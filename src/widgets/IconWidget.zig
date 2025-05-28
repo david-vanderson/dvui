@@ -12,7 +12,7 @@ name: []const u8 = undefined,
 tvg_bytes: []const u8 = undefined,
 icon_opts: dvui.IconRenderOptions = undefined,
 
-pub fn init(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, opts: Options, icon_opts: dvui.IconRenderOptions) !IconWidget {
+pub fn init(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: dvui.IconRenderOptions, opts: Options) !IconWidget {
     var self = IconWidget{};
     const options = (Options{ .name = "Icon" }).override(opts);
     self.name = name;

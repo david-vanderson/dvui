@@ -665,7 +665,13 @@ pub fn basicWidgets() !void {
                 var bbox = try dvui.box(@src(), .horizontal, opts);
                 defer bbox.deinit();
 
-                try dvui.icon(@src(), "cycle", entypo.cycle, opts, .{});
+                try dvui.icon(
+                    @src(),
+                    "cycle",
+                    entypo.cycle,
+                    .{},
+                    opts,
+                );
                 _ = try dvui.spacer(@src(), .{ .w = 4 }, .{});
                 try dvui.labelNoFmt(@src(), "Icon+Gray", opts);
 
@@ -777,9 +783,9 @@ pub fn basicWidgets() !void {
         try dvui.label(@src(), "Icons", .{}, .{ .gravity_y = 0.5 });
 
         const icon_opts = dvui.Options{ .gravity_y = 0.5, .min_size_content = .{ .h = 16 + icon_image_size_extra }, .rotation = icon_image_rotation };
-        try dvui.icon(@src(), "cycle", entypo.cycle, icon_opts, .{});
-        try dvui.icon(@src(), "aircraft", entypo.aircraft, icon_opts, .{});
-        try dvui.icon(@src(), "notes", entypo.beamed_note, icon_opts, .{});
+        try dvui.icon(@src(), "cycle", entypo.cycle, .{}, icon_opts);
+        try dvui.icon(@src(), "aircraft", entypo.aircraft, .{}, icon_opts);
+        try dvui.icon(@src(), "notes", entypo.beamed_note, .{}, icon_opts);
 
         if (try dvui.button(@src(), "Icon Browser", .{}, .{ .gravity_y = 0.5 })) {
             icon_browser_show = true;
@@ -821,7 +827,13 @@ pub fn dropdownAdvanced() !void {
     // Here's what is shown when the dropdown is not dropped
     {
         var hbox2 = try dvui.box(@src(), .horizontal, .{ .expand = .both });
-        try dvui.icon(@src(), "air", entypo.air, .{ .gravity_y = 0.5 }, .{});
+        try dvui.icon(
+            @src(),
+            "air",
+            entypo.air,
+            .{},
+            .{ .gravity_y = 0.5 },
+        );
 
         if (g.choice) |c| {
             try dvui.label(@src(), "Dropdown Choice {d}", .{c}, .{ .gravity_y = 0.5, .padding = .{ .x = 6, .w = 6 } });
@@ -829,7 +841,13 @@ pub fn dropdownAdvanced() !void {
             try dvui.label(@src(), "Advanced Dropdown", .{}, .{ .gravity_y = 0.5, .padding = .{ .x = 6, .w = 6 } });
         }
 
-        try dvui.icon(@src(), "dropdown_triangle", entypo.chevron_small_down, .{ .gravity_y = 0.5 }, .{});
+        try dvui.icon(
+            @src(),
+            "dropdown_triangle",
+            entypo.chevron_small_down,
+            .{},
+            .{ .gravity_y = 0.5 },
+        );
 
         hbox2.deinit();
     }
@@ -845,7 +863,13 @@ pub fn dropdownAdvanced() !void {
 
             var opts: Options = if (mi.show_active) dvui.themeGet().style_accent else .{};
 
-            try dvui.icon(@src(), "aircraft landing", entypo.aircraft_landing, opts.override(.{ .gravity_y = 0.5 }), .{});
+            try dvui.icon(
+                @src(),
+                "aircraft landing",
+                entypo.aircraft_landing,
+                .{},
+                opts.override(.{ .gravity_y = 0.5 }),
+            );
             try dvui.labelNoFmt(@src(), "icon with text", opts.override(.{ .padding = .{ .x = 6 } }));
 
             if (mi.activeRect()) |_| {
@@ -1812,7 +1836,7 @@ pub fn layoutText() !void {
         cbox.deinit();
 
         cbox = try dvui.box(@src(), .vertical, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .fill_window, .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
-        try dvui.icon(@src(), "aircraft", entypo.aircraft, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 }, .{});
+        try dvui.icon(@src(), "aircraft", entypo.aircraft, .{}, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 });
         try dvui.label(@src(), "Caption Heading", .{}, .{ .font_style = .caption_heading, .gravity_x = 0.5 });
         var tl_caption = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
         try tl_caption.addText("Here is some caption text that is in it's own text layout.", .{ .font_style = .caption });
@@ -1984,7 +2008,7 @@ pub fn reorderLists() !void {
             var hbox2 = try dvui.box(@src(), .horizontal, .{});
             defer hbox2.deinit();
             try dvui.label(@src(), "Drag", .{}, .{});
-            try dvui.icon(@src(), "drag_icon", dvui.entypo.menu, .{ .min_size_content = .{ .h = 22 } }, .{});
+            try dvui.icon(@src(), "drag_icon", dvui.entypo.menu, .{}, .{ .min_size_content = .{ .h = 22 } });
             try dvui.label(@src(), "to reorder.", .{}, .{});
         }
 
@@ -4288,7 +4312,7 @@ fn gridVirtualScrolling() !void {
             if (local.isPrime(num)) {
                 // TODO: Can't currently use gravity to centre the icon as it can't .expand. So pad it instead.
                 const pad_w = cell.data().contentRect().w / 2 - 15;
-                try dvui.icon(@src(), "Check", check_img, .{ .gravity_x = 0.5, .gravity_y = 0.5, .padding = .{ .x = pad_w }, .background = false });
+                try dvui.icon(@src(), "Check", check_img, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .padding = .{ .x = pad_w }, .background = false });
             }
         }
     }
