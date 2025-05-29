@@ -1583,7 +1583,7 @@ fn debugWindowShow(self: *Self) !void {
             var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
             defer hbox.deinit();
 
-            if (try dvui.buttonIcon(@src(), "find", dvui.entypo.magnifying_glass, .{}, .{})) {
+            if (try dvui.buttonIcon(@src(), "find", dvui.entypo.magnifying_glass, .{}, .{}, .{})) {
                 self.debug_widget_id = @enumFromInt(std.fmt.parseInt(u64, std.mem.sliceTo(line, ' '), 16) catch 0);
             }
 
