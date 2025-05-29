@@ -156,7 +156,7 @@ pub const draggableInitOptions = struct {
 };
 
 pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOptions, opts: dvui.Options) !?dvui.Point.Physical {
-    var iw = try dvui.IconWidget.init(src, "reorder_drag_icon", init_opts.tvg_bytes orelse dvui.entypo.menu, opts);
+    var iw = try dvui.IconWidget.init(src, "reorder_drag_icon", init_opts.tvg_bytes orelse dvui.entypo.menu, .{}, opts);
     try iw.install();
     var ret: ?dvui.Point.Physical = null;
     loop: for (dvui.events()) |*e| {
