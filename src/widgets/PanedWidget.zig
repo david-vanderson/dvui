@@ -17,13 +17,13 @@ const PanedWidget = @This();
 pub const InitOptions = struct {
     direction: enums.Direction,
     collapsed_size: f32,
+    handle_size: f32 = 4,
 };
-
-const handle_size = 4;
 
 wd: WidgetData = undefined,
 
 split_ratio: f32 = undefined,
+handle_size: f32 = undefined,
 dir: enums.Direction = undefined,
 collapsed_size: f32 = 0,
 hovered: bool = false,
@@ -38,6 +38,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     self.wd = WidgetData.init(src, .{}, defaults.override(opts));
     self.dir = init_opts.direction;
     self.collapsed_size = init_opts.collapsed_size;
+    self.handle_size = init_opts.handle_size;
 
     const rect = self.wd.contentRect();
     const our_size = switch (self.dir) {
@@ -122,7 +123,7 @@ pub fn draw(self: *PanedWidget) !void {
         if (self.hovered) {
             const rs = self.wd.contentRectScale();
             var r = rs.r;
-            const thick = handle_size * rs.s;
+            const thick = self.handle_size * rs.s;
             switch (self.dir) {
                 .horizontal => {
                     r.x += r.w * self.split_ratio - thick / 2;
@@ -190,8 +191,8 @@ pub fn rectFor(self: *PanedWidget, id: dvui.WidgetId, min_size: Size, e: Options
             }
         } else {
             switch (self.dir) {
-                .horizontal => r.w = @max(0, r.w * self.split_ratio - handle_size / 2),
-                .vertical => r.h = @max(0, r.h * self.split_ratio - handle_size / 2),
+                .horizontal => r.w = @max(0, r.w * self.split_ratio - self.handle_size / 2),
+                .vertical => r.h = @max(0, r.h * self.split_ratio - self.handle_size / 2),
             }
         }
         return dvui.placeIn(r, min_size, e, g);
@@ -213,14 +214,14 @@ pub fn rectFor(self: *PanedWidget, id: dvui.WidgetId, min_size: Size, e: Options
         } else {
             switch (self.dir) {
                 .horizontal => {
-                    const first = @max(0, r.w * self.split_ratio - handle_size / 2);
-                    r.w = @max(0, r.w - first - handle_size);
-                    r.x += first + handle_size;
+                    const first = @max(0, r.w * self.split_ratio - self.handle_size / 2);
+                    r.w = @max(0, r.w - first - self.handle_size);
+                    r.x += first + self.handle_size;
                 },
                 .vertical => {
-                    const first = @max(0, r.h * self.split_ratio - handle_size / 2);
-                    r.h = @max(0, r.h - first - handle_size);
-                    r.y += first + handle_size;
+                    const first = @max(0, r.h * self.split_ratio - self.handle_size / 2);
+                    r.h = @max(0, r.h - first - self.handle_size);
+                    r.y += first + self.handle_size;
                 },
             }
         }
