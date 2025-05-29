@@ -173,7 +173,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
         const uniform: bool = (b.x == b.y and b.x == b.w and b.x == b.h);
         if (!bg and uniform) {
             // draw border as stroked path
-            const r = self.borderRect().inset(b);
+            const r = self.borderRect().inset(b.scale(0.5, Rect));
             const rs = self.rectScale().rectToRectScale(r.offsetNeg(self.rect));
             try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = b.x * rs.s, .color = self.options.color(.border) });
         } else {
