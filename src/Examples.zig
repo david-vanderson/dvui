@@ -3763,16 +3763,14 @@ const grid_panel_size: Size = .{ .w = 250 };
 pub fn grids(height: f32) !void {
     // Below is a workaround for standaline demos being placed in a scroll-area.
     // By default the scroll-area will scroll instead of the grid.
-    // Fix the height of the     // grid to the scroll area's viewport to prevent this.
+    // Fix the height of the box around the tabs to prevent this.
     // This would not be required for normal usage.
-    const vbox = if (height > 0)
-        try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .h = height }, .max_size_content = .height(height), .expand = .horizontal })
-    else
-        null;
-
-    defer if (vbox) |vb| {
-        vb.deinit();
-    };
+    var min_size_content: ?Size = null;
+    var max_size_content: ?Options.MaxSize = null;
+    if (height > 0) {
+        min_size_content = .{ .h = height };
+        max_size_content = .height(height);
+    }
 
     const GridType = enum {
         styling,
@@ -3793,27 +3791,27 @@ pub fn grids(height: f32) !void {
                 .styling => "Styling and sorting",
                 .layout => "Layouts and data",
                 .scrolling => "Virtual scrolling",
-                .row_heights => "Variable row heigts",
+                .row_heights => "Variable row heights",
             };
         }
     };
+
+    var tbox = try dvui.box(@src(), .vertical, .{ .border = Rect.all(1), .expand = .horizontal, .min_size_content = min_size_content, .max_size_content = max_size_content });
+    defer tbox.deinit();
     {
-        var tbox = try dvui.box(@src(), .vertical, .{ .border = Rect.all(1), .expand = .horizontal });
-        defer tbox.deinit();
-        {
-            var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-            try tabs.install();
-            defer tabs.deinit();
+        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        try tabs.install();
+        defer tabs.deinit();
 
-            for (0..GridType.num_grids) |tab_num| {
-                const this_tab: GridType = @enumFromInt(tab_num);
+        for (0..GridType.num_grids) |tab_num| {
+            const this_tab: GridType = @enumFromInt(tab_num);
 
-                if (try tabs.addTabLabel(local.tabSelected(this_tab), local.tabName(this_tab))) {
-                    local.active_grid = this_tab;
-                }
+            if (try tabs.addTabLabel(local.tabSelected(this_tab), local.tabName(this_tab))) {
+                local.active_grid = this_tab;
             }
         }
     }
+
     switch (local.active_grid) {
         .styling => try gridStyling(),
         .layout => try gridLayouts(),
@@ -3857,7 +3855,6 @@ fn gridStyling() !void {
             .expand = .both,
             .background = true,
             .border = Rect.all(1),
-            .padding = .{ .x = 5 },
         });
         defer grid.deinit();
         local.resize_rows = false; // Only resize rows when needed.
@@ -4160,7 +4157,6 @@ fn gridLayouts() !void {
             .border = Rect.all(2),
             .min_size_content = .{ .h = content_h },
             .max_size_content = .height(content_h),
-            .padding = .{ .x = 5 },
         });
         defer grid.deinit();
 
@@ -4288,15 +4284,17 @@ fn gridVirtualScrolling() !void {
         var generated_primes: bool = false;
         var highlighted_row: ?usize = null;
 
+        // Generate prime numbers using The Sieve of Eratosthenes.
         fn generatePrimes() void {
-            const limit = std.math.sqrt(num_rows);
             if (num_rows > 0) primes.unset(0);
             if (num_rows > 1) primes.unset(1);
-            var current: u32 = 2;
-            while (current < limit) : (current += 1) {
-                if (primes.isSet(current)) {
-                    var multiples = current * current;
-                    while (multiples < num_rows) : (multiples += current) {
+
+            const limit = std.math.sqrt(num_rows);
+            var factor: u32 = 2;
+            while (factor < limit) : (factor += 1) {
+                if (primes.isSet(factor)) {
+                    var multiples = factor * factor;
+                    while (multiples < num_rows) : (multiples += factor) {
                         primes.unset(multiples);
                     }
                 }
@@ -4307,8 +4305,8 @@ fn gridVirtualScrolling() !void {
             return primes.isSet(num);
         }
 
-        fn highlightIfHovered(box: *dvui.BoxWidget, row_num: usize) !void {
-            if (highlighted_row != null and highlighted_row.? == row_num) {
+        fn highlightIfHovered(box: *dvui.BoxWidget, hovered: bool) !void {
+            if (hovered) {
                 box.wd.options.background = true;
                 box.wd.options.color_fill = .fill_hover;
                 try box.drawBackground();
@@ -4327,33 +4325,29 @@ fn gridVirtualScrolling() !void {
         .expand = .both,
         .background = true,
         .border = Rect.all(1),
-        .padding = .{ .x = 5 },
     });
     defer grid.deinit();
 
     // Check if a row is being hovered.
     const evts = dvui.events();
-    for (evts) |*e| {
-        if (dvui.eventMatchSimple(e, grid.scroll.data())) {
-            if (e.evt == .mouse and e.evt.mouse.action == .position) {
-                if (grid.row_height > 1) {
-                    // Convert mouse screen co-ords into co-ords relative to the scroll area's top-left.
-                    const scroll_rect = grid.scroll.data().rectScale();
-                    const offset = scroll_rect.pointFromPhysical(e.evt.mouse.p).y - grid.header_height;
-                    if (offset > 0) {
-                        // If the mouse is in the body part, not in the header part of the scroll area
-                        local.highlighted_row = @intFromFloat((local.scroll_info.viewport.y + offset) / grid.row_height);
-                        break;
-                    }
+    const highlighted_row: ?usize = row: {
+        for (evts) |*e| {
+            if (dvui.eventMatchSimple(e, grid.data()) and
+                (e.evt == .mouse and e.evt.mouse.action == .position) and
+                (grid.row_height > 1))
+            {
+                // Translate mouse screen position to a logical position relative to the top-left of the grid body.
+                if (grid.pointToBodyRelative(e.evt.mouse.p)) |point| {
+                    break :row @intFromFloat((local.scroll_info.viewport.y + point.y) / grid.row_height);
                 }
             }
         }
-        local.highlighted_row = null;
-    }
+        break :row null;
+    };
 
     const scroller: dvui.GridWidget.VirtualScroller = .init(grid, .{ .total_rows = num_rows, .scroll_info = &local.scroll_info });
     const first = scroller.startRow();
-    const last = scroller.endRow(); // Note that endRow is exclusive meaning it can be used as a slice ending index.
+    const last = scroller.endRow(); // Note that endRow is exclusive, meaning it can be used as a slice end index.
 
     // Number column
     {
@@ -4364,7 +4358,7 @@ fn gridVirtualScrolling() !void {
         for (first..last) |num| {
             var cell = try grid.bodyCell(@src(), num, .{ .border = .{ .x = 1, .w = 1, .h = 1 }, .background = true });
             defer cell.deinit();
-            try local.highlightIfHovered(cell, num);
+            try local.highlightIfHovered(cell, num == highlighted_row);
             try dvui.label(@src(), "{d}", .{num}, .{});
         }
     }
@@ -4378,9 +4372,9 @@ fn gridVirtualScrolling() !void {
         for (first..last) |num| {
             var cell = try grid.bodyCell(@src(), num, .{ .border = .{ .w = 1, .h = 1 }, .background = true });
             defer cell.deinit();
-            try local.highlightIfHovered(cell, num);
+            try local.highlightIfHovered(cell, num == highlighted_row);
             if (local.isPrime(num)) {
-                try dvui.icon(@src(), "Check", check_img, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+                try dvui.icon(@src(), "Check", check_img, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .background = false });
             }
         }
     }
@@ -4389,6 +4383,7 @@ fn gridVirtualScrolling() !void {
 fn gridVariableRowHeights() !void {
     var grid = try dvui.grid(@src(), .{}, .{
         .expand = .both,
+        .padding = Rect.all(0),
     });
     defer grid.deinit();
 
@@ -4399,7 +4394,7 @@ fn gridVariableRowHeights() !void {
         const row_height = 70 - (@abs(row_num_i - 5) * 10);
         var cell = try grid.bodyCell(@src(), row_num, .{ .height = @floatFromInt(row_height), .border = Rect.all(1) });
         defer cell.deinit();
-        try dvui.label(@src(), "h = {d}", .{row_height}, .{ .gravity_x = 0.5, .expand = .horizontal });
+        try dvui.label(@src(), "h = {d}", .{row_height}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .both });
     }
 }
 

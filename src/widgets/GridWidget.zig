@@ -5,17 +5,25 @@ const Options = dvui.Options;
 const ColorOrName = Options.ColorOrName;
 const Rect = dvui.Rect;
 const Size = dvui.Size;
+const Point = dvui.Point;
 const MaxSize = Options.MaxSize;
 const ScrollInfo = dvui.ScrollInfo;
 const WidgetData = dvui.WidgetData;
 const BoxWidget = dvui.BoxWidget;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
+const ScrollBarWidget = dvui.ScrollBarWidget;
+
 const GridWidget = @This();
+
 pub var defaults: Options = .{
     .name = "GridWidget",
     .background = true,
     .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
+    // Small padding to separate first column from left edge of the grid
+    .padding = .{ .x = 5 },
 };
+
+pub var scrollbar_padding_defaults: Size = .{ .h = 10, .w = 10 };
 
 pub const ColOptions = struct {
     width: ?f32 = null,
@@ -163,17 +171,12 @@ pub fn deinit(self: *GridWidget) void {
 
     self.hbox.deinit();
     self.scroll.deinit();
+
     self.vbox.deinit();
 }
 
 pub fn data(self: *GridWidget) *WidgetData {
     return &self.vbox.wd;
-}
-
-/// Set the starting y value to begin rendering rows.
-/// Used for setting the y location of the first row when virtual scrolling.
-pub fn offsetRowsBy(self: *GridWidget, offset: f32) void {
-    self.rows_y_offset = offset;
 }
 
 /// Start a new grid column.
@@ -311,9 +314,29 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, row_num: usi
 
     // If user provided a height, use that to position the next row, otherwise use the
     // calculated row_height.
-    self.next_row_y += if (opts.height) |height| height else self.row_height;
+    self.next_row_y += opts.height orelse self.row_height;
 
     return cell;
+}
+
+/// Set the starting y value to begin rendering rows.
+/// Used for setting the y location of the first row when virtual scrolling.
+pub fn offsetRowsBy(self: *GridWidget, offset: f32) void {
+    self.rows_y_offset = offset;
+}
+
+/// Converts a physical point (e.g. a mouse position) into a logical point
+/// relative to the top-left of the grid's body.
+/// Return the logical point if it is located within the grid body,
+/// otherwise return null.
+pub fn pointToBodyRelative(self: *GridWidget, point: Point.Physical) ?Point {
+    const scroll_wd = self.scroll.data();
+    var result = scroll_wd.rectScale().pointFromPhysical(point);
+    if (scroll_wd.rect.contains(result) and result.y >= self.header_height) {
+        result.y -= self.header_height;
+        return result;
+    }
+    return null;
 }
 
 /// Set the grid's sort order when manually managing column sorting.
@@ -360,7 +383,7 @@ pub const VirtualScroller = struct {
     pub fn init(grid: *GridWidget, init_opts: VirtualScroller.InitOpts) VirtualScroller {
         const si = init_opts.scroll_info;
         const total_rows_f: f32 = @floatFromInt(init_opts.total_rows);
-        si.virtual_size.h = @max(total_rows_f * grid.row_height + 10, si.viewport.h); // TODO: 10 = scrollbar padding
+        si.virtual_size.h = @max(total_rows_f * grid.row_height + scrollbar_padding_defaults.h, si.viewport.h);
         const first_row: f32 = @floatFromInt(_startRow(grid, si, init_opts.total_rows));
         grid.offsetRowsBy(first_row * grid.row_height);
         return .{

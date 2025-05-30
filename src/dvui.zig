@@ -4163,8 +4163,8 @@ pub fn gridHeading(src: std.builtin.SourceLocation, g: *GridWidget, heading: []c
     var cell = try g.headerCell(src, cell_opts);
     defer cell.deinit();
 
+    try separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
     try labelNoFmt(@src(), heading, label_options);
-    try separator(@src(), .{ .expand = .vertical });
 }
 
 /// Create a heading and allow the column to be sorted.
@@ -4181,11 +4181,8 @@ pub fn gridHeadingSortable(
 ) !bool {
     const icon_ascending = @embedFile("icons/entypo/chevron-small-down.tvg");
     const icon_descending = @embedFile("icons/entypo/chevron-small-up.tvg");
-    const icon_width = 27.5; // TODO: This is not const.
-    const padding = ButtonWidget.defaults.padding orelse Rect.all(6);
 
     // Pad buttons with extra space if there is no sort indicator.
-    const padding_opts: Options = .{ .padding = .{ .x = icon_width / 2.0, .w = icon_width / 2.0, .y = padding.y, .h = padding.h } };
     const heading_defaults: Options = .{
         .expand = .horizontal,
         .corner_radius = Rect.all(0),
@@ -4195,8 +4192,10 @@ pub fn gridHeadingSortable(
     var cell = try g.headerCell(src, cell_opts);
     defer cell.deinit();
 
+    try separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
+
     const sort_changed = switch (g.colSortOrder()) {
-        .unsorted => try button(@src(), heading, .{ .draw_focus = false }, padding_opts.override(heading_opts)),
+        .unsorted => try button(@src(), heading, .{ .draw_focus = false }, heading_opts),
         .ascending => try buttonLabelAndIcon(@src(), heading, icon_ascending, .{ .draw_focus = false }, heading_opts),
         .descending => try buttonLabelAndIcon(@src(), heading, icon_descending, .{ .draw_focus = false }, heading_opts),
     };
@@ -4204,7 +4203,6 @@ pub fn gridHeadingSortable(
     if (sort_changed) {
         g.sortChanged();
     }
-    try separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
     dir.* = g.sort_direction;
     return sort_changed;
 }
@@ -4326,25 +4324,33 @@ pub const GridColumnSelectAllState = enum {
 pub fn gridHeadingCheckbox(src: std.builtin.SourceLocation, g: *GridWidget, selection: *GridColumnSelectAllState, cell_opts: GridWidget.CellOptions, opts: Options) !bool {
     const header_defaults: Options = .{
         .background = true,
-        .color_fill = .{ .name = .fill_control },
-        .margin = ButtonWidget.defaults.margin,
-        .expand = .vertical,
+        .expand = .both,
+        .margin = ButtonWidget.defaults.marginGet(),
+        .color_fill = .fill_control,
+        .gravity_x = 0.5,
         .gravity_y = 0.5,
     };
     const header_options = header_defaults.override(opts);
+    var checkbox_opts: Options = header_options.strip();
+    checkbox_opts.padding = ButtonWidget.defaults.paddingGet();
+    checkbox_opts.gravity_x = header_options.gravity_x;
+    checkbox_opts.gravity_y = header_options.gravity_y;
+
     var cell = try g.headerCell(src, cell_opts);
     defer cell.deinit();
 
     var clicked = false;
     var selected = false;
     {
+        try dvui.separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
+
         var hbox = try dvui.box(@src(), .horizontal, header_options);
         defer hbox.deinit();
-        selected = dvui.dataGet(null, hbox.data().id, "_selected", bool) orelse false;
-        clicked = try dvui.checkbox(@src(), &selected, null, .{ .gravity_y = header_options.gravity_y, .gravity_x = header_options.gravity_x });
-        dvui.dataSet(null, hbox.data().id, "_selected", selected);
+
+        selected = dvui.dataGet(null, cell.data().id, "selected", bool) orelse false;
+        clicked = try dvui.checkbox(@src(), &selected, null, checkbox_opts);
+        dvui.dataSet(null, cell.data().id, "selected", selected);
     }
-    try dvui.separator(@src(), .{ .expand = .vertical });
 
     if (clicked) {
         selection.* = if (selected) .select_all else .select_none;
@@ -4371,7 +4377,7 @@ pub fn gridColumnCheckbox(
     if (T != bool) {
         if (field_name) |_field_name| {
             if (!@hasField(T, _field_name)) {
-                @compileError(std.fmt.comptimePrint("'{s}' does has no member named {s}.", .{ @typeName(T), _field_name }));
+                @compileError(std.fmt.comptimePrint("'{s}' doesn't contain a member named {s}.", .{ @typeName(T), _field_name }));
             } else if (@FieldType(T, _field_name) != bool) {
                 @compileError(std.fmt.comptimePrint("{s}.{s} must be of type bool.", .{ @typeName(T), _field_name }));
             }
@@ -4382,6 +4388,7 @@ pub fn gridColumnCheckbox(
     const check_defaults: Options = .{
         .gravity_x = 0.5,
         .gravity_y = 0.5,
+        .margin = ButtonWidget.defaults.marginGet(),
     };
     const check_opts = switch (opts) {
         .options => |o| check_defaults.override(o),
@@ -4431,7 +4438,7 @@ pub fn gridColumnCheckbox(
 /// the same negative ratio for the variable columns.
 ///     { -1, 50, -1 }.
 pub fn columnLayoutProportional(ratio_widths: []const f32, col_widths: []f32, content_width: f32) void {
-    const scroll_bar_w: f32 = 10; // TODO: Don't necessarily know if SB is showing? There needs ot be a grid function to work this out.
+    const scroll_bar_w: f32 = GridWidget.scrollbar_padding_defaults.w;
     std.debug.assert(ratio_widths.len == col_widths.len); // input and output slices must be the same length
 
     // Count all of the positive widths as reserved widths.
@@ -4937,8 +4944,8 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
         var hbox = try box(src, .horizontal, .{ .expand = .horizontal });
         defer hbox.deinit();
 
+        try icon(@src(), label_str, tvg_bytes, .{}, opts.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }));
         try labelNoFmt(@src(), label_str, options.override(.{ .expand = .horizontal }));
-        try icon(@src(), label_str, tvg_bytes, .{}, opts.strip().override(.{ .gravity_y = 0.5 }));
     }
 
     const click = bw.clicked();
