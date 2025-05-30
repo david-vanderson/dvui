@@ -3121,9 +3121,11 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
     return ret;
 }
 
+pub var header_rect: Rect = Rect.all(0);
+
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !void {
     var over = try dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
-
+    header_rect = over.wd.rect;
     try dvui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
 
     if (openflag) |of| {

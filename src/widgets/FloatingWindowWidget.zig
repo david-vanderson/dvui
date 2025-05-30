@@ -38,6 +38,7 @@ pub const InitOptions = struct {
         // nudge away from all subwindows
         nudge,
     } = .nudge_once,
+    drag_rect: ?Rect = null,
 };
 
 const DragPart = enum {
@@ -81,6 +82,7 @@ auto_pos: bool = false,
 auto_size: bool = false,
 auto_size_refresh_prev_value: ?u8 = null,
 drag_part: ?DragPart = null,
+drag_rect: Rect.Physical = undefined,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingWindowWidget {
     var self = FloatingWindowWidget{};
@@ -98,6 +100,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     self.options.name = null; // so our layout Box isn't named FloatingWindow
 
     self.init_options = init_opts;
+    self.drag_rect = if (init_opts.drag_rect) |dr| self.wd.rectScale().rectToPhysical(dr) else self.wd.rectScale().r;
 
     var autopossize = true;
     if (self.init_options.rect) |ior| {
@@ -344,6 +347,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
     const rs = self.wd.rectScale();
     const evts = dvui.events();
     for (evts) |*e| {
+        //        if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r }))
         if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r }))
             continue;
 
@@ -396,6 +400,10 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
     }
 }
 
+fn dragRectContains(self: *const FloatingWindowWidget, p: Point.Physical) bool {
+    return self.drag_rect.contains(p);
+}
+
 pub fn processEventsAfter(self: *FloatingWindowWidget) void {
     const rs = self.wd.rectScale();
     // duplicate processEventsBefore because you could have a click down,
@@ -406,6 +414,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
     const evts = dvui.events();
     for (evts) |*e| {
         if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r, .cleanup = true }))
+            //        if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = self.drag_rect, .cleanup = true }))
             continue;
 
         switch (e.evt) {
@@ -417,7 +426,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                         dvui.focusWidget(null, null, null);
                     },
                     .press => {
-                        if (me.button.pointer()) {
+                        if (me.button.pointer() and self.dragRectContains(me.p)) {
                             e.handle(@src(), self.data());
                             // capture and start drag
                             dvui.captureMouse(self.data());
@@ -445,7 +454,9 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                         }
                     },
                     .position => {
-                        dvui.cursorSet(dragPart(me, rs).cursor());
+                        if (self.dragRectContains(me.p)) {
+                            dvui.cursorSet(dragPart(me, rs).cursor());
+                        }
                     },
                     else => {},
                 }

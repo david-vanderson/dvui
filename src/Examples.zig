@@ -375,7 +375,7 @@ pub fn demo() !void {
 
     const width = 600;
 
-    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .width(width), .tag = demo_window_tag });
+    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window, .drag_rect = dvui.header_rect }, .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .width(width), .tag = demo_window_tag });
     defer float.deinit();
 
     // pad the fps label so that it doesn't trigger refresh when the number
