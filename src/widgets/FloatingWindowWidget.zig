@@ -100,7 +100,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     self.options.name = null; // so our layout Box isn't named FloatingWindow
 
     self.init_options = init_opts;
-    self.drag_rect = if (init_opts.drag_rect) |dr| self.wd.rectScale().rectToPhysical(dr) else self.wd.rectScale().r;
 
     var autopossize = true;
     if (self.init_options.rect) |ior| {
@@ -114,6 +113,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         // we store the rect (only while the window is open)
         self.wd.rect = dvui.dataGet(null, self.wd.id, "_rect", Rect) orelse Rect{};
     }
+
+    self.drag_rect = if (init_opts.drag_rect) |dr| self.wd.rectScale().rectToPhysical(dr) else self.wd.rectScale().r;
 
     if (autopossize) {
         if (dvui.dataGet(null, self.wd.id, "_auto_size", @TypeOf(self.auto_size))) |as| {
