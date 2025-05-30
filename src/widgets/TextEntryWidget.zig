@@ -169,19 +169,47 @@ pub fn install(self: *TextEntryWidget) !void {
         });
         defer hbox.deinit();
 
-        if (try dvui.buttonIcon(@src(), "paste", dvui.entypo.clipboard, .{}, .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) })) {
+        if (try dvui.buttonIcon(
+            @src(),
+            "paste",
+            dvui.entypo.clipboard,
+            .{},
+            .{},
+            .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) },
+        )) {
             self.paste();
         }
 
-        if (try dvui.buttonIcon(@src(), "select all", dvui.entypo.swap, .{}, .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) })) {
+        if (try dvui.buttonIcon(
+            @src(),
+            "select all",
+            dvui.entypo.swap,
+            .{},
+            .{},
+            .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) },
+        )) {
             self.textLayout.selection.selectAll();
         }
 
-        if (try dvui.buttonIcon(@src(), "cut", dvui.entypo.scissors, .{}, .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) })) {
+        if (try dvui.buttonIcon(
+            @src(),
+            "cut",
+            dvui.entypo.scissors,
+            .{},
+            .{},
+            .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) },
+        )) {
             self.cut();
         }
 
-        if (try dvui.buttonIcon(@src(), "copy", dvui.entypo.copy, .{}, .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) })) {
+        if (try dvui.buttonIcon(
+            @src(),
+            "copy",
+            dvui.entypo.copy,
+            .{},
+            .{},
+            .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) },
+        )) {
             self.textLayout.copy();
         }
     }
