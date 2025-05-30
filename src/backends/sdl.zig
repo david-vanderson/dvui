@@ -28,8 +28,9 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 // used when doing sdl callbacks
 pub var gwin: dvui.Window = undefined;
 pub var gback: SDLBackend = undefined;
-pub var ghaveEvent: bool = false;
-pub var gWaiting: bool = false;
+pub var ghave_event: bool = false;
+pub var ghave_resize: bool = false;
+pub var gno_wait: bool = false;
 
 const log = std.log.scoped(.SDLBackend);
 
@@ -1196,11 +1197,17 @@ fn appQuit(appstate: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
 // This function runs when a new event (mouse input, keypresses, etc) occurs.
 fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
     const e = event.?.*;
-    ghaveEvent = true;
+    ghave_event = true;
     _ = gback.addEvent(&gwin, e) catch |err| {
         log.err("dvui.Window.addEvent failed: {!}", .{err});
         return c.SDL_APP_FAILURE;
     };
+
+    if (event.?.type == c.SDL_EVENT_WINDOW_RESIZED) {
+        //std.debug.print("resize {d}x{d}\n", .{e.window.data1, e.window.data2});
+        // getting a resize event means we are likely in a callback, so don't call any wait functions
+        ghave_resize = true;
+    }
 
     if (event.?.type == c.SDL_EVENT_QUIT) {
         return c.SDL_APP_SUCCESS; // end the program, reporting success to the OS.
@@ -1213,8 +1220,8 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
 // This function runs once per frame, and is the heart of the program.
 fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     // beginWait coordinates with waitTime below to run frames only when needed
-    const nstime = gwin.beginWait(ghaveEvent or gWaiting);
-    ghaveEvent = false;
+    const nstime = gwin.beginWait(ghave_event or gno_wait);
+    ghave_event = false;
 
     // marks the beginning of a frame for dvui, can call dvui functions after this
     gwin.begin(nstime) catch |err| {
@@ -1247,18 +1254,23 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
 
     const wait_event_micros = gwin.waitTime(end_micros, null);
 
-    // If a resize event happens while we are in waitEventTimeout below, sdl
-    // will call us again before returning from waitEventTimeout.  We don't
-    // want to wait for events while nested.  Otherwise all event handling gets
-    // screwed up and either never recovers or recovers after many seconds.
-    if (gWaiting) {
+    //std.debug.print("waitEventTimeout {d} {} resize {}\n", .{wait_event_micros, gno_wait, ghave_resize});
+
+    // If a resize event happens we are likely in a callback.  If for any
+    // reason we are called nested while waiting in the below waitEventTimeout
+    // we are in a callback.
+    //
+    // During a callback we don't want to call SDL_WaitEvent or
+    // SDL_WaitEventTimeout.  Otherwise all event handling gets screwed up and
+    // either never recovers or recovers after many seconds.
+    if (gno_wait or ghave_resize) {
+        ghave_resize = false;
         return c.SDL_APP_CONTINUE;
     }
 
-    //std.debug.print("waitEventTimeout {d}\n", .{wait_event_micros});
-    gWaiting = true;
+    gno_wait = true;
     gback.waitEventTimeout(wait_event_micros);
-    gWaiting = false;
+    gno_wait = false;
 
     return c.SDL_APP_CONTINUE;
 }
