@@ -35,9 +35,7 @@ pub const InitOpts = struct {
 };
 
 hbox: BoxWidget = undefined,
-vbar: ?ScrollBarWidget = undefined,
 vbox: BoxWidget = undefined,
-hbar: ?ScrollBarWidget = undefined,
 init_opts: InitOpts = undefined,
 si: *ScrollInfo = undefined,
 si_store: ScrollInfo = .{},
@@ -117,8 +115,9 @@ pub fn install(self: *ScrollAreaWidget) !void {
     if (do_vbar) {
         // do the scrollbars first so that they still appear even if there's not enough space
         // - could instead do them in deinit
-        self.vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = self.si, .focus_id = focus_target }, .{ .gravity_x = 1.0, .expand = .vertical });
-        try self.vbar.?.install();
+        var vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = self.si, .focus_id = focus_target }, .{ .gravity_x = 1.0, .expand = .vertical });
+        try vbar.install();
+        vbar.deinit();
     }
 
     self.vbox = BoxWidget.init(@src(), .vertical, false, self.hbox.data().options.strip().override(.{ .expand = .both, .name = "ScrollAreaWidget vbox" }));
@@ -126,8 +125,9 @@ pub fn install(self: *ScrollAreaWidget) !void {
     try self.vbox.drawBackground();
 
     if (do_hbar) {
-        self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, .{ .expand = .horizontal, .gravity_y = 1.0 });
-        try self.hbar.?.install();
+        var hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, .{ .expand = .horizontal, .gravity_y = 1.0 });
+        try hbar.install();
+        hbar.deinit();
     }
 
     const container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
@@ -147,15 +147,7 @@ pub fn deinit(self: *ScrollAreaWidget) void {
     dvui.dataSet(null, self.hbox.data().id, "_scroll_id", self.scroll.wd.id);
     self.scroll.deinit();
 
-    if (self.hbar) |*hbar| {
-        hbar.deinit();
-    }
-
     self.vbox.deinit();
-
-    if (self.vbar) |*vbar| {
-        vbar.deinit();
-    }
 
     dvui.dataSet(null, self.hbox.data().id, "_scroll_info", self.si.*);
 
