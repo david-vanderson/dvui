@@ -472,7 +472,7 @@ fn addDvuiModule(
 
     dvui_mod.addIncludePath(b.path("src/stb"));
 
-    if (target.result.cpu.arch == .wasm32) {
+    if (target.result.cpu.arch == .wasm32 or target.result.cpu.arch == .wasm64) {
         dvui_mod.addCSourceFiles(.{
             .files = &.{
                 "src/stb/stb_image_impl.c",
