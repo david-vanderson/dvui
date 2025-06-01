@@ -14,20 +14,22 @@ const enums = dvui.enums;
 const BoxWidget = @This();
 
 const Data = struct {
-    total_weight_prev: ?f32 = null,
-    min_space_taken_prev: ?f32 = null,
+    total_weight: f32,
+    min_space_taken: f32,
 };
 
 wd: WidgetData = undefined,
 dir: enums.Direction = undefined,
 equal_space: bool = undefined,
 max_thick: f32 = 0,
-data_prev: Data = Data{},
+data_prev: ?Data = undefined,
 min_space_taken: f32 = 0,
 total_weight: f32 = 0,
-childRect: Rect = Rect{}, //TODO rename this to child_rect for naming consistency
-extra_pixels: f32 = 0,
-ratio_extra: f32 = 0,
+child_rect: Rect = Rect{},
+child_positioned: bool = false,
+ratio_extra: f32 = undefined,
+ran_off: bool = undefined,
+pixels_per_w: f32 = undefined,
 
 pub fn init(src: std.builtin.SourceLocation, dir: enums.Direction, equal_space: bool, opts: Options) BoxWidget {
     var self = BoxWidget{};
@@ -35,9 +37,9 @@ pub fn init(src: std.builtin.SourceLocation, dir: enums.Direction, equal_space: 
     self.wd = WidgetData.init(src, .{}, defaults.override(opts));
     self.dir = dir;
     self.equal_space = equal_space;
-    if (dvui.dataGet(null, self.wd.id, "_data", Data)) |d| {
-        self.data_prev = d;
-    }
+    self.data_prev = dvui.dataGet(null, self.wd.id, "_data", Data);
+    self.ran_off = false;
+    self.pixels_per_w = 0;
     return self;
 }
 
@@ -45,20 +47,18 @@ pub fn install(self: *BoxWidget) !void {
     try self.wd.register();
 
     // our rect for children has to start at 0,0
-    self.childRect = self.wd.contentRect().justSize();
+    self.child_rect = self.wd.contentRect().justSize();
 
-    if (self.data_prev.min_space_taken_prev) |taken_prev| {
-        if (self.dir == .horizontal) {
+    if (self.data_prev) |dp| {
+        if (dp.total_weight > 0) {
             if (self.equal_space) {
-                self.extra_pixels = self.childRect.w;
-            } else {
-                self.extra_pixels = @max(0, self.childRect.w - taken_prev);
-            }
-        } else {
-            if (self.equal_space) {
-                self.extra_pixels = self.childRect.h;
-            } else {
-                self.extra_pixels = @max(0, self.childRect.h - taken_prev);
+                switch (self.dir) {
+                    .horizontal => self.pixels_per_w = self.child_rect.w / dp.total_weight,
+                    .vertical => self.pixels_per_w = self.child_rect.h / dp.total_weight,
+                }
+            } else switch (self.dir) {
+                .horizontal => self.pixels_per_w = @max(0, self.child_rect.w - dp.min_space_taken) / dp.total_weight,
+                .vertical => self.pixels_per_w = @max(0, self.child_rect.h - dp.min_space_taken) / dp.total_weight,
             }
         }
     }
@@ -84,76 +84,115 @@ pub fn data(self: *BoxWidget) *WidgetData {
 
 pub fn rectFor(self: *BoxWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
+
+    self.child_positioned = switch (self.dir) {
+        .horizontal => g.x > 0 and g.x < 1.0,
+        .vertical => g.y > 0 and g.y < 1.0,
+    };
+
+    if (self.child_positioned) {
+        // don't pack this, we treat this like overlay - put it where they asked
+        return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+    }
+
     var current_weight: f32 = 0.0;
     if (self.equal_space or (self.dir == .horizontal and e.isHorizontal()) or (self.dir == .vertical and e.isVertical())) {
         current_weight = 1.0;
     }
     self.total_weight += current_weight;
 
-    var pixels_per_w: f32 = 0;
-    if (self.data_prev.total_weight_prev) |w| {
-        if (w > 0) {
-            pixels_per_w = self.extra_pixels / w;
-        }
-    }
+    const available = self.child_rect;
 
-    var rect = self.childRect;
-
+    // adjust min size for expand ratio, which is forced
     var ms = min_size;
     self.ratio_extra = 0;
     if (e == .ratio and ms.w != 0 and ms.h != 0) {
         switch (self.dir) {
             .horizontal => {
                 const ratio = ms.w / ms.h;
-                ms.h = rect.h;
-                ms.w = rect.h * ratio;
+                ms.h = available.h;
+                ms.w = available.h * ratio;
                 self.ratio_extra = ms.w - min_size.w;
             },
             .vertical => {
                 const ratio = ms.h / ms.w;
-                ms.h = rect.w * ratio;
-                ms.w = rect.w;
+                ms.h = available.w * ratio;
+                ms.w = available.w;
                 self.ratio_extra = ms.h - min_size.h;
             },
         }
     }
 
-    rect.w = @min(rect.w, ms.w);
-    rect.h = @min(rect.h, ms.h);
+    // min size after ratio
+    const child_min_size = ms;
 
-    if (self.dir == .horizontal) {
-        rect.h = self.childRect.h;
-        if (self.equal_space) {
-            rect.w = pixels_per_w * current_weight;
-        } else {
-            rect.w += pixels_per_w * current_weight;
+    var ret: Rect = undefined;
+
+    if (self.equal_space) {
+        // position child inside the space we allocate for it
+        switch (self.dir) {
+            .horizontal => {
+                ms.w = self.pixels_per_w * current_weight;
+                ms.h = available.h;
+                const avail = dvui.placeIn(available, ms, .none, g);
+                self.removeSpace(avail, g);
+                ret = dvui.placeIn(avail, child_min_size, e, g);
+            },
+            .vertical => {
+                ms.h = self.pixels_per_w * current_weight;
+                ms.w = available.w;
+                const avail = dvui.placeIn(available, ms, .none, g);
+                self.removeSpace(avail, g);
+                ret = dvui.placeIn(avail, child_min_size, e, g);
+            },
+        }
+    } else {
+        // adjust min size for normal expand (since you only get prorated extra space)
+        // - keep the expand in the non box direction
+        var ee: Options.Expand = .none;
+        switch (self.dir) {
+            .horizontal => {
+                ms.w += self.pixels_per_w * current_weight;
+                if (e.isVertical()) ee = .vertical;
+            },
+            .vertical => {
+                ms.h += self.pixels_per_w * current_weight;
+                if (e.isHorizontal()) ee = .horizontal;
+            },
         }
 
-        if (g.x <= 0.5) {
-            self.childRect.w = @max(0, self.childRect.w - rect.w);
-            self.childRect.x += rect.w;
-        } else {
-            rect.x += @max(0, self.childRect.w - rect.w);
-            self.childRect.w = @max(0, self.childRect.w - rect.w);
-        }
-    } else if (self.dir == .vertical) {
-        rect.w = self.childRect.w;
-        if (self.equal_space) {
-            rect.h = pixels_per_w * current_weight;
-        } else {
-            rect.h += pixels_per_w * current_weight;
-        }
-
-        if (g.y <= 0.5) {
-            self.childRect.h = @max(0, self.childRect.h - rect.h);
-            self.childRect.y += rect.h;
-        } else {
-            rect.y += @max(0, self.childRect.h - rect.h);
-            self.childRect.h = @max(0, self.childRect.h - rect.h);
-        }
+        ret = dvui.placeIn(available, ms, ee, g);
+        self.removeSpace(ret, g);
     }
 
-    return dvui.placeIn(rect, ms, e, g);
+    switch (self.dir) {
+        .horizontal => if (ret.w + 0.001 < child_min_size.w) {
+            self.ran_off = true;
+        },
+        .vertical => if (ret.h + 0.001 < child_min_size.h) {
+            self.ran_off = true;
+        },
+    }
+
+    return ret;
+}
+
+fn removeSpace(self: *BoxWidget, r: Rect, g: Options.Gravity) void {
+    if (self.dir == .horizontal) {
+        if (g.x <= 0.5) {
+            self.child_rect.w = @max(0, self.child_rect.w - r.w);
+            self.child_rect.x += r.w;
+        } else {
+            self.child_rect.w = @max(0, self.child_rect.w - r.w);
+        }
+    } else if (self.dir == .vertical) {
+        if (g.y <= 0.5) {
+            self.child_rect.h = @max(0, self.child_rect.h - r.h);
+            self.child_rect.y += r.h;
+        } else {
+            self.child_rect.h = @max(0, self.child_rect.h - r.h);
+        }
+    }
 }
 
 pub fn screenRectScale(self: *BoxWidget, rect: Rect) RectScale {
@@ -161,6 +200,11 @@ pub fn screenRectScale(self: *BoxWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *BoxWidget, s: Size) void {
+    if (self.child_positioned) {
+        self.wd.minSizeMax(self.wd.options.padSize(s));
+        return;
+    }
+
     if (self.dir == .horizontal) {
         if (self.equal_space) {
             self.min_space_taken = @max(self.min_space_taken, s.w + self.ratio_extra);
@@ -187,6 +231,7 @@ pub fn processEvent(self: *BoxWidget, e: *Event, bubbling: bool) void {
 
 pub fn deinit(self: *BoxWidget) void {
     var ms: Size = undefined;
+    var extra_space = false;
     if (self.dir == .horizontal) {
         if (self.equal_space) {
             ms.w = self.min_space_taken * self.total_weight;
@@ -194,11 +239,7 @@ pub fn deinit(self: *BoxWidget) void {
             ms.w = self.min_space_taken;
         }
         ms.h = self.max_thick;
-        if (self.total_weight > 0 and self.childRect.w > 0.001) {
-            // we have expanded children, but didn't use all the space, so something has changed
-            // equal_space could mean we don't exactly use all the space (due to floating point)
-            dvui.refresh(null, @src(), self.wd.id);
-        }
+        extra_space = self.child_rect.w > 0.001;
     } else {
         if (self.equal_space) {
             ms.h = self.min_space_taken * self.total_weight;
@@ -206,18 +247,37 @@ pub fn deinit(self: *BoxWidget) void {
             ms.h = self.min_space_taken;
         }
         ms.w = self.max_thick;
-        if (self.total_weight > 0 and self.childRect.h > 0.001) {
-            // we have expanded children, but didn't use all the space, so something has changed
+        extra_space = self.child_rect.h > 0.001;
+    }
+
+    if (self.total_weight > 0) {
+        if (extra_space) {
+            // we have expanded children, but didn't use all the space:
+            // - maybe lost a child
+            // - maybe one is no longer expanded
+            // - maybe one's min size shrunk (label changing text)
             // equal_space could mean we don't exactly use all the space (due to floating point)
             dvui.refresh(null, @src(), self.wd.id);
         }
+
+        if (!self.equal_space and self.pixels_per_w > 0 and self.ran_off) {
+            // we have expanded children, thought we had extra space, but ran
+            // off the end:
+            // - maybe one's min size got bigger (label changing text)
+            dvui.refresh(null, @src(), self.wd.id);
+        }
+
+        // if total_weight is 0, we are tight around all children, so our min
+        // size will be sensitive to theirs and handle normal changes in
+        // minSizeSetAndRefresh()
     }
 
     self.wd.minSizeMax(self.wd.options.padSize(ms));
+
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
 
-    dvui.dataSet(null, self.wd.id, "_data", Data{ .total_weight_prev = self.total_weight, .min_space_taken_prev = self.min_space_taken });
+    dvui.dataSet(null, self.wd.id, "_data", Data{ .total_weight = self.total_weight, .min_space_taken = self.min_space_taken });
 
     dvui.parentReset(self.wd.id, self.wd.parent);
 }
