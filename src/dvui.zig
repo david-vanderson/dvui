@@ -4069,6 +4069,12 @@ pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) !*VirtualPa
     return ret;
 }
 
+/// Lays out children according to gravity anywhere inside.  Useful to overlap
+/// children.
+///
+/// See `box`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
     var ret = try currentWindow().arena().create(OverlayWidget);
     ret.* = OverlayWidget.init(src, opts);
@@ -4076,8 +4082,17 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
     return ret;
 }
 
-/// Box that lays out children in one direction.  Extra space is allocated
-/// evenly to all children who are expanded in that direction.
+/// Box that packs children with gravity 0 or 1, or anywhere with gravity
+/// between (0,1).
+///
+/// A child with gravity between (0,1) in dir direction is not packed, and
+/// instead positioned in the whole box area, like `overlay`.
+///
+/// A child with gravity 0 or 1 in dir direction is packed either at the start
+/// (gravity 0) or end (gravity 1).
+///
+/// Extra space is allocated evenly to all packed children expanded in dir
+/// direction.
 ///
 /// See `boxEqual` and `flexbox`.
 ///
@@ -4090,8 +4105,7 @@ pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options)
     return ret;
 }
 
-/// Box laying out children in `dir` direction.  All children receive equal
-/// space.
+/// Same as `box` but all packed children receive equal space.
 ///
 /// See `box` and `flexbox`.
 ///
