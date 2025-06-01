@@ -639,7 +639,15 @@ pub fn basicWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Label", .{}, .{ .gravity_y = 0.5 });
-        try dvui.label(@src(), "Multi-line\nLabel", .{}, .{ .gravity_y = 0.5 });
+
+        {
+            // need to wrap the this, otherwise .gravity_x = 0.5 will make it
+            // not packed in the containing box
+            var vbox = try dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
+            defer vbox.deinit();
+            try dvui.label(@src(), "Multi-line\nLabel", .{}, .{ .gravity_x = 0.5 });
+        }
+
         _ = try dvui.button(@src(), "Button", .{}, .{ .gravity_y = 0.5 });
         _ = try dvui.button(@src(), "Multi-line\nButton", .{}, .{});
 
