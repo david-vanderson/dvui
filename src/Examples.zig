@@ -135,7 +135,7 @@ const AnimatingDialog = struct {
         try tl.addText(message, .{});
         tl.deinit();
 
-        if (try dvui.button(@src(), "Ok", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .tab_index = 1 })) {
+        if (try dvui.button(@src(), "Ok", .{}, .{ .gravity_x = 0.5, .gravity_y = 1.0, .tab_index = 1 })) {
             closing = true;
             dvui.dataSet(null, id, "response", enums.DialogResponse.ok);
         }
@@ -639,7 +639,7 @@ pub fn basicWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Label", .{}, .{ .gravity_y = 0.5 });
-        try dvui.label(@src(), "Multi-line\nLabel", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+        try dvui.label(@src(), "Multi-line\nLabel", .{}, .{ .gravity_y = 0.5 });
         _ = try dvui.button(@src(), "Button", .{}, .{ .gravity_y = 0.5 });
         _ = try dvui.button(@src(), "Multi-line\nButton", .{}, .{});
 
@@ -653,7 +653,7 @@ pub fn basicWidgets() !void {
                     // blend text and control colors
                     color = .{ .color = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill_control) };
                 }
-                var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .gravity_y = 0.5, .color_text = color });
+                var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .color_text = color });
                 defer bw.deinit();
                 try bw.install();
                 bw.processEvents();
@@ -1443,11 +1443,11 @@ pub fn styling() !void {
             var vbox = try dvui.box(@src(), .vertical, .{});
             defer vbox.deinit();
 
-            if (try rgbSliders(@src(), &backbox_color, .{ .gravity_y = 0.5 })) {
+            if (try rgbSliders(@src(), &backbox_color, .{ .debug = true })) {
                 hsluv_hsl = .fromColor(backbox_color);
                 hsv_color = .fromColor(backbox_color);
             }
-            if (try hsluvSliders(@src(), &hsluv_hsl, .{ .gravity_y = 0.5 })) {
+            if (try hsluvSliders(@src(), &hsluv_hsl, .{})) {
                 backbox_color = hsluv_hsl.color();
                 hsv_color = .fromColor(backbox_color);
             }
@@ -1610,8 +1610,8 @@ pub fn layout() !void {
 
             if (Static.img) {
                 try dvui.label(@src(), "Min Size", .{}, .{});
-                _ = try dvui.sliderEntry(@src(), "W: {d:0.0}", .{ .value = &Static.size.w, .min = 1, .max = 400, .interval = 1 }, .{ .gravity_y = 0.5 });
-                _ = try dvui.sliderEntry(@src(), "H: {d:0.0}", .{ .value = &Static.size.h, .min = 1, .max = 280, .interval = 1 }, .{ .gravity_y = 0.5 });
+                _ = try dvui.sliderEntry(@src(), "W: {d:0.0}", .{ .value = &Static.size.w, .min = 1, .max = 400, .interval = 1 }, .{});
+                _ = try dvui.sliderEntry(@src(), "H: {d:0.0}", .{ .value = &Static.size.h, .min = 1, .max = 280, .interval = 1 }, .{});
 
                 _ = try dvui.checkbox(@src(), &Static.shrink, "Shrink", .{});
                 _ = try dvui.checkbox(@src(), &Static.background, "Background", .{});
@@ -1745,9 +1745,8 @@ pub fn layout() !void {
     try dvui.label(@src(), "Boxes", .{}, .{});
     {
         const opts: Options = .{ .expand = .both, .border = Rect.all(1), .background = true };
-        const grav: Options = .{ .gravity_x = 0.5, .gravity_y = 0.5 };
 
-        var hbox = try dvui.box(@src(), .horizontal, .{});
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
         defer hbox.deinit();
         {
             var hbox2 = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 200, .h = 140 } });
@@ -1756,40 +1755,40 @@ pub fn layout() !void {
                 var vbox = try dvui.box(@src(), .vertical, opts);
                 defer vbox.deinit();
 
-                _ = try dvui.button(@src(), "vertical", .{}, grav);
-                _ = try dvui.button(@src(), "expand", .{}, grav.override(.{ .expand = .vertical }));
-                _ = try dvui.button(@src(), "a", .{}, grav);
+                _ = try dvui.button(@src(), "vertical", .{}, .{ .gravity_x = 0.5 });
+                _ = try dvui.button(@src(), "expand", .{}, .{ .expand = .both, .gravity_x = 0.5 });
+                _ = try dvui.button(@src(), "a", .{}, .{ .gravity_x = 0.5 });
             }
 
             {
                 var vbox = try dvui.boxEqual(@src(), .vertical, opts);
                 defer vbox.deinit();
 
-                _ = try dvui.button(@src(), "vert equal", .{}, grav);
-                _ = try dvui.button(@src(), "expand", .{}, grav.override(.{ .expand = .vertical }));
-                _ = try dvui.button(@src(), "a", .{}, grav);
+                _ = try dvui.button(@src(), "vert equal", .{}, .{ .gravity_x = 0.5 });
+                _ = try dvui.button(@src(), "expand", .{}, .{ .expand = .both, .gravity_x = 0.5 });
+                _ = try dvui.button(@src(), "a", .{}, .{ .gravity_x = 0.5 });
             }
         }
 
         {
-            var vbox2 = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200, .h = 140 } });
+            var vbox2 = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200, .h = 140 }, .expand = .horizontal });
             defer vbox2.deinit();
             {
-                var hbox2 = try dvui.box(@src(), .horizontal, opts);
+                var hbox2 = try dvui.box(@src(), .horizontal, opts.override(.{ .debug = true }));
                 defer hbox2.deinit();
 
-                _ = try dvui.button(@src(), "horizontal", .{}, grav);
-                _ = try dvui.button(@src(), "expand", .{}, grav.override(.{ .expand = .horizontal }));
-                _ = try dvui.button(@src(), "a", .{}, grav);
+                _ = try dvui.button(@src(), "horizontal", .{}, .{ .gravity_y = 0.5 });
+                _ = try dvui.button(@src(), "expand", .{}, .{ .expand = .both, .gravity_y = 0.5 });
+                _ = try dvui.button(@src(), "a", .{}, .{ .gravity_y = 0.5 });
             }
 
             {
                 var hbox2 = try dvui.boxEqual(@src(), .horizontal, opts);
                 defer hbox2.deinit();
 
-                _ = try dvui.button(@src(), "horz\nequal", .{}, grav);
-                _ = try dvui.button(@src(), "expand", .{}, grav.override(.{ .expand = .horizontal }));
-                _ = try dvui.button(@src(), "a", .{}, grav);
+                _ = try dvui.button(@src(), "horiz\nequal", .{}, .{ .gravity_y = 0.5 });
+                _ = try dvui.button(@src(), "expand", .{}, .{ .expand = .both, .gravity_y = 0.5 });
+                _ = try dvui.button(@src(), "a", .{}, .{ .gravity_y = 0.5 });
             }
         }
     }

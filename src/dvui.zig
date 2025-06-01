@@ -5587,7 +5587,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     defer b.deinit();
 
     const check_size = options.fontGet().textHeight();
-    const s = try spacer(@src(), Size.all(check_size), .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+    const s = try spacer(@src(), Size.all(check_size), .{ .gravity_y = 0.5 });
 
     const rs = s.borderRectScale();
 
@@ -5597,7 +5597,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 
     if (label_str) |str| {
         _ = try spacer(@src(), .{ .w = checkbox_defaults.paddingGet().w }, .{});
-        try labelNoFmt(@src(), str, options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
+        try labelNoFmt(@src(), str, options.strip().override(.{ .gravity_y = 0.5 }));
     }
 
     return ret;
@@ -5673,7 +5673,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     defer b.deinit();
 
     const radio_size = options.fontGet().textHeight();
-    const s = try spacer(@src(), Size.all(radio_size), .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+    const s = try spacer(@src(), Size.all(radio_size), .{ .gravity_y = 0.5 });
 
     const rs = s.borderRectScale();
 
@@ -5683,7 +5683,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 
     if (label_str) |str| {
         _ = try spacer(@src(), .{ .w = radio_defaults.paddingGet().w }, .{});
-        try labelNoFmt(@src(), str, options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
+        try labelNoFmt(@src(), str, options.strip().override(.{ .gravity_y = 0.5 }));
     }
 
     return ret;
