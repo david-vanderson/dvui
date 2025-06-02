@@ -49,6 +49,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         .vertical => rect.r.h,
     };
 
+    self.handle_interactive = init_opts.handle_interactive;
+
     if (!self.handle_interactive)
         self.handle_size = init_opts.handle_size
     else
