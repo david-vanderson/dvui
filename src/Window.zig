@@ -102,7 +102,7 @@ capture: ?dvui.CaptureMouse = null,
 captured_last_frame: bool = false,
 
 gpa: std.mem.Allocator,
-_arena: std.heap.ArenaAllocator,
+_arena: dvui.ShrinkingArenaAllocator,
 texture_trash: std.ArrayList(dvui.Texture) = undefined,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
@@ -171,7 +171,7 @@ const SavedData = struct {
 
 pub const InitOptions = struct {
     id_extra: usize = 0,
-    arena: ?std.heap.ArenaAllocator = null,
+    arena: ?dvui.ShrinkingArenaAllocator = null,
     theme: ?*Theme = null,
     keybinds: ?enum {
         none,
@@ -190,26 +190,26 @@ pub fn init(
 
     var self = Self{
         .gpa = gpa,
-        ._arena = init_opts.arena orelse std.heap.ArenaAllocator.init(gpa),
-        .subwindows = std.ArrayList(Subwindow).init(gpa),
-        .min_sizes = std.AutoHashMap(WidgetId, SavedSize).init(gpa),
-        .tags = std.StringHashMap(SavedTagData).init(gpa),
-        .data_mutex = std.Thread.Mutex{},
-        .datas = std.AutoHashMap(u64, SavedData).init(gpa),
-        .animations = std.AutoHashMap(u64, Animation).init(gpa),
-        .tab_index_prev = std.ArrayList(dvui.TabIndex).init(gpa),
-        .tab_index = std.ArrayList(dvui.TabIndex).init(gpa),
-        .font_cache = std.AutoHashMap(u64, dvui.FontCacheEntry).init(gpa),
-        .texture_cache = std.AutoHashMap(u64, dvui.TextureCacheEntry).init(gpa),
-        .dialog_mutex = std.Thread.Mutex{},
-        .dialogs = std.ArrayList(Dialog).init(gpa),
-        .toasts = std.ArrayList(Toast).init(gpa),
-        .keybinds = std.StringHashMap(dvui.enums.Keybind).init(gpa),
-        .debug_toggle_mutex = std.Thread.Mutex{},
+        ._arena = init_opts.arena orelse .init(gpa),
+        .subwindows = .init(gpa),
+        .min_sizes = .init(gpa),
+        .tags = .init(gpa),
+        .data_mutex = .{},
+        .datas = .init(gpa),
+        .animations = .init(gpa),
+        .tab_index_prev = .init(gpa),
+        .tab_index = .init(gpa),
+        .font_cache = .init(gpa),
+        .texture_cache = .init(gpa),
+        .dialog_mutex = .{},
+        .dialogs = .init(gpa),
+        .toasts = .init(gpa),
+        .keybinds = .init(gpa),
+        .debug_toggle_mutex = .{},
         .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
         .backend = backend_ctx,
         .font_bytes = try dvui.Font.initTTFBytesDatabase(gpa),
-        .themes = std.StringArrayHashMap(Theme).init(gpa),
+        .themes = .init(gpa),
     };
 
     try self.themes.putNoClobber("Adwaita Light", @import("themes/Adwaita.zig").light);
@@ -1708,7 +1708,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // event to the end this will print a debug message.
     self.positionMouseEventRemove();
 
-    _ = self._arena.reset(.retain_capacity);
+    _ = self._arena.reset();
 
     try self.initEvents();
 
