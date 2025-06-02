@@ -3221,6 +3221,7 @@ pub const DialogOptions = struct {
     message: []const u8,
     ok_label: []const u8 = "Ok",
     cancel_label: ?[]const u8 = null,
+    default: ?enums.DialogResponse = .ok,
     max_size: ?Options.MaxSize = null,
     displayFn: DialogDisplayFn = dialogDisplay,
     callafterFn: ?DialogCallAfterFn = null,
@@ -3243,6 +3244,9 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
     dataSet(opts.window, id, "_center_on", (opts.window orelse currentWindow()).subwindow_currentRect);
     if (opts.cancel_label) |cl| {
         dataSetSlice(opts.window, id, "_cancel_label", cl);
+    }
+    if (opts.default) |d| {
+        dataSet(opts.window, id, "_default", d);
     }
     if (opts.max_size) |ms| {
         dataSet(opts.window, id, "_max_size", ms);
@@ -3292,6 +3296,7 @@ pub fn dialogDisplay(id: WidgetId) !void {
     const center_on = dvui.dataGet(null, id, "_center_on", Rect.Natural) orelse currentWindow().subwindow_currentRect;
 
     const cancel_label = dvui.dataGetSlice(null, id, "_cancel_label", []u8);
+    const default = dvui.dataGet(null, id, "_default", enums.DialogResponse);
 
     const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
@@ -3310,13 +3315,33 @@ pub fn dialogDisplay(id: WidgetId) !void {
         return;
     }
 
+    const internal = struct {
+        fn button(src: std.builtin.SourceLocation, label_str: []const u8, focus_on_first_frame: bool, init_opts: ButtonWidget.InitOptions, opts: Options) !bool {
+            var bw = ButtonWidget.init(src, init_opts, opts);
+            if (focus_on_first_frame and dvui.firstFrame(bw.data().id)) {
+                dvui.focusWidget(bw.data().id, null, null);
+            }
+            try bw.install();
+            bw.processEvents();
+            try bw.drawBackground();
+
+            const click = bw.clicked();
+            var options = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
+            if (bw.pressed()) options = options.override(.{ .color_text = .{ .color = opts.color(.text_press) } });
+            try labelNoFmt(@src(), label_str, options);
+            try bw.drawFocus();
+            bw.deinit();
+            return click;
+        }
+    };
+
     {
         // Add the buttons at the bottom first, so that they are guaranteed to be shown
         var hbox = try dvui.box(@src(), .horizontal, .{ .gravity_x = 0.5, .gravity_y = 1.0 });
         defer hbox.deinit();
 
         if (cancel_label) |cl| {
-            if (try dvui.button(@src(), cl, .{}, .{ .tab_index = 2 })) {
+            if (try internal.button(@src(), cl, default != null and default.? == .cancel, .{}, .{ .tab_index = 2 })) {
                 dvui.dialogRemove(id);
                 if (callafter) |ca| {
                     try ca(id, .cancel);
@@ -3325,7 +3350,7 @@ pub fn dialogDisplay(id: WidgetId) !void {
             }
         }
 
-        if (try dvui.button(@src(), ok_label, .{}, .{ .tab_index = 1 })) {
+        if (try internal.button(@src(), ok_label, default != null and default.? == .ok, .{}, .{ .tab_index = 1 })) {
             dvui.dialogRemove(id);
             if (callafter) |ca| {
                 try ca(id, .ok);

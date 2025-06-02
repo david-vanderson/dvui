@@ -3113,7 +3113,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) !void {
         defer hbox.deinit();
 
         if (try dvui.button(@src(), "Non modal", .{}, .{})) {
-            try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Ok Dialog", .ok_label = "Done", .message = "This is a non modal dialog with no callafter" });
+            try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Ok Dialog", .ok_label = "Ok", .message = "This is a non modal dialog with no callafter\n\nThe ok button is focused by default" });
         }
 
         const dialogsFollowup = struct {
@@ -3126,7 +3126,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) !void {
         };
 
         if (try dvui.button(@src(), "Modal with followup", .{}, .{})) {
-            try dvui.dialog(@src(), .{}, .{ .title = "Followup", .message = "This is a modal dialog with modal followup", .callafterFn = dialogsFollowup.callafter, .cancel_label = "Cancel" });
+            try dvui.dialog(@src(), .{}, .{ .title = "Followup", .message = "This is a modal dialog with modal followup\n\nHere the cancel button is focused", .callafterFn = dialogsFollowup.callafter, .cancel_label = "Cancel", .default = .cancel });
         }
     }
 
