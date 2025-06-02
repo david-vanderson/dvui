@@ -958,7 +958,8 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, icon_op
         }
     };
     const img_raw_data = try cw.arena().alloc(u8, height * height * 4);
-    for (img_raw_data) |*d| d.* = 0;
+    defer cw.arena().free(img_raw_data);
+    @memset(img_raw_data, 0);
     var img = ImageAdapter{
         .pixels = img_raw_data,
         .width = height,
@@ -5856,9 +5857,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         }
     }
 
-    const cw = currentWindow();
-    var te = try cw.arena().create(TextEntryWidget);
-    te.* = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer } }, opts);
+    var te = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer } }, opts);
     try te.install();
     te.processEvents();
 
@@ -5957,9 +5956,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 9);
 
-    const cw = currentWindow();
-    var te = try cw.arena().create(TextEntryWidget);
-    te.* = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = init_opts.placeholder }, options);
+    var te = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = init_opts.placeholder }, options);
     try te.install();
 
     //initialize with input number
@@ -6198,15 +6195,9 @@ pub fn renderText(opts: renderTextOptions) !void {
         size.h += 2 * pad;
 
         var pixels = try cw.arena().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
+        defer cw.arena().free(pixels);
         // set all pixels to zero alpha
-        for (pixels) |*p| {
-            p.* = 0;
-            //if (i % 4 == 3) {
-            //    p.* = 0;
-            //} else {
-            //    p.* = 255;
-            //}
-        }
+        @memset(pixels, 0);
 
         //const num_glyphs = fce.glyph_info.count();
         //std.debug.print("font size {d} regen glyph atlas num {d} max size {}\n", .{ sized_font.size, num_glyphs, size });
@@ -6258,6 +6249,7 @@ pub fn renderText(opts: renderTextOptions) !void {
 
                     // single channel
                     const bitmap = try cw.arena().alloc(u8, @as(usize, out_w * out_h));
+                    defer cw.arena().free(bitmap);
 
                     //log.debug("makecodepointBitmap size x {d} y {d} w {d} h {d} out w {d} h {d}", .{ x, y, size.w, size.h, out_w, out_h });
 

@@ -131,6 +131,7 @@ pub fn install(self: *PlotWidget) !void {
         for (yticks) |m_ytick| {
             if (m_ytick) |ytick| {
                 const tick_str = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{ytick});
+                defer dvui.currentWindow().arena().free(tick_str);
                 tick_width = @max(tick_width, tick_font.textSize(tick_str).w);
             }
         }
@@ -216,6 +217,7 @@ pub fn install(self: *PlotWidget) !void {
             if (m_ytick) |ytick| {
                 const tick: Data = .{ .x = self.x_axis.min orelse 0, .y = ytick };
                 const tick_str = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{ytick});
+                defer dvui.currentWindow().arena().free(tick_str);
                 const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
                 var tick_p = self.dataToScreen(tick);
                 tick_p.x -= tick_str_size.w + pad;
@@ -236,6 +238,7 @@ pub fn install(self: *PlotWidget) !void {
             if (m_xtick) |xtick| {
                 const tick: Data = .{ .x = xtick, .y = self.y_axis.min orelse 0 };
                 const tick_str = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{xtick});
+                defer dvui.currentWindow().arena().free(tick_str);
                 const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
                 var tick_p = self.dataToScreen(tick);
                 tick_p.x = @max(tick_p.x, self.data_rs.r.x);
@@ -286,6 +289,8 @@ pub fn deinit(self: *PlotWidget) void {
     if (self.hover_data) |hd| {
         var p = self.box.data().contentRectScale().pointFromPhysical(self.mouse_point.?);
         const str = std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}, {d}", .{ hd.x, hd.y }) catch "";
+        // NOTE: Always calling free is safe because fallback is a 0 len slice, which is ignored
+        defer dvui.currentWindow().arena().free(str);
         const size: Size = (dvui.Options{}).fontGet().textSize(str);
         p.x -= size.w / 2;
         const padding = dvui.LabelWidget.defaults.paddingGet();
