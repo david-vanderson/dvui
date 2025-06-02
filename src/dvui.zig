@@ -4193,8 +4193,8 @@ pub fn gridHeadingSortable(
     cell_opts: GridWidget.CellOptions,
     opts: dvui.Options,
 ) !bool {
-    const icon_ascending = @embedFile("icons/entypo/chevron-small-down.tvg");
-    const icon_descending = @embedFile("icons/entypo/chevron-small-up.tvg");
+    const icon_ascending = dvui.entypo.chevron_small_down;
+    const icon_descending = dvui.entypo.chevron_small_up;
 
     // Pad buttons with extra space if there is no sort indicator.
     const heading_defaults: Options = .{
