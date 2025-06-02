@@ -4006,6 +4006,12 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     return expanded;
 }
 
+/// Splits area in two with a user-moveable sash between.
+///
+/// Automatically collapses (only shows one of the two sides) when it has less
+/// than init_opts.collapsed_size space.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: Options) !*PanedWidget {
     var ret = try currentWindow().arena().create(PanedWidget);
     ret.* = PanedWidget.init(src, init_opts, opts);
@@ -4062,6 +4068,12 @@ pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget
     tt.deinit();
 }
 
+/// Shim to make widget ids unique.
+///
+/// Useful when you wrap some widgets into a function, but that function does
+/// not have a parent widget.  See makeLabels() in src/Examples.zig
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) !*VirtualParentWidget {
     var ret = try currentWindow().arena().create(VirtualParentWidget);
     ret.* = VirtualParentWidget.init(src, opts);
