@@ -441,18 +441,15 @@ pub fn clipboardText(self: *SDLBackend) ![]const u8 {
 
 pub fn clipboardTextSet(self: *SDLBackend, text: []const u8) !void {
     if (text.len == 0) return;
-
-    var cstr = try self.arena.alloc(u8, text.len + 1);
-    @memcpy(cstr[0..text.len], text);
-    cstr[cstr.len - 1] = 0;
-    _ = c.SDL_SetClipboardText(cstr.ptr);
+    const c_text = try self.arena.dupeZ(u8, text);
+    defer self.arena.free(c_text);
+    _ = c.SDL_SetClipboardText(c_text.ptr);
 }
 
 pub fn openURL(self: *SDLBackend, url: []const u8) !void {
-    var cstr = try self.arena.alloc(u8, url.len + 1);
-    @memcpy(cstr[0..url.len], url);
-    cstr[cstr.len - 1] = 0;
-    _ = c.SDL_OpenURL(cstr.ptr);
+    const c_url = try self.arena.dupeZ(u8, url);
+    defer self.arena.free(c_url);
+    _ = c.SDL_OpenURL(c_url.ptr);
 }
 
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) void {
