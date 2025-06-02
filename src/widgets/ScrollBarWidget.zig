@@ -43,7 +43,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     var options = defaults.override(opts);
     if (self.overlay) {
         // we don't want to take any space from parent
-        options.min_size_content = .{ .w = 5, .h = 5 };
         options.rect = dvui.placeIn(dvui.parentGet().data().contentRect().justSize(), options.min_sizeGet(), opts.expandGet(), opts.gravityGet());
     }
     self.wd = WidgetData.init(src, .{}, options);
@@ -180,15 +179,17 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
     }
 }
 
-pub fn deinit(self: *ScrollBarWidget) void {
+pub fn drawGrab(self: *ScrollBarWidget) !void {
     var fill = self.wd.options.color(.text).opacity(0.5);
     if (dvui.captured(self.wd.id) or self.highlight) {
         fill = self.wd.options.color(.text).opacity(0.3);
     }
     self.grabRect = self.grabRect.insetAll(2);
     const grabrs = self.wd.parent.screenRectScale(self.grabRect);
-    grabrs.r.fill(.all(100), .{ .color = fill }) catch {};
+    try grabrs.r.fill(.all(100), .{ .color = fill });
+}
 
+pub fn deinit(self: *ScrollBarWidget) void {
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
 }
