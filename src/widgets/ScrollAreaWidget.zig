@@ -35,7 +35,9 @@ pub const InitOpts = struct {
 };
 
 hbox: BoxWidget = undefined,
+vbar: ?ScrollBarWidget = null,
 vbox: BoxWidget = undefined,
+hbar: ?ScrollBarWidget = null,
 init_opts: InitOpts = undefined,
 si: *ScrollInfo = undefined,
 si_store: ScrollInfo = .{},
@@ -89,14 +91,14 @@ pub fn install(self: *ScrollAreaWidget) !void {
     var do_vbar = false;
     var do_hbar = false;
     if (self.si.vertical != .none) {
-        if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar == .auto and (self.si.virtual_size.h > (self.si.viewport.h + 0.001)))) {
+        if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar.autoAny() and (self.si.virtual_size.h > (self.si.viewport.h + 0.001)))) {
             do_vbar = true;
             self.si.viewport.w -= ScrollBarWidget.defaults.min_sizeGet().w;
         }
     }
 
     if (self.si.horizontal != .none) {
-        if (self.init_opts.horizontal_bar == .show or (self.init_opts.horizontal_bar == .auto and (self.si.virtual_size.w > (self.si.viewport.w + 0.001)))) {
+        if (self.init_opts.horizontal_bar == .show or (self.init_opts.horizontal_bar.autoAny() and (self.si.virtual_size.w > (self.si.viewport.w + 0.001)))) {
             do_hbar = true;
             self.si.viewport.h -= ScrollBarWidget.defaults.min_sizeGet().h;
         }
@@ -105,7 +107,7 @@ pub fn install(self: *ScrollAreaWidget) !void {
     // test for vbar again because hbar might have removed some of our room
     if (!do_vbar) {
         if (self.si.vertical != .none) {
-            if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar == .auto and (self.si.virtual_size.h > (self.si.viewport.h + 0.001)))) {
+            if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar.autoAny() and (self.si.virtual_size.h > (self.si.viewport.h + 0.001)))) {
                 do_vbar = true;
                 self.si.viewport.w -= ScrollBarWidget.defaults.min_sizeGet().w;
             }
@@ -115,9 +117,10 @@ pub fn install(self: *ScrollAreaWidget) !void {
     if (do_vbar) {
         // do the scrollbars first so that they still appear even if there's not enough space
         // - could instead do them in deinit
-        var vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = self.si, .focus_id = focus_target }, .{ .gravity_x = 1.0, .expand = .vertical });
-        try vbar.install();
-        vbar.deinit();
+        self.vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = self.si, .focus_id = focus_target, .overlay = self.init_opts.vertical_bar == .auto_overlay }, .{ .gravity_x = 1.0, .expand = .vertical });
+        try self.vbar.?.install();
+        if (!self.vbar.?.overlay) try self.vbar.?.drawGrab();
+        self.vbar.?.deinit();
     }
 
     self.vbox = BoxWidget.init(@src(), .vertical, false, self.hbox.data().options.strip().override(.{ .expand = .both, .name = "ScrollAreaWidget vbox" }));
@@ -125,9 +128,10 @@ pub fn install(self: *ScrollAreaWidget) !void {
     try self.vbox.drawBackground();
 
     if (do_hbar) {
-        var hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, .{ .expand = .horizontal, .gravity_y = 1.0 });
-        try hbar.install();
-        hbar.deinit();
+        self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target, .overlay = self.init_opts.horizontal_bar == .auto_overlay }, .{ .expand = .horizontal, .gravity_y = 1.0 });
+        try self.hbar.?.install();
+        if (!self.hbar.?.overlay) try self.hbar.?.drawGrab();
+        self.hbar.?.deinit();
     }
 
     const container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
@@ -147,7 +151,15 @@ pub fn deinit(self: *ScrollAreaWidget) void {
     dvui.dataSet(null, self.hbox.data().id, "_scroll_id", self.scroll.wd.id);
     self.scroll.deinit();
 
+    if (self.hbar) |*hbar| {
+        if (hbar.overlay) hbar.drawGrab() catch {};
+    }
+
     self.vbox.deinit();
+
+    if (self.vbar) |*vbar| {
+        if (vbar.overlay) vbar.drawGrab() catch {};
+    }
 
     dvui.dataSet(null, self.hbox.data().id, "_scroll_info", self.si.*);
 
