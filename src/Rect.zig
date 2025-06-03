@@ -200,14 +200,14 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         /// - h is bottom-left corner
         ///
         /// Only valid between dvui.Window.begin() and end().
-        pub fn stroke(self: Rect.Physical, radius: Rect.Physical, opts: dvui.PathStrokeOptions) !void {
-            var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
+        pub fn stroke(self: Rect.Physical, radius: Rect.Physical, opts: dvui.Path.StrokeOptions) !void {
+            var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
             defer path.deinit();
 
-            try dvui.pathAddRect(&path, self, radius);
+            try path.addRect(self, radius);
             var options = opts;
             options.closed = true;
-            try dvui.pathStroke(path.items, options);
+            try path.build().stroke(options);
         }
 
         /// Fill a rounded rect.
@@ -219,12 +219,12 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         /// - h is bottom-left corner
         ///
         /// Only valid between dvui.Window.begin() and end().
-        pub fn fill(self: Rect.Physical, radius: Rect.Physical, opts: dvui.PathFillConvexOptions) !void {
-            var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
+        pub fn fill(self: Rect.Physical, radius: Rect.Physical, opts: dvui.Path.FillConvexOptions) !void {
+            var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
             defer path.deinit();
 
-            try dvui.pathAddRect(&path, self, radius);
-            try dvui.pathFillConvex(path.items, opts);
+            try path.addRect(self, radius);
+            try path.build().fillConvex(opts);
         }
 
         /// True if self would be modified when clipped by r.

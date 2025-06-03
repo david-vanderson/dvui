@@ -46,7 +46,7 @@ pub const Data = struct {
 
 pub const Line = struct {
     plot: *PlotWidget,
-    path: dvui.PathArrayList,
+    path: dvui.Path.Builder,
 
     pub fn point(self: *Line, x: f64, y: f64) !void {
         const data: Data = .{ .x = x, .y = y };
@@ -59,11 +59,11 @@ pub const Line = struct {
                 self.plot.hover_data = data;
             }
         }
-        try self.path.append(screen_p);
+        try self.path.points.append(screen_p);
     }
 
     pub fn stroke(self: *Line, thick: f32, color: dvui.Color) !void {
-        try dvui.pathStroke(self.path.items, .{ .thickness = thick * self.plot.data_rs.s, .color = color });
+        try self.path.build().stroke(.{ .thickness = thick * self.plot.data_rs.s, .color = color });
     }
 
     pub fn deinit(self: *Line) void {

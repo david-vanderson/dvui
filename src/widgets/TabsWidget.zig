@@ -48,7 +48,7 @@ pub fn install(self: *TabsWidget) !void {
                 r.w -= 1.0;
                 r.y = @floor(r.y) - 0.5;
             }
-            try dvui.pathStroke(&.{ r.bottomLeft(), r.bottomRight() }, .{ .thickness = 1, .color = dvui.themeGet().color_border });
+            try dvui.Path.stroke(.{ .points = &.{ r.bottomLeft(), r.bottomRight() } }, .{ .thickness = 1, .color = dvui.themeGet().color_border });
         },
         .vertical => {
             if (dvui.currentWindow().snap_to_pixels) {
@@ -56,7 +56,7 @@ pub fn install(self: *TabsWidget) !void {
                 r.h -= 1.0;
                 r.x = @floor(r.x) - 0.5;
             }
-            try dvui.pathStroke(&.{ r.topRight(), r.bottomRight() }, .{ .thickness = 1, .color = dvui.themeGet().color_border });
+            try dvui.Path.stroke(.{ .points = &.{ r.topRight(), r.bottomRight() } }, .{ .thickness = 1, .color = dvui.themeGet().color_border });
         },
     }
 }
@@ -117,36 +117,36 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) !*ButtonWidget {
 
         switch (self.init_options.dir) {
             .horizontal => {
-                var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
+                var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
                 defer path.deinit();
 
-                try path.append(r.bottomRight());
+                try path.points.append(r.bottomRight());
 
                 const tr = Point.Physical{ .x = r.x + r.w - cr.y, .y = r.y + cr.y };
-                try dvui.pathAddArc(&path, tr, cr.y, math.pi * 2.0, math.pi * 1.5, false);
+                try path.addArc(tr, cr.y, math.pi * 2.0, math.pi * 1.5, false);
 
                 const tl = Point.Physical{ .x = r.x + cr.x, .y = r.y + cr.x };
-                try dvui.pathAddArc(&path, tl, cr.x, math.pi * 1.5, math.pi, false);
+                try path.addArc(tl, cr.x, math.pi * 1.5, math.pi, false);
 
-                try path.append(r.bottomLeft());
+                try path.points.append(r.bottomLeft());
 
-                try dvui.pathStroke(path.items, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent, .after = true });
+                try path.build().stroke(.{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent, .after = true });
             },
             .vertical => {
-                var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
+                var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
                 defer path.deinit();
 
-                try path.append(r.topRight());
+                try path.points.append(r.topRight());
 
                 const tl = Point.Physical{ .x = r.x + cr.x, .y = r.y + cr.x };
-                try dvui.pathAddArc(&path, tl, cr.x, math.pi * 1.5, math.pi, false);
+                try path.addArc(tl, cr.x, math.pi * 1.5, math.pi, false);
 
                 const bl = Point.Physical{ .x = r.x + cr.h, .y = r.y + r.h - cr.h };
-                try dvui.pathAddArc(&path, bl, cr.h, math.pi, math.pi * 0.5, false);
+                try path.addArc(bl, cr.h, math.pi, math.pi * 0.5, false);
 
-                try path.append(r.bottomRight());
+                try path.points.append(r.bottomRight());
 
-                try dvui.pathStroke(path.items, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent, .after = true });
+                try path.build().stroke(.{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent, .after = true });
             },
         }
     }

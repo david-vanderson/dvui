@@ -334,14 +334,14 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             }
 
             if (visible) {
-                var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
+                var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
                 defer path.deinit();
 
-                try path.append(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
-                try dvui.pathAddArc(&path, .{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
+                try path.points.append(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
+                try path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                try dvui.pathFillConvex(path.items, .{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
-                try dvui.pathStroke(path.items, .{ .thickness = 1.0 * fcrs.s, .color = self.wd.options.color(.border), .closed = true });
+                try path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
+                try path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.wd.options.color(.border), .closed = true });
             }
 
             dvui.dataSet(null, fc.wd.id, "_offset", offset);
@@ -405,14 +405,14 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             }
 
             if (visible) {
-                var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
+                var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
                 defer path.deinit();
 
-                try path.append(.{ .x = fcrs.r.x, .y = fcrs.r.y });
-                try dvui.pathAddArc(&path, .{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
+                try path.points.append(.{ .x = fcrs.r.x, .y = fcrs.r.y });
+                try path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                try dvui.pathFillConvex(path.items, .{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
-                try dvui.pathStroke(path.items, .{ .thickness = 1.0 * fcrs.s, .color = self.wd.options.color(.border), .closed = true });
+                try path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
+                try path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.wd.options.color(.border), .closed = true });
             }
 
             dvui.dataSet(null, fc.wd.id, "_offset", offset);
