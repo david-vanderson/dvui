@@ -84,8 +84,11 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
         } else {
             self.animateSplit(0.0);
         }
-    } else if (!self.collapsing and self.collapsed_state and our_size >= self.init_opts.collapsed_size) {
+    }
+
+    if ((self.collapsing or self.collapsed_state) and our_size >= self.init_opts.collapsed_size) {
         // expanding
+        self.collapsing = false;
         self.collapsed_state = false;
         if (self.split_ratio.* > 0.5) {
             self.animateSplit(0.5);
@@ -101,7 +104,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
 
         if (self.collapsing and a.done()) {
             self.collapsing = false;
-            self.collapsed_state = our_size < self.init_opts.collapsed_size;
+            self.collapsed_state = true;
         }
     }
 
