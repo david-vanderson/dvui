@@ -107,7 +107,10 @@ pub fn register(self: *WidgetData) !void {
             cw.windowFor(cw.mouse_pt) == dvui.subwindowCurrentId())
         {
             const old = cw.debug_under_mouse_info;
-            cw.debug_under_mouse_info = try std.fmt.allocPrint(cw.gpa, "{s}\n{x} {s}", .{ old, self.id, name });
+            cw.debug_under_mouse_info = std.fmt.allocPrint(cw.gpa, "{s}\n{x} {s}", .{ old, self.id, name }) catch blk: {
+                dvui.log.err("Under mouse debug info could not be printed", .{});
+                break :blk "";
+            };
             if (old.len > 0) {
                 cw.gpa.free(old);
             }
@@ -124,7 +127,17 @@ pub fn register(self: *WidgetData) !void {
             if (dvui.minSizeGet(self.id)) |ms| {
                 min_size = ms;
             }
-            cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena(), "{x} {s}\n\n{}\nmin {}\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{ self.id, name, rs.r, min_size, self.options.expandGet(), rs.s, self.options.paddingGet().scale(rs.s, Rect.Physical), self.options.borderGet().scale(rs.s, Rect.Physical), self.options.marginGet().scale(rs.s, Rect.Physical) });
+            cw.debug_info_name_rect = std.fmt.allocPrint(cw.arena(), "{x} {s}\n\n{}\nmin {}\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{
+                self.id,
+                name,
+                rs.r,
+                min_size,
+                self.options.expandGet(),
+                rs.s,
+                self.options.paddingGet().scale(rs.s, Rect.Physical),
+                self.options.borderGet().scale(rs.s, Rect.Physical),
+                self.options.marginGet().scale(rs.s, Rect.Physical),
+            }) catch "ERROR allocPrint";
             const clipr = dvui.clipGet();
             // clip to whole window so we always see the outline
             dvui.clipSet(dvui.windowRectPixels());

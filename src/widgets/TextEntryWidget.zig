@@ -280,6 +280,7 @@ pub fn draw(self: *TextEntryWidget) !void {
         sel.cursor = scursor.?;
         sel.end = send.?;
         var password_str: []u8 = try dvui.currentWindow().arena().alloc(u8, count * pc.len);
+        defer dvui.currentWindow().arena().free(password_str);
         for (0..count) |i| {
             for (0..pc.len) |pci| {
                 password_str[i * pc.len + pci] = pc[pci];
@@ -401,18 +402,11 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
             },
             .internal => |i| {
                 new_size = @min(new_size, i.limit);
-                var oom = false;
-                const copy = dvui.currentWindow().arena().dupe(u8, self.text) catch blk: {
-                    oom = true;
-                    dvui.log.debug("{x} TextEntryWidget.textTyped failed to dupe internal buffer for grow\n", .{self.wd.id});
-                    break :blk &.{};
-                };
-                if (!oom) {
-                    dvui.dataRemove(null, self.wd.id, "_buffer");
-                    dvui.dataSetSliceCopies(null, self.wd.id, "_buffer", &[_]u8{0}, new_size);
-                    self.text = dvui.dataGetSlice(null, self.wd.id, "_buffer", []u8).?;
-                    @memcpy(self.text[0..copy.len], copy);
-                }
+                // NOTE: Using prev_text is safe because data is trashed and stays valid until the end of the frame
+                const prev_text = self.text;
+                dvui.dataSetSliceCopies(null, self.wd.id, "_buffer", &[_]u8{0}, new_size);
+                self.text = dvui.dataGetSlice(null, self.wd.id, "_buffer", []u8).?;
+                @memcpy(self.text[0..prev_text.len], prev_text);
             },
         }
     }
@@ -896,18 +890,11 @@ pub fn deinit(self: *TextEntryWidget) void {
                 }
             },
             .internal => {
-                var oom = false;
-                const copy = dvui.currentWindow().arena().dupe(u8, self.text[0..new_len]) catch blk: {
-                    oom = true;
-                    dvui.log.debug("{x} TextEntryWidget.deinit failed to dupe internal buffer for shrink\n", .{self.wd.id});
-                    break :blk &.{};
-                };
-                if (!oom) {
-                    dvui.dataRemove(null, self.wd.id, "_buffer");
-                    dvui.dataSetSliceCopies(null, self.wd.id, "_buffer", &[_]u8{0}, new_len);
-                    self.text = dvui.dataGetSlice(null, self.wd.id, "_buffer", []u8).?;
-                    @memcpy(self.text, copy);
-                }
+                // NOTE: Using prev_text is safe because data is trashed and stays valid until the end of the frame
+                const prev_text = self.text;
+                dvui.dataSetSliceCopies(null, self.wd.id, "_buffer", &[_]u8{0}, new_len);
+                self.text = dvui.dataGetSlice(null, self.wd.id, "_buffer", []u8).?;
+                @memcpy(self.text, prev_text);
             },
         }
     }

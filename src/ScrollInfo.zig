@@ -23,8 +23,14 @@ pub const ScrollBarMode = enum {
     hide,
     /// show scrollbar if viewport is smaller than virtual_size
     auto,
+    /// overlay scrollbar on content if viewport is smaller than virtual_size
+    auto_overlay,
     /// always show scrollbar
     show,
+
+    pub fn autoAny(self: ScrollBarMode) bool {
+        return self == .auto or self == .auto_overlay;
+    }
 };
 
 vertical: ScrollMode = .auto,
