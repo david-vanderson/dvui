@@ -1015,12 +1015,12 @@ pub const RenderCommand = struct {
             opts: RenderTextureOptions,
         },
         pathFillConvex: struct {
-            path: PathSlice,
-            opts: PathFillConvexOptions,
+            path: Path,
+            opts: Path.FillConvexOptions,
         },
         pathStroke: struct {
-            path: PathSlice,
-            opts: PathStrokeOptions,
+            path: Path,
+            opts: Path.StrokeOptions,
         },
         triangles: struct {
             tri: Triangles,
@@ -1188,488 +1188,538 @@ pub fn cursorSet(cursor: enums.Cursor) void {
     }
 }
 
-pub const PathArrayList = std.ArrayList(Point.Physical);
-pub const PathSlice = []const Point.Physical;
-
-/// Add rounded rect to path.  Starts from top left, and ends at top right
-/// unclosed.  See `Rect.fill`.
+/// A collection of points that make up a shape that can later be rendered to the screen.
 ///
-/// radius values:
-/// - x is top-left corner
-/// - y is top-right corner
-/// - w is bottom-right corner
-/// - h is bottom-left corner
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn pathAddRect(path: *PathArrayList, r: Rect.Physical, radius: Rect.Physical) !void {
-    var rad = radius;
-    const maxrad = @min(r.w, r.h) / 2;
-    rad.x = @min(rad.x, maxrad);
-    rad.y = @min(rad.y, maxrad);
-    rad.w = @min(rad.w, maxrad);
-    rad.h = @min(rad.h, maxrad);
-    const tl = Point.Physical{ .x = r.x + rad.x, .y = r.y + rad.x };
-    const bl = Point.Physical{ .x = r.x + rad.h, .y = r.y + r.h - rad.h };
-    const br = Point.Physical{ .x = r.x + r.w - rad.w, .y = r.y + r.h - rad.w };
-    const tr = Point.Physical{ .x = r.x + r.w - rad.y, .y = r.y + rad.y };
-    try pathAddArc(path, tl, rad.x, math.pi * 1.5, math.pi, @abs(tl.y - bl.y) < 0.5);
-    try pathAddArc(path, bl, rad.h, math.pi, math.pi * 0.5, @abs(bl.x - br.x) < 0.5);
-    try pathAddArc(path, br, rad.w, math.pi * 0.5, 0, @abs(br.y - tr.y) < 0.5);
-    try pathAddArc(path, tr, rad.y, math.pi * 2.0, math.pi * 1.5, @abs(tr.x - tl.x) < 0.5);
-}
+/// This is the basic tool to create rectangles and more complex polygons to later be
+/// turned into `Triangles` and rendered to the screen.
+pub const Path = struct {
+    points: []const Point.Physical,
 
-/// Add line segments creating an arc to path.
-///
-/// `start` >= `end`, both are radians that go clockwise from the positive x axis.
-///
-/// If `skip_end`, the final point will not be added.  Useful if the next
-/// addition to path would duplicate the end of the arc.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn pathAddArc(path: *PathArrayList, center: Point.Physical, radius: f32, start: f32, end: f32, skip_end: bool) !void {
-    if (radius == 0) {
-        try path.append(center);
-        return;
-    }
+    /// A builder with an ArrayList to add points to.
+    ///
+    /// `Builder.deinit` should always be called as `Builder.build` does not give ownership
+    /// of the memory
+    pub const Builder = struct {
+        points: std.ArrayList(Point.Physical),
 
-    // how close our points will be to the perfect circle
-    const err = 0.1;
-
-    // angle that has err error between circle and segments
-    const theta = math.acos(radius / (radius + err));
-
-    // make sure we never have less than 4 segments
-    // so a full circle can't be less than a diamond
-    const num_segments = @max(@ceil((start - end) / theta), 4.0);
-
-    const step = (start - end) / num_segments;
-
-    const num = @as(u32, @intFromFloat(num_segments));
-    var a: f32 = start;
-    var i: u32 = 0;
-    while (i < num) : (i += 1) {
-        try path.append(.{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
-        a -= step;
-    }
-
-    if (!skip_end) {
-        a = end;
-        try path.append(.{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
-    }
-}
-
-pub const PathFillConvexOptions = struct {
-    blur: f32 = 1.0,
-    color: ?Color = null,
-    center: ?Point.Physical = null,
-};
-
-/// Fill path (must be convex) with `color` (or `Theme.color_fill`).  See `Rect.fill`.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn pathFillConvex(path: PathSlice, opts: PathFillConvexOptions) !void {
-    if (path.len < 3) {
-        return;
-    }
-
-    if (dvui.clipGet().empty()) {
-        return;
-    }
-
-    var options = opts;
-    if (options.color == null) {
-        options.color = dvui.themeGet().color_fill;
-    }
-
-    const cw = currentWindow();
-
-    if (!cw.render_target.rendering) {
-        const path_copy = try cw.arena().dupe(Point.Physical, path);
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .opts = options } } };
-
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
-        return;
-    }
-
-    var triangles = try pathFillConvexTriangles(path, options);
-    defer triangles.deinit(cw.arena());
-    try renderTriangles(triangles, null);
-}
-
-/// Generates triangles to fill path (must be convex).
-///
-/// Vertexes will have unset uv and color is alpha multiplied white fading to
-/// transparent at the edge.
-///
-/// blur is how many pixels wide the fade to transparent is, starting a half
-/// pixel inside. Currently blur < 1 is treated as 1, but might change.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn pathFillConvexTriangles(path: PathSlice, opts: PathFillConvexOptions) !Triangles {
-    if (path.len < 3) {
-        return .empty;
-    }
-
-    const cw = currentWindow();
-
-    var vtx_count = path.len;
-    var idx_count = (path.len - 2) * 3;
-    if (opts.blur > 0) {
-        vtx_count *= 2;
-        idx_count += path.len * 6;
-    }
-    if (opts.center) |_| {
-        vtx_count += 1;
-        idx_count += 6;
-    }
-
-    var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
-    errdefer comptime unreachable; // No errors from this point on
-
-    const col: Color.PMA = if (opts.color) |color| .fromColor(color) else .cast(.white);
-
-    var i: usize = 0;
-    while (i < path.len) : (i += 1) {
-        const ai: u16 = @intCast((i + path.len - 1) % path.len);
-        const bi: u16 = @intCast(i % path.len);
-        const ci: u16 = @intCast((i + 1) % path.len);
-        const aa = path[ai];
-        const bb = path[bi];
-        const cc = path[ci];
-
-        const diffab = aa.diff(bb).normalize();
-        const diffbc = bb.diff(cc).normalize();
-        // average of normals on each side
-        var norm: Point.Physical = .{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 };
-
-        // inner vertex
-        const inside_len = @min(0.5, opts.blur / 2);
-        builder.appendVertex(.{
-            .pos = .{
-                .x = bb.x - norm.x * inside_len,
-                .y = bb.y - norm.y * inside_len,
-            },
-            .col = col,
-            .uv = undefined,
-        });
-
-        const idx_ai = if (opts.blur > 0) ai * 2 else ai;
-        const idx_bi = if (opts.blur > 0) bi * 2 else bi;
-
-        // indexes for fill
-        // triangles must be counter-clockwise (y going down) to avoid backface culling
-        if (opts.center) |_| {
-            builder.appendTriangles(&.{ @intCast(vtx_count - 1), idx_ai, idx_bi });
-        } else if (i > 1) {
-            builder.appendTriangles(&.{ 0, idx_ai, idx_bi });
+        pub fn init(allocator: std.mem.Allocator) Builder {
+            return .{ .points = .init(allocator) };
         }
 
-        if (opts.blur > 0) {
-            // scale averaged normal by angle between which happens to be the same as
-            // dividing by the length^2
-            const d2 = norm.x * norm.x + norm.y * norm.y;
-            if (d2 > 0.000001) {
-                norm = norm.scale(1.0 / d2, Point.Physical);
-            }
-
-            // limit distance our vertexes can be from the point to 2 * blur so
-            // very small angles don't produce huge geometries
-            const l = norm.length();
-            if (l > 2.0) {
-                norm = norm.scale(2.0 / l, Point.Physical);
-            }
-
-            // outer vertex
-            const outside_len = if (opts.blur <= 1) opts.blur / 2 else opts.blur - 0.5;
-            builder.appendVertex(.{
-                .pos = .{
-                    .x = bb.x + norm.x * outside_len,
-                    .y = bb.y + norm.y * outside_len,
-                },
-                .col = .transparent,
-                .uv = undefined,
-            });
-
-            // indexes for aa fade from inner to outer
-            // triangles must be counter-clockwise (y going down) to avoid backface culling
-            builder.appendTriangles(&.{
-                idx_ai,     idx_ai + 1, idx_bi,
-                idx_ai + 1, idx_bi + 1, idx_bi,
-            });
+        pub fn deinit(path: *Builder) void {
+            path.points.deinit();
         }
-    }
 
-    if (opts.center) |center| {
-        builder.appendVertex(.{ .pos = center, .col = col, .uv = undefined });
-    }
+        /// Returns a non-owned `Path`. Calling `deinit` on the `Builder` is still required to free memory
+        pub fn build(path: *Builder) Path {
+            return .{ .points = path.points.items };
+        }
 
-    return builder.build();
-}
+        /// Add rounded rect to path.  Starts from top left, and ends at top right
+        /// unclosed.  See `Rect.fill`.
+        ///
+        /// radius values:
+        /// - x is top-left corner
+        /// - y is top-right corner
+        /// - w is bottom-right corner
+        /// - h is bottom-left corner
+        ///
+        /// Only valid between `Window.begin`and `Window.end`.
+        pub fn addRect(path: *Builder, r: Rect.Physical, radius: Rect.Physical) !void {
+            var rad = radius;
+            const maxrad = @min(r.w, r.h) / 2;
+            rad.x = @min(rad.x, maxrad);
+            rad.y = @min(rad.y, maxrad);
+            rad.w = @min(rad.w, maxrad);
+            rad.h = @min(rad.h, maxrad);
+            const tl = Point.Physical{ .x = r.x + rad.x, .y = r.y + rad.x };
+            const bl = Point.Physical{ .x = r.x + rad.h, .y = r.y + r.h - rad.h };
+            const br = Point.Physical{ .x = r.x + r.w - rad.w, .y = r.y + r.h - rad.w };
+            const tr = Point.Physical{ .x = r.x + r.w - rad.y, .y = r.y + rad.y };
+            try path.addArc(tl, rad.x, math.pi * 1.5, math.pi, @abs(tl.y - bl.y) < 0.5);
+            try path.addArc(bl, rad.h, math.pi, math.pi * 0.5, @abs(bl.x - br.x) < 0.5);
+            try path.addArc(br, rad.w, math.pi * 0.5, 0, @abs(br.y - tr.y) < 0.5);
+            try path.addArc(tr, rad.y, math.pi * 2.0, math.pi * 1.5, @abs(tr.x - tl.x) < 0.5);
+        }
 
-pub const PathStrokeOptions = struct {
-    /// true => Render this after normal drawing on that subwindow.  Useful for
-    /// debugging on cross-gui drawing.
-    after: bool = false,
+        /// Add line segments creating an arc to path.
+        ///
+        /// `start` >= `end`, both are radians that go clockwise from the positive x axis.
+        ///
+        /// If `skip_end`, the final point will not be added.  Useful if the next
+        /// addition to path would duplicate the end of the arc.
+        ///
+        /// Only valid between `Window.begin`and `Window.end`.
+        pub fn addArc(path: *Builder, center: Point.Physical, radius: f32, start: f32, end: f32, skip_end: bool) !void {
+            if (radius == 0) {
+                try path.points.append(center);
+                return;
+            }
 
-    thickness: f32,
-    color: Color,
+            // how close our points will be to the perfect circle
+            const err = 0.1;
 
-    /// true => Stroke includes from path end to path start.
-    closed: bool = false,
-    endcap_style: EndCapStyle = .none,
+            // angle that has err error between circle and segments
+            const theta = math.acos(radius / (radius + err));
 
-    pub const EndCapStyle = enum {
-        none,
-        square,
+            // make sure we never have less than 4 segments
+            // so a full circle can't be less than a diamond
+            const num_segments = @max(@ceil((start - end) / theta), 4.0);
+
+            const step = (start - end) / num_segments;
+
+            const num = @as(u32, @intFromFloat(num_segments));
+            var a: f32 = start;
+            var i: u32 = 0;
+            while (i < num) : (i += 1) {
+                try path.points.append(.{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
+                a -= step;
+            }
+
+            if (!skip_end) {
+                a = end;
+                try path.points.append(.{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
+            }
+        }
     };
-};
 
-/// Stroke path as a series of line segments.  See `Rect.stroke`.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn pathStroke(path: PathSlice, opts: PathStrokeOptions) !void {
-    if (path.len == 0) {
-        return;
+    test Builder {
+        var t = try dvui.testing.init(.{});
+        defer t.deinit();
+
+        var builder = Path.Builder.init(std.testing.allocator);
+        // deinit should always be called on the builder
+        defer builder.deinit();
+
+        try builder.addRect(.{ .x = 10, .y = 20, .w = 30, .h = 40 }, .all(0));
+        const path = builder.build();
+        // path does not have to be freed as the memory is still
+        // owned by and will be freed by the Path.Builder
+        try std.testing.expectEqual(4, path.points.len);
+
+        var triangles = try path.fillConvexTriangles(.{});
+        defer triangles.deinit(t.window.arena());
+        try std.testing.expectApproxEqRel(10, triangles.bounds.x, 0.05);
+        try std.testing.expectApproxEqRel(20, triangles.bounds.y, 0.05);
+        try std.testing.expectApproxEqRel(30, triangles.bounds.w, 0.05);
+        try std.testing.expectApproxEqRel(40, triangles.bounds.h, 0.05);
     }
 
-    const cw = currentWindow();
+    pub fn dupe(path: Path, allocator: std.mem.Allocator) !Path {
+        return .{ .points = try allocator.dupe(Point.Physical, path.points) };
+    }
 
-    if (opts.after or !cw.render_target.rendering) {
-        const path_copy = try cw.arena().dupe(Point.Physical, path);
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .opts = opts } } };
+    pub const FillConvexOptions = struct {
+        blur: f32 = 1.0,
+        color: ?Color = null,
+        center: ?Point.Physical = null,
+    };
 
-        var sw = cw.subwindowCurrent();
-        if (opts.after) {
-            try sw.render_cmds_after.append(cmd);
-        } else {
-            try sw.render_cmds.append(cmd);
+    /// Fill path (must be convex) with `color` (or `Theme.color_fill`).  See `Rect.fill`.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn fillConvex(path: Path, opts: FillConvexOptions) !void {
+        if (path.points.len < 3) {
+            return;
         }
 
-        return;
+        if (dvui.clipGet().empty()) {
+            return;
+        }
+
+        var options = opts;
+        if (options.color == null) {
+            options.color = dvui.themeGet().color_fill;
+        }
+
+        const cw = currentWindow();
+
+        if (!cw.render_target.rendering) {
+            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = try path.dupe(cw.arena()), .opts = options } } };
+
+            var sw = cw.subwindowCurrent();
+            try sw.render_cmds.append(cmd);
+            return;
+        }
+
+        var triangles = try path.fillConvexTriangles(options);
+        defer triangles.deinit(cw.arena());
+        try renderTriangles(triangles, null);
     }
 
-    var triangles = try pathStrokeTriangles(path, opts);
-    defer triangles.deinit(cw.arena());
-    try renderTriangles(triangles, null);
-}
+    /// Generates triangles to fill path (must be convex).
+    ///
+    /// Vertexes will have unset uv and color is alpha multiplied white fading to
+    /// transparent at the edge.
+    ///
+    /// blur is how many pixels wide the fade to transparent is, starting a half
+    /// pixel inside. Currently blur < 1 is treated as 1, but might change.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn fillConvexTriangles(path: Path, opts: FillConvexOptions) !Triangles {
+        if (path.points.len < 3) {
+            return .empty;
+        }
 
-/// Generates triangles to stroke path.
-///
-/// Vertexes will have unset uv and color is alpha multiplied white fading to
-/// transparent at the edge.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn pathStrokeTriangles(path: PathSlice, opts: PathStrokeOptions) !Triangles {
-    if (dvui.clipGet().empty()) {
-        return .empty;
-    }
+        const cw = currentWindow();
 
-    const cw = currentWindow();
+        var vtx_count = path.points.len;
+        var idx_count = (path.points.len - 2) * 3;
+        if (opts.blur > 0) {
+            vtx_count *= 2;
+            idx_count += path.points.len * 6;
+        }
+        if (opts.center) |_| {
+            vtx_count += 1;
+            idx_count += 6;
+        }
 
-    if (path.len == 1) {
-        // draw a circle with radius thickness at that point
-        const center = path[0];
+        var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
+        errdefer comptime unreachable; // No errors from this point on
 
-        var tempPath: PathArrayList = .init(cw.arena());
-        defer tempPath.deinit();
+        const col: Color.PMA = if (opts.color) |color| .fromColor(color) else .cast(.white);
 
-        try pathAddArc(&tempPath, center, opts.thickness, math.pi * 2.0, 0, true);
-        return try pathFillConvexTriangles(tempPath.items, .{ .color = opts.color, .blur = 1.0 });
-    }
+        var i: usize = 0;
+        while (i < path.points.len) : (i += 1) {
+            const ai: u16 = @intCast((i + path.points.len - 1) % path.points.len);
+            const bi: u16 = @intCast(i % path.points.len);
+            const ci: u16 = @intCast((i + 1) % path.points.len);
+            const aa = path.points[ai];
+            const bb = path.points[bi];
+            const cc = path.points[ci];
 
-    // a single segment can't be closed
-    const closed: bool = if (path.len == 2) false else opts.closed;
-
-    var vtx_count = path.len * 4;
-    if (!closed) {
-        vtx_count += 4;
-    }
-    var idx_count = (path.len - 1) * 18;
-    if (closed) {
-        idx_count += 18;
-    } else {
-        idx_count += 8 * 3;
-    }
-
-    var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
-    errdefer comptime unreachable; // No errors from this point on
-
-    const col: Color.PMA = .fromColor(opts.color);
-
-    const aa_size = 1.0;
-    var vtx_start: u16 = 0;
-    var i: usize = 0;
-    while (i < path.len) : (i += 1) {
-        const ai: u16 = @intCast((i + path.len - 1) % path.len);
-        const bi: u16 = @intCast(i % path.len);
-        const ci: u16 = @intCast((i + 1) % path.len);
-        const aa = path[ai];
-        var bb = path[bi];
-        const cc = path[ci];
-
-        // the amount to move from bb to the edge of the line
-        var halfnorm: Point.Physical = undefined;
-        var diffab: Point.Physical = undefined;
-
-        if (!closed and ((i == 0) or ((i + 1) == path.len))) {
-            if (i == 0) {
-                const diffbc = bb.diff(cc).normalize();
-                // rotate by 90 to get normal
-                halfnorm = .{ .x = diffbc.y / 2, .y = (-diffbc.x) / 2 };
-
-                if (opts.endcap_style == .square) {
-                    // square endcaps move bb out by thickness
-                    bb.x += diffbc.x * opts.thickness;
-                    bb.y += diffbc.y * opts.thickness;
-                }
-
-                // add 2 extra vertexes for endcap fringe
-                vtx_start += 2;
-
-                builder.appendVertex(.{
-                    .pos = .{
-                        .x = bb.x - halfnorm.x * (opts.thickness + aa_size) + diffbc.x * aa_size,
-                        .y = bb.y - halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
-                    },
-                    .col = .transparent,
-                    .uv = undefined,
-                });
-
-                builder.appendVertex(.{
-                    .pos = .{
-                        .x = bb.x + halfnorm.x * (opts.thickness + aa_size) + diffbc.x * aa_size,
-                        .y = bb.y + halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
-                    },
-                    .col = .transparent,
-                    .uv = undefined,
-                });
-
-                // add indexes for endcap fringe
-                builder.appendTriangles(&.{
-                    0, vtx_start,         vtx_start + 1,
-                    0, 1,                 vtx_start,
-                    1, vtx_start + 2,     vtx_start,
-                    1, vtx_start + 2 + 1, vtx_start + 2,
-                });
-            } else if ((i + 1) == path.len) {
-                diffab = aa.diff(bb).normalize();
-                // rotate by 90 to get normal
-                halfnorm = .{ .x = diffab.y / 2, .y = (-diffab.x) / 2 };
-
-                if (opts.endcap_style == .square) {
-                    // square endcaps move bb out by thickness
-                    bb.x -= diffab.x * opts.thickness;
-                    bb.y -= diffab.y * opts.thickness;
-                }
-            }
-        } else {
-            diffab = aa.diff(bb).normalize();
+            const diffab = aa.diff(bb).normalize();
             const diffbc = bb.diff(cc).normalize();
             // average of normals on each side
-            halfnorm = .{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 };
+            var norm: Point.Physical = .{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 };
 
-            // scale averaged normal by angle between which happens to be the same as
-            // dividing by the length^2
-            const d2 = halfnorm.x * halfnorm.x + halfnorm.y * halfnorm.y;
-            if (d2 > 0.000001) {
-                halfnorm = halfnorm.scale(0.5 / d2, Point.Physical);
-            }
-
-            // limit distance our vertexes can be from the point to 2 * thickness so
-            // very small angles don't produce huge geometries
-            const l = halfnorm.length();
-            if (l > 2.0) {
-                halfnorm = halfnorm.scale(2.0 / l, Point.Physical);
-            }
-        }
-
-        // side 1 inner vertex
-        builder.appendVertex(.{
-            .pos = .{
-                .x = bb.x - halfnorm.x * opts.thickness,
-                .y = bb.y - halfnorm.y * opts.thickness,
-            },
-            .col = col,
-            .uv = undefined,
-        });
-
-        // side 1 AA vertex
-        builder.appendVertex(.{
-            .pos = .{
-                .x = bb.x - halfnorm.x * (opts.thickness + aa_size),
-                .y = bb.y - halfnorm.y * (opts.thickness + aa_size),
-            },
-            .col = .transparent,
-            .uv = undefined,
-        });
-
-        // side 2 inner vertex
-        builder.appendVertex(.{
-            .pos = .{
-                .x = bb.x + halfnorm.x * opts.thickness,
-                .y = bb.y + halfnorm.y * opts.thickness,
-            },
-            .col = col,
-            .uv = undefined,
-        });
-
-        // side 2 AA vertex
-        builder.appendVertex(.{
-            .pos = .{
-                .x = bb.x + halfnorm.x * (opts.thickness + aa_size),
-                .y = bb.y + halfnorm.y * (opts.thickness + aa_size),
-            },
-            .col = .transparent,
-            .uv = undefined,
-        });
-
-        // triangles must be counter-clockwise (y going down) to avoid backface culling
-        if (closed or ((i + 1) != path.len)) {
-            builder.appendTriangles(&.{
-                // indexes for fill
-                vtx_start + bi * 4,     vtx_start + bi * 4 + 2, vtx_start + ci * 4,
-                vtx_start + bi * 4 + 2, vtx_start + ci * 4 + 2, vtx_start + ci * 4,
-
-                // indexes for aa fade from inner to outer side 1
-                vtx_start + bi * 4,     vtx_start + ci * 4 + 1, vtx_start + bi * 4 + 1,
-                vtx_start + bi * 4,     vtx_start + ci * 4,     vtx_start + ci * 4 + 1,
-
-                // indexes for aa fade from inner to outer side 2
-                vtx_start + bi * 4 + 2, vtx_start + bi * 4 + 3, vtx_start + ci * 4 + 3,
-                vtx_start + bi * 4 + 2, vtx_start + ci * 4 + 3, vtx_start + ci * 4 + 2,
-            });
-        } else if (!closed and (i + 1) == path.len) {
-            // add 2 extra vertexes for endcap fringe
+            // inner vertex
+            const inside_len = @min(0.5, opts.blur / 2);
             builder.appendVertex(.{
                 .pos = .{
-                    .x = bb.x - halfnorm.x * (opts.thickness + aa_size) - diffab.x * aa_size,
-                    .y = bb.y - halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
+                    .x = bb.x - norm.x * inside_len,
+                    .y = bb.y - norm.y * inside_len,
                 },
-                .col = .transparent,
-                .uv = undefined,
-            });
-            builder.appendVertex(.{
-                .pos = .{
-                    .x = bb.x + halfnorm.x * (opts.thickness + aa_size) - diffab.x * aa_size,
-                    .y = bb.y + halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
-                },
-                .col = .transparent,
+                .col = col,
                 .uv = undefined,
             });
 
-            builder.appendTriangles(&.{
-                // add indexes for endcap fringe
-                vtx_start + bi * 4,     vtx_start + bi * 4 + 4, vtx_start + bi * 4 + 1,
-                vtx_start + bi * 4 + 4, vtx_start + bi * 4,     vtx_start + bi * 4 + 2,
-                vtx_start + bi * 4 + 4, vtx_start + bi * 4 + 2, vtx_start + bi * 4 + 5,
-                vtx_start + bi * 4 + 2, vtx_start + bi * 4 + 3, vtx_start + bi * 4 + 5,
-            });
+            const idx_ai = if (opts.blur > 0) ai * 2 else ai;
+            const idx_bi = if (opts.blur > 0) bi * 2 else bi;
+
+            // indexes for fill
+            // triangles must be counter-clockwise (y going down) to avoid backface culling
+            if (opts.center) |_| {
+                builder.appendTriangles(&.{ @intCast(vtx_count - 1), idx_ai, idx_bi });
+            } else if (i > 1) {
+                builder.appendTriangles(&.{ 0, idx_ai, idx_bi });
+            }
+
+            if (opts.blur > 0) {
+                // scale averaged normal by angle between which happens to be the same as
+                // dividing by the length^2
+                const d2 = norm.x * norm.x + norm.y * norm.y;
+                if (d2 > 0.000001) {
+                    norm = norm.scale(1.0 / d2, Point.Physical);
+                }
+
+                // limit distance our vertexes can be from the point to 2 * blur so
+                // very small angles don't produce huge geometries
+                const l = norm.length();
+                if (l > 2.0) {
+                    norm = norm.scale(2.0 / l, Point.Physical);
+                }
+
+                // outer vertex
+                const outside_len = if (opts.blur <= 1) opts.blur / 2 else opts.blur - 0.5;
+                builder.appendVertex(.{
+                    .pos = .{
+                        .x = bb.x + norm.x * outside_len,
+                        .y = bb.y + norm.y * outside_len,
+                    },
+                    .col = .transparent,
+                    .uv = undefined,
+                });
+
+                // indexes for aa fade from inner to outer
+                // triangles must be counter-clockwise (y going down) to avoid backface culling
+                builder.appendTriangles(&.{
+                    idx_ai,     idx_ai + 1, idx_bi,
+                    idx_ai + 1, idx_bi + 1, idx_bi,
+                });
+            }
         }
+
+        if (opts.center) |center| {
+            builder.appendVertex(.{ .pos = center, .col = col, .uv = undefined });
+        }
+
+        return builder.build();
     }
 
-    return builder.build();
-}
+    pub const StrokeOptions = struct {
+        /// true => Render this after normal drawing on that subwindow.  Useful for
+        /// debugging on cross-gui drawing.
+        after: bool = false,
+
+        thickness: f32,
+        color: Color,
+
+        /// true => Stroke includes from path end to path start.
+        closed: bool = false,
+        endcap_style: EndCapStyle = .none,
+
+        pub const EndCapStyle = enum {
+            none,
+            square,
+        };
+    };
+
+    /// Stroke path as a series of line segments.  See `Rect.stroke`.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn stroke(path: Path, opts: StrokeOptions) !void {
+        if (path.points.len == 0) {
+            return;
+        }
+
+        const cw = currentWindow();
+
+        if (opts.after or !cw.render_target.rendering) {
+            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = try path.dupe(cw.arena()), .opts = opts } } };
+
+            var sw = cw.subwindowCurrent();
+            if (opts.after) {
+                try sw.render_cmds_after.append(cmd);
+            } else {
+                try sw.render_cmds.append(cmd);
+            }
+
+            return;
+        }
+
+        var triangles = try path.strokeTriangles(opts);
+        defer triangles.deinit(cw.arena());
+        try renderTriangles(triangles, null);
+    }
+
+    /// Generates triangles to stroke path.
+    ///
+    /// Vertexes will have unset uv and color is alpha multiplied white fading to
+    /// transparent at the edge.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn strokeTriangles(path: Path, opts: StrokeOptions) !Triangles {
+        if (dvui.clipGet().empty()) {
+            return .empty;
+        }
+
+        const cw = currentWindow();
+
+        if (path.points.len == 1) {
+            // draw a circle with radius thickness at that point
+            const center = path.points[0];
+
+            var tempPath: Path.Builder = .init(cw.arena());
+            defer tempPath.deinit();
+
+            try tempPath.addArc(center, opts.thickness, math.pi * 2.0, 0, true);
+            return tempPath.build().fillConvexTriangles(.{ .color = opts.color, .blur = 1.0 });
+        }
+
+        // a single segment can't be closed
+        const closed: bool = if (path.points.len == 2) false else opts.closed;
+
+        var vtx_count = path.points.len * 4;
+        if (!closed) {
+            vtx_count += 4;
+        }
+        var idx_count = (path.points.len - 1) * 18;
+        if (closed) {
+            idx_count += 18;
+        } else {
+            idx_count += 8 * 3;
+        }
+
+        var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
+        errdefer comptime unreachable; // No errors from this point on
+
+        const col: Color.PMA = .fromColor(opts.color);
+
+        const aa_size = 1.0;
+        var vtx_start: u16 = 0;
+        var i: usize = 0;
+        while (i < path.points.len) : (i += 1) {
+            const ai: u16 = @intCast((i + path.points.len - 1) % path.points.len);
+            const bi: u16 = @intCast(i % path.points.len);
+            const ci: u16 = @intCast((i + 1) % path.points.len);
+            const aa = path.points[ai];
+            var bb = path.points[bi];
+            const cc = path.points[ci];
+
+            // the amount to move from bb to the edge of the line
+            var halfnorm: Point.Physical = undefined;
+            var diffab: Point.Physical = undefined;
+
+            if (!closed and ((i == 0) or ((i + 1) == path.points.len))) {
+                if (i == 0) {
+                    const diffbc = bb.diff(cc).normalize();
+                    // rotate by 90 to get normal
+                    halfnorm = .{ .x = diffbc.y / 2, .y = (-diffbc.x) / 2 };
+
+                    if (opts.endcap_style == .square) {
+                        // square endcaps move bb out by thickness
+                        bb.x += diffbc.x * opts.thickness;
+                        bb.y += diffbc.y * opts.thickness;
+                    }
+
+                    // add 2 extra vertexes for endcap fringe
+                    vtx_start += 2;
+
+                    builder.appendVertex(.{
+                        .pos = .{
+                            .x = bb.x - halfnorm.x * (opts.thickness + aa_size) + diffbc.x * aa_size,
+                            .y = bb.y - halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
+                        },
+                        .col = .transparent,
+                        .uv = undefined,
+                    });
+
+                    builder.appendVertex(.{
+                        .pos = .{
+                            .x = bb.x + halfnorm.x * (opts.thickness + aa_size) + diffbc.x * aa_size,
+                            .y = bb.y + halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
+                        },
+                        .col = .transparent,
+                        .uv = undefined,
+                    });
+
+                    // add indexes for endcap fringe
+                    builder.appendTriangles(&.{
+                        0, vtx_start,         vtx_start + 1,
+                        0, 1,                 vtx_start,
+                        1, vtx_start + 2,     vtx_start,
+                        1, vtx_start + 2 + 1, vtx_start + 2,
+                    });
+                } else if ((i + 1) == path.points.len) {
+                    diffab = aa.diff(bb).normalize();
+                    // rotate by 90 to get normal
+                    halfnorm = .{ .x = diffab.y / 2, .y = (-diffab.x) / 2 };
+
+                    if (opts.endcap_style == .square) {
+                        // square endcaps move bb out by thickness
+                        bb.x -= diffab.x * opts.thickness;
+                        bb.y -= diffab.y * opts.thickness;
+                    }
+                }
+            } else {
+                diffab = aa.diff(bb).normalize();
+                const diffbc = bb.diff(cc).normalize();
+                // average of normals on each side
+                halfnorm = .{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 };
+
+                // scale averaged normal by angle between which happens to be the same as
+                // dividing by the length^2
+                const d2 = halfnorm.x * halfnorm.x + halfnorm.y * halfnorm.y;
+                if (d2 > 0.000001) {
+                    halfnorm = halfnorm.scale(0.5 / d2, Point.Physical);
+                }
+
+                // limit distance our vertexes can be from the point to 2 * thickness so
+                // very small angles don't produce huge geometries
+                const l = halfnorm.length();
+                if (l > 2.0) {
+                    halfnorm = halfnorm.scale(2.0 / l, Point.Physical);
+                }
+            }
+
+            // side 1 inner vertex
+            builder.appendVertex(.{
+                .pos = .{
+                    .x = bb.x - halfnorm.x * opts.thickness,
+                    .y = bb.y - halfnorm.y * opts.thickness,
+                },
+                .col = col,
+                .uv = undefined,
+            });
+
+            // side 1 AA vertex
+            builder.appendVertex(.{
+                .pos = .{
+                    .x = bb.x - halfnorm.x * (opts.thickness + aa_size),
+                    .y = bb.y - halfnorm.y * (opts.thickness + aa_size),
+                },
+                .col = .transparent,
+                .uv = undefined,
+            });
+
+            // side 2 inner vertex
+            builder.appendVertex(.{
+                .pos = .{
+                    .x = bb.x + halfnorm.x * opts.thickness,
+                    .y = bb.y + halfnorm.y * opts.thickness,
+                },
+                .col = col,
+                .uv = undefined,
+            });
+
+            // side 2 AA vertex
+            builder.appendVertex(.{
+                .pos = .{
+                    .x = bb.x + halfnorm.x * (opts.thickness + aa_size),
+                    .y = bb.y + halfnorm.y * (opts.thickness + aa_size),
+                },
+                .col = .transparent,
+                .uv = undefined,
+            });
+
+            // triangles must be counter-clockwise (y going down) to avoid backface culling
+            if (closed or ((i + 1) != path.points.len)) {
+                builder.appendTriangles(&.{
+                    // indexes for fill
+                    vtx_start + bi * 4,     vtx_start + bi * 4 + 2, vtx_start + ci * 4,
+                    vtx_start + bi * 4 + 2, vtx_start + ci * 4 + 2, vtx_start + ci * 4,
+
+                    // indexes for aa fade from inner to outer side 1
+                    vtx_start + bi * 4,     vtx_start + ci * 4 + 1, vtx_start + bi * 4 + 1,
+                    vtx_start + bi * 4,     vtx_start + ci * 4,     vtx_start + ci * 4 + 1,
+
+                    // indexes for aa fade from inner to outer side 2
+                    vtx_start + bi * 4 + 2, vtx_start + bi * 4 + 3, vtx_start + ci * 4 + 3,
+                    vtx_start + bi * 4 + 2, vtx_start + ci * 4 + 3, vtx_start + ci * 4 + 2,
+                });
+            } else if (!closed and (i + 1) == path.points.len) {
+                // add 2 extra vertexes for endcap fringe
+                builder.appendVertex(.{
+                    .pos = .{
+                        .x = bb.x - halfnorm.x * (opts.thickness + aa_size) - diffab.x * aa_size,
+                        .y = bb.y - halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
+                    },
+                    .col = .transparent,
+                    .uv = undefined,
+                });
+                builder.appendVertex(.{
+                    .pos = .{
+                        .x = bb.x + halfnorm.x * (opts.thickness + aa_size) - diffab.x * aa_size,
+                        .y = bb.y + halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
+                    },
+                    .col = .transparent,
+                    .uv = undefined,
+                });
+
+                builder.appendTriangles(&.{
+                    // add indexes for endcap fringe
+                    vtx_start + bi * 4,     vtx_start + bi * 4 + 4, vtx_start + bi * 4 + 1,
+                    vtx_start + bi * 4 + 4, vtx_start + bi * 4,     vtx_start + bi * 4 + 2,
+                    vtx_start + bi * 4 + 4, vtx_start + bi * 4 + 2, vtx_start + bi * 4 + 5,
+                    vtx_start + bi * 4 + 2, vtx_start + bi * 4 + 3, vtx_start + bi * 4 + 5,
+                });
+            }
+        }
+
+        return builder.build();
+    }
+};
 
 pub const Triangles = struct {
     vertexes: []Vertex,
@@ -4584,7 +4634,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
         animation(wd.id, "_t", anim);
     }
 
-    var path: PathArrayList = .init(dvui.currentWindow().arena());
+    var path: Path.Builder = .init(dvui.currentWindow().arena());
     defer path.deinit();
 
     const full_circle = 2 * std.math.pi;
@@ -4593,8 +4643,8 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
     // end begins slow, catching up to start
     const end = full_circle * easing.inSine(t);
 
-    try pathAddArc(&path, r.center(), @min(r.w, r.h) / 3, start, end, false);
-    try pathStroke(path.items, .{ .thickness = 3.0 * rs.s, .color = options.color(.text) });
+    try path.addArc(r.center(), @min(r.w, r.h) / 3, start, end, false);
+    try path.build().stroke(.{ .thickness = 3.0 * rs.s, .color = options.color(.text) });
 }
 
 pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) !*ScaleWidget {
@@ -5691,12 +5741,12 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
         thick /= 1.5;
 
-        const path: PathSlice = &.{
+        const path: Path = .{ .points = &.{
             .{ .x = x - third, .y = y - third },
             .{ .x = x, .y = y },
             .{ .x = x + third * 2, .y = y - third * 2 },
-        };
-        try pathStroke(path, .{ .thickness = thick, .color = options.color(.text), .endcap_style = .square });
+        } };
+        try path.stroke(.{ .thickness = thick, .color = options.color(.text), .endcap_style = .square });
     }
 }
 
@@ -5769,7 +5819,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     if (active) {
         const thick = @max(1.0, r.w / 6);
 
-        try pathStroke(&.{r.center()}, .{ .thickness = thick, .color = options.color(.text) });
+        try Path.stroke(.{ .points = &.{r.center()} }, .{ .thickness = thick, .color = options.color(.text) });
     }
 }
 
@@ -6656,12 +6706,12 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
         return;
     }
 
-    var path: PathArrayList = .init(dvui.currentWindow().arena());
+    var path: Path.Builder = .init(dvui.currentWindow().arena());
     defer path.deinit();
 
-    try dvui.pathAddRect(&path, rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
+    try path.addRect(rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
 
-    var triangles = try pathFillConvexTriangles(path.items, .{ .color = opts.colormod });
+    var triangles = try path.build().fillConvexTriangles(.{ .color = opts.colormod });
     defer triangles.deinit(cw.arena());
 
     triangles.uvFromRectuv(rs.r, opts.uv);
