@@ -21,6 +21,9 @@ pub const InitOptions = struct {
     /// If smaller (logical size) in direction, only show one pane.
     collapsed_size: f32,
 
+    /// Use to save/control the split externally.
+    split_ratio: ?*f32 = null,
+
     /// Thickness (logical) of sash handle.  If handle_dynamic is not null,
     /// this is min handle size.
     handle_size: f32 = 4,
@@ -41,7 +44,7 @@ init_opts: InitOptions = undefined,
 
 mouse_dist: f32 = 1000, // logical
 handle_thick: f32 = undefined, // logical
-split_ratio: f32 = undefined,
+split_ratio: *f32 = undefined,
 prevClip: Rect.Physical = .{},
 collapsed_state: bool = false,
 collapsing: bool = false,
@@ -66,38 +69,35 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
         self.collapsed_state = false;
     }
 
-    if (dvui.dataGet(null, self.wd.id, "_split_ratio", f32)) |r| {
-        self.split_ratio = r;
-        if (!self.collapsing and !self.collapsed_state and our_size < self.init_opts.collapsed_size) {
-            // collapsing
-            self.collapsing = true;
-            if (self.split_ratio >= 0.5) {
-                self.animateSplit(1.0);
-            } else {
-                self.animateSplit(0.0);
-            }
-        } else if (!self.collapsing and self.collapsed_state and our_size >= self.init_opts.collapsed_size) {
-            // expanding
-            self.collapsed_state = false;
-            if (self.split_ratio > 0.5) {
-                self.animateSplit(0.5);
-            } else {
-                // we were on the second widget, this will
-                // "remember" we were on it
-                self.animateSplit(0.4999);
-            }
-        }
+    if (self.init_opts.split_ratio) |srp| {
+        self.split_ratio = srp;
     } else {
-        // first frame
-        if (our_size < self.init_opts.collapsed_size) {
-            self.split_ratio = 1.0;
+        const default: f32 = if (our_size < self.init_opts.collapsed_size) 1.0 else 0.5;
+        self.split_ratio = dvui.dataGetPtrDefault(null, self.wd.id, "_split_ratio", f32, default);
+    }
+
+    if (!self.collapsing and !self.collapsed_state and our_size < self.init_opts.collapsed_size) {
+        // collapsing
+        self.collapsing = true;
+        if (self.split_ratio.* >= 0.5) {
+            self.animateSplit(1.0);
         } else {
-            self.split_ratio = 0.5;
+            self.animateSplit(0.0);
+        }
+    } else if (!self.collapsing and self.collapsed_state and our_size >= self.init_opts.collapsed_size) {
+        // expanding
+        self.collapsed_state = false;
+        if (self.split_ratio.* > 0.5) {
+            self.animateSplit(0.5);
+        } else {
+            // we were on the second widget, this will
+            // "remember" we were on it
+            self.animateSplit(0.4999);
         }
     }
 
     if (dvui.animationGet(self.wd.id, "_split_ratio")) |a| {
-        self.split_ratio = a.value();
+        self.split_ratio.* = a.value();
 
         if (self.collapsing and a.done()) {
             self.collapsing = false;
@@ -159,14 +159,14 @@ pub fn draw(self: *PanedWidget) !void {
     const thick = self.handle_thick * rs.s; // physical
     switch (self.init_opts.direction) {
         .horizontal => {
-            r.x += r.w * self.split_ratio - thick / 2;
+            r.x += r.w * self.split_ratio.* - thick / 2;
             r.w = thick;
             const height = r.h * len_ratio;
             r.y += r.h / 2 - height / 2;
             r.h = height;
         },
         .vertical => {
-            r.y += r.h * self.split_ratio - thick / 2;
+            r.y += r.h * self.split_ratio.* - thick / 2;
             r.h = thick;
             const width = r.w * len_ratio;
             r.x += r.w / 2 - width / 2;
@@ -181,7 +181,7 @@ pub fn collapsed(self: *PanedWidget) bool {
 }
 
 pub fn showFirst(self: *PanedWidget) bool {
-    const ret = self.split_ratio > 0;
+    const ret = self.split_ratio.* > 0;
 
     // If we don't show the first side, then record that for rectFor
     if (!ret) self.first_side = false;
@@ -190,11 +190,11 @@ pub fn showFirst(self: *PanedWidget) bool {
 }
 
 pub fn showSecond(self: *PanedWidget) bool {
-    return self.split_ratio < 1.0;
+    return self.split_ratio.* < 1.0;
 }
 
 pub fn animateSplit(self: *PanedWidget, end_val: f32) void {
-    dvui.animation(self.wd.id, "_split_ratio", dvui.Animation{ .start_val = self.split_ratio, .end_val = end_val, .end_time = 250_000 });
+    dvui.animation(self.wd.id, "_split_ratio", dvui.Animation{ .start_val = self.split_ratio.*, .end_val = end_val, .end_time = 250_000 });
 }
 
 pub fn widget(self: *PanedWidget) Widget {
@@ -211,46 +211,46 @@ pub fn rectFor(self: *PanedWidget, id: dvui.WidgetId, min_size: Size, e: Options
     if (self.first_side) {
         self.first_side = false;
         if (self.collapsed()) {
-            if (self.split_ratio == 0.0) {
+            if (self.split_ratio.* == 0.0) {
                 r.w = 0;
                 r.h = 0;
             } else {
                 switch (self.init_opts.direction) {
-                    .horizontal => r.x -= (r.w - (r.w * self.split_ratio)),
-                    .vertical => r.y -= (r.h - (r.h * self.split_ratio)),
+                    .horizontal => r.x -= (r.w - (r.w * self.split_ratio.*)),
+                    .vertical => r.y -= (r.h - (r.h * self.split_ratio.*)),
                 }
             }
         } else {
             switch (self.init_opts.direction) {
-                .horizontal => r.w = @max(0, r.w * self.split_ratio - self.handle_thick / 2),
-                .vertical => r.h = @max(0, r.h * self.split_ratio - self.handle_thick / 2),
+                .horizontal => r.w = @max(0, r.w * self.split_ratio.* - self.handle_thick / 2),
+                .vertical => r.h = @max(0, r.h * self.split_ratio.* - self.handle_thick / 2),
             }
         }
         return dvui.placeIn(r, min_size, e, g);
     } else {
         if (self.collapsed()) {
-            if (self.split_ratio == 1.0) {
+            if (self.split_ratio.* == 1.0) {
                 r.w = 0;
                 r.h = 0;
             } else {
                 switch (self.init_opts.direction) {
                     .horizontal => {
-                        r.x = r.w * self.split_ratio;
+                        r.x = r.w * self.split_ratio.*;
                     },
                     .vertical => {
-                        r.y = r.h * self.split_ratio;
+                        r.y = r.h * self.split_ratio.*;
                     },
                 }
             }
         } else {
             switch (self.init_opts.direction) {
                 .horizontal => {
-                    const first = @max(0, r.w * self.split_ratio - self.handle_thick / 2);
+                    const first = @max(0, r.w * self.split_ratio.* - self.handle_thick / 2);
                     r.w = @max(0, r.w - first - self.handle_thick);
                     r.x += first + self.handle_thick;
                 },
                 .vertical => {
-                    const first = @max(0, r.h * self.split_ratio - self.handle_thick / 2);
+                    const first = @max(0, r.h * self.split_ratio.* - self.handle_thick / 2);
                     r.h = @max(0, r.h - first - self.handle_thick);
                     r.y += first + self.handle_thick;
                 },
@@ -278,8 +278,8 @@ pub fn processEvent(self: *PanedWidget, e: *Event, bubbling: bool) void {
         };
 
         self.mouse_dist = switch (self.init_opts.direction) {
-            .horizontal => @abs(e.evt.mouse.p.x - (rs.r.x + rs.r.w * self.split_ratio)) / rs.s,
-            .vertical => @abs(e.evt.mouse.p.y - (rs.r.y + rs.r.h * self.split_ratio)) / rs.s,
+            .horizontal => @abs(e.evt.mouse.p.x - (rs.r.x + rs.r.w * self.split_ratio.*)) / rs.s,
+            .vertical => @abs(e.evt.mouse.p.y - (rs.r.y + rs.r.h * self.split_ratio.*)) / rs.s,
         };
 
         if (self.init_opts.handle_dynamic) |hd| {
@@ -305,14 +305,14 @@ pub fn processEvent(self: *PanedWidget, e: *Event, bubbling: bool) void {
                     _ = dps;
                     switch (self.init_opts.direction) {
                         .horizontal => {
-                            self.split_ratio = (e.evt.mouse.p.x - rs.r.x) / rs.r.w;
+                            self.split_ratio.* = (e.evt.mouse.p.x - rs.r.x) / rs.r.w;
                         },
                         .vertical => {
-                            self.split_ratio = (e.evt.mouse.p.y - rs.r.y) / rs.r.h;
+                            self.split_ratio.* = (e.evt.mouse.p.y - rs.r.y) / rs.r.h;
                         },
                     }
 
-                    self.split_ratio = @max(0.0, @min(1.0, self.split_ratio));
+                    self.split_ratio.* = @max(0.0, @min(1.0, self.split_ratio.*));
                 }
             } else if (e.evt.mouse.action == .position) {
                 dvui.cursorSet(cursor);
@@ -329,7 +329,7 @@ pub fn deinit(self: *PanedWidget) void {
     dvui.clipSet(self.prevClip);
     dvui.dataSet(null, self.wd.id, "_collapsing", self.collapsing);
     dvui.dataSet(null, self.wd.id, "_collapsed", self.collapsed_state);
-    dvui.dataSet(null, self.wd.id, "_split_ratio", self.split_ratio);
+    dvui.dataSet(null, self.wd.id, "_split_ratio", self.split_ratio.*);
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);
