@@ -31,11 +31,11 @@ pub const InitOptions = struct {
     handle_dynamic: ?struct {
         /// Handle thickness is between handle_size (min) and handle_size_max
         /// (max) based on how close the mouse is.
-        handle_size_max: f32 = 8,
+        handle_size_max: f32 = 10,
 
         /// Show and dynamically adjust size of sash handle when mouse is
         /// closer than this (logical).
-        distance_max: f32 = 30,
+        distance_max: f32 = 20,
     } = null,
 };
 
@@ -290,7 +290,7 @@ pub fn processEvent(self: *PanedWidget, e: *Event, bubbling: bool) void {
             self.handle_thick = std.math.clamp(hd.handle_size_max - mouse_dist_outside / 2, self.init_opts.handle_size, hd.handle_size_max);
         }
 
-        if (dvui.captured(self.wd.id) or self.mouse_dist <= self.handle_thick + 3) {
+        if (dvui.captured(self.wd.id) or self.mouse_dist <= @max(self.handle_thick / 2, 2)) {
             if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
                 e.handle(@src(), self.data());
                 // capture and start drag
