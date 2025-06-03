@@ -32,7 +32,7 @@ pub const InitOptions = struct {
 
         /// Show and dynamically adjust size of sash handle when mouse is
         /// closer than this (logical).
-        dist_max: f32 = 30,
+        distance_max: f32 = 30,
     } = null,
 };
 
@@ -145,10 +145,10 @@ pub fn draw(self: *PanedWidget) !void {
     var len_ratio: f32 = 1.0 / 5.0;
 
     if (self.init_opts.handle_dynamic) |hd| {
-        if (self.mouse_dist > self.handle_thick + hd.dist_max) {
+        if (self.mouse_dist > self.handle_thick + hd.distance_max) {
             return;
         } else {
-            len_ratio *= 1.0 - std.math.clamp((self.mouse_dist - self.handle_thick) / hd.dist_max, 0.0, 1.0);
+            len_ratio *= 1.0 - std.math.clamp((self.mouse_dist - self.handle_thick) / hd.distance_max, 0.0, 1.0);
         }
     } else {
         if (self.mouse_dist > self.handle_thick + 3) return;
