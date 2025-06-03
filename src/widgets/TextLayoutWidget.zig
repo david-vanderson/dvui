@@ -424,6 +424,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
 pub fn format(self: *TextLayoutWidget, comptime fmt: []const u8, args: anytype, opts: Options) !void {
     const cw = dvui.currentWindow();
     const l = try std.fmt.allocPrint(cw.arena(), fmt, args);
+    defer cw.arena().free(l);
     try self.addText(l, opts);
 }
 
@@ -1184,30 +1185,33 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
             self.selMoveText(txt[0..end], self.bytes_seen);
         }
 
-        const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, self.wd.contentRect().h - self.insert_pt.y) });
-        //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
-        var rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
+        { // Scope here is for deallocating rtxt before handling copying to clipboard on the arena
+            const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, self.wd.contentRect().h - self.insert_pt.y) });
+            //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
+            var rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
 
-        // If the newline is part of the selection, then render it as a
-        // selected space.  This matches Chrome's behavior, although this is
-        // not a universal - Firefox doesn't do this.
-        if (newline and
-            (self.selection.start -| self.bytes_seen -| rtxt.len) == 0 and
-            (self.selection.end -| self.bytes_seen -| rtxt.len) > 0)
-        {
-            rtxt = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{s} ", .{rtxt});
+            // If the newline is part of the selection, then render it as a
+            // selected space.  This matches Chrome's behavior, although this is
+            // not a universal - Firefox doesn't do this.
+            if (newline and
+                (self.selection.start -| self.bytes_seen -| rtxt.len) == 0 and
+                (self.selection.end -| self.bytes_seen -| rtxt.len) > 0)
+            {
+                rtxt = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{s} ", .{rtxt});
+            }
+            defer if (txt.ptr != rtxt.ptr) dvui.currentWindow().arena().free(rtxt);
+
+            try dvui.renderText(.{
+                .font = options.fontGet(),
+                .text = rtxt,
+                .rs = rs,
+                .color = options.color(.text),
+                .sel_start = self.selection.start -| self.bytes_seen,
+                .sel_end = self.selection.end -| self.bytes_seen,
+                .sel_color = options.color(.fill),
+                .sel_color_bg = options.color(.accent),
+            });
         }
-
-        try dvui.renderText(.{
-            .font = options.fontGet(),
-            .text = rtxt,
-            .rs = rs,
-            .color = options.color(.text),
-            .sel_start = self.selection.start -| self.bytes_seen,
-            .sel_end = self.selection.end -| self.bytes_seen,
-            .sel_color = options.color(.fill),
-            .sel_color_bg = options.color(.accent),
-        });
 
         // Even if we don't actually render (might be outside clipping region),
         // need to update insert_pt and minSize like we did because our parent

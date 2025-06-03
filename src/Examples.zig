@@ -1019,6 +1019,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
     };
 
     var font_entries: [][]const u8 = try dvui.currentWindow().arena().alloc([]const u8, dvui.currentWindow().font_bytes.count() + 1);
+    defer dvui.currentWindow().arena().free(font_entries);
     {
         font_entries[0] = "Theme Body";
         var it = dvui.currentWindow().font_bytes.keyIterator();
@@ -1500,12 +1501,15 @@ pub fn styling() !void {
             }
 
             var drawBox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200, .h = 100 } });
+            defer drawBox.deinit();
             const rs = drawBox.data().contentRectScale();
 
             var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
+            defer path.deinit();
             try dvui.pathAddRect(&path, rs.r, dvui.Rect.Physical.all(5));
 
             var triangles = try dvui.pathFillConvexTriangles(path.items, .{ .center = rs.r.center() });
+            defer triangles.deinit(dvui.currentWindow().arena());
 
             const ca0 = backbox_color;
             const ca1 = backbox_color.opacity(0);
@@ -1534,10 +1538,6 @@ pub fn styling() !void {
                 },
             }
             try dvui.renderTriangles(triangles, null);
-
-            triangles.deinit(dvui.currentWindow().arena());
-            path.deinit();
-            drawBox.deinit();
         }
     }
 }
@@ -3113,7 +3113,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) !void {
         defer hbox.deinit();
 
         if (try dvui.button(@src(), "Non modal", .{}, .{})) {
-            try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Ok Dialog", .ok_label = "Done", .message = "This is a non modal dialog with no callafter" });
+            try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Ok Dialog", .ok_label = "Ok", .message = "This is a non modal dialog with no callafter\n\nThe ok button is focused by default" });
         }
 
         const dialogsFollowup = struct {
@@ -3126,7 +3126,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) !void {
         };
 
         if (try dvui.button(@src(), "Modal with followup", .{}, .{})) {
-            try dvui.dialog(@src(), .{}, .{ .title = "Followup", .message = "This is a modal dialog with modal followup", .callafterFn = dialogsFollowup.callafter, .cancel_label = "Cancel" });
+            try dvui.dialog(@src(), .{}, .{ .title = "Followup", .message = "This is a modal dialog with modal followup\n\nHere the cancel button is focused", .callafterFn = dialogsFollowup.callafter, .cancel_label = "Cancel", .default = .cancel });
         }
     }
 
