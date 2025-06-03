@@ -4216,8 +4216,8 @@ pub fn gridHeading(src: std.builtin.SourceLocation, g: *GridWidget, heading: []c
     var cell = try g.headerCell(src, cell_opts);
     defer cell.deinit();
 
-    try labelNoFmt(@src(), heading, label_options);
     try separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
+    try labelNoFmt(@src(), heading, label_options);
 }
 
 /// Create a heading and allow the column to be sorted.
@@ -4232,8 +4232,8 @@ pub fn gridHeadingSortable(
     cell_opts: GridWidget.CellOptions,
     opts: dvui.Options,
 ) !bool {
-    const icon_ascending = dvui.entypo.chevron_small_up;
-    const icon_descending = dvui.entypo.chevron_small_down;
+    const icon_ascending = dvui.entypo.chevron_small_down;
+    const icon_descending = dvui.entypo.chevron_small_up;
 
     // Pad buttons with extra space if there is no sort indicator.
     const heading_defaults: Options = .{
