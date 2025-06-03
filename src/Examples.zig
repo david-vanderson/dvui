@@ -1830,7 +1830,7 @@ pub fn layout() !void {
     }
     try dvui.label(@src(), "Collapsible Pane with Draggable Sash", .{}, .{});
     {
-        var paned = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = paned_collapsed_width }, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 100 } });
+        var paned = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = paned_collapsed_width }, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 130 } });
         defer paned.deinit();
 
         if (paned.showFirst()) {
