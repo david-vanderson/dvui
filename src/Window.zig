@@ -71,18 +71,19 @@ clipRect: dvui.Rect.Physical = .{},
 
 theme: Theme = undefined,
 
-min_sizes: std.AutoHashMap(WidgetId, SavedSize),
-tags: std.StringHashMap(SavedTagData),
-data_mutex: std.Thread.Mutex,
-datas: std.AutoHashMap(u64, SavedData),
+min_sizes: dvui.TrackingAutoHashMap(WidgetId, Size, .put_only) = .empty,
+tags: dvui.TrackingAutoHashMap([]const u8, dvui.TagData, .put_only) = .empty,
+data_mutex: std.Thread.Mutex = .{},
+datas: dvui.TrackingAutoHashMap(u64, SavedData, .get_and_put) = .empty,
 datas_trash: std.ArrayList(SavedData) = undefined,
-animations: std.AutoHashMap(u64, Animation),
+animations: dvui.TrackingAutoHashMap(u64, Animation, .get_and_put) = .empty,
 tab_index_prev: std.ArrayList(dvui.TabIndex),
 tab_index: std.ArrayList(dvui.TabIndex),
-font_cache: std.AutoHashMap(u64, dvui.FontCacheEntry),
+font_cache: dvui.TrackingAutoHashMap(u64, dvui.FontCacheEntry, .get_and_put) = .empty,
 font_bytes: std.StringHashMap(dvui.FontBytesEntry),
-texture_cache: std.AutoHashMap(u64, dvui.TextureCacheEntry),
-dialog_mutex: std.Thread.Mutex,
+texture_cache: dvui.TrackingAutoHashMap(u64, dvui.TextureCacheEntry, .get_and_put) = .empty,
+texture_trash: std.ArrayList(dvui.Texture) = undefined,
+dialog_mutex: std.Thread.Mutex = .{},
 dialogs: std.ArrayList(Dialog),
 toasts: std.ArrayList(Toast),
 keybinds: std.StringHashMap(dvui.enums.Keybind),
@@ -103,7 +104,6 @@ captured_last_frame: bool = false,
 
 gpa: std.mem.Allocator,
 _arena: dvui.ShrinkingArenaAllocator,
-texture_trash: std.ArrayList(dvui.Texture) = undefined,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
@@ -119,7 +119,7 @@ debug_under_mouse_esc_needed: bool = false,
 debug_under_mouse_quitting: bool = false,
 debug_under_mouse_info: []u8 = "",
 
-debug_toggle_mutex: std.Thread.Mutex,
+debug_toggle_mutex: std.Thread.Mutex = .{},
 debug_refresh: bool = false,
 debug_handled_event: bool = false,
 debug_unhandled_events: bool = false,
@@ -140,18 +140,7 @@ pub const Subwindow = struct {
     stay_above_parent_window: ?WidgetId = null,
 };
 
-const SavedSize = struct {
-    size: Size,
-    used: bool = true,
-};
-
-const SavedTagData = struct {
-    data: dvui.TagData,
-    used: bool = true,
-};
-
 const SavedData = struct {
-    used: bool = true,
     alignment: u8,
     data: []u8,
 
@@ -192,20 +181,11 @@ pub fn init(
         .gpa = gpa,
         ._arena = init_opts.arena orelse .init(gpa),
         .subwindows = .init(gpa),
-        .min_sizes = .init(gpa),
-        .tags = .init(gpa),
-        .data_mutex = .{},
-        .datas = .init(gpa),
-        .animations = .init(gpa),
         .tab_index_prev = .init(gpa),
         .tab_index = .init(gpa),
-        .font_cache = .init(gpa),
-        .texture_cache = .init(gpa),
-        .dialog_mutex = .{},
         .dialogs = .init(gpa),
         .toasts = .init(gpa),
         .keybinds = .init(gpa),
-        .debug_toggle_mutex = .{},
         .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
         .backend = backend_ctx,
         .font_bytes = try dvui.Font.initTTFBytesDatabase(gpa),
@@ -380,7 +360,7 @@ pub fn deinit(self: *Self) void {
     {
         var it = self.datas.iterator();
         while (it.next()) |item| item.value_ptr.free(self.gpa);
-        self.datas.deinit();
+        self.datas.deinit(self.gpa);
     }
 
     if (self.debug_under_mouse_info.len > 0) {
@@ -389,9 +369,9 @@ pub fn deinit(self: *Self) void {
     }
 
     self.subwindows.deinit();
-    self.min_sizes.deinit();
-    self.tags.deinit();
-    self.animations.deinit();
+    self.min_sizes.deinit(self.gpa);
+    self.tags.deinit(self.gpa);
+    self.animations.deinit(self.gpa);
     self.tab_index_prev.deinit();
     self.tab_index.deinit();
 
@@ -401,7 +381,7 @@ pub fn deinit(self: *Self) void {
             item.value_ptr.glyph_info.deinit();
             item.value_ptr.deinit(self);
         }
-        self.font_cache.deinit();
+        self.font_cache.deinit(self.gpa);
     }
 
     {
@@ -409,7 +389,7 @@ pub fn deinit(self: *Self) void {
         while (it.next()) |item| {
             self.backend.textureDestroy(item.value_ptr.texture);
         }
-        self.texture_cache.deinit();
+        self.texture_cache.deinit(self.gpa);
     }
 
     self.dialogs.deinit();
@@ -974,63 +954,29 @@ pub fn begin(
     }
 
     {
-        var deadSizes = std.ArrayList(WidgetId).init(larena);
-        defer deadSizes.deinit();
-        var it = self.min_sizes.iterator();
-        while (it.next()) |kv| {
-            if (kv.value_ptr.used) {
-                kv.value_ptr.used = false;
-            } else {
-                try deadSizes.append(kv.key_ptr.*);
-            }
-        }
-
-        for (deadSizes.items) |id| {
+        const deadSizes = try self.min_sizes.reset(larena);
+        defer larena.free(deadSizes);
+        for (deadSizes) |id| {
             _ = self.min_sizes.remove(id);
         }
-
         //std.debug.print("min_sizes {d}\n", .{self.min_sizes.count()});
     }
 
     {
-        var deadTags = std.ArrayList([]const u8).init(larena);
-        defer deadTags.deinit();
-        var it = self.tags.iterator();
-        while (it.next()) |kv| {
-            if (kv.value_ptr.used) {
-                kv.value_ptr.used = false;
-            } else {
-                try deadTags.append(kv.key_ptr.*);
-            }
-        }
-
-        for (deadTags.items) |name| {
+        const deadTags = try self.tags.reset(larena);
+        defer larena.free(deadTags);
+        for (deadTags) |name| {
             _ = self.tags.remove(name);
         }
-
         //std.debug.print("tags {d}\n", .{self.tags.count()});
     }
 
     {
-        self.data_mutex.lock();
-        defer self.data_mutex.unlock();
-
-        var deadDatas = std.ArrayList(u64).init(larena);
-        defer deadDatas.deinit();
-        var it = self.datas.iterator();
-        while (it.next()) |kv| {
-            if (kv.value_ptr.used) {
-                kv.value_ptr.used = false;
-            } else {
-                try deadDatas.append(kv.key_ptr.*);
-            }
+        const deadData = try self.datas.reset(larena);
+        defer larena.free(deadData);
+        for (deadData) |name| {
+            _ = self.datas.remove(name);
         }
-
-        for (deadDatas.items) |id| {
-            var dd = self.datas.fetchRemove(id).?;
-            dd.value.free(self.gpa);
-        }
-
         //std.debug.print("datas {d}\n", .{self.datas.count()});
     }
 
@@ -1055,14 +1001,11 @@ pub fn begin(
 
     {
         const micros: i32 = if (micros_since_last > math.maxInt(i32)) math.maxInt(i32) else @as(i32, @intCast(micros_since_last));
-        var deadAnimations = std.ArrayList(u64).init(larena);
-        defer deadAnimations.deinit();
         var it = self.animations.iterator();
-        while (it.next()) |kv| {
-            if (!kv.value_ptr.used or kv.value_ptr.end_time <= 0) {
-                try deadAnimations.append(kv.key_ptr.*);
+        while (it.next_used()) |kv| {
+            if (kv.value_ptr.end_time <= 0) {
+                @TypeOf(self.animations).setUsed(kv.value_ptr, false);
             } else {
-                kv.value_ptr.used = false;
                 kv.value_ptr.start_time -|= micros;
                 kv.value_ptr.end_time -|= micros;
                 if (kv.value_ptr.start_time <= 0 and kv.value_ptr.end_time > 0) {
@@ -1071,49 +1014,31 @@ pub fn begin(
             }
         }
 
-        for (deadAnimations.items) |id| {
+        const deadAnimations = try self.animations.reset(larena);
+        defer larena.free(deadAnimations);
+        for (deadAnimations) |id| {
             _ = self.animations.remove(id);
         }
     }
 
     {
-        var deadFonts = std.ArrayList(u64).init(larena);
-        defer deadFonts.deinit();
-        var it = self.font_cache.iterator();
-        while (it.next()) |kv| {
-            if (kv.value_ptr.used) {
-                kv.value_ptr.used = false;
-            } else {
-                try deadFonts.append(kv.key_ptr.*);
-            }
-        }
-
-        for (deadFonts.items) |id| {
+        const deadFonts = try self.font_cache.reset(larena);
+        defer larena.free(deadFonts);
+        for (deadFonts) |id| {
             var tce = self.font_cache.fetchRemove(id).?;
             tce.value.glyph_info.deinit();
             tce.value.deinit(self);
         }
-
         //std.debug.print("font_cache {d}\n", .{self.font_cache.count()});
     }
 
     {
-        var deadTextures = std.ArrayList(u64).init(larena);
-        defer deadTextures.deinit();
-        var it = self.texture_cache.iterator();
-        while (it.next()) |kv| {
-            if (kv.value_ptr.used) {
-                kv.value_ptr.used = false;
-            } else {
-                try deadTextures.append(kv.key_ptr.*);
-            }
-        }
-
-        for (deadTextures.items) |id| {
+        const deadTextures = try self.texture_cache.reset(larena);
+        defer larena.free(deadTextures);
+        for (deadTextures) |id| {
             const ice = self.texture_cache.fetchRemove(id).?;
             self.backend.textureDestroy(ice.value.texture);
         }
-
         //std.debug.print("texture_cache {d}\n", .{self.texture_cache.count()});
     }
 
@@ -1306,7 +1231,7 @@ pub fn dataSetAdvanced(self: *Self, id: WidgetId, key: []const u8, data_in: anyt
         sd.copy_slice = copy_slice;
     }
 
-    const previous_kv = self.datas.fetchPut(hash, sd) catch |err| switch (err) {
+    const previous_kv = self.datas.fetchPut(self.gpa, hash, sd) catch |err| switch (err) {
         error.OutOfMemory => {
             log.err("dataSet got {!} for id {x} key {s}\n", .{ err, id, key });
             sd.free(self.gpa);
@@ -1336,8 +1261,6 @@ pub fn dataGetInternal(self: *Self, id: WidgetId, key: []const u8, comptime T: t
                 std.debug.panic("dataGetInternal: stored type {s} (slice {}) doesn't match asked for type {s} (slice {})", .{ sd.type_str, sd.copy_slice, @typeName(T), slice });
             }
         }
-
-        sd.used = true;
         return sd.data;
     } else {
         return null;
@@ -1428,7 +1351,7 @@ pub fn timer(self: *Self, id: WidgetId, micros: i32) !void {
     // cause a single frame and then expire
     const a = Animation{ .start_time = micros, .end_time = micros };
     const h = dvui.hashIdKey(id, "_timer");
-    try self.animations.put(h, a);
+    try self.animations.put(self.gpa, h, a);
 }
 
 pub fn timerRemove(self: *Self, id: WidgetId) void {
@@ -1729,15 +1652,13 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // If all animations are scheduled in the future, pick the soonest start.
     var ret: ?u32 = null;
     var it = self.animations.iterator();
-    while (it.next()) |kv| {
-        if (kv.value_ptr.used) {
-            if (kv.value_ptr.start_time > 0) {
-                const st = @as(u32, @intCast(kv.value_ptr.start_time));
-                ret = @min(ret orelse st, st);
-            } else if (kv.value_ptr.end_time > 0) {
-                ret = 0;
-                break;
-            }
+    while (it.next_used()) |kv| {
+        if (kv.value_ptr.start_time > 0) {
+            const st = @as(u32, @intCast(kv.value_ptr.start_time));
+            ret = @min(ret orelse st, st);
+        } else if (kv.value_ptr.end_time > 0) {
+            ret = 0;
+            break;
         }
     }
 
