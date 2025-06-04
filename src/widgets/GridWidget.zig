@@ -106,7 +106,7 @@ saved_clip_rect: ?Rect.Physical = null,
 resizing: bool = false,
 rows_y_offset: f32 = 0,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) !GridWidget {
+pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) GridWidget {
     var self = GridWidget{};
     self.init_opts = init_opts;
     const options = defaults.override(opts);
@@ -142,7 +142,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options)
     return self;
 }
 
-pub fn install(self: *GridWidget) !void {
+pub fn install(self: *GridWidget) std.mem.Allocator.Error!void {
     try self.vbox.install();
     try self.vbox.drawBackground();
 
@@ -190,7 +190,7 @@ pub fn data(self: *GridWidget) *WidgetData {
 /// 2) opts.width if supplied
 /// 3) Otherewise column will expand to the available space.
 /// It is recommended that widths are provided for all columns.
-pub fn column(self: *GridWidget, src: std.builtin.SourceLocation, opts: ColOptions) !*BoxWidget {
+pub fn column(self: *GridWidget, src: std.builtin.SourceLocation, opts: ColOptions) std.mem.Allocator.Error!*BoxWidget {
     self.clipReset();
     self.current_col = null;
 
@@ -246,7 +246,7 @@ fn clipReset(self: *GridWidget) void {
 /// Returns a hbox. deinit() must be called on this hbox before creating a new cell.
 /// Only one header cell is allowed per column.
 /// Height is taken from opts.height if provided, otherwise height is automatically determined.
-pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, opts: CellOptions) !*BoxWidget {
+pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, opts: CellOptions) std.mem.Allocator.Error!*BoxWidget {
     const y: f32 = self.scroll.si.viewport.y;
     const parent_rect = self.current_col.?.data().contentRect();
 
@@ -278,7 +278,7 @@ pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, opts: Cell
 /// Create a new body cell within a column
 /// Returns a hbox. deinit() must be called on this hbox before creating a new cell.
 /// Height is taken from opts.height if provided, otherwise height is automatically determined.
-pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, row_num: usize, opts: CellOptions) !*BoxWidget {
+pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, row_num: usize, opts: CellOptions) std.mem.Allocator.Error!*BoxWidget {
     const parent_rect = self.current_col.?.data().contentRect();
 
     const cell_height: f32 = height: {

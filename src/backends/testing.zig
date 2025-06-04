@@ -122,7 +122,7 @@ pub fn textureFromTarget(_: *TestingBackend, texture: dvui.TextureTarget) dvui.T
 pub fn renderTarget(_: *TestingBackend, _: ?dvui.TextureTarget) void {}
 
 /// Get clipboard content (text only)
-pub fn clipboardText(self: *TestingBackend) error{OutOfMemory}![]const u8 {
+pub fn clipboardText(self: *TestingBackend) std.mem.Allocator.Error![]const u8 {
     if (self.clipboard) |text| {
         return try self.arena.dupe(u8, text);
     } else {
@@ -131,7 +131,7 @@ pub fn clipboardText(self: *TestingBackend) error{OutOfMemory}![]const u8 {
 }
 
 /// Set clipboard content (text only)
-pub fn clipboardTextSet(self: *TestingBackend, text: []const u8) error{OutOfMemory}!void {
+pub fn clipboardTextSet(self: *TestingBackend, text: []const u8) std.mem.Allocator.Error!void {
     if (self.clipboard) |prev_text| {
         self.allocator.free(prev_text);
     }
@@ -139,7 +139,7 @@ pub fn clipboardTextSet(self: *TestingBackend, text: []const u8) error{OutOfMemo
 }
 
 /// Open URL in system browser
-pub fn openURL(_: *TestingBackend, _: []const u8) error{OutOfMemory}!void {}
+pub fn openURL(_: *TestingBackend, _: []const u8) std.mem.Allocator.Error!void {}
 
 /// Called by dvui.refresh() when it is called from a background
 /// thread.  Used to wake up the gui thread.  It only has effect if you

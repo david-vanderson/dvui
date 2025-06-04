@@ -41,7 +41,7 @@ fn tce(self: *CacheWidget) ?*dvui.TextureCacheEntry {
     return dvui.currentWindow().texture_cache.getPtr(self.hash);
 }
 
-fn drawTce(self: *CacheWidget, t: *const dvui.TextureCacheEntry) !void {
+fn drawTce(self: *CacheWidget, t: *const dvui.TextureCacheEntry) std.mem.Allocator.Error!void {
     const rs = self.wd.contentRectScale();
 
     try dvui.renderTexture(t.texture, rs, .{ .uv = (Rect{}).toSize(self.tex_uv), .debug = self.wd.options.debugGet() });
@@ -51,7 +51,7 @@ fn drawTce(self: *CacheWidget, t: *const dvui.TextureCacheEntry) !void {
 }
 
 /// Must be called before install().
-pub fn invalidate(self: *CacheWidget) !void {
+pub fn invalidate(self: *CacheWidget) std.mem.Allocator.Error!void {
     if (self.tce()) |t| {
         // if we had a texture, show it this frame because our contents needs a frame to get sizing
         try self.drawTce(t);
@@ -65,7 +65,7 @@ pub fn invalidate(self: *CacheWidget) !void {
     }
 }
 
-pub fn install(self: *CacheWidget) !void {
+pub fn install(self: *CacheWidget) std.mem.Allocator.Error!void {
     dvui.parentSet(self.widget());
     try self.wd.register();
     try self.wd.borderAndBackground(.{});

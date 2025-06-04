@@ -91,7 +91,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *FloatingMenuWidget) !void {
+pub fn install(self: *FloatingMenuWidget) std.mem.Allocator.Error!void {
     self.prev_rendering = dvui.renderingSet(false);
 
     dvui.parentSet(self.widget());
