@@ -46,7 +46,7 @@ pub fn data(self: *LabelWidget) *WidgetData {
 }
 
 pub fn install(self: *LabelWidget) std.mem.Allocator.Error!void {
-    try self.wd.register();
+    self.wd.register();
     try self.wd.borderAndBackground(.{});
 }
 

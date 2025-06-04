@@ -482,7 +482,7 @@ pub const HeaderResizeWidget = struct {
     }
 
     pub fn install(self: *HeaderResizeWidget) !void {
-        try self.wd.register();
+        self.wd.register();
         try self.wd.borderAndBackground(.{});
     }
 

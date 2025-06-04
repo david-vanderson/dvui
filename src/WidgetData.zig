@@ -61,7 +61,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
     return self;
 }
 
-pub fn register(self: *WidgetData) std.mem.Allocator.Error!void {
+pub fn register(self: *WidgetData) void {
     self.rect_scale_cache = self.rectScale();
 
     // for normal widgets this is fine, but subwindows have to take care to

@@ -124,7 +124,7 @@ pub fn install(self: *FloatingMenuWidget) std.mem.Allocator.Error!void {
 
     try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, null);
     dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
-    try self.wd.register();
+    self.wd.register();
 
     // first break out of whatever clip we were in (so box shadows work, since
     // they are outside our window)

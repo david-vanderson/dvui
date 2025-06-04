@@ -20,7 +20,7 @@ pub fn init(src: std.builtin.SourceLocation, opts: Options) OverlayWidget {
 
 pub fn install(self: *OverlayWidget) std.mem.Allocator.Error!void {
     dvui.parentSet(self.widget());
-    try self.wd.register();
+    self.wd.register();
 }
 
 pub fn drawBackground(self: *OverlayWidget) std.mem.Allocator.Error!void {
