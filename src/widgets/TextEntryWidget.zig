@@ -406,7 +406,8 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
                 const prev_text = self.text;
                 dvui.dataSetSliceCopies(null, self.wd.id, "_buffer", &[_]u8{0}, new_size);
                 self.text = dvui.dataGetSlice(null, self.wd.id, "_buffer", []u8).?;
-                @memcpy(self.text[0..prev_text.len], prev_text);
+                const min_len = @min(prev_text.len, self.text.len);
+                @memcpy(self.text[0..min_len], prev_text[0..min_len]);
             },
         }
     }
@@ -894,7 +895,8 @@ pub fn deinit(self: *TextEntryWidget) void {
                 const prev_text = self.text;
                 dvui.dataSetSliceCopies(null, self.wd.id, "_buffer", &[_]u8{0}, new_len);
                 self.text = dvui.dataGetSlice(null, self.wd.id, "_buffer", []u8).?;
-                @memcpy(self.text, prev_text);
+                const min_len = @min(prev_text.len, self.text.len);
+                @memcpy(self.text[0..min_len], prev_text[0..min_len]);
             },
         }
     }
