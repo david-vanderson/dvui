@@ -813,6 +813,33 @@ pub fn dvuiRectToRaylib(rect: dvui.Rect.Physical) c.Rectangle {
     return c.Rectangle{ .x = r.x, .y = r.y, .width = r.w, .height = r.h };
 }
 
+pub fn EndDrawingWaitEventTimeout(_: *RaylibBackend, timeout_micros: u32) void {
+    if (timeout_micros == std.math.maxInt(u32)) {
+        // wait no timeout
+        c.EnableEventWaiting();
+        c.EndDrawing();
+        c.DisableEventWaiting();
+        return;
+    }
+
+    if (timeout_micros > 0) {
+        c.EndDrawing();
+
+        // TODO: investigate raylib with SUPPORT_CUSTOM_FRAME_CONTROL that
+        // could let us do slightly better than this
+        // * if an event came in before EndDrawing, then we will wait anyway
+
+        // wait with timeout
+        const timeout: f64 = @as(f64, @floatFromInt(timeout_micros)) / 1_000_000.0;
+        c.glfwWaitEventsTimeout(timeout);
+        return;
+    }
+
+    // don't wait at all
+    c.EndDrawing();
+    return;
+}
+
 pub fn main() !void {
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
@@ -846,10 +873,15 @@ pub fn main() !void {
     main_loop: while (true) {
         c.BeginDrawing();
 
-        // Raylib does not support waiting with event interruption, so dvui
-        // can't do variable framerate.  So can't call win.beginWait() or
-        // win.waitTime().
-        try win.begin(std.time.nanoTimestamp());
+        // beginWait coordinates with waitTime below to run frames only when needed
+        //
+        // Raylib does not directly support waiting with event interruption.
+        // We assume raylib is using glfw, but glfwWaitEventsTimeout doesn't
+        // tell you if it was interrupted or not. So always pass true.
+        const nstime = win.beginWait(true);
+
+        // marks the beginning of a frame for dvui, can call dvui functions after this
+        try win.begin(nstime);
 
         // send all events to dvui for processing
         const quit = try b.addAllEvents(&win);
@@ -864,28 +896,13 @@ pub fn main() !void {
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
         const end_micros = try win.end(.{});
-        const wait_event_micros = win.waitTime(end_micros, null);
 
         // cursor management
         b.setCursor(win.cursorRequested());
 
-        if (wait_event_micros == std.math.maxInt(u32)) {
-            c.EnableEventWaiting();
-            // render frame to OS
-            c.EndDrawing();
-            c.DisableEventWaiting();
-        } else {
-            // render frame to OS
-            c.EndDrawing();
-
-            // should investigate raylib with SUPPORT_CUSTOM_FRAME_CONTROL that
-            // could let us do slightly better than this
-            // * if an event came in before EndDrawing, then we will wait anyway
-
-            // wait with timeout
-            const timeout: f64 = @as(f64, @floatFromInt(wait_event_micros)) / 1_000_000.0;
-            c.glfwWaitEventsTimeout(timeout);
-        }
+        // waitTime and beginWait combine to achieve variable framerates
+        const wait_event_micros = win.waitTime(end_micros, null);
+        b.EndDrawingWaitEventTimeout(wait_event_micros);
 
         if (res != .ok) break :main_loop;
     }

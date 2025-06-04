@@ -42,10 +42,16 @@ pub fn main() !void {
     main_loop: while (true) {
         c.BeginDrawing();
 
-        // Raylib does not support waiting with event interruption, so dvui
-        // can't do variable framerate.  So can't call win.beginWait() or
-        // win.waitTime().
-        try win.begin(std.time.nanoTimestamp());
+        // beginWait coordinates with waitTime below to run frames only when needed
+        //
+        // Raylib does not directly support waiting with event interruption.
+        // In this example we assume raylib is using glfw, but
+        // glfwWaitEventsTimeout doesn't tell you if it was interrupted or not.
+        // So always pass true.
+        const nstime = win.beginWait(true);
+
+        // marks the beginning of a frame for dvui, can call dvui functions after this
+        try win.begin(nstime);
 
         // send all events to dvui for processing
         const quit = try backend.addAllEvents(&win);
@@ -59,13 +65,14 @@ pub fn main() !void {
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
-        _ = try win.end(.{});
+        const end_micros = try win.end(.{});
 
         // cursor management
         backend.setCursor(win.cursorRequested());
 
-        // render frame to OS
-        c.EndDrawing();
+        // waitTime and beginWait combine to achieve variable framerates
+        const wait_event_micros = win.waitTime(end_micros, null);
+        backend.EndDrawingWaitEventTimeout(wait_event_micros);
 
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
         if (show_dialog_outside_frame) {
