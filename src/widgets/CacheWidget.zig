@@ -38,13 +38,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 fn tce(self: *CacheWidget) ?*dvui.TextureCacheEntry {
-    const cw = dvui.currentWindow();
-    if (cw.texture_cache.getPtr(self.hash)) |t| {
-        t.used = true;
-        return t;
-    }
-
-    return null;
+    return dvui.currentWindow().texture_cache.getPtr(self.hash);
 }
 
 fn drawTce(self: *CacheWidget, t: *const dvui.TextureCacheEntry) !void {
@@ -157,13 +151,14 @@ pub fn processEvent(self: *CacheWidget, e: *dvui.Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *CacheWidget) void {
+    const cw = dvui.currentWindow();
     if (!self.texture_create_error and self.uncached()) {
         if (dvui.currentWindow().extra_frames_needed == 0) {
             dvui.dataSet(null, self.wd.id, "_cache_now", true);
             dvui.refresh(null, @src(), self.wd.id);
         }
     }
-    dvui.currentWindow().extra_frames_needed = @max(dvui.currentWindow().extra_frames_needed, self.refresh_prev_value);
+    cw.extra_frames_needed = @max(cw.extra_frames_needed, self.refresh_prev_value);
 
     if (self.old_clip) |clip| {
         dvui.clipSet(clip);
@@ -173,7 +168,7 @@ pub fn deinit(self: *CacheWidget) void {
 
         // convert texture target to normal texture
         const entry = dvui.TextureCacheEntry{ .texture = dvui.textureFromTarget(self.caching_tex) }; // destroys self.caching_tex
-        dvui.currentWindow().texture_cache.put(self.hash, entry) catch @panic("OOM");
+        cw.texture_cache.put(cw.gpa, self.hash, entry) catch @panic("OOM");
 
         // draw texture so we see it this frame
         self.drawTce(&entry) catch {

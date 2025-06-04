@@ -92,6 +92,7 @@ pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
 pub const testing = @import("testing.zig");
 pub const ShrinkingArenaAllocator = @import("shrinking_arena_allocator.zig");
+pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHashMap;
 
 pub const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
 pub const useFreeType = !wasm;
@@ -207,14 +208,13 @@ pub const TagData = struct {
 
 pub fn tag(name: []const u8, data: TagData) void {
     var cw = currentWindow();
-    const existing_tag = cw.tags.fetchPut(name, .{ .data = data }) catch |err| blk: {
+    const existing_tag = cw.tags.fetchPut(cw.gpa, name, data) catch |err| blk: {
         dvui.log.err("tag() \"{s}\" got {!} for id {x}\n", .{ name, err, data.id });
-
         break :blk null;
     };
 
     if (existing_tag) |kv| {
-        if (kv.value.used) {
+        if (kv.used) {
             dvui.log.err("duplicate tag name \"{s}\" id {x} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ name, data.id });
             cw.debug_widget_id = data.id;
         }
@@ -222,13 +222,7 @@ pub fn tag(name: []const u8, data: TagData) void {
 }
 
 pub fn tagGet(name: []const u8) ?TagData {
-    var cw = currentWindow();
-    const saved_tag = cw.tags.getPtr(name);
-    if (saved_tag) |st| {
-        return st.data;
-    } else {
-        return null;
-    }
+    return currentWindow().tags.get(name);
 }
 
 /// Help left-align widgets by adding horizontal spacers.
@@ -441,7 +435,6 @@ const GlyphInfo = struct {
 };
 
 pub const FontCacheEntry = struct {
-    used: bool = true,
     face: if (useFreeType) c.FT_Face else c.stbtt_fontinfo,
     scaleFactor: f32,
     height: f32,
@@ -761,10 +754,7 @@ pub const FontCacheEntry = struct {
 pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     var cw = currentWindow();
     const fontHash = FontCacheEntry.hash(font);
-    if (cw.font_cache.getPtr(fontHash)) |fce| {
-        fce.used = true;
-        return fce;
-    }
+    if (cw.font_cache.getPtr(fontHash)) |fce| return fce;
 
     //ttf bytes
     const bytes = blk: {
@@ -858,7 +848,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     errdefer {
         textureDestroyLater(entry.texture_atlas);
     }
-    try cw.font_cache.putNoClobber(fontHash, entry);
+    try cw.font_cache.putNoClobber(cw.gpa, fontHash, entry);
 
     return cw.font_cache.getPtr(fontHash).?;
 }
@@ -881,7 +871,6 @@ pub const TextureTarget = struct {
 /// how dvui caches icon and image rasterizations.
 pub const TextureCacheEntry = struct {
     texture: Texture,
-    used: bool = true,
 
     pub fn hash(bytes: []const u8, height: u32) u64 {
         var h = fnv.init();
@@ -928,10 +917,8 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, icon_op
     var cw = currentWindow();
     const icon_hash = TextureCacheEntry.hash_icon(tvg_bytes, height, icon_opts);
 
-    if (cw.texture_cache.getPtr(icon_hash)) |tce| {
-        tce.used = true;
-        return tce.*;
-    }
+    if (cw.texture_cache.get(icon_hash)) |tce| return tce;
+
     const ImageAdapter = struct {
         pixels: []u8,
         width: u32,
@@ -992,7 +979,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, icon_op
     //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{ name, height, render.width, render.height });
 
     const entry = TextureCacheEntry{ .texture = texture };
-    try cw.texture_cache.put(icon_hash, entry);
+    try cw.texture_cache.put(cw.gpa, icon_hash, entry);
 
     return entry;
 }
@@ -2438,13 +2425,7 @@ pub fn firstFrame(id: WidgetId) bool {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn minSizeGet(id: WidgetId) ?Size {
-    var cw = currentWindow();
-    const saved_size = cw.min_sizes.getPtr(id);
-    if (saved_size) |ss| {
-        return ss.size;
-    } else {
-        return null;
-    }
+    return currentWindow().min_sizes.get(id);
 }
 
 /// Return the maximum of min_size and the min size for id from last frame.
@@ -2927,7 +2908,6 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
 /// deleted at the beginning of the next frame.  See `spinner` for an example of
 /// how to have a seamless continuous animation.
 pub const Animation = struct {
-    used: bool = true,
     easing: *const easing.EasingFn = easing.linear,
     start_val: f32 = 0,
     end_val: f32 = 1,
@@ -2963,7 +2943,7 @@ pub const Animation = struct {
 pub fn animation(id: WidgetId, key: []const u8, a: Animation) void {
     var cw = currentWindow();
     const h = hashIdKey(id, key);
-    cw.animations.put(h, a) catch |err| switch (err) {
+    cw.animations.put(cw.gpa, h, a) catch |err| switch (err) {
         error.OutOfMemory => {
             log.err("animation got {!} for id {x} key {s}\n", .{ err, id, key });
         },
@@ -2974,15 +2954,8 @@ pub fn animation(id: WidgetId, key: []const u8, a: Animation) void {
 ///
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn animationGet(id: WidgetId, key: []const u8) ?Animation {
-    var cw = currentWindow();
     const h = hashIdKey(id, key);
-    const val = cw.animations.getPtr(h);
-    if (val) |v| {
-        v.used = true;
-        return v.*;
-    }
-
-    return null;
+    return currentWindow().animations.get(h);
 }
 
 /// Add a timer for id that will be `timerDone` on the first frame after micros
@@ -6745,10 +6718,7 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntr
     var cw = currentWindow();
     const hash = TextureCacheEntry.hash(image_bytes, 0);
 
-    if (cw.texture_cache.getPtr(hash)) |tce| {
-        tce.used = true;
-        return tce.*;
-    }
+    if (cw.texture_cache.get(hash)) |tce| return tce;
 
     var w: c_int = undefined;
     var h: c_int = undefined;
@@ -6783,7 +6753,7 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntr
     //}
 
     const entry = TextureCacheEntry{ .texture = texture };
-    try cw.texture_cache.put(hash, entry);
+    try cw.texture_cache.put(cw.gpa, hash, entry);
 
     return entry;
 }
