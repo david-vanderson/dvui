@@ -279,8 +279,9 @@ The drawing functions are:
 - `renderIcon()` - tvg icon
 - `renderImage()` - raster image via stb_image
 - `renderTexture()` - texture from `textureCreate()` or `textureCreateTarget()`
-- `pathFillConvex()` - fill convex path (see below)
-- `pathStroke()` - stroke path (see below)
+- `renderTriangles()` - raw vertex and indinex values sent to the backend
+- `Path.fillConvex()` - fill convex path (see below)
+- `Path.stroke()` - stroke path (see below)
 - `Rect.fill()` - convenience for making and filling a rounded rect
 - `Rect.stroke()` - convenience for making and stroking a rounded rect
 
