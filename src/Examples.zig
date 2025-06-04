@@ -4510,7 +4510,7 @@ pub const StrokeTest = struct {
 
         const defaults = dvui.Options{ .name = "StrokeTest" };
         self.wd = dvui.WidgetData.init(src, .{}, defaults.override(options));
-        try self.wd.register();
+        self.wd.register();
 
         const evts = dvui.events();
         for (evts) |*e| {

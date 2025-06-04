@@ -4606,7 +4606,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocat
     };
 
     var wd = WidgetData.init(src, .{}, defaults.override(opts));
-    try wd.register();
+    wd.register();
     try wd.borderAndBackground(.{});
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
@@ -4619,7 +4619,7 @@ pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) std.me
     }
     const defaults: Options = .{ .name = "Spacer" };
     var wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .min_size_content = size }));
-    try wd.register();
+    wd.register();
     try wd.borderAndBackground(.{});
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
@@ -4633,7 +4633,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocator
     };
     const options = defaults.override(opts);
     var wd = WidgetData.init(src, .{}, options);
-    try wd.register();
+    wd.register();
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
 
@@ -4919,7 +4919,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
     }
 
     var wd = WidgetData.init(src, .{}, options.override(.{ .min_size_content = size }));
-    try wd.register();
+    wd.register();
 
     const cr = wd.contentRect();
     const ms = wd.options.min_size_contentGet();
@@ -4987,7 +4987,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) !void {
     const size = sizePhys.scale(1.0 / ss, Size);
 
     var wd = WidgetData.init(src, .{}, opts.override(.{ .name = "debugFontAtlases", .min_size_content = size }));
-    try wd.register();
+    wd.register();
 
     try wd.borderAndBackground(.{});
 

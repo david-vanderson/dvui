@@ -80,7 +80,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 pub fn install(self: *MenuWidget) std.mem.Allocator.Error!void {
     dvui.parentSet(self.widget());
     self.parentMenu = menuSet(self);
-    try self.wd.register();
+    self.wd.register();
     try self.wd.borderAndBackground(.{});
 
     const evts = dvui.events();

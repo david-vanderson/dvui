@@ -1083,7 +1083,7 @@ pub fn begin(
 
     // Window's wd is kept frame to frame, so manually reset the cache.
     self.wd.rect_scale_cache = null;
-    try self.wd.register();
+    self.wd.register();
 
     self.layout = .{};
 

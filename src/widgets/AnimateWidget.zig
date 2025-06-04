@@ -78,7 +78,7 @@ pub fn install(self: *AnimateWidget) std.mem.Allocator.Error!void {
     }
 
     dvui.parentSet(self.widget());
-    try self.wd.register();
+    self.wd.register();
     try self.wd.borderAndBackground(.{});
 }
 
