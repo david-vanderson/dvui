@@ -143,7 +143,7 @@ pub const c = @cImport({
 
 pub var ft2lib: if (useFreeType) c.FT_Library else void = undefined;
 
-pub const Error = error{ OutOfMemory, InvalidUtf8, freetypeError, tvgError, stbiError };
+pub const Error = error{ OutOfMemory, freetypeError, tvgError, stbiError };
 
 pub const log = std.log.scoped(.dvui);
 const dvui = @This();
@@ -5866,6 +5866,35 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     }
 }
 
+/// The returned slice is guaranteed to be valid utf8. If the passed in slice
+/// already was valid, the same slice will be returned. Otherwise, a new slice
+/// will be allocated.
+///
+/// ```zig
+/// const some_text = "This is some maybe utf8 text";
+/// const utf8_text = try toUtf8(alloc, some_text);
+/// // Detect if the text needs to be freed by checking the
+/// defer if (utf8_text.ptr != some_text.ptr) alloc.free(utf8_text);
+/// ```
+pub fn toUtf8(allocator: std.mem.Allocator, text: []const u8) std.mem.Allocator.Error![]const u8 {
+    if (std.unicode.utf8ValidateSlice(text)) return text;
+    // Give some reasonable extra space for replacement bytes without the need to reallocate
+    const replacements_before_realloc = 100;
+    // We use array list directly to avoid `std.fmt.count` going over the string twice
+    var out = try std.ArrayList(u8).initCapacity(allocator, text.len + replacements_before_realloc);
+    const writer = out.writer();
+    try std.unicode.fmtUtf8(text).format(undefined, undefined, writer);
+    return out.toOwnedSlice();
+}
+
+test toUtf8 {
+    const alloc = std.testing.allocator;
+    const some_text = "This is some maybe utf8 text";
+    const utf8_text = try toUtf8(alloc, some_text);
+    // Detect if the text needs to be freed by checking the
+    defer if (utf8_text.ptr != some_text.ptr) alloc.free(utf8_text);
+}
+
 // pos is clamped to [0, text.len] then if it is in the middle of a multibyte
 // utf8 char, we move it back to the beginning
 pub fn findUtf8Start(text: []const u8, pos: usize) usize {
@@ -6218,16 +6247,13 @@ pub fn renderText(opts: renderTextOptions) !void {
     if (opts.text.len == 0) return;
     if (clipGet().intersect(opts.rs.r).empty()) return;
 
-    if (!std.unicode.utf8ValidateSlice(opts.text)) {
-        log.warn("renderText invalid utf8 for \"{s}\"\n", .{opts.text});
-        return error.InvalidUtf8;
-    }
-
     var cw = currentWindow();
+    const utf8_text = try toUtf8(cw.arena(), opts.text);
+    defer if (opts.text.ptr != utf8_text.ptr) cw.arena().free(utf8_text);
 
     if (!cw.render_target.rendering) {
         var opts_copy = opts;
-        opts_copy.text = try cw.arena().dupe(u8, opts.text);
+        opts_copy.text = try cw.arena().dupe(u8, utf8_text);
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
 
         var sw = cw.subwindowCurrent();
@@ -6245,7 +6271,7 @@ pub fn renderText(opts: renderTextOptions) !void {
     const target_fraction = if (cw.snap_to_pixels) 1.0 else target_size / fce.height;
 
     // make sure the cache has all the glyphs we need
-    var utf8it = (try std.unicode.Utf8View.init(opts.text)).iterator();
+    var utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
     while (utf8it.nextCodepoint()) |codepoint| {
         _ = try fce.glyphInfoGet(@as(u32, @intCast(codepoint)), opts.font.name);
     }
@@ -6376,7 +6402,7 @@ pub fn renderText(opts: renderTextOptions) !void {
     }
 
     // Over allocate the internal buffers assuming each byte is a character
-    var builder = try Triangles.Builder.init(cw.arena(), 4 * opts.text.len, 6 * opts.text.len);
+    var builder = try Triangles.Builder.init(cw.arena(), 4 * utf8_text.len, 6 * utf8_text.len);
     defer builder.deinit(cw.arena());
 
     const x_start: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
@@ -6393,19 +6419,19 @@ pub fn renderText(opts: renderTextOptions) !void {
     var sel_end_x: f32 = x;
     var sel_max_y: f32 = y;
     var sel_start: usize = opts.sel_start orelse 0;
-    sel_start = @min(sel_start, opts.text.len);
+    sel_start = @min(sel_start, utf8_text.len);
     var sel_end: usize = opts.sel_end orelse 0;
-    sel_end = @min(sel_end, opts.text.len);
+    sel_end = @min(sel_end, utf8_text.len);
     // if we will definitely have a selected region or not
     const sel: bool = sel_start < sel_end;
 
     const atlas_size: Size = .{ .w = @floatFromInt(fce.texture_atlas.width), .h = @floatFromInt(fce.texture_atlas.height) };
 
     var bytes_seen: usize = 0;
-    var utf8 = (try std.unicode.Utf8View.init(opts.text)).iterator();
+    utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
     var last_codepoint: u32 = 0;
     var last_glyph_index: u32 = 0;
-    while (utf8.nextCodepoint()) |codepoint| {
+    while (utf8it.nextCodepoint()) |codepoint| {
         const gi = try fce.glyphInfoGet(@as(u32, @intCast(codepoint)), opts.font.name);
 
         // kerning

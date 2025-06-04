@@ -3565,6 +3565,12 @@ pub fn debuggingErrors() !void {
         }
     }
 
+    if (try dvui.expander(@src(), "Invalid utf-8 text", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+        try dvui.labelNoFmt(@src(), "this \xFFtext\xFF includes some \xFF invalid utf-8\xFF\xFF\xFF which is replaced with \xFF", .{});
+    }
+
     if (try dvui.expander(@src(), "Scroll child after expanded child (will log error)", .{}, .{ .expand = .horizontal })) {
         var scroll = try dvui.scrollArea(@src(), .{}, .{ .min_size_content = .{ .w = 200, .h = 80 } });
         defer scroll.deinit();

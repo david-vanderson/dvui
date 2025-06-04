@@ -422,6 +422,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
 }
 
 pub fn format(self: *TextLayoutWidget, comptime fmt: []const u8, args: anytype, opts: Options) !void {
+    comptime if (!std.unicode.utf8ValidateSlice(fmt)) @compileError("Format strings must be valid utf-8");
     const cw = dvui.currentWindow();
     const l = try std.fmt.allocPrint(cw.arena(), fmt, args);
     defer cw.arena().free(l);
@@ -968,11 +969,14 @@ const AddTextExAction = enum {
 fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction, opts: Options) !bool {
     var ret = false;
 
+    const cw = dvui.currentWindow();
+
     const options = self.wd.options.override(opts);
     const msize = options.fontGet().sizeM(1, 1);
     const line_height = options.fontGet().lineHeight();
     self.current_line_height = @max(self.current_line_height, line_height);
-    var txt = text;
+    var txt = try dvui.toUtf8(cw.arena(), text);
+    defer if (text.ptr != txt.ptr) cw.arena().free(txt);
 
     var container_width = self.wd.contentRect().w;
     if (container_width == 0) {
@@ -1197,9 +1201,9 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 (self.selection.start -| self.bytes_seen -| rtxt.len) == 0 and
                 (self.selection.end -| self.bytes_seen -| rtxt.len) > 0)
             {
-                rtxt = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{s} ", .{rtxt});
+                rtxt = try std.mem.concat(cw.arena(), u8, &.{ rtxt, " " });
             }
-            defer if (txt.ptr != rtxt.ptr) dvui.currentWindow().arena().free(rtxt);
+            defer if (txt.ptr != rtxt.ptr) cw.arena().free(rtxt);
 
             try dvui.renderText(.{
                 .font = options.fontGet(),
@@ -1232,10 +1236,10 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 // initialize or realloc
                 if (self.copy_slice) |slice| {
                     const old_len = slice.len;
-                    self.copy_slice = try dvui.currentWindow().arena().realloc(slice, slice.len + (cend - cstart));
+                    self.copy_slice = try cw.arena().realloc(slice, slice.len + (cend - cstart));
                     @memcpy(self.copy_slice.?[old_len..], txt[cstart..cend]);
                 } else {
-                    self.copy_slice = try dvui.currentWindow().arena().dupe(u8, txt[cstart..cend]);
+                    self.copy_slice = try cw.arena().dupe(u8, txt[cstart..cend]);
                 }
 
                 // push to clipboard if done
@@ -1243,7 +1247,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                     try dvui.clipboardTextSet(self.copy_slice.?);
 
                     self.copy_sel = null;
-                    dvui.currentWindow().arena().free(self.copy_slice.?);
+                    cw.arena().free(self.copy_slice.?);
                     self.copy_slice = null;
                 }
             }
