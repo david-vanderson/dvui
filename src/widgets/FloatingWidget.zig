@@ -49,7 +49,7 @@ pub fn init(src: std.builtin.SourceLocation, opts_in: Options) FloatingWidget {
     return self;
 }
 
-pub fn install(self: *FloatingWidget) !void {
+pub fn install(self: *FloatingWidget) std.mem.Allocator.Error!void {
     self.prev_rendering = dvui.renderingSet(false);
 
     dvui.parentSet(self.widget());
