@@ -1246,12 +1246,12 @@ pub fn renderCommands(self: *Self, queue: std.ArrayList(dvui.RenderCommand)) !vo
                 try dvui.renderTexture(t.tex, t.rs, t.opts);
             },
             .pathFillConvex => |pf| {
-                var triangles = try dvui.pathFillConvexTriangles(pf.path, pf.opts);
+                var triangles = try pf.path.fillConvexTriangles(pf.opts);
                 defer triangles.deinit(self.arena());
                 try dvui.renderTriangles(triangles, null);
             },
             .pathStroke => |ps| {
-                var triangles = try dvui.pathStrokeTriangles(ps.path, ps.opts);
+                var triangles = try ps.path.strokeTriangles(ps.opts);
                 defer triangles.deinit(self.arena());
                 try dvui.renderTriangles(triangles, null);
             },
