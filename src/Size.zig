@@ -10,6 +10,8 @@ pub fn SizeType(comptime units: dvui.enums.Units) type {
         w: f32 = 0,
         h: f32 = 0,
 
+        pub const zero: Self = .{ .w = 0, .h = 0 };
+
         pub fn width(w: f32) Self {
             return .{ .w = w };
         }
