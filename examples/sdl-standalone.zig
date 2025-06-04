@@ -52,10 +52,12 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
     defer win.deinit();
 
+    var interrupted = false;
+
     main_loop: while (true) {
 
         // beginWait coordinates with waitTime below to run frames only when needed
-        const nstime = win.beginWait(backend.hasEvent());
+        const nstime = win.beginWait(interrupted);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(nstime);
@@ -85,7 +87,7 @@ pub fn main() !void {
 
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros, null);
-        backend.waitEventTimeout(wait_event_micros);
+        interrupted = backend.waitEventTimeout(wait_event_micros);
 
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
         if (show_dialog_outside_frame) {

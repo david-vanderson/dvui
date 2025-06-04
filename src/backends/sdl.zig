@@ -28,7 +28,7 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 // used when doing sdl callbacks
 pub var gwin: dvui.Window = undefined;
 pub var gback: SDLBackend = undefined;
-pub var ghave_event: bool = false;
+pub var ginterrupted: bool = false;
 pub var ghave_resize: bool = false;
 pub var gno_wait: bool = false;
 
@@ -283,22 +283,34 @@ pub fn setIconFromABGR8888(self: *SDLBackend, data: [*]const u8, icon_w: c_int, 
     _ = c.SDL_SetWindowIcon(self.window, surface);
 }
 
-pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) void {
+/// Return true if interrupted by event
+pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) bool {
     if (timeout_micros == std.math.maxInt(u32)) {
         // wait no timeout
         _ = c.SDL_WaitEvent(null);
-    } else if (timeout_micros > 0) {
+        return false;
+    }
+
+    if (timeout_micros > 0) {
         // wait with a timeout
         const timeout = @min((timeout_micros + 999) / 1000, std.math.maxInt(c_int));
-        _ = c.SDL_WaitEventTimeout(null, @as(c_int, @intCast(timeout)));
+        var ret: bool = undefined;
+        if (sdl3) {
+            ret = c.SDL_WaitEventTimeout(null, @as(c_int, @intCast(timeout)));
+        } else {
+            ret = c.SDL_WaitEventTimeout(null, @as(c_int, @intCast(timeout))) != 0;
+        }
 
         // TODO: this call to SDL_PollEvent can be removed after resolution of
         // https://github.com/libsdl-org/SDL/issues/6539
         // maintaining this a little longer for people with older SDL versions
         _ = c.SDL_PollEvent(null);
-    } else {
-        // don't wait
+
+        return ret;
     }
+
+    // don't wait at all
+    return false;
 }
 
 pub fn refresh(self: *SDLBackend) void {
@@ -413,10 +425,6 @@ pub fn renderPresent(self: *SDLBackend) void {
     } else {
         c.SDL_RenderPresent(self.renderer);
     }
-}
-
-pub fn hasEvent(_: *SDLBackend) bool {
-    return c.SDL_PollEvent(null) == if (sdl3) true else 1;
 }
 
 pub fn backend(self: *SDLBackend) dvui.Backend {
@@ -1097,10 +1105,12 @@ pub fn main() !u8 {
     if (app.initFn) |initFn| initFn(&win);
     defer if (app.deinitFn) |deinitFn| deinitFn();
 
+    var interrupted = false;
+
     main_loop: while (true) {
 
         // beginWait coordinates with waitTime below to run frames only when needed
-        const nstime = win.beginWait(back.hasEvent());
+        const nstime = win.beginWait(interrupted);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(nstime);
@@ -1126,7 +1136,7 @@ pub fn main() !u8 {
         if (res != .ok) break :main_loop;
 
         const wait_event_micros = win.waitTime(end_micros, null);
-        back.waitEventTimeout(wait_event_micros);
+        interrupted = back.waitEventTimeout(wait_event_micros);
     }
 
     return 0;
@@ -1194,7 +1204,6 @@ fn appQuit(appstate: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
 // This function runs when a new event (mouse input, keypresses, etc) occurs.
 fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
     const e = event.?.*;
-    ghave_event = true;
     _ = gback.addEvent(&gwin, e) catch |err| {
         log.err("dvui.Window.addEvent failed: {!}", .{err});
         return c.SDL_APP_FAILURE;
@@ -1217,8 +1226,7 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
 // This function runs once per frame, and is the heart of the program.
 fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     // beginWait coordinates with waitTime below to run frames only when needed
-    const nstime = gwin.beginWait(ghave_event or gno_wait);
-    ghave_event = false;
+    const nstime = gwin.beginWait(ginterrupted or gno_wait);
 
     // marks the beginning of a frame for dvui, can call dvui functions after this
     gwin.begin(nstime) catch |err| {
@@ -1266,7 +1274,7 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     }
 
     gno_wait = true;
-    gback.waitEventTimeout(wait_event_micros);
+    ginterrupted = gback.waitEventTimeout(wait_event_micros);
     gno_wait = false;
 
     return c.SDL_APP_CONTINUE;
