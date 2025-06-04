@@ -60,7 +60,7 @@ drag_name: []const u8 = "",
 
 frame_time_ns: i128 = 0,
 loop_wait_target: ?i128 = null,
-loop_wait_target_event: bool = false,
+loop_wait_target_can_interrupt: bool = false,
 loop_target_slop: i32 = 1000, // 1ms frame overhead seems a good place to start
 loop_target_slop_frames: i32 = 0,
 frame_times: [30]u32 = [_]u32{0} ** 30,
@@ -742,14 +742,17 @@ pub fn FPS(self: *const Self) f32 {
 
 /// Coordinates with `Window.waitTime` to run frames only when needed.
 ///
+/// If on the previous frame you called `Window.waitTime` and waited with event
+/// interruption, then pass true if that wait was interrupted (by an event).
+///
 /// Typically called right before `Window.begin`.
 ///
 /// See usage in the example folder for the backend of you choice.
-pub fn beginWait(self: *Self, has_event: bool) i128 {
+pub fn beginWait(self: *Self, interrupted: bool) i128 {
     var new_time = @max(self.frame_time_ns, self.backend.nanoTime());
 
     if (self.loop_wait_target) |target| {
-        if (self.loop_wait_target_event and has_event) {
+        if (self.loop_wait_target_can_interrupt and interrupted) {
             // interrupted by event, so don't adjust slop for target
             //std.debug.print("beginWait interrupted by event\n", .{});
             return new_time;
@@ -815,7 +818,7 @@ pub fn waitTime(self: *Self, end_micros: ?u32, maxFPS: ?f32) u32 {
     // assume that we won't target a specific time to sleep but if we do
     // calculate the targets before removing so_far and slop
     self.loop_wait_target = null;
-    self.loop_wait_target_event = false;
+    self.loop_wait_target_can_interrupt = false;
     const target_min = min_micros;
     const target = min_micros + wait_micros;
 
@@ -871,7 +874,7 @@ pub fn waitTime(self: *Self, end_micros: ?u32, maxFPS: ?f32) u32 {
         // since we have a timeout we will try to hit that target but set our
         // flag so that we don't adjust for the target if we wake up to an event
         self.loop_wait_target = self.frame_time_ns + (@as(i128, @intCast(target)) * 1000);
-        self.loop_wait_target_event = true;
+        self.loop_wait_target_can_interrupt = true;
         //std.debug.print("  wait {d:6}\n", .{wait_micros});
         return wait_micros;
     } else {
