@@ -67,7 +67,7 @@ pub fn invalidate(self: *CacheWidget) std.mem.Allocator.Error!void {
 
 pub fn install(self: *CacheWidget) std.mem.Allocator.Error!void {
     dvui.parentSet(self.widget());
-    try self.wd.register();
+    self.wd.register();
     try self.wd.borderAndBackground(.{});
 
     if (self.tce()) |t| {

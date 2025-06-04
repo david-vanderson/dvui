@@ -51,7 +51,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *ScrollBarWidget) std.mem.Allocator.Error!void {
-    try self.wd.register();
+    self.wd.register();
     try self.wd.borderAndBackground(.{});
 
     self.grabRect = self.wd.contentRect();
