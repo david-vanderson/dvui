@@ -3455,11 +3455,18 @@ pub fn animations() !void {
         try mslabel.draw();
         mslabel.deinit();
 
-        try dvui.label(@src(), "Estimate of frame overhead {d:6} us", .{dvui.currentWindow().loop_target_slop}, .{});
-
         if (dvui.timerDoneOrNone(mslabel.wd.id)) {
             const wait = 1000 * (1000 - left);
             try dvui.timer(mslabel.wd.id, wait);
+        }
+
+        try dvui.label(@src(), "Estimate of frame overhead {d:6} us", .{dvui.currentWindow().loop_target_slop}, .{});
+        switch (dvui.backend.kind) {
+            .sdl2, .sdl3 => try dvui.label(@src(), "sdl: updated when not interrupted by event", .{}, .{}),
+            .web => try dvui.label(@src(), "web: updated when not interrupted by event", .{}, .{}),
+            .raylib => try dvui.label(@src(), "raylib: only updated if non-null passed to waitTime", .{}, .{}),
+            .dx11 => try dvui.label(@src(), "dx11: only updated if non-null passed to waitTime", .{}, .{}),
+            .sdl, .custom, .testing => {},
         }
     }
 
