@@ -1504,11 +1504,11 @@ pub fn styling() !void {
             defer drawBox.deinit();
             const rs = drawBox.data().contentRectScale();
 
-            var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
+            var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
             defer path.deinit();
-            try dvui.pathAddRect(&path, rs.r, dvui.Rect.Physical.all(5));
+            try path.addRect(rs.r, dvui.Rect.Physical.all(5));
 
-            var triangles = try dvui.pathFillConvexTriangles(path.items, .{ .center = rs.r.center() });
+            var triangles = try path.build().fillConvexTriangles(.{ .center = rs.r.center() });
             defer triangles.deinit(dvui.currentWindow().arena());
 
             const ca0 = backbox_color;
@@ -2770,15 +2770,15 @@ pub fn scrollCanvas(comptime data: u8) !void {
     // can use this to convert between data and screen coords
     const dataRectScale = scaler.screenRectScale(.{});
 
-    try dvui.pathStroke(&.{
+    try dvui.Path.stroke(.{ .points = &.{
         dataRectScale.pointToPhysical(.{ .x = -10 }),
         dataRectScale.pointToPhysical(.{ .x = 10 }),
-    }, .{ .thickness = 1, .color = dvui.Color.black });
+    } }, .{ .thickness = 1, .color = dvui.Color.black });
 
-    try dvui.pathStroke(&.{
+    try dvui.Path.stroke(.{ .points = &.{
         dataRectScale.pointToPhysical(.{ .y = -10 }),
         dataRectScale.pointToPhysical(.{ .y = 10 }),
-    }, .{ .thickness = 1, .color = dvui.Color.black });
+    } }, .{ .thickness = 1, .color = dvui.Color.black });
 
     // keep record of bounding box
     var mbbox: ?Rect.Physical = null;
@@ -4465,7 +4465,7 @@ pub const StrokeTest = struct {
     var points: []dvui.Point = pointsArray[0..0];
     var dragi: ?usize = null;
     var thickness: f32 = 1.0;
-    var endcap_style: dvui.PathStrokeOptions.EndCapStyle = .none;
+    var endcap_style: dvui.Path.StrokeOptions.EndCapStyle = .none;
 
     wd: dvui.WidgetData = undefined,
 
@@ -4498,15 +4498,15 @@ pub const StrokeTest = struct {
             //_ = try dvui.button(@src(), i, "Floating", .{}, .{ .rect = dvui.Rect.fromPoint(p) });
         }
 
-        var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
-        defer path.deinit();
+        const path = try dvui.currentWindow().arena().alloc(dvui.Point.Physical, points.len);
+        defer dvui.currentWindow().arena().free(path);
 
-        for (points) |p| {
-            try path.append(rs.pointToPhysical(p));
+        for (points, path) |p, *path_point| {
+            path_point.* = rs.pointToPhysical(p);
         }
 
         const stroke_color = dvui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
-        try dvui.pathStroke(path.items, .{ .thickness = rs.s * thickness, .color = stroke_color, .closed = stroke_test_closed, .endcap_style = StrokeTest.endcap_style });
+        try dvui.Path.stroke(.{ .points = path }, .{ .thickness = rs.s * thickness, .color = stroke_color, .closed = stroke_test_closed, .endcap_style = StrokeTest.endcap_style });
     }
 
     pub fn widget(self: *Self) dvui.Widget {
