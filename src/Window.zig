@@ -1170,9 +1170,6 @@ pub fn renderCommands(self: *Self, queue: std.ArrayList(dvui.RenderCommand)) !vo
             .text => |t| {
                 try dvui.renderText(t);
             },
-            .debug_font_atlases => |t| {
-                try dvui.debugRenderFontAtlases(t.rs, t.color);
-            },
             .texture => |t| {
                 try dvui.renderTexture(t.tex, t.rs, t.opts);
             },

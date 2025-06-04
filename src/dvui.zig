@@ -992,10 +992,6 @@ pub const RenderCommand = struct {
     snap: bool,
     cmd: union(enum) {
         text: renderTextOptions,
-        debug_font_atlases: struct {
-            rs: RectScale,
-            color: Color,
-        },
         texture: struct {
             tex: Texture,
             rs: RectScale,
@@ -1733,11 +1729,19 @@ pub const Triangles = struct {
         },
 
         pub fn init(allocator: std.mem.Allocator, vtx_count: usize, idx_count: usize) !Builder {
+            std.debug.assert(vtx_count >= 3);
             std.debug.assert(idx_count % 3 == 0);
             return .{
-                .vertexes = .initBuffer(try allocator.alloc(Vertex, vtx_count)),
-                .indices = .initBuffer(try allocator.alloc(u16, idx_count)),
+                .vertexes = try .initCapacity(allocator, vtx_count),
+                .indices = try .initCapacity(allocator, idx_count),
             };
+        }
+
+        pub fn deinit(self: *Builder, allocator: std.mem.Allocator) void {
+            // NOTE: Should be in the opposite order to `init`
+            self.indices.deinit(allocator);
+            self.vertexes.deinit(allocator);
+            self.* = undefined;
         }
 
         /// Appends a vertex and updates the bounds
@@ -1759,10 +1763,21 @@ pub const Triangles = struct {
 
         /// Asserts that the entire array has been filled
         ///
-        /// The memory ownership is transferred to `Triangles`
-        pub fn build(self: *const Builder) Triangles {
+        /// The memory ownership is transferred to `Triangles`.
+        /// making `Builder.deinit` unnecessary, but safe, to call
+        pub fn build(self: *Builder) Triangles {
             std.debug.assert(self.vertexes.items.len == self.vertexes.capacity);
             std.debug.assert(self.indices.items.len == self.indices.capacity);
+            defer self.* = .{ .vertexes = .empty, .indices = .empty };
+            // Ownership is transferred as the the full allocated slices are returned
+            return self.build_unowned();
+        }
+
+        /// Creates `Triangles`, ignoring any extra capacity.
+        ///
+        /// Calling `Triangles.deinit` is invalid and `Builder.deinit`
+        /// should always be called instead
+        pub fn build_unowned(self: *Builder) Triangles {
             return .{
                 .vertexes = self.vertexes.items,
                 .indices = self.indices.items,
@@ -1786,6 +1801,7 @@ pub const Triangles = struct {
     pub fn deinit(self: *Triangles, allocator: std.mem.Allocator) void {
         allocator.free(self.indices);
         allocator.free(self.vertexes);
+        self.* = undefined;
     }
 
     /// Multiply `col` into vertex colors.
@@ -4936,8 +4952,23 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) !void {
 
     try wd.borderAndBackground(.{});
 
-    const rs = wd.parent.screenRectScale(placeIn(wd.contentRect(), size, .none, opts.gravityGet()));
-    try debugRenderFontAtlases(rs, opts.color(.text));
+    var rs = wd.parent.screenRectScale(placeIn(wd.contentRect(), size, .none, opts.gravityGet()));
+    const color = opts.color(.text);
+
+    if (cw.snap_to_pixels) {
+        rs.r.x = @round(rs.r.x);
+        rs.r.y = @round(rs.r.y);
+    }
+
+    it = cw.font_cache.iterator();
+    while (it.next()) |kv| {
+        rs.r = rs.r.toSize(.{
+            .w = @floatFromInt(kv.value_ptr.texture_atlas.width),
+            .h = @floatFromInt(kv.value_ptr.texture_atlas.height),
+        });
+        try renderTexture(kv.value_ptr.texture_atlas, rs, .{ .colormod = color });
+        rs.r.y += rs.r.h;
+    }
 
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
@@ -6165,8 +6196,6 @@ pub fn renderText(opts: renderTextOptions) !void {
         return;
     }
 
-    const r = opts.rs.r.offsetNegPoint(cw.render_target.offset);
-
     const target_size = opts.font.size * opts.rs.s;
     const sized_font = opts.font.resize(target_size);
 
@@ -6307,21 +6336,19 @@ pub fn renderText(opts: renderTextOptions) !void {
         fce.texture_atlas = textureCreate(.cast(pixels), @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
     }
 
-    var vtx = std.ArrayList(Vertex).init(cw.arena());
-    defer vtx.deinit();
-    var idx = std.ArrayList(u16).init(cw.arena());
-    defer idx.deinit();
+    // Over allocate the internal buffers assuming each byte is a character
+    var builder = try Triangles.Builder.init(cw.arena(), 4 * opts.text.len, 6 * opts.text.len);
+    defer builder.deinit(cw.arena());
 
-    const x_start: f32 = if (cw.snap_to_pixels) @round(r.x) else r.x;
+    const x_start: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
     var x = x_start;
     var max_x = x_start;
-    const y: f32 = if (cw.snap_to_pixels) @round(r.y) else r.y;
+    const y: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.y) else opts.rs.r.y;
 
     if (opts.debug) {
         log.debug("renderText x {d} y {d}\n", .{ x, y });
     }
 
-    var sel: bool = false;
     var sel_in: bool = false;
     var sel_start_x: f32 = x;
     var sel_end_x: f32 = x;
@@ -6330,10 +6357,8 @@ pub fn renderText(opts: renderTextOptions) !void {
     sel_start = @min(sel_start, opts.text.len);
     var sel_end: usize = opts.sel_end orelse 0;
     sel_end = @min(sel_end, opts.text.len);
-    if (sel_start < sel_end) {
-        // we will definitely have a selected region
-        sel = true;
-    }
+    // if we will definitely have a selected region or not
+    const sel: bool = sel_start < sel_end;
 
     const atlas_size: Size = .{ .w = @floatFromInt(fce.texture_atlas.width), .h = @floatFromInt(fce.texture_atlas.height) };
 
@@ -6389,14 +6414,14 @@ pub fn renderText(opts: renderTextOptions) !void {
 
         // don't output triangles for a zero-width glyph (space seems to be the only one)
         if (gi.w > 0) {
-            const len = @as(u32, @intCast(vtx.items.len));
+            const vtx_offset: u16 = @intCast(builder.vertexes.items.len);
             var v: Vertex = undefined;
 
             v.pos.x = x + gi.leftBearing * target_fraction;
             v.pos.y = y + gi.topBearing * target_fraction;
             v.col = .fromColor(if (sel_in) opts.sel_color orelse opts.color else opts.color);
             v.uv = gi.uv;
-            try vtx.append(v);
+            builder.appendVertex(v);
 
             if (opts.debug) {
                 log.debug(" - x {d} y {d}", .{ v.pos.x, v.pos.y });
@@ -6410,24 +6435,22 @@ pub fn renderText(opts: renderTextOptions) !void {
             v.pos.x = x + (gi.leftBearing + gi.w) * target_fraction;
             max_x = v.pos.x;
             v.uv[0] = gi.uv[0] + gi.w / atlas_size.w;
-            try vtx.append(v);
+            builder.appendVertex(v);
 
             v.pos.y = y + (gi.topBearing + gi.h) * target_fraction;
             sel_max_y = @max(sel_max_y, v.pos.y);
             v.uv[1] = gi.uv[1] + gi.h / atlas_size.h;
-            try vtx.append(v);
+            builder.appendVertex(v);
 
             v.pos.x = x + gi.leftBearing * target_fraction;
             v.uv[0] = gi.uv[0];
-            try vtx.append(v);
+            builder.appendVertex(v);
 
             // triangles must be counter-clockwise (y going down) to avoid backface culling
-            try idx.append(@as(u16, @intCast(len + 0)));
-            try idx.append(@as(u16, @intCast(len + 2)));
-            try idx.append(@as(u16, @intCast(len + 1)));
-            try idx.append(@as(u16, @intCast(len + 0)));
-            try idx.append(@as(u16, @intCast(len + 3)));
-            try idx.append(@as(u16, @intCast(len + 2)));
+            builder.appendTriangles(&.{
+                vtx_offset + 0, vtx_offset + 2, vtx_offset + 1,
+                vtx_offset + 0, vtx_offset + 3, vtx_offset + 2,
+            });
         }
 
         x = nextx;
@@ -6435,103 +6458,16 @@ pub fn renderText(opts: renderTextOptions) !void {
 
     if (sel) {
         if (opts.sel_color_bg) |bgcol| {
-            var sel_vtx: [4]Vertex = undefined;
-            sel_vtx[0].pos.x = sel_start_x;
-            sel_vtx[0].pos.y = r.y;
-            sel_vtx[3].pos.x = sel_start_x;
-            sel_vtx[3].pos.y = @max(sel_max_y, r.y + fce.height * target_fraction * opts.font.line_height_factor);
-            sel_vtx[1].pos.x = sel_end_x;
-            sel_vtx[1].pos.y = sel_vtx[0].pos.y;
-            sel_vtx[2].pos.x = sel_end_x;
-            sel_vtx[2].pos.y = sel_vtx[3].pos.y;
-
-            for (&sel_vtx) |*v| {
-                v.col = .fromColor(bgcol);
-                v.uv[0] = 0;
-                v.uv[1] = 0;
-            }
-
-            const selr = Rect.Physical.fromPoint(sel_vtx[0].pos).toPoint(sel_vtx[2].pos);
-            const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-            const clipr: ?Rect.Physical = if (selr.clippedBy(clip_offset)) clip_offset else null;
-
-            // triangles must be counter-clockwise (y going down) to avoid backface culling
-            cw.backend.drawClippedTriangles(null, &sel_vtx, &[_]u16{ 0, 2, 1, 0, 3, 2 }, clipr);
+            try Rect.Physical.fromPoint(.{ .x = sel_start_x, .y = opts.rs.r.y })
+                .toPoint(.{
+                    .x = sel_end_x,
+                    .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
+                })
+                .fill(.{}, .{ .color = bgcol, .blur = 0 });
         }
     }
 
-    if (vtx.items.len > 0) {
-        // due to floating point inaccuracies, shrink by 1/100 of a pixel before testing
-        const txtr = (Rect.Physical{ .x = x_start, .y = y, .w = max_x - x_start, .h = sel_max_y - y }).insetAll(0.01);
-        const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-        const clipr: ?Rect.Physical = if (txtr.clippedBy(clip_offset)) clip_offset else null;
-
-        cw.backend.drawClippedTriangles(fce.texture_atlas, vtx.items, idx.items, clipr);
-    }
-}
-
-pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
-    if (rs.s == 0) return;
-    if (clipGet().intersect(rs.r).empty()) return;
-
-    var cw = currentWindow();
-
-    const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .debug_font_atlases = .{ .rs = rs, .color = color } } };
-    if (!cw.render_target.rendering) {
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
-        return;
-    }
-
-    const r = rs.r.offsetNegPoint(cw.render_target.offset);
-
-    const x: f32 = if (cw.snap_to_pixels) @round(r.x) else r.x;
-    const y: f32 = if (cw.snap_to_pixels) @round(r.y) else r.y;
-    const col: Color.PMA = .fromColor(color);
-
-    var offset: f32 = 0;
-    var it = cw.font_cache.iterator();
-    while (it.next()) |kv| {
-        var vtx = std.ArrayList(Vertex).init(cw.arena());
-        defer vtx.deinit();
-        var idx = std.ArrayList(u16).init(cw.arena());
-        defer idx.deinit();
-
-        const len = @as(u32, @intCast(vtx.items.len));
-        var v: Vertex = undefined;
-        v.pos.x = x;
-        v.pos.y = y + offset;
-        v.col = col;
-        v.uv = .{ 0, 0 };
-        try vtx.append(v);
-
-        v.pos.x = x + @as(f32, @floatFromInt(kv.value_ptr.texture_atlas.width));
-        v.uv[0] = 1;
-        try vtx.append(v);
-
-        v.pos.y = y + offset + @as(f32, @floatFromInt(kv.value_ptr.texture_atlas.height));
-        v.uv[1] = 1;
-        try vtx.append(v);
-
-        v.pos.x = x;
-        v.uv[0] = 0;
-        try vtx.append(v);
-
-        // triangles must be counter-clockwise (y going down) to avoid backface culling
-        try idx.append(@as(u16, @intCast(len + 0)));
-        try idx.append(@as(u16, @intCast(len + 2)));
-        try idx.append(@as(u16, @intCast(len + 1)));
-        try idx.append(@as(u16, @intCast(len + 0)));
-        try idx.append(@as(u16, @intCast(len + 3)));
-        try idx.append(@as(u16, @intCast(len + 2)));
-
-        const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-        const clipr: ?Rect.Physical = if (r.clippedBy(clip_offset)) clip_offset else null;
-
-        cw.backend.drawClippedTriangles(kv.value_ptr.texture_atlas, vtx.items, idx.items, clipr);
-
-        offset += @as(f32, @floatFromInt(kv.value_ptr.texture_atlas.height));
-    }
+    try renderTriangles(builder.build_unowned(), fce.texture_atlas);
 }
 
 /// Holds a slice of premultiplied alpha (PMA) RGBA pixels
