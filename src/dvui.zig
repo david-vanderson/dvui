@@ -992,10 +992,6 @@ pub const RenderCommand = struct {
     snap: bool,
     cmd: union(enum) {
         text: renderTextOptions,
-        debug_font_atlases: struct {
-            rs: RectScale,
-            color: Color,
-        },
         texture: struct {
             tex: Texture,
             rs: RectScale,
@@ -4956,8 +4952,23 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) !void {
 
     try wd.borderAndBackground(.{});
 
-    const rs = wd.parent.screenRectScale(placeIn(wd.contentRect(), size, .none, opts.gravityGet()));
-    try debugRenderFontAtlases(rs, opts.color(.text));
+    var rs = wd.parent.screenRectScale(placeIn(wd.contentRect(), size, .none, opts.gravityGet()));
+    const color = opts.color(.text);
+
+    if (cw.snap_to_pixels) {
+        rs.r.x = @round(rs.r.x);
+        rs.r.y = @round(rs.r.y);
+    }
+
+    it = cw.font_cache.iterator();
+    while (it.next()) |kv| {
+        rs.r = rs.r.toSize(.{
+            .w = @floatFromInt(kv.value_ptr.texture_atlas.width),
+            .h = @floatFromInt(kv.value_ptr.texture_atlas.height),
+        });
+        try renderTexture(kv.value_ptr.texture_atlas, rs, .{ .colormod = color });
+        rs.r.y += rs.r.h;
+    }
 
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
@@ -6457,70 +6468,6 @@ pub fn renderText(opts: renderTextOptions) !void {
     }
 
     try renderTriangles(builder.build_unowned(), fce.texture_atlas);
-}
-
-pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
-    if (rs.s == 0) return;
-    if (clipGet().intersect(rs.r).empty()) return;
-
-    var cw = currentWindow();
-
-    const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .debug_font_atlases = .{ .rs = rs, .color = color } } };
-    if (!cw.render_target.rendering) {
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
-        return;
-    }
-
-    const r = rs.r.offsetNegPoint(cw.render_target.offset);
-
-    const x: f32 = if (cw.snap_to_pixels) @round(r.x) else r.x;
-    const y: f32 = if (cw.snap_to_pixels) @round(r.y) else r.y;
-    const col: Color.PMA = .fromColor(color);
-
-    var offset: f32 = 0;
-    var it = cw.font_cache.iterator();
-    while (it.next()) |kv| {
-        var vtx = std.ArrayList(Vertex).init(cw.arena());
-        defer vtx.deinit();
-        var idx = std.ArrayList(u16).init(cw.arena());
-        defer idx.deinit();
-
-        const len = @as(u32, @intCast(vtx.items.len));
-        var v: Vertex = undefined;
-        v.pos.x = x;
-        v.pos.y = y + offset;
-        v.col = col;
-        v.uv = .{ 0, 0 };
-        try vtx.append(v);
-
-        v.pos.x = x + @as(f32, @floatFromInt(kv.value_ptr.texture_atlas.width));
-        v.uv[0] = 1;
-        try vtx.append(v);
-
-        v.pos.y = y + offset + @as(f32, @floatFromInt(kv.value_ptr.texture_atlas.height));
-        v.uv[1] = 1;
-        try vtx.append(v);
-
-        v.pos.x = x;
-        v.uv[0] = 0;
-        try vtx.append(v);
-
-        // triangles must be counter-clockwise (y going down) to avoid backface culling
-        try idx.append(@as(u16, @intCast(len + 0)));
-        try idx.append(@as(u16, @intCast(len + 2)));
-        try idx.append(@as(u16, @intCast(len + 1)));
-        try idx.append(@as(u16, @intCast(len + 0)));
-        try idx.append(@as(u16, @intCast(len + 3)));
-        try idx.append(@as(u16, @intCast(len + 2)));
-
-        const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-        const clipr: ?Rect.Physical = if (r.clippedBy(clip_offset)) clip_offset else null;
-
-        cw.backend.drawClippedTriangles(kv.value_ptr.texture_atlas, vtx.items, idx.items, clipr);
-
-        offset += @as(f32, @floatFromInt(kv.value_ptr.texture_atlas.height));
-    }
 }
 
 /// Holds a slice of premultiplied alpha (PMA) RGBA pixels
