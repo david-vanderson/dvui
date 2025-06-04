@@ -61,7 +61,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
     return self;
 }
 
-pub fn register(self: *WidgetData) !void {
+pub fn register(self: *WidgetData) std.mem.Allocator.Error!void {
     self.rect_scale_cache = self.rectScale();
 
     // for normal widgets this is fine, but subwindows have to take care to
@@ -155,7 +155,9 @@ pub fn register(self: *WidgetData) !void {
                 outline_rect.y = @ceil(outline_rect.y) - 0.5;
             }
 
-            try outline_rect.stroke(.{}, .{ .thickness = 1 * rs.s, .color = dvui.themeGet().color_err, .after = true });
+            outline_rect.stroke(.{}, .{ .thickness = 1 * rs.s, .color = dvui.themeGet().color_err, .after = true }) catch {
+                dvui.log.err("Could not outline debug widget ({s}) {x}, at {}", .{ name, self.id, outline_rect });
+            };
 
             dvui.clipSet(clipr);
 
@@ -168,7 +170,7 @@ pub fn visible(self: *const WidgetData) bool {
     return !dvui.clipGet().intersect(self.borderRectScale().r).empty();
 }
 
-pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?Color = null }) !void {
+pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?Color = null }) std.mem.Allocator.Error!void {
     if (!self.visible()) {
         return;
     }
@@ -213,7 +215,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
     }
 }
 
-pub fn focusBorder(self: *const WidgetData) !void {
+pub fn focusBorder(self: *const WidgetData) std.mem.Allocator.Error!void {
     if (self.visible()) {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;

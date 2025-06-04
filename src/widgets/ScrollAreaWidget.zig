@@ -53,7 +53,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options)
     return self;
 }
 
-pub fn install(self: *ScrollAreaWidget) !void {
+pub fn install(self: *ScrollAreaWidget) std.mem.Allocator.Error!void {
     if (self.init_opts.scroll_info) |si| {
         self.si = si;
         if (self.init_opts.vertical != null) {

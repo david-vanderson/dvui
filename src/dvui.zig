@@ -256,7 +256,7 @@ pub const Alignment = struct {
     }
 
     /// Add spacer with margin.x so they all end at the same edge.
-    pub fn spacer(self: *Alignment, src: std.builtin.SourceLocation, id_extra: usize) !void {
+    pub fn spacer(self: *Alignment, src: std.builtin.SourceLocation, id_extra: usize) std.mem.Allocator.Error!void {
         const uniqueId = dvui.parentGet().extendId(src, id_extra);
         var wd = try dvui.spacer(src, .{}, .{ .margin = self.margin(uniqueId), .id_extra = id_extra });
         self.record(uniqueId, &wd);
@@ -1219,7 +1219,7 @@ pub const Path = struct {
         /// - h is bottom-left corner
         ///
         /// Only valid between `Window.begin`and `Window.end`.
-        pub fn addRect(path: *Builder, r: Rect.Physical, radius: Rect.Physical) !void {
+        pub fn addRect(path: *Builder, r: Rect.Physical, radius: Rect.Physical) std.mem.Allocator.Error!void {
             var rad = radius;
             const maxrad = @min(r.w, r.h) / 2;
             rad.x = @min(rad.x, maxrad);
@@ -1244,7 +1244,7 @@ pub const Path = struct {
         /// addition to path would duplicate the end of the arc.
         ///
         /// Only valid between `Window.begin`and `Window.end`.
-        pub fn addArc(path: *Builder, center: Point.Physical, radius: f32, start: f32, end: f32, skip_end: bool) !void {
+        pub fn addArc(path: *Builder, center: Point.Physical, radius: f32, start: f32, end: f32, skip_end: bool) std.mem.Allocator.Error!void {
             if (radius == 0) {
                 try path.points.append(center);
                 return;
@@ -1299,7 +1299,7 @@ pub const Path = struct {
         try std.testing.expectApproxEqRel(40, triangles.bounds.h, 0.05);
     }
 
-    pub fn dupe(path: Path, allocator: std.mem.Allocator) !Path {
+    pub fn dupe(path: Path, allocator: std.mem.Allocator) std.mem.Allocator.Error!Path {
         return .{ .points = try allocator.dupe(Point.Physical, path.points) };
     }
 
@@ -1312,7 +1312,7 @@ pub const Path = struct {
     /// Fill path (must be convex) with `color` (or `Theme.color_fill`).  See `Rect.fill`.
     ///
     /// Only valid between `Window.begin`and `Window.end`.
-    pub fn fillConvex(path: Path, opts: FillConvexOptions) !void {
+    pub fn fillConvex(path: Path, opts: FillConvexOptions) std.mem.Allocator.Error!void {
         if (path.points.len < 3) {
             return;
         }
@@ -1350,7 +1350,7 @@ pub const Path = struct {
     /// pixel inside. Currently blur < 1 is treated as 1, but might change.
     ///
     /// Only valid between `Window.begin`and `Window.end`.
-    pub fn fillConvexTriangles(path: Path, opts: FillConvexOptions) !Triangles {
+    pub fn fillConvexTriangles(path: Path, opts: FillConvexOptions) std.mem.Allocator.Error!Triangles {
         if (path.points.len < 3) {
             return .empty;
         }
@@ -1472,7 +1472,7 @@ pub const Path = struct {
     /// Stroke path as a series of line segments.  See `Rect.stroke`.
     ///
     /// Only valid between `Window.begin`and `Window.end`.
-    pub fn stroke(path: Path, opts: StrokeOptions) !void {
+    pub fn stroke(path: Path, opts: StrokeOptions) std.mem.Allocator.Error!void {
         if (path.points.len == 0) {
             return;
         }
@@ -1503,7 +1503,7 @@ pub const Path = struct {
     /// transparent at the edge.
     ///
     /// Only valid between `Window.begin`and `Window.end`.
-    pub fn strokeTriangles(path: Path, opts: StrokeOptions) !Triangles {
+    pub fn strokeTriangles(path: Path, opts: StrokeOptions) std.mem.Allocator.Error!Triangles {
         if (dvui.clipGet().empty()) {
             return .empty;
         }
@@ -1739,7 +1739,7 @@ pub const Triangles = struct {
             .h = -math.floatMax(f32),
         },
 
-        pub fn init(allocator: std.mem.Allocator, vtx_count: usize, idx_count: usize) !Builder {
+        pub fn init(allocator: std.mem.Allocator, vtx_count: usize, idx_count: usize) std.mem.Allocator.Error!Builder {
             std.debug.assert(vtx_count >= 3);
             std.debug.assert(idx_count % 3 == 0);
             return .{
@@ -1801,7 +1801,7 @@ pub const Triangles = struct {
         }
     };
 
-    pub fn dupe(self: *const Triangles, allocator: std.mem.Allocator) !Triangles {
+    pub fn dupe(self: *const Triangles, allocator: std.mem.Allocator) std.mem.Allocator.Error!Triangles {
         return .{
             .vertexes = try allocator.dupe(Vertex, self.vertexes),
             .indices = try allocator.dupe(u16, self.indices),
@@ -1888,7 +1888,7 @@ pub const Triangles = struct {
     }
 };
 
-pub fn renderTriangles(triangles: Triangles, tex: ?Texture) !void {
+pub fn renderTriangles(triangles: Triangles, tex: ?Texture) std.mem.Allocator.Error!void {
     if (triangles.vertexes.len == 0) {
         return;
     }
@@ -1925,7 +1925,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) !void {
 /// tagged with.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?WidgetId) !void {
+pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?WidgetId) std.mem.Allocator.Error!void {
     const cw = currentWindow();
     const arena = cw.arena();
 
@@ -2292,7 +2292,7 @@ pub fn refresh(win: ?*Window, src: std.builtin.SourceLocation, id: ?WidgetId) vo
 /// Get the textual content of the system clipboard.  Caller must copy.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn clipboardText() error{OutOfMemory}![]const u8 {
+pub fn clipboardText() std.mem.Allocator.Error![]const u8 {
     const cw = currentWindow();
     return cw.backend.clipboardText();
 }
@@ -2300,7 +2300,7 @@ pub fn clipboardText() error{OutOfMemory}![]const u8 {
 /// Set the textual content of the system clipboard.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn clipboardTextSet(text: []const u8) error{OutOfMemory}!void {
+pub fn clipboardTextSet(text: []const u8) std.mem.Allocator.Error!void {
     const cw = currentWindow();
     try cw.backend.clipboardTextSet(text);
 }
@@ -2308,7 +2308,7 @@ pub fn clipboardTextSet(text: []const u8) error{OutOfMemory}!void {
 /// Ask the system to open the given url.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn openURL(url: []const u8) !void {
+pub fn openURL(url: []const u8) std.mem.Allocator.Error!void {
     const cw = currentWindow();
     try cw.backend.openURL(url);
 }
@@ -2989,7 +2989,7 @@ pub fn animationGet(id: WidgetId, key: []const u8) ?Animation {
 /// has passed.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn timer(id: WidgetId, micros: i32) !void {
+pub fn timer(id: WidgetId, micros: i32) std.mem.Allocator.Error!void {
     try currentWindow().timer(id, micros);
 }
 
@@ -3043,7 +3043,7 @@ pub const TabIndex = struct {
 /// null widgets are visited in order of calling `tabIndexSet`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn tabIndexSet(widget_id: WidgetId, tab_index: ?u16) !void {
+pub fn tabIndexSet(widget_id: WidgetId, tab_index: ?u16) std.mem.Allocator.Error!void {
     if (tab_index != null and tab_index.? == 0)
         return;
 
@@ -3157,14 +3157,14 @@ pub fn wantTextInput(r: Rect.Natural) void {
     cw.text_input_rect = r;
 }
 
-pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) !*FloatingMenuWidget {
+pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*FloatingMenuWidget {
     var ret = try currentWindow().arena().create(FloatingMenuWidget);
     ret.* = FloatingMenuWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
 }
 
-pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) !*FloatingWindowWidget {
+pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*FloatingWindowWidget {
     var ret = try currentWindow().arena().create(FloatingWindowWidget);
     ret.* = FloatingWindowWidget.init(src, floating_opts, opts);
     try ret.install();
@@ -3242,7 +3242,7 @@ pub const IdMutex = struct {
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you
 /// **must** pass a pointer to the Window you want to add the dialog to.
-pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplayFn) !IdMutex {
+pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplayFn) std.mem.Allocator.Error!IdMutex {
     if (win) |w| {
         // we are being called from non gui thread
         const id = hashSrc(null, src, id_extra);
@@ -3290,7 +3290,7 @@ pub const DialogOptions = struct {
 ///
 /// Can be called from any thread, but if calling from a non-GUI thread or
 /// outside `Window.begin`/`Window.end` you must set opts.window.
-pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: DialogOptions) !void {
+pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: DialogOptions) std.mem.Allocator.Error!void {
     const id_mutex = try dialogAdd(opts.window, src, opts.id_extra, opts.displayFn);
     const id = id_mutex.id;
     dataSet(opts.window, id, "_modal", opts.modal);
@@ -3433,7 +3433,7 @@ const WasmFile = struct {
     /// The filename of the uploaded file. Does not include the path of the file
     name: [:0]const u8,
 
-    pub fn readData(self: *WasmFile, allocator: std.mem.Allocator) ![]u8 {
+    pub fn readData(self: *WasmFile, allocator: std.mem.Allocator) std.mem.Allocator.Error![]u8 {
         std.debug.assert(wasm); // WasmFile shouldn't be used outside wasm builds
         const data = try allocator.alloc(u8, self.size);
         dvui.backend.readFileData(self.id, self.index, data.ptr);
@@ -3530,7 +3530,7 @@ pub const DialogNativeFileOptions = struct {
 /// Not thread safe, but can be used from any thread.
 ///
 /// Returned string is created by passed allocator.  Not implemented for web (returns null).
-pub fn dialogNativeFileOpen(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) !?[:0]const u8 {
+pub fn dialogNativeFileOpen(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) std.mem.Allocator.Error!?[:0]const u8 {
     if (wasm) {
         return null;
     }
@@ -3544,7 +3544,7 @@ pub fn dialogNativeFileOpen(alloc: std.mem.Allocator, opts: DialogNativeFileOpti
 /// Not thread safe, but can be used from any thread.
 ///
 /// Returned slice and strings are created by passed allocator.  Not implemented for web (returns null).
-pub fn dialogNativeFileOpenMultiple(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) !?[][:0]const u8 {
+pub fn dialogNativeFileOpenMultiple(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) std.mem.Allocator.Error!?[][:0]const u8 {
     if (wasm) {
         return null;
     }
@@ -3558,7 +3558,7 @@ pub fn dialogNativeFileOpenMultiple(alloc: std.mem.Allocator, opts: DialogNative
 /// Not thread safe, but can be used from any thread.
 ///
 /// Returned string is created by passed allocator.  Not implemented for web (returns null).
-pub fn dialogNativeFileSave(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) !?[:0]const u8 {
+pub fn dialogNativeFileSave(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) std.mem.Allocator.Error!?[:0]const u8 {
     if (wasm) {
         return null;
     }
@@ -3566,7 +3566,7 @@ pub fn dialogNativeFileSave(alloc: std.mem.Allocator, opts: DialogNativeFileOpti
     return dialogNativeFileInternal(false, false, alloc, opts);
 }
 
-fn dialogNativeFileInternal(comptime open: bool, comptime multiple: bool, alloc: std.mem.Allocator, opts: DialogNativeFileOptions) if (multiple) error{OutOfMemory}!?[][:0]const u8 else error{OutOfMemory}!?[:0]const u8 {
+fn dialogNativeFileInternal(comptime open: bool, comptime multiple: bool, alloc: std.mem.Allocator, opts: DialogNativeFileOptions) if (multiple) std.mem.Allocator.Error!?[][:0]const u8 else std.mem.Allocator.Error!?[:0]const u8 {
     var backing: [500]u8 = undefined;
     var buf: []u8 = &backing;
 
@@ -3662,7 +3662,7 @@ pub const DialogNativeFolderSelectOptions = struct {
 /// Not thread safe, but can be used from any thread.
 ///
 /// Returned string is created by passed allocator.  Not implemented for web (returns null).
-pub fn dialogNativeFolderSelect(alloc: std.mem.Allocator, opts: DialogNativeFolderSelectOptions) error{OutOfMemory}!?[]const u8 {
+pub fn dialogNativeFolderSelect(alloc: std.mem.Allocator, opts: DialogNativeFolderSelectOptions) std.mem.Allocator.Error!?[]const u8 {
     if (wasm) {
         return null;
     }
@@ -3718,7 +3718,7 @@ pub const Toast = struct {
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the Window you want to add the toast to.
-pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?WidgetId, display: DialogDisplayFn, timeout: ?i32) !IdMutex {
+pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?WidgetId, display: DialogDisplayFn, timeout: ?i32) std.mem.Allocator.Error!IdMutex {
     if (win) |w| {
         // we are being called from non gui thread
         const id = hashSrc(null, src, id_extra);
@@ -3811,7 +3811,7 @@ pub const ToastOptions = struct {
 ///
 /// Can be called from any thread, but if called from a non-GUI thread or
 /// outside `Window.begin`/`Window.end`, you must set `opts.window`.
-pub fn toast(src: std.builtin.SourceLocation, opts: ToastOptions) !void {
+pub fn toast(src: std.builtin.SourceLocation, opts: ToastOptions) std.mem.Allocator.Error!void {
     const id_mutex = try dvui.toastAdd(opts.window, src, opts.id_extra, opts.subwindow_id, opts.displayFn, opts.timeout);
     const id = id_mutex.id;
     dvui.dataSetSlice(opts.window, id, "_message", opts.message);
@@ -3865,7 +3865,7 @@ pub fn toastsShow(floating_window_data: ?*WidgetData) !void {
     }
 }
 
-pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) !*AnimateWidget {
+pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*AnimateWidget {
     var ret = try currentWindow().arena().create(AnimateWidget);
     ret.* = AnimateWidget.init(src, init_opts, opts);
     try ret.install();
@@ -4089,7 +4089,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
 /// than init_opts.collapsed_size space.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: Options) !*PanedWidget {
+pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*PanedWidget {
     var ret = try currentWindow().arena().create(PanedWidget);
     ret.* = PanedWidget.init(src, init_opts, opts);
     try ret.install();
@@ -4127,7 +4127,7 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
 /// directly inside Context.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: Options) !*ContextWidget {
+pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*ContextWidget {
     var ret = try currentWindow().arena().create(ContextWidget);
     ret.* = ContextWidget.init(src, init_opts, opts);
     try ret.install();
@@ -4151,7 +4151,7 @@ pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget
 /// not have a parent widget.  See makeLabels() in src/Examples.zig
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) !*VirtualParentWidget {
+pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocator.Error!*VirtualParentWidget {
     var ret = try currentWindow().arena().create(VirtualParentWidget);
     ret.* = VirtualParentWidget.init(src, opts);
     try ret.install();
@@ -4164,7 +4164,7 @@ pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) !*VirtualPa
 /// See `box`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
+pub fn overlay(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocator.Error!*OverlayWidget {
     var ret = try currentWindow().arena().create(OverlayWidget);
     ret.* = OverlayWidget.init(src, opts);
     try ret.install();
@@ -4187,7 +4187,7 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
 /// See `boxEqual` and `flexbox`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
+pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) std.mem.Allocator.Error!*BoxWidget {
     var ret = try currentWindow().arena().create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, false, opts);
     try ret.install();
@@ -4200,7 +4200,7 @@ pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options)
 /// See `box` and `flexbox`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
+pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) std.mem.Allocator.Error!*BoxWidget {
     var ret = try currentWindow().arena().create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, true, opts);
     try ret.install();
@@ -4213,7 +4213,7 @@ pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Opt
 /// See `box` and `boxEqual`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) !*FlexBoxWidget {
+pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*FlexBoxWidget {
     var ret = try currentWindow().arena().create(FlexBoxWidget);
     ret.* = FlexBoxWidget.init(src, init_opts, opts);
     try ret.install();
@@ -4221,7 +4221,7 @@ pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOpt
     return ret;
 }
 
-pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) !*CacheWidget {
+pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*CacheWidget {
     var ret = try currentWindow().arena().create(CacheWidget);
     ret.* = CacheWidget.init(src, init_opts, opts);
     if (init_opts.invalidate) {
@@ -4231,7 +4231,7 @@ pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions
     return ret;
 }
 
-pub fn reorder(src: std.builtin.SourceLocation, opts: Options) !*ReorderWidget {
+pub fn reorder(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocator.Error!*ReorderWidget {
     var ret = try currentWindow().arena().create(ReorderWidget);
     ret.* = ReorderWidget.init(src, opts);
     try ret.install();
@@ -4239,16 +4239,16 @@ pub fn reorder(src: std.builtin.SourceLocation, opts: Options) !*ReorderWidget {
     return ret;
 }
 
-pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) !*ScrollAreaWidget {
+pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) std.mem.Allocator.Error!*ScrollAreaWidget {
     var ret = try currentWindow().arena().create(ScrollAreaWidget);
     ret.* = ScrollAreaWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
 }
 
-pub fn grid(src: std.builtin.SourceLocation, init_opts: GridWidget.InitOpts, opts: Options) !*GridWidget {
+pub fn grid(src: std.builtin.SourceLocation, init_opts: GridWidget.InitOpts, opts: Options) std.mem.Allocator.Error!*GridWidget {
     const ret = try currentWindow().arena().create(GridWidget);
-    ret.* = try GridWidget.init(src, init_opts, opts);
+    ret.* = GridWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
 }
@@ -4597,7 +4597,7 @@ pub fn columnLayoutProportional(ratio_widths: []const f32, col_widths: []f32, co
     }
 }
 
-pub fn separator(src: std.builtin.SourceLocation, opts: Options) !WidgetData {
+pub fn separator(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocator.Error!WidgetData {
     const defaults: Options = .{
         .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
@@ -4613,7 +4613,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) !WidgetData {
     return wd;
 }
 
-pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) !WidgetData {
+pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) std.mem.Allocator.Error!WidgetData {
     if (opts.min_size_content != null) {
         log.debug("spacer options had min_size but is being overwritten\n", .{});
     }
@@ -4626,7 +4626,7 @@ pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) !Widge
     return wd;
 }
 
-pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
+pub fn spinner(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocator.Error!void {
     var defaults: Options = .{
         .name = "Spinner",
         .min_size_content = .{ .w = 50, .h = 50 },
@@ -4675,7 +4675,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
     try path.build().stroke(.{ .thickness = 3.0 * rs.s, .color = options.color(.text) });
 }
 
-pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) !*ScaleWidget {
+pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*ScaleWidget {
     var ret = try currentWindow().arena().create(ScaleWidget);
     ret.* = ScaleWidget.init(src, init_opts, opts);
     try ret.install();
@@ -4683,7 +4683,7 @@ pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions
     return ret;
 }
 
-pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*MenuWidget {
+pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) std.mem.Allocator.Error!*MenuWidget {
     var ret = try currentWindow().arena().create(MenuWidget);
     ret.* = MenuWidget.init(src, .{ .dir = dir }, opts);
     try ret.install();
@@ -4734,7 +4734,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
     return ret;
 }
 
-pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitOptions, opts: Options) !*MenuItemWidget {
+pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*MenuItemWidget {
     var ret = try currentWindow().arena().create(MenuItemWidget);
     ret.* = MenuItemWidget.init(src, init_opts, opts);
     try ret.install();
@@ -4906,7 +4906,7 @@ pub const ImageInitOptions = struct {
 /// Show raster image.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts: Options) !WidgetData {
+pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts: Options) std.mem.Allocator.Error!WidgetData {
     const options = (Options{ .name = init_opts.name }).override(opts);
 
     var size = Size{};
@@ -5110,7 +5110,7 @@ pub var slider_defaults: Options = .{
 };
 
 // returns true if fraction (0-1) was changed
-pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *f32, opts: Options) !bool {
+pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *f32, opts: Options) std.mem.Allocator.Error!bool {
     std.debug.assert(fraction.* >= 0);
     std.debug.assert(fraction.* <= 1);
 
@@ -5679,7 +5679,7 @@ pub const Progress_InitOptions = struct {
     percent: f32,
 };
 
-pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions, opts: Options) !void {
+pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions, opts: Options) std.mem.Allocator.Error!void {
     const options = progress_defaults.override(opts);
 
     var b = try box(src, init_opts.dir, options);
@@ -5749,7 +5749,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     return ret;
 }
 
-pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
+pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) std.mem.Allocator.Error!void {
     const cornerRad = opts.corner_radiusGet().scale(rs.s, Rect.Physical);
     try rs.r.fill(cornerRad, .{ .color = opts.color(.border) });
 
@@ -5835,7 +5835,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     return ret;
 }
 
-pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
+pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) std.mem.Allocator.Error!void {
     const cornerRad = Rect.Physical.all(1000);
     const r = rs.r;
     try r.fill(cornerRad, .{ .color = opts.color(.border) });
@@ -6067,7 +6067,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
                 _ = try std.fmt.bufPrint(buffer, "#{x:0>2}{x:0>2}{x:0>2}{x:0>2}", .{ v.r, v.g, v.b, v.a });
                 te.len = 9;
             } else {
-                te.textSet(&(v.toHexString() catch unreachable), false);
+                te.textSet(&(v.toHexString()), false);
             }
         }
     }
@@ -6641,7 +6641,7 @@ pub const RenderTextureOptions = struct {
     debug: bool = false,
 };
 
-pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !void {
+pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) std.mem.Allocator.Error!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
@@ -6677,7 +6677,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
     try renderTriangles(triangles, tex);
 }
 
-pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions, icon_opts: IconRenderOptions) !void {
+pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions, icon_opts: IconRenderOptions) std.mem.Allocator.Error!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
@@ -6734,7 +6734,7 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntr
     return entry;
 }
 
-pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions) !void {
+pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions) std.mem.Allocator.Error!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
@@ -6809,7 +6809,7 @@ pub const pngEncodeOptions = struct {
 /// Make a png encoded image from RGBA pixels.
 ///
 /// Gives bytes of a png file (allocated by arena).
-pub fn pngEncode(arena: std.mem.Allocator, pixels: []u8, width: u32, height: u32, opts: pngEncodeOptions) ![]u8 {
+pub fn pngEncode(arena: std.mem.Allocator, pixels: []u8, width: u32, height: u32, opts: pngEncodeOptions) std.mem.Allocator.Error![]u8 {
     var len: c_int = undefined;
     const png_bytes = c.stbi_write_png_to_mem(pixels.ptr, @intCast(width * 4), @intCast(width), @intCast(height), 4, &len);
     defer {

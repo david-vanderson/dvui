@@ -31,7 +31,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *ColorPickerWidget) !void {
+pub fn install(self: *ColorPickerWidget) std.mem.Allocator.Error!void {
     self.box = try dvui.box(self.src, self.init_opts.dir, self.opts);
 
     if (try valueSaturationBox(@src(), self.init_opts.hsv, .{})) {
@@ -55,7 +55,7 @@ pub const value_saturation_box_defaults = Options{
 };
 
 /// Returns true if the color was changed
-pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts: Options) !bool {
+pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts: Options) std.mem.Allocator.Error!bool {
     const options = value_saturation_box_defaults.override(opts);
 
     var b = try dvui.box(src, .horizontal, options);
@@ -175,7 +175,7 @@ pub var hue_slider_defaults: Options = .{
 /// Returns true if the hue was changed
 ///
 /// `hue` >= 0 and `hue` < 360
-pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue: *f32, opts: Options) !bool {
+pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue: *f32, opts: Options) std.mem.Allocator.Error!bool {
     var fraction = std.math.clamp(hue.* / 360, 0, 1);
     std.debug.assert(fraction >= 0);
     std.debug.assert(fraction <= 1);
@@ -304,7 +304,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
     return ret;
 }
 
-pub fn getHueSelectorTexture(dir: dvui.enums.Direction) !dvui.Texture {
+pub fn getHueSelectorTexture(dir: dvui.enums.Direction) std.mem.Allocator.Error!dvui.Texture {
     const hue_texture_id = dvui.hashIdKey(@enumFromInt(@as(u64, @intFromEnum(dir))), "hue_selector_texture");
     const cw = dvui.currentWindow();
     const res = try cw.texture_cache.getOrPut(cw.gpa, hue_texture_id);
@@ -319,7 +319,7 @@ pub fn getHueSelectorTexture(dir: dvui.enums.Direction) !dvui.Texture {
     return res.value_ptr.texture;
 }
 
-pub fn getValueSaturationTexture(hue: f32) !dvui.Texture {
+pub fn getValueSaturationTexture(hue: f32) std.mem.Allocator.Error!dvui.Texture {
     const hue_texture_id = dvui.hashIdKey(@enumFromInt(@as(u64, @intFromFloat(hue * 10000))), "value_saturation_texture");
     const cw = dvui.currentWindow();
     const res = try cw.texture_cache.getOrPut(cw.gpa, hue_texture_id);

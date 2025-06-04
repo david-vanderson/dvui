@@ -46,7 +46,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *ScaleWidget) !void {
+pub fn install(self: *ScaleWidget) std.mem.Allocator.Error!void {
     if (self.init_options.scale) |init_s| {
         self.scale = init_s;
     } else {

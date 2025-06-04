@@ -39,7 +39,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *ButtonWidget) !void {
+pub fn install(self: *ButtonWidget) std.mem.Allocator.Error!void {
     try self.wd.register();
     dvui.parentSet(self.widget());
 
@@ -62,7 +62,7 @@ pub fn processEvents(self: *ButtonWidget) void {
     }
 }
 
-pub fn drawBackground(self: *ButtonWidget) !void {
+pub fn drawBackground(self: *ButtonWidget) std.mem.Allocator.Error!void {
     var fill_color: ?Color = null;
     if (dvui.captured(self.wd.id)) {
         fill_color = self.wd.options.color(.fill_press);
@@ -73,7 +73,7 @@ pub fn drawBackground(self: *ButtonWidget) !void {
     try self.wd.borderAndBackground(.{ .fill_color = fill_color });
 }
 
-pub fn drawFocus(self: *ButtonWidget) !void {
+pub fn drawFocus(self: *ButtonWidget) std.mem.Allocator.Error!void {
     if (self.init_options.draw_focus and self.focused()) {
         try self.wd.focusBorder();
     }

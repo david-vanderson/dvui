@@ -674,7 +674,7 @@ pub fn textInputRect(_: *WebBackend, rect: ?dvui.Rect.Natural) void {
     }
 }
 
-pub fn clipboardText(self: *WebBackend) error{OutOfMemory}![]const u8 {
+pub fn clipboardText(self: *WebBackend) std.mem.Allocator.Error![]const u8 {
     _ = self;
     // Current strategy is to return nothing:
     // - let the browser continue with the paste operation

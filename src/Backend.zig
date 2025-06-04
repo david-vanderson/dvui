@@ -28,10 +28,10 @@ const VTableTypes = struct {
     pub const textureReadTarget = *const fn (ctx: Context, texture: dvui.TextureTarget, pixels_out: [*]u8) error{TextureRead}!void;
     pub const renderTarget = *const fn (ctx: Context, texture: ?dvui.TextureTarget) void;
 
-    pub const clipboardText = *const fn (ctx: Context) error{OutOfMemory}![]const u8;
-    pub const clipboardTextSet = *const fn (ctx: Context, text: []const u8) error{OutOfMemory}!void;
+    pub const clipboardText = *const fn (ctx: Context) std.mem.Allocator.Error![]const u8;
+    pub const clipboardTextSet = *const fn (ctx: Context, text: []const u8) std.mem.Allocator.Error!void;
 
-    pub const openURL = *const fn (ctx: Context, url: []const u8) error{OutOfMemory}!void;
+    pub const openURL = *const fn (ctx: Context, url: []const u8) std.mem.Allocator.Error!void;
     pub const refresh = *const fn (ctx: Context) void;
 };
 
@@ -178,17 +178,17 @@ pub fn renderTarget(self: *Backend, texture: ?dvui.TextureTarget) void {
 }
 
 /// Get clipboard content (text only)
-pub fn clipboardText(self: *Backend) error{OutOfMemory}![]const u8 {
+pub fn clipboardText(self: *Backend) std.mem.Allocator.Error![]const u8 {
     return self.vtable.clipboardText(self.ctx);
 }
 
 /// Set clipboard content (text only)
-pub fn clipboardTextSet(self: *Backend, text: []const u8) error{OutOfMemory}!void {
+pub fn clipboardTextSet(self: *Backend, text: []const u8) std.mem.Allocator.Error!void {
     return self.vtable.clipboardTextSet(self.ctx, text);
 }
 
 /// Open URL in system browser
-pub fn openURL(self: *Backend, url: []const u8) error{OutOfMemory}!void {
+pub fn openURL(self: *Backend, url: []const u8) std.mem.Allocator.Error!void {
     return self.vtable.openURL(self.ctx, url);
 }
 

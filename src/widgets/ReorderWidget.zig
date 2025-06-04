@@ -27,7 +27,7 @@ pub fn init(src: std.builtin.SourceLocation, opts: Options) ReorderWidget {
     return self;
 }
 
-pub fn install(self: *ReorderWidget) !void {
+pub fn install(self: *ReorderWidget) std.mem.Allocator.Error!void {
     try self.wd.register();
     try self.wd.borderAndBackground(.{});
 
@@ -192,7 +192,7 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
     return ret;
 }
 
-pub fn reorderable(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: Reorderable.InitOptions, opts: Options) !*Reorderable {
+pub fn reorderable(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: Reorderable.InitOptions, opts: Options) std.mem.Allocator.Error!*Reorderable {
     const ret = try dvui.currentWindow().arena().create(Reorderable);
     ret.* = Reorderable.init(src, self, init_opts, opts);
     try ret.install();
@@ -246,7 +246,7 @@ pub const Reorderable = struct {
         return false;
     }
 
-    pub fn install(self: *Reorderable) !void {
+    pub fn install(self: *Reorderable) std.mem.Allocator.Error!void {
         self.installed = true;
         if (self.reorder.drag_point) |dp| {
             const topleft = dp.plus(dvui.dragOffset());
@@ -321,7 +321,7 @@ pub const Reorderable = struct {
         return false;
     }
 
-    pub fn reinstall(self: *Reorderable) !void {
+    pub fn reinstall(self: *Reorderable) std.mem.Allocator.Error!void {
         // send our target rect to the parent for sizing
         self.wd.minSizeMax(self.wd.rect.size());
         self.wd.minSizeReportToParent();
