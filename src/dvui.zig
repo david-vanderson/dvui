@@ -6559,6 +6559,7 @@ pub const RGBAPixelsPMA = struct {
         for (0..pixels.len / 4) |ii| {
             const i = ii * 4;
             const a = pixels[i + 3];
+            if (a == 0) continue;
             pixels[i + 0] = @intCast(@divTrunc(@as(u16, pixels[i + 0]) * 255, a));
             pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * 255, a));
             pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * 255, a));
