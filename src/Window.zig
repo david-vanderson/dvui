@@ -965,17 +965,20 @@ pub fn begin(
     {
         const deadTags = try self.tags.reset(larena);
         defer larena.free(deadTags);
-        for (deadTags) |name| {
-            _ = self.tags.remove(name);
+        for (deadTags) |id| {
+            _ = self.tags.remove(id);
         }
         //std.debug.print("tags {d}\n", .{self.tags.count()});
     }
 
     {
+        self.data_mutex.lock();
+        defer self.data_mutex.unlock();
         const deadData = try self.datas.reset(larena);
         defer larena.free(deadData);
-        for (deadData) |name| {
-            _ = self.datas.remove(name);
+        for (deadData) |id| {
+            var sd = self.datas.fetchRemove(id).?;
+            sd.value.free(self.gpa);
         }
         //std.debug.print("datas {d}\n", .{self.datas.count()});
     }
