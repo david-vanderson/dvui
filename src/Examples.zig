@@ -992,6 +992,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
         var te = try dvui.textEntry(@src(), .{
             .text = .{ .buffer = &text_entry_password_buf },
             .password_char = if (text_entry_password_buf_obf_enable) "*" else null,
+            .placeholder = "enter a password",
         }, .{});
 
         te.deinit();
