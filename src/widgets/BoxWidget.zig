@@ -43,8 +43,8 @@ pub fn init(src: std.builtin.SourceLocation, dir: enums.Direction, equal_space: 
     return self;
 }
 
-pub fn install(self: *BoxWidget) !void {
-    try self.wd.register();
+pub fn install(self: *BoxWidget) std.mem.Allocator.Error!void {
+    self.wd.register();
 
     // our rect for children has to start at 0,0
     self.child_rect = self.wd.contentRect().justSize();
@@ -66,7 +66,7 @@ pub fn install(self: *BoxWidget) !void {
     dvui.parentSet(self.widget());
 }
 
-pub fn drawBackground(self: *BoxWidget) !void {
+pub fn drawBackground(self: *BoxWidget) std.mem.Allocator.Error!void {
     try self.wd.borderAndBackground(.{});
 }
 

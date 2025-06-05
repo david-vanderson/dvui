@@ -27,8 +27,8 @@ pub fn init(src: std.builtin.SourceLocation, opts: Options) ReorderWidget {
     return self;
 }
 
-pub fn install(self: *ReorderWidget) !void {
-    try self.wd.register();
+pub fn install(self: *ReorderWidget) std.mem.Allocator.Error!void {
+    self.wd.register();
     try self.wd.borderAndBackground(.{});
 
     dvui.parentSet(self.widget());
@@ -192,7 +192,7 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
     return ret;
 }
 
-pub fn reorderable(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: Reorderable.InitOptions, opts: Options) !*Reorderable {
+pub fn reorderable(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: Reorderable.InitOptions, opts: Options) std.mem.Allocator.Error!*Reorderable {
     const ret = try dvui.currentWindow().arena().create(Reorderable);
     ret.* = Reorderable.init(src, self, init_opts, opts);
     try ret.install();
@@ -246,13 +246,13 @@ pub const Reorderable = struct {
         return false;
     }
 
-    pub fn install(self: *Reorderable) !void {
+    pub fn install(self: *Reorderable) std.mem.Allocator.Error!void {
         self.installed = true;
         if (self.reorder.drag_point) |dp| {
             const topleft = dp.plus(dvui.dragOffset());
             if (self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.wd.id.asUsize())) {
                 // we are being dragged - put in floating widget
-                try self.wd.register();
+                self.wd.register();
                 dvui.parentSet(self.widget());
 
                 self.floating_widget = dvui.FloatingWidget.init(@src(), .{ .rect = Rect.fromPoint(.cast(topleft.toNatural())), .min_size_content = self.reorder.reorderable_size });
@@ -281,7 +281,7 @@ pub const Reorderable = struct {
                 }
 
                 if (self.target_rs == null or self.init_options.last_slot) {
-                    try self.wd.register();
+                    self.wd.register();
                     dvui.parentSet(self.widget());
                 }
             }
@@ -289,7 +289,7 @@ pub const Reorderable = struct {
             self.wd = WidgetData.init(self.wd.src, .{}, self.options);
             self.reorder.reorderable_size = self.wd.rect.size();
 
-            try self.wd.register();
+            self.wd.register();
             dvui.parentSet(self.widget());
         }
     }
@@ -321,14 +321,14 @@ pub const Reorderable = struct {
         return false;
     }
 
-    pub fn reinstall(self: *Reorderable) !void {
+    pub fn reinstall(self: *Reorderable) std.mem.Allocator.Error!void {
         // send our target rect to the parent for sizing
         self.wd.minSizeMax(self.wd.rect.size());
         self.wd.minSizeReportToParent();
 
         // reinstall ourselves getting the next rect from parent
         self.wd = WidgetData.init(self.wd.src, .{}, self.options);
-        try self.wd.register();
+        self.wd.register();
         dvui.parentSet(self.widget());
     }
 

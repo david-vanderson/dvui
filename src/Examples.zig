@@ -1185,7 +1185,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
                     if (bytes) |b| blk: {
                         dvui.addFont(name, b, dvui.currentWindow().gpa) catch |err| switch (err) {
                             error.OutOfMemory => @panic("OOM"),
-                            error.freetypeError => {
+                            error.fontError => {
                                 dvui.currentWindow().gpa.free(b);
                                 try dvui.dialog(@src(), .{}, .{ .title = "Bad Font", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "\"{s}\" is not a valid font", .{filename}) });
                                 break :blk;
@@ -3558,6 +3558,12 @@ pub fn debuggingErrors() !void {
         }
     }
 
+    if (try dvui.expander(@src(), "Invalid utf-8 text", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+        try dvui.labelNoFmt(@src(), "this \xFFtext\xFF includes some \xFF invalid utf-8\xFF\xFF\xFF which is replaced with \xFF", .{});
+    }
+
     if (try dvui.expander(@src(), "Scroll child after expanded child (will log error)", .{}, .{ .expand = .horizontal })) {
         var scroll = try dvui.scrollArea(@src(), .{}, .{ .min_size_content = .{ .w = 200, .h = 80 } });
         defer scroll.deinit();
@@ -3621,7 +3627,7 @@ pub fn debuggingErrors() !void {
         try tl.addText("\nCurrent keybinds:\n", .{});
         outer = dvui.currentWindow().keybinds.iterator();
         while (outer.next()) |okv| {
-            try tl.format("\n{s}\n    {s}\n", .{ okv.key_ptr.*, try okv.value_ptr.format(dvui.currentWindow().arena()) }, .{});
+            try tl.format("\n{s}\n    {}\n", .{ okv.key_ptr.*, okv.value_ptr }, .{});
         }
         tl.deinit();
     }
@@ -4482,7 +4488,7 @@ pub const StrokeTest = struct {
 
         const defaults = dvui.Options{ .name = "StrokeTest" };
         self.wd = dvui.WidgetData.init(src, .{}, defaults.override(options));
-        try self.wd.register();
+        self.wd.register();
 
         const evts = dvui.events();
         for (evts) |*e| {

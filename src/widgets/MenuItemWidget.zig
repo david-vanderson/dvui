@@ -40,7 +40,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *MenuItemWidget) !void {
-    try self.wd.register();
+    self.wd.register();
 
     // For most widgets we only tabIndexSet if they are visible, but menu
     // items are often in large dropdowns that are scrollable, plus the
@@ -53,7 +53,7 @@ pub fn install(self: *MenuItemWidget) !void {
     dvui.parentSet(self.widget());
 }
 
-pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bool = false }) !void {
+pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bool = false }) std.mem.Allocator.Error!void {
     var focused: bool = false;
     if (self.wd.id == dvui.focusedWidgetId()) {
         focused = true;

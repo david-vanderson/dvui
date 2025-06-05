@@ -49,7 +49,7 @@ pub fn init(src: std.builtin.SourceLocation, opts_in: Options) FloatingWidget {
     return self;
 }
 
-pub fn install(self: *FloatingWidget) !void {
+pub fn install(self: *FloatingWidget) std.mem.Allocator.Error!void {
     self.prev_rendering = dvui.renderingSet(false);
 
     dvui.parentSet(self.widget());
@@ -60,7 +60,7 @@ pub fn install(self: *FloatingWidget) !void {
 
     try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, self.prev_windowId);
     dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
-    try self.wd.register();
+    self.wd.register();
 
     // clip to just our window (using clipSet since we are not inside our parent)
     self.prevClip = dvui.clipGet();

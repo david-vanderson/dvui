@@ -114,8 +114,8 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
     return self;
 }
 
-pub fn install(self: *PanedWidget) !void {
-    try self.wd.register();
+pub fn install(self: *PanedWidget) std.mem.Allocator.Error!void {
+    self.wd.register();
 
     try self.wd.borderAndBackground(.{});
     self.prevClip = dvui.clip(self.wd.contentRectScale().r);
@@ -137,7 +137,7 @@ pub fn processEvents(self: *PanedWidget) void {
     }
 }
 
-pub fn draw(self: *PanedWidget) !void {
+pub fn draw(self: *PanedWidget) std.mem.Allocator.Error!void {
     if (self.collapsed()) return;
 
     if (dvui.captured(self.wd.id)) {

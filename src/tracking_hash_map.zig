@@ -153,7 +153,7 @@ pub fn TrackingAutoHashMap(
         }
 
         /// Returns all keys that had not been used since the last call to this function
-        pub fn reset(self: *Self, allocator: std.mem.Allocator) ![]const K {
+        pub fn reset(self: *Self, allocator: std.mem.Allocator) std.mem.Allocator.Error![]const K {
             var unused = std.ArrayListUnmanaged(K).empty;
             var map_it = self.map.iterator();
             while (map_it.next()) |entry| {

@@ -59,8 +59,8 @@ pub fn init(src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, opts: 
     return self;
 }
 
-pub fn install(self: *ScrollContainerWidget) !void {
-    try self.wd.register();
+pub fn install(self: *ScrollContainerWidget) std.mem.Allocator.Error!void {
+    self.wd.register();
 
     // user code might have changed our rect
     const crect = self.wd.contentRect();

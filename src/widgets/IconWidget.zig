@@ -34,8 +34,8 @@ pub fn init(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []cons
     return self;
 }
 
-pub fn install(self: *IconWidget) !void {
-    try self.wd.register();
+pub fn install(self: *IconWidget) std.mem.Allocator.Error!void {
+    self.wd.register();
     try self.wd.borderAndBackground(.{});
 }
 

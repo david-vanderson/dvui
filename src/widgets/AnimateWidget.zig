@@ -35,7 +35,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return AnimateWidget{ .wd = WidgetData.init(src, .{}, defaults.override(opts)), .init_opts = init_opts };
 }
 
-pub fn install(self: *AnimateWidget) !void {
+pub fn install(self: *AnimateWidget) std.mem.Allocator.Error!void {
     if (dvui.firstFrame(self.wd.id)) {
         // start begin animation
         self.start();
@@ -78,7 +78,7 @@ pub fn install(self: *AnimateWidget) !void {
     }
 
     dvui.parentSet(self.widget());
-    try self.wd.register();
+    self.wd.register();
     try self.wd.borderAndBackground(.{});
 }
 
