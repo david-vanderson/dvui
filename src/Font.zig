@@ -97,10 +97,7 @@ pub fn textSizeEx(self: Font, text: []const u8, max_width: ?f32, end_idx: ?*usiz
         max_width_sized = mwidth / target_fraction;
     }
 
-    var s = fce.textSizeRaw(self.name, text, max_width_sized, end_idx, end_metric) catch |err| {
-        dvui.log.err("textSizeRaw got {!} for font \"{s}\" text \"{s}\"", .{ err, self.name, text });
-        return .{ .w = 10, .h = 10 };
-    };
+    var s = fce.textSizeRaw(self.name, text, max_width_sized, end_idx, end_metric) catch return .{ .w = 10, .h = 10 };
 
     // do this check after calling textSizeRaw so that end_idx is set
     if (ask_size == 0.0) return Size{};
