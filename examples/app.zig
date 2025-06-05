@@ -29,8 +29,10 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 // Runs before the first frame, after backend and dvui.Window.init()
-pub fn AppInit(win: *dvui.Window) void {
+// - runs between win.begin()/win.end()
+pub fn AppInit(win: *dvui.Window) !void {
     _ = win;
+    //try dvui.addFont("NOTO", @embedFile("../src/fonts/NotoSansKR-Regular.ttf"), null);
 }
 
 // Run as app is shutting down before dvui.Window.deinit()

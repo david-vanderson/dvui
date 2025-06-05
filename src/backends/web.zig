@@ -823,7 +823,22 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 
     win_ok = true;
 
-    if (app.initFn) |initFn| initFn(&win);
+    if (app.initFn) |initFn| {
+        win.begin(win.frame_time_ns) catch |err| {
+            log.err("dvui.Window.begin failed: {!}", .{err});
+            return 3;
+        };
+
+        initFn(&win) catch |err| {
+            log.err("dvui.App.initFn failed: {!}", .{err});
+            return 4;
+        };
+
+        _ = win.end(.{}) catch |err| {
+            log.err("dvui.Window.end failed: {!}", .{err});
+            return 5;
+        };
+    }
 
     return 0;
 }

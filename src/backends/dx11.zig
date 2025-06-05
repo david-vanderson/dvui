@@ -1616,7 +1616,11 @@ pub fn main() !void {
 
     const win = b.getWindow();
 
-    if (app.initFn) |initFn| initFn(win);
+    if (app.initFn) |initFn| {
+        try win.begin(win.frame_time_ns);
+        try initFn(win);
+        _ = try win.end(.{});
+    }
     defer if (app.deinitFn) |deinitFn| deinitFn();
 
     while (true) switch (serviceMessageQueue()) {
