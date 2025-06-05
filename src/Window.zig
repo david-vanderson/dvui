@@ -370,7 +370,16 @@ pub fn deinit(self: *Self) void {
 
     self.subwindows.deinit();
     self.min_sizes.deinit(self.gpa);
-    self.tags.deinit(self.gpa);
+
+    {
+        var it = self.tags.map.keyIterator();
+        while (it.next()) |name| {
+            //std.debug.print("tag free {s}\n", .{name.*});
+            self.gpa.free(name.*);
+        }
+        self.tags.deinit(self.gpa);
+    }
+
     self.animations.deinit(self.gpa);
     self.tab_index_prev.deinit();
     self.tab_index.deinit();
@@ -968,8 +977,10 @@ pub fn begin(
     {
         const deadTags = try self.tags.reset(larena);
         defer larena.free(deadTags);
-        for (deadTags) |id| {
-            _ = self.tags.remove(id);
+        for (deadTags) |name| {
+            _ = self.tags.remove(name);
+            //std.debug.print("tag dead free {s}\n", .{name});
+            self.gpa.free(name);
         }
         //std.debug.print("tags {d}\n", .{self.tags.count()});
     }
