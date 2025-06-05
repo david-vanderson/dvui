@@ -746,7 +746,7 @@ fn structFieldWidget(
     defer hbox.deinit();
 
     if (separate) {
-        try dvui.separator(@src(), .{
+        _ = try dvui.separator(@src(), .{
             .expand = .vertical,
             .min_size_content = .{ .w = 2 },
             .margin = dvui.Rect.all(4),

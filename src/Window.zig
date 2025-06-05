@@ -1422,7 +1422,7 @@ fn debugWindowShow(self: *Self) !void {
     var float = try dvui.floatingWindow(@src(), .{ .open_flag = &self.debug_window_show }, .{ .min_size_content = .{ .w = 300, .h = 600 } });
     defer float.deinit();
 
-    try dvui.windowHeader("DVUI Debug", "", &self.debug_window_show);
+    float.dragAreaSet(try dvui.windowHeader("DVUI Debug", "", &self.debug_window_show));
 
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
