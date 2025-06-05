@@ -867,7 +867,11 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), gpa, b.backend(), .{});
     defer win.deinit();
 
-    if (app.initFn) |initFn| initFn(&win);
+    if (app.initFn) |initFn| {
+        try win.begin(win.frame_time_ns);
+        try initFn(&win);
+        _ = try win.end(.{});
+    }
     defer if (app.deinitFn) |deinitFn| deinitFn();
 
     main_loop: while (true) {

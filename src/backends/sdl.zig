@@ -1102,7 +1102,11 @@ pub fn main() !u8 {
     var win = try dvui.Window.init(@src(), gpa, back.backend(), .{});
     defer win.deinit();
 
-    if (app.initFn) |initFn| initFn(&win);
+    if (app.initFn) |initFn| {
+        try win.begin(win.frame_time_ns);
+        try initFn(&win);
+        _ = try win.end(.{});
+    }
     defer if (app.deinitFn) |deinitFn| deinitFn();
 
     var interrupted = false;
@@ -1180,7 +1184,22 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
         return c.SDL_APP_FAILURE;
     };
 
-    if (app.initFn) |initFn| initFn(&gwin);
+    if (app.initFn) |initFn| {
+        gwin.begin(gwin.frame_time_ns) catch |err| {
+            log.err("dvui.Window.begin failed: {!}", .{err});
+            return c.SDL_APP_FAILURE;
+        };
+
+        initFn(&gwin) catch |err| {
+            log.err("dvui.App.initFn failed: {!}", .{err});
+            return c.SDL_APP_FAILURE;
+        };
+
+        _ = gwin.end(.{}) catch |err| {
+            log.err("dvui.Window.end failed: {!}", .{err});
+            return c.SDL_APP_FAILURE;
+        };
+    }
 
     return c.SDL_APP_CONTINUE;
 }

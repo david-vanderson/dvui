@@ -19,9 +19,10 @@ pub const App = @This();
 /// The configuration options for the app, either directly or a function that
 /// is run at startup that returns the options.
 config: AppConfig,
-/// Runs before the first frame, allowing for configuring the Window.  Window
-/// and Backend have run init() already.
-initFn: ?fn (*dvui.Window) void = null,
+/// Runs before the first full frame, allowing for configuring the Window.
+/// Window and Backend have run init() already.  Runs between `Window.begin`
+/// and `Window.end`, so can access all of dvui functions.
+initFn: ?fn (*dvui.Window) anyerror!void = null,
 /// Runs when the app is exiting, before Window.deinit().
 deinitFn: ?fn () void = null,
 /// Runs once every frame between `Window.begin` and `Window.end`
