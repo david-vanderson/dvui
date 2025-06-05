@@ -2,7 +2,7 @@
 
 This document describes the internals of DVUI and is useful for people extending or writing new widgets.  See [readme](/README.md) for a broad overview.
 
-If you want to make a widget that doesn't need to have child widgets inside it, then a function that combines existing widgets is the best approach.  Good examples are:
+If you want to make a widget that doesn't need to have child widgets inside it (but can still process events), then a function that combines existing widgets is the best approach.  Good examples are:
 * textEntryNumber
 * buttonIcon
 * windowHeader
@@ -78,7 +78,7 @@ Generally it follows this pattern:
   * create the struct representing this widget
   * `WidgetData.init()` generate ID and get a `Rect` from the parent widget (loads our min size from last frame)
     * `Rect` is a rectangle in the parent's coordinate space
-    * pass to `parent.screenRectScale()` to get a `RectScale` which is a screen (pixel) rectangle plus scale from logical points to physical pixels
+    * pass to `parent.screenRectScale()` to get a `RectScale` which is a screen (physical pixel) rectangle plus scale from logical pixels to physical pixels
   * `dataGet()` load persisted data from last frame
   * note: during `init()` the struct is in temporary memory, so you can't take the address of it or any field yet (including calling `widget()`)
 
@@ -94,14 +94,14 @@ Now the widget is the parent widget, so further widgets nested here will be chil
 
 * `processEvents()`
   * loop over `events()`, call `matchEvent()` for each
-  * set `Event.handled` if no other widget should process this event
+  * call `Event.handle()` if no other widget should process this event
   * bubble event to parent if `Event.bubbleable()`
 
 See the Event Handling section for details.
 
 * `drawBackground()`, `draw()`, `drawFocus()`, `drawCursor()`
   * draw parts of the widget, there's some variety here
-  * some widgets (BoxWidget) only do border/background
+  * some widgets (BoxWidget) only do border/background/box_shadow
 
 * `deinit()`
   * some widgets process some events here
@@ -134,7 +134,7 @@ Each widget keeps a pointer to its parent widget, which forms a chain going back
 * `parent.processEvent()` bubble keyboard events, so pressing the "up" key while focused on a button can make the containing scroll area scroll.
 
 #### Opting Out of Normal Layout
-If `Options.rect` is set, the widget is directly specifying its position and size.  In this case, it does not call `parent.rectFor()` nor `parent.minSizeForChild()`, which means it is invisible to its parent for layout purposes.  The parent can still receive bubbled events.
+If `Options.rect` is set, the widget is directly specifying its position and size (still in parent coordinates).  In this case, it does not call `parent.rectFor()` nor `parent.minSizeForChild()`, which means it is invisible to its parent for layout purposes.  The parent can still receive bubbled events.
 
 ### Windows and Subwindows
 `dvui.Window` maps to a single OS window.  All widgets and drawing happen in that window.
@@ -142,7 +142,7 @@ If `Options.rect` is set, the widget is directly specifying its position and siz
 `subwindow` is the term dvui uses for floating windows/dialogs/popups/etc.  They are dvui widgets and are not detachable or moveable outside the OS window.
 
 ### Widget IDs
-Each widget gets a `u32` id by combining:
+Each widget gets a `WidgetId` (fancy u64) by combining:
 - parent's id (see https://github.com/david-vanderson/dvui/blob/main/README.md#parent-child-and-nesting )
 - @src() passed to widget
 - `.id_extra` field of Options passed to widget (defaults to 0)
@@ -219,12 +219,13 @@ Special Events
 
 Sometimes a widget will just want to observe events but not mark them as processed.  An example is how to differentiate a click while holding a non-modifier key (like "a") from normal click.  In a low framerate situation, we can't rely on checking the current keyboard state when the click happens. This way the widget can watch all keyboard events and keep track of the key state properly interleaved with mouse events.
 
+`Window.debugHandleEvents()` and `Window.debugUnhandledEvents()` can be used to make dvui log events for debugging.
 
 ## Min Size and Layout
 A widget receives its position and size from its parent.  The widget sends these data to the parent:
 * min_size - the minimum size requested for this widget (includes content, padding, border, and margin)
   * usually this is the max of Options.min_size_content (plus padding/border/margin) and the min_size calculated for this widget from last frame
-  * the min_size calculated from last frame is capped by Options.max_size_content (plus padding/border/margin)
+  * the min_size is also capped by Options.max_size_content (plus padding/border/margin)
 * expand - whether to take up all the space available
   * horizontal or vertical or both
 * gravity_x, gravity_y - position a non-expanded widget inside a larger rectangle
@@ -279,7 +280,7 @@ The drawing functions are:
 - `renderIcon()` - tvg icon
 - `renderImage()` - raster image via stb_image
 - `renderTexture()` - texture from `textureCreate()` or `textureCreateTarget()`
-- `renderTriangles()` - raw vertex and indinex values sent to the backend
+- `renderTriangles()` - raw vertex and index values sent to the backend
 - `Path.fillConvex()` - fill convex path (see below)
 - `Path.stroke()` - stroke path (see below)
 - `Rect.fill()` - convenience for making and filling a rounded rect
