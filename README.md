@@ -39,7 +39,7 @@ How to run the built-in examples:
   - ```zig build docs -Dgenerate-images```
     - adds images to the docs
 
-This document is a broad overview.  See [implementation details](readme-implementation.md) for how to write and modify widgets.
+This document is a broad overview.  See [implementation details](readme-implementation.md) for how to write and modify container widgets.
 
 Online discussion happens in #gui-dev on the zig discord server: https://discord.gg/eJgXXTtVzA or in IRC (Libera) channel #dvui
 
@@ -63,17 +63,19 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 - Process every input event (suitable for low-fps situations)
 - Use for whole UI or for debugging on top of existing application
 - Existing backends
-  - [SDL](https://libsdl.org/)
+  - [SDL2 and SDL3](https://libsdl.org/)
   - [Web](https://david-vanderson.github.io/demo)
   - [Raylib](https://www.raylib.com/)
   - [Dx11](https://learn.microsoft.com/en-us/windows/win32/direct3d11/atoc-dx-graphics-direct3d-11)
-- Icon support via [TinyVG](https://tinyvg.tech/)
+- [TinyVG](https://tinyvg.tech/) icon support via [zig-lib-svg2tvg](https://github.com/nat3Github/zig-lib-svg2tvg)
+  - more icons at [zig-lib-icons](https://github.com/nat3Github/zig-lib-icons)
 - Raster image support via [stb_image](https://github.com/nothings/stb)
 - Font support
   - [freetype](https://github.com/david-vanderson/freetype/tree/zig-pkg)
   - [stb_truetype](https://github.com/nothings/stb)
 - Touch support
-  - Including selection draggables in text entries
+  - selection draggables in text entries
+  - pinch-zoom scaling
 - Native file dialogs via [tinyfiledialogs](https://sourceforge.net/projects/tinyfiledialogs)
 - Animations
 - Themes
@@ -82,8 +84,8 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 ## Usage
 
 [DVUI Demo](https://github.com/david-vanderson/dvui-demo) is a template project you can use as a starting point.
-
-The build.zig and build.zig.zon files there show how to reference dvui as a zig dependency.
+- build.zig and build.zig.zon show how to reference dvui as a zig dependency
+- for applications, you can use the dvui.App layer to have dvui manage the mainloop for you
 
 ## Built-in Widgets
 
@@ -101,6 +103,7 @@ The build.zig and build.zig.zon files there show how to reference dvui as a zig 
   - Button
   - Multi-line label
     - Can be clickable for links
+  - Tooltips
   - Slider
   - SliderEntry
     - Combo slider and text entry
@@ -112,8 +115,8 @@ The build.zig and build.zig.zon files there show how to reference dvui as a zig 
   - Combo Box
   - Reorderable Lists
     - Drag to reorder/remove/add
-- Missing Widgets for now
   - Data Grid
+- Missing Widgets for now
   - Docking
 
 ## Design
@@ -180,24 +183,26 @@ This library can be used in 2 ways:
 - as the gui for the whole application, drawing over the entire OS window
 - as floating windows on top of an existing application with minimal changes:
   - use widgets only inside `dvui.floatingWindow()` calls
-  - `dvui.addEvent...` functions return false if event won't be handled by dvui (main application should handle it)
-  - change `dvui.cursorRequested()` to `dvui.cursorRequestedFloating()` which returns null if the mouse cursor should be set by the main application
+  - `dvui.Window.addEvent...` functions return false if event won't be handled by dvui (main application should handle it)
+  - change `dvui.Window.cursorRequested()` to `dvui.Window.cursorRequestedFloating()` which returns null if the mouse cursor should be set by the main application
 
-Floating windows and popups are handled by deferring their rendering so that they render properly on top of windows below them.  Rendering of all floating windows and popups happens during `window.end()`.
+Floating windows and popups are handled by deferring their rendering so that they render properly on top of windows below them.  Rendering of all floating windows and popups happens during `dvui.Window.end()`.
 
 ### FPS throttling
-If your app is running at a fixed framerate, use `window.begin()` and `window.end()` which handle bookkeeping and rendering.
+If your app is running at a fixed framerate, use `dvui.Window.begin()` and `dvui.Window.end()` which handle bookkeeping and rendering.
 
-If you want to only render frames when needed, add `window.beginWait()` at the start and `window.waitTime()` at the end.  These cooperate to sleep the right amount and render frames when:
+If you want dvui to handle the mainloop for you, use `dvui.App`.
+
+If you want to only render frames when needed, add `dvui.Window.beginWait()` at the start and `dvui.Window.waitTime()` at the end.  These cooperate to sleep the right amount and render frames when:
 - an event comes in
 - an animation is ongoing
 - a timer has expired
-- user code calls `dvui.refresh(null, ...)` (if your code knows you need a frame after the current one)
+- gui code calls `dvui.refresh(null, ...)` (if your code knows you need a frame after the current one)
 - a background thread calls `dvui.refresh(window, ...)` which in turn calls `backend.refresh()`
 
-`window.waitTime()` also accepts a max fps parameter which will ensure the framerate stays below the given value.
+`dvui.Window.waitTime()` also accepts a max fps parameter which will ensure the framerate stays below the given value.
 
-`window.beginWait()` and `window.waitTime()` maintain an internal estimate of how much time is spent outside of the rendering code.  This is used in the calculation for how long to sleep for the next frame.
+`dvui.Window.beginWait()` and `dvui.Window.waitTime()` maintain an internal estimate of how much time is spent outside of the rendering code.  This is used in the calculation for how long to sleep for the next frame.
 
 The estimate is visible in the demo window Animations > Clock > "Estimate of frame overhead".  The estimate is only updated on frames caused by a timer expiring (like the clock example), and it starts at 1ms.
 
@@ -237,7 +242,7 @@ Start with the high-level functions, and when needed, copy the body of the high-
 ### Parent, Child, and Layout
 The primary layout mechanism is nesting widgets.  DVUI keeps track of the current parent widget.  When a widget runs, it is a child of the current parent.  A widget may then make itself the current parent, and reset back to the previous parent when it runs `deinit()`.
 
-The parent widget decides what rectangle of the screen to assign to each child.
+The parent widget decides what rectangle of the screen to assign to each child, unless the child passes `.rect = ` in their `dvui.Options`.
 
 Usually you want each part of a gui to either be packed tightly (take up only min size), or expand to take the available space.  The choice might be different for vertical vs. horizontal.
 
@@ -260,6 +265,7 @@ Each widget has the following options that can be changed through the Options st
 - max_size_content (margin/border/padding added to get maximum min size)
 - background (fills space inside border with background color)
 - corner_radius (for each corner)
+- box_shadow
 - colors (either RGBA value or named)
   - example RGBA `.color_text = .{ .color = .{ .r = 0xe0, .g = 0x1b, .b = 0x24 } }`
   - example HEX `.color_text = .fromHex("#e01b24")`
