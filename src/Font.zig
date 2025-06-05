@@ -10,29 +10,41 @@ size: f32,
 line_height_factor: f32 = 1.2,
 name: []const u8,
 
-pub fn resize(self: *const Font, s: f32) Font {
+pub fn hash(font: Font) u64 {
+    var h = dvui.fnv.init();
+    const bytes = if (dvui.currentWindow().font_bytes.get(font.name)) |fbe| fbe.ttf_bytes else Font.default_ttf_bytes;
+    h.update(std.mem.asBytes(&bytes.ptr));
+    h.update(std.mem.asBytes(&font.size));
+    return h.final();
+}
+
+pub fn switchFontName(self: Font, name: []const u8) Font {
+    return Font{ .size = self.size, .line_height_factor = self.line_height_factor, .name = name };
+}
+
+pub fn resize(self: Font, s: f32) Font {
     return Font{ .size = s, .line_height_factor = self.line_height_factor, .name = self.name };
 }
 
-pub fn lineHeightFactor(self: *const Font, factor: f32) Font {
+pub fn lineHeightFactor(self: Font, factor: f32) Font {
     return Font{ .size = self.size, .line_height_factor = factor, .name = self.name };
 }
 
-pub fn textHeight(self: *const Font) f32 {
+pub fn textHeight(self: Font) f32 {
     return self.sizeM(1, 1).h;
 }
 
-pub fn lineHeight(self: *const Font) f32 {
+pub fn lineHeight(self: Font) f32 {
     return self.textHeight() * self.line_height_factor;
 }
 
-pub fn sizeM(self: *const Font, wide: f32, tall: f32) Size {
+pub fn sizeM(self: Font, wide: f32, tall: f32) Size {
     const msize: Size = self.textSize("M");
     return .{ .w = msize.w * wide, .h = msize.h * tall };
 }
 
 // handles multiple lines
-pub fn textSize(self: *const Font, text: []const u8) Size {
+pub fn textSize(self: Font, text: []const u8) Size {
     if (text.len == 0) {
         // just want the normal text height
         return .{ .w = 0, .h = self.textHeight() };
@@ -65,7 +77,7 @@ pub const EndMetric = enum {
 };
 
 /// textSizeEx always stops at a newline, use textSize to get multiline sizes
-pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize, end_metric: EndMetric) Size {
+pub fn textSizeEx(self: Font, text: []const u8, max_width: ?f32, end_idx: ?*usize, end_metric: EndMetric) Size {
     // ask for a font that matches the natural display pixels so we get a more
     // accurate size
 
