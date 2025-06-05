@@ -125,7 +125,7 @@ const AnimatingDialog = struct {
         var closing: bool = false;
 
         var header_openflag = true;
-        try dvui.windowHeader(title, "", &header_openflag);
+        win.dragAreaSet(try dvui.windowHeader(title, "", &header_openflag));
         if (!header_openflag) {
             closing = true;
             dvui.dataSet(null, id, "response", enums.DialogResponse.cancel);
@@ -383,7 +383,7 @@ pub fn demo() !void {
     var buf: [100]u8 = undefined;
     const fps_str = std.fmt.bufPrint(&buf, "{d:0>3.0} fps | frame no {d}", .{ dvui.FPS(), frame_counter }) catch unreachable;
     frame_counter += 1;
-    try dvui.windowHeader("DVUI Demo", fps_str, &show_demo_window);
+    float.dragAreaSet(try dvui.windowHeader("DVUI Demo", fps_str, &show_demo_window));
 
     try dvui.toastsShow(float.data());
 
@@ -1404,7 +1404,7 @@ pub fn styling() !void {
 
         try dvui.label(@src(), "separators", .{}, .{ .gravity_y = 0.5 });
 
-        try dvui.separator(@src(), .{ .expand = .horizontal, .gravity_y = 0.5 });
+        _ = try dvui.separator(@src(), .{ .expand = .horizontal, .gravity_y = 0.5 });
     }
 
     try dvui.label(@src(), "corner radius", .{}, .{});
@@ -2231,7 +2231,7 @@ pub fn reorderListsAdvanced() !void {
         if (!reorderable.floating()) {
             if (seen_non_floating) {
                 // we've had a non floating one already, and we are non floating, so add a separator
-                try dvui.separator(@src(), .{ .id_extra = i, .expand = .horizontal, .margin = dvui.Rect.all(6) });
+                _ = try dvui.separator(@src(), .{ .id_extra = i, .expand = .horizontal, .margin = dvui.Rect.all(6) });
             } else {
                 seen_non_floating = true;
             }
@@ -2250,7 +2250,7 @@ pub fn reorderListsAdvanced() !void {
             try rs.r.fill(.{}, .{ .color = .green });
 
             // reset to use next space, need a separator
-            try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(6) });
+            _ = try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(6) });
             try reorderable.reinstall();
         }
 
@@ -2267,7 +2267,7 @@ pub fn reorderListsAdvanced() !void {
 
     if (reorder.needFinalSlot()) {
         if (seen_non_floating) {
-            try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(6) });
+            _ = try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(6) });
         }
         var reorderable = try reorder.reorderable(@src(), .{ .last_slot = true, .draw_target = false }, .{});
         defer reorderable.deinit();
@@ -3345,7 +3345,7 @@ pub fn animations() !void {
             defer win.deinit();
 
             var keep_open = true;
-            try dvui.windowHeader("Animating Window (center)", "", &keep_open);
+            win.dragAreaSet(try dvui.windowHeader("Animating Window (center)", "", &keep_open));
             if (!keep_open) {
                 animating_window_closing = true;
             }
@@ -3642,7 +3642,7 @@ pub fn dialogDirect() !void {
     var dialog_win = try dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = &show_dialog }, .{ .max_size_content = .width(500) });
     defer dialog_win.deinit();
 
-    try dvui.windowHeader("Dialog", "", &show_dialog);
+    dialog_win.dragAreaSet(try dvui.windowHeader("Dialog", "", &show_dialog));
     try dvui.label(@src(), "Asking a Question", .{}, .{ .font_style = .title_4, .gravity_x = 0.5 });
     try dvui.label(@src(), "This dialog is directly called by user code.", .{}, .{ .gravity_x = 0.5 });
 
@@ -3706,7 +3706,7 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
 
     var fwin = try dvui.floatingWindow(@src(), .{ .open_flag = show_flag }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
     defer fwin.deinit();
-    try dvui.windowHeader("Icon Browser " ++ icon_decl_name, "", show_flag);
+    fwin.dragAreaSet(try dvui.windowHeader("Icon Browser " ++ icon_decl_name, "", show_flag));
 
     var settings: *Settings = dvui.dataGetPtrDefault(null, fwin.data().id, "settings", Settings, .{});
 
@@ -4439,7 +4439,7 @@ fn background_progress(win: *dvui.Window, delay_ns: u64) !void {
 pub fn show_stroke_test_window() !void {
     var win = try dvui.floatingWindow(@src(), .{ .rect = &StrokeTest.show_rect, .open_flag = &StrokeTest.show }, .{});
     defer win.deinit();
-    try dvui.windowHeader("Stroke Test", "", &StrokeTest.show);
+    win.dragAreaSet(try dvui.windowHeader("Stroke Test", "", &StrokeTest.show));
 
     try dvui.label(@src(), "Stroke Test", .{}, .{});
     _ = try dvui.checkbox(@src(), &stroke_test_closed, "Closed", .{});

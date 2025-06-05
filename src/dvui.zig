@@ -3162,7 +3162,7 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
     return ret;
 }
 
-pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !void {
+pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !Rect.Physical {
     var over = try dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
 
     try dvui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
@@ -3198,9 +3198,14 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
         }
     }
 
+    var ret = over.data().rectScale().r;
+
     over.deinit();
 
-    try dvui.separator(@src(), .{ .expand = .horizontal });
+    const swd = try dvui.separator(@src(), .{ .expand = .horizontal });
+    ret.h += swd.rectScale().r.h;
+
+    return ret;
 }
 
 pub const DialogDisplayFn = *const fn (WidgetId) anyerror!void;
@@ -3346,7 +3351,7 @@ pub fn dialogDisplay(id: WidgetId) !void {
     defer win.deinit();
 
     var header_openflag = true;
-    try dvui.windowHeader(title, "", &header_openflag);
+    win.dragAreaSet(try dvui.windowHeader(title, "", &header_openflag));
     if (!header_openflag) {
         dvui.dialogRemove(id);
         if (callafter) |ca| {
@@ -4256,7 +4261,7 @@ pub fn gridHeading(src: std.builtin.SourceLocation, g: *GridWidget, heading: []c
     defer cell.deinit();
 
     try labelNoFmt(@src(), heading, label_options);
-    try separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
+    _ = try separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
 }
 
 /// Create a heading and allow the column to be sorted.
@@ -4284,7 +4289,7 @@ pub fn gridHeadingSortable(
     var cell = try g.headerCell(src, cell_opts);
     defer cell.deinit();
 
-    try separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
+    _ = try separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
 
     const sort_changed = switch (g.colSortOrder()) {
         .unsorted => try button(@src(), heading, .{ .draw_focus = false }, heading_opts),
@@ -4434,7 +4439,7 @@ pub fn gridHeadingCheckbox(src: std.builtin.SourceLocation, g: *GridWidget, sele
     var clicked = false;
     var selected = false;
     {
-        try dvui.separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
+        _ = try dvui.separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
 
         var hbox = try dvui.box(@src(), .horizontal, header_options);
         defer hbox.deinit();
@@ -4559,7 +4564,7 @@ pub fn columnLayoutProportional(ratio_widths: []const f32, col_widths: []f32, co
     }
 }
 
-pub fn separator(src: std.builtin.SourceLocation, opts: Options) !void {
+pub fn separator(src: std.builtin.SourceLocation, opts: Options) !WidgetData {
     const defaults: Options = .{
         .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
@@ -4572,6 +4577,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) !void {
     try wd.borderAndBackground(.{});
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
+    return wd;
 }
 
 pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) !WidgetData {
