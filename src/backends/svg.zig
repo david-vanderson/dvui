@@ -673,13 +673,13 @@ pub fn end(self: *SvgBackend) void {
 
 /// Return size of the window in physical pixels.  For a 300x200 retina
 /// window (so actually 600x400), this should return 600x400.
-pub fn pixelSize(self: *SvgBackend) dvui.Size {
-    return self.size;
+pub fn pixelSize(self: *SvgBackend) dvui.Size.Physical {
+    return .cast(self.size);
 }
 /// Return size of the window in logical pixels.  For a 300x200 retina
 /// window (so actually 600x400), this should return 300x200.
-pub fn windowSize(self: *SvgBackend) dvui.Size {
-    return self.size;
+pub fn windowSize(self: *SvgBackend) dvui.Size.Natural {
+    return .cast(self.size);
 }
 /// Return the detected additional scaling.  This represents the user's
 /// additional display scaling (usually set in their window system's
@@ -741,11 +741,11 @@ fn computePatternMatrix(v1: Vertex, v2: Vertex, v3: Vertex, trx_width: u32, trx_
 /// clipped to to clipr (if given).  Vertex positions and clipr are in
 /// physical pixels.  If texture is given, the vertexes uv coords are
 /// normalized (0-1).
-pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr: ?dvui.Rect) void {
+pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr: ?dvui.Rect.Physical) void {
     if (clipr) |cr| {
         self.svg_clippaths.append(
             self.arena,
-            SvgClippath{ .id = self.clipr_count, .rect = cr },
+            SvgClippath{ .id = self.clipr_count, .rect = .cast(cr) },
         ) catch unreachable;
         self.svg_graphics.append(
             self.arena,
@@ -761,7 +761,7 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
 
         var cur_pattern_id: ?u24 = null;
         if (texture) |txr| {
-            const filter = SvgFilter.fromCol(v3.col);
+            const filter = SvgFilter.fromCol(v3.col.toColor());
             cur_pattern_id = self.triangle_count;
             if (last_vtx_filter) |last_filter| {
                 if (last_filter.toId() != filter.toId()) {
@@ -804,7 +804,7 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             // If I have no texture, it means I need to emit a color group instead
             // (in textured version, the vertex's color is express with a <filter>)
             if (last_vtx_color) |last_color| {
-                if (last_color.toU32() != v3.col.toU32()) {
+                if (last_color.toU32() != v3.col.toColor().toU32()) {
                     // Close previous group
                     self.svg_graphics.append(
                         self.arena,
@@ -819,15 +819,15 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             } else {
                 // Only open a new one.
                 self.svg_graphics.append(self.arena, SvgGraphics{
-                    .color_group = .{ .col = v3.col },
+                    .color_group = .{ .col = v3.col.toColor() },
                 }) catch unreachable;
-                last_vtx_color = v3.col;
+                last_vtx_color = v3.col.toColor();
             }
         }
         const triangle = SvgTriangle{
-            .p1 = v1.pos,
-            .p2 = v2.pos,
-            .p3 = v3.pos,
+            .p1 = .cast(v1.pos),
+            .p2 = .cast(v2.pos),
+            .p3 = .cast(v3.pos),
             .pattern_id = cur_pattern_id,
             .filter_id = if (render_opts.debughl_vertexes != null) SvgFilter.fromCol(v3.col).toId() else {},
         };

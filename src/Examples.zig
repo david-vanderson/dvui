@@ -3467,6 +3467,7 @@ pub fn animations() !void {
             .web => try dvui.label(@src(), "web: updated when not interrupted by event", .{}, .{}),
             .raylib => try dvui.label(@src(), "raylib: only updated if non-null passed to waitTime", .{}, .{}),
             .dx11 => try dvui.label(@src(), "dx11: only updated if non-null passed to waitTime", .{}, .{}),
+            .svg => try dvui.label(@src(), "svg: FIXME : not sure how svg backend react here", .{}, .{}),
             .sdl, .custom, .testing => {},
         }
     }
