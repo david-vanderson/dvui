@@ -76,33 +76,36 @@ pub const Keybind = struct {
     key: ?Key = null,
     also: ?[]const u8 = null,
 
-    pub fn format(self: Keybind, arena: std.mem.Allocator) ![]u8 {
-        var ctrl_str: []const u8 = "";
+    pub fn format(self: *const Keybind, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        var needs_space = false;
         if (self.control) |ctrl| {
-            ctrl_str = if (ctrl) "ctrl " else "!ctrl ";
+            if (needs_space) try writer.writeByte(' ') else needs_space = true;
+            if (!ctrl) try writer.writeByte('!');
+            try writer.writeAll("ctrl");
         }
 
-        var cmd_str: []const u8 = "";
         if (self.command) |cmd| {
-            cmd_str = if (cmd) "cmd " else "!cmd ";
+            if (needs_space) try writer.writeByte(' ') else needs_space = true;
+            if (!cmd) try writer.writeByte('!');
+            try writer.writeAll("cmd");
         }
 
-        var alt_str: []const u8 = "";
         if (self.alt) |alt| {
-            alt_str = if (alt) "alt " else "!alt ";
+            if (needs_space) try writer.writeByte(' ') else needs_space = true;
+            if (!alt) try writer.writeByte('!');
+            try writer.writeAll("alt");
         }
 
-        var shift_str: []const u8 = "";
         if (self.shift) |shift| {
-            shift_str = if (shift) "shift " else "!shift ";
+            if (needs_space) try writer.writeByte(' ') else needs_space = true;
+            if (!shift) try writer.writeByte('!');
+            try writer.writeAll("shift");
         }
 
-        var key_str: []const u8 = "";
         if (self.key) |key| {
-            key_str = @tagName(key);
+            if (needs_space) try writer.writeByte(' ') else needs_space = true;
+            try writer.writeAll(@tagName(key));
         }
-
-        return try std.fmt.allocPrint(arena, "{s}{s}{s}{s}{s}", .{ ctrl_str, cmd_str, alt_str, shift_str, key_str });
     }
 };
 
