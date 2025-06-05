@@ -433,10 +433,7 @@ pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?st
     var cw = currentWindow();
 
     // Test if we can successfully open this font
-    const entry = try fontCacheInit(ttf_bytes, .{ .name = name, .size = 14 });
-    // FIXME: bad/ugly to create and destroy a texture needlessly
-    textureDestroyLater(entry.texture_atlas);
-
+    _ = try fontCacheInit(ttf_bytes, .{ .name = name, .size = 14 });
     try cw.font_bytes.put(name, FontBytesEntry{ .ttf_bytes = ttf_bytes, .allocator = ttf_bytes_allocator });
 }
 
@@ -455,14 +452,13 @@ pub const FontCacheEntry = struct {
     height: f32,
     ascent: f32,
     glyph_info: std.AutoHashMap(u32, GlyphInfo),
-    texture_atlas: Texture,
-    texture_atlas_regen: bool,
+    texture_atlas_cache: ?Texture = null,
 
     pub fn deinit(self: *FontCacheEntry, win: *Window) void {
         if (useFreeType) {
             _ = c.FT_Done_Face(self.face);
         }
-        win.backend.textureDestroy(self.texture_atlas);
+        if (self.texture_atlas_cache) |tex| win.backend.textureDestroy(tex);
     }
 
     pub const OpenFlags = packed struct(c_int) {
@@ -610,6 +606,142 @@ pub const FontCacheEntry = struct {
         return h.final();
     }
 
+    pub fn invalidateTextureAtlas(self: *FontCacheEntry) void {
+        if (self.texture_atlas_cache) |tex| {
+            dvui.textureDestroyLater(tex);
+        }
+        self.texture_atlas_cache = null;
+    }
+
+    /// This needs to be called before rendering of glyphs as the uv coordinates
+    /// of the glyphs will not be correct if the atlas needs to be generated.
+    pub fn getTextureAtlas(fce: *FontCacheEntry) std.mem.Allocator.Error!Texture {
+        if (fce.texture_atlas_cache) |tex| return tex;
+
+        // number of extra pixels to add on each side of each glyph
+        const pad = 1;
+
+        const row_glyphs = @as(u32, @intFromFloat(@ceil(@sqrt(@as(f32, @floatFromInt(fce.glyph_info.count()))))));
+
+        var size = Size{};
+        {
+            var it = fce.glyph_info.valueIterator();
+            var i: u32 = 0;
+            var rowlen: f32 = 0;
+            while (it.next()) |gi| {
+                if (i % row_glyphs == 0) {
+                    size.w = @max(size.w, rowlen);
+                    size.h += fce.height + 2 * pad;
+                    rowlen = 0;
+                }
+
+                rowlen += gi.w + 2 * pad;
+
+                i += 1;
+            } else {
+                size.w = @max(size.w, rowlen);
+            }
+
+            size = size.ceil();
+        }
+
+        // also add an extra padding around whole texture
+        size.w += 2 * pad;
+        size.h += 2 * pad;
+
+        const cw = currentWindow();
+
+        var pixels = try cw.arena().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
+        defer cw.arena().free(pixels);
+        // set all pixels to zero alpha
+        @memset(pixels, 0);
+
+        //const num_glyphs = fce.glyph_info.count();
+        //std.debug.print("font size {d} regen glyph atlas num {d} max size {}\n", .{ sized_font.size, num_glyphs, size });
+
+        var x: i32 = pad;
+        var y: i32 = pad;
+        var it = fce.glyph_info.iterator();
+        var i: u32 = 0;
+        while (it.next()) |e| {
+            var gi = e.value_ptr;
+            gi.uv[0] = @as(f32, @floatFromInt(x + pad)) / size.w;
+            gi.uv[1] = @as(f32, @floatFromInt(y + pad)) / size.h;
+
+            const codepoint = @as(u32, @intCast(e.key_ptr.*));
+
+            if (useFreeType) blk: {
+                FontCacheEntry.intToError(c.FT_Load_Char(fce.face, codepoint, @as(i32, @bitCast(FontCacheEntry.LoadFlags{ .render = true })))) catch |err| {
+                    log.warn("renderText: freetype error {!} trying to FT_Load_Char codepoint {d}", .{ err, codepoint });
+                    break :blk; // will skip the failing glyph
+                };
+
+                // https://freetype.org/freetype2/docs/tutorial/step1.html#section-6
+                if (fce.face.*.glyph.*.format != c.FT_GLYPH_FORMAT_BITMAP) {
+                    FontCacheEntry.intToError(c.FT_Render_Glyph(fce.face.*.glyph, c.FT_RENDER_MODE_NORMAL)) catch |err| {
+                        log.warn("renderText freetype error {!} trying to FT_Render_Glyph codepoint {d}", .{ err, codepoint });
+                        break :blk; // will skip the failing glyph
+                    };
+                }
+
+                const bitmap = fce.face.*.glyph.*.bitmap;
+                var row: i32 = 0;
+                while (row < bitmap.rows) : (row += 1) {
+                    var col: i32 = 0;
+                    while (col < bitmap.width) : (col += 1) {
+                        const src = bitmap.buffer[@as(usize, @intCast(row * bitmap.pitch + col))];
+
+                        // because of the extra edge, offset by 1 row and 1 col
+                        const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(size.w)) * 4 + (x + col + pad) * 4));
+
+                        // premultiplied white
+                        pixels[di + 0] = src;
+                        pixels[di + 1] = src;
+                        pixels[di + 2] = src;
+                        pixels[di + 3] = src;
+                    }
+                }
+            } else {
+                const out_w: u32 = @intFromFloat(gi.w);
+                const out_h: u32 = @intFromFloat(gi.h);
+
+                // single channel
+                const bitmap = try cw.arena().alloc(u8, @as(usize, out_w * out_h));
+                defer cw.arena().free(bitmap);
+
+                //log.debug("makecodepointBitmap size x {d} y {d} w {d} h {d} out w {d} h {d}", .{ x, y, size.w, size.h, out_w, out_h });
+
+                c.stbtt_MakeCodepointBitmapSubpixel(&fce.face, bitmap.ptr, @as(c_int, @intCast(out_w)), @as(c_int, @intCast(out_h)), @as(c_int, @intCast(out_w)), fce.scaleFactor, fce.scaleFactor, 0.0, 0.0, @as(c_int, @intCast(codepoint)));
+
+                const stride = @as(usize, @intFromFloat(size.w)) * 4;
+                const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x * 4));
+                for (0..out_h) |row| {
+                    for (0..out_w) |col| {
+                        const src = bitmap[row * out_w + col];
+                        const dest = di + (row + pad) * stride + (col + pad) * 4;
+
+                        // premultiplied white
+                        pixels[dest + 0] = src;
+                        pixels[dest + 1] = src;
+                        pixels[dest + 2] = src;
+                        pixels[dest + 3] = src;
+                    }
+                }
+            }
+
+            x += @as(i32, @intFromFloat(gi.w)) + 2 * pad;
+
+            i += 1;
+            if (i % row_glyphs == 0) {
+                x = pad;
+                y += @as(i32, @intFromFloat(fce.height)) + 2 * pad;
+            }
+        }
+
+        fce.texture_atlas_cache = textureCreate(.cast(pixels), @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
+        return fce.texture_atlas_cache.?;
+    }
+
     pub fn glyphInfoGet(self: *FontCacheEntry, codepoint: u32, font_name: []const u8) (std.mem.Allocator.Error || FontError)!GlyphInfo {
         if (self.glyph_info.get(codepoint)) |gi| {
             return gi;
@@ -665,7 +797,7 @@ pub const FontCacheEntry = struct {
 
         // new glyph, need to regen texture atlas on next render
         //std.debug.print("new glyph {}\n", .{codepoint});
-        self.texture_atlas_regen = true;
+        self.invalidateTextureAtlas();
 
         try self.glyph_info.put(codepoint, gi);
         return gi;
@@ -799,7 +931,6 @@ pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*FontCacheEntry {
             .name = Font.default_font_name,
         });
     };
-    errdefer textureDestroyLater(entry.texture_atlas);
 
     //log.debug("- size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
 
@@ -809,14 +940,6 @@ pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*FontCacheEntry {
 
 // Load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
 pub fn fontCacheInit(ttf_bytes: []const u8, font: Font) FontError!FontCacheEntry {
-    var cw = currentWindow();
-
-    // make debug texture atlas so we can see if something later goes wrong
-    const size = Size{ .w = 10, .h = 10 };
-    const pixels = cw.arena().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4) catch @panic("OOM");
-    @memset(pixels, 255);
-    defer cw.arena().free(pixels);
-
     const min_pixel_size = 1;
 
     if (useFreeType) {
@@ -853,9 +976,7 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font) FontError!FontCacheEntry
                     .scaleFactor = 1.0, // not used with freetype
                     .height = @ceil(height),
                     .ascent = @floor(ascent),
-                    .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-                    .texture_atlas = textureCreate(.cast(pixels), @intFromFloat(size.w), @intFromFloat(size.h), .linear),
-                    .texture_atlas_regen = true,
+                    .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(currentWindow().gpa),
                 };
             }
         }
@@ -886,9 +1007,7 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font) FontError!FontCacheEntry
             .scaleFactor = SF,
             .height = @ceil(height),
             .ascent = @floor(ascent),
-            .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-            .texture_atlas = textureCreate(.cast(pixels), @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
-            .texture_atlas_regen = true,
+            .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(currentWindow().gpa),
         };
     }
 }
@@ -5006,8 +5125,9 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) !void {
     var height: u32 = 0;
     var it = cw.font_cache.iterator();
     while (it.next()) |kv| {
-        width = @max(width, kv.value_ptr.texture_atlas.width);
-        height += kv.value_ptr.texture_atlas.height;
+        const texture_atlas = try kv.value_ptr.getTextureAtlas();
+        width = @max(width, texture_atlas.width);
+        height += texture_atlas.height;
     }
 
     const sizePhys: Size.Physical = .{ .w = @floatFromInt(width), .h = @floatFromInt(height) };
@@ -5030,11 +5150,12 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) !void {
 
     it = cw.font_cache.iterator();
     while (it.next()) |kv| {
+        const texture_atlas = try kv.value_ptr.getTextureAtlas();
         rs.r = rs.r.toSize(.{
-            .w = @floatFromInt(kv.value_ptr.texture_atlas.width),
-            .h = @floatFromInt(kv.value_ptr.texture_atlas.height),
+            .w = @floatFromInt(texture_atlas.width),
+            .h = @floatFromInt(texture_atlas.height),
         });
-        try renderTexture(kv.value_ptr.texture_atlas, rs, .{ .colormod = color });
+        try renderTexture(texture_atlas, rs, .{ .colormod = color });
         rs.r.y += rs.r.h;
     }
 
@@ -6305,130 +6426,8 @@ pub fn renderText(opts: renderTextOptions) (std.mem.Allocator.Error || FontError
         _ = try fce.glyphInfoGet(@as(u32, @intCast(codepoint)), opts.font.name);
     }
 
-    // number of extra pixels to add on each side of each glyph
-    const pad = 1;
-
-    if (fce.texture_atlas_regen) {
-        fce.texture_atlas_regen = false;
-        cw.backend.textureDestroy(fce.texture_atlas);
-
-        const row_glyphs = @as(u32, @intFromFloat(@ceil(@sqrt(@as(f32, @floatFromInt(fce.glyph_info.count()))))));
-
-        var size = Size{};
-        {
-            var it = fce.glyph_info.valueIterator();
-            var i: u32 = 0;
-            var rowlen: f32 = 0;
-            while (it.next()) |gi| {
-                if (i % row_glyphs == 0) {
-                    size.w = @max(size.w, rowlen);
-                    size.h += fce.height + 2 * pad;
-                    rowlen = 0;
-                }
-
-                rowlen += gi.w + 2 * pad;
-
-                i += 1;
-            } else {
-                size.w = @max(size.w, rowlen);
-            }
-
-            size = size.ceil();
-        }
-
-        // also add an extra padding around whole texture
-        size.w += 2 * pad;
-        size.h += 2 * pad;
-
-        var pixels = try cw.arena().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
-        defer cw.arena().free(pixels);
-        // set all pixels to zero alpha
-        @memset(pixels, 0);
-
-        //const num_glyphs = fce.glyph_info.count();
-        //std.debug.print("font size {d} regen glyph atlas num {d} max size {}\n", .{ sized_font.size, num_glyphs, size });
-
-        {
-            var x: i32 = pad;
-            var y: i32 = pad;
-            var it = fce.glyph_info.iterator();
-            var i: u32 = 0;
-            while (it.next()) |e| {
-                var gi = e.value_ptr;
-                gi.uv[0] = @as(f32, @floatFromInt(x + pad)) / size.w;
-                gi.uv[1] = @as(f32, @floatFromInt(y + pad)) / size.h;
-
-                const codepoint = @as(u32, @intCast(e.key_ptr.*));
-
-                if (useFreeType) {
-                    FontCacheEntry.intToError(c.FT_Load_Char(fce.face, codepoint, @as(i32, @bitCast(FontCacheEntry.LoadFlags{ .render = true })))) catch |err| {
-                        log.warn("renderText: freetype error {!} trying to FT_Load_Char font {s} codepoint {d}\n", .{ err, opts.font.name, codepoint });
-                        return FontError.fontError;
-                    };
-
-                    const bitmap = fce.face.*.glyph.*.bitmap;
-
-                    //std.debug.print("codepoint {d} gi {d}x{d} bitmap {d}x{d}\n", .{ e.key_ptr.*, e.value_ptr.maxx - e.value_ptr.minx, e.value_ptr.maxy - e.value_ptr.miny, bitmap.width(), bitmap.rows() });
-                    var row: i32 = 0;
-                    while (row < bitmap.rows) : (row += 1) {
-                        var col: i32 = 0;
-                        while (col < bitmap.width) : (col += 1) {
-                            if (bitmap.buffer == null) {
-                                log.warn("renderText freetype bitmap null for font {s} codepoint {d}\n", .{ opts.font.name, codepoint });
-                                return FontError.fontError;
-                            }
-                            const src = bitmap.buffer[@as(usize, @intCast(row * bitmap.pitch + col))];
-
-                            // because of the extra edge, offset by 1 row and 1 col
-                            const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(size.w)) * 4 + (x + col + pad) * 4));
-
-                            // premultiplied white
-                            pixels[di + 0] = src;
-                            pixels[di + 1] = src;
-                            pixels[di + 2] = src;
-                            pixels[di + 3] = src;
-                        }
-                    }
-                } else {
-                    const out_w: u32 = @intFromFloat(gi.w);
-                    const out_h: u32 = @intFromFloat(gi.h);
-
-                    // single channel
-                    const bitmap = try cw.arena().alloc(u8, @as(usize, out_w * out_h));
-                    defer cw.arena().free(bitmap);
-
-                    //log.debug("makecodepointBitmap size x {d} y {d} w {d} h {d} out w {d} h {d}", .{ x, y, size.w, size.h, out_w, out_h });
-
-                    c.stbtt_MakeCodepointBitmapSubpixel(&fce.face, bitmap.ptr, @as(c_int, @intCast(out_w)), @as(c_int, @intCast(out_h)), @as(c_int, @intCast(out_w)), fce.scaleFactor, fce.scaleFactor, 0.0, 0.0, @as(c_int, @intCast(codepoint)));
-
-                    const stride = @as(usize, @intFromFloat(size.w)) * 4;
-                    const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x * 4));
-                    for (0..out_h) |row| {
-                        for (0..out_w) |col| {
-                            const src = bitmap[row * out_w + col];
-                            const dest = di + (row + pad) * stride + (col + pad) * 4;
-
-                            // premultiplied white
-                            pixels[dest + 0] = src;
-                            pixels[dest + 1] = src;
-                            pixels[dest + 2] = src;
-                            pixels[dest + 3] = src;
-                        }
-                    }
-                }
-
-                x += @as(i32, @intFromFloat(gi.w)) + 2 * pad;
-
-                i += 1;
-                if (i % row_glyphs == 0) {
-                    x = pad;
-                    y += @as(i32, @intFromFloat(fce.height)) + 2 * pad;
-                }
-            }
-        }
-
-        fce.texture_atlas = textureCreate(.cast(pixels), @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
-    }
+    // Generate new texture atlas if needed to update glyph uv coords
+    const texture_atlas = try fce.getTextureAtlas();
 
     // Over allocate the internal buffers assuming each byte is a character
     var builder = try Triangles.Builder.init(cw.arena(), 4 * utf8_text.len, 6 * utf8_text.len);
@@ -6454,7 +6453,7 @@ pub fn renderText(opts: renderTextOptions) (std.mem.Allocator.Error || FontError
     // if we will definitely have a selected region or not
     const sel: bool = sel_start < sel_end;
 
-    const atlas_size: Size = .{ .w = @floatFromInt(fce.texture_atlas.width), .h = @floatFromInt(fce.texture_atlas.height) };
+    const atlas_size: Size = .{ .w = @floatFromInt(texture_atlas.width), .h = @floatFromInt(texture_atlas.height) };
 
     var bytes_seen: usize = 0;
     utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
@@ -6561,7 +6560,7 @@ pub fn renderText(opts: renderTextOptions) (std.mem.Allocator.Error || FontError
         }
     }
 
-    try renderTriangles(builder.build_unowned(), fce.texture_atlas);
+    try renderTriangles(builder.build_unowned(), texture_atlas);
 }
 
 /// Holds a slice of premultiplied alpha (PMA) RGBA pixels
