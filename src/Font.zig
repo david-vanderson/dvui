@@ -74,10 +74,7 @@ pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx:
     const sized_font = self.resize(ask_size);
 
     // might give us a slightly smaller font
-    const fce = dvui.fontCacheGet(sized_font) catch |err| {
-        dvui.log.err("fontCacheGet got {!} for font \"{s}\"", .{ err, self.name });
-        return .{ .w = 10, .h = 10 };
-    };
+    const fce = dvui.fontCacheGet(sized_font) catch return .{ .w = 10, .h = 10 };
 
     // this must be synced with dvui.renderText()
     const target_fraction = if (dvui.currentWindow().snap_to_pixels) 1.0 / ss else self.size / fce.height;
@@ -102,9 +99,12 @@ pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx:
 
 // default bytes if font id is not found in database
 pub const default_ttf_bytes = TTFBytes.Vera;
+// NOTE: This font name should match the name in the font data base
+pub const default_font_name = "Vera";
 
 // functionality for accessing builtin fonts
 pub const TTFBytes = struct {
+    pub const InvalidFontFile = "This is a very invalid font file";
     pub const Aleo = @embedFile("fonts/Aleo/static/Aleo-Regular.ttf");
     pub const AleoBd = @embedFile("fonts/Aleo/static/Aleo-Bold.ttf");
     pub const Vera = @embedFile("fonts/bitstream-vera/Vera.ttf");
@@ -134,11 +134,11 @@ pub const TTFBytes = struct {
 pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) std.mem.Allocator.Error!std.StringHashMap(dvui.FontBytesEntry) {
     var result = std.StringHashMap(dvui.FontBytesEntry).init(allocator);
     inline for (@typeInfo(TTFBytes).@"struct".decls) |decl| {
-        try result.put(decl.name, dvui.FontBytesEntry{ .ttf_bytes = @field(TTFBytes, decl.name), .allocator = null });
+        try result.putNoClobber(decl.name, dvui.FontBytesEntry{ .ttf_bytes = @field(TTFBytes, decl.name), .allocator = null });
     }
 
     if (!dvui.wasm) {
-        try result.put("Noto", dvui.FontBytesEntry{ .ttf_bytes = @embedFile("fonts/NotoSansKR-Regular.ttf"), .allocator = null });
+        try result.putNoClobber("Noto", dvui.FontBytesEntry{ .ttf_bytes = @embedFile("fonts/NotoSansKR-Regular.ttf"), .allocator = null });
     }
 
     return result;

@@ -1186,7 +1186,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
                     if (bytes) |b| blk: {
                         dvui.addFont(name, b, dvui.currentWindow().gpa) catch |err| switch (err) {
                             error.OutOfMemory => @panic("OOM"),
-                            error.freetypeError => {
+                            error.fontError => {
                                 dvui.currentWindow().gpa.free(b);
                                 try dvui.dialog(@src(), .{}, .{ .title = "Bad Font", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "\"{s}\" is not a valid font", .{filename}) });
                                 break :blk;
