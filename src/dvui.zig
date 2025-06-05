@@ -582,19 +582,6 @@ pub const FontCacheEntry = struct {
         };
     }
 
-    pub fn hash(font: Font) u64 {
-        var h = fnv.init();
-        var bytes: []const u8 = undefined;
-        if (currentWindow().font_bytes.get(font.name)) |fbe| {
-            bytes = fbe.ttf_bytes;
-        } else {
-            bytes = Font.default_ttf_bytes;
-        }
-        h.update(std.mem.asBytes(&bytes.ptr));
-        h.update(std.mem.asBytes(&font.size));
-        return h.final();
-    }
-
     pub fn invalidateTextureAtlas(self: *FontCacheEntry) void {
         if (self.texture_atlas_cache) |tex| {
             dvui.textureDestroyLater(tex);
@@ -831,7 +818,10 @@ pub const FontCacheEntry = struct {
                     var kern: c.FT_Vector = undefined;
                     FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
                         log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, font_name, last_codepoint, codepoint });
-                        return FontError.fontError;
+                        // Set fallback kern and continue to the best of out ability
+                        kern.x = 0;
+                        kern.y = 0;
+                        // return FontError.fontError;
                     };
                     last_glyph_index = glyph_index;
 
@@ -899,7 +889,7 @@ pub const FontCacheEntry = struct {
 // Get or load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
 pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*FontCacheEntry {
     var cw = currentWindow();
-    const fontHash = FontCacheEntry.hash(font);
+    const fontHash = font.hash();
     if (cw.font_cache.getPtr(fontHash)) |fce| return fce;
 
     const ttf_bytes = if (cw.font_bytes.get(font.name)) |fbe|
@@ -914,11 +904,7 @@ pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*FontCacheEntry {
         if (std.mem.eql(u8, font.name, Font.default_font_name)) {
             @panic("Default font could not be loaded");
         }
-        return fontCacheGet(.{
-            .size = font.size,
-            .line_height_factor = font.line_height_factor,
-            .name = Font.default_font_name,
-        });
+        return fontCacheGet(font.switchFontName(Font.default_font_name));
     };
 
     //log.debug("- size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
@@ -6437,7 +6423,10 @@ pub fn renderText(opts: renderTextOptions) (std.mem.Allocator.Error || FontError
                 var kern: c.FT_Vector = undefined;
                 FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
                     log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, opts.font.name, last_codepoint, codepoint });
-                    return FontError.fontError;
+                    // Set fallback kern and continue to the best of out ability
+                    kern.x = 0;
+                    kern.y = 0;
+                    // return FontError.fontError;
                 };
                 last_glyph_index = glyph_index;
 
