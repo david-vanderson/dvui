@@ -143,7 +143,9 @@ pub const c = @cImport({
 
 pub var ft2lib: if (useFreeType) c.FT_Library else void = undefined;
 
-pub const Error = error{ OutOfMemory, tvgError, stbiError } || FontError;
+pub const Error = std.mem.Allocator.Error || StbImageError || TvgError || FontError;
+pub const TvgError = error{tvgError};
+pub const StbImageError = error{stbImageError};
 pub const FontError = error{fontError};
 
 pub const log = std.log.scoped(.dvui);
@@ -928,12 +930,12 @@ pub const TextureCacheEntry = struct {
 /// Get the width of an icon at a specified height.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) !f32 {
+pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) TvgError!f32 {
     if (height == 0) return 0.0;
     var stream = std.io.fixedBufferStream(tvg_bytes);
     var parser = tvg.tvg.parse(currentWindow().arena(), stream.reader()) catch |err| {
         log.warn("iconWidth Tinyvg error {!} parsing icon {s}\n", .{ err, name });
-        return error.tvgError;
+        return TvgError.tvgError;
     };
     defer parser.deinit();
 
@@ -951,7 +953,7 @@ pub const IconRenderOptions = struct {
 /// Render `tvg_bytes` at `height` into a `Texture`.  Name is for debugging.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, icon_opts: IconRenderOptions) !TextureCacheEntry {
+pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, icon_opts: IconRenderOptions) (std.mem.Allocator.Error || TvgError)!TextureCacheEntry {
     var cw = currentWindow();
     const icon_hash = TextureCacheEntry.hash_icon(tvg_bytes, height, icon_opts);
 
@@ -1007,7 +1009,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, icon_op
         .disable_fill = disable_fill,
     }) catch |err| {
         log.warn("iconTexture Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, height });
-        return error.tvgError;
+        return TvgError.tvgError;
     };
 
     const pixels = dvui.RGBAPixelsPMA.cast(img.pixels);
@@ -4898,7 +4900,7 @@ pub fn icon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []cons
     iw.deinit();
 }
 
-pub fn imageSize(name: []const u8, image_bytes: []const u8) !Size {
+pub fn imageSize(name: []const u8, image_bytes: []const u8) StbImageError!Size {
     var w: c_int = undefined;
     var h: c_int = undefined;
     var n: c_int = undefined;
@@ -4907,7 +4909,7 @@ pub fn imageSize(name: []const u8, image_bytes: []const u8) !Size {
         return .{ .w = @floatFromInt(w), .h = @floatFromInt(h) };
     } else {
         log.warn("imageSize stbi_info error on image \"{s}\": {s}\n", .{ name, c.stbi_failure_reason() });
-        return Error.stbiError;
+        return StbImageError.stbImageError;
     }
 }
 
@@ -6743,7 +6745,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     try renderTexture(tce.texture, rs, opts);
 }
 
-pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntry {
+pub fn imageTexture(name: []const u8, image_bytes: []const u8) (std.mem.Allocator.Error || StbImageError)!TextureCacheEntry {
     var cw = currentWindow();
     const hash = TextureCacheEntry.hash(image_bytes, 0);
 
@@ -6755,7 +6757,7 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntr
     const data = c.stbi_load_from_memory(image_bytes.ptr, @as(c_int, @intCast(image_bytes.len)), &w, &h, &channels_in_file, 4);
     if (data == null) {
         log.warn("imageTexture stbi_load error on image \"{s}\": {s}\n", .{ name, c.stbi_failure_reason() });
-        return Error.stbiError;
+        return StbImageError.stbImageError;
     }
 
     defer c.stbi_image_free(data);
