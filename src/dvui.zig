@@ -729,6 +729,15 @@ pub const FontCacheEntry = struct {
         return fce.texture_atlas_cache.?;
     }
 
+    /// If a codepoint is missing in the font it gets the glyph for
+    /// `std.unicode.replacement_character`
+    pub fn glyphInfoGetOrReplacement(self: *FontCacheEntry, codepoint: u32, font_name: []const u8) std.mem.Allocator.Error!GlyphInfo {
+        return self.glyphInfoGet(codepoint, font_name) catch |err| switch (err) {
+            FontError.fontError => self.glyphInfoGet(std.unicode.replacement_character, font_name) catch unreachable,
+            else => |e| e,
+        };
+    }
+
     pub fn glyphInfoGet(self: *FontCacheEntry, codepoint: u32, font_name: []const u8) (std.mem.Allocator.Error || FontError)!GlyphInfo {
         if (self.glyph_info.get(codepoint)) |gi| {
             return gi;
@@ -801,7 +810,7 @@ pub const FontCacheEntry = struct {
         max_width: ?f32,
         end_idx: ?*usize,
         end_metric: Font.EndMetric,
-    ) (std.mem.Allocator.Error || FontError)!Size {
+    ) std.mem.Allocator.Error!Size {
         const mwidth = max_width orelse max_float_safe;
 
         var x: f32 = 0;
@@ -819,7 +828,7 @@ pub const FontCacheEntry = struct {
         var last_codepoint: u32 = 0;
         var last_glyph_index: u32 = 0;
         while (utf8.nextCodepoint()) |codepoint| {
-            const gi = try fce.glyphInfoGet(@as(u32, @intCast(codepoint)), font_name);
+            const gi = try fce.glyphInfoGetOrReplacement(@as(u32, @intCast(codepoint)), font_name);
 
             // kerning
             if (last_codepoint != 0) {
@@ -6378,7 +6387,7 @@ pub const renderTextOptions = struct {
 };
 
 // only renders a single line of text
-pub fn renderText(opts: renderTextOptions) (std.mem.Allocator.Error || FontError)!void {
+pub fn renderText(opts: renderTextOptions) std.mem.Allocator.Error!void {
     if (opts.rs.s == 0) return;
     if (opts.text.len == 0) return;
     if (clipGet().intersect(opts.rs.r).empty()) return;
@@ -6409,7 +6418,7 @@ pub fn renderText(opts: renderTextOptions) (std.mem.Allocator.Error || FontError
     // make sure the cache has all the glyphs we need
     var utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
     while (utf8it.nextCodepoint()) |codepoint| {
-        _ = try fce.glyphInfoGet(@as(u32, @intCast(codepoint)), opts.font.name);
+        _ = try fce.glyphInfoGetOrReplacement(@as(u32, @intCast(codepoint)), opts.font.name);
     }
 
     // Generate new texture atlas if needed to update glyph uv coords
@@ -6446,7 +6455,7 @@ pub fn renderText(opts: renderTextOptions) (std.mem.Allocator.Error || FontError
     var last_codepoint: u32 = 0;
     var last_glyph_index: u32 = 0;
     while (utf8it.nextCodepoint()) |codepoint| {
-        const gi = try fce.glyphInfoGet(@as(u32, @intCast(codepoint)), opts.font.name);
+        const gi = try fce.glyphInfoGetOrReplacement(@as(u32, @intCast(codepoint)), opts.font.name);
 
         // kerning
         if (last_codepoint != 0) {
