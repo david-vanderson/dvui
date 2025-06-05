@@ -3972,7 +3972,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
 
     if (init_opts.open_on_focus) {
         const focused_last_frame = dvui.dataGet(null, te.data().id, "_focused_last_frame", bool) orelse false;
-        const focused_now = dvui.focusedWidgetId() == te.data().id;
+        const focused_now = dvui.focusedWidgetIdInCurrentSubwindow() == te.data().id;
 
         if (!focused_last_frame and focused_now) {
             sug.open();
