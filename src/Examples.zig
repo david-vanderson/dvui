@@ -3634,7 +3634,7 @@ pub fn debuggingErrors() !void {
         try tl.addText("\nCurrent keybinds:\n", .{});
         outer = dvui.currentWindow().keybinds.iterator();
         while (outer.next()) |okv| {
-            try tl.format("\n{s}\n    {s}\n", .{ okv.key_ptr.*, try okv.value_ptr.format(dvui.currentWindow().arena()) }, .{});
+            try tl.format("\n{s}\n    {}\n", .{ okv.key_ptr.*, okv.value_ptr }, .{});
         }
         tl.deinit();
     }
