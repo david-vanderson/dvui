@@ -2360,14 +2360,20 @@ pub fn menus() !void {
         defer hbox.deinit();
 
         var tl = try dvui.textLayout(@src(), .{}, .{ .background = false });
-        try tl.addText("This box has a complex tooltip with a nested tooltip.", .{});
+        try tl.addText("This box has a complex tooltip with a fade in and nested tooltip.", .{});
         tl.deinit();
 
         var tt: dvui.FloatingTooltipWidget = .init(@src(), .{
             .active_rect = hbox.data().borderRectScale().r,
             .interactive = true,
-        }, .{});
+        }, .{ .background = false, .border = .{} });
         if (try tt.shown()) {
+            var animator = try dvui.animate(@src(), .{ .kind = .alpha, .duration = 250_000 }, .{ .expand = .both });
+            defer animator.deinit();
+
+            var vbox2 = try dvui.box(@src(), .vertical, dvui.FloatingTooltipWidget.defaults.override(.{ .expand = .both }));
+            defer vbox2.deinit();
+
             var tl2 = try dvui.textLayout(@src(), .{}, .{ .background = false });
             try tl2.addText("This is the tooltip text", .{});
             tl2.deinit();
