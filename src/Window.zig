@@ -567,16 +567,30 @@ pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) !bool {
     return ret;
 }
 
-/// Add a mouse motion event.  This is only for a mouse - for touch motion
-/// use addEventTouchMotion().
+/// Add a mouse motion event that the mouse is now at natural pixel pt.  This
+/// is only for a mouse - for touch motion use addEventTouchMotion().
+///
+/// See `addEventMouseMotionPhysical` if you have physical pixel coords.
 ///
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
 pub fn addEventMouseMotion(self: *Self, pt: Point.Natural) !bool {
+    const newpt = pt.scale(self.natural_scale / self.content_scale, Point.Physical);
+    return try self.addEventMouseMotionPhysical(newpt);
+}
+
+/// Add a mouse motion event that the mouse is now at physical pixel pt.  This
+/// is only for a mouse - for touch motion use addEventTouchMotion().
+///
+/// See `addEventMouseMotion` if you have natural pixel coords.
+///
+/// This can be called outside begin/end.  You should add all the events
+/// for a frame either before begin() or just after begin() and before
+/// calling normal dvui widgets.  end() clears the event list.
+pub fn addEventMouseMotionPhysical(self: *Self, newpt: Point.Physical) !bool {
     self.positionMouseEventRemove();
 
-    const newpt = pt.scale(self.natural_scale / self.content_scale, Point.Physical);
     //log.debug("mouse motion {d} {d} -> {d} {d}", .{ x, y, newpt.x, newpt.y });
     const dp = newpt.diff(self.mouse_pt);
     self.mouse_pt = newpt;
