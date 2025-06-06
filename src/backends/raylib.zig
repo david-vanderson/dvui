@@ -163,7 +163,7 @@ pub fn deinit(self: *RaylibBackend) void {
 }
 
 pub fn backend(self: *RaylibBackend) dvui.Backend {
-    return dvui.Backend.init(self, @This());
+    return dvui.Backend.init(self);
 }
 
 pub fn nanoTime(self: *RaylibBackend) i128 {

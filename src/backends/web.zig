@@ -543,7 +543,7 @@ pub fn deinit(self: *WebBackend) void {
 }
 
 pub fn backend(self: *WebBackend) dvui.Backend {
-    return dvui.Backend.init(self, @This());
+    return dvui.Backend.init(self);
 }
 
 pub fn nanoTime(self: *WebBackend) i128 {

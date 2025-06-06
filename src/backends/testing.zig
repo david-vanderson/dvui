@@ -148,7 +148,7 @@ pub fn openURL(_: *TestingBackend, _: []const u8) std.mem.Allocator.Error!void {
 pub fn refresh(_: *TestingBackend) void {}
 
 pub fn backend(self: *TestingBackend) dvui.Backend {
-    return dvui.Backend.init(self, TestingBackend);
+    return dvui.Backend.init(self);
 }
 
 test {
