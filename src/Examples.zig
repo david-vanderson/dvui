@@ -2382,10 +2382,10 @@ pub fn menus() !void {
 
             var tt2: dvui.FloatingTooltipWidget = .init(@src(), .{
                 .active_rect = tt.data().borderRectScale().r,
-            }, .{});
+            }, .{ .max_size_content = .width(200), .box_shadow = .{} });
             if (try tt2.shown()) {
                 var tl3 = try dvui.textLayout(@src(), .{}, .{ .background = false });
-                try tl3.addText("Text in a nested tooltip", .{});
+                try tl3.addText("Text in a nested tooltip with box shadow", .{});
                 tl3.deinit();
             }
             tt2.deinit();

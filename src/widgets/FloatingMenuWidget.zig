@@ -126,10 +126,10 @@ pub fn install(self: *FloatingMenuWidget) !void {
     dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
     try self.wd.register();
 
-    // clip to just our window (using clipSet since we are not inside our parent)
+    // first break out of whatever clip we were in (so box shadows work, since
+    // they are outside our window)
     self.prevClip = dvui.clipGet();
     dvui.clipSet(dvui.windowRectPixels());
-    _ = dvui.clip(rs.r);
 
     self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
     try self.scaler.install();
@@ -138,6 +138,9 @@ pub fn install(self: *FloatingMenuWidget) !void {
     // don't have margin, so turn that off
     self.scroll = ScrollAreaWidget.init(@src(), .{ .horizontal = .none }, self.options.override(.{ .margin = .{}, .expand = .both }));
     try self.scroll.install();
+
+    // clip to just our window (using clipSet since we are not inside our parent)
+    _ = dvui.clip(rs.r);
 
     if (dvui.MenuWidget.current()) |pm| {
         pm.child_popup_rect = rs.r;
