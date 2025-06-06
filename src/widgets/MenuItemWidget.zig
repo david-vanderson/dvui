@@ -53,7 +53,7 @@ pub fn install(self: *MenuItemWidget) !void {
     dvui.parentSet(self.widget());
 }
 
-pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bool = false }) std.mem.Allocator.Error!void {
+pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bool = false }) !void {
     var focused: bool = false;
     if (self.wd.id == dvui.focusedWidgetId()) {
         focused = true;

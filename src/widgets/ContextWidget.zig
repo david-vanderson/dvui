@@ -43,7 +43,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *ContextWidget) std.mem.Allocator.Error!void {
+pub fn install(self: *ContextWidget) !void {
     dvui.parentSet(self.widget());
     self.wd.register();
     try self.wd.borderAndBackground(.{});

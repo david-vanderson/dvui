@@ -224,7 +224,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, show_touch_draggables: bool = true }) std.mem.Allocator.Error!void {
+pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, show_touch_draggables: bool = true }) !void {
     self.focus_at_start = opts.focused orelse (self.wd.id == dvui.focusedWidgetId());
 
     self.wd.register();

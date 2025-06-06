@@ -6,6 +6,9 @@ const dvui = @import("dvui.zig");
 const Implementation = @import("backend");
 const Backend = @This();
 
+pub const GenericError = std.mem.Allocator.Error || error{BackendError};
+pub const TextureError = GenericError || error{ TextureCreate, TextureRead };
+
 /// The current implementation used
 pub const kind = Implementation.kind;
 
@@ -27,24 +30,24 @@ pub fn sleep(self: Backend, ns: u64) void {
 /// rendering.  Use to setup anything needed for this frame.  The arena
 /// arg is cleared before `dvui.Window.begin` is called next, useful for any
 /// temporary allocations needed only for this frame.
-pub fn begin(self: Backend, arena: std.mem.Allocator) void {
+pub fn begin(self: Backend, arena: std.mem.Allocator) GenericError!void {
     return self.impl.begin(arena);
 }
 
 /// Called during `dvui.Window.end` before freeing any memory for the current frame.
-pub fn end(self: Backend) void {
+pub fn end(self: Backend) GenericError!void {
     return self.impl.end();
 }
 
 /// Return size of the window in physical pixels.  For a 300x200 retina
 /// window (so actually 600x400), this should return 600x400.
-pub fn pixelSize(self: Backend) dvui.Size.Physical {
+pub fn pixelSize(self: Backend) GenericError!dvui.Size.Physical {
     return self.impl.pixelSize();
 }
 
 /// Return size of the window in logical pixels.  For a 300x200 retina
 /// window (so actually 600x400), this should return 300x200.
-pub fn windowSize(self: Backend) dvui.Size.Natural {
+pub fn windowSize(self: Backend) GenericError!dvui.Size.Natural {
     return self.impl.windowSize();
 }
 
@@ -52,7 +55,7 @@ pub fn windowSize(self: Backend) dvui.Size.Natural {
 /// additional display scaling (usually set in their window system's
 /// settings).  Currently only called during `dvui.Window.init`, so currently
 /// this sets the initial content scale.
-pub fn contentScale(self: Backend) f32 {
+pub fn contentScale(self: Backend) GenericError!f32 {
     return self.impl.contentScale();
 }
 
@@ -60,13 +63,13 @@ pub fn contentScale(self: Backend) f32 {
 /// clipped to to `clipr` (if given).  Vertex positions and `clipr` are in
 /// physical pixels.  If `texture` is given, the vertexes uv coords are
 /// normalized (0-1).
-pub fn drawClippedTriangles(self: Backend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr: ?dvui.Rect.Physical) void {
+pub fn drawClippedTriangles(self: Backend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr: ?dvui.Rect.Physical) GenericError!void {
     return self.impl.drawClippedTriangles(texture, vtx, idx, clipr);
 }
 
 /// Create a `dvui.Texture` from the given `pixels` in RGBA.  The returned
 /// pointer is what will later be passed to `drawClippedTriangles`.
-pub fn textureCreate(self: Backend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) dvui.Texture {
+pub fn textureCreate(self: Backend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) TextureError!dvui.Texture {
     return self.impl.textureCreate(pixels, width, height, interpolation);
 }
 
@@ -78,40 +81,40 @@ pub fn textureDestroy(self: Backend, texture: dvui.Texture) void {
 
 /// Create a `dvui.Texture` that can be rendered to with `renderTarget`.  The
 /// returned pointer is what will later be passed to `drawClippedTriangles`.
-pub fn textureCreateTarget(self: Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) error{ OutOfMemory, TextureCreate }!dvui.TextureTarget {
+pub fn textureCreateTarget(self: Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) TextureError!dvui.TextureTarget {
     return self.impl.textureCreateTarget(width, height, interpolation);
 }
 
 /// Read pixel data (RGBA) from `texture` into `pixels_out`.
-pub fn textureReadTarget(self: Backend, texture: dvui.TextureTarget, pixels_out: [*]u8) error{TextureRead}!void {
+pub fn textureReadTarget(self: Backend, texture: dvui.TextureTarget, pixels_out: [*]u8) TextureError!void {
     return self.impl.textureReadTarget(texture, pixels_out);
 }
 
 /// Convert texture target made with `textureCreateTarget` into return texture
 /// as if made by `textureCreate`.  After this call, texture target will not be
 /// used by dvui.
-pub fn textureFromTarget(self: Backend, texture: dvui.TextureTarget) dvui.Texture {
+pub fn textureFromTarget(self: Backend, texture: dvui.TextureTarget) TextureError!dvui.Texture {
     return self.impl.textureFromTarget(texture);
 }
 
 /// Render future `drawClippedTriangles` to the passed `texture` (or screen
 /// if null).
-pub fn renderTarget(self: Backend, texture: ?dvui.TextureTarget) void {
+pub fn renderTarget(self: Backend, texture: ?dvui.TextureTarget) GenericError!void {
     return self.impl.renderTarget(texture);
 }
 
 /// Get clipboard content (text only)
-pub fn clipboardText(self: Backend) std.mem.Allocator.Error![]const u8 {
+pub fn clipboardText(self: Backend) GenericError![]const u8 {
     return try self.impl.clipboardText();
 }
 
 /// Set clipboard content (text only)
-pub fn clipboardTextSet(self: Backend, text: []const u8) std.mem.Allocator.Error!void {
+pub fn clipboardTextSet(self: Backend, text: []const u8) GenericError!void {
     return self.impl.clipboardTextSet(text);
 }
 
 /// Open URL in system browser
-pub fn openURL(self: Backend, url: []const u8) std.mem.Allocator.Error!void {
+pub fn openURL(self: Backend, url: []const u8) GenericError!void {
     return self.impl.openURL(url);
 }
 
@@ -119,7 +122,7 @@ pub fn openURL(self: Backend, url: []const u8) std.mem.Allocator.Error!void {
 /// thread.  Used to wake up the gui thread.  It only has effect if you
 /// are using `dvui.Window.waitTime` or some other method of waiting until
 /// a new event comes in.
-pub fn refresh(self: Backend) void {
+pub fn refresh(self: Backend) GenericError!void {
     return self.impl.refresh();
 }
 

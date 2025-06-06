@@ -31,7 +31,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *ColorPickerWidget) std.mem.Allocator.Error!void {
+pub fn install(self: *ColorPickerWidget) dvui.Backend.TextureError!void {
     self.box = try dvui.box(self.src, self.init_opts.dir, self.opts);
 
     if (try valueSaturationBox(@src(), self.init_opts.hsv, .{})) {
@@ -55,7 +55,7 @@ pub const value_saturation_box_defaults = Options{
 };
 
 /// Returns true if the color was changed
-pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts: Options) std.mem.Allocator.Error!bool {
+pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts: Options) !bool {
     const options = value_saturation_box_defaults.override(opts);
 
     var b = try dvui.box(src, .horizontal, options);
@@ -175,7 +175,7 @@ pub var hue_slider_defaults: Options = .{
 /// Returns true if the hue was changed
 ///
 /// `hue` >= 0 and `hue` < 360
-pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue: *f32, opts: Options) std.mem.Allocator.Error!bool {
+pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue: *f32, opts: Options) !bool {
     var fraction = std.math.clamp(hue.* / 360, 0, 1);
     std.debug.assert(fraction >= 0);
     std.debug.assert(fraction <= 1);
@@ -304,7 +304,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
     return ret;
 }
 
-pub fn getHueSelectorTexture(dir: dvui.enums.Direction) std.mem.Allocator.Error!dvui.Texture {
+pub fn getHueSelectorTexture(dir: dvui.enums.Direction) dvui.Backend.TextureError!dvui.Texture {
     const hue_texture_id = dvui.hashIdKey(@enumFromInt(@as(u64, @intFromEnum(dir))), "hue_selector_texture");
     const cw = dvui.currentWindow();
     const res = try cw.texture_cache.getOrPut(cw.gpa, hue_texture_id);
@@ -314,12 +314,12 @@ pub fn getHueSelectorTexture(dir: dvui.enums.Direction) std.mem.Allocator.Error!
             .vertical => .{ 1, hue_selector_colors.len },
         };
         // FIXME: textureCreate should not need a non const pointer to pixels
-        res.value_ptr.texture = dvui.textureCreate(.cast(@constCast(&hue_selector_pixels)), width, height, .linear);
+        res.value_ptr.texture = try dvui.textureCreate(.cast(@constCast(&hue_selector_pixels)), width, height, .linear);
     }
     return res.value_ptr.texture;
 }
 
-pub fn getValueSaturationTexture(hue: f32) std.mem.Allocator.Error!dvui.Texture {
+pub fn getValueSaturationTexture(hue: f32) dvui.Backend.TextureError!dvui.Texture {
     const hue_texture_id = dvui.hashIdKey(@enumFromInt(@as(u64, @intFromFloat(hue * 10000))), "value_saturation_texture");
     const cw = dvui.currentWindow();
     const res = try cw.texture_cache.getOrPut(cw.gpa, hue_texture_id);
@@ -328,7 +328,7 @@ pub fn getValueSaturationTexture(hue: f32) std.mem.Allocator.Error!dvui.Texture 
         comptime std.debug.assert(pixels.len == 2 * 2 * 4);
         // set top right corner to the max value of that hue
         @memcpy(pixels[4..8], &Color.HSV.toColor(.{ .h = hue }).toRGBA());
-        res.value_ptr.texture = dvui.textureCreate(.cast(&pixels), 2, 2, .linear);
+        res.value_ptr.texture = try dvui.textureCreate(.cast(&pixels), 2, 2, .linear);
     }
     return res.value_ptr.texture;
 }

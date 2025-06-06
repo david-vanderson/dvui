@@ -18,12 +18,12 @@ pub fn init(src: std.builtin.SourceLocation, opts: Options) OverlayWidget {
     return OverlayWidget{ .wd = WidgetData.init(src, .{}, defaults.override(opts)) };
 }
 
-pub fn install(self: *OverlayWidget) std.mem.Allocator.Error!void {
+pub fn install(self: *OverlayWidget) !void {
     dvui.parentSet(self.widget());
     self.wd.register();
 }
 
-pub fn drawBackground(self: *OverlayWidget) std.mem.Allocator.Error!void {
+pub fn drawBackground(self: *OverlayWidget) !void {
     try self.wd.borderAndBackground(.{});
 }
 
