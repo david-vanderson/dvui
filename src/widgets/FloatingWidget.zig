@@ -62,9 +62,13 @@ pub fn install(self: *FloatingWidget) !void {
     dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
     try self.wd.register();
 
-    // clip to just our window (using clipSet since we are not inside our parent)
+    // first break out of whatever clipping we were in
     self.prevClip = dvui.clipGet();
     dvui.clipSet(dvui.windowRectPixels());
+
+    try self.wd.borderAndBackground(.{});
+
+    // clip to just our window (using clipSet since we are not inside our parent)
     _ = dvui.clip(rs.r);
 
     self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });

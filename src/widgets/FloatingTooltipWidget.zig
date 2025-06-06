@@ -174,13 +174,17 @@ pub fn install(self: *FloatingTooltipWidget) !void {
     dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
     try self.wd.register();
 
-    // clip to just our window (using clipSet since we are not inside our parent)
+    // first clip to the whole window to break out of whatever clipping we
+    // might have been in (example: might be nested inside another tooltip)
     self.prevClip = dvui.clipGet();
     dvui.clipSet(dvui.windowRectPixels());
-    _ = dvui.clip(rs.r);
 
+    // scaler is what is drawing our background/border/box_shadow
     self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, self.options.override(.{ .expand = .both }));
     try self.scaler.install();
+
+    // clip to just our window (using clipSet since we are not inside our parent)
+    _ = dvui.clip(rs.r);
 }
 
 pub fn widget(self: *FloatingTooltipWidget) Widget {
