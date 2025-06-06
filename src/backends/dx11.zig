@@ -939,14 +939,13 @@ pub fn pixelSize(self: Context) dvui.Size.Physical {
 }
 
 pub fn windowSize(self: Context) dvui.Size.Natural {
-    var rect: win32.RECT = undefined;
-    if (0 == win32.GetWindowRect(hwndFromContext(self), &rect)) win32.panicWin32(
-        "GetWindowRect",
-        win32.GetLastError(),
-    );
+    const size = self.pixelSize();
+    // apply dpi scaling manually as there is no convenient api to get the window
+    // size of the client size. `win32.GetWindowRect` includes window decorations
+    const dpi = win32.dpiFromHwnd(hwndFromContext(self));
     return .{
-        .w = @floatFromInt(rect.right - rect.left),
-        .h = @floatFromInt(rect.bottom - rect.top),
+        .w = size.w / win32.scaleFromDpi(f32, dpi),
+        .h = size.h / win32.scaleFromDpi(f32, dpi),
     };
 }
 
