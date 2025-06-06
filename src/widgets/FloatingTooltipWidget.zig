@@ -34,6 +34,8 @@ pub const Position = enum {
     vertical,
     /// Starts where mouse is but stays there
     sticky,
+    /// Use Options.rect as natural coords
+    absolute,
 };
 
 pub const InitOptions = struct {
@@ -89,6 +91,9 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Op
     // normal layout
     self.wd = WidgetData.init(src, .{ .subwindow = true }, (Options{ .name = "FloatingTooltip" }).override(.{ .rect = self.options.rect orelse .{} }));
 
+    // if a rect got passed, we don't want to also pass it to scaler
+    self.options.rect = null;
+
     self.init_options = init_opts;
     self.showing = dvui.dataGet(null, self.wd.id, "_showing", bool) orelse false;
 
@@ -135,6 +140,7 @@ pub fn shown(self: *FloatingTooltipWidget) !bool {
                     self.wd.rect = .cast(dvui.placeOnScreen(dvui.windowRect(), .{}, .none, r));
                 }
             },
+            .absolute => {},
         }
         //std.debug.print("rect {}\n", .{self.wd.rect});
 
