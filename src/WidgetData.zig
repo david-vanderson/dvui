@@ -170,7 +170,7 @@ pub fn visible(self: *const WidgetData) bool {
     return !dvui.clipGet().intersect(self.borderRectScale().r).empty();
 }
 
-pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?Color = null }) std.mem.Allocator.Error!void {
+pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?Color = null }) dvui.Backend.GenericError!void {
     if (!self.visible()) {
         return;
     }
@@ -215,7 +215,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
     }
 }
 
-pub fn focusBorder(self: *const WidgetData) std.mem.Allocator.Error!void {
+pub fn focusBorder(self: *const WidgetData) dvui.Backend.GenericError!void {
     if (self.visible()) {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;

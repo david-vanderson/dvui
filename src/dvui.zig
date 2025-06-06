@@ -259,7 +259,7 @@ pub const Alignment = struct {
     }
 
     /// Add spacer with margin.x so they all end at the same edge.
-    pub fn spacer(self: *Alignment, src: std.builtin.SourceLocation, id_extra: usize) std.mem.Allocator.Error!void {
+    pub fn spacer(self: *Alignment, src: std.builtin.SourceLocation, id_extra: usize) !void {
         const uniqueId = dvui.parentGet().extendId(src, id_extra);
         var wd = try dvui.spacer(src, .{}, .{ .margin = self.margin(uniqueId), .id_extra = id_extra });
         self.record(uniqueId, &wd);
@@ -602,7 +602,7 @@ pub const FontCacheEntry = struct {
 
     /// This needs to be called before rendering of glyphs as the uv coordinates
     /// of the glyphs will not be correct if the atlas needs to be generated.
-    pub fn getTextureAtlas(fce: *FontCacheEntry) std.mem.Allocator.Error!Texture {
+    pub fn getTextureAtlas(fce: *FontCacheEntry) Backend.TextureError!Texture {
         if (fce.texture_atlas_cache) |tex| return tex;
 
         // number of extra pixels to add on each side of each glyph
@@ -725,7 +725,7 @@ pub const FontCacheEntry = struct {
             }
         }
 
-        fce.texture_atlas_cache = textureCreate(.cast(pixels), @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
+        fce.texture_atlas_cache = try textureCreate(.cast(pixels), @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
         return fce.texture_atlas_cache.?;
     }
 
@@ -1067,7 +1067,7 @@ pub const IconRenderOptions = struct {
 /// Render `tvg_bytes` at `height` into a `Texture`.  Name is for debugging.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, icon_opts: IconRenderOptions) (std.mem.Allocator.Error || TvgError)!TextureCacheEntry {
+pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, icon_opts: IconRenderOptions) (Backend.TextureError || TvgError)!TextureCacheEntry {
     var cw = currentWindow();
     const icon_hash = TextureCacheEntry.hash_icon(tvg_bytes, height, icon_opts);
 
@@ -1128,7 +1128,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, icon_op
 
     const pixels = dvui.RGBAPixelsPMA.cast(img.pixels);
 
-    const texture = textureCreate(pixels, @intCast(img.width), @intCast(img.height), .linear);
+    const texture = try textureCreate(pixels, @intCast(img.width), @intCast(img.height), .linear);
 
     //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{ name, height, render.width, render.height });
 
@@ -1455,7 +1455,7 @@ pub const Path = struct {
     /// Fill path (must be convex) with `color` (or `Theme.color_fill`).  See `Rect.fill`.
     ///
     /// Only valid between `Window.begin`and `Window.end`.
-    pub fn fillConvex(path: Path, opts: FillConvexOptions) std.mem.Allocator.Error!void {
+    pub fn fillConvex(path: Path, opts: FillConvexOptions) Backend.GenericError!void {
         if (path.points.len < 3) {
             return;
         }
@@ -1615,7 +1615,7 @@ pub const Path = struct {
     /// Stroke path as a series of line segments.  See `Rect.stroke`.
     ///
     /// Only valid between `Window.begin`and `Window.end`.
-    pub fn stroke(path: Path, opts: StrokeOptions) std.mem.Allocator.Error!void {
+    pub fn stroke(path: Path, opts: StrokeOptions) Backend.GenericError!void {
         if (path.points.len == 0) {
             return;
         }
@@ -2031,7 +2031,7 @@ pub const Triangles = struct {
     }
 };
 
-pub fn renderTriangles(triangles: Triangles, tex: ?Texture) std.mem.Allocator.Error!void {
+pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError!void {
     if (triangles.vertexes.len == 0) {
         return;
     }
@@ -2060,7 +2060,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) std.mem.Allocator.Er
         }
     }
 
-    cw.backend.drawClippedTriangles(tex, triangles.vertexes, triangles.indices, clipr);
+    try cw.backend.drawClippedTriangles(tex, triangles.vertexes, triangles.indices, clipr);
 }
 
 /// Called by floating widgets to participate in subwindow stacking - the order
@@ -2435,7 +2435,7 @@ pub fn refresh(win: ?*Window, src: std.builtin.SourceLocation, id: ?WidgetId) vo
 /// Get the textual content of the system clipboard.  Caller must copy.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn clipboardText() std.mem.Allocator.Error![]const u8 {
+pub fn clipboardText() Backend.GenericError![]const u8 {
     const cw = currentWindow();
     return cw.backend.clipboardText();
 }
@@ -2443,7 +2443,7 @@ pub fn clipboardText() std.mem.Allocator.Error![]const u8 {
 /// Set the textual content of the system clipboard.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn clipboardTextSet(text: []const u8) std.mem.Allocator.Error!void {
+pub fn clipboardTextSet(text: []const u8) Backend.GenericError!void {
     const cw = currentWindow();
     try cw.backend.clipboardTextSet(text);
 }
@@ -2451,7 +2451,7 @@ pub fn clipboardTextSet(text: []const u8) std.mem.Allocator.Error!void {
 /// Ask the system to open the given url.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn openURL(url: []const u8) std.mem.Allocator.Error!void {
+pub fn openURL(url: []const u8) Backend.GenericError!void {
     const cw = currentWindow();
     try cw.backend.openURL(url);
 }
@@ -3300,14 +3300,14 @@ pub fn wantTextInput(r: Rect.Natural) void {
     cw.text_input_rect = r;
 }
 
-pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*FloatingMenuWidget {
+pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) !*FloatingMenuWidget {
     var ret = try currentWindow().arena().create(FloatingMenuWidget);
     ret.* = FloatingMenuWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
 }
 
-pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*FloatingWindowWidget {
+pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) !*FloatingWindowWidget {
     var ret = try currentWindow().arena().create(FloatingWindowWidget);
     ret.* = FloatingWindowWidget.init(src, floating_opts, opts);
     try ret.install();
@@ -4008,7 +4008,7 @@ pub fn toastsShow(floating_window_data: ?*WidgetData) !void {
     }
 }
 
-pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*AnimateWidget {
+pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) !*AnimateWidget {
     var ret = try currentWindow().arena().create(AnimateWidget);
     ret.* = AnimateWidget.init(src, init_opts, opts);
     try ret.install();
@@ -4232,7 +4232,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
 /// than init_opts.collapsed_size space.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*PanedWidget {
+pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: Options) !*PanedWidget {
     var ret = try currentWindow().arena().create(PanedWidget);
     ret.* = PanedWidget.init(src, init_opts, opts);
     try ret.install();
@@ -4270,7 +4270,7 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
 /// directly inside Context.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*ContextWidget {
+pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: Options) !*ContextWidget {
     var ret = try currentWindow().arena().create(ContextWidget);
     ret.* = ContextWidget.init(src, init_opts, opts);
     try ret.install();
@@ -4294,7 +4294,7 @@ pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget
 /// not have a parent widget.  See makeLabels() in src/Examples.zig
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocator.Error!*VirtualParentWidget {
+pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) !*VirtualParentWidget {
     var ret = try currentWindow().arena().create(VirtualParentWidget);
     ret.* = VirtualParentWidget.init(src, opts);
     try ret.install();
@@ -4307,7 +4307,7 @@ pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) std.mem.All
 /// See `box`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn overlay(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocator.Error!*OverlayWidget {
+pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
     var ret = try currentWindow().arena().create(OverlayWidget);
     ret.* = OverlayWidget.init(src, opts);
     try ret.install();
@@ -4330,7 +4330,7 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocator
 /// See `boxEqual` and `flexbox`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) std.mem.Allocator.Error!*BoxWidget {
+pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
     var ret = try currentWindow().arena().create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, false, opts);
     try ret.install();
@@ -4343,7 +4343,7 @@ pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options)
 /// See `box` and `flexbox`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) std.mem.Allocator.Error!*BoxWidget {
+pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
     var ret = try currentWindow().arena().create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, true, opts);
     try ret.install();
@@ -4356,7 +4356,7 @@ pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Opt
 /// See `box` and `boxEqual`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*FlexBoxWidget {
+pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) !*FlexBoxWidget {
     var ret = try currentWindow().arena().create(FlexBoxWidget);
     ret.* = FlexBoxWidget.init(src, init_opts, opts);
     try ret.install();
@@ -4364,7 +4364,7 @@ pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOpt
     return ret;
 }
 
-pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*CacheWidget {
+pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) !*CacheWidget {
     var ret = try currentWindow().arena().create(CacheWidget);
     ret.* = CacheWidget.init(src, init_opts, opts);
     if (init_opts.invalidate) {
@@ -4374,7 +4374,7 @@ pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions
     return ret;
 }
 
-pub fn reorder(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocator.Error!*ReorderWidget {
+pub fn reorder(src: std.builtin.SourceLocation, opts: Options) !*ReorderWidget {
     var ret = try currentWindow().arena().create(ReorderWidget);
     ret.* = ReorderWidget.init(src, opts);
     try ret.install();
@@ -4382,14 +4382,14 @@ pub fn reorder(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocator
     return ret;
 }
 
-pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) std.mem.Allocator.Error!*ScrollAreaWidget {
+pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) !*ScrollAreaWidget {
     var ret = try currentWindow().arena().create(ScrollAreaWidget);
     ret.* = ScrollAreaWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
 }
 
-pub fn grid(src: std.builtin.SourceLocation, init_opts: GridWidget.InitOpts, opts: Options) std.mem.Allocator.Error!*GridWidget {
+pub fn grid(src: std.builtin.SourceLocation, init_opts: GridWidget.InitOpts, opts: Options) !*GridWidget {
     const ret = try currentWindow().arena().create(GridWidget);
     ret.* = GridWidget.init(src, init_opts, opts);
     try ret.install();
@@ -4740,7 +4740,7 @@ pub fn columnLayoutProportional(ratio_widths: []const f32, col_widths: []f32, co
     }
 }
 
-pub fn separator(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocator.Error!WidgetData {
+pub fn separator(src: std.builtin.SourceLocation, opts: Options) !WidgetData {
     const defaults: Options = .{
         .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
@@ -4756,7 +4756,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocat
     return wd;
 }
 
-pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) std.mem.Allocator.Error!WidgetData {
+pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) !WidgetData {
     if (opts.min_size_content != null) {
         log.debug("spacer options had min_size but is being overwritten\n", .{});
     }
@@ -4769,7 +4769,7 @@ pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) std.me
     return wd;
 }
 
-pub fn spinner(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocator.Error!void {
+pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
     var defaults: Options = .{
         .name = "Spinner",
         .min_size_content = .{ .w = 50, .h = 50 },
@@ -4818,7 +4818,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) std.mem.Allocator
     try path.build().stroke(.{ .thickness = 3.0 * rs.s, .color = options.color(.text) });
 }
 
-pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*ScaleWidget {
+pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) !*ScaleWidget {
     var ret = try currentWindow().arena().create(ScaleWidget);
     ret.* = ScaleWidget.init(src, init_opts, opts);
     try ret.install();
@@ -4826,7 +4826,7 @@ pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions
     return ret;
 }
 
-pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) std.mem.Allocator.Error!*MenuWidget {
+pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*MenuWidget {
     var ret = try currentWindow().arena().create(MenuWidget);
     ret.* = MenuWidget.init(src, .{ .dir = dir }, opts);
     try ret.install();
@@ -4877,7 +4877,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
     return ret;
 }
 
-pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitOptions, opts: Options) std.mem.Allocator.Error!*MenuItemWidget {
+pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitOptions, opts: Options) !*MenuItemWidget {
     var ret = try currentWindow().arena().create(MenuItemWidget);
     ret.* = MenuItemWidget.init(src, init_opts, opts);
     try ret.install();
@@ -5049,7 +5049,7 @@ pub const ImageInitOptions = struct {
 /// Show raster image.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts: Options) std.mem.Allocator.Error!WidgetData {
+pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts: Options) !WidgetData {
     const options = (Options{ .name = init_opts.name }).override(opts);
 
     var size = Size{};
@@ -5255,7 +5255,7 @@ pub var slider_defaults: Options = .{
 };
 
 // returns true if fraction (0-1) was changed
-pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *f32, opts: Options) std.mem.Allocator.Error!bool {
+pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *f32, opts: Options) !bool {
     std.debug.assert(fraction.* >= 0);
     std.debug.assert(fraction.* <= 1);
 
@@ -5824,7 +5824,7 @@ pub const Progress_InitOptions = struct {
     percent: f32,
 };
 
-pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions, opts: Options) std.mem.Allocator.Error!void {
+pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions, opts: Options) !void {
     const options = progress_defaults.override(opts);
 
     var b = try box(src, init_opts.dir, options);
@@ -5894,7 +5894,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     return ret;
 }
 
-pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) std.mem.Allocator.Error!void {
+pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
     const cornerRad = opts.corner_radiusGet().scale(rs.s, Rect.Physical);
     try rs.r.fill(cornerRad, .{ .color = opts.color(.border) });
 
@@ -5980,7 +5980,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     return ret;
 }
 
-pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) std.mem.Allocator.Error!void {
+pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
     const cornerRad = Rect.Physical.all(1000);
     const r = rs.r;
     try r.fill(cornerRad, .{ .color = opts.color(.border) });
@@ -6387,7 +6387,7 @@ pub const renderTextOptions = struct {
 };
 
 // only renders a single line of text
-pub fn renderText(opts: renderTextOptions) std.mem.Allocator.Error!void {
+pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     if (opts.rs.s == 0) return;
     if (opts.text.len == 0) return;
     if (clipGet().intersect(opts.rs.r).empty()) return;
@@ -6422,7 +6422,14 @@ pub fn renderText(opts: renderTextOptions) std.mem.Allocator.Error!void {
     }
 
     // Generate new texture atlas if needed to update glyph uv coords
-    const texture_atlas = try fce.getTextureAtlas();
+    const texture_atlas = fce.getTextureAtlas() catch |err| switch (err) {
+        error.OutOfMemory => |e| return e,
+        else => {
+            log.err("Could not get texture atlas for font {s}, text area marked in magenta, to display '{s}'", .{ opts.font.name, opts.text });
+            try opts.rs.r.fill(.{}, .{ .color = .magenta });
+            return;
+        },
+    };
 
     // Over allocate the internal buffers assuming each byte is a character
     var builder = try Triangles.Builder.init(cw.arena(), 4 * utf8_text.len, 6 * utf8_text.len);
@@ -6608,7 +6615,7 @@ pub const RGBAPixelsPMA = struct {
 /// Remember to destroy the texture at some point, see `textureDestroyLater`.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn textureCreate(pixels: RGBAPixelsPMA, width: u32, height: u32, interpolation: enums.TextureInterpolation) Texture {
+pub fn textureCreate(pixels: RGBAPixelsPMA, width: u32, height: u32, interpolation: enums.TextureInterpolation) Backend.TextureError!Texture {
     if (pixels.pma.len != width * height * 4) {
         log.err("Texture was created with an incorrect amount of pixels, expected {d} but got {d} (w: {d}, h: {d})", .{ pixels.pma.len, width * height * 4, width, height });
     }
@@ -6643,7 +6650,7 @@ pub fn textureReadTarget(arena: std.mem.Allocator, texture: TextureTarget) !RGBA
 /// Convert a target texture to a normal texture.  target is destroyed.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn textureFromTarget(target: TextureTarget) Texture {
+pub fn textureFromTarget(target: TextureTarget) Backend.TextureError!Texture {
     return currentWindow().backend.textureFromTarget(target);
 }
 
@@ -6676,11 +6683,11 @@ pub const RenderTarget = struct {
 /// `Picture`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn renderTarget(args: RenderTarget) RenderTarget {
+pub fn renderTarget(args: RenderTarget) Backend.GenericError!RenderTarget {
     var cw = currentWindow();
     const ret = cw.render_target;
+    try cw.backend.renderTarget(args.texture);
     cw.render_target = args;
-    cw.backend.renderTarget(args.texture);
     return ret;
 }
 
@@ -6693,7 +6700,7 @@ pub const RenderTextureOptions = struct {
     debug: bool = false,
 };
 
-pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) std.mem.Allocator.Error!void {
+pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Backend.GenericError!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
@@ -6729,7 +6736,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) st
     try renderTriangles(triangles, tex);
 }
 
-pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions, icon_opts: IconRenderOptions) std.mem.Allocator.Error!void {
+pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions, icon_opts: IconRenderOptions) Backend.GenericError!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
@@ -6742,7 +6749,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     try renderTexture(tce.texture, rs, opts);
 }
 
-pub fn imageTexture(name: []const u8, image_bytes: []const u8) (std.mem.Allocator.Error || StbImageError)!TextureCacheEntry {
+pub fn imageTexture(name: []const u8, image_bytes: []const u8) (Backend.TextureError || StbImageError)!TextureCacheEntry {
     var cw = currentWindow();
     const hash = TextureCacheEntry.hash(image_bytes, 0);
 
@@ -6763,7 +6770,7 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) (std.mem.Allocato
     pixels.ptr = data;
     pixels.len = @intCast(w * h * 4);
 
-    const texture = textureCreate(.fromRGBA(pixels), @intCast(w), @intCast(h), .linear);
+    const texture = try textureCreate(.fromRGBA(pixels), @intCast(w), @intCast(h), .linear);
 
     //std.debug.print("created image texture \"{s}\" size {d}x{d}\n", .{ name, w, h });
     //const usizeh: usize = @intCast(h);
@@ -6786,7 +6793,7 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) (std.mem.Allocato
     return entry;
 }
 
-pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions) std.mem.Allocator.Error!void {
+pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions) Backend.GenericError!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
@@ -6824,30 +6831,35 @@ pub const Picture = struct {
         ret.r.h = @round(y_end - y_start);
 
         ret.texture = dvui.textureCreateTarget(@intFromFloat(ret.r.w), @intFromFloat(ret.r.h), .linear) catch return null;
-        ret.target = dvui.renderTarget(.{ .texture = ret.texture, .offset = ret.r.topLeft() });
+        ret.target = dvui.renderTarget(.{ .texture = ret.texture, .offset = ret.r.topLeft() }) catch {
+            // There is no destroy for targets so this will do
+            if (dvui.textureFromTarget(ret.texture) catch null) |tex| dvui.textureDestroyLater(tex);
+            return null;
+        };
 
         return ret;
     }
 
     /// Stop recording.
-    pub fn stop(self: *Picture) void {
-        _ = dvui.renderTarget(self.target);
+    pub fn stop(self: *Picture) Backend.GenericError!void {
+        _ = try dvui.renderTarget(self.target);
     }
 
     /// Encode texture as png.  Call after `stop` before `deinit`.
-    pub fn png(self: *Picture, arena: std.mem.Allocator) ![]u8 {
-        const pma_pixels = try dvui.textureReadTarget(arena, self.texture);
+    pub fn png(self: *Picture, allocator: std.mem.Allocator) Backend.TextureError![]u8 {
+        const pma_pixels = try dvui.textureReadTarget(allocator, self.texture);
         const pixels = pma_pixels.toRGBA();
-        defer arena.free(pixels);
+        defer allocator.free(pixels);
 
-        return try dvui.pngEncode(arena, pixels, self.texture.width, self.texture.height, .{});
+        return try dvui.pngEncode(allocator, pixels, self.texture.width, self.texture.height, .{});
     }
 
     /// Draw recorded texture and destroy it.
     pub fn deinit(self: *Picture) void {
-        const texture = dvui.textureFromTarget(self.texture); // destroys self.texture
-        dvui.renderTexture(texture, .{ .r = self.r }, .{}) catch {};
+        // Ignore errors as drawing is not critical to Pictures function
+        const texture = dvui.textureFromTarget(self.texture) catch return; // destroys self.texture
         dvui.textureDestroyLater(texture);
+        dvui.renderTexture(texture, .{ .r = self.r }, .{}) catch {};
     }
 };
 

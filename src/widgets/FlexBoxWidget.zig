@@ -35,14 +35,14 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *FlexBoxWidget) std.mem.Allocator.Error!void {
+pub fn install(self: *FlexBoxWidget) !void {
     self.wd.register();
     dvui.parentSet(self.widget());
 
     self.prevClip = dvui.clip(self.wd.contentRectScale().r);
 }
 
-pub fn drawBackground(self: *FlexBoxWidget) std.mem.Allocator.Error!void {
+pub fn drawBackground(self: *FlexBoxWidget) !void {
     const clip = dvui.clipGet();
     dvui.clipSet(self.prevClip);
     try self.wd.borderAndBackground(.{});

@@ -200,7 +200,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         /// - h is bottom-left corner
         ///
         /// Only valid between dvui.Window.begin() and end().
-        pub fn stroke(self: Rect.Physical, radius: Rect.Physical, opts: dvui.Path.StrokeOptions) std.mem.Allocator.Error!void {
+        pub fn stroke(self: Rect.Physical, radius: Rect.Physical, opts: dvui.Path.StrokeOptions) dvui.Backend.GenericError!void {
             var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
             defer path.deinit();
 
@@ -219,7 +219,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         /// - h is bottom-left corner
         ///
         /// Only valid between dvui.Window.begin() and end().
-        pub fn fill(self: Rect.Physical, radius: Rect.Physical, opts: dvui.Path.FillConvexOptions) std.mem.Allocator.Error!void {
+        pub fn fill(self: Rect.Physical, radius: Rect.Physical, opts: dvui.Path.FillConvexOptions) dvui.Backend.GenericError!void {
             var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
             defer path.deinit();
 

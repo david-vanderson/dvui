@@ -77,7 +77,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *MenuWidget) std.mem.Allocator.Error!void {
+pub fn install(self: *MenuWidget) !void {
     dvui.parentSet(self.widget());
     self.parentMenu = menuSet(self);
     self.wd.register();
