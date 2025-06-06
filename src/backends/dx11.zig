@@ -960,7 +960,7 @@ pub fn hasEvent(_: Context) bool {
 }
 
 pub fn backend(self: Context) dvui.Backend {
-    return dvui.Backend.init(self, @This());
+    return dvui.Backend.init(self);
 }
 
 pub fn nanoTime(self: Context) i128 {

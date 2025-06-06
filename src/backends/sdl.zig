@@ -428,7 +428,7 @@ pub fn renderPresent(self: *SDLBackend) void {
 }
 
 pub fn backend(self: *SDLBackend) dvui.Backend {
-    return dvui.Backend.init(self, @This());
+    return dvui.Backend.init(self);
 }
 
 pub fn nanoTime(self: *SDLBackend) i128 {
