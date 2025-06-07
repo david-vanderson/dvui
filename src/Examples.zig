@@ -1481,7 +1481,7 @@ pub fn styling() !void {
         try dvui.label(@src(), "Box shadows", .{}, .{ .gravity_x = 0.5 });
         _ = try dvui.checkbox(@src(), border, "border", .{});
         _ = try dvui.sliderEntry(@src(), "radius: {d:0.0}", .{ .value = radius, .min = 0, .max = 50, .interval = 1 }, .{ .gravity_x = 0.5 });
-        _ = try dvui.sliderEntry(@src(), "blur: {d:0.0}", .{ .value = blur, .min = 0, .max = 50, .interval = 0.1 }, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "blur: {d:0.1}", .{ .value = blur, .min = 0, .max = 50, .interval = 0.1 }, .{ .gravity_x = 0.5 });
         _ = try dvui.sliderEntry(@src(), "shrink: {d:0.0}", .{ .value = shrink, .min = -10, .max = 50, .interval = 1 }, .{ .gravity_x = 0.5 });
         _ = try dvui.sliderEntry(@src(), "x: {d:0.0}", .{ .value = &offset.x, .min = -20, .max = 20, .interval = 1 }, .{ .gravity_x = 0.5 });
         _ = try dvui.sliderEntry(@src(), "y: {d:0.0}", .{ .value = &offset.y, .min = -20, .max = 20, .interval = 1 }, .{ .gravity_x = 0.5 });
