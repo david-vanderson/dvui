@@ -6,9 +6,12 @@ const ColorOrName = Options.ColorOrName;
 const Rect = dvui.Rect;
 const Size = dvui.Size;
 const Point = dvui.Point;
+const Direction = dvui.enums.Direction;
+const Cursor = dvui.enums.Cursor;
 const MaxSize = Options.MaxSize;
 const ScrollInfo = dvui.ScrollInfo;
 const WidgetData = dvui.WidgetData;
+const Event = dvui.Event;
 const BoxWidget = dvui.BoxWidget;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
 const ScrollBarWidget = dvui.ScrollBarWidget;
@@ -418,3 +421,162 @@ pub const VirtualScroller = struct {
         return @min(last_row_in_viewport + 1, self.total_rows);
     }
 };
+
+/// Provides a draggable separator between columns
+/// size must be a pointer into the col_widths slice
+/// passed to the GridWidget init_option.
+pub const HeaderResizeWidget = struct {
+    pub const InitOptions = struct {
+        // Input and output width (.vertical) or height (.horizontal)
+        size: *f32,
+        // clicking on these extra pixels before/after (.vertical)
+        // or above/below the handle (.horizontal) also count
+        // as clicking on the handle.
+        grab_tolerance: f32 = 5,
+        // Will not resize to less than this value
+        min_size: ?f32 = null,
+        // Will not resize to more than this value
+        max_size: ?f32 = null,
+
+        pub const fixed: ?InitOptions = null;
+    };
+
+    const defaults: Options = .{
+        .name = "GridHeaderResize",
+        .background = true, // TODO: remove this when border and background are no longer coupled
+        .color_fill = .{ .name = .border },
+        .min_size_content = .{ .w = 1, .h = 1 },
+    };
+
+    wd: WidgetData = undefined,
+    direction: Direction = undefined,
+    init_opts: InitOptions = undefined,
+    // When user drags less than min_size or more than max_size
+    // this offset is used to make them return the mouse back
+    // to the min/max size before resizing can start again.
+    offset: Point = .{},
+
+    pub fn init(src: std.builtin.SourceLocation, dir: Direction, init_options: InitOptions, opts: Options) HeaderResizeWidget {
+        var self = HeaderResizeWidget{};
+
+        var widget_opts = HeaderResizeWidget.defaults.override(opts);
+        widget_opts.expand = switch (dir) {
+            .horizontal => .horizontal,
+            .vertical => .vertical,
+        };
+        self.direction = dir;
+        self.init_opts = init_options;
+        self.wd = WidgetData.init(src, .{}, widget_opts);
+
+        if (dvui.dataGet(null, self.wd.id, "_offset", Point)) |offset| {
+            self.offset = offset;
+        }
+
+        return self;
+    }
+
+    pub fn install(self: *HeaderResizeWidget) !void {
+        try self.wd.register();
+        try self.wd.borderAndBackground(.{});
+        self.wd.minSizeSetAndRefresh();
+        self.wd.minSizeReportToParent();
+    }
+
+    pub fn matchEvent(self: *HeaderResizeWidget, e: *Event) bool {
+        var rs = self.wd.rectScale();
+
+        // Clicking near the handle counts as clicking on the handle.
+        const grab_extra = self.init_opts.grab_tolerance * rs.s;
+        switch (self.direction) {
+            .vertical => {
+                rs.r.x -= grab_extra;
+                rs.r.w += grab_extra;
+            },
+            .horizontal => {
+                rs.r.y -= grab_extra;
+                rs.r.h += grab_extra;
+            },
+        }
+        return dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r });
+    }
+
+    pub fn processEvents(self: *HeaderResizeWidget) void {
+        const evts = dvui.events();
+        for (evts) |*e| {
+            if (!self.matchEvent(e))
+                continue;
+
+            self.processEvent(e, false);
+        }
+    }
+
+    pub fn data(self: *HeaderResizeWidget) *WidgetData {
+        return &self.wd;
+    }
+
+    pub fn processEvent(self: *HeaderResizeWidget, e: *Event, bubbling: bool) void {
+        _ = bubbling;
+        if (e.evt == .mouse) {
+            const rs = self.wd.rectScale();
+            const cursor: Cursor = switch (self.direction) {
+                .vertical => .arrow_w_e,
+                .horizontal => .arrow_n_s,
+            };
+
+            if (true) {
+                if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
+                    e.handle(@src(), self.data());
+                    // capture and start drag
+                    dvui.captureMouse(self.data());
+                    dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = cursor });
+                    self.offset = .{};
+                } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
+                    e.handle(@src(), self.data());
+                    // stop possible drag and capture
+                    dvui.captureMouse(null);
+                    dvui.dragEnd();
+                    self.offset = .{};
+                } else if (e.evt.mouse.action == .motion and dvui.captured(self.wd.id)) {
+                    e.handle(@src(), self.data());
+                    // move if dragging
+                    if (dvui.dragging(e.evt.mouse.p)) |dps| {
+                        dvui.refresh(null, @src(), self.wd.id);
+                        switch (self.direction) {
+                            .vertical => {
+                                const unclamped_width = self.init_opts.size.* + dps.x / rs.s + self.offset.x;
+                                self.init_opts.size.* = std.math.clamp(
+                                    unclamped_width,
+                                    self.init_opts.min_size orelse 1,
+                                    self.init_opts.max_size orelse dvui.max_float_safe,
+                                );
+                                self.offset.x = unclamped_width - self.init_opts.size.*;
+                            },
+                            .horizontal => {
+                                const unclamped_height = self.init_opts.size.* + dps.y / rs.s + self.offset.y;
+                                self.init_opts.size.* = std.math.clamp(
+                                    unclamped_height,
+                                    self.init_opts.min_size orelse 1,
+                                    self.init_opts.max_size orelse dvui.max_float_safe,
+                                );
+                                self.offset.y = unclamped_height - self.init_opts.size.*;
+                            },
+                        }
+                    }
+                } else if (e.evt.mouse.action == .position) {
+                    dvui.cursorSet(cursor);
+                }
+            }
+        }
+
+        if (e.bubbleable()) {
+            self.wd.parent.processEvent(e, true);
+        }
+    }
+
+    pub fn deinit(self: *HeaderResizeWidget) void {
+        dvui.dataSet(null, self.wd.id, "_offset", self.offset);
+    }
+};
+test {
+    @import("std").testing.refAllDecls(@This());
+}
