@@ -34,6 +34,8 @@ pub const Position = enum {
     vertical,
     /// Starts where mouse is but stays there
     sticky,
+    /// Use Options.rect as natural coords
+    absolute,
 };
 
 pub const InitOptions = struct {
@@ -89,6 +91,9 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Op
     // normal layout
     self.wd = WidgetData.init(src, .{ .subwindow = true }, (Options{ .name = "FloatingTooltip" }).override(.{ .rect = self.options.rect orelse .{} }));
 
+    // if a rect got passed, we don't want to also pass it to scaler
+    self.options.rect = null;
+
     self.init_options = init_opts;
     self.showing = dvui.dataGet(null, self.wd.id, "_showing", bool) orelse false;
 
@@ -135,6 +140,7 @@ pub fn shown(self: *FloatingTooltipWidget) !bool {
                     self.wd.rect = .cast(dvui.placeOnScreen(dvui.windowRect(), .{}, .none, r));
                 }
             },
+            .absolute => {},
         }
         //std.debug.print("rect {}\n", .{self.wd.rect});
 
@@ -174,13 +180,17 @@ pub fn install(self: *FloatingTooltipWidget) !void {
     dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
     try self.wd.register();
 
-    // clip to just our window (using clipSet since we are not inside our parent)
+    // first clip to the whole window to break out of whatever clipping we
+    // might have been in (example: might be nested inside another tooltip)
     self.prevClip = dvui.clipGet();
     dvui.clipSet(dvui.windowRectPixels());
-    _ = dvui.clip(rs.r);
 
+    // scaler is what is drawing our background/border/box_shadow
     self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, self.options.override(.{ .expand = .both }));
     try self.scaler.install();
+
+    // clip to just our window (using clipSet since we are not inside our parent)
+    _ = dvui.clip(rs.r);
 }
 
 pub fn widget(self: *FloatingTooltipWidget) Widget {

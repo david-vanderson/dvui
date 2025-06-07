@@ -81,6 +81,7 @@ auto_pos: bool = false,
 auto_size: bool = false,
 auto_size_refresh_prev_value: ?u8 = null,
 drag_part: ?DragPart = null,
+drag_area: Rect.Physical = undefined,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingWindowWidget {
     var self = FloatingWindowWidget{};
@@ -226,6 +227,8 @@ pub fn install(self: *FloatingWindowWidget) !void {
         }
     }
 
+    self.drag_area = self.wd.rectScale().r;
+
     dvui.parentSet(self.widget());
     self.prev_windowInfo = dvui.subwindowCurrentSet(self.wd.id, .cast(self.wd.rect));
 
@@ -357,25 +360,27 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
             }
 
             // If we are already dragging, do it here so it happens before drawing
-            if (me.action == .motion and dvui.captured(self.wd.id)) {
-                if (dvui.dragging(me.p)) |dps| {
-                    const p = me.p.plus(dvui.dragOffset()).toNatural();
-                    self.dragAdjust(p, dps.toNatural(), self.drag_part.?);
-                    // don't need refresh() because we're before drawing
+            if (dvui.captured(self.wd.id)) {
+                if (me.action == .motion) {
+                    if (dvui.dragging(me.p)) |dps| {
+                        const p = me.p.plus(dvui.dragOffset()).toNatural();
+                        self.dragAdjust(p, dps.toNatural(), self.drag_part.?);
+                        // don't need refresh() because we're before drawing
+                        e.handle(@src(), self.data());
+                        continue;
+                    }
+                }
+
+                if (me.action == .release and me.button.pointer()) {
+                    dvui.captureMouse(null); // stop drag and capture
+                    dvui.dragEnd();
                     e.handle(@src(), self.data());
                     continue;
                 }
             }
 
-            if (me.action == .release and me.button.pointer() and dvui.captured(self.wd.id)) {
-                dvui.captureMouse(null); // stop drag and capture
-                dvui.dragEnd();
-                e.handle(@src(), self.data());
-                continue;
-            }
-
-            if (me.action == .press and me.button.pointer()) {
-                if (dragPart(me, rs) == .bottom_right) {
+            if (dragPart(me, rs) == .bottom_right) {
+                if (me.action == .press and me.button.pointer()) {
                     // capture and start drag
                     dvui.captureMouse(self.data());
                     self.drag_part = .bottom_right;
@@ -383,10 +388,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
                     e.handle(@src(), self.data());
                     continue;
                 }
-            }
-
-            if (me.action == .position) {
-                if (dragPart(me, rs) == .bottom_right) {
+                if (me.action == .position) {
                     e.handle(@src(), self.data()); // don't want any widgets under this to see a hover
                     dvui.cursorSet(.arrow_nw_se);
                     continue;
@@ -394,6 +396,14 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
             }
         }
     }
+}
+
+/// Set the phyiscal pixel rect (inside FloatingWidowWidget) where a click-drag
+/// will move the FloatingWindowWidget.
+///
+/// Usually set by return from `windowHeader`.
+pub fn dragAreaSet(self: *FloatingWindowWidget, rect: Rect.Physical) void {
+    self.drag_area = rect;
 }
 
 pub fn processEventsAfter(self: *FloatingWindowWidget) void {
@@ -418,10 +428,14 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                     },
                     .press => {
                         if (me.button.pointer()) {
+                            const dp = dragPart(me, rs);
+                            if (dp == .middle and !self.drag_area.contains(me.p)) {
+                                continue;
+                            }
                             e.handle(@src(), self.data());
                             // capture and start drag
                             dvui.captureMouse(self.data());
-                            self.drag_part = dragPart(me, rs);
+                            self.drag_part = dp;
                             dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = self.drag_part.?.cursor() });
                         }
                     },
@@ -445,7 +459,11 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                         }
                     },
                     .position => {
-                        dvui.cursorSet(dragPart(me, rs).cursor());
+                        const dp = dragPart(me, rs);
+                        if (dp == .middle and !self.drag_area.contains(me.p)) {
+                            continue;
+                        }
+                        dvui.cursorSet(dp.cursor());
                     },
                     else => {},
                 }

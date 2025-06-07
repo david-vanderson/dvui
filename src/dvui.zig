@@ -208,17 +208,28 @@ pub const TagData = struct {
 
 pub fn tag(name: []const u8, data: TagData) void {
     var cw = currentWindow();
-    const existing_tag = cw.tags.fetchPut(cw.gpa, name, data) catch |err| blk: {
-        dvui.log.err("tag() \"{s}\" got {!} for id {x}\n", .{ name, err, data.id });
-        break :blk null;
-    };
 
-    if (existing_tag) |kv| {
-        if (kv.used) {
+    if (cw.tags.map.getPtr(name)) |old_data| {
+        if (old_data.used) {
             dvui.log.err("duplicate tag name \"{s}\" id {x} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ name, data.id });
             cw.debug_widget_id = data.id;
         }
+
+        old_data.*.inner = data;
+        old_data.used = true;
+        return;
     }
+
+    //std.debug.print("tag dupe {s}\n", .{name});
+    const name_copy = cw.gpa.dupe(u8, name) catch |err| {
+        dvui.log.err("tag() got {!} for name {s}\n", .{ err, name });
+        return;
+    };
+
+    cw.tags.put(cw.gpa, name_copy, data) catch |err| {
+        dvui.log.err("tag() \"{s}\" got {!} for id {x}\n", .{ name, err, data.id });
+        cw.gpa.free(name_copy);
+    };
 }
 
 pub fn tagGet(name: []const u8) ?TagData {
@@ -3162,7 +3173,7 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
     return ret;
 }
 
-pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !void {
+pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !Rect.Physical {
     var over = try dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
 
     try dvui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
@@ -3198,9 +3209,14 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
         }
     }
 
+    var ret = over.data().rectScale().r;
+
     over.deinit();
 
-    try dvui.separator(@src(), .{ .expand = .horizontal });
+    const swd = try dvui.separator(@src(), .{ .expand = .horizontal });
+    ret.h += swd.rectScale().r.h;
+
+    return ret;
 }
 
 pub const DialogDisplayFn = *const fn (WidgetId) anyerror!void;
@@ -3346,7 +3362,7 @@ pub fn dialogDisplay(id: WidgetId) !void {
     defer win.deinit();
 
     var header_openflag = true;
-    try dvui.windowHeader(title, "", &header_openflag);
+    win.dragAreaSet(try dvui.windowHeader(title, "", &header_openflag));
     if (!header_openflag) {
         dvui.dialogRemove(id);
         if (callafter) |ca| {
@@ -3355,33 +3371,16 @@ pub fn dialogDisplay(id: WidgetId) !void {
         return;
     }
 
-    const internal = struct {
-        fn button(src: std.builtin.SourceLocation, label_str: []const u8, focus_on_first_frame: bool, init_opts: ButtonWidget.InitOptions, opts: Options) !bool {
-            var bw = ButtonWidget.init(src, init_opts, opts);
-            if (focus_on_first_frame and dvui.firstFrame(bw.data().id)) {
-                dvui.focusWidget(bw.data().id, null, null);
-            }
-            try bw.install();
-            bw.processEvents();
-            try bw.drawBackground();
-
-            const click = bw.clicked();
-            var options = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
-            if (bw.pressed()) options = options.override(.{ .color_text = .{ .color = opts.color(.text_press) } });
-            try labelNoFmt(@src(), label_str, options);
-            try bw.drawFocus();
-            bw.deinit();
-            return click;
-        }
-    };
-
     {
         // Add the buttons at the bottom first, so that they are guaranteed to be shown
         var hbox = try dvui.box(@src(), .horizontal, .{ .gravity_x = 0.5, .gravity_y = 1.0 });
         defer hbox.deinit();
 
+        const tag_ok = if (default == null) null else try std.fmt.allocPrint(dvui.currentWindow().arena(), "{x}_ok", .{hbox.data().id});
+        const tag_cancel = if (default == null) null else try std.fmt.allocPrint(dvui.currentWindow().arena(), "{x}_cancel", .{hbox.data().id});
+
         if (cancel_label) |cl| {
-            if (try internal.button(@src(), cl, default != null and default.? == .cancel, .{}, .{ .tab_index = 2 })) {
+            if (try dvui.button(@src(), cl, .{}, .{ .tab_index = 2, .tag = tag_cancel })) {
                 dvui.dialogRemove(id);
                 if (callafter) |ca| {
                     try ca(id, .cancel);
@@ -3390,12 +3389,24 @@ pub fn dialogDisplay(id: WidgetId) !void {
             }
         }
 
-        if (try internal.button(@src(), ok_label, default != null and default.? == .ok, .{}, .{ .tab_index = 1 })) {
+        if (try dvui.button(@src(), ok_label, .{}, .{ .tab_index = 1, .tag = tag_ok })) {
             dvui.dialogRemove(id);
             if (callafter) |ca| {
                 try ca(id, .ok);
             }
             return;
+        }
+
+        if (default != null and dvui.firstFrame(hbox.data().id)) {
+            switch (default.?) {
+                .ok => if (dvui.tagGet(tag_ok.?)) |t| {
+                    dvui.focusWidget(t.id, null, null);
+                },
+                .cancel => if (dvui.tagGet(tag_cancel.?)) |t| {
+                    dvui.focusWidget(t.id, null, null);
+                },
+                else => {},
+            }
         }
     }
 
@@ -4256,7 +4267,7 @@ pub fn gridHeading(src: std.builtin.SourceLocation, g: *GridWidget, heading: []c
     defer cell.deinit();
 
     try labelNoFmt(@src(), heading, label_options);
-    try separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
+    _ = try separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
 }
 
 /// Create a heading and allow the column to be sorted.
@@ -4284,7 +4295,7 @@ pub fn gridHeadingSortable(
     var cell = try g.headerCell(src, cell_opts);
     defer cell.deinit();
 
-    try separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
+    _ = try separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
 
     const sort_changed = switch (g.colSortOrder()) {
         .unsorted => try button(@src(), heading, .{ .draw_focus = false }, heading_opts),
@@ -4434,7 +4445,7 @@ pub fn gridHeadingCheckbox(src: std.builtin.SourceLocation, g: *GridWidget, sele
     var clicked = false;
     var selected = false;
     {
-        try dvui.separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
+        _ = try dvui.separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
 
         var hbox = try dvui.box(@src(), .horizontal, header_options);
         defer hbox.deinit();
@@ -4559,7 +4570,7 @@ pub fn columnLayoutProportional(ratio_widths: []const f32, col_widths: []f32, co
     }
 }
 
-pub fn separator(src: std.builtin.SourceLocation, opts: Options) !void {
+pub fn separator(src: std.builtin.SourceLocation, opts: Options) !WidgetData {
     const defaults: Options = .{
         .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
@@ -4572,6 +4583,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) !void {
     try wd.borderAndBackground(.{});
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
+    return wd;
 }
 
 pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) !WidgetData {

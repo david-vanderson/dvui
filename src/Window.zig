@@ -370,7 +370,16 @@ pub fn deinit(self: *Self) void {
 
     self.subwindows.deinit();
     self.min_sizes.deinit(self.gpa);
-    self.tags.deinit(self.gpa);
+
+    {
+        var it = self.tags.map.keyIterator();
+        while (it.next()) |name| {
+            //std.debug.print("tag free {s}\n", .{name.*});
+            self.gpa.free(name.*);
+        }
+        self.tags.deinit(self.gpa);
+    }
+
     self.animations.deinit(self.gpa);
     self.tab_index_prev.deinit();
     self.tab_index.deinit();
@@ -558,16 +567,30 @@ pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) !bool {
     return ret;
 }
 
-/// Add a mouse motion event.  This is only for a mouse - for touch motion
-/// use addEventTouchMotion().
+/// Add a mouse motion event that the mouse is now at natural pixel pt.  This
+/// is only for a mouse - for touch motion use addEventTouchMotion().
+///
+/// See `addEventMouseMotionPhysical` if you have physical pixel coords.
 ///
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
 pub fn addEventMouseMotion(self: *Self, pt: Point.Natural) !bool {
+    const newpt = pt.scale(self.natural_scale / self.content_scale, Point.Physical);
+    return try self.addEventMouseMotionPhysical(newpt);
+}
+
+/// Add a mouse motion event that the mouse is now at physical pixel pt.  This
+/// is only for a mouse - for touch motion use addEventTouchMotion().
+///
+/// See `addEventMouseMotion` if you have natural pixel coords.
+///
+/// This can be called outside begin/end.  You should add all the events
+/// for a frame either before begin() or just after begin() and before
+/// calling normal dvui widgets.  end() clears the event list.
+pub fn addEventMouseMotionPhysical(self: *Self, newpt: Point.Physical) !bool {
     self.positionMouseEventRemove();
 
-    const newpt = pt.scale(self.natural_scale / self.content_scale, Point.Physical);
     //log.debug("mouse motion {d} {d} -> {d} {d}", .{ x, y, newpt.x, newpt.y });
     const dp = newpt.diff(self.mouse_pt);
     self.mouse_pt = newpt;
@@ -968,8 +991,10 @@ pub fn begin(
     {
         const deadTags = try self.tags.reset(larena);
         defer larena.free(deadTags);
-        for (deadTags) |id| {
-            _ = self.tags.remove(id);
+        for (deadTags) |name| {
+            _ = self.tags.remove(name);
+            //std.debug.print("tag dead free {s}\n", .{name});
+            self.gpa.free(name);
         }
         //std.debug.print("tags {d}\n", .{self.tags.count()});
     }
@@ -1422,7 +1447,7 @@ fn debugWindowShow(self: *Self) !void {
     var float = try dvui.floatingWindow(@src(), .{ .open_flag = &self.debug_window_show }, .{ .min_size_content = .{ .w = 300, .h = 600 } });
     defer float.deinit();
 
-    try dvui.windowHeader("DVUI Debug", "", &self.debug_window_show);
+    float.dragAreaSet(try dvui.windowHeader("DVUI Debug", "", &self.debug_window_show));
 
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});

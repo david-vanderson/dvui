@@ -128,7 +128,7 @@ fn dvuiStuff() !void {
     var float = try dvui.floatingWindow(@src(), .{}, .{ .max_size_content = .{ .w = 400, .h = 400 } });
     defer float.deinit();
 
-    try dvui.windowHeader("Floating Window", "", null);
+    float.dragAreaSet(try dvui.windowHeader("Floating Window", "", null));
 
     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
     defer scroll.deinit();

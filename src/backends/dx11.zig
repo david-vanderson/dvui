@@ -939,14 +939,13 @@ pub fn pixelSize(self: Context) dvui.Size.Physical {
 }
 
 pub fn windowSize(self: Context) dvui.Size.Natural {
-    var rect: win32.RECT = undefined;
-    if (0 == win32.GetWindowRect(hwndFromContext(self), &rect)) win32.panicWin32(
-        "GetWindowRect",
-        win32.GetLastError(),
-    );
+    const size = self.pixelSize();
+    // apply dpi scaling manually as there is no convenient api to get the window
+    // size of the client size. `win32.GetWindowRect` includes window decorations
+    const dpi = win32.dpiFromHwnd(hwndFromContext(self));
     return .{
-        .w = @floatFromInt(rect.right - rect.left),
-        .h = @floatFromInt(rect.bottom - rect.top),
+        .w = size.w / win32.scaleFromDpi(f32, dpi),
+        .h = size.h / win32.scaleFromDpi(f32, dpi),
     };
 }
 
@@ -1036,8 +1035,7 @@ pub fn refresh(self: Context) void {
     _ = self;
 }
 
-fn addEvent(self: Context, window: *dvui.Window, key_event: KeyEvent) !bool {
-    _ = self;
+fn addEvent(_: Context, window: *dvui.Window, key_event: KeyEvent) !bool {
     const event = key_event.target;
     const action = key_event.action;
     switch (event) {
@@ -1052,7 +1050,7 @@ fn addEvent(self: Context, window: *dvui.Window, key_event: KeyEvent) !bool {
             return window.addEventMouseButton(ev, if (action == .up) .release else .press);
         },
         .mouse_event => |ev| {
-            return window.addEventMouseMotion(.{ .x = @floatFromInt(ev.x), .y = @floatFromInt(ev.y) });
+            return window.addEventMouseMotionPhysical(.{ .x = @floatFromInt(ev.x), .y = @floatFromInt(ev.y) });
         },
         .wheel_event => |ev| {
             return window.addEventMouseWheel(@floatFromInt(ev), .vertical);
@@ -1616,7 +1614,11 @@ pub fn main() !void {
 
     const win = b.getWindow();
 
-    if (app.initFn) |initFn| initFn(win);
+    if (app.initFn) |initFn| {
+        try win.begin(win.frame_time_ns);
+        try initFn(win);
+        _ = try win.end(.{});
+    }
     defer if (app.deinitFn) |deinitFn| deinitFn();
 
     while (true) switch (serviceMessageQueue()) {
