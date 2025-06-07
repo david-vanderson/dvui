@@ -387,7 +387,11 @@ pub const VirtualScroller = struct {
     pub fn init(grid: *GridWidget, init_opts: VirtualScroller.InitOpts) VirtualScroller {
         const si = init_opts.scroll_info;
         const total_rows_f: f32 = @floatFromInt(init_opts.total_rows);
-        si.virtual_size.h = @max(total_rows_f * grid.row_height + scrollbar_padding_defaults.h, si.viewport.h);
+        // Adding some tiny padding helps make sure the last row is displayed with very large virtual scroll sizes.
+        // The actual padding required would depend on the row height, but this should help for normal text height grids.
+        const end_padding = total_rows_f / 100_000;
+        si.virtual_size.h = @max(total_rows_f * grid.row_height + scrollbar_padding_defaults.h + end_padding, si.viewport.h);
+
         const first_row: f32 = @floatFromInt(_startRow(grid, si, init_opts.total_rows));
         grid.offsetRowsBy(first_row * grid.row_height);
         return .{
