@@ -233,11 +233,11 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
                     log.info("guessing initial backend scale {d} from dpi {d}", .{ back.initial_scale, dpi });
                 }
             }
-
-            if (back.initial_scale != 1.0) {
-                _ = c.SDL_SetWindowSize(window, @as(c_int, @intFromFloat(back.initial_scale * options.size.w)), @as(c_int, @intFromFloat(back.initial_scale * options.size.h)));
-            }
         }
+    }
+
+    if (back.initial_scale != 1.0) {
+        _ = c.SDL_SetWindowSize(window, @as(c_int, @intFromFloat(back.initial_scale * options.size.w)), @as(c_int, @intFromFloat(back.initial_scale * options.size.h)));
     }
 
     if (options.icon) |bytes| {
