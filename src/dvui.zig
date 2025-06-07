@@ -5054,7 +5054,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
 
     // process events (mouse and keyboard)
     bw.processEvents();
-    var options = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
+    var options = opts.strip().override(.{ .gravity_y = 0.5 });
     if (bw.pressed()) options = options.override(.{ .color_text = .{ .color = opts.color(.text_press) } });
 
     // draw background/border
@@ -5063,7 +5063,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
         var hbox = try box(src, .horizontal, .{ .expand = .horizontal });
         defer hbox.deinit();
 
-        try icon(@src(), label_str, tvg_bytes, .{}, opts.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }));
+        try icon(@src(), label_str, tvg_bytes, .{}, opts.strip().override(.{ .gravity_x = 1.0 }));
         try labelNoFmt(@src(), label_str, options.override(.{ .expand = .horizontal }));
     }
 
