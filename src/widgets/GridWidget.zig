@@ -372,11 +372,12 @@ pub fn colSortOrder(self: *const GridWidget) SortDirection {
 /// Provides vitrual scrolling for a grid so that only the visibile rows are rendered.
 /// GridVirtualScroller requires that a scroll_info has been passed as an init_option
 /// to the GridBodyWidget.
-/// Note: Requires all rows to be the same height for the entire dataset. It is recommended
-/// to supply row heights to each cell when using the virtual scroller.
+/// Note: Requires that all rows are the same height for the entire grid, including rows
+/// not yet displayed. It is highly recommended to supply row heights to each cell
+/// when using the virtual scroller.
 pub const VirtualScroller = struct {
     pub const InitOpts = struct {
-        // Total rows in the columns displayed
+        // Total number of rows in the underlying dataset
         total_rows: usize,
         scroll_info: *ScrollInfo,
     };
@@ -412,6 +413,7 @@ pub const VirtualScroller = struct {
     }
 
     /// Return the end row to render (exclusive)
+    /// Can be used as slice[startRow()..endRow()]
     pub fn endRow(self: *const VirtualScroller) usize {
         const last_row_in_viewport: usize =
             if (self.grid.row_height < 1)
@@ -430,7 +432,7 @@ pub const HeaderResizeWidget = struct {
         // Input and output width (.vertical) or height (.horizontal)
         size: *f32,
         // clicking on these extra pixels before/after (.vertical)
-        // or above/below the handle (.horizontal) also count
+        // or above/below (.horizontal) the handle also counts
         // as clicking on the handle.
         grab_tolerance: f32 = 5,
         // Will not resize to less than this value
