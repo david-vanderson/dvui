@@ -79,15 +79,15 @@ pub fn main() !void {
         const end_micros = try win.end(.{});
 
         // cursor management
-        backend.setCursor(win.cursorRequested());
-        backend.textInputRect(win.textInputRequested());
+        try backend.setCursor(win.cursorRequested());
+        try backend.textInputRect(win.textInputRequested());
 
         // render frame to OS
-        backend.renderPresent();
+        try backend.renderPresent();
 
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros, null);
-        interrupted = backend.waitEventTimeout(wait_event_micros);
+        interrupted = try backend.waitEventTimeout(wait_event_micros);
 
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
         if (show_dialog_outside_frame) {

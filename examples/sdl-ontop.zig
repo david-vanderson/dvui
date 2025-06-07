@@ -96,15 +96,15 @@ pub fn main() !void {
         // cursor management
         if (win.cursorRequestedFloating()) |cursor| {
             // cursor is over floating window, dvui sets it
-            backend.setCursor(cursor);
+            try backend.setCursor(cursor);
         } else {
             // cursor should be handled by application
-            backend.setCursor(.bad);
+            try backend.setCursor(.bad);
         }
-        backend.textInputRect(win.textInputRequested());
+        try backend.textInputRect(win.textInputRequested());
 
         // render frame to OS
-        backend.renderPresent();
+        try backend.renderPresent();
     }
 
     c.SDL_DestroyRenderer(renderer);
