@@ -538,46 +538,41 @@ pub fn init() !WebBackend {
     return ret;
 }
 
-pub fn deinit(self: *WebBackend) void {
-    _ = self;
-}
+pub fn deinit(_: *WebBackend) void {}
 
 pub fn backend(self: *WebBackend) dvui.Backend {
     return dvui.Backend.init(self);
 }
 
-pub fn nanoTime(self: *WebBackend) i128 {
-    _ = self;
+pub fn nanoTime(_: *WebBackend) i128 {
     return @as(i128, @intFromFloat(wasm.wasm_now())) * 1_000_000;
 }
 
-pub fn sleep(self: *WebBackend, ns: u64) void {
-    _ = self;
+pub fn sleep(_: *WebBackend, ns: u64) void {
     wasm.wasm_sleep(@intCast(@divTrunc(ns, 1_000_000)));
 }
 
-pub fn begin(self: *WebBackend, arena_in: std.mem.Allocator) void {
-    _ = self;
+pub fn begin(_: *WebBackend, arena_in: std.mem.Allocator) !void {
     arena = arena_in;
 }
 
-pub fn end(_: *WebBackend) void {
+pub fn end(_: *WebBackend) !void {
     have_event = false;
 }
 
-pub fn pixelSize(_: *WebBackend) dvui.Size.Physical {
+pub fn pixelSize(_: *WebBackend) !dvui.Size.Physical {
     return .{ .w = wasm.wasm_pixel_width(), .h = wasm.wasm_pixel_height() };
 }
 
-pub fn windowSize(_: *WebBackend) dvui.Size.Natural {
+pub fn windowSize(_: *WebBackend) !dvui.Size.Natural {
     return .{ .w = wasm.wasm_canvas_width(), .h = wasm.wasm_canvas_height() };
 }
 
-pub fn contentScale(_: *WebBackend) f32 {
+pub fn contentScale(_: *WebBackend) !f32 {
     return 1.0;
 }
 
-pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect.Physical) void {
+pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect.Physical) !void {
     var x: i32 = std.math.maxInt(i32);
     var w: i32 = std.math.maxInt(i32);
     var y: i32 = std.math.maxInt(i32);
@@ -622,9 +617,7 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const
     );
 }
 
-pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) dvui.Texture {
-    _ = self;
-
+pub fn textureCreate(_: *WebBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
     const wasm_interp: u8 = switch (interpolation) {
         .nearest => 0,
         .linear => 1,
@@ -634,8 +627,7 @@ pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32, 
     return dvui.Texture{ .ptr = @ptrFromInt(id), .width = width, .height = height };
 }
 
-pub fn textureCreateTarget(self: *WebBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
-    _ = self;
+pub fn textureCreateTarget(_: *WebBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
     const wasm_interp: u8 = switch (interpolation) {
         .nearest => 0,
         .linear => 1,
@@ -645,12 +637,11 @@ pub fn textureCreateTarget(self: *WebBackend, width: u32, height: u32, interpola
     return dvui.TextureTarget{ .ptr = @ptrFromInt(id), .width = width, .height = height };
 }
 
-pub fn textureFromTarget(_: *WebBackend, texture: dvui.TextureTarget) dvui.Texture {
+pub fn textureFromTarget(_: *WebBackend, texture: dvui.TextureTarget) !dvui.Texture {
     return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height };
 }
 
-pub fn renderTarget(self: *WebBackend, texture: ?dvui.TextureTarget) void {
-    _ = self;
+pub fn renderTarget(_: *WebBackend, texture: ?dvui.TextureTarget) !void {
     if (texture) |tex| {
         wasm.wasm_renderTarget(@intCast(@intFromPtr(tex.ptr)));
     } else {
@@ -658,7 +649,7 @@ pub fn renderTarget(self: *WebBackend, texture: ?dvui.TextureTarget) void {
     }
 }
 
-pub fn textureReadTarget(_: *WebBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) error{TextureRead}!void {
+pub fn textureReadTarget(_: *WebBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
     wasm.wasm_textureRead(@intCast(@intFromPtr(texture.ptr)), pixels_out, texture.width, texture.height);
 }
 
@@ -674,8 +665,7 @@ pub fn textInputRect(_: *WebBackend, rect: ?dvui.Rect.Natural) void {
     }
 }
 
-pub fn clipboardText(self: *WebBackend) std.mem.Allocator.Error![]const u8 {
-    _ = self;
+pub fn clipboardText(_: *WebBackend) ![]const u8 {
     // Current strategy is to return nothing:
     // - let the browser continue with the paste operation
     // - puts the text into the hidden_input
@@ -689,24 +679,20 @@ pub fn clipboardText(self: *WebBackend) std.mem.Allocator.Error![]const u8 {
     return "";
 }
 
-pub fn clipboardTextSet(self: *WebBackend, text: []const u8) !void {
-    _ = self;
+pub fn clipboardTextSet(_: *WebBackend, text: []const u8) !void {
     wasm.wasm_clipboardTextSet(text.ptr, text.len);
     return;
 }
 
-pub fn openURL(self: *WebBackend, url: []const u8) !void {
+pub fn openURL(_: *WebBackend, url: []const u8) !void {
     wasm.wasm_open_url(url.ptr, url.len);
-    _ = self;
 }
 
 pub fn downloadData(name: []const u8, data: []const u8) !void {
     wasm.wasm_download_data(name.ptr, name.len, data.ptr, data.len);
 }
 
-pub fn refresh(self: *WebBackend) void {
-    _ = self;
-}
+pub fn refresh(_: *WebBackend) !void {}
 
 pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) void {
     if (cursor != self.cursor_last) {
