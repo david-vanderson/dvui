@@ -4168,6 +4168,7 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
     var ret = try currentWindow().arena().create(OverlayWidget);
     ret.* = OverlayWidget.init(src, opts);
     try ret.install();
+    try ret.drawBackground();
     return ret;
 }
 
