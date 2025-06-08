@@ -2498,6 +2498,7 @@ pub fn focus() !void {
         tl.deinit();
 
         var te = try dvui.textEntry(@src(), .{}, .{});
+        const teId = te.data().id;
 
         // firstFrame must be called before te.deinit()
         if (dvui.firstFrame(te.data().id)) {
@@ -2521,7 +2522,7 @@ pub fn focus() !void {
             }
 
             if (try dvui.button(@src(), "Focus Prev textEntry", .{}, .{})) {
-                dvui.focusWidget(te.data().id, null, null);
+                dvui.focusWidget(teId, null, null);
             }
         }
 
