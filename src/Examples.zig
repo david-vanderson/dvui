@@ -503,6 +503,7 @@ pub fn demo() !void {
         }
 
         try dvui.label(@src(), "{s}", .{demo_active.name()}, .{ .font_style = .title_2, .gravity_y = 0.5 });
+        const header_height = hbox.data().rect.h;
         hbox.deinit();
 
         var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both, .padding = Rect.all(4) });
@@ -525,7 +526,7 @@ pub fn demo() !void {
             .animations => animations(),
             .struct_ui => structUI(),
             .debugging => debuggingErrors(),
-            .grid => grids(scroll.si.viewport.h - hbox.data().rect.h - 10),
+            .grid => grids(scroll.si.viewport.h - header_height - 10),
         };
     }
 
