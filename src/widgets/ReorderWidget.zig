@@ -140,6 +140,7 @@ pub fn deinit(self: *ReorderWidget) void {
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);
+    self.* = undefined;
 }
 
 pub fn dragStart(self: *ReorderWidget, reorder_id: usize, p: dvui.Point.Physical) void {
@@ -371,6 +372,7 @@ pub const Reorderable = struct {
         self.wd.minSizeReportToParent();
 
         dvui.parentReset(self.wd.id, self.wd.parent);
+        self.* = undefined;
     }
 };
 

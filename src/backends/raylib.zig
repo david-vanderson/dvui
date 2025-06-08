@@ -160,6 +160,7 @@ pub fn deinit(self: *RaylibBackend) void {
     if (self.we_own_window) {
         c.CloseWindow();
     }
+    self.* = undefined;
 }
 
 pub fn backend(self: *RaylibBackend) dvui.Backend {

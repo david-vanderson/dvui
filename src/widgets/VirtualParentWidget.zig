@@ -66,6 +66,7 @@ pub fn deinit(self: *VirtualParentWidget) void {
         dvui.dataSet(null, self.wd.id, "_rect", u);
     }
     dvui.parentReset(self.wd.id, self.wd.parent);
+    self.* = undefined;
 }
 
 test {

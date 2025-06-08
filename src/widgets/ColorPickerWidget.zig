@@ -45,6 +45,7 @@ pub fn install(self: *ColorPickerWidget) dvui.Backend.TextureError!void {
 
 pub fn deinit(self: *ColorPickerWidget) void {
     self.box.deinit();
+    self.* = undefined;
 }
 
 pub const value_saturation_box_defaults = Options{

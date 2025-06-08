@@ -156,6 +156,7 @@ pub fn deinit(self: *AnimateWidget) void {
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);
+    self.* = undefined;
 }
 
 test {

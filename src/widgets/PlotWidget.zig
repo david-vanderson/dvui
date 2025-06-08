@@ -68,6 +68,7 @@ pub const Line = struct {
 
     pub fn deinit(self: *Line) void {
         self.path.deinit();
+        self.* = undefined;
     }
 };
 
@@ -299,6 +300,7 @@ pub fn deinit(self: *PlotWidget) void {
     }
 
     self.box.deinit();
+    self.* = undefined;
 }
 
 const Options = dvui.Options;

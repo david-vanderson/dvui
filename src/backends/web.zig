@@ -538,7 +538,9 @@ pub fn init() !WebBackend {
     return ret;
 }
 
-pub fn deinit(_: *WebBackend) void {}
+pub fn deinit(self: *WebBackend) void {
+    self.* = undefined;
+}
 
 pub fn backend(self: *WebBackend) dvui.Backend {
     return dvui.Backend.init(self);

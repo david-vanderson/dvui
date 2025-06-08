@@ -119,6 +119,7 @@ const AnimatingDialog = struct {
         }
 
         try win.install();
+        defer win.deinit();
         win.processEventsBefore();
         try win.drawBackground();
 
@@ -144,8 +145,6 @@ const AnimatingDialog = struct {
         if (winHeight_changed) {
             win.data().rect.h = winHeight;
         }
-
-        win.deinit();
 
         if (closing) {
             dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 1.0, .end_val = 0.0, .end_time = duration, .easing = easing });
@@ -2499,6 +2498,7 @@ pub fn focus() !void {
         tl.deinit();
 
         var te = try dvui.textEntry(@src(), .{}, .{});
+        const teId = te.data().id;
 
         // firstFrame must be called before te.deinit()
         if (dvui.firstFrame(te.data().id)) {
@@ -2522,7 +2522,7 @@ pub fn focus() !void {
             }
 
             if (try dvui.button(@src(), "Focus Prev textEntry", .{}, .{})) {
-                dvui.focusWidget(te.data().id, null, null);
+                dvui.focusWidget(teId, null, null);
             }
         }
 
@@ -3560,7 +3560,7 @@ pub fn debuggingErrors() !void {
             try dvui.label(@src(), " - fix by passing .id_extra = <loop index>", .{}, .{ .id_extra = i });
         }
 
-        if (try dvui.labelClick(@src(), "See https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids", .{}, .{ .gravity_y = 0.5, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
+        if (try dvui.labelClick(@src(), "See https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids", .{}, .{ .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
             try dvui.openURL("https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids");
         }
     }
@@ -4645,6 +4645,7 @@ pub const StrokeTest = struct {
         self.wd.minSizeReportToParent();
 
         dvui.parentReset(self.wd.id, self.wd.parent);
+        self.* = undefined;
     }
 };
 
