@@ -227,6 +227,7 @@ pub fn deinit(self: *MenuWidget) void {
     self.wd.minSizeReportToParent();
     _ = menuSet(self.parentMenu);
     dvui.parentReset(self.wd.id, self.wd.parent);
+    self.* = undefined;
 }
 
 test {

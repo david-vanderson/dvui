@@ -173,6 +173,7 @@ pub fn deinit(self: *ButtonWidget) void {
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);
+    self.* = undefined;
 }
 
 test {

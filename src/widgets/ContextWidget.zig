@@ -136,6 +136,7 @@ pub fn deinit(self: *ContextWidget) void {
     //self.wd.minSizeReportToParent();
 
     dvui.parentReset(self.wd.id, self.wd.parent);
+    self.* = undefined;
 }
 
 test {

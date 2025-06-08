@@ -580,6 +580,7 @@ pub fn deinit(self: *FloatingWindowWidget) void {
     _ = dvui.subwindowCurrentSet(self.prev_windowInfo.id, self.prev_windowInfo.rect);
     dvui.clipSet(self.prevClip);
     _ = dvui.renderingSet(self.prev_rendering);
+    self.* = undefined;
 }
 
 test {

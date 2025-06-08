@@ -157,6 +157,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) !*ButtonWidget {
 pub fn deinit(self: *TabsWidget) void {
     self.box.deinit();
     self.scroll.deinit();
+    self.* = undefined;
 }
 
 const Options = dvui.Options;

@@ -71,6 +71,7 @@ pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
         gpa.free(self.font_title_3.name);
         gpa.free(self.font_title_4.name);
     }
+    self.* = undefined;
 }
 
 pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
