@@ -372,11 +372,12 @@ pub fn colSortOrder(self: *const GridWidget) SortDirection {
 /// Provides vitrual scrolling for a grid so that only the visibile rows are rendered.
 /// GridVirtualScroller requires that a scroll_info has been passed as an init_option
 /// to the GridBodyWidget.
-/// Note: Requires all rows to be the same height for the entire dataset. It is recommended
-/// to supply row heights to each cell when using the virtual scroller.
+/// Note: Requires that all rows are the same height for the entire grid, including rows
+/// not yet displayed. It is highly recommended to supply row heights to each cell
+/// when using the virtual scroller.
 pub const VirtualScroller = struct {
     pub const InitOpts = struct {
-        // Total rows in the columns displayed
+        // Total number of rows in the underlying dataset
         total_rows: usize,
         scroll_info: *ScrollInfo,
     };
@@ -386,7 +387,11 @@ pub const VirtualScroller = struct {
     pub fn init(grid: *GridWidget, init_opts: VirtualScroller.InitOpts) VirtualScroller {
         const si = init_opts.scroll_info;
         const total_rows_f: f32 = @floatFromInt(init_opts.total_rows);
-        si.virtual_size.h = @max(total_rows_f * grid.row_height + scrollbar_padding_defaults.h, si.viewport.h);
+        // Adding some tiny padding helps make sure the last row is displayed with very large virtual scroll sizes.
+        // The actual padding required would depend on the row height, but this should help for normal text height grids.
+        const end_padding = total_rows_f / 100_000;
+        si.virtual_size.h = @max(total_rows_f * grid.row_height + scrollbar_padding_defaults.h + end_padding, si.viewport.h);
+
         const first_row: f32 = @floatFromInt(_startRow(grid, si, init_opts.total_rows));
         grid.offsetRowsBy(first_row * grid.row_height);
         return .{
@@ -412,6 +417,7 @@ pub const VirtualScroller = struct {
     }
 
     /// Return the end row to render (exclusive)
+    /// Can be used as slice[startRow()..endRow()]
     pub fn endRow(self: *const VirtualScroller) usize {
         const last_row_in_viewport: usize =
             if (self.grid.row_height < 1)
@@ -430,7 +436,7 @@ pub const HeaderResizeWidget = struct {
         // Input and output width (.vertical) or height (.horizontal)
         size: *f32,
         // clicking on these extra pixels before/after (.vertical)
-        // or above/below the handle (.horizontal) also count
+        // or above/below (.horizontal) the handle also counts
         // as clicking on the handle.
         grab_tolerance: f32 = 5,
         // Will not resize to less than this value
@@ -478,8 +484,6 @@ pub const HeaderResizeWidget = struct {
     pub fn install(self: *HeaderResizeWidget) !void {
         try self.wd.register();
         try self.wd.borderAndBackground(.{});
-        self.wd.minSizeSetAndRefresh();
-        self.wd.minSizeReportToParent();
     }
 
     pub fn matchEvent(self: *HeaderResizeWidget, e: *Event) bool {
@@ -523,48 +527,46 @@ pub const HeaderResizeWidget = struct {
                 .horizontal => .arrow_n_s,
             };
 
-            if (true) {
-                if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
-                    e.handle(@src(), self.data());
-                    // capture and start drag
-                    dvui.captureMouse(self.data());
-                    dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = cursor });
-                    self.offset = .{};
-                } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
-                    e.handle(@src(), self.data());
-                    // stop possible drag and capture
-                    dvui.captureMouse(null);
-                    dvui.dragEnd();
-                    self.offset = .{};
-                } else if (e.evt.mouse.action == .motion and dvui.captured(self.wd.id)) {
-                    e.handle(@src(), self.data());
-                    // move if dragging
-                    if (dvui.dragging(e.evt.mouse.p)) |dps| {
-                        dvui.refresh(null, @src(), self.wd.id);
-                        switch (self.direction) {
-                            .vertical => {
-                                const unclamped_width = self.init_opts.size.* + dps.x / rs.s + self.offset.x;
-                                self.init_opts.size.* = std.math.clamp(
-                                    unclamped_width,
-                                    self.init_opts.min_size orelse 1,
-                                    self.init_opts.max_size orelse dvui.max_float_safe,
-                                );
-                                self.offset.x = unclamped_width - self.init_opts.size.*;
-                            },
-                            .horizontal => {
-                                const unclamped_height = self.init_opts.size.* + dps.y / rs.s + self.offset.y;
-                                self.init_opts.size.* = std.math.clamp(
-                                    unclamped_height,
-                                    self.init_opts.min_size orelse 1,
-                                    self.init_opts.max_size orelse dvui.max_float_safe,
-                                );
-                                self.offset.y = unclamped_height - self.init_opts.size.*;
-                            },
-                        }
+            if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
+                e.handle(@src(), self.data());
+                // capture and start drag
+                dvui.captureMouse(self.data());
+                dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = cursor });
+                self.offset = .{};
+            } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
+                e.handle(@src(), self.data());
+                // stop possible drag and capture
+                dvui.captureMouse(null);
+                dvui.dragEnd();
+                self.offset = .{};
+            } else if (e.evt.mouse.action == .motion and dvui.captured(self.wd.id)) {
+                e.handle(@src(), self.data());
+                // move if dragging
+                if (dvui.dragging(e.evt.mouse.p)) |dps| {
+                    dvui.refresh(null, @src(), self.wd.id);
+                    switch (self.direction) {
+                        .vertical => {
+                            const unclamped_width = self.init_opts.size.* + dps.x / rs.s + self.offset.x;
+                            self.init_opts.size.* = std.math.clamp(
+                                unclamped_width,
+                                self.init_opts.min_size orelse 1,
+                                self.init_opts.max_size orelse dvui.max_float_safe,
+                            );
+                            self.offset.x = unclamped_width - self.init_opts.size.*;
+                        },
+                        .horizontal => {
+                            const unclamped_height = self.init_opts.size.* + dps.y / rs.s + self.offset.y;
+                            self.init_opts.size.* = std.math.clamp(
+                                unclamped_height,
+                                self.init_opts.min_size orelse 1,
+                                self.init_opts.max_size orelse dvui.max_float_safe,
+                            );
+                            self.offset.y = unclamped_height - self.init_opts.size.*;
+                        },
                     }
-                } else if (e.evt.mouse.action == .position) {
-                    dvui.cursorSet(cursor);
                 }
+            } else if (e.evt.mouse.action == .position) {
+                dvui.cursorSet(cursor);
             }
         }
 
@@ -575,6 +577,8 @@ pub const HeaderResizeWidget = struct {
 
     pub fn deinit(self: *HeaderResizeWidget) void {
         dvui.dataSet(null, self.wd.id, "_offset", self.offset);
+        self.wd.minSizeSetAndRefresh();
+        self.wd.minSizeReportToParent();
     }
 };
 test {
