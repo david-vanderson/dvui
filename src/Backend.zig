@@ -41,13 +41,13 @@ pub fn end(self: Backend) GenericError!void {
 
 /// Return size of the window in physical pixels.  For a 300x200 retina
 /// window (so actually 600x400), this should return 600x400.
-pub fn pixelSize(self: Backend) GenericError!dvui.Size.Physical {
+pub fn pixelSize(self: Backend) dvui.Size.Physical {
     return self.impl.pixelSize();
 }
 
 /// Return size of the window in logical pixels.  For a 300x200 retina
 /// window (so actually 600x400), this should return 300x200.
-pub fn windowSize(self: Backend) GenericError!dvui.Size.Natural {
+pub fn windowSize(self: Backend) dvui.Size.Natural {
     return self.impl.windowSize();
 }
 
@@ -55,7 +55,7 @@ pub fn windowSize(self: Backend) GenericError!dvui.Size.Natural {
 /// additional display scaling (usually set in their window system's
 /// settings).  Currently only called during `dvui.Window.init`, so currently
 /// this sets the initial content scale.
-pub fn contentScale(self: Backend) GenericError!f32 {
+pub fn contentScale(self: Backend) f32 {
     return self.impl.contentScale();
 }
 
@@ -122,7 +122,7 @@ pub fn openURL(self: Backend, url: []const u8) GenericError!void {
 /// thread.  Used to wake up the gui thread.  It only has effect if you
 /// are using `dvui.Window.waitTime` or some other method of waiting until
 /// a new event comes in.
-pub fn refresh(self: Backend) GenericError!void {
+pub fn refresh(self: Backend) void {
     return self.impl.refresh();
 }
 

@@ -58,13 +58,13 @@ pub fn end(_: *TestingBackend) !void {}
 
 /// Return size of the window in physical pixels.  For a 300x200 retina
 /// window (so actually 600x400), this should return 600x400.
-pub fn pixelSize(self: *TestingBackend) !dvui.Size.Physical {
+pub fn pixelSize(self: *TestingBackend) dvui.Size.Physical {
     return self.size_pixels;
 }
 
 /// Return size of the window in logical pixels.  For a 300x200 retina
 /// window (so actually 600x400), this should return 300x200.
-pub fn windowSize(self: *TestingBackend) !dvui.Size.Natural {
+pub fn windowSize(self: *TestingBackend) dvui.Size.Natural {
     return self.size;
 }
 
@@ -72,7 +72,7 @@ pub fn windowSize(self: *TestingBackend) !dvui.Size.Natural {
 /// additional display scaling (usually set in their window system's
 /// settings).  Currently only called during Window.init(), so currently
 /// this sets the initial content scale.
-pub fn contentScale(_: *TestingBackend) !f32 {
+pub fn contentScale(_: *TestingBackend) f32 {
     return 1;
 }
 
@@ -145,7 +145,7 @@ pub fn openURL(_: *TestingBackend, _: []const u8) std.mem.Allocator.Error!void {
 /// thread.  Used to wake up the gui thread.  It only has effect if you
 /// are using waitTime() or some other method of waiting until a new
 /// event comes in.
-pub fn refresh(_: *TestingBackend) !void {}
+pub fn refresh(_: *TestingBackend) void {}
 
 pub fn backend(self: *TestingBackend) dvui.Backend {
     return dvui.Backend.init(self);

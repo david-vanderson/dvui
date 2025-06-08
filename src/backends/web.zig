@@ -560,15 +560,15 @@ pub fn end(_: *WebBackend) !void {
     have_event = false;
 }
 
-pub fn pixelSize(_: *WebBackend) !dvui.Size.Physical {
+pub fn pixelSize(_: *WebBackend) dvui.Size.Physical {
     return .{ .w = wasm.wasm_pixel_width(), .h = wasm.wasm_pixel_height() };
 }
 
-pub fn windowSize(_: *WebBackend) !dvui.Size.Natural {
+pub fn windowSize(_: *WebBackend) dvui.Size.Natural {
     return .{ .w = wasm.wasm_canvas_width(), .h = wasm.wasm_canvas_height() };
 }
 
-pub fn contentScale(_: *WebBackend) !f32 {
+pub fn contentScale(_: *WebBackend) f32 {
     return 1.0;
 }
 
@@ -692,7 +692,7 @@ pub fn downloadData(name: []const u8, data: []const u8) !void {
     wasm.wasm_download_data(name.ptr, name.len, data.ptr, data.len);
 }
 
-pub fn refresh(_: *WebBackend) !void {}
+pub fn refresh(_: *WebBackend) void {}
 
 pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) void {
     if (cursor != self.cursor_last) {
