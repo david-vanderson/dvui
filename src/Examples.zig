@@ -3968,8 +3968,8 @@ fn gridStyling() !void {
             var bottom: bool = local.borders.h > 0;
             var left: bool = local.borders.x > 0;
             var right: bool = local.borders.w > 0;
-            var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
-            defer hbox.deinit();
+            var fbox = try dvui.flexbox(@src(), .{ .justify_content = .start }, .{});
+            defer fbox.deinit();
             {
                 var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
                 defer vbox.deinit();
@@ -4278,8 +4278,8 @@ fn gridLayouts() !void {
 
         if (try dvui.expander(@src(), "Layouts", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
             {
-                var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
-                defer hbox.deinit();
+                var fbox = try dvui.flexbox(@src(), .{ .justify_content = .start }, .{});
+                defer fbox.deinit();
 
                 if (try dvui.radio(@src(), local.layout_style == .proportional, "Proportional", .{})) {
                     local.layout_style = .proportional;
@@ -4302,8 +4302,9 @@ fn gridLayouts() !void {
                 }
             }
             {
-                var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
-                defer hbox.deinit();
+                var fbox = try dvui.flexbox(@src(), .{ .justify_content = .start }, .{});
+                defer fbox.deinit();
+
                 if (try dvui.checkbox(@src(), &local.h_scroll, "Horizontal scrolling", .{})) {
                     if (local.layout_style == .fit_window) {
                         local.layout_style = .proportional;
