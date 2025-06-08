@@ -127,6 +127,7 @@ pub fn processEvent(self: *ContextWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *ContextWidget) void {
+    defer dvui.widgetFree(self);
     if (self.focused) {
         dvui.dataSet(null, self.wd.id, "_activePt", self.activePt);
     }

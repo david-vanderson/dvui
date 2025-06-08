@@ -329,6 +329,7 @@ pub fn processEvent(self: *PanedWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *PanedWidget) void {
+    defer dvui.widgetFree(self);
     dvui.clipSet(self.prevClip);
     dvui.dataSet(null, self.wd.id, "_collapsing", self.collapsing);
     dvui.dataSet(null, self.wd.id, "_collapsed", self.collapsed_state);

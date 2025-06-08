@@ -222,6 +222,7 @@ pub fn processEvent(self: *FloatingTooltipWidget, e: *Event, bubbling: bool) voi
 }
 
 pub fn deinit(self: *FloatingTooltipWidget) void {
+    defer dvui.widgetFree(self);
     if (!self.installed) {
         return;
     }

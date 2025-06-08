@@ -257,6 +257,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *MenuItemWidget) void {
+    defer dvui.widgetFree(self);
     dvui.dataSet(null, self.wd.id, "_focus_last", self.focused_last_frame);
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();

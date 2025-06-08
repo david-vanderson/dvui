@@ -539,6 +539,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
 }
 
 pub fn deinit(self: *ScrollContainerWidget) void {
+    // defer dvui.widgetFree(self);
     self.processEventsAfter();
 
     dvui.dataSet(null, self.wd.id, "_fv_id", self.first_visible_id);

@@ -56,6 +56,7 @@ pub fn processEvent(self: *OverlayWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *OverlayWidget) void {
+    defer dvui.widgetFree(self);
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);

@@ -159,6 +159,7 @@ pub fn processEvent(self: *CacheWidget, e: *dvui.Event, bubbling: bool) void {
 /// This deinit function returns an error because of the additional
 /// texture handling it requires.
 pub fn deinit(self: *CacheWidget) !void {
+    defer dvui.widgetFree(self);
     const cw = dvui.currentWindow();
     if (self.state == .ok and self.uncached()) {
         if (dvui.currentWindow().extra_frames_needed == 0) {

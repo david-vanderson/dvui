@@ -246,6 +246,7 @@ pub fn processEvent(self: *BoxWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *BoxWidget) void {
+    defer dvui.widgetFree(self);
     var ms: Size = undefined;
     var extra_space = false;
     if (self.init_opts.dir == .horizontal) {

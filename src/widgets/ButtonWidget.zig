@@ -170,6 +170,7 @@ pub fn processEvent(self: *ButtonWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *ButtonWidget) void {
+    defer dvui.widgetFree(self);
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);

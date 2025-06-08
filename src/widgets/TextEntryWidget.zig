@@ -872,6 +872,7 @@ pub fn getText(self: *const TextEntryWidget) []u8 {
 }
 
 pub fn deinit(self: *TextEntryWidget) void {
+    defer dvui.widgetFree(self);
     if (self.len == 0 or self.len + realloc_bin_size + @divTrunc(realloc_bin_size, 2) <= self.text.len) {
         // we want to shrink the allocation
         const new_len = if (self.len == 0) 0 else realloc_bin_size * (@divTrunc(self.len, realloc_bin_size) + 1);

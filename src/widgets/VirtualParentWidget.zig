@@ -62,6 +62,7 @@ pub fn processEvent(self: *VirtualParentWidget, e: *Event, bubbling: bool) void 
 }
 
 pub fn deinit(self: *VirtualParentWidget) void {
+    defer dvui.widgetFree(self);
     if (self.child_rect_union) |u| {
         dvui.dataSet(null, self.wd.id, "_rect", u);
     }

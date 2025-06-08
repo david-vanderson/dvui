@@ -44,6 +44,7 @@ pub fn install(self: *ColorPickerWidget) dvui.Backend.TextureError!void {
 }
 
 pub fn deinit(self: *ColorPickerWidget) void {
+    defer dvui.widgetFree(self);
     self.box.deinit();
     self.* = undefined;
 }

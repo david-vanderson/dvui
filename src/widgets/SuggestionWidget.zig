@@ -108,6 +108,7 @@ pub fn addChoice(self: *SuggestionWidget) !*MenuItemWidget {
 }
 
 pub fn deinit(self: *SuggestionWidget) void {
+    defer dvui.widgetFree(self);
     if (self.selected_index > (self.drop_mi_index -| 1)) {
         self.selected_index = self.drop_mi_index -| 1;
         dvui.refresh(null, @src(), self.id);
