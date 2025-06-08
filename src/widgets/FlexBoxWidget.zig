@@ -36,7 +36,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *FlexBoxWidget) !void {
-    try self.wd.register();
+    self.wd.register();
     dvui.parentSet(self.widget());
 
     self.prevClip = dvui.clip(self.wd.contentRectScale().r);

@@ -517,7 +517,7 @@ pub fn focusRemainingEventsInternal(self: *Self, event_num: u16, focusWindowId: 
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventKey(self: *Self, event: Event.Key) !bool {
+pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
     if (self.debug_under_mouse and self.debug_under_mouse_esc_needed and event.action == .down and event.code == .escape) {
         // an escape will stop the debug stuff from following the mouse,
         // but need to stop it at the end of the frame when we've gotten
@@ -548,11 +548,11 @@ pub fn addEventKey(self: *Self, event: Event.Key) !bool {
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventText(self: *Self, text: []const u8) !bool {
+pub fn addEventText(self: *Self, text: []const u8) std.mem.Allocator.Error!bool {
     return try self.addEventTextEx(text, false);
 }
 
-pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) !bool {
+pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) std.mem.Allocator.Error!bool {
     self.positionMouseEventRemove();
 
     self.event_num += 1;
@@ -576,7 +576,7 @@ pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) !bool {
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventMouseMotion(self: *Self, pt: Point.Natural) !bool {
+pub fn addEventMouseMotion(self: *Self, pt: Point.Natural) std.mem.Allocator.Error!bool {
     const newpt = pt.scale(self.natural_scale / self.content_scale, Point.Physical);
     return try self.addEventMouseMotionPhysical(newpt);
 }
@@ -589,7 +589,7 @@ pub fn addEventMouseMotion(self: *Self, pt: Point.Natural) !bool {
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventMouseMotionPhysical(self: *Self, newpt: Point.Physical) !bool {
+pub fn addEventMouseMotionPhysical(self: *Self, newpt: Point.Physical) std.mem.Allocator.Error!bool {
     self.positionMouseEventRemove();
 
     //log.debug("mouse motion {d} {d} -> {d} {d}", .{ x, y, newpt.x, newpt.y });
@@ -621,7 +621,7 @@ pub fn addEventMouseMotionPhysical(self: *Self, newpt: Point.Physical) !bool {
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventMouseButton(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Action) !bool {
+pub fn addEventMouseButton(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Action) std.mem.Allocator.Error!bool {
     return addEventPointer(self, b, action, null);
 }
 
@@ -631,7 +631,7 @@ pub fn addEventMouseButton(self: *Self, b: dvui.enums.Button, action: Event.Mous
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Action, xynorm: ?Point) !bool {
+pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Action, xynorm: ?Point) std.mem.Allocator.Error!bool {
     if (self.debug_under_mouse and !self.debug_under_mouse_esc_needed and action == .press and b.pointer()) {
         // a left click or touch will stop the debug stuff from following
         // the mouse, but need to stop it at the end of the frame when
@@ -700,7 +700,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) !bool {
+pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) std.mem.Allocator.Error!bool {
     self.positionMouseEventRemove();
 
     const winId = self.windowFor(self.mouse_pt);
@@ -727,7 +727,7 @@ pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) !b
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, ynorm: f32, dxnorm: f32, dynorm: f32) !bool {
+pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, ynorm: f32, dxnorm: f32, dynorm: f32) std.mem.Allocator.Error!bool {
     self.positionMouseEventRemove();
 
     const newpt = (Point{ .x = xnorm * self.wd.rect.w, .y = ynorm * self.wd.rect.h }).scale(self.natural_scale, Point.Physical);
@@ -915,7 +915,7 @@ pub fn waitTime(self: *Self, end_micros: ?u32, maxFPS: ?f32) u32 {
 pub fn begin(
     self: *Self,
     time_ns: i128,
-) !void {
+) dvui.Backend.GenericError!void {
     const larena = self._arena.allocator();
 
     var micros_since_last: u32 = 1;
@@ -1084,14 +1084,14 @@ pub fn begin(
 
     // Window's wd is kept frame to frame, so manually reset the cache.
     self.wd.rect_scale_cache = null;
-    try self.wd.register();
+    self.wd.register();
 
     self.layout = .{};
 
-    self.backend.begin(larena);
+    try self.backend.begin(larena);
 }
 
-fn positionMouseEventAdd(self: *Self) !void {
+fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
     try self.events.append(self.arena(), .{ .evt = .{ .mouse = .{
         .action = .position,
         .button = .none,
@@ -1319,7 +1319,7 @@ pub fn dataRemove(self: *Self, id: WidgetId, key: []const u8) void {
 ///
 ///  If calling from a non-GUI thread, do any dataSet() calls before unlocking the
 ///  mutex to ensure that data is available before the dialog is displayed.
-pub fn dialogAdd(self: *Self, id: WidgetId, display: dvui.DialogDisplayFn) !*std.Thread.Mutex {
+pub fn dialogAdd(self: *Self, id: WidgetId, display: dvui.DialogDisplayFn) std.mem.Allocator.Error!*std.Thread.Mutex {
     self.dialog_mutex.lock();
 
     for (self.dialogs.items) |*d| {
@@ -1375,7 +1375,7 @@ fn dialogsShow(self: *Self) !void {
     }
 }
 
-pub fn timer(self: *Self, id: WidgetId, micros: i32) !void {
+pub fn timer(self: *Self, id: WidgetId, micros: i32) std.mem.Allocator.Error!void {
     // when start_time is in the future, we won't spam frames, so this will
     // cause a single frame and then expire
     const a = Animation{ .start_time = micros, .end_time = micros };
@@ -1393,7 +1393,7 @@ pub fn timerRemove(self: *Self, id: WidgetId) void {
 /// calling from a non-GUI thread, do any `dvui.dataSet` calls before unlocking
 /// the mutex to ensure that data is available before the dialog is
 /// displayed.
-pub fn toastAdd(self: *Self, id: WidgetId, subwindow_id: ?WidgetId, display: dvui.DialogDisplayFn, timeout: ?i32) !*std.Thread.Mutex {
+pub fn toastAdd(self: *Self, id: WidgetId, subwindow_id: ?WidgetId, display: dvui.DialogDisplayFn, timeout: ?i32) std.mem.Allocator.Error!*std.Thread.Mutex {
     self.dialog_mutex.lock();
 
     for (self.toasts.items) |*t| {
@@ -1582,7 +1582,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     }
 
     // Call this before freeing data so backend can use data allocated during frame.
-    self.backend.end();
+    try self.backend.end();
 
     for (self.datas_trash.items) |sd| {
         sd.free(self.gpa);
@@ -1694,7 +1694,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     return ret;
 }
 
-fn initEvents(self: *Self) !void {
+fn initEvents(self: *Self) std.mem.Allocator.Error!void {
     self.events = .{};
     self.event_num = 0;
 

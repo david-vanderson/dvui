@@ -178,7 +178,7 @@ pub fn install(self: *FloatingTooltipWidget) !void {
 
     try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, self.prev_windowId);
     dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
-    try self.wd.register();
+    self.wd.register();
 
     // first clip to the whole window to break out of whatever clipping we
     // might have been in (example: might be nested inside another tooltip)
