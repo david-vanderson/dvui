@@ -119,6 +119,7 @@ const AnimatingDialog = struct {
         }
 
         try win.install();
+        defer win.deinit();
         win.processEventsBefore();
         try win.drawBackground();
 
@@ -144,8 +145,6 @@ const AnimatingDialog = struct {
         if (winHeight_changed) {
             win.data().rect.h = winHeight;
         }
-
-        win.deinit();
 
         if (closing) {
             dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 1.0, .end_val = 0.0, .end_time = duration, .easing = easing });
