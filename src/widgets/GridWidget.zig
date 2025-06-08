@@ -106,7 +106,7 @@ saved_clip_rect: ?Rect.Physical = null,
 resizing: bool = false,
 rows_y_offset: f32 = 0,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) !GridWidget {
+pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) GridWidget {
     var self = GridWidget{};
     self.init_opts = init_opts;
     const options = defaults.override(opts);
@@ -483,7 +483,7 @@ pub const HeaderResizeWidget = struct {
     }
 
     pub fn install(self: *HeaderResizeWidget) !void {
-        try self.wd.register();
+        self.wd.register();
         try self.wd.borderAndBackground(.{});
     }
 

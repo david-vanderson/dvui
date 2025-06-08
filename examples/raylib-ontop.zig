@@ -104,7 +104,7 @@ fn colorPicker(result: *dvui.Color) !void {
         result.* = RaylibBackend.raylibColorToDvui(c_color);
     }
 
-    const color_hex = try result.toHexString();
+    const color_hex = result.toHexString();
 
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});

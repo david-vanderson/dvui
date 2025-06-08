@@ -35,7 +35,7 @@ pub fn init(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []cons
 }
 
 pub fn install(self: *IconWidget) !void {
-    try self.wd.register();
+    self.wd.register();
     try self.wd.borderAndBackground(.{});
 }
 

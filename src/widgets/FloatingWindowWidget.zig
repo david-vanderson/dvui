@@ -243,7 +243,7 @@ pub fn drawBackground(self: *FloatingWindowWidget) !void {
     const rs = self.wd.rectScale();
     try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent_window) self.prev_windowInfo.id else null);
     dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
-    try self.wd.register();
+    self.wd.register();
 
     if (self.init_options.modal) {
         // paint over everything below

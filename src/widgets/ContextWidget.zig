@@ -45,7 +45,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 
 pub fn install(self: *ContextWidget) !void {
     dvui.parentSet(self.widget());
-    try self.wd.register();
+    self.wd.register();
     try self.wd.borderAndBackground(.{});
 }
 
