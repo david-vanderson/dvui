@@ -79,6 +79,7 @@ pub fn TrackingAutoHashMap(
         /// See `HashMap.deinit`
         pub fn deinit(self: *Self, allocator: Allocator) void {
             self.map.deinit(allocator);
+            self.* = undefined;
         }
 
         /// See `HashMap.count`

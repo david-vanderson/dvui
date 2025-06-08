@@ -199,6 +199,7 @@ pub fn deinit(self: *DropdownWidget) void {
     }
     self.menuItem.deinit();
     self.menu.deinit();
+    self.* = undefined;
 }
 
 const Options = dvui.Options;

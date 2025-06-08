@@ -417,6 +417,7 @@ pub fn deinit(self: *SDLBackend) void {
         c.SDL_DestroyWindow(self.window);
         c.SDL_Quit();
     }
+    self.* = undefined;
 }
 
 pub fn renderPresent(self: *SDLBackend) void {

@@ -107,6 +107,7 @@ pub fn processEvent(self: *LabelWidget, e: *Event, bubbling: bool) void {
 pub fn deinit(self: *LabelWidget) void {
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
+    self.* = undefined;
 }
 
 test {

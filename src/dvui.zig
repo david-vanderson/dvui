@@ -288,6 +288,7 @@ pub const Alignment = struct {
                 refresh(null, @src(), self.id);
             }
         }
+        self.* = undefined;
     }
 };
 
@@ -459,6 +460,7 @@ pub const FontCacheEntry = struct {
             _ = c.FT_Done_Face(self.face);
         }
         win.backend.textureDestroy(self.texture_atlas);
+        self.* = undefined;
     }
 
     pub const OpenFlags = packed struct(c_int) {
@@ -4015,6 +4017,7 @@ pub const ComboBox = struct {
     pub fn deinit(self: *ComboBox) void {
         self.sug.deinit();
         self.te.deinit();
+        self.* = undefined;
     }
 };
 
@@ -6795,6 +6798,7 @@ pub const Picture = struct {
         const texture = dvui.textureFromTarget(self.texture); // destroys self.texture
         dvui.renderTexture(texture, .{ .r = self.r }, .{}) catch {};
         dvui.textureDestroyLater(texture);
+        self.* = undefined;
     }
 };
 

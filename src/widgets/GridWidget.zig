@@ -176,6 +176,7 @@ pub fn deinit(self: *GridWidget) void {
     self.scroll.deinit();
 
     self.vbox.deinit();
+    self.* = undefined;
 }
 
 pub fn data(self: *GridWidget) *WidgetData {
@@ -579,6 +580,7 @@ pub const HeaderResizeWidget = struct {
         dvui.dataSet(null, self.wd.id, "_offset", self.offset);
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
+        self.* = undefined;
     }
 };
 test {

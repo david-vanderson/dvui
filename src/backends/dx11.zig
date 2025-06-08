@@ -52,6 +52,7 @@ pub const WindowState = struct {
         _ = state.device_context.IUnknown.Release();
         _ = state.swap_chain.IUnknown.Release();
         state.dx_options.deinit();
+        state.* = undefined;
     }
 };
 

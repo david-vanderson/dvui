@@ -164,6 +164,7 @@ pub fn deinit(self: *ScrollAreaWidget) void {
     dvui.dataSet(null, self.hbox.data().id, "_scroll_info", self.si.*);
 
     self.hbox.deinit();
+    self.* = undefined;
 }
 
 test {

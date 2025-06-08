@@ -280,6 +280,7 @@ pub fn deinit(self: *BoxWidget) void {
     dvui.dataSet(null, self.wd.id, "_data", Data{ .total_weight = self.total_weight, .min_space_taken = self.min_space_taken });
 
     dvui.parentReset(self.wd.id, self.wd.parent);
+    self.* = undefined;
 }
 
 test {

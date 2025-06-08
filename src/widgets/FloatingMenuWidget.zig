@@ -285,6 +285,7 @@ pub fn deinit(self: *FloatingMenuWidget) void {
     _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
     dvui.clipSet(self.prevClip);
     _ = dvui.renderingSet(self.prev_rendering);
+    self.* = undefined;
 }
 
 test {

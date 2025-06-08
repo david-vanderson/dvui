@@ -422,6 +422,7 @@ pub fn deinit(self: *Self) void {
         }
     }
     self.themes.deinit();
+    self.* = undefined;
 }
 
 pub fn arena(self: *Self) std.mem.Allocator {
