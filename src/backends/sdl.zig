@@ -40,6 +40,8 @@ we_own_window: bool = false,
 touch_mouse_events: bool = false,
 log_events: bool = false,
 initial_scale: f32 = 1.0,
+last_pixel_size: dvui.Size.Physical = .{ .w = 800, .h = 600 },
+last_window_size: dvui.Size.Natural = .{ .w = 800, .h = 600 },
 cursor_last: dvui.enums.Cursor = .arrow,
 cursor_backing: [@typeInfo(dvui.enums.Cursor).@"enum".fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(dvui.enums.Cursor).@"enum".fields.len,
 cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).@"enum".fields.len]bool = [_]bool{false} ** @typeInfo(dvui.enums.Cursor).@"enum".fields.len,
@@ -134,8 +136,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         if (back.initial_scale == 0) return logErr("SDL_GetDisplayContentScale in initWindow");
         log.info("SDL3 backend scale {d}", .{back.initial_scale});
     } else {
-        const winSize = try back.windowSize();
-        const pxSize = try back.pixelSize();
+        const winSize = back.windowSize();
+        const pxSize = back.pixelSize();
         const nat_scale = pxSize.w / winSize.w;
         if (nat_scale == 1.0) {
             var guess_from_dpi = true;
@@ -364,11 +366,10 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) !bool {
     return false;
 }
 
-pub fn refresh(self: *SDLBackend) !void {
-    _ = self;
+pub fn refresh(_: *SDLBackend) void {
     var ue = std.mem.zeroes(c.SDL_Event);
     ue.type = if (sdl3) c.SDL_EVENT_USER else c.SDL_USEREVENT;
-    try toErr(c.SDL_PushEvent(&ue), "SDL_PushEvent in refresh");
+    toErr(c.SDL_PushEvent(&ue), "SDL_PushEvent in refresh") catch {};
 }
 
 pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !bool {
@@ -539,7 +540,7 @@ pub fn openURL(self: *SDLBackend, url: []const u8) !void {
 
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
-    const size = try self.pixelSize();
+    const size = self.pixelSize();
     if (sdl3) {
         try toErr(c.SDL_SetRenderClipRect(self.renderer, &c.SDL_Rect{
             .x = 0,
@@ -559,35 +560,37 @@ pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
 
 pub fn end(_: *SDLBackend) !void {}
 
-pub fn pixelSize(self: *SDLBackend) !dvui.Size.Physical {
+pub fn pixelSize(self: *SDLBackend) dvui.Size.Physical {
     var w: i32 = undefined;
     var h: i32 = undefined;
     if (sdl3) {
-        try toErr(
+        toErr(
             c.SDL_GetCurrentRenderOutputSize(self.renderer, &w, &h),
             "SDL_GetCurrentRenderOutputSize in pixelSize",
-        );
+        ) catch return self.last_pixel_size;
     } else {
-        try toErr(
+        toErr(
             c.SDL_GetRendererOutputSize(self.renderer, &w, &h),
             "SDL_GetRendererOutputSize in pixelSize",
-        );
+        ) catch return self.last_pixel_size;
     }
-    return .{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
+    self.last_pixel_size = .{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
+    return self.last_pixel_size;
 }
 
-pub fn windowSize(self: *SDLBackend) !dvui.Size.Natural {
+pub fn windowSize(self: *SDLBackend) dvui.Size.Natural {
     var w: i32 = undefined;
     var h: i32 = undefined;
     if (sdl3) {
-        try toErr(c.SDL_GetWindowSize(self.window, &w, &h), "SDL_GetWindowSize in windowSize");
+        toErr(c.SDL_GetWindowSize(self.window, &w, &h), "SDL_GetWindowSize in windowSize") catch return self.last_window_size;
     } else {
         c.SDL_GetWindowSize(self.window, &w, &h);
     }
-    return .{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
+    self.last_window_size = .{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
+    return self.last_window_size;
 }
 
-pub fn contentScale(self: *SDLBackend) !f32 {
+pub fn contentScale(self: *SDLBackend) f32 {
     return self.initial_scale;
 }
 

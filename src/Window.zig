@@ -318,9 +318,9 @@ pub fn init(
         },
     }
 
-    const winSize = try self.backend.windowSize();
-    const pxSize = try self.backend.pixelSize();
-    self.content_scale = try self.backend.contentScale();
+    const winSize = self.backend.windowSize();
+    const pxSize = self.backend.pixelSize();
+    self.content_scale = self.backend.contentScale();
 
     // Even on hidpi screens I see slight flattening of the sides of glyphs
     // when snap_to_pixels is false, so we are going to default on for now.
@@ -480,7 +480,7 @@ pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?WidgetI
     if (self.debugRefresh(null)) {
         log.debug("{s}:{d} refreshBackend {?x}", .{ src.file, src.line, id });
     }
-    self.backend.refresh() catch |err| log.warn("Backend refresh failed {!}, trace {?!}", .{ err, @errorReturnTrace() });
+    self.backend.refresh();
 }
 
 pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?WidgetId, event_num: ?u16) void {
@@ -1015,10 +1015,10 @@ pub fn begin(
     self.tab_index_prev = self.tab_index;
     self.tab_index = @TypeOf(self.tab_index).init(self.tab_index.allocator);
 
-    self.rect_pixels = .fromSize(try self.backend.pixelSize());
+    self.rect_pixels = .fromSize(self.backend.pixelSize());
     dvui.clipSet(self.rect_pixels);
 
-    self.wd.rect = Rect.Natural.fromSize(try self.backend.windowSize()).scale(1.0 / self.content_scale, Rect);
+    self.wd.rect = Rect.Natural.fromSize(self.backend.windowSize()).scale(1.0 / self.content_scale, Rect);
     self.natural_scale = if (self.wd.rect.w == 0) 1.0 else self.rect_pixels.w / self.wd.rect.w;
 
     //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });

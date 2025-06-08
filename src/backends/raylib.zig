@@ -175,19 +175,19 @@ pub fn sleep(_: *RaylibBackend, ns: u64) void {
     std.time.sleep(ns);
 }
 
-pub fn pixelSize(_: *RaylibBackend) !dvui.Size.Physical {
+pub fn pixelSize(_: *RaylibBackend) dvui.Size.Physical {
     const w = c.GetRenderWidth();
     const h = c.GetRenderHeight();
     return .{ .w = @floatFromInt(w), .h = @floatFromInt(h) };
 }
 
-pub fn windowSize(_: *RaylibBackend) !dvui.Size.Natural {
+pub fn windowSize(_: *RaylibBackend) dvui.Size.Natural {
     const w = c.GetScreenWidth();
     const h = c.GetScreenHeight();
     return .{ .w = @floatFromInt(w), .h = @floatFromInt(h) };
 }
 
-pub fn contentScale(_: *RaylibBackend) !f32 {
+pub fn contentScale(_: *RaylibBackend) f32 {
     return 1.0;
 }
 
@@ -461,7 +461,7 @@ pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
 }
 
 //TODO implement this function
-pub fn refresh(_: *RaylibBackend) !void {}
+pub fn refresh(_: *RaylibBackend) void {}
 
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     var disable_raylib_input: bool = false;

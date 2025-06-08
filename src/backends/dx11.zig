@@ -19,6 +19,9 @@ pub const WindowState = struct {
 
     dvui_window: dvui.Window,
 
+    last_pixel_size: dvui.Size.Physical = .{ .w = 800, .h = 600 },
+    last_window_size: dvui.Size.Natural = .{ .w = 800, .h = 600 },
+
     texture_interpolation: std.AutoHashMap(*anyopaque, dvui.enums.TextureInterpolation) = undefined,
 
     device: *win32.ID3D11Device,
@@ -879,7 +882,7 @@ pub fn begin(self: Context, arena: std.mem.Allocator) !void {
     const state = stateFromHwnd(hwndFromContext(self));
     state.arena = arena;
 
-    const pixel_size = try self.pixelSize();
+    const pixel_size = self.pixelSize();
     var scissor_rect: win32.RECT = .{
         .left = 0,
         .top = 0,
@@ -897,30 +900,36 @@ pub fn end(self: Context) !void {
     try toErr(state.swap_chain.Present(if (state.vsync) 1 else 0, 0), "Present in end");
 }
 
-pub fn pixelSize(self: Context) !dvui.Size.Physical {
+pub fn pixelSize(self: Context) dvui.Size.Physical {
+    const hwnd = hwndFromContext(self);
+    const state = stateFromHwnd(hwnd);
     var rect: win32.RECT = undefined;
-    try toErr(win32.GetClientRect(hwndFromContext(self), &rect), "GetClientRect in pixelSize");
+    toErr(win32.GetClientRect(hwnd, &rect), "GetClientRect in pixelSize") catch return state.last_pixel_size;
     std.debug.assert(rect.left == 0);
     std.debug.assert(rect.top == 0);
-    return .{
+    state.last_pixel_size = .{
         .w = @floatFromInt(rect.right),
         .h = @floatFromInt(rect.bottom),
     };
+    return state.last_pixel_size;
 }
 
-pub fn windowSize(self: Context) !dvui.Size.Natural {
-    const size = try self.pixelSize();
+pub fn windowSize(self: Context) dvui.Size.Natural {
+    const hwnd = hwndFromContext(self);
+    const state = stateFromHwnd(hwnd);
+    const size = self.pixelSize();
     // apply dpi scaling manually as there is no convenient api to get the window
     // size of the client size. `win32.GetWindowRect` includes window decorations
-    const dpi = win32.GetDpiForWindow(hwndFromContext(self));
-    try toLastErr(@intCast(dpi), "GetDpiForWindow in windowSize");
-    return .{
+    const dpi = win32.GetDpiForWindow(hwnd);
+    toLastErr(@intCast(dpi), "GetDpiForWindow in windowSize") catch return state.last_window_size;
+    state.last_window_size = .{
         .w = size.w / win32.scaleFromDpi(f32, dpi),
         .h = size.h / win32.scaleFromDpi(f32, dpi),
     };
+    return state.last_window_size;
 }
 
-pub fn contentScale(_: Context) !f32 {
+pub fn contentScale(_: Context) f32 {
     return 1.0;
     //return @as(f32, @floatFromInt(win32.dpiFromHwnd(hwndFromContext(self)))) / 96.0;
 }
@@ -1062,7 +1071,7 @@ pub fn contextFromHwnd(hwnd: win32.HWND) Context {
     return @ptrCast(hwnd);
 }
 fn stateFromHwnd(hwnd: win32.HWND) *WindowState {
-    const addr: usize = @bitCast(win32.GetWindowLongPtrW(hwnd, @enumFromInt(0)));
+    const addr: usize = @bitCast(win32.GetWindowLongPtrW(hwnd, win32.WINDOW_LONG_PTR_INDEX._USERDATA));
     if (addr == 0) @panic("window is missing it's state!");
     return @ptrFromInt(addr);
 }
@@ -1076,6 +1085,16 @@ pub fn attach(
         vsync: bool,
     },
 ) !Context {
+    const existing = win32.SetWindowLongPtrW(
+        hwnd,
+        win32.WINDOW_LONG_PTR_INDEX._USERDATA,
+        @bitCast(@intFromPtr(window_state)),
+    );
+    if (existing != 0) std.debug.panic("hwnd is already using slot 0 for something? (0x{x})", .{existing});
+
+    const addr: usize = @bitCast(win32.GetWindowLongPtrW(hwnd, win32.WINDOW_LONG_PTR_INDEX._USERDATA));
+    if (addr == 0) @panic("unable to attach window state pointer to HWND, did you set cbWndExtra to be >= to @sizeof(usize)?");
+
     var dvui_window = try dvui.Window.init(@src(), gpa, contextFromHwnd(hwnd).backend(), .{});
     errdefer dvui_window.deinit();
     window_state.* = .{
@@ -1085,18 +1104,6 @@ pub fn attach(
         .device_context = dx_options.device_context,
         .swap_chain = dx_options.swap_chain,
     };
-    {
-        const existing = win32.SetWindowLongPtrW(
-            hwnd,
-            @enumFromInt(0),
-            @bitCast(@intFromPtr(window_state)),
-        );
-        if (existing != 0) std.debug.panic("hwnd is already using slot 0 for something? (0x{x})", .{existing});
-    }
-    {
-        const addr: usize = @bitCast(win32.GetWindowLongPtrW(hwnd, @enumFromInt(0)));
-        if (addr == 0) @panic("unable to attach window state pointer to HWND, did you set cbWndExtra to be >= to @sizeof(usize)?");
-    }
 
     std.debug.assert(stateFromHwnd(hwnd) == window_state);
     return contextFromHwnd(hwnd);
