@@ -539,7 +539,7 @@ pub fn init() !WebBackend {
 }
 
 pub fn deinit(self: *WebBackend) void {
-    _ = self;
+    self.* = undefined;
 }
 
 pub fn backend(self: *WebBackend) dvui.Backend {
