@@ -837,19 +837,26 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 log.debug("event MOUSEWHEEL {d} {d} {d}\n", .{ event.wheel.x, event.wheel.y, event.wheel.which });
             }
 
-            const ticks_x = if (sdl3) event.wheel.x else @as(f32, @floatFromInt(event.wheel.x));
-            const ticks_y = if (sdl3) event.wheel.y else @as(f32, @floatFromInt(event.wheel.y));
-            const ticks = if (ticks_x == 0) ticks_y else ticks_x;
+            var ticks_x = if (sdl3) event.wheel.x else @as(f32, @floatFromInt(event.wheel.x));
+            var ticks_y = if (sdl3) event.wheel.y else @as(f32, @floatFromInt(event.wheel.y));
 
             // TODO: some real solution to interpreting the mouse wheel across OSes
-            const ticks_adj = switch (builtin.target.os.tag) {
-                .linux => ticks * 20,
-                .windows => ticks * 20,
-                .macos => ticks * 10,
-                else => ticks,
-            };
+            switch (builtin.target.os.tag) {
+                .windows, .linux => {
+                    ticks_x *= 20;
+                    ticks_y *= 20;
+                },
+                .macos => {
+                    ticks_x *= 10;
+                    ticks_y *= 10;
+                },
+                else => {},
+            }
 
-            return try win.addEventMouseWheel(ticks_adj, if (event.wheel.x == 0) .vertical else .horizontal);
+            var ret = false;
+            if (ticks_x != 0) ret = try win.addEventMouseWheel(ticks_x, .horizontal);
+            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y, .vertical);
+            return ret;
         },
         if (sdl3) c.SDL_EVENT_FINGER_DOWN else c.SDL_FINGERDOWN => {
             if (self.log_events) {
