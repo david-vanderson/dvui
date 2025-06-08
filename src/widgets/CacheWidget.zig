@@ -17,9 +17,8 @@ pub const InitOptions = struct {
 wd: WidgetData = undefined,
 hash: u64 = undefined,
 refresh_prev_value: u8 = undefined,
-caching: bool = false,
-caching_tex: dvui.TextureTarget = undefined,
-texture_create_error: bool = false,
+state: enum { ok, texture_create_error, unsupported } = .ok,
+caching_tex: ?dvui.TextureTarget = null,
 tex_uv: Size = undefined,
 old_target: dvui.RenderTarget = undefined,
 old_clip: ?Rect.Physical = null,
@@ -31,20 +30,23 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     self.wd = WidgetData.init(src, .{}, defaults.override(opts));
 
     self.hash = dvui.hashIdKey(self.wd.id, "_tex");
+    if (dvui.dataGet(null, self.wd.id, "_tex_uv", Size)) |uv| self.tex_uv = uv;
+    if (dvui.dataGet(null, self.wd.id, "_unsupported", bool) orelse false) self.state = .unsupported;
     self.tex_uv = dvui.dataGet(null, self.wd.id, "_tex_uv", Size) orelse .{};
     self.refresh_prev_value = dvui.currentWindow().extra_frames_needed;
     dvui.currentWindow().extra_frames_needed = 0;
     return self;
 }
 
-fn tce(self: *CacheWidget) ?*dvui.TextureCacheEntry {
-    return dvui.currentWindow().texture_cache.getPtr(self.hash);
+fn getCachedTexture(self: *CacheWidget) ?dvui.Texture {
+    const entry = dvui.currentWindow().texture_cache.getPtr(self.hash) orelse return null;
+    return entry.texture;
 }
 
-fn drawTce(self: *CacheWidget, t: *const dvui.TextureCacheEntry) !void {
+fn drawCachedTexture(self: *CacheWidget, t: dvui.Texture) !void {
     const rs = self.wd.contentRectScale();
 
-    try dvui.renderTexture(t.texture, rs, .{ .uv = (Rect{}).toSize(self.tex_uv), .debug = self.wd.options.debugGet() });
+    try dvui.renderTexture(t, rs, .{ .uv = (Rect{}).toSize(self.tex_uv), .debug = self.wd.options.debugGet() });
     //if (self.wd.options.debugGet()) {
     //    dvui.log.debug("drawing {d} {d} {d}x{d} {d}x{d} {d} {d}", .{ rs.r.x, rs.r.y, rs.r.w, rs.r.h, t.texture.width, t.texture.height, self.tex_uv.w, self.tex_uv.h });
     //}
@@ -52,11 +54,11 @@ fn drawTce(self: *CacheWidget, t: *const dvui.TextureCacheEntry) !void {
 
 /// Must be called before install().
 pub fn invalidate(self: *CacheWidget) !void {
-    if (self.tce()) |t| {
+    if (self.getCachedTexture()) |t| {
         // if we had a texture, show it this frame because our contents needs a frame to get sizing
-        try self.drawTce(t);
+        try self.drawCachedTexture(t);
 
-        dvui.textureDestroyLater(t.texture);
+        dvui.textureDestroyLater(t);
         _ = dvui.currentWindow().texture_cache.remove(self.hash);
 
         // now we've shown the texture, so prevent any widgets from drawing on top of it this frame
@@ -67,51 +69,55 @@ pub fn invalidate(self: *CacheWidget) !void {
 
 pub fn install(self: *CacheWidget) !void {
     dvui.parentSet(self.widget());
-    try self.wd.register();
+    self.wd.register();
     try self.wd.borderAndBackground(.{});
 
-    if (self.tce()) |t| {
+    if (self.state != .ok) return;
+
+    if (self.getCachedTexture()) |t| {
         // successful cache, draw texture and enforce min size
-        try self.drawTce(t);
+        try self.drawCachedTexture(t);
         self.wd.minSizeMax(self.wd.rect.size());
     } else {
 
         // we need to cache, but only do it if we didn't have any refreshes from last frame
         if (dvui.dataGet(null, self.wd.id, "_cache_now", bool) orelse false) {
-            self.caching = true;
-        }
-
-        if (self.caching) {
             const rs = self.wd.contentRectScale();
             const w: u32 = @intFromFloat(@ceil(rs.r.w));
             const h: u32 = @intFromFloat(@ceil(rs.r.h));
             self.tex_uv = .{ .w = rs.r.w / @ceil(rs.r.w), .h = rs.r.h / @ceil(rs.r.h) };
 
-            if (self.caching) {
-                self.caching_tex = dvui.textureCreateTarget(w, h, .linear) catch |err| blk: {
-                    if (err == error.TextureCreate) {
-                        self.texture_create_error = dvui.dataGet(null, self.wd.id, "_texture_create_error", bool) orelse false;
-                        if (!self.texture_create_error) {
-                            // indicate that texture failed last frame to prevent backends that always return errors from forever refreshing
-                            dvui.dataSet(null, self.wd.id, "_texture_create_error", true);
-                        }
+            self.caching_tex = dvui.textureCreateTarget(w, h, .linear) catch |err| switch (err) {
+                error.TextureCreate => blk: {
+                    self.state = .texture_create_error;
+                    if (dvui.dataGet(null, self.wd.id, "_texture_create_error", bool) orelse false) {
+                        // indicate that texture failed last frame to prevent backends that always return errors from forever refreshing
+                        dvui.dataSet(null, self.wd.id, "_texture_create_error", true);
                     }
-                    self.caching = false;
-                    break :blk undefined;
-                };
-            }
+                    break :blk null;
+                },
+                else => |e| return e,
+            };
+            errdefer if (self.caching_tex) |cache_tex| {
+                // There is no destroy for targets so this will do
+                if (dvui.textureFromTarget(cache_tex) catch null) |tex| dvui.textureDestroyLater(tex);
+                self.caching_tex = null;
+            };
 
-            if (self.caching) {
+            if (self.caching_tex) |tex| {
                 var offset = rs.r.topLeft();
                 if (dvui.snapToPixels()) {
                     offset.x = @round(offset.x);
                     offset.y = @round(offset.y);
                 }
-                self.old_target = dvui.renderTarget(.{ .texture = self.caching_tex, .offset = offset });
+                self.old_target = try dvui.renderTarget(.{ .texture = tex, .offset = offset });
 
                 // clip to just us, even if we are off screen
                 self.old_clip = dvui.clipGet();
                 dvui.clipSet(rs.r);
+            } else if (self.state != .texture_create_error) {
+                // `textureCreateTarget` returned null, indicating render target are unsupported
+                dvui.dataSet(null, self.wd.id, "_unsupported", true);
             }
         }
     }
@@ -119,7 +125,7 @@ pub fn install(self: *CacheWidget) !void {
 
 /// Must be called after install().
 pub fn uncached(self: *CacheWidget) bool {
-    return (self.caching or self.tce() == null);
+    return (self.caching_tex != null or self.getCachedTexture() == null);
 }
 
 pub fn widget(self: *CacheWidget) Widget {
@@ -150,9 +156,11 @@ pub fn processEvent(self: *CacheWidget, e: *dvui.Event, bubbling: bool) void {
     }
 }
 
-pub fn deinit(self: *CacheWidget) void {
+/// This deinit function returns an error because of the additional
+/// texture handling it requires.
+pub fn deinit(self: *CacheWidget) !void {
     const cw = dvui.currentWindow();
-    if (!self.texture_create_error and self.uncached()) {
+    if (self.state == .ok and self.uncached()) {
         if (dvui.currentWindow().extra_frames_needed == 0) {
             dvui.dataSet(null, self.wd.id, "_cache_now", true);
             dvui.refresh(null, @src(), self.wd.id);
@@ -163,17 +171,15 @@ pub fn deinit(self: *CacheWidget) void {
     if (self.old_clip) |clip| {
         dvui.clipSet(clip);
     }
-    if (self.caching) {
-        _ = dvui.renderTarget(self.old_target);
+    if (self.caching_tex) |tex| {
+        _ = try dvui.renderTarget(self.old_target);
 
-        // convert texture target to normal texture
-        const entry = dvui.TextureCacheEntry{ .texture = dvui.textureFromTarget(self.caching_tex) }; // destroys self.caching_tex
-        cw.texture_cache.put(cw.gpa, self.hash, entry) catch @panic("OOM");
+        // convert texture target to normal texture, destroys self.caching_tex
+        const texture = try dvui.textureFromTarget(tex);
+        try cw.texture_cache.put(cw.gpa, self.hash, .{ .texture = texture });
 
         // draw texture so we see it this frame
-        self.drawTce(&entry) catch {
-            dvui.log.debug("{x} CacheWidget.deinit failed to render texture\n", .{self.wd.id});
-        };
+        try self.drawCachedTexture(texture);
 
         dvui.dataSet(null, self.wd.id, "_tex_uv", self.tex_uv);
         dvui.dataRemove(null, self.wd.id, "_cache_now");

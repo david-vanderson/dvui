@@ -31,7 +31,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *ColorPickerWidget) !void {
+pub fn install(self: *ColorPickerWidget) dvui.Backend.TextureError!void {
     self.box = try dvui.box(self.src, self.init_opts.dir, self.opts);
 
     if (try valueSaturationBox(@src(), self.init_opts.hsv, .{})) {
@@ -304,7 +304,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
     return ret;
 }
 
-pub fn getHueSelectorTexture(dir: dvui.enums.Direction) !dvui.Texture {
+pub fn getHueSelectorTexture(dir: dvui.enums.Direction) dvui.Backend.TextureError!dvui.Texture {
     const hue_texture_id = dvui.hashIdKey(@enumFromInt(@as(u64, @intFromEnum(dir))), "hue_selector_texture");
     const cw = dvui.currentWindow();
     const res = try cw.texture_cache.getOrPut(cw.gpa, hue_texture_id);
@@ -314,12 +314,12 @@ pub fn getHueSelectorTexture(dir: dvui.enums.Direction) !dvui.Texture {
             .vertical => .{ 1, hue_selector_colors.len },
         };
         // FIXME: textureCreate should not need a non const pointer to pixels
-        res.value_ptr.texture = dvui.textureCreate(.cast(@constCast(&hue_selector_pixels)), width, height, .linear);
+        res.value_ptr.texture = try dvui.textureCreate(.cast(@constCast(&hue_selector_pixels)), width, height, .linear);
     }
     return res.value_ptr.texture;
 }
 
-pub fn getValueSaturationTexture(hue: f32) !dvui.Texture {
+pub fn getValueSaturationTexture(hue: f32) dvui.Backend.TextureError!dvui.Texture {
     const hue_texture_id = dvui.hashIdKey(@enumFromInt(@as(u64, @intFromFloat(hue * 10000))), "value_saturation_texture");
     const cw = dvui.currentWindow();
     const res = try cw.texture_cache.getOrPut(cw.gpa, hue_texture_id);
@@ -328,7 +328,7 @@ pub fn getValueSaturationTexture(hue: f32) !dvui.Texture {
         comptime std.debug.assert(pixels.len == 2 * 2 * 4);
         // set top right corner to the max value of that hue
         @memcpy(pixels[4..8], &Color.HSV.toColor(.{ .h = hue }).toRGBA());
-        res.value_ptr.texture = dvui.textureCreate(.cast(&pixels), 2, 2, .linear);
+        res.value_ptr.texture = try dvui.textureCreate(.cast(&pixels), 2, 2, .linear);
     }
     return res.value_ptr.texture;
 }

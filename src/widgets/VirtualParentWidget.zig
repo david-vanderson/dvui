@@ -25,7 +25,7 @@ pub fn init(src: std.builtin.SourceLocation, opts: Options) VirtualParentWidget 
 
 pub fn install(self: *VirtualParentWidget) !void {
     dvui.parentSet(self.widget());
-    try self.wd.register();
+    self.wd.register();
 }
 
 pub fn widget(self: *VirtualParentWidget) Widget {

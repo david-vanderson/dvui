@@ -194,7 +194,7 @@ pub const QuickTheme = struct {
         );
     }
 
-    pub fn toTheme(self: @This(), gpa: std.mem.Allocator) !Theme {
+    pub fn toTheme(self: @This(), gpa: std.mem.Allocator) (std.mem.Allocator.Error || Color.FromHexError)!Theme {
         const color_accent = try Color.tryFromHex(self.color_focus);
         const color_err = try Color.tryFromHex("#ffaaaa");
         const color_text = try Color.tryFromHex(self.color_text);

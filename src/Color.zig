@@ -324,9 +324,9 @@ pub const PMA = extern struct {
 pub const HexString = [7]u8;
 
 /// Returns a hex color string in the format "#rrggbb"
-pub fn toHexString(self: Color) !HexString {
+pub fn toHexString(self: Color) HexString {
     var result: HexString = undefined;
-    _ = try std.fmt.bufPrint(&result, "#{x:0>2}{x:0>2}{x:0>2}", .{ self.r, self.g, self.b });
+    _ = std.fmt.bufPrint(&result, "#{x:0>2}{x:0>2}{x:0>2}", .{ self.r, self.g, self.b }) catch unreachable;
     return result;
 }
 

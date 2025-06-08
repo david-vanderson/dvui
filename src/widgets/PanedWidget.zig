@@ -115,7 +115,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
 }
 
 pub fn install(self: *PanedWidget) !void {
-    try self.wd.register();
+    self.wd.register();
 
     try self.wd.borderAndBackground(.{});
     self.prevClip = dvui.clip(self.wd.contentRectScale().r);
