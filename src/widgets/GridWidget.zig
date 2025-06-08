@@ -484,8 +484,6 @@ pub const HeaderResizeWidget = struct {
     pub fn install(self: *HeaderResizeWidget) !void {
         try self.wd.register();
         try self.wd.borderAndBackground(.{});
-        self.wd.minSizeSetAndRefresh();
-        self.wd.minSizeReportToParent();
     }
 
     pub fn matchEvent(self: *HeaderResizeWidget, e: *Event) bool {
@@ -529,48 +527,46 @@ pub const HeaderResizeWidget = struct {
                 .horizontal => .arrow_n_s,
             };
 
-            if (true) {
-                if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
-                    e.handle(@src(), self.data());
-                    // capture and start drag
-                    dvui.captureMouse(self.data());
-                    dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = cursor });
-                    self.offset = .{};
-                } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
-                    e.handle(@src(), self.data());
-                    // stop possible drag and capture
-                    dvui.captureMouse(null);
-                    dvui.dragEnd();
-                    self.offset = .{};
-                } else if (e.evt.mouse.action == .motion and dvui.captured(self.wd.id)) {
-                    e.handle(@src(), self.data());
-                    // move if dragging
-                    if (dvui.dragging(e.evt.mouse.p)) |dps| {
-                        dvui.refresh(null, @src(), self.wd.id);
-                        switch (self.direction) {
-                            .vertical => {
-                                const unclamped_width = self.init_opts.size.* + dps.x / rs.s + self.offset.x;
-                                self.init_opts.size.* = std.math.clamp(
-                                    unclamped_width,
-                                    self.init_opts.min_size orelse 1,
-                                    self.init_opts.max_size orelse dvui.max_float_safe,
-                                );
-                                self.offset.x = unclamped_width - self.init_opts.size.*;
-                            },
-                            .horizontal => {
-                                const unclamped_height = self.init_opts.size.* + dps.y / rs.s + self.offset.y;
-                                self.init_opts.size.* = std.math.clamp(
-                                    unclamped_height,
-                                    self.init_opts.min_size orelse 1,
-                                    self.init_opts.max_size orelse dvui.max_float_safe,
-                                );
-                                self.offset.y = unclamped_height - self.init_opts.size.*;
-                            },
-                        }
+            if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
+                e.handle(@src(), self.data());
+                // capture and start drag
+                dvui.captureMouse(self.data());
+                dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = cursor });
+                self.offset = .{};
+            } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
+                e.handle(@src(), self.data());
+                // stop possible drag and capture
+                dvui.captureMouse(null);
+                dvui.dragEnd();
+                self.offset = .{};
+            } else if (e.evt.mouse.action == .motion and dvui.captured(self.wd.id)) {
+                e.handle(@src(), self.data());
+                // move if dragging
+                if (dvui.dragging(e.evt.mouse.p)) |dps| {
+                    dvui.refresh(null, @src(), self.wd.id);
+                    switch (self.direction) {
+                        .vertical => {
+                            const unclamped_width = self.init_opts.size.* + dps.x / rs.s + self.offset.x;
+                            self.init_opts.size.* = std.math.clamp(
+                                unclamped_width,
+                                self.init_opts.min_size orelse 1,
+                                self.init_opts.max_size orelse dvui.max_float_safe,
+                            );
+                            self.offset.x = unclamped_width - self.init_opts.size.*;
+                        },
+                        .horizontal => {
+                            const unclamped_height = self.init_opts.size.* + dps.y / rs.s + self.offset.y;
+                            self.init_opts.size.* = std.math.clamp(
+                                unclamped_height,
+                                self.init_opts.min_size orelse 1,
+                                self.init_opts.max_size orelse dvui.max_float_safe,
+                            );
+                            self.offset.y = unclamped_height - self.init_opts.size.*;
+                        },
                     }
-                } else if (e.evt.mouse.action == .position) {
-                    dvui.cursorSet(cursor);
                 }
+            } else if (e.evt.mouse.action == .position) {
+                dvui.cursorSet(cursor);
             }
         }
 
@@ -581,6 +577,8 @@ pub const HeaderResizeWidget = struct {
 
     pub fn deinit(self: *HeaderResizeWidget) void {
         dvui.dataSet(null, self.wd.id, "_offset", self.offset);
+        self.wd.minSizeSetAndRefresh();
+        self.wd.minSizeReportToParent();
     }
 };
 test {
