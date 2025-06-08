@@ -67,6 +67,7 @@ pub const Line = struct {
     }
 
     pub fn deinit(self: *Line) void {
+        defer dvui.widgetFree(self);
         self.path.deinit();
         self.* = undefined;
     }
@@ -264,6 +265,7 @@ pub fn line(self: *PlotWidget) Line {
 }
 
 pub fn deinit(self: *PlotWidget) void {
+    defer dvui.widgetFree(self);
     dvui.clipSet(self.old_clip);
 
     // maybe we got no data

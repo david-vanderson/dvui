@@ -108,6 +108,7 @@ pub fn processEvent(self: *LabelWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *LabelWidget) void {
+    defer dvui.widgetFree(self);
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
     self.* = undefined;

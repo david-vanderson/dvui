@@ -181,6 +181,50 @@ pub fn currentWindow() *Window {
     return current_window orelse unreachable;
 }
 
+/// Allocates space for a widget to the alloc stack, or the arena
+/// if the stack overflows.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn widgetAlloc(comptime T: type) *T {
+    const cw = currentWindow();
+    const alloc = cw._widget_stack.allocator();
+    const ptr = alloc.create(T) catch {
+        log.debug("Widget stack overflowed, falling back to arena allocator", .{});
+        return cw.arena().create(T) catch @panic("OOM");
+    };
+    // std.debug.print("PUSH {*} ({d}) {x}\n", .{ ptr, @alignOf(@TypeOf(ptr)), cw._widget_stack.end_index });
+    cw._peak_widget_stack = @max(cw._peak_widget_stack, cw._widget_stack.end_index);
+    return ptr;
+}
+
+/// Pops a widget off the alloc stack, if it was allocated there.
+///
+/// This should always be called in `deinit` to ensure the widget
+/// is popped.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn widgetFree(ptr: anytype) void {
+    const ws = &currentWindow()._widget_stack;
+    if (!ws.ownsSlice(std.mem.asBytes(ptr))) return;
+
+    comptime std.debug.assert(@alignOf(@TypeOf(ptr)) <= 8);
+    const size = @sizeOf(std.meta.Child(@TypeOf(ptr)));
+    const ptr_start_index: usize = @intFromPtr(ptr) - @intFromPtr(ws.buffer.ptr);
+    const ptr_end_index_with_alignment = std.mem.alignForwardLog2(ptr_start_index + size, 8);
+
+    // If we are more than 8 bytes away, we where not the final allocation
+    // This account for alignment of items above in the stack
+    if (ptr_end_index_with_alignment < ws.end_index) {
+        // log.debug("{*} was not at the top of the stack! Did you forget to call deinit or widgetFree somewhere?", .{ptr});
+        return;
+    }
+
+    // Set the end_index directly as `destroy` wouldn't account for alignment of other allcations
+    ws.end_index = ptr_start_index;
+
+    // std.debug.print("POP {x} {*}\n", .{ ws.end_index, ptr });
+}
+
 /// Get a pointer to the active theme.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
@@ -3303,14 +3347,14 @@ pub fn wantTextInput(r: Rect.Natural) void {
 }
 
 pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) !*FloatingMenuWidget {
-    var ret = try currentWindow().arena().create(FloatingMenuWidget);
+    var ret = widgetAlloc(FloatingMenuWidget);
     ret.* = FloatingMenuWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
 }
 
 pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) !*FloatingWindowWidget {
-    var ret = try currentWindow().arena().create(FloatingWindowWidget);
+    var ret = widgetAlloc(FloatingWindowWidget);
     ret.* = FloatingWindowWidget.init(src, floating_opts, opts);
     try ret.install();
     ret.processEventsBefore();
@@ -4011,7 +4055,7 @@ pub fn toastsShow(floating_window_data: ?*WidgetData) !void {
 }
 
 pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) !*AnimateWidget {
-    var ret = try currentWindow().arena().create(AnimateWidget);
+    var ret = widgetAlloc(AnimateWidget);
     ret.* = AnimateWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
@@ -4061,7 +4105,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
 
     const min_width = te.textLayout.data().backgroundRect().w;
 
-    var sug = try currentWindow().arena().create(SuggestionWidget);
+    var sug = widgetAlloc(SuggestionWidget);
     sug.* = dvui.SuggestionWidget.init(@src(), .{ .rs = te.data().borderRectScale(), .text_entry_id = te.data().id }, .{ .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
     try sug.install();
     if (open_sug) {
@@ -4158,6 +4202,7 @@ pub const ComboBox = struct {
     }
 
     pub fn deinit(self: *ComboBox) void {
+        widgetFree(self);
         self.sug.deinit();
         self.te.deinit();
         self.* = undefined;
@@ -4165,8 +4210,8 @@ pub const ComboBox = struct {
 };
 
 pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) !*ComboBox {
-    var combo = try currentWindow().arena().create(ComboBox);
-    combo.te = try currentWindow().arena().create(TextEntryWidget);
+    var combo = widgetAlloc(ComboBox);
+    combo.te = widgetAlloc(TextEntryWidget);
     combo.te.* = dvui.TextEntryWidget.init(src, init_opts, opts);
     try combo.te.install();
 
@@ -4236,7 +4281,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: Options) !*PanedWidget {
-    var ret = try currentWindow().arena().create(PanedWidget);
+    var ret = widgetAlloc(PanedWidget);
     ret.* = PanedWidget.init(src, init_opts, opts);
     try ret.install();
     ret.processEvents();
@@ -4245,8 +4290,7 @@ pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions
 }
 
 pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.InitOptions, opts: Options) !*TextLayoutWidget {
-    const cw = currentWindow();
-    var ret = try cw.arena().create(TextLayoutWidget);
+    var ret = widgetAlloc(TextLayoutWidget);
     ret.* = TextLayoutWidget.init(src, init_opts, opts);
     try ret.install(.{});
 
@@ -4274,7 +4318,7 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: Options) !*ContextWidget {
-    var ret = try currentWindow().arena().create(ContextWidget);
+    var ret = widgetAlloc(ContextWidget);
     ret.* = ContextWidget.init(src, init_opts, opts);
     try ret.install();
     ret.processEvents();
@@ -4298,7 +4342,7 @@ pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) !*VirtualParentWidget {
-    var ret = try currentWindow().arena().create(VirtualParentWidget);
+    var ret = widgetAlloc(VirtualParentWidget);
     ret.* = VirtualParentWidget.init(src, opts);
     try ret.install();
     return ret;
@@ -4311,7 +4355,7 @@ pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) !*VirtualPa
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
-    var ret = try currentWindow().arena().create(OverlayWidget);
+    var ret = widgetAlloc(OverlayWidget);
     ret.* = OverlayWidget.init(src, opts);
     try ret.install();
     try ret.drawBackground();
@@ -4334,7 +4378,7 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
-    var ret = try currentWindow().arena().create(BoxWidget);
+    var ret = widgetAlloc(BoxWidget);
     ret.* = BoxWidget.init(src, .{ .dir = dir }, opts);
     try ret.install();
     try ret.drawBackground();
@@ -4347,7 +4391,7 @@ pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options)
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
-    var ret = try currentWindow().arena().create(BoxWidget);
+    var ret = widgetAlloc(BoxWidget);
     ret.* = BoxWidget.init(src, .{ .dir = dir, .equal_space = true }, opts);
     try ret.install();
     try ret.drawBackground();
@@ -4360,7 +4404,7 @@ pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Opt
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) !*FlexBoxWidget {
-    var ret = try currentWindow().arena().create(FlexBoxWidget);
+    var ret = widgetAlloc(FlexBoxWidget);
     ret.* = FlexBoxWidget.init(src, init_opts, opts);
     try ret.install();
     try ret.drawBackground();
@@ -4368,7 +4412,7 @@ pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOpt
 }
 
 pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) !*CacheWidget {
-    var ret = try currentWindow().arena().create(CacheWidget);
+    var ret = widgetAlloc(CacheWidget);
     ret.* = CacheWidget.init(src, init_opts, opts);
     if (init_opts.invalidate) {
         try ret.invalidate();
@@ -4378,7 +4422,7 @@ pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions
 }
 
 pub fn reorder(src: std.builtin.SourceLocation, opts: Options) !*ReorderWidget {
-    var ret = try currentWindow().arena().create(ReorderWidget);
+    var ret = widgetAlloc(ReorderWidget);
     ret.* = ReorderWidget.init(src, opts);
     try ret.install();
     ret.processEvents();
@@ -4386,14 +4430,14 @@ pub fn reorder(src: std.builtin.SourceLocation, opts: Options) !*ReorderWidget {
 }
 
 pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) !*ScrollAreaWidget {
-    var ret = try currentWindow().arena().create(ScrollAreaWidget);
+    var ret = widgetAlloc(ScrollAreaWidget);
     ret.* = ScrollAreaWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
 }
 
 pub fn grid(src: std.builtin.SourceLocation, init_opts: GridWidget.InitOpts, opts: Options) !*GridWidget {
-    const ret = try currentWindow().arena().create(GridWidget);
+    const ret = widgetAlloc(GridWidget);
     ret.* = GridWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
@@ -4822,7 +4866,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
 }
 
 pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) !*ScaleWidget {
-    var ret = try currentWindow().arena().create(ScaleWidget);
+    var ret = widgetAlloc(ScaleWidget);
     ret.* = ScaleWidget.init(src, init_opts, opts);
     try ret.install();
     ret.processEvents();
@@ -4830,7 +4874,7 @@ pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions
 }
 
 pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*MenuWidget {
-    var ret = try currentWindow().arena().create(MenuWidget);
+    var ret = widgetAlloc(MenuWidget);
     ret.* = MenuWidget.init(src, .{ .dir = dir }, opts);
     try ret.install();
     return ret;
@@ -4881,7 +4925,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
 }
 
 pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitOptions, opts: Options) !*MenuItemWidget {
-    var ret = try currentWindow().arena().create(MenuItemWidget);
+    var ret = widgetAlloc(MenuItemWidget);
     ret.* = MenuItemWidget.init(src, init_opts, opts);
     try ret.install();
     ret.processEvents();
@@ -6067,8 +6111,7 @@ pub fn findUtf8Start(text: []const u8, pos: usize) usize {
 }
 
 pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) !*TextEntryWidget {
-    const cw = currentWindow();
-    var ret = try cw.arena().create(TextEntryWidget);
+    var ret = widgetAlloc(TextEntryWidget);
     ret.* = TextEntryWidget.init(src, init_opts, opts);
     try ret.install();
     // can install corner widgets here
@@ -6860,6 +6903,7 @@ pub const Picture = struct {
 
     /// Draw recorded texture and destroy it.
     pub fn deinit(self: *Picture) void {
+        widgetFree(self);
         // Ignore errors as drawing is not critical to Pictures function
         const texture = dvui.textureFromTarget(self.texture) catch return; // destroys self.texture
         dvui.textureDestroyLater(texture);
@@ -6986,7 +7030,7 @@ pub fn png_crc32(buf: []u8) u32 {
 }
 
 pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, opts: Options) !*PlotWidget {
-    var ret = try currentWindow().arena().create(PlotWidget);
+    var ret = widgetAlloc(PlotWidget);
     ret.* = PlotWidget.init(src, plot_opts, opts);
     try ret.install();
     return ret;

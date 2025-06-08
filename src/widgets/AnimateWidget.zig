@@ -137,6 +137,7 @@ pub fn processEvent(self: *AnimateWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *AnimateWidget) void {
+    defer dvui.widgetFree(self);
     if (self.val) |v| {
         switch (self.init_opts.kind) {
             .alpha => {

@@ -217,6 +217,7 @@ pub fn processEvent(self: *MenuWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *MenuWidget) void {
+    defer dvui.widgetFree(self);
     self.box.deinit();
     dvui.dataSet(null, self.wd.id, "_mouse_mode", self.mouse_mode);
     dvui.dataSet(null, self.wd.id, "_sub_act", self.submenus_activated);

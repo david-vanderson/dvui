@@ -114,6 +114,7 @@ pub fn processEvent(self: *FlexBoxWidget, e: *dvui.Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *FlexBoxWidget) void {
+    defer dvui.widgetFree(self);
     dvui.dataSet(null, self.wd.id, "_mrw", self.max_row_width);
     dvui.clipSet(self.prevClip);
     self.wd.minSizeSetAndRefresh();

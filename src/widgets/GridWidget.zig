@@ -158,6 +158,7 @@ pub fn install(self: *GridWidget) !void {
 }
 
 pub fn deinit(self: *GridWidget) void {
+    defer dvui.widgetFree(self);
     self.clipReset();
 
     // resizing if row heights changed or a resize was requested via init options.
@@ -227,7 +228,7 @@ pub fn column(self: *GridWidget, src: std.builtin.SourceLocation, opts: ColOptio
     col_opts.min_size_content = .{ .w = w, .h = self.last_height };
     col_opts.max_size_content = if (w > 0) .width(w) else null;
 
-    var col = try dvui.currentWindow().arena().create(BoxWidget);
+    var col = dvui.widgetAlloc(BoxWidget);
     col.* = BoxWidget.init(src, .{ .dir = .vertical }, col_opts);
     try col.install();
     try col.drawBackground();
@@ -262,7 +263,7 @@ pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, opts: Cell
     cell_opts.rect = .{ .x = 0, .y = y, .w = parent_rect.w, .h = header_height };
 
     // Create the cell and install as parent.
-    var cell = try dvui.currentWindow().arena().create(BoxWidget);
+    var cell = dvui.widgetAlloc(BoxWidget);
     cell.* = BoxWidget.init(src, .{ .dir = .horizontal }, cell_opts);
     try cell.install();
     try cell.drawBackground();
@@ -306,7 +307,7 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, row_num: usi
     cell_opts.rect = .{ .x = 0, .y = self.next_row_y, .w = parent_rect.w, .h = cell_height };
     cell_opts.id_extra = row_num;
 
-    var cell = try dvui.currentWindow().arena().create(BoxWidget);
+    var cell = dvui.widgetAlloc(BoxWidget);
     cell.* = BoxWidget.init(src, .{ .dir = .horizontal }, cell_opts);
     try cell.install();
     try cell.drawBackground();

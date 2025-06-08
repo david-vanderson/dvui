@@ -155,6 +155,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) !*ButtonWidget {
 }
 
 pub fn deinit(self: *TabsWidget) void {
+    defer dvui.widgetFree(self);
     self.box.deinit();
     self.scroll.deinit();
     self.* = undefined;

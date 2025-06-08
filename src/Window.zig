@@ -104,6 +104,9 @@ captured_last_frame: bool = false,
 
 gpa: std.mem.Allocator,
 _arena: dvui.ShrinkingArenaAllocator,
+/// Used to allocator widgets with a fixed location
+_widget_stack: std.heap.FixedBufferAllocator,
+_peak_widget_stack: usize = 0,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
@@ -161,6 +164,9 @@ const SavedData = struct {
 pub const InitOptions = struct {
     id_extra: usize = 0,
     arena: ?dvui.ShrinkingArenaAllocator = null,
+    /// For reference, the `dvui.Examples.demo` window uses
+    /// about 0x4000 stack space when not cached
+    widget_stack_max_bytes: usize = 0x10000,
     theme: ?*Theme = null,
     keybinds: ?enum {
         none,
@@ -180,6 +186,7 @@ pub fn init(
     var self = Self{
         .gpa = gpa,
         ._arena = init_opts.arena orelse .init(gpa),
+        ._widget_stack = .init(try gpa.alloc(u8, init_opts.widget_stack_max_bytes)),
         .subwindows = .init(gpa),
         .tab_index_prev = .init(gpa),
         .tab_index = .init(gpa),
@@ -405,6 +412,7 @@ pub fn deinit(self: *Self) void {
     self.toasts.deinit();
     self.keybinds.deinit();
     self._arena.deinit();
+    self.gpa.free(self._widget_stack.buffer);
 
     {
         var it = self.font_bytes.valueIterator();
@@ -1660,7 +1668,14 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // event to the end this will print a debug message.
     self.positionMouseEventRemove();
 
+    log.debug("peak arena {d} (0x{0x})", .{self._arena.peak_usage});
     _ = self._arena.reset();
+    if (self._widget_stack.end_index != 0) {
+        log.err("Widget stack was not empty at the end of the frame. Did you forget to call deinti?", .{});
+        self._widget_stack.reset();
+    }
+    log.debug("Peak widget stack {d} (0x{0x})", .{self._peak_widget_stack});
+    // self._peak_widget_stack = 0;
 
     try self.initEvents();
 

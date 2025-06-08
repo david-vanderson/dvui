@@ -1774,6 +1774,7 @@ pub fn copy(self: *TextLayoutWidget) void {
 }
 
 pub fn deinit(self: *TextLayoutWidget) void {
+    defer dvui.widgetFree(self);
     if (!self.add_text_done) {
         self.addTextDone(.{}) catch |err| {
             dvui.log.err("TextLayoutWidget.deinit addTextDone got {!}\n", .{err});
