@@ -54,7 +54,7 @@ pub fn install(self: *ScaleWidget) !void {
     }
 
     dvui.parentSet(self.widget());
-    try self.wd.register();
+    self.wd.register();
     try self.wd.borderAndBackground(.{});
 }
 

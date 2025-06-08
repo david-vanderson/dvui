@@ -163,7 +163,7 @@ pub fn deinit(self: *RaylibBackend) void {
 }
 
 pub fn backend(self: *RaylibBackend) dvui.Backend {
-    return dvui.Backend.init(self, @This());
+    return dvui.Backend.init(self);
 }
 
 pub fn nanoTime(self: *RaylibBackend) i128 {
@@ -191,7 +191,7 @@ pub fn contentScale(_: *RaylibBackend) f32 {
     return 1.0;
 }
 
-pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr_in: ?dvui.Rect.Physical) void {
+pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr_in: ?dvui.Rect.Physical) !void {
 
     //make sure all raylib draw calls are rendered
     //before rendering dvui elements
@@ -290,8 +290,9 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
     }
 }
 
-pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) dvui.Texture {
+pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
     const texid = c.rlLoadTexture(pixels, @intCast(width), @intCast(height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
+    if (texid <= 0) return dvui.Backend.TextureError.TextureCreate;
 
     switch (interpolation) {
         .nearest => {
@@ -312,9 +313,9 @@ pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32, 
 
 pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
     const id = c.rlLoadFramebuffer(); // Load an empty framebuffer
-    if (id == 0) {
+    if (id <= 0) {
         log.debug("textureCreateTarget: rlLoadFramebuffer() failed\n", .{});
-        return error.TextureCreate;
+        return dvui.Backend.TextureError.TextureCreate;
     }
 
     c.rlEnableFramebuffer(id);
@@ -322,6 +323,7 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
 
     // Create color texture (default to RGBA)
     const texid = c.rlLoadTexture(null, @intCast(width), @intCast(height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
+    if (texid <= 0) return dvui.Backend.TextureError.TextureCreate;
     switch (interpolation) {
         .nearest => {
             c.rlTextureParameters(texid, c.RL_TEXTURE_MIN_FILTER, c.RL_TEXTURE_FILTER_NEAREST);
@@ -341,16 +343,16 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
     // Check if fbo is complete with attachments (valid)
     if (!c.rlFramebufferComplete(id)) {
         log.debug("textureCreateTarget: rlFramebufferComplete() false\n", .{});
-        return error.TextureCreate;
+        return dvui.Backend.TextureError.TextureCreate;
     }
 
     try self.frame_buffers.put(texid, id);
 
     const ret = dvui.TextureTarget{ .ptr = @ptrFromInt(texid), .width = width, .height = height };
 
-    self.renderTarget(ret);
+    try self.renderTarget(ret);
     c.ClearBackground(c.BLANK);
-    self.renderTarget(null);
+    try self.renderTarget(null);
 
     return ret;
 }
@@ -361,14 +363,17 @@ pub fn textureFromTarget(_: *RaylibBackend, texture: dvui.TextureTarget) dvui.Te
 
 /// Render future drawClippedTriangles() to the passed texture (or screen
 /// if null).
-pub fn renderTarget(self: *RaylibBackend, texture: ?dvui.TextureTarget) void {
+pub fn renderTarget(self: *RaylibBackend, texture: ?dvui.TextureTarget) !void {
     if (texture) |tex| {
         const texid = @intFromPtr(tex.ptr);
-        var target: c.RenderTexture2D = undefined;
-        target.id = self.frame_buffers.get(@intCast(texid)) orelse unreachable;
-        target.texture.id = @intCast(texid);
-        target.texture.width = @intCast(tex.width);
-        target.texture.height = @intCast(tex.height);
+        const target: c.RenderTexture2D = .{
+            .id = self.frame_buffers.get(@intCast(texid)) orelse return dvui.Backend.GenericError.BackendError,
+            .texture = .{
+                .id = @intCast(texid),
+                .width = @intCast(tex.width),
+                .height = @intCast(tex.height),
+            },
+        };
         self.fb_width = target.texture.width;
         self.fb_height = target.texture.height;
 
@@ -388,16 +393,18 @@ pub fn renderTarget(self: *RaylibBackend, texture: ?dvui.TextureTarget) void {
     }
 }
 
-pub fn textureReadTarget(_: *RaylibBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) error{TextureRead}!void {
-    var t: c.Texture2D = undefined;
-    t.id = @intCast(@intFromPtr(texture.ptr));
-    t.width = @intCast(texture.width);
-    t.height = @intCast(texture.height);
-    t.mipmaps = 1;
-    t.format = c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
+pub fn textureReadTarget(_: *RaylibBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
+    const t: c.Texture2D = .{
+        .id = @intCast(@intFromPtr(texture.ptr)),
+        .width = @intCast(texture.width),
+        .height = @intCast(texture.height),
+        .mipmaps = 1,
+        .format = c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
+    };
 
     const img = c.LoadImageFromTexture(t);
     defer c.UnloadImage(img);
+    if (c.IsImageValid(img)) return dvui.Backend.TextureError.TextureRead;
 
     const imgData: [*]u8 = @ptrCast(img.data.?);
     for (0..@intCast(t.width * t.height * 4)) |i| {
@@ -415,7 +422,7 @@ pub fn textureDestroy(self: *RaylibBackend, texture: dvui.Texture) void {
 }
 
 pub fn clipboardText(_: *RaylibBackend) ![]const u8 {
-    return std.mem.sliceTo(c.GetClipboardText(), 0);
+    return std.mem.span(c.GetClipboardText());
 }
 
 pub fn clipboardTextSet(self: *RaylibBackend, text: []const u8) !void {

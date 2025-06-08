@@ -44,7 +44,7 @@ pub fn init(src: std.builtin.SourceLocation, dir: enums.Direction, equal_space: 
 }
 
 pub fn install(self: *BoxWidget) !void {
-    try self.wd.register();
+    self.wd.register();
 
     // our rect for children has to start at 0,0
     self.child_rect = self.wd.contentRect().justSize();

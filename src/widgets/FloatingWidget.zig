@@ -60,7 +60,7 @@ pub fn install(self: *FloatingWidget) !void {
 
     try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, self.prev_windowId);
     dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
-    try self.wd.register();
+    self.wd.register();
 
     // first break out of whatever clipping we were in
     self.prevClip = dvui.clipGet();

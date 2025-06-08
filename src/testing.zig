@@ -186,7 +186,7 @@ pub fn capturePng(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.P
     // render the retained dialogs and deferred renders
     _ = try dvui.currentWindow().endRendering(.{});
 
-    picture.stop();
+    try picture.stop();
 
     // texture will be destroyed in picture.deinit() so grab pixels now
     const png_data = try picture.png(self.allocator);

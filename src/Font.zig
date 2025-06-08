@@ -10,29 +10,41 @@ size: f32,
 line_height_factor: f32 = 1.2,
 name: []const u8,
 
-pub fn resize(self: *const Font, s: f32) Font {
+pub fn hash(font: Font) u64 {
+    var h = dvui.fnv.init();
+    const bytes = if (dvui.currentWindow().font_bytes.get(font.name)) |fbe| fbe.ttf_bytes else Font.default_ttf_bytes;
+    h.update(std.mem.asBytes(&bytes.ptr));
+    h.update(std.mem.asBytes(&font.size));
+    return h.final();
+}
+
+pub fn switchFontName(self: Font, name: []const u8) Font {
+    return Font{ .size = self.size, .line_height_factor = self.line_height_factor, .name = name };
+}
+
+pub fn resize(self: Font, s: f32) Font {
     return Font{ .size = s, .line_height_factor = self.line_height_factor, .name = self.name };
 }
 
-pub fn lineHeightFactor(self: *const Font, factor: f32) Font {
+pub fn lineHeightFactor(self: Font, factor: f32) Font {
     return Font{ .size = self.size, .line_height_factor = factor, .name = self.name };
 }
 
-pub fn textHeight(self: *const Font) f32 {
+pub fn textHeight(self: Font) f32 {
     return self.sizeM(1, 1).h;
 }
 
-pub fn lineHeight(self: *const Font) f32 {
+pub fn lineHeight(self: Font) f32 {
     return self.textHeight() * self.line_height_factor;
 }
 
-pub fn sizeM(self: *const Font, wide: f32, tall: f32) Size {
+pub fn sizeM(self: Font, wide: f32, tall: f32) Size {
     const msize: Size = self.textSize("M");
     return .{ .w = msize.w * wide, .h = msize.h * tall };
 }
 
 // handles multiple lines
-pub fn textSize(self: *const Font, text: []const u8) Size {
+pub fn textSize(self: Font, text: []const u8) Size {
     if (text.len == 0) {
         // just want the normal text height
         return .{ .w = 0, .h = self.textHeight() };
@@ -65,7 +77,7 @@ pub const EndMetric = enum {
 };
 
 /// textSizeEx always stops at a newline, use textSize to get multiline sizes
-pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize, end_metric: EndMetric) Size {
+pub fn textSizeEx(self: Font, text: []const u8, max_width: ?f32, end_idx: ?*usize, end_metric: EndMetric) Size {
     // ask for a font that matches the natural display pixels so we get a more
     // accurate size
 
@@ -74,10 +86,7 @@ pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx:
     const sized_font = self.resize(ask_size);
 
     // might give us a slightly smaller font
-    const fce = dvui.fontCacheGet(sized_font) catch |err| {
-        dvui.log.err("fontCacheGet got {!} for font \"{s}\"", .{ err, self.name });
-        return .{ .w = 10, .h = 10 };
-    };
+    const fce = dvui.fontCacheGet(sized_font) catch return .{ .w = 10, .h = 10 };
 
     // this must be synced with dvui.renderText()
     const target_fraction = if (dvui.currentWindow().snap_to_pixels) 1.0 / ss else self.size / fce.height;
@@ -88,10 +97,7 @@ pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx:
         max_width_sized = mwidth / target_fraction;
     }
 
-    var s = fce.textSizeRaw(self.name, text, max_width_sized, end_idx, end_metric) catch |err| {
-        dvui.log.err("textSizeRaw got {!} for font \"{s}\" text \"{s}\"", .{ err, self.name, text });
-        return .{ .w = 10, .h = 10 };
-    };
+    var s = fce.textSizeRaw(self.name, text, max_width_sized, end_idx, end_metric) catch return .{ .w = 10, .h = 10 };
 
     // do this check after calling textSizeRaw so that end_idx is set
     if (ask_size == 0.0) return Size{};
@@ -102,9 +108,12 @@ pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx:
 
 // default bytes if font id is not found in database
 pub const default_ttf_bytes = TTFBytes.Vera;
+// NOTE: This font name should match the name in the font data base
+pub const default_font_name = "Vera";
 
 // functionality for accessing builtin fonts
 pub const TTFBytes = struct {
+    pub const InvalidFontFile = "This is a very invalid font file";
     pub const Aleo = @embedFile("fonts/Aleo/static/Aleo-Regular.ttf");
     pub const AleoBd = @embedFile("fonts/Aleo/static/Aleo-Bold.ttf");
     pub const Vera = @embedFile("fonts/bitstream-vera/Vera.ttf");
@@ -131,14 +140,14 @@ pub const TTFBytes = struct {
     //pub const OpenDyslexicBdIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold-Italic.otf");
 };
 
-pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap(dvui.FontBytesEntry) {
+pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) std.mem.Allocator.Error!std.StringHashMap(dvui.FontBytesEntry) {
     var result = std.StringHashMap(dvui.FontBytesEntry).init(allocator);
     inline for (@typeInfo(TTFBytes).@"struct".decls) |decl| {
-        try result.put(decl.name, dvui.FontBytesEntry{ .ttf_bytes = @field(TTFBytes, decl.name), .allocator = null });
+        try result.putNoClobber(decl.name, dvui.FontBytesEntry{ .ttf_bytes = @field(TTFBytes, decl.name), .allocator = null });
     }
 
     if (!dvui.wasm) {
-        try result.put("Noto", dvui.FontBytesEntry{ .ttf_bytes = @embedFile("fonts/NotoSansKR-Regular.ttf"), .allocator = null });
+        try result.putNoClobber("Noto", dvui.FontBytesEntry{ .ttf_bytes = @embedFile("fonts/NotoSansKR-Regular.ttf"), .allocator = null });
     }
 
     return result;

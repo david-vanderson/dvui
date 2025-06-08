@@ -477,7 +477,7 @@ pub fn demo() !void {
             }
 
             if (use_cache) {
-                cache.deinit();
+                try cache.deinit();
             }
 
             try bw.drawFocus();
@@ -1186,7 +1186,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
                     if (bytes) |b| blk: {
                         dvui.addFont(name, b, dvui.currentWindow().gpa) catch |err| switch (err) {
                             error.OutOfMemory => @panic("OOM"),
-                            error.freetypeError => {
+                            error.fontError => {
                                 dvui.currentWindow().gpa.free(b);
                                 try dvui.dialog(@src(), .{}, .{ .title = "Bad Font", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "\"{s}\" is not a valid font", .{filename}) });
                                 break :blk;
@@ -2009,7 +2009,7 @@ pub fn plots() !void {
     plot.deinit();
 
     if (pic) |*p| {
-        p.stop();
+        try p.stop();
         defer p.deinit();
 
         const arena = dvui.currentWindow().arena();
@@ -2252,7 +2252,7 @@ pub fn reorderListsAdvanced() !void {
 
             // reset to use next space, need a separator
             _ = try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(6) });
-            try reorderable.reinstall();
+            reorderable.reinstall();
         }
 
         // actual content of the list entry
@@ -3510,7 +3510,7 @@ pub fn animations() !void {
 
         std.mem.rotate(u8, &pixels, @intCast(frame * 4));
 
-        const tex = dvui.textureCreate(.cast(&pixels), 2, 2, .nearest);
+        const tex = try dvui.textureCreate(.cast(&pixels), 2, 2, .nearest);
         dvui.textureDestroyLater(tex);
 
         var frame_box = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 50, .h = 50 } });
@@ -3563,6 +3563,12 @@ pub fn debuggingErrors() !void {
         if (try dvui.labelClick(@src(), "See https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids", .{}, .{ .gravity_y = 0.5, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
             try dvui.openURL("https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids");
         }
+    }
+
+    if (try dvui.expander(@src(), "Invalid utf-8 text", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+        try dvui.labelNoFmt(@src(), "this \xFFtext\xFF includes some \xFF invalid utf-8\xFF\xFF\xFF which is replaced with \xFF", .{});
     }
 
     if (try dvui.expander(@src(), "Scroll child after expanded child (will log error)", .{}, .{ .expand = .horizontal })) {
@@ -3628,7 +3634,7 @@ pub fn debuggingErrors() !void {
         try tl.addText("\nCurrent keybinds:\n", .{});
         outer = dvui.currentWindow().keybinds.iterator();
         while (outer.next()) |okv| {
-            try tl.format("\n{s}\n    {s}\n", .{ okv.key_ptr.*, try okv.value_ptr.format(dvui.currentWindow().arena()) }, .{});
+            try tl.format("\n{s}\n    {}\n", .{ okv.key_ptr.*, okv.value_ptr }, .{});
         }
         tl.deinit();
     }
@@ -4510,7 +4516,7 @@ pub const StrokeTest = struct {
 
         const defaults = dvui.Options{ .name = "StrokeTest" };
         self.wd = dvui.WidgetData.init(src, .{}, defaults.override(options));
-        try self.wd.register();
+        self.wd.register();
 
         const evts = dvui.events();
         for (evts) |*e| {
