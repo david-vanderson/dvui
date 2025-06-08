@@ -4252,8 +4252,33 @@ pub fn grid(src: std.builtin.SourceLocation, init_opts: GridWidget.InitOpts, opt
     return ret;
 }
 
+/// Create either a draggable separator (resize_options != null)
+/// or a standard separator (resize_options = null) for a grid heading.
+pub fn gridHeadingSeparator(resize_options: ?GridWidget.HeaderResizeWidget.InitOptions) !void {
+    if (resize_options) |resize_opts| {
+        var handle: GridWidget.HeaderResizeWidget = .init(
+            @src(),
+            .vertical,
+            resize_opts,
+            .{ .gravity_x = 1.0 },
+        );
+        try handle.install();
+        handle.processEvents();
+        handle.deinit();
+    } else {
+        _ = try separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
+    }
+}
+
 /// Create a heading with a static label
-pub fn gridHeading(src: std.builtin.SourceLocation, g: *GridWidget, heading: []const u8, cell_opts: dvui.GridWidget.CellOptions, opts: dvui.Options) !void {
+pub fn gridHeading(
+    src: std.builtin.SourceLocation,
+    g: *GridWidget,
+    heading: []const u8,
+    resize_opts: ?GridWidget.HeaderResizeWidget.InitOptions,
+    cell_opts: GridWidget.CellOptions,
+    opts: Options,
+) !void {
     const label_defaults: Options = .{
         .corner_radius = Rect.all(0),
         .expand = .horizontal,
@@ -4267,7 +4292,7 @@ pub fn gridHeading(src: std.builtin.SourceLocation, g: *GridWidget, heading: []c
     defer cell.deinit();
 
     try labelNoFmt(@src(), heading, label_options);
-    _ = try separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
+    try gridHeadingSeparator(resize_opts);
 }
 
 /// Create a heading and allow the column to be sorted.
@@ -4279,6 +4304,7 @@ pub fn gridHeadingSortable(
     g: *GridWidget,
     heading: []const u8,
     dir: *GridWidget.SortDirection,
+    resize_opts: ?GridWidget.HeaderResizeWidget.InitOptions,
     cell_opts: GridWidget.CellOptions,
     opts: dvui.Options,
 ) !bool {
@@ -4295,7 +4321,7 @@ pub fn gridHeadingSortable(
     var cell = try g.headerCell(src, cell_opts);
     defer cell.deinit();
 
-    _ = try separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
+    try gridHeadingSeparator(resize_opts);
 
     const sort_changed = switch (g.colSortOrder()) {
         .unsorted => try button(@src(), heading, .{ .draw_focus = false }, heading_opts),
