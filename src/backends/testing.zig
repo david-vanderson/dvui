@@ -33,6 +33,7 @@ pub fn deinit(self: *TestingBackend) void {
     if (self.clipboard) |text| {
         self.allocator.free(text);
     }
+    self.* = undefined;
 }
 
 /// Get monotonic nanosecond timestamp. Doesn't have to be system time.

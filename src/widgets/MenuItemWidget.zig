@@ -261,6 +261,7 @@ pub fn deinit(self: *MenuItemWidget) void {
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);
+    self.* = undefined;
 }
 
 test {

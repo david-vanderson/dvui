@@ -118,6 +118,7 @@ pub fn deinit(self: *SuggestionWidget) void {
         self.drop = null;
     }
     self.menu.deinit();
+    self.* = undefined;
 }
 
 const Options = dvui.Options;

@@ -55,6 +55,7 @@ pub fn draw(self: *IconWidget) !void {
 pub fn deinit(self: *IconWidget) void {
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
+    self.* = undefined;
 }
 
 test {
