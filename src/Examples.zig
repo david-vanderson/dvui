@@ -3862,7 +3862,7 @@ fn gridStyling() !void {
 
     var outer_hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
     defer outer_hbox.deinit();
-    const row_background = local.banding == .rows or local.borders.nonZero();
+    const row_background = local.banding != .none or local.borders.nonZero();
 
     {
         var grid = try dvui.grid(@src(), .{ .resize_rows = local.resize_rows }, .{
@@ -3901,7 +3901,8 @@ fn gridStyling() !void {
                 .border = local.borders,
                 .margin = Rect.all(local.margin),
                 .padding = Rect.all(local.padding),
-                .background = true,
+                .background = row_background,
+                // Only set the alternate fill colour if actually banding.
                 .color_fill = if (local.banding != .none) .fill_press else null,
             },
             .{},
@@ -4050,7 +4051,6 @@ fn gridLayouts() !void {
 
     const local = struct {
         const num_cols = 6;
-        const col_num_descr = 5;
         const checkbox_w = 40;
 
         var col_widths: [num_cols]f32 = @splat(100); // Default width to 100
@@ -4064,23 +4064,14 @@ fn gridLayouts() !void {
         var resize_rows: bool = false;
 
         /// Create a textArea for the description so that the text can wrap.
-        fn customDescriptionColumn(src: std.builtin.SourceLocation, grid: *GridWidget, data: []Car, opts: dvui.Options) !void {
-            // Creating the description cells with a multi-line text area.
+        fn customDescriptionColumn(src: std.builtin.SourceLocation, grid: *GridWidget, data: []Car, opts: *const GridWidget.GridOptionsBanded) !void {
             for (data, 0..) |*car, row_num| {
-                var col = try grid.bodyCell(src, row_num, rowBanding(col_num_descr, row_num));
+                var col = try grid.bodyCell(src, row_num, opts.cellOptions(grid.col_num, row_num));
                 defer col.deinit();
                 var text = try dvui.textLayout(@src(), .{ .break_lines = true }, .{ .expand = .both, .background = false });
                 defer text.deinit();
-                try text.addText(car.description, opts);
+                try text.addText(car.description, opts.options(grid.col_num, row_num));
             }
-        }
-
-        /// Set background of all odd rows to the theme's fill_press color.
-        fn rowBanding(_: usize, col_num: usize) GridWidget.CellOptions {
-            if (col_num % 2 == 1)
-                return .{ .color_fill = .{ .name = .fill_press }, .background = true }
-            else
-                return .{};
         }
 
         const ConditionTextColor = struct {
@@ -4289,7 +4280,7 @@ fn gridLayouts() !void {
             if (try dvui.gridHeadingSortable(@src(), grid, "Description", &local.sort_dir, local.headerResizeOptions(5), .{})) {
                 local.sort("Description");
             }
-            try local.customDescriptionColumn(@src(), grid, all_cars[0..], .{});
+            try local.customDescriptionColumn(@src(), grid, all_cars[0..], &banded);
         }
     }
     {
