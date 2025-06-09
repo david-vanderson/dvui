@@ -48,7 +48,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options)
     self.init_opts = init_opts;
     const options = defaults.override(opts);
 
-    self.hbox = BoxWidget.init(src, .horizontal, false, options);
+    self.hbox = BoxWidget.init(src, .{ .dir = .horizontal }, options);
 
     return self;
 }
@@ -123,7 +123,7 @@ pub fn install(self: *ScrollAreaWidget) !void {
         self.vbar.?.deinit();
     }
 
-    self.vbox = BoxWidget.init(@src(), .vertical, false, self.hbox.data().options.strip().override(.{ .expand = .both, .name = "ScrollAreaWidget vbox" }));
+    self.vbox = BoxWidget.init(@src(), .{ .dir = .vertical }, self.hbox.data().options.strip().override(.{ .expand = .both, .name = "ScrollAreaWidget vbox" }));
     try self.vbox.install();
     try self.vbox.drawBackground();
 

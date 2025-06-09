@@ -253,7 +253,7 @@ pub fn drawBackground(self: *FloatingWindowWidget) !void {
     }
 
     // we are using BoxWidget to do border/background
-    self.layout = BoxWidget.init(@src(), .vertical, false, self.options.override(.{ .expand = .both }));
+    self.layout = BoxWidget.init(@src(), .{ .dir = .vertical }, self.options.override(.{ .expand = .both }));
     try self.layout.install();
     try self.layout.drawBackground();
 

@@ -148,7 +148,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
     const br = b.data().contentRect();
     const current_point: dvui.Point = .{ .x = br.w * hsv.s, .y = br.h * (1 - hsv.v) };
 
-    var indicator = dvui.BoxWidget.init(@src(), .horizontal, false, .{
+    var indicator = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, .{
         .rect = dvui.Rect.fromPoint(current_point).toSize(.all(10)).offsetNeg(.all(5)),
         .padding = .{},
         .margin = .{},
@@ -286,7 +286,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
         .vertical => .{ .y = (br.h * fraction) - knobsize.h / 2 },
     }).toSize(knobsize);
 
-    var knob = dvui.BoxWidget.init(@src(), .horizontal, false, .{
+    var knob = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, .{
         .rect = knobRect,
         .padding = .{},
         .margin = .{},

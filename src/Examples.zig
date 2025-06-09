@@ -1453,7 +1453,7 @@ pub fn styling() !void {
             var vbox = try dvui.box(@src(), .vertical, .{});
             defer vbox.deinit();
 
-            if (try rgbSliders(@src(), &backbox_color, .{ .debug = true })) {
+            if (try rgbSliders(@src(), &backbox_color, .{})) {
                 hsluv_hsl = .fromColor(backbox_color);
                 hsv_color = .fromColor(backbox_color);
             }
@@ -1755,10 +1755,16 @@ pub fn layout() !void {
     {
         const opts: Options = .{ .expand = .both, .border = Rect.all(1), .background = true };
 
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+        const breakpoint: f32 = 400;
+        const equal = dvui.parentGet().data().contentRect().w > breakpoint;
+
+        var hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal, .equal_space = equal, .num_packed_expanded = if (equal) 2 else 1 }, .{ .expand = .horizontal });
+        try hbox.install();
+        try hbox.drawBackground();
         defer hbox.deinit();
+
         {
-            var hbox2 = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 200, .h = 140 } });
+            var hbox2 = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = breakpoint / 2, .h = 140 }, .max_size_content = .width(breakpoint / 2), .expand = if (equal) .horizontal else .none });
             defer hbox2.deinit();
             {
                 var vbox = try dvui.box(@src(), .vertical, opts);
@@ -1780,10 +1786,10 @@ pub fn layout() !void {
         }
 
         {
-            var vbox2 = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200, .h = 140 }, .expand = .horizontal });
+            var vbox2 = try dvui.box(@src(), .vertical, .{ .max_size_content = .zero, .expand = .both });
             defer vbox2.deinit();
             {
-                var hbox2 = try dvui.box(@src(), .horizontal, opts.override(.{ .debug = true }));
+                var hbox2 = try dvui.box(@src(), .horizontal, opts);
                 defer hbox2.deinit();
 
                 _ = try dvui.button(@src(), "horizontal", .{}, .{ .gravity_y = 0.5 });
@@ -2471,7 +2477,7 @@ pub fn menus() !void {
 
 pub fn submenus() !void {
     if (try dvui.menuItemLabel(@src(), "Submenu...", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
-        var fw2 = try dvui.floatingMenu(@src(), .{ .from = r }, .{ .debug = true });
+        var fw2 = try dvui.floatingMenu(@src(), .{ .from = r }, .{});
         defer fw2.deinit();
 
         try submenus();
@@ -2578,7 +2584,7 @@ pub fn focus() !void {
         try tl.addText("Hover highlighting a box around widgets:", .{});
         tl.deinit();
 
-        var hbox = dvui.BoxWidget.init(@src(), .horizontal, false, .{ .expand = .horizontal, .padding = dvui.Rect.all(4) });
+        var hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .padding = dvui.Rect.all(4) });
         try hbox.install();
         const evts = dvui.events();
         for (evts) |*e| {

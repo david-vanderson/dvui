@@ -37,7 +37,7 @@ pub fn install(self: *TabsWidget) !void {
         .horizontal => .{ .y = 2 },
         .vertical => .{ .x = 2 },
     };
-    self.box = BoxWidget.init(@src(), self.init_options.dir, false, .{ .margin = margin });
+    self.box = BoxWidget.init(@src(), .{ .dir = self.init_options.dir }, .{ .margin = margin });
     try self.box.install();
 
     var r = self.scroll.data().contentRectScale().r;
