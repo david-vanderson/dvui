@@ -4373,14 +4373,6 @@ fn gridVirtualScrolling() !void {
         fn isPrime(num: usize) bool {
             return primes.isSet(num);
         }
-
-        fn highlightIfHovered(box: *dvui.BoxWidget, hovered: bool) !void {
-            if (hovered) {
-                box.wd.options.background = true;
-                box.wd.options.color_fill = .fill_hover;
-                try box.drawBackground();
-            }
-        }
     };
 
     if (!local.generated_primes) {
@@ -4397,7 +4389,7 @@ fn gridVirtualScrolling() !void {
     });
     defer grid.deinit();
 
-    // Each column has slightly different border requirement. Create separate options for each.
+    // Each column has slightly different border requirements. Create separate options for each.
     // Using the override avoids having to duplicate the event processing from .init for each column.
     const highlight_hovered_1: GridWidget.GridOptionsHighlightHovered = .init(grid, &local.scroll_info, .{
         .border = .{ .x = 1, .w = 1, .h = 1 },
