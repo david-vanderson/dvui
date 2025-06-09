@@ -4397,23 +4397,11 @@ fn gridVirtualScrolling() !void {
     });
     defer grid.deinit();
 
-    // Check if a row is being hovered.
-    const evts = dvui.events();
-    const highlighted_row: ?usize = row: {
-        for (evts) |*e| {
-            if (dvui.eventMatchSimple(e, grid.data()) and
-                (e.evt == .mouse and e.evt.mouse.action == .position) and
-                (grid.row_height > 1))
-            {
-                // Translate mouse screen position to a logical position relative to the top-left of the grid body.
-                if (grid.pointToBodyRelative(e.evt.mouse.p)) |point| {
-                    break :row @intFromFloat((local.scroll_info.viewport.y + point.y) / grid.row_height);
-                }
-            }
-        }
-        break :row null;
-    };
-
+    const highlight_hovered: GridWidget.GridOptionsHighlightHovered = .init(grid, &local.scroll_info, .{
+        .border = .{ .x = 1, .w = 1, .h = 1 },
+        .background = true,
+        .color_fill_hover = .fill_hover,
+    }, .{});
     const scroller: dvui.GridWidget.VirtualScroller = .init(grid, .{ .total_rows = num_rows, .scroll_info = &local.scroll_info });
     const first = scroller.startRow();
     const last = scroller.endRow(); // Note that endRow is exclusive, meaning it can be used as a slice end index.
@@ -4425,9 +4413,8 @@ fn gridVirtualScrolling() !void {
         try dvui.gridHeading(@src(), grid, "Number", .fixed, .{});
 
         for (first..last) |num| {
-            var cell = try grid.bodyCell(@src(), num, .{ .border = .{ .x = 1, .w = 1, .h = 1 }, .background = true });
+            var cell = try grid.bodyCell(@src(), num, highlight_hovered.cellOptions(.body, 0, num));
             defer cell.deinit();
-            try local.highlightIfHovered(cell, num == highlighted_row);
             try dvui.label(@src(), "{d}", .{num}, .{});
         }
     }
@@ -4439,9 +4426,8 @@ fn gridVirtualScrolling() !void {
         try dvui.gridHeading(@src(), grid, "Is prime?", .fixed, .{});
 
         for (first..last) |num| {
-            var cell = try grid.bodyCell(@src(), num, .{ .border = .{ .w = 1, .h = 1 }, .background = true });
+            var cell = try grid.bodyCell(@src(), num, highlight_hovered.cellOptions(.body, 0, num));
             defer cell.deinit();
-            try local.highlightIfHovered(cell, num == highlighted_row);
             if (local.isPrime(num)) {
                 try dvui.icon(@src(), "Check", check_img, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .background = false });
             }
