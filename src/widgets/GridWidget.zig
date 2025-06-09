@@ -46,6 +46,80 @@ pub const ColOptions = struct {
     }
 };
 
+pub const GridOptions = struct {
+    pub const CellType = enum { header, body };
+    cell_opts: CellOptions,
+    opts: Options,
+
+    pub fn init(cell_opts: CellOptions, opts: Options) GridOptions {
+        return .{
+            .cell_opts = cell_opts,
+            .opts = opts,
+        };
+    }
+
+    pub fn cellOptions(self: *const GridOptions, typ: CellType, col: usize, row: usize) CellOptions {
+        _ = typ;
+        _ = row;
+        _ = col;
+        return self.cell_opts;
+    }
+
+    pub fn options(self: *const GridOptions, typ: CellType, col: usize, row: usize) Options {
+        _ = typ;
+        _ = row;
+        _ = col;
+        return self.opts;
+    }
+
+    pub fn overrideOptions(self: *const GridOptions, opts: Options) GridOptions {
+        return .{
+            .cell_opts = self.cell_opts,
+            .opts = self.opts.override(opts),
+        };
+    }
+
+    pub const none: GridOptions = .init(.{}, .{});
+};
+
+// TODO: Make this take an orientation so works for row, col and both? banding.
+pub const GridOptionsBanded = struct {
+    alt_cell_opts: CellOptions,
+    cell_opts: CellOptions,
+    opts: Options,
+
+    pub fn init(cell_opts: CellOptions, alt_cell_opts: CellOptions, opts: Options) GridOptionsBanded {
+        return .{
+            .cell_opts = cell_opts,
+            .alt_cell_opts = alt_cell_opts,
+            .opts = opts,
+        };
+    }
+
+    pub fn cellOptions(self: *const GridOptionsBanded, typ: GridOptions.CellType, col: usize, row: usize) CellOptions {
+        _ = col;
+        return if (typ == .header or row % 2 == 0)
+            self.cell_opts
+        else
+            self.alt_cell_opts;
+    }
+
+    pub fn options(self: *const GridOptionsBanded, typ: GridOptions.CellType, col: usize, row: usize) Options {
+        _ = typ;
+        _ = row;
+        _ = col;
+        return self.opts;
+    }
+
+    pub fn overrideOptions(self: *const GridOptionsBanded, opts: Options) GridOptionsBanded {
+        return .{
+            .cell_opts = self.cell_opts,
+            .alt_cell_opts = self.alt_cell_opts,
+            .opts = self.opts.override(opts),
+        };
+    }
+};
+
 pub const CellOptions = struct {
     height: ?f32 = null,
     margin: ?Rect = null,

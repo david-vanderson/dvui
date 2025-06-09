@@ -4423,8 +4423,7 @@ pub fn gridHeading(
     g: *GridWidget,
     heading: []const u8,
     resize_opts: ?GridWidget.HeaderResizeWidget.InitOptions,
-    cell_opts: GridWidget.CellOptions,
-    opts: Options,
+    anyopts: anytype,
 ) !void {
     const label_defaults: Options = .{
         .corner_radius = Rect.all(0),
@@ -4434,8 +4433,10 @@ pub fn gridHeading(
         .color_fill = .{ .name = .fill_control },
         .background = true,
     };
-    const label_options = label_defaults.override(opts);
-    var cell = try g.headerCell(src, cell_opts);
+    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.GridOptions.none else anyopts;
+
+    const label_options = label_defaults.override(opts.options(.header, g.col_num, 0));
+    var cell = try g.headerCell(src, opts.cellOptions(.header, g.col_num, 0));
     defer cell.deinit();
 
     try labelNoFmt(@src(), heading, label_options);
@@ -4452,8 +4453,7 @@ pub fn gridHeadingSortable(
     heading: []const u8,
     dir: *GridWidget.SortDirection,
     resize_opts: ?GridWidget.HeaderResizeWidget.InitOptions,
-    cell_opts: GridWidget.CellOptions,
-    opts: dvui.Options,
+    anyopts: anytype,
 ) !bool {
     const icon_ascending = dvui.entypo.chevron_small_up;
     const icon_descending = dvui.entypo.chevron_small_down;
@@ -4463,9 +4463,10 @@ pub fn gridHeadingSortable(
         .expand = .horizontal,
         .corner_radius = Rect.all(0),
     };
-    const heading_opts = heading_defaults.override(opts);
+    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.GridOptions.none else anyopts;
+    const heading_opts = heading_defaults.override(opts.options(.header, g.col_num, 0));
 
-    var cell = try g.headerCell(src, cell_opts);
+    var cell = try g.headerCell(src, opts.cellOptions(.header, g.col_num, 0));
     defer cell.deinit();
 
     try gridHeadingSeparator(resize_opts);
@@ -4483,20 +4484,6 @@ pub fn gridHeadingSortable(
     return sort_changed;
 }
 
-pub const CellOptionsOrCallback = union(enum) {
-    options: GridWidget.CellOptions,
-    callback: *const fn (col_num: usize, row_num: usize) GridWidget.CellOptions,
-
-    pub const none: CellOptionsOrCallback = .{ .options = .{} };
-};
-
-pub const OptionsOrCallback = union(enum) {
-    options: Options,
-    callback: *const fn (col_num: usize, row_num: usize) Options,
-
-    pub const none: OptionsOrCallback = .{ .options = .{} };
-};
-
 /// Create a column from a slice
 ///
 /// If data is a slice of struct field_name must be supplied
@@ -4510,8 +4497,7 @@ pub fn gridColumnFromSlice(
     data: []const T,
     comptime field_name: ?[]const u8,
     comptime fmt: []const u8,
-    cell_opts: CellOptionsOrCallback,
-    opts: OptionsOrCallback,
+    anyopts: anytype,
 ) !void {
     // TODO: Support pointer to direct value.
     comptime var TypeToValidate = T;
@@ -4535,27 +4521,16 @@ pub fn gridColumnFromSlice(
         },
         else => {},
     };
+    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.GridOptions.none else anyopts;
 
     const label_defaults: Options = .{
         .expand = .horizontal,
-    };
-    // If options are supplied create the default options.
-    const row_label_opts: Options = switch (opts) {
-        .options => |o| label_defaults.override(o),
-        .callback => .{},
-    };
-    const row_cell_opts: GridWidget.CellOptions = switch (cell_opts) {
-        .options => |o| o,
-        .callback => .{},
     };
     for (data, 0..) |item, row_num| {
         var cell = try g.bodyCell(
             src,
             row_num,
-            switch (cell_opts) {
-                .options => row_cell_opts,
-                .callback => |callback| callback(g.col_num, row_num),
-            },
+            opts.cellOptions(.body, g.col_num, row_num),
         );
         defer cell.deinit();
         const cell_value = value: {
@@ -4579,10 +4554,7 @@ pub fn gridColumnFromSlice(
             @src(),
             fmt,
             .{cell_value},
-            switch (opts) {
-                .options => |o| row_label_opts.override(o),
-                .callback => |callback| label_defaults.override(callback(g.col_num, row_num)),
-            },
+            label_defaults.override(opts.options(.body, g.col_num, row_num)),
         );
     }
 }
@@ -4597,7 +4569,7 @@ pub const GridColumnSelectAllState = enum {
 ///
 /// Returns true if the selection state has changed.
 /// selection - out parameter containing the current selection state.
-pub fn gridHeadingCheckbox(src: std.builtin.SourceLocation, g: *GridWidget, selection: *GridColumnSelectAllState, cell_opts: GridWidget.CellOptions, opts: Options) !bool {
+pub fn gridHeadingCheckbox(src: std.builtin.SourceLocation, g: *GridWidget, selection: *GridColumnSelectAllState, anyopts: anytype) !bool {
     const header_defaults: Options = .{
         .background = true,
         .expand = .both,
@@ -4606,13 +4578,16 @@ pub fn gridHeadingCheckbox(src: std.builtin.SourceLocation, g: *GridWidget, sele
         .gravity_x = 0.5,
         .gravity_y = 0.5,
     };
-    const header_options = header_defaults.override(opts);
+
+    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.GridOptions.none else anyopts;
+
+    const header_options = header_defaults.override(opts.options(.header, g.col_num, 0));
     var checkbox_opts: Options = header_options.strip();
     checkbox_opts.padding = ButtonWidget.defaults.paddingGet();
     checkbox_opts.gravity_x = header_options.gravity_x;
     checkbox_opts.gravity_y = header_options.gravity_y;
 
-    var cell = try g.headerCell(src, cell_opts);
+    var cell = try g.headerCell(src, opts.cellOptions(.header, g.col_num, 0));
     defer cell.deinit();
 
     var clicked = false;
@@ -4647,8 +4622,7 @@ pub fn gridColumnCheckbox(
     comptime T: type,
     data: []T,
     comptime field_name: ?[]const u8,
-    cell_opts: CellOptionsOrCallback,
-    opts: OptionsOrCallback,
+    anyopts: anytype,
 ) !bool {
     if (T != bool) {
         if (field_name) |_field_name| {
@@ -4661,14 +4635,12 @@ pub fn gridColumnCheckbox(
             @compileError("data must be of type []bool when field_name is null.");
         }
     }
+    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.GridOptions.none else anyopts;
+
     const check_defaults: Options = .{
         .gravity_x = 0.5,
         .gravity_y = 0.5,
         .margin = ButtonWidget.defaults.marginGet(),
-    };
-    const check_opts = switch (opts) {
-        .options => |o| check_defaults.override(o),
-        .callback => check_defaults,
     };
 
     var selection_changed = false;
@@ -4676,10 +4648,7 @@ pub fn gridColumnCheckbox(
         var cell = try g.bodyCell(
             src,
             row_num,
-            switch (cell_opts) {
-                .options => |o| o,
-                .callback => |callback| callback(g.col_num, row_num),
-            },
+            opts.cellOptions(.body, g.col_num, row_num),
         );
         defer cell.deinit();
         const is_selected: *bool = if (T == bool) item else &@field(item, field_name.?);
@@ -4688,10 +4657,7 @@ pub fn gridColumnCheckbox(
             @src(),
             is_selected,
             null,
-            switch (opts) {
-                .options => check_opts,
-                .callback => |callback| check_defaults.override(callback(g.col_num, row_num)),
-            },
+            check_defaults.override(opts.options(.body, g.col_num, row_num)),
         );
         selection_changed = selection_changed or was_selected != is_selected.*;
     }
