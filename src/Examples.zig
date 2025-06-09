@@ -3857,21 +3857,6 @@ fn gridStyling() !void {
         var margin: f32 = 0;
         var padding: f32 = 0;
 
-        // TODO: This can be replaced by the GridOptionsBanded
-        fn rowColorFill(row_num: usize) ?dvui.Options.ColorOrName {
-            if (banding == .rows and row_num % 2 == 0) {
-                return .{ .name = .fill_press };
-            }
-            return null;
-        }
-        // TODO: This can be replaced by the GridOptionsBanded when changed to support col banding.
-        fn colColorFill(col_num: usize) ?dvui.Options.ColorOrName {
-            if (banding == .cols and col_num % 2 == 0) {
-                return .{ .name = .fill_press };
-            }
-            return null;
-        }
-
         const Banding = enum { none, rows, cols };
     };
 
@@ -3901,9 +3886,30 @@ fn gridStyling() !void {
         // which column header is clicked.
         const current_sort_dir = local.sort_dir;
 
+        const cell_opts: GridWidget.GridOptionsBanded = .init(
+            switch (local.banding) {
+                .none, .rows => .rows,
+                .cols => .cols,
+            },
+            .{
+                .border = local.borders,
+                .background = row_background,
+                .margin = Rect.all(local.margin),
+                .padding = Rect.all(local.padding),
+            },
+            .{
+                .border = local.borders,
+                .margin = Rect.all(local.margin),
+                .padding = Rect.all(local.padding),
+                .background = true,
+                .color_fill = if (local.banding != .none) .fill_press else null,
+            },
+            .{},
+        );
+
         // First column displays temperature in Celcius.
         {
-            var col = try grid.column(@src(), .{ .color_fill = local.colColorFill(0), .background = true });
+            var col = try grid.column(@src(), .{});
             defer col.deinit();
             // Set this column as the default sort
             if (current_sort_dir == .unsorted) {
@@ -3921,23 +3927,14 @@ fn gridStyling() !void {
                 temp += interval;
                 row_num += 1;
             }) {
-                var cell = try grid.bodyCell(@src(), row_num, .{
-                    .border = local.borders,
-                    .background = row_background,
-                    .color_fill = local.rowColorFill(row_num),
-                    .margin = Rect.all(local.margin),
-                    .padding = Rect.all(local.padding),
-                });
+                var cell = try grid.bodyCell(@src(), row_num, cell_opts.cellOptions(grid.col_num, row_num));
                 defer cell.deinit();
                 try dvui.label(@src(), "{d}", .{temp}, .{ .gravity_x = 0.5, .expand = .horizontal });
             }
         }
         // Second column displays temperature in Farenheight.
         {
-            var col = try grid.column(@src(), .{
-                .color_fill = local.colColorFill(1),
-                .background = local.banding == .cols,
-            });
+            var col = try grid.column(@src(), .{});
             defer col.deinit();
             if (try dvui.gridHeadingSortable(@src(), grid, "Fahrenheit", &local.sort_dir, .fixed, .{})) {
                 grid.colSortSet(current_sort_dir.reverse());
@@ -3949,13 +3946,7 @@ fn gridStyling() !void {
                 temp += interval;
                 row_num += 1;
             }) {
-                var cell = try grid.bodyCell(@src(), row_num, .{
-                    .border = local.borders,
-                    .background = row_background,
-                    .color_fill = local.rowColorFill(row_num),
-                    .margin = Rect.all(local.margin),
-                    .padding = Rect.all(local.padding),
-                });
+                var cell = try grid.bodyCell(@src(), row_num, cell_opts.cellOptions(grid.col_num, row_num));
                 defer cell.deinit();
                 try dvui.label(@src(), "{d}", .{@divFloor(temp * 9, 5) + 32}, .{ .gravity_x = 0.5, .expand = .horizontal });
             }
@@ -4193,8 +4184,14 @@ fn gridLayouts() !void {
     const all_cars = local.all_cars[0..];
 
     const panel_height = 250;
-    const banded = GridWidget.GridOptionsBanded.init(.{}, .{ .color_fill = .{ .name = .fill_press }, .background = true }, .{});
-    const banded_centered = GridWidget.GridOptionsBanded.init(.{}, .{ .color_fill = .{ .name = .fill_press }, .background = true }, .{ .gravity_x = 0.5, .expand = .horizontal });
+    const banded = GridWidget.GridOptionsBanded.init(
+        .rows,
+        .{},
+        .{ .color_fill = .{ .name = .fill_press }, .background = true },
+        .{},
+    );
+    const banded_centered = banded.optionsOverride(.{ .gravity_x = 0.5, .expand = .horizontal });
+
     const content_h = dvui.parentGet().data().contentRect().h - panel_height;
     {
         const scroll_opts: ?dvui.ScrollAreaWidget.InitOpts = if (local.h_scroll)
