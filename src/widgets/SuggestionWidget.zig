@@ -72,7 +72,7 @@ pub fn dropped(self: *SuggestionWidget) !bool {
 pub fn addChoiceLabel(self: *SuggestionWidget, label_str: []const u8) !bool {
     var mi = try self.addChoice();
 
-    try dvui.labelNoFmt(@src(), label_str, .{});
+    try dvui.labelNoFmt(@src(), label_str, .{}, .{});
 
     var ret: bool = false;
     if (mi.activeRect()) |_| {

@@ -1493,7 +1493,7 @@ fn debugWindowShow(self: *Self) !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        try dvui.labelNoFmt(@src(), "Hex id of widget to highlight:", .{ .gravity_y = 0.5 });
+        try dvui.labelNoFmt(@src(), "Hex id of widget to highlight:", .{}, .{ .gravity_y = 0.5 });
 
         var buf = [_]u8{0} ** 20;
         if (self.debug_widget_id != .zero) {
@@ -1578,7 +1578,7 @@ fn debugWindowShow(self: *Self) !void {
                 self.debug_widget_id = @enumFromInt(std.fmt.parseInt(u64, std.mem.sliceTo(line, ' '), 16) catch 0);
             }
 
-            try dvui.labelNoFmt(@src(), line, .{ .gravity_y = 0.5 });
+            try dvui.labelNoFmt(@src(), line, .{}, .{ .gravity_y = 0.5 });
         }
     }
 }
