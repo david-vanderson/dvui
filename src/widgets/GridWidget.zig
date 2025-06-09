@@ -165,10 +165,11 @@ pub const GridOptionsHighlightHovered = struct {
         return self.opts.override(.{ .color_fill = self.opts.color_fill_hover });
     }
 
-    pub fn overrideCellOptions(self: *const GridOptionsHighlightHovered, cell_opts: CellOptions) CellOptions {
+    pub fn overrideCellOptions(self: *const GridOptionsHighlightHovered, cell_opts: CellOptions) GridOptionsHighlightHovered {
         return .{
             .cell_opts = self.cell_opts.override(cell_opts),
             .opts = self.opts,
+            .highlighted_row = self.highlighted_row,
         };
     }
 

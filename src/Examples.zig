@@ -4397,12 +4397,14 @@ fn gridVirtualScrolling() !void {
     });
     defer grid.deinit();
 
-    // TODO: Each column wants a slightly different border. Need to have an override on the cell options to the set borders differently.
-    const highlight_hovered: GridWidget.GridOptionsHighlightHovered = .init(grid, &local.scroll_info, .{
+    // Each column has slightly different border requirement. Create separate options for each.
+    // Using the override avoids having to duplicate the event processing from .init for each column.
+    const highlight_hovered_1: GridWidget.GridOptionsHighlightHovered = .init(grid, &local.scroll_info, .{
         .border = .{ .x = 1, .w = 1, .h = 1 },
         .background = true,
         .color_fill_hover = .fill_hover,
     }, .{});
+    const highlight_hovered_2 = highlight_hovered_1.overrideCellOptions(.{ .border = .{ .w = 1, .h = 1 } });
     const scroller: dvui.GridWidget.VirtualScroller = .init(grid, .{ .total_rows = num_rows, .scroll_info = &local.scroll_info });
     const first = scroller.startRow();
     const last = scroller.endRow(); // Note that endRow is exclusive, meaning it can be used as a slice end index.
@@ -4414,7 +4416,7 @@ fn gridVirtualScrolling() !void {
         try dvui.gridHeading(@src(), grid, "Number", .fixed, .{});
 
         for (first..last) |num| {
-            var cell = try grid.bodyCell(@src(), num, highlight_hovered.cellOptions(0, num).override(.{ .border = .{ .x = 1, .w = 1, .h = 1 } }));
+            var cell = try grid.bodyCell(@src(), num, highlight_hovered_1.cellOptions(0, num));
             defer cell.deinit();
             try dvui.label(@src(), "{d}", .{num}, .{});
         }
@@ -4427,7 +4429,7 @@ fn gridVirtualScrolling() !void {
         try dvui.gridHeading(@src(), grid, "Is prime?", .fixed, .{});
 
         for (first..last) |num| {
-            var cell = try grid.bodyCell(@src(), num, highlight_hovered.cellOptions(1, num).override(.{ .border = .{ .w = 1, .h = 1 } }));
+            var cell = try grid.bodyCell(@src(), num, highlight_hovered_2.cellOptions(1, num));
             defer cell.deinit();
             if (local.isPrime(num)) {
                 try dvui.icon(@src(), "Check", check_img, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .background = false });
