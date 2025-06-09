@@ -1241,7 +1241,7 @@ pub fn main() !u8 {
         _ = winapi.AttachConsole(0xFFFFFFFF);
     }
 
-    if (sdl3 and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows)) {
+    if (sdl3 and (sdl_options.callbacks orelse true) and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows)) {
         // We are using sdl's callbacks to support rendering during OS resizing
 
         // For programs that provide their own entry points instead of relying on SDL's main function
