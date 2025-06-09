@@ -103,10 +103,13 @@ capture: ?dvui.CaptureMouse = null,
 captured_last_frame: bool = false,
 
 gpa: std.mem.Allocator,
-_arena: dvui.ShrinkingArenaAllocator,
-/// Used to allocator widgets with a fixed location
+_long_term_arena: dvui.ShrinkingArenaAllocator,
+_temp_arena: dvui.ShrinkingArenaAllocator,
+/// Used to allocate widgets with a fixed location
 _widget_stack: std.heap.FixedBufferAllocator,
-_peak_widget_stack: usize = 0,
+/// The peak amount of bytes used by the widget stack since
+/// the creation of `Window`. Used to resize the stack ifs needed.
+peak_widget_stack: usize = 0,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
@@ -165,8 +168,8 @@ pub const InitOptions = struct {
     id_extra: usize = 0,
     arena: ?dvui.ShrinkingArenaAllocator = null,
     /// For reference, the `dvui.Examples.demo` window uses
-    /// about 0x4000 stack space when not cached
-    widget_stack_max_bytes: usize = 0x10000,
+    /// about 0x5000 stack space at its peak
+    default_widget_stack_capacity: usize = 0x10000,
     theme: ?*Theme = null,
     keybinds: ?enum {
         none,
@@ -185,8 +188,9 @@ pub fn init(
 
     var self = Self{
         .gpa = gpa,
-        ._arena = init_opts.arena orelse .init(gpa),
-        ._widget_stack = .init(try gpa.alloc(u8, init_opts.widget_stack_max_bytes)),
+        ._long_term_arena = init_opts.arena orelse .init(gpa),
+        ._temp_arena = .init(gpa),
+        ._widget_stack = .init(try gpa.alloc(u8, init_opts.default_widget_stack_capacity)),
         .subwindows = .init(gpa),
         .tab_index_prev = .init(gpa),
         .tab_index = .init(gpa),
@@ -203,7 +207,7 @@ pub fn init(
     try self.themes.putNoClobber("Adwaita Dark", @import("themes/Adwaita.zig").dark);
 
     inline for (@typeInfo(Theme.QuickTheme.builtin).@"struct".decls) |decl| {
-        const quick_theme = Theme.QuickTheme.fromString(self.arena(), @field(Theme.QuickTheme.builtin, decl.name)) catch {
+        const quick_theme = Theme.QuickTheme.fromString(self.long_term_arena(), @field(Theme.QuickTheme.builtin, decl.name)) catch {
             @panic("Failure loading builtin theme. This is a problem with DVUI.");
         };
         defer quick_theme.deinit();
@@ -411,7 +415,8 @@ pub fn deinit(self: *Self) void {
     self.dialogs.deinit();
     self.toasts.deinit();
     self.keybinds.deinit();
-    self._arena.deinit();
+    self._long_term_arena.deinit();
+    self._temp_arena.deinit();
     self.gpa.free(self._widget_stack.buffer);
 
     {
@@ -433,8 +438,28 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
+/// This allocator should ALWAYS deallocate to minimize memory
+/// usage. Can be very useful for quickly printing a some text
+/// with `std.fmt.allocPrint` or for temporary arrays.
+///
+/// The memory will be cleared at the end of the frame and if there
+/// are any remaining allocations, an warning will be logged.
+///
+/// If you want the memory to be automatically freed at the end
+/// of the frame, use `Window.long_term_arena`
 pub fn arena(self: *Self) std.mem.Allocator {
-    return self._arena.allocator();
+    return self._temp_arena.allocator();
+}
+
+/// A general allocator for using during a frame. All allocations
+/// will be freed at the end of the frame.
+///
+/// If any dvui functions is called before freeing memory, it is
+/// not guaranteed that the free will take effect until the end
+/// of the frame. For temporary allocation that can always be
+/// freed, see `Window.arena`
+pub fn long_term_arena(self: *Self) std.mem.Allocator {
+    return self._long_term_arena.allocator();
 }
 
 /// called from any thread
@@ -537,7 +562,7 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
     self.positionMouseEventRemove();
 
     self.event_num += 1;
-    try self.events.append(self.arena(), Event{
+    try self.events.append(self.long_term_arena(), Event{
         .num = self.event_num,
         .evt = .{ .key = event },
         .focus_windowId = self.focused_subwindowId,
@@ -564,9 +589,9 @@ pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) std.mem.All
     self.positionMouseEventRemove();
 
     self.event_num += 1;
-    try self.events.append(self.arena(), Event{
+    try self.events.append(self.long_term_arena(), Event{
         .num = self.event_num,
-        .evt = .{ .text = .{ .txt = try self._arena.allocator().dupe(u8, text), .selected = selected } },
+        .evt = .{ .text = .{ .txt = try self.long_term_arena().dupe(u8, text), .selected = selected } },
         .focus_windowId = self.focused_subwindowId,
         .focus_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
     });
@@ -610,7 +635,7 @@ pub fn addEventMouseMotionPhysical(self: *Self, newpt: Point.Physical) std.mem.A
     // - how to make it optional?
 
     self.event_num += 1;
-    try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
+    try self.events.append(self.long_term_arena(), Event{ .num = self.event_num, .evt = .{
         .mouse = .{
             .action = .{ .motion = dp },
             .button = if (self.debug_touch_simulate_events and self.debug_touch_simulate_down) .touch0 else .none,
@@ -678,7 +703,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
 
         // add focus event
         self.event_num += 1;
-        try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
+        try self.events.append(self.long_term_arena(), Event{ .num = self.event_num, .evt = .{
             .mouse = .{
                 .action = .focus,
                 .button = bb,
@@ -689,7 +714,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
     }
 
     self.event_num += 1;
-    try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
+    try self.events.append(self.long_term_arena(), Event{ .num = self.event_num, .evt = .{
         .mouse = .{
             .action = action,
             .button = bb,
@@ -716,7 +741,7 @@ pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) st
     //std.debug.print("mouse wheel {d}\n", .{ticks});
 
     self.event_num += 1;
-    try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
+    try self.events.append(self.long_term_arena(), Event{ .num = self.event_num, .evt = .{
         .mouse = .{
             .action = if (dir == .vertical) .{ .wheel_y = ticks } else .{ .wheel_x = ticks },
             .button = .none,
@@ -747,7 +772,7 @@ pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, y
     const winId = self.windowFor(self.mouse_pt);
 
     self.event_num += 1;
-    try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
+    try self.events.append(self.long_term_arena(), Event{ .num = self.event_num, .evt = .{
         .mouse = .{
             .action = .{ .motion = dp },
             .button = finger,
@@ -924,7 +949,7 @@ pub fn begin(
     self: *Self,
     time_ns: i128,
 ) dvui.Backend.GenericError!void {
-    const larena = self._arena.allocator();
+    const larena = self.long_term_arena();
 
     var micros_since_last: u32 = 1;
     if (time_ns > self.frame_time_ns) {
@@ -1100,7 +1125,7 @@ pub fn begin(
 }
 
 fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
-    try self.events.append(self.arena(), .{ .evt = .{ .mouse = .{
+    try self.events.append(self.long_term_arena(), .{ .evt = .{ .mouse = .{
         .action = .position,
         .button = .none,
         .p = self.mouse_pt,
@@ -1208,12 +1233,12 @@ pub fn renderCommands(self: *Self, queue: std.ArrayList(dvui.RenderCommand)) !vo
                 try dvui.renderTexture(t.tex, t.rs, t.opts);
             },
             .pathFillConvex => |pf| {
-                var triangles = try pf.path.fillConvexTriangles(pf.opts);
+                var triangles = try pf.path.fillConvexTriangles(self.arena(), pf.opts);
                 defer triangles.deinit(self.arena());
                 try dvui.renderTriangles(triangles, null);
             },
             .pathStroke => |ps| {
-                var triangles = try ps.path.strokeTriangles(ps.opts);
+                var triangles = try ps.path.strokeTriangles(self.arena(), ps.opts);
                 defer triangles.deinit(self.arena());
                 try dvui.renderTriangles(triangles, null);
             },
@@ -1668,14 +1693,39 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // event to the end this will print a debug message.
     self.positionMouseEventRemove();
 
-    log.debug("peak arena {d} (0x{0x})", .{self._arena.peak_usage});
-    _ = self._arena.reset();
+    // Allocators
+    // std.log.debug("peak temp arena {d} (0x{0x})", .{self._temp_arena.peak_usage});
+    // std.log.debug("peak long term arena {d} (0x{0x})", .{self._long_term_arena.peak_usage});
+    // std.log.debug("peak widget stack {d} (0x{0x})", .{self.peak_widget_stack});
+
+    _ = self._long_term_arena.reset();
+    if (self._temp_arena.current_usage != 0 and
+        // If we have more than one buffer, we increased in size this frame, ignore errors
+        self._temp_arena.arena.state.buffer_list.len() == 1)
+    {
+        log.warn("Arena was not empty at the end of the frame, {d} byte left. Did you forget to free memory somewhere?", .{self._temp_arena.current_usage});
+        // const buf: [*]u8 = @ptrCast(self._temp_arena.arena.state.buffer_list.first.?);
+        // std.log.debug("Arena content {s}", .{buf[@sizeOf(usize) .. self._temp_arena.current_usage]});
+    }
+    _ = self._temp_arena.reset();
+
+    // Widget stack
     if (self._widget_stack.end_index != 0) {
-        log.err("Widget stack was not empty at the end of the frame. Did you forget to call deinti?", .{});
+        log.warn("Widget stack was not empty at the end of the frame. Did you forget to call deinti?", .{});
         self._widget_stack.reset();
     }
-    log.debug("Peak widget stack {d} (0x{0x})", .{self._peak_widget_stack});
-    // self._peak_widget_stack = 0;
+    if (self._widget_stack.buffer.len < self.peak_widget_stack) {
+        log.warn("Widget stack overflowed, consider increasing the default widget stack size", .{});
+        const new_len = self.peak_widget_stack + 0x400;
+        if (self.gpa.resize(self._widget_stack.buffer, new_len)) {
+            self._widget_stack.buffer.len = new_len;
+        } else {
+            // do realloc ourselves as we don't need to copy any memory from the old allocation
+            const new_buf = try self.gpa.alloc(u8, new_len);
+            self.gpa.free(self._widget_stack.buffer);
+            self._widget_stack.buffer = new_buf;
+        }
+    }
 
     try self.initEvents();
 

@@ -19,7 +19,7 @@ label_str: []const u8,
 
 pub fn init(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) LabelWidget {
     comptime if (!std.unicode.utf8ValidateSlice(fmt)) @compileError("Format strings must be valid utf-8");
-    const l = std.fmt.allocPrint(dvui.currentWindow().arena(), fmt, args) catch |err| blk: {
+    const l = std.fmt.allocPrint(dvui.currentWindow().long_term_arena(), fmt, args) catch |err| blk: {
         const newid = dvui.parentGet().extendId(src, opts.idExtra());
         dvui.currentWindow().debug_widget_id = newid;
         dvui.log.err("{s}:{d} LabelWidget id {x} (highlighted in red) init() got {!}", .{ src.file, src.line, newid, err });
@@ -31,7 +31,7 @@ pub fn init(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: any
 
 pub fn initNoFmt(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) LabelWidget {
     var self = LabelWidget{
-        .label_str = dvui.toUtf8(dvui.currentWindow().arena(), label_str) catch label_str,
+        .label_str = dvui.toUtf8(dvui.currentWindow().long_term_arena(), label_str) catch label_str,
     };
 
     const options = defaults.override(opts);

@@ -62,6 +62,15 @@ fn free(ctx: *anyopaque, memory: []u8, alignment: Alignment, ret_addr: usize) vo
     const self: *ShrinkingArenaAllocator = @ptrCast(@alignCast(ctx));
     const end_before = self.arena.state.end_index;
     self.arena.allocator().rawFree(memory, alignment, ret_addr);
+
+    // Attempt to free acounting for alignment padding of allocations after the current one
+    var align_diff: usize = 8;
+    while (self.arena.state.end_index == end_before and align_diff > 0) : (align_diff >>= 1) {
+        var mem = memory;
+        mem.len = std.mem.alignForward(usize, memory.len, align_diff);
+        self.arena.allocator().rawFree(mem, alignment, ret_addr);
+    }
+
     if (self.arena.state.end_index < end_before) {
         self.current_usage -= memory.len;
     }

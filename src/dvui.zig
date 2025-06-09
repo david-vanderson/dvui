@@ -189,11 +189,11 @@ pub fn widgetAlloc(comptime T: type) *T {
     const cw = currentWindow();
     const alloc = cw._widget_stack.allocator();
     const ptr = alloc.create(T) catch {
-        log.debug("Widget stack overflowed, falling back to arena allocator", .{});
-        return cw.arena().create(T) catch @panic("OOM");
+        log.debug("Widget stack overflowed, falling back to long term arena allocator", .{});
+        return cw.long_term_arena().create(T) catch @panic("OOM");
     };
     // std.debug.print("PUSH {*} ({d}) {x}\n", .{ ptr, @alignOf(@TypeOf(ptr)), cw._widget_stack.end_index });
-    cw._peak_widget_stack = @max(cw._peak_widget_stack, cw._widget_stack.end_index);
+    cw.peak_widget_stack = @max(cw.peak_widget_stack, cw._widget_stack.end_index);
     return ptr;
 }
 
@@ -1093,7 +1093,7 @@ pub const TextureCacheEntry = struct {
 pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) TvgError!f32 {
     if (height == 0) return 0.0;
     var stream = std.io.fixedBufferStream(tvg_bytes);
-    var parser = tvg.tvg.parse(currentWindow().arena(), stream.reader()) catch |err| {
+    var parser = tvg.tvg.parse(currentWindow().long_term_arena(), stream.reader()) catch |err| {
         log.warn("iconWidth Tinyvg error {!} parsing icon {s}\n", .{ err, name });
         return TvgError.tvgError;
     };
@@ -1162,7 +1162,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, icon_op
         disable_fill = true;
     }
     if (icon_opts.fill_color) |cx| ow_fill = ImageAdapter.conv(cx);
-    tvg.renderStream(cw.arena(), &img, fb.reader(), .{
+    tvg.renderStream(cw.long_term_arena(), &img, fb.reader(), .{
         .overwrite_stroke_width = icon_opts.stroke_width,
         .overwrite_stroke = ow_stroke,
         .overwrite_fill = ow_fill,
@@ -1406,8 +1406,6 @@ pub const Path = struct {
         /// - y is top-right corner
         /// - w is bottom-right corner
         /// - h is bottom-left corner
-        ///
-        /// Only valid between `Window.begin`and `Window.end`.
         pub fn addRect(path: *Builder, r: Rect.Physical, radius: Rect.Physical) std.mem.Allocator.Error!void {
             var rad = radius;
             const maxrad = @min(r.w, r.h) / 2;
@@ -1431,8 +1429,6 @@ pub const Path = struct {
         ///
         /// If `skip_end`, the final point will not be added.  Useful if the next
         /// addition to path would duplicate the end of the arc.
-        ///
-        /// Only valid between `Window.begin`and `Window.end`.
         pub fn addArc(path: *Builder, center: Point.Physical, radius: f32, start: f32, end: f32, skip_end: bool) std.mem.Allocator.Error!void {
             if (radius == 0) {
                 try path.points.append(center);
@@ -1480,8 +1476,8 @@ pub const Path = struct {
         // owned by and will be freed by the Path.Builder
         try std.testing.expectEqual(4, path.points.len);
 
-        var triangles = try path.fillConvexTriangles(.{});
-        defer triangles.deinit(t.window.arena());
+        var triangles = try path.fillConvexTriangles(std.testing.allocator, .{});
+        defer triangles.deinit(std.testing.allocator);
         try std.testing.expectApproxEqRel(10, triangles.bounds.x, 0.05);
         try std.testing.expectApproxEqRel(20, triangles.bounds.y, 0.05);
         try std.testing.expectApproxEqRel(30, triangles.bounds.w, 0.05);
@@ -1518,14 +1514,14 @@ pub const Path = struct {
         const cw = currentWindow();
 
         if (!cw.render_target.rendering) {
-            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = try path.dupe(cw.arena()), .opts = options } } };
+            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = try path.dupe(cw.long_term_arena()), .opts = options } } };
 
             var sw = cw.subwindowCurrent();
             try sw.render_cmds.append(cmd);
             return;
         }
 
-        var triangles = try path.fillConvexTriangles(options);
+        var triangles = try path.fillConvexTriangles(cw.arena(), options);
         defer triangles.deinit(cw.arena());
         try renderTriangles(triangles, null);
     }
@@ -1537,14 +1533,10 @@ pub const Path = struct {
     ///
     /// blur is how many pixels wide the fade to transparent is, starting a half
     /// pixel inside. Currently blur < 1 is treated as 1, but might change.
-    ///
-    /// Only valid between `Window.begin`and `Window.end`.
-    pub fn fillConvexTriangles(path: Path, opts: FillConvexOptions) std.mem.Allocator.Error!Triangles {
+    pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillConvexOptions) std.mem.Allocator.Error!Triangles {
         if (path.points.len < 3) {
             return .empty;
         }
-
-        const cw = currentWindow();
 
         var vtx_count = path.points.len;
         var idx_count = (path.points.len - 2) * 3;
@@ -1557,7 +1549,7 @@ pub const Path = struct {
             idx_count += 6;
         }
 
-        var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
+        var builder = try Triangles.Builder.init(allocator, vtx_count, idx_count);
         errdefer comptime unreachable; // No errors from this point on
 
         const col: Color.PMA = if (opts.color) |color| .fromColor(color) else .cast(.white);
@@ -1669,7 +1661,7 @@ pub const Path = struct {
         const cw = currentWindow();
 
         if (opts.after or !cw.render_target.rendering) {
-            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = try path.dupe(cw.arena()), .opts = opts } } };
+            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = try path.dupe(cw.long_term_arena()), .opts = opts } } };
 
             var sw = cw.subwindowCurrent();
             if (opts.after) {
@@ -1681,7 +1673,7 @@ pub const Path = struct {
             return;
         }
 
-        var triangles = try path.strokeTriangles(opts);
+        var triangles = try path.strokeTriangles(cw.arena(), opts);
         defer triangles.deinit(cw.arena());
         try renderTriangles(triangles, null);
     }
@@ -1690,24 +1682,27 @@ pub const Path = struct {
     ///
     /// Vertexes will have unset uv and color is alpha multiplied white fading to
     /// transparent at the edge.
-    ///
-    /// Only valid between `Window.begin`and `Window.end`.
-    pub fn strokeTriangles(path: Path, opts: StrokeOptions) std.mem.Allocator.Error!Triangles {
+    pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOptions) std.mem.Allocator.Error!Triangles {
         if (dvui.clipGet().empty()) {
             return .empty;
         }
-
-        const cw = currentWindow();
 
         if (path.points.len == 1) {
             // draw a circle with radius thickness at that point
             const center = path.points[0];
 
-            var tempPath: Path.Builder = .init(cw.arena());
+            const other_allocator = if (current_window) |cw|
+                if (cw.arena().ptr != allocator.ptr) cw.arena() else cw.long_term_arena()
+            else
+                // Using the same allocator will "leak" the tempPath on
+                // arena allocators because it can only free the last allocation
+                allocator;
+
+            var tempPath: Path.Builder = .init(other_allocator);
             defer tempPath.deinit();
 
             try tempPath.addArc(center, opts.thickness, math.pi * 2.0, 0, true);
-            return tempPath.build().fillConvexTriangles(.{ .color = opts.color, .blur = 1.0 });
+            return tempPath.build().fillConvexTriangles(allocator, .{ .color = opts.color, .blur = 1.0 });
         }
 
         // a single segment can't be closed
@@ -1724,7 +1719,7 @@ pub const Path = struct {
             idx_count += 8 * 3;
         }
 
-        var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
+        var builder = try Triangles.Builder.init(allocator, vtx_count, idx_count);
         errdefer comptime unreachable; // No errors from this point on
 
         const col: Color.PMA = .fromColor(opts.color);
@@ -2089,7 +2084,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
     const cw = currentWindow();
 
     if (!cw.render_target.rendering) {
-        const tri_copy = try triangles.dupe(cw.arena());
+        const tri_copy = try triangles.dupe(cw.long_term_arena());
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .triangles = .{ .tri = tri_copy, .tex = tex } } };
 
         var sw = cw.subwindowCurrent();
@@ -2116,7 +2111,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?WidgetId) std.mem.Allocator.Error!void {
     const cw = currentWindow();
-    const arena = cw.arena();
+    const arena = cw.long_term_arena();
 
     for (cw.subwindows.items) |*sw| {
         if (id == sw.id) {
@@ -3565,8 +3560,8 @@ pub fn dialogDisplay(id: WidgetId) !void {
         var hbox = try dvui.box(@src(), .horizontal, .{ .gravity_x = 0.5, .gravity_y = 1.0 });
         defer hbox.deinit();
 
-        const tag_ok = if (default == null) null else try std.fmt.allocPrint(dvui.currentWindow().arena(), "{x}_ok", .{hbox.data().id});
-        const tag_cancel = if (default == null) null else try std.fmt.allocPrint(dvui.currentWindow().arena(), "{x}_cancel", .{hbox.data().id});
+        const tag_ok = if (default == null) null else try std.fmt.allocPrint(dvui.currentWindow().long_term_arena(), "{x}_ok", .{hbox.data().id});
+        const tag_cancel = if (default == null) null else try std.fmt.allocPrint(dvui.currentWindow().long_term_arena(), "{x}_cancel", .{hbox.data().id});
 
         if (cancel_label) |cl| {
             if (try dvui.button(@src(), cl, .{}, .{ .tab_index = 2, .tag = tag_cancel })) {
@@ -3678,7 +3673,7 @@ pub fn wasmFileUploadedMultiple(id: WidgetId) ?[]WasmFile {
     const num_files = dvui.backend.getNumberOfFilesAvailable(id);
     if (num_files == 0) return null;
 
-    const files = dvui.currentWindow().arena().alloc(WasmFile, num_files) catch |err| {
+    const files = dvui.currentWindow().long_term_arena().alloc(WasmFile, num_files) catch |err| {
         log.err("File upload skipped, failed to allocate space for file handles: {!}", .{err});
         return null;
     };
@@ -6445,7 +6440,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
 
     if (!cw.render_target.rendering) {
         var opts_copy = opts;
-        opts_copy.text = try cw.arena().dupe(u8, utf8_text);
+        opts_copy.text = try cw.long_term_arena().dupe(u8, utf8_text);
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
 
         var sw = cw.subwindowCurrent();
@@ -6766,7 +6761,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
 
     try path.addRect(rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
 
-    var triangles = try path.build().fillConvexTriangles(.{ .color = opts.colormod });
+    var triangles = try path.build().fillConvexTriangles(cw.arena(), .{ .color = opts.colormod });
     defer triangles.deinit(cw.arena());
 
     triangles.uvFromRectuv(rs.r, opts.uv);
