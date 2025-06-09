@@ -5235,11 +5235,12 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
     // draw background/border
     try bw.drawBackground();
     {
-        var hbox = try box(src, .horizontal, .{ .expand = .horizontal });
-        defer hbox.deinit();
-
+        var outer_hbox = try box(src, .horizontal, .{ .expand = .horizontal });
+        defer outer_hbox.deinit();
         try icon(@src(), label_str, tvg_bytes, .{}, opts.strip().override(.{ .gravity_x = 1.0 }));
-        try labelNoFmt(@src(), label_str, options.override(.{ .expand = .horizontal }));
+        var hbox = try box(src, .horizontal, .{ .expand = .horizontal });
+        defer hbox.deinit(); // this hbox is used to center the label.
+        try labelNoFmt(@src(), label_str, options.override(.{ .gravity_x = 0.5 }));
     }
 
     const click = bw.clicked();
