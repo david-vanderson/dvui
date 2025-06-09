@@ -153,22 +153,22 @@ pub const GridOptionsHighlightHovered = struct {
 
     pub fn cellOptions(self: *const GridOptionsHighlightHovered, typ: GridOptions.CellType, col: usize, row: usize) CellOptions {
         _ = col;
+        _ = typ;
         const highlighted_row = self.highlighted_row orelse return self.cell_opts;
-        if (typ == .body and row == highlighted_row) {
-            var result = self.cell_opts;
-            result.color_fill = result.color_fill_hover;
-            return result;
-        }
-        return self.cell_opts;
+        if (row != highlighted_row) return self.cell_opts;
+
+        var result = self.cell_opts;
+        result.color_fill = result.color_fill_hover;
+        return result;
     }
 
-    // TODO: Is options really needed for this? Should it also have the highlight hovered, just in case it is
-    // drawing the background? Probably.
     pub fn options(self: *const GridOptionsHighlightHovered, typ: GridOptions.CellType, col: usize, row: usize) Options {
         _ = typ;
-        _ = row;
         _ = col;
-        return self.opts;
+        const highlighted_row = self.highlighted_row orelse return self.opts;
+        if (row != highlighted_row) return self.opts;
+
+        return self.opts.override(.{ .color_fill = self.opts.color_fill_hover });
     }
 
     pub fn overrideOptions(self: *const GridOptionsHighlightHovered, opts: Options) GridOptionsHighlightHovered {

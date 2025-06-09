@@ -4426,7 +4426,7 @@ fn gridVirtualScrolling() !void {
         try dvui.gridHeading(@src(), grid, "Is prime?", .fixed, .{});
 
         for (first..last) |num| {
-            var cell = try grid.bodyCell(@src(), num, highlight_hovered.cellOptions(.body, 0, num));
+            var cell = try grid.bodyCell(@src(), num, highlight_hovered.cellOptions(.body, 1, num));
             defer cell.deinit();
             if (local.isPrime(num)) {
                 try dvui.icon(@src(), "Check", check_img, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .background = false });
