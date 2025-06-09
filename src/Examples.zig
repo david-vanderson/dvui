@@ -1139,7 +1139,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
                 .{},
                 .{ .expand = .ratio, .gravity_x = 1.0 },
             )) {
-                new_filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "Pick Font File" });
+                new_filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().long_term_arena(), .{ .title = "Pick Font File" });
             }
 
             try dvui.label(@src(), "File", .{}, .{ .gravity_y = 0.5 });
@@ -1164,17 +1164,23 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
                     try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Add a Name" });
                     name_error.* = true;
                 } else if (dvui.currentWindow().font_bytes.contains(name)) {
-                    try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Already have font named \"{s}\"", .{name}) });
+                    const msg = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Already have font named \"{s}\"", .{name});
+                    defer dvui.currentWindow().arena().free(msg);
+                    try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = msg });
                     name_error.* = true;
                 } else {
                     var bytes: ?[]u8 = null;
                     if (!std.fs.path.isAbsolute(filename)) {
                         file_error.* = true;
-                        try dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename}) });
+                        const msg = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename});
+                        defer dvui.currentWindow().arena().free(msg);
+                        try dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = msg });
                     } else {
                         const file = std.fs.openFileAbsolute(filename, .{}) catch blk: {
                             file_error.* = true;
-                            try dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename}) });
+                            const msg = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename});
+                            defer dvui.currentWindow().arena().free(msg);
+                            try dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = msg });
                             break :blk null;
                         };
                         if (file) |f| {
@@ -1187,12 +1193,16 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
                             error.OutOfMemory => @panic("OOM"),
                             error.fontError => {
                                 dvui.currentWindow().gpa.free(b);
-                                try dvui.dialog(@src(), .{}, .{ .title = "Bad Font", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "\"{s}\" is not a valid font", .{filename}) });
+                                const msg = try std.fmt.allocPrint(dvui.currentWindow().arena(), "\"{s}\" is not a valid font", .{filename});
+                                defer dvui.currentWindow().arena().free(msg);
+                                try dvui.dialog(@src(), .{}, .{ .title = "Bad Font", .message = msg });
                                 break :blk;
                             },
                         };
 
-                        try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Added font named \"{s}\"", .{name}) });
+                        const msg = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Added font named \"{s}\"", .{name});
+                        defer dvui.currentWindow().arena().free(msg);
+                        try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = msg });
                     }
                 }
             }
@@ -1509,7 +1519,7 @@ pub fn styling() !void {
             defer path.deinit();
             try path.addRect(rs.r, dvui.Rect.Physical.all(5));
 
-            var triangles = try path.build().fillConvexTriangles(.{ .center = rs.r.center() });
+            var triangles = try path.build().fillConvexTriangles(dvui.currentWindow().arena(), .{ .center = rs.r.center() });
             defer triangles.deinit(dvui.currentWindow().arena());
 
             const ca0 = backbox_color;
@@ -3219,7 +3229,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) !void {
             if (dvui.wasm) {
                 dvui.dialogWasmFileOpen(single_file_id, .{ .accept = ".png, .jpg" });
             } else {
-                const filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "dvui native file open", .filters = &.{ "*.png", "*.jpg" }, .filter_description = "images" });
+                const filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().long_term_arena(), .{ .title = "dvui native file open", .filters = &.{ "*.png", "*.jpg" }, .filter_description = "images" });
                 if (filename) |f| {
                     try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "File Open Result", .ok_label = "Done", .message = f });
                 }
@@ -3236,9 +3246,10 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) !void {
             if (dvui.wasm) {
                 dvui.dialogWasmFileOpenMultiple(multi_file_id, .{ .accept = ".png, .jpg" });
             } else {
-                const filenames = try dvui.dialogNativeFileOpenMultiple(dvui.currentWindow().arena(), .{ .title = "dvui native file open multiple", .filter_description = "images" });
+                const filenames = try dvui.dialogNativeFileOpenMultiple(dvui.currentWindow().long_term_arena(), .{ .title = "dvui native file open multiple", .filter_description = "images" });
                 if (filenames) |fs| {
                     const msg = try std.mem.join(dvui.currentWindow().arena(), "\n", fs);
+                    defer dvui.currentWindow().arena().free(msg);
                     try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "File Open Multiple Result", .ok_label = "Done", .message = msg });
                 }
             }
@@ -3246,6 +3257,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) !void {
 
         if (dvui.wasmFileUploadedMultiple(multi_file_id)) |files| {
             var msg = std.ArrayList(u8).init(dvui.currentWindow().arena());
+            defer msg.deinit();
             var writer = msg.writer();
             for (files) |file| {
                 try writer.writeAll(file.name);
@@ -3263,7 +3275,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) !void {
             if (dvui.wasm) {
                 try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
             } else {
-                const filename = try dvui.dialogNativeFolderSelect(dvui.currentWindow().arena(), .{ .title = "dvui native folder select" });
+                const filename = try dvui.dialogNativeFolderSelect(dvui.currentWindow().long_term_arena(), .{ .title = "dvui native folder select" });
                 if (filename) |f| {
                     try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Folder Select Result", .ok_label = "Done", .message = f });
                 }
@@ -3274,7 +3286,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) !void {
             if (dvui.wasm) {
                 try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Save File", .ok_label = "Ok", .message = "Not available on the web.  For file download, see \"Save Plot\" in the plots example." });
             } else {
-                const filename = try dvui.dialogNativeFileSave(dvui.currentWindow().arena(), .{ .title = "dvui native file save" });
+                const filename = try dvui.dialogNativeFileSave(dvui.currentWindow().long_term_arena(), .{ .title = "dvui native file save" });
                 if (filename) |f| {
                     try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "File Save Result", .ok_label = "Done", .message = f });
                 }
