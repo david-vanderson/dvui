@@ -4435,8 +4435,8 @@ pub fn gridHeading(
     };
     const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.GridOptions.none else anyopts;
 
-    const label_options = label_defaults.override(opts.options(.header, g.col_num, 0));
-    var cell = try g.headerCell(src, opts.cellOptions(.header, g.col_num, 0));
+    const label_options = label_defaults.override(opts.options(g.col_num, 0));
+    var cell = try g.headerCell(src, opts.cellOptions(g.col_num, 0));
     defer cell.deinit();
 
     try labelNoFmt(@src(), heading, label_options);
@@ -4464,9 +4464,9 @@ pub fn gridHeadingSortable(
         .corner_radius = Rect.all(0),
     };
     const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.GridOptions.none else anyopts;
-    const heading_opts = heading_defaults.override(opts.options(.header, g.col_num, 0));
+    const heading_opts = heading_defaults.override(opts.options(g.col_num, 0));
 
-    var cell = try g.headerCell(src, opts.cellOptions(.header, g.col_num, 0));
+    var cell = try g.headerCell(src, opts.cellOptions(g.col_num, 0));
     defer cell.deinit();
 
     try gridHeadingSeparator(resize_opts);
@@ -4530,7 +4530,7 @@ pub fn gridColumnFromSlice(
         var cell = try g.bodyCell(
             src,
             row_num,
-            opts.cellOptions(.body, g.col_num, row_num),
+            opts.cellOptions(g.col_num, row_num),
         );
         defer cell.deinit();
         const cell_value = value: {
@@ -4554,7 +4554,7 @@ pub fn gridColumnFromSlice(
             @src(),
             fmt,
             .{cell_value},
-            label_defaults.override(opts.options(.body, g.col_num, row_num)),
+            label_defaults.override(opts.options(g.col_num, row_num)),
         );
     }
 }
@@ -4581,13 +4581,13 @@ pub fn gridHeadingCheckbox(src: std.builtin.SourceLocation, g: *GridWidget, sele
 
     const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.GridOptions.none else anyopts;
 
-    const header_options = header_defaults.override(opts.options(.header, g.col_num, 0));
+    const header_options = header_defaults.override(opts.options(g.col_num, 0));
     var checkbox_opts: Options = header_options.strip();
     checkbox_opts.padding = ButtonWidget.defaults.paddingGet();
     checkbox_opts.gravity_x = header_options.gravity_x;
     checkbox_opts.gravity_y = header_options.gravity_y;
 
-    var cell = try g.headerCell(src, opts.cellOptions(.header, g.col_num, 0));
+    var cell = try g.headerCell(src, opts.cellOptions(g.col_num, 0));
     defer cell.deinit();
 
     var clicked = false;
@@ -4648,7 +4648,7 @@ pub fn gridColumnCheckbox(
         var cell = try g.bodyCell(
             src,
             row_num,
-            opts.cellOptions(.body, g.col_num, row_num),
+            opts.cellOptions(g.col_num, row_num),
         );
         defer cell.deinit();
         const is_selected: *bool = if (T == bool) item else &@field(item, field_name.?);
@@ -4657,7 +4657,7 @@ pub fn gridColumnCheckbox(
             @src(),
             is_selected,
             null,
-            check_defaults.override(opts.options(.body, g.col_num, row_num)),
+            check_defaults.override(opts.options(g.col_num, row_num)),
         );
         selection_changed = selection_changed or was_selected != is_selected.*;
     }

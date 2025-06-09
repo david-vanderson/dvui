@@ -47,7 +47,6 @@ pub const ColOptions = struct {
 };
 
 pub const GridOptions = struct {
-    pub const CellType = enum { header, body };
     cell_opts: CellOptions,
     opts: Options,
 
@@ -58,15 +57,13 @@ pub const GridOptions = struct {
         };
     }
 
-    pub fn cellOptions(self: *const GridOptions, typ: CellType, col: usize, row: usize) CellOptions {
-        _ = typ;
+    pub fn cellOptions(self: *const GridOptions, col: usize, row: usize) CellOptions {
         _ = row;
         _ = col;
         return self.cell_opts;
     }
 
-    pub fn options(self: *const GridOptions, typ: CellType, col: usize, row: usize) Options {
-        _ = typ;
+    pub fn options(self: *const GridOptions, col: usize, row: usize) Options {
         _ = row;
         _ = col;
         return self.opts;
@@ -96,16 +93,15 @@ pub const GridOptionsBanded = struct {
         };
     }
 
-    pub fn cellOptions(self: *const GridOptionsBanded, typ: GridOptions.CellType, col: usize, row: usize) CellOptions {
+    pub fn cellOptions(self: *const GridOptionsBanded, col: usize, row: usize) CellOptions {
         _ = col;
-        return if (typ == .header or row % 2 == 0)
+        return if (row % 2 == 0)
             self.cell_opts
         else
             self.alt_cell_opts;
     }
 
-    pub fn options(self: *const GridOptionsBanded, typ: GridOptions.CellType, col: usize, row: usize) Options {
-        _ = typ;
+    pub fn options(self: *const GridOptionsBanded, col: usize, row: usize) Options {
         _ = row;
         _ = col;
         return self.opts;
@@ -151,9 +147,8 @@ pub const GridOptionsHighlightHovered = struct {
         };
     }
 
-    pub fn cellOptions(self: *const GridOptionsHighlightHovered, typ: GridOptions.CellType, col: usize, row: usize) CellOptions {
+    pub fn cellOptions(self: *const GridOptionsHighlightHovered, col: usize, row: usize) CellOptions {
         _ = col;
-        _ = typ;
         const highlighted_row = self.highlighted_row orelse return self.cell_opts;
         if (row != highlighted_row) return self.cell_opts;
 
@@ -162,8 +157,7 @@ pub const GridOptionsHighlightHovered = struct {
         return result;
     }
 
-    pub fn options(self: *const GridOptionsHighlightHovered, typ: GridOptions.CellType, col: usize, row: usize) Options {
-        _ = typ;
+    pub fn options(self: *const GridOptionsHighlightHovered, col: usize, row: usize) Options {
         _ = col;
         const highlighted_row = self.highlighted_row orelse return self.opts;
         if (row != highlighted_row) return self.opts;
