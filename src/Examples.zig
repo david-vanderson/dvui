@@ -4414,7 +4414,7 @@ fn gridVirtualScrolling() !void {
         try dvui.gridHeading(@src(), grid, "Number", .fixed, .{});
 
         for (first..last) |num| {
-            var cell = try grid.bodyCell(@src(), num, highlight_hovered.cellOptions(0, num));
+            var cell = try grid.bodyCell(@src(), num, highlight_hovered.cellOptions(0, num).override(.{ .border = .{ .x = 1, .w = 1, .h = 1 } }));
             defer cell.deinit();
             try dvui.label(@src(), "{d}", .{num}, .{});
         }
@@ -4427,7 +4427,7 @@ fn gridVirtualScrolling() !void {
         try dvui.gridHeading(@src(), grid, "Is prime?", .fixed, .{});
 
         for (first..last) |num| {
-            var cell = try grid.bodyCell(@src(), num, highlight_hovered.cellOptions(1, num));
+            var cell = try grid.bodyCell(@src(), num, highlight_hovered.cellOptions(1, num).override(.{ .border = .{ .w = 1, .h = 1 } }));
             defer cell.deinit();
             if (local.isPrime(num)) {
                 try dvui.icon(@src(), "Check", check_img, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .background = false });
