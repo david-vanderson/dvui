@@ -91,8 +91,8 @@ pub const GridOptionsBanded = struct {
     pub fn init(cell_opts: CellOptions, alt_cell_opts: CellOptions, opts: Options) GridOptionsBanded {
         return .{
             .cell_opts = cell_opts,
-            .alt_cell_opts = alt_cell_opts,
             .opts = opts,
+            .alt_cell_opts = alt_cell_opts,
         };
     }
 
@@ -120,6 +120,66 @@ pub const GridOptionsBanded = struct {
     }
 };
 
+pub const GridOptionsHighlightHovered = struct {
+    cell_opts: CellOptions,
+    opts: Options,
+    highlighted_row: ?usize,
+
+    pub fn init(grid: *GridWidget, scroll_info: *ScrollInfo, cell_opts: CellOptions, opts: Options) GridOptionsHighlightHovered {
+
+        // Check if a row is being hovered.
+        const evts = dvui.events();
+        const highlighted_row: ?usize = row: {
+            for (evts) |*e| {
+                if (dvui.eventMatchSimple(e, grid.data()) and
+                    (e.evt == .mouse and e.evt.mouse.action == .position) and
+                    (grid.row_height > 1))
+                {
+                    // Translate mouse screen position to a logical position relative to the top-left of the grid body.
+                    if (grid.pointToBodyRelative(e.evt.mouse.p)) |point| {
+                        break :row @intFromFloat((scroll_info.viewport.y + point.y) / grid.row_height);
+                    }
+                }
+            }
+            break :row null;
+        };
+
+        return .{
+            .cell_opts = cell_opts,
+            .opts = opts,
+            .highlighted_row = highlighted_row,
+        };
+    }
+
+    pub fn cellOptions(self: *const GridOptionsHighlightHovered, typ: GridOptions.CellType, col: usize, row: usize) CellOptions {
+        _ = col;
+        const highlighted_row = self.highlighted_row orelse return self.cell_opts;
+        if (typ == .body and row == highlighted_row) {
+            var result = self.cell_opts;
+            result.color_fill = result.color_fill_hover;
+            return result;
+        }
+        return self.cell_opts;
+    }
+
+    // TODO: Is options really needed for this? Should it also have the highlight hovered, just in case it is
+    // drawing the background? Probably.
+    pub fn options(self: *const GridOptionsHighlightHovered, typ: GridOptions.CellType, col: usize, row: usize) Options {
+        _ = typ;
+        _ = row;
+        _ = col;
+        return self.opts;
+    }
+
+    pub fn overrideOptions(self: *const GridOptionsHighlightHovered, opts: Options) GridOptionsHighlightHovered {
+        return .{
+            .cell_opts = self.cell_opts,
+            .alt_cell_opts = self.alt_cell_opts,
+            .opts = self.opts.override(opts),
+        };
+    }
+};
+
 pub const CellOptions = struct {
     height: ?f32 = null,
     margin: ?Rect = null,
@@ -127,6 +187,7 @@ pub const CellOptions = struct {
     padding: ?Rect = null,
     background: ?bool = null,
     color_fill: ?ColorOrName = null,
+    color_fill_hover: ?ColorOrName = null,
     color_border: ?ColorOrName = null,
 
     pub fn toOptions(self: *const CellOptions) Options {
@@ -137,6 +198,7 @@ pub const CellOptions = struct {
             .padding = self.padding,
             .background = self.background,
             .color_fill = self.color_fill,
+            .color_fill_hover = self.color_fill_hover,
             .color_border = self.color_border,
         };
     }
