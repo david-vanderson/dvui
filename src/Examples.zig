@@ -4101,12 +4101,12 @@ fn gridLayouts() !void {
                 };
             }
 
-            pub fn cellOptions(self: *const ConditionTextColor, typ: GridOptions.CellType, col: usize, row: usize) GridWidget.CellOptions {
-                return self.base_opts.cellOptions(typ, col, row);
+            pub fn cellOptions(self: *const ConditionTextColor, col: usize, row: usize) GridWidget.CellOptions {
+                return self.base_opts.cellOptions(col, row);
             }
 
-            pub fn options(self: *const ConditionTextColor, typ: GridOptions.CellType, col: usize, row: usize) dvui.Options {
-                return self.base_opts.options(typ, col, row).override(conditionTextColor(row));
+            pub fn options(self: *const ConditionTextColor, col: usize, row: usize) dvui.Options {
+                return self.base_opts.options(col, row).override(conditionTextColor(row));
             }
             /// Set the text color of the Condition text, based on the condition.
             fn conditionTextColor(row_num: usize) Options {
@@ -4397,6 +4397,7 @@ fn gridVirtualScrolling() !void {
     });
     defer grid.deinit();
 
+    // TODO: Each column wants a slightly different border. Need to have an override on the cell options to the set borders differently.
     const highlight_hovered: GridWidget.GridOptionsHighlightHovered = .init(grid, &local.scroll_info, .{
         .border = .{ .x = 1, .w = 1, .h = 1 },
         .background = true,
@@ -4413,7 +4414,7 @@ fn gridVirtualScrolling() !void {
         try dvui.gridHeading(@src(), grid, "Number", .fixed, .{});
 
         for (first..last) |num| {
-            var cell = try grid.bodyCell(@src(), num, highlight_hovered.cellOptions(.body, 0, num));
+            var cell = try grid.bodyCell(@src(), num, highlight_hovered.cellOptions(0, num));
             defer cell.deinit();
             try dvui.label(@src(), "{d}", .{num}, .{});
         }
@@ -4426,7 +4427,7 @@ fn gridVirtualScrolling() !void {
         try dvui.gridHeading(@src(), grid, "Is prime?", .fixed, .{});
 
         for (first..last) |num| {
-            var cell = try grid.bodyCell(@src(), num, highlight_hovered.cellOptions(.body, 1, num));
+            var cell = try grid.bodyCell(@src(), num, highlight_hovered.cellOptions(1, num));
             defer cell.deinit();
             if (local.isPrime(num)) {
                 try dvui.icon(@src(), "Check", check_img, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .background = false });
