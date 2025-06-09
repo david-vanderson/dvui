@@ -1698,7 +1698,8 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // std.log.debug("peak long term arena {d} (0x{0x})", .{self._long_term_arena.peak_usage});
     // std.log.debug("peak widget stack {d} (0x{0x})", .{self.peak_widget_stack});
 
-    _ = self._long_term_arena.reset();
+    // self._long_term_arena.debug_log();
+    _ = self._long_term_arena.reset(.retain_capacity);
     if (self._temp_arena.current_usage != 0 and
         // If we have more than one buffer, we increased in size this frame, ignore errors
         self._temp_arena.arena.state.buffer_list.len() == 1)
@@ -1707,7 +1708,8 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         // const buf: [*]u8 = @ptrCast(self._temp_arena.arena.state.buffer_list.first.?);
         // std.log.debug("Arena content {s}", .{buf[@sizeOf(usize) .. self._temp_arena.current_usage]});
     }
-    _ = self._temp_arena.reset();
+    // self._temp_arena.debug_log();
+    _ = self._temp_arena.reset(.retain_capacity);
 
     // Widget stack
     if (self._widget_stack.end_index != 0) {
