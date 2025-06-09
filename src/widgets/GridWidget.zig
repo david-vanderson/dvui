@@ -44,6 +44,54 @@ pub const ColOptions = struct {
             .color_border = self.color_border,
         };
     }
+
+    pub fn override(self: *const ColOptions, over: CellOptions) CellOptions {
+        var ret = self.*;
+
+        inline for (@typeInfo(ColOptions).@"struct".fields) |f| {
+            if (@field(over, f.name)) |fval| {
+                @field(ret, f.name) = fval;
+            }
+        }
+
+        return ret;
+    }
+};
+
+pub const CellOptions = struct {
+    height: ?f32 = null,
+    margin: ?Rect = null,
+    border: ?Rect = null,
+    padding: ?Rect = null,
+    background: ?bool = null,
+    color_fill: ?ColorOrName = null,
+    color_fill_hover: ?ColorOrName = null,
+    color_border: ?ColorOrName = null,
+
+    pub fn toOptions(self: *const CellOptions) Options {
+        return .{
+            // does not convert height
+            .margin = self.margin,
+            .border = self.border,
+            .padding = self.padding,
+            .background = self.background,
+            .color_fill = self.color_fill,
+            .color_fill_hover = self.color_fill_hover,
+            .color_border = self.color_border,
+        };
+    }
+
+    pub fn override(self: *const CellOptions, over: CellOptions) CellOptions {
+        var ret = self.*;
+
+        inline for (@typeInfo(CellOptions).@"struct".fields) |f| {
+            if (@field(over, f.name)) |fval| {
+                @field(ret, f.name) = fval;
+            }
+        }
+
+        return ret;
+    }
 };
 
 pub const GridOptions = struct {
@@ -69,7 +117,14 @@ pub const GridOptions = struct {
         return self.opts;
     }
 
-    pub fn overrideOptions(self: *const GridOptions, opts: Options) GridOptions {
+    pub fn cellOptionsOverride(self: *const GridOptions, cell_opts: CellOptions) GridOptions {
+        return .{
+            .cell_opts = self.cell_opts.override(cell_opts),
+            .opts = self.opts,
+        };
+    }
+
+    pub fn optionsOverride(self: *const GridOptions, opts: Options) GridOptions {
         return .{
             .cell_opts = self.cell_opts,
             .opts = self.opts.override(opts),
@@ -79,7 +134,6 @@ pub const GridOptions = struct {
     pub const none: GridOptions = .init(.{}, .{});
 };
 
-// TODO: Make this take an orientation so works for row, col and both? banding.
 pub const GridOptionsBanded = struct {
     alt_cell_opts: CellOptions,
     cell_opts: CellOptions,
@@ -101,13 +155,29 @@ pub const GridOptionsBanded = struct {
             self.alt_cell_opts;
     }
 
+    pub fn cellOptionsOverride(self: *const GridOptions, cell_opts: CellOptions) GridOptions {
+        return .{
+            .cell_opts = self.cell_opts.override(cell_opts),
+            .alt_cell_opts = self.alt_cell_opts,
+            .opts = self.opts,
+        };
+    }
+
+    pub fn altCellOptionsOverride(self: *const GridOptions, alt_cell_opts: CellOptions) GridOptions {
+        return .{
+            .cell_opts = self.cell_opts,
+            .alt_cell_opts = self.alt_cell_opts.override(alt_cell_opts),
+            .opts = self.opts,
+        };
+    }
+
     pub fn options(self: *const GridOptionsBanded, col: usize, row: usize) Options {
         _ = row;
         _ = col;
         return self.opts;
     }
 
-    pub fn overrideOptions(self: *const GridOptionsBanded, opts: Options) GridOptionsBanded {
+    pub fn optionsOverride(self: *const GridOptionsBanded, opts: Options) GridOptionsBanded {
         return .{
             .cell_opts = self.cell_opts,
             .alt_cell_opts = self.alt_cell_opts,
@@ -116,6 +186,9 @@ pub const GridOptionsBanded = struct {
     }
 };
 
+/// Highlights the currently hovered grid cell.
+/// - scroll_info must be the same scroll_info passed to the GridWidget init_option.
+/// - requires that all rows are the same height.
 pub const GridOptionsHighlightHovered = struct {
     cell_opts: CellOptions,
     opts: Options,
@@ -165,7 +238,7 @@ pub const GridOptionsHighlightHovered = struct {
         return self.opts.override(.{ .color_fill = self.opts.color_fill_hover });
     }
 
-    pub fn overrideCellOptions(self: *const GridOptionsHighlightHovered, cell_opts: CellOptions) GridOptionsHighlightHovered {
+    pub fn cellOptionsOverride(self: *const GridOptionsHighlightHovered, cell_opts: CellOptions) GridOptionsHighlightHovered {
         return .{
             .cell_opts = self.cell_opts.override(cell_opts),
             .opts = self.opts,
@@ -173,47 +246,11 @@ pub const GridOptionsHighlightHovered = struct {
         };
     }
 
-    pub fn overrideOptions(self: *const GridOptionsHighlightHovered, opts: Options) GridOptionsHighlightHovered {
+    pub fn optionsOverride(self: *const GridOptionsHighlightHovered, opts: Options) GridOptionsHighlightHovered {
         return .{
             .cell_opts = self.cell_opts,
             .opts = self.opts.override(opts),
         };
-    }
-};
-
-pub const CellOptions = struct {
-    height: ?f32 = null,
-    margin: ?Rect = null,
-    border: ?Rect = null,
-    padding: ?Rect = null,
-    background: ?bool = null,
-    color_fill: ?ColorOrName = null,
-    color_fill_hover: ?ColorOrName = null,
-    color_border: ?ColorOrName = null,
-
-    pub fn toOptions(self: *const CellOptions) Options {
-        return .{
-            // does not convert height
-            .margin = self.margin,
-            .border = self.border,
-            .padding = self.padding,
-            .background = self.background,
-            .color_fill = self.color_fill,
-            .color_fill_hover = self.color_fill_hover,
-            .color_border = self.color_border,
-        };
-    }
-
-    pub fn override(self: *const CellOptions, over: CellOptions) CellOptions {
-        var ret = self.*;
-
-        inline for (@typeInfo(CellOptions).@"struct".fields) |f| {
-            if (@field(over, f.name)) |fval| {
-                @field(ret, f.name) = fval;
-            }
-        }
-
-        return ret;
     }
 };
 
