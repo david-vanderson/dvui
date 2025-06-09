@@ -18,7 +18,7 @@ const FloatingWindowWidget = dvui.FloatingWindowWidget;
 const LabelWidget = dvui.LabelWidget;
 const TextLayoutWidget = dvui.TextLayoutWidget;
 const GridWidget = dvui.GridWidget;
-
+const GridOptions = GridWidget.GridOptions;
 const enums = dvui.enums;
 
 const zig_favicon = @embedFile("zig-favicon.png");
@@ -3857,13 +3857,14 @@ fn gridStyling() !void {
         var margin: f32 = 0;
         var padding: f32 = 0;
 
+        // TODO: This can be replaced by the GridOptionsBanded
         fn rowColorFill(row_num: usize) ?dvui.Options.ColorOrName {
             if (banding == .rows and row_num % 2 == 0) {
                 return .{ .name = .fill_press };
             }
             return null;
         }
-
+        // TODO: This can be replaced by the GridOptionsBanded when changed to support col banding.
         fn colColorFill(col_num: usize) ?dvui.Options.ColorOrName {
             if (banding == .cols and col_num % 2 == 0) {
                 return .{ .name = .fill_press };
@@ -3910,7 +3911,7 @@ fn gridStyling() !void {
                 grid.colSortSet(local.sort_dir);
             }
 
-            if (try dvui.gridHeadingSortable(@src(), grid, "Celcius", &local.sort_dir, .fixed, .{}, .{})) {
+            if (try dvui.gridHeadingSortable(@src(), grid, "Celcius", &local.sort_dir, .fixed, .{})) {
                 grid.colSortSet(current_sort_dir.reverse());
             }
 
@@ -3938,7 +3939,7 @@ fn gridStyling() !void {
                 .background = local.banding == .cols,
             });
             defer col.deinit();
-            if (try dvui.gridHeadingSortable(@src(), grid, "Fahrenheit", &local.sort_dir, .fixed, .{}, .{})) {
+            if (try dvui.gridHeadingSortable(@src(), grid, "Fahrenheit", &local.sort_dir, .fixed, .{})) {
                 grid.colSortSet(current_sort_dir.reverse());
             }
 
@@ -4091,20 +4092,37 @@ fn gridLayouts() !void {
                 return .{};
         }
 
-        /// Set the text color of the Condition text, based on the condition.
-        fn conditionTextColor(_: usize, row_num: usize) Options {
-            return .{
-                .expand = .horizontal,
-                .gravity_x = 0.5,
-                .color_text = switch (all_cars[row_num].condition) {
-                    .New => .{ .color = dvui.Color.fromHex("#4bbfc3") },
-                    .Excellent => .{ .color = dvui.Color.fromHex("#6ca96c") },
-                    .Good => .{ .color = dvui.Color.fromHex("#a3b76b") },
-                    .Fair => .{ .color = dvui.Color.fromHex("#d3b95f") },
-                    .Poor => .{ .color = dvui.Color.fromHex("#c96b6b") },
-                },
-            };
-        }
+        const ConditionTextColor = struct {
+            base_opts: *const GridWidget.GridOptionsBanded,
+
+            pub fn init(base_opts: *const GridWidget.GridOptionsBanded) ConditionTextColor {
+                return .{
+                    .base_opts = base_opts,
+                };
+            }
+
+            pub fn cellOptions(self: *const ConditionTextColor, typ: GridOptions.CellType, col: usize, row: usize) GridWidget.CellOptions {
+                return self.base_opts.cellOptions(typ, col, row);
+            }
+
+            pub fn options(self: *const ConditionTextColor, typ: GridOptions.CellType, col: usize, row: usize) dvui.Options {
+                return self.base_opts.options(typ, col, row).override(conditionTextColor(row));
+            }
+            /// Set the text color of the Condition text, based on the condition.
+            fn conditionTextColor(row_num: usize) Options {
+                return .{
+                    .expand = .horizontal,
+                    .gravity_x = 0.5,
+                    .color_text = switch (all_cars[row_num].condition) {
+                        .New => .{ .color = dvui.Color.fromHex("#4bbfc3") },
+                        .Excellent => .{ .color = dvui.Color.fromHex("#6ca96c") },
+                        .Good => .{ .color = dvui.Color.fromHex("#a3b76b") },
+                        .Fair => .{ .color = dvui.Color.fromHex("#d3b95f") },
+                        .Poor => .{ .color = dvui.Color.fromHex("#c96b6b") },
+                    },
+                };
+            }
+        };
 
         fn sort(key: []const u8) void {
             switch (sort_dir) {
@@ -4175,6 +4193,8 @@ fn gridLayouts() !void {
     const all_cars = local.all_cars[0..];
 
     const panel_height = 250;
+    const banded = GridWidget.GridOptionsBanded.init(.{}, .{ .color_fill = .{ .name = .fill_press }, .background = true }, .{});
+    const banded_centered = GridWidget.GridOptionsBanded.init(.{}, .{ .color_fill = .{ .name = .fill_press }, .background = true }, .{ .gravity_x = 0.5, .expand = .horizontal });
     const content_h = dvui.parentGet().data().contentRect().h - panel_height;
     {
         const scroll_opts: ?dvui.ScrollAreaWidget.InitOpts = if (local.h_scroll)
@@ -4218,7 +4238,7 @@ fn gridLayouts() !void {
             // Make the checkbox column fixed width. (This width is used if init_opts.col_widths is null)
             var col = try grid.column(@src(), .{ .width = local.checkbox_w });
             defer col.deinit();
-            if (try dvui.gridHeadingCheckbox(@src(), grid, &local.selection_state, .{}, .{})) {
+            if (try dvui.gridHeadingCheckbox(@src(), grid, &local.selection_state, .{})) {
                 for (all_cars) |*car| {
                     car.selected = switch (local.selection_state) {
                         .select_all => true,
@@ -4227,49 +4247,49 @@ fn gridLayouts() !void {
                     };
                 }
             }
-            _ = try dvui.gridColumnCheckbox(@src(), grid, Car, all_cars[0..], "selected", .{ .callback = local.rowBanding }, .{ .options = .{ .gravity_y = 0.0 } });
+            _ = try dvui.gridColumnCheckbox(@src(), grid, Car, all_cars[0..], "selected", banded.overrideOptions(.{ .gravity_y = 0 }));
         }
         // Make
         {
             var col = try grid.column(@src(), .{});
             defer col.deinit();
-            if (try dvui.gridHeadingSortable(@src(), grid, "Make", &local.sort_dir, local.headerResizeOptions(1), .{}, .{})) {
+            if (try dvui.gridHeadingSortable(@src(), grid, "Make", &local.sort_dir, local.headerResizeOptions(1), .{})) {
                 local.sort("Make");
             }
-            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "make", "{s}", .{ .callback = local.rowBanding }, .none);
+            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "make", "{s}", banded);
         }
         // Model
         {
             var col = try grid.column(@src(), .{});
             defer col.deinit();
-            if (try dvui.gridHeadingSortable(@src(), grid, "Model", &local.sort_dir, local.headerResizeOptions(2), .{}, .{})) {
+            if (try dvui.gridHeadingSortable(@src(), grid, "Model", &local.sort_dir, local.headerResizeOptions(2), .{})) {
                 local.sort("Model");
             }
-            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "model", "{s}", .{ .callback = local.rowBanding }, .none);
+            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "model", "{s}", banded);
         }
         // Year
         {
             var col = try grid.column(@src(), .{});
             defer col.deinit();
-            if (try dvui.gridHeadingSortable(@src(), grid, "Year", &local.sort_dir, local.headerResizeOptions(3), .{}, .{})) {
+            if (try dvui.gridHeadingSortable(@src(), grid, "Year", &local.sort_dir, local.headerResizeOptions(3), .{})) {
                 local.sort("Year");
             }
-            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "year", "{d}", .{ .callback = local.rowBanding }, .none);
+            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "year", "{d}", banded);
         }
         // Condition
         {
             var col = try grid.column(@src(), .{});
             defer col.deinit();
-            if (try dvui.gridHeadingSortable(@src(), grid, "Condition", &local.sort_dir, local.headerResizeOptions(4), .{}, .{ .gravity_x = 0.5, .expand = .horizontal })) {
+            if (try dvui.gridHeadingSortable(@src(), grid, "Condition", &local.sort_dir, local.headerResizeOptions(4), GridWidget.GridOptions.init(.{}, .{ .gravity_x = 0.5, .expand = .horizontal }))) {
                 local.sort("Condition");
             }
-            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "condition", "{s}", .{ .callback = local.rowBanding }, .{ .callback = local.conditionTextColor });
+            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "condition", "{s}", local.ConditionTextColor.init(&banded_centered));
         }
         // Description
         {
             var col = try grid.column(@src(), .{});
             defer col.deinit();
-            if (try dvui.gridHeadingSortable(@src(), grid, "Description", &local.sort_dir, local.headerResizeOptions(5), .{}, .{})) {
+            if (try dvui.gridHeadingSortable(@src(), grid, "Description", &local.sort_dir, local.headerResizeOptions(5), .{})) {
                 local.sort("Description");
             }
             try local.customDescriptionColumn(@src(), grid, all_cars[0..], .{});
@@ -4402,7 +4422,7 @@ fn gridVirtualScrolling() !void {
     {
         var col = try grid.column(@src(), .{});
         defer col.deinit();
-        try dvui.gridHeading(@src(), grid, "Number", .fixed, .{}, .{});
+        try dvui.gridHeading(@src(), grid, "Number", .fixed, .{});
 
         for (first..last) |num| {
             var cell = try grid.bodyCell(@src(), num, .{ .border = .{ .x = 1, .w = 1, .h = 1 }, .background = true });
@@ -4416,7 +4436,7 @@ fn gridVirtualScrolling() !void {
         const check_img = @embedFile("icons/entypo/check.tvg");
         var col = try grid.column(@src(), .{});
         defer col.deinit();
-        try dvui.gridHeading(@src(), grid, "Is prime?", .fixed, .{}, .{});
+        try dvui.gridHeading(@src(), grid, "Is prime?", .fixed, .{});
 
         for (first..last) |num| {
             var cell = try grid.bodyCell(@src(), num, .{ .border = .{ .w = 1, .h = 1 }, .background = true });
