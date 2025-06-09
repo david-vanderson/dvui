@@ -135,12 +135,15 @@ pub const GridOptions = struct {
 };
 
 pub const GridOptionsBanded = struct {
+    const Banding = enum { rows, cols };
+    banding: Banding,
     alt_cell_opts: CellOptions,
     cell_opts: CellOptions,
     opts: Options,
 
-    pub fn init(cell_opts: CellOptions, alt_cell_opts: CellOptions, opts: Options) GridOptionsBanded {
+    pub fn init(banding: Banding, cell_opts: CellOptions, alt_cell_opts: CellOptions, opts: Options) GridOptionsBanded {
         return .{
+            .banding = banding,
             .cell_opts = cell_opts,
             .opts = opts,
             .alt_cell_opts = alt_cell_opts,
@@ -148,15 +151,25 @@ pub const GridOptionsBanded = struct {
     }
 
     pub fn cellOptions(self: *const GridOptionsBanded, col: usize, row: usize) CellOptions {
-        _ = col;
-        return if (row % 2 == 0)
-            self.cell_opts
-        else
-            self.alt_cell_opts;
+        switch (self.banding) {
+            .rows => {
+                return if (row % 2 == 0)
+                    self.cell_opts
+                else
+                    self.alt_cell_opts;
+            },
+            .cols => {
+                return if (col % 2 == 0)
+                    self.cell_opts
+                else
+                    self.alt_cell_opts;
+            },
+        }
     }
 
     pub fn cellOptionsOverride(self: *const GridOptions, cell_opts: CellOptions) GridOptions {
         return .{
+            .banding = self.banding,
             .cell_opts = self.cell_opts.override(cell_opts),
             .alt_cell_opts = self.alt_cell_opts,
             .opts = self.opts,
@@ -165,6 +178,7 @@ pub const GridOptionsBanded = struct {
 
     pub fn altCellOptionsOverride(self: *const GridOptions, alt_cell_opts: CellOptions) GridOptions {
         return .{
+            .banding = self.banding,
             .cell_opts = self.cell_opts,
             .alt_cell_opts = self.alt_cell_opts.override(alt_cell_opts),
             .opts = self.opts,
@@ -179,6 +193,7 @@ pub const GridOptionsBanded = struct {
 
     pub fn optionsOverride(self: *const GridOptionsBanded, opts: Options) GridOptionsBanded {
         return .{
+            .banding = self.banding,
             .cell_opts = self.cell_opts,
             .alt_cell_opts = self.alt_cell_opts,
             .opts = self.opts.override(opts),
