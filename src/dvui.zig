@@ -4207,7 +4207,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
         expanded = !expanded;
     }
 
-    var bcbox = BoxWidget.init(@src(), .horizontal, false, options.strip());
+    var bcbox = BoxWidget.init(@src(), .{ .dir = .horizontal }, options.strip());
     defer bcbox.deinit();
     try bcbox.install();
     try bcbox.drawBackground();
@@ -4335,7 +4335,7 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
     var ret = try currentWindow().arena().create(BoxWidget);
-    ret.* = BoxWidget.init(src, dir, false, opts);
+    ret.* = BoxWidget.init(src, .{ .dir = dir }, opts);
     try ret.install();
     try ret.drawBackground();
     return ret;
@@ -4348,7 +4348,7 @@ pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options)
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
     var ret = try currentWindow().arena().create(BoxWidget);
-    ret.* = BoxWidget.init(src, dir, true, opts);
+    ret.* = BoxWidget.init(src, .{ .dir = dir, .equal_space = true }, opts);
     try ret.install();
     try ret.drawBackground();
     return ret;
@@ -5400,7 +5400,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
     } else {
         fill_color = options.color(.fill);
     }
-    var knob = BoxWidget.init(@src(), .horizontal, false, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = .{ .color = fill_color } });
+    var knob = BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = .{ .color = fill_color } });
     try knob.install();
     try knob.drawBackground();
     if (b.data().id == focusedWidgetId()) {
@@ -5452,7 +5452,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
     var ret = false;
     var hover = false;
-    var b = BoxWidget.init(src, .horizontal, false, options);
+    var b = BoxWidget.init(src, .{ .dir = .horizontal }, options);
     try b.install();
     defer b.deinit();
 

@@ -91,7 +91,7 @@ pub fn install(self: *MenuWidget) !void {
         self.processEvent(e, false);
     }
 
-    self.box = BoxWidget.init(@src(), self.init_opts.dir, false, self.wd.options.strip().override(.{ .expand = .both }));
+    self.box = BoxWidget.init(@src(), .{ .dir = self.init_opts.dir }, self.wd.options.strip().override(.{ .expand = .both }));
     try self.box.install();
     try self.box.drawBackground();
 }

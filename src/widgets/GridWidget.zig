@@ -110,7 +110,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options)
     var self = GridWidget{};
     self.init_opts = init_opts;
     const options = defaults.override(opts);
-    self.vbox = BoxWidget.init(src, .vertical, false, options);
+    self.vbox = BoxWidget.init(src, .{ .dir = .vertical }, options);
     if (dvui.dataGet(null, self.data().id, "_last_height", f32)) |last_height| {
         self.last_height = last_height;
     }
@@ -150,7 +150,7 @@ pub fn install(self: *GridWidget) !void {
     try self.scroll.install();
 
     // Lay out columns horizontally.
-    self.hbox = BoxWidget.init(@src(), .horizontal, false, .{
+    self.hbox = BoxWidget.init(@src(), .{ .dir = .horizontal }, .{
         .expand = .both,
     });
     try self.hbox.install();
@@ -228,7 +228,7 @@ pub fn column(self: *GridWidget, src: std.builtin.SourceLocation, opts: ColOptio
     col_opts.max_size_content = if (w > 0) .width(w) else null;
 
     var col = try dvui.currentWindow().arena().create(BoxWidget);
-    col.* = BoxWidget.init(src, .vertical, false, col_opts);
+    col.* = BoxWidget.init(src, .{ .dir = .vertical }, col_opts);
     try col.install();
     try col.drawBackground();
     self.current_col = col;
@@ -263,7 +263,7 @@ pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, opts: Cell
 
     // Create the cell and install as parent.
     var cell = try dvui.currentWindow().arena().create(BoxWidget);
-    cell.* = BoxWidget.init(src, .horizontal, false, cell_opts);
+    cell.* = BoxWidget.init(src, .{ .dir = .horizontal }, cell_opts);
     try cell.install();
     try cell.drawBackground();
 
@@ -307,7 +307,7 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, row_num: usi
     cell_opts.id_extra = row_num;
 
     var cell = try dvui.currentWindow().arena().create(BoxWidget);
-    cell.* = BoxWidget.init(src, .horizontal, false, cell_opts);
+    cell.* = BoxWidget.init(src, .{ .dir = .horizontal }, cell_opts);
     try cell.install();
     try cell.drawBackground();
 

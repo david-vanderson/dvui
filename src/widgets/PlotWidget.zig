@@ -75,7 +75,7 @@ pub const Line = struct {
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) PlotWidget {
     var self = PlotWidget{};
     self.init_options = init_opts;
-    self.box = BoxWidget.init(src, .vertical, false, defaults.override(opts));
+    self.box = BoxWidget.init(src, .{ .dir = .vertical }, defaults.override(opts));
 
     return self;
 }
