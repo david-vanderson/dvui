@@ -200,7 +200,7 @@ fn boolFieldWidget(
         .dropdown => {
             const entries = .{ "false", "true" };
             var choice: usize = if (result.* == false) 0 else 1;
-            try dvui.labelNoFmt(@src(), opt.label_override orelse name, .{});
+            try dvui.labelNoFmt(@src(), opt.label_override orelse name, .{}, .{});
             _ = try dvui.dropdown(@src(), &entries, &choice, .{});
             result.* = if (choice == 0) false else true;
         },
