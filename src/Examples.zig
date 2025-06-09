@@ -21,6 +21,7 @@ const GridWidget = dvui.GridWidget;
 const enums = dvui.enums;
 
 const zig_favicon = @embedFile("zig-favicon.png");
+const zig_svg = @embedFile("zig-mark.svg");
 
 pub var show_demo_window: bool = false;
 var frame_counter: u64 = 0;
@@ -781,6 +782,23 @@ pub fn basicWidgets() !void {
             .min_size_content = .{ .w = imgsize.w + icon_image_size_extra, .h = imgsize.h + icon_image_size_extra },
             .rotation = icon_image_rotation,
         });
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Svg Images", .{}, .{ .gravity_y = 0.5 });
+
+        const zig_tvg_bytes = if (dvui.dataGetSlice(null, hbox.data().id, "_zig_tvg", []u8)) |tvg| tvg else blk: {
+            const zig_tvg_bytes = try dvui.svgToTvg(dvui.currentWindow().arena(), zig_svg);
+            defer dvui.currentWindow().arena().free(zig_tvg_bytes);
+            dvui.dataSetSlice(null, hbox.data().id, "_zig_tvg", zig_tvg_bytes);
+            break :blk dvui.dataGetSlice(null, hbox.data().id, "_zig_tvg", []u8).?;
+        };
+
+        const icon_opts = dvui.Options{ .gravity_y = 0.5, .min_size_content = .{ .h = 16 + icon_image_size_extra }, .rotation = icon_image_rotation };
+        try dvui.icon(@src(), "zig favicon", zig_tvg_bytes, .{}, icon_opts);
     }
 
     {
