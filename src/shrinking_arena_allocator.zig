@@ -1,10 +1,12 @@
-//! This is a wrapper of the `ArenaAllocator` that keeps track of the peak memory used
-//! in order to retain only the most minimal allocation.
+//! This is a wrapper of the `ArenaAllocator` that keeps
+//! track of the peak memory used in order to retain only
+//! the most minimal allocation.
 //!
-//! This is important because dvui applications may allocate large files like images
-//! on the arena, but never again for the lifetime of the application. Retaining the
-//! capacity for these the large files does no make sense when only a fraction of
-//! that is used during a normal frame.
+//! This is important because dvui applications may allocate
+//! large files like images on the arena, but never again for
+//! the lifetime of the application. Retaining the capacity
+//! for these the large files does no make sense when only
+//! a fraction of that is used during a normal frame.
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
@@ -27,15 +29,28 @@ pub fn deinit(self: ShrinkingArenaAllocator) void {
     self.arena.deinit();
 }
 
-/// Resets the inner arena, limiting the retained capacity to the peak amount used + the extra allowed capacity
-pub fn reset(self: *ShrinkingArenaAllocator) bool {
-    // std.log.debug("SAA peak used: {d}", .{self.peak_usage});
-    // std.log.debug("SAA arena buf len: {d}", .{self.arena.state.buffer_list.len()});
-    // std.log.debug("SAA arena capacity: {d}", .{self.arena.queryCapacity()});
-    // defer std.log.debug("SAA retained capacity: {d}", .{self.arena.queryCapacity()});
+/// Resets the inner arena, limiting the retained capacity to
+/// the peak amount used + the extra allowed capacity
+///
+/// The function will return whether the reset operation was
+/// successful or not. If the reallocation failed `false` is
+/// returned. The arena will still be fully functional in that
+/// case, all memory is released. Future allocations just
+/// might be slower.
+pub fn reset(self: *ShrinkingArenaAllocator, kind: enum { retain_capacity, shrink_to_peak_usage }) bool {
     defer self.current_usage = 0;
     defer self.peak_usage = 0;
-    return self.arena.reset(.{ .retain_with_limit = self.peak_usage + allowed_extra_capacity });
+    return switch (kind) {
+        .retain_capacity => self.arena.reset(.retain_capacity),
+        .shrink_to_peak_usage => self.arena.reset(.{ .retain_with_limit = self.peak_usage + allowed_extra_capacity }),
+    };
+}
+
+pub fn debug_log(self: *const ShrinkingArenaAllocator) void {
+    std.log.debug("{*} current used: {d}", .{ self, self.current_usage });
+    std.log.debug("{*} peak used: {d}", .{ self, self.peak_usage });
+    std.log.debug("{*} arena buf len: {d}", .{ self, self.arena.state.buffer_list.len() });
+    std.log.debug("{*} arena capacity: {d}", .{ self, self.arena.queryCapacity() });
 }
 
 pub fn allocator(self: *ShrinkingArenaAllocator) Allocator {
@@ -104,4 +119,8 @@ fn resize(ctx: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, r
     } else {
         return false;
     }
+}
+
+test {
+    @import("std").testing.refAllDecls(@This());
 }
