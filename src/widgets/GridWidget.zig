@@ -165,10 +165,16 @@ pub const GridOptionsHighlightHovered = struct {
         return self.opts.override(.{ .color_fill = self.opts.color_fill_hover });
     }
 
+    pub fn overrideCellOptions(self: *const GridOptionsHighlightHovered, cell_opts: CellOptions) CellOptions {
+        return .{
+            .cell_opts = self.cell_opts.override(cell_opts),
+            .opts = self.opts,
+        };
+    }
+
     pub fn overrideOptions(self: *const GridOptionsHighlightHovered, opts: Options) GridOptionsHighlightHovered {
         return .{
             .cell_opts = self.cell_opts,
-            .alt_cell_opts = self.alt_cell_opts,
             .opts = self.opts.override(opts),
         };
     }
@@ -195,6 +201,18 @@ pub const CellOptions = struct {
             .color_fill_hover = self.color_fill_hover,
             .color_border = self.color_border,
         };
+    }
+
+    pub fn override(self: *const CellOptions, over: CellOptions) CellOptions {
+        var ret = self.*;
+
+        inline for (@typeInfo(CellOptions).@"struct".fields) |f| {
+            if (@field(over, f.name)) |fval| {
+                @field(ret, f.name) = fval;
+            }
+        }
+
+        return ret;
     }
 };
 
