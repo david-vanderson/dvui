@@ -4247,7 +4247,7 @@ fn gridLayouts() !void {
                     };
                 }
             }
-            _ = try dvui.gridColumnCheckbox(@src(), grid, Car, all_cars[0..], "selected", banded.overrideOptions(.{ .gravity_y = 0 }));
+            _ = try dvui.gridColumnCheckbox(@src(), grid, Car, all_cars[0..], "selected", banded.optionsOverride(.{ .gravity_y = 0 }));
         }
         // Make
         {
@@ -4390,13 +4390,13 @@ fn gridVirtualScrolling() !void {
     defer grid.deinit();
 
     // Each column has slightly different border requirements. Create separate options for each.
-    // Using the override avoids having to duplicate the event processing from .init for each column.
+    // Using the override avoids having to re-run the event processing from .init for each column.
     const highlight_hovered_1: GridWidget.GridOptionsHighlightHovered = .init(grid, &local.scroll_info, .{
         .border = .{ .x = 1, .w = 1, .h = 1 },
         .background = true,
         .color_fill_hover = .fill_hover,
     }, .{});
-    const highlight_hovered_2 = highlight_hovered_1.overrideCellOptions(.{ .border = .{ .w = 1, .h = 1 } });
+    const highlight_hovered_2 = highlight_hovered_1.cellOptionsOverride(.{ .border = .{ .w = 1, .h = 1 } });
     const scroller: dvui.GridWidget.VirtualScroller = .init(grid, .{ .total_rows = num_rows, .scroll_info = &local.scroll_info });
     const first = scroller.startRow();
     const last = scroller.endRow(); // Note that endRow is exclusive, meaning it can be used as a slice end index.
