@@ -1117,6 +1117,18 @@ pub const TextureCacheEntry = struct {
     }
 };
 
+/// Takes in svg bytes and returns a tvg bytes that can be used
+/// with `icon` or `iconTexture`
+pub fn svgToTvg(allocator: std.mem.Allocator, svg_bytes: []const u8) (std.mem.Allocator.Error || TvgError)![]const u8 {
+    return tvg.tvg_from_svg(allocator, svg_bytes, .{}) catch |err| switch (err) {
+        error.OutOfMemory => |e| return e,
+        else => {
+            log.debug("svgToTvg returned {!}", .{err});
+            return TvgError.tvgError;
+        },
+    };
+}
+
 /// Get the width of an icon at a specified height.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
