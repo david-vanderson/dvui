@@ -40,6 +40,13 @@ pub fn build(b: *std.Build) !void {
             b.option([]const u8, "image-dir", "Default directory for dvui.testing.saveImage"),
     );
 
+    var sdl3_options = b.addOptions();
+    sdl3_options.addOption(
+        ?bool,
+        "callbacks",
+        b.option(bool, "sdl3-callbacks", "Use callbacks for live resizing on windows/mac"),
+    );
+
     const dvui_opts = DvuiModuleOptions{
         .b = b,
         .target = target,
@@ -110,15 +117,15 @@ pub fn build(b: *std.Build) !void {
         dvui_opts.addChecks(sdl_mod, "sdl2-backend");
         dvui_opts.addTests(sdl_mod, "sdl2-backend");
 
-        var sdl_options = b.addOptions();
+        var sdl2_options = b.addOptions();
 
         if (b.systemIntegrationOption("sdl2", .{})) {
             // SDL2 from system
-            sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
+            sdl2_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
             sdl_mod.linkSystemLibrary("SDL2", .{});
         } else {
             // SDL2 compiled from source
-            sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
+            sdl2_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
             if (target.result.os.tag == .linux) {
                 const sdl_dep = b.lazyDependency("sdl", .{
                     .target = target,
@@ -139,7 +146,7 @@ pub fn build(b: *std.Build) !void {
                 }
             }
         }
-        sdl_mod.addOptions("sdl_options", sdl_options);
+        sdl_mod.addOptions("sdl_options", sdl2_options);
 
         const dvui_sdl = addDvuiModule("dvui_sdl2", dvui_opts);
         dvui_opts.addChecks(dvui_sdl, "dvui_sdl2");
@@ -167,15 +174,13 @@ pub fn build(b: *std.Build) !void {
         dvui_opts.addChecks(sdl_mod, "sdl3-backend");
         dvui_opts.addTests(sdl_mod, "sdl3-backend");
 
-        var sdl_options = b.addOptions();
-
         if (b.systemIntegrationOption("sdl3", .{})) {
             // SDL3 from system
-            sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
+            sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
             sdl_mod.linkSystemLibrary("SDL3", .{});
         } else {
             // SDL3 compiled from source
-            sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
+            sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
             if (b.lazyDependency("sdl3", .{
                 .target = target,
                 .optimize = optimize,
@@ -183,7 +188,7 @@ pub fn build(b: *std.Build) !void {
                 sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
             }
         }
-        sdl_mod.addOptions("sdl_options", sdl_options);
+        sdl_mod.addOptions("sdl_options", sdl3_options);
 
         const dvui_sdl = addDvuiModule("dvui_sdl3", dvui_opts);
         dvui_opts.addChecks(dvui_sdl, "dvui_sdl3");
