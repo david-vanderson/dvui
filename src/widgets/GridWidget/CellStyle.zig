@@ -1,63 +1,79 @@
-/// Provides cell options and widget options for grid cells.
-/// styling options can vary by row and column
+//! Provides cell options and widget options for grid cells.
+//! styling options can vary by row and column
+//!
+//! CellStyle structs must provide the following functions:
+//! - pub fn cellOptions(self: *const T, col: usize, row: usize) CellOptions
+//! - pub fn options(self: *const T, col: usize, row: usize) Options
+//
 const dvui = @import("../../dvui.zig");
-const CellStyling = @This();
 const GridWidget = dvui.GridWidget;
 const CellOptions = GridWidget.CellOptions;
 const Options = dvui.Options;
 const ScrollInfo = dvui.ScrollInfo;
 
-pub const none: CellStyling = .init(.{}, .{});
+const CellStyle = @This();
+pub const none: CellStyle = .init(.{}, .{});
 cell_opts: CellOptions,
 opts: Options,
 
-pub fn init(cell_opts: CellOptions, opts: Options) CellStyling {
+/// The default cell styling provides the same CellOptions
+/// and Options to all cells.
+/// - cell_opts is used to style the cell
+/// - opts is used to style the widgets within the cell.
+pub fn init(cell_opts: CellOptions, opts: Options) CellStyle {
     return .{
         .cell_opts = cell_opts,
         .opts = opts,
     };
 }
 
-pub fn cellOptions(self: *const CellStyling, col: usize, row: usize) CellOptions {
+/// Returns the cellOptions for this cell. col and row are ignored.
+pub fn cellOptions(self: *const CellStyle, col: usize, row: usize) CellOptions {
     _ = row;
     _ = col;
     return self.cell_opts;
 }
 
-pub fn options(self: *const CellStyling, col: usize, row: usize) Options {
+// Return widget options for this cell. col and row are ignored.
+pub fn options(self: *const CellStyle, col: usize, row: usize) Options {
     _ = row;
     _ = col;
     return self.opts;
 }
 
-pub fn cellOptionsOverride(self: *const CellStyling, cell_opts: CellOptions) CellStyling {
+/// Return a new CellStyle with overridden CellOptions
+pub fn cellOptionsOverride(self: *const CellStyle, cell_opts: CellOptions) CellStyle {
     return .{
         .cell_opts = self.cell_opts.override(cell_opts),
         .opts = self.opts,
     };
 }
 
-pub fn optionsOverride(self: *const CellStyling, opts: Options) CellStyling {
+/// Return a new CellStyle with overridden Options
+pub fn optionsOverride(self: *const CellStyle, opts: Options) CellStyle {
     return .{
         .cell_opts = self.cell_opts,
         .opts = self.opts.override(opts),
     };
 }
 
-// Returns cell_opts for even rows and alt_cell_opts for odd rows.
+/// Banded cell styling.
+/// - cell_opts returned for even rows
+/// - alt_cell_opts returned for odd rows.
+/// - opts is returned for all rows.
 pub const Banded = struct {
     const Banding = enum { rows, cols };
     banding: Banding,
-    alt_cell_opts: CellOptions,
     cell_opts: CellOptions,
+    alt_cell_opts: CellOptions,
     opts: Options,
 
     pub fn init(banding: Banding, cell_opts: CellOptions, alt_cell_opts: CellOptions, opts: Options) Banded {
         return .{
             .banding = banding,
             .cell_opts = cell_opts,
-            .opts = opts,
             .alt_cell_opts = alt_cell_opts,
+            .opts = opts,
         };
     }
 
@@ -112,7 +128,7 @@ pub const Banded = struct {
     }
 };
 
-/// Applies the fill_hover colour to all cels on the hovered row.
+/// Applies the fill_hover colour to all cells on the hovered row.
 /// - scroll_info must be the same scroll_info passed to the GridWidget init_option.
 /// - requires that all rows are the same height.
 pub const HoveredRow = struct {

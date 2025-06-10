@@ -16,8 +16,8 @@ const BoxWidget = dvui.BoxWidget;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
 const ScrollBarWidget = dvui.ScrollBarWidget;
 
+pub const CellStyle = @import("GridWidget/CellStyle.zig");
 const GridWidget = @This();
-pub const CellStyling = @import("GridWidget/CellStyling.zig");
 
 pub var defaults: Options = .{
     .name = "GridWidget",

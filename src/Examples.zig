@@ -3886,7 +3886,7 @@ fn gridStyling() !void {
         // which column header is clicked.
         const current_sort_dir = local.sort_dir;
 
-        const cell_opts: GridWidget.CellStyling.Banded = .init(
+        const cell_opts: GridWidget.CellStyle.Banded = .init(
             switch (local.banding) {
                 .none, .rows => .rows,
                 .cols => .cols,
@@ -4064,7 +4064,7 @@ fn gridLayouts() !void {
         var resize_rows: bool = false;
 
         /// Create a textArea for the description so that the text can wrap.
-        fn customDescriptionColumn(src: std.builtin.SourceLocation, grid: *GridWidget, data: []Car, opts: *const GridWidget.CellStyling.Banded) !void {
+        fn customDescriptionColumn(src: std.builtin.SourceLocation, grid: *GridWidget, data: []Car, opts: *const GridWidget.CellStyle.Banded) !void {
             for (data, 0..) |*car, row_num| {
                 var col = try grid.bodyCell(src, row_num, opts.cellOptions(grid.col_num, row_num));
                 defer col.deinit();
@@ -4075,9 +4075,9 @@ fn gridLayouts() !void {
         }
 
         const ConditionTextColor = struct {
-            base_opts: *const GridWidget.CellStyling.Banded,
+            base_opts: *const GridWidget.CellStyle.Banded,
 
-            pub fn init(base_opts: *const GridWidget.CellStyling.Banded) ConditionTextColor {
+            pub fn init(base_opts: *const GridWidget.CellStyle.Banded) ConditionTextColor {
                 return .{
                     .base_opts = base_opts,
                 };
@@ -4175,7 +4175,7 @@ fn gridLayouts() !void {
     const all_cars = local.all_cars[0..];
 
     const panel_height = 250;
-    const banded = GridWidget.CellStyling.Banded.init(
+    const banded = GridWidget.CellStyle.Banded.init(
         .rows,
         .{},
         .{ .color_fill = .{ .name = .fill_press }, .background = true },
@@ -4268,7 +4268,8 @@ fn gridLayouts() !void {
         {
             var col = try grid.column(@src(), .{});
             defer col.deinit();
-            if (try dvui.gridHeadingSortable(@src(), grid, "Condition", &local.sort_dir, local.headerResizeOptions(4), GridWidget.CellStyling.init(.{}, .{ .gravity_x = 0.5, .expand = .horizontal }))) {
+            //            if (try dvui.gridHeadingSortable(@src(), grid, "Condition", &local.sort_dir, local.headerResizeOptions(4), GridWidget.CellStyle.init(.{}, .{ .gravity_x = 0.5, .expand = .horizontal }))) {
+            if (try dvui.gridHeadingSortable(@src(), grid, "Condition", &local.sort_dir, local.headerResizeOptions(4), .{})) {
                 local.sort("Condition");
             }
             try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "condition", "{s}", local.ConditionTextColor.init(&banded_centered));
@@ -4379,7 +4380,7 @@ fn gridVirtualScrolling() !void {
 
     // Each column has slightly different border requirements. Create separate options for each.
     // Using the override avoids having to re-run the event processing from .init for each column.
-    const highlight_hovered_1: GridWidget.CellStyling.HoveredRow = .init(grid, &local.scroll_info, .{
+    const highlight_hovered_1: GridWidget.CellStyle.HoveredRow = .init(grid, &local.scroll_info, .{
         .border = .{ .x = 1, .w = 1, .h = 1 },
         .background = true,
         .color_fill_hover = .fill_hover,
