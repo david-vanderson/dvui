@@ -4423,7 +4423,7 @@ pub fn gridHeading(
     g: *GridWidget,
     heading: []const u8,
     resize_opts: ?GridWidget.HeaderResizeWidget.InitOptions,
-    cell_style: anytype,
+    cell_style: anytype, // GridWidget.CellStyle
 ) !void {
     const label_defaults: Options = .{
         .corner_radius = Rect.all(0),
@@ -4453,7 +4453,7 @@ pub fn gridHeadingSortable(
     heading: []const u8,
     dir: *GridWidget.SortDirection,
     resize_opts: ?GridWidget.HeaderResizeWidget.InitOptions,
-    cell_style: anytype,
+    cell_style: anytype, // GridWidget.CellStyle
 ) !bool {
     const icon_ascending = dvui.entypo.chevron_small_up;
     const icon_descending = dvui.entypo.chevron_small_down;
@@ -4497,7 +4497,7 @@ pub fn gridColumnFromSlice(
     data: []const T,
     comptime field_name: ?[]const u8,
     comptime fmt: []const u8,
-    cell_style: anytype,
+    cell_style: anytype, // GridWidget.CellStyle
 ) !void {
     // TODO: Support pointer to direct value.
     comptime var TypeToValidate = T;
@@ -4569,7 +4569,12 @@ pub const GridColumnSelectAllState = enum {
 ///
 /// Returns true if the selection state has changed.
 /// selection - out parameter containing the current selection state.
-pub fn gridHeadingCheckbox(src: std.builtin.SourceLocation, g: *GridWidget, selection: *GridColumnSelectAllState, cell_style: anytype) !bool {
+pub fn gridHeadingCheckbox(
+    src: std.builtin.SourceLocation,
+    g: *GridWidget,
+    selection: *GridColumnSelectAllState,
+    cell_style: anytype, // GridWidget.CellStyle
+) !bool {
     const header_defaults: Options = .{
         .background = true,
         .expand = .both,
@@ -4622,7 +4627,7 @@ pub fn gridColumnCheckbox(
     comptime T: type,
     data: []T,
     comptime field_name: ?[]const u8,
-    cell_style: anytype,
+    cell_style: anytype, // GridWidget.CellStyle
 ) !bool {
     if (T != bool) {
         if (field_name) |_field_name| {
