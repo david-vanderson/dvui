@@ -1925,8 +1925,10 @@ pub const Triangles = struct {
         pub fn init(allocator: std.mem.Allocator, vtx_count: usize, idx_count: usize) std.mem.Allocator.Error!Builder {
             std.debug.assert(vtx_count >= 3);
             std.debug.assert(idx_count % 3 == 0);
+            var vtx: @FieldType(Builder, "vertexes") = try .initCapacity(allocator, vtx_count);
+            errdefer vtx.deinit(allocator);
             return .{
-                .vertexes = try .initCapacity(allocator, vtx_count),
+                .vertexes = vtx,
                 .indices = try .initCapacity(allocator, idx_count),
             };
         }
@@ -1985,8 +1987,10 @@ pub const Triangles = struct {
     };
 
     pub fn dupe(self: *const Triangles, allocator: std.mem.Allocator) std.mem.Allocator.Error!Triangles {
+        const vtx = try allocator.dupe(Vertex, self.vertexes);
+        errdefer allocator.free(vtx);
         return .{
-            .vertexes = try allocator.dupe(Vertex, self.vertexes),
+            .vertexes = vtx,
             .indices = try allocator.dupe(u16, self.indices),
             .bounds = self.bounds,
         };
