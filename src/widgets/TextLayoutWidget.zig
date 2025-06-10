@@ -334,7 +334,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             }
 
             if (visible) {
-                var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
+                var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
                 defer path.deinit();
 
                 try path.points.append(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
@@ -405,7 +405,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             }
 
             if (visible) {
-                var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
+                var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
                 defer path.deinit();
 
                 try path.points.append(.{ .x = fcrs.r.x, .y = fcrs.r.y });
@@ -424,8 +424,8 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
 pub fn format(self: *TextLayoutWidget, comptime fmt: []const u8, args: anytype, opts: Options) !void {
     comptime if (!std.unicode.utf8ValidateSlice(fmt)) @compileError("Format strings must be valid utf-8");
     const cw = dvui.currentWindow();
-    const l = try std.fmt.allocPrint(cw.arena(), fmt, args);
-    defer cw.arena().free(l);
+    const l = try std.fmt.allocPrint(cw.lifo(), fmt, args);
+    defer cw.lifo().free(l);
     try self.addText(l, opts);
 }
 
@@ -975,8 +975,8 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
     const msize = options.fontGet().sizeM(1, 1);
     const line_height = options.fontGet().lineHeight();
     self.current_line_height = @max(self.current_line_height, line_height);
-    var txt = try dvui.toUtf8(cw.arena(), text);
-    defer if (text.ptr != txt.ptr) cw.arena().free(txt);
+    var txt = try dvui.toUtf8(cw.lifo(), text);
+    defer if (text.ptr != txt.ptr) cw.lifo().free(txt);
 
     var container_width = self.wd.contentRect().w;
     if (container_width == 0) {
@@ -1201,9 +1201,9 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 (self.selection.start -| self.bytes_seen -| rtxt.len) == 0 and
                 (self.selection.end -| self.bytes_seen -| rtxt.len) > 0)
             {
-                rtxt = try std.mem.concat(cw.arena(), u8, &.{ rtxt, " " });
+                rtxt = try std.mem.concat(cw.lifo(), u8, &.{ rtxt, " " });
             }
-            defer if (txt.ptr != rtxt.ptr) cw.arena().free(rtxt);
+            defer if (txt.ptr != rtxt.ptr) cw.lifo().free(rtxt);
 
             try dvui.renderText(.{
                 .font = options.fontGet(),
@@ -1236,10 +1236,10 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 // initialize or realloc
                 if (self.copy_slice) |slice| {
                     const old_len = slice.len;
-                    self.copy_slice = try cw.arena().realloc(slice, slice.len + (cend - cstart));
+                    self.copy_slice = try cw.lifo().realloc(slice, slice.len + (cend - cstart));
                     @memcpy(self.copy_slice.?[old_len..], txt[cstart..cend]);
                 } else {
-                    self.copy_slice = try cw.arena().dupe(u8, txt[cstart..cend]);
+                    self.copy_slice = try cw.lifo().dupe(u8, txt[cstart..cend]);
                 }
 
                 // push to clipboard if done
@@ -1247,7 +1247,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                     try dvui.clipboardTextSet(self.copy_slice.?);
 
                     self.copy_sel = null;
-                    cw.arena().free(self.copy_slice.?);
+                    cw.lifo().free(self.copy_slice.?);
                     self.copy_slice = null;
                 }
             }
@@ -1332,7 +1332,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
 
         self.copy_sel = null;
         if (self.copy_slice) |cs| {
-            dvui.currentWindow().arena().free(cs);
+            dvui.currentWindow().lifo().free(cs);
         }
         self.copy_slice = null;
     }

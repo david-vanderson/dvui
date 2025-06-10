@@ -224,8 +224,8 @@ export fn dvui_c_memcpy(dest: [*c]u8, src: [*c]const u8, n: usize) [*c]u8 {
 
 export fn dvui_c_memmove(dest: [*c]u8, src: [*c]const u8, n: usize) [*c]u8 {
     //log.debug("dvui_c_memmove dest {*} src {*} {d}", .{ dest, src, n });
-    const buf = dvui.currentWindow().long_term_arena().alloc(u8, n) catch unreachable;
-    defer dvui.currentWindow().long_term_arena().free(buf);
+    const buf = dvui.currentWindow().arena().alloc(u8, n) catch unreachable;
+    defer dvui.currentWindow().arena().free(buf);
     @memcpy(buf, src[0..n]);
     @memcpy(dest[0..n], buf);
     return dest;

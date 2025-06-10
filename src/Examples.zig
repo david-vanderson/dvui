@@ -1019,8 +1019,8 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
         }
     };
 
-    var font_entries: [][]const u8 = try dvui.currentWindow().arena().alloc([]const u8, dvui.currentWindow().font_bytes.count() + 1);
-    defer dvui.currentWindow().arena().free(font_entries);
+    var font_entries: [][]const u8 = try dvui.currentWindow().lifo().alloc([]const u8, dvui.currentWindow().font_bytes.count() + 1);
+    defer dvui.currentWindow().lifo().free(font_entries);
     {
         font_entries[0] = "Theme Body";
         var it = dvui.currentWindow().font_bytes.keyIterator();
@@ -1139,7 +1139,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
                 .{},
                 .{ .expand = .ratio, .gravity_x = 1.0 },
             )) {
-                new_filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().long_term_arena(), .{ .title = "Pick Font File" });
+                new_filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "Pick Font File" });
             }
 
             try dvui.label(@src(), "File", .{}, .{ .gravity_y = 0.5 });
@@ -1164,22 +1164,22 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
                     try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Add a Name" });
                     name_error.* = true;
                 } else if (dvui.currentWindow().font_bytes.contains(name)) {
-                    const msg = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Already have font named \"{s}\"", .{name});
-                    defer dvui.currentWindow().arena().free(msg);
+                    const msg = try std.fmt.allocPrint(dvui.currentWindow().lifo(), "Already have font named \"{s}\"", .{name});
+                    defer dvui.currentWindow().lifo().free(msg);
                     try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = msg });
                     name_error.* = true;
                 } else {
                     var bytes: ?[]u8 = null;
                     if (!std.fs.path.isAbsolute(filename)) {
                         file_error.* = true;
-                        const msg = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename});
-                        defer dvui.currentWindow().arena().free(msg);
+                        const msg = try std.fmt.allocPrint(dvui.currentWindow().lifo(), "Could not open \"{s}\"", .{filename});
+                        defer dvui.currentWindow().lifo().free(msg);
                         try dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = msg });
                     } else {
                         const file = std.fs.openFileAbsolute(filename, .{}) catch blk: {
                             file_error.* = true;
-                            const msg = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename});
-                            defer dvui.currentWindow().arena().free(msg);
+                            const msg = try std.fmt.allocPrint(dvui.currentWindow().lifo(), "Could not open \"{s}\"", .{filename});
+                            defer dvui.currentWindow().lifo().free(msg);
                             try dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = msg });
                             break :blk null;
                         };
@@ -1193,15 +1193,15 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
                             error.OutOfMemory => @panic("OOM"),
                             error.fontError => {
                                 dvui.currentWindow().gpa.free(b);
-                                const msg = try std.fmt.allocPrint(dvui.currentWindow().arena(), "\"{s}\" is not a valid font", .{filename});
-                                defer dvui.currentWindow().arena().free(msg);
+                                const msg = try std.fmt.allocPrint(dvui.currentWindow().lifo(), "\"{s}\" is not a valid font", .{filename});
+                                defer dvui.currentWindow().lifo().free(msg);
                                 try dvui.dialog(@src(), .{}, .{ .title = "Bad Font", .message = msg });
                                 break :blk;
                             },
                         };
 
-                        const msg = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Added font named \"{s}\"", .{name});
-                        defer dvui.currentWindow().arena().free(msg);
+                        const msg = try std.fmt.allocPrint(dvui.currentWindow().lifo(), "Added font named \"{s}\"", .{name});
+                        defer dvui.currentWindow().lifo().free(msg);
                         try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = msg });
                     }
                 }
@@ -1228,7 +1228,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
 
         // filter suggestions to match the start of the entry
         if (combo.te.text_changed) {
-            const arena = dvui.currentWindow().arena();
+            const arena = dvui.currentWindow().lifo();
             var filtered = try std.ArrayListUnmanaged([]const u8).initCapacity(arena, entries.len);
             defer filtered.deinit(arena);
             const filter_text = combo.te.getText();
@@ -1265,7 +1265,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
 
         // dvui.suggestion processes events so text entry should be updated
         if (te.text_changed) {
-            const arena = dvui.currentWindow().arena();
+            const arena = dvui.currentWindow().lifo();
             var filtered = try std.ArrayListUnmanaged([]const u8).initCapacity(arena, entries.len);
             defer filtered.deinit(arena);
             const filter_text = te.getText();
@@ -1515,12 +1515,12 @@ pub fn styling() !void {
             defer drawBox.deinit();
             const rs = drawBox.data().contentRectScale();
 
-            var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
+            var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
             defer path.deinit();
             try path.addRect(rs.r, dvui.Rect.Physical.all(5));
 
-            var triangles = try path.build().fillConvexTriangles(dvui.currentWindow().arena(), .{ .center = rs.r.center() });
-            defer triangles.deinit(dvui.currentWindow().arena());
+            var triangles = try path.build().fillConvexTriangles(dvui.currentWindow().lifo(), .{ .center = rs.r.center() });
+            defer triangles.deinit(dvui.currentWindow().lifo());
 
             const ca0 = backbox_color;
             const ca1 = backbox_color.opacity(0);
@@ -2027,7 +2027,7 @@ pub fn plots() !void {
         try p.stop();
         defer p.deinit();
 
-        const arena = dvui.currentWindow().arena();
+        const arena = dvui.currentWindow().lifo();
 
         const png_slice = try p.png(arena);
         defer arena.free(png_slice);
@@ -3229,7 +3229,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) !void {
             if (dvui.wasm) {
                 dvui.dialogWasmFileOpen(single_file_id, .{ .accept = ".png, .jpg" });
             } else {
-                const filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().long_term_arena(), .{ .title = "dvui native file open", .filters = &.{ "*.png", "*.jpg" }, .filter_description = "images" });
+                const filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "dvui native file open", .filters = &.{ "*.png", "*.jpg" }, .filter_description = "images" });
                 if (filename) |f| {
                     try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "File Open Result", .ok_label = "Done", .message = f });
                 }
@@ -3246,17 +3246,17 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) !void {
             if (dvui.wasm) {
                 dvui.dialogWasmFileOpenMultiple(multi_file_id, .{ .accept = ".png, .jpg" });
             } else {
-                const filenames = try dvui.dialogNativeFileOpenMultiple(dvui.currentWindow().long_term_arena(), .{ .title = "dvui native file open multiple", .filter_description = "images" });
+                const filenames = try dvui.dialogNativeFileOpenMultiple(dvui.currentWindow().arena(), .{ .title = "dvui native file open multiple", .filter_description = "images" });
                 if (filenames) |fs| {
-                    const msg = try std.mem.join(dvui.currentWindow().arena(), "\n", fs);
-                    defer dvui.currentWindow().arena().free(msg);
+                    const msg = try std.mem.join(dvui.currentWindow().lifo(), "\n", fs);
+                    defer dvui.currentWindow().lifo().free(msg);
                     try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "File Open Multiple Result", .ok_label = "Done", .message = msg });
                 }
             }
         }
 
         if (dvui.wasmFileUploadedMultiple(multi_file_id)) |files| {
-            var msg = std.ArrayList(u8).init(dvui.currentWindow().arena());
+            var msg = std.ArrayList(u8).init(dvui.currentWindow().lifo());
             defer msg.deinit();
             var writer = msg.writer();
             for (files) |file| {
@@ -3275,7 +3275,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) !void {
             if (dvui.wasm) {
                 try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
             } else {
-                const filename = try dvui.dialogNativeFolderSelect(dvui.currentWindow().long_term_arena(), .{ .title = "dvui native folder select" });
+                const filename = try dvui.dialogNativeFolderSelect(dvui.currentWindow().arena(), .{ .title = "dvui native folder select" });
                 if (filename) |f| {
                     try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Folder Select Result", .ok_label = "Done", .message = f });
                 }
@@ -3286,7 +3286,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) !void {
             if (dvui.wasm) {
                 try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Save File", .ok_label = "Ok", .message = "Not available on the web.  For file download, see \"Save Plot\" in the plots example." });
             } else {
-                const filename = try dvui.dialogNativeFileSave(dvui.currentWindow().long_term_arena(), .{ .title = "dvui native file save" });
+                const filename = try dvui.dialogNativeFileSave(dvui.currentWindow().arena(), .{ .title = "dvui native file save" });
                 if (filename) |f| {
                     try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "File Save Result", .ok_label = "Done", .message = f });
                 }
@@ -4558,8 +4558,8 @@ pub const StrokeTest = struct {
             //_ = try dvui.button(@src(), i, "Floating", .{}, .{ .rect = dvui.Rect.fromPoint(p) });
         }
 
-        const path = try dvui.currentWindow().arena().alloc(dvui.Point.Physical, points.len);
-        defer dvui.currentWindow().arena().free(path);
+        const path = try dvui.currentWindow().lifo().alloc(dvui.Point.Physical, points.len);
+        defer dvui.currentWindow().lifo().free(path);
 
         for (points, path) |p, *path_point| {
             path_point.* = rs.pointToPhysical(p);

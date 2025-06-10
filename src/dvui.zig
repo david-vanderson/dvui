@@ -190,7 +190,7 @@ pub fn widgetAlloc(comptime T: type) *T {
     const alloc = cw._widget_stack.allocator();
     const ptr = alloc.create(T) catch {
         log.debug("Widget stack overflowed, falling back to long term arena allocator", .{});
-        return cw.long_term_arena().create(T) catch @panic("OOM");
+        return cw.arena().create(T) catch @panic("OOM");
     };
     // std.debug.print("PUSH {*} ({d}) {x}\n", .{ ptr, @alignOf(@TypeOf(ptr)), cw._widget_stack.end_index });
     cw.peak_widget_stack = @max(cw.peak_widget_stack, cw._widget_stack.end_index);
@@ -684,8 +684,8 @@ pub const FontCacheEntry = struct {
 
         const cw = currentWindow();
 
-        var pixels = try cw.arena().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
-        defer cw.arena().free(pixels);
+        var pixels = try cw.lifo().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
+        defer cw.lifo().free(pixels);
         // set all pixels to zero alpha
         @memset(pixels, 0);
 
@@ -739,8 +739,8 @@ pub const FontCacheEntry = struct {
                 const out_h: u32 = @intFromFloat(gi.h);
 
                 // single channel
-                const bitmap = try cw.arena().alloc(u8, @as(usize, out_w * out_h));
-                defer cw.arena().free(bitmap);
+                const bitmap = try cw.lifo().alloc(u8, @as(usize, out_w * out_h));
+                defer cw.lifo().free(bitmap);
 
                 //log.debug("makecodepointBitmap size x {d} y {d} w {d} h {d} out w {d} h {d}", .{ x, y, size.w, size.h, out_w, out_h });
 
@@ -1093,7 +1093,7 @@ pub const TextureCacheEntry = struct {
 pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) TvgError!f32 {
     if (height == 0) return 0.0;
     var stream = std.io.fixedBufferStream(tvg_bytes);
-    var parser = tvg.tvg.parse(currentWindow().long_term_arena(), stream.reader()) catch |err| {
+    var parser = tvg.tvg.parse(currentWindow().arena(), stream.reader()) catch |err| {
         log.warn("iconWidth Tinyvg error {!} parsing icon {s}\n", .{ err, name });
         return TvgError.tvgError;
     };
@@ -1144,8 +1144,8 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, icon_op
             };
         }
     };
-    const img_raw_data = try cw.arena().alloc(u8, height * height * 4);
-    defer cw.arena().free(img_raw_data);
+    const img_raw_data = try cw.lifo().alloc(u8, height * height * 4);
+    defer cw.lifo().free(img_raw_data);
     @memset(img_raw_data, 0);
     var img = ImageAdapter{
         .pixels = img_raw_data,
@@ -1162,7 +1162,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, icon_op
         disable_fill = true;
     }
     if (icon_opts.fill_color) |cx| ow_fill = ImageAdapter.conv(cx);
-    tvg.renderStream(cw.long_term_arena(), &img, fb.reader(), .{
+    tvg.renderStream(cw.arena(), &img, fb.reader(), .{
         .overwrite_stroke_width = icon_opts.stroke_width,
         .overwrite_stroke = ow_stroke,
         .overwrite_fill = ow_fill,
@@ -1514,15 +1514,15 @@ pub const Path = struct {
         const cw = currentWindow();
 
         if (!cw.render_target.rendering) {
-            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = try path.dupe(cw.long_term_arena()), .opts = options } } };
+            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = try path.dupe(cw.arena()), .opts = options } } };
 
             var sw = cw.subwindowCurrent();
             try sw.render_cmds.append(cmd);
             return;
         }
 
-        var triangles = try path.fillConvexTriangles(cw.arena(), options);
-        defer triangles.deinit(cw.arena());
+        var triangles = try path.fillConvexTriangles(cw.lifo(), options);
+        defer triangles.deinit(cw.lifo());
         try renderTriangles(triangles, null);
     }
 
@@ -1661,7 +1661,7 @@ pub const Path = struct {
         const cw = currentWindow();
 
         if (opts.after or !cw.render_target.rendering) {
-            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = try path.dupe(cw.long_term_arena()), .opts = opts } } };
+            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = try path.dupe(cw.arena()), .opts = opts } } };
 
             var sw = cw.subwindowCurrent();
             if (opts.after) {
@@ -1673,8 +1673,8 @@ pub const Path = struct {
             return;
         }
 
-        var triangles = try path.strokeTriangles(cw.arena(), opts);
-        defer triangles.deinit(cw.arena());
+        var triangles = try path.strokeTriangles(cw.lifo(), opts);
+        defer triangles.deinit(cw.lifo());
         try renderTriangles(triangles, null);
     }
 
@@ -1692,7 +1692,7 @@ pub const Path = struct {
             const center = path.points[0];
 
             const other_allocator = if (current_window) |cw|
-                if (cw.arena().ptr != allocator.ptr) cw.arena() else cw.long_term_arena()
+                if (cw.lifo().ptr != allocator.ptr) cw.lifo() else cw.arena()
             else
                 // Using the same allocator will "leak" the tempPath on
                 // arena allocators because it can only free the last allocation
@@ -2084,7 +2084,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
     const cw = currentWindow();
 
     if (!cw.render_target.rendering) {
-        const tri_copy = try triangles.dupe(cw.long_term_arena());
+        const tri_copy = try triangles.dupe(cw.arena());
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .triangles = .{ .tri = tri_copy, .tex = tex } } };
 
         var sw = cw.subwindowCurrent();
@@ -2111,7 +2111,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?WidgetId) std.mem.Allocator.Error!void {
     const cw = currentWindow();
-    const arena = cw.long_term_arena();
+    const arena = cw.arena();
 
     for (cw.subwindows.items) |*sw| {
         if (id == sw.id) {
@@ -3560,8 +3560,8 @@ pub fn dialogDisplay(id: WidgetId) !void {
         var hbox = try dvui.box(@src(), .horizontal, .{ .gravity_x = 0.5, .gravity_y = 1.0 });
         defer hbox.deinit();
 
-        const tag_ok = if (default == null) null else try std.fmt.allocPrint(dvui.currentWindow().long_term_arena(), "{x}_ok", .{hbox.data().id});
-        const tag_cancel = if (default == null) null else try std.fmt.allocPrint(dvui.currentWindow().long_term_arena(), "{x}_cancel", .{hbox.data().id});
+        const tag_ok = if (default == null) null else try std.fmt.allocPrint(dvui.currentWindow().arena(), "{x}_ok", .{hbox.data().id});
+        const tag_cancel = if (default == null) null else try std.fmt.allocPrint(dvui.currentWindow().arena(), "{x}_cancel", .{hbox.data().id});
 
         if (cancel_label) |cl| {
             if (try dvui.button(@src(), cl, .{}, .{ .tab_index = 2, .tag = tag_cancel })) {
@@ -3673,7 +3673,7 @@ pub fn wasmFileUploadedMultiple(id: WidgetId) ?[]WasmFile {
     const num_files = dvui.backend.getNumberOfFilesAvailable(id);
     if (num_files == 0) return null;
 
-    const files = dvui.currentWindow().long_term_arena().alloc(WasmFile, num_files) catch |err| {
+    const files = dvui.currentWindow().arena().alloc(WasmFile, num_files) catch |err| {
         log.err("File upload skipped, failed to allocate space for file handles: {!}", .{err});
         return null;
     };
@@ -4847,7 +4847,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
         animation(wd.id, "_t", anim);
     }
 
-    var path: Path.Builder = .init(dvui.currentWindow().arena());
+    var path: Path.Builder = .init(dvui.currentWindow().lifo());
     defer path.deinit();
 
     const full_circle = 2 * std.math.pi;
@@ -6435,12 +6435,12 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     if (clipGet().intersect(opts.rs.r).empty()) return;
 
     var cw = currentWindow();
-    const utf8_text = try toUtf8(cw.arena(), opts.text);
-    defer if (opts.text.ptr != utf8_text.ptr) cw.arena().free(utf8_text);
+    const utf8_text = try toUtf8(cw.lifo(), opts.text);
+    defer if (opts.text.ptr != utf8_text.ptr) cw.lifo().free(utf8_text);
 
     if (!cw.render_target.rendering) {
         var opts_copy = opts;
-        opts_copy.text = try cw.long_term_arena().dupe(u8, utf8_text);
+        opts_copy.text = try cw.arena().dupe(u8, utf8_text);
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
 
         var sw = cw.subwindowCurrent();
@@ -6474,8 +6474,8 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     };
 
     // Over allocate the internal buffers assuming each byte is a character
-    var builder = try Triangles.Builder.init(cw.arena(), 4 * utf8_text.len, 6 * utf8_text.len);
-    defer builder.deinit(cw.arena());
+    var builder = try Triangles.Builder.init(cw.lifo(), 4 * utf8_text.len, 6 * utf8_text.len);
+    defer builder.deinit(cw.lifo());
 
     const x_start: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
     var x = x_start;
@@ -6756,20 +6756,20 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
         return;
     }
 
-    var path: Path.Builder = .init(dvui.currentWindow().arena());
+    var path: Path.Builder = .init(dvui.currentWindow().lifo());
     defer path.deinit();
 
     try path.addRect(rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
 
-    var triangles = try path.build().fillConvexTriangles(cw.arena(), .{ .color = opts.colormod });
-    defer triangles.deinit(cw.arena());
+    var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod });
+    defer triangles.deinit(cw.lifo());
 
     triangles.uvFromRectuv(rs.r, opts.uv);
     triangles.rotate(rs.r.center(), opts.rotation);
 
     if (opts.background_color) |bg_col| {
-        var back_tri = try triangles.dupe(cw.arena());
-        defer back_tri.deinit(cw.arena());
+        var back_tri = try triangles.dupe(cw.lifo());
+        defer back_tri.deinit(cw.lifo());
 
         back_tri.color(bg_col);
         try renderTriangles(back_tri, null);
