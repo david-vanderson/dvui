@@ -4,7 +4,7 @@
 //! CellStyle structs must provide the following functions:
 //! - pub fn cellOptions(self: *const T, col: usize, row: usize) CellOptions
 //! - pub fn options(self: *const T, col: usize, row: usize) Options
-//
+
 const dvui = @import("../../dvui.zig");
 const GridWidget = dvui.GridWidget;
 const CellOptions = GridWidget.CellOptions;
@@ -34,7 +34,7 @@ pub fn cellOptions(self: *const CellStyle, col: usize, row: usize) CellOptions {
     return self.cell_opts;
 }
 
-// Return widget options for this cell. col and row are ignored.
+/// Return widget options for this cell. col and row are ignored.
 pub fn options(self: *const CellStyle, col: usize, row: usize) Options {
     _ = row;
     _ = col;
@@ -167,9 +167,7 @@ pub const HoveredRow = struct {
         const highlighted_row = self.highlighted_row orelse return self.cell_opts;
         if (row != highlighted_row) return self.cell_opts;
 
-        var result = self.cell_opts;
-        result.color_fill = result.color_fill_hover;
-        return result;
+        return self.cell_opts.override(.{ .color_fill = self.cell_opts.color_fill_hover });
     }
 
     pub fn options(self: *const HoveredRow, col: usize, row: usize) Options {
@@ -192,6 +190,7 @@ pub const HoveredRow = struct {
         return .{
             .cell_opts = self.cell_opts,
             .opts = self.opts.override(opts),
+            .highlighted_row = self.highlighted_row,
         };
     }
 };

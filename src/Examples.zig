@@ -12,13 +12,12 @@ const Rect = dvui.Rect;
 const ScrollInfo = dvui.ScrollInfo;
 const Size = dvui.Size;
 const entypo = dvui.entypo;
-const Adwaita = dvui.Adwaita;
 const ButtonWidget = dvui.ButtonWidget;
 const FloatingWindowWidget = dvui.FloatingWindowWidget;
 const LabelWidget = dvui.LabelWidget;
 const TextLayoutWidget = dvui.TextLayoutWidget;
 const GridWidget = dvui.GridWidget;
-const GridOptions = GridWidget.GridOptions;
+
 const enums = dvui.enums;
 
 const zig_favicon = @embedFile("zig-favicon.png");
@@ -4268,7 +4267,6 @@ fn gridLayouts() !void {
         {
             var col = try grid.column(@src(), .{});
             defer col.deinit();
-            //            if (try dvui.gridHeadingSortable(@src(), grid, "Condition", &local.sort_dir, local.headerResizeOptions(4), GridWidget.CellStyle.init(.{}, .{ .gravity_x = 0.5, .expand = .horizontal }))) {
             if (try dvui.gridHeadingSortable(@src(), grid, "Condition", &local.sort_dir, local.headerResizeOptions(4), .{})) {
                 local.sort("Condition");
             }
