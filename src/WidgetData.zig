@@ -127,7 +127,7 @@ pub fn register(self: *WidgetData) void {
             if (dvui.minSizeGet(self.id)) |ms| {
                 min_size = ms;
             }
-            cw.debug_info_name_rect = std.fmt.allocPrint(cw.long_term_arena(), "{x} {s}\n\n{}\nmin {}\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{
+            cw.debug_info_name_rect = std.fmt.allocPrint(cw.arena(), "{x} {s}\n\n{}\nmin {}\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{
                 self.id,
                 name,
                 rs.r,
@@ -161,7 +161,7 @@ pub fn register(self: *WidgetData) void {
 
             dvui.clipSet(clipr);
 
-            cw.debug_info_src_id_extra = std.fmt.allocPrint(cw.long_term_arena(), "{s}:{d}\nid_extra {d}", .{ self.src.file, self.src.line, self.options.idExtra() }) catch "ERROR allocPrint";
+            cw.debug_info_src_id_extra = std.fmt.allocPrint(cw.arena(), "{s}:{d}\nid_extra {d}", .{ self.src.file, self.src.line, self.options.idExtra() }) catch "ERROR allocPrint";
         }
     }
 }

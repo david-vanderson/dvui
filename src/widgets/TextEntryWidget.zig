@@ -274,8 +274,8 @@ pub fn draw(self: *TextEntryWidget) !void {
         sel.start = sstart.?;
         sel.cursor = scursor.?;
         sel.end = send.?;
-        var password_str: []u8 = try dvui.currentWindow().arena().alloc(u8, count * pc.len);
-        defer dvui.currentWindow().arena().free(password_str);
+        var password_str: []u8 = try dvui.currentWindow().lifo().alloc(u8, count * pc.len);
+        defer dvui.currentWindow().lifo().free(password_str);
         for (0..count) |i| {
             for (0..pc.len) |pci| {
                 password_str[i * pc.len + pci] = pc[pci];

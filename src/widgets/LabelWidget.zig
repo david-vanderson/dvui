@@ -25,19 +25,19 @@ pub fn init(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: any
     const cw = dvui.currentWindow();
     // Validate utf8 formatting
     const str, const alloc = blk: {
-        const str = std.fmt.allocPrint(cw.arena(), fmt, args) catch |err| {
+        const str = std.fmt.allocPrint(cw.lifo(), fmt, args) catch |err| {
             logAndHighlight(src, opts, err);
             break :blk .{ fmt, null };
         };
         // We need to use `long_term_arena` because otherwise we
         // will not be able to free the memory of the allocPrint
-        const utf8 = dvui.toUtf8(cw.long_term_arena(), str) catch |err| {
+        const utf8 = dvui.toUtf8(cw.arena(), str) catch |err| {
             logAndHighlight(src, opts, err);
             // We contained invalid utf8, so textSize will fail later
-            break :blk .{ str, cw.arena() };
+            break :blk .{ str, cw.lifo() };
         };
-        if (str.ptr == utf8.ptr) break :blk .{ str, cw.arena() };
-        cw.arena().free(str);
+        if (str.ptr == utf8.ptr) break :blk .{ str, cw.lifo() };
+        cw.lifo().free(str);
         dvui.log.debug("{s}:{d}: LabelWidget format output was invalid utf8 for '{s}'.", .{ src.file, src.line, str });
         break :blk .{ utf8, null };
     };
@@ -45,7 +45,7 @@ pub fn init(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: any
 }
 
 pub fn initNoFmt(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) LabelWidget {
-    const arena = dvui.currentWindow().arena();
+    const arena = dvui.currentWindow().lifo();
     // If the allocation fails, the textSize will be incorrect
     // later because of invalid utf8
     const str = dvui.toUtf8(arena, label_str) catch |err| blk: {
