@@ -4423,7 +4423,7 @@ pub fn gridHeading(
     g: *GridWidget,
     heading: []const u8,
     resize_opts: ?GridWidget.HeaderResizeWidget.InitOptions,
-    anyopts: anytype,
+    cell_styling: anytype,
 ) !void {
     const label_defaults: Options = .{
         .corner_radius = Rect.all(0),
@@ -4433,7 +4433,7 @@ pub fn gridHeading(
         .color_fill = .{ .name = .fill_control },
         .background = true,
     };
-    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.CellStyling.none else anyopts;
+    const opts = if (@TypeOf(cell_styling) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_styling;
 
     const label_options = label_defaults.override(opts.options(g.col_num, 0));
     var cell = try g.headerCell(src, opts.cellOptions(g.col_num, 0));
@@ -4453,7 +4453,7 @@ pub fn gridHeadingSortable(
     heading: []const u8,
     dir: *GridWidget.SortDirection,
     resize_opts: ?GridWidget.HeaderResizeWidget.InitOptions,
-    anyopts: anytype,
+    cell_styling: anytype,
 ) !bool {
     const icon_ascending = dvui.entypo.chevron_small_up;
     const icon_descending = dvui.entypo.chevron_small_down;
@@ -4463,7 +4463,7 @@ pub fn gridHeadingSortable(
         .expand = .horizontal,
         .corner_radius = Rect.all(0),
     };
-    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.CellStyling.none else anyopts;
+    const opts = if (@TypeOf(cell_styling) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_styling;
     const heading_opts = heading_defaults.override(opts.options(g.col_num, 0));
 
     var cell = try g.headerCell(src, opts.cellOptions(g.col_num, 0));
@@ -4497,7 +4497,7 @@ pub fn gridColumnFromSlice(
     data: []const T,
     comptime field_name: ?[]const u8,
     comptime fmt: []const u8,
-    anyopts: anytype,
+    cell_styling: anytype,
 ) !void {
     // TODO: Support pointer to direct value.
     comptime var TypeToValidate = T;
@@ -4521,7 +4521,7 @@ pub fn gridColumnFromSlice(
         },
         else => {},
     };
-    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.CellStyling.none else anyopts;
+    const opts = if (@TypeOf(cell_styling) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_styling;
 
     const label_defaults: Options = .{
         .expand = .horizontal,
@@ -4569,7 +4569,7 @@ pub const GridColumnSelectAllState = enum {
 ///
 /// Returns true if the selection state has changed.
 /// selection - out parameter containing the current selection state.
-pub fn gridHeadingCheckbox(src: std.builtin.SourceLocation, g: *GridWidget, selection: *GridColumnSelectAllState, anyopts: anytype) !bool {
+pub fn gridHeadingCheckbox(src: std.builtin.SourceLocation, g: *GridWidget, selection: *GridColumnSelectAllState, cell_styling: anytype) !bool {
     const header_defaults: Options = .{
         .background = true,
         .expand = .both,
@@ -4579,7 +4579,7 @@ pub fn gridHeadingCheckbox(src: std.builtin.SourceLocation, g: *GridWidget, sele
         .gravity_y = 0.5,
     };
 
-    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.CellStyling.none else anyopts;
+    const opts = if (@TypeOf(cell_styling) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_styling;
 
     const header_options = header_defaults.override(opts.options(g.col_num, 0));
     var checkbox_opts: Options = header_options.strip();
@@ -4622,7 +4622,7 @@ pub fn gridColumnCheckbox(
     comptime T: type,
     data: []T,
     comptime field_name: ?[]const u8,
-    anyopts: anytype,
+    cell_styling: anytype,
 ) !bool {
     if (T != bool) {
         if (field_name) |_field_name| {
@@ -4635,7 +4635,7 @@ pub fn gridColumnCheckbox(
             @compileError("data must be of type []bool when field_name is null.");
         }
     }
-    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.CellStyling.none else anyopts;
+    const opts = if (@TypeOf(cell_styling) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_styling;
 
     const check_defaults: Options = .{
         .gravity_x = 0.5,
