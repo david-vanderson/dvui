@@ -4433,7 +4433,7 @@ pub fn gridHeading(
         .color_fill = .{ .name = .fill_control },
         .background = true,
     };
-    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.GridOptions.none else anyopts;
+    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.CellStyling.none else anyopts;
 
     const label_options = label_defaults.override(opts.options(g.col_num, 0));
     var cell = try g.headerCell(src, opts.cellOptions(g.col_num, 0));
@@ -4463,7 +4463,7 @@ pub fn gridHeadingSortable(
         .expand = .horizontal,
         .corner_radius = Rect.all(0),
     };
-    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.GridOptions.none else anyopts;
+    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.CellStyling.none else anyopts;
     const heading_opts = heading_defaults.override(opts.options(g.col_num, 0));
 
     var cell = try g.headerCell(src, opts.cellOptions(g.col_num, 0));
@@ -4521,7 +4521,7 @@ pub fn gridColumnFromSlice(
         },
         else => {},
     };
-    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.GridOptions.none else anyopts;
+    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.CellStyling.none else anyopts;
 
     const label_defaults: Options = .{
         .expand = .horizontal,
@@ -4579,7 +4579,7 @@ pub fn gridHeadingCheckbox(src: std.builtin.SourceLocation, g: *GridWidget, sele
         .gravity_y = 0.5,
     };
 
-    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.GridOptions.none else anyopts;
+    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.CellStyling.none else anyopts;
 
     const header_options = header_defaults.override(opts.options(g.col_num, 0));
     var checkbox_opts: Options = header_options.strip();
@@ -4635,7 +4635,7 @@ pub fn gridColumnCheckbox(
             @compileError("data must be of type []bool when field_name is null.");
         }
     }
-    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.GridOptions.none else anyopts;
+    const opts = if (@TypeOf(anyopts) == @TypeOf(.{})) GridWidget.CellStyling.none else anyopts;
 
     const check_defaults: Options = .{
         .gravity_x = 0.5,
