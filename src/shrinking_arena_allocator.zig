@@ -65,6 +65,51 @@ pub fn allocator(self: *ShrinkingArenaAllocator) Allocator {
     };
 }
 
+/// This version of the allocator enforces that all calls to
+/// free succeeds, meaning all allocations and frees are
+/// performed in the order of last allocated, first freed.
+///
+/// This is most easily achieved by immidietly deferring the
+/// freeing of allocated memory.
+pub fn allocatorLIFO(self: *ShrinkingArenaAllocator) Allocator {
+    return .{
+        .ptr = self,
+        .vtable = &.{
+            .alloc = alloc,
+            .resize = resize,
+            .remap = remap,
+            .free = freeLIFO,
+        },
+    };
+}
+
+pub fn has_expanded(self: *const ShrinkingArenaAllocator) bool {
+    if (self.arena.state.buffer_list.first) |first| {
+        // If there is a second buffer, we expanded past our first
+        return first.next != null;
+    } else return false;
+}
+
+/// Attempts to free the given memory and returns whether it
+/// succeeded or not.
+fn attemptFree(self: *ShrinkingArenaAllocator, memory: []u8, alignment: Alignment, ret_addr: usize) bool {
+    const end_before = self.arena.state.end_index;
+    self.arena.allocator().rawFree(memory, alignment, ret_addr);
+
+    // Attempt to free acounting for alignment padding of allocations after the current one
+    var align_diff: usize = 8;
+    while (self.arena.state.end_index == end_before and align_diff > 0) : (align_diff >>= 1) {
+        var mem = memory;
+        mem.len = std.mem.alignForward(usize, memory.len, align_diff);
+        self.arena.allocator().rawFree(mem, alignment, ret_addr);
+    }
+    const succeeded = self.arena.state.end_index < end_before;
+    if (succeeded) {
+        self.current_usage -= memory.len;
+    }
+    return succeeded;
+}
+
 fn alloc(ctx: *anyopaque, len: usize, alignment: Alignment, ret_addr: usize) ?[*]u8 {
     const self: *ShrinkingArenaAllocator = @ptrCast(@alignCast(ctx));
     const buf = self.arena.allocator().rawAlloc(len, alignment, ret_addr) orelse return null;
@@ -86,8 +131,19 @@ fn free(ctx: *anyopaque, memory: []u8, alignment: Alignment, ret_addr: usize) vo
         self.arena.allocator().rawFree(mem, alignment, ret_addr);
     }
 
-    if (self.arena.state.end_index < end_before) {
-        self.current_usage -= memory.len;
+    _ = self.attemptFree(memory, alignment, ret_addr);
+}
+
+fn freeLIFO(ctx: *anyopaque, memory: []u8, alignment: Alignment, ret_addr: usize) void {
+    const self: *ShrinkingArenaAllocator = @ptrCast(@alignCast(ctx));
+    if (!self.attemptFree(memory, alignment, ret_addr) and !self.has_expanded()) {
+        var addresses: [8]usize = undefined;
+        var trace = std.builtin.StackTrace{
+            .index = 0,
+            .instruction_addresses = &addresses,
+        };
+        std.debug.captureStackTrace(ret_addr, &trace);
+        std.log.debug("Free from lifo arena failed. Somewhere between when this was allocated and this call to free there was another allocation that was not freed first. Stack trace: {}", .{trace});
     }
 }
 

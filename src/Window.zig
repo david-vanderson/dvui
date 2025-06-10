@@ -448,7 +448,7 @@ pub fn deinit(self: *Self) void {
 /// If you want the memory to be automatically freed at the end
 /// of the frame, use `Window.long_term_arena`
 pub fn arena(self: *Self) std.mem.Allocator {
-    return self._temp_arena.allocator();
+    return self._temp_arena.allocatorFIFO();
 }
 
 /// A general allocator for using during a frame. All allocations
