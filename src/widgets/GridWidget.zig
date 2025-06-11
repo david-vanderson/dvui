@@ -226,6 +226,7 @@ pub fn column(self: *GridWidget, src: std.builtin.SourceLocation, opts: ColOptio
     col_opts.expand = expand;
     col_opts.min_size_content = .{ .w = w, .h = self.last_height };
     col_opts.max_size_content = if (w > 0) .width(w) else null;
+    col_opts.id_extra = self.col_num;
 
     var col = try dvui.currentWindow().arena().create(BoxWidget);
     col.* = BoxWidget.init(src, .{ .dir = .vertical }, col_opts);
