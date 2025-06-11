@@ -16,6 +16,7 @@ const BoxWidget = dvui.BoxWidget;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
 const ScrollBarWidget = dvui.ScrollBarWidget;
 
+pub const CellStyle = @import("GridWidget/CellStyle.zig");
 const GridWidget = @This();
 
 pub var defaults: Options = .{
@@ -44,6 +45,18 @@ pub const ColOptions = struct {
             .color_border = self.color_border,
         };
     }
+
+    pub fn override(self: *const ColOptions, over: CellOptions) CellOptions {
+        var ret = self.*;
+
+        inline for (@typeInfo(ColOptions).@"struct".fields) |f| {
+            if (@field(over, f.name)) |fval| {
+                @field(ret, f.name) = fval;
+            }
+        }
+
+        return ret;
+    }
 };
 
 pub const CellOptions = struct {
@@ -53,6 +66,7 @@ pub const CellOptions = struct {
     padding: ?Rect = null,
     background: ?bool = null,
     color_fill: ?ColorOrName = null,
+    color_fill_hover: ?ColorOrName = null,
     color_border: ?ColorOrName = null,
 
     pub fn toOptions(self: *const CellOptions) Options {
@@ -63,8 +77,21 @@ pub const CellOptions = struct {
             .padding = self.padding,
             .background = self.background,
             .color_fill = self.color_fill,
+            .color_fill_hover = self.color_fill_hover,
             .color_border = self.color_border,
         };
+    }
+
+    pub fn override(self: *const CellOptions, over: CellOptions) CellOptions {
+        var ret = self.*;
+
+        inline for (@typeInfo(CellOptions).@"struct".fields) |f| {
+            if (@field(over, f.name)) |fval| {
+                @field(ret, f.name) = fval;
+            }
+        }
+
+        return ret;
     }
 };
 
@@ -432,7 +459,7 @@ pub const VirtualScroller = struct {
 };
 
 /// Provides a draggable separator between columns
-/// size must be a pointer into the col_widths slice
+/// size must be a pointer into the same col_widths slice
 /// passed to the GridWidget init_option.
 pub const HeaderResizeWidget = struct {
     pub const InitOptions = struct {
