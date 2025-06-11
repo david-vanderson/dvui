@@ -260,7 +260,7 @@ pub fn install(self: *PlotWidget) !void {
 pub fn line(self: *PlotWidget) Line {
     return .{
         .plot = self,
-        .path = .init(dvui.currentWindow().lifo()),
+        .path = .init(dvui.currentWindow().arena()),
     };
 }
 
