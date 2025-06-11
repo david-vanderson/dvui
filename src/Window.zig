@@ -1706,13 +1706,10 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
     // self._arena.debug_log();
     _ = self._arena.reset(.retain_capacity);
-    if (self._lifo_arena.current_usage != 0 and
-        // If we have more than one buffer, we increased in size this frame, ignore errors
-        self._lifo_arena.arena.state.buffer_list.len() == 1)
-    {
+    if (self._lifo_arena.current_usage != 0 and !self._lifo_arena.has_expanded()) {
         log.warn("Arena was not empty at the end of the frame, {d} byte left. Did you forget to free memory somewhere?", .{self._lifo_arena.current_usage});
         // const buf: [*]u8 = @ptrCast(self._lifo_arena.arena.state.buffer_list.first.?);
-        // std.log.debug("Arena content {s}", .{buf[@sizeOf(usize) .. self._lifo_arena.current_usage]});
+        // std.log.debug("Arena content {s}", .{buf[@sizeOf(usize)..self._lifo_arena.current_usage]});
     }
     // self._lifo_arena.debug_log();
     _ = self._lifo_arena.reset(.retain_capacity);

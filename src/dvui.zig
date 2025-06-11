@@ -1692,7 +1692,7 @@ pub const Path = struct {
             const center = path.points[0];
 
             const other_allocator = if (current_window) |cw|
-                if (cw.lifo().ptr != allocator.ptr) cw.arena() else cw.arena()
+                if (cw.lifo().ptr != allocator.ptr) cw.lifo() else cw.arena()
             else
                 // Using the same allocator will "leak" the tempPath on
                 // arena allocators because it can only free the last allocation
@@ -4818,7 +4818,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
         animation(wd.id, "_t", anim);
     }
 
-    var path: Path.Builder = .init(dvui.currentWindow().arena());
+    var path: Path.Builder = .init(dvui.currentWindow().lifo());
     defer path.deinit();
 
     const full_circle = 2 * std.math.pi;
@@ -4904,7 +4904,7 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
 pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) !bool {
     var ret = false;
 
-    var lw = LabelWidget.init(src, fmt, args, (Options{ .name = "LabelClick" }).override(opts));
+    var lw = LabelWidget.init(src, fmt, args, opts.override(.{ .name = "LabelClick" }));
     // now lw has a Rect from its parent but hasn't processed events or drawn
 
     const lwid = lw.data().id;
@@ -6727,7 +6727,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
         return;
     }
 
-    var path: Path.Builder = .init(dvui.currentWindow().arena());
+    var path: Path.Builder = .init(dvui.currentWindow().lifo());
     defer path.deinit();
 
     try path.addRect(rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
