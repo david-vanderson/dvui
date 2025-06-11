@@ -36,8 +36,10 @@ pub const InitOpts = struct {
 
 hbox: BoxWidget = undefined,
 vbar: ?ScrollBarWidget = null,
+vbar_grab: ?ScrollBarWidget.Grab = null,
 vbox: BoxWidget = undefined,
 hbar: ?ScrollBarWidget = null,
+hbar_grab: ?ScrollBarWidget.Grab = null,
 init_opts: InitOpts = undefined,
 si: *ScrollInfo = undefined,
 si_store: ScrollInfo = .{},
@@ -116,10 +118,17 @@ pub fn install(self: *ScrollAreaWidget) !void {
 
     if (do_vbar) {
         // do the scrollbars first so that they still appear even if there's not enough space
-        // - could instead do them in deinit
-        self.vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = self.si, .focus_id = focus_target, .overlay = self.init_opts.vertical_bar == .auto_overlay }, .{ .gravity_x = 1.0, .expand = .vertical });
+        const overlay = self.init_opts.vertical_bar == .auto_overlay;
+        self.vbar = ScrollBarWidget.init(@src(), .{
+            .scroll_info = self.si,
+            .focus_id = focus_target,
+        }, .{ .gravity_x = if (overlay) 0.999 else 1.0, .expand = .vertical });
         try self.vbar.?.install();
-        if (!self.vbar.?.overlay) try self.vbar.?.drawGrab();
+        if (overlay) {
+            self.vbar_grab = self.vbar.?.grab();
+        } else {
+            try self.vbar.?.grab().draw();
+        }
         self.vbar.?.deinit();
     }
 
@@ -128,9 +137,14 @@ pub fn install(self: *ScrollAreaWidget) !void {
     try self.vbox.drawBackground();
 
     if (do_hbar) {
-        self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target, .overlay = self.init_opts.horizontal_bar == .auto_overlay }, .{ .expand = .horizontal, .gravity_y = 1.0 });
+        const overlay = self.init_opts.horizontal_bar == .auto_overlay;
+        self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, .{ .expand = .horizontal, .gravity_y = if (overlay) 0.999 else 1.0 });
         try self.hbar.?.install();
-        if (!self.hbar.?.overlay) try self.hbar.?.drawGrab();
+        if (overlay) {
+            self.hbar_grab = self.hbar.?.grab();
+        } else {
+            try self.hbar.?.grab().draw();
+        }
         self.hbar.?.deinit();
     }
 
@@ -152,15 +166,11 @@ pub fn deinit(self: *ScrollAreaWidget) void {
     dvui.dataSet(null, self.hbox.data().id, "_scroll_id", self.scroll.wd.id);
     self.scroll.deinit();
 
-    if (self.hbar) |*hbar| {
-        if (hbar.overlay) hbar.drawGrab() catch {};
-    }
+    if (self.hbar_grab) |hb| hb.draw() catch {};
 
     self.vbox.deinit();
 
-    if (self.vbar) |*vbar| {
-        if (vbar.overlay) vbar.drawGrab() catch {};
-    }
+    if (self.vbar_grab) |vb| vb.draw() catch {};
 
     dvui.dataSet(null, self.hbox.data().id, "_scroll_info", self.si.*);
 
