@@ -11,21 +11,16 @@ const CellOptions = GridWidget.CellOptions;
 const Options = dvui.Options;
 const ScrollInfo = dvui.ScrollInfo;
 
-const CellStyle = @This();
-pub const none: CellStyle = .init(.{}, .{});
-cell_opts: CellOptions,
-opts: Options,
-
 /// The default cell styling provides the same CellOptions
 /// and Options to all cells.
 /// - cell_opts is used to style the cell
 /// - opts is used to style the widgets within the cell.
-pub fn init(cell_opts: CellOptions, opts: Options) CellStyle {
-    return .{
-        .cell_opts = cell_opts,
-        .opts = opts,
-    };
-}
+const CellStyle = @This();
+
+pub const none: CellStyle = .{};
+
+cell_opts: CellOptions = .{},
+opts: Options = .{},
 
 /// Returns the cellOptions for this cell. col and row are ignored.
 pub fn cellOptions(self: *const CellStyle, col: usize, row: usize) CellOptions {
@@ -63,19 +58,10 @@ pub fn optionsOverride(self: *const CellStyle, opts: Options) CellStyle {
 /// - opts is returned for all rows.
 pub const Banded = struct {
     const Banding = enum { rows, cols };
-    banding: Banding,
-    cell_opts: CellOptions,
-    alt_cell_opts: CellOptions,
-    opts: Options,
-
-    pub fn init(banding: Banding, cell_opts: CellOptions, alt_cell_opts: CellOptions, opts: Options) Banded {
-        return .{
-            .banding = banding,
-            .cell_opts = cell_opts,
-            .alt_cell_opts = alt_cell_opts,
-            .opts = opts,
-        };
-    }
+    banding: Banding = .rows,
+    cell_opts: CellOptions = .{},
+    alt_cell_opts: CellOptions = .{},
+    opts: Options = .{},
 
     pub fn cellOptions(self: *const Banded, col: usize, row: usize) CellOptions {
         switch (self.banding) {
@@ -129,18 +115,20 @@ pub const Banded = struct {
 };
 
 /// Applies the fill_hover colour to all cells on the hovered row.
-/// - scroll_info must be the same scroll_info passed to the GridWidget init_option.
-/// - requires that all rows are the same height.
+/// - requires that all rows are the same heights
 pub const HoveredRow = struct {
-    cell_opts: CellOptions,
-    opts: Options,
-    highlighted_row: ?usize,
+    cell_opts: CellOptions = .{},
+    opts: Options = .{},
+    // highlighted_row is calculated in processEvents()
+    highlighted_row: ?usize = null,
 
-    pub fn init(grid: *GridWidget, scroll_info: *ScrollInfo, cell_opts: CellOptions, opts: Options) HoveredRow {
+    /// Process mouse position events to find the hovered row.
+    /// - scroll_info must be the same as pass to the GriwWidget init_option.
+    pub fn processEvents(self: *HoveredRow, grid: *GridWidget, scroll_info: *ScrollInfo) void {
 
         // Check if a row is being hovered.
         const evts = dvui.events();
-        const highlighted_row: ?usize = row: {
+        self.highlighted_row = row: {
             for (evts) |*e| {
                 if (dvui.eventMatchSimple(e, grid.data()) and
                     (e.evt == .mouse and e.evt.mouse.action == .position) and
@@ -153,12 +141,6 @@ pub const HoveredRow = struct {
                 }
             }
             break :row null;
-        };
-
-        return .{
-            .cell_opts = cell_opts,
-            .opts = opts,
-            .highlighted_row = highlighted_row,
         };
     }
 
