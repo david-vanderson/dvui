@@ -3794,9 +3794,11 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
             }
             try dvui.labelNoFmt(@src(), text, .{ .gravity_y = 0.5 });
 
-            iconbox.deinit();
+            const iconboxId = iconbox.data().id;
 
-            settings.row_height = iconbox.wd.min_size.h;
+            iconbox.deinit(); // this calculates iconbox min size
+
+            settings.row_height = dvui.minSizeGet(iconboxId).?.h;
         }
 
         cursor += settings.row_height;
