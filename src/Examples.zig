@@ -1514,7 +1514,7 @@ pub fn styling() !void {
             defer drawBox.deinit();
             const rs = drawBox.data().contentRectScale();
 
-            var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
+            var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
             defer path.deinit();
             try path.addRect(rs.r, dvui.Rect.Physical.all(5));
 
