@@ -96,12 +96,19 @@ fn attemptFree(self: *ShrinkingArenaAllocator, memory: []u8, alignment: Alignmen
     const end_before = self.arena.state.end_index;
     self.arena.allocator().rawFree(memory, alignment, ret_addr);
 
-    // Attempt to free acounting for alignment padding of allocations after the current one
-    var align_diff: usize = 8;
-    while (self.arena.state.end_index == end_before and align_diff > 0) : (align_diff >>= 1) {
-        var mem = memory;
-        mem.len = std.mem.alignForward(usize, memory.len, align_diff);
-        self.arena.allocator().rawFree(mem, alignment, ret_addr);
+    if (memory.len == 0) {
+        // The allocation had no bytes, so cannot fail freeing
+        return true;
+    }
+
+    if (!self.has_expanded()) {
+        // Attempt to free acounting for alignment padding of allocations after the current one
+        var align_diff: usize = 8;
+        while (self.arena.state.end_index == end_before and align_diff > 0) : (align_diff >>= 1) {
+            var mem = memory;
+            mem.len = std.mem.alignForward(usize, @intFromPtr(memory.ptr) + memory.len, align_diff) - @intFromPtr(memory.ptr);
+            self.arena.allocator().rawFree(mem, alignment, ret_addr);
+        }
     }
     const succeeded = self.arena.state.end_index < end_before;
     if (succeeded) {
@@ -120,17 +127,6 @@ fn alloc(ctx: *anyopaque, len: usize, alignment: Alignment, ret_addr: usize) ?[*
 
 fn free(ctx: *anyopaque, memory: []u8, alignment: Alignment, ret_addr: usize) void {
     const self: *ShrinkingArenaAllocator = @ptrCast(@alignCast(ctx));
-    const end_before = self.arena.state.end_index;
-    self.arena.allocator().rawFree(memory, alignment, ret_addr);
-
-    // Attempt to free acounting for alignment padding of allocations after the current one
-    var align_diff: usize = 8;
-    while (self.arena.state.end_index == end_before and align_diff > 0) : (align_diff >>= 1) {
-        var mem = memory;
-        mem.len = std.mem.alignForward(usize, memory.len, align_diff);
-        self.arena.allocator().rawFree(mem, alignment, ret_addr);
-    }
-
     _ = self.attemptFree(memory, alignment, ret_addr);
 }
 
