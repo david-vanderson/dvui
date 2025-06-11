@@ -4196,7 +4196,7 @@ pub const ComboBox = struct {
     }
 
     pub fn deinit(self: *ComboBox) void {
-        widgetFree(self);
+        defer widgetFree(self);
         self.sug.deinit();
         self.te.deinit();
         self.* = undefined;
