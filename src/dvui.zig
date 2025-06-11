@@ -4904,7 +4904,7 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
 pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) !bool {
     var ret = false;
 
-    var lw = LabelWidget.init(src, fmt, args, opts.override(.{ .name = "LabelClick" }));
+    var lw = LabelWidget.init(src, fmt, args, (Options{ .name = "LabelClick" }).override(opts));
     // now lw has a Rect from its parent but hasn't processed events or drawn
 
     const lwid = lw.data().id;
