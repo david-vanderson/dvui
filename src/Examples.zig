@@ -4427,14 +4427,24 @@ fn gridVariableRowHeights() !void {
     });
     defer grid.deinit();
 
+    // Use of CellStyle is optional, but useful when applying the same styling to multiple columns.
+    // CellOptions and Options can be passed directly to bodyCell() and label() if preferred.
+    const cell_style: GridWidget.CellStyle = .{
+        .cell_opts = .{ .border = Rect.all(1) },
+        .opts = .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .both },
+    };
     var col = try grid.column(@src(), .{});
     defer col.deinit();
     for (1..10) |row_num| {
         const row_num_i: i32 = @intCast(row_num);
         const row_height = 70 - (@abs(row_num_i - 5) * 10);
-        var cell = try grid.bodyCell(@src(), row_num, .{ .height = @floatFromInt(row_height), .border = Rect.all(1) });
+        var cell = try grid.bodyCell(
+            @src(),
+            row_num,
+            cell_style.cellOptions(0, row_num).override(.{ .height = @floatFromInt(row_height) }),
+        );
         defer cell.deinit();
-        try dvui.label(@src(), "h = {d}", .{row_height}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .both });
+        try dvui.label(@src(), "h = {d}", .{row_height}, cell_style.options(0, row_num));
     }
 }
 
