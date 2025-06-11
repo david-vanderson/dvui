@@ -212,6 +212,29 @@ pub const ColorOrName = union(enum) {
     pub const fill_press = ColorOrName{ .name = .fill_press };
     pub const border = ColorOrName{ .name = .border };
 
+    // duplicated names from Color
+    pub const white: ColorOrName = .fromColor(.white);
+    pub const silver: ColorOrName = .fromColor(.silver);
+    pub const gray: ColorOrName = .fromColor(.gray);
+    pub const black: ColorOrName = .fromColor(.black);
+    pub const red: ColorOrName = .fromColor(.red);
+    pub const maroon: ColorOrName = .fromColor(.maroon);
+    pub const yellow: ColorOrName = .fromColor(.yellow);
+    pub const olive: ColorOrName = .fromColor(.olive);
+    pub const lime: ColorOrName = .fromColor(.lime);
+    pub const green: ColorOrName = .fromColor(.green);
+    pub const aqua: ColorOrName = .fromColor(.aqua);
+    pub const teal: ColorOrName = .fromColor(.teal);
+    pub const blue: ColorOrName = .fromColor(.blue);
+    pub const navy: ColorOrName = .fromColor(.navy);
+    pub const fuchsia: ColorOrName = .fromColor(.fuchsia);
+    pub const purple: ColorOrName = .fromColor(.purple);
+    pub const cyan = aqua;
+    pub const magenta = fuchsia;
+    pub const darl_cyan = teal;
+    pub const dark_magenta = purple;
+    pub const transparent: ColorOrName = .fromColor(.transparent);
+
     pub fn fromColor(col: Color) @This() {
         return .{ .color = col };
     }
