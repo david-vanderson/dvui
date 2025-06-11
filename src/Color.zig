@@ -10,6 +10,7 @@ g: u8 = 0xff,
 b: u8 = 0xff,
 a: u8 = 0xff,
 
+// These color names are duplicated in Options.ColorOrName
 // Basic web colors
 // https://en.wikipedia.org/wiki/Web_colors#Basic_colors
 pub const white = Color{ .r = 0xFF, .g = 0xFF, .b = 0xFF };
