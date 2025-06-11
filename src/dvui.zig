@@ -209,18 +209,17 @@ pub fn widgetFree(ptr: anytype) void {
 
     comptime std.debug.assert(@alignOf(@TypeOf(ptr)) <= 8);
     const size = @sizeOf(std.meta.Child(@TypeOf(ptr)));
-    const ptr_start_index: usize = @intFromPtr(ptr) - @intFromPtr(ws.buffer.ptr);
-    const ptr_end_index_with_alignment = std.mem.alignForwardLog2(ptr_start_index + size, 8);
+    const ptr_end_with_alignment = std.mem.alignForwardLog2(@intFromPtr(ptr) + size, 8);
 
     // If we are more than 8 bytes away, we where not the final allocation
     // This account for alignment of items above in the stack
-    if (ptr_end_index_with_alignment < ws.end_index) {
+    if (ptr_end_with_alignment < @intFromPtr(ws.buffer.ptr) + ws.end_index) {
         // log.debug("{*} was not at the top of the stack! Did you forget to call deinit or widgetFree somewhere?", .{ptr});
         return;
     }
 
     // Set the end_index directly as `destroy` wouldn't account for alignment of other allcations
-    ws.end_index = ptr_start_index;
+    ws.end_index = @intFromPtr(ptr) - @intFromPtr(ws.buffer.ptr);
 
     // std.debug.print("POP {x} {*}\n", .{ ws.end_index, ptr });
 }
