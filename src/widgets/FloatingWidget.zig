@@ -49,7 +49,7 @@ pub fn init(src: std.builtin.SourceLocation, opts_in: Options) FloatingWidget {
     return self;
 }
 
-pub fn install(self: *FloatingWidget) !void {
+pub fn install(self: *FloatingWidget) void {
     self.prev_rendering = dvui.renderingSet(false);
 
     dvui.parentSet(self.widget());
@@ -58,7 +58,7 @@ pub fn install(self: *FloatingWidget) !void {
 
     const rs = self.wd.rectScale();
 
-    try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, self.prev_windowId);
+    dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, self.prev_windowId);
     dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
     self.wd.register();
 
@@ -66,13 +66,13 @@ pub fn install(self: *FloatingWidget) !void {
     self.prevClip = dvui.clipGet();
     dvui.clipSet(dvui.windowRectPixels());
 
-    try self.wd.borderAndBackground(.{});
+    self.wd.borderAndBackground(.{});
 
     // clip to just our window (using clipSet since we are not inside our parent)
     _ = dvui.clip(rs.r);
 
     self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
-    try self.scaler.install();
+    self.scaler.install();
 }
 
 pub fn widget(self: *FloatingWidget) Widget {

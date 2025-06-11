@@ -30,15 +30,15 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *TabsWidget) !void {
-    try self.scroll.install();
+pub fn install(self: *TabsWidget) void {
+    self.scroll.install();
 
     const margin: Rect = switch (self.init_options.dir) {
         .horizontal => .{ .y = 2 },
         .vertical => .{ .x = 2 },
     };
     self.box = BoxWidget.init(@src(), .{ .dir = self.init_options.dir }, .{ .margin = margin });
-    try self.box.install();
+    self.box.install();
 
     var r = self.scroll.data().contentRectScale().r;
     switch (self.init_options.dir) {
@@ -48,7 +48,7 @@ pub fn install(self: *TabsWidget) !void {
                 r.w -= 1.0;
                 r.y = @floor(r.y) - 0.5;
             }
-            try dvui.Path.stroke(.{ .points = &.{ r.bottomLeft(), r.bottomRight() } }, .{ .thickness = 1, .color = dvui.themeGet().color_border });
+            dvui.Path.stroke(.{ .points = &.{ r.bottomLeft(), r.bottomRight() } }, .{ .thickness = 1, .color = dvui.themeGet().color_border });
         },
         .vertical => {
             if (dvui.currentWindow().snap_to_pixels) {
@@ -56,13 +56,13 @@ pub fn install(self: *TabsWidget) !void {
                 r.h -= 1.0;
                 r.x = @floor(r.x) - 0.5;
             }
-            try dvui.Path.stroke(.{ .points = &.{ r.topRight(), r.bottomRight() } }, .{ .thickness = 1, .color = dvui.themeGet().color_border });
+            dvui.Path.stroke(.{ .points = &.{ r.topRight(), r.bottomRight() } }, .{ .thickness = 1, .color = dvui.themeGet().color_border });
         },
     }
 }
 
-pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8) !bool {
-    var tab = try self.addTab(selected, .{});
+pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8) bool {
+    var tab = self.addTab(selected, .{});
     defer tab.deinit();
 
     var label_opts = tab.data().options.strip();
@@ -70,12 +70,12 @@ pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8) !bool {
         label_opts.color_text = .{ .name = .text_press };
     }
 
-    try dvui.labelNoFmt(@src(), text, label_opts);
+    dvui.labelNoFmt(@src(), text, label_opts);
 
     return tab.clicked();
 }
 
-pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) !*ButtonWidget {
+pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
     var tab_defaults: Options = switch (self.init_options.dir) {
         .horizontal => .{ .id_extra = self.tab_index, .background = true, .corner_radius = .{ .x = 5, .y = 5 }, .margin = .{ .x = 2, .w = 2 } },
         .vertical => .{ .id_extra = self.tab_index, .background = true, .corner_radius = .{ .x = 5, .h = 5 }, .margin = .{ .y = 2, .h = 2 } },
@@ -106,9 +106,9 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) !*ButtonWidget {
     const options = tab_defaults.override(opts);
 
     self.tab_button = ButtonWidget.init(@src(), .{}, options);
-    try self.tab_button.install();
+    self.tab_button.install();
     self.tab_button.processEvents();
-    try self.tab_button.drawBackground();
+    self.tab_button.drawBackground();
 
     if (self.tab_button.focused() and self.tab_button.data().visible()) {
         const rs = self.tab_button.data().borderRectScale();
@@ -120,33 +120,33 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) !*ButtonWidget {
                 var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
                 defer path.deinit();
 
-                try path.points.append(r.bottomRight());
+                path.addPoint(r.bottomRight());
 
                 const tr = Point.Physical{ .x = r.x + r.w - cr.y, .y = r.y + cr.y };
-                try path.addArc(tr, cr.y, math.pi * 2.0, math.pi * 1.5, false);
+                path.addArc(tr, cr.y, math.pi * 2.0, math.pi * 1.5, false);
 
                 const tl = Point.Physical{ .x = r.x + cr.x, .y = r.y + cr.x };
-                try path.addArc(tl, cr.x, math.pi * 1.5, math.pi, false);
+                path.addArc(tl, cr.x, math.pi * 1.5, math.pi, false);
 
-                try path.points.append(r.bottomLeft());
+                path.addPoint(r.bottomLeft());
 
-                try path.build().stroke(.{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent, .after = true });
+                path.build().stroke(.{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent, .after = true });
             },
             .vertical => {
                 var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
                 defer path.deinit();
 
-                try path.points.append(r.topRight());
+                path.addPoint(r.topRight());
 
                 const tl = Point.Physical{ .x = r.x + cr.x, .y = r.y + cr.x };
-                try path.addArc(tl, cr.x, math.pi * 1.5, math.pi, false);
+                path.addArc(tl, cr.x, math.pi * 1.5, math.pi, false);
 
                 const bl = Point.Physical{ .x = r.x + cr.h, .y = r.y + r.h - cr.h };
-                try path.addArc(bl, cr.h, math.pi, math.pi * 0.5, false);
+                path.addArc(bl, cr.h, math.pi, math.pi * 0.5, false);
 
-                try path.points.append(r.bottomRight());
+                path.addPoint(r.bottomRight());
 
-                try path.build().stroke(.{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent, .after = true });
+                path.build().stroke(.{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent, .after = true });
             },
         }
     }

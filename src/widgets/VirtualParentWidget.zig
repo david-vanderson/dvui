@@ -23,7 +23,7 @@ pub fn init(src: std.builtin.SourceLocation, opts: Options) VirtualParentWidget 
     return VirtualParentWidget{ .wd = WidgetData.init(src, .{}, defaults.override(opts)) };
 }
 
-pub fn install(self: *VirtualParentWidget) !void {
+pub fn install(self: *VirtualParentWidget) void {
     dvui.parentSet(self.widget());
     self.wd.register();
 }

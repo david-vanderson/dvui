@@ -59,7 +59,7 @@ pub fn init(src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, opts: 
     return self;
 }
 
-pub fn install(self: *ScrollContainerWidget) !void {
+pub fn install(self: *ScrollContainerWidget) void {
     self.wd.register();
 
     // user code might have changed our rect
@@ -78,7 +78,7 @@ pub fn install(self: *ScrollContainerWidget) !void {
         .given => {},
     }
 
-    try self.wd.borderAndBackground(.{});
+    self.wd.borderAndBackground(.{});
 
     self.prevClip = dvui.clip(self.wd.contentRectScale().r);
 

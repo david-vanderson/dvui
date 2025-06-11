@@ -201,29 +201,29 @@ test "DOCIMG easing plots" {
         fn frame() !dvui.App.Result {
             var y_axis = dvui.PlotWidget.Axis{ .min = -0.5, .max = 1.5 };
             var x_axis = dvui.PlotWidget.Axis{ .min = -0.25, .max = 1.25 };
-            var plot = try dvui.plot(@src(), .{ .x_axis = &x_axis, .y_axis = &y_axis }, .{ .expand = .both });
+            var plot = dvui.plot(@src(), .{ .x_axis = &x_axis, .y_axis = &y_axis }, .{ .expand = .both });
             defer plot.deinit();
 
             var x_line = plot.line();
             defer x_line.deinit();
-            try x_line.point(0, 0);
-            try x_line.point(1, 0);
-            try x_line.stroke(1, dvui.Color.black);
+            x_line.point(0, 0);
+            x_line.point(1, 0);
+            x_line.stroke(1, dvui.Color.black);
 
             var y_line = plot.line();
             defer y_line.deinit();
-            try y_line.point(0, 0);
-            try y_line.point(0, 1);
-            try y_line.stroke(1, dvui.Color.black);
+            y_line.point(0, 0);
+            y_line.point(0, 1);
+            y_line.stroke(1, dvui.Color.black);
 
             var line = plot.line();
             defer line.deinit();
             for (0..resolution) |i| {
                 const x = @as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(resolution));
                 const y = easing(@floatCast(x));
-                try line.point(x, y);
+                line.point(x, y);
             }
-            try line.stroke(1, plot.box.wd.options.color(.accent));
+            line.stroke(1, plot.box.wd.options.color(.accent));
             return .ok;
         }
     };
