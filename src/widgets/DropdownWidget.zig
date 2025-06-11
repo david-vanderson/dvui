@@ -193,6 +193,7 @@ pub fn addChoice(self: *DropdownWidget) !*MenuItemWidget {
 }
 
 pub fn deinit(self: *DropdownWidget) void {
+    defer dvui.widgetFree(self);
     if (self.drop != null) {
         self.drop.?.deinit();
         self.drop = null;

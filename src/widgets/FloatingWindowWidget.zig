@@ -544,6 +544,7 @@ pub fn processEvent(self: *FloatingWindowWidget, e: *Event, bubbling: bool) void
 }
 
 pub fn deinit(self: *FloatingWindowWidget) void {
+    defer dvui.widgetFree(self);
     self.layout.deinit();
 
     if (self.auto_size_refresh_prev_value) |pv| {

@@ -181,6 +181,50 @@ pub fn currentWindow() *Window {
     return current_window orelse unreachable;
 }
 
+/// Allocates space for a widget to the alloc stack, or the arena
+/// if the stack overflows.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn widgetAlloc(comptime T: type) *T {
+    const cw = currentWindow();
+    const alloc = cw._widget_stack.allocator();
+    const ptr = alloc.create(T) catch {
+        log.debug("Widget stack overflowed, falling back to long term arena allocator", .{});
+        return cw.arena().create(T) catch @panic("OOM");
+    };
+    // std.debug.print("PUSH {*} ({d}) {x}\n", .{ ptr, @alignOf(@TypeOf(ptr)), cw._widget_stack.end_index });
+    cw.peak_widget_stack = @max(cw.peak_widget_stack, cw._widget_stack.end_index);
+    return ptr;
+}
+
+/// Pops a widget off the alloc stack, if it was allocated there.
+///
+/// This should always be called in `deinit` to ensure the widget
+/// is popped.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn widgetFree(ptr: anytype) void {
+    const ws = &currentWindow()._widget_stack;
+    if (!ws.ownsSlice(std.mem.asBytes(ptr))) return;
+
+    comptime std.debug.assert(@alignOf(@TypeOf(ptr)) <= 8);
+    const size = @sizeOf(std.meta.Child(@TypeOf(ptr)));
+    const ptr_start_index: usize = @intFromPtr(ptr) - @intFromPtr(ws.buffer.ptr);
+    const ptr_end_index_with_alignment = std.mem.alignForwardLog2(ptr_start_index + size, 8);
+
+    // If we are more than 8 bytes away, we where not the final allocation
+    // This account for alignment of items above in the stack
+    if (ptr_end_index_with_alignment < ws.end_index) {
+        // log.debug("{*} was not at the top of the stack! Did you forget to call deinit or widgetFree somewhere?", .{ptr});
+        return;
+    }
+
+    // Set the end_index directly as `destroy` wouldn't account for alignment of other allcations
+    ws.end_index = ptr_start_index;
+
+    // std.debug.print("POP {x} {*}\n", .{ ws.end_index, ptr });
+}
+
 /// Get a pointer to the active theme.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
@@ -640,8 +684,8 @@ pub const FontCacheEntry = struct {
 
         const cw = currentWindow();
 
-        var pixels = try cw.arena().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
-        defer cw.arena().free(pixels);
+        var pixels = try cw.lifo().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
+        defer cw.lifo().free(pixels);
         // set all pixels to zero alpha
         @memset(pixels, 0);
 
@@ -695,8 +739,8 @@ pub const FontCacheEntry = struct {
                 const out_h: u32 = @intFromFloat(gi.h);
 
                 // single channel
-                const bitmap = try cw.arena().alloc(u8, @as(usize, out_w * out_h));
-                defer cw.arena().free(bitmap);
+                const bitmap = try cw.lifo().alloc(u8, @as(usize, out_w * out_h));
+                defer cw.lifo().free(bitmap);
 
                 //log.debug("makecodepointBitmap size x {d} y {d} w {d} h {d} out w {d} h {d}", .{ x, y, size.w, size.h, out_w, out_h });
 
@@ -1100,8 +1144,8 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, icon_op
             };
         }
     };
-    const img_raw_data = try cw.arena().alloc(u8, height * height * 4);
-    defer cw.arena().free(img_raw_data);
+    const img_raw_data = try cw.lifo().alloc(u8, height * height * 4);
+    defer cw.lifo().free(img_raw_data);
     @memset(img_raw_data, 0);
     var img = ImageAdapter{
         .pixels = img_raw_data,
@@ -1362,8 +1406,6 @@ pub const Path = struct {
         /// - y is top-right corner
         /// - w is bottom-right corner
         /// - h is bottom-left corner
-        ///
-        /// Only valid between `Window.begin`and `Window.end`.
         pub fn addRect(path: *Builder, r: Rect.Physical, radius: Rect.Physical) std.mem.Allocator.Error!void {
             var rad = radius;
             const maxrad = @min(r.w, r.h) / 2;
@@ -1387,8 +1429,6 @@ pub const Path = struct {
         ///
         /// If `skip_end`, the final point will not be added.  Useful if the next
         /// addition to path would duplicate the end of the arc.
-        ///
-        /// Only valid between `Window.begin`and `Window.end`.
         pub fn addArc(path: *Builder, center: Point.Physical, radius: f32, start: f32, end: f32, skip_end: bool) std.mem.Allocator.Error!void {
             if (radius == 0) {
                 try path.points.append(center);
@@ -1436,8 +1476,8 @@ pub const Path = struct {
         // owned by and will be freed by the Path.Builder
         try std.testing.expectEqual(4, path.points.len);
 
-        var triangles = try path.fillConvexTriangles(.{});
-        defer triangles.deinit(t.window.arena());
+        var triangles = try path.fillConvexTriangles(std.testing.allocator, .{});
+        defer triangles.deinit(std.testing.allocator);
         try std.testing.expectApproxEqRel(10, triangles.bounds.x, 0.05);
         try std.testing.expectApproxEqRel(20, triangles.bounds.y, 0.05);
         try std.testing.expectApproxEqRel(30, triangles.bounds.w, 0.05);
@@ -1481,8 +1521,8 @@ pub const Path = struct {
             return;
         }
 
-        var triangles = try path.fillConvexTriangles(options);
-        defer triangles.deinit(cw.arena());
+        var triangles = try path.fillConvexTriangles(cw.lifo(), options);
+        defer triangles.deinit(cw.lifo());
         try renderTriangles(triangles, null);
     }
 
@@ -1493,14 +1533,10 @@ pub const Path = struct {
     ///
     /// blur is how many pixels wide the fade to transparent is, starting a half
     /// pixel inside. Currently blur < 1 is treated as 1, but might change.
-    ///
-    /// Only valid between `Window.begin`and `Window.end`.
-    pub fn fillConvexTriangles(path: Path, opts: FillConvexOptions) std.mem.Allocator.Error!Triangles {
+    pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillConvexOptions) std.mem.Allocator.Error!Triangles {
         if (path.points.len < 3) {
             return .empty;
         }
-
-        const cw = currentWindow();
 
         var vtx_count = path.points.len;
         var idx_count = (path.points.len - 2) * 3;
@@ -1513,7 +1549,7 @@ pub const Path = struct {
             idx_count += 6;
         }
 
-        var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
+        var builder = try Triangles.Builder.init(allocator, vtx_count, idx_count);
         errdefer comptime unreachable; // No errors from this point on
 
         const col: Color.PMA = if (opts.color) |color| .fromColor(color) else .cast(.white);
@@ -1637,8 +1673,8 @@ pub const Path = struct {
             return;
         }
 
-        var triangles = try path.strokeTriangles(opts);
-        defer triangles.deinit(cw.arena());
+        var triangles = try path.strokeTriangles(cw.lifo(), opts);
+        defer triangles.deinit(cw.lifo());
         try renderTriangles(triangles, null);
     }
 
@@ -1646,24 +1682,27 @@ pub const Path = struct {
     ///
     /// Vertexes will have unset uv and color is alpha multiplied white fading to
     /// transparent at the edge.
-    ///
-    /// Only valid between `Window.begin`and `Window.end`.
-    pub fn strokeTriangles(path: Path, opts: StrokeOptions) std.mem.Allocator.Error!Triangles {
+    pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOptions) std.mem.Allocator.Error!Triangles {
         if (dvui.clipGet().empty()) {
             return .empty;
         }
-
-        const cw = currentWindow();
 
         if (path.points.len == 1) {
             // draw a circle with radius thickness at that point
             const center = path.points[0];
 
-            var tempPath: Path.Builder = .init(cw.arena());
+            const other_allocator = if (current_window) |cw|
+                if (cw.lifo().ptr != allocator.ptr) cw.lifo() else cw.arena()
+            else
+                // Using the same allocator will "leak" the tempPath on
+                // arena allocators because it can only free the last allocation
+                allocator;
+
+            var tempPath: Path.Builder = .init(other_allocator);
             defer tempPath.deinit();
 
             try tempPath.addArc(center, opts.thickness, math.pi * 2.0, 0, true);
-            return tempPath.build().fillConvexTriangles(.{ .color = opts.color, .blur = 1.0 });
+            return tempPath.build().fillConvexTriangles(allocator, .{ .color = opts.color, .blur = 1.0 });
         }
 
         // a single segment can't be closed
@@ -1680,7 +1719,7 @@ pub const Path = struct {
             idx_count += 8 * 3;
         }
 
-        var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
+        var builder = try Triangles.Builder.init(allocator, vtx_count, idx_count);
         errdefer comptime unreachable; // No errors from this point on
 
         const col: Color.PMA = .fromColor(opts.color);
@@ -3303,14 +3342,14 @@ pub fn wantTextInput(r: Rect.Natural) void {
 }
 
 pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) !*FloatingMenuWidget {
-    var ret = try currentWindow().arena().create(FloatingMenuWidget);
+    var ret = widgetAlloc(FloatingMenuWidget);
     ret.* = FloatingMenuWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
 }
 
 pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) !*FloatingWindowWidget {
-    var ret = try currentWindow().arena().create(FloatingWindowWidget);
+    var ret = widgetAlloc(FloatingWindowWidget);
     ret.* = FloatingWindowWidget.init(src, floating_opts, opts);
     try ret.install();
     ret.processEventsBefore();
@@ -4011,7 +4050,7 @@ pub fn toastsShow(floating_window_data: ?*WidgetData) !void {
 }
 
 pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) !*AnimateWidget {
-    var ret = try currentWindow().arena().create(AnimateWidget);
+    var ret = widgetAlloc(AnimateWidget);
     ret.* = AnimateWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
@@ -4061,7 +4100,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
 
     const min_width = te.textLayout.data().backgroundRect().w;
 
-    var sug = try currentWindow().arena().create(SuggestionWidget);
+    var sug = widgetAlloc(SuggestionWidget);
     sug.* = dvui.SuggestionWidget.init(@src(), .{ .rs = te.data().borderRectScale(), .text_entry_id = te.data().id }, .{ .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
     try sug.install();
     if (open_sug) {
@@ -4158,6 +4197,7 @@ pub const ComboBox = struct {
     }
 
     pub fn deinit(self: *ComboBox) void {
+        widgetFree(self);
         self.sug.deinit();
         self.te.deinit();
         self.* = undefined;
@@ -4165,8 +4205,8 @@ pub const ComboBox = struct {
 };
 
 pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) !*ComboBox {
-    var combo = try currentWindow().arena().create(ComboBox);
-    combo.te = try currentWindow().arena().create(TextEntryWidget);
+    var combo = widgetAlloc(ComboBox);
+    combo.te = widgetAlloc(TextEntryWidget);
     combo.te.* = dvui.TextEntryWidget.init(src, init_opts, opts);
     try combo.te.install();
 
@@ -4236,7 +4276,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: Options) !*PanedWidget {
-    var ret = try currentWindow().arena().create(PanedWidget);
+    var ret = widgetAlloc(PanedWidget);
     ret.* = PanedWidget.init(src, init_opts, opts);
     try ret.install();
     ret.processEvents();
@@ -4245,8 +4285,7 @@ pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions
 }
 
 pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.InitOptions, opts: Options) !*TextLayoutWidget {
-    const cw = currentWindow();
-    var ret = try cw.arena().create(TextLayoutWidget);
+    var ret = widgetAlloc(TextLayoutWidget);
     ret.* = TextLayoutWidget.init(src, init_opts, opts);
     try ret.install(.{});
 
@@ -4274,7 +4313,7 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: Options) !*ContextWidget {
-    var ret = try currentWindow().arena().create(ContextWidget);
+    var ret = widgetAlloc(ContextWidget);
     ret.* = ContextWidget.init(src, init_opts, opts);
     try ret.install();
     ret.processEvents();
@@ -4298,7 +4337,7 @@ pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) !*VirtualParentWidget {
-    var ret = try currentWindow().arena().create(VirtualParentWidget);
+    var ret = widgetAlloc(VirtualParentWidget);
     ret.* = VirtualParentWidget.init(src, opts);
     try ret.install();
     return ret;
@@ -4311,7 +4350,7 @@ pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) !*VirtualPa
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
-    var ret = try currentWindow().arena().create(OverlayWidget);
+    var ret = widgetAlloc(OverlayWidget);
     ret.* = OverlayWidget.init(src, opts);
     try ret.install();
     try ret.drawBackground();
@@ -4334,7 +4373,7 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
-    var ret = try currentWindow().arena().create(BoxWidget);
+    var ret = widgetAlloc(BoxWidget);
     ret.* = BoxWidget.init(src, .{ .dir = dir }, opts);
     try ret.install();
     try ret.drawBackground();
@@ -4347,7 +4386,7 @@ pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options)
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
-    var ret = try currentWindow().arena().create(BoxWidget);
+    var ret = widgetAlloc(BoxWidget);
     ret.* = BoxWidget.init(src, .{ .dir = dir, .equal_space = true }, opts);
     try ret.install();
     try ret.drawBackground();
@@ -4360,7 +4399,7 @@ pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Opt
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) !*FlexBoxWidget {
-    var ret = try currentWindow().arena().create(FlexBoxWidget);
+    var ret = widgetAlloc(FlexBoxWidget);
     ret.* = FlexBoxWidget.init(src, init_opts, opts);
     try ret.install();
     try ret.drawBackground();
@@ -4368,7 +4407,7 @@ pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOpt
 }
 
 pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) !*CacheWidget {
-    var ret = try currentWindow().arena().create(CacheWidget);
+    var ret = widgetAlloc(CacheWidget);
     ret.* = CacheWidget.init(src, init_opts, opts);
     if (init_opts.invalidate) {
         try ret.invalidate();
@@ -4378,7 +4417,7 @@ pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions
 }
 
 pub fn reorder(src: std.builtin.SourceLocation, opts: Options) !*ReorderWidget {
-    var ret = try currentWindow().arena().create(ReorderWidget);
+    var ret = widgetAlloc(ReorderWidget);
     ret.* = ReorderWidget.init(src, opts);
     try ret.install();
     ret.processEvents();
@@ -4386,14 +4425,14 @@ pub fn reorder(src: std.builtin.SourceLocation, opts: Options) !*ReorderWidget {
 }
 
 pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) !*ScrollAreaWidget {
-    var ret = try currentWindow().arena().create(ScrollAreaWidget);
+    var ret = widgetAlloc(ScrollAreaWidget);
     ret.* = ScrollAreaWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
 }
 
 pub fn grid(src: std.builtin.SourceLocation, init_opts: GridWidget.InitOpts, opts: Options) !*GridWidget {
-    const ret = try currentWindow().arena().create(GridWidget);
+    const ret = widgetAlloc(GridWidget);
     ret.* = GridWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
@@ -4808,7 +4847,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
         animation(wd.id, "_t", anim);
     }
 
-    var path: Path.Builder = .init(dvui.currentWindow().arena());
+    var path: Path.Builder = .init(dvui.currentWindow().lifo());
     defer path.deinit();
 
     const full_circle = 2 * std.math.pi;
@@ -4822,7 +4861,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
 }
 
 pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) !*ScaleWidget {
-    var ret = try currentWindow().arena().create(ScaleWidget);
+    var ret = widgetAlloc(ScaleWidget);
     ret.* = ScaleWidget.init(src, init_opts, opts);
     try ret.install();
     ret.processEvents();
@@ -4830,7 +4869,7 @@ pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions
 }
 
 pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*MenuWidget {
-    var ret = try currentWindow().arena().create(MenuWidget);
+    var ret = widgetAlloc(MenuWidget);
     ret.* = MenuWidget.init(src, .{ .dir = dir }, opts);
     try ret.install();
     return ret;
@@ -4881,7 +4920,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
 }
 
 pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitOptions, opts: Options) !*MenuItemWidget {
-    var ret = try currentWindow().arena().create(MenuItemWidget);
+    var ret = widgetAlloc(MenuItemWidget);
     ret.* = MenuItemWidget.init(src, init_opts, opts);
     try ret.install();
     ret.processEvents();
@@ -6067,8 +6106,7 @@ pub fn findUtf8Start(text: []const u8, pos: usize) usize {
 }
 
 pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) !*TextEntryWidget {
-    const cw = currentWindow();
-    var ret = try cw.arena().create(TextEntryWidget);
+    var ret = widgetAlloc(TextEntryWidget);
     ret.* = TextEntryWidget.init(src, init_opts, opts);
     try ret.install();
     // can install corner widgets here
@@ -6397,8 +6435,8 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     if (clipGet().intersect(opts.rs.r).empty()) return;
 
     var cw = currentWindow();
-    const utf8_text = try toUtf8(cw.arena(), opts.text);
-    defer if (opts.text.ptr != utf8_text.ptr) cw.arena().free(utf8_text);
+    const utf8_text = try toUtf8(cw.lifo(), opts.text);
+    defer if (opts.text.ptr != utf8_text.ptr) cw.lifo().free(utf8_text);
 
     if (!cw.render_target.rendering) {
         var opts_copy = opts;
@@ -6436,8 +6474,8 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     };
 
     // Over allocate the internal buffers assuming each byte is a character
-    var builder = try Triangles.Builder.init(cw.arena(), 4 * utf8_text.len, 6 * utf8_text.len);
-    defer builder.deinit(cw.arena());
+    var builder = try Triangles.Builder.init(cw.lifo(), 4 * utf8_text.len, 6 * utf8_text.len);
+    defer builder.deinit(cw.lifo());
 
     const x_start: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
     var x = x_start;
@@ -6718,20 +6756,20 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
         return;
     }
 
-    var path: Path.Builder = .init(dvui.currentWindow().arena());
+    var path: Path.Builder = .init(dvui.currentWindow().lifo());
     defer path.deinit();
 
     try path.addRect(rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
 
-    var triangles = try path.build().fillConvexTriangles(.{ .color = opts.colormod });
-    defer triangles.deinit(cw.arena());
+    var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod });
+    defer triangles.deinit(cw.lifo());
 
     triangles.uvFromRectuv(rs.r, opts.uv);
     triangles.rotate(rs.r.center(), opts.rotation);
 
     if (opts.background_color) |bg_col| {
-        var back_tri = try triangles.dupe(cw.arena());
-        defer back_tri.deinit(cw.arena());
+        var back_tri = try triangles.dupe(cw.lifo());
+        defer back_tri.deinit(cw.lifo());
 
         back_tri.color(bg_col);
         try renderTriangles(back_tri, null);
@@ -6860,6 +6898,7 @@ pub const Picture = struct {
 
     /// Draw recorded texture and destroy it.
     pub fn deinit(self: *Picture) void {
+        widgetFree(self);
         // Ignore errors as drawing is not critical to Pictures function
         const texture = dvui.textureFromTarget(self.texture) catch return; // destroys self.texture
         dvui.textureDestroyLater(texture);
@@ -6986,7 +7025,7 @@ pub fn png_crc32(buf: []u8) u32 {
 }
 
 pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, opts: Options) !*PlotWidget {
-    var ret = try currentWindow().arena().create(PlotWidget);
+    var ret = widgetAlloc(PlotWidget);
     ret.* = PlotWidget.init(src, plot_opts, opts);
     try ret.install();
     return ret;

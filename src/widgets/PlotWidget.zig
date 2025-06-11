@@ -67,6 +67,7 @@ pub const Line = struct {
     }
 
     pub fn deinit(self: *Line) void {
+        defer dvui.widgetFree(self);
         self.path.deinit();
         self.* = undefined;
     }
@@ -131,8 +132,8 @@ pub fn install(self: *PlotWidget) !void {
     if (self.y_axis.name) |_| {
         for (yticks) |m_ytick| {
             if (m_ytick) |ytick| {
-                const tick_str = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{ytick});
-                defer dvui.currentWindow().arena().free(tick_str);
+                const tick_str = try std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{ytick});
+                defer dvui.currentWindow().lifo().free(tick_str);
                 tick_width = @max(tick_width, tick_font.textSize(tick_str).w);
             }
         }
@@ -217,8 +218,8 @@ pub fn install(self: *PlotWidget) !void {
         for (yticks) |m_ytick| {
             if (m_ytick) |ytick| {
                 const tick: Data = .{ .x = self.x_axis.min orelse 0, .y = ytick };
-                const tick_str = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{ytick});
-                defer dvui.currentWindow().arena().free(tick_str);
+                const tick_str = try std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{ytick});
+                defer dvui.currentWindow().lifo().free(tick_str);
                 const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
                 var tick_p = self.dataToScreen(tick);
                 tick_p.x -= tick_str_size.w + pad;
@@ -238,8 +239,8 @@ pub fn install(self: *PlotWidget) !void {
         for (xticks) |m_xtick| {
             if (m_xtick) |xtick| {
                 const tick: Data = .{ .x = xtick, .y = self.y_axis.min orelse 0 };
-                const tick_str = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{xtick});
-                defer dvui.currentWindow().arena().free(tick_str);
+                const tick_str = try std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{xtick});
+                defer dvui.currentWindow().lifo().free(tick_str);
                 const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
                 var tick_p = self.dataToScreen(tick);
                 tick_p.x = @max(tick_p.x, self.data_rs.r.x);
@@ -259,11 +260,12 @@ pub fn install(self: *PlotWidget) !void {
 pub fn line(self: *PlotWidget) Line {
     return .{
         .plot = self,
-        .path = .init(dvui.currentWindow().arena()),
+        .path = .init(dvui.currentWindow().lifo()),
     };
 }
 
 pub fn deinit(self: *PlotWidget) void {
+    defer dvui.widgetFree(self);
     dvui.clipSet(self.old_clip);
 
     // maybe we got no data
@@ -289,9 +291,9 @@ pub fn deinit(self: *PlotWidget) void {
 
     if (self.hover_data) |hd| {
         var p = self.box.data().contentRectScale().pointFromPhysical(self.mouse_point.?);
-        const str = std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}, {d}", .{ hd.x, hd.y }) catch "";
+        const str = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}, {d}", .{ hd.x, hd.y }) catch "";
         // NOTE: Always calling free is safe because fallback is a 0 len slice, which is ignored
-        defer dvui.currentWindow().arena().free(str);
+        defer dvui.currentWindow().lifo().free(str);
         const size: Size = (dvui.Options{}).fontGet().textSize(str);
         p.x -= size.w / 2;
         const padding = dvui.LabelWidget.defaults.paddingGet();

@@ -224,6 +224,7 @@ pub fn chainFocused(self: *FloatingMenuWidget, self_call: bool) bool {
 }
 
 pub fn deinit(self: *FloatingMenuWidget) void {
+    defer dvui.widgetFree(self);
     self.menu.deinit();
     self.scroll.deinit();
     self.scaler.deinit();
