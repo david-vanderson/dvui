@@ -3885,18 +3885,19 @@ fn gridStyling() !void {
         // which column header is clicked.
         const current_sort_dir = local.sort_dir;
 
-        const cell_opts: GridWidget.CellStyle.Banded = .init(
-            switch (local.banding) {
+        const cell_opts: GridWidget.CellStyle.Banded = .{
+            .banding = switch (local.banding) {
                 .none, .rows => .rows,
                 .cols => .cols,
             },
-            .{
+
+            .cell_opts = .{
                 .border = local.borders,
                 .background = row_background,
                 .margin = Rect.all(local.margin),
                 .padding = Rect.all(local.padding),
             },
-            .{
+            .alt_cell_opts = .{
                 .border = local.borders,
                 .margin = Rect.all(local.margin),
                 .padding = Rect.all(local.padding),
@@ -3904,8 +3905,7 @@ fn gridStyling() !void {
                 // Only set the alternate fill colour if actually banding.
                 .color_fill = if (local.banding != .none) .fill_press else null,
             },
-            .{},
-        );
+        };
 
         // First column displays temperature in Celcius.
         {
@@ -4174,12 +4174,9 @@ fn gridLayouts() !void {
     const all_cars = local.all_cars[0..];
 
     const panel_height = 250;
-    const banded = GridWidget.CellStyle.Banded.init(
-        .rows,
-        .{},
-        .{ .color_fill = .{ .name = .fill_press }, .background = true },
-        .{},
-    );
+    const banded: GridWidget.CellStyle.Banded = .{
+        .alt_cell_opts = .{ .color_fill = .{ .name = .fill_press }, .background = true },
+    };
     const banded_centered = banded.optionsOverride(.{ .gravity_x = 0.5, .expand = .horizontal });
 
     const content_h = dvui.parentGet().data().contentRect().h - panel_height;
@@ -4376,14 +4373,20 @@ fn gridVirtualScrolling() !void {
     });
     defer grid.deinit();
 
-    // Each column has slightly different border requirements. Create separate options for each.
-    // Using the override avoids having to re-run the event processing from .init for each column.
-    const highlight_hovered_1: GridWidget.CellStyle.HoveredRow = .init(grid, &local.scroll_info, .{
-        .border = .{ .x = 1, .w = 1, .h = 1 },
-        .background = true,
-        .color_fill_hover = .fill_hover,
-    }, .{});
+    // Highlight hovered row.
+    // Each column has slightly different border requirements, so create separate options for each.
+    // Calls cellOptionsOverride after processEvents() so that the hovered row only needs to be calculated once.
+    var highlight_hovered_1: GridWidget.CellStyle.HoveredRow = .{
+        .cell_opts = .{
+            .border = .{ .x = 1, .w = 1, .h = 1 },
+            .background = true,
+            .color_fill_hover = .fill_hover,
+        },
+    };
+    highlight_hovered_1.processEvents(grid, &local.scroll_info);
     const highlight_hovered_2 = highlight_hovered_1.cellOptionsOverride(.{ .border = .{ .w = 1, .h = 1 } });
+
+    // Virtual scrolling
     const scroller: dvui.GridWidget.VirtualScroller = .init(grid, .{ .total_rows = num_rows, .scroll_info = &local.scroll_info });
     const first = scroller.startRow();
     const last = scroller.endRow(); // Note that endRow is exclusive, meaning it can be used as a slice end index.
