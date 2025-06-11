@@ -334,7 +334,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             }
 
             if (visible) {
-                var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
+                var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
                 defer path.deinit();
 
                 try path.points.append(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
@@ -405,7 +405,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             }
 
             if (visible) {
-                var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
+                var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
                 defer path.deinit();
 
                 try path.points.append(.{ .x = fcrs.r.x, .y = fcrs.r.y });

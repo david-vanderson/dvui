@@ -117,7 +117,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) !*ButtonWidget {
 
         switch (self.init_options.dir) {
             .horizontal => {
-                var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
+                var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
                 defer path.deinit();
 
                 try path.points.append(r.bottomRight());
@@ -133,7 +133,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) !*ButtonWidget {
                 try path.build().stroke(.{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent, .after = true });
             },
             .vertical => {
-                var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
+                var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
                 defer path.deinit();
 
                 try path.points.append(r.topRight());
