@@ -55,7 +55,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
     return self;
 }
 
-pub fn install(self: *BoxWidget) !void {
+pub fn install(self: *BoxWidget) void {
     self.wd.register();
 
     // our rect for children has to start at 0,0
@@ -87,8 +87,8 @@ pub fn install(self: *BoxWidget) !void {
     dvui.parentSet(self.widget());
 }
 
-pub fn drawBackground(self: *BoxWidget) !void {
-    try self.wd.borderAndBackground(.{});
+pub fn drawBackground(self: *BoxWidget) void {
+    self.wd.borderAndBackground(.{});
 }
 
 pub fn matchEvent(self: *BoxWidget, e: *Event) bool {

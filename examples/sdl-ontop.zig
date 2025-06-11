@@ -75,7 +75,7 @@ pub fn main() !void {
         _ = c.SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         _ = c.SDL_RenderFillRect(renderer, &rect2);
 
-        try dvui_floating_stuff();
+        dvui_floating_stuff();
 
         rect2.x += 24;
         _ = c.SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
@@ -112,46 +112,46 @@ pub fn main() !void {
     c.SDL_Quit();
 }
 
-fn dvui_floating_stuff() !void {
-    var float = try dvui.floatingWindow(@src(), .{}, .{ .max_size_content = .{ .w = 400, .h = 400 } });
+fn dvui_floating_stuff() void {
+    var float = dvui.floatingWindow(@src(), .{}, .{ .max_size_content = .{ .w = 400, .h = 400 } });
     defer float.deinit();
 
-    float.dragAreaSet(try dvui.windowHeader("Floating Window", "", null));
+    float.dragAreaSet(dvui.windowHeader("Floating Window", "", null));
 
-    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
     defer scroll.deinit();
 
-    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
     const lorem = "This example shows how to use dvui for floating windows on top of an existing application.";
-    try tl.addText(lorem, .{});
+    tl.addText(lorem, .{});
     tl.deinit();
 
-    var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    try tl2.addText("The dvui is painting only floating windows and dialogs.", .{});
-    try tl2.addText("\n\n", .{});
-    try tl2.addText("Framerate is managed by the application", .{});
+    var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+    tl2.addText("The dvui is painting only floating windows and dialogs.", .{});
+    tl2.addText("\n\n", .{});
+    tl2.addText("Framerate is managed by the application", .{});
     if (vsync) {
-        try tl2.addText(" (capped at vsync)", .{});
+        tl2.addText(" (capped at vsync)", .{});
     } else {
-        try tl2.addText(" (uncapped - no vsync)", .{});
+        tl2.addText(" (uncapped - no vsync)", .{});
     }
-    try tl2.addText("\n\n", .{});
-    try tl2.addText("Cursor is only being set by dvui for floating windows.", .{});
-    try tl2.addText("\n\n", .{});
+    tl2.addText("\n\n", .{});
+    tl2.addText("Cursor is only being set by dvui for floating windows.", .{});
+    tl2.addText("\n\n", .{});
     if (dvui.useFreeType) {
-        try tl2.addText("Fonts are being rendered by FreeType 2.", .{});
+        tl2.addText("Fonts are being rendered by FreeType 2.", .{});
     } else {
-        try tl2.addText("Fonts are being rendered by stb_truetype.", .{});
+        tl2.addText("Fonts are being rendered by stb_truetype.", .{});
     }
     tl2.deinit();
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
-    if (try dvui.button(@src(), label, .{}, .{})) {
+    if (dvui.button(@src(), label, .{}, .{})) {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
     // look at demo() for examples of dvui widgets, shows in a floating window
-    try dvui.Examples.demo();
+    dvui.Examples.demo();
 }
 
 fn app_init() !void {

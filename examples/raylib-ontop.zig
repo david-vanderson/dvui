@@ -57,23 +57,23 @@ pub fn main() !void {
         ray.ClearBackground(RaylibBackend.dvuiColorToRaylib(dvui.themeGet().color_fill_window));
 
         {
-            var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+            var b = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
             defer b.deinit();
 
             if (ray.GuiIsLocked()) {
-                try dvui.label(@src(), "Raygui Status: Locked", .{}, .{ .gravity_y = 0.5 });
+                dvui.label(@src(), "Raygui Status: Locked", .{}, .{ .gravity_y = 0.5 });
             } else {
-                try dvui.label(@src(), "Raygui Status: Unlocked", .{}, .{ .gravity_y = 0.5 });
+                dvui.label(@src(), "Raygui Status: Unlocked", .{}, .{ .gravity_y = 0.5 });
             }
 
-            if (try dvui.expander(@src(), "Pick Color Using Raygui", .{}, .{})) {
-                try colorPicker(&selected_color);
+            if (dvui.expander(@src(), "Pick Color Using Raygui", .{}, .{})) {
+                colorPicker(&selected_color);
             }
         }
 
         ray.DrawText("Congrats! You Combined Raylib, Raygui and DVUI!", 20, 400, 20, ray.RAYWHITE);
 
-        try dvuiStuff();
+        dvuiStuff();
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before EndDrawing()
@@ -92,10 +92,10 @@ pub fn main() !void {
     }
 }
 
-fn colorPicker(result: *dvui.Color) !void {
-    _ = try dvui.spacer(@src(), .{ .w = 10, .h = 10 }, .{});
+fn colorPicker(result: *dvui.Color) void {
+    _ = dvui.spacer(@src(), .{ .w = 10, .h = 10 }, .{});
     {
-        var overlay = try dvui.overlay(@src(), .{ .min_size_content = .{ .w = 100, .h = 100 } });
+        var overlay = dvui.overlay(@src(), .{ .min_size_content = .{ .w = 100, .h = 100 } });
         defer overlay.deinit();
 
         const bounds = RaylibBackend.dvuiRectToRaylib(overlay.data().contentRectScale().r);
@@ -107,56 +107,56 @@ fn colorPicker(result: *dvui.Color) !void {
     const color_hex = result.toHexString();
 
     {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        try dvui.labelNoFmt(@src(), &color_hex, .{
+        dvui.labelNoFmt(@src(), &color_hex, .{
             .color_text = .{ .color = result.* },
             .gravity_y = 0.5,
         });
 
-        const copy = try dvui.button(@src(), "Copy", .{}, .{});
+        const copy = dvui.button(@src(), "Copy", .{}, .{});
 
         if (copy) {
-            try dvui.clipboardTextSet(&color_hex);
-            try dvui.toast(@src(), .{ .message = "Copied!" });
+            dvui.clipboardTextSet(&color_hex);
+            dvui.toast(@src(), .{ .message = "Copied!" });
         }
     }
 }
 
-fn dvuiStuff() !void {
-    var float = try dvui.floatingWindow(@src(), .{}, .{ .max_size_content = .{ .w = 400, .h = 400 } });
+fn dvuiStuff() void {
+    var float = dvui.floatingWindow(@src(), .{}, .{ .max_size_content = .{ .w = 400, .h = 400 } });
     defer float.deinit();
 
-    float.dragAreaSet(try dvui.windowHeader("Floating Window", "", null));
+    float.dragAreaSet(dvui.windowHeader("Floating Window", "", null));
 
-    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
     defer scroll.deinit();
 
-    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
     const lorem = "This example shows how to use dvui for floating windows on top of an existing application.";
-    try tl.addText(lorem, .{});
+    tl.addText(lorem, .{});
     tl.deinit();
 
-    var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    try tl2.addText("The dvui is painting only floating windows and dialogs.", .{});
-    try tl2.addText("\n\n", .{});
-    try tl2.addText("Framerate is managed by the application (in this demo capped at vsync).", .{});
-    try tl2.addText("\n\n", .{});
-    try tl2.addText("Cursor is only being set by dvui for floating windows.", .{});
-    try tl2.addText("\n\n", .{});
+    var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+    tl2.addText("The dvui is painting only floating windows and dialogs.", .{});
+    tl2.addText("\n\n", .{});
+    tl2.addText("Framerate is managed by the application (in this demo capped at vsync).", .{});
+    tl2.addText("\n\n", .{});
+    tl2.addText("Cursor is only being set by dvui for floating windows.", .{});
+    tl2.addText("\n\n", .{});
     if (dvui.useFreeType) {
-        try tl2.addText("Fonts are being rendered by FreeType 2.", .{});
+        tl2.addText("Fonts are being rendered by FreeType 2.", .{});
     } else {
-        try tl2.addText("Fonts are being rendered by stb_truetype.", .{});
+        tl2.addText("Fonts are being rendered by stb_truetype.", .{});
     }
     tl2.deinit();
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
-    if (try dvui.button(@src(), label, .{}, .{})) {
+    if (dvui.button(@src(), label, .{}, .{})) {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
     // look at demo() for examples of dvui widgets, shows in a floating window
-    try dvui.Examples.demo();
+    dvui.Examples.demo();
 }

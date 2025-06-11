@@ -43,9 +43,9 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *ScrollBarWidget) !void {
+pub fn install(self: *ScrollBarWidget) void {
     self.wd.register();
-    try self.wd.borderAndBackground(.{});
+    self.wd.borderAndBackground(.{});
 
     self.grabRect = self.wd.contentRect();
     switch (self.dir) {
@@ -176,8 +176,8 @@ pub const Grab = struct {
     rect: Rect.Physical,
     color: dvui.Color,
 
-    pub fn draw(self: Grab) !void {
-        try self.rect.fill(.all(100), .{ .color = self.color });
+    pub fn draw(self: Grab) void {
+        self.rect.fill(.all(100), .{ .color = self.color });
     }
 };
 

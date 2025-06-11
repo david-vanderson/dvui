@@ -31,14 +31,14 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *ColorPickerWidget) dvui.Backend.TextureError!void {
-    self.box = try dvui.box(self.src, self.init_opts.dir, self.opts);
+pub fn install(self: *ColorPickerWidget) void {
+    self.box = dvui.box(self.src, self.init_opts.dir, self.opts);
 
-    if (try valueSaturationBox(@src(), self.init_opts.hsv, .{})) {
+    if (valueSaturationBox(@src(), self.init_opts.hsv, .{})) {
         self.color_changed = true;
     }
 
-    if (try hueSlider(@src(), self.init_opts.dir.invert(), &self.init_opts.hsv.h, .{ .expand = .fromDirection(self.init_opts.dir.invert()) })) {
+    if (hueSlider(@src(), self.init_opts.dir.invert(), &self.init_opts.hsv.h, .{ .expand = .fromDirection(self.init_opts.dir.invert()) })) {
         self.color_changed = true;
     }
 }
@@ -57,22 +57,30 @@ pub const value_saturation_box_defaults = Options{
 };
 
 /// Returns true if the color was changed
-pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts: Options) !bool {
+pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts: Options) bool {
     const options = value_saturation_box_defaults.override(opts);
 
-    var b = try dvui.box(src, .horizontal, options);
+    var b = dvui.box(src, .horizontal, options);
     defer b.deinit();
 
     if (b.data().visible()) {
-        try dvui.tabIndexSet(b.data().id, options.tab_index);
+        dvui.tabIndexSet(b.data().id, options.tab_index);
     }
 
     const rs = b.data().contentRectScale();
 
-    try dvui.renderTexture(try getValueSaturationTexture(hsv.h), rs, .{
-        .corner_radius = options.corner_radiusGet(),
-        .uv = .{ .x = 0.25, .y = 0.25, .w = 0.75, .h = 0.75 },
-    });
+    const texture = getValueSaturationTexture(hsv.h) catch |err| blk: {
+        dvui.logError(@src(), err, "Could not get value saturation texture", .{});
+        break :blk null;
+    };
+    if (texture) |tex| {
+        dvui.renderTexture(tex, rs, .{
+            .corner_radius = options.corner_radiusGet(),
+            .uv = .{ .x = 0.25, .y = 0.25, .w = 0.75, .h = 0.75 },
+        }) catch |err| {
+            dvui.logError(@src(), err, "Could not render value saturation texture", .{});
+        };
+    }
 
     const mouse_rect = b.data().contentRect().justSize().outsetAll(5);
     const mouse_rs = b.widget().screenRectScale(mouse_rect);
@@ -158,10 +166,10 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
         .corner_radius = .all(100),
         .color_fill = .fromColor(hsv.toColor()),
     });
-    try indicator.install();
-    try indicator.drawBackground();
+    indicator.install();
+    indicator.drawBackground();
     if (b.data().id == dvui.focusedWidgetId()) {
-        try indicator.wd.focusBorder();
+        indicator.wd.focusBorder();
     }
     indicator.deinit();
 
@@ -177,18 +185,18 @@ pub var hue_slider_defaults: Options = .{
 /// Returns true if the hue was changed
 ///
 /// `hue` >= 0 and `hue` < 360
-pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue: *f32, opts: Options) !bool {
+pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue: *f32, opts: Options) bool {
     var fraction = std.math.clamp(hue.* / 360, 0, 1);
     std.debug.assert(fraction >= 0);
     std.debug.assert(fraction <= 1);
 
     const options = hue_slider_defaults.override(opts);
 
-    var b = try dvui.box(src, dir, options);
+    var b = dvui.box(src, dir, options);
     defer b.deinit();
 
     if (b.data().visible()) {
-        try dvui.tabIndexSet(b.data().id, options.tab_index);
+        dvui.tabIndexSet(b.data().id, options.tab_index);
     }
 
     const br = b.data().contentRect();
@@ -272,15 +280,23 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
     }
 
     const uv_offset = comptime 0.5 / @as(f32, @floatFromInt(hue_selector_colors.len));
-    try dvui.renderTexture(try getHueSelectorTexture(dir), trackrs, .{
-        .corner_radius = options.corner_radiusGet(),
-        .uv = .{
-            .x = uv_offset,
-            .y = if (dir == .vertical) uv_offset else 1 - uv_offset,
-            .w = 1 - uv_offset,
-            .h = if (dir == .horizontal) uv_offset else 1 - uv_offset,
-        },
-    });
+    const texture = getHueSelectorTexture(dir) catch |err| blk: {
+        dvui.logError(@src(), err, "Could not get hue selector texture", .{});
+        break :blk null;
+    };
+    if (texture) |tex| {
+        dvui.renderTexture(tex, trackrs, .{
+            .corner_radius = options.corner_radiusGet(),
+            .uv = .{
+                .x = uv_offset,
+                .y = if (dir == .vertical) uv_offset else 1 - uv_offset,
+                .w = 1 - uv_offset,
+                .h = if (dir == .horizontal) uv_offset else 1 - uv_offset,
+            },
+        }) catch |err| {
+            dvui.logError(@src(), err, "Could not render hue selector texture", .{});
+        };
+    }
 
     const knobRect = dvui.Rect.fromPoint(switch (dir) {
         .horizontal => .{ .x = (br.w * fraction) - knobsize.w / 2 },
@@ -296,10 +312,10 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
         .corner_radius = .all(100),
         .color_fill = .fromColor((Color.HSV{ .h = hue.* }).toColor()),
     });
-    try knob.install();
-    try knob.drawBackground();
+    knob.install();
+    knob.drawBackground();
     if (b.data().id == dvui.focusedWidgetId()) {
-        try knob.wd.focusBorder();
+        knob.wd.focusBorder();
     }
     knob.deinit();
 
@@ -363,11 +379,11 @@ test "DOCIMG ColorPickerWidget" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
 
             var hsv: dvui.Color.HSV = .{ .h = 120, .s = 0.8, .v = 0.9 };
-            _ = try dvui.colorPicker(@src(), .{ .hsv = &hsv }, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+            _ = dvui.colorPicker(@src(), .{ .hsv = &hsv }, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
             return .ok;
         }
     }.frame;

@@ -91,7 +91,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *FloatingMenuWidget) !void {
+pub fn install(self: *FloatingMenuWidget) void {
     self.prev_rendering = dvui.renderingSet(false);
 
     dvui.parentSet(self.widget());
@@ -122,7 +122,7 @@ pub fn install(self: *FloatingMenuWidget) !void {
 
     const rs = self.wd.rectScale();
 
-    try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, null);
+    dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, null);
     dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
     self.wd.register();
 
@@ -132,12 +132,12 @@ pub fn install(self: *FloatingMenuWidget) !void {
     dvui.clipSet(dvui.windowRectPixels());
 
     self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
-    try self.scaler.install();
+    self.scaler.install();
 
     // we are using scroll to do border/background but floating windows
     // don't have margin, so turn that off
     self.scroll = ScrollAreaWidget.init(@src(), .{ .horizontal = .none }, self.options.override(.{ .margin = .{}, .expand = .both }));
-    try self.scroll.install();
+    self.scroll.install();
 
     // clip to just our window (using clipSet since we are not inside our parent)
     _ = dvui.clip(rs.r);
@@ -148,7 +148,7 @@ pub fn install(self: *FloatingMenuWidget) !void {
 
     self.menu = MenuWidget.init(@src(), .{ .dir = .vertical }, self.options.strip().override(.{ .expand = .horizontal }));
     self.menu.parentSubwindowId = self.prev_windowId;
-    try self.menu.install();
+    self.menu.install();
 
     // if no widget in this popup has focus, make the menu have focus to handle keyboard events
     if (dvui.focusedWidgetIdInCurrentSubwindow() == null) {
