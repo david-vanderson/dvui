@@ -12,7 +12,6 @@ const Rect = dvui.Rect;
 const ScrollInfo = dvui.ScrollInfo;
 const Size = dvui.Size;
 const entypo = dvui.entypo;
-const Adwaita = dvui.Adwaita;
 const ButtonWidget = dvui.ButtonWidget;
 const FloatingWindowWidget = dvui.FloatingWindowWidget;
 const LabelWidget = dvui.LabelWidget;
@@ -3875,26 +3874,12 @@ fn gridStyling() !void {
         var margin: f32 = 0;
         var padding: f32 = 0;
 
-        fn rowColorFill(row_num: usize) ?dvui.Options.ColorOrName {
-            if (banding == .rows and row_num % 2 == 0) {
-                return .{ .name = .fill_press };
-            }
-            return null;
-        }
-
-        fn colColorFill(col_num: usize) ?dvui.Options.ColorOrName {
-            if (banding == .cols and col_num % 2 == 0) {
-                return .{ .name = .fill_press };
-            }
-            return null;
-        }
-
         const Banding = enum { none, rows, cols };
     };
 
     var outer_hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
     defer outer_hbox.deinit();
-    const row_background = local.banding == .rows or local.borders.nonZero();
+    const row_background = local.banding != .none or local.borders.nonZero();
 
     {
         var grid = try dvui.grid(@src(), .{ .resize_rows = local.resize_rows }, .{
@@ -3918,9 +3903,31 @@ fn gridStyling() !void {
         // which column header is clicked.
         const current_sort_dir = local.sort_dir;
 
+        const cell_opts: GridWidget.CellStyle.Banded = .{
+            .banding = switch (local.banding) {
+                .none, .rows => .rows,
+                .cols => .cols,
+            },
+
+            .cell_opts = .{
+                .border = local.borders,
+                .background = row_background,
+                .margin = Rect.all(local.margin),
+                .padding = Rect.all(local.padding),
+            },
+            .alt_cell_opts = .{
+                .border = local.borders,
+                .margin = Rect.all(local.margin),
+                .padding = Rect.all(local.padding),
+                .background = row_background,
+                // Only set the alternate fill colour if actually banding.
+                .color_fill = if (local.banding != .none) .fill_press else null,
+            },
+        };
+
         // First column displays temperature in Celcius.
         {
-            var col = try grid.column(@src(), .{ .color_fill = local.colColorFill(0), .background = true });
+            var col = try grid.column(@src(), .{});
             defer col.deinit();
             // Set this column as the default sort
             if (current_sort_dir == .unsorted) {
@@ -3928,7 +3935,7 @@ fn gridStyling() !void {
                 grid.colSortSet(local.sort_dir);
             }
 
-            if (try dvui.gridHeadingSortable(@src(), grid, "Celcius", &local.sort_dir, .fixed, .{}, .{})) {
+            if (try dvui.gridHeadingSortable(@src(), grid, "Celcius", &local.sort_dir, .fixed, .{})) {
                 grid.colSortSet(current_sort_dir.reverse());
             }
 
@@ -3938,25 +3945,16 @@ fn gridStyling() !void {
                 temp += interval;
                 row_num += 1;
             }) {
-                var cell = try grid.bodyCell(@src(), row_num, .{
-                    .border = local.borders,
-                    .background = row_background,
-                    .color_fill = local.rowColorFill(row_num),
-                    .margin = Rect.all(local.margin),
-                    .padding = Rect.all(local.padding),
-                });
+                var cell = try grid.bodyCell(@src(), row_num, cell_opts.cellOptions(grid.col_num, row_num));
                 defer cell.deinit();
                 try dvui.label(@src(), "{d}", .{temp}, .{ .gravity_x = 0.5, .expand = .horizontal });
             }
         }
         // Second column displays temperature in Farenheight.
         {
-            var col = try grid.column(@src(), .{
-                .color_fill = local.colColorFill(1),
-                .background = local.banding == .cols,
-            });
+            var col = try grid.column(@src(), .{});
             defer col.deinit();
-            if (try dvui.gridHeadingSortable(@src(), grid, "Fahrenheit", &local.sort_dir, .fixed, .{}, .{})) {
+            if (try dvui.gridHeadingSortable(@src(), grid, "Fahrenheit", &local.sort_dir, .fixed, .{})) {
                 grid.colSortSet(current_sort_dir.reverse());
             }
 
@@ -3966,13 +3964,7 @@ fn gridStyling() !void {
                 temp += interval;
                 row_num += 1;
             }) {
-                var cell = try grid.bodyCell(@src(), row_num, .{
-                    .border = local.borders,
-                    .background = row_background,
-                    .color_fill = local.rowColorFill(row_num),
-                    .margin = Rect.all(local.margin),
-                    .padding = Rect.all(local.padding),
-                });
+                var cell = try grid.bodyCell(@src(), row_num, cell_opts.cellOptions(grid.col_num, row_num));
                 defer cell.deinit();
                 try dvui.label(@src(), "{d}", .{@divFloor(temp * 9, 5) + 32}, .{ .gravity_x = 0.5, .expand = .horizontal });
             }
@@ -4076,7 +4068,6 @@ fn gridLayouts() !void {
 
     const local = struct {
         const num_cols = 6;
-        const col_num_descr = 5;
         const checkbox_w = 40;
 
         var col_widths: [num_cols]f32 = @splat(100); // Default width to 100
@@ -4090,39 +4081,47 @@ fn gridLayouts() !void {
         var resize_rows: bool = false;
 
         /// Create a textArea for the description so that the text can wrap.
-        fn customDescriptionColumn(src: std.builtin.SourceLocation, grid: *GridWidget, data: []Car, opts: dvui.Options) !void {
-            // Creating the description cells with a multi-line text area.
+        fn customDescriptionColumn(src: std.builtin.SourceLocation, grid: *GridWidget, data: []Car, opts: *const GridWidget.CellStyle.Banded) !void {
             for (data, 0..) |*car, row_num| {
-                var col = try grid.bodyCell(src, row_num, rowBanding(col_num_descr, row_num));
+                var col = try grid.bodyCell(src, row_num, opts.cellOptions(grid.col_num, row_num));
                 defer col.deinit();
                 var text = try dvui.textLayout(@src(), .{ .break_lines = true }, .{ .expand = .both, .background = false });
                 defer text.deinit();
-                try text.addText(car.description, opts);
+                try text.addText(car.description, opts.options(grid.col_num, row_num));
             }
         }
 
-        /// Set background of all odd rows to the theme's fill_press color.
-        fn rowBanding(_: usize, col_num: usize) GridWidget.CellOptions {
-            if (col_num % 2 == 1)
-                return .{ .color_fill = .{ .name = .fill_press }, .background = true }
-            else
-                return .{};
-        }
+        const ConditionTextColor = struct {
+            base_opts: *const GridWidget.CellStyle.Banded,
 
-        /// Set the text color of the Condition text, based on the condition.
-        fn conditionTextColor(_: usize, row_num: usize) Options {
-            return .{
-                .expand = .horizontal,
-                .gravity_x = 0.5,
-                .color_text = switch (all_cars[row_num].condition) {
-                    .New => .{ .color = dvui.Color.fromHex("#4bbfc3") },
-                    .Excellent => .{ .color = dvui.Color.fromHex("#6ca96c") },
-                    .Good => .{ .color = dvui.Color.fromHex("#a3b76b") },
-                    .Fair => .{ .color = dvui.Color.fromHex("#d3b95f") },
-                    .Poor => .{ .color = dvui.Color.fromHex("#c96b6b") },
-                },
-            };
-        }
+            pub fn init(base_opts: *const GridWidget.CellStyle.Banded) ConditionTextColor {
+                return .{
+                    .base_opts = base_opts,
+                };
+            }
+
+            pub fn cellOptions(self: *const ConditionTextColor, col: usize, row: usize) GridWidget.CellOptions {
+                return self.base_opts.cellOptions(col, row);
+            }
+
+            pub fn options(self: *const ConditionTextColor, col: usize, row: usize) dvui.Options {
+                return self.base_opts.options(col, row).override(conditionTextColor(row));
+            }
+            /// Set the text color of the Condition text, based on the condition.
+            fn conditionTextColor(row_num: usize) Options {
+                return .{
+                    .expand = .horizontal,
+                    .gravity_x = 0.5,
+                    .color_text = switch (all_cars[row_num].condition) {
+                        .New => .{ .color = dvui.Color.fromHex("#4bbfc3") },
+                        .Excellent => .{ .color = dvui.Color.fromHex("#6ca96c") },
+                        .Good => .{ .color = dvui.Color.fromHex("#a3b76b") },
+                        .Fair => .{ .color = dvui.Color.fromHex("#d3b95f") },
+                        .Poor => .{ .color = dvui.Color.fromHex("#c96b6b") },
+                    },
+                };
+            }
+        };
 
         fn sort(key: []const u8) void {
             switch (sort_dir) {
@@ -4193,6 +4192,11 @@ fn gridLayouts() !void {
     const all_cars = local.all_cars[0..];
 
     const panel_height = 250;
+    const banded: GridWidget.CellStyle.Banded = .{
+        .alt_cell_opts = .{ .color_fill = .{ .name = .fill_press }, .background = true },
+    };
+    const banded_centered = banded.optionsOverride(.{ .gravity_x = 0.5, .expand = .horizontal });
+
     const content_h = dvui.parentGet().data().contentRect().h - panel_height;
     {
         const scroll_opts: ?dvui.ScrollAreaWidget.InitOpts = if (local.h_scroll)
@@ -4236,7 +4240,7 @@ fn gridLayouts() !void {
             // Make the checkbox column fixed width. (This width is used if init_opts.col_widths is null)
             var col = try grid.column(@src(), .{ .width = local.checkbox_w });
             defer col.deinit();
-            if (try dvui.gridHeadingCheckbox(@src(), grid, &local.selection_state, .{}, .{})) {
+            if (try dvui.gridHeadingCheckbox(@src(), grid, &local.selection_state, .{})) {
                 for (all_cars) |*car| {
                     car.selected = switch (local.selection_state) {
                         .select_all => true,
@@ -4245,52 +4249,52 @@ fn gridLayouts() !void {
                     };
                 }
             }
-            _ = try dvui.gridColumnCheckbox(@src(), grid, Car, all_cars[0..], "selected", .{ .callback = local.rowBanding }, .{ .options = .{ .gravity_y = 0.0 } });
+            _ = try dvui.gridColumnCheckbox(@src(), grid, Car, all_cars[0..], "selected", banded.optionsOverride(.{ .gravity_y = 0 }));
         }
         // Make
         {
             var col = try grid.column(@src(), .{});
             defer col.deinit();
-            if (try dvui.gridHeadingSortable(@src(), grid, "Make", &local.sort_dir, local.headerResizeOptions(1), .{}, .{})) {
+            if (try dvui.gridHeadingSortable(@src(), grid, "Make", &local.sort_dir, local.headerResizeOptions(1), .{})) {
                 local.sort("Make");
             }
-            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "make", "{s}", .{ .callback = local.rowBanding }, .none);
+            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "make", "{s}", banded);
         }
         // Model
         {
             var col = try grid.column(@src(), .{});
             defer col.deinit();
-            if (try dvui.gridHeadingSortable(@src(), grid, "Model", &local.sort_dir, local.headerResizeOptions(2), .{}, .{})) {
+            if (try dvui.gridHeadingSortable(@src(), grid, "Model", &local.sort_dir, local.headerResizeOptions(2), .{})) {
                 local.sort("Model");
             }
-            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "model", "{s}", .{ .callback = local.rowBanding }, .none);
+            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "model", "{s}", banded);
         }
         // Year
         {
             var col = try grid.column(@src(), .{});
             defer col.deinit();
-            if (try dvui.gridHeadingSortable(@src(), grid, "Year", &local.sort_dir, local.headerResizeOptions(3), .{}, .{})) {
+            if (try dvui.gridHeadingSortable(@src(), grid, "Year", &local.sort_dir, local.headerResizeOptions(3), .{})) {
                 local.sort("Year");
             }
-            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "year", "{d}", .{ .callback = local.rowBanding }, .none);
+            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "year", "{d}", banded);
         }
         // Condition
         {
             var col = try grid.column(@src(), .{});
             defer col.deinit();
-            if (try dvui.gridHeadingSortable(@src(), grid, "Condition", &local.sort_dir, local.headerResizeOptions(4), .{}, .{ .gravity_x = 0.5, .expand = .horizontal })) {
+            if (try dvui.gridHeadingSortable(@src(), grid, "Condition", &local.sort_dir, local.headerResizeOptions(4), .{})) {
                 local.sort("Condition");
             }
-            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "condition", "{s}", .{ .callback = local.rowBanding }, .{ .callback = local.conditionTextColor });
+            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "condition", "{s}", local.ConditionTextColor.init(&banded_centered));
         }
         // Description
         {
             var col = try grid.column(@src(), .{});
             defer col.deinit();
-            if (try dvui.gridHeadingSortable(@src(), grid, "Description", &local.sort_dir, local.headerResizeOptions(5), .{}, .{})) {
+            if (try dvui.gridHeadingSortable(@src(), grid, "Description", &local.sort_dir, local.headerResizeOptions(5), .{})) {
                 local.sort("Description");
             }
-            try local.customDescriptionColumn(@src(), grid, all_cars[0..], .{});
+            try local.customDescriptionColumn(@src(), grid, all_cars[0..], &banded);
         }
     }
     {
@@ -4371,14 +4375,6 @@ fn gridVirtualScrolling() !void {
         fn isPrime(num: usize) bool {
             return primes.isSet(num);
         }
-
-        fn highlightIfHovered(box: *dvui.BoxWidget, hovered: bool) !void {
-            if (hovered) {
-                box.wd.options.background = true;
-                box.wd.options.color_fill = .fill_hover;
-                try box.drawBackground();
-            }
-        }
     };
 
     if (!local.generated_primes) {
@@ -4395,23 +4391,20 @@ fn gridVirtualScrolling() !void {
     });
     defer grid.deinit();
 
-    // Check if a row is being hovered.
-    const evts = dvui.events();
-    const highlighted_row: ?usize = row: {
-        for (evts) |*e| {
-            if (dvui.eventMatchSimple(e, grid.data()) and
-                (e.evt == .mouse and e.evt.mouse.action == .position) and
-                (grid.row_height > 1))
-            {
-                // Translate mouse screen position to a logical position relative to the top-left of the grid body.
-                if (grid.pointToBodyRelative(e.evt.mouse.p)) |point| {
-                    break :row @intFromFloat((local.scroll_info.viewport.y + point.y) / grid.row_height);
-                }
-            }
-        }
-        break :row null;
+    // Highlight hovered row.
+    // Each column has slightly different border requirements, so create separate options for each.
+    // Calls cellOptionsOverride after processEvents() so that the hovered row only needs to be calculated once.
+    var highlight_hovered_1: GridWidget.CellStyle.HoveredRow = .{
+        .cell_opts = .{
+            .border = .{ .x = 1, .w = 1, .h = 1 },
+            .background = true,
+            .color_fill_hover = .fill_hover,
+        },
     };
+    highlight_hovered_1.processEvents(grid, &local.scroll_info);
+    const highlight_hovered_2 = highlight_hovered_1.cellOptionsOverride(.{ .border = .{ .w = 1, .h = 1 } });
 
+    // Virtual scrolling
     const scroller: dvui.GridWidget.VirtualScroller = .init(grid, .{ .total_rows = num_rows, .scroll_info = &local.scroll_info });
     const first = scroller.startRow();
     const last = scroller.endRow(); // Note that endRow is exclusive, meaning it can be used as a slice end index.
@@ -4420,12 +4413,11 @@ fn gridVirtualScrolling() !void {
     {
         var col = try grid.column(@src(), .{});
         defer col.deinit();
-        try dvui.gridHeading(@src(), grid, "Number", .fixed, .{}, .{});
+        try dvui.gridHeading(@src(), grid, "Number", .fixed, .{});
 
         for (first..last) |num| {
-            var cell = try grid.bodyCell(@src(), num, .{ .border = .{ .x = 1, .w = 1, .h = 1 }, .background = true });
+            var cell = try grid.bodyCell(@src(), num, highlight_hovered_1.cellOptions(0, num));
             defer cell.deinit();
-            try local.highlightIfHovered(cell, num == highlighted_row);
             try dvui.label(@src(), "{d}", .{num}, .{});
         }
     }
@@ -4434,12 +4426,11 @@ fn gridVirtualScrolling() !void {
         const check_img = @embedFile("icons/entypo/check.tvg");
         var col = try grid.column(@src(), .{});
         defer col.deinit();
-        try dvui.gridHeading(@src(), grid, "Is prime?", .fixed, .{}, .{});
+        try dvui.gridHeading(@src(), grid, "Is prime?", .fixed, .{});
 
         for (first..last) |num| {
-            var cell = try grid.bodyCell(@src(), num, .{ .border = .{ .w = 1, .h = 1 }, .background = true });
+            var cell = try grid.bodyCell(@src(), num, highlight_hovered_2.cellOptions(1, num));
             defer cell.deinit();
-            try local.highlightIfHovered(cell, num == highlighted_row);
             if (local.isPrime(num)) {
                 try dvui.icon(@src(), "Check", check_img, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .background = false });
             }
@@ -4454,14 +4445,24 @@ fn gridVariableRowHeights() !void {
     });
     defer grid.deinit();
 
+    // Use of CellStyle is optional, but useful when applying the same styling to multiple columns.
+    // CellOptions and Options can be passed directly to bodyCell() and label() if preferred.
+    const cell_style: GridWidget.CellStyle = .{
+        .cell_opts = .{ .border = Rect.all(1) },
+        .opts = .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .both },
+    };
     var col = try grid.column(@src(), .{});
     defer col.deinit();
     for (1..10) |row_num| {
         const row_num_i: i32 = @intCast(row_num);
         const row_height = 70 - (@abs(row_num_i - 5) * 10);
-        var cell = try grid.bodyCell(@src(), row_num, .{ .height = @floatFromInt(row_height), .border = Rect.all(1) });
+        var cell = try grid.bodyCell(
+            @src(),
+            row_num,
+            cell_style.cellOptions(0, row_num).override(.{ .height = @floatFromInt(row_height) }),
+        );
         defer cell.deinit();
-        try dvui.label(@src(), "h = {d}", .{row_height}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .both });
+        try dvui.label(@src(), "h = {d}", .{row_height}, cell_style.options(0, row_num));
     }
 }
 
