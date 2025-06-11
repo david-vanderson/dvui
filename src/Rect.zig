@@ -201,7 +201,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         ///
         /// Only valid between dvui.Window.begin() and end().
         pub fn stroke(self: Rect.Physical, radius: Rect.Physical, opts: dvui.Path.StrokeOptions) dvui.Backend.GenericError!void {
-            var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
+            var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
             defer path.deinit();
 
             try path.addRect(self, radius);
@@ -220,7 +220,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         ///
         /// Only valid between dvui.Window.begin() and end().
         pub fn fill(self: Rect.Physical, radius: Rect.Physical, opts: dvui.Path.FillConvexOptions) dvui.Backend.GenericError!void {
-            var path: dvui.Path.Builder = .init(dvui.currentWindow().arena());
+            var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
             defer path.deinit();
 
             try path.addRect(self, radius);

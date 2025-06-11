@@ -118,6 +118,7 @@ pub fn processEvent(self: *ReorderWidget, e: *dvui.Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *ReorderWidget) void {
+    defer dvui.widgetFree(self);
     if (self.drag_ending) {
         self.id_reorderable = null;
         self.drag_point = null;
@@ -194,7 +195,7 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
 }
 
 pub fn reorderable(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: Reorderable.InitOptions, opts: Options) !*Reorderable {
-    const ret = try dvui.currentWindow().arena().create(Reorderable);
+    const ret = dvui.widgetAlloc(Reorderable);
     ret.* = Reorderable.init(src, self, init_opts, opts);
     try ret.install();
     return ret;
@@ -363,6 +364,7 @@ pub const Reorderable = struct {
     }
 
     pub fn deinit(self: *Reorderable) void {
+        defer dvui.widgetFree(self);
         if (self.floating_widget) |*fw| {
             self.wd.minSizeMax(fw.wd.min_size);
             fw.deinit();

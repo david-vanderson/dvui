@@ -53,6 +53,7 @@ pub fn draw(self: *IconWidget) !void {
 }
 
 pub fn deinit(self: *IconWidget) void {
+    defer dvui.widgetFree(self);
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
     self.* = undefined;

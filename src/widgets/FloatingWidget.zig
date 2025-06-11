@@ -110,6 +110,7 @@ pub fn processEvent(self: *FloatingWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *FloatingWidget) void {
+    defer dvui.widgetFree(self);
     self.scaler.deinit();
     self.wd.minSizeSetAndRefresh();
 

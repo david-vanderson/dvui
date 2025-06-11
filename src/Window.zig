@@ -104,6 +104,12 @@ captured_last_frame: bool = false,
 
 gpa: std.mem.Allocator,
 _arena: dvui.ShrinkingArenaAllocator,
+_lifo_arena: dvui.ShrinkingArenaAllocator,
+/// Used to allocate widgets with a fixed location
+_widget_stack: std.heap.FixedBufferAllocator,
+/// The peak amount of bytes used by the widget stack since
+/// the creation of `Window`. Used to resize the stack ifs needed.
+peak_widget_stack: usize = 0,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
@@ -161,6 +167,9 @@ const SavedData = struct {
 pub const InitOptions = struct {
     id_extra: usize = 0,
     arena: ?dvui.ShrinkingArenaAllocator = null,
+    /// For reference, the `dvui.Examples.demo` window uses
+    /// about 0x5000 stack space at its peak
+    default_widget_stack_capacity: usize = 0x10000,
     theme: ?*Theme = null,
     keybinds: ?enum {
         none,
@@ -180,6 +189,8 @@ pub fn init(
     var self = Self{
         .gpa = gpa,
         ._arena = init_opts.arena orelse .init(gpa),
+        ._lifo_arena = .init(gpa),
+        ._widget_stack = .init(try gpa.alloc(u8, init_opts.default_widget_stack_capacity)),
         .subwindows = .init(gpa),
         .tab_index_prev = .init(gpa),
         .tab_index = .init(gpa),
@@ -405,6 +416,8 @@ pub fn deinit(self: *Self) void {
     self.toasts.deinit();
     self.keybinds.deinit();
     self._arena.deinit();
+    self._lifo_arena.deinit();
+    self.gpa.free(self._widget_stack.buffer);
 
     {
         var it = self.font_bytes.valueIterator();
@@ -425,6 +438,32 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
+/// This allocator requires that the allocations are freed in a
+/// LIFO (Last In First Out) order. The purpose is to reuse as
+/// much memory as possible throughout a frame.
+///
+/// Can be very useful for quickly printing some text with
+/// `std.fmt.allocPrint` or for temporary arrays.
+///
+/// ```zig
+/// const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", number);
+/// defer dvui.currentWindow().lifo().free(msg);
+/// // ... Render text in some widget here
+/// ```
+///
+/// For allocations that should live for the entire frame, see
+/// `Window.arena`
+pub fn lifo(self: *Self) std.mem.Allocator {
+    return self._lifo_arena.allocatorLIFO();
+}
+
+/// A general allocator for using during a frame. All allocations
+/// will be freed at the end of the frame.
+///
+/// If any dvui functions are called before freeing memory, it is
+/// not guaranteed that the allocation can be freed.
+///
+/// For temporary allocations, see `Window.lifo`
 pub fn arena(self: *Self) std.mem.Allocator {
     return self._arena.allocator();
 }
@@ -558,7 +597,7 @@ pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) std.mem.All
     self.event_num += 1;
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
-        .evt = .{ .text = .{ .txt = try self._arena.allocator().dupe(u8, text), .selected = selected } },
+        .evt = .{ .text = .{ .txt = try self.arena().dupe(u8, text), .selected = selected } },
         .focus_windowId = self.focused_subwindowId,
         .focus_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
     });
@@ -916,7 +955,7 @@ pub fn begin(
     self: *Self,
     time_ns: i128,
 ) dvui.Backend.GenericError!void {
-    const larena = self._arena.allocator();
+    const larena = self.arena();
 
     var micros_since_last: u32 = 1;
     if (time_ns > self.frame_time_ns) {
@@ -1200,13 +1239,13 @@ pub fn renderCommands(self: *Self, queue: std.ArrayList(dvui.RenderCommand)) !vo
                 try dvui.renderTexture(t.tex, t.rs, t.opts);
             },
             .pathFillConvex => |pf| {
-                var triangles = try pf.path.fillConvexTriangles(pf.opts);
-                defer triangles.deinit(self.arena());
+                var triangles = try pf.path.fillConvexTriangles(self.lifo(), pf.opts);
+                defer triangles.deinit(self.lifo());
                 try dvui.renderTriangles(triangles, null);
             },
             .pathStroke => |ps| {
-                var triangles = try ps.path.strokeTriangles(ps.opts);
-                defer triangles.deinit(self.arena());
+                var triangles = try ps.path.strokeTriangles(self.lifo(), ps.opts);
+                defer triangles.deinit(self.lifo());
                 try dvui.renderTriangles(triangles, null);
             },
             .triangles => |t| {
@@ -1660,7 +1699,41 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // event to the end this will print a debug message.
     self.positionMouseEventRemove();
 
-    _ = self._arena.reset();
+    // Allocators
+    // std.log.debug("peak lifo arena {d} (0x{0x})", .{self._lifo_arena.peak_usage});
+    // std.log.debug("peak arena {d} (0x{0x})", .{self._arena.peak_usage});
+    // std.log.debug("peak widget stack {d} (0x{0x})", .{self.peak_widget_stack});
+
+    // self._arena.debug_log();
+    _ = self._arena.reset(.retain_capacity);
+    if (self._lifo_arena.current_usage != 0 and
+        // If we have more than one buffer, we increased in size this frame, ignore errors
+        self._lifo_arena.arena.state.buffer_list.len() == 1)
+    {
+        log.warn("Arena was not empty at the end of the frame, {d} byte left. Did you forget to free memory somewhere?", .{self._lifo_arena.current_usage});
+        // const buf: [*]u8 = @ptrCast(self._lifo_arena.arena.state.buffer_list.first.?);
+        // std.log.debug("Arena content {s}", .{buf[@sizeOf(usize) .. self._lifo_arena.current_usage]});
+    }
+    // self._lifo_arena.debug_log();
+    _ = self._lifo_arena.reset(.retain_capacity);
+
+    // Widget stack
+    if (self._widget_stack.end_index != 0) {
+        log.warn("Widget stack was not empty at the end of the frame. Did you forget to call deinti?", .{});
+        self._widget_stack.reset();
+    }
+    if (self._widget_stack.buffer.len < self.peak_widget_stack) {
+        log.warn("Widget stack overflowed, consider increasing the default widget stack size", .{});
+        const new_len = self.peak_widget_stack + 0x400;
+        if (self.gpa.resize(self._widget_stack.buffer, new_len)) {
+            self._widget_stack.buffer.len = new_len;
+        } else {
+            // do realloc ourselves as we don't need to copy any memory from the old allocation
+            const new_buf = try self.gpa.alloc(u8, new_len);
+            self.gpa.free(self._widget_stack.buffer);
+            self._widget_stack.buffer = new_buf;
+        }
+    }
 
     try self.initEvents();
 

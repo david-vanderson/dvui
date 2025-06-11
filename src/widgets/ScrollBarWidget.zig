@@ -190,6 +190,7 @@ pub fn drawGrab(self: *ScrollBarWidget) !void {
 }
 
 pub fn deinit(self: *ScrollBarWidget) void {
+    defer dvui.widgetFree(self);
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
     self.* = undefined;

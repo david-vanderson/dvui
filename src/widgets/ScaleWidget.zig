@@ -166,6 +166,7 @@ pub fn minSizeForChild(self: *ScaleWidget, s: Size) void {
 }
 
 pub fn deinit(self: *ScaleWidget) void {
+    defer dvui.widgetFree(self);
     dvui.dataSet(null, self.wd.id, "_scale", self.scale.*);
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();

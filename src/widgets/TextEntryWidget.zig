@@ -274,8 +274,8 @@ pub fn draw(self: *TextEntryWidget) !void {
         sel.start = sstart.?;
         sel.cursor = scursor.?;
         sel.end = send.?;
-        var password_str: []u8 = try dvui.currentWindow().arena().alloc(u8, count * pc.len);
-        defer dvui.currentWindow().arena().free(password_str);
+        var password_str: []u8 = try dvui.currentWindow().lifo().alloc(u8, count * pc.len);
+        defer dvui.currentWindow().lifo().free(password_str);
         for (0..count) |i| {
             for (0..pc.len) |pci| {
                 password_str[i * pc.len + pci] = pc[pci];
@@ -872,6 +872,7 @@ pub fn getText(self: *const TextEntryWidget) []u8 {
 }
 
 pub fn deinit(self: *TextEntryWidget) void {
+    defer dvui.widgetFree(self);
     if (self.len == 0 or self.len + realloc_bin_size + @divTrunc(realloc_bin_size, 2) <= self.text.len) {
         // we want to shrink the allocation
         const new_len = if (self.len == 0) 0 else realloc_bin_size * (@divTrunc(self.len, realloc_bin_size) + 1);

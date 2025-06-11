@@ -148,6 +148,7 @@ pub fn data(self: *ScrollAreaWidget) *WidgetData {
 }
 
 pub fn deinit(self: *ScrollAreaWidget) void {
+    defer dvui.widgetFree(self);
     dvui.dataSet(null, self.hbox.data().id, "_scroll_id", self.scroll.wd.id);
     self.scroll.deinit();
 
