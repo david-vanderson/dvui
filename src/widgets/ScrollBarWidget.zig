@@ -22,7 +22,6 @@ pub const InitOptions = struct {
     scroll_info: *ScrollInfo,
     direction: enums.Direction = .vertical,
     focus_id: ?dvui.WidgetId = null,
-    overlay: bool = false,
 };
 
 wd: WidgetData = undefined,
@@ -30,7 +29,6 @@ grabRect: Rect = Rect{},
 si: *ScrollInfo = undefined,
 focus_id: ?dvui.WidgetId = null,
 dir: enums.Direction = undefined,
-overlay: bool = false,
 highlight: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ScrollBarWidget {
@@ -38,13 +36,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     self.si = init_opts.scroll_info;
     self.focus_id = init_opts.focus_id;
     self.dir = init_opts.direction;
-    self.overlay = init_opts.overlay;
 
-    var options = defaults.override(opts);
-    if (self.overlay) {
-        // we don't want to take any space from parent
-        options.rect = dvui.placeIn(dvui.parentGet().data().contentRect().justSize(), options.min_sizeGet(), opts.expandGet(), opts.gravityGet());
-    }
+    const options = defaults.override(opts);
     self.wd = WidgetData.init(src, .{}, options);
 
     return self;
@@ -179,14 +172,25 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
     }
 }
 
-pub fn drawGrab(self: *ScrollBarWidget) !void {
+pub const Grab = struct {
+    rect: Rect.Physical,
+    color: dvui.Color,
+
+    pub fn draw(self: Grab) !void {
+        try self.rect.fill(.all(100), .{ .color = self.color });
+    }
+};
+
+pub fn grab(self: *ScrollBarWidget) Grab {
     var fill = self.wd.options.color(.text).opacity(0.5);
     if (dvui.captured(self.wd.id) or self.highlight) {
         fill = self.wd.options.color(.text).opacity(0.3);
     }
-    self.grabRect = self.grabRect.insetAll(2);
-    const grabrs = self.wd.parent.screenRectScale(self.grabRect);
-    try grabrs.r.fill(.all(100), .{ .color = fill });
+
+    return .{
+        .rect = self.wd.parent.screenRectScale(self.grabRect.insetAll(2)).r,
+        .color = fill,
+    };
 }
 
 pub fn deinit(self: *ScrollBarWidget) void {
