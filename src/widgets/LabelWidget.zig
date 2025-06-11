@@ -37,8 +37,8 @@ pub fn init(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: any
             break :blk .{ str, cw.lifo() };
         };
         if (str.ptr == utf8.ptr) break :blk .{ str, cw.lifo() };
-        dvui.log.debug("{s}:{d}: LabelWidget format output was invalid utf8 for '{s}'.", .{ src.file, src.line, str });
         cw.lifo().free(str);
+        dvui.log.debug("{s}:{d}: LabelWidget format output was invalid utf8 for '{s}'.", .{ src.file, src.line, str });
         break :blk .{ utf8, null };
     };
     return initNoFmtAllocator(src, str, alloc, opts);
@@ -140,15 +140,11 @@ pub fn processEvent(self: *LabelWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *LabelWidget) void {
+    defer dvui.widgetFree(self);
+    if (self.allocator) |alloc| alloc.free(self.label_str);
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
-
-    // need to free label_str after widget
-    const allocator = self.allocator;
-    const label_str = self.label_str;
     self.* = undefined;
-    dvui.widgetFree(self);
-    if (allocator) |alloc| alloc.free(label_str);
 }
 
 test {
