@@ -379,9 +379,21 @@ pub const StackAllocator = struct {
             cur_node.data.end_index = @intCast(@intFromPtr(buf.ptr) - @intFromPtr(cur_buf.ptr));
             @memset(buf, undefined);
 
-            if (cur_node.data.end_index == 0) {
-                if (cur_node.next) |node| {
-                    self.current_node = node;
+            const start_of_buf = mem.alignForward(usize, @intFromPtr(cur_buf.ptr), alignment.toByteUnits()) - @intFromPtr(cur_buf.ptr);
+
+            if (cur_node.data.end_index == start_of_buf) {
+                var next = cur_node.next;
+                self.current_node = next;
+                // Find the first non empty node
+                while (next) |node| : (next = node.next) {
+                    if (node.data.end_index != 0) {
+                        self.current_node = node;
+                        break;
+                    }
+                }
+                // Fallback to the last node in the list
+                if (self.current_node == null) {
+                    self.current_node = self.buffer_list.last;
                 }
             }
 
