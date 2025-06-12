@@ -202,6 +202,7 @@ pub const StackAllocator = struct {
             const next_it = node.next;
             if (next_it == null)
                 break node;
+            self.buffer_list.remove(node);
             const alloc_buf = @as([*]u8, @ptrCast(node))[0..node.data.len];
             self.child_allocator.rawFree(alloc_buf, BufNode_alignment, @returnAddress());
             it = next_it;
