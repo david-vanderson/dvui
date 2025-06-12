@@ -314,7 +314,8 @@ pub const StackAllocator = struct {
         _ = ret_addr;
 
         const cur_node = self.current() orelse return false;
-        const cur_buf = @as([*]u8, @ptrCast(cur_node))[@sizeOf(BufNode)..cur_node.data.len];
+        const cur_alloc_buf = @as([*]u8, @ptrCast(cur_node))[0..cur_node.data.len];
+        const cur_buf = cur_alloc_buf[@sizeOf(BufNode)..];
         if (@intFromPtr(cur_buf.ptr) + cur_node.data.end_index != @intFromPtr(buf.ptr) + buf.len) {
             // It's not the most recent allocation, so because we
             // need to be able to free, we cannot even shrink
@@ -329,6 +330,14 @@ pub const StackAllocator = struct {
             if (debug) self.meta.items[self.meta.items.len - 1].item_buf.len = new_len;
             return true;
         } else {
+            // Try to expand the current buffer
+            const bigger_size = cur_alloc_buf.len + (new_len - buf.len);
+            if (self.child_allocator.rawResize(cur_alloc_buf, BufNode_alignment, bigger_size, @returnAddress())) {
+                cur_node.data.len = @intCast(bigger_size);
+                cur_node.data.end_index += @intCast(new_len - buf.len);
+                if (debug) self.meta.items[self.meta.items.len - 1].item_buf.len = new_len;
+                return true;
+            }
             return false;
         }
     }
@@ -343,7 +352,7 @@ pub const StackAllocator = struct {
 
             // Resize failed so we know this will create a new buffer
             const new_buf = alloc(ctx, new_len, alignment, ret_addr) orelse return null;
-            std.debug.assert(cur_node != self.buffer_list.first);
+            std.debug.assert(cur_node != self.current());
             @memcpy(new_buf, buf);
             // "free" the data from the previous buffer
             cur_node.data.end_index = @intCast(@intFromPtr(buf.ptr) - @intFromPtr(cur_buf.ptr));
@@ -351,7 +360,9 @@ pub const StackAllocator = struct {
             if (debug) {
                 // remove meta added by alloc
                 _ = self.meta.pop();
-                self.meta.items[self.meta.items.len - 1].item_buf = new_buf[0..new_len];
+                const meta = &self.meta.items[self.meta.items.len - 1];
+                meta.item_buf = new_buf[0..new_len];
+                std.debug.assert(meta.alignment.compare(.eq, alignment));
             }
             return new_buf;
         };
