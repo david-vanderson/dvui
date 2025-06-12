@@ -20,19 +20,21 @@ const Allocator = std.mem.Allocator;
 // Comptime configurations
 // TODO: Make these available as generic params out build options
 const debug = builtin.mode == .Debug;
-const stack_trace_frames = if (builtin.is_test) 3 else 8;
+const stack_trace_frames = if (builtin.is_test) 1 else 8;
 
 const log = if (!builtin.is_test)
     std.log.scoped(.stack_allocator)
 else
     struct {
         const default = std.log.scoped(.stack_allocator);
+        // Downgrade error logs to not fail tests
         pub fn err(comptime format: []const u8, args: anytype) void {
-            // Downgrade error logs to not fail tests
-            default.warn(format, args);
+            // Set to warn to show up in test output
+            default.info(format, args);
         }
         pub fn warn(comptime format: []const u8, args: anytype) void {
-            default.warn(format, args);
+            // Set to warn to show up in test output
+            default.info(format, args);
         }
         pub fn info(comptime format: []const u8, args: anytype) void {
             default.info(format, args);
