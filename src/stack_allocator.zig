@@ -227,10 +227,12 @@ pub const StackAllocator = struct {
                     // we failed to preheat the arena properly, signal this to the user.
                     return false;
                 };
+                self.buffer_list.remove(first_node);
                 self.child_allocator.rawFree(first_alloc_buf, BufNode_alignment, @returnAddress());
+                std.debug.assert(self.buffer_list.len == 0);
                 const node: *BufNode = @ptrCast(@alignCast(new_ptr));
                 node.* = .{ .data = .{ .len = @intCast(total_size) } };
-                self.buffer_list.first = node;
+                self.buffer_list.prepend(node);
             }
         }
         return true;
