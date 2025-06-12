@@ -128,7 +128,10 @@ gpa: std.mem.Allocator,
 _arena: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
 _lifo_arena: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
 /// Used to allocate widgets with a fixed location
-_widget_stack: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
+_widget_stack: dvui.StackAllocator,
+/// The peak amount of bytes used by the widget stack since
+/// the creation of `Window`. Used to resize the stack ifs needed.
+peak_widget_stack: usize = 0,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
@@ -467,7 +470,7 @@ pub fn deinit(self: *Self) void {
 /// For allocations that should live for the entire frame, see
 /// `Window.arena`
 pub fn lifo(self: *Self) std.mem.Allocator {
-    return self._lifo_arena.allocatorLIFO();
+    return self._lifo_arena.allocator();
 }
 
 /// A general allocator for using during a frame. All allocations
@@ -1798,13 +1801,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // self._lifo_arena.debug_log();
     _ = self._lifo_arena.reset(.shrink_to_peak_usage);
 
-    if (self._widget_stack.current_usage != 0 and !self._widget_stack.has_expanded()) {
-        log.warn("Widget stack was not empty at the end of the frame, {d} bytes left. Did you forget to call deinit?", .{self._widget_stack.current_usage});
-        // const buf: [*]u8 = @ptrCast(self._widget_stack.arena.state.buffer_list.first.?);
-        // std.log.debug("Widget stack content {s}", .{buf[@sizeOf(usize)..self._widget_stack.current_usage]});
-    }
-    // self._widget_stack.debug_log();
-    _ = self._widget_stack.reset(.shrink_to_peak_usage);
+    _ = self._widget_stack.reset(.retain_capacity);
 
     try self.initEvents();
 
