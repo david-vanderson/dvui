@@ -291,6 +291,7 @@ pub const StackAllocator = struct {
                     meta.captureTrace(ret_addr);
                 }
 
+                self.current_node = cur_node;
                 cur_node.data.end_index = @intCast(new_end_index);
                 return result.ptr;
             }
@@ -298,9 +299,8 @@ pub const StackAllocator = struct {
             const bigger_buf_size = @sizeOf(BufNode) + new_end_index;
             if (self.child_allocator.rawResize(cur_alloc_buf, BufNode_alignment, bigger_buf_size, @returnAddress())) {
                 cur_node.data.len = @intCast(bigger_buf_size);
-            } else if (cur_node != self.buffer_list.first) {
-                self.current_node = cur_node.prev;
-                cur_node = self.current().?;
+            } else if (cur_node.prev) |node| {
+                cur_node = node;
             } else {
                 // Allocate a new node if that's not possible
                 cur_node = self.createNode(cur_buf.len, n + ptr_align) orelse return null;
