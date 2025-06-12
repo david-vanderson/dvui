@@ -97,7 +97,7 @@ pub const StackAllocator = struct {
         };
     }
 
-    const BufList = std.SinglyLinkedList(struct { len: u32, end_index: u32 = 0 });
+    const BufList = std.DoublyLinkedList(struct { len: u32, end_index: u32 = 0 });
 
     const BufNode = BufList.Node;
     const BufNode_alignment: mem.Alignment = .fromByteUnits(@alignOf(BufNode));
@@ -267,8 +267,8 @@ pub const StackAllocator = struct {
         const self: *StackAllocator = @ptrCast(@alignCast(ctx));
 
         const ptr_align = alignment.toByteUnits();
-        var cur_node = if (self.buffer_list.first) |first_node|
-            first_node
+        var cur_node = if (self.current()) |node|
+            node
         else
             (self.createNode(0, n + ptr_align) orelse return null);
         while (true) {
@@ -297,6 +297,9 @@ pub const StackAllocator = struct {
             const bigger_buf_size = @sizeOf(BufNode) + new_end_index;
             if (self.child_allocator.rawResize(cur_alloc_buf, BufNode_alignment, bigger_buf_size, @returnAddress())) {
                 cur_node.data.len = @intCast(bigger_buf_size);
+            } else if (cur_node != self.buffer_list.first) {
+                self.current_node = cur_node.prev;
+                cur_node = self.current().?;
             } else {
                 // Allocate a new node if that's not possible
                 cur_node = self.createNode(cur_buf.len, n + ptr_align) orelse return null;
@@ -514,7 +517,7 @@ test "out of order frees" {
         try std.testing.expectEqual(@sizeOf(usize) * 5, instance.current().?.data.end_index);
         // Force a second buffer
         _ = try alloc.alloc(usize, 100);
-        try std.testing.expectEqual(2, instance.buffer_list.len());
+        try std.testing.expectEqual(2, instance.buffer_list.len);
         try std.testing.expectEqual(@sizeOf(usize) * 100, instance.current().?.data.end_index);
         alloc.free(a2);
 
@@ -541,11 +544,11 @@ test "reset while retaining a buffer" {
     }
 
     // Check that we have at least two buffers
-    try std.testing.expect(instance.buffer_list.len() == 2);
+    try std.testing.expectEqual(2, instance.buffer_list.len);
 
     // This retains the first allocated buffer
     try std.testing.expect(instance.reset(.{ .retain_with_limit = 1 }));
-    try std.testing.expect(instance.buffer_list.len() == 1);
+    try std.testing.expectEqual(1, instance.buffer_list.len);
 }
 
 test "array usage" {
@@ -565,9 +568,9 @@ test "array usage" {
     // const temp = try alloc.alloc(usize, 1000);
     // alloc.free(temp);
 
-    try std.testing.expect(instance.buffer_list.len() > 1);
+    try std.testing.expect(instance.buffer_list.len > 1);
     try std.testing.expect(instance.reset(.retain_capacity));
-    try std.testing.expectEqual(1, instance.buffer_list.len());
+    try std.testing.expectEqual(1, instance.buffer_list.len);
     try std.testing.expect(instance.queryCapacity() > 1000);
 
     {
@@ -579,5 +582,5 @@ test "array usage" {
     }
 
     try std.testing.expect(instance.reset(.free_all));
-    try std.testing.expectEqual(0, instance.buffer_list.len());
+    try std.testing.expectEqual(0, instance.buffer_list.len);
 }
