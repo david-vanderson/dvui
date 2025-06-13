@@ -266,8 +266,11 @@ pub fn draw(self: *TextEntryWidget) void {
                     pstr[i * pc.len + pci] = pc[pci];
                 }
             }
+            self.textLayout.addText(pstr, self.wd.options.strip());
+        } else {
+            dvui.log.warn("Could not allocate password_str, falling back to one single password_str", .{});
+            self.textLayout.addText(pc, self.wd.options.strip());
         }
-        self.textLayout.addText(password_str orelse pc, self.wd.options.strip());
     } else {
         self.textLayout.addText(self.text[0..self.len], self.wd.options.strip());
     }
