@@ -118,6 +118,7 @@ pub const default_col_width: f32 = 100;
 
 vbox: BoxWidget = undefined,
 scroll: ScrollAreaWidget = undefined,
+si: ScrollInfo = undefined,
 hbox: BoxWidget = undefined,
 init_opts: InitOpts = undefined,
 current_col: ?*BoxWidget = null,
@@ -175,6 +176,8 @@ pub fn install(self: *GridWidget) !void {
 
     self.scroll = ScrollAreaWidget.init(@src(), self.init_opts.scroll_opts orelse .{}, .{ .name = "GridWidgetScrollArea", .expand = .both });
     try self.scroll.install();
+    // Keep a copy of the scroll_info in case the viewport changes between column layouts.
+    self.si = self.scroll.si.*;
 
     // Lay out columns horizontally.
     self.hbox = BoxWidget.init(@src(), .{ .dir = .horizontal }, .{
@@ -277,7 +280,7 @@ fn clipReset(self: *GridWidget) void {
 /// Only one header cell is allowed per column.
 /// Height is taken from opts.height if provided, otherwise height is automatically determined.
 pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, opts: CellOptions) !*BoxWidget {
-    const y: f32 = self.scroll.si.viewport.y;
+    const y: f32 = self.si.viewport.y;
     const parent_rect = self.current_col.?.data().contentRect();
 
     const header_height: f32 = height: {
@@ -326,7 +329,7 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, row_num: usi
 
         var clip_rect = rect_scale.r;
         clip_rect.y += header_height_scaled;
-        clip_rect.h = self.scroll.si.viewport.h * rect_scale.s - header_height_scaled;
+        clip_rect.h = self.si.viewport.h * rect_scale.s - header_height_scaled;
 
         self.saved_clip_rect = dvui.clip(clip_rect);
     }
