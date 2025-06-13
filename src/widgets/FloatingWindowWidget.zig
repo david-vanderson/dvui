@@ -198,7 +198,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *FloatingWindowWidget) !void {
+pub fn install(self: *FloatingWindowWidget) void {
     self.prev_rendering = dvui.renderingSet(false);
 
     if (dvui.firstFrame(self.wd.id)) {
@@ -239,9 +239,9 @@ pub fn install(self: *FloatingWindowWidget) !void {
     dvui.clipSet(dvui.windowRectPixels());
 }
 
-pub fn drawBackground(self: *FloatingWindowWidget) !void {
+pub fn drawBackground(self: *FloatingWindowWidget) void {
     const rs = self.wd.rectScale();
-    try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent_window) self.prev_windowInfo.id else null);
+    dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent_window) self.prev_windowInfo.id else null);
     dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
     self.wd.register();
 
@@ -249,13 +249,13 @@ pub fn drawBackground(self: *FloatingWindowWidget) !void {
         // paint over everything below
         var col = self.options.color(.text);
         col.a = if (dvui.themeGet().dark) 60 else 80;
-        try dvui.windowRectPixels().fill(.{}, .{ .color = col });
+        dvui.windowRectPixels().fill(.{}, .{ .color = col });
     }
 
     // we are using BoxWidget to do border/background
     self.layout = BoxWidget.init(@src(), .{ .dir = .vertical }, self.options.override(.{ .expand = .both }));
-    try self.layout.install();
-    try self.layout.drawBackground();
+    self.layout.install();
+    self.layout.drawBackground();
 
     // clip to just our window (layout has the margin)
     _ = dvui.clip(self.layout.data().borderRectScale().r);

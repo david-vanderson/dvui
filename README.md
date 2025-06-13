@@ -123,7 +123,7 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 
 ### Immediate Mode
 ```zig
-if (try dvui.button(@src(), "Ok", .{}, .{})) {
+if (dvui.button(@src(), "Ok", .{}, .{})) {
   dialog.close();
 }
 ```
@@ -142,17 +142,17 @@ For an intro to immediate mode guis, see: https://github.com/ocornut/imgui/wiki#
   * since running a widget is a function, you can wrap a widget easily
 ```zig
 // Let's wrap the sliderEntry widget so we have 3 that represent a Color
-pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) !void {
-    var hbox = try dvui.box(src, .horizontal, opts);
+pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) void {
+    var hbox = dvui.box(src, .horizontal, opts);
     defer hbox.deinit();
 
     var red: f32 = @floatFromInt(color.r);
     var green: f32 = @floatFromInt(color.g);
     var blue: f32 = @floatFromInt(color.b);
 
-    _ = try dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &red, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
-    _ = try dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &green, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
-    _ = try dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &blue, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
+    _ = dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &red, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
+    _ = dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &green, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
+    _ = dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &blue, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
 
     color.r = @intFromFloat(red);
     color.g = @intFromFloat(green);
@@ -210,7 +210,7 @@ The estimate is visible in the demo window Animations > Clock > "Estimate of fra
 The easiest way to use widgets is through the high-level functions that create and install them:
 ```zig
 {
-    var box = try dvui.box(@src(), .vertical, .{.expand = .both});
+    var box = dvui.box(@src(), .vertical, .{.expand = .both});
     defer box.deinit();
 
     // widgets run here will be children of box
@@ -224,10 +224,10 @@ Instead you can allocate the widget on the stack using the lower-level functions
     var box = BoxWidget.init(@src(), .vertical, false, .{.expand = .both});
     // box now has an id, can look up animations/timers
 
-    try box.install();
+    box.install();
     // box is now parent widget
 
-    try box.drawBackground();
+    box.drawBackground();
     // might draw the background in a different way
 
     defer box.deinit();

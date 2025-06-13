@@ -124,87 +124,71 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *TextEntryWidget) !void {
+pub fn install(self: *TextEntryWidget) void {
     self.wd.register();
 
     if (self.wd.visible()) {
-        try dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
+        dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
     }
 
     dvui.parentSet(self.widget());
 
-    try self.wd.borderAndBackground(.{});
+    self.wd.borderAndBackground(.{});
 
     self.prevClip = dvui.clip(self.wd.borderRectScale().r);
     const borderClip = dvui.clipGet();
 
     self.scroll = ScrollAreaWidget.init(@src(), self.scroll_init_opts, self.wd.options.strip().override(.{ .expand = .both }));
     // scrollbars process mouse events here
-    try self.scroll.install();
+    self.scroll.install();
 
     self.scrollClip = dvui.clipGet();
 
     self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .touch_edit_just_focused = false }, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding }));
-    try self.textLayout.install(.{ .focused = self.wd.id == dvui.focusedWidgetId(), .show_touch_draggables = (self.len > 0) });
+    self.textLayout.install(.{ .focused = self.wd.id == dvui.focusedWidgetId(), .show_touch_draggables = (self.len > 0) });
     self.textClip = dvui.clipGet();
 
     if (self.len == 0) {
         if (self.init_opts.placeholder) |placeholder| {
-            try self.textLayout.addText(placeholder, .{ .color_text = .fromColor(self.textLayout.wd.options.color(.text).opacity(0.75)) });
+            self.textLayout.addText(placeholder, .{ .color_text = .fromColor(self.textLayout.wd.options.color(.text).opacity(0.75)) });
         }
     }
 
-    if (try self.textLayout.touchEditing()) |floating_widget| {
+    if (self.textLayout.touchEditing()) |floating_widget| {
         defer floating_widget.deinit();
 
-        var hbox = try dvui.box(@src(), .horizontal, .{
+        var hbox = dvui.box(@src(), .horizontal, .{
             .corner_radius = dvui.ButtonWidget.defaults.corner_radiusGet(),
             .background = true,
             .border = dvui.Rect.all(1),
         });
         defer hbox.deinit();
 
-        if (try dvui.buttonIcon(
-            @src(),
-            "paste",
-            dvui.entypo.clipboard,
-            .{},
-            .{},
-            .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) },
-        )) {
+        if (dvui.buttonIcon(@src(), "paste", dvui.entypo.clipboard, .{}, .{}, .{
+            .min_size_content = .{ .h = 20 },
+            .margin = Rect.all(2),
+        })) {
             self.paste();
         }
 
-        if (try dvui.buttonIcon(
-            @src(),
-            "select all",
-            dvui.entypo.swap,
-            .{},
-            .{},
-            .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) },
-        )) {
+        if (dvui.buttonIcon(@src(), "select all", dvui.entypo.swap, .{}, .{}, .{
+            .min_size_content = .{ .h = 20 },
+            .margin = Rect.all(2),
+        })) {
             self.textLayout.selection.selectAll();
         }
 
-        if (try dvui.buttonIcon(
-            @src(),
-            "cut",
-            dvui.entypo.scissors,
-            .{},
-            .{},
-            .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) },
-        )) {
+        if (dvui.buttonIcon(@src(), "cut", dvui.entypo.scissors, .{}, .{}, .{
+            .min_size_content = .{ .h = 20 },
+            .margin = Rect.all(2),
+        })) {
             self.cut();
         }
 
-        if (try dvui.buttonIcon(
-            @src(),
-            "copy",
-            dvui.entypo.copy,
-            .{},
-            .{},
-            .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) },
-        )) {
+        if (dvui.buttonIcon(@src(), "copy", dvui.entypo.copy, .{}, .{}, .{
+            .min_size_content = .{ .h = 20 },
+            .margin = Rect.all(2),
+        })) {
             self.textLayout.copy();
         }
     }
@@ -241,7 +225,7 @@ pub fn processEvents(self: *TextEntryWidget) void {
     }
 }
 
-pub fn draw(self: *TextEntryWidget) !void {
+pub fn draw(self: *TextEntryWidget) void {
     const focused = (self.wd.id == dvui.focusedWidgetId());
 
     if (focused) {
@@ -259,7 +243,7 @@ pub fn draw(self: *TextEntryWidget) !void {
         var sstart: ?usize = null;
         var scursor: ?usize = null;
         var send: ?usize = null;
-        var utf8it = (try std.unicode.Utf8View.init(self.text[0..self.len])).iterator();
+        var utf8it = (std.unicode.Utf8View.initUnchecked(self.text[0..self.len])).iterator();
         while (utf8it.nextCodepoint()) |codepoint| {
             if (sstart == null and sel.start == bytes) sstart = count * pc.len;
             if (scursor == null and sel.cursor == bytes) scursor = count * pc.len;
@@ -274,19 +258,24 @@ pub fn draw(self: *TextEntryWidget) !void {
         sel.start = sstart.?;
         sel.cursor = scursor.?;
         sel.end = send.?;
-        var password_str: []u8 = try dvui.currentWindow().lifo().alloc(u8, count * pc.len);
-        defer dvui.currentWindow().lifo().free(password_str);
-        for (0..count) |i| {
-            for (0..pc.len) |pci| {
-                password_str[i * pc.len + pci] = pc[pci];
+        const password_str: ?[]u8 = dvui.currentWindow().lifo().alloc(u8, count * pc.len) catch null;
+        if (password_str) |pstr| {
+            defer dvui.currentWindow().lifo().free(pstr);
+            for (0..count) |i| {
+                for (0..pc.len) |pci| {
+                    pstr[i * pc.len + pci] = pc[pci];
+                }
             }
+            self.textLayout.addText(pstr, self.wd.options.strip());
+        } else {
+            dvui.log.warn("Could not allocate password_str, falling back to one single password_str", .{});
+            self.textLayout.addText(pc, self.wd.options.strip());
         }
-        try self.textLayout.addText(password_str, self.wd.options.strip());
     } else {
-        try self.textLayout.addText(self.text[0..self.len], self.wd.options.strip());
+        self.textLayout.addText(self.text[0..self.len], self.wd.options.strip());
     }
 
-    try self.textLayout.addTextDone(self.wd.options.strip());
+    self.textLayout.addTextDone(self.wd.options.strip());
 
     if (self.init_opts.password_char) |pc| {
         // reset selection
@@ -296,7 +285,8 @@ pub fn draw(self: *TextEntryWidget) !void {
         var sstart: ?usize = null;
         var scursor: ?usize = null;
         var send: ?usize = null;
-        var utf8it = (try std.unicode.Utf8View.init(self.text[0..self.len])).iterator();
+        // NOTE: We assume that all text in the area it valid utf8, loop with exit early on invalid utf8
+        var utf8it = (std.unicode.Utf8View.initUnchecked(self.text[0..self.len])).iterator();
         while (utf8it.nextCodepoint()) |codepoint| {
             if (sstart == null and sel.start == count * pc.len) sstart = bytes;
             if (scursor == null and sel.cursor == count * pc.len) scursor = bytes;
@@ -314,17 +304,17 @@ pub fn draw(self: *TextEntryWidget) !void {
     }
 
     if (focused) {
-        try self.drawCursor();
+        self.drawCursor();
     }
 
     dvui.clipSet(self.prevClip);
 
     if (focused) {
-        try self.wd.focusBorder();
+        self.wd.focusBorder();
     }
 }
 
-pub fn drawCursor(self: *TextEntryWidget) !void {
+pub fn drawCursor(self: *TextEntryWidget) void {
     var sel = self.textLayout.selectionGet(self.len);
     if (sel.empty()) {
         // the cursor can be slightly outside the textLayout clip
@@ -332,7 +322,7 @@ pub fn drawCursor(self: *TextEntryWidget) !void {
 
         var crect = self.textLayout.cursor_rect.plus(.{ .x = -1 });
         crect.w = 2;
-        try self.textLayout.screenRectScale(crect).r.fill(.{}, .{ .color = self.wd.options.color(.accent) });
+        self.textLayout.screenRectScale(crect).r.fill(.{}, .{ .color = self.wd.options.color(.accent) });
     }
 }
 
@@ -827,10 +817,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn paste(self: *TextEntryWidget) void {
-    const clip_text = dvui.clipboardText() catch |err| blk: {
-        dvui.log.err("clipboardText error {!}\n", .{err});
-        break :blk "";
-    };
+    const clip_text = dvui.clipboardText();
 
     if (self.init_opts.multiline) {
         self.textTyped(clip_text, false);
@@ -852,9 +839,7 @@ pub fn cut(self: *TextEntryWidget) void {
     var sel = self.textLayout.selectionGet(self.len);
     if (!sel.empty()) {
         // copy selection to clipboard
-        dvui.clipboardTextSet(self.text[sel.start..sel.end]) catch |err| {
-            dvui.log.err("clipboardTextSet error {!}\n", .{err});
-        };
+        dvui.clipboardTextSet(self.text[sel.start..sel.end]);
 
         // delete selection
         std.mem.copyForwards(u8, self.text[sel.start..], self.text[sel.end..self.len]);

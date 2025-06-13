@@ -48,7 +48,7 @@ pub const Line = struct {
     plot: *PlotWidget,
     path: dvui.Path.Builder,
 
-    pub fn point(self: *Line, x: f64, y: f64) !void {
+    pub fn point(self: *Line, x: f64, y: f64) void {
         const data: Data = .{ .x = x, .y = y };
         self.plot.dataForRange(data);
         const screen_p = self.plot.dataToScreen(data);
@@ -59,11 +59,11 @@ pub const Line = struct {
                 self.plot.hover_data = data;
             }
         }
-        try self.path.points.append(screen_p);
+        self.path.addPoint(screen_p);
     }
 
-    pub fn stroke(self: *Line, thick: f32, color: dvui.Color) !void {
-        try self.path.build().stroke(.{ .thickness = thick * self.plot.data_rs.s, .color = color });
+    pub fn stroke(self: *Line, thick: f32, color: dvui.Color) void {
+        self.path.build().stroke(.{ .thickness = thick * self.plot.data_rs.s, .color = color });
     }
 
     pub fn deinit(self: *Line) void {
@@ -97,7 +97,7 @@ pub fn dataForRange(self: *PlotWidget, data: Data) void {
     self.data_max.y = @max(self.data_max.y, data.y);
 }
 
-pub fn install(self: *PlotWidget) !void {
+pub fn install(self: *PlotWidget) void {
     if (self.init_options.x_axis) |xa| {
         self.x_axis = xa;
     } else {
@@ -116,11 +116,11 @@ pub fn install(self: *PlotWidget) !void {
         self.y_axis = &self.y_axis_store;
     }
 
-    try self.box.install();
-    try self.box.drawBackground();
+    self.box.install();
+    self.box.drawBackground();
 
     if (self.init_options.title) |title| {
-        try dvui.label(@src(), "{s}", .{title}, .{ .gravity_x = 0.5, .font_style = .title_4 });
+        dvui.label(@src(), "{s}", .{title}, .{ .gravity_x = 0.5, .font_style = .title_4 });
     }
 
     //const str = "000";
@@ -132,31 +132,31 @@ pub fn install(self: *PlotWidget) !void {
     if (self.y_axis.name) |_| {
         for (yticks) |m_ytick| {
             if (m_ytick) |ytick| {
-                const tick_str = try std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{ytick});
+                const tick_str = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{ytick}) catch "";
                 defer dvui.currentWindow().lifo().free(tick_str);
                 tick_width = @max(tick_width, tick_font.textSize(tick_str).w);
             }
         }
     }
 
-    var hbox1 = try dvui.box(@src(), .horizontal, .{ .expand = .both });
+    var hbox1 = dvui.box(@src(), .horizontal, .{ .expand = .both });
 
     // y axis
-    var yaxis = try dvui.box(@src(), .horizontal, .{ .expand = .vertical, .min_size_content = .{ .w = tick_width } });
+    var yaxis = dvui.box(@src(), .horizontal, .{ .expand = .vertical, .min_size_content = .{ .w = tick_width } });
     var yaxis_rect = yaxis.data().rect;
     if (self.y_axis.name) |yname| {
         if (yname.len > 0) {
-            try dvui.label(@src(), "{s}", .{yname}, .{ .gravity_y = 0.5 });
+            dvui.label(@src(), "{s}", .{yname}, .{ .gravity_y = 0.5 });
         }
     }
     yaxis.deinit();
 
     // right padding (if adding, need to add a spacer to the right of xaxis as well)
-    //var xaxis_padding = try dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0, .expand = .vertical, .min_size_content = .{ .w = tick_size.w / 2 } });
+    //var xaxis_padding = dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0, .expand = .vertical, .min_size_content = .{ .w = tick_size.w / 2 } });
     //xaxis_padding.deinit();
 
     // data area
-    var data_box = try dvui.box(@src(), .horizontal, .{ .expand = .both });
+    var data_box = dvui.box(@src(), .horizontal, .{ .expand = .both });
 
     // mouse hover
     if (self.init_options.mouse_hover) {
@@ -183,17 +183,17 @@ pub fn install(self: *PlotWidget) !void {
 
     const bt: f32 = self.init_options.border_thick orelse 0.0;
     if (bt > 0) {
-        try self.data_rs.r.stroke(.{}, .{ .thickness = bt * self.data_rs.s, .color = self.box.data().options.color(.text) });
+        self.data_rs.r.stroke(.{}, .{ .thickness = bt * self.data_rs.s, .color = self.box.data().options.color(.text) });
     }
 
     const pad = 2 * self.data_rs.s;
 
     hbox1.deinit();
 
-    var hbox2 = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+    var hbox2 = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
 
     // bottom left corner under y axis
-    _ = try dvui.spacer(@src(), .{ .w = yaxis_rect.w }, .{ .expand = .vertical });
+    _ = dvui.spacer(@src(), .{ .w = yaxis_rect.w }, .{ .expand = .vertical });
 
     var x_tick_height: f32 = 0;
     if (self.x_axis.name) |_| {
@@ -203,10 +203,10 @@ pub fn install(self: *PlotWidget) !void {
     }
 
     // x axis
-    var xaxis = try dvui.box(@src(), .vertical, .{ .gravity_y = 1.0, .expand = .horizontal, .min_size_content = .{ .h = x_tick_height } });
+    var xaxis = dvui.box(@src(), .vertical, .{ .gravity_y = 1.0, .expand = .horizontal, .min_size_content = .{ .h = x_tick_height } });
     if (self.x_axis.name) |xname| {
         if (xname.len > 0) {
-            try dvui.label(@src(), "{s}", .{xname}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+            dvui.label(@src(), "{s}", .{xname}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
         }
     }
     xaxis.deinit();
@@ -218,7 +218,7 @@ pub fn install(self: *PlotWidget) !void {
         for (yticks) |m_ytick| {
             if (m_ytick) |ytick| {
                 const tick: Data = .{ .x = self.x_axis.min orelse 0, .y = ytick };
-                const tick_str = try std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{ytick});
+                const tick_str = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{ytick}) catch "";
                 defer dvui.currentWindow().lifo().free(tick_str);
                 const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
                 var tick_p = self.dataToScreen(tick);
@@ -228,7 +228,9 @@ pub fn install(self: *PlotWidget) !void {
                 //tick_p.y -= tick_str_size.h / 2;
                 const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_p).toSize(tick_str_size), .s = self.data_rs.s };
 
-                try dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) });
+                dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) }) catch |err| {
+                    dvui.logError(@src(), err, "y axis tick text for {d}", .{ytick});
+                };
             }
         }
     }
@@ -239,7 +241,7 @@ pub fn install(self: *PlotWidget) !void {
         for (xticks) |m_xtick| {
             if (m_xtick) |xtick| {
                 const tick: Data = .{ .x = xtick, .y = self.y_axis.min orelse 0 };
-                const tick_str = try std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{xtick});
+                const tick_str = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{xtick}) catch "";
                 defer dvui.currentWindow().lifo().free(tick_str);
                 const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
                 var tick_p = self.dataToScreen(tick);
@@ -249,7 +251,9 @@ pub fn install(self: *PlotWidget) !void {
                 tick_p.y += pad;
                 const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_p).toSize(tick_str_size), .s = self.data_rs.s };
 
-                try dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) });
+                dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) }) catch |err| {
+                    dvui.logError(@src(), err, "x axis tick text for {d}", .{xtick});
+                };
             }
         }
     }
@@ -298,7 +302,7 @@ pub fn deinit(self: *PlotWidget) void {
         p.x -= size.w / 2;
         const padding = dvui.LabelWidget.defaults.paddingGet();
         p.y -= size.h + padding.y + padding.h + 8;
-        dvui.label(@src(), "{d}, {d}", .{ hd.x, hd.y }, .{ .rect = Rect.fromPoint(p), .background = true, .border = Rect.all(1), .margin = .{} }) catch {};
+        dvui.label(@src(), "{d}, {d}", .{ hd.x, hd.y }, .{ .rect = Rect.fromPoint(p), .background = true, .border = Rect.all(1), .margin = .{} });
     }
 
     self.box.deinit();

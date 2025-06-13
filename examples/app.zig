@@ -44,59 +44,59 @@ pub fn AppFrame() !dvui.App.Result {
 }
 
 pub fn frame() !dvui.App.Result {
-    var scaler = try dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
+    var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
     scaler.deinit();
 
-    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
     defer scroll.deinit();
 
-    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
     const lorem = "This is a dvui.App example that can compile on multiple backends.";
-    try tl.addText(lorem, .{});
-    try tl.addText("\n\n", .{});
-    try tl.format("Current backend: {s}", .{@tagName(dvui.backend.kind)}, .{});
+    tl.addText(lorem, .{});
+    tl.addText("\n\n", .{});
+    tl.format("Current backend: {s}", .{@tagName(dvui.backend.kind)}, .{});
     if (dvui.backend.kind == .web) {
-        try tl.format(" : {s}", .{if (dvui.backend.wasm.wasm_about_webgl2() == 1) "webgl2" else "webgl (no mipmaps)"}, .{});
+        tl.format(" : {s}", .{if (dvui.backend.wasm.wasm_about_webgl2() == 1) "webgl2" else "webgl (no mipmaps)"}, .{});
     }
     tl.deinit();
 
-    var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    try tl2.addText(
+    var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+    tl2.addText(
         \\DVUI
         \\- paints the entire window
         \\- can show floating windows and dialogs
         \\- rest of the window is a scroll area
     , .{});
-    try tl2.addText("\n\n", .{});
-    try tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
-    try tl2.addText("\n\n", .{});
-    try tl2.addText("Framerate is capped by vsync.", .{});
-    try tl2.addText("\n\n", .{});
-    try tl2.addText("Cursor is always being set by dvui.", .{});
-    try tl2.addText("\n\n", .{});
+    tl2.addText("\n\n", .{});
+    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
+    tl2.addText("\n\n", .{});
+    tl2.addText("Framerate is capped by vsync.", .{});
+    tl2.addText("\n\n", .{});
+    tl2.addText("Cursor is always being set by dvui.", .{});
+    tl2.addText("\n\n", .{});
     if (dvui.useFreeType) {
-        try tl2.addText("Fonts are being rendered by FreeType 2.", .{});
+        tl2.addText("Fonts are being rendered by FreeType 2.", .{});
     } else {
-        try tl2.addText("Fonts are being rendered by stb_truetype.", .{});
+        tl2.addText("Fonts are being rendered by stb_truetype.", .{});
     }
     tl2.deinit();
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
-    if (try dvui.button(@src(), label, .{}, .{ .tag = "show-demo-btn" })) {
+    if (dvui.button(@src(), label, .{}, .{ .tag = "show-demo-btn" })) {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
-    //if (try dvui.button(@src(), "Panic", .{}, .{})) {
+    //if (dvui.button(@src(), "Panic", .{}, .{})) {
     //std.debug.panic("This is a panic message after {d}s", .{@divTrunc(dvui.currentWindow().frame_time_ns, std.time.ns_per_s)});
     //}
     if (dvui.backend.kind != .web) {
-        if (try dvui.button(@src(), "Close", .{}, .{})) {
+        if (dvui.button(@src(), "Close", .{}, .{})) {
             return .close;
         }
     }
 
     // look at demo() for examples of dvui widgets, shows in a floating window
-    try dvui.Examples.demo();
+    dvui.Examples.demo();
 
     return .ok;
 }

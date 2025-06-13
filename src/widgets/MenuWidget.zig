@@ -77,11 +77,11 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *MenuWidget) !void {
+pub fn install(self: *MenuWidget) void {
     dvui.parentSet(self.widget());
     self.parentMenu = menuSet(self);
     self.wd.register();
-    try self.wd.borderAndBackground(.{});
+    self.wd.borderAndBackground(.{});
 
     const evts = dvui.events();
     for (evts) |*e| {
@@ -92,8 +92,8 @@ pub fn install(self: *MenuWidget) !void {
     }
 
     self.box = BoxWidget.init(@src(), .{ .dir = self.init_opts.dir }, self.wd.options.strip().override(.{ .expand = .both }));
-    try self.box.install();
-    try self.box.drawBackground();
+    self.box.install();
+    self.box.drawBackground();
 }
 
 pub fn close(self: *MenuWidget) void {

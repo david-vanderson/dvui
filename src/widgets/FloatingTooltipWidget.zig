@@ -100,7 +100,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Op
     return self;
 }
 
-pub fn shown(self: *FloatingTooltipWidget) !bool {
+pub fn shown(self: *FloatingTooltipWidget) bool {
     // protect against this being called multiple times
     if (self.installed) {
         return true;
@@ -144,7 +144,7 @@ pub fn shown(self: *FloatingTooltipWidget) !bool {
         }
         //std.debug.print("rect {}\n", .{self.wd.rect});
 
-        try self.install();
+        self.install();
 
         if (self.init_options.interactive) {
             // check for mouse position in tooltip window rect
@@ -165,7 +165,7 @@ pub fn shown(self: *FloatingTooltipWidget) !bool {
     return false;
 }
 
-pub fn install(self: *FloatingTooltipWidget) !void {
+pub fn install(self: *FloatingTooltipWidget) void {
     self.installed = true;
     self.prev_rendering = dvui.renderingSet(false);
 
@@ -176,7 +176,7 @@ pub fn install(self: *FloatingTooltipWidget) !void {
 
     const rs = self.wd.rectScale();
 
-    try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, self.prev_windowId);
+    dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, self.prev_windowId);
     dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
     self.wd.register();
 
@@ -187,7 +187,7 @@ pub fn install(self: *FloatingTooltipWidget) !void {
 
     // scaler is what is drawing our background/border/box_shadow
     self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, self.options.override(.{ .expand = .both }));
-    try self.scaler.install();
+    self.scaler.install();
 
     // clip to just our window (using clipSet since we are not inside our parent)
     _ = dvui.clip(rs.r);

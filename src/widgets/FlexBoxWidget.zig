@@ -35,17 +35,17 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *FlexBoxWidget) !void {
+pub fn install(self: *FlexBoxWidget) void {
     self.wd.register();
     dvui.parentSet(self.widget());
 
     self.prevClip = dvui.clip(self.wd.contentRectScale().r);
 }
 
-pub fn drawBackground(self: *FlexBoxWidget) !void {
+pub fn drawBackground(self: *FlexBoxWidget) void {
     const clip = dvui.clipGet();
     dvui.clipSet(self.prevClip);
-    try self.wd.borderAndBackground(.{});
+    self.wd.borderAndBackground(.{});
     dvui.clipSet(clip);
 }
 

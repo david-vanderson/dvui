@@ -27,9 +27,9 @@ pub fn init(src: std.builtin.SourceLocation, opts: Options) ReorderWidget {
     return self;
 }
 
-pub fn install(self: *ReorderWidget) !void {
+pub fn install(self: *ReorderWidget) void {
     self.wd.register();
-    try self.wd.borderAndBackground(.{});
+    self.wd.borderAndBackground(.{});
 
     dvui.parentSet(self.widget());
 }
@@ -38,9 +38,9 @@ pub fn needFinalSlot(self: *ReorderWidget) bool {
     return self.drag_point != null and !self.found_slot;
 }
 
-pub fn finalSlot(self: *ReorderWidget) !bool {
+pub fn finalSlot(self: *ReorderWidget) bool {
     if (self.needFinalSlot()) {
-        var r = try self.reorderable(@src(), .{ .last_slot = true }, .{});
+        var r = self.reorderable(@src(), .{ .last_slot = true }, .{});
         defer r.deinit();
 
         if (r.insertBefore()) {
@@ -157,9 +157,9 @@ pub const draggableInitOptions = struct {
     reorderable: ?*Reorderable = null,
 };
 
-pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOptions, opts: dvui.Options) !?dvui.Point.Physical {
-    var iw = try dvui.IconWidget.init(src, "reorder_drag_icon", init_opts.tvg_bytes orelse dvui.entypo.menu, .{}, opts);
-    try iw.install();
+pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOptions, opts: dvui.Options) ?dvui.Point.Physical {
+    var iw = dvui.IconWidget.init(src, "reorder_drag_icon", init_opts.tvg_bytes orelse dvui.entypo.menu, .{}, opts);
+    iw.install();
     var ret: ?dvui.Point.Physical = null;
     loop: for (dvui.events()) |*e| {
         if (!iw.matchEvent(e))
@@ -189,15 +189,15 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
             else => {},
         }
     }
-    try iw.draw();
+    iw.draw();
     iw.deinit();
     return ret;
 }
 
-pub fn reorderable(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: Reorderable.InitOptions, opts: Options) !*Reorderable {
+pub fn reorderable(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: Reorderable.InitOptions, opts: Options) *Reorderable {
     const ret = dvui.widgetAlloc(Reorderable);
     ret.* = Reorderable.init(src, self, init_opts, opts);
-    try ret.install();
+    ret.install();
     return ret;
 }
 
@@ -248,7 +248,7 @@ pub const Reorderable = struct {
         return false;
     }
 
-    pub fn install(self: *Reorderable) !void {
+    pub fn install(self: *Reorderable) void {
         self.installed = true;
         if (self.reorder.drag_point) |dp| {
             const topleft = dp.plus(dvui.dragOffset());
@@ -258,7 +258,7 @@ pub const Reorderable = struct {
                 dvui.parentSet(self.widget());
 
                 self.floating_widget = dvui.FloatingWidget.init(@src(), .{ .rect = Rect.fromPoint(.cast(topleft.toNatural())), .min_size_content = self.reorder.reorderable_size });
-                try self.floating_widget.?.install();
+                self.floating_widget.?.install();
             } else {
                 if (self.init_options.last_slot) {
                     self.wd = WidgetData.init(self.wd.src, .{}, self.options.override(.{ .min_size_content = self.reorder.reorderable_size }));
@@ -274,7 +274,7 @@ pub const Reorderable = struct {
                     self.reorder.found_slot = true;
 
                     if (self.init_options.draw_target) {
-                        try rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent });
+                        rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent });
                     }
 
                     if (self.init_options.reinstall and !self.init_options.last_slot) {

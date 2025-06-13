@@ -26,19 +26,23 @@ pub fn init(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: any
     // Validate utf8 formatting
     const str, const alloc = blk: {
         const str = std.fmt.allocPrint(cw.lifo(), fmt, args) catch |err| {
-            logAndHighlight(src, opts, err);
+            const newid = dvui.parentGet().extendId(src, opts.idExtra());
+            dvui.logError(@src(), err, "id {x} (highlighted in red) could not print its content", .{newid});
+            dvui.currentWindow().debug_widget_id = newid;
             break :blk .{ fmt, null };
         };
         // We need to use `long_term_arena` because otherwise we
         // will not be able to free the memory of the allocPrint
         const utf8 = dvui.toUtf8(cw.arena(), str) catch |err| {
-            logAndHighlight(src, opts, err);
+            const newid = dvui.parentGet().extendId(src, opts.idExtra());
+            dvui.logError(@src(), err, "id {x} (highlighted in red) could not allocate valid utf8 slice", .{newid});
+            dvui.currentWindow().debug_widget_id = newid;
             // We contained invalid utf8, so textSize will fail later
             break :blk .{ str, cw.lifo() };
         };
         if (str.ptr == utf8.ptr) break :blk .{ str, cw.lifo() };
         cw.lifo().free(str);
-        dvui.log.debug("{s}:{d}: LabelWidget format output was invalid utf8 for '{s}'.", .{ src.file, src.line, str });
+        dvui.log.debug("LabelWidget format output was invalid utf8 for {s} with '{any}'.", .{ fmt, args });
         break :blk .{ utf8, null };
     };
     return initNoFmtAllocator(src, str, alloc, opts);
@@ -80,12 +84,12 @@ pub fn data(self: *LabelWidget) *WidgetData {
     return &self.wd;
 }
 
-pub fn install(self: *LabelWidget) !void {
+pub fn install(self: *LabelWidget) void {
     self.wd.register();
-    try self.wd.borderAndBackground(.{});
+    self.wd.borderAndBackground(.{});
 }
 
-pub fn draw(self: *LabelWidget) !void {
+pub fn draw(self: *LabelWidget) void {
     const rect = dvui.placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
     var rs = self.wd.parent.screenRectScale(rect);
     const oldclip = dvui.clip(rs.r);
@@ -105,13 +109,15 @@ pub fn draw(self: *LabelWidget) !void {
         const liners = self.wd.parent.screenRectScale(lineRect);
 
         rs.r.x = liners.r.x;
-        try dvui.renderText(.{
+        dvui.renderText(.{
             .font = self.wd.options.fontGet(),
             .text = line,
             .rs = rs,
             .color = self.wd.options.color(.text),
             .debug = self.wd.options.debugGet(),
-        });
+        }) catch |err| {
+            dvui.logError(@src(), err, "Failed to render text: {s}", .{line});
+        };
         rs.r.y += rs.s * tsize.h;
     }
     dvui.clipSet(oldclip);
