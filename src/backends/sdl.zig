@@ -369,7 +369,16 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) !bool {
 pub fn refresh(_: *SDLBackend) void {
     var ue = std.mem.zeroes(c.SDL_Event);
     ue.type = if (sdl3) c.SDL_EVENT_USER else c.SDL_USEREVENT;
-    toErr(c.SDL_PushEvent(&ue), "SDL_PushEvent in refresh") catch {};
+    if (sdl3) {
+        toErr(c.SDL_PushEvent(&ue), "SDL_PushEvent in refresh") catch {};
+    } else {
+        // Returns 1 on success, 0 if the event was filtered, or a negative error code on failure
+        const ret = c.SDL_PushEvent(&ue);
+        if (ret == 0) {
+            log.debug("Refresh event was filtered", .{});
+        }
+        toErr(if (ret < 0) ret else SDL_SUCCESS, "SDL_PushEvent in refresh") catch {};
+    }
 }
 
 pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !bool {
