@@ -628,7 +628,7 @@ pub fn themeSerialization() !void {
     var serialize_box = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer serialize_box.deinit();
 
-    try dvui.labelNoFmt(@src(), "TODO: demonstrate loading a quicktheme here", .{});
+    try dvui.labelNoFmt(@src(), "TODO: demonstrate loading a quicktheme here", .{}, .{});
 }
 
 /// ![image](Examples-basic_widgets.png)
@@ -639,13 +639,7 @@ pub fn basicWidgets() !void {
 
         try dvui.label(@src(), "Label", .{}, .{ .gravity_y = 0.5 });
 
-        {
-            // need to wrap the this, otherwise .gravity_x = 0.5 will make it
-            // not packed in the containing box
-            var vbox = try dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
-            defer vbox.deinit();
-            try dvui.label(@src(), "Multi-line\nLabel", .{}, .{ .gravity_x = 0.5 });
-        }
+        try dvui.labelEx(@src(), "Multi-line\nLabel", .{}, .{ .align_x = 0.5 }, .{ .gravity_y = 0.5 });
 
         _ = try dvui.button(@src(), "Button", .{}, .{ .gravity_y = 0.5 });
         _ = try dvui.button(@src(), "Multi-line\nButton", .{}, .{});
@@ -680,7 +674,7 @@ pub fn basicWidgets() !void {
                     opts,
                 );
                 _ = try dvui.spacer(@src(), .{ .w = 4 }, .{});
-                try dvui.labelNoFmt(@src(), "Icon+Gray", opts);
+                try dvui.labelNoFmt(@src(), "Icon+Gray", .{}, opts);
 
                 if (bw.clicked()) {
                     try dvui.toast(@src(), .{ .message = "This button is grayed out\nbut still clickable." });
@@ -905,7 +899,7 @@ pub fn dropdownAdvanced() !void {
                 .{},
                 opts.override(.{ .gravity_y = 0.5 }),
             );
-            try dvui.labelNoFmt(@src(), "icon with text", opts.override(.{ .padding = .{ .x = 6 } }));
+            try dvui.labelNoFmt(@src(), "icon with text", .{}, opts.override(.{ .padding = .{ .x = 6 } }));
 
             if (mi.activeRect()) |_| {
                 dd.close();
@@ -927,7 +921,7 @@ pub fn dropdownAdvanced() !void {
             var opts: Options = if (mi.show_active) dvui.themeGet().style_accent else .{};
 
             _ = try dvui.image(@src(), .{ .name = "zig favicon", .bytes = zig_favicon }, opts.override(.{ .gravity_x = 0.5 }));
-            try dvui.labelNoFmt(@src(), "image above text", opts.override(.{ .gravity_x = 0.5, .padding = .{} }));
+            try dvui.labelNoFmt(@src(), "image above text", .{}, opts.override(.{ .gravity_x = 0.5, .padding = .{} }));
 
             if (mi.activeRect()) |_| {
                 dd.close();
@@ -2353,7 +2347,7 @@ pub fn menus() !void {
         }
     }
 
-    try dvui.labelNoFmt(@src(), "Right click for a context menu", .{});
+    try dvui.labelNoFmt(@src(), "Right click for a context menu", .{}, .{});
 
     _ = try dvui.spacer(@src(), .{ .h = 20 }, .{});
 
@@ -2461,7 +2455,7 @@ pub fn menus() !void {
                         label_opts.color_text = .text_press;
                     }
 
-                    try dvui.labelNoFmt(@src(), tabname, label_opts);
+                    try dvui.labelNoFmt(@src(), tabname, .{}, label_opts);
 
                     if (tab.clicked()) {
                         Data.tab = i;
@@ -2680,7 +2674,7 @@ pub fn scrolling(comptime data: u8) !void {
             .Invalid => "Invalid",
             .Valid, .Empty => " ",
         };
-        try dvui.labelNoFmt(@src(), label, .{});
+        try dvui.labelNoFmt(@src(), label, .{}, .{});
         if (result.value == .Valid and result.enter_pressed) {
             scroll_to_msg = result.value.Valid;
         }
@@ -3344,7 +3338,7 @@ pub fn animations() !void {
             try button_wiggle.install();
             button_wiggle.processEvents();
             try button_wiggle.drawBackground();
-            try dvui.labelNoFmt(@src(), "Wiggle", button_wiggle.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
+            try dvui.labelNoFmt(@src(), "Wiggle", .{}, button_wiggle.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
             try button_wiggle.drawFocus();
 
             if (button_wiggle.clicked()) {
@@ -3385,11 +3379,11 @@ pub fn animations() !void {
             var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            try dvui.labelNoFmt(@src(), "Animate", .{ .gravity_y = 0.5 });
+            try dvui.labelNoFmt(@src(), "Animate", .{}, .{ .gravity_y = 0.5 });
 
             _ = try dvui.dropdown(@src(), &.{ "alpha", "horizontal", "vertical" }, &global.animation_choice, .{});
 
-            try dvui.labelNoFmt(@src(), "easing", .{ .gravity_y = 0.5 });
+            try dvui.labelNoFmt(@src(), "easing", .{}, .{ .gravity_y = 0.5 });
 
             var recalc = false;
             if (dvui.firstFrame(hbox.data().id)) {
@@ -3464,17 +3458,17 @@ pub fn animations() !void {
     }
 
     if (try dvui.expander(@src(), "Spinner", .{}, .{ .expand = .horizontal })) {
-        try dvui.labelNoFmt(@src(), "Spinner maxes out frame rate", .{});
+        try dvui.labelNoFmt(@src(), "Spinner maxes out frame rate", .{}, .{});
         try dvui.spinner(@src(), .{ .color_text = .{ .color = .{ .r = 100, .g = 200, .b = 100 } } });
     }
 
     if (try dvui.expander(@src(), "Clock", .{}, .{ .expand = .horizontal })) {
-        try dvui.labelNoFmt(@src(), "Schedules a frame at the beginning of each second", .{});
+        try dvui.labelNoFmt(@src(), "Schedules a frame at the beginning of each second", .{}, .{});
 
         const millis = @divFloor(dvui.frameTimeNS(), 1_000_000);
         const left = @as(i32, @intCast(@rem(millis, 1000)));
 
-        var mslabel = dvui.LabelWidget.init(@src(), "{d:0>3} ms into second", .{@as(u32, @intCast(left))}, .{});
+        var mslabel = dvui.LabelWidget.init(@src(), "{d:0>3} ms into second", .{@as(u32, @intCast(left))}, .{}, .{});
         try mslabel.install();
         mslabel.processEvents();
         try mslabel.draw();
@@ -3585,7 +3579,7 @@ pub fn debuggingErrors() !void {
     if (try dvui.expander(@src(), "Invalid utf-8 text", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
-        try dvui.labelNoFmt(@src(), "this \xFFtext\xFF includes some \xFF invalid utf-8\xFF\xFF\xFF which is replaced with \xFF", .{});
+        try dvui.labelNoFmt(@src(), "this \xFFtext\xFF includes some \xFF invalid utf-8\xFF\xFF\xFF which is replaced with \xFF", .{}, .{});
     }
 
     if (try dvui.expander(@src(), "Scroll child after expanded child (will log error)", .{}, .{ .expand = .horizontal })) {
@@ -3792,7 +3786,7 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
                 const toast_text = try std.fmt.bufPrint(&buf2, "Copied \"{s}\"", .{text});
                 try dvui.toast(@src(), .{ .message = toast_text });
             }
-            try dvui.labelNoFmt(@src(), text, .{ .gravity_y = 0.5 });
+            try dvui.labelNoFmt(@src(), text, .{}, .{ .gravity_y = 0.5 });
 
             const iconboxId = iconbox.data().id;
 
@@ -4026,7 +4020,7 @@ fn gridStyling() !void {
             {
                 var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
                 defer hbox.deinit();
-                try dvui.labelNoFmt(@src(), "Margin:", .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
+                try dvui.labelNoFmt(@src(), "Margin:", .{}, .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
                 const result = try dvui.textEntryNumber(@src(), f32, .{ .min = 0, .max = 10, .value = &local.margin, .show_min_max = true }, .{});
                 if (result.changed and result.value == .Valid) {
                     local.margin = result.value.Valid;
@@ -4036,7 +4030,7 @@ fn gridStyling() !void {
             {
                 var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
                 defer hbox.deinit();
-                try dvui.labelNoFmt(@src(), "Padding:", .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
+                try dvui.labelNoFmt(@src(), "Padding:", .{}, .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
                 const result = try dvui.textEntryNumber(@src(), f32, .{ .min = 0, .max = 10, .value = &local.padding, .show_min_max = true }, .{});
                 if (result.changed and result.value == .Valid) {
                     local.padding = result.value.Valid;

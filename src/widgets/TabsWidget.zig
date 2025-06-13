@@ -70,7 +70,7 @@ pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8) !bool {
         label_opts.color_text = .{ .name = .text_press };
     }
 
-    try dvui.labelNoFmt(@src(), text, label_opts);
+    try dvui.labelNoFmt(@src(), text, .{}, label_opts);
 
     return tab.clicked();
 }

@@ -110,7 +110,7 @@ fn colorPicker(result: *dvui.Color) !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        try dvui.labelNoFmt(@src(), &color_hex, .{
+        try dvui.labelNoFmt(@src(), &color_hex, .{}, .{
             .color_text = .{ .color = result.* },
             .gravity_y = 0.5,
         });

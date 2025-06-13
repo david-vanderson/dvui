@@ -169,7 +169,7 @@ fn gui_frame() !void {
     }
 
     {
-        try dvui.labelNoFmt(@src(), "These are drawn directly by the backend, not going through DVUI.", .{ .margin = .{ .x = 4 } });
+        try dvui.labelNoFmt(@src(), "These are drawn directly by the backend, not going through DVUI.", .{}, .{ .margin = .{ .x = 4 } });
 
         var box = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
         defer box.deinit();
