@@ -402,7 +402,8 @@ pub fn build(b: *std.Build) !void {
             }
         }
 
-        b.getInstallStep().dependOn(docs_step);
+        // Don't add to normal install step as it fails in ci
+        // b.getInstallStep().dependOn(docs_step);
 
         // Use customized index.html
         const add_doc_logo = b.addExecutable(.{
