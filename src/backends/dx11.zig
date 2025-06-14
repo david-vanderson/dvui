@@ -1011,34 +1011,6 @@ pub fn openURL(self: Context, url: []const u8) !void {
 
 pub fn refresh(_: Context) void {}
 
-fn addEvent(_: Context, window: *dvui.Window, key_event: KeyEvent) !bool {
-    const event = key_event.target;
-    const action = key_event.action;
-    switch (event) {
-        .keyboard_key => |ev| {
-            return window.addEventKey(.{
-                .code = ev,
-                .action = if (action == .up) .up else .down,
-                .mod = dvui.enums.Mod.none,
-            });
-        },
-        .mouse_key => |ev| {
-            return window.addEventMouseButton(ev, if (action == .up) .release else .press);
-        },
-        .mouse_event => |ev| {
-            return window.addEventMouseMotionPhysical(.{ .x = @floatFromInt(ev.x), .y = @floatFromInt(ev.y) });
-        },
-        .wheel_event => |ev| {
-            return window.addEventMouseWheel(@floatFromInt(ev), .vertical);
-        },
-        .none => return false,
-    }
-}
-
-pub fn addAllEvents(_: Context, _: *dvui.Window) !bool {
-    return false;
-}
-
 pub fn setCursor(self: Context, new_cursor: dvui.enums.Cursor) void {
     const converted_cursor = switch (new_cursor) {
         .arrow => win32.IDC_ARROW,
@@ -1163,141 +1135,124 @@ pub fn wndProc(
             };
             return 0;
         },
-        win32.WM_KEYDOWN, win32.WM_SYSKEYDOWN => {
-            if (std.meta.intToEnum(win32.VIRTUAL_KEY, wparam)) |as_vkey| {
-                const conv_vkey = convertVKeyToDvuiKey(as_vkey);
-                const state = stateFromHwnd(hwnd);
-                const dk = DvuiKey{ .keyboard_key = conv_vkey };
-                _ = contextFromHwnd(hwnd).addEvent(
-                    &state.dvui_window,
-                    KeyEvent{ .target = dk, .action = .down },
-                ) catch {};
-            } else |err| {
-                log.err("invalid key found: {}", .{err});
-            }
-            return if (umsg == win32.WM_SYSKEYDOWN)
-                win32.DefWindowProcW(hwnd, umsg, wparam, lparam)
-            else
-                0;
-        },
-        win32.WM_LBUTTONDOWN, win32.WM_LBUTTONDBLCLK => {
-            const lbutton = dvui.enums.Button.left;
-            const dk = DvuiKey{ .mouse_key = lbutton };
-            const state = stateFromHwnd(hwnd);
-            _ = contextFromHwnd(hwnd).addEvent(
-                &state.dvui_window,
-                KeyEvent{ .target = dk, .action = .down },
-            ) catch {};
-            return 0;
-        },
-        win32.WM_RBUTTONDOWN => {
-            const rbutton = dvui.enums.Button.right;
-            const state = stateFromHwnd(hwnd);
-            const dk = DvuiKey{ .mouse_key = rbutton };
-            _ = contextFromHwnd(hwnd).addEvent(
-                &state.dvui_window,
-                KeyEvent{ .target = dk, .action = .down },
-            ) catch {};
-            return 0;
-        },
-        win32.WM_MBUTTONDOWN => {
-            const mbutton = dvui.enums.Button.middle;
-            const state = stateFromHwnd(hwnd);
-            const dk = DvuiKey{ .mouse_key = mbutton };
-            _ = contextFromHwnd(hwnd).addEvent(
-                &state.dvui_window,
-                KeyEvent{ .target = dk, .action = .down },
-            ) catch {};
-            return 0;
-        },
-        win32.WM_XBUTTONDOWN => {
-            const xbutton: packed struct { _upper: u16, which: u16, _lower: u32 } = @bitCast(wparam);
-            const variant = if (xbutton.which == 1) dvui.enums.Button.four else dvui.enums.Button.five;
-            const state = stateFromHwnd(hwnd);
-            const dk = DvuiKey{ .mouse_key = variant };
-            _ = contextFromHwnd(hwnd).addEvent(
-                &state.dvui_window,
-                KeyEvent{ .target = dk, .action = .down },
+        // All mouse events
+        win32.WM_LBUTTONDOWN,
+        win32.WM_LBUTTONDBLCLK,
+        win32.WM_RBUTTONDOWN,
+        win32.WM_MBUTTONDOWN,
+        win32.WM_XBUTTONDOWN,
+        win32.WM_LBUTTONUP,
+        win32.WM_RBUTTONUP,
+        win32.WM_MBUTTONUP,
+        win32.WM_XBUTTONUP,
+        => |msg| {
+            const button: dvui.enums.Button = switch (msg) {
+                win32.WM_LBUTTONDOWN, win32.WM_LBUTTONDBLCLK, win32.WM_LBUTTONUP => .left,
+                win32.WM_RBUTTONDOWN, win32.WM_RBUTTONUP => .right,
+                win32.WM_MBUTTONDOWN, win32.WM_MBUTTONUP => .middle,
+                win32.WM_XBUTTONDOWN, win32.WM_XBUTTONUP => switch (win32.hiword(wparam)) {
+                    0x0001 => .four,
+                    0x0002 => .five,
+                    else => unreachable,
+                },
+                else => unreachable,
+            };
+            _ = stateFromHwnd(hwnd).dvui_window.addEventMouseButton(
+                button,
+                switch (msg) {
+                    win32.WM_LBUTTONDOWN, win32.WM_LBUTTONDBLCLK, win32.WM_MBUTTONDOWN, win32.WM_XBUTTONDOWN => .press,
+                    win32.WM_LBUTTONUP, win32.WM_RBUTTONUP, win32.WM_MBUTTONUP, win32.WM_XBUTTONUP => .release,
+                    else => unreachable,
+                },
             ) catch {};
             return 0;
         },
         win32.WM_MOUSEMOVE => {
-            const lparam_low: i32 = @truncate(lparam);
-            const bits: packed struct { x: i16, y: i16 } = @bitCast(lparam_low);
-            const state = stateFromHwnd(hwnd);
-            const mouse_x, const mouse_y = .{ bits.x, bits.y };
-            _ = contextFromHwnd(hwnd).addEvent(
-                &state.dvui_window,
-                KeyEvent{ .target = DvuiKey{
-                    .mouse_event = .{ .x = mouse_x, .y = mouse_y },
-                }, .action = .down },
-            ) catch {};
-            return 0;
-        },
-        win32.WM_KEYUP, win32.WM_SYSKEYUP => {
-            if (std.meta.intToEnum(win32.VIRTUAL_KEY, wparam)) |as_vkey| {
-                const conv_vkey = convertVKeyToDvuiKey(as_vkey);
-                const state = stateFromHwnd(hwnd);
-                const dk = DvuiKey{ .keyboard_key = conv_vkey };
-                _ = contextFromHwnd(hwnd).addEvent(
-                    &state.dvui_window,
-                    KeyEvent{ .target = dk, .action = .up },
-                ) catch {};
-            } else |err| {
-                log.err("invalid key found: {}", .{err});
-            }
-            return 0;
-        },
-        win32.WM_LBUTTONUP => {
-            const lbutton = dvui.enums.Button.left;
-            const state = stateFromHwnd(hwnd);
-            const dk = DvuiKey{ .mouse_key = lbutton };
-            _ = contextFromHwnd(hwnd).addEvent(
-                &state.dvui_window,
-                KeyEvent{ .target = dk, .action = .up },
-            ) catch {};
-            return 0;
-        },
-        win32.WM_RBUTTONUP => {
-            const rbutton = dvui.enums.Button.right;
-            const state = stateFromHwnd(hwnd);
-            const dk = DvuiKey{ .mouse_key = rbutton };
-            _ = contextFromHwnd(hwnd).addEvent(
-                &state.dvui_window,
-                KeyEvent{ .target = dk, .action = .up },
-            ) catch {};
-            return 0;
-        },
-        win32.WM_MBUTTONUP => {
-            const mbutton = dvui.enums.Button.middle;
-            const state = stateFromHwnd(hwnd);
-            const dk = DvuiKey{ .mouse_key = mbutton };
-            _ = contextFromHwnd(hwnd).addEvent(
-                &state.dvui_window,
-                KeyEvent{ .target = dk, .action = .up },
-            ) catch {};
-            return 0;
-        },
-        win32.WM_XBUTTONUP => {
-            const xbutton: packed struct { _upper: u16, which: u16, _lower: u32 } = @bitCast(wparam);
-            const variant = if (xbutton.which == 1) dvui.enums.Button.four else dvui.enums.Button.five;
-            const state = stateFromHwnd(hwnd);
-            const dk = DvuiKey{ .mouse_key = variant };
-            _ = contextFromHwnd(hwnd).addEvent(
-                &state.dvui_window,
-                KeyEvent{ .target = dk, .action = .up },
+            const x = win32.xFromLparam(lparam);
+            const y = win32.yFromLparam(lparam);
+            _ = stateFromHwnd(hwnd).dvui_window.addEventMouseMotionPhysical(
+                .{ .x = @floatFromInt(x), .y = @floatFromInt(y) },
             ) catch {};
             return 0;
         },
         win32.WM_MOUSEWHEEL => {
-            const higher: isize = @intCast(wparam >> 16);
-            const wheel_info: i16 = @truncate(higher);
-            const state = stateFromHwnd(hwnd);
-            _ = contextFromHwnd(hwnd).addEvent(&state.dvui_window, KeyEvent{
-                .target = .{ .wheel_event = wheel_info },
-                .action = .none,
-            }) catch {};
+            const wheel_delta: i16 = @bitCast(win32.hiword(wparam));
+            _ = stateFromHwnd(hwnd).dvui_window.addEventMouseWheel(
+                @floatFromInt(wheel_delta),
+                // TODO: Should this always be vertical?
+                .vertical,
+            ) catch {};
             return 0;
+        },
+        // All key events
+        win32.WM_KEYUP,
+        win32.WM_SYSKEYUP,
+        win32.WM_KEYDOWN,
+        win32.WM_SYSKEYDOWN,
+        => |msg| {
+            // https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#keystroke-message-flags
+            const KeystrokeMessageFlags = packed struct(u32) {
+                /// The repeat count for the current message. The value is the number of times
+                /// the keystroke is autorepeated as a result of the user holding down the key.
+                /// The repeat count is always 1 for a WM_KEYUP message.
+                repeat_count: u16,
+                /// The scan code. The value depends on the OEM.
+                scan_code: u8,
+                /// Indicates whether the key is an extended key, such as the right-hand ALT
+                /// and CTRL keys that appear on an enhanced 101- or 102-key keyboard. The value
+                /// is 1 if it is an extended key; otherwise, it is 0.
+                is_extended_key: bool,
+                _reserved: u4,
+                /// The context code. The value is always 0 for a WM_KEYUP message.
+                has_alt_down: bool,
+                /// The previous key state. The value is always 1 for a WM_KEYUP message.
+                was_key_down: bool,
+                /// The transition state. The value is always 1 for a WM_KEYUP message.
+                is_key_released: bool,
+            };
+            const info: KeystrokeMessageFlags = @bitCast(@as(i32, @truncate(lparam)));
+
+            if (std.meta.intToEnum(win32.VIRTUAL_KEY, wparam)) |as_vkey| {
+                // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getasynckeystate
+                // NOTE: If the key is pressed, the most significant bit is set.
+                //       For a signed integer that means it's a negative number
+                //       if the key is currently down.
+                var mods = dvui.enums.Mod.none;
+                if (win32.GetAsyncKeyState(@intFromEnum(win32.VK_LSHIFT)) < 0) mods.combine(.lshift);
+                if (win32.GetAsyncKeyState(@intFromEnum(win32.VK_RSHIFT)) < 0) mods.combine(.rshift);
+                if (win32.GetAsyncKeyState(@intFromEnum(win32.VK_LCONTROL)) < 0) mods.combine(.lcontrol);
+                if (win32.GetAsyncKeyState(@intFromEnum(win32.VK_RCONTROL)) < 0) mods.combine(.rcontrol);
+                if (win32.GetAsyncKeyState(@intFromEnum(win32.VK_LMENU)) < 0) mods.combine(.lalt);
+                if (win32.GetAsyncKeyState(@intFromEnum(win32.VK_RMENU)) < 0) mods.combine(.ralt);
+                // Command mods would be the windows key, which we do not handle
+
+                const code = convertVKeyToDvuiKey(as_vkey);
+
+                const state = stateFromHwnd(hwnd);
+                _ = state.dvui_window.addEventKey(.{
+                    .code = code,
+                    .action = switch (msg) {
+                        win32.WM_KEYDOWN, win32.WM_SYSKEYDOWN => if (info.was_key_down) .repeat else .down,
+                        win32.WM_KEYUP, win32.WM_SYSKEYUP => .up,
+                        else => unreachable,
+                    },
+                    .mod = mods,
+                }) catch {};
+                // Repeats are counted, so we produce an event for each additional repeat
+                for (1..info.repeat_count) |_| {
+                    _ = state.dvui_window.addEventKey(.{
+                        .code = code,
+                        .action = .repeat,
+                        .mod = mods,
+                    }) catch {};
+                }
+            } else |err| {
+                log.err("invalid key found: {}", .{err});
+            }
+            return switch (msg) {
+                win32.WM_SYSKEYDOWN, win32.WM_SYSKEYUP => win32.DefWindowProcW(hwnd, umsg, wparam, lparam),
+                else => 0,
+            };
         },
         win32.WM_CHAR => {
             const state = stateFromHwnd(hwnd);
@@ -1423,16 +1378,26 @@ fn createDeviceD3D(hwnd: win32.HWND) ?Directx11Options {
 fn convertVKeyToDvuiKey(vkey: win32.VIRTUAL_KEY) dvui.enums.Key {
     const K = dvui.enums.Key;
     return switch (vkey) {
-        .@"0", .NUMPAD0 => K.kp_0,
-        .@"1", .NUMPAD1 => K.kp_1,
-        .@"2", .NUMPAD2 => K.kp_2,
-        .@"3", .NUMPAD3 => K.kp_3,
-        .@"4", .NUMPAD4 => K.kp_4,
-        .@"5", .NUMPAD5 => K.kp_5,
-        .@"6", .NUMPAD6 => K.kp_6,
-        .@"7", .NUMPAD7 => K.kp_7,
-        .@"8", .NUMPAD8 => K.kp_8,
-        .@"9", .NUMPAD9 => K.kp_9,
+        .@"0" => .zero,
+        .@"1" => .one,
+        .@"2" => .two,
+        .@"3" => .three,
+        .@"4" => .four,
+        .@"5" => .five,
+        .@"6" => .six,
+        .@"7" => .seven,
+        .@"8" => .eight,
+        .@"9" => .nine,
+        .NUMPAD0 => K.kp_0,
+        .NUMPAD1 => K.kp_1,
+        .NUMPAD2 => K.kp_2,
+        .NUMPAD3 => K.kp_3,
+        .NUMPAD4 => K.kp_4,
+        .NUMPAD5 => K.kp_5,
+        .NUMPAD6 => K.kp_6,
+        .NUMPAD7 => K.kp_7,
+        .NUMPAD8 => K.kp_8,
+        .NUMPAD9 => K.kp_9,
         .A => K.a,
         .B => K.b,
         .C => K.c,

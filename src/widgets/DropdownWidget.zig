@@ -45,7 +45,7 @@ pub fn install(self: *DropdownWidget) void {
     if (self.init_options.label) |ll| {
         var hbox = dvui.box(@src(), .horizontal, .{ .expand = .both });
 
-        var lw = LabelWidget.initNoFmt(@src(), ll, self.options.strip().override(.{ .gravity_y = 0.5 }));
+        var lw = LabelWidget.initNoFmt(@src(), ll, .{}, self.options.strip().override(.{ .gravity_y = 0.5 }));
         lw.install();
         lw.draw();
         lw.deinit();
@@ -158,7 +158,7 @@ pub fn addChoiceLabel(self: *DropdownWidget, label_text: []const u8) bool {
         opts = opts.override(dvui.themeGet().style_accent);
     }
 
-    dvui.labelNoFmt(@src(), label_text, opts);
+    dvui.labelNoFmt(@src(), label_text, .{}, opts);
 
     if (mi.activeRect()) |_| {
         self.close();
