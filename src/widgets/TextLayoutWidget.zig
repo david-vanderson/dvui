@@ -97,6 +97,10 @@ pub const Selection = struct {
     }
 };
 
+/// This is used for word selection - 2 clicks and ctrl+left/right - everything
+/// here is not a word, and everything else is.
+pub const word_breaks = " \n!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+
 wd: WidgetData = undefined,
 corners: [4]?Rect = [_]?Rect{null} ** 4,
 corners_min_size: [4]?Size = [_]?Size{null} ** 4,
@@ -167,9 +171,9 @@ sel_move: union(enum) {
         count: i8 = 0,
         select: bool = true, // false - move cursor, true - change selection
         scratch_kind: enum {
-            blank,
+            punc, // space, newline, or ascii puncutation
             word,
-        } = .blank,
+        } = .punc,
         // indexes of the last starts of words (only used when count < 0)
         word_start_idx: [5]usize = .{ 0, 0, 0, 0, 0 },
     },
@@ -654,9 +658,9 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
         .mouse => {},
         .expand_pt => |*ep| {
             if (!ep.done) {
-                const search = if (ep.which == .word) " \n" else "\n";
+                const search = if (ep.which == .word) word_breaks else "\n";
                 if (!self.cursor_seen) {
-                    // maintain index of last space/newline we saw
+                    // maintain index of last punc we saw
                     if (std.mem.lastIndexOfAny(u8, txt, search)) |space| {
                         ep.last[1] = ep.last[0];
                         ep.last[0] = start_idx + space + 1;
@@ -665,7 +669,7 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
                         }
                     }
                 } else {
-                    // searching for next space/newline
+                    // searching for next punc
                     if (std.mem.indexOfAny(u8, txt, search)) |space| {
                         // found within our current text
                         self.selection.moveCursor(start_idx + space, ep.select);
@@ -734,9 +738,9 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
             if (wlr.count < 0) {
                 // maintain our list of previous starts of words, looking backwards
                 var idx = txt.len -| 1;
-                var last_kind: enum { blank, word } = undefined;
-                if (std.mem.indexOfAnyPos(u8, txt, idx, " \n") != null) {
-                    last_kind = .blank;
+                var last_kind: enum { punc, word } = undefined;
+                if (std.mem.indexOfAnyPos(u8, txt, idx, word_breaks) != null) {
+                    last_kind = .punc;
                 } else {
                     last_kind = .word;
                 }
@@ -745,26 +749,26 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
 
                 loop: while (word_start_count < wlr.word_start_idx.len) {
                     switch (last_kind) {
-                        .blank => {
-                            if (std.mem.lastIndexOfNone(u8, txt[0..idx], " \n")) |word_end| {
+                        .punc => {
+                            if (std.mem.lastIndexOfNone(u8, txt[0..idx], word_breaks)) |word_end| {
                                 last_kind = .word;
                                 idx = word_end;
                             } else {
-                                // all blank
+                                // all punc
                                 break :loop;
                             }
                         },
                         .word => {
                             var new_word_start: ?usize = null;
-                            if (std.mem.lastIndexOfAny(u8, txt[0..idx], " \n")) |blank| {
-                                last_kind = .blank;
-                                idx = blank;
+                            if (std.mem.lastIndexOfAny(u8, txt[0..idx], word_breaks)) |punc| {
+                                last_kind = .punc;
+                                idx = punc;
                                 new_word_start = idx + 1;
                             } else {
                                 // all word
                                 idx = 0;
-                                if (wlr.scratch_kind == .blank) {
-                                    // last char from previous iteration was blank and we started with word
+                                if (wlr.scratch_kind == .punc) {
+                                    // last char from previous iteration was punc and we started with word
                                     new_word_start = idx;
                                 }
                             }
@@ -786,8 +790,8 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
                 }
 
                 // record last character kind for next iteration
-                if (std.mem.indexOfAnyPos(u8, txt, txt.len -| 1, " \n") != null) {
-                    wlr.scratch_kind = .blank;
+                if (std.mem.indexOfAnyPos(u8, txt, txt.len -| 1, word_breaks) != null) {
+                    wlr.scratch_kind = .punc;
                 } else {
                     wlr.scratch_kind = .word;
                 }
@@ -795,23 +799,23 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
 
             while (self.cursor_seen and wlr.count > 0) {
                 switch (wlr.scratch_kind) {
-                    .blank => {
-                        // skipping over blanks
-                        if (std.mem.indexOfNonePos(u8, txt, self.selection.cursor -| start_idx, " \n")) |non_blank| {
+                    .punc => {
+                        // skipping over punc
+                        if (std.mem.indexOfNonePos(u8, txt, self.selection.cursor -| start_idx, word_breaks)) |non_blank| {
                             self.selection.moveCursor(start_idx + non_blank, wlr.select);
                             wlr.scratch_kind = .word; // now want to skip over word chars
                         } else {
-                            // rest was blank
+                            // rest was punc
                             self.selection.moveCursor(start_idx + txt.len, wlr.select);
                             break;
                         }
                     },
                     .word => {
                         // skipping over word chars
-                        if (std.mem.indexOfAnyPos(u8, txt, self.selection.cursor -| start_idx, " \n")) |blank| {
-                            self.selection.moveCursor(start_idx + blank, wlr.select);
+                        if (std.mem.indexOfAnyPos(u8, txt, self.selection.cursor -| start_idx, word_breaks)) |punc| {
+                            self.selection.moveCursor(start_idx + punc, wlr.select);
                             // done with this one
-                            wlr.scratch_kind = .blank; // now want to skip over blanks
+                            wlr.scratch_kind = .punc; // now want to skip over punc
                             wlr.count -= 1;
                         } else {
                             // rest was word

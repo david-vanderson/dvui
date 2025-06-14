@@ -3423,7 +3423,7 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Rect.Physical {
     var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
 
-    dvui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
+    dvui.labelNoFmt(@src(), str, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
 
     if (openflag) |of| {
         if (dvui.buttonIcon(
@@ -3438,7 +3438,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
         }
     }
 
-    dvui.labelNoFmt(@src(), right_str, .{ .gravity_x = 1.0 });
+    dvui.labelNoFmt(@src(), right_str, .{}, .{ .gravity_x = 1.0 });
 
     const evts = events();
     for (evts) |*e| {
@@ -4079,7 +4079,7 @@ pub fn toastDisplay(id: WidgetId) !void {
 
     var animator = dvui.animate(@src(), .{ .kind = .alpha, .duration = 500_000 }, .{ .id_extra = id.asUsize() });
     defer animator.deinit();
-    dvui.labelNoFmt(@src(), message, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 } });
+    dvui.labelNoFmt(@src(), message, .{}, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 } });
 
     if (dvui.timerDone(id)) {
         animator.startEnd();
@@ -4333,7 +4333,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
             .{ .gravity_y = 0.5 },
         );
     }
-    labelNoFmt(@src(), label_str, options.strip());
+    labelNoFmt(@src(), label_str, .{}, options.strip());
 
     dvui.dataSet(null, bc.wd.id, "_expand", expanded);
 
@@ -4549,7 +4549,7 @@ pub fn gridHeading(
     var cell = g.headerCell(src, opts.cellOptions(g.col_num, 0));
     defer cell.deinit();
 
-    labelNoFmt(@src(), heading, label_options);
+    labelNoFmt(@src(), heading, .{}, label_options);
     gridHeadingSeparator(resize_opts);
 }
 
@@ -4931,7 +4931,7 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, ini
         labelopts = labelopts.override(themeGet().style_accent);
     }
 
-    labelNoFmt(@src(), label_str, labelopts);
+    labelNoFmt(@src(), label_str, .{}, labelopts);
 
     mi.deinit();
 
@@ -4975,7 +4975,7 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
 pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) bool {
     var ret = false;
 
-    var lw = LabelWidget.init(src, fmt, args, opts.override(.{ .name = "LabelClick" }));
+    var lw = LabelWidget.init(src, fmt, args, .{}, opts.override(.{ .name = "LabelClick" }));
     // now lw has a Rect from its parent but hasn't processed events or drawn
 
     const lwid = lw.data().id;
@@ -5075,16 +5075,39 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
     return ret;
 }
 
+/// Format and display a label.
+///
+/// See `labelEx` and `labelNoFmt`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) void {
-    var lw = LabelWidget.init(src, fmt, args, opts);
+    var lw = LabelWidget.init(src, fmt, args, .{}, opts);
     lw.install();
     lw.processEvents();
     lw.draw();
     lw.deinit();
 }
 
-pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, opts: Options) void {
-    var lw = LabelWidget.initNoFmt(src, str, opts);
+/// Format and display a label with extra label options.
+///
+/// See `label` and `labelNoFmt`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn labelEx(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) void {
+    var lw = LabelWidget.init(src, fmt, args, init_opts, opts);
+    lw.install();
+    lw.processEvents();
+    lw.draw();
+    lw.deinit();
+}
+
+/// Display a label (no formatting) with extra label options.
+///
+/// See `label` and `labelEx`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, init_opts: LabelWidget.InitOptions, opts: Options) void {
+    var lw = LabelWidget.initNoFmt(src, str, init_opts, opts);
     lw.install();
     lw.processEvents();
     lw.draw();
@@ -5280,7 +5303,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
     // - gets a rectangle from bw
     // - draws itself
     // - reports its min size to bw
-    labelNoFmt(@src(), label_str, options);
+    labelNoFmt(@src(), label_str, .{}, options);
 
     // draw focus
     bw.drawFocus();
@@ -5333,9 +5356,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
         var outer_hbox = box(src, .horizontal, .{ .expand = .horizontal });
         defer outer_hbox.deinit();
         icon(@src(), label_str, tvg_bytes, .{}, opts.strip().override(.{ .gravity_x = 1.0 }));
-        var hbox = box(src, .horizontal, .{ .expand = .horizontal });
-        defer hbox.deinit(); // this hbox is used to center the label.
-        labelNoFmt(@src(), label_str, options.override(.{ .gravity_x = 0.5 }));
+        labelEx(@src(), "{s}", .{label_str}, .{ .align_x = 0.5 }, opts.strip().override(.{ .expand = .both }));
     }
 
     const click = bw.clicked();
@@ -5987,7 +6008,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 
     if (label_str) |str| {
         _ = spacer(@src(), .{ .w = checkbox_defaults.paddingGet().w }, .{});
-        labelNoFmt(@src(), str, options.strip().override(.{ .gravity_y = 0.5 }));
+        labelNoFmt(@src(), str, .{}, options.strip().override(.{ .gravity_y = 0.5 }));
     }
 
     return ret;
@@ -6073,7 +6094,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 
     if (label_str) |str| {
         _ = spacer(@src(), .{ .w = radio_defaults.paddingGet().w }, .{});
-        labelNoFmt(@src(), str, options.strip().override(.{ .gravity_y = 0.5 }));
+        labelNoFmt(@src(), str, .{}, options.strip().override(.{ .gravity_y = 0.5 }));
     }
 
     return ret;

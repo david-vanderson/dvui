@@ -468,6 +468,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     var disable_raylib_input: bool = false;
 
     const shift = c.IsKeyDown(c.KEY_LEFT_SHIFT) or c.IsKeyDown(c.KEY_RIGHT_SHIFT);
+    const capslock = c.IsKeyDown(c.KEY_CAPS_LOCK);
     //check for key releases
     var iter = self.pressed_keys.iterator(.{});
     while (iter.next()) |keycode| {
@@ -510,7 +511,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
             const char: u8 = @intCast(event);
 
             const lowercase_alpha = std.ascii.toLower(char);
-            const shifted = if (shift) shiftAscii(lowercase_alpha) else lowercase_alpha;
+            const shifted = if (shift or (capslock and std.ascii.isAlphabetic(lowercase_alpha))) shiftAscii(lowercase_alpha) else lowercase_alpha;
             const string: []const u8 = &.{shifted};
             if (self.log_events) {
                 std.debug.print("raylib event text entry {s}\n", .{string});
@@ -545,7 +546,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
             const char: u8 = @intCast(keycode);
 
             const lowercase_alpha = std.ascii.toLower(char);
-            const shifted = if (shift) shiftAscii(lowercase_alpha) else lowercase_alpha;
+            const shifted = if (shift or (capslock and std.ascii.isAlphabetic(lowercase_alpha))) shiftAscii(lowercase_alpha) else lowercase_alpha;
             const string: []const u8 = &.{shifted};
             if (self.log_events) {
                 std.debug.print("raylib event text entry {s}\n", .{string});
@@ -734,7 +735,7 @@ pub fn raylibKeyToDvui(key: c_int) dvui.enums.Key {
         c.KEY_RIGHT_ALT => .right_alt,
         c.KEY_LEFT_SUPER => .left_command,
         c.KEY_RIGHT_SUPER => .right_command,
-        //c.KEY_MENU => .menu, //it appears menu and r use the same keycode ??
+        // c.KEY_MENU => .menu, //it appears menu and r use the same keycode ??
         c.KEY_NUM_LOCK => .num_lock,
         c.KEY_CAPS_LOCK => .caps_lock,
         c.KEY_PRINT_SCREEN => .print,

@@ -629,7 +629,7 @@ pub fn themeSerialization() void {
     var serialize_box = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer serialize_box.deinit();
 
-    dvui.labelNoFmt(@src(), "TODO: demonstrate loading a quicktheme here", .{});
+    dvui.labelNoFmt(@src(), "TODO: demonstrate loading a quicktheme here", .{}, .{});
 }
 
 /// ![image](Examples-basic_widgets.png)
@@ -640,13 +640,7 @@ pub fn basicWidgets() void {
 
         dvui.label(@src(), "Label", .{}, .{ .gravity_y = 0.5 });
 
-        {
-            // need to wrap the this, otherwise .gravity_x = 0.5 will make it
-            // not packed in the containing box
-            var vbox = dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
-            defer vbox.deinit();
-            dvui.label(@src(), "Multi-line\nLabel", .{}, .{ .gravity_x = 0.5 });
-        }
+        dvui.labelEx(@src(), "Multi-line\nLabel", .{}, .{ .align_x = 0.5 }, .{ .gravity_y = 0.5 });
 
         _ = dvui.button(@src(), "Button", .{}, .{ .gravity_y = 0.5 });
         _ = dvui.button(@src(), "Multi-line\nButton", .{}, .{});
@@ -681,7 +675,7 @@ pub fn basicWidgets() void {
                     opts,
                 );
                 _ = dvui.spacer(@src(), .{ .w = 4 }, .{});
-                dvui.labelNoFmt(@src(), "Icon+Gray", opts);
+                dvui.labelNoFmt(@src(), "Icon+Gray", .{}, opts);
 
                 if (bw.clicked()) {
                     dvui.toast(@src(), .{ .message = "This button is grayed out\nbut still clickable." });
@@ -906,7 +900,7 @@ pub fn dropdownAdvanced() void {
                 .{},
                 opts.override(.{ .gravity_y = 0.5 }),
             );
-            dvui.labelNoFmt(@src(), "icon with text", opts.override(.{ .padding = .{ .x = 6 } }));
+            dvui.labelNoFmt(@src(), "icon with text", .{}, opts.override(.{ .padding = .{ .x = 6 } }));
 
             if (mi.activeRect()) |_| {
                 dd.close();
@@ -928,7 +922,7 @@ pub fn dropdownAdvanced() void {
             var opts: Options = if (mi.show_active) dvui.themeGet().style_accent else .{};
 
             _ = dvui.image(@src(), .{ .name = "zig favicon", .bytes = zig_favicon }, opts.override(.{ .gravity_x = 0.5 }));
-            dvui.labelNoFmt(@src(), "image above text", opts.override(.{ .gravity_x = 0.5, .padding = .{} }));
+            dvui.labelNoFmt(@src(), "image above text", .{}, opts.override(.{ .gravity_x = 0.5, .padding = .{} }));
 
             if (mi.activeRect()) |_| {
                 dd.close();
@@ -2371,7 +2365,7 @@ pub fn menus() void {
         }
     }
 
-    dvui.labelNoFmt(@src(), "Right click for a context menu", .{});
+    dvui.labelNoFmt(@src(), "Right click for a context menu", .{}, .{});
 
     _ = dvui.spacer(@src(), .{ .h = 20 }, .{});
 
@@ -2479,7 +2473,7 @@ pub fn menus() void {
                         label_opts.color_text = .text_press;
                     }
 
-                    dvui.labelNoFmt(@src(), tabname, label_opts);
+                    dvui.labelNoFmt(@src(), tabname, .{}, label_opts);
 
                     if (tab.clicked()) {
                         Data.tab = i;
@@ -2698,7 +2692,7 @@ pub fn scrolling(comptime data: u8) void {
             .Invalid => "Invalid",
             .Valid, .Empty => " ",
         };
-        dvui.labelNoFmt(@src(), label, .{});
+        dvui.labelNoFmt(@src(), label, .{}, .{});
         if (result.value == .Valid and result.enter_pressed) {
             scroll_to_msg = result.value.Valid;
         }
@@ -3389,7 +3383,7 @@ pub fn animations() void {
             button_wiggle.install();
             button_wiggle.processEvents();
             button_wiggle.drawBackground();
-            dvui.labelNoFmt(@src(), "Wiggle", button_wiggle.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
+            dvui.labelNoFmt(@src(), "Wiggle", .{}, button_wiggle.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
             button_wiggle.drawFocus();
 
             if (button_wiggle.clicked()) {
@@ -3430,11 +3424,11 @@ pub fn animations() void {
             var hbox = dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            dvui.labelNoFmt(@src(), "Animate", .{ .gravity_y = 0.5 });
+            dvui.labelNoFmt(@src(), "Animate", .{}, .{ .gravity_y = 0.5 });
 
             _ = dvui.dropdown(@src(), &.{ "alpha", "horizontal", "vertical" }, &global.animation_choice, .{});
 
-            dvui.labelNoFmt(@src(), "easing", .{ .gravity_y = 0.5 });
+            dvui.labelNoFmt(@src(), "easing", .{}, .{ .gravity_y = 0.5 });
 
             var recalc = false;
             if (dvui.firstFrame(hbox.data().id)) {
@@ -3509,17 +3503,17 @@ pub fn animations() void {
     }
 
     if (dvui.expander(@src(), "Spinner", .{}, .{ .expand = .horizontal })) {
-        dvui.labelNoFmt(@src(), "Spinner maxes out frame rate", .{});
+        dvui.labelNoFmt(@src(), "Spinner maxes out frame rate", .{}, .{});
         dvui.spinner(@src(), .{ .color_text = .{ .color = .{ .r = 100, .g = 200, .b = 100 } } });
     }
 
     if (dvui.expander(@src(), "Clock", .{}, .{ .expand = .horizontal })) {
-        dvui.labelNoFmt(@src(), "Schedules a frame at the beginning of each second", .{});
+        dvui.labelNoFmt(@src(), "Schedules a frame at the beginning of each second", .{}, .{});
 
         const millis = @divFloor(dvui.frameTimeNS(), 1_000_000);
         const left = @as(i32, @intCast(@rem(millis, 1000)));
 
-        var mslabel = dvui.LabelWidget.init(@src(), "{d:0>3} ms into second", .{@as(u32, @intCast(left))}, .{});
+        var mslabel = dvui.LabelWidget.init(@src(), "{d:0>3} ms into second", .{@as(u32, @intCast(left))}, .{}, .{});
         mslabel.install();
         mslabel.processEvents();
         mslabel.draw();
@@ -3634,7 +3628,7 @@ pub fn debuggingErrors() void {
     if (dvui.expander(@src(), "Invalid utf-8 text", .{}, .{ .expand = .horizontal })) {
         var b = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
-        dvui.labelNoFmt(@src(), "this \xFFtext\xFF includes some \xFF invalid utf-8\xFF\xFF\xFF which is replaced with \xFF", .{});
+        dvui.labelNoFmt(@src(), "this \xFFtext\xFF includes some \xFF invalid utf-8\xFF\xFF\xFF which is replaced with \xFF", .{}, .{});
     }
 
     if (dvui.expander(@src(), "Scroll child after expanded child (will log error)", .{}, .{ .expand = .horizontal })) {
@@ -3841,7 +3835,7 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
                 const toast_text = std.fmt.bufPrint(&buf2, "Copied \"{s}\"", .{text}) catch "Copied <Too much text>";
                 dvui.toast(@src(), .{ .message = toast_text });
             }
-            dvui.labelNoFmt(@src(), text, .{ .gravity_y = 0.5 });
+            dvui.labelNoFmt(@src(), text, .{}, .{ .gravity_y = 0.5 });
 
             const iconboxId = iconbox.data().id;
 
@@ -4075,7 +4069,7 @@ fn gridStyling() void {
             {
                 var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
                 defer hbox.deinit();
-                dvui.labelNoFmt(@src(), "Margin:", .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
+                dvui.labelNoFmt(@src(), "Margin:", .{}, .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
                 const result = dvui.textEntryNumber(@src(), f32, .{ .min = 0, .max = 10, .value = &local.margin, .show_min_max = true }, .{});
                 if (result.changed and result.value == .Valid) {
                     local.margin = result.value.Valid;
@@ -4085,7 +4079,7 @@ fn gridStyling() void {
             {
                 var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
                 defer hbox.deinit();
-                dvui.labelNoFmt(@src(), "Padding:", .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
+                dvui.labelNoFmt(@src(), "Padding:", .{}, .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
                 const result = dvui.textEntryNumber(@src(), f32, .{ .min = 0, .max = 10, .value = &local.padding, .show_min_max = true }, .{});
                 if (result.changed and result.value == .Valid) {
                     local.padding = result.value.Valid;
@@ -4244,7 +4238,14 @@ fn gridLayouts() void {
 
     const panel_height = 250;
     const banded: GridWidget.CellStyle.Banded = .{
-        .alt_cell_opts = .{ .color_fill = .{ .name = .fill_press }, .background = true },
+        .opts = .{
+            .margin = TextLayoutWidget.defaults.margin,
+            .padding = TextLayoutWidget.defaults.padding,
+        },
+        .alt_cell_opts = .{
+            .color_fill = .{ .name = .fill_press },
+            .background = true,
+        },
     };
     const banded_centered = banded.optionsOverride(.{ .gravity_x = 0.5, .expand = .horizontal });
 
