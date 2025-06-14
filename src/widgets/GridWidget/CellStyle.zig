@@ -176,3 +176,60 @@ pub const HoveredRow = struct {
         };
     }
 };
+
+/// Nah.. I think this is dumb right? If the options don't
+/// vary by row / col, then what is the point of this?
+/// It may as well be an init options to the col function.
+pub const Icon = struct {
+    cell_opts: CellOptions = .{},
+    icon_opts: dvui.IconRenderOptions = .{},
+    opts: Options = .{},
+
+    pub fn cellOptions(self: *const Banded, col: usize, row: usize) CellOptions {
+        switch (self.banding) {
+            .rows => {
+                return if (row % 2 == 0)
+                    self.cell_opts
+                else
+                    self.alt_cell_opts;
+            },
+            .cols => {
+                return if (col % 2 == 0)
+                    self.cell_opts
+                else
+                    self.alt_cell_opts;
+            },
+        }
+    }
+
+    pub fn cellOptionsOverride(self: *const Banded, cell_opts: CellOptions) Banded {
+        return .{
+            .banding = self.banding,
+            .cell_opts = self.cell_opts.override(cell_opts),
+            .alt_cell_opts = self.alt_cell_opts,
+            .opts = self.opts,
+        };
+    }
+
+    // It is doesn;t vary by row/col, there
+    pub fn iconRenderOptions(self: *const Banded, col: usize, row: usize) dvui.IconRenderOptions {
+        _ = col;
+        _ = row;
+        return self.icon_opts;
+    }
+
+    pub fn options(self: *const Banded, col: usize, row: usize) Options {
+        _ = row;
+        _ = col;
+        return self.opts;
+    }
+
+    pub fn optionsOverride(self: *const Banded, opts: Options) Banded {
+        return .{
+            .banding = self.banding,
+            .cell_opts = self.cell_opts,
+            .alt_cell_opts = self.alt_cell_opts,
+            .opts = self.opts.override(opts),
+        };
+    }
+};

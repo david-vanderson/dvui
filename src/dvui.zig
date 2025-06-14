@@ -4522,77 +4522,59 @@ pub fn gridHeadingSortable(
     return sort_changed;
 }
 
-/// Create a column from a slice
-///
-/// If data is a slice of struct field_name must be supplied
-/// Enums are displayed as their @tagName and fmt must be "{s}"
-/// Bools are displayed as Y or N and fmt must be "{s}"
-/// Other types are formatted using the supplied fmt string.
-pub fn gridColumnFromSlice(
+pub fn gridColumnLabel(
     src: std.builtin.SourceLocation,
     g: *GridWidget,
-    comptime T: type,
-    data: []const T,
-    comptime field_name: ?[]const u8,
     comptime fmt: []const u8,
+    data_adapter: anytype, // XXX
     cell_style: anytype, // GridWidget.CellStyle
 ) !void {
-    // TODO: Support pointer to direct value.
-    comptime var TypeToValidate = T;
-    comptime validate: switch (@typeInfo(T)) {
-        .pointer => |ptr| {
-            if (ptr.size != .one) @compileError("T cannot be an array, slice or vector");
-            const child_type = @typeInfo(ptr.child);
-            if (child_type == .pointer) @compileError("T cannot be a pointer to a pointer");
-            if (child_type == .@"struct") {
-                // If pointer to struct then validate the child struct.
-                TypeToValidate = ptr.child;
-                continue :validate child_type;
-            }
-        },
-        .@"struct" => {
-            if (field_name) |_field_name| {
-                if (!@hasField(TypeToValidate, _field_name)) {
-                    @compileError(std.fmt.comptimePrint("{s} does not contain field {s}.", .{ @typeName(T), _field_name }));
-                }
-            } else @compileError("field_name must be supplied when T is a struct or pointer to a struct");
-        },
-        else => {},
-    };
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
 
     const label_defaults: Options = .{
         .expand = .horizontal,
     };
-    for (data, 0..) |item, row_num| {
+    for (0..data_adapter.len()) |row_num| {
         var cell = try g.bodyCell(
             src,
             row_num,
             opts.cellOptions(g.col_num, row_num),
         );
         defer cell.deinit();
-        const cell_value = value: {
-            if (field_name) |_field_name| {
-                // populate value from struct field.
-                break :value switch (@typeInfo(@TypeOf(@field(item, _field_name)))) {
-                    .@"enum" => @tagName(@field(item, _field_name)),
-                    .bool => if (@field(item, _field_name)) "Y" else "N",
-                    else => @field(item, _field_name),
-                };
-            } else {
-                // populate value directly from slice
-                break :value switch (@typeInfo(T)) {
-                    .@"enum" => @tagName(item),
-                    .bool => if (item) "Y" else "N",
-                    else => item,
-                };
-            }
-        };
         try label(
             @src(),
             fmt,
-            .{cell_value},
+            .{data_adapter.value(row_num)},
             label_defaults.override(opts.options(g.col_num, row_num)),
+        );
+    }
+}
+
+pub fn gridColumnIcon(
+    src: std.builtin.SourceLocation,
+    g: *GridWidget,
+    icon_opts: IconRenderOptions,
+    data_adapter: anytype, // GridWidget.DataAdapter
+    cell_style: anytype, // GridWidget.CellStyle
+) !void {
+    const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
+
+    const icon_defaults: Options = .{
+        //        .expand = .horizontal,
+    };
+    for (0..data_adapter.len()) |row_num| {
+        var cell = try g.bodyCell(
+            src,
+            row_num,
+            opts.cellOptions(g.col_num, row_num),
+        );
+        defer cell.deinit();
+        try icon(
+            @src(),
+            "nothing for now",
+            data_adapter.value(row_num),
+            icon_opts,
+            icon_defaults.override(opts.options(g.col_num, row_num)),
         );
     }
 }
@@ -4654,55 +4636,70 @@ pub fn gridHeadingCheckbox(
     return clicked;
 }
 
-/// A checkbox column that allows selection of boolean items.
-///
-/// Returns true if any selections have changed.
-/// If field_name is null, T must be a bool.
-/// Otherwise field_name must refer to a bool field within a struct.
+pub const SelectionInfo = struct {
+    prev_changed: ?usize = null,
+    prev_selected: bool = false,
+    this_changed: ?usize = null,
+    this_selected: bool = false,
+
+    pub fn selectionChanged(self: *SelectionInfo, row_num: usize, selected: bool) void {
+        self.prev_selected = self.this_selected;
+        self.prev_changed = self.this_changed;
+        self.this_changed = row_num;
+        self.this_selected = selected;
+    }
+};
+
 pub fn gridColumnCheckbox(
     src: std.builtin.SourceLocation,
     g: *dvui.GridWidget,
-    comptime T: type,
-    data: []T,
-    comptime field_name: ?[]const u8,
+    data_adapter: anytype, // GridWidget.DataAdapter.Selection
     cell_style: anytype, // GridWidget.CellStyle
+    selection_info: ?*SelectionInfo,
 ) !bool {
-    if (T != bool) {
-        if (field_name) |_field_name| {
-            if (!@hasField(T, _field_name)) {
-                @compileError(std.fmt.comptimePrint("'{s}' doesn't contain a member named {s}.", .{ @typeName(T), _field_name }));
-            } else if (@FieldType(T, _field_name) != bool) {
-                @compileError(std.fmt.comptimePrint("{s}.{s} must be of type bool.", .{ @typeName(T), _field_name }));
-            }
-        } else {
-            @compileError("data must be of type []bool when field_name is null.");
-        }
+    if (@TypeOf(data_adapter.value(0)) != bool) {
+        @compileLog(@TypeOf(data_adapter.value(0)));
+        @compileError("Data adapter value() must return bool");
     }
+    if (!std.meta.hasFn(@TypeOf(data_adapter), "setValue")) {
+        @compileError("Data adapter must supply setValue(bool)");
+    }
+
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
 
     const check_defaults: Options = .{
         .gravity_x = 0.5,
         .gravity_y = 0.5,
-        .margin = ButtonWidget.defaults.marginGet(),
+        .margin = ButtonWidget.defaults.margin,
     };
 
     var selection_changed = false;
-    for (data, 0..) |*item, row_num| {
+    // TODO: Can't use an absolute row num for virtual scrolling. Maybe they will need to pass in
+    // the start and end as part of the selection_info?
+    // The data adapters will need to take care of that.
+    // Can also probably simpily the logic below so that selection_changes is only set when the button is clicked?
+    for (0..data_adapter.len()) |row_num| {
         var cell = try g.bodyCell(
             src,
             row_num,
             opts.cellOptions(g.col_num, row_num),
         );
         defer cell.deinit();
-        const is_selected: *bool = if (T == bool) item else &@field(item, field_name.?);
-        const was_selected = is_selected.*;
-        _ = try dvui.checkbox(
+        var is_selected: bool = data_adapter.value(row_num);
+        const was_selected = is_selected;
+        if (try dvui.checkbox(
             @src(),
-            is_selected,
+            &is_selected,
             null,
             check_defaults.override(opts.options(g.col_num, row_num)),
-        );
-        selection_changed = selection_changed or was_selected != is_selected.*;
+        )) {
+            data_adapter.setValue(row_num, is_selected);
+
+            if (selection_info) |info| {
+                info.selectionChanged(row_num, is_selected);
+            }
+        }
+        selection_changed = selection_changed or was_selected != is_selected;
     }
     return selection_changed;
 }
