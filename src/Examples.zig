@@ -4189,7 +4189,14 @@ fn gridLayouts() !void {
 
     const panel_height = 250;
     const banded: GridWidget.CellStyle.Banded = .{
-        .alt_cell_opts = .{ .color_fill = .{ .name = .fill_press }, .background = true },
+        .opts = .{
+            .margin = TextLayoutWidget.defaults.margin,
+            .padding = TextLayoutWidget.defaults.padding,
+        },
+        .alt_cell_opts = .{
+            .color_fill = .{ .name = .fill_press },
+            .background = true,
+        },
     };
     const banded_centered = banded.optionsOverride(.{ .gravity_x = 0.5, .expand = .horizontal });
 
