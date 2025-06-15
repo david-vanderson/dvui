@@ -12,7 +12,7 @@ name: []const u8 = undefined,
 tvg_bytes: []const u8 = undefined,
 icon_opts: dvui.IconRenderOptions = undefined,
 
-pub fn init(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: dvui.IconRenderOptions, opts: Options) !IconWidget {
+pub fn init(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: dvui.IconRenderOptions, opts: Options) IconWidget {
     var self = IconWidget{};
     const options = (Options{ .name = "Icon" }).override(opts);
     self.name = name;
@@ -34,9 +34,9 @@ pub fn init(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []cons
     return self;
 }
 
-pub fn install(self: *IconWidget) !void {
+pub fn install(self: *IconWidget) void {
     self.wd.register();
-    try self.wd.borderAndBackground(.{});
+    self.wd.borderAndBackground(.{});
 }
 
 pub fn data(self: *IconWidget) *WidgetData {
@@ -47,9 +47,17 @@ pub fn matchEvent(self: *IconWidget, e: *dvui.Event) bool {
     return dvui.eventMatchSimple(e, &self.wd);
 }
 
-pub fn draw(self: *IconWidget) !void {
+pub fn draw(self: *IconWidget) void {
     const rs = self.wd.parent.screenRectScale(self.wd.contentRect());
-    try dvui.renderIcon(self.name, self.tvg_bytes, rs, .{ .rotation = self.wd.options.rotationGet(), .colormod = self.wd.options.color(.text) }, self.icon_opts);
+    dvui.renderIcon(
+        self.name,
+        self.tvg_bytes,
+        rs,
+        .{ .rotation = self.wd.options.rotationGet(), .colormod = self.wd.options.color(.text) },
+        self.icon_opts,
+    ) catch |err| {
+        dvui.logError(@src(), err, "Could not render icon", .{});
+    };
 }
 
 pub fn deinit(self: *IconWidget) void {

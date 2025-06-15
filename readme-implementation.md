@@ -14,30 +14,30 @@ If you want to support child widgets, then you'll need to implement the Widget i
 ### Example: button() function combines ButtonWidget and label
 
 ```zig
-pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) !bool {
+pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) bool {
     // initialize widget and get rectangle from parent
     var bw = ButtonWidget.init(src, .{}, opts);
 
     // make ourselves the new parent
-    try bw.install();
+    bw.install();
 
     // process events (mouse and keyboard)
     bw.processEvents();
 
     // draw background/border
-    try bw.drawBackground();
+    bw.drawBackground();
 
     // this child widget:
     // - has bw as parent
     // - gets a rectangle from bw
     // - draws itself
     // - reports its min size to bw
-    try labelNoFmt(@src(), label_str, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
+    labelNoFmt(@src(), label_str, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
 
     var click = bw.clicked();
 
     // draw focus
-    try bw.drawFocus();
+    bw.drawFocus();
 
     // restore previous parent
     // send our min size to parent
@@ -156,32 +156,32 @@ If creating widgets in a function, you probably want the function to take `@src(
 Examples
 ```zig
 // caller is responsible for passing src and .id_extra if needed
-fn my_wrapper(src: std.builtin.SourceLocation, opts: Options) !void {
-    var wrapper_box = try dvui.box(src, .horizontal, opts);
+fn my_wrapper(src: std.builtin.SourceLocation, opts: Options) void {
+    var wrapper_box = dvui.box(src, .horizontal, opts);
     defer wrapper_box.deinit();
 
     // label is a child of wrapper_box, so can just call @src() here
-    try dvui.label(@src(), "Wrapped", .{}, .{});
+    dvui.label(@src(), "Wrapped", .{}, .{});
 }
 
-pub fn frame() !void {
+pub fn frame() void {
     // normally we pass @src() and that is good enough
-    var vbox = try dvui.box(@src(), .vertical, .{});
+    var vbox = dvui.box(@src(), .vertical, .{});
     defer vbox.deinit();
 
     for (0..3) |i| {
         // this will be called multiple times with the same parent and
         // @src(), so pass .id_extra here to keep the IDs unique
-        var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
+        var hbox = dvui.box(@src(), .horizontal, .{ .id_extra = i });
 
         // label is a child of hbox, so can just call @src() here
-        try dvui.label(@src(), "Label {d}", .{i}, .{});
+        dvui.label(@src(), "Label {d}", .{i}, .{});
 
         hbox.deinit();
 
         // this will be called multiple times with the same parent and
         // @src(), so pass .id_extra here to keep the IDs unique
-        try my_wrapper(@src(), .{ .id_extra = i });
+        my_wrapper(@src(), .{ .id_extra = i });
     }
 }
 

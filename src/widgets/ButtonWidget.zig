@@ -39,12 +39,12 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *ButtonWidget) !void {
+pub fn install(self: *ButtonWidget) void {
     self.wd.register();
     dvui.parentSet(self.widget());
 
     if (self.wd.visible()) {
-        try dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
+        dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
     }
 }
 
@@ -62,7 +62,7 @@ pub fn processEvents(self: *ButtonWidget) void {
     }
 }
 
-pub fn drawBackground(self: *ButtonWidget) !void {
+pub fn drawBackground(self: *ButtonWidget) void {
     var fill_color: ?Color = null;
     if (dvui.captured(self.wd.id)) {
         fill_color = self.wd.options.color(.fill_press);
@@ -70,12 +70,12 @@ pub fn drawBackground(self: *ButtonWidget) !void {
         fill_color = self.wd.options.color(.fill_hover);
     }
 
-    try self.wd.borderAndBackground(.{ .fill_color = fill_color });
+    self.wd.borderAndBackground(.{ .fill_color = fill_color });
 }
 
-pub fn drawFocus(self: *ButtonWidget) !void {
+pub fn drawFocus(self: *ButtonWidget) void {
     if (self.init_options.draw_focus and self.focused()) {
-        try self.wd.focusBorder();
+        self.wd.focusBorder();
     }
 }
 

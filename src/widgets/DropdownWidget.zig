@@ -34,23 +34,23 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *DropdownWidget) !void {
-    try self.menu.install();
+pub fn install(self: *DropdownWidget) void {
+    self.menu.install();
 
     self.menuItem = MenuItemWidget.init(@src(), .{ .submenu = true }, self.options.wrapInner());
-    try self.menuItem.install();
+    self.menuItem.install();
     self.menuItem.processEvents();
-    try self.menuItem.drawBackground(.{ .focus_as_outline = true });
+    self.menuItem.drawBackground(.{ .focus_as_outline = true });
 
     if (self.init_options.label) |ll| {
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both });
+        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .both });
 
         var lw = LabelWidget.initNoFmt(@src(), ll, .{}, self.options.strip().override(.{ .gravity_y = 0.5 }));
-        try lw.install();
-        try lw.draw();
+        lw.install();
+        lw.draw();
         lw.deinit();
-        _ = try dvui.spacer(@src(), .{ .w = 6 }, .{});
-        try dvui.icon(
+        _ = dvui.spacer(@src(), .{ .w = 6 }, .{});
+        dvui.icon(
             @src(),
             "dropdown_triangle",
             dvui.entypo.chevron_small_down,
@@ -66,7 +66,7 @@ pub fn close(self: *DropdownWidget) void {
     self.menu.close();
 }
 
-pub fn dropped(self: *DropdownWidget) !bool {
+pub fn dropped(self: *DropdownWidget) bool {
     if (self.drop != null) {
         // protect against calling this multiple times
         return true;
@@ -88,7 +88,7 @@ pub fn dropped(self: *DropdownWidget) !bool {
         // move drop up so selected entry is aligned
         drop.init_options.from.y -= self.drop_adjust * s;
 
-        try drop.install();
+        drop.install();
 
         // without this, if you trigger the dropdown with the keyboard and then
         // move the mouse, the entries are highlighted but not focused
@@ -149,8 +149,8 @@ pub fn dropped(self: *DropdownWidget) !bool {
     return false;
 }
 
-pub fn addChoiceLabel(self: *DropdownWidget, label_text: []const u8) !bool {
-    var mi = try self.addChoice();
+pub fn addChoiceLabel(self: *DropdownWidget, label_text: []const u8) bool {
+    var mi = self.addChoice();
     defer mi.deinit();
 
     var opts = self.options.strip();
@@ -158,7 +158,7 @@ pub fn addChoiceLabel(self: *DropdownWidget, label_text: []const u8) !bool {
         opts = opts.override(dvui.themeGet().style_accent);
     }
 
-    try dvui.labelNoFmt(@src(), label_text, .{}, opts);
+    dvui.labelNoFmt(@src(), label_text, .{}, opts);
 
     if (mi.activeRect()) |_| {
         self.close();
@@ -168,16 +168,16 @@ pub fn addChoiceLabel(self: *DropdownWidget, label_text: []const u8) !bool {
     return false;
 }
 
-pub fn addChoice(self: *DropdownWidget) !*MenuItemWidget {
+pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
     // record how far down in our parent we would be
     if (self.drop_mi) |*mi| {
         self.drop_height += mi.data().min_size.h;
     }
 
     self.drop_mi = MenuItemWidget.init(@src(), .{}, .{ .id_extra = self.drop_mi_index, .expand = .horizontal });
-    try self.drop_mi.?.install();
+    self.drop_mi.?.install();
     self.drop_mi.?.processEvents();
-    try self.drop_mi.?.drawBackground(.{});
+    self.drop_mi.?.drawBackground(.{});
 
     if (self.drop_first_frame) {
         if (self.init_options.selected_index) |si| {

@@ -55,7 +55,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options)
     return self;
 }
 
-pub fn install(self: *ScrollAreaWidget) !void {
+pub fn install(self: *ScrollAreaWidget) void {
     if (self.init_opts.scroll_info) |si| {
         self.si = si;
         if (self.init_opts.vertical != null) {
@@ -77,8 +77,8 @@ pub fn install(self: *ScrollAreaWidget) !void {
         self.si.horizontal = self.init_opts.horizontal orelse .none;
     }
 
-    try self.hbox.install();
-    try self.hbox.drawBackground();
+    self.hbox.install();
+    self.hbox.drawBackground();
 
     // the viewport is also set in ScrollContainer but we need it here in
     // case the scroll bar modes are auto
@@ -123,27 +123,27 @@ pub fn install(self: *ScrollAreaWidget) !void {
             .scroll_info = self.si,
             .focus_id = focus_target,
         }, .{ .gravity_x = if (overlay) 0.999 else 1.0, .expand = .vertical });
-        try self.vbar.?.install();
+        self.vbar.?.install();
         if (overlay) {
             self.vbar_grab = self.vbar.?.grab();
         } else {
-            try self.vbar.?.grab().draw();
+            self.vbar.?.grab().draw();
         }
         self.vbar.?.deinit();
     }
 
     self.vbox = BoxWidget.init(@src(), .{ .dir = .vertical }, self.hbox.data().options.strip().override(.{ .expand = .both, .name = "ScrollAreaWidget vbox" }));
-    try self.vbox.install();
-    try self.vbox.drawBackground();
+    self.vbox.install();
+    self.vbox.drawBackground();
 
     if (do_hbar) {
         const overlay = self.init_opts.horizontal_bar == .auto_overlay;
         self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, .{ .expand = .horizontal, .gravity_y = if (overlay) 0.999 else 1.0 });
-        try self.hbar.?.install();
+        self.hbar.?.install();
         if (overlay) {
             self.hbar_grab = self.hbar.?.grab();
         } else {
-            try self.hbar.?.grab().draw();
+            self.hbar.?.grab().draw();
         }
         self.hbar.?.deinit();
     }
@@ -152,7 +152,7 @@ pub fn install(self: *ScrollAreaWidget) !void {
     self.scroll = ScrollContainerWidget.init(@src(), self.si, container_opts);
     self.scroll.lock_visible = self.init_opts.lock_visible;
 
-    try self.scroll.install();
+    self.scroll.install();
     self.scroll.processEvents();
     self.scroll.processVelocity();
 }
@@ -166,11 +166,11 @@ pub fn deinit(self: *ScrollAreaWidget) void {
     dvui.dataSet(null, self.hbox.data().id, "_scroll_id", self.scroll.wd.id);
     self.scroll.deinit();
 
-    if (self.hbar_grab) |hb| hb.draw() catch {};
+    if (self.hbar_grab) |hb| hb.draw();
 
     self.vbox.deinit();
 
-    if (self.vbar_grab) |vb| vb.draw() catch {};
+    if (self.vbar_grab) |vb| vb.draw();
 
     dvui.dataSet(null, self.hbox.data().id, "_scroll_info", self.si.*);
 

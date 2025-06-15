@@ -1020,8 +1020,8 @@ pub fn begin(
     }
 
     {
-        const deadSizes = try self.min_sizes.reset(larena);
-        defer larena.free(deadSizes);
+        const deadSizes = try self.min_sizes.reset(self.lifo());
+        defer self.lifo().free(deadSizes);
         for (deadSizes) |id| {
             _ = self.min_sizes.remove(id);
         }
@@ -1029,8 +1029,8 @@ pub fn begin(
     }
 
     {
-        const deadTags = try self.tags.reset(larena);
-        defer larena.free(deadTags);
+        const deadTags = try self.tags.reset(self.lifo());
+        defer self.lifo().free(deadTags);
         for (deadTags) |name| {
             _ = self.tags.remove(name);
             //std.debug.print("tag dead free {s}\n", .{name});
@@ -1042,8 +1042,8 @@ pub fn begin(
     {
         self.data_mutex.lock();
         defer self.data_mutex.unlock();
-        const deadData = try self.datas.reset(larena);
-        defer larena.free(deadData);
+        const deadData = try self.datas.reset(self.lifo());
+        defer self.lifo().free(deadData);
         for (deadData) |id| {
             var sd = self.datas.fetchRemove(id).?;
             sd.value.free(self.gpa);
@@ -1063,7 +1063,7 @@ pub fn begin(
 
     //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
-    try dvui.subwindowAdd(self.wd.id, self.wd.rect, self.rect_pixels, false, null);
+    dvui.subwindowAdd(self.wd.id, self.wd.rect, self.rect_pixels, false, null);
 
     _ = dvui.subwindowCurrentSet(self.wd.id, .cast(self.wd.rect));
 
@@ -1085,16 +1085,16 @@ pub fn begin(
             }
         }
 
-        const deadAnimations = try self.animations.reset(larena);
-        defer larena.free(deadAnimations);
+        const deadAnimations = try self.animations.reset(self.lifo());
+        defer self.lifo().free(deadAnimations);
         for (deadAnimations) |id| {
             _ = self.animations.remove(id);
         }
     }
 
     {
-        const deadFonts = try self.font_cache.reset(larena);
-        defer larena.free(deadFonts);
+        const deadFonts = try self.font_cache.reset(self.lifo());
+        defer self.lifo().free(deadFonts);
         for (deadFonts) |id| {
             var tce = self.font_cache.fetchRemove(id).?;
             tce.value.glyph_info.deinit();
@@ -1104,8 +1104,8 @@ pub fn begin(
     }
 
     {
-        const deadTextures = try self.texture_cache.reset(larena);
-        defer larena.free(deadTextures);
+        const deadTextures = try self.texture_cache.reset(self.lifo());
+        defer self.lifo().free(deadTextures);
         for (deadTextures) |id| {
             const ice = self.texture_cache.fetchRemove(id).?;
             self.backend.textureDestroy(ice.value.texture);
@@ -1127,7 +1127,7 @@ pub fn begin(
 
     self.layout = .{};
 
-    try self.backend.begin(larena);
+    try self.backend.begin(self.arena());
 }
 
 fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
@@ -1358,7 +1358,7 @@ pub fn dataRemove(self: *Self, id: WidgetId, key: []const u8) void {
 ///
 ///  If calling from a non-GUI thread, do any dataSet() calls before unlocking the
 ///  mutex to ensure that data is available before the dialog is displayed.
-pub fn dialogAdd(self: *Self, id: WidgetId, display: dvui.DialogDisplayFn) std.mem.Allocator.Error!*std.Thread.Mutex {
+pub fn dialogAdd(self: *Self, id: WidgetId, display: dvui.DialogDisplayFn) *std.Thread.Mutex {
     self.dialog_mutex.lock();
 
     for (self.dialogs.items) |*d| {
@@ -1367,7 +1367,9 @@ pub fn dialogAdd(self: *Self, id: WidgetId, display: dvui.DialogDisplayFn) std.m
             break;
         }
     } else {
-        try self.dialogs.append(Dialog{ .id = id, .display = display });
+        self.dialogs.append(Dialog{ .id = id, .display = display }) catch |err| {
+            dvui.logError(@src(), err, "Could not add dialog to the list", .{});
+        };
     }
 
     return &self.dialog_mutex;
@@ -1386,7 +1388,7 @@ pub fn dialogRemove(self: *Self, id: WidgetId) void {
     }
 }
 
-fn dialogsShow(self: *Self) !void {
+fn dialogsShow(self: *Self) void {
     var i: usize = 0;
     var dia: ?Dialog = null;
     while (true) {
@@ -1407,19 +1409,23 @@ fn dialogsShow(self: *Self) !void {
         self.dialog_mutex.unlock();
 
         if (dia) |d| {
-            try d.display(d.id);
+            d.display(d.id) catch |err| {
+                log.warn("Dialog {x} got {!} from its display function", .{ d.id, err });
+            };
         } else {
             break;
         }
     }
 }
 
-pub fn timer(self: *Self, id: WidgetId, micros: i32) std.mem.Allocator.Error!void {
+pub fn timer(self: *Self, id: WidgetId, micros: i32) void {
     // when start_time is in the future, we won't spam frames, so this will
     // cause a single frame and then expire
     const a = Animation{ .start_time = micros, .end_time = micros };
     const h = dvui.hashIdKey(id, "_timer");
-    try self.animations.put(self.gpa, h, a);
+    self.animations.put(self.gpa, h, a) catch |err| {
+        dvui.logError(@src(), err, "Could not add timer for {x}", .{id});
+    };
 }
 
 pub fn timerRemove(self: *Self, id: WidgetId) void {
@@ -1432,7 +1438,7 @@ pub fn timerRemove(self: *Self, id: WidgetId) void {
 /// calling from a non-GUI thread, do any `dvui.dataSet` calls before unlocking
 /// the mutex to ensure that data is available before the dialog is
 /// displayed.
-pub fn toastAdd(self: *Self, id: WidgetId, subwindow_id: ?WidgetId, display: dvui.DialogDisplayFn, timeout: ?i32) std.mem.Allocator.Error!*std.Thread.Mutex {
+pub fn toastAdd(self: *Self, id: WidgetId, subwindow_id: ?WidgetId, display: dvui.DialogDisplayFn, timeout: ?i32) *std.Thread.Mutex {
     self.dialog_mutex.lock();
 
     for (self.toasts.items) |*t| {
@@ -1442,11 +1448,13 @@ pub fn toastAdd(self: *Self, id: WidgetId, subwindow_id: ?WidgetId, display: dvu
             break;
         }
     } else {
-        try self.toasts.append(Toast{ .id = id, .subwindow_id = subwindow_id, .display = display });
+        self.toasts.append(Toast{ .id = id, .subwindow_id = subwindow_id, .display = display }) catch |err| {
+            dvui.logError(@src(), err, "Could not add toast {x} to the list", .{id});
+        };
     }
 
     if (timeout) |tt| {
-        try self.timer(id, tt);
+        self.timer(id, tt);
     } else {
         self.timerRemove(id);
     }
@@ -1466,7 +1474,7 @@ pub fn toastRemove(self: *Self, id: WidgetId) void {
     }
 }
 
-fn debugWindowShow(self: *Self) !void {
+fn debugWindowShow(self: *Self) void {
     if (self.debug_under_mouse_quitting) {
         self.debug_under_mouse = false;
         self.debug_under_mouse_esc_needed = false;
@@ -1484,22 +1492,22 @@ fn debugWindowShow(self: *Self) !void {
     self.debug_under_focus = false;
     defer self.debug_under_focus = duf;
 
-    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &self.debug_window_show }, .{ .min_size_content = .{ .w = 300, .h = 600 } });
+    var float = dvui.floatingWindow(@src(), .{ .open_flag = &self.debug_window_show }, .{ .min_size_content = .{ .w = 300, .h = 600 } });
     defer float.deinit();
 
-    float.dragAreaSet(try dvui.windowHeader("DVUI Debug", "", &self.debug_window_show));
+    float.dragAreaSet(dvui.windowHeader("DVUI Debug", "", &self.debug_window_show));
 
     {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        try dvui.labelNoFmt(@src(), "Hex id of widget to highlight:", .{}, .{ .gravity_y = 0.5 });
+        dvui.labelNoFmt(@src(), "Hex id of widget to highlight:", .{}, .{ .gravity_y = 0.5 });
 
         var buf = [_]u8{0} ** 20;
         if (self.debug_widget_id != .zero) {
-            _ = try std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id});
+            _ = std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id}) catch unreachable;
         }
-        var te = try dvui.textEntry(@src(), .{
+        var te = dvui.textEntry(@src(), .{
             .text = .{ .buffer = &buf },
         }, .{});
         te.deinit();
@@ -1508,7 +1516,7 @@ fn debugWindowShow(self: *Self) !void {
     }
 
     var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 } });
-    try tl.install(.{});
+    tl.install(.{});
 
     self.debug_widget_panic = false;
 
@@ -1517,68 +1525,68 @@ fn debugWindowShow(self: *Self) !void {
         // blend text and control colors
         color = .{ .color = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill_control) };
     }
-    if (try dvui.button(@src(), "Panic", .{}, .{ .gravity_x = 1.0, .margin = dvui.Rect.all(8), .color_text = color })) {
+    if (dvui.button(@src(), "Panic", .{}, .{ .gravity_x = 1.0, .margin = dvui.Rect.all(8), .color_text = color })) {
         if (self.debug_widget_id != .zero) {
             self.debug_widget_panic = true;
         } else {
-            try dvui.dialog(@src(), .{}, .{ .title = "Disabled", .message = "Need valid widget Id to panic" });
+            dvui.dialog(@src(), .{}, .{ .title = "Disabled", .message = "Need valid widget Id to panic" });
         }
     }
 
-    if (try tl.touchEditing()) |floating_widget| {
+    if (tl.touchEditing()) |floating_widget| {
         defer floating_widget.deinit();
-        try tl.touchEditingMenu();
+        tl.touchEditingMenu();
     }
     tl.processEvents();
 
-    try tl.addText(self.debug_info_name_rect, .{});
-    try tl.addText("\n\n", .{});
-    try tl.addText(self.debug_info_src_id_extra, .{});
+    tl.addText(self.debug_info_name_rect, .{});
+    tl.addText("\n\n", .{});
+    tl.addText(self.debug_info_src_id_extra, .{});
     tl.deinit();
 
-    if (try dvui.button(@src(), if (dum) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{}, .{})) {
+    if (dvui.button(@src(), if (dum) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{}, .{})) {
         dum = !dum;
     }
 
-    if (try dvui.button(@src(), if (dum) "Stop (Or Press Esc)" else "Debug Under Mouse (until esc)", .{}, .{})) {
+    if (dvui.button(@src(), if (dum) "Stop (Or Press Esc)" else "Debug Under Mouse (until esc)", .{}, .{})) {
         dum = !dum;
         self.debug_under_mouse_esc_needed = dum;
     }
 
-    if (try dvui.button(@src(), if (duf) "Stop Debugging Focus" else "Debug Focus", .{}, .{})) {
+    if (dvui.button(@src(), if (duf) "Stop Debugging Focus" else "Debug Focus", .{}, .{})) {
         duf = !duf;
     }
 
     var log_refresh = self.debugRefresh(null);
-    if (try dvui.checkbox(@src(), &log_refresh, "Refresh Logging", .{})) {
+    if (dvui.checkbox(@src(), &log_refresh, "Refresh Logging", .{})) {
         _ = self.debugRefresh(log_refresh);
     }
 
     var log_event_handled = self.debugHandleEvents(null);
-    if (try dvui.checkbox(@src(), &log_event_handled, "Log Handled Events", .{})) {
+    if (dvui.checkbox(@src(), &log_event_handled, "Log Handled Events", .{})) {
         _ = self.debugHandleEvents(log_event_handled);
     }
 
     var log_event_unhandled = self.debugUnhandledEvents(null);
-    if (try dvui.checkbox(@src(), &log_event_unhandled, "Log Unhandled Events", .{})) {
+    if (dvui.checkbox(@src(), &log_event_unhandled, "Log Unhandled Events", .{})) {
         _ = self.debugUnhandledEvents(log_event_unhandled);
     }
 
-    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false, .min_size_content = .height(200) });
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false, .min_size_content = .height(200) });
     defer scroll.deinit();
 
     var iter = std.mem.splitScalar(u8, self.debug_under_mouse_info, '\n');
     var i: usize = 0;
     while (iter.next()) |line| : (i += 1) {
         if (line.len > 0) {
-            var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
+            var hbox = dvui.box(@src(), .horizontal, .{ .id_extra = i });
             defer hbox.deinit();
 
-            if (try dvui.buttonIcon(@src(), "find", dvui.entypo.magnifying_glass, .{}, .{}, .{})) {
+            if (dvui.buttonIcon(@src(), "find", dvui.entypo.magnifying_glass, .{}, .{}, .{})) {
                 self.debug_widget_id = @enumFromInt(std.fmt.parseInt(u64, std.mem.sliceTo(line, ' '), 16) catch 0);
             }
 
-            try dvui.labelNoFmt(@src(), line, .{}, .{ .gravity_y = 0.5 });
+            dvui.labelNoFmt(@src(), line, .{}, .{ .gravity_y = 0.5 });
         }
     }
 }
@@ -1589,21 +1597,25 @@ pub const endOptions = struct {
 
 /// Normally this is called for you in `end`, but you can call it separately in
 /// case you want to do something after everything has been rendered.
-pub fn endRendering(self: *Self, opts: endOptions) !void {
+pub fn endRendering(self: *Self, opts: endOptions) void {
     if (opts.show_toasts) {
-        try dvui.toastsShow(null);
+        dvui.toastsShow(null);
     }
-    try self.dialogsShow();
+    self.dialogsShow();
 
     if (self.debug_window_show) {
-        try self.debugWindowShow();
+        self.debugWindowShow();
     }
 
     for (self.subwindows.items) |*sw| {
-        try self.renderCommands(sw.render_cmds);
+        self.renderCommands(sw.render_cmds) catch |err| {
+            dvui.logError(@src(), err, "Failed to render commands for subwindow {x}", .{sw.id});
+        };
         sw.render_cmds.clearAndFree();
 
-        try self.renderCommands(sw.render_cmds_after);
+        self.renderCommands(sw.render_cmds_after) catch |err| {
+            dvui.logError(@src(), err, "Failed to render commands after for subwindow {x}", .{sw.id});
+        };
         sw.render_cmds_after.clearAndFree();
     }
 
@@ -1617,7 +1629,7 @@ pub fn endRendering(self: *Self, opts: endOptions) !void {
 /// get a useful time to wait between render loops.
 pub fn end(self: *Self, opts: endOptions) !?u32 {
     if (!self.end_rendering_done) {
-        try self.endRendering(opts);
+        self.endRendering(opts);
     }
 
     // Call this before freeing data so backend can use data allocated during frame.

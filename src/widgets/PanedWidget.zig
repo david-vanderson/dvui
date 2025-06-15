@@ -114,10 +114,10 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
     return self;
 }
 
-pub fn install(self: *PanedWidget) !void {
+pub fn install(self: *PanedWidget) void {
     self.wd.register();
 
-    try self.wd.borderAndBackground(.{});
+    self.wd.borderAndBackground(.{});
     self.prevClip = dvui.clip(self.wd.contentRectScale().r);
 
     dvui.parentSet(self.widget());
@@ -137,7 +137,7 @@ pub fn processEvents(self: *PanedWidget) void {
     }
 }
 
-pub fn draw(self: *PanedWidget) !void {
+pub fn draw(self: *PanedWidget) void {
     if (self.collapsed()) return;
 
     if (dvui.captured(self.wd.id)) {
@@ -176,7 +176,7 @@ pub fn draw(self: *PanedWidget) !void {
             r.w = width;
         },
     }
-    try r.fill(.all(thick), .{ .color = self.wd.options.color(.text).opacity(0.5) });
+    r.fill(.all(thick), .{ .color = self.wd.options.color(.text).opacity(0.5) });
 }
 
 pub fn collapsed(self: *PanedWidget) bool {

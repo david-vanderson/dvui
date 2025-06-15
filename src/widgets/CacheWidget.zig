@@ -43,20 +43,25 @@ fn getCachedTexture(self: *CacheWidget) ?dvui.Texture {
     return entry.texture;
 }
 
-fn drawCachedTexture(self: *CacheWidget, t: dvui.Texture) !void {
+fn drawCachedTexture(self: *CacheWidget, t: dvui.Texture) void {
     const rs = self.wd.contentRectScale();
 
-    try dvui.renderTexture(t, rs, .{ .uv = (Rect{}).toSize(self.tex_uv), .debug = self.wd.options.debugGet() });
+    dvui.renderTexture(t, rs, .{
+        .uv = (Rect{}).toSize(self.tex_uv),
+        .debug = self.wd.options.debugGet(),
+    }) catch |err| {
+        dvui.logError(@src(), err, "Could not render texture", .{});
+    };
     //if (self.wd.options.debugGet()) {
     //    dvui.log.debug("drawing {d} {d} {d}x{d} {d}x{d} {d} {d}", .{ rs.r.x, rs.r.y, rs.r.w, rs.r.h, t.texture.width, t.texture.height, self.tex_uv.w, self.tex_uv.h });
     //}
 }
 
 /// Must be called before install().
-pub fn invalidate(self: *CacheWidget) !void {
+pub fn invalidate(self: *CacheWidget) void {
     if (self.getCachedTexture()) |t| {
         // if we had a texture, show it this frame because our contents needs a frame to get sizing
-        try self.drawCachedTexture(t);
+        self.drawCachedTexture(t);
 
         dvui.textureDestroyLater(t);
         _ = dvui.currentWindow().texture_cache.remove(self.hash);
@@ -67,16 +72,16 @@ pub fn invalidate(self: *CacheWidget) !void {
     }
 }
 
-pub fn install(self: *CacheWidget) !void {
+pub fn install(self: *CacheWidget) void {
     dvui.parentSet(self.widget());
     self.wd.register();
-    try self.wd.borderAndBackground(.{});
+    self.wd.borderAndBackground(.{});
 
     if (self.state != .ok) return;
 
     if (self.getCachedTexture()) |t| {
         // successful cache, draw texture and enforce min size
-        try self.drawCachedTexture(t);
+        self.drawCachedTexture(t);
         self.wd.minSizeMax(self.wd.rect.size());
     } else {
 
@@ -87,8 +92,8 @@ pub fn install(self: *CacheWidget) !void {
             const h: u32 = @intFromFloat(@ceil(rs.r.h));
             self.tex_uv = .{ .w = rs.r.w / @ceil(rs.r.w), .h = rs.r.h / @ceil(rs.r.h) };
 
-            self.caching_tex = dvui.textureCreateTarget(w, h, .linear) catch |err| switch (err) {
-                error.TextureCreate => blk: {
+            self.caching_tex = dvui.textureCreateTarget(w, h, .linear) catch |err| blk: switch (err) {
+                error.TextureCreate => {
                     self.state = .texture_create_error;
                     if (dvui.dataGet(null, self.wd.id, "_texture_create_error", bool) orelse false) {
                         // indicate that texture failed last frame to prevent backends that always return errors from forever refreshing
@@ -96,12 +101,10 @@ pub fn install(self: *CacheWidget) !void {
                     }
                     break :blk null;
                 },
-                else => |e| return e,
-            };
-            errdefer if (self.caching_tex) |cache_tex| {
-                // There is no destroy for targets so this will do
-                if (dvui.textureFromTarget(cache_tex) catch null) |tex| dvui.textureDestroyLater(tex);
-                self.caching_tex = null;
+                else => {
+                    dvui.logError(@src(), err, "Could not create cache texture", .{});
+                    break :blk null;
+                },
             };
 
             if (self.caching_tex) |tex| {
@@ -110,7 +113,7 @@ pub fn install(self: *CacheWidget) !void {
                     offset.x = @round(offset.x);
                     offset.y = @round(offset.y);
                 }
-                self.old_target = try dvui.renderTarget(.{ .texture = tex, .offset = offset });
+                self.old_target = dvui.renderTarget(.{ .texture = tex, .offset = offset });
 
                 // clip to just us, even if we are off screen
                 self.old_clip = dvui.clipGet();
@@ -158,7 +161,7 @@ pub fn processEvent(self: *CacheWidget, e: *dvui.Event, bubbling: bool) void {
 
 /// This deinit function returns an error because of the additional
 /// texture handling it requires.
-pub fn deinit(self: *CacheWidget) !void {
+pub fn deinit(self: *CacheWidget) void {
     defer dvui.widgetFree(self);
     const cw = dvui.currentWindow();
     if (self.state == .ok and self.uncached()) {
@@ -172,15 +175,20 @@ pub fn deinit(self: *CacheWidget) !void {
     if (self.old_clip) |clip| {
         dvui.clipSet(clip);
     }
-    if (self.caching_tex) |tex| {
-        _ = try dvui.renderTarget(self.old_target);
+    if (self.caching_tex) |tex| blk: {
+        _ = dvui.renderTarget(self.old_target);
 
         // convert texture target to normal texture, destroys self.caching_tex
-        const texture = try dvui.textureFromTarget(tex);
-        try cw.texture_cache.put(cw.gpa, self.hash, .{ .texture = texture });
-
+        const texture = dvui.textureFromTarget(tex) catch |err| {
+            dvui.logError(@src(), err, "Could not get texture from caching target", .{});
+            break :blk;
+        };
+        cw.texture_cache.put(cw.gpa, self.hash, .{ .texture = texture }) catch |err| {
+            dvui.logError(@src(), err, "Could not put texture into the cache", .{});
+            break :blk;
+        };
         // draw texture so we see it this frame
-        try self.drawCachedTexture(texture);
+        self.drawCachedTexture(texture);
 
         dvui.dataSet(null, self.wd.id, "_tex_uv", self.tex_uv);
         dvui.dataRemove(null, self.wd.id, "_cache_now");
