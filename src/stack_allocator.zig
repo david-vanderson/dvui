@@ -1,16 +1,15 @@
 //! A Last In Last Out (LIFO) Stack Allocator, based on `std.heap.ArenaAllocator`
 //! with added support for freeing all memory like a stack.
 //!
-//! Remapping an resizing has limited support, meaning nothing but the last
-//! allocation can be resized or remapped. This means using array lists will
-//! cripple this allocator if it ever returns `error.OutOfMemory`, but should
-//! work one at a time without issue.
+//! Only the most recent allocation can be resized or remapped. This means that
+//! if this is used with a growing `std.ArrayList`, it must be the most recent
+//! allocation.
 //!
-//! If the memory order is not upheld, a trace will be printed to the offending
-//! allocations to show the order they should be freed. Freeing out-of-order
-//! will attempt to reset when debugging is active, but will fail to free
-//! when debug is disabled. Therefor all freeing errors needs to be addressed
-//! for use without debug enabled.
+//! If the memory order is not upheld, a stack trace will be printed to the
+//! offending allocations to show the order they should be freed. Freeing
+//! out-of-order will attempt to reset the stack when `debug` is enabled, but
+//! will fail to free when `debug` is disabled. Therefor all freeing errors needs
+//! to be addressed for use without debug enabled.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -45,9 +44,8 @@ else
     };
 
 /// This allocator takes an existing allocator, wraps it, and provides an interface where
-/// you can allocate and then free it all together. Calls to free an individual item only
-/// free the item if it was the most recent allocation, otherwise calls to free do
-/// nothing.
+/// you can allocate and free in LIFO (Last In First Out) order. Out-of-order calls to free
+/// will log errors when `debug` is enabled and will fail to free with `debug` disabled.
 pub const StackAllocator = struct {
     child_allocator: Allocator,
     buffer_list: BufList = .{},
