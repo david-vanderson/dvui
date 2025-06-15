@@ -135,9 +135,9 @@ pub const StackAllocator = struct {
     }
 
     pub const ResetMode = union(enum) {
-        /// Releases all allocated memory in the arena.
+        /// Releases all allocated memory for the stack.
         free_all,
-        /// This will pre-heat the arena for future allocations by allocating a
+        /// This will pre-heat the stack for future allocations by allocating a
         /// large enough buffer for all previously done allocations.
         /// Preheating will speed up the allocation process by invoking the backing allocator
         /// less often than before. If `reset()` is used in a loop, this means that after the
@@ -146,6 +146,9 @@ pub const StackAllocator = struct {
         /// This is the same as `retain_capacity`, but the memory will be shrunk to
         /// this value if it exceeds the limit.
         retain_with_limit: usize,
+        /// This is the same as `retain_capacity`, but the memory will be shrunk to
+        /// the peak usage since the last call to `reset()`
+        retain_with_peak_limit,
     };
     /// Queries the current memory use of this arena.
     /// This will **not** include the storage required for internal keeping.
@@ -197,6 +200,8 @@ pub const StackAllocator = struct {
         const requested_capacity = switch (mode) {
             .retain_capacity => self.queryCapacity(),
             .retain_with_limit => |limit| @min(limit, self.queryCapacity()),
+            // Round up to the nearest 0x400 to leave some space for minor variation
+            .retain_with_peak_limit => if (self.peak_usage == 0) 0 else (self.peak_usage + 0x400) & ~@as(@TypeOf(self.peak_usage), 0x400 - 1),
             .free_all => 0,
         };
         if (requested_capacity == 0) {
