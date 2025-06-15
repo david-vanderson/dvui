@@ -89,7 +89,7 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
     return ret;
 }
 
-pub fn picker(src: std.builtin.SourceLocation, opts: Options) !bool {
+pub fn picker(src: std.builtin.SourceLocation, opts: Options) bool {
     var picked = false;
 
     const defaults: Options = .{
@@ -114,11 +114,11 @@ pub fn picker(src: std.builtin.SourceLocation, opts: Options) !bool {
         .{ .selected_index = theme_choice, .label = dvui.themeGet().name },
         options,
     );
-    try dd.install();
+    dd.install();
 
-    if (try dd.dropped()) {
+    if (dd.dropped()) {
         for (cw.themes.values()) |*theme| {
-            if (try dd.addChoiceLabel(theme.name)) {
+            if (dd.addChoiceLabel(theme.name)) {
                 dvui.themeSet(theme);
                 picked = true;
                 break;

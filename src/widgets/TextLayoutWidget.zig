@@ -228,7 +228,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, show_touch_draggables: bool = true }) !void {
+pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, show_touch_draggables: bool = true }) void {
     self.focus_at_start = opts.focused orelse (self.wd.id == dvui.focusedWidgetId());
 
     self.wd.register();
@@ -267,7 +267,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
 
     const rs = self.wd.contentRectScale();
 
-    try self.wd.borderAndBackground(.{});
+    self.wd.borderAndBackground(.{});
 
     self.prevClip = dvui.clip(rs.r);
 
@@ -298,7 +298,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             rect.h = size;
 
             var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
-            try fc.install();
+            fc.install();
 
             var offset: Point.Physical = dvui.dataGet(null, fc.wd.id, "_offset", Point.Physical) orelse .{};
 
@@ -341,11 +341,11 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
                 defer path.deinit();
 
-                try path.points.append(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
-                try path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
+                path.addPoint(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
+                path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                try path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
-                try path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.wd.options.color(.border), .closed = true });
+                path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
+                path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.wd.options.color(.border), .closed = true });
             }
 
             dvui.dataSet(null, fc.wd.id, "_offset", offset);
@@ -369,7 +369,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             rect.h = size;
 
             var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
-            try fc.install();
+            fc.install();
 
             var offset: Point.Physical = dvui.dataGet(null, fc.wd.id, "_offset", Point.Physical) orelse .{};
 
@@ -412,11 +412,11 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
                 defer path.deinit();
 
-                try path.points.append(.{ .x = fcrs.r.x, .y = fcrs.r.y });
-                try path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
+                path.addPoint(.{ .x = fcrs.r.x, .y = fcrs.r.y });
+                path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                try path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
-                try path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.wd.options.color(.border), .closed = true });
+                path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
+                path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.wd.options.color(.border), .closed = true });
             }
 
             dvui.dataSet(null, fc.wd.id, "_offset", offset);
@@ -425,39 +425,42 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
     }
 }
 
-pub fn format(self: *TextLayoutWidget, comptime fmt: []const u8, args: anytype, opts: Options) !void {
+pub fn format(self: *TextLayoutWidget, comptime fmt: []const u8, args: anytype, opts: Options) void {
     comptime if (!std.unicode.utf8ValidateSlice(fmt)) @compileError("Format strings must be valid utf-8");
     const cw = dvui.currentWindow();
-    const l = try std.fmt.allocPrint(cw.lifo(), fmt, args);
-    defer cw.lifo().free(l);
-    try self.addText(l, opts);
+    const l = std.fmt.allocPrint(cw.lifo(), fmt, args) catch |err| blk: {
+        dvui.logError(@src(), err, "Failed to print", .{});
+        break :blk fmt;
+    };
+    defer if (l.ptr != fmt.ptr) cw.lifo().free(l);
+    self.addText(l, opts);
 }
 
-pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
-    _ = try self.addTextEx(text, .none, opts);
+pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) void {
+    _ = self.addTextEx(text, .none, opts);
 }
 
-pub fn addTextClick(self: *TextLayoutWidget, text: []const u8, opts: Options) !bool {
-    return try self.addTextEx(text, .click, opts);
+pub fn addTextClick(self: *TextLayoutWidget, text: []const u8, opts: Options) bool {
+    return self.addTextEx(text, .click, opts);
 }
 
-pub fn addTextHover(self: *TextLayoutWidget, text: []const u8, opts: Options) !bool {
-    return try self.addTextEx(text, .hover, opts);
+pub fn addTextHover(self: *TextLayoutWidget, text: []const u8, opts: Options) bool {
+    return self.addTextEx(text, .hover, opts);
 }
 
-pub fn addTextTooltip(self: *TextLayoutWidget, src: std.builtin.SourceLocation, text: []const u8, tooltip: []const u8, opts: Options) !void {
+pub fn addTextTooltip(self: *TextLayoutWidget, src: std.builtin.SourceLocation, text: []const u8, tooltip: []const u8, opts: Options) void {
     var tt: dvui.FloatingTooltipWidget = .init(src, .{
         .active_rect = .{},
         .position = .sticky,
     }, .{ .id_extra = opts.idExtra() });
 
-    if (try self.addTextHover(text, opts)) {
+    if (self.addTextHover(text, opts)) {
         tt.init_options.active_rect = dvui.windowRectPixels();
     }
 
-    if (try tt.shown()) {
-        var tl = try dvui.textLayout(@src(), .{}, .{ .background = false });
-        try tl.addText(tooltip, .{});
+    if (tt.shown()) {
+        var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
+        tl.addText(tooltip, .{});
         tl.deinit();
     }
 
@@ -466,7 +469,7 @@ pub fn addTextTooltip(self: *TextLayoutWidget, src: std.builtin.SourceLocation, 
 
 // Helper to addTextEx
 // - returns byte position if p is before or within r
-fn findPoint(p: Point, r: Rect, bytes_seen: usize, txt: []const u8, options: Options) !?struct { byte: usize, affinity: Selection.Affinity = .after } {
+fn findPoint(p: Point, r: Rect, bytes_seen: usize, txt: []const u8, options: Options) ?struct { byte: usize, affinity: Selection.Affinity = .after } {
     if (p.y < r.y or (p.y < (r.y + r.h) and p.x < r.x)) {
         // found it - p is before this rect
         return .{ .byte = bytes_seen };
@@ -496,13 +499,13 @@ fn findPoint(p: Point, r: Rect, bytes_seen: usize, txt: []const u8, options: Opt
 // Called for each piece of text before searching for the cursor.
 // Place for selection movement to track points and move the cursor if needed,
 // also to track any state they need before the cursor (like word select).
-fn selMovePre(self: *TextLayoutWidget, txt: []const u8, end: usize, text_rect: Rect, options: Options) !void {
+fn selMovePre(self: *TextLayoutWidget, txt: []const u8, end: usize, text_rect: Rect, options: Options) void {
     const text_line = txt[0..end];
     switch (self.sel_move) {
         .none => {},
         .mouse => |*m| {
             if (m.down_pt) |p| {
-                if (try findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
+                if (findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
                     m.byte = ba.byte;
                     self.selection.moveCursor(ba.byte, false);
                     self.selection.affinity = ba.affinity;
@@ -512,7 +515,7 @@ fn selMovePre(self: *TextLayoutWidget, txt: []const u8, end: usize, text_rect: R
                     self.selection.moveCursor(self.bytes_seen + end, false);
                 }
             } else if (m.drag_pt) |p| {
-                if (try findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
+                if (findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
                     self.selection.cursor = ba.byte;
                     self.selection.start = @min(m.byte.?, ba.byte);
                     self.selection.end = @max(m.byte.?, ba.byte);
@@ -529,7 +532,7 @@ fn selMovePre(self: *TextLayoutWidget, txt: []const u8, end: usize, text_rect: R
         },
         .expand_pt => |*ep| {
             if (ep.pt) |p| {
-                if (try findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
+                if (findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
                     self.selection.moveCursor(ba.byte, false);
                     self.selection.affinity = ba.affinity;
                     ep.pt = null;
@@ -547,7 +550,7 @@ fn selMovePre(self: *TextLayoutWidget, txt: []const u8, end: usize, text_rect: R
         .char_left_right => {},
         .cursor_updown => |*cud| {
             if (cud.pt) |p| {
-                if (try findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
+                if (findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
                     self.selection.moveCursor(ba.byte, cud.select);
                     self.selection.affinity = ba.affinity;
                     cud.pt = null;
@@ -970,7 +973,7 @@ const AddTextExAction = enum {
     hover,
 };
 
-fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction, opts: Options) !bool {
+fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction, opts: Options) bool {
     var ret = false;
 
     const cw = dvui.currentWindow();
@@ -979,7 +982,10 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
     const msize = options.fontGet().sizeM(1, 1);
     const line_height = options.fontGet().lineHeight();
     self.current_line_height = @max(self.current_line_height, line_height);
-    var txt = try dvui.toUtf8(cw.lifo(), text);
+    var txt = dvui.toUtf8(cw.lifo(), text) catch |err| blk: {
+        dvui.logError(@src(), err, "Failed to convert to utf8", .{});
+        break :blk text;
+    };
     defer if (text.ptr != txt.ptr) cw.lifo().free(txt);
 
     var container_width = self.wd.contentRect().w;
@@ -1121,7 +1127,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
 
         // handle selection movement
         const text_rect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
-        try self.selMovePre(txt, end, text_rect, options);
+        self.selMovePre(txt, end, text_rect, options);
 
         if (self.sel_pts[0] != null or self.sel_pts[1] != null) {
             var sel_bytes = [2]?usize{ null, null };
@@ -1205,11 +1211,11 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 (self.selection.start -| self.bytes_seen -| rtxt.len) == 0 and
                 (self.selection.end -| self.bytes_seen -| rtxt.len) > 0)
             {
-                rtxt = try std.mem.concat(cw.lifo(), u8, &.{ rtxt, " " });
+                rtxt = std.mem.concat(cw.lifo(), u8, &.{ rtxt, " " }) catch txt;
             }
             defer if (txt.ptr != rtxt.ptr) cw.lifo().free(rtxt);
 
-            try dvui.renderText(.{
+            dvui.renderText(.{
                 .font = options.fontGet(),
                 .text = rtxt,
                 .rs = rs,
@@ -1218,7 +1224,9 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 .sel_end = self.selection.end -| self.bytes_seen,
                 .sel_color = options.color(.fill),
                 .sel_color_bg = options.color(.accent),
-            });
+            }) catch |err| {
+                dvui.logError(@src(), err, "Failed to render text: {s}", .{rtxt});
+            };
         }
 
         // Even if we don't actually render (might be outside clipping region),
@@ -1240,16 +1248,22 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 // initialize or realloc
                 if (self.copy_slice) |slice| {
                     const old_len = slice.len;
-                    self.copy_slice = try cw.lifo().realloc(slice, slice.len + (cend - cstart));
-                    @memcpy(self.copy_slice.?[old_len..], txt[cstart..cend]);
+                    self.copy_slice = cw.lifo().realloc(slice, slice.len + (cend - cstart)) catch slice;
+                    if (self.copy_slice.?.len == old_len) {
+                        dvui.log.debug("copy_slice realloc failed, copying will be incomplete", .{});
+                    } else {
+                        @memcpy(self.copy_slice.?[old_len..], txt[cstart..cend]);
+                    }
                 } else {
-                    self.copy_slice = try cw.lifo().dupe(u8, txt[cstart..cend]);
+                    self.copy_slice = cw.lifo().dupe(u8, txt[cstart..cend]) catch |err| blk: {
+                        dvui.logError(@src(), err, "Could not allocate copy slice for text: {s}", .{txt[cstart..cend]});
+                        break :blk null;
+                    };
                 }
 
                 // push to clipboard if done
                 if (sel.end <= self.bytes_seen + end) {
-                    try dvui.clipboardTextSet(self.copy_slice.?);
-
+                    dvui.clipboardTextSet(self.copy_slice.?);
                     self.copy_sel = null;
                     cw.lifo().free(self.copy_slice.?);
                     self.copy_slice = null;
@@ -1315,7 +1329,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
     return ret;
 }
 
-pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
+pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     self.add_text_done = true;
 
     self.selection.cursor = @min(self.selection.cursor, self.bytes_seen);
@@ -1332,7 +1346,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
 
     if (self.copy_sel) |_| {
         // we are copying to clipboard and never stopped
-        try dvui.clipboardTextSet(self.copy_slice orelse "");
+        dvui.clipboardTextSet(self.copy_slice orelse "");
 
         self.copy_sel = null;
         if (self.copy_slice) |cs| {
@@ -1403,7 +1417,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
     }
 }
 
-pub fn touchEditing(self: *TextLayoutWidget) !?*FloatingWidget {
+pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
     if (self.touch_editing and self.te_show_context_menu and self.focus_at_start and self.wd.visible()) {
         self.te_floating = dvui.FloatingWidget.init(@src(), .{});
 
@@ -1422,22 +1436,22 @@ pub fn touchEditing(self: *TextLayoutWidget) !?*FloatingWidget {
             dvui.refresh(null, @src(), self.te_floating.wd.id);
         }
 
-        try self.te_floating.install();
+        self.te_floating.install();
         return &self.te_floating;
     }
 
     return null;
 }
 
-pub fn touchEditingMenu(self: *TextLayoutWidget) !void {
-    var hbox = try dvui.box(@src(), .horizontal, .{
+pub fn touchEditingMenu(self: *TextLayoutWidget) void {
+    var hbox = dvui.box(@src(), .horizontal, .{
         .corner_radius = dvui.ButtonWidget.defaults.corner_radiusGet(),
         .background = true,
         .border = dvui.Rect.all(1),
     });
     defer hbox.deinit();
 
-    if (try dvui.buttonIcon(
+    if (dvui.buttonIcon(
         @src(),
         "select all",
         dvui.entypo.swap,
@@ -1448,7 +1462,7 @@ pub fn touchEditingMenu(self: *TextLayoutWidget) !void {
         self.selection.selectAll();
     }
 
-    if (try dvui.buttonIcon(
+    if (dvui.buttonIcon(
         @src(),
         "copy",
         dvui.entypo.copy,
@@ -1780,9 +1794,7 @@ pub fn copy(self: *TextLayoutWidget) void {
 pub fn deinit(self: *TextLayoutWidget) void {
     defer dvui.widgetFree(self);
     if (!self.add_text_done) {
-        self.addTextDone(.{}) catch |err| {
-            dvui.log.err("TextLayoutWidget.deinit addTextDone got {!}\n", .{err});
-        };
+        self.addTextDone(.{});
     }
 
     // handle mouse cursor here after all addText because some might set the cursor

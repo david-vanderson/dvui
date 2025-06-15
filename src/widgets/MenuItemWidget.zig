@@ -39,21 +39,21 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *MenuItemWidget) !void {
+pub fn install(self: *MenuItemWidget) void {
     self.wd.register();
 
     // For most widgets we only tabIndexSet if they are visible, but menu
     // items are often in large dropdowns that are scrollable, plus the
     // up/down arrow keys get used to move between menu items, so you need
     // to be able to move to the next menu item even if it's not visible
-    try dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
+    dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
 
-    try self.wd.borderAndBackground(.{});
+    self.wd.borderAndBackground(.{});
 
     dvui.parentSet(self.widget());
 }
 
-pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bool = false }) !void {
+pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bool = false }) void {
     var focused: bool = false;
     if (self.wd.id == dvui.focusedWidgetId()) {
         focused = true;
@@ -84,17 +84,17 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
     if (self.wd.visible()) {
         if (self.show_active) {
             if (opts.focus_as_outline) {
-                try self.wd.focusBorder();
+                self.wd.focusBorder();
             } else {
                 const rs = self.wd.backgroundRectScale();
-                try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.wd.options.color(.accent) });
+                rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.wd.options.color(.accent) });
             }
         } else if ((self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow()) or self.highlight) {
             const rs = self.wd.backgroundRectScale();
-            try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.wd.options.color(.fill_hover) });
+            rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.wd.options.color(.fill_hover) });
         } else if (self.wd.options.backgroundGet()) {
             const rs = self.wd.backgroundRectScale();
-            try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.wd.options.color(.fill) });
+            rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.wd.options.color(.fill) });
         }
     }
 }
@@ -277,15 +277,15 @@ test "menuItem click sets last_focused_id_this_frame" {
         var last_focused_id_set: ?dvui.WidgetId = null;
 
         fn frame() !dvui.App.Result {
-            var m = try dvui.menu(@src(), .vertical, .{ .padding = .all(10), .tag = "menu" });
+            var m = dvui.menu(@src(), .vertical, .{ .padding = .all(10), .tag = "menu" });
             defer m.deinit();
 
             const last_focused = dvui.lastFocusedIdInFrame();
 
-            if (try dvui.menuItemLabel(@src(), "item 1", .{}, .{ .tag = "item 1" })) |_| {
+            if (dvui.menuItemLabel(@src(), "item 1", .{}, .{ .tag = "item 1" })) |_| {
                 dvui.focusWidget(m.data().id, null, null);
             }
-            _ = try dvui.menuItemLabel(@src(), "item 2", .{}, .{ .tag = "item 2" });
+            _ = dvui.menuItemLabel(@src(), "item 2", .{}, .{ .tag = "item 2" });
 
             last_focused_id_set = null;
             if (last_focused != dvui.lastFocusedIdInFrame()) {

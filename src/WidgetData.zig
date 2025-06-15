@@ -107,8 +107,8 @@ pub fn register(self: *WidgetData) void {
             cw.windowFor(cw.mouse_pt) == dvui.subwindowCurrentId())
         {
             const old = cw.debug_under_mouse_info;
-            cw.debug_under_mouse_info = std.fmt.allocPrint(cw.gpa, "{s}\n{x} {s}", .{ old, self.id, name }) catch blk: {
-                dvui.log.err("Under mouse debug info could not be printed", .{});
+            cw.debug_under_mouse_info = std.fmt.allocPrint(cw.gpa, "{s}\n{x} {s}", .{ old, self.id, name }) catch |err| blk: {
+                dvui.logError(@src(), err, "Under mouse debug info could not be printed", .{});
                 break :blk "";
             };
             if (old.len > 0) {
@@ -155,9 +155,7 @@ pub fn register(self: *WidgetData) void {
                 outline_rect.y = @ceil(outline_rect.y) - 0.5;
             }
 
-            outline_rect.stroke(.{}, .{ .thickness = 1 * rs.s, .color = dvui.themeGet().color_err, .after = true }) catch {
-                dvui.log.err("Could not outline debug widget ({s}) {x}, at {}", .{ name, self.id, outline_rect });
-            };
+            outline_rect.stroke(.{}, .{ .thickness = 1 * rs.s, .color = dvui.themeGet().color_err, .after = true });
 
             dvui.clipSet(clipr);
 
@@ -170,7 +168,7 @@ pub fn visible(self: *const WidgetData) bool {
     return !dvui.clipGet().intersect(self.borderRectScale().r).empty();
 }
 
-pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?Color = null }) dvui.Backend.GenericError!void {
+pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?Color = null }) void {
     if (!self.visible()) {
         return;
     }
@@ -181,7 +179,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
 
         const prect = rs.r.insetAll(rs.s * bs.shrink).offsetPoint(bs.offset.scale(rs.s, dvui.Point.Physical));
 
-        try prect.fill(radius.scale(rs.s, Rect.Physical), .{ .color = bs.colorGet().opacity(bs.alpha), .blur = rs.s * bs.blur });
+        prect.fill(radius.scale(rs.s, Rect.Physical), .{ .color = bs.colorGet().opacity(bs.alpha), .blur = rs.s * bs.blur });
     }
 
     var bg = self.options.backgroundGet();
@@ -192,7 +190,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
             // draw border as stroked path
             const r = self.borderRect().inset(b.scale(0.5, Rect));
             const rs = self.rectScale().rectToRectScale(r.offsetNeg(self.rect));
-            try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = b.x * rs.s, .color = self.options.color(.border) });
+            rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = b.x * rs.s, .color = self.options.color(.border) });
         } else {
             // draw border as large rect with background on top
             if (!bg) {
@@ -202,7 +200,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
 
             const rs = self.borderRectScale();
             if (!rs.r.empty()) {
-                try rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.options.color(.border) });
+                rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.options.color(.border) });
             }
         }
     }
@@ -210,17 +208,17 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
     if (bg) {
         const rs = self.backgroundRectScale();
         if (!rs.r.empty()) {
-            try rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = opts.fill_color orelse self.options.color(.fill) });
+            rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = opts.fill_color orelse self.options.color(.fill) });
         }
     }
 }
 
-pub fn focusBorder(self: *const WidgetData) dvui.Backend.GenericError!void {
+pub fn focusBorder(self: *const WidgetData) void {
     if (self.visible()) {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;
 
-        try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = thick, .color = dvui.themeGet().color_accent, .after = true });
+        rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = thick, .color = dvui.themeGet().color_accent, .after = true });
     }
 }
 
