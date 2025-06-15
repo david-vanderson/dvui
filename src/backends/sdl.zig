@@ -64,9 +64,26 @@ pub const InitOptions = struct {
     icon: ?[]const u8 = null,
     /// use when running tests
     hidden: bool = false,
+    /// Passes the internal logs from SDL to std.log
+    /// (can be enabled later with `c.SDL_SetLogPriorities)
+    logs: bool = false,
 };
 
 pub fn initWindow(options: InitOptions) !SDLBackend {
+    if (options.logs) {
+        if (sdl3) {
+            c.SDL_SetLogPriorities(c.SDL_LOG_PRIORITY_VERBOSE);
+        } else {
+            c.SDL_LogSetAllPriority(c.SDL_LOG_PRIORITY_VERBOSE);
+        }
+    }
+
+    if (sdl3) {
+        c.SDL_SetLogOutputFunction(&logCallback, null);
+    } else {
+        c.SDL_LogSetOutputFunction(&logCallback, null);
+    }
+
     if (!sdl3) _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
     // needed according to https://discourse.libsdl.org/t/possible-to-run-sdl2-headless/25665/2
     // but getting error "offscreen not available"
@@ -281,6 +298,52 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
 
 pub fn init(window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
     return SDLBackend{ .window = window, .renderer = renderer };
+}
+
+fn logCallback(_: ?*anyopaque, category: c_int, priority: c.SDL_LogPriority, message: [*c]const u8) callconv(.c) void {
+    const sdl_log = std.log.scoped(.SDL);
+    const category_name = switch (category) {
+        c.SDL_LOG_CATEGORY_APPLICATION => "APPLICATION",
+        c.SDL_LOG_CATEGORY_ERROR => "ERROR",
+        c.SDL_LOG_CATEGORY_ASSERT => "ASSERT",
+        c.SDL_LOG_CATEGORY_SYSTEM => "SYSTEM",
+        c.SDL_LOG_CATEGORY_AUDIO => "AUDIO",
+        c.SDL_LOG_CATEGORY_VIDEO => "VIDEO",
+        c.SDL_LOG_CATEGORY_RENDER => "RENDER",
+        c.SDL_LOG_CATEGORY_INPUT => "INPUT",
+        c.SDL_LOG_CATEGORY_TEST => "TEST",
+        if (sdl3) c.SDL_LOG_CATEGORY_GPU else c.SDL_LOG_CATEGORY_RESERVED1 => if (sdl3) "GPU" else "RESERVED",
+        c.SDL_LOG_CATEGORY_RESERVED2...c.SDL_LOG_CATEGORY_RESERVED10 => "RESERVED",
+        c.SDL_LOG_CATEGORY_CUSTOM => "CUSTOM",
+        else => "UNKNOWN",
+    };
+    const level: std.log.Level, const extra = if (sdl3) switch (priority) {
+        c.SDL_LOG_PRIORITY_INVALID => .{ .debug, "(INVALID)" },
+        c.SDL_LOG_PRIORITY_TRACE => .{ .debug, "(TRACE)" },
+        c.SDL_LOG_PRIORITY_VERBOSE => .{ .debug, "(VERBOSE)" },
+        c.SDL_LOG_PRIORITY_COUNT => .{ .debug, "(COUNT)" },
+        c.SDL_LOG_PRIORITY_DEBUG => .{ .debug, "" },
+        c.SDL_LOG_PRIORITY_INFO => .{ .info, "" },
+        c.SDL_LOG_PRIORITY_WARN => .{ .warn, "" },
+        c.SDL_LOG_PRIORITY_ERROR => .{ .err, "" },
+        c.SDL_LOG_PRIORITY_CRITICAL => .{ .err, "(CRITICAL)" },
+        else => .{ .err, "(UNKNOWN)" },
+    } else switch (priority) {
+        c.SDL_LOG_PRIORITY_VERBOSE => .{ .debug, "(VERBOSE)" },
+        c.SDL_LOG_PRIORITY_DEBUG => .{ .debug, "" },
+        c.SDL_NUM_LOG_PRIORITIES => .{ .debug, "(NUM)" },
+        c.SDL_LOG_PRIORITY_INFO => .{ .info, "" },
+        c.SDL_LOG_PRIORITY_WARN => .{ .warn, "" },
+        c.SDL_LOG_PRIORITY_ERROR => .{ .err, "" },
+        c.SDL_LOG_PRIORITY_CRITICAL => .{ .err, "(CRITICAL)" },
+        else => .{ .err, "(UNKNOWN)" },
+    };
+    switch (level) {
+        .debug => sdl_log.debug("[{s}]{s} {s}", .{ category_name, extra, message }),
+        .info => sdl_log.info("[{s}]{s} {s}", .{ category_name, extra, message }),
+        .warn => sdl_log.warn("[{s}]{s} {s}", .{ category_name, extra, message }),
+        .err => sdl_log.err("[{s}]{s} {s}", .{ category_name, extra, message }),
+    }
 }
 
 const SDL_ERROR = if (sdl3) bool else c_int;
