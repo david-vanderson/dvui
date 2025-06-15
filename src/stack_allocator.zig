@@ -55,6 +55,8 @@ pub const StackAllocator = struct {
     // to an earlier node. If this is null, use the first node in the buf list
     current_node: ?*BufNode = null,
     last_freed_alignment: mem.Alignment = .@"1",
+    peak_usage: u32 = 0,
+    current_usage: u32 = 0,
 
     meta: if (debug) std.ArrayListUnmanaged(DebugMeta) = if (debug) .empty else {},
 
@@ -123,6 +125,13 @@ pub const StackAllocator = struct {
         if (debug) {
             self.meta.deinit(self.child_allocator);
         }
+    }
+
+    pub fn debug_log(self: *const StackAllocator) void {
+        std.log.debug("{*} current used: {d}", .{ self, self.current_usage });
+        std.log.debug("{*} peak used: {d}", .{ self, self.peak_usage });
+        std.log.debug("{*} buf len: {d}", .{ self, self.buffer_list.len });
+        std.log.debug("{*} capacity: {d}", .{ self, self.queryCapacity() });
     }
 
     pub const ResetMode = union(enum) {
@@ -212,6 +221,9 @@ pub const StackAllocator = struct {
         std.debug.assert(maybe_first_node == null or maybe_first_node.?.next == null);
         // reset the state before we try resizing the buffers, so we definitely have reset the arena to 0.
         self.current_node = null;
+        self.current_usage = 0;
+        self.peak_usage = 0;
+
         if (debug) self.meta.clearAndFree(self.child_allocator);
         if (maybe_first_node) |first_node| {
             first_node.data.end_index = 0;
@@ -296,6 +308,8 @@ pub const StackAllocator = struct {
                 }
 
                 self.current_node = cur_node;
+                self.current_usage += @intCast(result.len);
+                self.peak_usage = @max(self.peak_usage, self.current_usage);
                 cur_node.data.end_index = @intCast(new_end_index);
                 return result.ptr;
             }
@@ -329,19 +343,27 @@ pub const StackAllocator = struct {
             return false;
         }
         if (buf.len >= new_len) {
-            cur_node.data.end_index -= @intCast(buf.len - new_len);
+            const diff: u32 = @intCast(buf.len - new_len);
+            self.current_usage -= diff;
+            cur_node.data.end_index -= diff;
             if (debug) self.meta.items[self.meta.items.len - 1].item_buf.len = new_len;
             return true;
         } else if (cur_buf.len - cur_node.data.end_index >= new_len - buf.len) {
-            cur_node.data.end_index += @intCast(new_len - buf.len);
+            const diff: u32 = @intCast(new_len - buf.len);
+            self.current_usage += diff;
+            self.peak_usage = @max(self.peak_usage, self.current_usage);
+            cur_node.data.end_index += diff;
             if (debug) self.meta.items[self.meta.items.len - 1].item_buf.len = new_len;
             return true;
         } else {
             // Try to expand the current buffer
             const bigger_size = cur_alloc_buf.len + (new_len - buf.len);
             if (self.child_allocator.rawResize(cur_alloc_buf, BufNode_alignment, bigger_size, @returnAddress())) {
+                const diff: u32 = @intCast(new_len - buf.len);
                 cur_node.data.len = @intCast(bigger_size);
-                cur_node.data.end_index += @intCast(new_len - buf.len);
+                self.current_usage += diff;
+                self.peak_usage = @max(self.peak_usage, self.current_usage);
+                cur_node.data.end_index += diff;
                 if (debug) self.meta.items[self.meta.items.len - 1].item_buf.len = new_len;
                 return true;
             }
@@ -367,6 +389,9 @@ pub const StackAllocator = struct {
             const new_buf = alloc(ctx, new_len, alignment, ret_addr) orelse return null;
             std.debug.assert(cur_node != self.current());
             @memcpy(new_buf, buf);
+            self.current_usage += @intCast(new_len - buf.len);
+            self.peak_usage = @max(self.peak_usage, self.current_usage);
+
             // "free" the data from the previous buffer
             cur_node.data.end_index = @intCast(@intFromPtr(buf.ptr) - @intFromPtr(cur_buf.ptr));
 
@@ -400,6 +425,7 @@ pub const StackAllocator = struct {
         // made us switch buffers and thus didn't affect the alignment of the current buffer
         if (cur_node.data.end_index == aligned_end_index or cur_node.data.end_index == end_index) {
             self.last_freed_alignment = alignment;
+            self.current_usage -= @intCast(buf.len);
             cur_node.data.end_index = @intCast(@intFromPtr(buf.ptr) - @intFromPtr(cur_buf.ptr));
             @memset(buf, undefined);
 
@@ -451,7 +477,10 @@ pub const StackAllocator = struct {
             // There was other things above us in the stack, find out where we are
             var i: usize = 0;
             while (i < self.meta.items.len) : (i += 1) {
-                if (self.meta.items[self.meta.items.len - 1 - i].item_buf.ptr == buf.ptr) break;
+                const meta = &self.meta.items[self.meta.items.len - 1 - i];
+                if (meta.item_buf.ptr == buf.ptr) break;
+                // We are "free"-ing everything along the way
+                self.current_usage -= @intCast(meta.item_buf.len);
             }
             // We could not find this allocation in the list
             if (i == self.meta.items.len) {
