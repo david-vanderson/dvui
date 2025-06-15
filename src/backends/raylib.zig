@@ -82,6 +82,9 @@ pub const InitOptions = struct {
     /// content of a PNG image (or any other format stb_image can load)
     /// tip: use @embedFile
     icon: ?[]const u8 = null,
+    /// Enables all logs from the raylib library
+    /// (log level can always be changed directly with `c.SetTraceLogLevel`)
+    logs: bool = false,
 };
 
 //==========WINDOW MANAGEMENT FUNCTIONALITY==========
@@ -128,6 +131,13 @@ pub fn clear(_: *RaylibBackend) void {}
 pub fn initWindow(options: InitOptions) !RaylibBackend {
     createWindow(options);
 
+    c.SetTraceLogCallback(&logCallback);
+    if (options.logs) {
+        c.SetTraceLogLevel(c.LOG_ALL);
+    } else {
+        c.SetTraceLogLevel(c.LOG_NONE);
+    }
+
     var back = init(options.gpa);
     back.we_own_window = true;
     return back;
@@ -146,6 +156,39 @@ pub fn init(gpa: std.mem.Allocator) RaylibBackend {
         .shader = c.LoadShaderFromMemory(vertexSource, fragSource),
         .VAO = @intCast(c.rlLoadVertexArray()),
     };
+}
+
+/// This is needed because raylib gives a printf format string
+/// and va_list args that needs to be formatted.
+///
+/// https://linux.die.net/man/3/vsnprintf
+pub extern "c" fn vsnprintf(out_str: [*c]u8, size: usize, format: [*c]const u8, args: c.va_list) c_int;
+/// https://www.raylib.com/examples/core/loader.html?name=core_custom_logging
+fn logCallback(msgType: c_int, format: [*c]const u8, args: c.va_list) callconv(.c) void {
+    const raylib_log = std.log.scoped(.raylib);
+    var buf: [500:0]u8 = undefined;
+    const len = vsnprintf(&buf, buf.len, format, args);
+    if (len < 0) {
+        return;
+    }
+    const level: std.log.Level, const extra = switch (msgType) {
+        c.LOG_ALL => .{ .debug, "(ALL) " },
+        c.LOG_TRACE => .{ .debug, "(TRACE) " },
+        c.LOG_DEBUG => .{ .debug, "" },
+        c.LOG_INFO => .{ .info, "" },
+        c.LOG_WARNING => .{ .warn, "" },
+        c.LOG_ERROR => .{ .err, "" },
+        c.LOG_FATAL => .{ .err, "(FATAL) " },
+        c.LOG_NONE => .{ .debug, "(NONE) " },
+        else => .{ .debug, "(UNKNOWN)" },
+    };
+
+    switch (level) {
+        .debug => raylib_log.debug("{s}{s}", .{ extra, buf[0..@intCast(len)] }),
+        .info => raylib_log.info("{s}{s}", .{ extra, buf[0..@intCast(len)] }),
+        .warn => raylib_log.warn("{s}{s}", .{ extra, buf[0..@intCast(len)] }),
+        .err => raylib_log.err("{s}{s}", .{ extra, buf[0..@intCast(len)] }),
+    }
 }
 
 pub fn shouldBlockRaylibInput(self: *RaylibBackend) bool {
