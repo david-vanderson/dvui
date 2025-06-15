@@ -315,7 +315,6 @@ pub const StackAllocator = struct {
     fn resize(ctx: *anyopaque, buf: []u8, alignment: mem.Alignment, new_len: usize, ret_addr: usize) bool {
         const self: *StackAllocator = @ptrCast(@alignCast(ctx));
         _ = alignment;
-        _ = ret_addr;
 
         const cur_node = self.current() orelse return false;
         const cur_alloc_buf = @as([*]u8, @ptrCast(cur_node))[0..cur_node.data.len];
@@ -323,6 +322,10 @@ pub const StackAllocator = struct {
         if (@intFromPtr(cur_buf.ptr) + cur_node.data.end_index != @intFromPtr(buf.ptr) + buf.len) {
             // It's not the most recent allocation, so because we
             // need to be able to free, we cannot even shrink
+            var addresses: [stack_trace_frames]usize = @splat(0);
+            var trace = std.builtin.StackTrace{ .instruction_addresses = &addresses, .index = 0 };
+            std.debug.captureStackTrace(ret_addr, &trace);
+            log.warn("Attempted to resize an allocation that was not at the top, this is not supported by this allocator. {}", .{trace});
             return false;
         }
         if (buf.len >= new_len) {
@@ -352,7 +355,13 @@ pub const StackAllocator = struct {
             const cur_node = self.current() orelse return null;
             const cur_buf = @as([*]u8, @ptrCast(cur_node))[@sizeOf(BufNode)..cur_node.data.len];
             // If we are not the last allocation, there is nothing we can do.
-            if (@intFromPtr(cur_buf.ptr) + cur_node.data.end_index != @intFromPtr(buf.ptr) + buf.len) return null;
+            if (@intFromPtr(cur_buf.ptr) + cur_node.data.end_index != @intFromPtr(buf.ptr) + buf.len) {
+                var addresses: [stack_trace_frames]usize = @splat(0);
+                var trace = std.builtin.StackTrace{ .instruction_addresses = &addresses, .index = 0 };
+                std.debug.captureStackTrace(ret_addr, &trace);
+                log.warn("Attempted to remap an allocation that was not at the top, this is not supported by this allocator. {}", .{trace});
+                return null;
+            }
 
             // Resize failed so we know this will create a new buffer
             const new_buf = alloc(ctx, new_len, alignment, ret_addr) orelse return null;
