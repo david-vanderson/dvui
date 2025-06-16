@@ -745,6 +745,9 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
 
 /// Add a mouse wheel event.  Positive ticks means scrolling up / scrolling left.
 ///
+/// If the shift key is being held, any vertical scroll will be transformed to
+/// horizontal.
+///
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
@@ -758,7 +761,7 @@ pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) st
     self.event_num += 1;
     try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
         .mouse = .{
-            .action = if (dir == .vertical) .{ .wheel_y = ticks } else .{ .wheel_x = ticks },
+            .action = if (dir == .vertical and !self.modifiers.shift()) .{ .wheel_y = ticks } else .{ .wheel_x = ticks },
             .button = .none,
             .mod = self.modifiers,
             .p = self.mouse_pt,
