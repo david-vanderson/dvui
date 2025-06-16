@@ -5712,7 +5712,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                         focusWidget(b.data().id, null, e.num);
                     } else if (me.action == .press and me.button.pointer()) {
                         e.handle(@src(), b.data());
-                        if (me.mod.ctrlOrCommand()) {
+                        if (me.mod.matchBind("ctrl/cmd")) {
                             text_mode = true;
                             refresh(null, @src(), b.data().id);
                         } else {
