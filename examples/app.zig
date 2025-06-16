@@ -28,10 +28,12 @@ pub const std_options: std.Options = .{
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
+var orig_content_scale: f32 = 1.0;
+
 // Runs before the first frame, after backend and dvui.Window.init()
 // - runs between win.begin()/win.end()
 pub fn AppInit(win: *dvui.Window) !void {
-    _ = win;
+    orig_content_scale = win.content_scale;
     //try dvui.addFont("NOTO", @embedFile("../src/fonts/NotoSansKR-Regular.ttf"), null);
 }
 
@@ -84,6 +86,25 @@ pub fn frame() !dvui.App.Result {
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
     if (dvui.button(@src(), label, .{}, .{ .tag = "show-demo-btn" })) {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
+    }
+
+    {
+        var hbox = dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+        dvui.label(@src(), "Pinch Zoom or Scale", .{}, .{});
+        if (dvui.buttonIcon(@src(), "plus", dvui.entypo.plus, .{}, .{}, .{})) {
+            dvui.currentWindow().content_scale *= 1.1;
+        }
+
+        if (dvui.buttonIcon(@src(), "minus", dvui.entypo.minus, .{}, .{}, .{})) {
+            dvui.currentWindow().content_scale /= 1.1;
+        }
+
+        if (dvui.currentWindow().content_scale != orig_content_scale) {
+            if (dvui.button(@src(), "Reset Scale", .{}, .{})) {
+                dvui.currentWindow().content_scale = orig_content_scale;
+            }
+        }
     }
 
     //if (dvui.button(@src(), "Panic", .{}, .{})) {
