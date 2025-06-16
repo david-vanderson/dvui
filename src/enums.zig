@@ -172,25 +172,23 @@ pub const Mod = enum(u16) {
         self.* = @enumFromInt(s & (~t));
     }
 
-    ///for debugging
-    pub fn print(self: Mod) void {
-        std.debug.print("Mod(", .{});
+    pub fn format(self: *const Mod, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        try writer.writeAll("Mod(");
+        var needs_separator = false;
 
-        var found_set = false;
-
-        const mod_fields = comptime std.meta.fieldNames(Mod);
-        inline for (mod_fields[0..9]) |field_name| {
-            if (self.has(@field(Mod, field_name))) {
-                std.debug.print(".{s}, ", .{field_name});
-                found_set = true;
+        if (self.* == .none) {
+            try writer.writeAll("none");
+        } else {
+            const mod_fields = comptime std.meta.fieldNames(Mod);
+            inline for (mod_fields[0..9]) |field_name| {
+                if (self.has(@field(Mod, field_name))) {
+                    if (needs_separator) try writer.writeAll(", ") else needs_separator = true;
+                    try writer.writeAll(field_name);
+                }
             }
         }
 
-        if (found_set == false) {
-            std.debug.print("{}", .{self});
-        }
-
-        std.debug.print(")\n", .{});
+        try writer.writeAll(")");
     }
 };
 
