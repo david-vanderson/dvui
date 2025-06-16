@@ -40,9 +40,9 @@ pub fn build(b: *std.Build) !void {
             b.option([]const u8, "image-dir", "Default directory for dvui.testing.saveImage"),
     );
     build_options.addOption(
-        u8,
+        ?u8,
         "log_stack_trace",
-        b.option(u8, "log-stack-trace", "The max number of stack frames to display in error log stack traces (32 shows almost everything)") orelse 0,
+        b.option(u8, "log-stack-trace", "The max number of stack frames to display in error log stack traces (32 shows almost everything, 0 to disable)"),
     );
     build_options.addOption(
         ?bool,
