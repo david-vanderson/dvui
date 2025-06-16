@@ -2991,17 +2991,12 @@ pub fn scrollCanvas(comptime data: u8) void {
         dragBox.deinit();
     }
 
-    var ctrl_down = dvui.dataGet(null, vbox.data().id, "_ctrl", bool) orelse false;
     var zoom: f32 = 1;
     var zoomP: Point.Physical = .{};
 
     // process scroll area events after boxes so the boxes get first pick (so
     // the button works)
     for (evts) |*e| {
-        if (e.evt == .key and e.evt.key.matchBind("ctrl/cmd")) {
-            ctrl_down = (e.evt.key.action == .down or e.evt.key.action == .repeat);
-        }
-
         if (!scroll.scroll.matchEvent(e))
             continue;
 
@@ -3031,7 +3026,7 @@ pub fn scrollCanvas(comptime data: u8) void {
                             dvui.refresh(null, @src(), scroll.scroll.data().id);
                         }
                     }
-                } else if (me.action == .wheel_y and ctrl_down) {
+                } else if (me.action == .wheel_y and me.mod.ctrlOrCommand()) {
                     e.handle(@src(), scroll.scroll.data());
                     const base: f32 = 1.01;
                     const zs = @exp(@log(base) * me.action.wheel_y);
@@ -3065,8 +3060,6 @@ pub fn scrollCanvas(comptime data: u8) void {
 
         dvui.refresh(null, @src(), scroll.scroll.data().id);
     }
-
-    dvui.dataSet(null, vbox.data().id, "_ctrl", ctrl_down);
 
     scaler.deinit();
 
