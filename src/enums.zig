@@ -1,5 +1,6 @@
 const builtin = @import("builtin");
 const std = @import("std");
+const dvui = @import("dvui.zig");
 
 pub const Backend = enum {
     custom,
@@ -158,11 +159,6 @@ pub const Mod = enum(u16) {
         return self.has(.lcommand) or self.has(.rcommand);
     }
 
-    /// This uses `command` on MacOS and `control` otherwise
-    pub fn ctrlOrCommand(self: Mod) bool {
-        return if (builtin.target.os.tag == .macos) self.command() else self.control();
-    }
-
     ///combine two modifiers
     pub fn combine(self: *Mod, other: Mod) void {
         const s: u16 = @intFromEnum(self.*);
@@ -175,6 +171,37 @@ pub const Mod = enum(u16) {
         const s: u16 = @intFromEnum(self.*);
         const t: u16 = @intFromEnum(other);
         self.* = @enumFromInt(s & (~t));
+    }
+
+    /// True if matches the named keybind ignoring Keybind.key (follows
+    /// Keybind.also).  See `matchKeyBind`.
+    pub fn matchBind(self: Mod, keybind_name: []const u8) bool {
+        const cw = dvui.currentWindow();
+
+        var name = keybind_name;
+        while (true) {
+            if (cw.keybinds.get(name)) |kb| {
+                if (self.matchKeyBind(kb)) {
+                    return true;
+                } else if (kb.also) |also_name| {
+                    name = also_name;
+                    continue;
+                } else {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+    }
+
+    /// True if matches the named keybind ignoring Keybind.key (ignores
+    /// Keybind.also).   Usually you want `matchBind`.
+    pub fn matchKeyBind(self: Mod, kb: Keybind) bool {
+        return ((kb.shift == null or kb.shift.? == self.shift()) and
+            (kb.control == null or kb.control.? == self.control()) and
+            (kb.alt == null or kb.alt.? == self.alt()) and
+            (kb.command == null or kb.command.? == self.command()));
     }
 
     pub fn format(self: *const Mod, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {

@@ -260,8 +260,8 @@ pub fn init(
                 try self.keybinds.putNoClobber("paste",      .{ .key = .v, .control = true });
                 try self.keybinds.putNoClobber("select_all", .{ .key = .a, .control = true });
 
-                try self.keybinds.putNoClobber("ctrl/cmd",   .{ .key = .left_control, .also = "ctrl/cmd_1" });
-                try self.keybinds.putNoClobber("ctrl/cmd_1", .{ .key = .right_control });
+                // use with mod.matchBind
+                try self.keybinds.putNoClobber("ctrl/cmd",   .{ .control = true });
 
                 try self.keybinds.putNoClobber("text_start",        .{ .key = .home, .shift = false, .control = true });
                 try self.keybinds.putNoClobber("text_end",          .{ .key = .end,  .shift = false, .control = true });
@@ -299,8 +299,8 @@ pub fn init(
                 try self.keybinds.putNoClobber("paste",      .{ .key = .v, .command = true });
                 try self.keybinds.putNoClobber("select_all", .{ .key = .a, .command = true });
 
-                try self.keybinds.putNoClobber("ctrl/cmd",   .{ .key = .left_command, .also = "ctrl/cmd_1" });
-                try self.keybinds.putNoClobber("ctrl/cmd_1", .{ .key = .right_command });
+                // use with mod.matchBind
+                try self.keybinds.putNoClobber("ctrl/cmd",   .{ .command = true });
 
                 try self.keybinds.putNoClobber("text_start",        .{ .key = .up,   .shift = false, .command = true });
                 try self.keybinds.putNoClobber("text_end",          .{ .key = .down, .shift = false, .command = true });
