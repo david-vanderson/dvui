@@ -5604,7 +5604,6 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     const rs = b.data().contentRectScale();
 
     var text_mode = dataGet(null, b.data().id, "_text_mode", bool) orelse false;
-    var ctrl_down = dataGet(null, b.data().id, "_ctrl", bool) orelse false;
 
     // must call dataGet/dataSet on these every frame to prevent them from
     // getting purged
@@ -5634,10 +5633,6 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
         const evts = events();
         for (evts) |*e| {
-            if (e.evt == .key and e.evt.key.matchBind("ctrl/cmd")) {
-                ctrl_down = (e.evt.key.action == .down or e.evt.key.action == .repeat);
-            }
-
             if (!text_mode) {
                 // if we are switching out of text mode, skip processing any
                 // remaining events
@@ -5706,10 +5701,6 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
         const evts = events();
         for (evts) |*e| {
-            if (e.evt == .key and e.evt.key.matchBind("ctrl/cmd")) {
-                ctrl_down = (e.evt.key.action == .down or e.evt.key.action == .repeat);
-            }
-
             if (!eventMatch(e, .{ .id = b.data().id, .r = rs.r }))
                 continue;
 
@@ -5721,7 +5712,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                         focusWidget(b.data().id, null, e.num);
                     } else if (me.action == .press and me.button.pointer()) {
                         e.handle(@src(), b.data());
-                        if (ctrl_down) {
+                        if (me.mod.matchBind("ctrl/cmd")) {
                             text_mode = true;
                             refresh(null, @src(), b.data().id);
                         } else {
@@ -5874,7 +5865,6 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     }
 
     dataSet(null, b.data().id, "_text_mode", text_mode);
-    dataSet(null, b.data().id, "_ctrl", ctrl_down);
 
     if (ret) {
         refresh(null, @src(), b.data().id);

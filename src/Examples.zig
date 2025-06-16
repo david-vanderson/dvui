@@ -2991,17 +2991,12 @@ pub fn scrollCanvas(comptime data: u8) void {
         dragBox.deinit();
     }
 
-    var ctrl_down = dvui.dataGet(null, vbox.data().id, "_ctrl", bool) orelse false;
     var zoom: f32 = 1;
     var zoomP: Point.Physical = .{};
 
     // process scroll area events after boxes so the boxes get first pick (so
     // the button works)
     for (evts) |*e| {
-        if (e.evt == .key and e.evt.key.matchBind("ctrl/cmd")) {
-            ctrl_down = (e.evt.key.action == .down or e.evt.key.action == .repeat);
-        }
-
         if (!scroll.scroll.matchEvent(e))
             continue;
 
@@ -3031,7 +3026,7 @@ pub fn scrollCanvas(comptime data: u8) void {
                             dvui.refresh(null, @src(), scroll.scroll.data().id);
                         }
                     }
-                } else if (me.action == .wheel_y and ctrl_down) {
+                } else if (me.action == .wheel_y and me.mod.matchBind("ctrl/cmd")) {
                     e.handle(@src(), scroll.scroll.data());
                     const base: f32 = 1.01;
                     const zs = @exp(@log(base) * me.action.wheel_y);
@@ -3065,8 +3060,6 @@ pub fn scrollCanvas(comptime data: u8) void {
 
         dvui.refresh(null, @src(), scroll.scroll.data().id);
     }
-
-    dvui.dataSet(null, vbox.data().id, "_ctrl", ctrl_down);
 
     scaler.deinit();
 
@@ -3665,38 +3658,47 @@ pub fn debuggingErrors() void {
         }
 
         var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+        tl.format("Latest matched keybinding: {s}", .{g.latest_slice}, .{});
+        tl.deinit();
 
-        tl.format("Latest matched keybinding: {s}\n\n", .{g.latest_slice}, .{});
+        if (dvui.expander(@src(), "All Key bindings", .{}, .{ .expand = .horizontal })) {
+            var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+            defer tl2.deinit();
 
-        var any_overlaps = false;
-        var outer = dvui.currentWindow().keybinds.iterator();
-        while (outer.next()) |okv| {
-            var inner = outer;
-            while (inner.next()) |ikv| {
-                const okb = okv.value_ptr.*;
-                const ikb = ikv.value_ptr.*;
-                if ((okb.shift == ikb.shift or okb.shift == null or ikb.shift == null) and
-                    (okb.control == ikb.control or okb.control == null or ikb.control == null) and
-                    (okb.alt == ikb.alt or okb.alt == null or ikb.alt == null) and
-                    (okb.command == ikb.command or okb.command == null or ikb.command == null) and
-                    (okb.key == ikb.key or okb.key == null or ikb.key == null))
-                {
-                    tl.format("keybind \"{s}\" overlaps \"{s}\"\n", .{ okv.key_ptr.*, ikv.key_ptr.* }, .{});
-                    any_overlaps = true;
-                }
+            var outer = dvui.currentWindow().keybinds.iterator();
+            while (outer.next()) |okv| {
+                tl2.format("\n{s}\n    {}\n", .{ okv.key_ptr.*, okv.value_ptr }, .{});
             }
         }
 
-        if (!any_overlaps) {
-            tl.addText("No keybind overlaps found.\n", .{});
+        if (dvui.expander(@src(), "Overlapping Key bindings", .{}, .{ .expand = .horizontal })) {
+            var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+            defer tl2.deinit();
+
+            var any_overlaps = false;
+            var outer = dvui.currentWindow().keybinds.iterator();
+            while (outer.next()) |okv| {
+                var inner = outer;
+                while (inner.next()) |ikv| {
+                    const okb = okv.value_ptr.*;
+                    const ikb = ikv.value_ptr.*;
+                    if ((okb.shift == ikb.shift or okb.shift == null or ikb.shift == null) and
+                        (okb.control == ikb.control or okb.control == null or ikb.control == null) and
+                        (okb.alt == ikb.alt or okb.alt == null or ikb.alt == null) and
+                        (okb.command == ikb.command or okb.command == null or ikb.command == null) and
+                        (okb.key == ikb.key))
+                    {
+                        tl2.format("keybind \"{s}\" overlaps \"{s}\"\n", .{ okv.key_ptr.*, ikv.key_ptr.* }, .{});
+                        any_overlaps = true;
+                    }
+                }
+            }
+
+            if (!any_overlaps) {
+                tl2.addText("No keybind overlaps found.", .{});
+            }
         }
 
-        tl.addText("\nCurrent keybinds:\n", .{});
-        outer = dvui.currentWindow().keybinds.iterator();
-        while (outer.next()) |okv| {
-            tl.format("\n{s}\n    {}\n", .{ okv.key_ptr.*, okv.value_ptr }, .{});
-        }
-        tl.deinit();
     }
 
     if (dvui.expander(@src(), "Show Font Atlases", .{}, .{ .expand = .horizontal })) {
