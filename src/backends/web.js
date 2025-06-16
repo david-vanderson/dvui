@@ -1109,13 +1109,15 @@ class Dvui {
         } else if (millis_to_wait == 0) {
             this.requestRender();
         } else if (millis_to_wait > 0) {
-            this.renderTimeoutId = setTimeout(function () {
-                this.renderTimeoutId = 0;
-                this.requestRender();
-            }.bind(this), millis_to_wait);
+            this.renderTimeoutId = setTimeout(
+                function () {
+                    this.renderTimeoutId = 0;
+                    this.requestRender();
+                }.bind(this),
+                millis_to_wait,
+            );
         }
     }
-
 
     run() {
         if (!this.instance) {
@@ -1146,9 +1148,9 @@ class Dvui {
         this.gl.canvas.addEventListener("mousemove", (ev) => {
             let rect = this.gl.canvas.getBoundingClientRect();
             let x = (ev.clientX - rect.left) / (rect.right - rect.left) *
-                this.gl.canvas.clientWidth;
+                this.gl.drawingBufferWidth;
             let y = (ev.clientY - rect.top) / (rect.bottom - rect.top) *
-                this.gl.canvas.clientHeight;
+                this.gl.drawingBufferHeight;
             this.instance.exports.add_event(1, 0, 0, x, y);
             this.requestRender();
         });

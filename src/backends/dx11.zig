@@ -1171,7 +1171,7 @@ pub fn wndProc(
         win32.WM_MOUSEMOVE => {
             const x = win32.xFromLparam(lparam);
             const y = win32.yFromLparam(lparam);
-            _ = stateFromHwnd(hwnd).dvui_window.addEventMouseMotionPhysical(
+            _ = stateFromHwnd(hwnd).dvui_window.addEventMouseMotion(
                 .{ .x = @floatFromInt(x), .y = @floatFromInt(y) },
             ) catch {};
             return 0;
