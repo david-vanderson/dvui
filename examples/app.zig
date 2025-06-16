@@ -33,14 +33,6 @@ const gpa = gpa_instance.allocator();
 pub fn AppInit(win: *dvui.Window) !void {
     _ = win;
     //try dvui.addFont("NOTO", @embedFile("../src/fonts/NotoSansKR-Regular.ttf"), null);
-
-    var fail = std.testing.FailingAllocator.init(std.heap.page_allocator, .{ .fail_index = 1 });
-    var path = dvui.Path.Builder.init(fail.allocator());
-    defer path.deinit();
-    for (0..1000) |i| {
-        path.addPoint(.{ .x = @floatFromInt(i), .y = @floatFromInt(i) });
-    }
-    path.build().stroke(.{ .thickness = 1, .color = .red });
 }
 
 // Run as app is shutting down before dvui.Window.deinit()
