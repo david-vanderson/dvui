@@ -978,9 +978,15 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             }
 
             if (sdl3) {
-                return try win.addEventMouseMotion(.{ .x = event.motion.x, .y = event.motion.y });
+                return try win.addEventMouseMotion(.{
+                    .x = event.motion.x,
+                    .y = event.motion.y,
+                });
             } else {
-                return try win.addEventMouseMotion(.{ .x = @as(f32, @floatFromInt(event.motion.x)), .y = @as(f32, @floatFromInt(event.motion.y)) });
+                return try win.addEventMouseMotion(.{
+                    .x = @as(f32, @floatFromInt(event.motion.x)),
+                    .y = @as(f32, @floatFromInt(event.motion.y)),
+                });
             }
         },
         if (sdl3) c.SDL_EVENT_MOUSE_BUTTON_DOWN else c.SDL_MOUSEBUTTONDOWN => {
