@@ -1176,12 +1176,19 @@ pub fn wndProc(
             ) catch {};
             return 0;
         },
-        win32.WM_MOUSEWHEEL => {
-            const wheel_delta: i16 = @bitCast(win32.hiword(wparam));
+        win32.WM_MOUSEWHEEL,
+        win32.WM_MOUSEHWHEEL,
+        => |msg| {
+            const delta: i16 = @bitCast(win32.hiword(wparam));
+            const float_delta: f32 = @floatFromInt(delta);
+            const wheel_delta: f32 = @floatFromInt(win32.WHEEL_DELTA);
             _ = stateFromHwnd(hwnd).dvui_window.addEventMouseWheel(
-                @floatFromInt(wheel_delta),
-                // TODO: Should this always be vertical?
-                .vertical,
+                float_delta / wheel_delta * 20,
+                switch (msg) {
+                    win32.WM_MOUSEWHEEL => .vertical,
+                    win32.WM_MOUSEHWHEEL => .horizontal,
+                    else => unreachable,
+                },
             ) catch {};
             return 0;
         },
