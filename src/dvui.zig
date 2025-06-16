@@ -225,10 +225,11 @@ pub fn widgetFree(ptr: anytype) void {
 }
 
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {
-    const stack_trace_enabled = @import("build_options").log_stack_trace > 0;
+    const stack_trace_frame_count = @import("build_options").log_stack_trace orelse if (builtin.mode == .Debug) 12 else 0;
+    const stack_trace_enabled = stack_trace_frame_count > 0;
     const err_trace_enabled = if (@import("build_options").log_error_trace) |enabled| enabled else stack_trace_enabled;
 
-    var addresses: [@import("build_options").log_stack_trace]usize = @splat(0);
+    var addresses: [stack_trace_frame_count]usize = @splat(0);
     var stack_trace = std.builtin.StackTrace{ .instruction_addresses = &addresses, .index = 0 };
     if (!builtin.strip_debug_info) std.debug.captureStackTrace(@returnAddress(), &stack_trace);
 
