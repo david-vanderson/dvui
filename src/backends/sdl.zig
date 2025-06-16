@@ -977,15 +977,19 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 return false;
             }
 
+            // sdl gives us mouse coords in "window coords" which is kind of
+            // like natural coords but ignores content scaling
+            const scale = self.pixelSize().w / self.windowSize().w;
+
             if (sdl3) {
                 return try win.addEventMouseMotion(.{
-                    .x = event.motion.x,
-                    .y = event.motion.y,
+                    .x = event.motion.x * scale,
+                    .y = event.motion.y * scale,
                 });
             } else {
                 return try win.addEventMouseMotion(.{
-                    .x = @as(f32, @floatFromInt(event.motion.x)),
-                    .y = @as(f32, @floatFromInt(event.motion.y)),
+                    .x = @as(f32, @floatFromInt(event.motion.x)) * scale,
+                    .y = @as(f32, @floatFromInt(event.motion.y)) * scale,
                 });
             }
         },
