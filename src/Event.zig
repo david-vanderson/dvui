@@ -127,6 +127,8 @@ pub const Mouse = struct {
     // mouse motion will be a touch or .none
     button: enums.Button,
 
+    mod: enums.Mod,
+
     p: dvui.Point.Physical,
     floating_win: dvui.WidgetId,
 };
