@@ -743,7 +743,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
     return ret;
 }
 
-/// Add a mouse wheel event.  Positive ticks means scrolling up / scrolling left.
+/// Add a mouse wheel event.  Positive ticks means scrolling up / scrolling right.
 ///
 /// If the shift key is being held, any vertical scroll will be transformed to
 /// horizontal.
@@ -759,15 +759,26 @@ pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) st
     //std.debug.print("mouse wheel {d}\n", .{ticks});
 
     self.event_num += 1;
-    try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
-        .mouse = .{
-            .action = if (dir == .vertical and !self.modifiers.shift()) .{ .wheel_y = ticks } else .{ .wheel_x = ticks },
-            .button = .none,
-            .mod = self.modifiers,
-            .p = self.mouse_pt,
-            .floating_win = winId,
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .evt = .{
+            .mouse = .{
+                .action = if (dir == .vertical)
+                    if (!self.modifiers.shift())
+                        .{ .wheel_y = ticks }
+                    else
+                        // Invert ticks so scrolling up takes you left
+                        // (matches behaviour of text editors and browsers)
+                        .{ .wheel_x = -ticks }
+                else
+                    .{ .wheel_x = ticks },
+                .button = .none,
+                .mod = self.modifiers,
+                .p = self.mouse_pt,
+                .floating_win = winId,
+            },
         },
-    } });
+    });
 
     const ret = (self.wd.id != winId);
     try self.positionMouseEventAdd();
