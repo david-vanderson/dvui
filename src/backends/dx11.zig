@@ -344,7 +344,8 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
             win32.SWP_NOCOPYBITS,
         ), "SetWindowPos in initWindow");
     }
-    try toLastErr(win32.ShowWindow(hwnd, .{ .SHOWNORMAL = 1 }), "ShowWindow in initWindow");
+    // Returns 0 if the window was previously hidden
+    _ = win32.ShowWindow(hwnd, .{ .SHOWNORMAL = 1 });
     try toLastErr(win32.UpdateWindow(hwnd), "UpdateWindow in initWindow");
     return contextFromHwnd(hwnd);
 }
