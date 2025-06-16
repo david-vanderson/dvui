@@ -158,6 +158,11 @@ pub const Mod = enum(u16) {
         return self.has(.lcommand) or self.has(.rcommand);
     }
 
+    /// This uses `command` on MacOS and `control` otherwise
+    pub fn ctrlOrCommand(self: Mod) bool {
+        return if (builtin.target.os.tag == .macos) self.command() else self.control();
+    }
+
     ///combine two modifiers
     pub fn combine(self: *Mod, other: Mod) void {
         const s: u16 = @intFromEnum(self.*);
