@@ -47,6 +47,10 @@ event_num: u16 = 0,
 // Start off screen so nothing is highlighted on the first frame
 mouse_pt: Point.Physical = .{ .x = -1, .y = -1 },
 mouse_pt_prev: Point.Physical = .{ .x = -1, .y = -1 },
+/// Holds the current state of the modifiers from the most
+/// recently added key event. Used for adding modifiers to
+/// mouse events
+modifiers: dvui.enums.Mod = .none,
 inject_motion_event: bool = false,
 
 drag_state: enum {
@@ -256,8 +260,8 @@ pub fn init(
                 try self.keybinds.putNoClobber("paste",      .{ .key = .v, .control = true });
                 try self.keybinds.putNoClobber("select_all", .{ .key = .a, .control = true });
 
-                try self.keybinds.putNoClobber("ctrl/cmd",   .{ .key = .left_control, .also = "ctrl/cmd_1" });
-                try self.keybinds.putNoClobber("ctrl/cmd_1", .{ .key = .right_control });
+                // use with mod.matchBind
+                try self.keybinds.putNoClobber("ctrl/cmd",   .{ .control = true });
 
                 try self.keybinds.putNoClobber("text_start",        .{ .key = .home, .shift = false, .control = true });
                 try self.keybinds.putNoClobber("text_end",          .{ .key = .end,  .shift = false, .control = true });
@@ -295,8 +299,8 @@ pub fn init(
                 try self.keybinds.putNoClobber("paste",      .{ .key = .v, .command = true });
                 try self.keybinds.putNoClobber("select_all", .{ .key = .a, .command = true });
 
-                try self.keybinds.putNoClobber("ctrl/cmd",   .{ .key = .left_command, .also = "ctrl/cmd_1" });
-                try self.keybinds.putNoClobber("ctrl/cmd_1", .{ .key = .right_command });
+                // use with mod.matchBind
+                try self.keybinds.putNoClobber("ctrl/cmd",   .{ .command = true });
 
                 try self.keybinds.putNoClobber("text_start",        .{ .key = .up,   .shift = false, .command = true });
                 try self.keybinds.putNoClobber("text_end",          .{ .key = .down, .shift = false, .command = true });
@@ -567,6 +571,8 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
 
     self.positionMouseEventRemove();
 
+    self.modifiers = event.mod;
+
     self.event_num += 1;
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
@@ -630,6 +636,7 @@ pub fn addEventMouseMotion(self: *Self, newpt: Point.Physical) std.mem.Allocator
         .mouse = .{
             .action = .{ .motion = dp },
             .button = if (self.debug_touch_simulate_events and self.debug_touch_simulate_down) .touch0 else .none,
+            .mod = self.modifiers,
             .p = self.mouse_pt,
             .floating_win = winId,
         },
@@ -698,6 +705,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
             .mouse = .{
                 .action = .focus,
                 .button = bb,
+                .mod = self.modifiers,
                 .p = self.mouse_pt,
                 .floating_win = winId,
             },
@@ -709,6 +717,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
         .mouse = .{
             .action = action,
             .button = bb,
+            .mod = self.modifiers,
             .p = self.mouse_pt,
             .floating_win = winId,
         },
@@ -719,7 +728,10 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
     return ret;
 }
 
-/// Add a mouse wheel event.  Positive ticks means scrolling up / scrolling left.
+/// Add a mouse wheel event.  Positive ticks means scrolling up / scrolling right.
+///
+/// If the shift key is being held, any vertical scroll will be transformed to
+/// horizontal.
 ///
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
@@ -732,14 +744,26 @@ pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) st
     //std.debug.print("mouse wheel {d}\n", .{ticks});
 
     self.event_num += 1;
-    try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
-        .mouse = .{
-            .action = if (dir == .vertical) .{ .wheel_y = ticks } else .{ .wheel_x = ticks },
-            .button = .none,
-            .p = self.mouse_pt,
-            .floating_win = winId,
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .evt = .{
+            .mouse = .{
+                .action = if (dir == .vertical)
+                    if (!self.modifiers.shift())
+                        .{ .wheel_y = ticks }
+                    else
+                        // Invert ticks so scrolling up takes you left
+                        // (matches behaviour of text editors and browsers)
+                        .{ .wheel_x = -ticks }
+                else
+                    .{ .wheel_x = ticks },
+                .button = .none,
+                .mod = self.modifiers,
+                .p = self.mouse_pt,
+                .floating_win = winId,
+            },
         },
-    } });
+    });
 
     const ret = (self.wd.id != winId);
     try self.positionMouseEventAdd();
@@ -767,6 +791,7 @@ pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, y
         .mouse = .{
             .action = .{ .motion = dp },
             .button = finger,
+            .mod = self.modifiers,
             .p = self.mouse_pt,
             .floating_win = winId,
         },
@@ -1119,6 +1144,7 @@ fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
     try self.events.append(self.arena(), .{ .evt = .{ .mouse = .{
         .action = .position,
         .button = .none,
+        .mod = self.modifiers,
         .p = self.mouse_pt,
         .floating_win = self.windowFor(self.mouse_pt),
     } } });

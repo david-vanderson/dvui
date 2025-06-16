@@ -63,6 +63,7 @@ pub const Key = struct {
     },
     mod: enums.Mod,
 
+    /// True if matches the named keybind (follows Keybind.also).  See `matchKeyBind`.
     pub fn matchBind(self: Key, keybind_name: []const u8) bool {
         const cw = dvui.currentWindow();
 
@@ -83,12 +84,10 @@ pub const Key = struct {
         }
     }
 
+    /// True if matches the named keybind (ignores Keybind.also).  Usually you
+    /// want `matchBind`.
     pub fn matchKeyBind(self: Key, kb: enums.Keybind) bool {
-        return ((kb.shift == null or kb.shift.? == self.mod.shift()) and
-            (kb.control == null or kb.control.? == self.mod.control()) and
-            (kb.alt == null or kb.alt.? == self.mod.alt()) and
-            (kb.command == null or kb.command.? == self.mod.command()) and
-            (kb.key == null or kb.key.? == self.code));
+        return self.mod.matchKeyBind(kb) and (kb.key != null and kb.key.? == self.code);
     }
 };
 
@@ -126,6 +125,8 @@ pub const Mouse = struct {
     // .none is used for mouse wheel and position
     // mouse motion will be a touch or .none
     button: enums.Button,
+
+    mod: enums.Mod,
 
     p: dvui.Point.Physical,
     floating_win: dvui.WidgetId,
