@@ -53,7 +53,6 @@ See the code for [pub fn sliderEntry](https://github.com/david-vanderson/dvui/bl
 * tab index
 * storing data from frame to frame
 * intercepting events and forwarding to child widgets
-* tracking ctrl key for ctrl-click
 * drawing a rounded rect
 
 ### One Frame At a Time
