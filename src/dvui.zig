@@ -1418,6 +1418,7 @@ pub const Path = struct {
     /// of the memory
     pub const Builder = struct {
         points: std.ArrayList(Point.Physical),
+        oom_error_occurred: bool = false,
 
         pub fn init(allocator: std.mem.Allocator) Builder {
             return .{ .points = .init(allocator) };
@@ -1429,13 +1430,18 @@ pub const Path = struct {
 
         /// Returns a non-owned `Path`. Calling `deinit` on the `Builder` is still required to free memory
         pub fn build(path: *Builder) Path {
+            if (path.oom_error_occurred) {
+                // This does not allow for error return traces, but
+                // reduces spam caused by logs on every call to `addPoint`
+                logError(@src(), std.mem.Allocator.Error.OutOfMemory, "Path encountered error and is likely incomplete", .{});
+            }
             return .{ .points = path.points.items };
         }
 
         /// Add a point to the path
         pub fn addPoint(path: *Builder, p: Point.Physical) void {
-            path.points.append(p) catch |err| {
-                logError(@src(), err, "Failed to add {} to path", .{p});
+            path.points.append(p) catch {
+                path.oom_error_occurred = true;
             };
         }
 
