@@ -225,17 +225,34 @@ pub fn widgetFree(ptr: anytype) void {
 }
 
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {
+    const stack_trace_frame_count = @import("build_options").log_stack_trace orelse if (builtin.mode == .Debug) 12 else 0;
+    const stack_trace_enabled = stack_trace_frame_count > 0;
+    const err_trace_enabled = if (@import("build_options").log_error_trace) |enabled| enabled else stack_trace_enabled;
+
+    var addresses: [stack_trace_frame_count]usize = @splat(0);
+    var stack_trace = std.builtin.StackTrace{ .instruction_addresses = &addresses, .index = 0 };
+    if (!builtin.strip_debug_info) std.debug.captureStackTrace(@returnAddress(), &stack_trace);
+
+    const error_trace_fmt, const err_trace_arg = if (err_trace_enabled)
+        .{ "\nError trace: {?}", @errorReturnTrace() }
+    else
+        .{ "{s}", "" }; // Needed to keep the arg count the same
+    const stack_trace_fmt, const trace_arg = if (stack_trace_enabled)
+        .{ "\nStack trace: {}", stack_trace }
+    else
+        .{ "{s}", "" }; // Needed to keep the arg count the sames
+
     // There is no nice way to combine a comptime tuple and a runtime tuple
     const combined_args = switch (std.meta.fields(@TypeOf(args)).len) {
-        0 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err) },
-        1 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0] },
-        2 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1] },
-        3 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2] },
-        4 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], args[3] },
-        5 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], args[3], args[4] },
+        0 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), err_trace_arg, trace_arg },
+        1 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], err_trace_arg, trace_arg },
+        2 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], err_trace_arg, trace_arg },
+        3 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], err_trace_arg, trace_arg },
+        4 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], args[3], err_trace_arg, trace_arg },
+        5 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], args[3], args[4], err_trace_arg, trace_arg },
         else => @compileError("Too many arguments"),
     };
-    log.err("{s}:{d}:{d}: {s} got {s}: " ++ fmt, combined_args);
+    log.err("{s}:{d}:{d}: {s} got {s}: " ++ fmt ++ error_trace_fmt ++ stack_trace_fmt, combined_args);
 }
 
 /// Get a pointer to the active theme.
@@ -1401,6 +1418,7 @@ pub const Path = struct {
     /// of the memory
     pub const Builder = struct {
         points: std.ArrayList(Point.Physical),
+        oom_error_occurred: bool = false,
 
         pub fn init(allocator: std.mem.Allocator) Builder {
             return .{ .points = .init(allocator) };
@@ -1412,13 +1430,18 @@ pub const Path = struct {
 
         /// Returns a non-owned `Path`. Calling `deinit` on the `Builder` is still required to free memory
         pub fn build(path: *Builder) Path {
+            if (path.oom_error_occurred) {
+                // This does not allow for error return traces, but
+                // reduces spam caused by logs on every call to `addPoint`
+                logError(@src(), std.mem.Allocator.Error.OutOfMemory, "Path encountered error and is likely incomplete", .{});
+            }
             return .{ .points = path.points.items };
         }
 
         /// Add a point to the path
         pub fn addPoint(path: *Builder, p: Point.Physical) void {
-            path.points.append(p) catch |err| {
-                logError(@src(), err, "Failed to add {} to path", .{p});
+            path.points.append(p) catch {
+                path.oom_error_occurred = true;
             };
         }
 
