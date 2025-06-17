@@ -1102,18 +1102,124 @@ pub const TextureTarget = struct {
 pub const TextureCacheEntry = struct {
     texture: Texture,
 
-    pub fn hash(bytes: []const u8, height: u32) u64 {
+    fn hash(bytes: []const u8, height: u32) u64 {
         var h = fnv.init();
         h.update(std.mem.asBytes(&bytes.ptr));
         h.update(std.mem.asBytes(&height));
         return h.final();
     }
-    pub fn hash_icon(bytes: []const u8, height: u32, opt: IconRenderOptions) u64 {
+    fn hash_icon(bytes: []const u8, height: u32, opt: IconRenderOptions) u64 {
         var h = fnv.init();
         h.update(std.mem.asBytes(&bytes.ptr));
         h.update(std.mem.asBytes(&height));
         h.update(std.mem.asBytes(&opt));
         return h.final();
+    }
+
+    pub fn fromImageFile(name: []const u8, image_bytes: []const u8) (Backend.TextureError || StbImageError)!TextureCacheEntry {
+        var cw = currentWindow();
+        const tex_hash = TextureCacheEntry.hash(image_bytes, 0);
+
+        if (cw.texture_cache.get(tex_hash)) |tce| return tce;
+
+        var w: c_int = undefined;
+        var h: c_int = undefined;
+        var channels_in_file: c_int = undefined;
+        const data = c.stbi_load_from_memory(image_bytes.ptr, @as(c_int, @intCast(image_bytes.len)), &w, &h, &channels_in_file, 4);
+        if (data == null) {
+            log.warn("imageTexture stbi_load error on image \"{s}\": {s}\n", .{ name, c.stbi_failure_reason() });
+            return StbImageError.stbImageError;
+        }
+
+        defer c.stbi_image_free(data);
+
+        var pixels: []u8 = undefined;
+        pixels.ptr = data;
+        pixels.len = @intCast(w * h * 4);
+
+        const texture = try textureCreate(.fromRGBA(pixels), @intCast(w), @intCast(h), .linear);
+
+        const entry = TextureCacheEntry{ .texture = texture };
+        try cw.texture_cache.put(cw.gpa, tex_hash, entry);
+
+        return entry;
+    }
+
+    pub fn fromRgbaPixelPMA(pma: dvui.RGBAPixelsPMA, width: u32, height: u32) !dvui.TextureCacheEntry {
+        var cw = dvui.currentWindow();
+        const tex_hash = dvui.TextureCacheEntry.hash(pma.pma, 0);
+        if (cw.texture_cache.getPtr(tex_hash)) |tce| return tce.*;
+        const texture = try dvui.textureCreate(pma, width, height, .linear);
+        const entry = dvui.TextureCacheEntry{ .texture = texture };
+        try cw.texture_cache.put(cw.gpa, tex_hash, entry);
+        return entry;
+    }
+    /// Render `tvg_bytes` at `height` into a `Texture`.  Name is for debugging.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn fromTvgFile(name: []const u8, tvg_bytes: []const u8, height: u32, icon_opts: IconRenderOptions) (Backend.TextureError || TvgError)!TextureCacheEntry {
+        var cw = currentWindow();
+        const icon_hash = TextureCacheEntry.hash_icon(tvg_bytes, height, icon_opts);
+
+        if (cw.texture_cache.get(icon_hash)) |tce| return tce;
+
+        const ImageAdapter = struct {
+            pixels: []u8,
+            width: u32,
+            height: u32,
+            pub fn setPixel(self: *@This(), x: usize, y: usize, col: [4]u8) void {
+                const idx = (y * self.height + x) * 4;
+                for (0..4) |i| {
+                    self.pixels[idx + i] = col[i];
+                }
+            }
+            pub fn getPixel(self: *@This(), x: usize, y: usize) [4]u8 {
+                const idx = y * self.height + x;
+                const slice = self.pixels[idx * 4 .. (idx + 1) * 4];
+                var col: [4]u8 = undefined;
+                for (&col, slice) |*a, s| a.* = s;
+            }
+            fn conv(dcol: dvui.Color) tvg.Color {
+                return tvg.Color{
+                    .r = @as(f32, @floatFromInt(dcol.r)) / 255.0,
+                    .g = @as(f32, @floatFromInt(dcol.g)) / 255.0,
+                    .b = @as(f32, @floatFromInt(dcol.b)) / 255.0,
+                    .a = @as(f32, @floatFromInt(dcol.a)) / 255.0,
+                };
+            }
+        };
+        const img_raw_data = try cw.lifo().alloc(u8, height * height * 4);
+        defer cw.lifo().free(img_raw_data);
+        @memset(img_raw_data, 0);
+        var img = ImageAdapter{
+            .pixels = img_raw_data,
+            .width = height,
+            .height = height,
+        };
+        var fb = std.io.fixedBufferStream(tvg_bytes);
+
+        var ow_stroke: ?tvg.Color = null;
+        if (icon_opts.stroke_color) |cx| ow_stroke = ImageAdapter.conv(cx);
+        var ow_fill: ?tvg.Color = null;
+        var disable_fill = false;
+        if (ow_fill != null and ow_fill.?.a == 0.0) {
+            disable_fill = true;
+        }
+        if (icon_opts.fill_color) |cx| ow_fill = ImageAdapter.conv(cx);
+        tvg.renderStream(cw.arena(), &img, fb.reader(), .{
+            .overwrite_stroke_width = icon_opts.stroke_width,
+            .overwrite_stroke = ow_stroke,
+            .overwrite_fill = ow_fill,
+            .disable_fill = disable_fill,
+        }) catch |err| {
+            log.warn("iconTexture Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, height });
+            return TvgError.tvgError;
+        };
+        const pixels = dvui.RGBAPixelsPMA.cast(img.pixels);
+        const texture = try textureCreate(pixels, @intCast(img.width), @intCast(img.height), .linear);
+        const entry = TextureCacheEntry{ .texture = texture };
+        try cw.texture_cache.put(cw.gpa, icon_hash, entry);
+        return entry;
     }
 };
 
@@ -1139,80 +1245,6 @@ pub const IconRenderOptions = struct {
     /// if null uses original stroke colors
     stroke_color: ?Color = .white,
 };
-
-/// Render `tvg_bytes` at `height` into a `Texture`.  Name is for debugging.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, icon_opts: IconRenderOptions) (Backend.TextureError || TvgError)!TextureCacheEntry {
-    var cw = currentWindow();
-    const icon_hash = TextureCacheEntry.hash_icon(tvg_bytes, height, icon_opts);
-
-    if (cw.texture_cache.get(icon_hash)) |tce| return tce;
-
-    const ImageAdapter = struct {
-        pixels: []u8,
-        width: u32,
-        height: u32,
-        pub fn setPixel(self: *@This(), x: usize, y: usize, col: [4]u8) void {
-            const idx = (y * self.height + x) * 4;
-            for (0..4) |i| {
-                self.pixels[idx + i] = col[i];
-            }
-        }
-        pub fn getPixel(self: *@This(), x: usize, y: usize) [4]u8 {
-            const idx = y * self.height + x;
-            const slice = self.pixels[idx * 4 .. (idx + 1) * 4];
-            var col: [4]u8 = undefined;
-            for (&col, slice) |*a, s| a.* = s;
-        }
-        fn conv(dcol: dvui.Color) tvg.Color {
-            return tvg.Color{
-                .r = @as(f32, @floatFromInt(dcol.r)) / 255.0,
-                .g = @as(f32, @floatFromInt(dcol.g)) / 255.0,
-                .b = @as(f32, @floatFromInt(dcol.b)) / 255.0,
-                .a = @as(f32, @floatFromInt(dcol.a)) / 255.0,
-            };
-        }
-    };
-    const img_raw_data = try cw.lifo().alloc(u8, height * height * 4);
-    defer cw.lifo().free(img_raw_data);
-    @memset(img_raw_data, 0);
-    var img = ImageAdapter{
-        .pixels = img_raw_data,
-        .width = height,
-        .height = height,
-    };
-    var fb = std.io.fixedBufferStream(tvg_bytes);
-
-    var ow_stroke: ?tvg.Color = null;
-    if (icon_opts.stroke_color) |cx| ow_stroke = ImageAdapter.conv(cx);
-    var ow_fill: ?tvg.Color = null;
-    var disable_fill = false;
-    if (ow_fill != null and ow_fill.?.a == 0.0) {
-        disable_fill = true;
-    }
-    if (icon_opts.fill_color) |cx| ow_fill = ImageAdapter.conv(cx);
-    tvg.renderStream(cw.arena(), &img, fb.reader(), .{
-        .overwrite_stroke_width = icon_opts.stroke_width,
-        .overwrite_stroke = ow_stroke,
-        .overwrite_fill = ow_fill,
-        .disable_fill = disable_fill,
-    }) catch |err| {
-        log.warn("iconTexture Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, height });
-        return TvgError.tvgError;
-    };
-
-    const pixels = dvui.RGBAPixelsPMA.cast(img.pixels);
-
-    const texture = try textureCreate(pixels, @intCast(img.width), @intCast(img.height), .linear);
-
-    //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{ name, height, render.width, render.height });
-
-    const entry = TextureCacheEntry{ .texture = texture };
-    try cw.texture_cache.put(cw.gpa, icon_hash, entry);
-
-    return entry;
-}
 
 /// Represents a deferred call to one of the render functions.  This is how
 /// dvui defers rendering of floating windows so they render on top of widgets
@@ -5144,25 +5176,44 @@ pub fn icon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []cons
     iw.deinit();
 }
 
-pub fn imageSize(name: []const u8, image_bytes: []const u8) StbImageError!Size {
-    var w: c_int = undefined;
-    var h: c_int = undefined;
-    var n: c_int = undefined;
-    const ok = c.stbi_info_from_memory(image_bytes.ptr, @as(c_int, @intCast(image_bytes.len)), &w, &h, &n);
-    if (ok == 1) {
-        return .{ .w = @floatFromInt(w), .h = @floatFromInt(h) };
-    } else {
-        log.warn("imageSize stbi_info error on image \"{s}\": {s}\n", .{ name, c.stbi_failure_reason() });
-        return StbImageError.stbImageError;
+pub fn imageSize(name: []const u8, bytes: ImageInitOptions.ImageBytes) !Size {
+    switch (bytes) {
+        .imageFile => |b| {
+            var w: c_int = undefined;
+            var h: c_int = undefined;
+            var n: c_int = undefined;
+            const ok = c.stbi_info_from_memory(b.ptr, @as(c_int, @intCast(b.len)), &w, &h, &n);
+            if (ok == 1) {
+                return .{ .w = @floatFromInt(w), .h = @floatFromInt(h) };
+            } else {
+                log.warn("imageSize stbi_info error on image \"{s}\": {s}\n", .{ name, c.stbi_failure_reason() });
+                return StbImageError.stbImageError;
+            }
+        },
+        .pixels => |a| return .{ .w = @floatFromInt(a.width), .h = @floatFromInt(a.height) },
     }
 }
 
 pub const ImageInitOptions = struct {
+    pub const ImageType = enum {
+        /// bytes of an supported image file (i.e. png, jpeg, gif, ...)
+        imageFile,
+        /// bytes of an premultiplied rgba u8 array in row major order
+        pixels,
+    };
+    pub const ImageBytes = union(ImageType) {
+        imageFile: []const u8,
+        pixels: struct {
+            bytes: RGBAPixelsPMA,
+            width: u32,
+            height: u32,
+        },
+    };
     /// Used for debugging output.
     name: []const u8 = "image",
 
-    /// Bytes of the image file (like png), decoded lazily and cached.
-    bytes: []const u8,
+    /// Bytes of the image file.
+    bytes: ImageBytes,
 
     /// If min size is larger than the rect we got, how to shrink it:
     /// - null => use expand setting
@@ -5234,17 +5285,14 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
             dvui.log.debug("image {x} can't render border while rotated\n", .{wd.id});
         }
     }
-
-    const content_rs = wd.contentRectScale();
-    dvui.renderImage(init_opts.name, init_opts.bytes, wd.contentRectScale(), .{
+    const render_tex_opts = RenderTextureOptions{
         .rotation = wd.options.rotationGet(),
         .corner_radius = wd.options.corner_radiusGet(),
         .uv = init_opts.uv,
         .background_color = renderBackground,
-    }) catch |err| {
-        logError(@src(), err, "Could not render image {s} at {}", .{ init_opts.name, content_rs });
     };
-
+    const content_rs = wd.contentRectScale();
+    renderImage(init_opts.name, init_opts.bytes, content_rs, render_tex_opts) catch |err| logError(@src(), err, "Could not render image {s} at {}", .{ init_opts.name, content_rs });
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
 
@@ -6880,60 +6928,19 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     const target_size = rs.r.h;
     const ask_height = @ceil(target_size);
 
-    const tce = iconTexture(name, tvg_bytes, @as(u32, @intFromFloat(ask_height)), icon_opts) catch return;
+    const tce = dvui.TextureCacheEntry.fromTvgFile(name, tvg_bytes, @as(u32, @intFromFloat(ask_height)), icon_opts) catch return;
 
     try renderTexture(tce.texture, rs, opts);
 }
 
-pub fn imageTexture(name: []const u8, image_bytes: []const u8) (Backend.TextureError || StbImageError)!TextureCacheEntry {
-    var cw = currentWindow();
-    const hash = TextureCacheEntry.hash(image_bytes, 0);
-
-    if (cw.texture_cache.get(hash)) |tce| return tce;
-
-    var w: c_int = undefined;
-    var h: c_int = undefined;
-    var channels_in_file: c_int = undefined;
-    const data = c.stbi_load_from_memory(image_bytes.ptr, @as(c_int, @intCast(image_bytes.len)), &w, &h, &channels_in_file, 4);
-    if (data == null) {
-        log.warn("imageTexture stbi_load error on image \"{s}\": {s}\n", .{ name, c.stbi_failure_reason() });
-        return StbImageError.stbImageError;
-    }
-
-    defer c.stbi_image_free(data);
-
-    var pixels: []u8 = undefined;
-    pixels.ptr = data;
-    pixels.len = @intCast(w * h * 4);
-
-    const texture = try textureCreate(.fromRGBA(pixels), @intCast(w), @intCast(h), .linear);
-
-    //std.debug.print("created image texture \"{s}\" size {d}x{d}\n", .{ name, w, h });
-    //const usizeh: usize = @intCast(h);
-    //for (0..@intCast(h)) |hi| {
-    //    for (0..@intCast(w)) |wi| {
-    //        std.debug.print("pixel {d} {d} {d}.{d}.{d}.{d}\n", .{
-    //            hi,
-    //            wi,
-    //            data[hi * usizeh * 4 + wi * 4],
-    //            data[hi * usizeh * 4 + wi * 4 + 1],
-    //            data[hi * usizeh * 4 + wi * 4 + 2],
-    //            data[hi * usizeh * 4 + wi * 4 + 3],
-    //        });
-    //    }
-    //}
-
-    const entry = TextureCacheEntry{ .texture = texture };
-    try cw.texture_cache.put(cw.gpa, hash, entry);
-
-    return entry;
-}
-
-pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions) Backend.GenericError!void {
+pub fn renderImage(name: []const u8, bytes: ImageInitOptions.ImageBytes, rs: RectScale, opts: RenderTextureOptions) Backend.GenericError!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
-
-    const tce = imageTexture(name, image_bytes) catch return;
+    const cached_tex = switch (bytes) {
+        .imageFile => |b| dvui.TextureCacheEntry.fromImageFile(name, b),
+        .pixels => |p| dvui.TextureCacheEntry.fromRgbaPixelPMA(p.bytes, p.width, p.height),
+    };
+    const tce = cached_tex catch return;
     try renderTexture(tce.texture, rs, opts);
 }
 

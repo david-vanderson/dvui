@@ -770,8 +770,8 @@ pub fn basicWidgets() void {
 
         dvui.label(@src(), "Raster Images", .{}, .{ .gravity_y = 0.5 });
 
-        const imgsize = dvui.imageSize("zig favicon", zig_favicon) catch dvui.Size.all(50);
-        _ = dvui.image(@src(), .{ .name = "zig favicon", .bytes = zig_favicon }, .{
+        const imgsize = dvui.imageSize("zig favicon", .{ .imageFile = zig_favicon }) catch dvui.Size.all(50);
+        _ = dvui.image(@src(), .{ .name = "zig favicon", .bytes = .{ .imageFile = zig_favicon } }, .{
             .gravity_y = 0.5,
             .min_size_content = .{ .w = imgsize.w + icon_image_size_extra, .h = imgsize.h + icon_image_size_extra },
             .rotation = icon_image_rotation,
@@ -921,7 +921,7 @@ pub fn dropdownAdvanced() void {
 
             var opts: Options = if (mi.show_active) dvui.themeGet().style_accent else .{};
 
-            _ = dvui.image(@src(), .{ .name = "zig favicon", .bytes = zig_favicon }, opts.override(.{ .gravity_x = 0.5 }));
+            _ = dvui.image(@src(), .{ .name = "zig favicon", .bytes = .{ .imageFile = zig_favicon } }, opts.override(.{ .gravity_x = 0.5 }));
             dvui.labelNoFmt(@src(), "image above text", .{}, opts.override(.{ .gravity_x = 0.5, .padding = .{} }));
 
             if (mi.activeRect()) |_| {
@@ -1651,7 +1651,7 @@ pub fn layout() void {
 
             const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation, .corner_radius = layout_corner_radius };
             if (Static.img) {
-                _ = dvui.image(@src(), .{ .name = "zig favicon", .bytes = zig_favicon, .shrink = if (Static.shrink) Static.shrinkE else null, .uv = Static.uv }, options.override(.{
+                _ = dvui.image(@src(), .{ .name = "zig favicon", .bytes = .{ .imageFile = zig_favicon }, .shrink = if (Static.shrink) Static.shrinkE else null, .uv = Static.uv }, options.override(.{
                     .min_size_content = Static.size,
                     .background = Static.background,
                     .color_fill = .{ .color = dvui.themeGet().color_text },
@@ -3698,7 +3698,6 @@ pub fn debuggingErrors() void {
                 tl2.addText("No keybind overlaps found.", .{});
             }
         }
-
     }
 
     if (dvui.expander(@src(), "Show Font Atlases", .{}, .{ .expand = .horizontal })) {
