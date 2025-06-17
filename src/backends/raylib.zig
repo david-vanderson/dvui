@@ -94,6 +94,7 @@ pub const InitOptions = struct {
 /// creates a window using raylib
 pub fn createWindow(options: InitOptions) void {
     c.SetConfigFlags(c.FLAG_WINDOW_RESIZABLE);
+    c.SetConfigFlags(c.FLAG_WINDOW_HIGHDPI);
     if (options.vsync) {
         c.SetConfigFlags(c.FLAG_VSYNC_HINT);
     }
@@ -200,7 +201,7 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
 
     if (clipr_in) |clip_rect| {
         if (self.fb_width == null) {
-            // clipr is in pixels, but raylib multiplies by GetWindowScaleDPI(), so we
+            // clip_rect is in pixels, but raylib multiplies by GetWindowScaleDPI(), so we
             // have to divide by that here
             const clipr = dvuiRectToRaylib(clip_rect);
 
@@ -820,11 +821,19 @@ pub fn dvuiColorToRaylib(color: dvui.Color) c.Color {
     return c.Color{ .r = @intCast(color.r), .b = @intCast(color.b), .g = @intCast(color.g), .a = @intCast(color.a) };
 }
 
+/// Divides my the scaling of the monitor, only needed when rendering to
+/// the main render target. No conversion is needed when rendering to
+/// textures.
 pub fn dvuiRectToRaylib(rect: dvui.Rect.Physical) c.Rectangle {
     // raylib multiplies everything internally by the monitor scale, so we
     // have to divide by that
-    const r = rect.toNatural();
-    return c.Rectangle{ .x = r.x, .y = r.y, .width = r.w, .height = r.h };
+    const s = c.GetWindowScaleDPI();
+    return c.Rectangle{
+        .x = rect.x / s.x,
+        .y = rect.y / s.y,
+        .width = rect.w / s.x,
+        .height = rect.h / s.y,
+    };
 }
 
 pub fn EndDrawingWaitEventTimeout(_: *RaylibBackend, timeout_micros: u32) void {
