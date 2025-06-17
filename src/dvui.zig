@@ -3466,7 +3466,7 @@ pub fn tabIndexPrev(event_num: ?u16) void {
     focusWidget(newId, null, event_num);
 }
 
-/// Wigets that accept text input should call this on frames they have focus.
+/// Widgets that accept text input should call this on frames they have focus.
 ///
 /// It communicates:
 /// * text input should happen (maybe shows an on screen keyboard)
@@ -3478,6 +3478,13 @@ pub fn wantTextInput(r: Rect.Natural) void {
     cw.text_input_rect = r;
 }
 
+/// Temporary menu that floats above current layer.  Usually contains multiple
+/// `menuItemLabel`, `menuItemIcon`, or `menuItem`, but can contain any
+/// widgets.
+///
+/// Clicking outside of the menu or any child menus closes it.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) *FloatingMenuWidget {
     var ret = widgetAlloc(FloatingMenuWidget);
     ret.* = FloatingMenuWidget.init(src, init_opts, opts);
@@ -3485,6 +3492,11 @@ pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidg
     return ret;
 }
 
+/// Subwindow that the user can generally resize and move around.
+///
+/// Usually you want to add `windowHeader` as the first child.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) *FloatingWindowWidget {
     var ret = widgetAlloc(FloatingWindowWidget);
     ret.* = FloatingWindowWidget.init(src, floating_opts, opts);
@@ -3494,6 +3506,15 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
     return ret;
 }
 
+/// Normal widgets seen at the top of `floatingWindow`.  Includes a close
+/// button, centered title str, and right_str on the right.
+///
+/// Handles raising and focusing the subwindow on click.  To make
+/// `floatingWindow` only move on a click-drag in the header, use:
+///
+/// floating_win.dragAreaSet(dvui.windowHeader("Title", "", show_flag));
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Rect.Physical {
     var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
 
@@ -4033,8 +4054,10 @@ pub const Toast = struct {
     display: DialogDisplayFn,
 };
 
-/// Add a toast.  If subwindow_id is null, the toast will be shown during
-/// `Window.end`.  If subwindow_id is not null, separate code must call
+/// Add a toast.  Use `toast` for a simple message.
+///
+/// If subwindow_id is null, the toast will be shown during `Window.end`.  If
+/// subwindow_id is not null, separate code must call `toastsShow` or
 /// `toastsFor` with that subwindow_id to retrieve this toast and display it.
 ///
 /// Returns an id and locked mutex that must be unlocked by the caller. Caller
@@ -4065,13 +4088,18 @@ pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize,
     }
 }
 
-/// Only called from gui thread.
+/// Remove a previously added toast.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn toastRemove(id: WidgetId) void {
     const cw = currentWindow();
     cw.toastRemove(id);
     refresh(null, @src(), id);
 }
 
+/// Returns toasts that were previously added with non-null subwindow_id.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn toastsFor(subwindow_id: ?WidgetId) ?ToastIterator {
     const cw = dvui.currentWindow();
     cw.dialog_mutex.lock();
@@ -4132,9 +4160,12 @@ pub const ToastOptions = struct {
     displayFn: DialogDisplayFn = toastDisplay,
 };
 
-/// Add a toast.  If `opts.subwindow_id` is null, the toast will be shown during
+/// Add a simple toast.  Use `toastAdd` for more complex toasts.
+///
+/// If `opts.subwindow_id` is null, the toast will be shown during
 /// `Window.end`.  If `opts.subwindow_id` is not null, separate code must call
-/// `toastsFor` with that subwindow_id to retrieve this toast and display it.
+/// `toastsShow` or `toastsFor` with that subwindow_id to retrieve this toast
+/// and display it.
 ///
 /// Can be called from any thread, but if called from a non-GUI thread or
 /// outside `Window.begin`/`Window.end`, you must set `opts.window`.
@@ -4164,7 +4195,14 @@ pub fn toastDisplay(id: WidgetId) !void {
     }
 }
 
-/// Standard way of showing toasts.
+/// Standard way of showing toasts.  For the main window, this is called with
+/// null in Window.end().
+///
+/// For floating windows, pass non-null floating_window_data. Then it shows
+/// toasts that were previously added with non-null subwindow_id, and they are
+/// shown on top of that subwindow.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn toastsShow(floating_window_data: ?*WidgetData) void {
     const id: ?WidgetId, const rect: Rect = blk: {
         if (floating_window_data) |fwd| {
@@ -4194,6 +4232,11 @@ pub fn toastsShow(floating_window_data: ?*WidgetData) void {
     }
 }
 
+/// Wrapper widget that takes a single child and animates it.
+///
+/// `AnimateWidget.start` is called for you on the first frame.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) *AnimateWidget {
     var ret = widgetAlloc(AnimateWidget);
     ret.* = AnimateWidget.init(src, init_opts, opts);
@@ -4201,6 +4244,11 @@ pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOpt
     return ret;
 }
 
+/// Show chosen entry, and click to display all entries in a floating menu.
+///
+/// See `DropdownWidget` for more advanced usage.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: *usize, opts: Options) bool {
     var dd = dvui.DropdownWidget.init(src, .{ .selected_index = choice.*, .label = entries[choice.*] }, opts);
     dd.install();
@@ -4226,6 +4274,12 @@ pub const SuggestionInitOptions = struct {
     open_on_focus: bool = true,
 };
 
+/// Wraps a textEntry to provide an attached menu (dropdown) of choices.
+///
+/// Use after TextEntryWidget.install(), and handles events, so don't call
+/// TextEntryWidget.processEvents().
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *SuggestionWidget {
     var open_sug = init_opts.opened;
 
@@ -4349,6 +4403,11 @@ pub const ComboBox = struct {
     }
 };
 
+/// Text entry widget with dropdown choices.
+///
+/// Call `ComboBox.entries` after this with the choices.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) *ComboBox {
     var combo = widgetAlloc(ComboBox);
     combo.te = widgetAlloc(TextEntryWidget);
@@ -4371,6 +4430,11 @@ pub const ExpanderOptions = struct {
     default_expanded: bool = false,
 };
 
+/// Arrow icon and label that remembers if it has been clicked (expanded).
+///
+/// Use to divide lots of content into expandable sections.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ExpanderOptions, opts: Options) bool {
     const options = expander_defaults.override(opts);
 
@@ -4429,6 +4493,12 @@ pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions
     return ret;
 }
 
+/// Show text with wrapping (optional).  Supports mouse and touch selection.
+///
+/// Text is added incrementally with `TextLayoutWidget.addText` or
+/// `TextLayoutWidget.format`.  Each call can have different styling.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.InitOptions, opts: Options) *TextLayoutWidget {
     var ret = widgetAlloc(TextLayoutWidget);
     ret.* = TextLayoutWidget.init(src, init_opts, opts);
@@ -4465,6 +4535,12 @@ pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOpt
     return ret;
 }
 
+/// Show a floating text tooltip as long as the mouse is inside init_opts.active_rect.
+///
+/// Use init_opts.interactive = true to allow mouse interaction with the
+/// tooltip contents.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget.InitOptions, comptime fmt: []const u8, fmt_args: anytype, opts: Options) void {
     var tt: dvui.FloatingTooltipWidget = .init(src, init_opts, opts);
     if (tt.shown()) {
