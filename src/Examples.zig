@@ -20,6 +20,7 @@ const GridWidget = dvui.GridWidget;
 const enums = dvui.enums;
 
 const zig_favicon = @embedFile("zig-favicon.png");
+const zig_svg = @embedFile("zig-mark.svg");
 
 pub var show_demo_window: bool = false;
 var frame_counter: u64 = 0;
@@ -776,6 +777,24 @@ pub fn basicWidgets() void {
             .min_size_content = .{ .w = imgsize.w + icon_image_size_extra, .h = imgsize.h + icon_image_size_extra },
             .rotation = icon_image_rotation,
         });
+    }
+
+    {
+        var hbox = dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        dvui.label(@src(), "Svg Images", .{}, .{ .gravity_y = 0.5 });
+
+        const zig_tvg_bytes = if (dvui.dataGetSlice(null, hbox.data().id, "_zig_tvg", []u8)) |tvg| tvg else blk: {
+            // Could fail on OutOfMemory, but then the dataGetSlice would also panic
+            const zig_tvg_bytes = dvui.svgToTvg(dvui.currentWindow().arena(), zig_svg) catch unreachable;
+            defer dvui.currentWindow().arena().free(zig_tvg_bytes);
+            dvui.dataSetSlice(null, hbox.data().id, "_zig_tvg", zig_tvg_bytes);
+            break :blk dvui.dataGetSlice(null, hbox.data().id, "_zig_tvg", []u8).?;
+        };
+
+        const icon_opts = dvui.Options{ .gravity_y = 0.5, .min_size_content = .{ .h = 16 + icon_image_size_extra }, .rotation = icon_image_rotation };
+        dvui.icon(@src(), "zig favicon", zig_tvg_bytes, .{}, icon_opts);
     }
 
     {
@@ -3698,7 +3717,6 @@ pub fn debuggingErrors() void {
                 tl2.addText("No keybind overlaps found.", .{});
             }
         }
-
     }
 
     if (dvui.expander(@src(), "Show Font Atlases", .{}, .{ .expand = .horizontal })) {
