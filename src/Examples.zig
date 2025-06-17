@@ -675,7 +675,7 @@ pub fn basicWidgets() void {
                     .{},
                     opts,
                 );
-                _ = dvui.spacer(@src(), .{ .w = 4 }, .{});
+                _ = dvui.spacer(@src(), .{ .min_size_content = .width(4) });
                 dvui.labelNoFmt(@src(), "Icon+Gray", .{}, opts);
 
                 if (bw.clicked()) {
@@ -763,7 +763,7 @@ pub fn basicWidgets() void {
         _ = dvui.checkbox(@src(), &slider_entry_vector, "Vector", .{});
     }
 
-    _ = dvui.spacer(@src(), .{ .h = 4 }, .{});
+    _ = dvui.spacer(@src(), .{ .min_size_content = .height(4) });
 
     {
         var hbox = dvui.box(@src(), .horizontal, .{});
@@ -1222,7 +1222,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
         }
     }
 
-    _ = dvui.spacer(@src(), .{ .h = 10 }, .{});
+    _ = dvui.spacer(@src(), .{ .min_size_content = .height(10) });
 
     // Combobox
     {
@@ -1318,7 +1318,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
         te.deinit();
     }
 
-    _ = dvui.spacer(@src(), .{ .h = 10 }, .{});
+    _ = dvui.spacer(@src(), .{ .min_size_content = .height(10) });
 
     const parse_types = [_]type{ u8, i8, u16, i16, u32, i32, f32, f64 };
     const parse_typenames: [parse_types.len][]const u8 = blk: {
@@ -1389,7 +1389,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
         _ = dvui.label(@src(), "Stored {d}", .{S.value}, .{});
     }
 
-    _ = dvui.spacer(@src(), .{ .h = 20 }, .{});
+    _ = dvui.spacer(@src(), .{ .min_size_content = .height(20) });
 
     dvui.label(@src(), "The text entries in this section are left-aligned", .{}, .{});
 }
@@ -2386,7 +2386,7 @@ pub fn menus() void {
 
     dvui.labelNoFmt(@src(), "Right click for a context menu", .{}, .{});
 
-    _ = dvui.spacer(@src(), .{ .h = 20 }, .{});
+    _ = dvui.spacer(@src(), .{ .min_size_content = .height(20) });
 
     {
         var hbox = dvui.box(@src(), .horizontal, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .width(300) });
@@ -2399,7 +2399,7 @@ pub fn menus() void {
         dvui.tooltip(@src(), .{ .active_rect = hbox.data().borderRectScale().r }, "{s}", .{"Simple Tooltip"}, .{});
     }
 
-    _ = dvui.spacer(@src(), .{ .h = 10 }, .{});
+    _ = dvui.spacer(@src(), .{ .min_size_content = .height(10) });
 
     {
         var hbox = dvui.box(@src(), .horizontal, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .width(300) });
@@ -2439,7 +2439,7 @@ pub fn menus() void {
         tt.deinit();
     }
 
-    _ = dvui.spacer(@src(), .{ .h = 20 }, .{});
+    _ = dvui.spacer(@src(), .{ .min_size_content = .height(20) });
 
     {
         const Data = struct {
@@ -2485,7 +2485,7 @@ pub fn menus() void {
 
                     dvui.icon(@src(), "cycle", entypo.cycle, .{}, .{});
 
-                    _ = dvui.spacer(@src(), .{ .w = 4 }, .{});
+                    _ = dvui.spacer(@src(), .{ .min_size_content = .width(4) });
 
                     var label_opts = tab.data().options.strip();
                     if (dvui.captured(tab.data().id)) {
@@ -2580,7 +2580,7 @@ pub fn focus() void {
         te2.deinit();
     }
 
-    _ = dvui.spacer(@src(), .{ .h = 10 }, .{});
+    _ = dvui.spacer(@src(), .{ .min_size_content = .height(10) });
 
     {
         var b = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10, .y = 2 }, .border = dvui.Rect.all(1) });
@@ -2614,7 +2614,7 @@ pub fn focus() void {
         dvui.label(@src(), "Anything here with focus: {s}", .{if (have_focus) "Yes" else "No"}, .{});
     }
 
-    _ = dvui.spacer(@src(), .{ .h = 10 }, .{});
+    _ = dvui.spacer(@src(), .{ .min_size_content = .height(10) });
 
     {
         var b = dvui.box(@src(), .vertical, .{ .expand = .horizontal });
@@ -2701,7 +2701,7 @@ pub fn scrolling(comptime data: u8) void {
             scroll_lock_visible = true;
         }
 
-        _ = dvui.spacer(@src(), .{}, .{ .expand = .vertical });
+        _ = dvui.spacer(@src(), .{ .expand = .vertical });
 
         dvui.label(@src(), "Scroll to msg:", .{}, .{});
         const result = dvui.textEntryNumber(@src(), usize, .{ .min = Data.msg_start, .max = Data.msg_end }, .{ .min_size_content = dvui.Options.sizeM(8, 1) });
@@ -2716,7 +2716,7 @@ pub fn scrolling(comptime data: u8) void {
             scroll_to_msg = result.value.Valid;
         }
 
-        _ = dvui.spacer(@src(), .{}, .{ .expand = .vertical });
+        _ = dvui.spacer(@src(), .{ .expand = .vertical });
 
         {
             var h2 = dvui.box(@src(), .horizontal, .{});
@@ -2928,7 +2928,7 @@ pub fn scrollCanvas(comptime data: u8) void {
 
             for (0..Data.box_contents[i]) |k| {
                 if (k > 0) {
-                    _ = dvui.spacer(@src(), .{ .w = 5 }, .{ .id_extra = k });
+                    _ = dvui.spacer(@src(), .{ .min_size_content = .width(5), .id_extra = k });
                 }
                 const col = if (dragging_box and i == Data.drag_box_window and k == Data.drag_box_content) dvui.Color.lime else dvui.Color.blue;
                 var dbox = dvui.box(@src(), .vertical, .{ .id_extra = k, .min_size_content = .{ .w = 20, .h = 20 }, .background = true, .color_fill = .{ .color = col } });
@@ -3753,7 +3753,7 @@ pub fn dialogDirect() void {
     }
 
     {
-        _ = dvui.spacer(@src(), .{}, .{ .expand = .vertical });
+        _ = dvui.spacer(@src(), .{ .expand = .vertical });
         var hbox = dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0 });
         defer hbox.deinit();
 

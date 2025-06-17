@@ -667,7 +667,7 @@ pub fn sliceFieldWidget(
         .mutate_value_and_realloc => {
             const new_item: *Child = dvui.dataGetPtrDefault(null, reorder.data().id, "new_item", Child, undefined);
 
-            _ = dvui.spacer(@src(), .{ .h = 4 }, .{});
+            _ = dvui.spacer(@src(), .{ .min_size_content = .height(4) });
 
             var hbox = dvui.box(@src(), .horizontal, .{
                 .expand = .both,

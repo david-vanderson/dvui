@@ -335,7 +335,7 @@ pub const Alignment = struct {
     /// Add spacer with margin.x so they all end at the same edge.
     pub fn spacer(self: *Alignment, src: std.builtin.SourceLocation, id_extra: usize) void {
         const uniqueId = dvui.parentGet().extendId(src, id_extra);
-        var wd = dvui.spacer(src, .{}, .{ .margin = self.margin(uniqueId), .id_extra = id_extra });
+        var wd = dvui.spacer(src, .{ .margin = self.margin(uniqueId), .id_extra = id_extra });
         self.record(uniqueId, &wd);
     }
 
@@ -4898,6 +4898,10 @@ pub fn columnLayoutProportional(ratio_widths: []const f32, col_widths: []f32, co
     }
 }
 
+/// Widget for making thin lines to visually separate other widgets.  Use
+/// .min_size_content to control size.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
     const defaults: Options = .{
         .name = "Separator",
@@ -4914,12 +4918,12 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
     return wd;
 }
 
-pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) WidgetData {
-    if (opts.min_size_content != null) {
-        log.debug("spacer options had min_size but is being overwritten\n", .{});
-    }
+/// Empty widget used to take up space with .min_size_content.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn spacer(src: std.builtin.SourceLocation, opts: Options) WidgetData {
     const defaults: Options = .{ .name = "Spacer" };
-    var wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .min_size_content = size }));
+    var wd = WidgetData.init(src, .{}, defaults.override(opts));
     wd.register();
     wd.borderAndBackground(.{});
     wd.minSizeSetAndRefresh();
@@ -6078,7 +6082,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     defer b.deinit();
 
     const check_size = options.fontGet().textHeight();
-    const s = spacer(@src(), Size.all(check_size), .{ .gravity_y = 0.5 });
+    const s = spacer(@src(), .{ .min_size_content = Size.all(check_size), .gravity_y = 0.5 });
 
     const rs = s.borderRectScale();
 
@@ -6087,7 +6091,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     }
 
     if (label_str) |str| {
-        _ = spacer(@src(), .{ .w = checkbox_defaults.paddingGet().w }, .{});
+        _ = spacer(@src(), .{ .min_size_content = .width(checkbox_defaults.paddingGet().w) });
         labelNoFmt(@src(), str, .{}, options.strip().override(.{ .gravity_y = 0.5 }));
     }
 
@@ -6164,7 +6168,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     defer b.deinit();
 
     const radio_size = options.fontGet().textHeight();
-    const s = spacer(@src(), Size.all(radio_size), .{ .gravity_y = 0.5 });
+    const s = spacer(@src(), .{ .min_size_content = Size.all(radio_size), .gravity_y = 0.5 });
 
     const rs = s.borderRectScale();
 
@@ -6173,7 +6177,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     }
 
     if (label_str) |str| {
-        _ = spacer(@src(), .{ .w = radio_defaults.paddingGet().w }, .{});
+        _ = spacer(@src(), .{ .min_size_content = .width(radio_defaults.paddingGet().w) });
         labelNoFmt(@src(), str, .{}, options.strip().override(.{ .gravity_y = 0.5 }));
     }
 

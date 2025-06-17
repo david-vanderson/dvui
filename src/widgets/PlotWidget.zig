@@ -193,7 +193,7 @@ pub fn install(self: *PlotWidget) void {
     var hbox2 = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
 
     // bottom left corner under y axis
-    _ = dvui.spacer(@src(), .{ .w = yaxis_rect.w }, .{ .expand = .vertical });
+    _ = dvui.spacer(@src(), .{ .min_size_content = .width(yaxis_rect.w), .expand = .vertical });
 
     var x_tick_height: f32 = 0;
     if (self.x_axis.name) |_| {
