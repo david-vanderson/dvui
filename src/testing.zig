@@ -17,7 +17,7 @@ pub fn moveTo(tag: []const u8) !void {
     };
     if (!tag_data.visible) return error.WidgetNotVisible;
     const cw = dvui.currentWindow();
-    _ = try cw.addEventMouseMotionPhysical(tag_data.rect.center());
+    _ = try cw.addEventMouseMotion(tag_data.rect.center());
 }
 
 /// Presses and releases the button at the current mouse position

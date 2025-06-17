@@ -558,7 +558,12 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     const mouse_move = c.GetMouseDelta();
     if (mouse_move.x != 0 or mouse_move.y != 0) {
         const mouse_pos = c.GetMousePosition();
-        if (try win.addEventMouseMotion(.{ .x = mouse_pos.x, .y = mouse_pos.y })) disable_raylib_input = true;
+
+        // raylib gives us mouse coords in "window coords" which is kind of
+        // like natural coords but ignores content scaling
+        const scale = self.pixelSize().w / self.windowSize().w;
+
+        if (try win.addEventMouseMotion(.{ .x = mouse_pos.x * scale, .y = mouse_pos.y * scale })) disable_raylib_input = true;
         if (self.log_events) {
             //std.debug.print("raylib event Mouse Moved\n", .{});
         }
