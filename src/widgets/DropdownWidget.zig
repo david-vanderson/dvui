@@ -49,7 +49,7 @@ pub fn install(self: *DropdownWidget) void {
         lw.install();
         lw.draw();
         lw.deinit();
-        _ = dvui.spacer(@src(), .{ .w = 6 }, .{});
+        _ = dvui.spacer(@src(), .{ .min_size_content = .width(6) });
         dvui.icon(
             @src(),
             "dropdown_triangle",

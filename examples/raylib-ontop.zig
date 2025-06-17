@@ -61,9 +61,9 @@ pub fn main() !void {
             defer b.deinit();
 
             if (ray.GuiIsLocked()) {
-                dvui.label(@src(), "Raygui Status: Locked", .{}, .{ .gravity_y = 0.5 });
+                dvui.label(@src(), "Raygui Status: Locked", .{}, .{});
             } else {
-                dvui.label(@src(), "Raygui Status: Unlocked", .{}, .{ .gravity_y = 0.5 });
+                dvui.label(@src(), "Raygui Status: Unlocked", .{}, .{});
             }
 
             if (dvui.expander(@src(), "Pick Color Using Raygui", .{}, .{})) {
@@ -93,7 +93,7 @@ pub fn main() !void {
 }
 
 fn colorPicker(result: *dvui.Color) void {
-    _ = dvui.spacer(@src(), .{ .w = 10, .h = 10 }, .{});
+    _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
     {
         var overlay = dvui.overlay(@src(), .{ .min_size_content = .{ .w = 100, .h = 100 } });
         defer overlay.deinit();
