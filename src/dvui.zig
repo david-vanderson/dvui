@@ -1102,26 +1102,37 @@ pub const TextureTarget = struct {
 pub const TextureCacheEntry = struct {
     texture: Texture,
 
-    fn hash(bytes: []const u8, height: u32) u64 {
+    fn hashImageBytes(bytes: []const u8) u64 {
         var h = fnv.init();
         h.update(std.mem.asBytes(&bytes.ptr));
-        h.update(std.mem.asBytes(&height));
         return h.final();
     }
-    fn hash_icon(bytes: []const u8, height: u32, opt: IconRenderOptions) u64 {
+    fn hashIcon(bytes: []const u8, height: u32, opt: IconRenderOptions) u64 {
         var h = fnv.init();
         h.update(std.mem.asBytes(&bytes.ptr));
         h.update(std.mem.asBytes(&height));
         h.update(std.mem.asBytes(&opt));
         return h.final();
     }
+    /// only valid between window.begin and window.end
+    pub fn invalidateCachedImage(image_bytes: ImageInitOptions.ImageBytes) void {
+        var cw = dvui.currentWindow();
+        switch (image_bytes) {
+            .imageFile => |b| {
+                const h = dvui.TextureCacheEntry.hashImageBytes(b);
+                _ = cw.texture_cache.remove(h);
+            },
+            .pixels => |p| {
+                const h = dvui.TextureCacheEntry.hashImageBytes(p.bytes.pma);
+                _ = cw.texture_cache.remove(h);
+            },
+        }
+    }
 
     pub fn fromImageFile(name: []const u8, image_bytes: []const u8) (Backend.TextureError || StbImageError)!TextureCacheEntry {
         var cw = currentWindow();
-        const tex_hash = TextureCacheEntry.hash(image_bytes, 0);
-
+        const tex_hash = TextureCacheEntry.hashImageBytes(image_bytes);
         if (cw.texture_cache.get(tex_hash)) |tce| return tce;
-
         var w: c_int = undefined;
         var h: c_int = undefined;
         var channels_in_file: c_int = undefined;
@@ -1130,9 +1141,7 @@ pub const TextureCacheEntry = struct {
             log.warn("imageTexture stbi_load error on image \"{s}\": {s}\n", .{ name, c.stbi_failure_reason() });
             return StbImageError.stbImageError;
         }
-
         defer c.stbi_image_free(data);
-
         var pixels: []u8 = undefined;
         pixels.ptr = data;
         pixels.len = @intCast(w * h * 4);
@@ -1141,13 +1150,12 @@ pub const TextureCacheEntry = struct {
 
         const entry = TextureCacheEntry{ .texture = texture };
         try cw.texture_cache.put(cw.gpa, tex_hash, entry);
-
         return entry;
     }
 
     pub fn fromPixels(pma: dvui.RGBAPixelsPMA, width: u32, height: u32) Backend.TextureError!dvui.TextureCacheEntry {
         var cw = dvui.currentWindow();
-        const tex_hash = dvui.TextureCacheEntry.hash(pma.pma, 0);
+        const tex_hash = dvui.TextureCacheEntry.hashImageBytes(pma.pma);
         if (cw.texture_cache.getPtr(tex_hash)) |tce| return tce.*;
         const texture = try dvui.textureCreate(pma, width, height, .linear);
         const entry = dvui.TextureCacheEntry{ .texture = texture };
@@ -1159,8 +1167,7 @@ pub const TextureCacheEntry = struct {
     /// Only valid between `Window.begin`and `Window.end`.
     pub fn fromTvgFile(name: []const u8, tvg_bytes: []const u8, height: u32, icon_opts: IconRenderOptions) (Backend.TextureError || TvgError)!TextureCacheEntry {
         var cw = currentWindow();
-        const icon_hash = TextureCacheEntry.hash_icon(tvg_bytes, height, icon_opts);
-
+        const icon_hash = TextureCacheEntry.hashIcon(tvg_bytes, height, icon_opts);
         if (cw.texture_cache.get(icon_hash)) |tce| return tce;
 
         const ImageAdapter = struct {
