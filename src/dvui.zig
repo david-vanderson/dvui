@@ -1145,7 +1145,7 @@ pub const TextureCacheEntry = struct {
         return entry;
     }
 
-    pub fn fromRgbaPixelPMA(pma: dvui.RGBAPixelsPMA, width: u32, height: u32) !dvui.TextureCacheEntry {
+    pub fn fromPixels(pma: dvui.RGBAPixelsPMA, width: u32, height: u32) Backend.TextureError!dvui.TextureCacheEntry {
         var cw = dvui.currentWindow();
         const tex_hash = dvui.TextureCacheEntry.hash(pma.pma, 0);
         if (cw.texture_cache.getPtr(tex_hash)) |tce| return tce.*;
