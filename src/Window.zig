@@ -613,28 +613,13 @@ pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) std.mem.All
     return ret;
 }
 
-/// Add a mouse motion event that the mouse is now at natural pixel pt.  This
-/// is only for a mouse - for touch motion use addEventTouchMotion().
-///
-/// See `addEventMouseMotionPhysical` if you have physical pixel coords.
-///
-/// This can be called outside begin/end.  You should add all the events
-/// for a frame either before begin() or just after begin() and before
-/// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventMouseMotion(self: *Self, pt: Point.Natural) std.mem.Allocator.Error!bool {
-    const newpt = pt.scale(self.natural_scale / self.content_scale, Point.Physical);
-    return try self.addEventMouseMotionPhysical(newpt);
-}
-
 /// Add a mouse motion event that the mouse is now at physical pixel pt.  This
 /// is only for a mouse - for touch motion use addEventTouchMotion().
 ///
-/// See `addEventMouseMotion` if you have natural pixel coords.
-///
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventMouseMotionPhysical(self: *Self, newpt: Point.Physical) std.mem.Allocator.Error!bool {
+pub fn addEventMouseMotion(self: *Self, newpt: Point.Physical) std.mem.Allocator.Error!bool {
     self.positionMouseEventRemove();
 
     //log.debug("mouse motion {d} {d} -> {d} {d}", .{ x, y, newpt.x, newpt.y });
@@ -1774,8 +1759,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
     if (self.inject_motion_event) {
         self.inject_motion_event = false;
-        const pt = self.rectScale().pointFromPhysical(self.mouse_pt);
-        _ = try self.addEventMouseMotion(.cast(pt));
+        _ = try self.addEventMouseMotion(self.mouse_pt);
     }
 
     defer dvui.current_window = self.previous_window;
