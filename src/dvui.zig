@@ -6938,7 +6938,7 @@ pub fn renderImage(name: []const u8, bytes: ImageInitOptions.ImageBytes, rs: Rec
     if (clipGet().intersect(rs.r).empty()) return;
     const cached_tex = switch (bytes) {
         .imageFile => |b| dvui.TextureCacheEntry.fromImageFile(name, b),
-        .pixels => |p| dvui.TextureCacheEntry.fromRgbaPixelPMA(p.bytes, p.width, p.height),
+        .pixels => |p| dvui.TextureCacheEntry.fromPixels(p.bytes, p.width, p.height),
     };
     const tce = cached_tex catch return;
     try renderTexture(tce.texture, rs, opts);
