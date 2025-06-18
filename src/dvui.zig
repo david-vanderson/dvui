@@ -1372,6 +1372,7 @@ pub fn raiseSubwindow(subwindow_id: WidgetId) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void {
     const cw = currentWindow();
+    cw.scroll_to_focused = false;
     const swid = subwindow_id orelse subwindowCurrentId();
     for (cw.subwindows.items) |*sw| {
         if (swid == sw.id) {
@@ -1383,6 +1384,8 @@ pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void
                 refresh(null, @src(), null);
 
                 if (id) |wid| {
+                    cw.scroll_to_focused = true;
+
                     if (cw.last_registered_id_this_frame == wid) {
                         cw.last_focused_id_this_frame = wid;
                     } else {
@@ -5136,10 +5139,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
 
     const lwid = lw.data().id;
 
-    // if lw is visible, we want to be able to keyboard navigate to it
-    if (lw.data().visible()) {
-        dvui.tabIndexSet(lwid, lw.data().options.tab_index);
-    }
+    dvui.tabIndexSet(lwid, lw.data().options.tab_index);
 
     // draw border and background
     lw.install();
@@ -5565,9 +5565,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
     var b = box(src, dir, options);
     defer b.deinit();
 
-    if (b.data().visible()) {
-        tabIndexSet(b.data().id, options.tab_index);
-    }
+    tabIndexSet(b.data().id, options.tab_index);
 
     var hovered: bool = false;
     var ret = false;
@@ -5753,9 +5751,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     b.install();
     defer b.deinit();
 
-    if (b.data().visible()) {
-        tabIndexSet(b.data().id, options.tab_index);
-    }
+    tabIndexSet(b.data().id, options.tab_index);
 
     const br = b.data().contentRect();
     const knobsize = @min(br.w, br.h);

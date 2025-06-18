@@ -127,9 +127,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 pub fn install(self: *TextEntryWidget) void {
     self.wd.register();
 
-    if (self.wd.visible()) {
-        dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
-    }
+    dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
 
     dvui.parentSet(self.widget());
 

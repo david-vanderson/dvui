@@ -82,6 +82,15 @@ pub fn register(self: *WidgetData) void {
     const focused_widget_id = dvui.focusedWidgetId();
     if (self.id == focused_widget_id) {
         cw.last_focused_id_this_frame = self.id;
+
+        if (cw.scroll_to_focused) {
+            cw.scroll_to_focused = false;
+
+            var scrollto = dvui.Event{ .evt = .{ .scroll_to = .{
+                .screen_rect = self.rectScale().r,
+            } } };
+            self.parent.processEvent(&scrollto, true);
+        }
     }
 
     if (dvui.testing.widget_hasher) |*hasher| {

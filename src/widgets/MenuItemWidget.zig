@@ -42,10 +42,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 pub fn install(self: *MenuItemWidget) void {
     self.wd.register();
 
-    // For most widgets we only tabIndexSet if they are visible, but menu
-    // items are often in large dropdowns that are scrollable, plus the
-    // up/down arrow keys get used to move between menu items, so you need
-    // to be able to move to the next menu item even if it's not visible
     dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
 
     self.wd.borderAndBackground(.{});

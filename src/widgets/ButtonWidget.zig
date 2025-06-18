@@ -43,9 +43,7 @@ pub fn install(self: *ButtonWidget) void {
     self.wd.register();
     dvui.parentSet(self.widget());
 
-    if (self.wd.visible()) {
-        dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
-    }
+    dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
 }
 
 pub fn matchEvent(self: *ButtonWidget, e: *Event) bool {
