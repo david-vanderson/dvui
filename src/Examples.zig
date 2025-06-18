@@ -462,7 +462,7 @@ pub fn demo() void {
                     .plots => plots(),
                     .reorderable => reorderLists(),
                     .menus => menus(),
-                    .scrolling => scrolling(1),
+                    .scrolling => scrolling(),
                     .scroll_canvas => scrollCanvas(),
                     .dialogs => dialogs(float.data().id),
                     .animations => animations(),
@@ -515,7 +515,7 @@ pub fn demo() void {
             .plots => plots(),
             .reorderable => reorderLists(),
             .menus => menus(),
-            .scrolling => scrolling(2),
+            .scrolling => scrolling(),
             .scroll_canvas => scrollCanvas(),
             .dialogs => dialogs(float.data().id),
             .animations => animations(),
@@ -2647,30 +2647,27 @@ pub fn focus() void {
 }
 
 /// ![image](Examples-scrolling.png)
-pub fn scrolling(comptime data: u8) void {
+pub fn scrolling() void {
     const Data1 = struct {
-        var msg_start: usize = 1_000;
-        var msg_end: usize = 1_100;
-        var scroll_info: ScrollInfo = .{};
+        msg_start: usize = 1_000,
+        msg_end: usize = 1_100,
+        scroll_info: ScrollInfo = .{},
     };
 
-    const Data2 = struct {
-        var msg_start: usize = 1_000;
-        var msg_end: usize = 1_100;
-        var scroll_info: ScrollInfo = .{};
-    };
+    var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+    defer hbox.deinit();
 
-    const Data = if (data == 1) Data1 else Data2;
+    const Data = dvui.dataGetPtrDefault(null, hbox.data().id, "data", Data1, .{});
 
     var scroll_to_msg: ?usize = null;
     var scroll_to_bottom_after = false;
     var scroll_lock_visible = false;
 
-    var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
-    defer hbox.deinit();
     {
         var vbox = dvui.box(@src(), .vertical, .{ .expand = .vertical });
         defer vbox.deinit();
+
+        dvui.label(@src(), "{d} total widgets", .{2 * (Data.msg_end - Data.msg_start)}, .{});
 
         if (dvui.button(@src(), "Scroll to Top", .{}, .{})) {
             Data.scroll_info.scrollToOffset(.vertical, 0);
@@ -2759,17 +2756,12 @@ pub fn scrolling(comptime data: u8) void {
             tl2.format("Reply {d}", .{i}, .{});
             tl2.deinit();
         }
-
-        //const visibleRect = scroll.si.viewport;
     }
 
     if (scroll_to_bottom_after) {
         // do this after scrollArea has given scroll_info the new size
         Data.scroll_info.scrollToOffset(.vertical, std.math.maxInt(usize));
     }
-
-    // todo: add button to show icon browser with note about how that works
-
 }
 
 /// ![image](Examples-scroll_canvas.png)
@@ -4930,7 +4922,7 @@ test "DOCIMG scrolling" {
         fn frame() !dvui.App.Result {
             var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
-            scrolling(1);
+            scrolling();
             return .ok;
         }
     }.frame;
