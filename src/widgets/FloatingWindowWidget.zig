@@ -245,7 +245,7 @@ pub fn drawBackground(self: *FloatingWindowWidget) void {
     dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
     self.wd.register();
 
-    if (self.init_options.modal) {
+    if (self.init_options.modal and !dvui.firstFrame(self.wd.id)) {
         // paint over everything below
         var col = self.options.color(.text);
         col.a = if (dvui.themeGet().dark) 60 else 80;
