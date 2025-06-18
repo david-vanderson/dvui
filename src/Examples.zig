@@ -310,14 +310,13 @@ pub const demoKind = enum {
     plots,
     reorderable,
     menus,
-    focus,
     scrolling,
     scroll_canvas,
     dialogs,
     animations,
+    grid,
     struct_ui,
     debugging,
-    grid,
 
     pub fn name(self: demoKind) []const u8 {
         return switch (self) {
@@ -329,8 +328,7 @@ pub const demoKind = enum {
             .text_layout => "Text Layout",
             .plots => "Plots",
             .reorderable => "Reorderable",
-            .menus => "Menus / Tabs",
-            .focus => "Focus",
+            .menus => "Menus / Focus",
             .scrolling => "Scrolling",
             .scroll_canvas => "Scroll Canvas",
             .dialogs => "Dialogs / Toasts",
@@ -352,7 +350,6 @@ pub const demoKind = enum {
             .plots => .{ .scale = 0.45, .offset = .{} },
             .reorderable => .{ .scale = 0.45, .offset = .{ .y = -200 } },
             .menus => .{ .scale = 0.45, .offset = .{} },
-            .focus => .{ .scale = 0.45, .offset = .{} },
             .scrolling => .{ .scale = 0.45, .offset = .{ .x = -150, .y = 0 } },
             .scroll_canvas => .{ .scale = 0.35, .offset = .{ .y = -120 } },
             .dialogs => .{ .scale = 0.45, .offset = .{} },
@@ -465,7 +462,6 @@ pub fn demo() void {
                     .plots => plots(),
                     .reorderable => reorderLists(),
                     .menus => menus(),
-                    .focus => focus(),
                     .scrolling => scrolling(1),
                     .scroll_canvas => scrollCanvas(1),
                     .dialogs => dialogs(float.data().id),
@@ -519,7 +515,6 @@ pub fn demo() void {
             .plots => plots(),
             .reorderable => reorderLists(),
             .menus => menus(),
-            .focus => focus(),
             .scrolling => scrolling(2),
             .scroll_canvas => scrollCanvas(2),
             .dialogs => dialogs(float.data().id),
@@ -2354,8 +2349,10 @@ pub fn menus() void {
     }
 
     {
+        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+        defer hbox.deinit();
+
         var m = dvui.menu(@src(), .horizontal, .{});
-        defer m.deinit();
 
         if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
             var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
@@ -2382,11 +2379,13 @@ pub fn menus() void {
             _ = dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
             _ = dvui.menuItemLabel(@src(), "Dummy Super Long", .{}, .{ .expand = .horizontal });
         }
+
+        m.deinit();
+
+        dvui.labelNoFmt(@src(), "Right click for a context menu", .{}, .{ .gravity_x = 1.0 });
     }
 
-    dvui.labelNoFmt(@src(), "Right click for a context menu", .{}, .{});
-
-    _ = dvui.spacer(@src(), .{ .min_size_content = .height(20) });
+    _ = dvui.spacer(@src(), .{ .min_size_content = .height(12) });
 
     {
         var hbox = dvui.box(@src(), .horizontal, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .width(300) });
@@ -2399,7 +2398,7 @@ pub fn menus() void {
         dvui.tooltip(@src(), .{ .active_rect = hbox.data().borderRectScale().r }, "{s}", .{"Simple Tooltip"}, .{});
     }
 
-    _ = dvui.spacer(@src(), .{ .min_size_content = .height(10) });
+    _ = dvui.spacer(@src(), .{ .min_size_content = .height(4) });
 
     {
         var hbox = dvui.box(@src(), .horizontal, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .width(300) });
@@ -2439,32 +2438,27 @@ pub fn menus() void {
         tt.deinit();
     }
 
-    _ = dvui.spacer(@src(), .{ .min_size_content = .height(20) });
+    _ = dvui.spacer(@src(), .{ .min_size_content = .height(12) });
 
     {
-        const Data = struct {
-            var tab: usize = 0;
-            var layout: dvui.enums.Direction = .vertical;
-        };
+        var hbox = dvui.box(@src(), .horizontal, .{});
+        const layout_dir = dvui.dataGetPtrDefault(null, hbox.data().id, "layout_dir", dvui.enums.Direction, .horizontal);
+        const active_tab = dvui.dataGetPtrDefault(null, hbox.data().id, "active_tab", usize, 0);
 
-        {
-            var hbox = dvui.box(@src(), .horizontal, .{});
-            defer hbox.deinit();
-
-            const entries = [_][]const u8{ "Horizontal", "Vertical" };
-            for (0..2) |i| {
-                if (dvui.radio(@src(), @intFromEnum(Data.layout) == i, entries[i], .{ .id_extra = i })) {
-                    Data.layout = @enumFromInt(i);
-                }
+        const entries = [_][]const u8{ "Horizontal", "Vertical" };
+        for (0..2) |i| {
+            if (dvui.radio(@src(), @intFromEnum(layout_dir.*) == i, entries[i], .{ .id_extra = i })) {
+                layout_dir.* = @enumFromInt(i);
             }
         }
+        hbox.deinit();
 
         // reverse orientation because horizontal tabs go above content
-        var tbox = dvui.box(@src(), if (Data.layout == .vertical) .horizontal else .vertical, .{ .max_size_content = .{ .w = 400, .h = 200 } });
+        var tbox = dvui.box(@src(), if (layout_dir.* == .vertical) .horizontal else .vertical, .{ .max_size_content = .{ .w = 400, .h = 200 } });
         defer tbox.deinit();
 
         {
-            var tabs = dvui.TabsWidget.init(@src(), .{ .dir = Data.layout }, .{ .expand = if (Data.layout == .horizontal) .horizontal else .vertical });
+            var tabs = dvui.TabsWidget.init(@src(), .{ .dir = layout_dir.* }, .{ .expand = if (layout_dir.* == .horizontal) .horizontal else .vertical });
             tabs.install();
             defer tabs.deinit();
 
@@ -2472,12 +2466,12 @@ pub fn menus() void {
                 const tabname = std.fmt.comptimePrint("Tab {d}", .{i});
                 if (i != 3) {
                     // easy label only
-                    if (tabs.addTabLabel(Data.tab == i, tabname)) {
-                        Data.tab = i;
+                    if (tabs.addTabLabel(active_tab.* == i, tabname)) {
+                        active_tab.* = i;
                     }
                 } else {
                     // directly put whatever in the tab
-                    var tab = tabs.addTab(Data.tab == i, .{});
+                    var tab = tabs.addTab(active_tab.* == i, .{});
                     defer tab.deinit();
 
                     var tab_box = dvui.box(@src(), .horizontal, .{});
@@ -2495,7 +2489,7 @@ pub fn menus() void {
                     dvui.labelNoFmt(@src(), tabname, .{}, label_opts);
 
                     if (tab.clicked()) {
-                        Data.tab = i;
+                        active_tab.* = i;
                     }
                 }
             }
@@ -2503,16 +2497,20 @@ pub fn menus() void {
 
         {
             var border = dvui.Rect.all(1);
-            switch (Data.layout) {
+            switch (layout_dir.*) {
                 .horizontal => border.y = 0,
                 .vertical => border.x = 0,
             }
             var vbox3 = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window, .border = border });
             defer vbox3.deinit();
 
-            dvui.label(@src(), "This is tab {d}", .{Data.tab}, .{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 });
+            dvui.label(@src(), "This is tab {d}", .{active_tab.*}, .{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 });
         }
     }
+
+    _ = dvui.spacer(@src(), .{ .min_size_content = .height(12) });
+
+    focus();
 }
 
 pub fn submenus() void {
@@ -2533,7 +2531,6 @@ pub fn submenus() void {
     }
 }
 
-/// ![image](Examples-focus.png)
 pub fn focus() void {
     if (dvui.expander(@src(), "Changing Focus", .{}, .{ .expand = .horizontal })) {
         var b = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
@@ -4928,23 +4925,6 @@ test "DOCIMG menus" {
 
     try dvui.testing.settle(frame);
     try t.saveImage(frame, null, "Examples-menus.png");
-}
-
-test "DOCIMG focus" {
-    var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 300 } });
-    defer t.deinit();
-
-    const frame = struct {
-        fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
-            defer box.deinit();
-            focus();
-            return .ok;
-        }
-    }.frame;
-
-    try dvui.testing.settle(frame);
-    try t.saveImage(frame, null, "Examples-focus.png");
 }
 
 test "DOCIMG scrolling" {
