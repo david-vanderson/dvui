@@ -64,6 +64,7 @@ pub const InitOptions = struct {
     icon: ?[]const u8 = null,
     /// use when running tests
     hidden: bool = false,
+    fullscreen: bool = false,
 };
 
 pub fn initWindow(options: InitOptions) !SDLBackend {
@@ -79,12 +80,13 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     try toErr(c.SDL_Init(c.SDL_INIT_VIDEO), "SDL_Init in initWindow");
 
     const hidden_flag = if (options.hidden) c.SDL_WINDOW_HIDDEN else 0;
+    const fullscreen_flag = if (options.fullscreen) c.SDL_WINDOW_FULLSCREEN else 0;
     const window: *c.SDL_Window = if (sdl3)
         c.SDL_CreateWindow(
             options.title,
             @as(c_int, @intFromFloat(options.size.w)),
             @as(c_int, @intFromFloat(options.size.h)),
-            @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | hidden_flag),
+            @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | hidden_flag | fullscreen_flag),
         ) orelse return logErr("SDL_CreateWindow in initWindow")
     else
         c.SDL_CreateWindow(
