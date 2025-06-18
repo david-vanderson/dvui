@@ -1,19 +1,9 @@
 const builtin = @import("builtin");
 const std = @import("std");
 const dvui = @import("dvui.zig");
+const enums_backend = @import("enums_backend.zig");
 
-pub const Backend = enum {
-    custom,
-    /// DEPRECATED: Use either sdl2 or sdl3
-    sdl,
-    sdl2,
-    sdl3,
-    raylib,
-    dx11,
-    web,
-    /// Does no rendering!
-    testing,
-};
+pub const Backend = enums_backend.Backend;
 
 pub const Units = enum {
     /// None is the logical units. It's used for relative placements
