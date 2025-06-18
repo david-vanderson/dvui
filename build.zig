@@ -1,5 +1,5 @@
 const std = @import("std");
-const enums = @import("src/enums.zig");
+const enums_backend = @import("src/enums_backend.zig");
 const Pkg = std.Build.Pkg;
 const Compile = std.Build.Step.Compile;
 
@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const back_to_build: ?enums.Backend = b.option(enums.Backend, "backend", "Backend to build");
+    const back_to_build: ?enums_backend.Backend = b.option(enums_backend.Backend, "backend", "Backend to build");
 
     const test_step = b.step("test", "Test the dvui codebase");
     const check_step = b.step("check", "Check that the entire dvui codebase has no syntax errors");
