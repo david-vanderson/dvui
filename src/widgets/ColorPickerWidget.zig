@@ -63,9 +63,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
     var b = dvui.box(src, .horizontal, options);
     defer b.deinit();
 
-    if (b.data().visible()) {
-        dvui.tabIndexSet(b.data().id, options.tab_index);
-    }
+    dvui.tabIndexSet(b.data().id, options.tab_index);
 
     const rs = b.data().contentRectScale();
 
@@ -195,9 +193,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
     var b = dvui.box(src, dir, options);
     defer b.deinit();
 
-    if (b.data().visible()) {
-        dvui.tabIndexSet(b.data().id, options.tab_index);
-    }
+    dvui.tabIndexSet(b.data().id, options.tab_index);
 
     const br = b.data().contentRect();
     const knobsize: dvui.Size = switch (dir) {

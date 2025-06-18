@@ -29,6 +29,7 @@ focused_subwindowId: WidgetId = .zero,
 
 last_focused_id_this_frame: WidgetId = .zero,
 last_registered_id_this_frame: WidgetId = .zero,
+scroll_to_focused: bool = false,
 
 /// natural rect telling the backend where our text input box is:
 /// * when non-null, we want an on screen keyboard if needed (phones)
