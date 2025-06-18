@@ -24,6 +24,9 @@ pub const InitOptions = struct {
     /// Use to save/control the split externally.
     split_ratio: ?*f32 = null,
 
+    /// When uncollapsing, the split ratio will be set to this value.
+    uncollapse_ratio: ?f32 = null,
+
     /// Thickness (logical) of sash handle.  If handle_dynamic is not null,
     /// this is min handle size.
     handle_size: f32 = 4,
@@ -90,7 +93,9 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
         // expanding
         self.collapsing = false;
         self.collapsed_state = false;
-        if (self.split_ratio.* > 0.5) {
+        if (self.init_opts.uncollapse_ratio) |ratio| {
+            self.animateSplit(ratio);
+        } else if (self.split_ratio.* > 0.5) {
             self.animateSplit(0.5);
         } else {
             // we were on the second widget, this will
