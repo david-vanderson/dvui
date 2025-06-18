@@ -463,7 +463,7 @@ pub fn demo() void {
                     .reorderable => reorderLists(),
                     .menus => menus(),
                     .scrolling => scrolling(1),
-                    .scroll_canvas => scrollCanvas(1),
+                    .scroll_canvas => scrollCanvas(),
                     .dialogs => dialogs(float.data().id),
                     .animations => animations(),
                     .struct_ui => structUI(),
@@ -516,7 +516,7 @@ pub fn demo() void {
             .reorderable => reorderLists(),
             .menus => menus(),
             .scrolling => scrolling(2),
-            .scroll_canvas => scrollCanvas(2),
+            .scroll_canvas => scrollCanvas(),
             .dialogs => dialogs(float.data().id),
             .animations => animations(),
             .struct_ui => structUI(),
@@ -2773,50 +2773,35 @@ pub fn scrolling(comptime data: u8) void {
 }
 
 /// ![image](Examples-scroll_canvas.png)
-pub fn scrollCanvas(comptime data: u8) void {
-    const Data1 = struct {
-        var scroll_info: ScrollInfo = .{ .vertical = .given, .horizontal = .given };
-        var origin: Point = .{};
-        var scale: f32 = 1.0;
-        var boxes: [2]Point = .{ .{ .x = 50, .y = 10 }, .{ .x = 80, .y = 150 } };
-        var box_contents: [2]u8 = .{ 1, 3 };
-
-        var drag_box_window: usize = 0;
-        var drag_box_content: usize = 0;
-    };
-
-    const Data2 = struct {
-        var scroll_info: ScrollInfo = .{ .vertical = .given, .horizontal = .given };
-        var origin: Point = .{};
-        var scale: f32 = 1.0;
-        var boxes: [2]Point = .{ .{ .x = 50, .y = 10 }, .{ .x = 80, .y = 150 } };
-        var box_contents: [2]u8 = .{ 1, 3 };
-
-        var drag_box_window: usize = 0;
-        var drag_box_content: usize = 0;
-    };
-
-    const Data = if (data == 1) Data1 else Data2;
-
+pub fn scrollCanvas() void {
     var vbox = dvui.box(@src(), .vertical, .{});
     defer vbox.deinit();
+
+    const scroll_info = dvui.dataGetPtrDefault(null, vbox.data().id, "scroll_info", ScrollInfo, .{ .vertical = .given, .horizontal = .given });
+    const origin = dvui.dataGetPtrDefault(null, vbox.data().id, "origin", Point, .{});
+    const scale = dvui.dataGetPtrDefault(null, vbox.data().id, "scale", f32, 1.0);
+    const boxes = dvui.dataGetSliceDefault(null, vbox.data().id, "boxes", []Point, &.{ .{ .x = 50, .y = 10 }, .{ .x = 80, .y = 150 } });
+    const box_contents = dvui.dataGetSliceDefault(null, vbox.data().id, "box_contents", []u8, &.{ 1, 3 });
+
+    const drag_box_window = dvui.dataGetPtrDefault(null, vbox.data().id, "drag_box_window", usize, 0);
+    const drag_box_content = dvui.dataGetPtrDefault(null, vbox.data().id, "drag_box_content", usize, 0);
 
     var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .color_fill = .fill_window });
     tl.addText("Click-drag to pan\n", .{});
     tl.addText("Ctrl-wheel to zoom\n", .{});
     tl.addText("Drag blue cubes from box to box\n\n", .{});
-    tl.format("Virtual size {d}x{d}\n", .{ Data.scroll_info.virtual_size.w, Data.scroll_info.virtual_size.h }, .{});
-    tl.format("Scroll Offset {d}x{d}\n", .{ Data.scroll_info.viewport.x, Data.scroll_info.viewport.y }, .{});
-    tl.format("Origin {d}x{d}\n", .{ Data.origin.x, Data.origin.y }, .{});
-    tl.format("Scale {d}", .{Data.scale}, .{});
+    tl.format("Virtual size {d}x{d}\n", .{ scroll_info.virtual_size.w, scroll_info.virtual_size.h }, .{});
+    tl.format("Scroll Offset {d}x{d}\n", .{ scroll_info.viewport.x, scroll_info.viewport.y }, .{});
+    tl.format("Origin {d}x{d}\n", .{ origin.x, origin.y }, .{});
+    tl.format("Scale {d}", .{scale}, .{});
     tl.deinit();
 
-    var scroll = dvui.scrollArea(@src(), .{ .scroll_info = &Data.scroll_info }, .{ .expand = .both, .min_size_content = .{ .w = 300, .h = 300 } });
+    var scroll = dvui.scrollArea(@src(), .{ .scroll_info = scroll_info }, .{ .expand = .both, .min_size_content = .{ .w = 300, .h = 300 } });
 
     // can use this to convert between viewport/virtual_size and screen coords
     const scrollRectScale = scroll.scroll.screenRectScale(.{});
 
-    var scaler = dvui.scale(@src(), .{ .scale = &Data.scale }, .{ .rect = .{ .x = -Data.origin.x, .y = -Data.origin.y } });
+    var scaler = dvui.scale(@src(), .{ .scale = scale }, .{ .rect = .{ .x = -origin.x, .y = -origin.y } });
 
     // can use this to convert between data and screen coords
     const dataRectScale = scaler.screenRectScale(.{});
@@ -2837,7 +2822,7 @@ pub fn scrollCanvas(comptime data: u8) void {
     const dragging_box = dvui.draggingName("box_transfer");
     const evts = dvui.events();
 
-    for (&Data.boxes, 0..) |*b, i| {
+    for (boxes, 0..) |*b, i| {
         var dragBox = dvui.box(@src(), .vertical, .{
             .id_extra = i,
             .rect = dvui.Rect{ .x = b.x, .y = b.y },
@@ -2846,8 +2831,8 @@ pub fn scrollCanvas(comptime data: u8) void {
             .color_fill = .fill_window,
             .border = .{ .h = 1, .w = 1, .x = 1, .y = 1 },
             .corner_radius = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
-            .color_border = if (dragging_box and i != Data.drag_box_window) dvui.Options.ColorOrName.fromColor(.lime) else null,
-            .box_shadow = .{},
+            .color_border = if (dragging_box and i != drag_box_window.*) .lime else null,
+            .box_shadow = .{ .color = if (dragging_box and i != drag_box_window.*) .lime else .black },
         });
 
         const boxRect = dragBox.data().rectScale().r;
@@ -2871,10 +2856,10 @@ pub fn scrollCanvas(comptime data: u8) void {
                             dvui.dragEnd();
                             dvui.refresh(null, @src(), dragBox.data().id);
 
-                            if (Data.drag_box_window != i) {
+                            if (drag_box_window.* != i) {
                                 // move box to new home
-                                Data.box_contents[Data.drag_box_window] -= 1;
-                                Data.box_contents[1 - Data.drag_box_window] += 1;
+                                box_contents[drag_box_window.*] -= 1;
+                                box_contents[1 - drag_box_window.*] += 1;
                             }
                         } else if (me.action == .position) {
                             dvui.cursorSet(.crosshair);
@@ -2923,11 +2908,13 @@ pub fn scrollCanvas(comptime data: u8) void {
                 }
             }
 
-            for (0..Data.box_contents[i]) |k| {
+            for (0..box_contents[i]) |k| {
+                const dragging_this = dragging_box and i == drag_box_window.* and k == drag_box_content.*;
+
                 if (k > 0) {
                     _ = dvui.spacer(@src(), .{ .min_size_content = .width(5), .id_extra = k });
                 }
-                const col = if (dragging_box and i == Data.drag_box_window and k == Data.drag_box_content) dvui.Color.lime else dvui.Color.blue;
+                const col = if (dragging_this) dvui.Color.lime.opacity(0.5) else dvui.Color.blue;
                 var dbox = dvui.box(@src(), .vertical, .{ .id_extra = k, .min_size_content = .{ .w = 20, .h = 20 }, .background = true, .color_fill = .{ .color = col } });
                 defer dbox.deinit();
 
@@ -2947,8 +2934,8 @@ pub fn scrollCanvas(comptime data: u8) void {
                                     e.handle(@src(), dragBox.data());
                                     if (dvui.dragging(me.p)) |_| {
                                         // started the drag
-                                        Data.drag_box_window = i;
-                                        Data.drag_box_content = k;
+                                        drag_box_window.* = i;
+                                        drag_box_content.* = k;
                                         // give up capture so target can get mouse events, but don't end drag
                                         dvui.captureMouse(null);
                                     }
@@ -3037,8 +3024,8 @@ pub fn scrollCanvas(comptime data: u8) void {
                         if (dvui.dragging(me.p)) |dps| {
                             e.handle(@src(), scroll.scroll.data());
                             const rs = scrollRectScale;
-                            Data.scroll_info.viewport.x -= dps.x / rs.s;
-                            Data.scroll_info.viewport.y -= dps.y / rs.s;
+                            scroll_info.viewport.x -= dps.x / rs.s;
+                            scroll_info.viewport.y -= dps.y / rs.s;
                             dvui.refresh(null, @src(), scroll.scroll.data().id);
                         }
                     }
@@ -3062,17 +3049,17 @@ pub fn scrollCanvas(comptime data: u8) void {
         const prevP = dataRectScale.pointFromPhysical(zoomP);
 
         // scale
-        var pp = prevP.scale(1 / Data.scale, Point);
-        Data.scale *= zoom;
-        pp = pp.scale(Data.scale, Point);
+        var pp = prevP.scale(1 / scale.*, Point);
+        scale.* *= zoom;
+        pp = pp.scale(scale.*, Point);
 
         // get where the mouse would be now
         const newP = dataRectScale.pointToPhysical(pp);
 
         // convert both to viewport
         const diff = scrollRectScale.pointFromPhysical(newP).diff(scrollRectScale.pointFromPhysical(zoomP));
-        Data.scroll_info.viewport.x += diff.x;
-        Data.scroll_info.viewport.y += diff.y;
+        scroll_info.viewport.x += diff.x;
+        scroll_info.viewport.y += diff.y;
 
         dvui.refresh(null, @src(), scroll.scroll.data().id);
     }
@@ -3084,10 +3071,10 @@ pub fn scrollCanvas(comptime data: u8) void {
 
     // don't mess with scrolling if we aren't being shown (prevents weirdness
     // when starting out)
-    if (!Data.scroll_info.viewport.empty()) {
+    if (!scroll_info.viewport.empty()) {
         // add current viewport plus padding
         const pad = 10;
-        var bbox = Data.scroll_info.viewport.outsetAll(pad);
+        var bbox = scroll_info.viewport.outsetAll(pad);
         if (mbbox) |bb| {
             // convert bb from screen space to viewport space
             const scrollbbox = scrollRectScale.rectFromPhysical(bb);
@@ -3097,30 +3084,30 @@ pub fn scrollCanvas(comptime data: u8) void {
         // adjust top if needed
         if (bbox.y != 0) {
             const adj = -bbox.y;
-            Data.scroll_info.virtual_size.h += adj;
-            Data.scroll_info.viewport.y += adj;
-            Data.origin.y -= adj;
+            scroll_info.virtual_size.h += adj;
+            scroll_info.viewport.y += adj;
+            origin.y -= adj;
             dvui.refresh(null, @src(), scroll.scroll.data().id);
         }
 
         // adjust left if needed
         if (bbox.x != 0) {
             const adj = -bbox.x;
-            Data.scroll_info.virtual_size.w += adj;
-            Data.scroll_info.viewport.x += adj;
-            Data.origin.x -= adj;
+            scroll_info.virtual_size.w += adj;
+            scroll_info.viewport.x += adj;
+            origin.x -= adj;
             dvui.refresh(null, @src(), scroll.scroll.data().id);
         }
 
         // adjust bottom if needed
-        if (bbox.h != Data.scroll_info.virtual_size.h) {
-            Data.scroll_info.virtual_size.h = bbox.h;
+        if (bbox.h != scroll_info.virtual_size.h) {
+            scroll_info.virtual_size.h = bbox.h;
             dvui.refresh(null, @src(), scroll.scroll.data().id);
         }
 
         // adjust right if needed
-        if (bbox.w != Data.scroll_info.virtual_size.w) {
-            Data.scroll_info.virtual_size.w = bbox.w;
+        if (bbox.w != scroll_info.virtual_size.w) {
+            scroll_info.virtual_size.w = bbox.w;
             dvui.refresh(null, @src(), scroll.scroll.data().id);
         }
     }
@@ -3129,11 +3116,19 @@ pub fn scrollCanvas(comptime data: u8) void {
     // Any mouse release during a drag here means the user released the mouse
     // outside any target widget.
     if (dragging_box) {
+        var done = false;
         for (evts) |*e| {
             if (!e.handled and e.evt == .mouse and e.evt.mouse.action == .release) {
+                done = true;
                 dvui.dragEnd();
                 dvui.refresh(null, @src(), null);
             }
+        }
+
+        if (!done) {
+            // still dragging, draw a half-opaque box to show we are dragging
+            const dr = Rect.Physical.fromPoint(dvui.currentWindow().mouse_pt.diff(.{ .x = 10, .y = 10 })).toSize(.all(20));
+            dr.fill(.{}, .{ .color = dvui.Color.lime.opacity(0.5) });
         }
     }
 }
@@ -4952,7 +4947,7 @@ test "DOCIMG scroll_canvas" {
         fn frame() !dvui.App.Result {
             var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
-            scrollCanvas(1);
+            scrollCanvas();
             return .ok;
         }
     }.frame;
