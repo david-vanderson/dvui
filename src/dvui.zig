@@ -1375,6 +1375,7 @@ pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void
         if (swid == sw.id) {
             if (sw.focused_widgetId != id) {
                 sw.focused_widgetId = id;
+                sw.focused_widgetRect = .{};
                 if (event_num) |en| {
                     focusRemainingEvents(en, sw.id, sw.focused_widgetId);
                 }
@@ -1390,6 +1391,7 @@ pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void
                         while (true) : (wd = wd.parent.data()) {
                             if (wd.id == wid) {
                                 cw.last_focused_id_this_frame = wid;
+                                sw.focused_widgetRect = wd.rectScale().r;
                                 break;
                             }
 
