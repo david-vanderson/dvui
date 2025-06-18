@@ -5270,6 +5270,15 @@ pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, init_opts: L
     lw.deinit();
 }
 
+/// Display an icon rasterized lazily from tvg_bytes.
+///
+/// See `buttonIcon` and `buttonLabelAndIcon`.
+///
+/// icon_opts controls the rasterization, and opts.color_text is multiplied in
+/// the shader.  If icon_opts is the default, then the text color is multiplied
+/// in the shader even if not passed in opts.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn icon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: IconRenderOptions, opts: Options) void {
     var iw = IconWidget.init(src, name, tvg_bytes, icon_opts, opts);
     iw.install();
