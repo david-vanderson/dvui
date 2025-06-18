@@ -154,7 +154,7 @@ pub const MaxSize = struct {
 
 pub const BoxShadow = struct {
     /// Color of shadow
-    color: ColorOrName = .fromColor(.black),
+    color: ColorOrName = .black,
 
     // x topleft, y topright, w botright, h botleft
     // if null uses Options.corner_radius
