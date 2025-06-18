@@ -171,15 +171,6 @@ pub const BoxShadow = struct {
 
     /// Additional alpha multiply factor
     alpha: f32 = 0.5,
-
-    pub fn colorGet(self: *const BoxShadow) Color {
-        const col = switch (self.color) {
-            .color => |col| col,
-            .name => |from_theme| Color.fromTheme(from_theme),
-        };
-
-        return col.opacity(dvui.themeGet().alpha);
-    }
 };
 
 // All the colors you can get from a Theme
@@ -238,8 +229,18 @@ pub const ColorOrName = union(enum) {
     pub fn fromColor(col: Color) @This() {
         return .{ .color = col };
     }
+
     pub fn fromHex(hex_color: []const u8) @This() {
         return fromColor(Color.fromHex(hex_color));
+    }
+
+    pub fn resolve(self: ColorOrName) Color {
+        const col = switch (self) {
+            .color => |col| col,
+            .name => |from_theme| Color.fromTheme(from_theme),
+        };
+
+        return col.opacity(dvui.themeGet().alpha);
     }
 };
 
@@ -265,13 +266,7 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
         .border => self.color_border orelse .{ .name = .border },
     };
 
-    const col = switch (color_or_name) {
-        // if we have a custom color, use it
-        .color => |col| col,
-        .name => |from_theme| Color.fromTheme(from_theme),
-    };
-
-    return col.opacity(dvui.themeGet().alpha);
+    return color_or_name.resolve();
 }
 
 pub fn fontGet(self: *const Options) Font {

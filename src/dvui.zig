@@ -1263,6 +1263,8 @@ pub const IconRenderOptions = struct {
     stroke_width: ?f32 = null,
     /// if null uses original stroke colors
     stroke_color: ?Color = .white,
+
+    // note: IconWidget tests against default values
 };
 
 /// Represents a deferred call to one of the render functions.  This is how
@@ -5097,7 +5099,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
 
     // pass min_size_content through to the icon so that it will figure out the
     // min width based on the height
-    var iconopts = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio });
+    var iconopts = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text });
 
     var ret: ?Rect.Natural = null;
     if (mi.activeRect()) |r| {
@@ -5499,7 +5501,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
         name,
         tvg_bytes,
         icon_opts,
-        opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio }),
+        opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text }),
     );
 
     const click = bw.clicked();
@@ -5525,7 +5527,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
     {
         var outer_hbox = box(src, .horizontal, .{ .expand = .horizontal });
         defer outer_hbox.deinit();
-        icon(@src(), label_str, tvg_bytes, .{}, opts.strip().override(.{ .gravity_x = 1.0 }));
+        icon(@src(), label_str, tvg_bytes, .{}, opts.strip().override(.{ .gravity_x = 1.0, .color_text = opts.color_text }));
         labelEx(@src(), "{s}", .{label_str}, .{ .align_x = 0.5 }, opts.strip().override(.{ .expand = .both }));
     }
 
