@@ -92,6 +92,7 @@ pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
 pub const testing = @import("testing.zig");
 pub const ShrinkingArenaAllocator = @import("shrinking_arena_allocator.zig");
+pub const StackAllocator = @import("stack_allocator.zig").StackAllocator;
 pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHashMap;
 
 pub const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
@@ -188,13 +189,7 @@ pub fn currentWindow() *Window {
 pub fn widgetAlloc(comptime T: type) *T {
     const cw = currentWindow();
     const alloc = cw._widget_stack.allocator();
-    const ptr = alloc.create(T) catch {
-        log.debug("Widget stack overflowed, falling back to long term arena allocator", .{});
-        return cw.arena().create(T) catch @panic("OOM");
-    };
-    // std.debug.print("PUSH {*} ({d}) {x}\n", .{ ptr, @alignOf(@TypeOf(ptr)), cw._widget_stack.end_index });
-    cw.peak_widget_stack = @max(cw.peak_widget_stack, cw._widget_stack.end_index);
-    return ptr;
+    return alloc.create(T) catch @panic("OOM");
 }
 
 /// Pops a widget off the alloc stack, if it was allocated there.
@@ -205,23 +200,10 @@ pub fn widgetAlloc(comptime T: type) *T {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetFree(ptr: anytype) void {
     const ws = &currentWindow()._widget_stack;
+    // FIXME: It's not optimal to have to walk a list every time
+    //        the allocator expands
     if (!ws.ownsSlice(std.mem.asBytes(ptr))) return;
-
-    comptime std.debug.assert(@alignOf(@TypeOf(ptr)) <= 8);
-    const size = @sizeOf(std.meta.Child(@TypeOf(ptr)));
-    const ptr_end_with_alignment = std.mem.alignForwardLog2(@intFromPtr(ptr) + size, 8);
-
-    // If we are more than 8 bytes away, we where not the final allocation
-    // This account for alignment of items above in the stack
-    if (ptr_end_with_alignment < @intFromPtr(ws.buffer.ptr) + ws.end_index) {
-        // log.debug("{*} was not at the top of the stack! Did you forget to call deinit or widgetFree somewhere?", .{ptr});
-        return;
-    }
-
-    // Set the end_index directly as `destroy` wouldn't account for alignment of other allcations
-    ws.end_index = @intFromPtr(ptr) - @intFromPtr(ws.buffer.ptr);
-
-    // std.debug.print("POP {x} {*}\n", .{ ws.end_index, ptr });
+    ws.allocator().destroy(ptr);
 }
 
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {
