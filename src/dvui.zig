@@ -4788,9 +4788,6 @@ pub fn gridColumnFromSlice(
     };
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
 
-    const label_defaults: Options = .{
-        .expand = .horizontal,
-    };
     for (data, 0..) |item, row_num| {
         var cell = g.bodyCell(
             src,
@@ -4819,7 +4816,7 @@ pub fn gridColumnFromSlice(
             @src(),
             fmt,
             .{cell_value},
-            label_defaults.override(opts.options(g.col_num, row_num)),
+            opts.options(g.col_num, row_num),
         );
     }
 }
