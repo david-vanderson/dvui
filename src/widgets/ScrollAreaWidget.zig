@@ -44,7 +44,7 @@ hbar_grab: ?ScrollBarWidget.Grab = null,
 init_opts: InitOpts = undefined,
 si: *ScrollInfo = undefined,
 si_store: ScrollInfo = .{},
-scroll: ScrollContainerWidget = undefined,
+scroll: ?ScrollContainerWidget = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) ScrollAreaWidget {
     var self = ScrollAreaWidget{};
@@ -57,6 +57,17 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options)
 }
 
 pub fn install(self: *ScrollAreaWidget) void {
+    self.installScrollBars();
+
+    const container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
+    self.scroll = ScrollContainerWidget.init(@src(), self.si, .{ .lock_visible = self.init_opts.lock_visible, .frame_viewport = self.init_opts.frame_viewport }, container_opts);
+
+    self.scroll.?.install();
+    self.scroll.?.processEvents();
+    self.scroll.?.processVelocity();
+}
+
+pub fn installScrollBars(self: *ScrollAreaWidget) void {
     if (self.init_opts.scroll_info) |si| {
         self.si = si;
         if (self.init_opts.vertical != null) {
@@ -81,12 +92,6 @@ pub fn install(self: *ScrollAreaWidget) void {
     self.hbox.install();
     self.hbox.drawBackground();
 
-    // the viewport is also set in ScrollContainer but we need it here in
-    // case the scroll bar modes are auto
-    const crect = self.hbox.wd.contentRect();
-    self.si.viewport.w = crect.w;
-    self.si.viewport.h = crect.h;
-
     const focus_target = self.init_opts.focus_id orelse dvui.dataGet(null, self.hbox.data().id, "_scroll_id", dvui.WidgetId);
 
     // due to floating point inaccuracies, give ourselves a tiny bit of extra wiggle room
@@ -96,14 +101,12 @@ pub fn install(self: *ScrollAreaWidget) void {
     if (self.si.vertical != .none) {
         if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar.autoAny() and (self.si.virtual_size.h > (self.si.viewport.h + 0.001)))) {
             do_vbar = true;
-            self.si.viewport.w -= ScrollBarWidget.defaults.min_sizeGet().w;
         }
     }
 
     if (self.si.horizontal != .none) {
         if (self.init_opts.horizontal_bar == .show or (self.init_opts.horizontal_bar.autoAny() and (self.si.virtual_size.w > (self.si.viewport.w + 0.001)))) {
             do_hbar = true;
-            self.si.viewport.h -= ScrollBarWidget.defaults.min_sizeGet().h;
         }
     }
 
@@ -112,7 +115,6 @@ pub fn install(self: *ScrollAreaWidget) void {
         if (self.si.vertical != .none) {
             if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar.autoAny() and (self.si.virtual_size.h > (self.si.viewport.h + 0.001)))) {
                 do_vbar = true;
-                self.si.viewport.w -= ScrollBarWidget.defaults.min_sizeGet().w;
             }
         }
     }
@@ -148,13 +150,6 @@ pub fn install(self: *ScrollAreaWidget) void {
         }
         self.hbar.?.deinit();
     }
-
-    const container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
-    self.scroll = ScrollContainerWidget.init(@src(), self.si, .{ .lock_visible = self.init_opts.lock_visible, .frame_viewport = self.init_opts.frame_viewport }, container_opts);
-
-    self.scroll.install();
-    self.scroll.processEvents();
-    self.scroll.processVelocity();
 }
 
 pub fn data(self: *ScrollAreaWidget) *WidgetData {
@@ -163,8 +158,11 @@ pub fn data(self: *ScrollAreaWidget) *WidgetData {
 
 pub fn deinit(self: *ScrollAreaWidget) void {
     defer dvui.widgetFree(self);
-    dvui.dataSet(null, self.hbox.data().id, "_scroll_id", self.scroll.wd.id);
-    self.scroll.deinit();
+
+    if (self.scroll) |*s| {
+        dvui.dataSet(null, self.hbox.data().id, "_scroll_id", s.data().id);
+        s.deinit();
+    }
 
     if (self.hbar_grab) |hb| hb.draw();
 

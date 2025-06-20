@@ -110,7 +110,7 @@ pub fn dropped(self: *DropdownWidget) bool {
                             .screen_rect = drop.menu.data().rectScale().r,
                             .capture_id = drop.wd.id,
                         } } };
-                        drop.scroll.scroll.processEvent(&scrolldrag, true);
+                        drop.scroll.scroll.?.processEvent(&scrolldrag, true);
                     } else if (e.evt.mouse.action == .position) {
                         dvui.currentWindow().inject_motion_event = true;
                     }
