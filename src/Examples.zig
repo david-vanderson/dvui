@@ -2768,40 +2768,49 @@ pub fn scrolling() void {
     _ = dvui.separator(@src(), .{ .expand = .horizontal });
     _ = dvui.spacer(@src(), .{ .min_size_content = .all(12) });
 
-    var hbox2 = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+    var box2 = dvui.box(@src(), .vertical, .{ .expand = .horizontal });
+    defer box2.deinit();
 
-    const siTop = dvui.dataGetPtrDefault(null, hbox2.data().id, "siTop", ScrollInfo, .{ .horizontal = .auto });
-    const siLeft = dvui.dataGetPtrDefault(null, hbox2.data().id, "siLeft", ScrollInfo, .{ .horizontal = .auto });
-    const siMain = dvui.dataGetPtrDefault(null, hbox2.data().id, "siMain", ScrollInfo, .{ .horizontal = .auto });
+    const siTop = dvui.dataGetPtrDefault(null, box2.data().id, "siTop", ScrollInfo, .{ .horizontal = .auto });
+    const siLeft = dvui.dataGetPtrDefault(null, box2.data().id, "siLeft", ScrollInfo, .{ .horizontal = .auto });
+    const siMain = dvui.dataGetPtrDefault(null, box2.data().id, "siMain", ScrollInfo, .{ .horizontal = .auto });
 
     // save the viewport so everything is synced this frame
     const fv = siMain.viewport.topLeft();
 
-    var lbox = dvui.box(@src(), .vertical, .{ .min_size_content = .all(100) });
-    dvui.label(@src(), "Linked\nScrolling", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
-    lbox.deinit();
+    var main_area = dvui.ScrollAreaWidget.init(@src(), .{ .scroll_info = siMain, .frame_viewport = fv }, .{ .expand = .both, .max_size_content = .height(300), .background = false });
+    main_area.installScrollBars();
 
-    _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
+    const left_side_width = 80;
 
-    var top_area = dvui.scrollArea(@src(), .{ .scroll_info = siTop, .frame_viewport = .{ .x = fv.x } }, .{ .expand = .horizontal, .min_size_content = .height(100) });
     {
-        // inside top area
-        var topbox = dvui.box(@src(), .horizontal, .{});
-        defer topbox.deinit();
+        var hboxTop = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+        defer hboxTop.deinit();
 
-        for (0..20) |i| {
-            dvui.label(@src(), "label {d}", .{i}, .{ .id_extra = i });
+        var lbox = dvui.box(@src(), .vertical, .{ .min_size_content = .width(left_side_width) });
+        dvui.label(@src(), "Linked\nScrolling", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+        lbox.deinit();
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
+
+        var top_area = dvui.scrollArea(@src(), .{ .scroll_info = siTop, .frame_viewport = .{ .x = fv.x }, .horizontal_bar = .hide }, .{ .expand = .both });
+        {
+            // inside top area
+            var topbox = dvui.box(@src(), .horizontal, .{});
+            defer topbox.deinit();
+
+            for (0..20) |i| {
+                dvui.label(@src(), "label {d}", .{i}, .{ .id_extra = i });
+            }
         }
+        top_area.deinit();
     }
-    top_area.deinit();
-
-    hbox2.deinit();
 
     _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
 
     var hbox3 = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
 
-    var side_area = dvui.scrollArea(@src(), .{ .scroll_info = siLeft, .frame_viewport = .{ .y = fv.y } }, .{ .min_size_content = .{ .w = 100, .h = 200 }, .max_size_content = .{ .w = 100, .h = 200 } });
+    var side_area = dvui.scrollArea(@src(), .{ .scroll_info = siLeft, .frame_viewport = .{ .y = fv.y }, .vertical_bar = .hide }, .{ .min_size_content = .{ .w = left_side_width, .h = 200 }, .expand = .vertical });
     {
         // inside side area
         var sidebox = dvui.box(@src(), .vertical, .{});
@@ -2815,7 +2824,11 @@ pub fn scrolling() void {
 
     _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
 
-    var main_area = dvui.scrollArea(@src(), .{ .scroll_info = siMain, .frame_viewport = fv }, .{ .expand = .both, .max_size_content = .height(200) });
+    var scontainer = dvui.ScrollContainerWidget.init(@src(), siMain, .{ .frame_viewport = fv }, .{ .expand = .both });
+    scontainer.install();
+    scontainer.processEvents();
+    scontainer.processVelocity();
+
     {
         // inside main area
         var mainbox = dvui.box(@src(), .vertical, .{});
@@ -2829,6 +2842,8 @@ pub fn scrolling() void {
         }
         mainbox.deinit();
     }
+    scontainer.deinit();
+    hbox3.deinit();
     main_area.deinit();
 
     // sync siTop and siMain horizontal
@@ -2839,7 +2854,7 @@ pub fn scrolling() void {
     if (siLeft.viewport.y != fv.y) siMain.viewport.y = siLeft.viewport.y;
     if (siMain.viewport.y != fv.y) siLeft.viewport.y = siMain.viewport.y;
 
-    hbox3.deinit();
+    // TODO: what happens if sizes are different?
 }
 
 /// ![image](Examples-scroll_canvas.png)
@@ -2866,10 +2881,11 @@ pub fn scrollCanvas() void {
     tl.format("Scale {d}", .{scale}, .{});
     tl.deinit();
 
-    var scroll = dvui.scrollArea(@src(), .{ .scroll_info = scroll_info }, .{ .expand = .both, .min_size_content = .{ .w = 300, .h = 300 } });
+    var scrollArea = dvui.scrollArea(@src(), .{ .scroll_info = scroll_info }, .{ .expand = .both, .min_size_content = .{ .w = 300, .h = 300 } });
+    var scrollContainer = &scrollArea.scroll.?;
 
     // can use this to convert between viewport/virtual_size and screen coords
-    const scrollRectScale = scroll.scroll.screenRectScale(.{});
+    const scrollRectScale = scrollContainer.screenRectScale(.{});
 
     var scaler = dvui.scale(@src(), .{ .scale = scale }, .{ .rect = .{ .x = -origin.x, .y = -origin.y } });
 
@@ -3045,7 +3061,7 @@ pub fn scrollCanvas() void {
                             if (dvui.dragging(me.p)) |_| {
                                 const p = me.p.diff(dvui.dragOffset()); // pixel corner we want
                                 b.* = dataRectScale.pointFromPhysical(p);
-                                dvui.refresh(null, @src(), scroll.scroll.data().id);
+                                dvui.refresh(null, @src(), scrollContainer.data().id);
 
                                 var scrolldrag = dvui.Event{ .evt = .{ .scroll_drag = .{
                                     .mouse_pt = e.evt.mouse.p,
@@ -3070,37 +3086,37 @@ pub fn scrollCanvas() void {
     // process scroll area events after boxes so the boxes get first pick (so
     // the button works)
     for (evts) |*e| {
-        if (!scroll.scroll.matchEvent(e))
+        if (!scrollContainer.matchEvent(e))
             continue;
 
         switch (e.evt) {
             .mouse => |me| {
                 if (me.action == .press and me.button.pointer()) {
-                    e.handle(@src(), scroll.scroll.data());
-                    dvui.captureMouse(scroll.scroll.data());
+                    e.handle(@src(), scrollContainer.data());
+                    dvui.captureMouse(scrollContainer.data());
                     dvui.dragPreStart(me.p, .{});
                 } else if (me.action == .release and me.button.pointer()) {
-                    if (dvui.captured(scroll.scroll.data().id)) {
-                        e.handle(@src(), scroll.scroll.data());
+                    if (dvui.captured(scrollContainer.data().id)) {
+                        e.handle(@src(), scrollContainer.data());
                         dvui.captureMouse(null);
                         dvui.dragEnd();
                     }
                 } else if (me.action == .motion) {
                     if (me.button.touch() and dragging_box) {
                         // eat touch motion events so they don't scroll
-                        e.handle(@src(), scroll.scroll.data());
+                        e.handle(@src(), scrollContainer.data());
                     }
-                    if (dvui.captured(scroll.scroll.data().id)) {
+                    if (dvui.captured(scrollContainer.data().id)) {
                         if (dvui.dragging(me.p)) |dps| {
-                            e.handle(@src(), scroll.scroll.data());
+                            e.handle(@src(), scrollContainer.data());
                             const rs = scrollRectScale;
                             scroll_info.viewport.x -= dps.x / rs.s;
                             scroll_info.viewport.y -= dps.y / rs.s;
-                            dvui.refresh(null, @src(), scroll.scroll.data().id);
+                            dvui.refresh(null, @src(), scrollContainer.data().id);
                         }
                     }
                 } else if (me.action == .wheel_y and me.mod.matchBind("ctrl/cmd")) {
-                    e.handle(@src(), scroll.scroll.data());
+                    e.handle(@src(), scrollContainer.data());
                     const base: f32 = 1.01;
                     const zs = @exp(@log(base) * me.action.wheel_y);
                     if (zs != 1.0) {
@@ -3131,13 +3147,15 @@ pub fn scrollCanvas() void {
         scroll_info.viewport.x += diff.x;
         scroll_info.viewport.y += diff.y;
 
-        dvui.refresh(null, @src(), scroll.scroll.data().id);
+        dvui.refresh(null, @src(), scrollContainer.data().id);
     }
 
     scaler.deinit();
 
+    const scrollContainerId = scrollContainer.data().id;
+
     // deinit is where scroll processes events
-    scroll.deinit();
+    scrollArea.deinit();
 
     // don't mess with scrolling if we aren't being shown (prevents weirdness
     // when starting out)
@@ -3157,7 +3175,7 @@ pub fn scrollCanvas() void {
             scroll_info.virtual_size.h += adj;
             scroll_info.viewport.y += adj;
             origin.y -= adj;
-            dvui.refresh(null, @src(), scroll.scroll.data().id);
+            dvui.refresh(null, @src(), scrollContainerId);
         }
 
         // adjust left if needed
@@ -3166,19 +3184,19 @@ pub fn scrollCanvas() void {
             scroll_info.virtual_size.w += adj;
             scroll_info.viewport.x += adj;
             origin.x -= adj;
-            dvui.refresh(null, @src(), scroll.scroll.data().id);
+            dvui.refresh(null, @src(), scrollContainerId);
         }
 
         // adjust bottom if needed
         if (bbox.h != scroll_info.virtual_size.h) {
             scroll_info.virtual_size.h = bbox.h;
-            dvui.refresh(null, @src(), scroll.scroll.data().id);
+            dvui.refresh(null, @src(), scrollContainerId);
         }
 
         // adjust right if needed
         if (bbox.w != scroll_info.virtual_size.w) {
             scroll_info.virtual_size.w = bbox.w;
-            dvui.refresh(null, @src(), scroll.scroll.data().id);
+            dvui.refresh(null, @src(), scrollContainerId);
         }
     }
 
