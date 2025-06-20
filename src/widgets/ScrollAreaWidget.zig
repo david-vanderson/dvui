@@ -31,6 +31,7 @@ pub const InitOpts = struct {
     horizontal: ?ScrollInfo.ScrollMode = null, // .none is default
     horizontal_bar: ScrollInfo.ScrollBarMode = .auto,
     focus_id: ?dvui.WidgetId = null, // clicking on a scrollbar will focus this id, or the scroll container if null
+    frame_viewport: ?dvui.Point = null,
     lock_visible: bool = false,
 };
 
@@ -149,8 +150,7 @@ pub fn install(self: *ScrollAreaWidget) void {
     }
 
     const container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
-    self.scroll = ScrollContainerWidget.init(@src(), self.si, container_opts);
-    self.scroll.lock_visible = self.init_opts.lock_visible;
+    self.scroll = ScrollContainerWidget.init(@src(), self.si, .{ .lock_visible = self.init_opts.lock_visible, .frame_viewport = self.init_opts.frame_viewport }, container_opts);
 
     self.scroll.install();
     self.scroll.processEvents();

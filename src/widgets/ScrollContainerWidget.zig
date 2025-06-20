@@ -21,9 +21,14 @@ pub var defaults: Options = .{
     .min_size_content = .{ .w = 5, .h = 5 },
 };
 
-wd: WidgetData = undefined,
+pub const InitOptions = struct {
+    frame_viewport: ?Point = null,
+    lock_visible: bool = false,
+};
 
+wd: WidgetData = undefined,
 si: *ScrollInfo = undefined,
+init_opts: InitOptions = undefined,
 
 // si.viewport.x/y might be updated in the middle of a frame, this prevents
 // those visual artifacts
@@ -34,7 +39,6 @@ prevClip: Rect.Physical = .{},
 nextVirtualSize: Size = Size{},
 seen_expanded_child: bool = false,
 
-lock_visible: bool = false,
 first_visible_id: dvui.WidgetId = .zero,
 first_visible_offset: Point = Point{}, // offset of top left of first visible widget from viewport
 
@@ -43,8 +47,8 @@ seen_scroll_drag: bool = false,
 
 finger_down: bool = false,
 
-pub fn init(src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, opts: Options) ScrollContainerWidget {
-    var self = ScrollContainerWidget{};
+pub fn init(src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, init_options: InitOptions, opts: Options) ScrollContainerWidget {
+    var self = ScrollContainerWidget{ .init_opts = init_options };
     const options = defaults.override(opts);
 
     self.wd = WidgetData.init(src, .{}, options);
@@ -82,8 +86,8 @@ pub fn install(self: *ScrollContainerWidget) void {
 
     self.prevClip = dvui.clip(self.wd.contentRectScale().r);
 
-    self.frame_viewport = self.si.viewport.topLeft();
-    if (self.lock_visible) {
+    self.frame_viewport = self.init_opts.frame_viewport orelse self.si.viewport.topLeft();
+    if (self.init_opts.lock_visible) {
         // we don't want to see anything until we find first_visible_id
         self.first_visible_id = dvui.dataGet(null, self.wd.id, "_fv_id", dvui.WidgetId) orelse .zero;
         self.first_visible_offset = dvui.dataGet(null, self.wd.id, "_fv_offset", Point) orelse .{};
@@ -114,8 +118,8 @@ pub fn processEvents(self: *ScrollContainerWidget) void {
     }
 
     // might have changed from events
-    self.frame_viewport = self.si.viewport.topLeft();
-    if (self.lock_visible) {
+    self.frame_viewport = self.init_opts.frame_viewport orelse self.si.viewport.topLeft();
+    if (self.init_opts.lock_visible) {
         self.frame_viewport = .{ .x = -10000, .y = -10000 };
     }
 }
@@ -189,8 +193,8 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
     }
 
     // might have changed
-    self.frame_viewport = self.si.viewport.topLeft();
-    if (self.lock_visible) {
+    self.frame_viewport = self.init_opts.frame_viewport orelse self.si.viewport.topLeft();
+    if (self.init_opts.lock_visible) {
         self.frame_viewport = .{ .x = -10000, .y = -10000 };
     }
 }
@@ -245,7 +249,7 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.WidgetId, min_size: Size, 
     const rect = Rect{ .x = 0, .y = y, .w = maxw, .h = h };
     const ret = dvui.placeIn(rect, min_size, e, g);
 
-    if (self.lock_visible and self.first_visible_id == id) {
+    if (self.init_opts.lock_visible and self.first_visible_id == id) {
         self.frame_viewport.x = 0; // todo
         self.frame_viewport.y = y + self.first_visible_offset.y;
         self.si.viewport.x = self.frame_viewport.x;

@@ -2655,7 +2655,6 @@ pub fn scrolling() void {
     };
 
     var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
-    defer hbox.deinit();
 
     const Data = dvui.dataGetPtrDefault(null, hbox.data().id, "data", Data1, .{});
 
@@ -2762,6 +2761,85 @@ pub fn scrolling() void {
         // do this after scrollArea has given scroll_info the new size
         Data.scroll_info.scrollToOffset(.vertical, std.math.maxInt(usize));
     }
+
+    hbox.deinit();
+
+    _ = dvui.spacer(@src(), .{ .min_size_content = .all(12) });
+    _ = dvui.separator(@src(), .{ .expand = .horizontal });
+    _ = dvui.spacer(@src(), .{ .min_size_content = .all(12) });
+
+    var hbox2 = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+
+    const siTop = dvui.dataGetPtrDefault(null, hbox2.data().id, "siTop", ScrollInfo, .{ .horizontal = .auto });
+    const siLeft = dvui.dataGetPtrDefault(null, hbox2.data().id, "siLeft", ScrollInfo, .{ .horizontal = .auto });
+    const siMain = dvui.dataGetPtrDefault(null, hbox2.data().id, "siMain", ScrollInfo, .{ .horizontal = .auto });
+
+    // save the viewport so everything is synced this frame
+    const fv = siMain.viewport.topLeft();
+
+    var lbox = dvui.box(@src(), .vertical, .{ .min_size_content = .all(100) });
+    dvui.label(@src(), "Linked\nScrolling", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+    lbox.deinit();
+
+    _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
+
+    var top_area = dvui.scrollArea(@src(), .{ .scroll_info = siTop, .frame_viewport = .{ .x = fv.x } }, .{ .expand = .horizontal, .min_size_content = .height(100) });
+    {
+        // inside top area
+        var topbox = dvui.box(@src(), .horizontal, .{});
+        defer topbox.deinit();
+
+        for (0..20) |i| {
+            dvui.label(@src(), "label {d}", .{i}, .{ .id_extra = i });
+        }
+    }
+    top_area.deinit();
+
+    hbox2.deinit();
+
+    _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
+
+    var hbox3 = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+
+    var side_area = dvui.scrollArea(@src(), .{ .scroll_info = siLeft, .frame_viewport = .{ .y = fv.y } }, .{ .min_size_content = .{ .w = 100, .h = 200 }, .max_size_content = .{ .w = 100, .h = 200 } });
+    {
+        // inside side area
+        var sidebox = dvui.box(@src(), .vertical, .{});
+        defer sidebox.deinit();
+
+        for (0..20) |i| {
+            dvui.label(@src(), "label {d}", .{i}, .{ .id_extra = i });
+        }
+    }
+    side_area.deinit();
+
+    _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
+
+    var main_area = dvui.scrollArea(@src(), .{ .scroll_info = siMain, .frame_viewport = fv }, .{ .expand = .both, .max_size_content = .height(200) });
+    {
+        // inside main area
+        var mainbox = dvui.box(@src(), .vertical, .{});
+        var mainbox2 = dvui.box(@src(), .horizontal, .{});
+        for (0..20) |i| {
+            dvui.label(@src(), "label {d}", .{i}, .{ .id_extra = i });
+        }
+        mainbox2.deinit();
+        for (1..20) |i| {
+            dvui.label(@src(), "label {d}", .{i}, .{ .id_extra = i });
+        }
+        mainbox.deinit();
+    }
+    main_area.deinit();
+
+    // sync siTop and siMain horizontal
+    if (siTop.viewport.x != fv.x) siMain.viewport.x = siTop.viewport.x;
+    if (siMain.viewport.x != fv.x) siTop.viewport.x = siMain.viewport.x;
+
+    // sync siLeft and siMain vertical
+    if (siLeft.viewport.y != fv.y) siMain.viewport.y = siLeft.viewport.y;
+    if (siMain.viewport.y != fv.y) siLeft.viewport.y = siMain.viewport.y;
+
+    hbox3.deinit();
 }
 
 /// ![image](Examples-scroll_canvas.png)
