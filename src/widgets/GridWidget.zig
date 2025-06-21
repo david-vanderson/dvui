@@ -103,16 +103,15 @@ pub const InitOpts = struct {
         widths: []f32,
         num: usize,
     };
-    // Must supply either the number of columns or a
-    // []f32 containing column widths.
+    // Must supply either the number of columns or a slice of column widths
     cols: WidthsOrCount,
     scroll_opts: ?ScrollAreaWidget.InitOpts = null,
     // Recalculate row heights. Only set this when row heights could have changed, .e.g on column resize.
     resize_rows: bool = false,
     // Only used when cols.num is specified. Allows col widths to shrink this frame.
     resize_cols: bool = false,
-    // If var row heights is now set to true, then size.h is ignored.
-    // When using var row heights row_nr must be populated sequentially for each column when ceeating bodyCells.
+    // If var row heights is set to false, size.h is ignored.
+    // When using var row heights row_nr must be populated sequentially for each column when creating bodyCells.
     var_row_heights: bool = false,
 };
 pub const default_col_width: f32 = 100;
@@ -137,7 +136,6 @@ resizing: bool = false,
 //rows_y_offset: f32 = 0,
 max_row: usize = 0,
 frame_viewport: Point = undefined,
-col_widths_store: std.ArrayListUnmanaged(f32) = .empty,
 col_widths: []f32 = undefined,
 // Next y position for this column when using variable row heights.
 next_row_y: f32 = 0,
@@ -188,6 +186,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options)
     return self;
 }
 
+// Default col_widths to if allocation fails this frame.
 var oom_col_width: [1]f32 = .{0};
 
 pub fn install(self: *GridWidget) void {
@@ -259,13 +258,11 @@ pub fn deinit(self: *GridWidget) void {
         hscroll.deinit();
     }
 
-    // TODO: Is this bbox guaranteed to exit?
     if (self.bscroll) |*bscroll| {
         self.bbox.deinit();
         bscroll.deinit();
     }
     self.scroll.deinit();
-    // TODO: Broken for no columns and for variable row heights.
     const max_row_f: f32 = @floatFromInt(self.max_row);
     const this_height: f32 = if (self.init_opts.var_row_heights) self.next_row_y else (max_row_f + 1) * self.row_height;
     dvui.dataSet(null, self.data().id, "_last_height", this_height);
@@ -458,8 +455,6 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: usi
     const row_num_f: f32 = @floatFromInt(row_num);
     const xpos = self.posX(col_num);
     const ypos = if (self.init_opts.var_row_heights) self.next_row_y else self.row_height * row_num_f;
-    //    const ypos = ypos_rel + self.rows_y_offset;
-    //if (row_num == 10) std.debug.print("ypos_rel = {d}, y_pos = {d}, y_offset = {d}\n", .{ ypos_rel, ypos, self.rows_y_offset });
     var cell_opts = opts.toOptions();
     cell_opts.rect = .{ .x = xpos, .y = ypos, .w = cell_width, .h = cell_height };
 
@@ -481,7 +476,7 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: usi
     return cell;
 }
 
-// TODO: Does this get removed? Whjat about for var row heights?
+// TODO: Does this get removed? What about for var row heights?
 /// Set the starting y value to begin rendering rows.
 /// Used for setting the y location of the first row when virtual scrolling.
 pub fn offsetRowsBy(self: *GridWidget, offset: f32) void {
@@ -490,6 +485,7 @@ pub fn offsetRowsBy(self: *GridWidget, offset: f32) void {
     _ = self;
 }
 
+// TODO: We should be able to remove the header height offset now? If we use the body scroll instead?
 /// Converts a physical point (e.g. a mouse position) into a logical point
 /// relative to the top-left of the grid's body.
 /// Return the logical point if it is located within the grid body,
@@ -549,10 +545,7 @@ pub const VirtualScroller = struct {
     pub fn init(grid: *GridWidget, init_opts: VirtualScroller.InitOpts) VirtualScroller {
         const si = init_opts.scroll_info;
         const total_rows_f: f32 = @floatFromInt(init_opts.total_rows);
-        // Adding some tiny padding helps make sure the last row is displayed with very large virtual scroll sizes.
-        // The actual padding required would depend on the row height, but this should help for normal text height grids.
-        const end_padding = total_rows_f / 100_000;
-        si.virtual_size.h = @max(total_rows_f * grid.row_height + scrollbar_padding_defaults.h + end_padding, si.viewport.h);
+        si.virtual_size.h = @max(total_rows_f * grid.row_height + scrollbar_padding_defaults.h, si.viewport.h);
 
         const first_row: f32 = @floatFromInt(_startRow(grid, init_opts.total_rows));
         grid.offsetRowsBy(first_row * grid.row_height);
@@ -587,7 +580,6 @@ pub const VirtualScroller = struct {
                 0
             else
                 @intFromFloat(@round((self.grid.frame_viewport.y + self.si.viewport.h) / self.grid.row_height));
-        //                @intFromFloat(@round((self.si.viewport.y + self.si.viewport.h) / self.grid.row_height));
         return @min(last_row_in_viewport + 1, self.total_rows);
     }
 };
