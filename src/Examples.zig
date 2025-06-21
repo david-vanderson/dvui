@@ -4027,7 +4027,7 @@ fn gridStyling() void {
     const row_background = local.banding != .none or local.borders.nonZero();
 
     {
-        var grid = dvui.grid(@src(), .{ .resize_rows = local.resize_rows }, .{
+        var grid = dvui.grid(@src(), .{ .cols = .{ .num = 2 }, .resize_rows = local.resize_rows }, .{
             .expand = .both,
             .background = true,
             .border = Rect.all(1),
@@ -4070,18 +4070,20 @@ fn gridStyling() void {
             },
         };
 
+        if (dvui.gridHeadingSortable(@src(), grid, 0, "Celcius", &local.sort_dir, .fixed, .{})) {
+            grid.colSortSet(0, current_sort_dir.reverse());
+        }
+
+        if (dvui.gridHeadingSortable(@src(), grid, 1, "Fahrenheit", &local.sort_dir, .fixed, .{})) {
+            grid.colSortSet(1, current_sort_dir.reverse());
+        }
+
         // First column displays temperature in Celcius.
         {
-            var col = grid.column(@src(), .{});
-            defer col.deinit();
             // Set this column as the default sort
             if (current_sort_dir == .unsorted) {
                 local.sort_dir = .ascending;
-                grid.colSortSet(local.sort_dir);
-            }
-
-            if (dvui.gridHeadingSortable(@src(), grid, "Celcius", &local.sort_dir, .fixed, .{})) {
-                grid.colSortSet(current_sort_dir.reverse());
+                grid.colSortSet(0, local.sort_dir);
             }
 
             var temp: i32 = start_temp;
@@ -4090,26 +4092,20 @@ fn gridStyling() void {
                 temp += interval;
                 row_num += 1;
             }) {
-                var cell = grid.bodyCell(@src(), row_num, cell_opts.cellOptions(grid.col_num, row_num));
+                var cell = grid.bodyCell(@src(), 0, row_num, cell_opts.cellOptions(0, row_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{d}", .{temp}, .{ .gravity_x = 0.5, .expand = .horizontal });
             }
         }
         // Second column displays temperature in Farenheight.
         {
-            var col = grid.column(@src(), .{});
-            defer col.deinit();
-            if (dvui.gridHeadingSortable(@src(), grid, "Fahrenheit", &local.sort_dir, .fixed, .{})) {
-                grid.colSortSet(current_sort_dir.reverse());
-            }
-
             var temp: i32 = start_temp;
             var row_num: usize = 0;
             while (temp != end_temp + interval) : ({
                 temp += interval;
                 row_num += 1;
             }) {
-                var cell = grid.bodyCell(@src(), row_num, cell_opts.cellOptions(grid.col_num, row_num));
+                var cell = grid.bodyCell(@src(), 1, row_num, cell_opts.cellOptions(1, row_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{d}", .{@divFloor(temp * 9, 5) + 32}, .{ .gravity_x = 0.5, .expand = .horizontal });
             }
@@ -4226,13 +4222,13 @@ fn gridLayouts() void {
         var resize_rows: bool = false;
 
         /// Create a textArea for the description so that the text can wrap.
-        fn customDescriptionColumn(src: std.builtin.SourceLocation, grid: *GridWidget, data: []Car, opts: *const GridWidget.CellStyle.Banded) void {
+        fn customDescriptionColumn(src: std.builtin.SourceLocation, grid: *GridWidget, col_num: usize, data: []Car, opts: *const GridWidget.CellStyle.Banded) void {
             for (data, 0..) |*car, row_num| {
-                var col = grid.bodyCell(src, row_num, opts.cellOptions(grid.col_num, row_num));
+                var col = grid.bodyCell(src, col_num, row_num, opts.cellOptions(col_num, row_num));
                 defer col.deinit();
                 var text = dvui.textLayout(@src(), .{ .break_lines = true }, .{ .expand = .both, .background = false });
                 defer text.deinit();
-                text.addText(car.description, opts.options(grid.col_num, row_num));
+                text.addText(car.description, opts.options(col_num, row_num));
             }
         }
 
@@ -4362,7 +4358,7 @@ fn gridLayouts() void {
         };
 
         var grid = dvui.grid(@src(), .{
-            .col_widths = col_widths,
+            .cols = if (col_widths) |widths| .{ .widths = widths } else .{ .num = local.col_widths.len },
             .scroll_opts = scroll_opts,
             .resize_rows = local.resize_rows,
         }, .{
@@ -4387,66 +4383,55 @@ fn gridLayouts() void {
         }
         local.resize_rows = false;
 
+        if (dvui.gridHeadingCheckbox(@src(), grid, 0, &local.selection_state, .{})) {
+            for (all_cars) |*car| {
+                car.selected = switch (local.selection_state) {
+                    .select_all => true,
+                    .select_none => false,
+                    .unchanged => break,
+                };
+            }
+        }
+        if (dvui.gridHeadingSortable(@src(), grid, 1, "Make", &local.sort_dir, local.headerResizeOptions(1), .{})) {
+            local.sort("Make");
+        }
+        if (dvui.gridHeadingSortable(@src(), grid, 2, "Model", &local.sort_dir, local.headerResizeOptions(2), .{})) {
+            local.sort("Model");
+        }
+        if (dvui.gridHeadingSortable(@src(), grid, 3, "Year", &local.sort_dir, local.headerResizeOptions(3), .{})) {
+            local.sort("Year");
+        }
+        if (dvui.gridHeadingSortable(@src(), grid, 4, "Condition", &local.sort_dir, local.headerResizeOptions(4), .{})) {
+            local.sort("Condition");
+        }
+        if (dvui.gridHeadingSortable(@src(), grid, 5, "Description", &local.sort_dir, local.headerResizeOptions(5), .{})) {
+            local.sort("Description");
+        }
+
         // Selection
         {
             // Make the checkbox column fixed width. (This width is used if init_opts.col_widths is null)
-            var col = grid.column(@src(), .{ .width = local.checkbox_w });
-            defer col.deinit();
-            if (dvui.gridHeadingCheckbox(@src(), grid, &local.selection_state, .{})) {
-                for (all_cars) |*car| {
-                    car.selected = switch (local.selection_state) {
-                        .select_all => true,
-                        .select_none => false,
-                        .unchanged => break,
-                    };
-                }
-            }
-            _ = dvui.gridColumnCheckbox(@src(), grid, Car, all_cars[0..], "selected", banded.optionsOverride(.{ .gravity_y = 0 }));
+            _ = dvui.gridColumnCheckbox(@src(), grid, 0, Car, all_cars[0..], "selected", banded.optionsOverride(.{ .gravity_y = 0 }));
         }
         // Make
         {
-            var col = grid.column(@src(), .{});
-            defer col.deinit();
-            if (dvui.gridHeadingSortable(@src(), grid, "Make", &local.sort_dir, local.headerResizeOptions(1), .{})) {
-                local.sort("Make");
-            }
-            dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "make", "{s}", banded);
+            dvui.gridColumnFromSlice(@src(), grid, 1, Car, all_cars[0..], "make", "{s}", banded);
         }
         // Model
         {
-            var col = grid.column(@src(), .{});
-            defer col.deinit();
-            if (dvui.gridHeadingSortable(@src(), grid, "Model", &local.sort_dir, local.headerResizeOptions(2), .{})) {
-                local.sort("Model");
-            }
-            dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "model", "{s}", banded);
+            dvui.gridColumnFromSlice(@src(), grid, 2, Car, all_cars[0..], "model", "{s}", banded);
         }
         // Year
         {
-            var col = grid.column(@src(), .{});
-            defer col.deinit();
-            if (dvui.gridHeadingSortable(@src(), grid, "Year", &local.sort_dir, local.headerResizeOptions(3), .{})) {
-                local.sort("Year");
-            }
-            dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "year", "{d}", banded);
+            dvui.gridColumnFromSlice(@src(), grid, 3, Car, all_cars[0..], "year", "{d}", banded);
         }
         // Condition
         {
-            var col = grid.column(@src(), .{});
-            defer col.deinit();
-            if (dvui.gridHeadingSortable(@src(), grid, "Condition", &local.sort_dir, local.headerResizeOptions(4), .{})) {
-                local.sort("Condition");
-            }
-            dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "condition", "{s}", local.ConditionTextColor.init(&banded_centered));
+            dvui.gridColumnFromSlice(@src(), grid, 4, Car, all_cars[0..], "condition", "{s}", local.ConditionTextColor.init(&banded_centered));
         }
         // Description
         {
-            var col = grid.column(@src(), .{});
-            defer col.deinit();
-            if (dvui.gridHeadingSortable(@src(), grid, "Description", &local.sort_dir, local.headerResizeOptions(5), .{})) {
-                local.sort("Description");
-            }
-            local.customDescriptionColumn(@src(), grid, all_cars[0..], &banded);
+            local.customDescriptionColumn(@src(), grid, 5, all_cars[0..], &banded);
         }
     }
     {
@@ -4536,7 +4521,10 @@ fn gridVirtualScrolling() void {
 
     var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
     defer vbox.deinit();
-    var grid = dvui.grid(@src(), .{ .scroll_opts = .{ .scroll_info = &local.scroll_info } }, .{
+    var grid = dvui.grid(@src(), .{
+        .cols = .{ .num = 2 },
+        .scroll_opts = .{ .scroll_info = &local.scroll_info },
+    }, .{
         .expand = .both,
         .background = true,
         .border = Rect.all(1),
@@ -4561,27 +4549,19 @@ fn gridVirtualScrolling() void {
     const first = scroller.startRow();
     const last = scroller.endRow(); // Note that endRow is exclusive, meaning it can be used as a slice end index.
 
-    // Number column
-    {
-        var col = grid.column(@src(), .{});
-        defer col.deinit();
-        dvui.gridHeading(@src(), grid, "Number", .fixed, .{});
+    dvui.gridHeading(@src(), grid, "Number", 0, .fixed, .{});
+    dvui.gridHeading(@src(), grid, "Is prime?", 1, .fixed, .{});
 
-        for (first..last) |num| {
-            var cell = grid.bodyCell(@src(), num, highlight_hovered_1.cellOptions(0, num));
+    for (first..last) |num| {
+        {
+            var cell = grid.bodyCell(@src(), 0, num, highlight_hovered_1.cellOptions(0, num));
             defer cell.deinit();
             dvui.label(@src(), "{d}", .{num}, .{});
         }
-    }
-    // Prime column
-    {
-        const check_img = @embedFile("icons/entypo/check.tvg");
-        var col = grid.column(@src(), .{});
-        defer col.deinit();
-        dvui.gridHeading(@src(), grid, "Is prime?", .fixed, .{});
+        {
+            const check_img = @embedFile("icons/entypo/check.tvg");
 
-        for (first..last) |num| {
-            var cell = grid.bodyCell(@src(), num, highlight_hovered_2.cellOptions(1, num));
+            var cell = grid.bodyCell(@src(), 1, num, highlight_hovered_2.cellOptions(1, num));
             defer cell.deinit();
             if (local.isPrime(num)) {
                 dvui.icon(@src(), "Check", check_img, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .background = false });
@@ -4591,7 +4571,7 @@ fn gridVirtualScrolling() void {
 }
 
 fn gridVariableRowHeights() void {
-    var grid = dvui.grid(@src(), .{}, .{
+    var grid = dvui.grid(@src(), .{ .var_row_heights = true, .cols = .{ .num = 1 } }, .{
         .expand = .both,
         .padding = Rect.all(0),
     });
@@ -4603,15 +4583,15 @@ fn gridVariableRowHeights() void {
         .cell_opts = .{ .border = Rect.all(1) },
         .opts = .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .both },
     };
-    var col = grid.column(@src(), .{});
-    defer col.deinit();
     for (1..10) |row_num| {
         const row_num_i: i32 = @intCast(row_num);
         const row_height = 70 - (@abs(row_num_i - 5) * 10);
         var cell = grid.bodyCell(
             @src(),
+            0,
             row_num,
-            cell_style.cellOptions(0, row_num).override(.{ .height = @floatFromInt(row_height) }),
+            // TODO: TODO TODO: Remove the width from here. The grid needs to be able to work it out. not sure why it can;t.
+            cell_style.cellOptions(0, row_num).override(.{ .size = .{ .h = @floatFromInt(row_height), .w = 500 } }),
         );
         defer cell.deinit();
         dvui.label(@src(), "h = {d}", .{row_height}, cell_style.options(0, row_num));
