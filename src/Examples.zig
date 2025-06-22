@@ -4024,6 +4024,82 @@ fn gridStyling() void {
 
     var outer_hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
     defer outer_hbox.deinit();
+
+    {
+        var outer_vbox = dvui.box(@src(), .vertical, .{
+            .min_size_content = grid_panel_size,
+            .max_size_content = .size(grid_panel_size),
+            .expand = .vertical,
+            .border = Rect.all(1),
+            .gravity_x = 1.0,
+        });
+        defer outer_vbox.deinit();
+
+        if (dvui.expander(@src(), "Borders", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+            var top: bool = local.borders.y > 0;
+            var bottom: bool = local.borders.h > 0;
+            var left: bool = local.borders.x > 0;
+            var right: bool = local.borders.w > 0;
+            var fbox = dvui.flexbox(@src(), .{ .justify_content = .start }, .{});
+            defer fbox.deinit();
+            {
+                var vbox = dvui.box(@src(), .vertical, .{ .expand = .horizontal });
+                defer vbox.deinit();
+                _ = dvui.checkbox(@src(), &top, "Top", .{});
+                _ = dvui.checkbox(@src(), &left, "Left", .{});
+            }
+            {
+                var vbox = dvui.box(@src(), .vertical, .{ .expand = .horizontal });
+                defer vbox.deinit();
+                _ = dvui.checkbox(@src(), &right, "Right", .{});
+                _ = dvui.checkbox(@src(), &bottom, "Bottom", .{});
+            }
+            local.borders = .{
+                .y = if (top) 1 else 0,
+                .h = if (bottom) 1 else 0,
+                .x = if (left) 1 else 0,
+                .w = if (right) 1 else 0,
+            };
+            if (local.borders.nonZero() and local.banding == .cols) {
+                local.banding = .none;
+            }
+        }
+        if (dvui.expander(@src(), "Banding", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+            if (dvui.radio(@src(), local.banding == .none, "None", .{})) {
+                local.banding = .none;
+            }
+            if (dvui.radio(@src(), local.banding == .rows, "Rows", .{})) {
+                local.banding = .rows;
+            }
+            if (dvui.radio(@src(), local.banding == .cols, "Cols", .{})) {
+                local.banding = .cols;
+                local.borders = Rect.all(0);
+            }
+        }
+        if (dvui.expander(@src(), "Other", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+            {
+                var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+                defer hbox.deinit();
+                dvui.labelNoFmt(@src(), "Margin:", .{}, .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
+                const result = dvui.textEntryNumber(@src(), f32, .{ .min = 0, .max = 10, .value = &local.margin, .show_min_max = true }, .{});
+                if (result.changed and result.value == .Valid) {
+                    local.margin = result.value.Valid;
+                    local.resize_rows = true;
+                }
+            }
+            {
+                var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+                defer hbox.deinit();
+                dvui.labelNoFmt(@src(), "Padding:", .{}, .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
+                const result = dvui.textEntryNumber(@src(), f32, .{ .min = 0, .max = 10, .value = &local.padding, .show_min_max = true }, .{});
+                if (result.changed and result.value == .Valid) {
+                    local.padding = result.value.Valid;
+                    local.resize_rows = true;
+                }
+            }
+        }
+    }
+
     const row_background = local.banding != .none or local.borders.nonZero();
 
     {
@@ -4039,7 +4115,7 @@ fn gridStyling() void {
         // Normally this would just be grid.data().contentRect().w but we want to keep the right-hand panel fixed size.
         //dvui.columnLayoutFitContent(&.{ 0, 0 }, &local.col_widths, @floor(outer_hbox.data().contentRect().w - grid_panel_size.w));
         // TODO: Why does this need -10? The columnLayoutProportional is already subtracting the scrollbar width from the content width?
-        dvui.columnLayoutProportional(&.{ -1, -1 }, &local.col_widths, outer_hbox.data().contentRect().w - grid_panel_size.w - 10);
+        dvui.columnLayoutProportional(&.{ -1, -1 }, &local.col_widths, grid.data().contentRect().w);
         std.debug.print("hbox_ = {d}, grid_w = {d}, widths = {d}\n", .{ outer_hbox.data().contentRect().w, grid.data().contentRect().w, local.col_widths });
 
         defer grid.deinit();
@@ -4119,79 +4195,6 @@ fn gridStyling() void {
                 var cell = grid.bodyCell(@src(), 1, row_num, cell_opts.cellOptions(1, row_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{d}", .{@divFloor(temp * 9, 5) + 32}, .{ .gravity_x = 0.5, .expand = .horizontal });
-            }
-        }
-    }
-    {
-        var outer_vbox = dvui.box(@src(), .vertical, .{
-            .min_size_content = grid_panel_size,
-            .max_size_content = .size(grid_panel_size),
-            .expand = .vertical,
-            .border = Rect.all(1),
-        });
-        defer outer_vbox.deinit();
-
-        if (dvui.expander(@src(), "Borders", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
-            var top: bool = local.borders.y > 0;
-            var bottom: bool = local.borders.h > 0;
-            var left: bool = local.borders.x > 0;
-            var right: bool = local.borders.w > 0;
-            var fbox = dvui.flexbox(@src(), .{ .justify_content = .start }, .{});
-            defer fbox.deinit();
-            {
-                var vbox = dvui.box(@src(), .vertical, .{ .expand = .horizontal });
-                defer vbox.deinit();
-                _ = dvui.checkbox(@src(), &top, "Top", .{});
-                _ = dvui.checkbox(@src(), &left, "Left", .{});
-            }
-            {
-                var vbox = dvui.box(@src(), .vertical, .{ .expand = .horizontal });
-                defer vbox.deinit();
-                _ = dvui.checkbox(@src(), &right, "Right", .{});
-                _ = dvui.checkbox(@src(), &bottom, "Bottom", .{});
-            }
-            local.borders = .{
-                .y = if (top) 1 else 0,
-                .h = if (bottom) 1 else 0,
-                .x = if (left) 1 else 0,
-                .w = if (right) 1 else 0,
-            };
-            if (local.borders.nonZero() and local.banding == .cols) {
-                local.banding = .none;
-            }
-        }
-        if (dvui.expander(@src(), "Banding", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
-            if (dvui.radio(@src(), local.banding == .none, "None", .{})) {
-                local.banding = .none;
-            }
-            if (dvui.radio(@src(), local.banding == .rows, "Rows", .{})) {
-                local.banding = .rows;
-            }
-            if (dvui.radio(@src(), local.banding == .cols, "Cols", .{})) {
-                local.banding = .cols;
-                local.borders = Rect.all(0);
-            }
-        }
-        if (dvui.expander(@src(), "Other", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
-            {
-                var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
-                defer hbox.deinit();
-                dvui.labelNoFmt(@src(), "Margin:", .{}, .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
-                const result = dvui.textEntryNumber(@src(), f32, .{ .min = 0, .max = 10, .value = &local.margin, .show_min_max = true }, .{});
-                if (result.changed and result.value == .Valid) {
-                    local.margin = result.value.Valid;
-                    local.resize_rows = true;
-                }
-            }
-            {
-                var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
-                defer hbox.deinit();
-                dvui.labelNoFmt(@src(), "Padding:", .{}, .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
-                const result = dvui.textEntryNumber(@src(), f32, .{ .min = 0, .max = 10, .value = &local.padding, .show_min_max = true }, .{});
-                if (result.changed and result.value == .Valid) {
-                    local.padding = result.value.Valid;
-                    local.resize_rows = true;
-                }
             }
         }
     }
