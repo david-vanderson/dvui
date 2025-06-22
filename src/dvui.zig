@@ -4983,6 +4983,41 @@ pub fn columnLayoutProportional(ratio_widths: []const f32, col_widths: []f32, co
     }
 }
 
+// Any columns with a width of 0 will be expanded to take up any available space.
+// It is safe to use the same slice for col_widths and result_widths.
+// TODO: Prob just remove this? You can do the same thing with proportional, it just uses -1's instead of 0's
+pub fn columnLayoutFitContent(col_widths: []const f32, result_widths: []f32, content_width: f32) void {
+    const scroll_bar_w: f32 = GridWidget.scrollbar_padding_defaults.w + 10; // TODO: Need to fiugure this out.
+    std.debug.assert(col_widths.len == result_widths.len); // input and output slices must be the same length
+
+    const used_w: f32, const expand_count: f32 = sum: {
+        var total_w: f32 = 0;
+        var zero_w_count: usize = 0;
+        for (col_widths) |w| {
+            if (w > 0) {
+                total_w += w;
+            } else {
+                zero_w_count += 1;
+            }
+        }
+        break :sum .{ total_w, @floatFromInt(zero_w_count) };
+    };
+    const available_w = content_width - used_w - scroll_bar_w;
+
+    const per_col_w = available_w / expand_count;
+    const left_over = available_w - per_col_w * expand_count;
+    for (col_widths, result_widths, 0..) |cw, *rw, col_num| {
+        if (cw <= 0) {
+            rw.* = per_col_w;
+            if (col_num == result_widths.len - 1) {
+                rw.* += left_over;
+            }
+        } else {
+            rw.* = cw;
+        }
+    }
+}
+
 /// Widget for making thin lines to visually separate other widgets.  Use
 /// .min_size_content to control size.
 ///
