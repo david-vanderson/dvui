@@ -1006,8 +1006,23 @@ pub fn clipboardTextSet(self: Context, text: []const u8) !void {
 }
 
 pub fn openURL(self: Context, url: []const u8) !void {
-    _ = self;
-    _ = url;
+    const hwnd = hwndFromContext(self);
+    const arena = stateFromHwnd(hwnd).arena;
+
+    const win_url = std.unicode.utf8ToUtf16LeAllocZ(arena, url) catch |err| switch (err) {
+        error.OutOfMemory => |e| return e,
+        else => return dvui.Backend.GenericError.BackendError,
+    };
+    defer arena.free(win_url);
+
+    _ = win32.ShellExecuteW(
+        hwnd,
+        win32.L("open"),
+        win_url,
+        null,
+        null,
+        win32.SW_SHOW.SHOWNORMAL,
+    );
 }
 
 pub fn refresh(_: Context) void {}
