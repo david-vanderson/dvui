@@ -4104,7 +4104,7 @@ fn gridStyling() void {
 
     {
         var grid = dvui.grid(@src(), .{
-            .cols = .{ .widths = &local.col_widths },
+            .cols = .colWidths(&local.col_widths),
             .resize_rows = local.resize_rows,
             //            .scroll_opts = .{ .vertical_bar = .show },
         }, .{
@@ -4112,11 +4112,7 @@ fn gridStyling() void {
             .background = true,
             .border = Rect.all(1),
         });
-        // Normally this would just be grid.data().contentRect().w but we want to keep the right-hand panel fixed size.
-        //dvui.columnLayoutFitContent(&.{ 0, 0 }, &local.col_widths, @floor(outer_hbox.data().contentRect().w - grid_panel_size.w));
-        // TODO: Why does this need -10? The columnLayoutProportional is already subtracting the scrollbar width from the content width?
         dvui.columnLayoutProportional(&.{ -1, -1 }, &local.col_widths, grid.data().contentRect().w);
-        std.debug.print("hbox_ = {d}, grid_w = {d}, widths = {d}\n", .{ outer_hbox.data().contentRect().w, grid.data().contentRect().w, local.col_widths });
 
         defer grid.deinit();
         local.resize_rows = false; // Only resize rows when needed.
@@ -4311,10 +4307,12 @@ fn gridLayouts() void {
 
         const resize_min = 80;
         const resize_max = 500;
-        fn headerResizeOptions(col_num: usize) ?GridWidget.HeaderResizeWidget.InitOptions {
+        fn headerResizeOptions(grid: *GridWidget, col_num: usize) ?GridWidget.HeaderResizeWidget.InitOptions {
+            _ = grid;
             if (layout_style != .user_resizable) return .fixed;
             return .{
-                .size = &col_widths[col_num],
+                .sizes = &col_widths,
+                .num = col_num,
                 .min_size = resize_min,
                 .max_size = resize_max,
             };
@@ -4367,13 +4365,8 @@ fn gridLayouts() void {
         else
             null;
 
-        //        const col_widths: ?[]f32 = switch (local.layout_style) {
-        //            .fit_window => null,
-        //            else => &local.col_widths,
-        //        };
-
         var grid = dvui.grid(@src(), .{
-            .cols = .{ .widths = &local.col_widths },
+            .cols = .colWidths(&local.col_widths),
             .scroll_opts = scroll_opts,
             .resize_rows = local.resize_rows,
         }, .{
@@ -4390,13 +4383,13 @@ fn gridLayouts() void {
             .equal_spacing => &local.equal_spacing,
             .fixed_width => &local.fixed_widths,
             .proportional => &local.column_ratios,
-            .fit_window => &local.fit_window,
+            .fit_window => &local.equal_spacing,
             .user_resizable => null,
         };
         if (col_widths_src) |col_widths| {
             switch (local.layout_style) {
                 .fit_window => {
-                    dvui.columnLayoutFitContent(col_widths, &local.col_widths, grid.data().contentRect().w);
+                    dvui.columnLayoutProportional(col_widths, &local.col_widths, grid.data().contentRect().w);
                 },
                 else => {
                     // Fit columns to the grid visible area, or to the virtual scroll area if horizontal scorlling is enabled.
@@ -4414,19 +4407,19 @@ fn gridLayouts() void {
                 };
             }
         }
-        if (dvui.gridHeadingSortable(@src(), grid, 1, "Make", &local.sort_dir, local.headerResizeOptions(1), .{})) {
+        if (dvui.gridHeadingSortable(@src(), grid, 1, "Make", &local.sort_dir, local.headerResizeOptions(grid, 1), .{})) {
             local.sort("Make");
         }
-        if (dvui.gridHeadingSortable(@src(), grid, 2, "Model", &local.sort_dir, local.headerResizeOptions(2), .{})) {
+        if (dvui.gridHeadingSortable(@src(), grid, 2, "Model", &local.sort_dir, local.headerResizeOptions(grid, 2), .{})) {
             local.sort("Model");
         }
-        if (dvui.gridHeadingSortable(@src(), grid, 3, "Year", &local.sort_dir, local.headerResizeOptions(3), .{})) {
+        if (dvui.gridHeadingSortable(@src(), grid, 3, "Year", &local.sort_dir, local.headerResizeOptions(grid, 3), .{})) {
             local.sort("Year");
         }
-        if (dvui.gridHeadingSortable(@src(), grid, 4, "Condition", &local.sort_dir, local.headerResizeOptions(4), .{})) {
+        if (dvui.gridHeadingSortable(@src(), grid, 4, "Condition", &local.sort_dir, local.headerResizeOptions(grid, 4), .{})) {
             local.sort("Condition");
         }
-        if (dvui.gridHeadingSortable(@src(), grid, 5, "Description", &local.sort_dir, local.headerResizeOptions(5), .{})) {
+        if (dvui.gridHeadingSortable(@src(), grid, 5, "Description", &local.sort_dir, local.headerResizeOptions(grid, 5), .{})) {
             local.sort("Description");
         }
 
@@ -4546,7 +4539,7 @@ fn gridVirtualScrolling() void {
     var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
     defer vbox.deinit();
     var grid = dvui.grid(@src(), .{
-        .cols = .{ .num = 2 },
+        .cols = .numCols(2),
         .scroll_opts = .{ .scroll_info = &local.scroll_info },
         .resize_cols = local.resize_cols,
     }, .{
@@ -4609,7 +4602,7 @@ fn gridVirtualScrolling() void {
 }
 
 fn gridVariableRowHeights() void {
-    var grid = dvui.grid(@src(), .{ .var_row_heights = true, .cols = .{ .num = 1 } }, .{
+    var grid = dvui.grid(@src(), .{ .var_row_heights = true, .cols = .numCols(1) }, .{
         .expand = .both,
         .padding = Rect.all(0),
     });
@@ -4628,7 +4621,6 @@ fn gridVariableRowHeights() void {
             @src(),
             0,
             row_num,
-            // TODO: TODO TODO: Remove the width from here. The grid needs to be able to work it out. not sure why it can;t.
             cell_style.cellOptions(0, row_num).override(.{ .size = .{ .h = @floatFromInt(row_height), .w = 500 } }),
         );
         defer cell.deinit();
