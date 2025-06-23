@@ -842,5 +842,6 @@ pub const HeaderResizeWidget = struct {
     }
 };
 test {
+    _ = @import("GridWidget/testing.zig");
     @import("std").testing.refAllDecls(@This());
 }
