@@ -1955,6 +1955,8 @@ pub fn layoutText() void {
         const col = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill);
         tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = .{ .color = col }, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
 
+        tl.format("This line uses zig format strings: {d}\n\n", .{12345}, .{});
+
         tl.addText("Title ", .{ .font_style = .title });
         tl.addText("Title-1 ", .{ .font_style = .title_1 });
         tl.addText("Title-2 ", .{ .font_style = .title_2 });
