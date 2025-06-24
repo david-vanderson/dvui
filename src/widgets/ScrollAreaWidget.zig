@@ -33,6 +33,7 @@ pub const InitOpts = struct {
     focus_id: ?dvui.WidgetId = null, // clicking on a scrollbar will focus this id, or the scroll container if null
     frame_viewport: ?dvui.Point = null,
     lock_visible: bool = false,
+    process_events_after: bool = true,
 };
 
 hbox: BoxWidget = undefined,
@@ -60,7 +61,7 @@ pub fn install(self: *ScrollAreaWidget) void {
     self.installScrollBars();
 
     const container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
-    self.scroll = ScrollContainerWidget.init(@src(), self.si, .{ .lock_visible = self.init_opts.lock_visible, .frame_viewport = self.init_opts.frame_viewport }, container_opts);
+    self.scroll = ScrollContainerWidget.init(@src(), self.si, .{ .lock_visible = self.init_opts.lock_visible, .frame_viewport = self.init_opts.frame_viewport, .process_events_after = self.init_opts.process_events_after }, container_opts);
 
     self.scroll.?.install();
     self.scroll.?.processEvents();

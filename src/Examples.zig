@@ -2795,7 +2795,7 @@ pub fn scrolling() void {
 
         _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
 
-        var top_area = dvui.scrollArea(@src(), .{ .scroll_info = siTop, .frame_viewport = .{ .x = fv.x }, .horizontal_bar = .hide }, .{ .expand = .both });
+        var top_area = dvui.scrollArea(@src(), .{ .scroll_info = siTop, .frame_viewport = .{ .x = fv.x }, .horizontal_bar = .hide, .process_events_after = false }, .{ .expand = .both });
         {
             // inside top area
             var topbox = dvui.box(@src(), .horizontal, .{});
@@ -2812,7 +2812,7 @@ pub fn scrolling() void {
 
     var hbox3 = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
 
-    var side_area = dvui.scrollArea(@src(), .{ .scroll_info = siLeft, .frame_viewport = .{ .y = fv.y }, .vertical_bar = .hide }, .{ .min_size_content = .{ .w = left_side_width, .h = 200 }, .expand = .vertical });
+    var side_area = dvui.scrollArea(@src(), .{ .scroll_info = siLeft, .frame_viewport = .{ .y = fv.y }, .vertical_bar = .hide, .process_events_after = false }, .{ .min_size_content = .{ .w = left_side_width, .h = 200 }, .expand = .vertical });
     {
         // inside side area
         var sidebox = dvui.box(@src(), .vertical, .{});
@@ -2826,7 +2826,7 @@ pub fn scrolling() void {
 
     _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
 
-    var scontainer = dvui.ScrollContainerWidget.init(@src(), siMain, .{ .frame_viewport = fv }, .{ .expand = .both });
+    var scontainer = dvui.ScrollContainerWidget.init(@src(), siMain, .{ .frame_viewport = fv, .event_rect = main_area.data().borderRectScale().r }, .{ .expand = .both });
     scontainer.install();
     scontainer.processEvents();
     scontainer.processVelocity();
