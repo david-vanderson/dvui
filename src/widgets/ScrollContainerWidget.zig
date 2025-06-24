@@ -24,6 +24,8 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     frame_viewport: ?Point = null,
     lock_visible: bool = false,
+    event_rect: ?Rect.Physical = null,
+    process_events_after: bool = true,
 };
 
 wd: WidgetData = undefined,
@@ -105,7 +107,7 @@ pub fn matchEvent(self: *ScrollContainerWidget, e: *Event) bool {
         self.finger_down = false;
     }
 
-    return dvui.eventMatchSimple(e, self.data());
+    return dvui.eventMatch(e, .{ .id = self.wd.id, .r = self.init_opts.event_rect orelse self.wd.borderRectScale().r });
 }
 
 pub fn processEvents(self: *ScrollContainerWidget) void {
@@ -475,7 +477,7 @@ pub fn processMotionScrollEvent(self: *ScrollContainerWidget, e: *dvui.Event, mo
 pub fn processEventsAfter(self: *ScrollContainerWidget) void {
     const evts = dvui.events();
     for (evts) |*e| {
-        if (!dvui.eventMatchSimple(e, self.data()))
+        if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = self.init_opts.event_rect orelse self.wd.borderRectScale().r }))
             continue;
 
         switch (e.evt) {
@@ -544,7 +546,14 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
 
 pub fn deinit(self: *ScrollContainerWidget) void {
     defer dvui.widgetFree(self);
-    self.processEventsAfter();
+
+    // need to reset clip before processEventsAfter, event_rect could be
+    // outside clip, and mouse events only match inside the clip
+    dvui.clipSet(self.prevClip);
+
+    if (self.init_opts.process_events_after) {
+        self.processEventsAfter();
+    }
 
     dvui.dataSet(null, self.wd.id, "_fv_id", self.first_visible_id);
     dvui.dataSet(null, self.wd.id, "_fv_offset", self.first_visible_offset);
@@ -560,8 +569,6 @@ pub fn deinit(self: *ScrollContainerWidget) void {
             dvui.currentWindow().inject_motion_event = true;
         }
     }
-
-    dvui.clipSet(self.prevClip);
 
     const padded = self.wd.options.padSize(self.nextVirtualSize);
     switch (self.si.horizontal) {
