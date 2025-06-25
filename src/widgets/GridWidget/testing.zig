@@ -175,7 +175,7 @@ test "GridWidget: populate by reverse rol, col" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var grid = dvui.grid(@src(), .numCols(10), .{}, .{}); // TODO:
+            var grid = dvui.grid(@src(), .numCols(10), .{}, .{});
             defer grid.deinit();
             for (0..10) |row| {
                 for (0..10) |col| {
@@ -221,7 +221,7 @@ test "GridWidget: col widths" {
     const frame = struct {
         var col_widths: [10]f32 = @splat(50);
         fn frame() !dvui.App.Result {
-            var grid = dvui.grid(@src(), .colWidths(&col_widths), .{}, .{ .expand = .both }); // TODO: No .expand
+            var grid = dvui.grid(@src(), .colWidths(&col_widths), .{}, .{});
             defer grid.deinit();
             for (0..10) |col| {
                 for (0..10) |row| {
@@ -614,4 +614,166 @@ test "GridWidget: more body cells than header cells" {
 
     try dvui.testing.settle(frame);
     try t.saveImage(frame, null, "GridWidget-more_body_than_header.png");
+}
+
+test "add rows" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
+    defer t.deinit();
+    const frame = struct {
+        var frame_number: usize = 0;
+        fn frame() !dvui.App.Result {
+            var grid = dvui.grid(@src(), .numCols(10), .{}, .{});
+            defer grid.deinit();
+            {
+                const start: usize, const end: usize = if (frame_number == 0)
+                    .{ 0, 5 }
+                else
+                    .{ 0, 10 };
+                for (0..10) |col| {
+                    for (start..end) |row| {
+                        var cell = grid.bodyCell(@src(), col, row, .{
+                            .border = dvui.Rect.all(1),
+                        });
+                        defer cell.deinit();
+                        dvui.label(@src(), "{}:{}", .{ col, row }, .{});
+                    }
+                }
+            }
+            return .ok;
+        }
+    };
+    try dvui.testing.settle(frame.frame);
+    frame.frame_number += 1;
+    try dvui.testing.settle(frame.frame);
+    try t.saveImage(frame.frame, null, "GridWidget-add_rows.png");
+}
+
+test "remove rows" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
+    defer t.deinit();
+    const frame = struct {
+        var frame_number: usize = 0;
+        fn frame() !dvui.App.Result {
+            var grid = dvui.grid(@src(), .numCols(10), .{}, .{});
+            defer grid.deinit();
+            {
+                const start: usize, const end: usize = if (frame_number == 0)
+                    .{ 0, 10 }
+                else
+                    .{ 0, 5 };
+                for (0..10) |col| {
+                    for (start..end) |row| {
+                        var cell = grid.bodyCell(@src(), col, row, .{
+                            .border = dvui.Rect.all(1),
+                        });
+                        defer cell.deinit();
+                        dvui.label(@src(), "{}:{}", .{ col, row }, .{});
+                    }
+                }
+            }
+            return .ok;
+        }
+    };
+    try dvui.testing.settle(frame.frame);
+    frame.frame_number += 1;
+    try dvui.testing.settle(frame.frame);
+    try t.saveImage(frame.frame, null, "GridWidget-remove_rows.png");
+}
+
+test "add cols" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
+    defer t.deinit();
+    const frame = struct {
+        var frame_number: usize = 0;
+        fn frame() !dvui.App.Result {
+            var grid = dvui.grid(@src(), .numCols(10), .{}, .{});
+            defer grid.deinit();
+            {
+                const start: usize, const end: usize = if (frame_number == 0)
+                    .{ 0, 5 }
+                else
+                    .{ 0, 10 };
+                for (start..end) |col| {
+                    for (0..10) |row| {
+                        var cell = grid.bodyCell(@src(), col, row, .{
+                            .border = dvui.Rect.all(1),
+                        });
+                        defer cell.deinit();
+                        dvui.label(@src(), "{}:{}", .{ col, row }, .{});
+                    }
+                }
+            }
+            return .ok;
+        }
+    };
+    try dvui.testing.settle(frame.frame);
+    frame.frame_number += 1;
+    try dvui.testing.settle(frame.frame);
+    try t.saveImage(frame.frame, null, "GridWidget-add_cols.png");
+}
+
+test "remove cols" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
+    defer t.deinit();
+    const frame = struct {
+        var frame_number: usize = 0;
+        fn frame() !dvui.App.Result {
+            const start: usize, const end: usize = if (frame_number == 0)
+                .{ 0, 10 }
+            else
+                .{ 0, 5 };
+
+            var grid = dvui.grid(@src(), .numCols(10), .{}, .{});
+            defer grid.deinit();
+            {
+                for (start..end) |col| {
+                    for (0..10) |row| {
+                        var cell = grid.bodyCell(@src(), col, row, .{
+                            .border = dvui.Rect.all(1),
+                        });
+                        defer cell.deinit();
+                        dvui.label(@src(), "{}:{}", .{ col, row }, .{});
+                    }
+                }
+            }
+            return .ok;
+        }
+    };
+    try dvui.testing.settle(frame.frame);
+    frame.frame_number += 1;
+    try dvui.testing.settle(frame.frame);
+    try t.saveImage(frame.frame, null, "GridWidget-remove_cols.png");
+}
+
+test "remove cols and shrink" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
+    defer t.deinit();
+    const frame = struct {
+        var frame_number: usize = 0;
+        fn frame() !dvui.App.Result {
+            const start: usize, const end: usize = if (frame_number == 0)
+                .{ 0, 10 }
+            else
+                .{ 0, 5 };
+
+            var grid = dvui.grid(@src(), .numCols(end), .{}, .{});
+            defer grid.deinit();
+            {
+                for (start..end) |col| {
+                    for (0..10) |row| {
+                        var cell = grid.bodyCell(@src(), col, row, .{
+                            .border = dvui.Rect.all(1),
+                        });
+                        defer cell.deinit();
+                        dvui.label(@src(), "{}:{}", .{ col, row }, .{});
+                    }
+                }
+            }
+            return .ok;
+        }
+    };
+    try dvui.testing.settle(frame.frame);
+    frame.frame_number += 1;
+    try dvui.testing.settle(frame.frame);
+    try t.saveImage(frame.frame, null, "GridWidget-remove_cols_shrink.png");
 }
