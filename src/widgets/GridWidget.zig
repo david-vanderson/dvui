@@ -508,6 +508,10 @@ pub fn colWidth(self: *GridWidget, col_num: usize) f32 {
         dvui.log.debug("GridWidget {x} col_num {d} is greater than number of columns {d} using default col_width\n", .{ self.data().id, col_num, self.col_widths.len });
         return default_col_width;
     }
+    // If grid is keeping track of the column widths return the start of frame col width
+    // as next frame's value may have already been set by colWidthSet() for a previous row.
+    // During column resizing, this is used to ensure that all cells get a width of 0,
+    // so they can expand to their preferred size, until the next frame.
     if (self.starting_col_widths) |starting_col_widths| {
         return starting_col_widths[col_num];
     } else {
@@ -553,27 +557,13 @@ fn headerScrollAreaCreate(self: *GridWidget) void {
             .vertical_bar = .hide,
             .scroll_info = &self.hsi,
             .frame_viewport = .{ .x = self.frame_viewport.x },
+            .process_events_after = false,
         }, .{
             .name = "GridWidgetHeaderScroll",
             .expand = .horizontal,
-            .min_size_content = .{ .h = self.header_height, .w = self.totalWidth() },
+            .min_size_content = .{ .h = self.header_height, .w = self.last_size.w },
         });
         self.hscroll.?.install();
-    }
-
-    // Any scroll-wheel events in the header should be applied to the body instead.
-    const events = dvui.events();
-    for (events) |*e| {
-        if (e.evt == .mouse and dvui.eventMatchSimple(e, self.hscroll.?.data())) {
-            const me = e.evt.mouse;
-            if (me.action == .wheel_y) {
-                e.handle(@src(), self.data());
-                self.bsi.scrollByOffset(.vertical, -me.action.wheel_y);
-            } else if (me.action == .wheel_x) {
-                e.handle(@src(), self.data());
-                self.bsi.scrollByOffset(.horizontal, me.action.wheel_x);
-            }
-        }
     }
 }
 
@@ -585,15 +575,13 @@ fn bodyScrollContainerCreate(self: *GridWidget, src: std.builtin.SourceLocation)
     }
 
     if (self.bscroll == null) {
-        self.bscroll = ScrollContainerWidget.init(
-            src,
-            self.bsi,
-            .{ .frame_viewport = self.frame_viewport },
-            .{
-                .name = "GridWidgetBodyScroll",
-                .expand = .both,
-            },
-        );
+        self.bscroll = ScrollContainerWidget.init(src, self.bsi, .{
+            .frame_viewport = self.frame_viewport,
+            .event_rect = self.scroll.data().borderRectScale().r,
+        }, .{
+            .name = "GridWidgetBodyScroll",
+            .expand = .both,
+        });
         self.bscroll.?.install();
         self.bscroll.?.processEvents();
         self.bscroll.?.processVelocity();
