@@ -1,83 +1,117 @@
 
-zig 0.15:
-- if better alternative to sliceAsBytes/bytesAsSlice that includes sentinel, then update our use
+git shortlog -sn --since="last month"
+git log --pretty=oneline --since="last month" | wc -l
 
 
-doc comments and publish
-
-update web-test and publish
+push docs and web-app
 
 
+devlog
+- BoxWidget changes
 
+
+bubbling rework
+
+
+lifo stuff
+- separate arena for each alignment?
+- zig arena doesn't free if alignment caused a gap between items
+- zig arena also doesn't free across buffer_lists
+
+consolidate box and boxEqual
+- should vertical be default?
+
+file issue for size caching widget:
+- usecase is a box that you sometimes want to put something inside, but always take the same amount of space
+
+infinite scroll demo
+
+hasEvent -> interrupted for web, dx11
+
+maybe minSizeForChild needs to take id, so you can detect if rectFor/minSizeForChild are not called in order?
+
+pinch-zoom on mobile at least should be able to move the whole window around so you can zoom in on something anywhere
+
+touch drag on a scroll container should not be handled if no scroll is possible (we are not showing a scrollbar)
+
+look at addTab() vs tab()?  addXXX functions in general?
+
+Cache Widget should respect snapToPixels - demo buttons can look blurry
+
+find out what the status of tinyvg sdk is - is it being maintained?
+
+theme rework
+- able to switch to the dark theme immediately
+- able to switch to given built in theme
+- check docs for accent color
+
+problem is that Font would need to copy the font names as well?
+
+change themes to be ArrayList
++            // Sort themes alphabetically
++            const Context = struct {
++                pub fn lessThan(_: void, lhs: Theme, rhs: Theme) bool {
++                    return std.ascii.orderIgnoreCase(lhs.name, rhs.name) == .lt;
++                }
+             };
+-            defer quick_theme.deinit();
+-            const theme = try quick_theme.value.toTheme(self.gpa);
+-            try self.themes.putNoClobber(theme.name, theme);
+-        }
++            std.mem.sort(Theme, self.themes.items, {}, Context.lessThan);
+ 
+-        // Sort themes alphabetically
+-        const Context = struct {
+-            hashmap: *std.StringArrayHashMap(Theme),
+-            pub fn lessThan(ctx: @This(), lhs: usize, rhs: usize) bool {
+-                return std.ascii.orderIgnoreCase(ctx.hashmap.values()[lhs].name, ctx.hashmap.values()[rhs].name) == .lt;
++            for (self.themes.items) |t| {
++                if (std.mem.eql(u8, t.name, "Adwaita Light")) {
++                    self.theme = try t.copy(self.gpa);
++                    break;
++                }
+
+
+make struct UI work with []const u8
+- if modified with allocator, copy/free/replace
+
+change borderAndBackground to directly take all params instead of getting them from WidgetData directly
+
+figure out what set of doc images we should have for now
+
+can we live-update the Options struct for widgets?
+
+see if Freetype can be compiled for wasm
 
 Backend.initWindow should have a fullscreen option for podcast
 podcast text selection is not showing the touch cut/copy/paste options
 
-make simple plot with option to save the image
-- save to file on desktop, save to dataurl on web?
-
-
-
-
 switch stb_truetype for zig version
-
-
-
-tooltips
-
-
-make textureCreate* properly return errors
-
-
 
 should do tabIndexSet if the element has size, so even if it's scrolled off the screen we still go to it
 - when we do tabIndexNext/Prev it should focus that element and then also send a scroll_to message from that widget - how?
-
 
 scrollContainer:
 - doesn't do multiple widgets going horizontally
   - rectFor or minSizeForChild
 - add a direction to scrollContainer that controls the direction widgets are added in
 
-
-
 lock_visible
 - also take into account any viewport movement that frame from events/velocity
 
-
-do some profiling of the scrolling demo and add caching to BoxWidget?
-- add some profiling infrastructure?
-- if cache is true and we are outside clipping rectangle, then can skip children and just go again with our minSize
-
-
 add Options.id_override to forcefully set the id
 - use in textEntryNumber
-- use in reroder so things don't reset when they get dragged/dropped
+- use in reorder so things don't reset when they get dragged/dropped
 - search for all uses of extendId
-
-
 
 textLayout:
 - check that min width/height works when there are top corner widgets (top left, top right, both) but no text
 
-
-try to decouple background from border
-
-
-consolidate touch editing selection
-
-
 raylib backend
-- directly call glfw.waitEventsTimeout?
-- events
 - instead of useTex, preload (or use raylib's) a 1x1 white texture
 - use raylib's default shader (have to give up premultiplied alpha)
 - on mac, two-finger scrolling in the demo window a lot hangs?
 - enable by default
-
-new theme fields
-
-build needs an option to select backend?
 
 touch dragging should probably not work when the size of the stuff inside the scroll area is less than the scroll area's size?
 - otherwise you get lots of meaningless off-the-edge scrolling
@@ -85,22 +119,12 @@ touch dragging should probably not work when the size of the stuff inside the sc
 README needs a section on themes
 - and how the new fields interact
 
-maybe toasts subwindow need some kind of outline?
-
-
-test ability to scroll_drag on a touch screen - do we need a curtain area around the edge of the scrollarea/screen where touch events will cause a scroll drag?
-
-
-web backend
-- on phone chrome entering characters works, but backspace first removes characters from the keyboard buffer before we get them removed, something to do with IME
-
 web backend clipboard
 - ideally we should preventDefault on copy/paste events, then be able to access the clipboard
 
-            navigator.clipboard.readText().then(function (text) {
-                console.log("read: " + text);
-            });
-
+    navigator.clipboard.readText().then(function (text) {
+        console.log("read: " + text);
+    });
 
 maybe expand should be a f32 instead of bool
 - could express "want this to take up 1/3 of the space"
@@ -109,7 +133,6 @@ maybe expand should be a f32 instead of bool
 text rendering:
 - investigate if with stb_truetype we can align horizontally to pixels?
 - see if the vertical weirdness is global, maybe a canvas size thing?  Does it happen in the SDL demo?
-
 
 add cursors to examples (row of buttons or something one for each cursor)
 
@@ -121,7 +144,6 @@ on hidpi display, selecting a bunch of text leaves small gaps noticeable in the 
 paned should have an "autopos" mode where when not collapsed it will use the expand of the children to determine split
 - this way you can have the split automatically be not 50/50
 
-
 need a button for sizing/rotation for icon and raster that works continuously while you hold it down
 - add option to Button where when in the down position it keeps refreshing
 
@@ -131,11 +153,6 @@ need a strategy for activating paste from a menu, because the widget will lose f
 - when the menu gets focus, maybe it saves the previous focus id?
 - then when the paste menu item is clicked, it can send focus back to saved id
   - also need to synthesize an event so that widget processes a paste
-
-add inertia to scrolling
-- if the scrollContainer has more intertia scrolling to do, then it should eat all pointer events, because we don't want any pointer events going to children if the scrolling is still happening
-
-switch from my freetype fork to Mach's
 
 maybe builtin button should record multiple clicks?
 - helps in low framerate situations
@@ -148,33 +165,7 @@ add alpha to Options as well and multiply it by the theme alpha
 
 add backend function to allow screensaver
 
-Tooltips:
-- wrapper around thing you want the tooltip for
-- floating windows similar to popup
-- popup has 3-4 states:
-  - ready (on first frame where the mouse pointer is above the rect, go to 
-  showing)
-  - timer (could go here and wait for timer)
-  - showing (tooltip popup shows, go to off if the mouse pointer is not 
-  above rect)
-  - off (go to ready on a frame where the mouse pointer is off our rect)
-  var ttw = ToolTipWidget.init...
-- if (ttw.active()) |p| {
-    // p is the point of the mouse when the tooltip was activated
-    var ttp = TooltipPopupWidget.init... (pass in TooltipWidget's screenrect, optionally previous ttp if nested)
-    // ttp
-    ttp.install();
-    // tooltip contents
-    ttp.deinit();
-    // ttp.deinit() checks:
-      - if we have a live nested ttp, we stay alive
-      - if the current mouse pointer is not above ttp OR the passed in ttw screenrect, we stay alive
-      - if staying alive and we have a ttp parent, tell that parent we are live
-  }
-
 xstart and ystart for textSize
-
-kerning
 
 when we have a widget that has captured the mouse, need to capture the mouse in the underlying window system so click-dragging works even when the mouse pointer goes outside the window
 
