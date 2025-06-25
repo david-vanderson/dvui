@@ -1,19 +1,22 @@
-//! A scrollable grid widget for displaying tabular data. It has support for:
-//!  - Optional headers
+//! A scrollable grid widget for displaying tabular data.
+//! Features:
+//!  - Optional headers.
 //!  - Consistent or variable row heights.
-//!  - Horizontal and vertical scrolling
-//!  - Individual cell styling
+//!  - Horizontal and vertical scrolling.
+//!  - Individual cell styling.
 //!
-//! - If var_row_heights is false, rows and cols can be laid out in any order, including
-//!   sparse layouts where not all rows or cols are provided.
-//! - If var_row_heights is true, then rows must be laid out sequentially.
-//!   Either sequentially all rows for a column before moving to a new column,
-//!   or all columns for a row before moving to the next sequential row.
+//! If `var_row_heights` is false, rows and columns can be laid out in any order,
+//! including sparse layouts where not all rows or columns are provided.
 //!
-//! See related:
-//! - CellStyle: helpers to style grid cells and widgets.
-//! - HeaderResizeWidget: draggable header resizing.
-//! - VirtualScroller: virtual scrolling through large datasets.
+//! If `var_row_heights` is true, rows must be laid out sequentially—either:
+//!  1. All rows for a column before moving to the next column, or
+//!  2. All columns for a row before moving to the next row.
+//!
+//! See also:
+//!  - `CellStyle`: helpers to style grid cells and widgets.
+//!  - `HeaderResizeWidget`: draggable header resizing.
+//!  - `VirtualScroller`: virtual scrolling through large datasets.
+
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 
@@ -47,9 +50,9 @@ pub var defaults: Options = .{
 pub var scrollbar_padding_defaults: Size = .{ .h = 10, .w = 10 };
 
 pub const CellOptions = struct {
-    // size manually control height or width of a cell.
-    // height is ignored unless var_row_heights = true. height should be the same for all cells in a row.
-    // width is ignored when col_widths is supplied. width should be the same for all cells in a column (including the header cell)
+    // Set the height or width of a cell.
+    // height is ignored unless var_row_heights = true.
+    // width is ignored when col_widths is supplied to init_opts.
     size: ?Size = null,
     margin: ?Rect = null,
     border: ?Rect = null,
@@ -140,7 +143,7 @@ hscroll: ?ScrollAreaWidget = null, // header scroll area
 bscroll: ?ScrollContainerWidget = null, // body scroll container
 bbox: BoxWidget = undefined, // has the same lifetime as bscroll.
 
-// Not valid untill after install()
+// Not valid until after install()
 hsi: ScrollInfo = undefined, // Header scroll info
 bsi: *ScrollInfo = undefined, // Body scroll info
 frame_viewport: Point = undefined, // Fixed scroll viewport for this frame
@@ -304,8 +307,12 @@ pub fn deinit(self: *GridWidget) void {
     const this_height: f32 = if (self.init_opts.var_row_heights) self.next_row_y else (max_row_f + 1) * self.row_height;
     const this_size: Size = .{ .h = this_height, .w = self.totalWidth() };
 
-    if (self.resizing or !this_size.eq(self.last_size))
+    if (self.resizing or
+        self.init_opts.resize_cols or
+        !this_size.eq(self.last_size))
+    {
         dvui.refresh(null, @src(), self.data().id);
+    }
 
     if (self.hscroll) |*hscroll| {
         hscroll.deinit();
@@ -366,8 +373,8 @@ pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: u
         }
     };
     var cell_opts = opts.toOptions();
-    const xpos = self.posX(col_num);
-    cell_opts.rect = .{ .x = xpos, .y = 0, .w = header_width, .h = header_height };
+    const pos_x = self.posX(col_num);
+    cell_opts.rect = .{ .x = pos_x, .y = 0, .w = header_width, .h = header_height };
     cell_opts.id_extra = col_num;
 
     // Create the cell and install as parent.
@@ -423,10 +430,10 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: usi
     };
 
     const row_num_f: f32 = @floatFromInt(row_num);
-    const xpos = self.posX(col_num);
-    const ypos = if (self.init_opts.var_row_heights) self.this_row_y else self.row_height * row_num_f;
+    const pos_x = self.posX(col_num);
+    const pos_y = if (self.init_opts.var_row_heights) self.this_row_y else self.row_height * row_num_f;
     var cell_opts = opts.toOptions();
-    cell_opts.rect = .{ .x = xpos, .y = ypos, .w = cell_width, .h = cell_height };
+    cell_opts.rect = .{ .x = pos_x, .y = pos_y, .w = cell_width, .h = cell_height };
 
     // To support being called in a loop, combine col and row numbers as id_extra.
     // 9_223_372_036_854_775K cols should be enough for anybody.
@@ -591,7 +598,7 @@ fn bodyScrollContainerCreate(self: *GridWidget, src: std.builtin.SourceLocation)
         self.bscroll.?.processEvents();
         self.bscroll.?.processVelocity();
 
-        // This box ise used to set the size of the scrollable area in the scroll container.
+        // This box is used to set the size of the scrollable area in the scroll container.
         self.bbox = BoxWidget.init(@src(), .{ .dir = .horizontal }, .{
             .min_size_content = self.last_size,
         });
@@ -603,7 +610,7 @@ fn bodyScrollContainerCreate(self: *GridWidget, src: std.builtin.SourceLocation)
 /// GridVirtualScroller requires that a scroll_info has been passed as an init_option
 /// to the GridBodyWidget.
 /// Note: Requires that all rows are the same height for the entire grid, including rows
-/// not yet displayed. It is highly recommended to supply row heights to each cell
+/// not yet displayed. It is highly recommended to supply the row height to each cell
 /// when using the virtual scroller.
 pub const VirtualScroller = struct {
     pub const InitOpts = struct {
@@ -619,8 +626,6 @@ pub const VirtualScroller = struct {
         const total_rows_f: f32 = @floatFromInt(init_opts.total_rows);
         si.virtual_size.h = @max(total_rows_f * grid.row_height + scrollbar_padding_defaults.h, si.viewport.h);
 
-        const first_row: f32 = @floatFromInt(_startRow(grid, init_opts.total_rows));
-        grid.offsetRowsBy(first_row * grid.row_height);
         return .{
             .grid = grid,
             .si = si,
@@ -628,20 +633,17 @@ pub const VirtualScroller = struct {
         };
     }
 
-    fn _startRow(grid: *const GridWidget, total_rows: usize) usize {
-        if (grid.row_height < 1) {
-            return 0;
-        }
-        const first_row_in_viewport: usize = @intFromFloat(@round(grid.frame_viewport.y / grid.row_height));
-
-        if (first_row_in_viewport == 0) {
-            return 0;
-        }
-        return @min(first_row_in_viewport - 1, total_rows);
-    }
     /// Return the first row to render (inclusive)
     pub fn startRow(self: *const VirtualScroller) usize {
-        return _startRow(self.grid, self.total_rows);
+        if (self.grid.row_height < 1) {
+            return 0;
+        }
+        const first_row_in_viewport: usize = @intFromFloat(@round(self.grid.frame_viewport.y / self.grid.row_height));
+
+        if (first_row_in_viewport == 0 or self.total_rows == 0) {
+            return 0;
+        }
+        return @min(first_row_in_viewport - 1, self.total_rows - 1);
     }
 
     /// Return the end row to render (exclusive)
@@ -849,6 +851,6 @@ pub const HeaderResizeWidget = struct {
 };
 test {
     // TODO: Don't include grid tests yet.
-    // _ = @import("GridWidget/testing.zig");
+    _ = @import("GridWidget/testing.zig");
     @import("std").testing.refAllDecls(@This());
 }
