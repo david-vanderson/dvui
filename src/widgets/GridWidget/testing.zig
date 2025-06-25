@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("../../dvui.zig");
 const GridWidget = dvui.GridWidget;
 
-test "GridWidget: basic by col" {
+test "basic by col" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -33,7 +33,7 @@ test "GridWidget: basic by col" {
     try t.saveImage(frame, null, "GridWidget-basic_by_col.png");
 }
 
-test "GridWidget: basic by row" {
+test "basic by row" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -64,7 +64,7 @@ test "GridWidget: basic by row" {
     try t.saveImage(frame, null, "GridWidget-basic_by_row.png");
 }
 
-test "GridWidget: empty grid" {
+test "empty grid" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -80,7 +80,7 @@ test "GridWidget: empty grid" {
     try t.saveImage(frame, null, "GridWidget-empty.png");
 }
 
-test "GridWidget: one cell" {
+test "one cell" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -99,7 +99,7 @@ test "GridWidget: one cell" {
     try t.saveImage(frame, null, "GridWidget-one_cell.png");
 }
 
-test "GridWidget: populate by col expand" {
+test "populate by col expand" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -122,7 +122,7 @@ test "GridWidget: populate by col expand" {
     try t.saveImage(frame, null, "GridWidget-by_col_expand.png");
 }
 
-test "GridWidget: populate by col no expand" {
+test "populate by col no expand" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -145,7 +145,7 @@ test "GridWidget: populate by col no expand" {
     try t.saveImage(frame, null, "GridWidget-by_col_no_expand.png");
 }
 
-test "GridWidget: populate by row" {
+test "populate by row" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -168,7 +168,7 @@ test "GridWidget: populate by row" {
     try t.saveImage(frame, null, "GridWidget-by_row.png");
 }
 
-test "GridWidget: populate by reverse rol, col" {
+test "populate by reverse rol, col" {
     // This should be the most difficult as the layout starts in the bottom right and moves to the top-left.
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
@@ -192,7 +192,7 @@ test "GridWidget: populate by reverse rol, col" {
     try t.saveImage(frame, null, "GridWidget-by_reverse_row_col.png");
 }
 
-test "GridWidget: col out of bounds" {
+test "col out of bounds" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -215,7 +215,7 @@ test "GridWidget: col out of bounds" {
     try t.saveImage(frame, null, "GridWidget-col_out_of_bounds.png");
 }
 
-test "GridWidget: col widths" {
+test "col widths" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
     const frame = struct {
@@ -238,7 +238,7 @@ test "GridWidget: col widths" {
     try t.saveImage(frame, null, "GridWidget-col_widths.png");
 }
 
-test "GridWidget: cell widths" {
+test "cell widths" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
     const frame = struct {
@@ -260,7 +260,7 @@ test "GridWidget: cell widths" {
     try t.saveImage(frame, null, "GridWidget-cell_widths.png");
 }
 
-test "GridWidget: ignore cell_heights" {
+test "ignore cell_heights" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
     const frame = struct {
@@ -282,7 +282,7 @@ test "GridWidget: ignore cell_heights" {
     try t.saveImage(frame, null, "GridWidget-ignore_cell_height.png");
 }
 
-test "GridWidget: variable cell_heights by col" {
+test "variable cell_heights by col" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
     const frame = struct {
@@ -305,7 +305,7 @@ test "GridWidget: variable cell_heights by col" {
     try t.saveImage(frame, null, "GridWidget-variable_cell_height_col.png");
 }
 
-test "GridWidget: variable cell_heights by row" {
+test "variable cell_heights by row" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
     const frame = struct {
@@ -328,7 +328,7 @@ test "GridWidget: variable cell_heights by row" {
     try t.saveImage(frame, null, "GridWidget-variable_cell_height_row.png");
 }
 
-test "GridWidget: styling" {
+test "styling" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
     const frame = struct {
@@ -354,7 +354,7 @@ test "GridWidget: styling" {
     try t.saveImage(frame, null, "GridWidget-styling.png");
 }
 
-test "GridWidget: styling empty" {
+test "styling empty" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
     const frame = struct {
@@ -379,7 +379,7 @@ test "GridWidget: styling empty" {
     try t.saveImage(frame, null, "GridWidget-styling_empty.png");
 }
 
-test "GridWidget: heading only" {
+test "heading only" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
     const frame = struct {
@@ -399,7 +399,7 @@ test "GridWidget: heading only" {
     try t.saveImage(frame, null, "GridWidget-heading_only.png");
 }
 
-test "GridWidget: body then header" {
+test "body then header" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
     const frame = struct {
@@ -424,7 +424,7 @@ test "GridWidget: body then header" {
     try t.saveImage(frame, null, "GridWidget-body_then_header.png");
 }
 
-test "GridWidget: vary header height" {
+test "vary header height" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -461,7 +461,7 @@ test "GridWidget: vary header height" {
     try t.saveImage(frame, null, "GridWidget-vary_header_height.png");
 }
 
-test "GridWidget: vary row height" {
+test "vary row height" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -501,7 +501,7 @@ test "GridWidget: vary row height" {
     try t.saveImage(frame, null, "GridWidget-vary_row_height.png");
 }
 
-test "GridWidget: sparse" {
+test "sparse" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -526,7 +526,7 @@ test "GridWidget: sparse" {
     try t.saveImage(frame, null, "GridWidget-sparse.png");
 }
 
-test "GridWidget: sparse reverse" {
+test "sparse reverse" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -552,7 +552,7 @@ test "GridWidget: sparse reverse" {
     try t.saveImage(frame, null, "GridWidget-sparse_reverse.png");
 }
 
-test "GridWidget: more header cells than body cells" {
+test "more header cells than body cells" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -584,7 +584,7 @@ test "GridWidget: more header cells than body cells" {
     try t.saveImage(frame, null, "GridWidget-more_headers_than_body.png");
 }
 
-test "GridWidget: more body cells than header cells" {
+test "more body cells than header cells" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -614,6 +614,87 @@ test "GridWidget: more body cells than header cells" {
 
     try dvui.testing.settle(frame);
     try t.saveImage(frame, null, "GridWidget-more_body_than_header.png");
+}
+
+test "resize cols" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
+    defer t.deinit();
+
+    const frame = struct {
+        var action: enum { wide, resize, narrow } = .wide;
+        var frame_count: usize = 0;
+        fn frame() !dvui.App.Result {
+            var grid = dvui.grid(@src(), .numCols(4), .{ .resize_cols = action == .resize }, .{});
+            defer grid.deinit();
+            {
+                for (0..4) |col| {
+                    var cell = grid.headerCell(@src(), col, .{
+                        .border = dvui.Rect.all(1),
+                        .size = .{ .w = if (action == .wide) 100 else 50 },
+                    });
+                    defer cell.deinit();
+                    dvui.label(@src(), "{}", .{col}, .{});
+                }
+                for (0..4) |col| {
+                    for (0..4) |row| {
+                        var cell = grid.bodyCell(@src(), col, row, .{
+                            .border = dvui.Rect.all(1),
+                        });
+                        defer cell.deinit();
+                        dvui.label(@src(), "{}:{}", .{ col, row }, .{});
+                    }
+                }
+            }
+            if (action == .resize) action = .narrow;
+            return .ok;
+        }
+    };
+    frame.action = .wide;
+    try dvui.testing.settle(frame.frame);
+    try t.saveImage(frame.frame, null, "GridWidget-resize_cols_wide.png");
+    frame.action = .resize;
+    try dvui.testing.settle(frame.frame);
+    try t.saveImage(frame.frame, null, "GridWidget-resize_cols_narrow.png");
+}
+
+test "resize rows" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
+    defer t.deinit();
+
+    const frame = struct {
+        var action: enum { tall, resize, short } = .tall;
+        var frame_count: usize = 0;
+        fn frame() !dvui.App.Result {
+            var grid = dvui.grid(@src(), .numCols(4), .{ .resize_rows = action == .resize }, .{});
+            defer grid.deinit();
+            {
+                for (0..4) |col| {
+                    var cell = grid.headerCell(@src(), col, .{
+                        .border = dvui.Rect.all(1),
+                    });
+                    defer cell.deinit();
+                    dvui.label(@src(), "{}", .{col}, .{});
+                }
+                for (0..4) |col| {
+                    for (0..4) |row| {
+                        var cell = grid.bodyCell(@src(), col, row, .{
+                            .border = dvui.Rect.all(1),
+                        });
+                        defer cell.deinit();
+                        dvui.label(@src(), "{}:{}", .{ col, row }, .{ .font_style = if (action == .tall) .title_1 else null });
+                    }
+                }
+            }
+            if (action == .resize) action = .short;
+            return .ok;
+        }
+    };
+    frame.action = .tall;
+    try dvui.testing.settle(frame.frame);
+    try t.saveImage(frame.frame, null, "GridWidget-resize_rows_tall.png");
+    frame.action = .resize;
+    try dvui.testing.settle(frame.frame);
+    try t.saveImage(frame.frame, null, "GridWidget-resize_rows_short.png");
 }
 
 test "add rows" {
