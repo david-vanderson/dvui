@@ -5308,13 +5308,14 @@ pub const ImageInitOptions = struct {
         /// bytes of an premultiplied rgba u8 array in row major order
         pixels,
     };
+    pub const PixelBytes = struct {
+        bytes: RGBAPixelsPMA,
+        width: u32,
+        height: u32,
+    };
     pub const ImageBytes = union(ImageType) {
         imageFile: []const u8,
-        pixels: struct {
-            bytes: RGBAPixelsPMA,
-            width: u32,
-            height: u32,
-        },
+        pixels: PixelBytes,
     };
     /// Used for debugging output.
     name: []const u8 = "image",
