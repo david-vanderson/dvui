@@ -883,3 +883,32 @@ test "remove cols and shrink" {
     try dvui.testing.settle(frame.frame);
     try t.saveImage(frame.frame, null, "GridWidget-remove_cols_shrink.png");
 }
+
+test "header size and shrink" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
+    defer t.deinit();
+    const frame = struct {
+        var action: enum { tall, resize, short } = .tall;
+        fn frame() !dvui.App.Result {
+            var grid = dvui.grid(@src(), .numCols(10), .{ .resize_rows = action == .resize }, .{});
+            defer grid.deinit();
+            {
+                for (0..10) |col| {
+                    var cell = grid.headerCell(@src(), col, .{
+                        .size = .{ .h = if (action == .tall) 100 else 50 },
+                        .border = dvui.Rect.all(1),
+                    });
+                    defer cell.deinit();
+                    dvui.label(@src(), "{}", .{col}, .{});
+                }
+            }
+            if (action == .resize) action = .short;
+            return .ok;
+        }
+    };
+    try dvui.testing.settle(frame.frame);
+    try t.saveImage(frame.frame, null, "GridWidget-reheader_pre_resize.png");
+    frame.action = .resize;
+    try dvui.testing.settle(frame.frame);
+    try t.saveImage(frame.frame, null, "GridWidget-header_post_resize.png");
+}
