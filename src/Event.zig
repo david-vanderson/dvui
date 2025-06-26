@@ -14,9 +14,9 @@ num: u16 = 0,
 evt: union(enum) {
     // non-bubbleable
     mouse: Mouse,
+    key: Key,
 
     // bubbleable
-    key: Key,
     text: Text,
     close_popup: ClosePopup,
     scroll_drag: ScrollDrag,
@@ -28,7 +28,7 @@ evt: union(enum) {
 // so that pressing the up key in any child of a scrollarea will scroll.  Call
 // this helper at the end of processEvent().
 pub fn bubbleable(self: *const Event) bool {
-    return (!self.handled and (self.evt != .mouse));
+    return (!self.handled and self.evt != .mouse and self.evt != .key);
 }
 
 /// Mark the event as handled

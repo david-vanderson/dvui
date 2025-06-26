@@ -2585,7 +2585,7 @@ pub fn focus() void {
         var b = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10, .y = 2 }, .border = dvui.Rect.all(1) });
         defer b.deinit();
 
-        const last_focus_id = dvui.lastFocusedIdInFrame();
+        const last_focus_id = dvui.lastFocusedIdInFrame(null);
 
         var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
         tl.addText("This shows how to detect if any widgets in a dynamic extent have focus.", .{});
@@ -2609,7 +2609,7 @@ pub fn focus() void {
             }
         }
 
-        const have_focus = (last_focus_id != dvui.lastFocusedIdInFrame());
+        const have_focus = (last_focus_id != dvui.lastFocusedIdInFrame(null));
         dvui.label(@src(), "Anything here with focus: {s}", .{if (have_focus) "Yes" else "No"}, .{});
     }
 

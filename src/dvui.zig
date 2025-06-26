@@ -1436,15 +1436,24 @@ pub fn focusedWidgetIdInCurrentSubwindow() ?WidgetId {
 
 /// Last widget id we saw this frame that was the focused widget.
 ///
-/// If two calls to this function return different values, then some widget
-/// that ran between them had focus.  This means one of:
+/// Pass result from previous call for the last focused id only if it changed.
+/// If so, some widget that ran between them had focus.  This means one of:
 /// * a widget had focus when it called `WidgetData.register`
 /// * `focusWidget` with the id of the last widget to call `WidgetData.register`
 /// * `focusWidget` with the id of a widget in the parent chain
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn lastFocusedIdInFrame() WidgetId {
-    return currentWindow().last_focused_id_this_frame;
+pub fn lastFocusedIdInFrame(prev: ?WidgetId) WidgetId {
+    const last_focused_id = currentWindow().last_focused_id_this_frame;
+    if (prev) |p| {
+        if (p != last_focused_id) {
+            return last_focused_id;
+        } else {
+            return .zero;
+        }
+    } else {
+        return last_focused_id;
+    }
 }
 
 /// Set cursor the app should use if not already set this frame.
@@ -2450,6 +2459,7 @@ pub const CaptureMouse = struct {
     /// subwindow id the widget with capture is in
     subwindow_id: WidgetId,
 };
+
 /// Capture the mouse for this widget's data.
 /// (i.e. `eventMatch` return true for this widget and false for all others)
 /// and capture is explicitly released when passing `null`.
@@ -3145,8 +3155,12 @@ pub fn eventMatchSimple(e: *Event, wd: *WidgetData) bool {
 
 /// Data for matching events to widgets.  See `eventMatch`.
 pub const EventMatchOptions = struct {
-    /// Id of widget, used to route non pointer events based on focus.
+    /// Id of widget, used for keyboard focus and mouse capture.
     id: WidgetId,
+
+    /// Additional Id for keyboard focus, use to match children with
+    /// `lastFocusedIdInFrame()`.
+    focus_id: WidgetId = .zero,
 
     /// Physical pixel rect used to match pointer events.
     r: Rect.Physical,
@@ -3181,7 +3195,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                 return false;
             }
         } else {
-            if (e.focus_widgetId != opts.id) {
+            if (e.focus_widgetId != opts.id and e.focus_widgetId != opts.focus_id) {
                 // not the focused widget
                 return false;
             }

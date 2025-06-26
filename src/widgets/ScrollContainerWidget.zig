@@ -31,6 +31,7 @@ pub const InitOptions = struct {
 wd: WidgetData = undefined,
 si: *ScrollInfo = undefined,
 init_opts: InitOptions = undefined,
+last_focus: dvui.WidgetId = undefined,
 
 // si.viewport.x/y might be updated in the middle of a frame, this prevents
 // those visual artifacts
@@ -54,6 +55,7 @@ pub fn init(src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, init_o
     const options = defaults.override(opts);
 
     self.wd = WidgetData.init(src, .{}, options);
+    self.last_focus = dvui.lastFocusedIdInFrame(null);
 
     self.si = io_scroll_info;
     self.finger_down = dvui.dataGet(null, self.wd.id, "_finger_down", bool) orelse false;
@@ -279,7 +281,7 @@ pub fn minSizeForChild(self: *ScrollContainerWidget, s: Size) void {
     self.nextVirtualSize.w = @max(self.nextVirtualSize.w, s.w);
 }
 
-pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) void {
+pub fn processEvent(self: *ScrollContainerWidget, e: *Event, _: bool) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .press and me.button.touch()) {
@@ -291,43 +293,6 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
 
                     self.si.velocity.x = 0;
                     self.si.velocity.y = 0;
-                }
-            }
-        },
-        .key => |ke| {
-            if (bubbling or (self.wd.id == dvui.focusedWidgetId())) {
-                if (ke.code == .up and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    if (self.si.vertical != .none) {
-                        self.si.scrollByOffset(.vertical, -10);
-                    }
-                    dvui.refresh(null, @src(), self.wd.id);
-                } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    if (self.si.vertical != .none) {
-                        self.si.scrollByOffset(.vertical, 10);
-                    }
-                    dvui.refresh(null, @src(), self.wd.id);
-                } else if (ke.code == .left and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    if (self.si.horizontal != .none) {
-                        self.si.scrollByOffset(.horizontal, -10);
-                    }
-                    dvui.refresh(null, @src(), self.wd.id);
-                } else if (ke.code == .right and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    if (self.si.horizontal != .none) {
-                        self.si.scrollByOffset(.horizontal, 10);
-                    }
-                    dvui.refresh(null, @src(), self.wd.id);
-                } else if (ke.code == .page_up and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    self.si.scrollPageUp(.vertical);
-                    dvui.refresh(null, @src(), self.wd.id);
-                } else if (ke.code == .page_down and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    self.si.scrollPageDown(.vertical);
-                    dvui.refresh(null, @src(), self.wd.id);
                 }
             }
         },
@@ -475,9 +440,11 @@ pub fn processMotionScrollEvent(self: *ScrollContainerWidget, e: *dvui.Event, mo
 }
 
 pub fn processEventsAfter(self: *ScrollContainerWidget) void {
+    const focus_id = dvui.lastFocusedIdInFrame(self.last_focus);
+
     const evts = dvui.events();
     for (evts) |*e| {
-        if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = self.init_opts.event_rect orelse self.wd.borderRectScale().r }))
+        if (!dvui.eventMatch(e, .{ .id = self.wd.id, .focus_id = focus_id, .r = self.init_opts.event_rect orelse self.wd.borderRectScale().r }))
             continue;
 
         switch (e.evt) {
@@ -537,6 +504,41 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     dvui.captureMouse(self.data());
 
                     self.processMotionScrollEvent(e, me.action.motion);
+                }
+            },
+            .key => |ke| {
+                if (ke.code == .up and (ke.action == .down or ke.action == .repeat)) {
+                    e.handle(@src(), self.data());
+                    if (self.si.vertical != .none) {
+                        self.si.scrollByOffset(.vertical, -10);
+                    }
+                    dvui.refresh(null, @src(), self.wd.id);
+                } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
+                    e.handle(@src(), self.data());
+                    if (self.si.vertical != .none) {
+                        self.si.scrollByOffset(.vertical, 10);
+                    }
+                    dvui.refresh(null, @src(), self.wd.id);
+                } else if (ke.code == .left and (ke.action == .down or ke.action == .repeat)) {
+                    e.handle(@src(), self.data());
+                    if (self.si.horizontal != .none) {
+                        self.si.scrollByOffset(.horizontal, -10);
+                    }
+                    dvui.refresh(null, @src(), self.wd.id);
+                } else if (ke.code == .right and (ke.action == .down or ke.action == .repeat)) {
+                    e.handle(@src(), self.data());
+                    if (self.si.horizontal != .none) {
+                        self.si.scrollByOffset(.horizontal, 10);
+                    }
+                    dvui.refresh(null, @src(), self.wd.id);
+                } else if (ke.code == .page_up and (ke.action == .down or ke.action == .repeat)) {
+                    e.handle(@src(), self.data());
+                    self.si.scrollPageUp(.vertical);
+                    dvui.refresh(null, @src(), self.wd.id);
+                } else if (ke.code == .page_down and (ke.action == .down or ke.action == .repeat)) {
+                    e.handle(@src(), self.data());
+                    self.si.scrollPageDown(.vertical);
+                    dvui.refresh(null, @src(), self.wd.id);
                 }
             },
             else => {},

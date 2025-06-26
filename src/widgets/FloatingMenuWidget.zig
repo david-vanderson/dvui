@@ -51,6 +51,7 @@ prev_rendering: bool = undefined,
 wd: WidgetData = undefined,
 options: Options = undefined,
 prev_windowId: dvui.WidgetId = .zero,
+prev_last_focus: dvui.WidgetId = undefined,
 parent_popup: ?*FloatingMenuWidget = null,
 have_popup_child: bool = false,
 menu: MenuWidget = undefined,
@@ -98,6 +99,8 @@ pub fn install(self: *FloatingMenuWidget) void {
 
     self.prev_windowId = dvui.subwindowCurrentSet(self.wd.id, null).id;
     self.parent_popup = popupSet(self);
+    // prevents parents from processing key events if focus is inside the floating window:w
+    self.prev_last_focus = dvui.lastFocusedIdInFrame(null);
 
     const avoid: dvui.PlaceOnScreenAvoid = switch (self.init_options.avoid) {
         .none => .none,
@@ -283,6 +286,7 @@ pub fn deinit(self: *FloatingMenuWidget) void {
 
     _ = popupSet(self.parent_popup);
     dvui.parentReset(self.wd.id, self.wd.parent);
+    dvui.currentWindow().last_focused_id_this_frame = self.prev_last_focus;
     _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
     dvui.clipSet(self.prevClip);
     _ = dvui.renderingSet(self.prev_rendering);
