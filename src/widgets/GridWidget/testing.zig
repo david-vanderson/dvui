@@ -260,7 +260,7 @@ test "cell widths" {
     try t.saveImage(frame, null, "GridWidget-cell_widths.png");
 }
 
-test "ignore cell_heights" {
+test "cell heights non variable" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
     const frame = struct {
@@ -269,7 +269,8 @@ test "ignore cell_heights" {
             defer grid.deinit();
             for (0..10) |col| {
                 for (0..10) |row| {
-                    var cell = grid.bodyCell(@src(), col, row, .{ .size = .{ .h = 200 }, .border = dvui.Rect.all(1) });
+                    const row_f: f32 = @floatFromInt(row);
+                    var cell = grid.bodyCell(@src(), col, row, .{ .size = .{ .h = 20 * row_f }, .border = dvui.Rect.all(1) });
                     defer cell.deinit();
                     dvui.label(@src(), "{}:{}", .{ col, row }, .{});
                 }
@@ -279,7 +280,31 @@ test "ignore cell_heights" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveImage(frame, null, "GridWidget-ignore_cell_height.png");
+    try t.saveImage(frame, null, "GridWidget-cell_height_nonvar.png");
+}
+
+test "cell heights non variable reverse" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
+    defer t.deinit();
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var grid = dvui.grid(@src(), .numCols(10), .{}, .{});
+            defer grid.deinit();
+            for (0..10) |col| {
+                for (0..10) |i| {
+                    const i_f: f32 = @floatFromInt(i);
+                    const row = 9 - i;
+                    var cell = grid.bodyCell(@src(), col, row, .{ .size = .{ .h = 20 * i_f }, .border = dvui.Rect.all(1) });
+                    defer cell.deinit();
+                    dvui.label(@src(), "{}:{}", .{ col, row }, .{});
+                }
+            }
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "GridWidget-cell_height_nonvar_rev.png");
 }
 
 test "variable cell_heights by col" {
@@ -302,7 +327,7 @@ test "variable cell_heights by col" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveImage(frame, null, "GridWidget-variable_cell_height_col.png");
+    try t.saveImage(frame, null, "GridWidget-cell_height_var.png");
 }
 
 test "variable cell_heights by row" {
