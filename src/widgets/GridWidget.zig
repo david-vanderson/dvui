@@ -166,6 +166,7 @@ cur_row: usize = std.math.maxInt(usize), // current row being rendered
 rows_y_offset: f32 = 0, // y value to offset rendering of the first body cell
 next_row_y: f32 = 0, // Next y position for laying out rows with variable heights
 this_row_y: f32 = 0, // This y position for laying out rows with variable heights
+last_header_height: f32 = 0, // Height of header last frame
 
 // Options
 init_opts: InitOpts = undefined,
@@ -208,6 +209,8 @@ pub fn init(src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitO
     if (dvui.firstFrame(self.data().id)) {
         self.resizing = true;
     }
+
+    self.last_header_height = self.header_height;
     if (init_opts.resize_rows or self.resizing) {
         self.row_height = 0;
         self.header_height = 0;
@@ -572,7 +575,7 @@ fn headerScrollAreaCreate(self: *GridWidget) void {
         }, .{
             .name = "GridWidgetHeaderScroll",
             .expand = .horizontal,
-            .min_size_content = .{ .h = self.header_height, .w = self.last_size.w },
+            .min_size_content = .{ .h = if (self.header_height > 0) self.header_height else self.last_header_height, .w = self.last_size.w },
         });
         self.hscroll.?.install();
     }
