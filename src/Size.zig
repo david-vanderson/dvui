@@ -63,6 +63,12 @@ pub fn SizeType(comptime units: dvui.enums.Units) type {
             return .{ .w = @min(a.w, b.w), .h = @min(a.h, b.h) };
         }
 
+        /// Returns true if the two sizes are equal within a tolerance.
+        pub fn eq(lhs: Self, rhs: Self) bool {
+            return std.math.approxEqAbs(f32, lhs.h, rhs.h, 0.001) and
+                std.math.approxEqAbs(f32, lhs.w, rhs.w, 0.001);
+        }
+
         /// Pass the scale and the type of Size it now represents.
         pub fn scale(self: *const Self, s: f32, sizeType: type) sizeType {
             return sizeType{ .w = self.w * s, .h = self.h * s };

@@ -6,6 +6,9 @@
 //! - pub fn options(self: *const T, col: usize, row: usize) Options
 
 const dvui = @import("../../dvui.zig");
+const Rect = dvui.Rect;
+const Color = dvui.Color;
+const ColorOrName = dvui.ColorOrName;
 const GridWidget = dvui.GridWidget;
 const CellOptions = GridWidget.CellOptions;
 const Options = dvui.Options;
@@ -49,6 +52,28 @@ pub fn optionsOverride(self: *const CellStyle, opts: Options) CellStyle {
     return .{
         .cell_opts = self.cell_opts,
         .opts = self.opts.override(opts),
+    };
+}
+
+/// Allow two CellStyle to be used together.
+/// Returns the result of style1.override(style2) for cellOptions() and options()
+pub fn Join(T1: type, T2: type) type {
+    return struct {
+        const Self = @This();
+        style1: T1,
+        style2: T2,
+
+        pub fn init(style1: T1, style2: T2) Self {
+            return .{ .style1 = style1, .style2 = style2 };
+        }
+
+        pub fn cellOptions(self: Self, col_num: usize, row_num: usize) CellOptions {
+            return self.style1.cellOptions(col_num, row_num).override(self.style2.cellOptions(col_num, row_num));
+        }
+
+        pub fn options(self: Self, col_num: usize, row_num: usize) Options {
+            return self.style1.options(col_num, row_num).override(self.style2.options(col_num, row_num));
+        }
     };
 }
 
@@ -114,8 +139,63 @@ pub const Banded = struct {
     }
 };
 
+/// Draw borders around cells.
+/// - external is used for any border touching the edge of the grid
+/// - internal is used for all other borders
+pub const Borders = struct {
+    external: Rect,
+    internal: Rect,
+    num_cols: usize,
+    num_rows: usize,
+    cell_opts: CellOptions = .{},
+    opts: Options = .{},
+
+    pub fn cellOptions(self: *const Borders, col: usize, row: usize) CellOptions {
+        var border = self.internal;
+        if (col == 0)
+            border.x = self.external.x;
+        if (row == 0)
+            border.y = self.external.y;
+        if (row == self.num_rows - 1)
+            border.h = self.external.h;
+        if (col == self.num_cols - 1)
+            border.w = self.external.w;
+        return self.cell_opts.override(.{ .border = border, .background = true });
+    }
+
+    pub fn cellOptionsOverride(self: *const Borders, cell_opts: CellOptions) Borders {
+        return .{
+            .external = self.borders_external,
+            .internal = self.borders_internal,
+            .color_border = self.border_color,
+            .num_cols = self.num_cols,
+            .num_rows = self.num_rows,
+            .cell_opts = self.cell_opts.override(cell_opts),
+            .opts = self.opts,
+        };
+    }
+
+    pub fn options(self: *const Borders, col: usize, row: usize) Options {
+        _ = row;
+        _ = col;
+        return self.opts;
+    }
+
+    pub fn optionsOverride(self: *const Borders, opts: Options) Borders {
+        return .{
+            .external = self.borders_external,
+            .internal = self.borders_internal,
+            .color_border = self.border_color,
+            .num_cols = self.num_cols,
+            .num_rows = self.num_rows,
+            .cell_opts = self.cell_opts,
+            .opts = self.opts.override(opts),
+        };
+    }
+};
+
 /// Applies the fill_hover colour to all cells on the hovered row.
-/// - requires that all rows are the same heights
+/// - requires that all rows are the same height
 pub const HoveredRow = struct {
     cell_opts: CellOptions = .{},
     opts: Options = .{},
@@ -176,3 +256,7 @@ pub const HoveredRow = struct {
         };
     }
 };
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
