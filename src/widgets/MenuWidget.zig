@@ -42,6 +42,7 @@ init_opts: InitOptions = undefined,
 winId: dvui.WidgetId = undefined,
 parentMenu: ?*MenuWidget = null,
 parentSubwindowId: ?dvui.WidgetId = null,
+last_focus: dvui.WidgetId = undefined,
 box: BoxWidget = undefined,
 
 // whether submenus should be open
@@ -64,6 +65,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     const options = defaults.override(opts);
     self.wd = WidgetData.init(src, .{}, options);
     self.init_opts = init_opts;
+    self.last_focus = dvui.lastFocusedIdInFrame(null);
 
     self.winId = dvui.subwindowCurrentId();
     if (dvui.dataGet(null, self.wd.id, "_sub_act", bool)) |a| {
@@ -152,59 +154,6 @@ pub fn processEvent(self: *MenuWidget, e: *Event, bubbling: bool) void {
                 }
             }
         },
-        .key => |ke| {
-            if (ke.action == .down or ke.action == .repeat) {
-                switch (ke.code) {
-                    .escape => {
-                        self.mouse_mode = false;
-                        e.handle(@src(), self.data());
-                        var closeE = Event{ .evt = .{ .close_popup = .{} } };
-                        self.processEvent(&closeE, true);
-                    },
-                    .up => {
-                        self.mouse_mode = false;
-                        if (self.init_opts.dir == .vertical) {
-                            e.handle(@src(), self.data());
-                            // TODO: don't do this if focus would move outside the menu
-                            dvui.tabIndexPrev(e.num);
-                        }
-                    },
-                    .down => {
-                        self.mouse_mode = false;
-                        if (self.init_opts.dir == .vertical) {
-                            e.handle(@src(), self.data());
-                            // TODO: don't do this if focus would move outside the menu
-                            dvui.tabIndexNext(e.num);
-                        }
-                    },
-                    .left => {
-                        self.mouse_mode = false;
-                        if (self.init_opts.dir == .vertical) {
-                            e.handle(@src(), self.data());
-                            if (self.parentMenu) |pm| {
-                                pm.submenus_activated = false;
-                                if (self.parentSubwindowId) |sid| {
-                                    dvui.focusSubwindow(sid, null);
-                                }
-                            }
-                        } else {
-                            e.handle(@src(), self.data());
-                            // TODO: don't do this if focus would move outside the menu
-                            dvui.tabIndexPrev(e.num);
-                        }
-                    },
-                    .right => {
-                        self.mouse_mode = false;
-                        if (self.init_opts.dir == .horizontal) {
-                            e.handle(@src(), self.data());
-                            // TODO: don't do this if focus would move outside the menu
-                            dvui.tabIndexNext(e.num);
-                        }
-                    },
-                    else => {},
-                }
-            }
-        },
         .close_popup => {
             self.submenus_activated = false;
         },
@@ -216,7 +165,76 @@ pub fn processEvent(self: *MenuWidget, e: *Event, bubbling: bool) void {
     }
 }
 
+pub fn processEventsAfter(self: *MenuWidget) void {
+    const focus_id = dvui.lastFocusedIdInFrame(self.last_focus);
+
+    const evts = dvui.events();
+    for (evts) |*e| {
+        if (!dvui.eventMatch(e, .{ .id = self.wd.id, .focus_id = focus_id, .r = self.wd.borderRectScale().r }))
+            continue;
+
+        switch (e.evt) {
+            .key => |ke| {
+                if (ke.action == .down or ke.action == .repeat) {
+                    switch (ke.code) {
+                        .escape => {
+                            self.mouse_mode = false;
+                            e.handle(@src(), self.data());
+                            var closeE = Event{ .evt = .{ .close_popup = .{} } };
+                            self.processEvent(&closeE, true);
+                        },
+                        .up => {
+                            self.mouse_mode = false;
+                            if (self.init_opts.dir == .vertical) {
+                                e.handle(@src(), self.data());
+                                // TODO: don't do this if focus would move outside the menu
+                                dvui.tabIndexPrev(e.num);
+                            }
+                        },
+                        .down => {
+                            self.mouse_mode = false;
+                            if (self.init_opts.dir == .vertical) {
+                                e.handle(@src(), self.data());
+                                // TODO: don't do this if focus would move outside the menu
+                                dvui.tabIndexNext(e.num);
+                            }
+                        },
+                        .left => {
+                            self.mouse_mode = false;
+                            if (self.init_opts.dir == .vertical) {
+                                e.handle(@src(), self.data());
+                                if (self.parentMenu) |pm| {
+                                    pm.submenus_activated = false;
+                                    if (self.parentSubwindowId) |sid| {
+                                        dvui.focusSubwindow(sid, null);
+                                    }
+                                }
+                            } else {
+                                e.handle(@src(), self.data());
+                                // TODO: don't do this if focus would move outside the menu
+                                dvui.tabIndexPrev(e.num);
+                            }
+                        },
+                        .right => {
+                            self.mouse_mode = false;
+                            if (self.init_opts.dir == .horizontal) {
+                                e.handle(@src(), self.data());
+                                // TODO: don't do this if focus would move outside the menu
+                                dvui.tabIndexNext(e.num);
+                            }
+                        },
+                        else => {},
+                    }
+                }
+            },
+            else => {},
+        }
+    }
+}
+
 pub fn deinit(self: *MenuWidget) void {
+    self.processEventsAfter();
+
     defer dvui.widgetFree(self);
     self.box.deinit();
     dvui.dataSet(null, self.wd.id, "_mouse_mode", self.mouse_mode);
