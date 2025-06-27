@@ -289,7 +289,7 @@ pub const Branch = struct {
                 } else {
                     self.wd = WidgetData.init(self.wd.src, .{}, self.options);
                 }
-                const rs = self.button.wd.rectScale();
+                const rs = self.wd.rectScale();
                 const dragRect = Rect.Physical.fromPoint(topleft).toSize(self.tree.branch_size.scale(rs.s, Size.Physical));
 
                 if (!self.tree.found_slot and !rs.r.intersect(dragRect).empty()) {
@@ -316,52 +316,52 @@ pub const Branch = struct {
 
             self.wd.register();
             dvui.parentSet(self.widget());
+        }
 
-            const no_padding = Options{
-                .name = "Padding",
-                .padding = dvui.Rect.all(0),
-                .margin = dvui.Rect.all(0),
-            };
+        const no_padding = Options{
+            .name = "Padding",
+            .padding = dvui.Rect.all(0),
+            .margin = dvui.Rect.all(0),
+        };
 
-            self.vbox = dvui.BoxWidget.init(@src(), .{ .dir = .vertical }, no_padding.override(self.options));
-            self.vbox.install();
-            self.vbox.drawBackground();
+        self.vbox = dvui.BoxWidget.init(@src(), .{ .dir = .vertical }, no_padding.override(self.options));
+        self.vbox.install();
+        self.vbox.drawBackground();
 
-            self.tree.branch_size = self.vbox.wd.rect.size();
+        self.tree.branch_size = self.vbox.wd.rect.size();
 
-            self.button = dvui.ButtonWidget.init(@src(), .{}, no_padding.override(self.options));
-            self.button.install();
-            self.button.processEvents();
-            self.button.drawBackground();
+        self.button = dvui.ButtonWidget.init(@src(), .{}, no_padding.override(self.options));
+        self.button.install();
+        self.button.processEvents();
+        self.button.drawBackground();
 
-            self.hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, no_padding.override(self.options));
-            self.hbox.install();
-            self.hbox.drawBackground();
+        self.hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, no_padding.override(self.options));
+        self.hbox.install();
+        self.hbox.drawBackground();
 
-            loop: for (dvui.events()) |*e| {
-                if (!self.button.matchEvent(e))
-                    continue;
+        loop: for (dvui.events()) |*e| {
+            if (!self.button.matchEvent(e))
+                continue;
 
-                switch (e.evt) {
-                    .mouse => |me| {
-                        if (me.action == .press and me.button.pointer()) {
+            switch (e.evt) {
+                .mouse => |me| {
+                    if (me.action == .press and me.button.pointer()) {
+                        e.handle(@src(), self.button.data());
+                        dvui.captureMouse(self.button.data());
+                        const top_left = self.button.wd.rectScale().r.topLeft();
+                        dvui.dragPreStart(me.p, .{ .offset = top_left });
+                    } else if (me.action == .motion) {
+                        if (dvui.captured(self.button.wd.id)) {
                             e.handle(@src(), self.button.data());
-                            dvui.captureMouse(self.button.data());
-                            const top_left = self.button.wd.rectScale().r.topLeft();
-                            dvui.dragPreStart(me.p, .{ .offset = top_left });
-                        } else if (me.action == .motion) {
-                            if (dvui.captured(self.button.wd.id)) {
-                                e.handle(@src(), self.button.data());
-                                if (dvui.dragging(me.p)) |_| {
-                                    self.tree.dragStart(self.wd.id.asUsize(), me.p); // reorder grabs capture
+                            if (dvui.dragging(me.p)) |_| {
+                                self.tree.dragStart(self.wd.id.asUsize(), me.p); // reorder grabs capture
 
-                                    break :loop;
-                                }
+                                break :loop;
                             }
                         }
-                    },
-                    else => {},
-                }
+                    }
+                },
+                else => {},
             }
         }
     }
@@ -431,14 +431,14 @@ pub const Branch = struct {
         self.wd.register();
         dvui.parentSet(self.widget());
 
-        self.button = dvui.ButtonWidget.init(@src(), .{}, self.options);
-        self.button.install();
-        self.button.processEvents();
-        self.button.drawBackground();
+        //self.button = dvui.ButtonWidget.init(@src(), .{}, self.options);
+        //self.button.install();
+        //self.button.processEvents();
+        //self.button.drawBackground();
 
-        self.hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, self.options);
-        self.hbox.install();
-        self.hbox.drawBackground();
+        //self.hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, self.options);
+        //self.hbox.install();
+        //self.hbox.drawBackground();
     }
 
     pub fn widget(self: *Branch) Widget {
