@@ -1826,20 +1826,8 @@ pub fn minSizeForChild(self: *Self, s: Size) void {
 }
 
 pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
-    // window does cleanup events, but not normal events
-    switch (e.evt) {
-        .close_popup => |cp| {
-            e.handle(@src(), self.data());
-            if (cp.intentional) {
-                // when a popup is closed due to a menu item being chosen,
-                // the window that spawned it (which had focus previously)
-                // should become focused again
-                dvui.focusSubwindow(self.wd.id, null);
-            }
-        },
-        else => {},
-    }
-
+    _ = self;
+    _ = e;
     // can't bubble past the base window
     _ = bubbling;
 }

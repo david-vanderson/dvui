@@ -60,6 +60,9 @@ child_popup_rect: ?Rect.Physical = null,
 // entry that happens to be under the mouse
 mouse_mode: bool = false,
 
+/// If the menu or a submenu caused this menu to be closed this frame.
+closed_this_frame: bool = false,
+
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) MenuWidget {
     var self = MenuWidget{};
     const options = defaults.override(opts);
@@ -99,10 +102,22 @@ pub fn install(self: *MenuWidget) void {
 }
 
 pub fn close(self: *MenuWidget) void {
-    // bubble this event to close all popups that had submenus leading to this
-    var e = Event{ .evt = .{ .close_popup = .{} } };
-    self.processEvent(&e, true);
     dvui.refresh(null, @src(), self.wd.id);
+    self.close_chain(true);
+}
+
+pub fn close_chain(self: *MenuWidget, intentional: bool) void {
+    self.submenus_activated = false;
+    self.closed_this_frame = true;
+    // close all submenus in the chain
+    if (self.parentMenu) |pm| {
+        pm.close_chain(intentional);
+    } else if (intentional) {
+        // when a popup is closed because the user chose to, the
+        // window that spawned it (which had focus previously)
+        // should become focused again
+        dvui.focusSubwindow(self.parentSubwindowId, null);
+    }
 }
 
 pub fn widget(self: *MenuWidget) Widget {
@@ -154,9 +169,6 @@ pub fn processEvent(self: *MenuWidget, e: *Event, bubbling: bool) void {
                 }
             }
         },
-        .close_popup => {
-            self.submenus_activated = false;
-        },
         else => {},
     }
 
@@ -180,8 +192,7 @@ pub fn processEventsAfter(self: *MenuWidget) void {
                         .escape => {
                             self.mouse_mode = false;
                             e.handle(@src(), self.data());
-                            var closeE = Event{ .evt = .{ .close_popup = .{} } };
-                            self.processEvent(&closeE, true);
+                            self.close();
                         },
                         .up => {
                             self.mouse_mode = false;

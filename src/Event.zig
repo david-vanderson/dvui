@@ -18,7 +18,6 @@ evt: union(enum) {
 
     // bubbleable
     text: Text,
-    close_popup: ClosePopup,
     scroll_drag: ScrollDrag,
     scroll_to: ScrollTo,
     scroll_propagate: ScrollPropagate,
@@ -130,12 +129,6 @@ pub const Mouse = struct {
 
     p: dvui.Point.Physical,
     floating_win: dvui.WidgetId,
-};
-
-pub const ClosePopup = struct {
-    // are we closing because of a specific user action (clicked on menu item,
-    // pressed escape), or because they clicked off the menu somewhere?
-    intentional: bool = true,
 };
 
 /// Event bubbled from inside a scrollarea to ensure scrolling while dragging

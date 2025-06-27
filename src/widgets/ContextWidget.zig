@@ -57,6 +57,11 @@ pub fn activePoint(self: *ContextWidget) ?Point.Natural {
     return null;
 }
 
+pub fn close(self: *ContextWidget) void {
+    self.focused = false;
+    dvui.focusWidget(null, self.winId, null);
+}
+
 pub fn widget(self: *ContextWidget) Widget {
     return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
 }
@@ -110,12 +115,6 @@ pub fn processEvent(self: *ContextWidget, e: *Event, bubbling: bool) void {
 
                 // offset just enough so when Popup first appears nothing is highlighted
                 self.activePt.x += 1;
-            }
-        },
-        .close_popup => {
-            if (self.focused) {
-                // we are getting a bubbled event, so the window we are in is not the current one
-                dvui.focusWidget(null, self.winId, null);
             }
         },
         else => {},

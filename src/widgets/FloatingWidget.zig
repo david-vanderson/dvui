@@ -97,15 +97,8 @@ pub fn minSizeForChild(self: *FloatingWidget, s: Size) void {
 }
 
 pub fn processEvent(self: *FloatingWidget, e: *Event, bubbling: bool) void {
-    // no normal events, just forward close_popup
-    switch (e.evt) {
-        .close_popup => {
-            self.wd.parent.processEvent(e, true);
-        },
-        else => {},
-    }
-
-    // otherwise don't bubble events
+    _ = self;
+    _ = e;
     _ = bubbling;
 }
 
