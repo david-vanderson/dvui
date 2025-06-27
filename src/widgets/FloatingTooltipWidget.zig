@@ -194,7 +194,7 @@ pub fn install(self: *FloatingTooltipWidget) void {
 }
 
 pub fn widget(self: *FloatingTooltipWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *FloatingTooltipWidget) *WidgetData {
@@ -212,13 +212,6 @@ pub fn screenRectScale(self: *FloatingTooltipWidget, rect: Rect) RectScale {
 
 pub fn minSizeForChild(self: *FloatingTooltipWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
-}
-
-pub fn processEvent(self: *FloatingTooltipWidget, e: *Event, bubbling: bool) void {
-    // no event processing, everything stops
-    _ = self;
-    _ = e;
-    _ = bubbling;
 }
 
 pub fn deinit(self: *FloatingTooltipWidget) void {

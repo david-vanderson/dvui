@@ -168,7 +168,7 @@ pub fn closed_this_frame(self: *FloatingMenuWidget) bool {
 }
 
 pub fn widget(self: *FloatingMenuWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *FloatingMenuWidget) *WidgetData {
@@ -186,12 +186,6 @@ pub fn screenRectScale(self: *FloatingMenuWidget, rect: Rect) RectScale {
 
 pub fn minSizeForChild(self: *FloatingMenuWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
-}
-
-pub fn processEvent(self: *FloatingMenuWidget, e: *Event, bubbling: bool) void {
-    _ = self;
-    _ = e;
-    _ = bubbling;
 }
 
 pub fn chainFocused(self: *FloatingMenuWidget, self_call: bool) bool {

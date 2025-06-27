@@ -543,7 +543,7 @@ pub const HeaderResizeWidget = struct {
             if (!self.matchEvent(e))
                 continue;
 
-            self.processEvent(e, false);
+            self.processEvent(e);
         }
     }
 
@@ -551,8 +551,7 @@ pub const HeaderResizeWidget = struct {
         return &self.wd;
     }
 
-    pub fn processEvent(self: *HeaderResizeWidget, e: *Event, bubbling: bool) void {
-        _ = bubbling;
+    pub fn processEvent(self: *HeaderResizeWidget, e: *Event) void {
         if (e.evt == .mouse) {
             const rs = self.wd.rectScale();
             const cursor: Cursor = switch (self.direction) {
@@ -601,10 +600,6 @@ pub const HeaderResizeWidget = struct {
             } else if (e.evt.mouse.action == .position) {
                 dvui.cursorSet(cursor);
             }
-        }
-
-        if (e.bubbleable()) {
-            self.wd.parent.processEvent(e, true);
         }
     }
 

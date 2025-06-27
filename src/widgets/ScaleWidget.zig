@@ -75,13 +75,11 @@ pub fn processEvents(self: *ScaleWidget) void {
         if (!self.matchEvent(e))
             continue;
 
-        self.processEvent(e, false);
+        self.processEvent(e);
     }
 }
 
-pub fn processEvent(self: *ScaleWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
-
+pub fn processEvent(self: *ScaleWidget, e: *Event) void {
     if (e.evt == .mouse and (e.evt.mouse.button == .touch0 or e.evt.mouse.button == .touch1)) {
         const idx: usize = if (e.evt.mouse.button == .touch0) 0 else 1;
         switch (e.evt.mouse.action) {
@@ -128,14 +126,10 @@ pub fn processEvent(self: *ScaleWidget, e: *Event, bubbling: bool) void {
             else => {},
         }
     }
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
-    }
 }
 
 pub fn widget(self: *ScaleWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *ScaleWidget) *WidgetData {

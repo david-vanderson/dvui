@@ -165,10 +165,6 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
             },
             else => {},
         }
-
-        if (e.bubbleable()) {
-            self.wd.parent.processEvent(e, true);
-        }
     }
 }
 

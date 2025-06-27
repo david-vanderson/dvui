@@ -104,7 +104,7 @@ pub fn processEvents(self: *MenuItemWidget) void {
         if (!self.matchEvent(e))
             continue;
 
-        self.processEvent(e, false);
+        self.processEvent(e);
     }
 }
 
@@ -126,7 +126,7 @@ pub fn activeRect(self: *const MenuItemWidget) ?Rect.Natural {
 }
 
 pub fn widget(self: *MenuItemWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *MenuItemWidget) *WidgetData {
@@ -146,8 +146,7 @@ pub fn minSizeForChild(self: *MenuItemWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
-pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
+pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .focus) {
@@ -244,10 +243,6 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
             }
         },
         else => {},
-    }
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
     }
 }
 

@@ -63,7 +63,7 @@ pub fn close(self: *ContextWidget) void {
 }
 
 pub fn widget(self: *ContextWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *ContextWidget) *WidgetData {
@@ -90,12 +90,11 @@ pub fn processEvents(self: *ContextWidget) void {
         if (!dvui.eventMatchSimple(e, self.data()))
             continue;
 
-        self.processEvent(e, false);
+        self.processEvent(e);
     }
 }
 
-pub fn processEvent(self: *ContextWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
+pub fn processEvent(self: *ContextWidget, e: *Event) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .focus and me.button == .right) {
@@ -118,10 +117,6 @@ pub fn processEvent(self: *ContextWidget, e: *Event, bubbling: bool) void {
             }
         },
         else => {},
-    }
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
     }
 }
 
