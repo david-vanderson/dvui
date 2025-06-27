@@ -18,9 +18,6 @@ tag: ?[]const u8 = null,
 /// Use to name the kind of widget for debugging.
 name: ?[]const u8 = null,
 
-/// Debugging flag to isolate debug commands/output to a specific widget.
-debug: ?bool = null,
-
 /// Specific placement within parent.  Null is normal, meaning parent picks a
 /// rect for the child widget.
 ///
@@ -291,10 +288,6 @@ pub fn idExtra(self: *const Options) usize {
     return self.id_extra orelse 0;
 }
 
-pub fn debugGet(self: *const Options) bool {
-    return self.debug orelse false;
-}
-
 pub fn expandGet(self: *const Options) Expand {
     return self.expand orelse .none;
 }
@@ -398,7 +391,6 @@ pub fn strip(self: *const Options) Options {
         .font_style = self.font_style,
 
         .rotation = self.rotation,
-        .debug = self.debug,
     };
 }
 
