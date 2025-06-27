@@ -907,7 +907,7 @@ test "header size and shrink" {
         }
     };
     try dvui.testing.settle(frame.frame);
-    try t.saveImage(frame.frame, null, "GridWidget-reheader_pre_resize.png");
+    try t.saveImage(frame.frame, null, "GridWidget-header_pre_resize.png");
     frame.action = .resize;
     try dvui.testing.settle(frame.frame);
     try t.saveImage(frame.frame, null, "GridWidget-header_post_resize.png");
@@ -932,8 +932,8 @@ test "header body resize" {
                 for (0..10) |col| {
                     var cell = grid.headerCell(@src(), col, .{
                         .border = dvui.Rect.all(1),
+                        .size = if (action == .tall) .{ .h = 100 } else null,
                     });
-                    std.debug.print("{}:{}\n", .{ frame_number, cell.data().rect });
                     defer cell.deinit();
                     dvui.label(@src(), "{}", .{col}, .{});
                 }
