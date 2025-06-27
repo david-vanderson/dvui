@@ -48,7 +48,6 @@ fn drawCachedTexture(self: *CacheWidget, t: dvui.Texture) void {
 
     dvui.renderTexture(t, rs, .{
         .uv = (Rect{}).toSize(self.tex_uv),
-        .debug = self.wd.options.debugGet(),
     }) catch |err| {
         dvui.logError(@src(), err, "Could not render texture", .{});
     };

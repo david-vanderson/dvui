@@ -128,7 +128,6 @@ pub fn draw(self: *LabelWidget) void {
             .text = line,
             .rs = rs,
             .color = self.wd.options.color(.text),
-            .debug = self.wd.options.debugGet(),
         }) catch |err| {
             dvui.logError(@src(), err, "Failed to render text: {s}", .{line});
         };
