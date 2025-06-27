@@ -4658,9 +4658,9 @@ pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.I
     return ret;
 }
 
-pub fn grid(src: std.builtin.SourceLocation, init_opts: GridWidget.InitOpts, opts: Options) *GridWidget {
+pub fn grid(src: std.builtin.SourceLocation, cols: GridWidget.WidthsOrNum, init_opts: GridWidget.InitOpts, opts: Options) *GridWidget {
     const ret = widgetAlloc(GridWidget);
-    ret.* = GridWidget.init(src, init_opts, opts);
+    ret.* = GridWidget.init(src, cols, init_opts, opts);
     ret.install();
     return ret;
 }
@@ -4688,6 +4688,7 @@ pub fn gridHeading(
     src: std.builtin.SourceLocation,
     g: *GridWidget,
     heading: []const u8,
+    col_num: usize,
     resize_opts: ?GridWidget.HeaderResizeWidget.InitOptions,
     cell_style: anytype, // GridWidget.CellStyle
 ) void {
@@ -4701,8 +4702,8 @@ pub fn gridHeading(
     };
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
 
-    const label_options = label_defaults.override(opts.options(g.col_num, 0));
-    var cell = g.headerCell(src, opts.cellOptions(g.col_num, 0));
+    const label_options = label_defaults.override(opts.options(col_num, 0));
+    var cell = g.headerCell(src, col_num, opts.cellOptions(col_num, 0));
     defer cell.deinit();
 
     labelNoFmt(@src(), heading, .{}, label_options);
@@ -4716,6 +4717,7 @@ pub fn gridHeading(
 pub fn gridHeadingSortable(
     src: std.builtin.SourceLocation,
     g: *GridWidget,
+    col_num: usize,
     heading: []const u8,
     dir: *GridWidget.SortDirection,
     resize_opts: ?GridWidget.HeaderResizeWidget.InitOptions,
@@ -4730,21 +4732,21 @@ pub fn gridHeadingSortable(
         .corner_radius = Rect.all(0),
     };
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
-    const heading_opts = heading_defaults.override(opts.options(g.col_num, 0));
+    const heading_opts = heading_defaults.override(opts.options(col_num, 0));
 
-    var cell = g.headerCell(src, opts.cellOptions(g.col_num, 0));
+    var cell = g.headerCell(src, col_num, opts.cellOptions(col_num, 0));
     defer cell.deinit();
 
     gridHeadingSeparator(resize_opts);
 
-    const sort_changed = switch (g.colSortOrder()) {
+    const sort_changed = switch (g.colSortOrder(col_num)) {
         .unsorted => button(@src(), heading, .{ .draw_focus = false }, heading_opts),
         .ascending => buttonLabelAndIcon(@src(), heading, icon_ascending, .{ .draw_focus = false }, heading_opts),
         .descending => buttonLabelAndIcon(@src(), heading, icon_descending, .{ .draw_focus = false }, heading_opts),
     };
 
     if (sort_changed) {
-        g.sortChanged();
+        g.sortChanged(col_num);
     }
     dir.* = g.sort_direction;
     return sort_changed;
@@ -4759,6 +4761,7 @@ pub fn gridHeadingSortable(
 pub fn gridColumnFromSlice(
     src: std.builtin.SourceLocation,
     g: *GridWidget,
+    col_num: usize,
     comptime T: type,
     data: []const T,
     comptime field_name: ?[]const u8,
@@ -4792,8 +4795,9 @@ pub fn gridColumnFromSlice(
     for (data, 0..) |item, row_num| {
         var cell = g.bodyCell(
             src,
+            col_num,
             row_num,
-            opts.cellOptions(g.col_num, row_num),
+            opts.cellOptions(col_num, row_num),
         );
         defer cell.deinit();
         const cell_value = value: {
@@ -4817,7 +4821,7 @@ pub fn gridColumnFromSlice(
             @src(),
             fmt,
             .{cell_value},
-            opts.options(g.col_num, row_num),
+            opts.options(col_num, row_num),
         );
     }
 }
@@ -4835,6 +4839,7 @@ pub const GridColumnSelectAllState = enum {
 pub fn gridHeadingCheckbox(
     src: std.builtin.SourceLocation,
     g: *GridWidget,
+    col_num: usize,
     selection: *GridColumnSelectAllState,
     cell_style: anytype, // GridWidget.CellStyle
 ) bool {
@@ -4849,13 +4854,13 @@ pub fn gridHeadingCheckbox(
 
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
 
-    const header_options = header_defaults.override(opts.options(g.col_num, 0));
+    const header_options = header_defaults.override(opts.options(col_num, 0));
     var checkbox_opts: Options = header_options.strip();
     checkbox_opts.padding = ButtonWidget.defaults.paddingGet();
     checkbox_opts.gravity_x = header_options.gravity_x;
     checkbox_opts.gravity_y = header_options.gravity_y;
 
-    var cell = g.headerCell(src, opts.cellOptions(g.col_num, 0));
+    var cell = g.headerCell(src, col_num, opts.cellOptions(col_num, 0));
     defer cell.deinit();
 
     var clicked = false;
@@ -4887,6 +4892,7 @@ pub fn gridHeadingCheckbox(
 pub fn gridColumnCheckbox(
     src: std.builtin.SourceLocation,
     g: *dvui.GridWidget,
+    col_num: usize,
     comptime T: type,
     data: []T,
     comptime field_name: ?[]const u8,
@@ -4915,8 +4921,9 @@ pub fn gridColumnCheckbox(
     for (data, 0..) |*item, row_num| {
         var cell = g.bodyCell(
             src,
+            col_num,
             row_num,
-            opts.cellOptions(g.col_num, row_num),
+            opts.cellOptions(col_num, row_num),
         );
         defer cell.deinit();
         const is_selected: *bool = if (T == bool) item else &@field(item, field_name.?);
@@ -4925,7 +4932,7 @@ pub fn gridColumnCheckbox(
             @src(),
             is_selected,
             null,
-            check_defaults.override(opts.options(g.col_num, row_num)),
+            check_defaults.override(opts.options(col_num, row_num)),
         );
         selection_changed = selection_changed or was_selected != is_selected.*;
     }
@@ -5309,13 +5316,14 @@ pub const ImageInitOptions = struct {
         /// bytes of an premultiplied rgba u8 array in row major order
         pixels,
     };
+    pub const PixelBytes = struct {
+        bytes: RGBAPixelsPMA,
+        width: u32,
+        height: u32,
+    };
     pub const ImageBytes = union(ImageType) {
         imageFile: []const u8,
-        pixels: struct {
-            bytes: RGBAPixelsPMA,
-            width: u32,
-            height: u32,
-        },
+        pixels: PixelBytes,
     };
     /// Used for debugging output.
     name: []const u8 = "image",

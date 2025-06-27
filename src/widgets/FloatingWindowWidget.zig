@@ -95,7 +95,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     // the embedded BoxWidget
     // passing options.rect will stop WidgetData.init from calling rectFor
     // which is important because we are outside normal layout
-    self.wd = WidgetData.init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{}, .name = self.options.name, .debug = self.options.debugGet() });
+    self.wd = WidgetData.init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{}, .name = self.options.name });
     self.options.name = null; // so our layout Box isn't named FloatingWindow
 
     self.init_options = init_opts;
