@@ -95,6 +95,18 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
 
     const focus_target = self.init_opts.focus_id orelse dvui.dataGet(null, self.hbox.data().id, "_scroll_id", dvui.WidgetId);
 
+    // If the viewport from last frame is zero, then likely we are on the first
+    // or second frame and ScrollContainer doesn't know how big it is yet.
+    // Assume ScrollContainer gets all our space.  Otherwise you always get a
+    // scrollbar on the second frame.
+    var do_viewport = false;
+    if (self.si.viewport.w == 0 and self.si.viewport.h == 0) {
+        do_viewport = true;
+        const crect = self.hbox.data().contentRect();
+        self.si.viewport.w = crect.w;
+        self.si.viewport.h = crect.h;
+    }
+
     // due to floating point inaccuracies, give ourselves a tiny bit of extra wiggle room
 
     var do_vbar = false;
@@ -102,12 +114,18 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
     if (self.si.vertical != .none) {
         if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar.autoAny() and (self.si.virtual_size.h > (self.si.viewport.h + 0.001)))) {
             do_vbar = true;
+            if (do_viewport) {
+                self.si.viewport.w -= ScrollBarWidget.defaults.min_sizeGet().w;
+            }
         }
     }
 
     if (self.si.horizontal != .none) {
         if (self.init_opts.horizontal_bar == .show or (self.init_opts.horizontal_bar.autoAny() and (self.si.virtual_size.w > (self.si.viewport.w + 0.001)))) {
             do_hbar = true;
+            if (do_viewport) {
+                self.si.viewport.h -= ScrollBarWidget.defaults.min_sizeGet().h;
+            }
         }
     }
 
@@ -116,6 +134,9 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
         if (self.si.vertical != .none) {
             if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar.autoAny() and (self.si.virtual_size.h > (self.si.viewport.h + 0.001)))) {
                 do_vbar = true;
+                if (do_viewport) {
+                    self.si.viewport.w -= ScrollBarWidget.defaults.min_sizeGet().w;
+                }
             }
         }
     }
