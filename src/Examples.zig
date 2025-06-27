@@ -2383,7 +2383,7 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
                     .id_extra = id_extra,
                     .expand = .horizontal,
                     .color_fill_hover = .fill,
-                    .padding = padding,
+                    .padding = dvui.Rect.all(1),
                 });
                 defer branch.deinit();
 
@@ -2466,9 +2466,10 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
                             .corner_radius = branch.button.wd.options.corner_radius,
                             .box_shadow = .{
                                 .color = .{ .color = .black },
-                                .offset = .{ .x = -2, .y = 0 },
+                                .offset = .{ .x = -5, .y = 5 },
+                                .shrink = 5,
                                 .blur = 10,
-                                .alpha = 0.2,
+                                .alpha = 0.15,
                             },
                         })) {
                             try search(
@@ -2533,9 +2534,10 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
         .corner_radius = root_branch.button.wd.options.corner_radius,
         .box_shadow = .{
             .color = .{ .color = .black },
-            .offset = .{ .x = -2, .y = 0 },
+            .offset = .{ .x = -5, .y = 5 },
+            .shrink = 5,
             .blur = 10,
-            .alpha = 0.2,
+            .alpha = 0.15,
         },
     })) {
         try recursor(allocator, root_directory, outer_tree, &color_index);
