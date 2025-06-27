@@ -105,12 +105,11 @@ pub fn dropped(self: *DropdownWidget) bool {
             if (drag_scroll and e.evt == .mouse and !e.evt.mouse.button.touch() and (e.evt.mouse.action == .motion or e.evt.mouse.action == .position)) {
                 if (e.evt.mouse.p.x >= scroll_rs.r.x and e.evt.mouse.p.x <= scroll_rs.r.x + scroll_rs.r.w and (e.evt.mouse.p.y <= scroll_rs.r.y or e.evt.mouse.p.y >= scroll_rs.r.y + scroll_rs.r.h)) {
                     if (e.evt.mouse.action == .motion) {
-                        var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
+                        dvui.scrollDrag(.{
                             .mouse_pt = e.evt.mouse.p,
                             .screen_rect = drop.menu.data().rectScale().r,
                             .capture_id = drop.wd.id,
-                        } } };
-                        drop.scroll.scroll.?.processEvent(&scrolldrag, true);
+                        });
                     } else if (e.evt.mouse.action == .position) {
                         dvui.currentWindow().inject_motion_event = true;
                     }

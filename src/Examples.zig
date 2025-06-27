@@ -3069,12 +3069,11 @@ pub fn scrollCanvas() void {
                                 b.* = dataRectScale.pointFromPhysical(p);
                                 dvui.refresh(null, @src(), scrollContainer.data().id);
 
-                                var scrolldrag = dvui.Event{ .evt = .{ .scroll_drag = .{
+                                dvui.scrollDrag(.{
                                     .mouse_pt = e.evt.mouse.p,
                                     .screen_rect = dragBox.data().rectScale().r,
                                     .capture_id = dragBox.data().id,
-                                } } };
-                                dragBox.processEvent(&scrolldrag, true);
+                                });
                             }
                         }
                     }

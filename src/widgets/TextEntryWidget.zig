@@ -802,7 +802,6 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 dvui.focusWidget(self.wd.id, null, e.num);
             }
         },
-        else => {},
     }
 
     if (!e.handled and !bubbling) {

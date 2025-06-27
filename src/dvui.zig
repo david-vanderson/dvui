@@ -3254,10 +3254,6 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                 return false;
             }
         },
-
-        .scroll_drag => unreachable,
-        .scroll_to => unreachable,
-        .scroll_propagate => unreachable,
     }
 
     return true;
@@ -3362,6 +3358,46 @@ pub fn timerDone(id: WidgetId) bool {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn timerDoneOrNone(id: WidgetId) bool {
     return timerDone(id) or (timerGet(id) == null);
+}
+
+pub const ScrollToOptions = struct {
+    // rect in screen coords we want to be visible (might be outside
+    // scrollarea's clipping region - we want to scroll to bring it inside)
+    screen_rect: dvui.Rect.Physical,
+
+    // whether to scroll outside the current scroll bounds (useful if the
+    // current action might be expanding the scroll area)
+    over_scroll: bool = false,
+};
+
+/// Scroll the current containing scroll area to show the passed in screen rect
+pub fn scrollTo(scroll_to: ScrollToOptions) void {
+    if (ScrollContainerWidget.current()) |scroll| {
+        scroll.processScrollTo(scroll_to);
+    }
+}
+
+pub const ScrollDragOptions = struct {
+    // mouse point from motion event
+    mouse_pt: dvui.Point.Physical,
+
+    // rect in screen coords of the widget doing the drag (scrolling will stop
+    // if it wouldn't show more of this rect)
+    screen_rect: dvui.Rect.Physical,
+
+    // id of the widget that has mouse capture during the drag (needed to
+    // inject synthetic motion events into the next frame to keep scrolling)
+    capture_id: dvui.WidgetId,
+};
+
+/// Bubbled from inside a scrollarea to ensure scrolling while dragging
+/// if the mouse moves to the edge or outside the scrollarea.
+///
+/// During dragging, a widget should call this on each pointer motion event.
+pub fn scrollDrag(scroll_drag: ScrollDragOptions) void {
+    if (ScrollContainerWidget.current()) |scroll| {
+        scroll.processScrollDrag(scroll_drag);
+    }
 }
 
 pub const TabIndex = struct {
