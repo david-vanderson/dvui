@@ -7,6 +7,7 @@ menuItem: MenuItemWidget = undefined,
 drop: ?FloatingMenuWidget = null,
 drop_first_frame: bool = false,
 drop_mi: ?MenuItemWidget = null,
+drop_mi_id: ?dvui.WidgetId = null,
 drop_mi_index: usize = 0,
 drop_height: f32 = 0,
 drop_adjust: f32 = undefined,
@@ -170,11 +171,14 @@ pub fn addChoiceLabel(self: *DropdownWidget, label_text: []const u8) bool {
 
 pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
     // record how far down in our parent we would be
-    if (self.drop_mi) |*mi| {
-        self.drop_height += mi.data().min_size.h;
+    if (self.drop_mi_id) |mid| {
+        if (dvui.minSizeGet(mid)) |ms| {
+            self.drop_height += ms.h;
+        }
     }
 
     self.drop_mi = MenuItemWidget.init(@src(), .{}, .{ .id_extra = self.drop_mi_index, .expand = .horizontal });
+    self.drop_mi_id = self.drop_mi.?.data().id;
     self.drop_mi.?.install();
     self.drop_mi.?.processEvents();
     self.drop_mi.?.drawBackground(.{});
