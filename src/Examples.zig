@@ -2347,6 +2347,10 @@ pub fn menus() void {
             if ((dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal })) != null) {
                 fw2.close();
             }
+            // FIXME: This is a workaround for the context menu not getting unfocused without event bubbling.
+            if (fw2.closed_this_frame()) {
+                ctext.close();
+            }
         }
     }
 

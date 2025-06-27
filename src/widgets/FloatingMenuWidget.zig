@@ -163,6 +163,10 @@ pub fn close(self: *FloatingMenuWidget) void {
     self.menu.close();
 }
 
+pub fn closed_this_frame(self: *FloatingMenuWidget) bool {
+    return self.menu.closed_this_frame;
+}
+
 pub fn widget(self: *FloatingMenuWidget) Widget {
     return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
 }
@@ -185,15 +189,8 @@ pub fn minSizeForChild(self: *FloatingMenuWidget, s: Size) void {
 }
 
 pub fn processEvent(self: *FloatingMenuWidget, e: *Event, bubbling: bool) void {
-    // popup does cleanup events, but not normal events
-    switch (e.evt) {
-        .close_popup => {
-            self.wd.parent.processEvent(e, true);
-        },
-        else => {},
-    }
-
-    // otherwise popups don't bubble events
+    _ = self;
+    _ = e;
     _ = bubbling;
 }
 
@@ -228,12 +225,30 @@ pub fn chainFocused(self: *FloatingMenuWidget, self_call: bool) bool {
 
 pub fn deinit(self: *FloatingMenuWidget) void {
     defer dvui.widgetFree(self);
+    const evts = dvui.events();
+
+    // check if a focus event is happening outside our window
+    for (evts) |e| {
+        if (!e.handled and e.evt == .mouse and e.evt.mouse.action == .focus) {
+            self.close();
+        }
+    }
+
+    if (!self.have_popup_child and !self.chainFocused(true)) {
+        // if a popup chain is open and the user focuses a different window
+        // (not the parent of the popups), then we want to close the popups
+
+        // only the last popup can do the check, you can't query the focus
+        // status of children, only parents
+        self.menu.close_chain(false);
+        dvui.refresh(null, @src(), self.wd.id);
+    }
+
     self.menu.deinit();
     self.scroll.deinit();
     self.scaler.deinit();
 
     const rs = self.wd.rectScale();
-    const evts = dvui.events();
     for (evts) |*e| {
         if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r, .cleanup = true }))
             continue;
@@ -256,24 +271,6 @@ pub fn deinit(self: *FloatingMenuWidget) void {
                 dvui.tabIndexPrev(e.num);
             }
         }
-    }
-
-    // check if a focus event is happening outside our window
-    for (evts) |e| {
-        if (!e.handled and e.evt == .mouse and e.evt.mouse.action == .focus) {
-            var closeE = Event{ .evt = .{ .close_popup = .{} } };
-            self.processEvent(&closeE, true);
-        }
-    }
-
-    if (!self.have_popup_child and !self.chainFocused(true)) {
-        // if a popup chain is open and the user focuses a different window
-        // (not the parent of the popups), then we want to close the popups
-
-        // only the last popup can do the check, you can't query the focus
-        // status of children, only parents
-        var closeE = Event{ .evt = .{ .close_popup = .{ .intentional = false } } };
-        self.processEvent(&closeE, true);
     }
 
     // in case no children ever show up, this will provide a visual indication

@@ -528,21 +528,8 @@ pub fn minSizeForChild(self: *FloatingWindowWidget, s: Size) void {
 }
 
 pub fn processEvent(self: *FloatingWindowWidget, e: *Event, bubbling: bool) void {
-    // floating window doesn't process events normally
-    switch (e.evt) {
-        .close_popup => |cp| {
-            e.handle(@src(), self.data());
-            if (cp.intentional) {
-                // when a popup is closed because the user chose to, the
-                // window that spawned it (which had focus previously)
-                // should become focused again
-                dvui.focusSubwindow(self.wd.id, null);
-            }
-        },
-        else => {},
-    }
-
-    // floating windows don't bubble any events
+    _ = self;
+    _ = e;
     _ = bubbling;
 }
 
