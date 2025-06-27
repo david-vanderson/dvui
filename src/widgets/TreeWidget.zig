@@ -317,18 +317,24 @@ pub const Branch = struct {
             self.wd.register();
             dvui.parentSet(self.widget());
 
-            self.vbox = dvui.BoxWidget.init(@src(), .{ .dir = .vertical }, self.options);
+            const no_padding = Options{
+                .name = "Padding",
+                .padding = dvui.Rect.all(0),
+                .margin = dvui.Rect.all(0),
+            };
+
+            self.vbox = dvui.BoxWidget.init(@src(), .{ .dir = .vertical }, no_padding.override(self.options));
             self.vbox.install();
             self.vbox.drawBackground();
 
             self.tree.branch_size = self.vbox.wd.rect.size();
 
-            self.button = dvui.ButtonWidget.init(@src(), .{}, self.options);
+            self.button = dvui.ButtonWidget.init(@src(), .{}, no_padding.override(self.options));
             self.button.install();
             self.button.processEvents();
             self.button.drawBackground();
 
-            self.hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, self.options);
+            self.hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, no_padding.override(self.options));
             self.hbox.install();
             self.hbox.drawBackground();
 
