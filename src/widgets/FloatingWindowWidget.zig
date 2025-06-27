@@ -507,7 +507,7 @@ pub fn close(self: *FloatingWindowWidget) void {
 }
 
 pub fn widget(self: *FloatingWindowWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *FloatingWindowWidget) *WidgetData {
@@ -525,12 +525,6 @@ pub fn screenRectScale(self: *FloatingWindowWidget, rect: Rect) RectScale {
 
 pub fn minSizeForChild(self: *FloatingWindowWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
-}
-
-pub fn processEvent(self: *FloatingWindowWidget, e: *Event, bubbling: bool) void {
-    _ = self;
-    _ = e;
-    _ = bubbling;
 }
 
 pub fn deinit(self: *FloatingWindowWidget) void {

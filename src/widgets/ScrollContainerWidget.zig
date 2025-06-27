@@ -132,7 +132,7 @@ pub fn processEvents(self: *ScrollContainerWidget) void {
         if (!self.matchEvent(e))
             continue;
 
-        self.processEvent(e, false);
+        self.processEvent(e);
     }
 
     // might have changed from events
@@ -218,7 +218,7 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
 }
 
 pub fn widget(self: *ScrollContainerWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *ScrollContainerWidget) *WidgetData {
@@ -295,7 +295,7 @@ pub fn minSizeForChild(self: *ScrollContainerWidget, s: Size) void {
     self.nextVirtualSize.w = @max(self.nextVirtualSize.w, s.w);
 }
 
-pub fn processEvent(self: *ScrollContainerWidget, e: *Event, _: bool) void {
+pub fn processEvent(self: *ScrollContainerWidget, e: *Event) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .press and me.button.touch()) {
@@ -311,10 +311,6 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, _: bool) void {
             }
         },
         else => {},
-    }
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
     }
 }
 

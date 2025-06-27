@@ -1657,8 +1657,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     }
     self.texture_trash.clearAndFree();
 
-    // events may have been tagged with a focus widget that never showed up, so
-    // we wouldn't even get them bubbled
+    // events may have been tagged with a focus widget that never showed up
     const evts = dvui.events();
     for (evts) |*e| {
         if (self.drag_state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release) {
@@ -1800,7 +1799,7 @@ fn initEvents(self: *Self) std.mem.Allocator.Error!void {
 }
 
 pub fn widget(self: *Self) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *Self) *WidgetData {
@@ -1823,13 +1822,6 @@ pub fn minSizeForChild(self: *Self, s: Size) void {
     // os window doesn't size itself based on children
     _ = self;
     _ = s;
-}
-
-pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
-    _ = self;
-    _ = e;
-    // can't bubble past the base window
-    _ = bubbling;
 }
 
 const Options = dvui.Options;

@@ -138,7 +138,7 @@ pub fn processEvents(self: *PanedWidget) void {
         if (!self.matchEvent(e))
             continue;
 
-        self.processEvent(e, false);
+        self.processEvent(e);
     }
 }
 
@@ -206,7 +206,7 @@ pub fn animateSplit(self: *PanedWidget, end_val: f32) void {
 }
 
 pub fn widget(self: *PanedWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *PanedWidget) *WidgetData {
@@ -276,8 +276,7 @@ pub fn minSizeForChild(self: *PanedWidget, s: dvui.Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
-pub fn processEvent(self: *PanedWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
+pub fn processEvent(self: *PanedWidget, e: *Event) void {
     if (e.evt == .mouse) {
         const rs = self.wd.contentRectScale();
         const cursor: enums.Cursor = switch (self.init_opts.direction) {
@@ -326,10 +325,6 @@ pub fn processEvent(self: *PanedWidget, e: *Event, bubbling: bool) void {
                 dvui.cursorSet(cursor);
             }
         }
-    }
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
     }
 }
 

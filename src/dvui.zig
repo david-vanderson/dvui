@@ -4410,7 +4410,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
         }
 
         if (!e.handled) {
-            te.processEvent(e, false);
+            te.processEvent(e);
         }
     }
 
@@ -5255,12 +5255,6 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
             },
             else => {},
         }
-
-        // if we didn't handle this event, send it to lw - this means we don't
-        // need to call lw.processEvents()
-        if (!e.handled) {
-            lw.processEvent(e, false);
-        }
     }
 
     // draw text
@@ -5285,7 +5279,6 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
 pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) void {
     var lw = LabelWidget.init(src, fmt, args, .{}, opts);
     lw.install();
-    lw.processEvents();
     lw.draw();
     lw.deinit();
 }
@@ -5298,7 +5291,6 @@ pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: an
 pub fn labelEx(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) void {
     var lw = LabelWidget.init(src, fmt, args, init_opts, opts);
     lw.install();
-    lw.processEvents();
     lw.draw();
     lw.deinit();
 }
@@ -5311,7 +5303,6 @@ pub fn labelEx(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: 
 pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, init_opts: LabelWidget.InitOptions, opts: Options) void {
     var lw = LabelWidget.initNoFmt(src, str, init_opts, opts);
     lw.install();
-    lw.processEvents();
     lw.draw();
     lw.deinit();
 }
@@ -5866,7 +5857,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             }
 
             if (!e.handled) {
-                te.processEvent(e, false);
+                te.processEvent(e);
             }
         }
 
@@ -6039,10 +6030,6 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                     }
                 },
                 else => {},
-            }
-
-            if (e.bubbleable()) {
-                b.wd.parent.processEvent(e, true);
             }
         }
 

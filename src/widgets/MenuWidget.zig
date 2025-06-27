@@ -93,7 +93,7 @@ pub fn install(self: *MenuWidget) void {
         if (!dvui.eventMatchSimple(e, self.data()))
             continue;
 
-        self.processEvent(e, false);
+        self.processEvent(e);
     }
 
     self.box = BoxWidget.init(@src(), .{ .dir = self.init_opts.dir }, self.wd.options.strip().override(.{ .expand = .both }));
@@ -121,7 +121,7 @@ pub fn close_chain(self: *MenuWidget, intentional: bool) void {
 }
 
 pub fn widget(self: *MenuWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *MenuWidget) *WidgetData {
@@ -141,8 +141,7 @@ pub fn minSizeForChild(self: *MenuWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
-pub fn processEvent(self: *MenuWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
+pub fn processEvent(self: *MenuWidget, e: *Event) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .position) {
@@ -170,10 +169,6 @@ pub fn processEvent(self: *MenuWidget, e: *Event, bubbling: bool) void {
             }
         },
         else => {},
-    }
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
     }
 }
 

@@ -12,20 +12,10 @@ focus_widgetId: ?dvui.WidgetId = null,
 // num increments within a frame, used in focusRemainingEvents
 num: u16 = 0,
 evt: union(enum) {
-    // non-bubbleable
     mouse: Mouse,
     key: Key,
-
-    // bubbleable
     text: Text,
 },
-
-// All widgets have to bubble keyboard events if they can have keyboard focus
-// so that pressing the up key in any child of a scrollarea will scroll.  Call
-// this helper at the end of processEvent().
-pub fn bubbleable(self: *const Event) bool {
-    return (!self.handled and self.evt != .mouse and self.evt != .key);
-}
 
 /// Mark the event as handled
 ///
