@@ -225,29 +225,8 @@ pub fn chainFocused(self: *FloatingMenuWidget, self_call: bool) bool {
 
 pub fn deinit(self: *FloatingMenuWidget) void {
     defer dvui.widgetFree(self);
+
     const evts = dvui.events();
-
-    // check if a focus event is happening outside our window
-    for (evts) |e| {
-        if (!e.handled and e.evt == .mouse and e.evt.mouse.action == .focus) {
-            self.close();
-        }
-    }
-
-    if (!self.have_popup_child and !self.chainFocused(true)) {
-        // if a popup chain is open and the user focuses a different window
-        // (not the parent of the popups), then we want to close the popups
-
-        // only the last popup can do the check, you can't query the focus
-        // status of children, only parents
-        self.menu.close_chain(false);
-        dvui.refresh(null, @src(), self.wd.id);
-    }
-
-    self.menu.deinit();
-    self.scroll.deinit();
-    self.scaler.deinit();
-
     const rs = self.wd.rectScale();
     for (evts) |*e| {
         if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r, .cleanup = true }))
@@ -272,6 +251,27 @@ pub fn deinit(self: *FloatingMenuWidget) void {
             }
         }
     }
+
+    // check if a focus event is happening outside our window
+    for (evts) |e| {
+        if (!e.handled and e.evt == .mouse and e.evt.mouse.action == .focus) {
+            self.close();
+        }
+    }
+
+    if (!self.have_popup_child and !self.chainFocused(true)) {
+        // if a popup chain is open and the user focuses a different window
+        // (not the parent of the popups), then we want to close the popups
+
+        // only the last popup can do the check, you can't query the focus
+        // status of children, only parents
+        self.menu.close_chain(false);
+        dvui.refresh(null, @src(), self.wd.id);
+    }
+
+    self.menu.deinit();
+    self.scroll.deinit();
+    self.scaler.deinit();
 
     // in case no children ever show up, this will provide a visual indication
     // that there is an empty floating menu

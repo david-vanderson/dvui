@@ -69,8 +69,7 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
 
             if (!self.focused_last_frame) {
                 // in case we are in a scrollable dropdown, scroll
-                var scrollto = Event{ .evt = .{ .scroll_to = .{ .screen_rect = self.wd.borderRectScale().r } } };
-                self.wd.parent.processEvent(&scrollto, true);
+                dvui.scrollTo(.{ .screen_rect = self.wd.borderRectScale().r });
             }
         }
     }

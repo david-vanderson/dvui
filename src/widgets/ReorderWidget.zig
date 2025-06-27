@@ -99,13 +99,11 @@ pub fn processEvent(self: *ReorderWidget, e: *dvui.Event, bubbling: bool) void {
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (me.action == .motion) {
                     self.drag_point = me.p;
-
-                    var scrolldrag = dvui.Event{ .evt = .{ .scroll_drag = .{
+                    dvui.scrollDrag(.{
                         .mouse_pt = me.p,
                         .screen_rect = self.wd.rectScale().r,
                         .capture_id = self.wd.id,
-                    } } };
-                    self.wd.parent.processEvent(&scrolldrag, true);
+                    });
                 }
             },
             else => {},

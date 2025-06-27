@@ -13,6 +13,18 @@ const WidgetData = dvui.WidgetData;
 
 const ScrollContainerWidget = @This();
 
+var scroll_current: ?*ScrollContainerWidget = null;
+
+pub fn current() ?*ScrollContainerWidget {
+    return scroll_current;
+}
+
+fn scrollSet(scroll: ?*ScrollContainerWidget) ?*ScrollContainerWidget {
+    const ret = scroll_current;
+    scroll_current = scroll;
+    return ret;
+}
+
 pub var defaults: Options = .{
     .name = "ScrollContainer",
     // most of the time ScrollContainer is used inside ScrollArea which
@@ -32,6 +44,7 @@ wd: WidgetData = undefined,
 si: *ScrollInfo = undefined,
 init_opts: InitOptions = undefined,
 last_focus: dvui.WidgetId = undefined,
+parentScroll: ?*ScrollContainerWidget = null,
 
 // si.viewport.x/y might be updated in the middle of a frame, this prevents
 // those visual artifacts
@@ -99,6 +112,7 @@ pub fn install(self: *ScrollContainerWidget) void {
     }
 
     dvui.parentSet(self.widget());
+    self.parentScroll = scrollSet(self);
 }
 
 pub fn matchEvent(self: *ScrollContainerWidget, e: *Event) bool {
@@ -296,103 +310,6 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, _: bool) void {
                 }
             }
         },
-        .scroll_drag => |sd| {
-            e.handle(@src(), self.data());
-            const rs = self.wd.contentRectScale();
-            var scrolly: f32 = 0;
-            if (sd.mouse_pt.y <= rs.r.y and // want to scroll up
-                sd.screen_rect.y < rs.r.y and // scrolling would show more of child
-                self.si.viewport.y > 0) // can scroll up
-            {
-                scrolly = if (!self.seen_scroll_drag) -200 * dvui.secondsSinceLastFrame() else -5;
-            }
-
-            if (sd.mouse_pt.y >= (rs.r.y + rs.r.h) and
-                (sd.screen_rect.y + sd.screen_rect.h) > (rs.r.y + rs.r.h) and
-                self.si.viewport.y < self.si.scrollMax(.vertical))
-            {
-                scrolly = if (!self.seen_scroll_drag) 200 * dvui.secondsSinceLastFrame() else 5;
-            }
-
-            var scrollx: f32 = 0;
-            if (sd.mouse_pt.x <= rs.r.x and // want to scroll left
-                sd.screen_rect.x < rs.r.x and // scrolling would show more of child
-                self.si.viewport.x > 0) // can scroll left
-            {
-                scrollx = if (!self.seen_scroll_drag) -200 * dvui.secondsSinceLastFrame() else -5;
-            }
-
-            if (sd.mouse_pt.x >= (rs.r.x + rs.r.w) and
-                (sd.screen_rect.x + sd.screen_rect.w) > (rs.r.x + rs.r.w) and
-                self.si.viewport.x < self.si.scrollMax(.horizontal))
-            {
-                scrollx = if (!self.seen_scroll_drag) 200 * dvui.secondsSinceLastFrame() else 5;
-            }
-
-            if (scrolly != 0 or scrollx != 0) {
-                if (scrolly != 0) {
-                    self.si.scrollByOffset(.vertical, scrolly);
-                }
-                if (scrollx != 0) {
-                    self.si.scrollByOffset(.horizontal, scrollx);
-                }
-
-                dvui.refresh(null, @src(), self.wd.id);
-
-                // if we are scrolling, then we need a motion event next
-                // frame so that the child widget can adjust selection
-                self.inject_capture_id = sd.capture_id;
-            }
-
-            self.seen_scroll_drag = true;
-        },
-        .scroll_to => |st| {
-            e.handle(@src(), self.data());
-            const rs = self.wd.contentRectScale();
-
-            if (self.si.vertical != .none) {
-                const ypx = @max(0.0, rs.r.y - st.screen_rect.y);
-                if (ypx > 0) {
-                    self.si.viewport.y = self.si.viewport.y - (ypx / rs.s);
-                    if (!st.over_scroll) {
-                        self.si.scrollToOffset(.vertical, self.si.viewport.y);
-                    }
-                    dvui.refresh(null, @src(), self.wd.id);
-                }
-
-                const ypx2 = @max(0.0, (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h));
-                if (ypx2 > 0) {
-                    self.si.viewport.y = self.si.viewport.y + (ypx2 / rs.s);
-                    if (!st.over_scroll) {
-                        self.si.scrollToOffset(.vertical, self.si.viewport.y);
-                    }
-                    dvui.refresh(null, @src(), self.wd.id);
-                }
-            }
-
-            if (self.si.horizontal != .none) {
-                const xpx = @max(0.0, rs.r.x - st.screen_rect.x);
-                if (xpx > 0) {
-                    self.si.viewport.x = self.si.viewport.x - (xpx / rs.s);
-                    if (!st.over_scroll) {
-                        self.si.scrollToOffset(.horizontal, self.si.viewport.x);
-                    }
-                    dvui.refresh(null, @src(), self.wd.id);
-                }
-
-                const xpx2 = @max(0.0, (st.screen_rect.x + st.screen_rect.w) - (rs.r.x + rs.r.w));
-                if (xpx2 > 0) {
-                    self.si.viewport.x = self.si.viewport.x + (xpx2 / rs.s);
-                    if (!st.over_scroll) {
-                        self.si.scrollToOffset(.horizontal, self.si.viewport.x);
-                    }
-                    dvui.refresh(null, @src(), self.wd.id);
-                }
-            }
-        },
-        .scroll_propagate => |sp| {
-            self.processMotionScrollEvent(e, sp.motion);
-        },
         else => {},
     }
 
@@ -401,9 +318,107 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, _: bool) void {
     }
 }
 
-pub fn processMotionScrollEvent(self: *ScrollContainerWidget, e: *dvui.Event, motion: dvui.Point.Physical) void {
-    e.handle(@src(), self.data());
+pub fn processScrollDrag(
+    self: *ScrollContainerWidget,
+    sd: dvui.ScrollDragOptions,
+) void {
+    const rs = self.wd.contentRectScale();
+    var scrolly: f32 = 0;
+    if (sd.mouse_pt.y <= rs.r.y and // want to scroll up
+        sd.screen_rect.y < rs.r.y and // scrolling would show more of child
+        self.si.viewport.y > 0) // can scroll up
+    {
+        scrolly = if (!self.seen_scroll_drag) -200 * dvui.secondsSinceLastFrame() else -5;
+    }
 
+    if (sd.mouse_pt.y >= (rs.r.y + rs.r.h) and
+        (sd.screen_rect.y + sd.screen_rect.h) > (rs.r.y + rs.r.h) and
+        self.si.viewport.y < self.si.scrollMax(.vertical))
+    {
+        scrolly = if (!self.seen_scroll_drag) 200 * dvui.secondsSinceLastFrame() else 5;
+    }
+
+    var scrollx: f32 = 0;
+    if (sd.mouse_pt.x <= rs.r.x and // want to scroll left
+        sd.screen_rect.x < rs.r.x and // scrolling would show more of child
+        self.si.viewport.x > 0) // can scroll left
+    {
+        scrollx = if (!self.seen_scroll_drag) -200 * dvui.secondsSinceLastFrame() else -5;
+    }
+
+    if (sd.mouse_pt.x >= (rs.r.x + rs.r.w) and
+        (sd.screen_rect.x + sd.screen_rect.w) > (rs.r.x + rs.r.w) and
+        self.si.viewport.x < self.si.scrollMax(.horizontal))
+    {
+        scrollx = if (!self.seen_scroll_drag) 200 * dvui.secondsSinceLastFrame() else 5;
+    }
+
+    if (scrolly != 0 or scrollx != 0) {
+        if (scrolly != 0) {
+            self.si.scrollByOffset(.vertical, scrolly);
+        }
+        if (scrollx != 0) {
+            self.si.scrollByOffset(.horizontal, scrollx);
+        }
+
+        dvui.refresh(null, @src(), self.wd.id);
+
+        // if we are scrolling, then we need a motion event next
+        // frame so that the child widget can adjust selection
+        self.inject_capture_id = sd.capture_id;
+    }
+
+    self.seen_scroll_drag = true;
+}
+
+pub fn processScrollTo(
+    self: *ScrollContainerWidget,
+    st: dvui.ScrollToOptions,
+) void {
+    const rs = self.wd.contentRectScale();
+
+    if (self.si.vertical != .none) {
+        const ypx = @max(0.0, rs.r.y - st.screen_rect.y);
+        if (ypx > 0) {
+            self.si.viewport.y = self.si.viewport.y - (ypx / rs.s);
+            if (!st.over_scroll) {
+                self.si.scrollToOffset(.vertical, self.si.viewport.y);
+            }
+            dvui.refresh(null, @src(), self.wd.id);
+        }
+
+        const ypx2 = @max(0.0, (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h));
+        if (ypx2 > 0) {
+            self.si.viewport.y = self.si.viewport.y + (ypx2 / rs.s);
+            if (!st.over_scroll) {
+                self.si.scrollToOffset(.vertical, self.si.viewport.y);
+            }
+            dvui.refresh(null, @src(), self.wd.id);
+        }
+    }
+
+    if (self.si.horizontal != .none) {
+        const xpx = @max(0.0, rs.r.x - st.screen_rect.x);
+        if (xpx > 0) {
+            self.si.viewport.x = self.si.viewport.x - (xpx / rs.s);
+            if (!st.over_scroll) {
+                self.si.scrollToOffset(.horizontal, self.si.viewport.x);
+            }
+            dvui.refresh(null, @src(), self.wd.id);
+        }
+
+        const xpx2 = @max(0.0, (st.screen_rect.x + st.screen_rect.w) - (rs.r.x + rs.r.w));
+        if (xpx2 > 0) {
+            self.si.viewport.x = self.si.viewport.x + (xpx2 / rs.s);
+            if (!st.over_scroll) {
+                self.si.scrollToOffset(.horizontal, self.si.viewport.x);
+            }
+            dvui.refresh(null, @src(), self.wd.id);
+        }
+    }
+}
+
+pub fn processMotionScroll(self: *ScrollContainerWidget, motion: dvui.Point.Physical) void {
     const rs = self.wd.borderRectScale();
 
     // Whether to propagate out to any containing scroll
@@ -434,8 +449,9 @@ pub fn processMotionScrollEvent(self: *ScrollContainerWidget, e: *dvui.Event, mo
     }
 
     if (propagate) {
-        var scrollprop = Event{ .evt = .{ .scroll_propagate = .{ .motion = motion } } };
-        self.wd.parent.processEvent(&scrollprop, true);
+        if (self.parentScroll) |parent| {
+            parent.processMotionScroll(motion);
+        }
     }
 }
 
@@ -503,7 +519,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     // never having seen the touch down.
                     dvui.captureMouse(self.data());
 
-                    self.processMotionScrollEvent(e, me.action.motion);
+                    self.processMotionScroll(me.action.motion);
                 }
             },
             .key => |ke| {
@@ -562,9 +578,9 @@ pub fn deinit(self: *ScrollContainerWidget) void {
     dvui.dataSet(null, self.wd.id, "_finger_down", self.finger_down);
 
     if (self.inject_capture_id) |ci| {
-        // Only do this if the widget that sent the scroll_drag event still has
-        // mouse capture at this point.  Mouse could have moved, generated a
-        // scroll_drag, then released - in that case we don't want to inject a
+        // Only do this if the widget that called the scrollDrag still has
+        // mouse capture at this point.  Mouse could have moved, called
+        // scrollDrag, then released - in that case we don't want to inject a
         // motion event next frame.
         if (dvui.captured(ci)) {
             // inject a mouse motion event into next frame
@@ -599,6 +615,7 @@ pub fn deinit(self: *ScrollContainerWidget) void {
 
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
+    _ = scrollSet(self.parentScroll);
     dvui.parentReset(self.wd.id, self.wd.parent);
     self.* = undefined;
 }
