@@ -570,6 +570,9 @@ fn headerScrollAreaCreate(self: *GridWidget) void {
             .min_size_content = .{ .h = if (self.header_height > 0) self.header_height else self.last_header_height, .w = self.totalWidth() },
         });
         self.hscroll.?.install();
+        if (!std.math.approxEqAbs(f32, self.header_height, self.last_header_height, 0.01)) {
+            self.resizing = true;
+        }
     }
 }
 
