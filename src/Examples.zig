@@ -2122,6 +2122,13 @@ pub fn reorderLists() void {
         dvui.label(@src(), "Drag off list to remove.", .{}, .{});
         reorderListsAdvanced();
     }
+
+    if (dvui.expander(@src(), "Tree", expander_o, .{ .expand = .horizontal })) {
+        var vbox = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
+        defer vbox.deinit();
+
+        reorderTree();
+    }
 }
 
 pub fn reorderListsSimple(lay: reorderLayout) void {
@@ -2326,6 +2333,223 @@ pub fn reorderListsAdvanced() void {
     }
 
     g.reorder(removed_idx, insert_before_idx);
+}
+
+const TreeEntryType = enum {
+    file,
+    directory,
+};
+
+const TreeEntry = struct {
+    name: []const u8,
+    children: ?[]TreeEntry = null,
+    type: TreeEntryType = .file,
+};
+
+const tree_palette = &[_]dvui.Color{
+    .{ .r = 0x5e, .g = 0x31, .b = 0x5b, .a = 0xff },
+    .{ .r = 0x8c, .g = 0x3f, .b = 0x5d, .a = 0xff },
+    .{ .r = 0xba, .g = 0x61, .b = 0x56, .a = 0xff },
+    .{ .r = 0xf2, .g = 0xa6, .b = 0x5e, .a = 0xff },
+    .{ .r = 0xff, .g = 0xe4, .b = 0x78, .a = 0xff },
+    .{ .r = 0xcf, .g = 0xff, .b = 0x70, .a = 0xff },
+    .{ .r = 0x8f, .g = 0xde, .b = 0x5d, .a = 0xff },
+    .{ .r = 0x3c, .g = 0xa3, .b = 0x70, .a = 0xff },
+    .{ .r = 0x3d, .g = 0x6e, .b = 0x70, .a = 0xff },
+    .{ .r = 0x32, .g = 0x3e, .b = 0x4f, .a = 0xff },
+    .{ .r = 0x32, .g = 0x29, .b = 0x47, .a = 0xff },
+    .{ .r = 0x47, .g = 0x3b, .b = 0x78, .a = 0xff },
+    .{ .r = 0x4b, .g = 0x5b, .b = 0xab, .a = 0xff },
+};
+
+pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, outer_tree: *dvui.TreeWidget) !void {
+    const recursor = struct {
+        fn search(alloc: std.mem.Allocator, directory: []const u8, tree: *dvui.TreeWidget, color_id: *usize) !void {
+            var dir = try std.fs.cwd().openDir(directory, .{ .access_sub_paths = true, .iterate = true });
+            defer dir.close();
+
+            const padding = dvui.Rect.all(2);
+
+            var iter = dir.iterate();
+            var id_extra: usize = 0;
+            while (try iter.next()) |entry| {
+                id_extra += 1;
+
+                const color = tree_palette[color_id.* % tree_palette.len];
+
+                const branch = tree.branch(@src(), .{
+                    .expanded = false,
+                }, .{
+                    .id_extra = id_extra,
+                    .expand = .horizontal,
+                    .color_fill_hover = .fill,
+                });
+                defer branch.deinit();
+
+                switch (entry.kind) {
+                    .file => {
+                        const icon = dvui.entypo.text_document;
+                        const icon_color = color;
+                        const text_color = dvui.themeGet().color_text;
+
+                        _ = dvui.icon(
+                            @src(),
+                            "FileIcon",
+                            icon,
+                            .{ .fill_color = icon_color },
+                            .{
+                                .gravity_y = 0.5,
+                                .padding = padding,
+                            },
+                        );
+                        dvui.label(
+                            @src(),
+                            "{s}",
+                            .{entry.name},
+                            .{
+                                .color_text = .{ .color = text_color },
+                                .padding = padding,
+                            },
+                        );
+
+                        const abs_path = try std.fs.path.joinZ(
+                            alloc,
+                            &.{ directory, entry.name },
+                        );
+                        defer alloc.free(abs_path);
+
+                        if (branch.button.clicked()) {
+                            std.log.debug("Clicked: {s}", .{abs_path});
+                        }
+                    },
+                    .directory => {
+                        const abs_path = try std.fs.path.joinZ(
+                            dvui.currentWindow().arena(),
+                            &[_][]const u8{ directory, entry.name },
+                        );
+                        const folder_name = std.fs.path.basename(abs_path);
+                        const icon_color = color;
+
+                        _ = dvui.icon(
+                            @src(),
+                            "FolderIcon",
+                            dvui.entypo.folder,
+                            .{
+                                .fill_color = icon_color,
+                            },
+                            .{
+                                .gravity_y = 0.5,
+                                .padding = padding,
+                            },
+                        );
+                        dvui.label(@src(), "{s}", .{folder_name}, .{
+                            .color_text = .{ .color = dvui.themeGet().color_text },
+                            .padding = padding,
+                        });
+                        _ = dvui.icon(
+                            @src(),
+                            "DropIcon",
+                            if (branch.expanded) dvui.entypo.triangle_down else dvui.entypo.triangle_right,
+                            .{ .fill_color = icon_color },
+                            .{
+                                .gravity_y = 0.5,
+                                .gravity_x = 1.0,
+                                .padding = padding,
+                            },
+                        );
+
+                        if (branch.expander(@src(), .{ .indent = 20 }, .{
+                            .color_fill = .fill_window,
+                            .color_border = .{ .color = color },
+                            .expand = .horizontal,
+                            .corner_radius = branch.button.wd.options.corner_radius,
+                        })) {
+                            try search(
+                                alloc,
+                                abs_path,
+                                tree,
+                                color_id,
+                            );
+                        }
+                        color_id.* = color_id.* + 1;
+                    },
+                    else => {},
+                }
+            }
+        }
+    }.search;
+
+    var color_index: usize = 0;
+
+    const root_branch = outer_tree.branch(@src(), .{
+        .expanded = false,
+    }, .{
+        .id_extra = 0,
+        .expand = .horizontal,
+        .color_fill_hover = .fill,
+    });
+    defer root_branch.deinit();
+
+    _ = dvui.icon(
+        @src(),
+        "FolderIcon",
+        dvui.entypo.folder,
+        .{
+            .fill_color = tree_palette[0],
+        },
+        .{
+            .gravity_y = 0.5,
+            .padding = dvui.Rect.all(2),
+        },
+    );
+    const folder_name = std.fs.path.basename(root_directory);
+    dvui.label(@src(), "{s}", .{folder_name}, .{
+        .color_text = .{ .color = dvui.themeGet().color_text },
+        .padding = dvui.Rect.all(2),
+    });
+    _ = dvui.icon(
+        @src(),
+        "DropIcon",
+        if (root_branch.expanded) dvui.entypo.triangle_down else dvui.entypo.triangle_right,
+        .{ .fill_color = tree_palette[0] },
+        .{
+            .gravity_y = 0.5,
+            .gravity_x = 1.0,
+            .padding = dvui.Rect.all(2),
+        },
+    );
+
+    if (root_branch.expander(@src(), .{ .indent = 20 }, .{
+        .color_fill = .fill_window,
+        .color_border = .{ .color = tree_palette[0] },
+        .expand = .horizontal,
+        .corner_radius = root_branch.button.wd.options.corner_radius,
+    })) {
+        try recursor(allocator, root_directory, outer_tree, &color_index);
+    }
+
+    return;
+}
+
+pub fn reorderTree() void {
+    const g = struct {
+        var root_directory: ?[]const u8 = null;
+    };
+
+    if (dvui.button(@src(), "Select Directory", .{}, .{ .expand = .horizontal })) {
+        g.root_directory = dvui.dialogNativeFolderSelect(dvui.currentWindow().gpa, .{ .title = "Select Directory" }) catch null;
+    }
+
+    if (g.root_directory) |directory| {
+        dvui.label(@src(), "Root Directory: {s}", .{directory}, .{});
+
+        var tree = dvui.TreeWidget.tree(@src(), .{ .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
+        defer tree.deinit();
+
+        if (g.root_directory) |root_directory| {
+            recurseFiles(dvui.currentWindow().arena(), root_directory, tree) catch std.debug.panic("Failed to recurse files", .{});
+        }
+    }
 }
 
 /// ![image](Examples-menus.png)
