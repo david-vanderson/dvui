@@ -2383,6 +2383,7 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
                     .id_extra = id_extra,
                     .expand = .horizontal,
                     .color_fill_hover = .fill,
+                    .padding = padding,
                 });
                 defer branch.deinit();
 
@@ -2458,7 +2459,7 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
                             },
                         );
 
-                        if (branch.expander(@src(), .{ .indent = 20 }, .{
+                        if (branch.expander(@src(), .{ .indent = 14 }, .{
                             .color_fill = .fill_window,
                             .color_border = .{ .color = color },
                             .expand = .horizontal,
@@ -2499,13 +2500,13 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
         },
         .{
             .gravity_y = 0.5,
-            .padding = dvui.Rect.all(2),
+            .padding = dvui.Rect.all(10),
         },
     );
     const folder_name = std.fs.path.basename(root_directory);
     dvui.label(@src(), "{s}", .{folder_name}, .{
         .color_text = .{ .color = dvui.themeGet().color_text },
-        .padding = dvui.Rect.all(2),
+        .padding = dvui.Rect.all(10),
     });
     _ = dvui.icon(
         @src(),
@@ -2515,11 +2516,11 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
         .{
             .gravity_y = 0.5,
             .gravity_x = 1.0,
-            .padding = dvui.Rect.all(2),
+            .padding = dvui.Rect.all(10),
         },
     );
 
-    if (root_branch.expander(@src(), .{ .indent = 20 }, .{
+    if (root_branch.expander(@src(), .{ .indent = 14 }, .{
         .color_fill = .fill_window,
         .color_border = .{ .color = tree_palette[0] },
         .expand = .horizontal,
