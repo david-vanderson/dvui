@@ -1910,7 +1910,7 @@ pub fn layoutText() void {
             .{},
             .{ .expand = .ratio },
         )) {
-            dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
+            dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Play", .message = "You clicked play" });
         }
         if (dvui.buttonIcon(
             @src(),
@@ -1920,7 +1920,7 @@ pub fn layoutText() void {
             .{},
             .{ .expand = .ratio },
         )) {
-            dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Ok Dialog", .message = "You clicked more" });
+            dvui.dialog(@src(), .{}, .{ .modal = false, .title = "More", .message = "You clicked more" });
         }
         cbox.deinit();
 
