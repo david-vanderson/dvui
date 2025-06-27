@@ -474,11 +474,7 @@ pub const Branch = struct {
         if (self.can_expand) {
             self.expander_vbox.deinit();
 
-            if (self.expanded) {
-                dvui.dataSet(null, self.wd.id, "_expanded", self.expanded);
-            } else {
-                dvui.dataRemove(null, self.wd.id, "_expanded");
-            }
+            dvui.dataSet(null, self.wd.id, "_expanded", self.expanded);
         } else {
             self.hbox.deinit();
             self.button.deinit();

@@ -2490,11 +2490,11 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
     var color_index: usize = 0;
 
     const root_branch = outer_tree.branch(@src(), .{
-        .expanded = false,
+        .expanded = true,
     }, .{
         .id_extra = 0,
         .expand = .horizontal,
-        .color_fill_hover = .fill,
+        //.color_fill_hover = .fill,
     });
     defer root_branch.deinit();
 
