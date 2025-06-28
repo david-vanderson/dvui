@@ -416,7 +416,7 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: usi
     }
     self.max_row = @max(self.max_row, row_num);
     if (self.bscroll == null) {
-        self.bodyScrollContainerCreate(src);
+        self.bodyScrollContainerCreate();
     }
     const cell_width = width: {
         if (opts.width() > 0) {
@@ -576,7 +576,7 @@ fn headerScrollAreaCreate(self: *GridWidget) void {
     }
 }
 
-fn bodyScrollContainerCreate(self: *GridWidget, src: std.builtin.SourceLocation) void {
+fn bodyScrollContainerCreate(self: *GridWidget) void {
     // Finished with headers.
     if (self.hscroll) |*hscroll| {
         hscroll.deinit();
@@ -584,7 +584,7 @@ fn bodyScrollContainerCreate(self: *GridWidget, src: std.builtin.SourceLocation)
     }
 
     if (self.bscroll == null) {
-        self.bscroll = ScrollContainerWidget.init(src, self.bsi, .{
+        self.bscroll = ScrollContainerWidget.init(@src(), self.bsi, .{
             .frame_viewport = self.frame_viewport,
             .event_rect = self.scroll.data().borderRectScale().r,
         }, .{
