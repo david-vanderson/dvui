@@ -111,10 +111,7 @@ gpa: std.mem.Allocator,
 _arena: dvui.ShrinkingArenaAllocator,
 _lifo_arena: dvui.ShrinkingArenaAllocator,
 /// Used to allocate widgets with a fixed location
-_widget_stack: std.heap.FixedBufferAllocator,
-/// The peak amount of bytes used by the widget stack since
-/// the creation of `Window`. Used to resize the stack ifs needed.
-peak_widget_stack: usize = 0,
+_widget_stack: dvui.ShrinkingArenaAllocator,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
@@ -195,7 +192,7 @@ pub fn init(
         .gpa = gpa,
         ._arena = init_opts.arena orelse .init(gpa),
         ._lifo_arena = .init(gpa),
-        ._widget_stack = .init(try gpa.alloc(u8, init_opts.default_widget_stack_capacity)),
+        ._widget_stack = .init(gpa),
         .subwindows = .init(gpa),
         .tab_index_prev = .init(gpa),
         .tab_index = .init(gpa),
@@ -422,7 +419,7 @@ pub fn deinit(self: *Self) void {
     self.keybinds.deinit();
     self._arena.deinit();
     self._lifo_arena.deinit();
-    self.gpa.free(self._widget_stack.buffer);
+    self._widget_stack.deinit();
 
     {
         var it = self.font_bytes.valueIterator();
@@ -1731,30 +1728,20 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // self._arena.debug_log();
     _ = self._arena.reset(.retain_capacity);
     if (self._lifo_arena.current_usage != 0 and !self._lifo_arena.has_expanded()) {
-        log.warn("Arena was not empty at the end of the frame, {d} byte left. Did you forget to free memory somewhere?", .{self._lifo_arena.current_usage});
+        log.warn("Arena was not empty at the end of the frame, {d} bytes left. Did you forget to free memory somewhere?", .{self._lifo_arena.current_usage});
         // const buf: [*]u8 = @ptrCast(self._lifo_arena.arena.state.buffer_list.first.?);
         // std.log.debug("Arena content {s}", .{buf[@sizeOf(usize)..self._lifo_arena.current_usage]});
     }
     // self._lifo_arena.debug_log();
     _ = self._lifo_arena.reset(.retain_capacity);
 
-    // Widget stack
-    if (self._widget_stack.end_index != 0) {
-        log.warn("Widget stack was not empty at the end of the frame. Did you forget to call deinti?", .{});
-        self._widget_stack.reset();
+    if (self._widget_stack.current_usage != 0 and !self._widget_stack.has_expanded()) {
+        log.warn("Widget stack was not empty at the end of the frame, {d} bytes left. Did you forget to call deinit?", .{self._widget_stack.current_usage});
+        // const buf: [*]u8 = @ptrCast(self._widget_stack.arena.state.buffer_list.first.?);
+        // std.log.debug("Widget stack content {s}", .{buf[@sizeOf(usize)..self._widget_stack.current_usage]});
     }
-    if (self._widget_stack.buffer.len < self.peak_widget_stack) {
-        log.warn("Widget stack overflowed, consider increasing the default widget stack size", .{});
-        const new_len = self.peak_widget_stack + 0x400;
-        if (self.gpa.resize(self._widget_stack.buffer, new_len)) {
-            self._widget_stack.buffer.len = new_len;
-        } else {
-            // do realloc ourselves as we don't need to copy any memory from the old allocation
-            const new_buf = try self.gpa.alloc(u8, new_len);
-            self.gpa.free(self._widget_stack.buffer);
-            self._widget_stack.buffer = new_buf;
-        }
-    }
+    // self._widget_stack.debug_log();
+    _ = self._widget_stack.reset(.retain_capacity);
 
     try self.initEvents();
 
