@@ -214,8 +214,6 @@ const MultiSelect = struct {
 };
 
 var selections: std.DynamicBitSetUnmanaged = undefined;
-var selection_info: dvui.SelectionInfo = .{};
-//var selection: dvui.GridWidget.Actions.MultiSelectMouse = .{ .selection_info = &selection_info };
 
 // Optional: windows os only
 const winapi = if (builtin.os.tag == .windows) struct {
