@@ -178,6 +178,12 @@ pub const ScrollPropagate = struct {
     motion: dvui.Point.Physical,
 };
 
+pub const Selection = struct {
+    selection_id: u64,
+    selected: bool,
+    screen_rect: dvui.Rect.Physical,
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

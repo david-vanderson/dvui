@@ -3136,6 +3136,10 @@ pub fn events() []Event {
     return currentWindow().events.items;
 }
 
+pub fn selectionEvents() []Event.Selection {
+    return currentWindow().selections.items;
+}
+
 /// Wrapper around `eventMatch` for normal usage.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
@@ -4686,8 +4690,8 @@ pub fn gridHeadingSeparator(resize_options: ?GridWidget.HeaderResizeWidget.InitO
 pub fn gridHeading(
     src: std.builtin.SourceLocation,
     g: *GridWidget,
-    heading: []const u8,
     col_num: usize,
+    heading: []const u8,
     resize_opts: ?GridWidget.HeaderResizeWidget.InitOptions,
     cell_style: anytype, // GridWidget.CellStyle
 ) void {
@@ -6164,6 +6168,9 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     if (bw.clicked()) {
         target.* = !target.*;
         ret = true;
+        if (opts.selection_id) |selection_id| {
+            dvui.currentWindow().addSelectionEvent(.{ .selection_id = selection_id, .screen_rect = bw.wd.rectScale().r, .selected = target.* });
+        }
     }
 
     var b = box(@src(), .horizontal, options.strip().override(.{ .expand = .both }));

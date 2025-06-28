@@ -165,6 +165,7 @@ pub fn build(b: *std.Build) !void {
         }
 
         linkBackend(dvui_sdl, sdl_mod);
+        addExample("sdl2-dir-grid", b.path("examples/sdl-dir-grid.zig"), dvui_sdl, true, dvui_opts);
         addExample("sdl2-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, true, dvui_opts);
         addExample("sdl2-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, true, dvui_opts);
         addExample("sdl2-app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);

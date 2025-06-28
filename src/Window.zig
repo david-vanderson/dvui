@@ -54,6 +54,8 @@ mouse_pt_prev: Point.Physical = .{ .x = -1, .y = -1 },
 modifiers: dvui.enums.Mod = .none,
 inject_motion_event: bool = false,
 
+selections: std.ArrayListUnmanaged(Event.Selection) = .empty,
+
 drag_state: enum {
     none,
     prestart,
@@ -801,6 +803,13 @@ pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, y
     const ret = (self.wd.id != winId);
     try self.positionMouseEventAdd();
     return ret;
+}
+
+pub fn addSelectionEvent(self: *Self, evt: Event.Selection) void {
+    self.selections.append(self.arena(), evt) catch |err| {
+        dvui.logError(@src(), err, "dropping selection event...", .{}); // TODO:
+        return;
+    };
 }
 
 pub fn FPS(self: *const Self) f32 {
@@ -1656,6 +1665,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         self.backend.textureDestroy(tex);
     }
     self.texture_trash.clearAndFree();
+    self.selections.clearAndFree(self.arena()); // TODO: Why?
 
     // events may have been tagged with a focus widget that never showed up, so
     // we wouldn't even get them bubbled
