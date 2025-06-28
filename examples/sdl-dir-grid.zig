@@ -118,14 +118,14 @@ fn gui_frame() !void {
         if (dvui.expander(@src(), "Options", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
             var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
             defer hbox.deinit();
-            if (dvui.radio(@src(), mode == .raw, "Raw", .{})) {
+            if (dvui.radio(@src(), mode == .raw, "Raw", .{ .margin = dvui.Rect.all(6) })) {
                 mode = .raw;
             }
-            if (dvui.radio(@src(), mode == .cached, "Cached", .{})) {
+            if (dvui.radio(@src(), mode == .cached, "Cached", .{ .margin = dvui.Rect.all(6) })) {
                 mode = .cached;
             }
             var selected = selection_mode == .multi_select;
-            if (dvui.checkbox(@src(), &selected, "Multi-Select?", .{})) {
+            if (dvui.checkbox(@src(), &selected, "Multi-Select?", .{ .margin = dvui.Rect.all(6) })) {
                 selection_mode = if (selected) .multi_select else .single_select;
                 if (selection_mode == .single_select) {
                     switch (mode) {
@@ -134,14 +134,22 @@ fn gui_frame() !void {
                     }
                 }
             }
+            dvui.labelNoFmt(@src(), "Filter: (contains): ", .{}, .{ .margin = dvui.Rect.all(6) });
+            var text = dvui.textEntry(@src(), .{}, .{ .gravity_y = 0.5, .margin = dvui.Rect.all(6) });
+            defer text.deinit();
+            filename_filter = text.getText();
         }
     }
     {
         var grid = dvui.grid(@src(), .numCols(6), .{}, .{ .expand = .both, .background = true });
         defer grid.deinit();
         var select_all_state: dvui.GridColumnSelectAllState = undefined;
+        // Note: The extra "selection_changed" here is because I've chosen to unselect anything that was filtered.
+        // If we were just doing selection it just needs multi_select.selectionChanged();
+        const changed = selection_changed or multi_select.selectionChanged();
+        selection_changed = false;
         if (selection_mode == .multi_select) {
-            if (dvui.gridHeadingCheckbox(@src(), grid, 0, &select_all_state, multi_select.selectionChanged(), .{})) {
+            if (dvui.gridHeadingCheckbox(@src(), grid, 0, &select_all_state, changed, .{})) {
                 switch (mode) {
                     .raw => selectAllRaw(select_all_state),
                     .cached => selectAllCache(select_all_state),
@@ -188,6 +196,7 @@ fn gui_frame() !void {
 }
 var multi_select: MultiSelect = .{};
 var single_select: SingleSelect = .{};
+var filename_filter: []u8 = "";
 
 const MultiSelect = struct {
     first_selected_id: ?u64 = null,
@@ -253,8 +262,7 @@ const SingleSelect = struct {
         for (dvui.selectionEvents()) |se| {
             if (se.selected == false) {
                 self.id_to_select = null;
-                self.id_to_unselect = null;
-                self.selection_changed = true;
+                self.id_to_unselect = se.selection_id;
             } else if (rect.contains(se.screen_rect.topLeft())) {
                 if (self.id_to_select) |last_id| {
                     self.id_to_unselect = last_id;
@@ -270,7 +278,7 @@ const SingleSelect = struct {
 };
 
 var selections: std.DynamicBitSetUnmanaged = undefined;
-
+var selection_changed = false;
 // Optional: windows os only
 const winapi = if (builtin.os.tag == .windows) struct {
     extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
@@ -281,18 +289,30 @@ pub fn directoryOpen() !std.fs.Dir {
 }
 
 pub fn directoryDisplay(grid: *dvui.GridWidget) !void {
-    for (0..selections.capacity()) |row_num| {
-        var cell = grid.bodyCell(@src(), 0, row_num, .{});
-        defer cell.deinit();
-        var is_set = selections.isSet(row_num);
-        _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = row_num, .gravity_x = 0.5 });
-    }
-
     var dir = directoryOpen() catch return;
     defer dir.close();
     var itr = dir.iterate();
+    var dir_num: usize = 0;
     var row_num: usize = 0;
-    while (itr.next() catch null) |entry| : (row_num += 1) {
+    while (itr.next() catch null) |entry| : (dir_num += 1) {
+        if (filename_filter.len > 0) {
+            if (std.mem.indexOf(u8, entry.name, filename_filter)) |_| {} else {
+                if (dir_num < selections.capacity()) {
+                    if (selections.isSet(dir_num)) {
+                        selections.unset(dir_num);
+                        //selection_changed = true;
+                    }
+                }
+                continue;
+            }
+        }
+        defer row_num += 1;
+        {
+            var cell = grid.bodyCell(@src(), 0, row_num, .{});
+            defer cell.deinit();
+            var is_set = if (dir_num < selections.capacity()) selections.isSet(dir_num) else false;
+            _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .gravity_x = 0.5 });
+        }
         {
             var cell = grid.bodyCell(@src(), 1, row_num, .{ .size = .{ .w = 300 } });
             defer cell.deinit();
@@ -325,14 +345,18 @@ pub fn directoryDisplay(grid: *dvui.GridWidget) !void {
             }
         }
     }
-    if (selections.count() != row_num)
-        try selections.resize(gpa, row_num, false);
+    if (selections.count() != dir_num)
+        try selections.resize(gpa, dir_num, false);
 }
 
+// TODO: Currently when filterd, seletc all selects everything, then the filter unselects.
+// This causes uneccessary "selection_changed" to happen which always clears the header
+// checkbox row when presssing select all in filter mode. Easy fix is to split
+// out filtering so it can be used in display and selection.
 pub fn selectAllRaw(state: dvui.GridColumnSelectAllState) void {
     switch (state) {
-        .select_all => selections.setAll(),
-        .select_none => selections.unsetAll(),
+        .select_all => selections.setAll(), // TODO: This needs to set based off a filter.
+        .select_none => selections.unsetAll(), // TODO: This needs to set/unset based off a filter.
         .unchanged => {},
     }
 }
@@ -389,13 +413,27 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget) void {
         cache_valid = true;
     }
 
-    for (0..dir_cache.items.len) |row_num| {
-        var cell = grid.bodyCell(@src(), 0, row_num, .{});
-        defer cell.deinit();
-        var is_set = dir_cache.items[row_num].selected;
-        _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = row_num, .gravity_x = 0.5 });
-    }
-    for (dir_cache.items, 0..) |*entry, row_num| {
+    var row_num: usize = 0;
+    for (dir_cache.items, 0..) |*entry, dir_num| {
+        if (filename_filter.len > 0) {
+            if (std.mem.indexOf(u8, entry.name, filename_filter)) |_| {} else {
+                if (dir_cache.items[dir_num].selected) {
+                    dir_cache.items[dir_num].selected = false;
+                    // TODO: change when filtering logic done.
+                    // Actually this is only an issue when going from filtered back to full. So
+                    // we can track that and set selection changed then?
+                    //selection_changed = true;
+                }
+                continue;
+            }
+        }
+        defer row_num += 1;
+        {
+            var cell = grid.bodyCell(@src(), 0, row_num, .{});
+            defer cell.deinit();
+            var is_set = dir_cache.items[dir_num].selected;
+            _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .gravity_x = 0.5 });
+        }
         {
             var cell = grid.bodyCell(@src(), 1, row_num, .{});
             defer cell.deinit();
