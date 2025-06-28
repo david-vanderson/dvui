@@ -259,18 +259,21 @@ const SingleSelect = struct {
 
     pub fn processEvents(self: *SingleSelect, rect: dvui.Rect.Physical) void {
         for (dvui.selectionEvents()) |se| {
-            if (se.selected == false) {
-                self.id_to_select = null;
-                self.id_to_unselect = se.selection_id;
-            } else if (rect.contains(se.screen_rect.topLeft())) {
-                if (self.id_to_select) |last_id| {
-                    self.id_to_unselect = last_id;
+            if (rect.contains(se.screen_rect.topLeft())) {
+                if (se.selected == false) {
+                    self.id_to_select = null;
+                    self.id_to_unselect = se.selection_id;
+                } else {
+                    if (self.id_to_select) |last_id| {
+                        self.id_to_unselect = last_id;
+                    }
+                    self.id_to_select = se.selection_id;
                 }
-                self.id_to_select = se.selection_id;
+                self.selection_changed = true;
             }
-            self.selection_changed = true;
         }
     }
+
     pub fn selectionChanged(self: *SingleSelect) bool {
         return self.selection_changed;
     }
@@ -416,6 +419,7 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget) void {
     for (dir_cache.items, 0..) |*entry, dir_num| {
         if (filename_filter.len > 0) {
             if (std.mem.indexOf(u8, entry.name, filename_filter)) |_| {} else {
+                // Clear selection of anything filtered. Not all apps would want to do this.
                 if (dir_cache.items[dir_num].selected) {
                     dir_cache.items[dir_num].selected = false;
                     // TODO: change when filtering logic done.
@@ -462,14 +466,15 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget) void {
         }
     }
 }
-//
+
 pub fn fromNsTimestamp(timestamp_ns: i128) struct { year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8 } {
-    // Split into days and nanoseconds of the day
-    const days_since_epoch: i128 = @divTrunc(timestamp_ns, std.time.ns_per_day);
-    const nanos_of_day: i128 = @rem(timestamp_ns, std.time.ns_per_day);
     const days_per_400_years = 146_097;
     const days_per_100_years = 36_524;
     const days_per_4_years = 1_460;
+
+    // Split into days and nanoseconds of the day
+    const days_since_epoch: i128 = @divTrunc(timestamp_ns, std.time.ns_per_day);
+    const nanos_of_day: i128 = @rem(timestamp_ns, std.time.ns_per_day);
 
     // Convert nanoseconds of the day to hours, minutes, seconds
     const hour: u8 = @intCast(@divTrunc(nanos_of_day, (std.time.ns_per_s * 3_600)));
