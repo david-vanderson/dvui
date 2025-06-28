@@ -190,6 +190,12 @@ class Dvui {
      * list of tuple (touch identifier, initial index)
      * @type {[number, number][]} */
     touches = [];
+    /** The lowest data seen, used to determine the delta for one "tick"
+     * of the scroll wheel
+     *
+     * The first number is x and second is y
+     * @type {[number, number]} */
+    lowest_scroll_delta = [99999, 99999];
     /**
      * x y w h of on screen keyboard editing position, or empty if none
      *
@@ -1179,20 +1185,30 @@ class Dvui {
         this.gl.canvas.addEventListener("wheel", (ev) => {
             ev.preventDefault();
             if (ev.deltaX != 0) {
+                const min = Math.min(
+                    Math.abs(ev.deltaX),
+                    this.lowest_scroll_delta[0],
+                );
+                this.lowest_scroll_delta[0] = min;
                 this.instance.exports.add_event(
                     4,
                     0,
                     0,
-                    -ev.deltaX,
+                    ev.deltaX / min,
                     0,
                 );
             }
             if (ev.deltaY != 0) {
+                const min = Math.min(
+                    Math.abs(ev.deltaY),
+                    this.lowest_scroll_delta[1],
+                );
+                this.lowest_scroll_delta[1] = min;
                 this.instance.exports.add_event(
                     4,
                     1,
                     0,
-                    ev.deltaY,
+                    -ev.deltaY / min,
                     0,
                 );
             }
