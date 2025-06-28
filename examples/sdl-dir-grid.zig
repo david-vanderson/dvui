@@ -93,6 +93,8 @@ pub fn main() !void {
 }
 
 var mode: enum { raw, cached } = .raw;
+var selection_mode: enum { multi_select, single_select } = .multi_select;
+
 // both dvui and SDL drawing
 fn gui_frame() !void {
     {
@@ -122,16 +124,28 @@ fn gui_frame() !void {
             if (dvui.radio(@src(), mode == .cached, "Cached", .{})) {
                 mode = .cached;
             }
+            var selected = selection_mode == .multi_select;
+            if (dvui.checkbox(@src(), &selected, "Multi-Select?", .{})) {
+                selection_mode = if (selected) .multi_select else .single_select;
+                if (selection_mode == .single_select) {
+                    switch (mode) {
+                        .raw => selectAllRaw(.select_none),
+                        .cached => selectAllCache(.select_none),
+                    }
+                }
+            }
         }
     }
     {
         var grid = dvui.grid(@src(), .numCols(6), .{}, .{ .expand = .both, .background = true });
         defer grid.deinit();
         var select_all_state: dvui.GridColumnSelectAllState = undefined;
-        if (dvui.gridHeadingCheckbox(@src(), grid, 0, &select_all_state, multi_select.selectionChanged(), .{})) {
-            switch (mode) {
-                .raw => selectAllRaw(select_all_state),
-                .cached => selectAllCache(select_all_state),
+        if (selection_mode == .multi_select) {
+            if (dvui.gridHeadingCheckbox(@src(), grid, 0, &select_all_state, multi_select.selectionChanged(), .{})) {
+                switch (mode) {
+                    .raw => selectAllRaw(select_all_state),
+                    .cached => selectAllCache(select_all_state),
+                }
             }
         }
         dvui.gridHeading(@src(), grid, 1, "Name", .fixed, CellStyle{ .cell_opts = .{ .size = .{ .w = 300 } } });
@@ -143,18 +157,37 @@ fn gui_frame() !void {
             .raw => directoryDisplay(grid) catch return,
             .cached => directoryDisplayCached(grid),
         }
-        multi_select.processEvents(grid.data().borderRectScale().r);
-        if (multi_select.selectionChanged()) {
-            for (multi_select.selectionIdStart()..multi_select.selectionIdEnd() + 1) |row_num| {
-                switch (mode) {
-                    .raw => selections.setValue(row_num, multi_select.should_select),
-                    .cached => dir_cache.items[row_num].selected = multi_select.should_select,
+        if (selection_mode == .multi_select) {
+            multi_select.processEvents(grid.data().borderRectScale().r);
+            if (multi_select.selectionChanged()) {
+                for (multi_select.selectionIdStart()..multi_select.selectionIdEnd() + 1) |row_num| {
+                    switch (mode) {
+                        .raw => selections.setValue(row_num, multi_select.should_select),
+                        .cached => dir_cache.items[row_num].selected = multi_select.should_select,
+                    }
+                }
+            }
+        } else {
+            single_select.processEvents(grid.data().borderRectScale().r);
+            if (single_select.selectionChanged()) {
+                if (single_select.id_to_unselect) |unselect_row| {
+                    switch (mode) {
+                        .raw => selections.unset(unselect_row),
+                        .cached => dir_cache.items[unselect_row].selected = false,
+                    }
+                }
+                if (single_select.id_to_select) |select_row| {
+                    switch (mode) {
+                        .raw => selections.set(select_row),
+                        .cached => dir_cache.items[select_row].selected = true,
+                    }
                 }
             }
         }
     }
 }
 var multi_select: MultiSelect = .{};
+var single_select: SingleSelect = .{};
 
 const MultiSelect = struct {
     first_selected_id: ?u64 = null,
@@ -207,6 +240,32 @@ const MultiSelect = struct {
 
     pub fn selectionIdEnd(self: *MultiSelect) u64 {
         return @max(self.first_selected_id orelse 0, self.second_selected_id orelse self.first_selected_id orelse 0);
+    }
+};
+
+const SingleSelect = struct {
+    id_to_select: ?u64 = null,
+    id_to_unselect: ?u64 = null,
+    should_select: bool = false,
+    selection_changed: bool = false,
+
+    pub fn processEvents(self: *SingleSelect, rect: dvui.Rect.Physical) void {
+        for (dvui.selectionEvents()) |se| {
+            if (se.selected == false) {
+                self.id_to_select = null;
+                self.id_to_unselect = null;
+                self.selection_changed = true;
+            } else if (rect.contains(se.screen_rect.topLeft())) {
+                if (self.id_to_select) |last_id| {
+                    self.id_to_unselect = last_id;
+                }
+                self.id_to_select = se.selection_id;
+            }
+            self.selection_changed = true;
+        }
+    }
+    pub fn selectionChanged(self: *SingleSelect) bool {
+        return self.selection_changed;
     }
 };
 
