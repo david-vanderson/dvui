@@ -358,10 +358,6 @@ pub fn directoryDisplay(grid: *dvui.GridWidget) !void {
         try selections.resize(gpa, dir_num, false);
 }
 
-// TODO: Currently when filterd, seletc all selects everything, then the filter unselects.
-// This causes uneccessary "selection_changed" to happen which always clears the header
-// checkbox row when presssing select all in filter mode. Easy fix is to split
-// out filtering so it can be used in display and selection.
 pub fn selectAllRaw(state: dvui.GridColumnSelectAllState) void {
     switch (state) {
         .select_all => selections.setAll(), // TODO: This needs to set based off a filter.
