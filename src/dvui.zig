@@ -4844,6 +4844,7 @@ pub fn gridHeadingCheckbox(
     g: *GridWidget,
     col_num: usize,
     selection: *GridColumnSelectAllState,
+    selection_changed: bool,
     cell_style: anytype, // GridWidget.CellStyle
 ) bool {
     const header_defaults: Options = .{
@@ -4874,7 +4875,7 @@ pub fn gridHeadingCheckbox(
         var hbox = dvui.box(@src(), .horizontal, header_options);
         defer hbox.deinit();
 
-        selected = dvui.dataGet(null, cell.data().id, "selected", bool) orelse false;
+        selected = !selection_changed and dvui.dataGet(null, cell.data().id, "selected", bool) orelse false;
         clicked = dvui.checkbox(@src(), &selected, null, checkbox_opts);
         dvui.dataSet(null, cell.data().id, "selected", selected);
     }
@@ -4892,6 +4893,8 @@ pub fn gridHeadingCheckbox(
 /// Returns true if any selections have changed.
 /// If field_name is null, T must be a bool.
 /// Otherwise field_name must refer to a bool field within a struct.
+///
+///
 pub fn gridColumnCheckbox(
     src: std.builtin.SourceLocation,
     g: *dvui.GridWidget,

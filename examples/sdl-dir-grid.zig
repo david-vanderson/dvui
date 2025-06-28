@@ -129,7 +129,7 @@ fn gui_frame() !void {
         var grid = dvui.grid(@src(), .numCols(6), .{}, .{ .expand = .both, .background = true });
         defer grid.deinit();
         var select_all_state: dvui.GridColumnSelectAllState = undefined;
-        if (dvui.gridHeadingCheckbox(@src(), grid, 0, &select_all_state, .{})) {
+        if (dvui.gridHeadingCheckbox(@src(), grid, 0, &select_all_state, multi_select.selectionChanged(), .{})) {
             switch (select_all_state) {
                 .select_all => {
                     selections.setAll(); // Set selections for non-cached (in bitset)
@@ -229,7 +229,7 @@ pub fn directoryDisplay(grid: *dvui.GridWidget) !void {
         var cell = grid.bodyCell(@src(), 0, row_num, .{});
         defer cell.deinit();
         var is_set = selections.isSet(row_num);
-        _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = row_num });
+        _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = row_num, .gravity_x = 0.5 });
     }
 
     var dir = directoryOpen() catch return;
