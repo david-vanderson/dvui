@@ -120,8 +120,12 @@ fn gui_frame() !void {
             defer hbox.deinit();
             if (dvui.radio(@src(), mode == .raw, "Raw", .{ .margin = dvui.Rect.all(6) })) {
                 mode = .raw;
+                selectAllCache(.select_none);
+                filtering_changed = true;
             }
             if (dvui.radio(@src(), mode == .cached, "Cached", .{ .margin = dvui.Rect.all(6) })) {
+                filtering_changed = true;
+                selectAllRaw(.select_none);
                 mode = .cached;
             }
             var selected = selection_mode == .multi_select;
@@ -146,10 +150,9 @@ fn gui_frame() !void {
         var select_all_state: dvui.GridColumnSelectAllState = undefined;
         // Note: The extra "selection_changed" here is because I've chosen to unselect anything that was filtered.
         // If we were just doing selection it just needs multi_select.selectionChanged();
-        const changed = selection_changed or multi_select.selectionChanged();
-        selection_changed = false;
+        const selection_changed = filtering_changed or multi_select.selectionChanged();
         if (selection_mode == .multi_select) {
-            if (dvui.gridHeadingCheckbox(@src(), grid, 0, &select_all_state, changed, .{})) {
+            if (dvui.gridHeadingCheckbox(@src(), grid, 0, &select_all_state, selection_changed, .{})) {
                 switch (mode) {
                     .raw => selectAllRaw(select_all_state),
                     .cached => selectAllCache(select_all_state),
@@ -161,10 +164,12 @@ fn gui_frame() !void {
         dvui.gridHeading(@src(), grid, 3, "Size", .fixed, .{});
         dvui.gridHeading(@src(), grid, 4, "Mode", .fixed, .{});
         dvui.gridHeading(@src(), grid, 5, "MTime", .fixed, .{});
+        const was_filtering = filtering;
         switch (mode) {
             .raw => directoryDisplay(grid) catch return,
             .cached => directoryDisplayCached(grid),
         }
+        filtering_changed = (was_filtering != filtering);
         if (selection_mode == .multi_select) {
             multi_select.processEvents(grid.data().borderRectScale().r);
             if (multi_select.selectionChanged()) {
@@ -197,6 +202,8 @@ fn gui_frame() !void {
 var multi_select: MultiSelect = .{};
 var single_select: SingleSelect = .{};
 var filename_filter: []u8 = "";
+var filtering: bool = false;
+var filtering_changed = false;
 
 const MultiSelect = struct {
     first_selected_id: ?u64 = null,
@@ -282,7 +289,6 @@ const SingleSelect = struct {
 };
 
 var selections: std.DynamicBitSetUnmanaged = undefined;
-var selection_changed = false;
 // Optional: windows os only
 const winapi = if (builtin.os.tag == .windows) struct {
     extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
@@ -298,14 +304,13 @@ pub fn directoryDisplay(grid: *dvui.GridWidget) !void {
     var itr = dir.iterate();
     var dir_num: usize = 0;
     var row_num: usize = 0;
+    filtering = false;
     while (itr.next() catch null) |entry| : (dir_num += 1) {
         if (filename_filter.len > 0) {
             if (std.mem.indexOf(u8, entry.name, filename_filter)) |_| {} else {
                 if (dir_num < selections.capacity()) {
-                    if (selections.isSet(dir_num)) {
-                        selections.unset(dir_num);
-                        //selection_changed = true;
-                    }
+                    selections.unset(dir_num);
+                    filtering = true;
                 }
                 continue;
             }
@@ -416,21 +421,16 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget) void {
         }
         cache_valid = true;
     }
-
+    filtering = false;
     var row_num: usize = 0;
     for (dir_cache.items, 0..) |*entry, dir_num| {
         if (filename_filter.len > 0) {
             if (std.mem.indexOf(u8, entry.name, filename_filter)) |_| {} else {
                 // Clear selection of anything filtered. Not all apps would want to do this.
-                if (dir_cache.items[dir_num].selected) {
-                    dir_cache.items[dir_num].selected = false;
-                    // TODO: change when filtering logic done.
-                    // Actually this is only an issue when going from filtered back to full. So
-                    // we can track that and set selection changed then?
-                    //selection_changed = true;
-                }
-                continue;
+                dir_cache.items[dir_num].selected = false;
+                filtering = true;
             }
+            continue;
         }
         defer row_num += 1;
         {
