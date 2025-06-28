@@ -3,7 +3,6 @@ const builtin = @import("builtin");
 const dvui = @import("dvui");
 const Backend = dvui.backend;
 const CellStyle = dvui.GridWidget.CellStyle;
-const DataAdapter = dvui.GridWidget.DataAdapter;
 comptime {
     std.debug.assert(@hasDecl(Backend, "SDLBackend"));
 }
@@ -130,14 +129,9 @@ fn gui_frame() !void {
         defer grid.deinit();
         var select_all_state: dvui.GridColumnSelectAllState = undefined;
         if (dvui.gridHeadingCheckbox(@src(), grid, 0, &select_all_state, multi_select.selectionChanged(), .{})) {
-            switch (select_all_state) {
-                .select_all => {
-                    selections.setAll(); // Set selections for non-cached (in bitset)
-                },
-                .select_none => {
-                    selections.unsetAll();
-                },
-                .unchanged => {},
+            switch (mode) {
+                .raw => selectAllRaw(select_all_state),
+                .cached => selectAllCache(select_all_state),
             }
         }
         dvui.gridHeading(@src(), grid, 1, "Name", .fixed, CellStyle{ .cell_opts = .{ .size = .{ .w = 300 } } });
@@ -147,12 +141,15 @@ fn gui_frame() !void {
         dvui.gridHeading(@src(), grid, 5, "MTime", .fixed, .{});
         switch (mode) {
             .raw => directoryDisplay(grid) catch return,
-            .cached => {}, //directoryDisplayCached(grid),
+            .cached => directoryDisplayCached(grid),
         }
         multi_select.processEvents(grid.data().borderRectScale().r);
         if (multi_select.selectionChanged()) {
             for (multi_select.selectionIdStart()..multi_select.selectionIdEnd() + 1) |row_num| {
-                selections.setValue(row_num, multi_select.should_select);
+                switch (mode) {
+                    .raw => selections.setValue(row_num, multi_select.should_select),
+                    .cached => dir_cache.items[row_num].selected = multi_select.should_select,
+                }
             }
         }
     }
@@ -273,88 +270,102 @@ pub fn directoryDisplay(grid: *dvui.GridWidget) !void {
         try selections.resize(gpa, row_num, false);
 }
 
-//const CacheEntry = struct {
-//    selected: bool,
-//    name: []const u8,
-//    kind: std.fs.Dir.Entry.Kind,
-//    size: u65,
-//    mode: std.fs.File.Mode,
-//    mtime: i128,
-//};
-//
-//const no_stat: std.fs.Dir.Stat = .{
-//    .inode = 0,
-//    .atime = 0,
-//    .ctime = 0,
-//    .kind = .directory,
-//    .mode = 0,
-//    .mtime = 0,
-//    .size = 0,
-//};
-//var dir_cache: std.ArrayListUnmanaged(CacheEntry) = .empty;
-//var cache_valid = false;
-//pub fn directoryDisplayCached(grid: *dvui.GridWidget) void {
-//    if (!cache_valid) {
-//        var dir = directoryOpen() catch return;
-//        defer dir.close();
-//        var itr = dir.iterate();
-//        while (itr.next() catch null) |entry| {
-//            const name = gpa.dupe(u8, entry.name) catch continue;
-//            const stat: std.fs.Dir.Stat = if (entry.kind == .file) dir.statFile(entry.name) catch no_stat else no_stat;
-//
-//            dir_cache.append(gpa, .{
-//                .selected = false,
-//                .name = name,
-//                .kind = entry.kind,
-//                .size = stat.size,
-//                .mode = stat.mode,
-//                .mtime = stat.mtime,
-//            }) catch continue;
-//        }
-//        cache_valid = true;
-//    }
-//
-//    selection.processEvents();
-//    const selection_adapter: DataAdapter.SliceOfStructUpdatable(CacheEntry, "selected") = .{ .slice = dir_cache.items };
-//    const selection_changed = dvui.gridColumnCheckbox(
-//        @src(),
-//        grid,
-//        0,
-//        .{ .selection_info = &selection_info },
-//        selection_adapter,
-//        .{},
-//    );
-//    for (dir_cache.items, 0..) |*entry, row_num| {
-//        {
-//            var cell = grid.bodyCell(@src(), 1, row_num, .{});
-//            defer cell.deinit();
-//            dvui.labelNoFmt(@src(), entry.name, .{}, .{});
-//        }
-//        {
-//            var cell = grid.bodyCell(@src(), 2, row_num, .{});
-//            defer cell.deinit();
-//            dvui.labelNoFmt(@src(), @tagName(entry.kind), .{}, .{});
-//        }
-//        if (entry.kind == .file) {
-//            {
-//                var cell = grid.bodyCell(@src(), 3, row_num, .{});
-//                defer cell.deinit();
-//                dvui.label(@src(), "{d}", .{entry.size}, .{});
-//            }
-//            {
-//                var cell = grid.bodyCell(@src(), 4, row_num, .{});
-//                defer cell.deinit();
-//                dvui.label(@src(), "{d}", .{entry.mode}, .{});
-//            }
-//            {
-//                var cell = grid.bodyCell(@src(), 5, row_num, .{});
-//                defer cell.deinit();
-//                dvui.label(@src(), "{[year]:0>4}-{[month]:0>2}-{[day]:0>2} {[hour]:0>2}:{[minute]:0>2}:{[second]:0>2}", fromNsTimestamp(entry.mtime), .{});
-//            }
-//        }
-//    }
-//    selection.performAction(selection_changed, selection_adapter);
-//}
+pub fn selectAllRaw(state: dvui.GridColumnSelectAllState) void {
+    switch (state) {
+        .select_all => selections.setAll(),
+        .select_none => selections.unsetAll(),
+        .unchanged => {},
+    }
+}
+
+const CacheEntry = struct {
+    selected: bool,
+    name: []const u8,
+    kind: std.fs.Dir.Entry.Kind,
+    size: u65,
+    mode: std.fs.File.Mode,
+    mtime: i128,
+};
+
+const no_stat: std.fs.Dir.Stat = .{
+    .inode = 0,
+    .atime = 0,
+    .ctime = 0,
+    .kind = .directory,
+    .mode = 0,
+    .mtime = 0,
+    .size = 0,
+};
+var dir_cache: std.ArrayListUnmanaged(CacheEntry) = .empty;
+var cache_valid = false;
+
+pub fn selectAllCache(state: dvui.GridColumnSelectAllState) void {
+    for (dir_cache.items) |*entry| {
+        switch (state) {
+            .select_all => entry.selected = true,
+            .select_none => entry.selected = false,
+            .unchanged => {},
+        }
+    }
+}
+
+pub fn directoryDisplayCached(grid: *dvui.GridWidget) void {
+    if (!cache_valid) {
+        var dir = directoryOpen() catch return;
+        defer dir.close();
+        var itr = dir.iterate();
+        while (itr.next() catch null) |entry| {
+            const name = gpa.dupe(u8, entry.name) catch continue;
+            const stat: std.fs.Dir.Stat = if (entry.kind == .file) dir.statFile(entry.name) catch no_stat else no_stat;
+
+            dir_cache.append(gpa, .{
+                .selected = false,
+                .name = name,
+                .kind = entry.kind,
+                .size = stat.size,
+                .mode = stat.mode,
+                .mtime = stat.mtime,
+            }) catch continue;
+        }
+        cache_valid = true;
+    }
+
+    for (0..dir_cache.items.len) |row_num| {
+        var cell = grid.bodyCell(@src(), 0, row_num, .{});
+        defer cell.deinit();
+        var is_set = dir_cache.items[row_num].selected;
+        _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = row_num, .gravity_x = 0.5 });
+    }
+    for (dir_cache.items, 0..) |*entry, row_num| {
+        {
+            var cell = grid.bodyCell(@src(), 1, row_num, .{});
+            defer cell.deinit();
+            dvui.labelNoFmt(@src(), entry.name, .{}, .{});
+        }
+        {
+            var cell = grid.bodyCell(@src(), 2, row_num, .{});
+            defer cell.deinit();
+            dvui.labelNoFmt(@src(), @tagName(entry.kind), .{}, .{});
+        }
+        if (entry.kind == .file) {
+            {
+                var cell = grid.bodyCell(@src(), 3, row_num, .{});
+                defer cell.deinit();
+                dvui.label(@src(), "{d}", .{entry.size}, .{});
+            }
+            {
+                var cell = grid.bodyCell(@src(), 4, row_num, .{});
+                defer cell.deinit();
+                dvui.label(@src(), "{d}", .{entry.mode}, .{});
+            }
+            {
+                var cell = grid.bodyCell(@src(), 5, row_num, .{});
+                defer cell.deinit();
+                dvui.label(@src(), "{[year]:0>4}-{[month]:0>2}-{[day]:0>2} {[hour]:0>2}:{[minute]:0>2}:{[second]:0>2}", fromNsTimestamp(entry.mtime), .{});
+            }
+        }
+    }
+}
 //
 pub fn fromNsTimestamp(timestamp_ns: i128) struct { year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8 } {
     // Split into days and nanoseconds of the day

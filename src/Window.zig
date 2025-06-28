@@ -1665,7 +1665,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         self.backend.textureDestroy(tex);
     }
     self.texture_trash.clearAndFree();
-    self.selections.clearAndFree(self.arena()); // TODO: Why?
+    self.selections = .empty;
 
     // events may have been tagged with a focus widget that never showed up, so
     // we wouldn't even get them bubbled
