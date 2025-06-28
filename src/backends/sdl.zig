@@ -1037,12 +1037,14 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             // TODO: some real solution to interpreting the mouse wheel across OSes
             switch (builtin.target.os.tag) {
                 .windows, .linux => {
-                    ticks_x *= 20;
-                    ticks_y *= 20;
+                    ticks_x *= dvui.scroll_speed;
+                    ticks_y *= dvui.scroll_speed;
                 },
                 .macos => {
-                    ticks_x *= 10;
-                    ticks_y *= 10;
+                    // TODO: Is this divided by 2 because of retina scale?
+                    //       In that case, should we scale by content_scale?
+                    ticks_x *= dvui.scroll_speed / 2;
+                    ticks_y *= dvui.scroll_speed / 2;
                 },
                 else => {},
             }
