@@ -812,7 +812,7 @@ pub fn addSelectionEvent(self: *Self, selection_id: u64, selected: bool, screen_
         return;
     };
     self.positionMouseEventAdd() catch |err| {
-        dvui.logError(@src(), err, "Unable to add position event  for for selection_id {d}\n", .{selection_id});
+        dvui.logError(@src(), err, "Unable to add position event for selection_id {d}\n", .{selection_id});
         return;
     };
 }
