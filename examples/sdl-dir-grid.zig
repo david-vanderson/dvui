@@ -212,7 +212,6 @@ const MultiSelect = struct {
             const ke = e.evt.key;
             if (ke.code != .left_shift and ke.code != .right_shift) continue;
             self.shift_held = ke.action == .down or ke.action == .repeat;
-            self.selection_changed = true;
         }
 
         for (dvui.selectionEvents()) |se| {
