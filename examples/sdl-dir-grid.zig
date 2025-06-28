@@ -215,31 +215,32 @@ const MultiSelect = struct {
     pub fn processEvents(self: *MultiSelect, rect: dvui.Rect.Physical) void {
         self.selection_changed = false;
         for (dvui.events()) |*e| {
-            if (e.evt != .key) continue;
-            const ke = e.evt.key;
-            if (ke.code != .left_shift and ke.code != .right_shift) continue;
-            self.shift_held = ke.action == .down or ke.action == .repeat;
-        }
-
-        for (dvui.selectionEvents()) |se| {
-            // Shame we can't do an event match, cause it's not an "Event"
-            if (rect.contains(se.screen_rect.topLeft())) {
-                if (!self.shift_held) {
-                    self.first_selected_id = se.selection_id;
-                    self.second_selected_id = se.selection_id;
-                    self.should_select = se.selected;
-                    if (self.first_selected_id) |_| {
-                        if (self.second_selected_id) |second_id| {
-                            self.first_selected_id = second_id;
-                        }
+            if (e.evt == .key) {
+                if (e.evt != .key and e.evt != .selection) continue;
+                const ke = e.evt.key;
+                if (ke.code != .left_shift and ke.code != .right_shift) continue;
+                self.shift_held = ke.action == .down or ke.action == .repeat;
+            } else if (e.evt == .selection) {
+                const se = e.evt.selection;
+                // TODO: What widget id would we user here?
+                if (dvui.eventMatch(e, .{ .id = .zero, .r = rect })) {
+                    if (!self.shift_held) {
+                        self.first_selected_id = se.selection_id;
                         self.second_selected_id = se.selection_id;
+                        self.should_select = se.selected;
+                        if (self.first_selected_id) |_| {
+                            if (self.second_selected_id) |second_id| {
+                                self.first_selected_id = second_id;
+                            }
+                            self.second_selected_id = se.selection_id;
+                            self.should_select = se.selected;
+                            self.selection_changed = true;
+                        }
+                    } else {
+                        self.first_selected_id = se.selection_id;
                         self.should_select = se.selected;
                         self.selection_changed = true;
                     }
-                } else {
-                    self.first_selected_id = se.selection_id;
-                    self.should_select = se.selected;
-                    self.selection_changed = true;
                 }
             }
         }
@@ -266,8 +267,10 @@ const SingleSelect = struct {
 
     pub fn processEvents(self: *SingleSelect, rect: dvui.Rect.Physical) void {
         self.selection_changed = false;
-        for (dvui.selectionEvents()) |se| {
-            if (rect.contains(se.screen_rect.topLeft())) {
+        for (dvui.events()) |*e| {
+            if (e.evt != .selection) continue;
+            if (dvui.eventMatch(e, .{ .id = .zero, .r = rect })) {
+                const se = e.evt.selection;
                 if (se.selected == false) {
                     self.id_to_select = null;
                     self.id_to_unselect = se.selection_id;

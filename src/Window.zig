@@ -54,8 +54,6 @@ mouse_pt_prev: Point.Physical = .{ .x = -1, .y = -1 },
 modifiers: dvui.enums.Mod = .none,
 inject_motion_event: bool = false,
 
-selections: std.ArrayListUnmanaged(Event.Selection) = .empty,
-
 drag_state: enum {
     none,
     prestart,
@@ -805,9 +803,16 @@ pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, y
     return ret;
 }
 
-pub fn addSelectionEvent(self: *Self, evt: Event.Selection) void {
-    self.selections.append(self.arena(), evt) catch |err| {
-        dvui.logError(@src(), err, "dropping selection event...", .{}); // TODO:
+pub fn addSelectionEvent(self: *Self, selection_id: u64, selected: bool, screen_rect: Rect.Physical) void {
+    self.event_num += 1;
+    self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
+        .selection = .{ .selection_id = selection_id, .selected = selected, .screen_rect = screen_rect },
+    } }) catch |err| {
+        dvui.logError(@src(), err, "Dropping selection event for selection_id {d}\n", .{selection_id});
+        return;
+    };
+    self.positionMouseEventAdd() catch |err| {
+        dvui.logError(@src(), err, "Unable to add position event  for for selection_id {d}\n", .{selection_id});
         return;
     };
 }
@@ -1665,7 +1670,6 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         self.backend.textureDestroy(tex);
     }
     self.texture_trash.clearAndFree();
-    self.selections = .empty;
 
     // events may have been tagged with a focus widget that never showed up, so
     // we wouldn't even get them bubbled

@@ -3136,10 +3136,6 @@ pub fn events() []Event {
     return currentWindow().events.items;
 }
 
-pub fn selectionEvents() []Event.Selection {
-    return currentWindow().selections.items;
-}
-
 /// Wrapper around `eventMatch` for normal usage.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
@@ -3243,6 +3239,9 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
 
                 return false;
             }
+        },
+        .selection => |sel| {
+            return opts.r.contains(sel.screen_rect.topLeft());
         },
 
         .close_popup => unreachable,
@@ -6172,7 +6171,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
         target.* = !target.*;
         ret = true;
         if (opts.selection_id) |selection_id| {
-            dvui.currentWindow().addSelectionEvent(.{ .selection_id = selection_id, .screen_rect = bw.wd.rectScale().r, .selected = target.* });
+            dvui.currentWindow().addSelectionEvent(selection_id, target.*, bw.wd.rectScale().r);
         }
     }
 

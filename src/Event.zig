@@ -22,6 +22,7 @@ evt: union(enum) {
     scroll_drag: ScrollDrag,
     scroll_to: ScrollTo,
     scroll_propagate: ScrollPropagate,
+    selection: Selection,
 },
 
 // All widgets have to bubble keyboard events if they can have keyboard focus
