@@ -1726,14 +1726,14 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // std.log.debug("peak widget stack {d} (0x{0x})", .{self.peak_widget_stack});
 
     // self._arena.debug_log();
-    _ = self._arena.reset(.retain_capacity);
+    _ = self._arena.reset(.shrink_to_peak_usage);
     if (self._lifo_arena.current_usage != 0 and !self._lifo_arena.has_expanded()) {
         log.warn("Arena was not empty at the end of the frame, {d} bytes left. Did you forget to free memory somewhere?", .{self._lifo_arena.current_usage});
         // const buf: [*]u8 = @ptrCast(self._lifo_arena.arena.state.buffer_list.first.?);
         // std.log.debug("Arena content {s}", .{buf[@sizeOf(usize)..self._lifo_arena.current_usage]});
     }
     // self._lifo_arena.debug_log();
-    _ = self._lifo_arena.reset(.retain_capacity);
+    _ = self._lifo_arena.reset(.shrink_to_peak_usage);
 
     if (self._widget_stack.current_usage != 0 and !self._widget_stack.has_expanded()) {
         log.warn("Widget stack was not empty at the end of the frame, {d} bytes left. Did you forget to call deinit?", .{self._widget_stack.current_usage});
@@ -1741,7 +1741,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         // std.log.debug("Widget stack content {s}", .{buf[@sizeOf(usize)..self._widget_stack.current_usage]});
     }
     // self._widget_stack.debug_log();
-    _ = self._widget_stack.reset(.retain_capacity);
+    _ = self._widget_stack.reset(.shrink_to_peak_usage);
 
     try self.initEvents();
 
