@@ -2456,7 +2456,7 @@ pub const CaptureMouse = struct {
 /// (which is what you would expect for e.g. background highlight)
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn captureMouse(wd: ?*WidgetData) void {
+pub fn captureMouse(wd: ?*const WidgetData) void {
     const cm = if (wd) |data| CaptureMouse{
         .id = data.id,
         .rect = data.borderRectScale().r,
@@ -3244,6 +3244,97 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     }
 
     return true;
+}
+
+pub const ClickOptions = struct {
+    /// Is set to true if the cursor is hovering the click rect
+    hovered: ?*bool = null,
+    /// If not null, this will be set when the cursor is within the click rect
+    hover_cursor: ?enums.Cursor = .hand,
+    /// The rect in which clicks are checked
+    ///
+    /// Defaults to the border rect of the `WidgetData`
+    rect: ?Rect.Physical = null,
+};
+
+/// Handles all events needed for clicking behaviour, used by `ButtonWidget`.
+pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
+    var is_clicked = false;
+    const click_rect = opts.rect orelse wd.borderRectScale().r;
+    for (dvui.events()) |*e| {
+        if (!dvui.eventMatch(e, .{ .id = wd.id, .r = click_rect }))
+            continue;
+
+        switch (e.evt) {
+            .mouse => |me| {
+                if (me.action == .focus) {
+                    e.handle(@src(), wd);
+
+                    // focus this widget for events after this one (starting with e.num)
+                    dvui.focusWidget(wd.id, null, e.num);
+                } else if (me.action == .press and me.button.pointer()) {
+                    e.handle(@src(), wd);
+                    dvui.captureMouse(wd);
+
+                    // for touch events, we want to cancel our click if a drag is started
+                    dvui.dragPreStart(me.p, .{});
+                } else if (me.action == .release and me.button.pointer()) {
+                    // mouse button was released, do we still have mouse capture?
+                    if (dvui.captured(wd.id)) {
+                        e.handle(@src(), wd);
+
+                        // cancel our capture
+                        dvui.captureMouse(null);
+                        dvui.dragEnd();
+
+                        // if the release was within our border, the click is successful
+                        if (click_rect.contains(me.p)) {
+                            is_clicked = true;
+
+                            // if the user interacts successfully with a
+                            // widget, it usually means part of the GUI is
+                            // changing, so the convention is to call refresh
+                            // so the user doesn't have to remember
+                            dvui.refresh(null, @src(), wd.id);
+                        }
+                    }
+                } else if (me.action == .motion and me.button.touch()) {
+                    if (dvui.captured(wd.id)) {
+                        if (dvui.dragging(me.p)) |_| {
+                            // touch: if we overcame the drag threshold, then
+                            // that means the person probably didn't want to
+                            // touch this button, they were trying to scroll
+                            dvui.captureMouse(null);
+                            dvui.dragEnd();
+                        }
+                    }
+                } else if (me.action == .position) {
+                    // TODO: Should this mark this event as handled? If the click_rect
+                    //       is above another widget with hover effects or click behaviour,
+                    //       we don't want that widget to highlight as if the next click
+                    //       would apply to it.
+
+                    // a single .position mouse event is at the end of each
+                    // frame, so this means the mouse ended above us
+                    if (opts.hover_cursor) |cursor| {
+                        dvui.cursorSet(cursor);
+                    }
+                    if (opts.hovered) |hovered| {
+                        hovered.* = true;
+                    }
+                }
+            },
+            .key => |ke| {
+                if (ke.action == .down and ke.matchBind("activate")) {
+                    e.handle(@src(), wd);
+                    is_clicked = true;
+                    dvui.refresh(null, @src(), wd.id);
+                }
+            },
+            else => {},
+        }
+    }
+    return is_clicked;
 }
 
 /// Animation state - see `animation` and `animationGet`.
@@ -4898,7 +4989,7 @@ pub fn gridHeadingCheckbox(
     var cell = g.headerCell(src, col_num, opts.cellOptions(col_num, 0));
     defer cell.deinit();
 
-    var clicked = false;
+    var is_clicked = false;
     var selected = false;
     {
         _ = dvui.separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
@@ -4907,16 +4998,16 @@ pub fn gridHeadingCheckbox(
         defer hbox.deinit();
 
         selected = dvui.dataGet(null, cell.data().id, "selected", bool) orelse false;
-        clicked = dvui.checkbox(@src(), &selected, null, checkbox_opts);
+        is_clicked = dvui.checkbox(@src(), &selected, null, checkbox_opts);
         dvui.dataSet(null, cell.data().id, "selected", selected);
     }
 
-    if (clicked) {
+    if (is_clicked) {
         selection.* = if (selected) .select_all else .select_none;
     } else {
         selection.* = .unchanged;
     }
-    return clicked;
+    return is_clicked;
 }
 
 /// A checkbox column that allows selection of boolean items.
@@ -5172,8 +5263,6 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
 /// A clickable label.  Good for hyperlinks.
 /// Returns true if it's been clicked.
 pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) bool {
-    var ret = false;
-
     var lw = LabelWidget.init(src, fmt, args, .{}, opts.override(.{ .name = "LabelClick" }));
     // now lw has a Rect from its parent but hasn't processed events or drawn
 
@@ -5184,72 +5273,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
     // draw border and background
     lw.install();
 
-    // loop over all events this frame in order of arrival
-    for (dvui.events()) |*e| {
-
-        // skip if lw would not normally process this event
-        if (!lw.matchEvent(e))
-            continue;
-
-        switch (e.evt) {
-            .mouse => |me| {
-                if (me.action == .focus) {
-                    e.handle(@src(), lw.data());
-
-                    // focus this widget for events after this one (starting with e.num)
-                    dvui.focusWidget(lwid, null, e.num);
-                } else if (me.action == .press and me.button.pointer()) {
-                    e.handle(@src(), lw.data());
-                    dvui.captureMouse(lw.data());
-
-                    // for touch events, we want to cancel our click if a drag is started
-                    dvui.dragPreStart(me.p, .{});
-                } else if (me.action == .release and me.button.pointer()) {
-                    // mouse button was released, do we still have mouse capture?
-                    if (dvui.captured(lwid)) {
-                        e.handle(@src(), lw.data());
-
-                        // cancel our capture
-                        dvui.captureMouse(null);
-                        dvui.dragEnd();
-
-                        // if the release was within our border, the click is successful
-                        if (lw.data().borderRectScale().r.contains(me.p)) {
-                            ret = true;
-
-                            // if the user interacts successfully with a
-                            // widget, it usually means part of the GUI is
-                            // changing, so the convention is to call refresh
-                            // so the user doesn't have to remember
-                            dvui.refresh(null, @src(), lwid);
-                        }
-                    }
-                } else if (me.action == .motion and me.button.touch()) {
-                    if (dvui.captured(lwid)) {
-                        if (dvui.dragging(me.p)) |_| {
-                            // touch: if we overcame the drag threshold, then
-                            // that means the person probably didn't want to
-                            // touch this button, they were trying to scroll
-                            dvui.captureMouse(null);
-                            dvui.dragEnd();
-                        }
-                    }
-                } else if (me.action == .position) {
-                    // a single .position mouse event is at the end of each
-                    // frame, so this means the mouse ended above us
-                    dvui.cursorSet(.hand);
-                }
-            },
-            .key => |ke| {
-                if (ke.action == .down and ke.matchBind("activate")) {
-                    e.handle(@src(), lw.data());
-                    ret = true;
-                    dvui.refresh(null, @src(), lwid);
-                }
-            },
-            else => {},
-        }
-    }
+    const ret = dvui.clicked(lw.data(), .{});
 
     // draw text
     lw.draw();
