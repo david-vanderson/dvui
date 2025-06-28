@@ -171,7 +171,7 @@ fn gui_frame() !void {
         }
         filtering_changed = (was_filtering != filtering);
         if (selection_mode == .multi_select) {
-            multi_select.processEvents(grid.data().borderRectScale().r);
+            multi_select.processEvents(grid.data());
             if (multi_select.selectionChanged()) {
                 for (multi_select.selectionIdStart()..multi_select.selectionIdEnd() + 1) |row_num| {
                     switch (mode) {
@@ -181,7 +181,7 @@ fn gui_frame() !void {
                 }
             }
         } else {
-            single_select.processEvents(grid.data().borderRectScale().r);
+            single_select.processEvents(grid.data());
             if (single_select.selectionChanged()) {
                 if (single_select.id_to_unselect) |unselect_row| {
                     switch (mode) {
@@ -212,7 +212,7 @@ const MultiSelect = struct {
     shift_held: bool = false,
     selection_changed: bool = false,
 
-    pub fn processEvents(self: *MultiSelect, rect: dvui.Rect.Physical) void {
+    pub fn processEvents(self: *MultiSelect, wd: *dvui.WidgetData) void {
         self.selection_changed = false;
         for (dvui.events()) |*e| {
             if (e.evt == .key) {
@@ -222,8 +222,7 @@ const MultiSelect = struct {
                 self.shift_held = ke.action == .down or ke.action == .repeat;
             } else if (e.evt == .selection) {
                 const se = e.evt.selection;
-                // TODO: What widget id would we user here?
-                if (dvui.eventMatch(e, .{ .id = .zero, .r = rect })) {
+                if (dvui.eventMatch(e, .{ .id = wd.id, .r = wd.borderRectScale().r })) {
                     if (!self.shift_held) {
                         self.first_selected_id = se.selection_id;
                         self.second_selected_id = se.selection_id;
@@ -265,11 +264,11 @@ const SingleSelect = struct {
     should_select: bool = false,
     selection_changed: bool = false,
 
-    pub fn processEvents(self: *SingleSelect, rect: dvui.Rect.Physical) void {
+    pub fn processEvents(self: *SingleSelect, wd: *dvui.WidgetData) void {
         self.selection_changed = false;
         for (dvui.events()) |*e| {
             if (e.evt != .selection) continue;
-            if (dvui.eventMatch(e, .{ .id = .zero, .r = rect })) {
+            if (dvui.eventMatch(e, .{ .id = wd.id, .r = wd.borderRectScale().r })) {
                 const se = e.evt.selection;
                 if (se.selected == false) {
                     self.id_to_select = null;
