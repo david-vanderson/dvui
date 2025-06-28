@@ -258,18 +258,20 @@ const SingleSelect = struct {
     selection_changed: bool = false,
 
     pub fn processEvents(self: *SingleSelect, rect: dvui.Rect.Physical) void {
+        self.selection_changed = false;
         for (dvui.selectionEvents()) |se| {
             if (rect.contains(se.screen_rect.topLeft())) {
                 if (se.selected == false) {
                     self.id_to_select = null;
                     self.id_to_unselect = se.selection_id;
+                    self.selection_changed = true;
                 } else {
                     if (self.id_to_select) |last_id| {
                         self.id_to_unselect = last_id;
                     }
                     self.id_to_select = se.selection_id;
+                    self.selection_changed = true;
                 }
-                self.selection_changed = true;
             }
         }
     }
