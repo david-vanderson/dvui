@@ -232,7 +232,7 @@ pub const Branch = struct {
     pub fn install(self: *Branch) void {
         self.installed = true;
         if (self.tree.drag_point) |dp| {
-            const topleft = dp.plus(dvui.dragOffset());
+            const topleft = dp.plus(dvui.dragOffset().plus(.{ .x = 5, .y = 5 }));
             if (self.tree.id_branch.? == (self.init_options.branch_id orelse self.wd.id.asUsize())) {
                 // we are being dragged - put in floating widget
                 self.wd.register();
@@ -247,15 +247,12 @@ pub const Branch = struct {
                     self.wd = WidgetData.init(self.wd.src, .{}, self.options);
                 }
                 var rs = self.wd.rectScale();
-                //rs.r.h = 2.0;
 
-                const dragRect = Rect.Physical.fromPoint(topleft).toSize(self.tree.branch_size.scale(rs.s, Size.Physical));
+                var dragRect = Rect.Physical.fromPoint(topleft).toSize(self.tree.branch_size.scale(rs.s, Size.Physical));
+                dragRect.h = 2.0;
 
                 if (!self.tree.found_slot and !rs.r.intersect(dragRect).empty()) {
                     // user is dragging a reorderable over this rect
-                    //self.target_rs = rs;
-                    //self.tree.found_slot = true;
-
                     if (!self.expanded) {
                         if (dvui.animationGet(self.wd.id, "hover_expand")) |anim| {
                             if (anim.done()) {
@@ -266,20 +263,17 @@ pub const Branch = struct {
                         }
                     }
 
+                    if (!self.expanded)
+                        self.target_rs = rs;
+
                     if (self.init_options.draw_target) {
                         rs.r.h = 2.0;
                         rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent });
                     }
-
-                    if (self.init_options.reinstall and !self.init_options.last_slot) {
-                        self.reinstall();
-                    }
                 }
 
-                if (self.target_rs == null or self.init_options.last_slot) {
-                    self.wd.register();
-                    dvui.parentSet(self.widget());
-                }
+                self.wd.register();
+                dvui.parentSet(self.widget());
             }
         } else {
             self.wd = WidgetData.init(self.wd.src, .{}, self.options);
@@ -400,15 +394,6 @@ pub const Branch = struct {
         self.wd = WidgetData.init(self.wd.src, .{}, self.options);
         self.wd.register();
         dvui.parentSet(self.widget());
-
-        //self.button = dvui.ButtonWidget.init(@src(), .{}, self.options);
-        //self.button.install();
-        //self.button.processEvents();
-        //self.button.drawBackground();
-
-        //self.hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, self.options);
-        //self.hbox.install();
-        //self.hbox.drawBackground();
     }
 
     pub fn widget(self: *Branch) Widget {
