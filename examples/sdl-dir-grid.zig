@@ -233,7 +233,7 @@ const winapi = if (builtin.os.tag == .windows) struct {
 } else struct {};
 
 pub fn directoryOpen() !std.fs.Dir {
-    return try std.fs.cwd().openDir("c:\\temp", .{ .iterate = true, .access_sub_paths = true });
+    return try std.fs.cwd().openDir(".", .{ .iterate = true, .access_sub_paths = true });
 }
 
 pub fn directoryDisplay(grid: *dvui.GridWidget, row_selected: ?usize) !void {
