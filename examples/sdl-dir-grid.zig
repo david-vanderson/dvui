@@ -398,10 +398,9 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget, row_selected: ?usize) void
             var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
             defer cell.deinit();
             var is_set = dir_cache.items[dir_num].selected;
-            if (!dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .gravity_x = 0.5 })) {
-                if (row_selected == dir_num) {
-                    dvui.currentWindow().addSelectionEvent(dir_num, !is_set, cell.data().borderRectScale().r);
-                }
+            _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .gravity_x = 0.5 });
+            if (row_selected == dir_num) {
+                dvui.currentWindow().addSelectionEvent(dir_num, !is_set, cell.data().borderRectScale().r);
             }
         }
         {
