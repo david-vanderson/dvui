@@ -305,6 +305,12 @@ pub fn directoryDisplay(grid: *dvui.GridWidget, row_selected: ?usize) !void {
                 defer cell.deinit();
                 dvui.label(@src(), "{[year]:0>4}-{[month]:0>2}-{[day]:0>2} {[hour]:0>2}:{[minute]:0>2}:{[second]:0>2}", fromNsTimestamp(stats.mtime), .{});
             }
+        } else {
+            const end_col = col_num + 3;
+            while (col_num != end_col) : (col_num += 1) {
+                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
+                defer cell.deinit();
+            }
         }
     }
     if (selections.count() != dir_num)
@@ -428,6 +434,12 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget, row_selected: ?usize) void
                 var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{[year]:0>4}-{[month]:0>2}-{[day]:0>2} {[hour]:0>2}:{[minute]:0>2}:{[second]:0>2}", fromNsTimestamp(entry.mtime), .{});
+            }
+        } else {
+            const end_col = col_num + 3;
+            while (col_num != end_col) : (col_num += 1) {
+                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
+                defer cell.deinit();
             }
         }
     }
