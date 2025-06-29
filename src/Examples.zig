@@ -2375,6 +2375,12 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
             while (try iter.next()) |entry| {
                 id_extra += 1;
 
+                const abs_path = try std.fs.path.joinZ(
+                    alloc,
+                    &.{ directory, entry.name },
+                );
+                defer alloc.free(abs_path);
+
                 const color = tree_palette[color_id.* % tree_palette.len];
 
                 const branch = tree.branch(@src(), .{
@@ -2386,6 +2392,14 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
                     .padding = dvui.Rect.all(1),
                 });
                 defer branch.deinit();
+
+                if (branch.removed()) {
+                    std.log.debug("Removed: {s} from {s}", .{ abs_path, directory });
+                }
+
+                if (branch.insertBefore()) {
+                    std.log.debug("Inserted: {s} into {s}", .{ abs_path, directory });
+                }
 
                 switch (entry.kind) {
                     .file => {
@@ -2413,21 +2427,11 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
                             },
                         );
 
-                        const abs_path = try std.fs.path.joinZ(
-                            alloc,
-                            &.{ directory, entry.name },
-                        );
-                        defer alloc.free(abs_path);
-
                         if (branch.button.clicked()) {
                             std.log.debug("Clicked: {s}", .{abs_path});
                         }
                     },
                     .directory => {
-                        const abs_path = try std.fs.path.joinZ(
-                            dvui.currentWindow().arena(),
-                            &[_][]const u8{ directory, entry.name },
-                        );
                         const folder_name = std.fs.path.basename(abs_path);
                         const icon_color = color;
 
