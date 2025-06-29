@@ -136,16 +136,18 @@ pub const WidthsOrNum = union(enum) {
 pub const default_col_width: f32 = 100;
 
 //Widgets
-vbox: BoxWidget = undefined,
+vbox: BoxWidget,
+/// SAFETY: Set in `install`
 scroll: ScrollAreaWidget = undefined, // main scroll area
 hscroll: ?ScrollAreaWidget = null, // header scroll area
 bscroll: ?ScrollContainerWidget = null, // body scroll container
 
-// Not valid until after install()
-hsi: ScrollInfo = undefined, // Header scroll info
+hsi: ScrollInfo = .{ .horizontal = .auto, .vertical = .none }, // Header scroll info
+/// SAFETY: Set in `install`, might point to `default_scroll_info`
 bsi: *ScrollInfo = undefined, // Body scroll info
+/// SAFETY: Set in `install`
 frame_viewport: Point = undefined, // Fixed scroll viewport for this frame
-col_widths: []f32 = undefined, // Internal or user-supplied column widths
+col_widths: []f32, // Internal or user-supplied column widths
 starting_col_widths: ?[]f32 = null, // If grid is storing col widths, keep a copy of the starting widths.
 
 // Persistent state
@@ -157,7 +159,7 @@ sort_col_number: usize = 0,
 default_scroll_info: ScrollInfo = .{},
 
 // Non-persistent state
-cols: WidthsOrNum = undefined,
+cols: WidthsOrNum,
 row_height: f32 = 0,
 max_row: usize = 0,
 cur_row: usize = std.math.maxInt(usize), // current row being rendered
@@ -167,14 +169,17 @@ this_row_y: f32 = 0, // This y position for laying out rows with variable height
 last_header_height: f32 = 0, // Height of header last frame
 
 // Options
-init_opts: InitOpts = undefined,
+init_opts: InitOpts,
 
 pub fn init(src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitOpts, opts: Options) GridWidget {
-    var self = GridWidget{};
-    self.init_opts = init_opts;
-    self.cols = cols;
     const options = defaults.override(opts);
-    self.vbox = BoxWidget.init(src, .{ .dir = .vertical }, options);
+    var self = GridWidget{
+        .init_opts = init_opts,
+        .cols = cols,
+        .vbox = BoxWidget.init(src, .{ .dir = .vertical }, options),
+        // SAFETY: Set bellow
+        .col_widths = undefined,
+    };
     if (dvui.dataGet(null, self.data().id, "_resizing", bool)) |resizing| {
         self.resizing = resizing;
     }
@@ -193,8 +198,6 @@ pub fn init(src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitO
     }
     if (dvui.dataGet(null, self.data().id, "_hsi", ScrollInfo)) |hsi| {
         self.hsi = hsi;
-    } else {
-        self.hsi = .{ .horizontal = .auto, .vertical = .none };
     }
     if (dvui.dataGet(null, self.data().id, "_default_si", ScrollInfo)) |default_si| {
         self.default_scroll_info = default_si;
@@ -210,6 +213,39 @@ pub fn init(src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitO
         self.row_height = 0;
         self.header_height = 0;
     }
+    // Set the self.col_widths slice to point to the user-supplied col_widths or the
+    // internally stored col_widths.
+    switch (self.cols) {
+        .num_cols => |num_cols| {
+            if (dvui.dataGetSlice(null, self.data().id, "_col_widths", []f32)) |col_widths| {
+                if (col_widths.len == num_cols) {
+                    self.col_widths = col_widths;
+                    if (self.init_opts.resize_cols) {
+                        @memset(self.col_widths, 0);
+                    }
+                }
+            } else {
+                dvui.dataSetSliceCopies(null, self.data().id, "_col_widths", &[1]f32{0}, num_cols);
+                self.col_widths = dvui.dataGetSlice(null, self.data().id, "_col_widths", []f32) orelse default: {
+                    dvui.log.debug("GridWidget could not allocator column widths", .{});
+                    break :default &oom_col_width;
+                };
+            }
+
+            // If the grid is keep track of col widths then keep a copy of the starting col widths.
+            self.starting_col_widths = dvui.currentWindow().arena().alloc(f32, self.col_widths.len) catch |err| default: {
+                dvui.logError(@src(), err, "GridWidget {x} could not allocate column widths", .{self.data().id});
+                dvui.currentWindow().debug_widget_id = self.data().id;
+                break :default null;
+            };
+            if (self.starting_col_widths) |starting| {
+                @memcpy(starting, self.col_widths);
+            }
+        },
+        .col_widths => |col_widths| {
+            self.col_widths = col_widths;
+        },
+    }
 
     return self;
 }
@@ -218,44 +254,6 @@ pub fn init(src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitO
 var oom_col_width: [1]f32 = .{0};
 
 pub fn install(self: *GridWidget) void {
-    // Set the self.col_widths slice to point to the user-supplied col_widths or the
-    // internally stored col_widths.
-    blk: {
-        switch (self.cols) {
-            .num_cols => |num_cols| {
-                if (dvui.dataGetSlice(null, self.data().id, "_col_widths", []f32)) |col_widths| {
-                    if (col_widths.len == num_cols) {
-                        self.col_widths = col_widths;
-                        if (self.init_opts.resize_cols) {
-                            @memset(self.col_widths, 0);
-                        }
-                        break :blk;
-                    }
-                }
-                // If there are no saved col_widths or the number of columns has changed.
-                self.col_widths = dvui.currentWindow().arena().alloc(f32, num_cols) catch |err| default: {
-                    dvui.logError(@src(), err, "GridWidget {x} could not allocate column widths", .{self.data().id});
-                    dvui.currentWindow().debug_widget_id = self.data().id;
-                    break :default &oom_col_width;
-                };
-                @memset(self.col_widths, 0);
-            },
-            .col_widths => |col_widths| {
-                self.col_widths = col_widths;
-            },
-        }
-    }
-    // If the grid is keep track of col widths then keep a copy of the starting col widths.
-    if (self.cols == .num_cols) {
-        self.starting_col_widths = dvui.currentWindow().arena().alloc(f32, self.col_widths.len) catch |err| default: {
-            dvui.logError(@src(), err, "GridWidget {x} could not allocate column widths", .{self.data().id});
-            dvui.currentWindow().debug_widget_id = self.data().id;
-            break :default null;
-        };
-        if (self.starting_col_widths) |starting| {
-            @memcpy(starting, self.col_widths);
-        }
-    }
     if (self.init_opts.scroll_opts) |*scroll_opts| {
         if (scroll_opts.scroll_info) |scroll_info| {
             self.bsi = scroll_info;
@@ -263,8 +261,8 @@ pub fn install(self: *GridWidget) void {
             self.bsi = &self.default_scroll_info;
             scroll_opts.scroll_info = self.bsi;
             // Move the .horizontal and .vertical settings from scroll_opts to scroll_info
-            self.bsi.horizontal = scroll_opts.horizontal orelse .none;
-            self.bsi.vertical = scroll_opts.vertical orelse .auto;
+            if (scroll_opts.horizontal) |mode| self.bsi.horizontal = mode;
+            if (scroll_opts.vertical) |mode| self.bsi.vertical = mode;
             scroll_opts.horizontal = null;
             scroll_opts.vertical = null;
         }
@@ -327,9 +325,6 @@ pub fn deinit(self: *GridWidget) void {
     dvui.dataSet(null, self.data().id, "_hsi", self.hsi);
     if (self.bsi == &self.default_scroll_info) {
         dvui.dataSet(null, self.data().id, "_default_si", self.default_scroll_info);
-    }
-    if (self.cols == .num_cols) {
-        dvui.dataSetSlice(null, self.data().id, "_col_widths", self.col_widths);
     }
 
     self.vbox.deinit();
@@ -678,25 +673,26 @@ pub const HeaderResizeWidget = struct {
         .min_size_content = .{ .w = 1, .h = 1 },
     };
 
-    wd: WidgetData = undefined,
-    direction: Direction = undefined,
-    init_opts: InitOptions = undefined,
+    wd: WidgetData,
+    direction: Direction,
+    init_opts: InitOptions,
     // When user drags less than min_size or more than max_size
     // this offset is used to make them return the mouse back
     // to the min/max size before resizing can start again.
     offset: Point = .{},
 
     pub fn init(src: std.builtin.SourceLocation, dir: Direction, init_options: InitOptions, opts: Options) HeaderResizeWidget {
-        var self = HeaderResizeWidget{};
-
         var widget_opts = HeaderResizeWidget.defaults.override(opts);
         widget_opts.expand = switch (dir) {
             .horizontal => .horizontal,
             .vertical => .vertical,
         };
-        self.direction = dir;
-        self.init_opts = init_options;
-        self.wd = WidgetData.init(src, .{}, widget_opts);
+
+        var self = HeaderResizeWidget{
+            .wd = WidgetData.init(src, .{}, widget_opts),
+            .direction = dir,
+            .init_opts = init_options,
+        };
 
         if (dvui.dataGet(null, self.wd.id, "_offset", Point)) |offset| {
             self.offset = offset;

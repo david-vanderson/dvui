@@ -100,16 +100,16 @@ pub const Selection = struct {
 /// here is not a word, and everything else is.
 pub const word_breaks = " \n!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
 
-wd: WidgetData = undefined,
+wd: WidgetData,
 corners: [4]?Rect = [_]?Rect{null} ** 4,
 corners_min_size: [4]?Size = [_]?Size{null} ** 4,
 corners_last_seen: ?u8 = null,
 insert_pt: Point = Point{},
 current_line_height: f32 = 0.0,
 prevClip: Rect.Physical = .{},
-break_lines: bool = undefined,
+break_lines: bool,
 current_line_width: f32 = 0.0, // width of lines if break_lines was false
-touch_edit_just_focused: bool = undefined,
+touch_edit_just_focused: bool,
 
 cursor_pt: ?Point = null,
 click_pt: ?Point = null,
@@ -118,6 +118,7 @@ click_num: u8 = 0,
 bytes_seen: usize = 0,
 first_byte_in_line: usize = 0,
 selection_in: ?*Selection = null,
+/// SAFETY: Set in `install`, might point to `selection_store`
 selection: *Selection = undefined,
 selection_store: Selection = .{},
 
@@ -185,6 +186,7 @@ sel_end_r_new: ?Rect = null,
 sel_pts: [2]?Point = [2]?Point{ null, null },
 
 cursor_seen: bool = false,
+/// SAFETY: Set in `textAddEx`
 cursor_rect: Rect = undefined,
 scroll_to_cursor: bool = false,
 scroll_to_cursor_next_frame: bool = false,
@@ -201,23 +203,25 @@ te_show_draggables: bool = true,
 te_show_context_menu: bool = true,
 te_focus_on_touchdown: bool = false,
 focus_at_start: bool = false,
+/// SAFETY: Set in `touchEditing`
 te_floating: FloatingWidget = undefined,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextLayoutWidget {
     const options = defaults.override(opts);
-    var self = TextLayoutWidget{ .wd = WidgetData.init(src, .{}, options), .selection_in = init_opts.selection };
-    self.break_lines = init_opts.break_lines;
-    self.touch_edit_just_focused = init_opts.touch_edit_just_focused;
-    self.touch_editing = dvui.dataGet(null, self.wd.id, "_touch_editing", bool) orelse false;
-    self.te_first = dvui.dataGet(null, self.wd.id, "_te_first", bool) orelse true;
-    self.te_show_draggables = dvui.dataGet(null, self.wd.id, "_te_show_draggables", bool) orelse true;
-    self.te_show_context_menu = dvui.dataGet(null, self.wd.id, "_te_show_context_menu", bool) orelse true;
-    self.te_focus_on_touchdown = dvui.dataGet(null, self.wd.id, "_te_focus_on_touchdown", bool) orelse false;
-
-    self.sel_start_r = dvui.dataGet(null, self.wd.id, "_sel_start_r", Rect) orelse .{};
-    self.sel_end_r = dvui.dataGet(null, self.wd.id, "_sel_end_r", Rect) orelse .{};
-
-    self.click_num = dvui.dataGet(null, self.wd.id, "_click_num", u8) orelse 0;
+    var self = TextLayoutWidget{
+        .wd = WidgetData.init(src, .{}, options),
+        .selection_in = init_opts.selection,
+        .break_lines = init_opts.break_lines,
+        .touch_edit_just_focused = init_opts.touch_edit_just_focused,
+    };
+    if (dvui.dataGet(null, self.wd.id, "_touch_editing", bool)) |val| self.touch_editing = val;
+    if (dvui.dataGet(null, self.wd.id, "_te_first", bool)) |val| self.te_first = val;
+    if (dvui.dataGet(null, self.wd.id, "_te_show_draggables", bool)) |val| self.te_show_draggables = val;
+    if (dvui.dataGet(null, self.wd.id, "_te_show_context_menu", bool)) |val| self.te_show_context_menu = val;
+    if (dvui.dataGet(null, self.wd.id, "_te_focus_on_touchdown", bool)) |val| self.te_focus_on_touchdown = val;
+    if (dvui.dataGet(null, self.wd.id, "_sel_start_r", Rect)) |val| self.sel_start_r = val;
+    if (dvui.dataGet(null, self.wd.id, "_sel_end_r", Rect)) |val| self.sel_end_r = val;
+    if (dvui.dataGet(null, self.wd.id, "_click_num", u8)) |val| self.click_num = val;
 
     if (dvui.dataGet(null, self.wd.id, "_scroll_to_cursor", bool) orelse false) {
         dvui.dataRemove(null, self.wd.id, "_scroll_to_cursor");
@@ -735,12 +739,7 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
             if (wlr.count < 0) {
                 // maintain our list of previous starts of words, looking backwards
                 var idx = txt.len -| 1;
-                var last_kind: enum { punc, word } = undefined;
-                if (std.mem.indexOfAnyPos(u8, txt, idx, word_breaks) != null) {
-                    last_kind = .punc;
-                } else {
-                    last_kind = .word;
-                }
+                var last_kind: enum { punc, word } = if (std.mem.indexOfAnyPos(u8, txt, idx, word_breaks) != null) .punc else .word;
 
                 var word_start_count: usize = 0;
 
@@ -1483,20 +1482,14 @@ pub fn rectFor(self: *TextLayoutWidget, id: dvui.WidgetId, min_size: Size, e: Op
     ret.x -= self.wd.options.paddingGet().x;
     ret.y -= self.wd.options.paddingGet().y;
 
-    var i: usize = undefined;
-    if (g.y < 0.5) {
-        if (g.x < 0.5) {
-            i = 0; // upleft
-        } else {
-            i = 1; // upright
-        }
-    } else {
-        if (g.x < 0.5) {
-            i = 2; // downleft
-        } else {
-            i = 3; // downright
-        }
-    }
+    const i: usize = if (g.y < 0.5) if (g.x < 0.5)
+        0 // upleft
+    else
+        1 // upright
+    else if (g.x < 0.5)
+        2 // downleft
+    else
+        3; // downright
 
     self.corners[i] = ret;
     self.corners_last_seen = @intCast(i);

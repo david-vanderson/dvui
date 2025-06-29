@@ -13,8 +13,8 @@ const BoxWidget = dvui.BoxWidget;
 
 const FloatingWindowWidget = @This();
 
+/// Defaults is for the embedded box widget
 pub var defaults: Options = .{
-    .name = "FloatingWindow",
     .corner_radius = Rect.all(5),
     .margin = Rect.all(2),
     .border = Rect.all(1),
@@ -70,36 +70,46 @@ const DragPart = enum {
     }
 };
 
+/// SAFETY: Set by `install`
 prev_rendering: bool = undefined,
-wd: WidgetData = undefined,
-init_options: InitOptions = undefined,
-options: Options = undefined,
+wd: WidgetData,
+init_options: InitOptions,
+/// options is for our embedded BoxWidget
+options: Options,
+/// SAFETY: Set by `install`
 prev_windowInfo: dvui.subwindowCurrentSetReturn = undefined,
+/// SAFETY: Set by `install`
 prev_last_focus: dvui.WidgetId = undefined,
+/// SAFETY: Set by `install`
 layout: BoxWidget = undefined,
-prevClip: Rect.Physical = .{},
+/// SAFETY: Set by `install`
+prevClip: Rect.Physical = undefined,
 auto_pos: bool = false,
 auto_size: bool = false,
 auto_size_refresh_prev_value: ?u8 = null,
 drag_part: ?DragPart = null,
+/// SAFETY: Set by `install`
 drag_area: Rect.Physical = undefined,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingWindowWidget {
-    var self = FloatingWindowWidget{};
+    var self = FloatingWindowWidget{
+        // options is really for our embedded BoxWidget, so save them for the
+        // end of install()
+        .options = defaults.override(opts),
 
-    // options is really for our embedded BoxWidget, so save them for the
-    // end of install()
-    self.options = defaults.override(opts);
+        // the floating window itself doesn't have any styling, it comes from
+        // the embedded BoxWidget
+        .wd = WidgetData.init(src, .{ .subwindow = true }, .{
+            .id_extra = opts.id_extra,
+            // passing options.rect will stop WidgetData.init from calling rectFor
+            // which is important because we are outside normal layout
+            .rect = .{},
+            .name = "FloatingWindow",
+        }),
+        .init_options = init_opts,
+    };
+
     self.options.rect = null; // if the user passes in a rect, don't pass it to the BoxWidget
-
-    // the floating window itself doesn't have any styling, it comes from
-    // the embedded BoxWidget
-    // passing options.rect will stop WidgetData.init from calling rectFor
-    // which is important because we are outside normal layout
-    self.wd = WidgetData.init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{}, .name = self.options.name });
-    self.options.name = null; // so our layout Box isn't named FloatingWindow
-
-    self.init_options = init_opts;
 
     var autopossize = true;
     if (self.init_options.rect) |ior| {
