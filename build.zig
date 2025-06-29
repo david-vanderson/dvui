@@ -14,7 +14,10 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const back_to_build: enums_backend.Backend = b.option(enums_backend.Backend, "backend", "Backend to build").?;
+    var back_to_build: ?enums_backend.Backend = b.option(enums_backend.Backend, "backend", "Backend to build");
+    if (back_to_build == null) {
+        back_to_build = .sdl3;
+    }
 
     const test_step = b.step("test", "Test the dvui codebase");
     const check_step = b.step("check", "Check that the entire dvui codebase has no syntax errors");
@@ -24,6 +27,9 @@ pub fn build(b: *std.Build) !void {
     const test_filters = b.option([]const []const u8, "test-filter", "Skip tests that do not match any filter") orelse &[0][]const u8{};
 
     const generate_doc_images = b.option(bool, "generate-images", "Add this to 'docs' to generate images") orelse false;
+    if (generate_doc_images) {
+        back_to_build = .sdl2;
+    }
 
     const build_options = b.addOptions();
     build_options.addOption(
@@ -68,7 +74,7 @@ pub fn build(b: *std.Build) !void {
         .build_options = build_options,
     };
 
-    switch (back_to_build) {
+    switch (back_to_build.?) {
         .custom => {
             // For export to users who are bringing their own backend.  Use in your build.zig:
             // const dvui_mod = dvui_dep.module("dvui");
