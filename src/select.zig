@@ -24,7 +24,7 @@ pub const MultiSelect = struct {
                 self.shift_held = ke.action == .down or ke.action == .repeat;
             } else if (e.evt == .selection) {
                 const se = e.evt.selection;
-                (@import("std")).debug.print("se = {}\n", .{se});
+                @import("std").debug.print("se = {}\n", .{se});
                 if (dvui.eventMatch(e, .{ .id = wd.id, .r = wd.borderRectScale().r })) {
                     e.handle(@src(), wd);
                     if (!self.shift_held) {

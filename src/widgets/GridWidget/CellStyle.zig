@@ -124,19 +124,22 @@ pub const HoveredRow = struct {
 
     /// Process mouse position events to find the hovered row.
     /// - scroll_info must be the same as pass to the GriwWidget init_option.
-    pub fn processEvents(self: *HoveredRow, grid: *GridWidget, scroll_info: *ScrollInfo) void {
-
+    pub fn processEvents(self: *HoveredRow, grid: *GridWidget) void {
         // Check if a row is being hovered.
         const evts = dvui.events();
         self.highlighted_row = row: {
             for (evts) |*e| {
-                if (dvui.eventMatchSimple(e, grid.data()) and
-                    (e.evt == .mouse and e.evt.mouse.action == .position) and
-                    (grid.row_height > 1))
+                if (e.evt == .mouse and
+                    e.evt.mouse.action == .position)
+                // and
+                //dvui.eventMatchSimple(e, grid.data()))
+                // TODO: Don't understand why this event match doesn't work.
+                // It doesn't really matter as below checks anyway. But is vey strange.
+                // This is one for the debugger, whenever I get that working again.
                 {
                     // Translate mouse screen position to a logical position relative to the top-left of the grid body.
-                    if (grid.pointToBodyRelative(e.evt.mouse.p)) |point| {
-                        break :row @intFromFloat((scroll_info.viewport.y + point.y) / grid.row_height);
+                    if (grid.pointToColRow(e.evt.mouse.p)) |cell| {
+                        break :row cell.row_num;
                     }
                 }
             }
