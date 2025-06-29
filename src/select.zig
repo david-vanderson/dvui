@@ -7,24 +7,22 @@ const WidgetData = dvui.WidgetData;
 /// supports single-click and shift-click selection.
 /// - must persist accross frames
 /// - call processEvents after the "selectables" have been deinit()-ed.
-pub const MultiSelect = struct {
+pub const MultiSelectMouse = struct {
     first_selected_id: ?u64 = null,
     second_selected_id: ?u64 = null,
     should_select: bool = false,
     shift_held: bool = false,
     selection_changed: bool = false,
 
-    pub fn processEvents(self: *MultiSelect, wd: *dvui.WidgetData) void {
+    pub fn processEvents(self: *MultiSelectMouse, wd: *dvui.WidgetData) void {
         self.selection_changed = false;
         for (dvui.events()) |*e| {
             if (e.evt == .key) {
-                if (e.evt != .key and e.evt != .selection) continue;
                 const ke = e.evt.key;
                 if (ke.code != .left_shift and ke.code != .right_shift) continue;
                 self.shift_held = ke.action == .down or ke.action == .repeat;
             } else if (e.evt == .selection) {
                 const se = e.evt.selection;
-                @import("std").debug.print("se = {}\n", .{se});
                 if (dvui.eventMatch(e, .{ .id = wd.id, .r = wd.borderRectScale().r })) {
                     e.handle(@src(), wd);
                     if (!self.shift_held or self.first_selected_id == null) {
@@ -49,18 +47,55 @@ pub const MultiSelect = struct {
         }
     }
 
-    pub fn selectionChanged(self: *MultiSelect) bool {
+    pub fn selectionChanged(self: *MultiSelectMouse) bool {
         return self.selection_changed;
     }
 
     // Returns the lowest id selected.
-    pub fn selectionIdStart(self: *MultiSelect) u64 {
+    pub fn selectionIdStart(self: *MultiSelectMouse) u64 {
         return @min(self.first_selected_id orelse 0, self.second_selected_id orelse self.first_selected_id orelse 0);
     }
 
     // Returns the highest id selected.
-    pub fn selectionIdEnd(self: *MultiSelect) u64 {
+    pub fn selectionIdEnd(self: *MultiSelectMouse) u64 {
         return @max(self.first_selected_id orelse 0, self.second_selected_id orelse self.first_selected_id orelse 0);
+    }
+};
+
+/// Helper for select all support via the "select_all" keyboard binding.
+pub const SelectAllKeyboard = struct {
+    selection_changed: bool = false,
+
+    pub fn processEvents(self: *SelectAllKeyboard, select_all_state: *dvui.GridColumnSelectAllState, wd: *dvui.WidgetData) void {
+        self.selection_changed = false;
+        var is_select_all = false;
+        var is_in_widget: bool = false;
+        for (dvui.events()) |*e| {
+            if (e.evt == .mouse and e.evt.mouse.action == .position) {
+                if (wd.backgroundRectScale().r.contains(e.evt.mouse.p)) {
+                    is_in_widget = true;
+                }
+            }
+            if (e.evt == .key and !e.handled) {
+                const ke = e.evt.key;
+                if (ke.matchBind("select_all") and ke.action != .up) {
+                    e.handle(@src(), wd);
+                    is_select_all = true;
+                }
+            }
+        }
+        if (is_in_widget and is_select_all) {
+            if (select_all_state.* == .select_all) {
+                select_all_state.* = .select_none;
+            } else {
+                select_all_state.* = .select_all;
+            }
+            self.selection_changed = true;
+        }
+    }
+
+    pub fn selectionChanged(self: *const SelectAllKeyboard) bool {
+        return self.selection_changed;
     }
 };
 

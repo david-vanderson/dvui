@@ -164,12 +164,13 @@ fn gui_frame() !void {
             break :blk null;
         };
 
-        var select_all_state: dvui.GridColumnSelectAllState = undefined;
         // Note: The extra "selection_changed" here is because I've chosen to unselect anything that was filtered.
         // If we were just doing selection it just needs multi_select.selectionChanged();
-        const selection_changed = filtering_changed or multi_select.selectionChanged();
+        if (filtering_changed or multi_select.selectionChanged()) {
+            select_all_state = .select_none;
+        }
         if (selection_mode == .multi_select) {
-            if (dvui.gridHeadingCheckbox(@src(), grid, 0, &select_all_state, selection_changed, .{})) {
+            if (dvui.gridHeadingCheckbox(@src(), grid, 0, &select_all_state, .{})) {
                 switch (mode) {
                     .raw => selectAllRaw(select_all_state),
                     .cached => selectAllCache(select_all_state),
@@ -186,11 +187,22 @@ fn gui_frame() !void {
             highlight_style.processEvents(grid);
         const was_filtering = filtering;
 
+        if (selection_mode == .multi_select) {
+            kb_select.processEvents(&select_all_state, grid.data());
+            if (kb_select.selectionChanged()) {
+                switch (mode) {
+                    .raw => selectAllRaw(select_all_state),
+                    .cached => selectAllCache(select_all_state),
+                }
+            }
+        }
+
         switch (mode) {
             .raw => directoryDisplay(grid, row_clicked) catch return,
             .cached => directoryDisplayCached(grid, row_clicked),
         }
         filtering_changed = (was_filtering != filtering);
+
         if (selection_mode == .multi_select) {
             multi_select.processEvents(grid.data());
             if (multi_select.selectionChanged()) {
@@ -220,11 +232,13 @@ fn gui_frame() !void {
         }
     }
 }
-var multi_select: dvui.select.MultiSelect = .{};
+var multi_select: dvui.select.MultiSelectMouse = .{};
+var kb_select: dvui.select.SelectAllKeyboard = .{};
 var single_select: dvui.select.SingleSelect = .{};
 var filename_filter: []u8 = "";
 var filtering: bool = false;
 var filtering_changed = false;
+var select_all_state: dvui.GridColumnSelectAllState = .select_none;
 
 var selections: std.DynamicBitSetUnmanaged = undefined;
 // Optional: windows os only
@@ -321,7 +335,6 @@ pub fn selectAllRaw(state: dvui.GridColumnSelectAllState) void {
     switch (state) {
         .select_all => selections.setAll(), // TODO: This needs to set based off a filter.
         .select_none => selections.unsetAll(), // TODO: This needs to set/unset based off a filter.
-        .unchanged => {},
     }
 }
 
@@ -351,7 +364,6 @@ pub fn selectAllCache(state: dvui.GridColumnSelectAllState) void {
         switch (state) {
             .select_all => entry.selected = true,
             .select_none => entry.selected = false,
-            .unchanged => {},
         }
     }
 }

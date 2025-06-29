@@ -4832,7 +4832,6 @@ pub fn gridColumnFromSlice(
 pub const GridColumnSelectAllState = enum {
     select_all,
     select_none,
-    unchanged,
 };
 
 /// A grid heading with a checkbox for select-all and select-none
@@ -4844,7 +4843,6 @@ pub fn gridHeadingCheckbox(
     g: *GridWidget,
     col_num: usize,
     selection: *GridColumnSelectAllState,
-    selection_changed: bool,
     cell_style: anytype, // GridWidget.CellStyle
 ) bool {
     const header_defaults: Options = .{
@@ -4868,22 +4866,17 @@ pub fn gridHeadingCheckbox(
     defer cell.deinit();
 
     var clicked = false;
-    var selected = false;
+    var selected = selection.* == .select_all;
     {
         _ = dvui.separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
 
         var hbox = dvui.box(@src(), .horizontal, header_options);
         defer hbox.deinit();
 
-        selected = !selection_changed and dvui.dataGet(null, cell.data().id, "selected", bool) orelse false;
         clicked = dvui.checkbox(@src(), &selected, null, checkbox_opts);
-        dvui.dataSet(null, cell.data().id, "selected", selected);
     }
-
     if (clicked) {
         selection.* = if (selected) .select_all else .select_none;
-    } else {
-        selection.* = .unchanged;
     }
     return clicked;
 }
