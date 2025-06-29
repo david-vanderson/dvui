@@ -70,6 +70,7 @@ var animating_window_show: bool = false;
 var animating_window_closing: bool = false;
 var animating_window_rect = Rect{ .x = 100, .y = 100, .w = 300, .h = 200 };
 var paned_collapsed_width: f32 = 400;
+var tree_removed_path: ?[]const u8 = null;
 
 var progress_mutex = std.Thread.Mutex{};
 var progress_val: f32 = 0.0;
@@ -2393,12 +2394,23 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
                 });
                 defer branch.deinit();
 
-                if (branch.removed()) {
-                    std.log.debug("Removed: {s} from {s}", .{ abs_path, directory });
+                if (branch.floating()) {
+                    tree_removed_path = alloc.dupe(u8, abs_path) catch null;
                 }
 
                 if (branch.insertBefore()) {
-                    std.log.debug("Inserted: {s} into {s}", .{ abs_path, directory });
+                    if (tree_removed_path) |removed_path| {
+                        defer alloc.free(removed_path);
+
+                        const old_sub_path = std.fs.path.basename(removed_path);
+
+                        const new_path = try std.fs.path.joinZ(alloc, &.{ directory, old_sub_path });
+                        defer alloc.free(new_path);
+
+                        try std.fs.renameAbsolute(removed_path, new_path);
+
+                        std.log.debug("DVUI/TreeWidget: Moved {s} to {s}", .{ removed_path, new_path });
+                    }
                 }
 
                 switch (entry.kind) {
