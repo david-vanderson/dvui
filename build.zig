@@ -115,7 +115,7 @@ pub fn build(b: *std.Build) !void {
             }
 
             linkBackend(dvui_testing, testing_mod);
-            addExample("testing-app", b.path("examples/app.zig"), dvui_testing, test_dvui_and_app, dvui_opts);
+            addExample("app", b.path("examples/app.zig"), dvui_testing, test_dvui_and_app, dvui_opts);
         },
         .sdl2 => {
             const test_dvui_and_app = back_to_build == .sdl2;
@@ -167,9 +167,9 @@ pub fn build(b: *std.Build) !void {
             }
 
             linkBackend(dvui_sdl, sdl_mod);
-            addExample("sdl2-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, true, dvui_opts);
-            addExample("sdl2-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, true, dvui_opts);
-            addExample("sdl2-app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
+            addExample("standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, true, dvui_opts);
+            addExample("ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, true, dvui_opts);
+            addExample("app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
         },
         .sdl3 => {
             // if we are building all the backends, here's where we do dvui tests
@@ -207,9 +207,9 @@ pub fn build(b: *std.Build) !void {
             }
 
             linkBackend(dvui_sdl, sdl_mod);
-            addExample("sdl3-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, true, dvui_opts);
-            addExample("sdl3-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, true, dvui_opts);
-            addExample("sdl3-app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
+            addExample("standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, true, dvui_opts);
+            addExample("ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, true, dvui_opts);
+            addExample("app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
         },
         .raylib => {
             const test_dvui_and_app = back_to_build == .raylib;
@@ -282,9 +282,9 @@ pub fn build(b: *std.Build) !void {
             }
 
             linkBackend(dvui_raylib, raylib_mod);
-            addExample("raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib, true, dvui_opts_raylib);
-            addExample("raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib, true, dvui_opts_raylib);
-            addExample("raylib-app", b.path("examples/app.zig"), dvui_raylib, test_dvui_and_app, dvui_opts_raylib);
+            addExample("standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib, true, dvui_opts_raylib);
+            addExample("ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib, true, dvui_opts_raylib);
+            addExample("app", b.path("examples/app.zig"), dvui_raylib, test_dvui_and_app, dvui_opts_raylib);
         },
         .dx11 => {
             const test_dvui_and_app = back_to_build == .dx11;
@@ -310,9 +310,9 @@ pub fn build(b: *std.Build) !void {
                 }
 
                 linkBackend(dvui_dx11, dx11_mod);
-                addExample("dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11, true, dvui_opts);
-                addExample("dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11, true, dvui_opts);
-                addExample("dx11-app", b.path("examples/app.zig"), dvui_dx11, test_dvui_and_app, dvui_opts);
+                addExample("standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11, true, dvui_opts);
+                addExample("ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11, true, dvui_opts);
+                addExample("app", b.path("examples/app.zig"), dvui_dx11, test_dvui_and_app, dvui_opts);
             }
         },
         .web => {
