@@ -15,6 +15,31 @@ const enums = dvui.enums;
 
 const MenuWidget = @This();
 
+/// This allows for other widgets to register as the root
+/// of some widget chain to be notified when, for example,
+/// the menu chain closes.
+///
+/// This is used by `dvui.ContextWidget`
+pub const Root = struct {
+    ptr: *anyopaque,
+    close: *const fn (ptr: *anyopaque, reason: CloseReason) void,
+
+    var current: ?Root = null;
+
+    pub fn set(root: ?Root) ?Root {
+        defer Root.current = root;
+        return Root.current;
+    }
+};
+
+pub const CloseReason = enum {
+    /// The user pressed some button that causes the menu to close
+    intentional,
+    /// The menu lost focus or similar and should close, but the
+    /// user didn't explicitly close the menu themselves.
+    unintentional,
+};
+
 var menu_current: ?*MenuWidget = null;
 
 pub fn current() ?*MenuWidget {
@@ -60,9 +85,6 @@ child_popup_rect: ?Rect.Physical = null,
 // entry that happens to be under the mouse
 mouse_mode: bool = false,
 
-/// If the menu or a submenu caused this menu to be closed this frame.
-closed_this_frame: bool = false,
-
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) MenuWidget {
     var self = MenuWidget{};
     const options = defaults.override(opts);
@@ -103,20 +125,24 @@ pub fn install(self: *MenuWidget) void {
 
 pub fn close(self: *MenuWidget) void {
     dvui.refresh(null, @src(), self.wd.id);
-    self.close_chain(true);
+    self.close_chain(.intentional);
 }
 
-pub fn close_chain(self: *MenuWidget, intentional: bool) void {
+pub fn close_chain(self: *MenuWidget, reason: CloseReason) void {
     self.submenus_activated = false;
-    self.closed_this_frame = true;
     // close all submenus in the chain
     if (self.parentMenu) |pm| {
-        pm.close_chain(intentional);
-    } else if (intentional) {
-        // when a popup is closed because the user chose to, the
-        // window that spawned it (which had focus previously)
-        // should become focused again
-        dvui.focusSubwindow(self.parentSubwindowId, null);
+        pm.close_chain(reason);
+    } else {
+        if (Root.current) |root| {
+            root.close(root.ptr, reason);
+        }
+        if (reason == .intentional) {
+            // when a popup is closed because the user chose to, the
+            // window that spawned it (which had focus previously)
+            // should become focused again
+            dvui.focusSubwindow(self.parentSubwindowId, null);
+        }
     }
 }
 

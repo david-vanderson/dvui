@@ -163,10 +163,6 @@ pub fn close(self: *FloatingMenuWidget) void {
     self.menu.close();
 }
 
-pub fn closed_this_frame(self: *FloatingMenuWidget) bool {
-    return self.menu.closed_this_frame;
-}
-
 pub fn widget(self: *FloatingMenuWidget) Widget {
     return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
@@ -259,7 +255,7 @@ pub fn deinit(self: *FloatingMenuWidget) void {
 
         // only the last popup can do the check, you can't query the focus
         // status of children, only parents
-        self.menu.close_chain(false);
+        self.menu.close_chain(.unintentional);
         dvui.refresh(null, @src(), self.wd.id);
     }
 
