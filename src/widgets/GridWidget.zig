@@ -483,7 +483,7 @@ pub fn pointToBodyRelative(self: *GridWidget, point: Point.Physical) ?Point {
 
 /// Convert a screen physical coord into a grid cell position.
 /// Not valid when using variable row heights.
-pub fn pointToRowCol(self: *GridWidget, point: Point.Physical) ?struct { col_num: usize, row_num: usize } {
+pub fn pointToColRow(self: *GridWidget, point: Point.Physical) ?struct { col_num: usize, row_num: usize } {
     if (self.init_opts.var_row_heights) return null;
     if (self.resizing or self.init_opts.resize_cols) return null;
 
@@ -492,7 +492,7 @@ pub fn pointToRowCol(self: *GridWidget, point: Point.Physical) ?struct { col_num
         if (self.row_height < 1) {
             return null;
         }
-        const row_num: usize = @intFromFloat(@trunc(point_rel.y / self.row_height));
+        const row_num: usize = @intFromFloat(@trunc((self.frame_viewport.y + point_rel.y) / self.row_height));
         const col_num = blk: {
             var total_w: f32 = 0;
             for (self.col_widths, 0..) |w, col| {

@@ -156,7 +156,7 @@ fn gui_frame() !void {
                 if (e.evt != .mouse) continue;
                 const me = e.evt.mouse;
                 if (me.action != .press) continue;
-                if (grid.pointToRowCol(me.p)) |cell| {
+                if (grid.pointToColRow(me.p)) |cell| {
                     if (cell.col_num > 0) break :blk cell.row_num;
                 }
             }
@@ -255,7 +255,6 @@ pub fn directoryDisplay(grid: *dvui.GridWidget, row_selected: ?usize) !void {
             var is_set = if (dir_num < selections.capacity()) selections.isSet(dir_num) else false;
             _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .gravity_x = 0.5 });
             if (row_num == row_selected) {
-                std.debug.print("{} {?} {} \n", .{ row_num, row_selected, is_set });
                 dvui.currentWindow().addSelectionEvent(dir_num, !is_set, cell.data().borderRectScale().r);
             }
         }
@@ -374,15 +373,9 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget, selected_row: ?usize) void
             defer cell.deinit();
             var is_set = dir_cache.items[dir_num].selected;
             if (!dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .gravity_x = 0.5 })) {
-                if (row_num == 1)
-                    std.debug.print("false\n", .{});
                 if (selected_row == dir_num) {
-                    std.debug.print("adding sel event\n", .{});
                     dvui.currentWindow().addSelectionEvent(dir_num, !is_set, cell.data().borderRectScale().r);
                 }
-            } else {
-                if (row_num == 1)
-                    std.debug.print("true\n", .{});
             }
         }
         {
