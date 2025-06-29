@@ -164,8 +164,11 @@ fn gui_frame() !void {
             break :blk null;
         };
 
-        // Note: The extra "selection_changed" here is because I've chosen to unselect anything that was filtered.
+        // Note: The extra check here is because I've chosen to unselect anything that was filtered.
         // If we were just doing selection it just needs multi_select.selectionChanged();
+        // OR user might prefer to check if everything in the current filter is selected and
+        // set the select_all state based on that. So this gives quite a bit more flexibility
+        // than previous.
         if (filtering_changed or multi_select.selectionChanged()) {
             select_all_state = .select_none;
         }
