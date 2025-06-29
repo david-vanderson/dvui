@@ -80,10 +80,9 @@ pub const SelectAllKeyboard = struct {
                 if (wd.backgroundRectScale().r.contains(e.evt.mouse.p)) {
                     is_in_widget = true;
                 }
-            }
-            if (e.evt == .key and !e.handled) {
+            } else if (e.evt == .key and !e.handled) {
                 const ke = e.evt.key;
-                if (ke.matchBind("select_all") and ke.action != .up) {
+                if (ke.matchBind("select_all") and ke.action == .down) {
                     e.handle(@src(), wd);
                     is_select_all = true;
                 }
@@ -95,6 +94,8 @@ pub const SelectAllKeyboard = struct {
             } else {
                 select_all_state.* = .select_all;
             }
+            // Show the results of the selection change.
+            dvui.refresh(null, @src(), null);
             self.selection_changed = true;
         }
     }
