@@ -481,9 +481,12 @@ pub fn pointToBodyRelative(self: *GridWidget, point: Point.Physical) ?Point {
     return null;
 }
 
-/// Returns the cell corresponding to point.
-/// Not valid when using var_row_height.
+/// Convert a screen physical coord into a grid cell position.
+/// Not valid when using variable row heights.
 pub fn pointToRowCol(self: *GridWidget, point: Point.Physical) ?struct { col_num: usize, row_num: usize } {
+    if (self.init_opts.var_row_heights) return null;
+    if (self.resizing or self.init_opts.resize_cols) return null;
+
     const p = self.pointToBodyRelative(point);
     if (p) |point_rel| {
         if (self.row_height < 1) {

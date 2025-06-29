@@ -156,9 +156,6 @@ fn gui_frame() !void {
                 if (e.evt != .mouse) continue;
                 const me = e.evt.mouse;
                 if (me.action != .press) continue;
-
-                // TODO: Also needs to check vs content width. Maybe body relative can deal with that?
-                // Can this return row / col?
                 if (grid.pointToRowCol(me.p)) |cell| {
                     if (cell.col_num > 0) break :blk cell.row_num;
                 }
