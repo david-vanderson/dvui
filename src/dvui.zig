@@ -193,7 +193,6 @@ pub fn widgetAlloc(comptime T: type) *T {
         return cw.arena().create(T) catch @panic("OOM");
     };
     // std.debug.print("PUSH {*} ({d}) {x}\n", .{ ptr, @alignOf(@TypeOf(ptr)), cw._widget_stack.end_index });
-    cw.peak_widget_stack = @max(cw.peak_widget_stack, cw._widget_stack.end_index);
     return ptr;
 }
 
@@ -205,23 +204,11 @@ pub fn widgetAlloc(comptime T: type) *T {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetFree(ptr: anytype) void {
     const ws = &currentWindow()._widget_stack;
-    if (!ws.ownsSlice(std.mem.asBytes(ptr))) return;
-
-    comptime std.debug.assert(@alignOf(@TypeOf(ptr)) <= 8);
-    const size = @sizeOf(std.meta.Child(@TypeOf(ptr)));
-    const ptr_end_with_alignment = std.mem.alignForwardLog2(@intFromPtr(ptr) + size, 8);
-
-    // If we are more than 8 bytes away, we where not the final allocation
-    // This account for alignment of items above in the stack
-    if (ptr_end_with_alignment < @intFromPtr(ws.buffer.ptr) + ws.end_index) {
-        // log.debug("{*} was not at the top of the stack! Did you forget to call deinit or widgetFree somewhere?", .{ptr});
-        return;
-    }
-
-    // Set the end_index directly as `destroy` wouldn't account for alignment of other allcations
-    ws.end_index = @intFromPtr(ptr) - @intFromPtr(ws.buffer.ptr);
-
-    // std.debug.print("POP {x} {*}\n", .{ ws.end_index, ptr });
+    // NOTE: We cannot use `allocatorLIFO` because of widgets that
+    //       store other widgets in their fields, which would cause
+    //       errors when attempting to free as they are not on the
+    //       top of the stack
+    ws.allocator().destroy(ptr);
 }
 
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {
