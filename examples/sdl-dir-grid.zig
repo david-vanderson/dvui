@@ -94,6 +94,7 @@ pub fn main() !void {
 var mode: enum { raw, cached } = .raw;
 var selection_mode: enum { multi_select, single_select } = .multi_select;
 var row_select: bool = false;
+var highlight_style: CellStyle.HoveredRow = .{ .cell_opts = .{ .color_fill_hover = .fill_hover, .background = true } };
 
 // both dvui and SDL drawing
 fn gui_frame() !void {
@@ -180,7 +181,11 @@ fn gui_frame() !void {
         dvui.gridHeading(@src(), grid, 3, "Size", .fixed, .{});
         dvui.gridHeading(@src(), grid, 4, "Mode", .fixed, .{});
         dvui.gridHeading(@src(), grid, 5, "MTime", .fixed, .{});
+
+        if (row_select)
+            highlight_style.processEvents(grid);
         const was_filtering = filtering;
+
         switch (mode) {
             .raw => directoryDisplay(grid, row_clicked) catch return,
             .cached => directoryDisplayCached(grid, row_clicked),
@@ -249,8 +254,10 @@ pub fn directoryDisplay(grid: *dvui.GridWidget, row_selected: ?usize) !void {
             }
         }
         defer row_num += 1;
+        var col_num: usize = 0;
         {
-            var cell = grid.bodyCell(@src(), 0, row_num, .{});
+            defer col_num += 1;
+            var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
             defer cell.deinit();
             var is_set = if (dir_num < selections.capacity()) selections.isSet(dir_num) else false;
             _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .gravity_x = 0.5 });
@@ -259,12 +266,19 @@ pub fn directoryDisplay(grid: *dvui.GridWidget, row_selected: ?usize) !void {
             }
         }
         {
-            var cell = grid.bodyCell(@src(), 1, row_num, .{ .size = .{ .w = 300 } });
+            defer col_num += 1;
+            var cell = grid.bodyCell(
+                @src(),
+                col_num,
+                row_num,
+                highlight_style.cellOptions(col_num, row_num).override(.{ .size = .{ .w = 300 } }),
+            );
             defer cell.deinit();
             dvui.labelNoFmt(@src(), entry.name, .{}, .{});
         }
         {
-            var cell = grid.bodyCell(@src(), 2, row_num, .{});
+            defer col_num += 1;
+            var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
             defer cell.deinit();
             dvui.labelNoFmt(@src(), @tagName(entry.kind), .{}, .{});
         }
@@ -274,17 +288,20 @@ pub fn directoryDisplay(grid: *dvui.GridWidget, row_selected: ?usize) !void {
                 continue;
             };
             {
-                var cell = grid.bodyCell(@src(), 3, row_num, .{});
+                defer col_num += 1;
+                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{d}", .{stats.size}, .{});
             }
             {
-                var cell = grid.bodyCell(@src(), 4, row_num, .{});
+                defer col_num += 1;
+                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{d}", .{stats.mode}, .{});
             }
             {
-                var cell = grid.bodyCell(@src(), 5, row_num, .{});
+                defer col_num += 1;
+                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{[year]:0>4}-{[month]:0>2}-{[day]:0>2} {[hour]:0>2}:{[minute]:0>2}:{[second]:0>2}", fromNsTimestamp(stats.mtime), .{});
             }
@@ -336,7 +353,7 @@ pub fn selectAllCache(state: dvui.GridColumnSelectAllState) void {
 // TODO: Allocate the filenames from an area that can be reset when the
 // cache is invalidated.
 // Invalidate cache on exit.
-pub fn directoryDisplayCached(grid: *dvui.GridWidget, selected_row: ?usize) void {
+pub fn directoryDisplayCached(grid: *dvui.GridWidget, row_selected: ?usize) void {
     if (!cache_valid) {
         var dir = directoryOpen() catch return;
         defer dir.close();
@@ -357,8 +374,10 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget, selected_row: ?usize) void
         cache_valid = true;
     }
     filtering = false;
+
     var row_num: usize = 0;
     for (dir_cache.items, 0..) |*entry, dir_num| {
+        var col_num: usize = 0;
         if (filename_filter.len > 0) {
             if (std.mem.indexOf(u8, entry.name, filename_filter)) |_| {} else {
                 // Clear selection of anything filtered. Not all apps would want to do this.
@@ -369,38 +388,44 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget, selected_row: ?usize) void
         }
         defer row_num += 1;
         {
-            var cell = grid.bodyCell(@src(), 0, row_num, .{});
+            defer col_num += 1;
+            var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
             defer cell.deinit();
             var is_set = dir_cache.items[dir_num].selected;
             if (!dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .gravity_x = 0.5 })) {
-                if (selected_row == dir_num) {
+                if (row_selected == dir_num) {
                     dvui.currentWindow().addSelectionEvent(dir_num, !is_set, cell.data().borderRectScale().r);
                 }
             }
         }
         {
-            var cell = grid.bodyCell(@src(), 1, row_num, .{});
+            defer col_num += 1;
+            var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
             defer cell.deinit();
             dvui.labelNoFmt(@src(), entry.name, .{}, .{});
         }
         {
-            var cell = grid.bodyCell(@src(), 2, row_num, .{});
+            defer col_num += 1;
+            var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
             defer cell.deinit();
             dvui.labelNoFmt(@src(), @tagName(entry.kind), .{}, .{});
         }
         if (entry.kind == .file) {
             {
-                var cell = grid.bodyCell(@src(), 3, row_num, .{});
+                defer col_num += 1;
+                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{d}", .{entry.size}, .{});
             }
             {
-                var cell = grid.bodyCell(@src(), 4, row_num, .{});
+                defer col_num += 1;
+                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{d}", .{entry.mode}, .{});
             }
             {
-                var cell = grid.bodyCell(@src(), 5, row_num, .{});
+                defer col_num += 1;
+                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{[year]:0>4}-{[month]:0>2}-{[day]:0>2} {[hour]:0>2}:{[minute]:0>2}:{[second]:0>2}", fromNsTimestamp(entry.mtime), .{});
             }
