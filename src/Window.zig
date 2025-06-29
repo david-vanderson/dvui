@@ -169,9 +169,6 @@ const SavedData = struct {
 pub const InitOptions = struct {
     id_extra: usize = 0,
     arena: ?dvui.ShrinkingArenaAllocator = null,
-    /// For reference, the `dvui.Examples.demo` window uses
-    /// about 0x5000 stack space at its peak
-    default_widget_stack_capacity: usize = 0x10000,
     theme: ?*Theme = null,
     keybinds: ?enum {
         none,
