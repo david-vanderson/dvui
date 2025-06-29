@@ -238,7 +238,7 @@ var single_select: dvui.select.SingleSelect = .{};
 var filename_filter: []u8 = "";
 var filtering: bool = false;
 var filtering_changed = false;
-var select_all_state: dvui.GridColumnSelectAllState = .select_none;
+var select_all_state: dvui.select.SelectAllState = .select_none;
 
 var selections: std.DynamicBitSetUnmanaged = undefined;
 // Optional: windows os only
@@ -331,7 +331,7 @@ pub fn directoryDisplay(grid: *dvui.GridWidget, row_selected: ?usize) !void {
         try selections.resize(gpa, dir_num, false);
 }
 
-pub fn selectAllRaw(state: dvui.GridColumnSelectAllState) void {
+pub fn selectAllRaw(state: dvui.select.SelectAllState) void {
     switch (state) {
         .select_all => selections.setAll(), // TODO: This needs to set based off a filter.
         .select_none => selections.unsetAll(), // TODO: This needs to set/unset based off a filter.
@@ -359,7 +359,7 @@ const no_stat: std.fs.Dir.Stat = .{
 var dir_cache: std.ArrayListUnmanaged(CacheEntry) = .empty;
 var cache_valid = false;
 
-pub fn selectAllCache(state: dvui.GridColumnSelectAllState) void {
+pub fn selectAllCache(state: dvui.select.SelectAllState) void {
     for (dir_cache.items) |*entry| {
         switch (state) {
             .select_all => entry.selected = true,

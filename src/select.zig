@@ -3,6 +3,11 @@
 const dvui = @import("dvui.zig");
 const WidgetData = dvui.WidgetData;
 
+pub const SelectAllState = enum {
+    select_all,
+    select_none,
+};
+
 /// Manage multi-selection.
 /// supports single-click and shift-click selection.
 /// - must persist accross frames
@@ -66,7 +71,7 @@ pub const MultiSelectMouse = struct {
 pub const SelectAllKeyboard = struct {
     selection_changed: bool = false,
 
-    pub fn processEvents(self: *SelectAllKeyboard, select_all_state: *dvui.GridColumnSelectAllState, wd: *dvui.WidgetData) void {
+    pub fn processEvents(self: *SelectAllKeyboard, select_all_state: *dvui.select.SelectAllState, wd: *dvui.WidgetData) void {
         self.selection_changed = false;
         var is_select_all = false;
         var is_in_widget: bool = false;

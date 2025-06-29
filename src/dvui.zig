@@ -4829,11 +4829,6 @@ pub fn gridColumnFromSlice(
     }
 }
 
-pub const GridColumnSelectAllState = enum {
-    select_all,
-    select_none,
-};
-
 /// A grid heading with a checkbox for select-all and select-none
 ///
 /// Returns true if the selection state has changed.
@@ -4842,7 +4837,7 @@ pub fn gridHeadingCheckbox(
     src: std.builtin.SourceLocation,
     g: *GridWidget,
     col_num: usize,
-    selection: *GridColumnSelectAllState,
+    selection: *select.SelectAllState,
     cell_style: anytype, // GridWidget.CellStyle
 ) bool {
     const header_defaults: Options = .{
