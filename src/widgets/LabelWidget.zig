@@ -23,7 +23,7 @@ pub const InitOptions = struct {
     }
 };
 
-wd: WidgetData = undefined,
+wd: WidgetData,
 label_str: []const u8,
 /// An allocator to free `label_str` on `deinit`
 allocator: ?std.mem.Allocator,

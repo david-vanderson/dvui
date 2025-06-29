@@ -24,8 +24,8 @@ pub const Kind = enum {
     horizontal,
 };
 
-wd: WidgetData = undefined,
-init_opts: InitOptions = undefined,
+wd: WidgetData,
+init_opts: InitOptions,
 val: ?f32 = null,
 
 prev_alpha: f32 = 1.0,

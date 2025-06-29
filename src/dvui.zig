@@ -304,10 +304,10 @@ pub fn tagGet(name: []const u8) ?TagData {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub const Alignment = struct {
-    id: WidgetId = undefined,
-    scale: f32 = undefined,
-    max: ?f32 = undefined,
-    next: f32 = undefined,
+    id: WidgetId,
+    scale: f32,
+    max: ?f32,
+    next: f32,
 
     pub fn init() Alignment {
         const wd = dvui.parentGet().data();
@@ -1687,7 +1687,6 @@ pub const Path = struct {
                     .y = bb.y - norm.y * inside_len,
                 },
                 .col = col,
-                .uv = undefined,
             });
 
             const idx_ai = if (opts.blur > 0) ai * 2 else ai;
@@ -1724,7 +1723,6 @@ pub const Path = struct {
                         .y = bb.y + norm.y * outside_len,
                     },
                     .col = .transparent,
-                    .uv = undefined,
                 });
 
                 // indexes for aa fade from inner to outer
@@ -1737,7 +1735,10 @@ pub const Path = struct {
         }
 
         if (opts.center) |center| {
-            builder.appendVertex(.{ .pos = center, .col = col, .uv = undefined });
+            builder.appendVertex(.{
+                .pos = center,
+                .col = col,
+            });
         }
 
         return builder.build();
@@ -1885,7 +1886,6 @@ pub const Path = struct {
                             .y = bb.y - halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
                         },
                         .col = .transparent,
-                        .uv = undefined,
                     });
 
                     builder.appendVertex(.{
@@ -1894,7 +1894,6 @@ pub const Path = struct {
                             .y = bb.y + halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
                         },
                         .col = .transparent,
-                        .uv = undefined,
                     });
 
                     // add indexes for endcap fringe
@@ -1943,7 +1942,6 @@ pub const Path = struct {
                     .y = bb.y - halfnorm.y * opts.thickness,
                 },
                 .col = col,
-                .uv = undefined,
             });
 
             // side 1 AA vertex
@@ -1953,7 +1951,6 @@ pub const Path = struct {
                     .y = bb.y - halfnorm.y * (opts.thickness + aa_size),
                 },
                 .col = .transparent,
-                .uv = undefined,
             });
 
             // side 2 inner vertex
@@ -1963,7 +1960,6 @@ pub const Path = struct {
                     .y = bb.y + halfnorm.y * opts.thickness,
                 },
                 .col = col,
-                .uv = undefined,
             });
 
             // side 2 AA vertex
@@ -1973,7 +1969,6 @@ pub const Path = struct {
                     .y = bb.y + halfnorm.y * (opts.thickness + aa_size),
                 },
                 .col = .transparent,
-                .uv = undefined,
             });
 
             // triangles must be counter-clockwise (y going down) to avoid backface culling
@@ -1999,7 +1994,6 @@ pub const Path = struct {
                         .y = bb.y - halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
                     },
                     .col = .transparent,
-                    .uv = undefined,
                 });
                 builder.appendVertex(.{
                     .pos = .{
@@ -2007,7 +2001,6 @@ pub const Path = struct {
                         .y = bb.y + halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
                     },
                     .col = .transparent,
-                    .uv = undefined,
                 });
 
                 builder.appendTriangles(&.{
@@ -5743,14 +5736,12 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         .vertical => Rect{ .y = (br.h - knobsize) * (1 - perc), .w = knobsize, .h = knobsize },
     };
 
-    var fill_color: Color = undefined;
-    if (captured(b.data().id)) {
-        fill_color = options.color(.fill_press);
-    } else if (hovered) {
-        fill_color = options.color(.fill_hover);
-    } else {
-        fill_color = options.color(.fill);
-    }
+    const fill_color: Color = if (captured(b.data().id))
+        options.color(.fill_press)
+    else if (hovered)
+        options.color(.fill_hover)
+    else
+        options.color(.fill);
     var knob = BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = .{ .color = fill_color } });
     knob.install();
     knob.drawBackground();
@@ -7105,8 +7096,8 @@ pub fn renderImage(name: []const u8, bytes: ImageInitOptions.ImageBytes, rs: Rec
 /// Captures dvui drawing to part of the screen in a `Texture`.
 pub const Picture = struct {
     r: Rect.Physical, // pixels captured
-    texture: dvui.TextureTarget = undefined,
-    target: dvui.RenderTarget = undefined,
+    texture: dvui.TextureTarget,
+    target: dvui.RenderTarget,
 
     /// Begin recording drawing to the physical pixels in rect (enlarged to pixel boundaries).
     ///
@@ -7118,23 +7109,27 @@ pub const Picture = struct {
             log.err("Picture.start() was called with an empty rect", .{});
             return null;
         }
-        var ret: Picture = .{ .r = rect };
 
+        var r = rect;
         // enlarge texture to pixels boundaries
-        const x_start = @floor(ret.r.x);
-        const x_end = @ceil(ret.r.x + ret.r.w);
-        ret.r.x = x_start;
-        ret.r.w = @round(x_end - x_start);
+        const x_start = @floor(r.x);
+        const x_end = @ceil(r.x + r.w);
+        r.x = x_start;
+        r.w = @round(x_end - x_start);
 
-        const y_start = @floor(ret.r.y);
-        const y_end = @ceil(ret.r.y + ret.r.h);
-        ret.r.y = y_start;
-        ret.r.h = @round(y_end - y_start);
+        const y_start = @floor(r.y);
+        const y_end = @ceil(r.y + r.h);
+        r.y = y_start;
+        r.h = @round(y_end - y_start);
 
-        ret.texture = dvui.textureCreateTarget(@intFromFloat(ret.r.w), @intFromFloat(ret.r.h), .linear) catch return null;
-        ret.target = dvui.renderTarget(.{ .texture = ret.texture, .offset = ret.r.topLeft() });
+        const texture = dvui.textureCreateTarget(@intFromFloat(r.w), @intFromFloat(r.h), .linear) catch return null;
+        const target = dvui.renderTarget(.{ .texture = texture, .offset = r.topLeft() });
 
-        return ret;
+        return .{
+            .r = r,
+            .texture = texture,
+            .target = target,
+        };
     }
 
     /// Stop recording.

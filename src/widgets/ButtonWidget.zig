@@ -26,17 +26,17 @@ pub const InitOptions = struct {
     draw_focus: bool = true,
 };
 
-wd: WidgetData = undefined,
-init_options: InitOptions = undefined,
+wd: WidgetData,
+init_options: InitOptions,
 hover: bool = false,
 focus: bool = false,
 click: bool = false,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ButtonWidget {
-    var self = ButtonWidget{};
-    self.init_options = init_opts;
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-    return self;
+pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) ButtonWidget {
+    return .{
+        .wd = .init(src, .{}, defaults.override(opts)),
+        .init_options = init_options,
+    };
 }
 
 pub fn install(self: *ButtonWidget) void {

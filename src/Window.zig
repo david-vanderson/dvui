@@ -74,6 +74,7 @@ secs_since_last_frame: f32 = 0,
 extra_frames_needed: u8 = 0,
 clipRect: dvui.Rect.Physical = .{},
 
+// SAFETY: Is set by `init` after the theme map has been created
 theme: Theme = undefined,
 
 min_sizes: dvui.TrackingAutoHashMap(WidgetId, Size, .put_only) = .empty,
@@ -97,7 +98,7 @@ themes: std.StringArrayHashMap(Theme),
 cursor_requested: ?dvui.enums.Cursor = null,
 cursor_dragging: ?dvui.enums.Cursor = null,
 
-wd: WidgetData = undefined,
+wd: WidgetData,
 rect_pixels: dvui.Rect.Physical = .{},
 natural_scale: f32 = 1.0,
 /// can set separately but gets folded into natural_scale
@@ -196,7 +197,18 @@ pub fn init(
         .dialogs = .init(gpa),
         .toasts = .init(gpa),
         .keybinds = .init(gpa),
-        .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
+        .wd = WidgetData{
+            .src = src,
+            .id = hashval,
+            .init_options = .{ .subwindow = true },
+            .options = .{ .name = "Window" },
+            // Unused
+            .min_size = undefined,
+            // Set in `begin`
+            .rect = undefined,
+            // Set in `begin`
+            .parent = undefined,
+        },
         .backend = backend_ctx,
         .font_bytes = try dvui.Font.initTTFBytesDatabase(gpa),
         .themes = .init(gpa),
@@ -1268,15 +1280,13 @@ pub fn dataSetAdvanced(self: *Self, id: WidgetId, key: []const u8, data_in: anyt
 
     const dt = @typeInfo(@TypeOf(data_in));
     const dt_type_str = @typeName(@TypeOf(data_in));
-    var bytes: []const u8 = undefined;
-    if (copy_slice) {
-        bytes = std.mem.sliceAsBytes(data_in);
+    const bytes: []const u8 = if (copy_slice) blk: {
+        var bytes = std.mem.sliceAsBytes(data_in);
         if (dt.pointer.sentinel() != null) {
             bytes.len += @sizeOf(dt.pointer.child);
         }
-    } else {
-        bytes = std.mem.asBytes(&data_in);
-    }
+        break :blk bytes;
+    } else std.mem.asBytes(&data_in);
 
     const alignment = comptime blk: {
         if (copy_slice) {
