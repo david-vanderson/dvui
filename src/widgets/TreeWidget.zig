@@ -166,49 +166,6 @@ pub fn dragStart(self: *TreeWidget, branch_id: usize, p: dvui.Point.Physical) vo
     dvui.captureMouse(self.data());
 }
 
-// pub const draggableInitOptions = struct {
-//     tvg_bytes: ?[]const u8 = null,
-//     top_left: ?dvui.Point.Physical = null,
-//     reorderable: ?*Branch = null,
-// };
-
-// pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOptions, opts: dvui.Options) ?dvui.Point.Physical {
-//     var iw = dvui.IconWidget.init(src, "reorder_drag_icon", init_opts.tvg_bytes orelse dvui.entypo.menu, .{}, opts);
-//     iw.install();
-//     var ret: ?dvui.Point.Physical = null;
-//     loop: for (dvui.events()) |*e| {
-//         if (!iw.matchEvent(e))
-//             continue;
-
-//         switch (e.evt) {
-//             .mouse => |me| {
-//                 if (me.action == .press and me.button.pointer()) {
-//                     e.handle(@src(), iw.data());
-//                     dvui.captureMouse(iw.data());
-//                     const reo_top_left: ?dvui.Point.Physical = if (init_opts.reorderable) |reo| reo.wd.rectScale().r.topLeft() else null;
-//                     const top_left: ?dvui.Point.Physical = init_opts.top_left orelse reo_top_left;
-//                     dvui.dragPreStart(me.p, .{ .offset = (top_left orelse iw.wd.rectScale().r.topLeft()).diff(me.p) });
-//                 } else if (me.action == .motion) {
-//                     if (dvui.captured(iw.wd.id)) {
-//                         e.handle(@src(), iw.data());
-//                         if (dvui.dragging(me.p)) |_| {
-//                             ret = me.p;
-//                             if (init_opts.reorderable) |reo| {
-//                                 reo.tree.dragStart(reo.wd.id.asUsize(), me.p); // reorder grabs capture
-//                             }
-//                             break :loop;
-//                         }
-//                     }
-//                 }
-//             },
-//             else => {},
-//         }
-//     }
-//     iw.draw();
-//     iw.deinit();
-//     return ret;
-// }
-
 pub fn branch(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: Branch.InitOptions, opts: Options) *Branch {
     const ret = dvui.widgetAlloc(Branch);
     ret.* = Branch.init(src, self, init_opts, opts);
@@ -233,7 +190,7 @@ pub const Branch = struct {
         draw_target: bool = true,
 
         // if false, caller responsible for calling reinstall() when targetRectScale() returns true
-        reinstall: bool = true,
+        reinstall: bool = false,
     };
 
     wd: WidgetData = undefined,
@@ -289,15 +246,28 @@ pub const Branch = struct {
                 } else {
                     self.wd = WidgetData.init(self.wd.src, .{}, self.options);
                 }
-                const rs = self.wd.rectScale();
+                var rs = self.wd.rectScale();
+                //rs.r.h = 2.0;
+
                 const dragRect = Rect.Physical.fromPoint(topleft).toSize(self.tree.branch_size.scale(rs.s, Size.Physical));
 
                 if (!self.tree.found_slot and !rs.r.intersect(dragRect).empty()) {
                     // user is dragging a reorderable over this rect
-                    self.target_rs = rs;
-                    self.tree.found_slot = true;
+                    //self.target_rs = rs;
+                    //self.tree.found_slot = true;
+
+                    if (!self.expanded) {
+                        if (dvui.animationGet(self.wd.id, "hover_expand")) |anim| {
+                            if (anim.done()) {
+                                self.expanded = true;
+                            }
+                        } else {
+                            _ = dvui.animation(self.wd.id, "hover_expand", .{ .end_time = 1_000_000 });
+                        }
+                    }
 
                     if (self.init_options.draw_target) {
+                        rs.r.h = 2.0;
                         rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent });
                     }
 
@@ -328,12 +298,12 @@ pub const Branch = struct {
         self.vbox.install();
         self.vbox.drawBackground();
 
-        self.tree.branch_size = self.vbox.wd.rect.size();
-
         self.button = dvui.ButtonWidget.init(@src(), .{}, no_padding.override(self.options));
         self.button.install();
         self.button.processEvents();
         self.button.drawBackground();
+
+        self.tree.branch_size = self.button.wd.rect.size();
 
         self.hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, no_padding.override(self.options));
         self.hbox.install();
