@@ -297,7 +297,7 @@ const winapi = if (builtin.os.tag == .windows) struct {
 } else struct {};
 
 pub fn directoryOpen() !std.fs.Dir {
-    return try std.fs.cwd().openDir(".", .{ .iterate = true, .access_sub_paths = true });
+    return try std.fs.cwd().openDir("c:\\temp", .{ .iterate = true, .access_sub_paths = true });
 }
 
 pub fn directoryDisplay(grid: *dvui.GridWidget) !void {
@@ -312,8 +312,8 @@ pub fn directoryDisplay(grid: *dvui.GridWidget) !void {
             if (std.mem.indexOf(u8, entry.name, filename_filter)) |_| {} else {
                 if (dir_num < selections.capacity()) {
                     selections.unset(dir_num);
-                    filtering = true;
                 }
+                filtering = true;
                 continue;
             }
         }
@@ -427,8 +427,8 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget) void {
                 // Clear selection of anything filtered. Not all apps would want to do this.
                 dir_cache.items[dir_num].selected = false;
                 filtering = true;
+                continue;
             }
-            continue;
         }
         defer row_num += 1;
         {
