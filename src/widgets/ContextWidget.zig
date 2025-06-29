@@ -20,6 +20,7 @@ pub const InitOptions = struct {
 wd: WidgetData = undefined,
 init_options: InitOptions = undefined,
 
+prev_menu_root: ?dvui.MenuWidget.Root = null,
 winId: dvui.WidgetId = undefined,
 focused: bool = false,
 activePt: Point.Natural = .{},
@@ -45,6 +46,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 
 pub fn install(self: *ContextWidget) void {
     dvui.parentSet(self.widget());
+    self.prev_menu_root = dvui.MenuWidget.Root.set(.{ .ptr = self, .close = menu_root_close });
     self.wd.register();
     self.wd.borderAndBackground(.{});
 }
@@ -60,6 +62,12 @@ pub fn activePoint(self: *ContextWidget) ?Point.Natural {
 pub fn close(self: *ContextWidget) void {
     self.focused = false;
     dvui.focusWidget(null, self.winId, null);
+}
+
+/// Used as a close callback for menus closing
+fn menu_root_close(ptr: *anyopaque, _: dvui.MenuWidget.CloseReason) void {
+    const self: *ContextWidget = @alignCast(@ptrCast(ptr));
+    self.close();
 }
 
 pub fn widget(self: *ContextWidget) Widget {
@@ -130,6 +138,7 @@ pub fn deinit(self: *ContextWidget) void {
     //self.wd.minSizeSetAndRefresh();
     //self.wd.minSizeReportToParent();
 
+    _ = dvui.MenuWidget.Root.set(self.prev_menu_root);
     dvui.parentReset(self.wd.id, self.wd.parent);
     self.* = undefined;
 }
