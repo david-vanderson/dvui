@@ -486,12 +486,9 @@ pub fn pointToBodyRelative(self: *GridWidget, point: Point.Physical) ?Point {
 pub fn pointToColRow(self: *GridWidget, point: Point.Physical) ?struct { col_num: usize, row_num: usize } {
     if (self.init_opts.var_row_heights) return null;
     if (self.resizing or self.init_opts.resize_cols) return null;
+    if (self.row_height < 1) return null;
 
-    const p = self.pointToBodyRelative(point);
-    if (p) |point_rel| {
-        if (self.row_height < 1) {
-            return null;
-        }
+    if (self.pointToBodyRelative(point)) |point_rel| {
         const row_num: usize = @intFromFloat(@trunc((self.frame_viewport.y + point_rel.y) / self.row_height));
         const col_num = blk: {
             var total_w: f32 = 0;
