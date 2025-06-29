@@ -158,8 +158,9 @@ fn gui_frame() !void {
                 if (me.action != .press) continue;
 
                 // TODO: Also needs to check vs content width. Maybe body relative can deal with that?
-                if (grid.pointToBodyRelative(me.p)) |click_pos| {
-                    break :blk if (grid.row_height > 0) @as(usize, @intFromFloat(@trunc(click_pos.y / grid.row_height))) else null;
+                // Can this return row / col?
+                if (grid.pointToRowCol(me.p)) |cell| {
+                    if (cell.col_num > 0) break :blk cell.row_num;
                 }
             }
             break :blk null;
@@ -217,96 +218,11 @@ fn gui_frame() !void {
         }
     }
 }
-var multi_select: MultiSelect = .{};
-var single_select: SingleSelect = .{};
+var multi_select: dvui.select.MultiSelect = .{};
+var single_select: dvui.select.SingleSelect = .{};
 var filename_filter: []u8 = "";
 var filtering: bool = false;
 var filtering_changed = false;
-
-const MultiSelect = struct {
-    first_selected_id: ?u64 = null,
-    second_selected_id: ?u64 = null,
-    should_select: bool = false,
-    shift_held: bool = false,
-    selection_changed: bool = false,
-
-    pub fn processEvents(self: *MultiSelect, wd: *dvui.WidgetData) void {
-        self.selection_changed = false;
-        for (dvui.events()) |*e| {
-            if (e.evt == .key) {
-                if (e.evt != .key and e.evt != .selection) continue;
-                const ke = e.evt.key;
-                if (ke.code != .left_shift and ke.code != .right_shift) continue;
-                self.shift_held = ke.action == .down or ke.action == .repeat;
-            } else if (e.evt == .selection) {
-                const se = e.evt.selection;
-                if (dvui.eventMatch(e, .{ .id = wd.id, .r = wd.borderRectScale().r })) {
-                    if (!self.shift_held) {
-                        self.first_selected_id = se.selection_id;
-                        self.second_selected_id = se.selection_id;
-                        self.should_select = se.selected;
-                        if (self.first_selected_id) |_| {
-                            if (self.second_selected_id) |second_id| {
-                                self.first_selected_id = second_id;
-                            }
-                            self.second_selected_id = se.selection_id;
-                            self.should_select = se.selected;
-                            self.selection_changed = true;
-                        }
-                    } else {
-                        self.first_selected_id = se.selection_id;
-                        self.should_select = se.selected;
-                        self.selection_changed = true;
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn selectionChanged(self: *MultiSelect) bool {
-        return self.selection_changed;
-    }
-
-    pub fn selectionIdStart(self: *MultiSelect) u64 {
-        return @min(self.first_selected_id orelse 0, self.second_selected_id orelse self.first_selected_id orelse 0);
-    }
-
-    pub fn selectionIdEnd(self: *MultiSelect) u64 {
-        return @max(self.first_selected_id orelse 0, self.second_selected_id orelse self.first_selected_id orelse 0);
-    }
-};
-
-const SingleSelect = struct {
-    id_to_select: ?u64 = null,
-    id_to_unselect: ?u64 = null,
-    should_select: bool = false,
-    selection_changed: bool = false,
-
-    pub fn processEvents(self: *SingleSelect, wd: *dvui.WidgetData) void {
-        self.selection_changed = false;
-        for (dvui.events()) |*e| {
-            if (e.evt != .selection) continue;
-            if (dvui.eventMatch(e, .{ .id = wd.id, .r = wd.borderRectScale().r })) {
-                const se = e.evt.selection;
-                if (se.selected == false) {
-                    self.id_to_select = null;
-                    self.id_to_unselect = se.selection_id;
-                    self.selection_changed = true;
-                } else {
-                    if (self.id_to_select) |last_id| {
-                        self.id_to_unselect = last_id;
-                    }
-                    self.id_to_select = se.selection_id;
-                    self.selection_changed = true;
-                }
-            }
-        }
-    }
-
-    pub fn selectionChanged(self: *SingleSelect) bool {
-        return self.selection_changed;
-    }
-};
 
 var selections: std.DynamicBitSetUnmanaged = undefined;
 // Optional: windows os only
@@ -342,6 +258,7 @@ pub fn directoryDisplay(grid: *dvui.GridWidget, row_selected: ?usize) !void {
             var is_set = if (dir_num < selections.capacity()) selections.isSet(dir_num) else false;
             _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .gravity_x = 0.5 });
             if (row_num == row_selected) {
+                std.debug.print("{} {?} {} \n", .{ row_num, row_selected, is_set });
                 dvui.currentWindow().addSelectionEvent(dir_num, !is_set, cell.data().borderRectScale().r);
             }
         }
@@ -459,9 +376,16 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget, selected_row: ?usize) void
             var cell = grid.bodyCell(@src(), 0, row_num, .{});
             defer cell.deinit();
             var is_set = dir_cache.items[dir_num].selected;
-            _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .gravity_x = 0.5 });
-            if (selected_row == dir_num) {
-                dvui.currentWindow().addSelectionEvent(dir_num, !is_set, cell.data().borderRectScale().r);
+            if (!dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .gravity_x = 0.5 })) {
+                if (row_num == 1)
+                    std.debug.print("false\n", .{});
+                if (selected_row == dir_num) {
+                    std.debug.print("adding sel event\n", .{});
+                    dvui.currentWindow().addSelectionEvent(dir_num, !is_set, cell.data().borderRectScale().r);
+                }
+            } else {
+                if (row_num == 1)
+                    std.debug.print("true\n", .{});
             }
         }
         {

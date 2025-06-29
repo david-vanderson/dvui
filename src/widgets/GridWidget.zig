@@ -481,6 +481,30 @@ pub fn pointToBodyRelative(self: *GridWidget, point: Point.Physical) ?Point {
     return null;
 }
 
+/// Returns the cell corresponding to point.
+/// Not valid when using var_row_height.
+pub fn pointToRowCol(self: *GridWidget, point: Point.Physical) ?struct { col_num: usize, row_num: usize } {
+    const p = self.pointToBodyRelative(point);
+    if (p) |point_rel| {
+        if (self.row_height < 1) {
+            return null;
+        }
+        const row_num: usize = @intFromFloat(@trunc(point_rel.y / self.row_height));
+        const col_num = blk: {
+            var total_w: f32 = 0;
+            for (self.col_widths, 0..) |w, col| {
+                total_w += w;
+                if (point_rel.x < total_w) {
+                    break :blk col;
+                }
+            }
+            return null;
+        };
+        return .{ .col_num = col_num, .row_num = row_num };
+    }
+    return null;
+}
+
 /// Set the grid's sort order when manually managing column sorting.
 pub fn colSortSet(self: *GridWidget, col_num: usize, dir: SortDirection) void {
     self.sort_col_number = col_num;
