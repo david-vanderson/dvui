@@ -88,12 +88,12 @@ pub fn main() !void {
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros, null);
         interrupted = try backend.waitEventTimeout(wait_event_micros);
-        //std.debug.print("{s}, {s}, {s}\n", .{ data1[0].text, data1[1].text, data1[2].text });
     }
 }
 
 var mode: enum { raw, cached } = .raw;
 var selection_mode: enum { multi_select, single_select } = .multi_select;
+var row_select: bool = false;
 
 // both dvui and SDL drawing
 fn gui_frame() !void {
@@ -129,7 +129,7 @@ fn gui_frame() !void {
                 mode = .cached;
             }
             var selected = selection_mode == .multi_select;
-            if (dvui.checkbox(@src(), &selected, "Multi-Select?", .{ .margin = dvui.Rect.all(6) })) {
+            if (dvui.checkbox(@src(), &selected, "Multi-Select", .{ .margin = dvui.Rect.all(6) })) {
                 selection_mode = if (selected) .multi_select else .single_select;
                 if (selection_mode == .single_select) {
                     switch (mode) {
@@ -138,6 +138,7 @@ fn gui_frame() !void {
                     }
                 }
             }
+            _ = dvui.checkbox(@src(), &row_select, "Row Select", .{ .margin = dvui.Rect.all(6) });
             dvui.labelNoFmt(@src(), "Filter: (contains): ", .{}, .{ .margin = dvui.Rect.all(6) });
             var text = dvui.textEntry(@src(), .{}, .{ .gravity_y = 0.5, .margin = dvui.Rect.all(6) });
             defer text.deinit();
@@ -147,6 +148,23 @@ fn gui_frame() !void {
     {
         var grid = dvui.grid(@src(), .numCols(6), .{}, .{ .expand = .both, .background = true });
         defer grid.deinit();
+
+        const row_clicked: ?usize = blk: {
+            if (!row_select) break :blk null;
+            for (dvui.events()) |*e| {
+                if (!dvui.eventMatchSimple(e, grid.data())) continue;
+                if (e.evt != .mouse) continue;
+                const me = e.evt.mouse;
+                if (me.action != .press) continue;
+
+                // TODO: Also needs to check vs content width. Maybe body relative can deal with that?
+                if (grid.pointToBodyRelative(me.p)) |click_pos| {
+                    break :blk if (grid.row_height > 0) @as(usize, @intFromFloat(@trunc(click_pos.y / grid.row_height))) else null;
+                }
+            }
+            break :blk null;
+        };
+
         var select_all_state: dvui.GridColumnSelectAllState = undefined;
         // Note: The extra "selection_changed" here is because I've chosen to unselect anything that was filtered.
         // If we were just doing selection it just needs multi_select.selectionChanged();
@@ -166,8 +184,8 @@ fn gui_frame() !void {
         dvui.gridHeading(@src(), grid, 5, "MTime", .fixed, .{});
         const was_filtering = filtering;
         switch (mode) {
-            .raw => directoryDisplay(grid) catch return,
-            .cached => directoryDisplayCached(grid),
+            .raw => directoryDisplay(grid, row_clicked) catch return,
+            .cached => directoryDisplayCached(grid, row_clicked),
         }
         filtering_changed = (was_filtering != filtering);
         if (selection_mode == .multi_select) {
@@ -300,7 +318,7 @@ pub fn directoryOpen() !std.fs.Dir {
     return try std.fs.cwd().openDir("c:\\temp", .{ .iterate = true, .access_sub_paths = true });
 }
 
-pub fn directoryDisplay(grid: *dvui.GridWidget) !void {
+pub fn directoryDisplay(grid: *dvui.GridWidget, row_selected: ?usize) !void {
     var dir = directoryOpen() catch return;
     defer dir.close();
     var itr = dir.iterate();
@@ -323,6 +341,9 @@ pub fn directoryDisplay(grid: *dvui.GridWidget) !void {
             defer cell.deinit();
             var is_set = if (dir_num < selections.capacity()) selections.isSet(dir_num) else false;
             _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .gravity_x = 0.5 });
+            if (row_num == row_selected) {
+                dvui.currentWindow().addSelectionEvent(dir_num, !is_set, cell.data().borderRectScale().r);
+            }
         }
         {
             var cell = grid.bodyCell(@src(), 1, row_num, .{ .size = .{ .w = 300 } });
@@ -399,7 +420,7 @@ pub fn selectAllCache(state: dvui.GridColumnSelectAllState) void {
     }
 }
 
-pub fn directoryDisplayCached(grid: *dvui.GridWidget) void {
+pub fn directoryDisplayCached(grid: *dvui.GridWidget, selected_row: ?usize) void {
     if (!cache_valid) {
         var dir = directoryOpen() catch return;
         defer dir.close();
@@ -436,6 +457,9 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget) void {
             defer cell.deinit();
             var is_set = dir_cache.items[dir_num].selected;
             _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .gravity_x = 0.5 });
+            if (selected_row == dir_num) {
+                dvui.currentWindow().addSelectionEvent(dir_num, !is_set, cell.data().borderRectScale().r);
+            }
         }
         {
             var cell = grid.bodyCell(@src(), 1, row_num, .{});
