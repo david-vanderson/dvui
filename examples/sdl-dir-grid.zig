@@ -420,6 +420,9 @@ pub fn selectAllCache(state: dvui.GridColumnSelectAllState) void {
     }
 }
 
+// TODO: Allocate the filenames from an area that can be reset when the
+// cache is invalidated.
+// Invalidate cache on exit.
 pub fn directoryDisplayCached(grid: *dvui.GridWidget, selected_row: ?usize) void {
     if (!cache_valid) {
         var dir = directoryOpen() catch return;
