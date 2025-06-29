@@ -496,7 +496,7 @@ pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?st
 
     // Test if we can successfully open this font
     _ = try fontCacheInit(ttf_bytes, .{ .name = name, .size = 14 });
-    try cw.font_bytes.put(name, FontBytesEntry{ .ttf_bytes = ttf_bytes, .allocator = ttf_bytes_allocator });
+    try cw.font_bytes.put(cw.gpa, name, FontBytesEntry{ .ttf_bytes = ttf_bytes, .allocator = ttf_bytes_allocator });
 }
 
 const GlyphInfo = struct {
@@ -1620,7 +1620,7 @@ pub const Path = struct {
             const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = new_path, .opts = options } } };
 
             var sw = cw.subwindowCurrent();
-            sw.render_cmds.append(cmd) catch |err| {
+            sw.render_cmds.append(cw.arena(), cmd) catch |err| {
                 logError(@src(), err, "Could not append to render_cmds_after", .{});
             };
             return;
@@ -1781,11 +1781,11 @@ pub const Path = struct {
 
             var sw = cw.subwindowCurrent();
             if (opts.after) {
-                sw.render_cmds_after.append(cmd) catch |err| {
+                sw.render_cmds_after.append(cw.arena(), cmd) catch |err| {
                     logError(@src(), err, "Could not append to render_cmds_after", .{});
                 };
             } else {
-                sw.render_cmds.append(cmd) catch |err| {
+                sw.render_cmds.append(cw.arena(), cmd) catch |err| {
                     logError(@src(), err, "Could not append to render_cmds_after", .{});
                 };
             }
@@ -2210,7 +2210,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .triangles = .{ .tri = tri_copy, .tex = tex } } };
 
         var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
+        try sw.render_cmds.append(cw.arena(), cmd);
         return;
     }
 
@@ -2233,8 +2233,6 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?WidgetId) void {
     const cw = currentWindow();
-    const arena = cw.arena();
-
     for (cw.subwindows.items) |*sw| {
         if (id == sw.id) {
             // this window was here previously, just update data, so it stays in the same place in the stack
@@ -2248,14 +2246,20 @@ pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal:
                 log.warn("subwindowAdd {x} is clearing some drawing commands (did you try to draw between subwindowCurrentSet and subwindowAdd?)\n", .{id});
             }
 
-            sw.render_cmds = std.ArrayList(RenderCommand).init(arena);
-            sw.render_cmds_after = std.ArrayList(RenderCommand).init(arena);
+            sw.render_cmds = .empty;
+            sw.render_cmds_after = .empty;
             return;
         }
     }
 
     // haven't seen this window before
-    const sw = Window.Subwindow{ .id = id, .rect = rect, .rect_pixels = rect_pixels, .modal = modal, .stay_above_parent_window = stay_above_parent_window, .render_cmds = std.ArrayList(RenderCommand).init(arena), .render_cmds_after = std.ArrayList(RenderCommand).init(arena) };
+    const sw = Window.Subwindow{
+        .id = id,
+        .rect = rect,
+        .rect_pixels = rect_pixels,
+        .modal = modal,
+        .stay_above_parent_window = stay_above_parent_window,
+    };
     if (stay_above_parent_window) |subwin_id| {
         // it wants to be above subwin_id
         var i: usize = 0;
@@ -2273,10 +2277,10 @@ pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal:
         }
 
         // i points just past all subwindows that want to be on top of this subwin_id
-        cw.subwindows.insert(i, sw) catch @panic("Could not add subwindow to list");
+        cw.subwindows.insert(cw.gpa, i, sw) catch @panic("Could not add subwindow to list");
     } else {
         // just put it on the top
-        cw.subwindows.append(sw) catch @panic("Could not add subwindow to list");
+        cw.subwindows.append(cw.gpa, sw) catch @panic("Could not add subwindow to list");
     }
 }
 
@@ -3493,7 +3497,7 @@ pub fn tabIndexSet(widget_id: WidgetId, tab_index: ?u16) void {
 
     var cw = currentWindow();
     const ti = TabIndex{ .windowId = cw.subwindow_currentId, .widgetId = widget_id, .tabIndex = (tab_index orelse math.maxInt(u16)) };
-    cw.tab_index.append(ti) catch |err| {
+    cw.tab_index.append(cw.gpa, ti) catch |err| {
         logError(@src(), err, "Could not set tab index. This might break keyboard navigation as the widget may become unreachable via tab", .{});
     };
 }
@@ -6731,7 +6735,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
 
         var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
+        try sw.render_cmds.append(cw.arena(), cmd);
         return;
     }
 
@@ -6991,7 +6995,8 @@ pub fn textureFromTarget(target: TextureTarget) Backend.TextureError!Texture {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn textureDestroyLater(texture: Texture) void {
-    currentWindow().texture_trash.append(texture) catch |err| {
+    const cw = currentWindow();
+    cw.texture_trash.append(cw.arena(), texture) catch |err| {
         dvui.log.err("textureDestroyLater got {!}\n", .{err});
     };
 }
@@ -7043,7 +7048,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .opts = opts } } };
 
         var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
+        try sw.render_cmds.append(cw.arena(), cmd);
         return;
     }
 

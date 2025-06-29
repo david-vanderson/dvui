@@ -140,14 +140,14 @@ pub const TTFBytes = struct {
     //pub const OpenDyslexicBdIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold-Italic.otf");
 };
 
-pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) std.mem.Allocator.Error!std.StringHashMap(dvui.FontBytesEntry) {
-    var result = std.StringHashMap(dvui.FontBytesEntry).init(allocator);
+pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) std.mem.Allocator.Error!std.StringHashMapUnmanaged(dvui.FontBytesEntry) {
+    var result: std.StringHashMapUnmanaged(dvui.FontBytesEntry) = .empty;
     inline for (@typeInfo(TTFBytes).@"struct".decls) |decl| {
-        try result.putNoClobber(decl.name, dvui.FontBytesEntry{ .ttf_bytes = @field(TTFBytes, decl.name), .allocator = null });
+        try result.putNoClobber(allocator, decl.name, dvui.FontBytesEntry{ .ttf_bytes = @field(TTFBytes, decl.name), .allocator = null });
     }
 
     if (!dvui.wasm) {
-        try result.putNoClobber("Noto", dvui.FontBytesEntry{ .ttf_bytes = @embedFile("fonts/NotoSansKR-Regular.ttf"), .allocator = null });
+        try result.putNoClobber(allocator, "Noto", dvui.FontBytesEntry{ .ttf_bytes = @embedFile("fonts/NotoSansKR-Regular.ttf"), .allocator = null });
     }
 
     return result;
