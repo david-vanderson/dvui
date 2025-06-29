@@ -26,6 +26,7 @@ pub const MultiSelect = struct {
                 const se = e.evt.selection;
                 (@import("std")).debug.print("se = {}\n", .{se});
                 if (dvui.eventMatch(e, .{ .id = wd.id, .r = wd.borderRectScale().r })) {
+                    e.handle(@src(), wd);
                     if (!self.shift_held) {
                         self.first_selected_id = se.selection_id;
                         self.second_selected_id = se.selection_id;
@@ -77,6 +78,7 @@ pub const SingleSelect = struct {
         for (dvui.events()) |*e| {
             if (e.evt != .selection) continue;
             if (dvui.eventMatch(e, .{ .id = wd.id, .r = wd.borderRectScale().r })) {
+                e.handle(@src(), wd);
                 const se = e.evt.selection;
                 if (se.selected == false) {
                     self.id_to_select = null;
