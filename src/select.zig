@@ -27,7 +27,7 @@ pub const MultiSelect = struct {
                 @import("std").debug.print("se = {}\n", .{se});
                 if (dvui.eventMatch(e, .{ .id = wd.id, .r = wd.borderRectScale().r })) {
                     e.handle(@src(), wd);
-                    if (!self.shift_held) {
+                    if (!self.shift_held or self.first_selected_id == null) {
                         self.first_selected_id = se.selection_id;
                         self.second_selected_id = se.selection_id;
                         self.should_select = se.selected;
