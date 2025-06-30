@@ -1,4 +1,7 @@
 //! Helpers for Multi and Single selection
+//!
+
+// TODO: Select or SelectION???
 
 const dvui = @import("dvui.zig");
 const WidgetData = dvui.WidgetData;
@@ -71,19 +74,14 @@ pub const MultiSelectMouse = struct {
         for (sel_info.events()) |*se| {
             if (se.eventMatch(wd)) {
                 if (!self.shift_held or self.first_selected_id == null) {
+                    // Single select or shift held on first selection.
                     self.first_selected_id = se.selection_id;
                     self.second_selected_id = se.selection_id;
                     self.should_select = se.selected;
-                    if (self.first_selected_id) |_| {
-                        if (self.second_selected_id) |second_id| {
-                            self.first_selected_id = second_id;
-                        }
-                        self.second_selected_id = se.selection_id;
-                        self.should_select = se.selected;
-                        self.selection_changed = true;
-                    }
+                    self.selection_changed = true;
                 } else {
-                    self.first_selected_id = se.selection_id;
+                    // Shift-select
+                    self.second_selected_id = se.selection_id;
                     self.should_select = se.selected;
                     self.selection_changed = true;
                 }
