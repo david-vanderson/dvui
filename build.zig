@@ -216,6 +216,33 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             }
             sdl_mod.addOptions("sdl_options", sdl2_options);
 
+            // Enable smooth scrolling on mac
+            if (target.result.os.tag == .macos) {
+                // SDL hard codes this so we have to overwrite it
+                const objc_files = b.addWriteFiles();
+                const objc_file = objc_files.add("config.mm",
+                    // https://github.com/libsdl-org/SDL/issues/2176#issuecomment-2009687592
+                    \\#import <Foundation/Foundation.h>
+                    \\
+                    \\void MACOS_enable_scroll_momentum() {
+                    \\    [[NSUserDefaults standardUserDefaults]
+                    \\    setBool: YES forKey: @"AppleMomentumScrollSupported"];
+                    \\}
+                );
+                const lib = b.addLibrary(.{
+                    .name = "SDL2_config",
+                    .root_module = b.createModule(.{
+                        .target = target,
+                        .optimize = optimize,
+                    }),
+                });
+                lib.addCSourceFile(.{
+                    .file = objc_file,
+                    .language = .objective_c,
+                });
+                sdl_mod.linkLibrary(lib);
+            }
+
             const dvui_sdl = addDvuiModule("dvui_sdl2", dvui_opts);
             dvui_opts.addChecks(dvui_sdl, "dvui_sdl2");
             if (test_dvui_and_app) {
