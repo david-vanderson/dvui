@@ -2372,15 +2372,10 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
             const padding = dvui.Rect.all(2);
 
             var iter = dir.iterate();
+
             var id_extra: usize = 0;
             while (try iter.next()) |entry| {
                 id_extra += 1;
-
-                const abs_path = try std.fs.path.joinZ(
-                    alloc,
-                    &.{ directory, entry.name },
-                );
-                defer alloc.free(abs_path);
 
                 const color = tree_palette[color_id.* % tree_palette.len];
 
@@ -2394,23 +2389,33 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
                 });
                 defer branch.deinit();
 
-                if (branch.floating()) {
-                    tree_removed_path = alloc.dupe(u8, abs_path) catch null;
-                }
+                const abs_path = try std.fs.path.join(
+                    alloc,
+                    &.{ directory, entry.name },
+                );
+                defer alloc.free(abs_path);
 
                 if (branch.insertBefore()) {
                     if (tree_removed_path) |removed_path| {
-                        defer alloc.free(removed_path);
-
                         const old_sub_path = std.fs.path.basename(removed_path);
 
-                        const new_path = try std.fs.path.joinZ(alloc, &.{ directory, old_sub_path });
+                        const new_path = try std.fs.path.join(alloc, &.{ if (entry.kind == .directory) abs_path else directory, old_sub_path });
                         defer alloc.free(new_path);
 
-                        try std.fs.renameAbsolute(removed_path, new_path);
-
                         std.log.debug("DVUI/TreeWidget: Moved {s} to {s}", .{ removed_path, new_path });
+
+                        if (!std.mem.eql(u8, removed_path, new_path)) {
+                            try std.fs.renameAbsolute(removed_path, new_path);
+                        }
+
+                        alloc.free(removed_path);
+                        tree_removed_path = null;
                     }
+                }
+
+                if (branch.floating()) {
+                    if (tree_removed_path == null)
+                        tree_removed_path = alloc.dupe(u8, abs_path) catch null;
                 }
 
                 switch (entry.kind) {
@@ -2476,10 +2481,13 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
                         );
 
                         if (branch.expander(@src(), .{ .indent = 14 }, .{
+                            .margin = .{ .x = 14 },
                             .color_fill = .fill_window,
                             .color_border = .{ .color = color },
                             .expand = .horizontal,
                             .corner_radius = branch.button.wd.options.corner_radius,
+                            .background = true,
+                            .border = .{ .x = 1 },
                             .box_shadow = .{
                                 .color = .{ .color = .black },
                                 .offset = .{ .x = -5, .y = 5 },
@@ -2514,7 +2522,7 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
     });
     defer root_branch.deinit();
 
-    _ = dvui.icon(
+    dvui.icon(
         @src(),
         "FolderIcon",
         dvui.entypo.folder,
@@ -2526,12 +2534,13 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
             .padding = dvui.Rect.all(10),
         },
     );
+
     const folder_name = std.fs.path.basename(root_directory);
     dvui.label(@src(), "{s}", .{folder_name}, .{
         .color_text = .{ .color = dvui.themeGet().color_text },
         .padding = dvui.Rect.all(10),
     });
-    _ = dvui.icon(
+    dvui.icon(
         @src(),
         "DropIcon",
         if (root_branch.expanded) dvui.entypo.triangle_down else dvui.entypo.triangle_right,
@@ -2543,11 +2552,13 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
         },
     );
 
-    if (root_branch.expander(@src(), .{ .indent = 14 }, .{
+    if (root_branch.expander(@src(), .{ .indent = 14.0 }, .{
         .color_fill = .fill_window,
         .color_border = .{ .color = tree_palette[0] },
         .expand = .horizontal,
         .corner_radius = root_branch.button.wd.options.corner_radius,
+        .background = true,
+        .border = .{ .x = 1 },
         .box_shadow = .{
             .color = .{ .color = .black },
             .offset = .{ .x = -5, .y = 5 },
@@ -2574,11 +2585,15 @@ pub fn reorderTree() void {
     if (g.root_directory) |directory| {
         dvui.label(@src(), "Root Directory: {s}", .{directory}, .{});
 
+        if (tree_removed_path) |removed_path| {
+            dvui.label(@src(), "Removed: {s}", .{removed_path}, .{});
+        }
+
         var tree = dvui.TreeWidget.tree(@src(), .{ .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
         defer tree.deinit();
 
         if (g.root_directory) |root_directory| {
-            recurseFiles(dvui.currentWindow().arena(), root_directory, tree) catch std.debug.panic("Failed to recurse files", .{});
+            recurseFiles(dvui.currentWindow().gpa, root_directory, tree) catch std.debug.panic("Failed to recurse files", .{});
         }
     }
 }
