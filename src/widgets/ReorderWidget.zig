@@ -93,7 +93,7 @@ pub fn processEvent(self: *ReorderWidget, e: *dvui.Event) void {
             .mouse => |me| {
                 if ((me.action == .press or me.action == .release) and me.button.pointer()) {
                     self.drag_ending = true;
-                    dvui.captureMouse(null);
+                    dvui.captureMouse(null, e.num);
                     dvui.dragEnd();
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (me.action == .motion) {
@@ -137,11 +137,11 @@ pub fn deinit(self: *ReorderWidget) void {
     self.* = undefined;
 }
 
-pub fn dragStart(self: *ReorderWidget, reorder_id: usize, p: dvui.Point.Physical) void {
+pub fn dragStart(self: *ReorderWidget, reorder_id: usize, p: dvui.Point.Physical, event_num: u16) void {
     self.id_reorderable = reorder_id;
     self.drag_point = p;
     self.found_slot = true;
-    dvui.captureMouse(self.data());
+    dvui.captureMouse(self.data(), event_num);
 }
 
 pub const draggableInitOptions = struct {
@@ -162,7 +162,7 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
             .mouse => |me| {
                 if (me.action == .press and me.button.pointer()) {
                     e.handle(@src(), iw.data());
-                    dvui.captureMouse(iw.data());
+                    dvui.captureMouse(iw.data(), e.num);
                     const reo_top_left: ?dvui.Point.Physical = if (init_opts.reorderable) |reo| reo.wd.rectScale().r.topLeft() else null;
                     const top_left: ?dvui.Point.Physical = init_opts.top_left orelse reo_top_left;
                     dvui.dragPreStart(me.p, .{ .offset = (top_left orelse iw.wd.rectScale().r.topLeft()).diff(me.p) });
@@ -172,7 +172,7 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
                         if (dvui.dragging(me.p)) |_| {
                             ret = me.p;
                             if (init_opts.reorderable) |reo| {
-                                reo.reorder.dragStart(reo.wd.id.asUsize(), me.p); // reorder grabs capture
+                                reo.reorder.dragStart(reo.wd.id.asUsize(), me.p, e.num); // reorder grabs capture
                             }
                             break :loop;
                         }

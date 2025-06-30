@@ -97,12 +97,12 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
                     dvui.focusWidget(b.data().id, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     // capture
-                    dvui.captureMouse(b.data());
+                    dvui.captureMouse(b.data(), e.num);
                     e.handle(@src(), b.data());
                     p = me.p;
                 } else if (me.action == .release and me.button.pointer()) {
                     // stop capture
-                    dvui.captureMouse(null);
+                    dvui.captureMouse(null, e.num);
                     dvui.dragEnd();
                     e.handle(@src(), b.data());
                 } else if (me.action == .motion and dvui.captured(b.data().id)) {
@@ -224,12 +224,12 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
                     dvui.focusWidget(b.data().id, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     // capture
-                    dvui.captureMouse(b.data());
+                    dvui.captureMouse(b.data(), e.num);
                     e.handle(@src(), b.data());
                     p = me.p;
                 } else if (me.action == .release and me.button.pointer()) {
                     // stop capture
-                    dvui.captureMouse(null);
+                    dvui.captureMouse(null, e.num);
                     dvui.dragEnd();
                     e.handle(@src(), b.data());
                 } else if (me.action == .motion and dvui.captured(b.data().id)) {

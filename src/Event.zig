@@ -35,6 +35,14 @@ pub fn handle(self: *Event, src: std.builtin.SourceLocation, wd: *const dvui.Wid
     self.handled = true;
 }
 
+pub fn focusable(self: *const Event) bool {
+    return switch (self.evt) {
+        // Only wheel events cannot be focused/captured
+        .mouse => |me| me.action != .wheel_x and me.action != .wheel_y,
+        else => true,
+    };
+}
+
 pub const Text = struct {
     txt: []u8,
     selected: bool = false,

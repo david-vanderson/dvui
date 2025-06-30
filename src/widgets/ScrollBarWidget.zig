@@ -87,7 +87,7 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
                             e.handle(@src(), self.data());
                             if (grabrs.contains(me.p)) {
                                 // capture and start drag
-                                dvui.captureMouse(self.data());
+                                dvui.captureMouse(self.data(), e.num);
                                 switch (self.dir) {
                                     .vertical => dvui.dragPreStart(me.p, .{ .cursor = .arrow, .offset = .{ .y = me.p.y - (grabrs.y + grabrs.h / 2) } }),
                                     .horizontal => dvui.dragPreStart(me.p, .{ .cursor = .arrow, .offset = .{ .x = me.p.x - (grabrs.x + grabrs.w / 2) } }),
@@ -109,7 +109,7 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
                         if (me.button.pointer()) {
                             e.handle(@src(), self.data());
                             // stop possible drag and capture
-                            dvui.captureMouse(null);
+                            dvui.captureMouse(null, e.num);
                             dvui.dragEnd();
                         }
                     },
