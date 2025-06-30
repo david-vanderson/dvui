@@ -4,7 +4,6 @@ id: dvui.WidgetId = undefined,
 options: Options = undefined,
 init_options: InitOptions = undefined,
 
-// menu catches the close_popup from drop if you click off of it
 menu: *MenuWidget = undefined,
 drop: ?*FloatingMenuWidget = null,
 drop_mi: ?MenuItemWidget = null,

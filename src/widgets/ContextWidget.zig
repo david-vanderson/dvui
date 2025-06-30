@@ -20,6 +20,7 @@ pub const InitOptions = struct {
 wd: WidgetData = undefined,
 init_options: InitOptions = undefined,
 
+prev_menu_root: ?dvui.MenuWidget.Root = null,
 winId: dvui.WidgetId = undefined,
 focused: bool = false,
 activePt: Point.Natural = .{},
@@ -45,6 +46,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 
 pub fn install(self: *ContextWidget) void {
     dvui.parentSet(self.widget());
+    self.prev_menu_root = dvui.MenuWidget.Root.set(.{ .ptr = self, .close = menu_root_close });
     self.wd.register();
     self.wd.borderAndBackground(.{});
 }
@@ -57,8 +59,19 @@ pub fn activePoint(self: *ContextWidget) ?Point.Natural {
     return null;
 }
 
+pub fn close(self: *ContextWidget) void {
+    self.focused = false;
+    dvui.focusWidget(null, self.winId, null);
+}
+
+/// Used as a close callback for menus closing
+fn menu_root_close(ptr: *anyopaque, _: dvui.MenuWidget.CloseReason) void {
+    const self: *ContextWidget = @alignCast(@ptrCast(ptr));
+    self.close();
+}
+
 pub fn widget(self: *ContextWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *ContextWidget) *WidgetData {
@@ -85,12 +98,11 @@ pub fn processEvents(self: *ContextWidget) void {
         if (!dvui.eventMatchSimple(e, self.data()))
             continue;
 
-        self.processEvent(e, false);
+        self.processEvent(e);
     }
 }
 
-pub fn processEvent(self: *ContextWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
+pub fn processEvent(self: *ContextWidget, e: *Event) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .focus and me.button == .right) {
@@ -112,17 +124,7 @@ pub fn processEvent(self: *ContextWidget, e: *Event, bubbling: bool) void {
                 self.activePt.x += 1;
             }
         },
-        .close_popup => {
-            if (self.focused) {
-                // we are getting a bubbled event, so the window we are in is not the current one
-                dvui.focusWidget(null, self.winId, null);
-            }
-        },
         else => {},
-    }
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
     }
 }
 
@@ -136,6 +138,7 @@ pub fn deinit(self: *ContextWidget) void {
     //self.wd.minSizeSetAndRefresh();
     //self.wd.minSizeReportToParent();
 
+    _ = dvui.MenuWidget.Root.set(self.prev_menu_root);
     dvui.parentReset(self.wd.id, self.wd.parent);
     self.* = undefined;
 }

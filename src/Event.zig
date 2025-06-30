@@ -12,24 +12,10 @@ focus_widgetId: ?dvui.WidgetId = null,
 // num increments within a frame, used in focusRemainingEvents
 num: u16 = 0,
 evt: union(enum) {
-    // non-bubbleable
     mouse: Mouse,
-
-    // bubbleable
     key: Key,
     text: Text,
-    close_popup: ClosePopup,
-    scroll_drag: ScrollDrag,
-    scroll_to: ScrollTo,
-    scroll_propagate: ScrollPropagate,
 },
-
-// All widgets have to bubble keyboard events if they can have keyboard focus
-// so that pressing the up key in any child of a scrollarea will scroll.  Call
-// this helper at the end of processEvent().
-pub fn bubbleable(self: *const Event) bool {
-    return (!self.handled and (self.evt != .mouse));
-}
 
 /// Mark the event as handled
 ///
@@ -130,52 +116,6 @@ pub const Mouse = struct {
 
     p: dvui.Point.Physical,
     floating_win: dvui.WidgetId,
-};
-
-pub const ClosePopup = struct {
-    // are we closing because of a specific user action (clicked on menu item,
-    // pressed escape), or because they clicked off the menu somewhere?
-    intentional: bool = true,
-};
-
-/// Event bubbled from inside a scrollarea to ensure scrolling while dragging
-/// if the mouse moves to the edge or outside the scrollarea.
-///
-/// During dragging, a widget should bubble this on each pointer motion event.
-pub const ScrollDrag = struct {
-
-    // mouse point from motion event
-    mouse_pt: dvui.Point.Physical,
-
-    // rect in screen coords of the widget doing the drag (scrolling will stop
-    // if it wouldn't show more of this rect)
-    screen_rect: dvui.Rect.Physical,
-
-    // id of the widget that has mouse capture during the drag (needed to
-    // inject synthetic motion events into the next frame to keep scrolling)
-    capture_id: dvui.WidgetId,
-};
-
-/// Event bubbled from inside a scrollarea to scroll to a specific place.
-pub const ScrollTo = struct {
-
-    // rect in screen coords we want to be visible (might be outside
-    // scrollarea's clipping region - we want to scroll to bring it inside)
-    screen_rect: dvui.Rect.Physical,
-
-    // whether to scroll outside the current scroll bounds (useful if the
-    // current action might be expanding the scroll area)
-    over_scroll: bool = false,
-};
-
-/// Event bubbled from a scrollarea when user tries to scroll farther than it
-/// can.  Containing scrollareas use this to scroll if they can.
-/// Example is scrolling a TextEntry to its top will then scroll the containing
-/// page up.
-pub const ScrollPropagate = struct {
-    /// Motion field from the Mouse event that would have scrolled but we were
-    /// at the edge.
-    motion: dvui.Point.Physical,
 };
 
 test {
