@@ -117,7 +117,7 @@ fn gui_frame() !void {
             }
         }
     }
-    const style = CellStyle{ .opts = .{ .tab_index = 0, .expand = .horizontal } };
+
     var main_box = dvui.box(@src(), .horizontal, .{ .expand = .both, .color_fill = .fill_window, .background = true });
     defer main_box.deinit();
     {
@@ -126,6 +126,11 @@ fn gui_frame() !void {
         {
             var grid = dvui.grid(@src(), .numCols(3), .{}, .{});
             defer grid.deinit();
+
+            const style_base = CellStyle{ .opts = .{ .tab_index = 0, .expand = .horizontal } };
+            const focus_cell = grid.cellCursor();
+            std.debug.print("focus cell = {}\n", .{focus_cell});
+            const style: CellStyleNav = .{ .base = style_base, .focus_col = focus_cell.col_num, .focus_row = focus_cell.row_num };
 
             dvui.gridHeading(@src(), grid, 0, "Year", .fixed, .{});
             dvui.gridHeading(@src(), grid, 1, "Temperature", .fixed, .{});
@@ -152,6 +157,10 @@ fn gui_frame() !void {
                     _ = dvui.textEntryNumber(@src(), f64, .{ .value = pirates, .min = 0, .max = 10_000_000_000 }, style.options(col_num, row_num));
                 }
             }
+            if (dvui.tagGet("grid_focus_next")) |focus_widget| {
+                std.debug.print("got tag\n", .{});
+                dvui.focusWidget(focus_widget.id, null, null);
+            }
         }
     }
     {
@@ -167,6 +176,23 @@ fn gui_frame() !void {
         );
     }
 }
+
+const CellStyleNav = struct {
+    base: CellStyle,
+    focus_col: usize,
+    focus_row: usize,
+
+    pub fn cellOptions(self: *const CellStyleNav, col_num: usize, row_num: usize) dvui.GridWidget.CellOptions {
+        return self.base.cellOptions(col_num, row_num);
+    }
+
+    pub fn options(self: *const CellStyleNav, col_num: usize, row_num: usize) dvui.Options {
+        if (row_num == self.focus_row and col_num == self.focus_col) {
+            return self.base.options(col_num, row_num).override(.{ .tag = "grid_focus_next" });
+        }
+        return self.base.options(col_num, row_num);
+    }
+};
 
 const PirateDatum = struct { year: f64, temperature: f64, pirates: f64 };
 

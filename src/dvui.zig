@@ -4698,6 +4698,7 @@ pub fn grid(src: std.builtin.SourceLocation, cols: GridWidget.WidthsOrNum, init_
     const ret = widgetAlloc(GridWidget);
     ret.* = GridWidget.init(src, cols, init_opts, opts);
     ret.install();
+    ret.processEvents();
     return ret;
 }
 

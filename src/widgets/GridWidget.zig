@@ -580,6 +580,66 @@ pub fn totalWidth(self: *GridWidget) f32 {
     return total;
 }
 
+pub fn matchEvent(self: *GridWidget, e: *Event) bool {
+    //const ret = dvui.eventMatch(e, .{
+    //    .id = self.data().id,
+    //    .focus_id = dvui.lastFocusedIdInFrame(null),
+    //    .r = self.data().borderRectScale().r,
+    //});
+    //std.debug.print("event match = {}\n", .{ret});
+    //return ret;
+    // TOOD: this is too dumb.
+    for (dvui.events()) |*pe| {
+        if (pe.evt != .mouse or pe.evt.mouse.action != .position) continue;
+        if (!self.data().borderRectScale().r.contains(pe.evt.mouse.p)) return false;
+    }
+    return e.evt == .key and !e.handled;
+}
+
+pub fn processEvents(self: *GridWidget) void {
+    for (dvui.events()) |*e| {
+        if (!self.matchEvent(e))
+            continue;
+
+        self.processEvent(e);
+    }
+}
+var row_cursor: usize = 0;
+var col_cursor: usize = 0;
+
+pub fn processEvent(self: *GridWidget, e: *Event) void {
+    std.debug.print("GRID EVENT GRID: {}\n", .{e});
+    if (e.evt != .key or e.evt.key.action != .down) return;
+    const ke = e.evt.key;
+    std.debug.print("GRID PROCESS KEY\n", .{});
+    switch (ke.code) {
+        .up => {
+            e.handle(@src(), self.data());
+            row_cursor = if (row_cursor > 0) row_cursor - 1 else 0;
+        },
+        .down => {
+            std.debug.print("DWN\n", .{});
+            e.handle(@src(), self.data());
+            row_cursor += 1;
+        },
+        .tab => {
+            if (ke.mod.shift()) {
+                e.handle(@src(), self.data());
+                col_cursor = if (col_cursor > 0) col_cursor - 1 else 0;
+            } else {
+                e.handle(@src(), self.data());
+                col_cursor += 1;
+            }
+        },
+        else => {},
+    }
+    std.debug.print("cursor = {}:{}\n", .{ col_cursor, row_cursor });
+}
+
+pub fn cellCursor(_: *GridWidget) struct { col_num: usize, row_num: usize } {
+    return .{ .col_num = col_cursor, .row_num = row_cursor };
+}
+
 fn headerScrollAreaCreate(self: *GridWidget) void {
     if (self.hscroll == null) {
         self.hscroll = ScrollAreaWidget.init(@src(), .{
