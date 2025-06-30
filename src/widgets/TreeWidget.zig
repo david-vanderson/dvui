@@ -178,19 +178,12 @@ pub const Branch = struct {
         // if true, the branch is currently expanded
         expanded: bool = false,
 
-        // set to true for a reorderable that represents a final empty slot in
-        // the list shown during dragging
-        last_slot: bool = false,
-
         // if null, uses widget id
         // if non-null, must be unique among reorderables in a single reorder
         branch_id: ?usize = null,
 
         // if false, caller responsible for drawing something when targetRectScale() returns true
         draw_target: bool = true,
-
-        // if false, caller responsible for calling reinstall() when targetRectScale() returns true
-        reinstall: bool = false,
     };
 
     wd: WidgetData = undefined,
@@ -222,7 +215,7 @@ pub const Branch = struct {
     // can call this after init before install
     pub fn floating(self: *Branch) bool {
         // if drag_point is non-null, id_reorderable is non-null
-        if (self.tree.drag_point != null and self.tree.id_branch.? == (self.init_options.branch_id orelse self.wd.id.asUsize())) {
+        if (self.tree.drag_point != null and self.tree.id_branch.? == (self.init_options.branch_id orelse self.wd.id.asUsize()) and !self.tree.drag_ending) {
             return true;
         }
 
@@ -231,6 +224,7 @@ pub const Branch = struct {
 
     pub fn install(self: *Branch) void {
         self.installed = true;
+        var check_button_hovered: bool = false;
         if (self.tree.drag_point) |dp| {
             const topleft = dp.plus(dvui.dragOffset().plus(.{ .x = 5, .y = 5 }));
             if (self.tree.id_branch.? == (self.init_options.branch_id orelse self.wd.id.asUsize())) {
@@ -238,20 +232,20 @@ pub const Branch = struct {
                 self.wd.register();
                 dvui.parentSet(self.widget());
 
-                self.floating_widget = dvui.FloatingWidget.init(@src(), .{ .rect = Rect.fromPoint(.cast(topleft.toNatural())), .min_size_content = self.tree.branch_size });
+                self.floating_widget = dvui.FloatingWidget.init(
+                    @src(),
+                    .{ .rect = Rect.fromPoint(.cast(topleft.toNatural())), .min_size_content = self.tree.branch_size },
+                );
                 self.floating_widget.?.install();
             } else {
-                if (self.init_options.last_slot) {
-                    self.wd = WidgetData.init(self.wd.src, .{}, self.options.override(.{ .min_size_content = self.tree.branch_size }));
-                } else {
-                    self.wd = WidgetData.init(self.wd.src, .{}, self.options);
-                }
+                self.wd = WidgetData.init(self.wd.src, .{}, self.options);
+
                 var rs = self.wd.rectScale();
 
                 var dragRect = Rect.Physical.fromPoint(topleft).toSize(self.tree.branch_size.scale(rs.s, Size.Physical));
                 dragRect.h = 2.0;
 
-                if (!self.tree.found_slot and !rs.r.intersect(dragRect).empty()) {
+                if (!rs.r.intersect(dragRect).empty()) {
                     // user is dragging a reorderable over this rect
                     if (!self.expanded) {
                         if (dvui.animationGet(self.wd.id, "hover_expand")) |anim| {
@@ -263,10 +257,13 @@ pub const Branch = struct {
                         }
                     }
 
-                    if (!self.expanded)
+                    if (!self.expanded) {
                         self.target_rs = rs;
+                    } else {
+                        check_button_hovered = true;
+                    }
 
-                    if (self.init_options.draw_target) {
+                    if (self.init_options.draw_target and self.target_rs != null) {
                         rs.r.h = 2.0;
                         rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent });
                     }
@@ -296,6 +293,15 @@ pub const Branch = struct {
         self.button.install();
         self.button.processEvents();
         self.button.drawBackground();
+
+        // Check if the button is hovered if we are expanded, this allows us to set the target rs when
+        // the entry is expanded
+        if (self.button.hovered() and check_button_hovered) {
+            var rs = self.wd.rectScale();
+            self.target_rs = rs;
+            rs.r.h = 2.0;
+            rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent });
+        }
 
         self.tree.branch_size = self.button.wd.rect.size();
 
@@ -331,7 +337,7 @@ pub const Branch = struct {
     }
 
     pub const ExpanderOptions = struct {
-        indent: u32 = 10,
+        indent: f32 = 10.0,
     };
 
     pub fn expander(self: *Branch, src: std.builtin.SourceLocation, init_opts: ExpanderOptions, opts: Options) bool {
@@ -344,14 +350,17 @@ pub const Branch = struct {
 
         const defaults = Options{
             .name = "Expander",
-            .border = .{ .x = 1 },
-            .margin = .{ .x = @as(f32, @floatFromInt(init_opts.indent)) },
-            .background = true,
+            .margin = .{ .x = init_opts.indent },
         };
 
-        self.expander_vbox = dvui.BoxWidget.init(src, .{ .dir = .vertical }, defaults.override(opts));
-        self.expander_vbox.install();
-        self.expander_vbox.drawBackground();
+        if (self.expanded) {
+            self.expander_vbox = dvui.BoxWidget.init(src, .{ .dir = .vertical }, defaults.override(opts));
+            self.expander_vbox.install();
+            self.expander_vbox.drawBackground();
+
+            // Since our items are padded, we need to add some extra space to the top
+            _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = self.options.paddingGet().y * 2.0 } });
+        }
 
         self.can_expand = true;
 
@@ -427,7 +436,9 @@ pub const Branch = struct {
 
     pub fn deinit(self: *Branch) void {
         if (self.can_expand) {
-            self.expander_vbox.deinit();
+            if (self.expanded) {
+                self.expander_vbox.deinit();
+            }
 
             dvui.dataSet(null, self.wd.id, "_expanded", self.expanded);
         } else {
