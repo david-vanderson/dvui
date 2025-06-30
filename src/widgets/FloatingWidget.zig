@@ -76,7 +76,7 @@ pub fn install(self: *FloatingWidget) void {
 }
 
 pub fn widget(self: *FloatingWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *FloatingWidget) *WidgetData {
@@ -94,19 +94,6 @@ pub fn screenRectScale(self: *FloatingWidget, rect: Rect) RectScale {
 
 pub fn minSizeForChild(self: *FloatingWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
-}
-
-pub fn processEvent(self: *FloatingWidget, e: *Event, bubbling: bool) void {
-    // no normal events, just forward close_popup
-    switch (e.evt) {
-        .close_popup => {
-            self.wd.parent.processEvent(e, true);
-        },
-        else => {},
-    }
-
-    // otherwise don't bubble events
-    _ = bubbling;
 }
 
 pub fn deinit(self: *FloatingWidget) void {

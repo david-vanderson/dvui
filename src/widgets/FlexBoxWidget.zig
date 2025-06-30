@@ -50,7 +50,7 @@ pub fn drawBackground(self: *FlexBoxWidget) void {
 }
 
 pub fn widget(self: *FlexBoxWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *FlexBoxWidget) *WidgetData {
@@ -104,13 +104,6 @@ pub fn minSizeForChild(self: *FlexBoxWidget, s: Size) void {
     self.max_row_width = @max(self.max_row_width, self.row_size.w);
     self.width_nobreak += s.w;
     self.wd.min_size = self.wd.options.padSize(.{ .w = self.width_nobreak, .h = self.insert_pt.y + self.row_size.h });
-}
-
-pub fn processEvent(self: *FlexBoxWidget, e: *dvui.Event, bubbling: bool) void {
-    _ = bubbling;
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
-    }
 }
 
 pub fn deinit(self: *FlexBoxWidget) void {

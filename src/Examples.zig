@@ -2585,7 +2585,7 @@ pub fn focus() void {
         var b = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10, .y = 2 }, .border = dvui.Rect.all(1) });
         defer b.deinit();
 
-        const last_focus_id = dvui.lastFocusedIdInFrame();
+        const last_focus_id = dvui.lastFocusedIdInFrame(null);
 
         var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
         tl.addText("This shows how to detect if any widgets in a dynamic extent have focus.", .{});
@@ -2609,7 +2609,7 @@ pub fn focus() void {
             }
         }
 
-        const have_focus = (last_focus_id != dvui.lastFocusedIdInFrame());
+        const have_focus = (last_focus_id != dvui.lastFocusedIdInFrame(null));
         dvui.label(@src(), "Anything here with focus: {s}", .{if (have_focus) "Yes" else "No"}, .{});
     }
 
@@ -3065,12 +3065,11 @@ pub fn scrollCanvas() void {
                                 b.* = dataRectScale.pointFromPhysical(p);
                                 dvui.refresh(null, @src(), scrollContainer.data().id);
 
-                                var scrolldrag = dvui.Event{ .evt = .{ .scroll_drag = .{
+                                dvui.scrollDrag(.{
                                     .mouse_pt = e.evt.mouse.p,
                                     .screen_rect = dragBox.data().rectScale().r,
                                     .capture_id = dragBox.data().id,
-                                } } };
-                                dragBox.processEvent(&scrolldrag, true);
+                                });
                             }
                         }
                     }
@@ -3609,7 +3608,6 @@ pub fn animations() void {
 
         var mslabel = dvui.LabelWidget.init(@src(), "{d:0>3} ms into second", .{@as(u32, @intCast(left))}, .{}, .{});
         mslabel.install();
-        mslabel.processEvents();
         mslabel.draw();
         mslabel.deinit();
 
@@ -4704,7 +4702,7 @@ pub const StrokeTest = struct {
             if (!dvui.eventMatchSimple(e, self.data()))
                 continue;
 
-            self.processEvent(e, false);
+            self.processEvent(e);
         }
 
         self.wd.borderAndBackground(.{});
@@ -4734,7 +4732,7 @@ pub const StrokeTest = struct {
     }
 
     pub fn widget(self: *Self) dvui.Widget {
-        return dvui.Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+        return dvui.Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
     }
 
     pub fn data(self: *Self) *dvui.WidgetData {
@@ -4754,8 +4752,7 @@ pub const StrokeTest = struct {
         self.wd.minSizeMax(self.wd.options.padSize(s));
     }
 
-    pub fn processEvent(self: *Self, e: *dvui.Event, bubbling: bool) void {
-        _ = bubbling;
+    pub fn processEvent(self: *Self, e: *dvui.Event) void {
         switch (e.evt) {
             .mouse => |me| {
                 const rs = self.wd.contentRectScale();
@@ -4815,10 +4812,6 @@ pub const StrokeTest = struct {
                 }
             },
             else => {},
-        }
-
-        if (e.bubbleable()) {
-            self.wd.parent.processEvent(e, true);
         }
     }
 

@@ -1423,15 +1423,24 @@ pub fn focusedWidgetIdInCurrentSubwindow() ?WidgetId {
 
 /// Last widget id we saw this frame that was the focused widget.
 ///
-/// If two calls to this function return different values, then some widget
-/// that ran between them had focus.  This means one of:
+/// Pass result from previous call for the last focused id only if it changed.
+/// If so, some widget that ran between them had focus.  This means one of:
 /// * a widget had focus when it called `WidgetData.register`
 /// * `focusWidget` with the id of the last widget to call `WidgetData.register`
 /// * `focusWidget` with the id of a widget in the parent chain
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn lastFocusedIdInFrame() WidgetId {
-    return currentWindow().last_focused_id_this_frame;
+pub fn lastFocusedIdInFrame(prev: ?WidgetId) WidgetId {
+    const last_focused_id = currentWindow().last_focused_id_this_frame;
+    if (prev) |p| {
+        if (p != last_focused_id) {
+            return last_focused_id;
+        } else {
+            return .zero;
+        }
+    } else {
+        return last_focused_id;
+    }
 }
 
 /// Set cursor the app should use if not already set this frame.
@@ -2437,6 +2446,7 @@ pub const CaptureMouse = struct {
     /// subwindow id the widget with capture is in
     subwindow_id: WidgetId,
 };
+
 /// Capture the mouse for this widget's data.
 /// (i.e. `eventMatch` return true for this widget and false for all others)
 /// and capture is explicitly released when passing `null`.
@@ -3132,8 +3142,12 @@ pub fn eventMatchSimple(e: *Event, wd: *WidgetData) bool {
 
 /// Data for matching events to widgets.  See `eventMatch`.
 pub const EventMatchOptions = struct {
-    /// Id of widget, used to route non pointer events based on focus.
+    /// Id of widget, used for keyboard focus and mouse capture.
     id: WidgetId,
+
+    /// Additional Id for keyboard focus, use to match children with
+    /// `lastFocusedIdInFrame()`.
+    focus_id: WidgetId = .zero,
 
     /// Physical pixel rect used to match pointer events.
     r: Rect.Physical,
@@ -3168,7 +3182,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                 return false;
             }
         } else {
-            if (e.focus_widgetId != opts.id) {
+            if (e.focus_widgetId != opts.id and e.focus_widgetId != opts.focus_id) {
                 // not the focused widget
                 return false;
             }
@@ -3227,11 +3241,6 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                 return false;
             }
         },
-
-        .close_popup => unreachable,
-        .scroll_drag => unreachable,
-        .scroll_to => unreachable,
-        .scroll_propagate => unreachable,
     }
 
     return true;
@@ -3336,6 +3345,46 @@ pub fn timerDone(id: WidgetId) bool {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn timerDoneOrNone(id: WidgetId) bool {
     return timerDone(id) or (timerGet(id) == null);
+}
+
+pub const ScrollToOptions = struct {
+    // rect in screen coords we want to be visible (might be outside
+    // scrollarea's clipping region - we want to scroll to bring it inside)
+    screen_rect: dvui.Rect.Physical,
+
+    // whether to scroll outside the current scroll bounds (useful if the
+    // current action might be expanding the scroll area)
+    over_scroll: bool = false,
+};
+
+/// Scroll the current containing scroll area to show the passed in screen rect
+pub fn scrollTo(scroll_to: ScrollToOptions) void {
+    if (ScrollContainerWidget.current()) |scroll| {
+        scroll.processScrollTo(scroll_to);
+    }
+}
+
+pub const ScrollDragOptions = struct {
+    // mouse point from motion event
+    mouse_pt: dvui.Point.Physical,
+
+    // rect in screen coords of the widget doing the drag (scrolling will stop
+    // if it wouldn't show more of this rect)
+    screen_rect: dvui.Rect.Physical,
+
+    // id of the widget that has mouse capture during the drag (needed to
+    // inject synthetic motion events into the next frame to keep scrolling)
+    capture_id: dvui.WidgetId,
+};
+
+/// Bubbled from inside a scrollarea to ensure scrolling while dragging
+/// if the mouse moves to the edge or outside the scrollarea.
+///
+/// During dragging, a widget should call this on each pointer motion event.
+pub fn scrollDrag(scroll_drag: ScrollDragOptions) void {
+    if (ScrollContainerWidget.current()) |scroll| {
+        scroll.processScrollDrag(scroll_drag);
+    }
 }
 
 pub const TabIndex = struct {
@@ -4348,7 +4397,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
         }
 
         if (!e.handled) {
-            te.processEvent(e, false);
+            te.processEvent(e);
         }
     }
 
@@ -5200,12 +5249,6 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
             },
             else => {},
         }
-
-        // if we didn't handle this event, send it to lw - this means we don't
-        // need to call lw.processEvents()
-        if (!e.handled) {
-            lw.processEvent(e, false);
-        }
     }
 
     // draw text
@@ -5230,7 +5273,6 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
 pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) void {
     var lw = LabelWidget.init(src, fmt, args, .{}, opts);
     lw.install();
-    lw.processEvents();
     lw.draw();
     lw.deinit();
 }
@@ -5243,7 +5285,6 @@ pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: an
 pub fn labelEx(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) void {
     var lw = LabelWidget.init(src, fmt, args, init_opts, opts);
     lw.install();
-    lw.processEvents();
     lw.draw();
     lw.deinit();
 }
@@ -5256,7 +5297,6 @@ pub fn labelEx(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: 
 pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, init_opts: LabelWidget.InitOptions, opts: Options) void {
     var lw = LabelWidget.initNoFmt(src, str, init_opts, opts);
     lw.install();
-    lw.processEvents();
     lw.draw();
     lw.deinit();
 }
@@ -5812,7 +5852,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             }
 
             if (!e.handled) {
-                te.processEvent(e, false);
+                te.processEvent(e);
             }
         }
 
@@ -5985,10 +6025,6 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                     }
                 },
                 else => {},
-            }
-
-            if (e.bubbleable()) {
-                b.wd.parent.processEvent(e, true);
             }
         }
 

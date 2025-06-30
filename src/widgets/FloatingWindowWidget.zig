@@ -75,6 +75,7 @@ wd: WidgetData = undefined,
 init_options: InitOptions = undefined,
 options: Options = undefined,
 prev_windowInfo: dvui.subwindowCurrentSetReturn = undefined,
+prev_last_focus: dvui.WidgetId = undefined,
 layout: BoxWidget = undefined,
 prevClip: Rect.Physical = .{},
 auto_pos: bool = false,
@@ -231,6 +232,8 @@ pub fn install(self: *FloatingWindowWidget) void {
 
     dvui.parentSet(self.widget());
     self.prev_windowInfo = dvui.subwindowCurrentSet(self.wd.id, .cast(self.wd.rect));
+    // prevents parents from processing key events if focus is inside the floating window:w
+    self.prev_last_focus = dvui.lastFocusedIdInFrame(null);
 
     // reset clip to whole OS window
     // - if modal fade everything below us
@@ -504,7 +507,7 @@ pub fn close(self: *FloatingWindowWidget) void {
 }
 
 pub fn widget(self: *FloatingWindowWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *FloatingWindowWidget) *WidgetData {
@@ -522,25 +525,6 @@ pub fn screenRectScale(self: *FloatingWindowWidget, rect: Rect) RectScale {
 
 pub fn minSizeForChild(self: *FloatingWindowWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
-}
-
-pub fn processEvent(self: *FloatingWindowWidget, e: *Event, bubbling: bool) void {
-    // floating window doesn't process events normally
-    switch (e.evt) {
-        .close_popup => |cp| {
-            e.handle(@src(), self.data());
-            if (cp.intentional) {
-                // when a popup is closed because the user chose to, the
-                // window that spawned it (which had focus previously)
-                // should become focused again
-                dvui.focusSubwindow(self.wd.id, null);
-            }
-        },
-        else => {},
-    }
-
-    // floating windows don't bubble any events
-    _ = bubbling;
 }
 
 pub fn deinit(self: *FloatingWindowWidget) void {
@@ -578,6 +562,7 @@ pub fn deinit(self: *FloatingWindowWidget) void {
     // outside normal layout, don't call minSizeForChild or self.wd.minSizeReportToParent();
 
     dvui.parentReset(self.wd.id, self.wd.parent);
+    dvui.currentWindow().last_focused_id_this_frame = self.prev_last_focus;
     _ = dvui.subwindowCurrentSet(self.prev_windowInfo.id, self.prev_windowInfo.rect);
     dvui.clipSet(self.prevClip);
     _ = dvui.renderingSet(self.prev_rendering);

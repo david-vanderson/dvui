@@ -109,7 +109,7 @@ pub fn end(self: *AnimateWidget) bool {
 }
 
 pub fn widget(self: *AnimateWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *AnimateWidget) *WidgetData {
@@ -127,13 +127,6 @@ pub fn screenRectScale(self: *AnimateWidget, rect: Rect) RectScale {
 
 pub fn minSizeForChild(self: *AnimateWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
-}
-
-pub fn processEvent(self: *AnimateWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
-    }
 }
 
 pub fn deinit(self: *AnimateWidget) void {

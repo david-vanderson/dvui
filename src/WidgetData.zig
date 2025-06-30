@@ -85,11 +85,9 @@ pub fn register(self: *WidgetData) void {
 
         if (cw.scroll_to_focused) {
             cw.scroll_to_focused = false;
-
-            var scrollto = dvui.Event{ .evt = .{ .scroll_to = .{
+            dvui.scrollTo(.{
                 .screen_rect = self.rectScale().r,
-            } } };
-            self.parent.processEvent(&scrollto, true);
+            });
         }
     }
 

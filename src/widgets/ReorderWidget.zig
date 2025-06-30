@@ -52,7 +52,7 @@ pub fn finalSlot(self: *ReorderWidget) bool {
 }
 
 pub fn widget(self: *ReorderWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *ReorderWidget) *WidgetData {
@@ -82,13 +82,11 @@ pub fn processEvents(self: *ReorderWidget) void {
         if (!self.matchEvent(e))
             continue;
 
-        self.processEvent(e, false);
+        self.processEvent(e);
     }
 }
 
-pub fn processEvent(self: *ReorderWidget, e: *dvui.Event, bubbling: bool) void {
-    _ = bubbling;
-
+pub fn processEvent(self: *ReorderWidget, e: *dvui.Event) void {
     if (dvui.captured(self.wd.id)) {
         switch (e.evt) {
             .mouse => |me| {
@@ -99,21 +97,15 @@ pub fn processEvent(self: *ReorderWidget, e: *dvui.Event, bubbling: bool) void {
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (me.action == .motion) {
                     self.drag_point = me.p;
-
-                    var scrolldrag = dvui.Event{ .evt = .{ .scroll_drag = .{
+                    dvui.scrollDrag(.{
                         .mouse_pt = me.p,
                         .screen_rect = self.wd.rectScale().r,
                         .capture_id = self.wd.id,
-                    } } };
-                    self.wd.parent.processEvent(&scrolldrag, true);
+                    });
                 }
             },
             else => {},
         }
-    }
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
     }
 }
 
@@ -335,7 +327,7 @@ pub const Reorderable = struct {
     }
 
     pub fn widget(self: *Reorderable) Widget {
-        return Widget.init(self, Reorderable.data, Reorderable.rectFor, Reorderable.screenRectScale, Reorderable.minSizeForChild, Reorderable.processEvent);
+        return Widget.init(self, Reorderable.data, Reorderable.rectFor, Reorderable.screenRectScale, Reorderable.minSizeForChild);
     }
 
     pub fn data(self: *Reorderable) *WidgetData {
@@ -353,14 +345,6 @@ pub const Reorderable = struct {
 
     pub fn minSizeForChild(self: *Reorderable, s: Size) void {
         self.wd.minSizeMax(self.wd.options.padSize(s));
-    }
-
-    pub fn processEvent(self: *Reorderable, e: *dvui.Event, bubbling: bool) void {
-        _ = bubbling;
-
-        if (e.bubbleable()) {
-            self.wd.parent.processEvent(e, true);
-        }
     }
 
     pub fn deinit(self: *Reorderable) void {

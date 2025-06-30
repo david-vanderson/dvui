@@ -140,24 +140,6 @@ pub fn matchEvent(self: *LabelWidget, e: *Event) bool {
     return dvui.eventMatchSimple(e, self.data());
 }
 
-pub fn processEvents(self: *LabelWidget) void {
-    const evts = dvui.events();
-    for (evts) |*e| {
-        if (!self.matchEvent(e))
-            continue;
-
-        self.processEvent(e, false);
-    }
-}
-
-pub fn processEvent(self: *LabelWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
-    }
-}
-
 pub fn deinit(self: *LabelWidget) void {
     defer dvui.widgetFree(self);
     if (self.allocator) |alloc| alloc.free(self.label_str);

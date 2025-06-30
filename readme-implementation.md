@@ -94,7 +94,6 @@ Now the widget is the parent widget, so further widgets nested here will be chil
 * `processEvents()`
   * loop over `events()`, call `matchEvent()` for each
   * call `Event.handle()` if no other widget should process this event
-  * bubble event to parent if `Event.bubbleable()`
 
 See the Event Handling section for details.
 
@@ -130,10 +129,10 @@ There is always a single parent widget.  `parentSet()` is how a widget sets itse
 
 Each widget keeps a pointer to its parent widget, which forms a chain going back to `dvui.Window` which is the original parent.  This chain is used for:
 * `parent.screenRectScale()` translate from our child Rect (in our parent's coordinate space) to a RectScale (in screen coordinates).
-* `parent.processEvent()` bubble keyboard events, so pressing the "up" key while focused on a button can make the containing scroll area scroll.
+* `parent.minSizeForChild()` to inform the parent of the final size of a child for layout purposes.
 
 #### Opting Out of Normal Layout
-If `Options.rect` is set, the widget is directly specifying its position and size (still in parent coordinates).  In this case, it does not call `parent.rectFor()` nor `parent.minSizeForChild()`, which means it is invisible to its parent for layout purposes.  The parent can still receive bubbled events.
+If `Options.rect` is set, the widget is directly specifying its position and size (still in parent coordinates).  In this case, it does not call `parent.rectFor()` nor `parent.minSizeForChild()`, which means it is invisible to its parent for layout purposes.
 
 ### Windows and Subwindows
 `dvui.Window` maps to a single OS window.  All widgets and drawing happen in that window.
@@ -203,8 +202,6 @@ Most events are either mouse (includes touch) or keyboard:
   * have the id of the last focused widget
   * have the id of the last focused subwindow (each subwindow has a focused widget)
   * we want the focused widget to process the event
-  * if it doesn't, it bubbles the event up the parent chain
-    * example: button has focus, pressing the "up" key can bubble to a containing scroll area
 
 Special Events
 * `.focus`
