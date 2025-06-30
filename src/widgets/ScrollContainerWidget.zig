@@ -429,22 +429,22 @@ pub fn processMotionScroll(self: *ScrollContainerWidget, motion: dvui.Point.Phys
     // entry box where you are trying to scroll vertically
     // but the motion event has a small amount of
     // horizontal.
-    var propagate: bool = true;
+    var propagate: bool = false;
 
     if (self.si.vertical != .none) {
         self.si.viewport.y -= motion.y / rs.s;
         self.si.velocity.y = -motion.y / rs.s;
         dvui.refresh(null, @src(), self.wd.id);
-        if (@abs(motion.y) > @abs(motion.x) and self.si.viewport.y >= 0 and self.si.viewport.y <= self.si.scrollMax(.vertical)) {
-            propagate = false;
+        if (@abs(motion.y) > @abs(motion.x) and (self.si.viewport.y < 0 or self.si.viewport.y > self.si.scrollMax(.vertical))) {
+            propagate = true;
         }
     }
     if (self.si.horizontal != .none) {
         self.si.viewport.x -= motion.x / rs.s;
         self.si.velocity.x = -motion.x / rs.s;
         dvui.refresh(null, @src(), self.wd.id);
-        if (@abs(motion.x) > @abs(motion.y) and self.si.viewport.x >= 0 and self.si.viewport.x <= self.si.scrollMax(.horizontal)) {
-            propagate = false;
+        if (@abs(motion.x) > @abs(motion.y) and (self.si.viewport.x < 0 or self.si.viewport.x > self.si.scrollMax(.horizontal))) {
+            propagate = true;
         }
     }
 
