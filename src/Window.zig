@@ -1154,7 +1154,7 @@ pub fn begin(
 }
 
 fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
-    try self.events.append(self.arena(), .{ .evt = .{ .mouse = .{
+    try self.events.append(self.arena(), .{ .num = self.event_num + 1, .evt = .{ .mouse = .{
         .action = .position,
         .button = .none,
         .mod = self.modifiers,
