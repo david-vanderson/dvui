@@ -328,7 +328,7 @@ pub const demoKind = enum {
             .layout => "Layout",
             .text_layout => "Text Layout",
             .plots => "Plots",
-            .reorderable => "Reorderable",
+            .reorderable => "Reorder / Tree",
             .menus => "Menus / Focus",
             .scrolling => "Scrolling",
             .scroll_canvas => "Scroll Canvas",
@@ -349,7 +349,7 @@ pub const demoKind = enum {
             .layout => .{ .scale = 0.45, .offset = .{ .x = -50 } },
             .text_layout => .{ .scale = 0.45, .offset = .{} },
             .plots => .{ .scale = 0.45, .offset = .{} },
-            .reorderable => .{ .scale = 0.45, .offset = .{ .y = -200 } },
+            .reorderable => .{ .scale = 0.45, .offset = .{ } },
             .menus => .{ .scale = 0.45, .offset = .{} },
             .scrolling => .{ .scale = 0.45, .offset = .{ .x = -150, .y = 0 } },
             .scroll_canvas => .{ .scale = 0.35, .offset = .{ .y = -120 } },
@@ -2084,12 +2084,10 @@ const reorderLayout = enum {
 
 /// ![image](Examples-reorderable.png)
 pub fn reorderLists() void {
-    const g = struct {
-        var layout: reorderLayout = .vertical;
-    };
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+    const layo = dvui.dataGetPtrDefault(null, uniqueId, "reorderLayout", reorderLayout, .horizontal);
 
-    const expander_o: dvui.ExpanderOptions = .{ .default_expanded = true };
-    if (dvui.expander(@src(), "Simple", expander_o, .{ .expand = .horizontal })) {
+    if (dvui.expander(@src(), "Simple", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
         var vbox = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
         defer vbox.deinit();
 
@@ -2099,8 +2097,8 @@ pub fn reorderLists() void {
 
             const entries = [_][]const u8{ "Vertical", "Horizontal", "Flex" };
             for (0..3) |i| {
-                if (dvui.radio(@src(), @intFromEnum(g.layout) == i, entries[i], .{ .id_extra = i })) {
-                    g.layout = @enumFromInt(i);
+                if (dvui.radio(@src(), @intFromEnum(layo.*) == i, entries[i], .{ .id_extra = i })) {
+                    layo.* = @enumFromInt(i);
                 }
             }
         }
@@ -2113,10 +2111,10 @@ pub fn reorderLists() void {
             dvui.label(@src(), "to reorder.", .{}, .{});
         }
 
-        reorderListsSimple(g.layout);
+        reorderListsSimple(layo.*);
     }
 
-    if (dvui.expander(@src(), "Advanced", expander_o, .{ .expand = .horizontal })) {
+    if (dvui.expander(@src(), "Advanced", .{}, .{ .expand = .horizontal })) {
         var vbox = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
         defer vbox.deinit();
 
@@ -2124,7 +2122,7 @@ pub fn reorderLists() void {
         reorderListsAdvanced();
     }
 
-    if (dvui.expander(@src(), "Tree", expander_o, .{ .expand = .horizontal })) {
+    if (dvui.expander(@src(), "Tree", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
         var vbox = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
         defer vbox.deinit();
 
@@ -2574,15 +2572,15 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
 }
 
 pub fn reorderTree() void {
-    const g = struct {
-        var root_directory: ?[]const u8 = null;
-    };
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+    var root_directory: ?[]const u8 = dvui.dataGetSlice(null, uniqueId, "root_dir", []u8) orelse null;
 
     if (dvui.button(@src(), "Select Directory", .{}, .{ .expand = .horizontal })) {
-        g.root_directory = dvui.dialogNativeFolderSelect(dvui.currentWindow().gpa, .{ .title = "Select Directory" }) catch null;
+        root_directory = dvui.dialogNativeFolderSelect(dvui.currentWindow().arena(), .{ .title = "Select Directory" }) catch null;
     }
 
-    if (g.root_directory) |directory| {
+    if (root_directory) |directory| {
+        dvui.dataSetSlice(null, uniqueId, "root_dir", directory);
         dvui.label(@src(), "Root Directory: {s}", .{directory}, .{});
 
         if (tree_removed_path) |removed_path| {
@@ -2592,9 +2590,7 @@ pub fn reorderTree() void {
         var tree = dvui.TreeWidget.tree(@src(), .{ .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
         defer tree.deinit();
 
-        if (g.root_directory) |root_directory| {
-            recurseFiles(dvui.currentWindow().gpa, root_directory, tree) catch std.debug.panic("Failed to recurse files", .{});
-        }
+        recurseFiles(dvui.currentWindow().gpa, directory, tree) catch std.debug.panic("Failed to recurse files", .{});
     }
 }
 
