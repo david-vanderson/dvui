@@ -131,7 +131,7 @@ pub fn uncached(self: *CacheWidget) bool {
 }
 
 pub fn widget(self: *CacheWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *CacheWidget) *WidgetData {
@@ -149,13 +149,6 @@ pub fn screenRectScale(self: *CacheWidget, rect: Rect) RectScale {
 
 pub fn minSizeForChild(self: *CacheWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
-}
-
-pub fn processEvent(self: *CacheWidget, e: *dvui.Event, bubbling: bool) void {
-    _ = bubbling;
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
-    }
 }
 
 /// This deinit function returns an error because of the additional

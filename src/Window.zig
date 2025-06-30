@@ -111,10 +111,7 @@ gpa: std.mem.Allocator,
 _arena: dvui.ShrinkingArenaAllocator,
 _lifo_arena: dvui.ShrinkingArenaAllocator,
 /// Used to allocate widgets with a fixed location
-_widget_stack: std.heap.FixedBufferAllocator,
-/// The peak amount of bytes used by the widget stack since
-/// the creation of `Window`. Used to resize the stack ifs needed.
-peak_widget_stack: usize = 0,
+_widget_stack: dvui.ShrinkingArenaAllocator,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
@@ -172,9 +169,6 @@ const SavedData = struct {
 pub const InitOptions = struct {
     id_extra: usize = 0,
     arena: ?dvui.ShrinkingArenaAllocator = null,
-    /// For reference, the `dvui.Examples.demo` window uses
-    /// about 0x5000 stack space at its peak
-    default_widget_stack_capacity: usize = 0x10000,
     theme: ?*Theme = null,
     keybinds: ?enum {
         none,
@@ -195,7 +189,7 @@ pub fn init(
         .gpa = gpa,
         ._arena = init_opts.arena orelse .init(gpa),
         ._lifo_arena = .init(gpa),
-        ._widget_stack = .init(try gpa.alloc(u8, init_opts.default_widget_stack_capacity)),
+        ._widget_stack = .init(gpa),
         .subwindows = .init(gpa),
         .tab_index_prev = .init(gpa),
         .tab_index = .init(gpa),
@@ -422,7 +416,7 @@ pub fn deinit(self: *Self) void {
     self.keybinds.deinit();
     self._arena.deinit();
     self._lifo_arena.deinit();
-    self.gpa.free(self._widget_stack.buffer);
+    self._widget_stack.deinit();
 
     {
         var it = self.font_bytes.valueIterator();
@@ -1671,8 +1665,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     }
     self.texture_trash.clearAndFree();
 
-    // events may have been tagged with a focus widget that never showed up, so
-    // we wouldn't even get them bubbled
+    // events may have been tagged with a focus widget that never showed up
     const evts = dvui.events();
     for (evts) |*e| {
         if (self.drag_state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release) {
@@ -1743,32 +1736,22 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // std.log.debug("peak widget stack {d} (0x{0x})", .{self.peak_widget_stack});
 
     // self._arena.debug_log();
-    _ = self._arena.reset(.retain_capacity);
+    _ = self._arena.reset(.shrink_to_peak_usage);
     if (self._lifo_arena.current_usage != 0 and !self._lifo_arena.has_expanded()) {
-        log.warn("Arena was not empty at the end of the frame, {d} byte left. Did you forget to free memory somewhere?", .{self._lifo_arena.current_usage});
+        log.warn("Arena was not empty at the end of the frame, {d} bytes left. Did you forget to free memory somewhere?", .{self._lifo_arena.current_usage});
         // const buf: [*]u8 = @ptrCast(self._lifo_arena.arena.state.buffer_list.first.?);
         // std.log.debug("Arena content {s}", .{buf[@sizeOf(usize)..self._lifo_arena.current_usage]});
     }
     // self._lifo_arena.debug_log();
-    _ = self._lifo_arena.reset(.retain_capacity);
+    _ = self._lifo_arena.reset(.shrink_to_peak_usage);
 
-    // Widget stack
-    if (self._widget_stack.end_index != 0) {
-        log.warn("Widget stack was not empty at the end of the frame. Did you forget to call deinti?", .{});
-        self._widget_stack.reset();
+    if (self._widget_stack.current_usage != 0 and !self._widget_stack.has_expanded()) {
+        log.warn("Widget stack was not empty at the end of the frame, {d} bytes left. Did you forget to call deinit?", .{self._widget_stack.current_usage});
+        // const buf: [*]u8 = @ptrCast(self._widget_stack.arena.state.buffer_list.first.?);
+        // std.log.debug("Widget stack content {s}", .{buf[@sizeOf(usize)..self._widget_stack.current_usage]});
     }
-    if (self._widget_stack.buffer.len < self.peak_widget_stack) {
-        log.warn("Widget stack overflowed, consider increasing the default widget stack size", .{});
-        const new_len = self.peak_widget_stack + 0x400;
-        if (self.gpa.resize(self._widget_stack.buffer, new_len)) {
-            self._widget_stack.buffer.len = new_len;
-        } else {
-            // do realloc ourselves as we don't need to copy any memory from the old allocation
-            const new_buf = try self.gpa.alloc(u8, new_len);
-            self.gpa.free(self._widget_stack.buffer);
-            self._widget_stack.buffer = new_buf;
-        }
-    }
+    // self._widget_stack.debug_log();
+    _ = self._widget_stack.reset(.shrink_to_peak_usage);
 
     try self.initEvents();
 
@@ -1814,7 +1797,7 @@ fn initEvents(self: *Self) std.mem.Allocator.Error!void {
 }
 
 pub fn widget(self: *Self) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *Self) *WidgetData {
@@ -1837,25 +1820,6 @@ pub fn minSizeForChild(self: *Self, s: Size) void {
     // os window doesn't size itself based on children
     _ = self;
     _ = s;
-}
-
-pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
-    // window does cleanup events, but not normal events
-    switch (e.evt) {
-        .close_popup => |cp| {
-            e.handle(@src(), self.data());
-            if (cp.intentional) {
-                // when a popup is closed due to a menu item being chosen,
-                // the window that spawned it (which had focus previously)
-                // should become focused again
-                dvui.focusSubwindow(self.wd.id, null);
-            }
-        },
-        else => {},
-    }
-
-    // can't bubble past the base window
-    _ = bubbling;
 }
 
 const Options = dvui.Options;

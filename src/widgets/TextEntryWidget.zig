@@ -219,7 +219,7 @@ pub fn processEvents(self: *TextEntryWidget) void {
         if (!self.matchEvent(e))
             continue;
 
-        self.processEvent(e, false);
+        self.processEvent(e);
     }
 }
 
@@ -325,7 +325,7 @@ pub fn drawCursor(self: *TextEntryWidget) void {
 }
 
 pub fn widget(self: *TextEntryWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *TextEntryWidget) *WidgetData {
@@ -512,7 +512,7 @@ pub fn addNullTerminator(self: *TextEntryWidget) void {
     }
 }
 
-pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
+pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
     switch (e.evt) {
         .key => |ke| blk: {
             if (ke.action == .down and ke.matchBind("next_widget")) {
@@ -802,15 +802,10 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 dvui.focusWidget(self.wd.id, null, e.num);
             }
         },
-        else => {},
     }
 
-    if (!e.handled and !bubbling) {
-        self.textLayout.processEvent(e, false);
-    }
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
+    if (!e.handled) {
+        self.textLayout.processEvent(e);
     }
 }
 

@@ -15,8 +15,6 @@ const ArenaAllocator = std.heap.ArenaAllocator;
 
 const ShrinkingArenaAllocator = @This();
 
-const allowed_extra_capacity = 0x1000;
-
 arena: ArenaAllocator,
 peak_usage: usize = 0,
 current_usage: usize = 0,
@@ -29,20 +27,41 @@ pub fn deinit(self: ShrinkingArenaAllocator) void {
     self.arena.deinit();
 }
 
-/// Resets the inner arena, limiting the retained capacity to
-/// the peak amount used + the extra allowed capacity
+pub const ResetMode = union(enum) {
+    /// Releases all allocated memory in the arena.
+    free_all,
+    /// This will pre-heat the arena for future allocations by allocating
+    /// a large enough buffer for all previously done allocations.
+    /// Preheating will speed up the allocation process by invoking
+    /// the backing allocator less often than before. If `reset()`
+    /// is used in a loop, this means that after the biggest operation,
+    /// no memory allocations are performed anymore.
+    retain_capacity,
+    /// Shrinks the capacity to the peak usage plus some fraction
+    /// of the peak usage. This ensures that small variations in
+    /// the allocated memory won't cause any new allocations.
+    shrink_to_peak_usage,
+    /// Shrinks the capacity to exactly the peak amount used. This
+    /// means that any additional amount of capacity needed will
+    /// cause a new buffer to be allocated by the backing allocator.
+    shrink_to_peak_usage_exact,
+};
+
+/// Resets the inner arena using the strategy decided by `mode`
 ///
 /// The function will return whether the reset operation was
 /// successful or not. If the reallocation failed `false` is
 /// returned. The arena will still be fully functional in that
 /// case, all memory is released. Future allocations just
 /// might be slower.
-pub fn reset(self: *ShrinkingArenaAllocator, kind: enum { retain_capacity, shrink_to_peak_usage }) bool {
+pub fn reset(self: *ShrinkingArenaAllocator, mode: ResetMode) bool {
     defer self.current_usage = 0;
     defer self.peak_usage = 0;
-    return switch (kind) {
+    return switch (mode) {
+        .free_all => self.arena.reset(.free_all),
         .retain_capacity => self.arena.reset(.retain_capacity),
-        .shrink_to_peak_usage => self.arena.reset(.{ .retain_with_limit = self.peak_usage + allowed_extra_capacity }),
+        .shrink_to_peak_usage => self.arena.reset(.{ .retain_with_limit = self.peak_usage + self.peak_usage / 2 }),
+        .shrink_to_peak_usage_exact => self.arena.reset(.{ .retain_with_limit = self.peak_usage }),
     };
 }
 

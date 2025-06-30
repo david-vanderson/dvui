@@ -96,7 +96,7 @@ pub fn matchEvent(self: *BoxWidget, e: *Event) bool {
 }
 
 pub fn widget(self: *BoxWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *BoxWidget) *WidgetData {
@@ -235,13 +235,6 @@ pub fn minSizeForChild(self: *BoxWidget, s: Size) void {
         self.max_space = @max(self.max_space, s.h + self.ratio_extra);
         self.min_space_taken += s.h + self.ratio_extra;
         self.max_thick = @max(self.max_thick, s.w);
-    }
-}
-
-pub fn processEvent(self: *BoxWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
     }
 }
 

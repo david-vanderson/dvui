@@ -56,7 +56,7 @@ pub fn processEvents(self: *ButtonWidget) void {
         if (!self.matchEvent(e))
             continue;
 
-        self.processEvent(e, false);
+        self.processEvent(e);
     }
 }
 
@@ -94,7 +94,7 @@ pub fn clicked(self: *ButtonWidget) bool {
 }
 
 pub fn widget(self: *ButtonWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *ButtonWidget) *WidgetData {
@@ -114,8 +114,7 @@ pub fn minSizeForChild(self: *ButtonWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
-pub fn processEvent(self: *ButtonWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
+pub fn processEvent(self: *ButtonWidget, e: *Event) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .focus) {
@@ -160,10 +159,6 @@ pub fn processEvent(self: *ButtonWidget, e: *Event, bubbling: bool) void {
             }
         },
         else => {},
-    }
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
     }
 }
 

@@ -326,12 +326,11 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
 
                         self.sel_pts[0].?.y = @min(self.sel_pts[0].?.y, self.sel_pts[1].?.y);
 
-                        var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
+                        dvui.scrollDrag(.{
                             .mouse_pt = e.evt.mouse.p,
                             .screen_rect = self.wd.rectScale().r,
                             .capture_id = self.wd.id,
-                        } } };
-                        self.processEvent(&scrolldrag, true);
+                        });
                     }
                 }
             }
@@ -397,12 +396,11 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
 
                         self.sel_pts[1].?.y = @max(self.sel_pts[0].?.y, self.sel_pts[1].?.y);
 
-                        var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
+                        dvui.scrollDrag(.{
                             .mouse_pt = e.evt.mouse.p,
                             .screen_rect = self.wd.rectScale().r,
                             .capture_id = self.wd.id,
-                        } } };
-                        self.processEvent(&scrolldrag, true);
+                        });
                     }
                 }
             }
@@ -929,10 +927,9 @@ fn cursorSeen(self: *TextLayoutWidget) void {
 
                 // scroll up/down to where we want the cursor, don't need
                 // overscroll because we are staying within the current text
-                var scrollto = Event{ .evt = .{ .scroll_to = .{
+                dvui.scrollTo(.{
                     .screen_rect = self.screenRectScale(cr_new.outset(self.wd.options.paddingGet())).r,
-                } } };
-                self.processEvent(&scrollto, true);
+                });
 
                 // even though we scrolled to where we thought the cursor would
                 // be, we might have moved up from a long line to a short one
@@ -953,16 +950,11 @@ fn cursorSeen(self: *TextLayoutWidget) void {
     }
 
     if (self.scroll_to_cursor) {
-        var scrollto = Event{
-            .evt = .{
-                .scroll_to = .{
-                    .screen_rect = self.screenRectScale(cr.outset(self.wd.options.paddingGet())).r,
-                    // cursor might just have transitioned to a new line, so scroll area has not expanded yet
-                    .over_scroll = true,
-                },
-            },
-        };
-        self.processEvent(&scrollto, true);
+        dvui.scrollTo(.{
+            .screen_rect = self.screenRectScale(cr.outset(self.wd.options.paddingGet())).r,
+            // cursor might just have transitioned to a new line, so scroll area has not expanded yet
+            .over_scroll = true,
+        });
     }
 }
 
@@ -1474,7 +1466,7 @@ pub fn touchEditingMenu(self: *TextLayoutWidget) void {
 }
 
 pub fn widget(self: *TextLayoutWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *TextLayoutWidget) *WidgetData {
@@ -1551,12 +1543,11 @@ pub fn processEvents(self: *TextLayoutWidget) void {
         if (!self.matchEvent(e))
             continue;
 
-        self.processEvent(e, false);
+        self.processEvent(e);
     }
 }
 
-pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
+pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .focus) {
@@ -1650,12 +1641,11 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                             self.sel_move.expand_pt.done = false;
                             self.sel_move.expand_pt.dragging = true;
                         }
-                        var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
+                        dvui.scrollDrag(.{
                             .mouse_pt = me.p,
                             .screen_rect = self.wd.rectScale().r,
                             .capture_id = self.wd.id,
-                        } } };
-                        self.processEvent(&scrolldrag, true);
+                        });
                     } else {
                         // user intended to scroll with a finger swipe
                         dvui.captureMouse(null); // stop possible drag and capture
@@ -1778,10 +1768,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             }
         },
         else => {},
-    }
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
     }
 }
 
