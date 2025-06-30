@@ -108,8 +108,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 pub fn install(self: *MenuWidget) void {
     dvui.parentSet(self.widget());
     self.parentMenu = menuSet(self);
-    self.wd.register();
-    self.wd.borderAndBackground(.{});
+    self.data().register();
+    self.data().borderAndBackground(.{});
 
     const evts = dvui.events();
     for (evts) |*e| {
@@ -119,13 +119,13 @@ pub fn install(self: *MenuWidget) void {
         self.processEvent(e);
     }
 
-    self.box = BoxWidget.init(@src(), .{ .dir = self.init_opts.dir }, self.wd.options.strip().override(.{ .expand = .both }));
+    self.box = BoxWidget.init(@src(), .{ .dir = self.init_opts.dir }, self.data().options.strip().override(.{ .expand = .both }));
     self.box.install();
     self.box.drawBackground();
 }
 
 pub fn close(self: *MenuWidget) void {
-    dvui.refresh(null, @src(), self.wd.id);
+    dvui.refresh(null, @src(), self.data().id);
     self.close_chain(.intentional);
 }
 
@@ -157,15 +157,15 @@ pub fn data(self: *MenuWidget) *WidgetData {
 
 pub fn rectFor(self: *MenuWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
-    return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *MenuWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *MenuWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s));
+    self.data().minSizeMax(self.data().options.padSize(s));
 }
 
 pub fn processEvent(self: *MenuWidget, e: *Event) void {
@@ -174,7 +174,7 @@ pub fn processEvent(self: *MenuWidget, e: *Event) void {
             if (me.action == .position) {
                 if (dvui.mouseTotalMotion().nonZero()) {
                     self.mouse_mode = true;
-                    if (dvui.dataGet(null, self.wd.id, "_child_popup", Rect.Physical)) |r| {
+                    if (dvui.dataGet(null, self.data().id, "_child_popup", Rect.Physical)) |r| {
                         const center = Point.Physical{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
                         const cw = dvui.currentWindow();
                         const to_center = center.diff(cw.mouse_pt_prev);
@@ -204,7 +204,7 @@ pub fn processEventsAfter(self: *MenuWidget) void {
 
     const evts = dvui.events();
     for (evts) |*e| {
-        if (!dvui.eventMatch(e, .{ .id = self.wd.id, .focus_id = focus_id, .r = self.wd.borderRectScale().r }))
+        if (!dvui.eventMatch(e, .{ .id = self.data().id, .focus_id = focus_id, .r = self.data().borderRectScale().r }))
             continue;
 
         switch (e.evt) {
@@ -270,15 +270,15 @@ pub fn deinit(self: *MenuWidget) void {
 
     defer dvui.widgetFree(self);
     self.box.deinit();
-    dvui.dataSet(null, self.wd.id, "_mouse_mode", self.mouse_mode);
-    dvui.dataSet(null, self.wd.id, "_sub_act", self.submenus_activated);
+    dvui.dataSet(null, self.data().id, "_mouse_mode", self.mouse_mode);
+    dvui.dataSet(null, self.data().id, "_sub_act", self.submenus_activated);
     if (self.child_popup_rect) |r| {
-        dvui.dataSet(null, self.wd.id, "_child_popup", r);
+        dvui.dataSet(null, self.data().id, "_child_popup", r);
     }
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
     _ = menuSet(self.parentMenu);
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 

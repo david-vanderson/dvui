@@ -82,7 +82,7 @@ pub fn dropped(self: *DropdownWidget) bool {
     if (self.menuItem.activeRect()) |r| {
         self.drop = FloatingMenuWidget.init(@src(), .{ .from = r, .avoid = .none }, .{ .min_size_content = .cast(r.size()) });
         var drop = &self.drop.?;
-        self.drop_first_frame = dvui.firstFrame(drop.wd.id);
+        self.drop_first_frame = dvui.firstFrame(drop.data().id);
 
         const s = drop.scale_val;
 
@@ -102,8 +102,8 @@ pub fn dropped(self: *DropdownWidget) bool {
         drop.menu.submenus_activated = true;
 
         // only want a mouse-up to choose something if the mouse has moved in the dropup
-        var eat_mouse_up = dvui.dataGet(null, drop.wd.id, "_eat_mouse_up", bool) orelse true;
-        var drag_scroll = dvui.dataGet(null, drop.wd.id, "_drag_scroll", bool) orelse false;
+        var eat_mouse_up = dvui.dataGet(null, drop.data().id, "_eat_mouse_up", bool) orelse true;
+        var drag_scroll = dvui.dataGet(null, drop.data().id, "_drag_scroll", bool) orelse false;
 
         const drop_rs = drop.data().rectScale();
         const scroll_rs = drop.scroll.data().contentRectScale();
@@ -131,17 +131,17 @@ pub fn dropped(self: *DropdownWidget) bool {
                     if (eat_mouse_up) {
                         e.handle(@src(), drop.data());
                         eat_mouse_up = false;
-                        dvui.dataSet(null, drop.wd.id, "_eat_mouse_up", eat_mouse_up);
+                        dvui.dataSet(null, drop.data().id, "_eat_mouse_up", eat_mouse_up);
                     }
                 } else if (e.evt.mouse.action == .motion or (e.evt.mouse.action == .press and e.evt.mouse.button.pointer())) {
                     if (eat_mouse_up) {
                         eat_mouse_up = false;
-                        dvui.dataSet(null, drop.wd.id, "_eat_mouse_up", eat_mouse_up);
+                        dvui.dataSet(null, drop.data().id, "_eat_mouse_up", eat_mouse_up);
                     }
 
                     if (!drag_scroll) {
                         drag_scroll = true;
-                        dvui.dataSet(null, drop.wd.id, "_drag_scroll", drag_scroll);
+                        dvui.dataSet(null, drop.data().id, "_drag_scroll", drag_scroll);
                     }
                 }
             }
@@ -191,7 +191,7 @@ pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
     if (self.drop_first_frame) {
         if (self.init_options.selected_index) |si| {
             if (si == self.drop_mi_index) {
-                dvui.focusWidget(self.drop_mi.wd.id, null, null);
+                dvui.focusWidget(self.drop_mi.data().id, null, null);
                 dvui.dataSet(null, self.menu.wd.id, "_drop_adjust", self.drop_height);
             }
         }

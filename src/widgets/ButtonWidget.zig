@@ -40,10 +40,10 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
 }
 
 pub fn install(self: *ButtonWidget) void {
-    self.wd.register();
+    self.data().register();
     dvui.parentSet(self.widget());
 
-    dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
+    dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
 }
 
 pub fn matchEvent(self: *ButtonWidget, e: *Event) bool {
@@ -56,23 +56,23 @@ pub fn processEvents(self: *ButtonWidget) void {
 
 pub fn drawBackground(self: *ButtonWidget) void {
     var fill_color: ?Color = null;
-    if (dvui.captured(self.wd.id)) {
-        fill_color = self.wd.options.color(.fill_press);
+    if (dvui.captured(self.data().id)) {
+        fill_color = self.data().options.color(.fill_press);
     } else if (self.hover) {
-        fill_color = self.wd.options.color(.fill_hover);
+        fill_color = self.data().options.color(.fill_hover);
     }
 
-    self.wd.borderAndBackground(.{ .fill_color = fill_color });
+    self.data().borderAndBackground(.{ .fill_color = fill_color });
 }
 
 pub fn drawFocus(self: *ButtonWidget) void {
     if (self.init_options.draw_focus and self.focused()) {
-        self.wd.focusBorder();
+        self.data().focusBorder();
     }
 }
 
 pub fn focused(self: *ButtonWidget) bool {
-    return self.wd.id == dvui.focusedWidgetId();
+    return self.data().id == dvui.focusedWidgetId();
 }
 
 pub fn hovered(self: *ButtonWidget) bool {
@@ -80,7 +80,7 @@ pub fn hovered(self: *ButtonWidget) bool {
 }
 
 pub fn pressed(self: *ButtonWidget) bool {
-    return dvui.captured(self.wd.id);
+    return dvui.captured(self.data().id);
 }
 
 pub fn clicked(self: *ButtonWidget) bool {
@@ -97,22 +97,22 @@ pub fn data(self: *ButtonWidget) *WidgetData {
 
 pub fn rectFor(self: *ButtonWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
-    return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *ButtonWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *ButtonWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s));
+    self.data().minSizeMax(self.data().options.padSize(s));
 }
 
 pub fn deinit(self: *ButtonWidget) void {
     defer dvui.widgetFree(self);
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 

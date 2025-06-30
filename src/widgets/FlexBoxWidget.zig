@@ -38,16 +38,16 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *FlexBoxWidget) void {
-    self.wd.register();
+    self.data().register();
     dvui.parentSet(self.widget());
 
-    self.prevClip = dvui.clip(self.wd.contentRectScale().r);
+    self.prevClip = dvui.clip(self.data().contentRectScale().r);
 }
 
 pub fn drawBackground(self: *FlexBoxWidget) void {
     const clip = dvui.clipGet();
     dvui.clipSet(self.prevClip);
-    self.wd.borderAndBackground(.{});
+    self.data().borderAndBackground(.{});
     dvui.clipSet(clip);
 }
 
@@ -64,13 +64,13 @@ pub fn rectFor(self: *FlexBoxWidget, id: dvui.WidgetId, min_size: Size, e: Optio
     _ = e;
     _ = g;
 
-    var container_width = self.wd.contentRect().w;
+    var container_width = self.data().contentRect().w;
     if (container_width == 0) {
         // if we are not being shown at all, probably this is the first
         // frame for us and we should calculate our min height assuming we
         // get at least our min width
 
-        container_width = self.wd.options.min_size_contentGet().w;
+        container_width = self.data().options.min_size_contentGet().w;
         if (container_width == 0) {
             // wasn't given a min width, assume something
             container_width = 500;
@@ -89,7 +89,7 @@ pub fn rectFor(self: *FlexBoxWidget, id: dvui.WidgetId, min_size: Size, e: Optio
     var ret = Rect.fromPoint(self.insert_pt).toSize(min_size);
     switch (self.init_options.justify_content) {
         .start => {},
-        .center => ret.x += (self.wd.contentRect().w - self.max_row_width_prev) / 2,
+        .center => ret.x += (self.data().contentRect().w - self.max_row_width_prev) / 2,
     }
 
     self.insert_pt.x += min_size.w;
@@ -98,23 +98,23 @@ pub fn rectFor(self: *FlexBoxWidget, id: dvui.WidgetId, min_size: Size, e: Optio
 }
 
 pub fn screenRectScale(self: *FlexBoxWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *FlexBoxWidget, s: Size) void {
     self.row_size.w += s.w;
     self.max_row_width = @max(self.max_row_width, self.row_size.w);
     self.width_nobreak += s.w;
-    self.wd.min_size = self.wd.options.padSize(.{ .w = self.width_nobreak, .h = self.insert_pt.y + self.row_size.h });
+    self.data().min_size = self.data().options.padSize(.{ .w = self.width_nobreak, .h = self.insert_pt.y + self.row_size.h });
 }
 
 pub fn deinit(self: *FlexBoxWidget) void {
     defer dvui.widgetFree(self);
-    dvui.dataSet(null, self.wd.id, "_mrw", self.max_row_width);
+    dvui.dataSet(null, self.data().id, "_mrw", self.max_row_width);
     dvui.clipSet(self.prevClip);
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 
