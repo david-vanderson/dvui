@@ -25,7 +25,7 @@ pub fn init(src: std.builtin.SourceLocation, opts: Options) VirtualParentWidget 
 
 pub fn install(self: *VirtualParentWidget) void {
     dvui.parentSet(self.widget());
-    self.wd.register();
+    self.data().register();
 }
 
 pub fn widget(self: *VirtualParentWidget) Widget {
@@ -37,7 +37,7 @@ pub fn data(self: *VirtualParentWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *VirtualParentWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    const ret = self.wd.parent.rectFor(id, min_size, e, g);
+    const ret = self.data().parent.rectFor(id, min_size, e, g);
     if (self.child_rect_union) |u| {
         self.child_rect_union = u.unionWith(ret);
     } else {
@@ -47,19 +47,19 @@ pub fn rectFor(self: *VirtualParentWidget, id: dvui.WidgetId, min_size: Size, e:
 }
 
 pub fn screenRectScale(self: *VirtualParentWidget, rect: Rect) RectScale {
-    return self.wd.parent.screenRectScale(rect);
+    return self.data().parent.screenRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *VirtualParentWidget, s: Size) void {
-    self.wd.parent.minSizeForChild(s);
+    self.data().parent.minSizeForChild(s);
 }
 
 pub fn deinit(self: *VirtualParentWidget) void {
     defer dvui.widgetFree(self);
     if (self.child_rect_union) |u| {
-        dvui.dataSet(null, self.wd.id, "_rect", u);
+        dvui.dataSet(null, self.data().id, "_rect", u);
     }
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 

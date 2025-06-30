@@ -35,8 +35,8 @@ pub fn init(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []cons
 }
 
 pub fn install(self: *IconWidget) void {
-    self.wd.register();
-    self.wd.borderAndBackground(.{});
+    self.data().register();
+    self.data().borderAndBackground(.{});
 }
 
 pub fn data(self: *IconWidget) *WidgetData {
@@ -44,12 +44,12 @@ pub fn data(self: *IconWidget) *WidgetData {
 }
 
 pub fn matchEvent(self: *IconWidget, e: *dvui.Event) bool {
-    return dvui.eventMatchSimple(e, &self.wd);
+    return dvui.eventMatchSimple(e, self.data());
 }
 
 pub fn draw(self: *IconWidget) void {
-    const rs = self.wd.parent.screenRectScale(self.wd.contentRect());
-    var texOpts: dvui.RenderTextureOptions = .{ .rotation = self.wd.options.rotationGet() };
+    const rs = self.data().parent.screenRectScale(self.data().contentRect());
+    var texOpts: dvui.RenderTextureOptions = .{ .rotation = self.data().options.rotationGet() };
 
     const white: ?dvui.Color = .white;
     const as_bytes = std.mem.asBytes;
@@ -58,8 +58,8 @@ pub fn draw(self: *IconWidget) void {
     {
         // user is rasterizing icon with defaults (white), so always use
         // colormod (so icons default to text color)
-        texOpts.colormod = self.wd.options.color(.text);
-    } else if (self.wd.options.color_text) |ct| {
+        texOpts.colormod = self.data().options.color(.text);
+    } else if (self.data().options.color_text) |ct| {
         // user is customizing icon rasterization, only colormod if they passed
         // a text color
         texOpts.colormod = ct.resolve();
@@ -78,8 +78,8 @@ pub fn draw(self: *IconWidget) void {
 
 pub fn deinit(self: *IconWidget) void {
     defer dvui.widgetFree(self);
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
     self.* = undefined;
 }
 

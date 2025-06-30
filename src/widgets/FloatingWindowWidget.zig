@@ -128,7 +128,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         if (dvui.dataGet(null, self.wd.id, "_auto_size", @TypeOf(self.auto_size))) |as| {
             self.auto_size = as;
         } else {
-            if (self.wd.rect.w == 0 and self.wd.rect.h == 0) {
+            if (self.data().rect.w == 0 and self.wd.rect.h == 0) {
                 self.autoSize();
             }
         }
@@ -161,7 +161,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             self.wd.rect.y = centering.y + (centering.h - self.wd.rect.h) / 2;
 
             if (dvui.snapToPixels()) {
-                const s = self.wd.rectScale().s;
+                const s = self.data().rectScale().s;
                 self.wd.rect.x = @round(self.wd.rect.x * s) / s;
                 self.wd.rect.y = @round(self.wd.rect.y * s) / s;
             }
@@ -183,7 +183,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
                     nudge = false;
                     // don't check against subwindows[0] - that's that main window
                     for (cw.subwindows.items[1..]) |subw| {
-                        if (subw.id != self.wd.id and subw.rect.topLeft().equals(self.wd.rect.topLeft())) {
+                        if (subw.id != self.wd.id and subw.rect.topLeft().equals(self.data().rect.topLeft())) {
                             self.wd.rect.x += 24;
                             self.wd.rect.y += 24;
                             nudge = true;
@@ -192,7 +192,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
                 }
             }
 
-            //std.debug.print("autopos to {}\n", .{self.wd.rect});
+            //std.debug.print("autopos to {}\n", .{self.data().rect});
         }
 
         // always make sure we are on the screen
@@ -203,7 +203,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         screen.w += offleft + offleft;
         // okay if we are off the bottom but still see the top
         screen.h += self.wd.rect.h - 24;
-        self.wd.rect = .cast(dvui.placeOnScreen(screen, .{}, .none, .cast(self.wd.rect)));
+        self.wd.rect = .cast(dvui.placeOnScreen(screen, .{}, .none, .cast(self.data().rect)));
     }
 
     return self;
@@ -212,36 +212,36 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 pub fn install(self: *FloatingWindowWidget) void {
     self.prev_rendering = dvui.renderingSet(false);
 
-    if (dvui.firstFrame(self.wd.id)) {
-        dvui.focusSubwindow(self.wd.id, null);
+    if (dvui.firstFrame(self.data().id)) {
+        dvui.focusSubwindow(self.data().id, null);
 
         // write back before we hide ourselves for the first frame
-        dvui.dataSet(null, self.wd.id, "_rect", self.wd.rect);
+        dvui.dataSet(null, self.data().id, "_rect", self.data().rect);
         if (self.init_options.rect) |ior| {
             // send rect back to user
-            ior.* = self.wd.rect;
+            ior.* = self.data().rect;
         }
 
         // need a second frame to fit contents
-        dvui.refresh(null, @src(), self.wd.id);
+        dvui.refresh(null, @src(), self.data().id);
 
         // hide our first frame so the user doesn't see an empty window or
         // jump when we autopos/autosize - do this in install() because
         // animation stuff might be messing with out rect after init()
-        self.wd.rect.w = 0;
-        self.wd.rect.h = 0;
+        self.data().rect.w = 0;
+        self.data().rect.h = 0;
     }
 
-    if (dvui.captured(self.wd.id)) {
-        if (dvui.dataGet(null, self.wd.id, "_drag_part", DragPart)) |dp| {
+    if (dvui.captured(self.data().id)) {
+        if (dvui.dataGet(null, self.data().id, "_drag_part", DragPart)) |dp| {
             self.drag_part = dp;
         }
     }
 
-    self.drag_area = self.wd.rectScale().r;
+    self.drag_area = self.data().rectScale().r;
 
     dvui.parentSet(self.widget());
-    self.prev_windowInfo = dvui.subwindowCurrentSet(self.wd.id, .cast(self.wd.rect));
+    self.prev_windowInfo = dvui.subwindowCurrentSet(self.data().id, .cast(self.data().rect));
     // prevents parents from processing key events if focus is inside the floating window:w
     self.prev_last_focus = dvui.lastFocusedIdInFrame(null);
 
@@ -253,12 +253,12 @@ pub fn install(self: *FloatingWindowWidget) void {
 }
 
 pub fn drawBackground(self: *FloatingWindowWidget) void {
-    const rs = self.wd.rectScale();
-    dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent_window) self.prev_windowInfo.id else null);
-    dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
-    self.wd.register();
+    const rs = self.data().rectScale();
+    dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent_window) self.prev_windowInfo.id else null);
+    dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
+    self.data().register();
 
-    if (self.init_options.modal and !dvui.firstFrame(self.wd.id)) {
+    if (self.init_options.modal and !dvui.firstFrame(self.data().id)) {
         // paint over everything below
         var col = self.options.color(.text);
         col.a = if (dvui.themeGet().dark) 60 else 80;
@@ -305,62 +305,62 @@ fn dragPart(me: Event.Mouse, rs: RectScale) DragPart {
 fn dragAdjust(self: *FloatingWindowWidget, p: Point.Natural, dp: Point.Natural, drag_part: DragPart) void {
     switch (drag_part) {
         .middle => {
-            self.wd.rect.x += dp.x;
-            self.wd.rect.y += dp.y;
+            self.data().rect.x += dp.x;
+            self.data().rect.y += dp.y;
         },
         .bottom_right => {
-            self.wd.rect.w = @max(40, p.x - self.wd.rect.x);
-            self.wd.rect.h = @max(10, p.y - self.wd.rect.y);
+            self.data().rect.w = @max(40, p.x - self.data().rect.x);
+            self.data().rect.h = @max(10, p.y - self.data().rect.y);
         },
         .top_left => {
-            const anchor = self.wd.rect.bottomRight();
-            const new_w = @max(40, self.wd.rect.w - (p.x - self.wd.rect.x));
-            const new_h = @max(10, self.wd.rect.h - (p.y - self.wd.rect.y));
-            self.wd.rect.x = anchor.x - new_w;
-            self.wd.rect.w = new_w;
-            self.wd.rect.y = anchor.y - new_h;
-            self.wd.rect.h = new_h;
+            const anchor = self.data().rect.bottomRight();
+            const new_w = @max(40, self.data().rect.w - (p.x - self.data().rect.x));
+            const new_h = @max(10, self.data().rect.h - (p.y - self.data().rect.y));
+            self.data().rect.x = anchor.x - new_w;
+            self.data().rect.w = new_w;
+            self.data().rect.y = anchor.y - new_h;
+            self.data().rect.h = new_h;
         },
         .bottom_left => {
-            const anchor = self.wd.rect.topRight();
-            const new_w = @max(40, self.wd.rect.w - (p.x - self.wd.rect.x));
-            self.wd.rect.x = anchor.x - new_w;
-            self.wd.rect.w = new_w;
-            self.wd.rect.h = @max(10, p.y - self.wd.rect.y);
+            const anchor = self.data().rect.topRight();
+            const new_w = @max(40, self.data().rect.w - (p.x - self.data().rect.x));
+            self.data().rect.x = anchor.x - new_w;
+            self.data().rect.w = new_w;
+            self.data().rect.h = @max(10, p.y - self.data().rect.y);
         },
         .top_right => {
-            const anchor = self.wd.rect.bottomLeft();
-            self.wd.rect.w = @max(40, p.x - self.wd.rect.x);
-            const new_h = @max(10, self.wd.rect.h - (p.y - self.wd.rect.y));
-            self.wd.rect.y = anchor.y - new_h;
-            self.wd.rect.h = new_h;
+            const anchor = self.data().rect.bottomLeft();
+            self.data().rect.w = @max(40, p.x - self.data().rect.x);
+            const new_h = @max(10, self.data().rect.h - (p.y - self.data().rect.y));
+            self.data().rect.y = anchor.y - new_h;
+            self.data().rect.h = new_h;
         },
         .bottom => {
-            self.wd.rect.h = @max(10, p.y - self.wd.rect.y);
+            self.data().rect.h = @max(10, p.y - self.data().rect.y);
         },
         .top => {
-            const anchor = self.wd.rect.bottomLeft();
-            const new_h = @max(10, self.wd.rect.h - (p.y - self.wd.rect.y));
-            self.wd.rect.y = anchor.y - new_h;
-            self.wd.rect.h = new_h;
+            const anchor = self.data().rect.bottomLeft();
+            const new_h = @max(10, self.data().rect.h - (p.y - self.data().rect.y));
+            self.data().rect.y = anchor.y - new_h;
+            self.data().rect.h = new_h;
         },
         .left => {
-            const anchor = self.wd.rect.topRight();
-            const new_w = @max(40, self.wd.rect.w - (p.x - self.wd.rect.x));
-            self.wd.rect.x = anchor.x - new_w;
-            self.wd.rect.w = new_w;
+            const anchor = self.data().rect.topRight();
+            const new_w = @max(40, self.data().rect.w - (p.x - self.data().rect.x));
+            self.data().rect.x = anchor.x - new_w;
+            self.data().rect.w = new_w;
         },
         .right => {
-            self.wd.rect.w = @max(40, p.x - self.wd.rect.x);
+            self.data().rect.w = @max(40, p.x - self.data().rect.x);
         },
     }
 }
 
 pub fn processEventsBefore(self: *FloatingWindowWidget) void {
-    const rs = self.wd.rectScale();
+    const rs = self.data().rectScale();
     const evts = dvui.events();
     for (evts) |*e| {
-        if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r }))
+        if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = rs.r }))
             continue;
 
         if (e.evt == .mouse) {
@@ -368,12 +368,12 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
 
             if (me.action == .focus) {
                 // focus but let the focus event propagate to widgets
-                dvui.focusSubwindow(self.wd.id, e.num);
+                dvui.focusSubwindow(self.data().id, e.num);
                 continue;
             }
 
             // If we are already dragging, do it here so it happens before drawing
-            if (dvui.captured(self.wd.id)) {
+            if (dvui.captured(self.data().id)) {
                 if (me.action == .motion) {
                     if (dvui.dragging(me.p)) |dps| {
                         const p = me.p.plus(dvui.dragOffset()).toNatural();
@@ -420,7 +420,7 @@ pub fn dragAreaSet(self: *FloatingWindowWidget, rect: Rect.Physical) void {
 }
 
 pub fn processEventsAfter(self: *FloatingWindowWidget) void {
-    const rs = self.wd.rectScale();
+    const rs = self.data().rectScale();
     // duplicate processEventsBefore because you could have a click down,
     // motion, and up in same frame and you wouldn't know you needed to do
     // anything until you got capture here
@@ -428,7 +428,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
     // bottom_right corner happens in processEventsBefore
     const evts = dvui.events();
     for (evts) |*e| {
-        if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r, .cleanup = true }))
+        if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = rs.r, .cleanup = true }))
             continue;
 
         switch (e.evt) {
@@ -453,21 +453,21 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                         }
                     },
                     .release => {
-                        if (me.button.pointer() and dvui.captured(self.wd.id)) {
+                        if (me.button.pointer() and dvui.captured(self.data().id)) {
                             e.handle(@src(), self.data());
                             dvui.captureMouse(null); // stop drag and capture
                             dvui.dragEnd();
                         }
                     },
                     .motion => {
-                        if (dvui.captured(self.wd.id)) {
+                        if (dvui.captured(self.data().id)) {
                             // move if dragging
                             if (dvui.dragging(me.p)) |dps| {
                                 const p = me.p.plus(dvui.dragOffset()).toNatural();
                                 self.dragAdjust(p, dps.toNatural(), self.drag_part.?);
 
                                 e.handle(@src(), self.data());
-                                dvui.refresh(null, @src(), self.wd.id);
+                                dvui.refresh(null, @src(), self.data().id);
                             }
                         }
                     },
@@ -511,9 +511,9 @@ pub fn close(self: *FloatingWindowWidget) void {
     if (self.init_options.open_flag) |of| {
         of.* = false;
     } else {
-        dvui.log.warn("{s}:{d} FloatingWindowWidget.close() was called but it has no open_flag", .{ self.wd.src.file, self.wd.src.line });
+        dvui.log.warn("{s}:{d} FloatingWindowWidget.close() was called but it has no open_flag", .{ self.data().src.file, self.data().src.line });
     }
-    dvui.refresh(null, @src(), self.wd.id);
+    dvui.refresh(null, @src(), self.data().id);
 }
 
 pub fn widget(self: *FloatingWindowWidget) Widget {
@@ -526,15 +526,15 @@ pub fn data(self: *FloatingWindowWidget) *WidgetData {
 
 pub fn rectFor(self: *FloatingWindowWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
-    return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *FloatingWindowWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *FloatingWindowWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s));
+    self.data().minSizeMax(self.data().options.padSize(s));
 }
 
 pub fn deinit(self: *FloatingWindowWidget) void {
@@ -552,26 +552,26 @@ pub fn deinit(self: *FloatingWindowWidget) void {
         self.processEventsAfter();
     }
 
-    if (!dvui.firstFrame(self.wd.id)) {
+    if (!dvui.firstFrame(self.data().id)) {
         // if firstFrame, we already did this in install
-        dvui.dataSet(null, self.wd.id, "_rect", self.wd.rect);
+        dvui.dataSet(null, self.data().id, "_rect", self.data().rect);
         if (self.init_options.rect) |ior| {
             // send rect back to user
-            ior.* = self.wd.rect;
+            ior.* = self.data().rect;
         }
     }
 
-    if (dvui.captured(self.wd.id)) {
-        dvui.dataSet(null, self.wd.id, "_drag_part", self.drag_part.?);
+    if (dvui.captured(self.data().id)) {
+        dvui.dataSet(null, self.data().id, "_drag_part", self.drag_part.?);
     }
 
-    dvui.dataSet(null, self.wd.id, "_auto_pos", self.auto_pos);
-    dvui.dataSet(null, self.wd.id, "_auto_size", self.auto_size);
-    self.wd.minSizeSetAndRefresh();
+    dvui.dataSet(null, self.data().id, "_auto_pos", self.auto_pos);
+    dvui.dataSet(null, self.data().id, "_auto_size", self.auto_size);
+    self.data().minSizeSetAndRefresh();
 
-    // outside normal layout, don't call minSizeForChild or self.wd.minSizeReportToParent();
+    // outside normal layout, don't call minSizeForChild or self.data().minSizeReportToParent();
 
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    dvui.parentReset(self.data().id, self.data().parent);
     dvui.currentWindow().last_focused_id_this_frame = self.prev_last_focus;
     _ = dvui.subwindowCurrentSet(self.prev_windowInfo.id, self.prev_windowInfo.rect);
     dvui.clipSet(self.prevClip);

@@ -96,38 +96,38 @@ pub fn data(self: *LabelWidget) *WidgetData {
 }
 
 pub fn install(self: *LabelWidget) void {
-    self.wd.register();
-    self.wd.borderAndBackground(.{});
+    self.data().register();
+    self.data().borderAndBackground(.{});
 }
 
 pub fn draw(self: *LabelWidget) void {
     const label_gravity = self.init_options.gravityGet();
-    const rect = dvui.placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, label_gravity);
-    var rs = self.wd.parent.screenRectScale(rect);
+    const rect = dvui.placeIn(self.data().contentRect(), self.data().options.min_size_contentGet(), .none, label_gravity);
+    var rs = self.data().parent.screenRectScale(rect);
     const oldclip = dvui.clip(rs.r);
     var iter = std.mem.splitScalar(u8, self.label_str, '\n');
     var line_height_adj: f32 = undefined;
     var first: bool = true;
     while (iter.next()) |line| {
         if (first) {
-            line_height_adj = self.wd.options.fontGet().textHeight() * (self.wd.options.fontGet().line_height_factor - 1.0);
+            line_height_adj = self.data().options.fontGet().textHeight() * (self.data().options.fontGet().line_height_factor - 1.0);
             first = false;
         } else {
             rs.r.y += rs.s * line_height_adj;
         }
 
-        const tsize = self.wd.options.fontGet().textSize(line);
+        const tsize = self.data().options.fontGet().textSize(line);
 
         // this is only about horizontal direction
-        const lineRect = dvui.placeIn(self.wd.contentRect(), tsize, .none, label_gravity);
-        const liners = self.wd.parent.screenRectScale(lineRect);
+        const lineRect = dvui.placeIn(self.data().contentRect(), tsize, .none, label_gravity);
+        const liners = self.data().parent.screenRectScale(lineRect);
 
         rs.r.x = liners.r.x;
         dvui.renderText(.{
-            .font = self.wd.options.fontGet(),
+            .font = self.data().options.fontGet(),
             .text = line,
             .rs = rs,
-            .color = self.wd.options.color(.text),
+            .color = self.data().options.color(.text),
         }) catch |err| {
             dvui.logError(@src(), err, "Failed to render text: {s}", .{line});
         };
@@ -143,8 +143,8 @@ pub fn matchEvent(self: *LabelWidget, e: *Event) bool {
 pub fn deinit(self: *LabelWidget) void {
     defer dvui.widgetFree(self);
     if (self.allocator) |alloc| alloc.free(self.label_str);
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
     self.* = undefined;
 }
 

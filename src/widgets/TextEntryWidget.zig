@@ -132,30 +132,30 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *TextEntryWidget) void {
-    self.wd.register();
+    self.data().register();
 
-    dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
+    dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
 
     dvui.parentSet(self.widget());
 
-    self.wd.borderAndBackground(.{});
+    self.data().borderAndBackground(.{});
 
-    self.prevClip = dvui.clip(self.wd.borderRectScale().r);
+    self.prevClip = dvui.clip(self.data().borderRectScale().r);
     const borderClip = dvui.clipGet();
 
-    self.scroll = ScrollAreaWidget.init(@src(), self.scroll_init_opts, self.wd.options.strip().override(.{ .expand = .both }));
+    self.scroll = ScrollAreaWidget.init(@src(), self.scroll_init_opts, self.data().options.strip().override(.{ .expand = .both }));
     // scrollbars process mouse events here
     self.scroll.install();
 
     self.scrollClip = dvui.clipGet();
 
-    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .touch_edit_just_focused = false }, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding }));
-    self.textLayout.install(.{ .focused = self.wd.id == dvui.focusedWidgetId(), .show_touch_draggables = (self.len > 0) });
+    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .touch_edit_just_focused = false }, self.data().options.strip().override(.{ .expand = .both, .padding = self.padding }));
+    self.textLayout.install(.{ .focused = self.data().id == dvui.focusedWidgetId(), .show_touch_draggables = (self.len > 0) });
     self.textClip = dvui.clipGet();
 
     if (self.len == 0) {
         if (self.init_opts.placeholder) |placeholder| {
-            self.textLayout.addText(placeholder, .{ .color_text = .fromColor(self.textLayout.wd.options.color(.text).opacity(0.75)) });
+            self.textLayout.addText(placeholder, .{ .color_text = .fromColor(self.textLayout.data().options.color(.text).opacity(0.75)) });
         }
     }
 
@@ -231,10 +231,10 @@ pub fn processEvents(self: *TextEntryWidget) void {
 }
 
 pub fn draw(self: *TextEntryWidget) void {
-    const focused = (self.wd.id == dvui.focusedWidgetId());
+    const focused = (self.data().id == dvui.focusedWidgetId());
 
     if (focused) {
-        dvui.wantTextInput(self.wd.borderRectScale().r.toNatural());
+        dvui.wantTextInput(self.data().borderRectScale().r.toNatural());
     }
 
     // set clip back to what textLayout had, so we don't draw over the scrollbars
@@ -271,16 +271,16 @@ pub fn draw(self: *TextEntryWidget) void {
                     pstr[i * pc.len + pci] = pc[pci];
                 }
             }
-            self.textLayout.addText(pstr, self.wd.options.strip());
+            self.textLayout.addText(pstr, self.data().options.strip());
         } else {
             dvui.log.warn("Could not allocate password_str, falling back to one single password_str", .{});
-            self.textLayout.addText(pc, self.wd.options.strip());
+            self.textLayout.addText(pc, self.data().options.strip());
         }
     } else {
-        self.textLayout.addText(self.text[0..self.len], self.wd.options.strip());
+        self.textLayout.addText(self.text[0..self.len], self.data().options.strip());
     }
 
-    self.textLayout.addTextDone(self.wd.options.strip());
+    self.textLayout.addTextDone(self.data().options.strip());
 
     if (self.init_opts.password_char) |pc| {
         // reset selection
@@ -315,7 +315,7 @@ pub fn draw(self: *TextEntryWidget) void {
     dvui.clipSet(self.prevClip);
 
     if (focused) {
-        self.wd.focusBorder();
+        self.data().focusBorder();
     }
 }
 
@@ -327,7 +327,7 @@ pub fn drawCursor(self: *TextEntryWidget) void {
 
         var crect = self.textLayout.cursor_rect.plus(.{ .x = -1 });
         crect.w = 2;
-        self.textLayout.screenRectScale(crect).r.fill(.{}, .{ .color = self.wd.options.color(.accent) });
+        self.textLayout.screenRectScale(crect).r.fill(.{}, .{ .color = self.data().options.color(.accent) });
     }
 }
 
@@ -341,15 +341,15 @@ pub fn data(self: *TextEntryWidget) *WidgetData {
 
 pub fn rectFor(self: *TextEntryWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
-    return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *TextEntryWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *TextEntryWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s));
+    self.data().minSizeMax(self.data().options.padSize(s));
 }
 
 pub fn textSet(self: *TextEntryWidget, text: []const u8, selected: bool) void {
@@ -385,7 +385,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
             .buffer_dynamic => |b| {
                 new_size = @min(new_size, b.limit);
                 b.backing.* = b.allocator.realloc(self.text, new_size) catch blk: {
-                    dvui.log.debug("{x} TextEntryWidget.textTyped failed to realloc backing\n", .{self.wd.id});
+                    dvui.log.debug("{x} TextEntryWidget.textTyped failed to realloc backing\n", .{self.data().id});
                     break :blk b.backing.*;
                 };
                 self.text = b.backing.*;
@@ -394,8 +394,8 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
                 new_size = @min(new_size, i.limit);
                 // NOTE: Using prev_text is safe because data is trashed and stays valid until the end of the frame
                 const prev_text = self.text;
-                dvui.dataSetSliceCopies(null, self.wd.id, "_buffer", &[_]u8{0}, new_size);
-                self.text = dvui.dataGetSlice(null, self.wd.id, "_buffer", []u8).?;
+                dvui.dataSetSliceCopies(null, self.data().id, "_buffer", &[_]u8{0}, new_size);
+                self.text = dvui.dataGetSlice(null, self.data().id, "_buffer", []u8).?;
                 const min_len = @min(prev_text.len, self.text.len);
                 @memcpy(self.text[0..min_len], prev_text[0..min_len]);
             },
@@ -447,7 +447,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
 
     // we might have dropped to a new line, so make sure the cursor is visible
     self.textLayout.scroll_to_cursor_next_frame = true;
-    dvui.refresh(null, @src(), self.wd.id);
+    dvui.refresh(null, @src(), self.data().id);
 }
 
 /// Remove all characters that not present in filter_chars.
@@ -778,7 +778,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             self.textTyped("\n", false);
                         } else {
                             self.enter_pressed = true;
-                            dvui.refresh(null, @src(), self.wd.id);
+                            dvui.refresh(null, @src(), self.data().id);
                         }
                     }
                 },
@@ -806,7 +806,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
         .mouse => |me| {
             if (me.action == .focus) {
                 e.handle(@src(), self.data());
-                dvui.focusWidget(self.wd.id, null, e.num);
+                dvui.focusWidget(self.data().id, null, e.num);
             }
         },
     }
@@ -868,14 +868,14 @@ pub fn deinit(self: *TextEntryWidget) void {
                     b.backing.*.len = new_len;
                     self.text.len = new_len;
                 } else {
-                    dvui.log.debug("{x} TextEntryWidget.deinit failed to resize backing\n", .{self.wd.id});
+                    dvui.log.debug("{x} TextEntryWidget.deinit failed to resize backing\n", .{self.data().id});
                 }
             },
             .internal => {
                 // NOTE: Using prev_text is safe because data is trashed and stays valid until the end of the frame
                 const prev_text = self.text;
-                dvui.dataSetSliceCopies(null, self.wd.id, "_buffer", &[_]u8{0}, new_len);
-                self.text = dvui.dataGetSlice(null, self.wd.id, "_buffer", []u8).?;
+                dvui.dataSetSliceCopies(null, self.data().id, "_buffer", &[_]u8{0}, new_len);
+                self.text = dvui.dataGetSlice(null, self.data().id, "_buffer", []u8).?;
                 const min_len = @min(prev_text.len, self.text.len);
                 @memcpy(self.text[0..min_len], prev_text[0..min_len]);
             },
@@ -886,9 +886,9 @@ pub fn deinit(self: *TextEntryWidget) void {
     self.scroll.deinit();
 
     dvui.clipSet(self.prevClip);
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 

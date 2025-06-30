@@ -56,10 +56,10 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
 }
 
 pub fn install(self: *BoxWidget) void {
-    self.wd.register();
+    self.data().register();
 
     // our rect for children has to start at 0,0
-    self.child_rect = self.wd.contentRect().justSize();
+    self.child_rect = self.data().contentRect().justSize();
 
     if (self.data_prev) |dp| {
         if (self.init_opts.equal_space) {
@@ -88,7 +88,7 @@ pub fn install(self: *BoxWidget) void {
 }
 
 pub fn drawBackground(self: *BoxWidget) void {
-    self.wd.borderAndBackground(.{});
+    self.data().borderAndBackground(.{});
 }
 
 pub fn matchEvent(self: *BoxWidget, e: *Event) bool {
@@ -113,7 +113,7 @@ pub fn rectFor(self: *BoxWidget, id: dvui.WidgetId, min_size: Size, e: Options.E
 
     if (self.child_positioned) {
         // don't pack this, we treat this like overlay - put it where they asked
-        return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+        return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
     }
 
     self.packed_children += 1;
@@ -217,12 +217,12 @@ fn removeSpace(self: *BoxWidget, r: Rect, g: Options.Gravity) void {
 }
 
 pub fn screenRectScale(self: *BoxWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *BoxWidget, s: Size) void {
     if (self.child_positioned) {
-        self.wd.minSizeMax(self.wd.options.padSize(s));
+        self.data().minSizeMax(self.data().options.padSize(s));
         return;
     }
 
@@ -261,14 +261,14 @@ pub fn deinit(self: *BoxWidget) void {
             // - maybe one is no longer expanded
             // - maybe one's min size shrunk (label changing text)
             // equal_space could mean we don't exactly use all the space (due to floating point)
-            dvui.refresh(null, @src(), self.wd.id);
+            dvui.refresh(null, @src(), self.data().id);
         }
 
         if (!self.init_opts.equal_space and self.pixels_per_w > 0 and self.ran_off) {
             // we have expanded children, thought we had extra space, but ran
             // off the end:
             // - maybe one's min size got bigger (label changing text)
-            dvui.refresh(null, @src(), self.wd.id);
+            dvui.refresh(null, @src(), self.data().id);
         }
 
         // if total_weight is 0, we are tight around all children, so our min
@@ -276,14 +276,14 @@ pub fn deinit(self: *BoxWidget) void {
         // minSizeSetAndRefresh()
     }
 
-    self.wd.minSizeMax(self.wd.options.padSize(ms));
+    self.data().minSizeMax(self.data().options.padSize(ms));
 
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
 
-    dvui.dataSet(null, self.wd.id, "_data", Data{ .packed_children = self.packed_children, .total_weight = self.total_weight, .min_space_taken = self.min_space_taken });
+    dvui.dataSet(null, self.data().id, "_data", Data{ .packed_children = self.packed_children, .total_weight = self.total_weight, .min_space_taken = self.min_space_taken });
 
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 
