@@ -1239,14 +1239,14 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 // initialize or realloc
                 if (self.copy_slice) |slice| {
                     const old_len = slice.len;
-                    self.copy_slice = cw.lifo().realloc(slice, slice.len + (cend - cstart)) catch slice;
+                    self.copy_slice = cw.arena().realloc(slice, slice.len + (cend - cstart)) catch slice;
                     if (self.copy_slice.?.len == old_len) {
                         dvui.log.debug("copy_slice realloc failed, copying will be incomplete", .{});
                     } else {
                         @memcpy(self.copy_slice.?[old_len..], txt[cstart..cend]);
                     }
                 } else {
-                    self.copy_slice = cw.lifo().dupe(u8, txt[cstart..cend]) catch |err| blk: {
+                    self.copy_slice = cw.arena().dupe(u8, txt[cstart..cend]) catch |err| blk: {
                         dvui.logError(@src(), err, "Could not allocate copy slice for text: {s}", .{txt[cstart..cend]});
                         break :blk null;
                     };
@@ -1256,7 +1256,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 if (sel.end <= self.bytes_seen + end) {
                     dvui.clipboardTextSet(self.copy_slice.?);
                     self.copy_sel = null;
-                    cw.lifo().free(self.copy_slice.?);
+                    cw.arena().free(self.copy_slice.?);
                     self.copy_slice = null;
                 }
             }
@@ -1341,7 +1341,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
         self.copy_sel = null;
         if (self.copy_slice) |cs| {
-            dvui.currentWindow().lifo().free(cs);
+            dvui.currentWindow().arena().free(cs);
         }
         self.copy_slice = null;
     }
