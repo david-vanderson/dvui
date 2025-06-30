@@ -223,18 +223,11 @@ pub fn init(
         },
         .backend = backend_ctx,
         .font_bytes = try dvui.Font.initTTFBytesDatabase(gpa),
-        .theme = if (init_opts.theme) |t| t.* else @import("themes/Adwaita.zig").light,
+        .theme = if (init_opts.theme) |t| t.* else Theme.builtin.adwaita_light,
     };
 
-    try self.themes.putNoClobber(self.gpa, "Adwaita Light", @import("themes/Adwaita.zig").light);
-    try self.themes.putNoClobber(self.gpa, "Adwaita Dark", @import("themes/Adwaita.zig").dark);
-
-    inline for (@typeInfo(Theme.QuickTheme.builtin).@"struct".decls) |decl| {
-        const quick_theme = Theme.QuickTheme.fromString(self.arena(), @field(Theme.QuickTheme.builtin, decl.name)) catch {
-            @panic("Failure loading builtin theme. This is a problem with DVUI.");
-        };
-        defer quick_theme.deinit();
-        const theme = try quick_theme.value.toTheme(self.gpa);
+    inline for (@typeInfo(Theme.builtin).@"struct".decls) |decl| {
+        const theme = @field(Theme.builtin, decl.name);
         try self.themes.putNoClobber(self.gpa, theme.name, theme);
     }
 
