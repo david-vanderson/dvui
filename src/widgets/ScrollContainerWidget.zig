@@ -417,6 +417,9 @@ pub fn processScrollTo(
 pub fn processMotionScroll(self: *ScrollContainerWidget, motion: dvui.Point.Physical) void {
     const rs = self.wd.borderRectScale();
 
+    // We propagate (instead of not handling the motion event) because we have
+    // capture.
+    //
     // Whether to propagate out to any containing scroll
     // containers. Propagate unless we did the whole scroll
     // in the main direction of movement.
@@ -508,6 +511,8 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     dvui.captureMouse(null);
                     dvui.dragEnd();
                 } else if (me.action == .motion and me.button.touch()) {
+                    e.handle(@src(), self.data());
+
                     // Need to capture here because it's common for the touch
                     // down to happen on top of a different widget.  Example is
                     // a touch down on a button, which captures.  Then when the
