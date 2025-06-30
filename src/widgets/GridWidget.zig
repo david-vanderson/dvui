@@ -331,7 +331,7 @@ pub fn deinit(self: *GridWidget) void {
 }
 
 pub fn data(self: *GridWidget) *WidgetData {
-    return &self.vbox.wd;
+    return self.vbox.data();
 }
 
 /// Create a header cell for the requested column

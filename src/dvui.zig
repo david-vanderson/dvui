@@ -147,12 +147,11 @@ pub const Error = std.mem.Allocator.Error || StbImageError || TvgError || FontEr
 pub const TvgError = error{tvgError};
 pub const StbImageError = error{stbImageError};
 pub const FontError = error{fontError};
-
 pub const log = std.log.scoped(.dvui);
 const dvui = @This();
-
 pub const WidgetId = enum(u64) {
     zero = 0,
+    undef = 0xAAAAAAAAAAAAAAAA,
     _,
 
     pub fn asU64(self: WidgetId) u64 {

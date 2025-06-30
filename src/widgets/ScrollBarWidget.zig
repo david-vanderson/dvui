@@ -63,7 +63,7 @@ pub fn install(self: *ScrollBarWidget) void {
 }
 
 pub fn data(self: *ScrollBarWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {

@@ -84,7 +84,7 @@ pub fn widget(self: *FloatingWidget) Widget {
 }
 
 pub fn data(self: *FloatingWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *FloatingWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {

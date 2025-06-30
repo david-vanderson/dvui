@@ -204,7 +204,7 @@ pub fn widget(self: *FloatingTooltipWidget) Widget {
 }
 
 pub fn data(self: *FloatingTooltipWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *FloatingTooltipWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
