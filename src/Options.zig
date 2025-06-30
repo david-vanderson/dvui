@@ -87,8 +87,6 @@ font_style: ?FontStyle = null,
 /// Render a box shadow in `WidgetData.borderAndBackground`.
 box_shadow: ?BoxShadow = null,
 
-selection_id: ?u64 = null,
-
 pub const Expand = enum {
     none,
     horizontal,

@@ -22,7 +22,6 @@ evt: union(enum) {
     scroll_drag: ScrollDrag,
     scroll_to: ScrollTo,
     scroll_propagate: ScrollPropagate,
-    selection: Selection,
 },
 
 // All widgets have to bubble keyboard events if they can have keyboard focus
@@ -177,12 +176,6 @@ pub const ScrollPropagate = struct {
     /// Motion field from the Mouse event that would have scrolled but we were
     /// at the edge.
     motion: dvui.Point.Physical,
-};
-
-pub const Selection = struct {
-    selection_id: u64,
-    selected: bool,
-    screen_rect: dvui.Rect.Physical,
 };
 
 test {

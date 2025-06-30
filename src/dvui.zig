@@ -3241,9 +3241,6 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                 return false;
             }
         },
-        .selection => |sel| {
-            return opts.r.contains(sel.screen_rect.topLeft());
-        },
 
         .close_popup => unreachable,
         .scroll_drag => unreachable,
@@ -4868,7 +4865,7 @@ pub fn gridHeadingCheckbox(
         var hbox = dvui.box(@src(), .horizontal, header_options);
         defer hbox.deinit();
 
-        clicked = dvui.checkbox(@src(), &selected, null, checkbox_opts);
+        clicked = dvui.checkbox(@src(), &selected, null, .{}, checkbox_opts);
     }
     if (clicked) {
         selection.* = if (selected) .select_all else .select_none;
@@ -6144,7 +6141,7 @@ pub var checkbox_defaults: Options = .{
     .padding = Rect.all(6),
 };
 
-pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, opts: Options) bool {
+pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, sel_opts: select.SelectOptions, opts: Options) bool {
     const options = checkbox_defaults.override(opts);
     var ret = false;
 
@@ -6159,8 +6156,8 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     if (bw.clicked()) {
         target.* = !target.*;
         ret = true;
-        if (opts.selection_id) |selection_id| {
-            dvui.currentWindow().addSelectionEvent(selection_id, target.*, bw.wd.rectScale().r);
+        if (sel_opts.selection_info) |sel_info| {
+            sel_info.add(sel_opts.selection_id, target.*, bw.data());
         }
     }
 

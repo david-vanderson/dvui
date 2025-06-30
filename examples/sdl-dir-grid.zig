@@ -111,6 +111,7 @@ fn gui_frame() !void {
             }
         }
     }
+
     var main_box = dvui.box(@src(), .vertical, .{ .expand = .both, .color_fill = .fill_window, .background = true });
     defer main_box.deinit();
     {
@@ -130,7 +131,7 @@ fn gui_frame() !void {
                 mode = .cached;
             }
             var selected = selection_mode == .multi_select;
-            if (dvui.checkbox(@src(), &selected, "Multi-Select", .{ .margin = dvui.Rect.all(6) })) {
+            if (dvui.checkbox(@src(), &selected, "Multi-Select", .{}, .{ .margin = dvui.Rect.all(6) })) {
                 selection_mode = if (selected) .multi_select else .single_select;
                 if (selection_mode == .single_select) {
                     switch (mode) {
@@ -139,7 +140,7 @@ fn gui_frame() !void {
                     }
                 }
             }
-            _ = dvui.checkbox(@src(), &row_select, "Row Select", .{ .margin = dvui.Rect.all(6) });
+            _ = dvui.checkbox(@src(), &row_select, "Row Select", .{}, .{ .margin = dvui.Rect.all(6) });
             dvui.labelNoFmt(@src(), "Filter: (contains): ", .{}, .{ .margin = dvui.Rect.all(6) });
             var text = dvui.textEntry(@src(), .{}, .{ .gravity_y = 0.5, .margin = dvui.Rect.all(6) });
             defer text.deinit();
@@ -164,6 +165,7 @@ fn gui_frame() !void {
             break :blk null;
         };
 
+        selection_info.reset();
         // Note: The extra check here is because I've chosen to unselect anything that was filtered.
         // If we were just doing selection it just needs multi_select.selectionChanged();
         // OR user might prefer to check if everything in the current filter is selected and
@@ -207,7 +209,7 @@ fn gui_frame() !void {
         filtering_changed = (was_filtering != filtering);
 
         if (selection_mode == .multi_select) {
-            multi_select.processEvents(grid.data());
+            multi_select.processEvents(&selection_info, grid.data());
             if (multi_select.selectionChanged()) {
                 for (multi_select.selectionIdStart()..multi_select.selectionIdEnd() + 1) |row_num| {
                     switch (mode) {
@@ -217,7 +219,7 @@ fn gui_frame() !void {
                 }
             }
         } else {
-            single_select.processEvents(grid.data());
+            single_select.processEvents(&selection_info, grid.data());
             if (single_select.selectionChanged()) {
                 if (single_select.id_to_unselect) |unselect_row| {
                     switch (mode) {
@@ -242,7 +244,7 @@ var filename_filter: []u8 = "";
 var filtering: bool = false;
 var filtering_changed = false;
 var select_all_state: dvui.select.SelectAllState = .select_none;
-
+var selection_info: dvui.select.SelectionInfo = .{};
 var selections: std.DynamicBitSetUnmanaged = undefined;
 // Optional: windows os only
 const winapi = if (builtin.os.tag == .windows) struct {
@@ -277,9 +279,9 @@ pub fn directoryDisplay(grid: *dvui.GridWidget, row_selected: ?usize) !void {
             var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
             defer cell.deinit();
             var is_set = if (dir_num < selections.capacity()) selections.isSet(dir_num) else false;
-            _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .gravity_x = 0.5 });
+            _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .selection_info = &selection_info }, .{ .gravity_x = 0.5 });
             if (row_num == row_selected) {
-                dvui.currentWindow().addSelectionEvent(dir_num, !is_set, cell.data().borderRectScale().r);
+                selection_info.add(dir_num, !is_set, cell.data());
             }
         }
         {
@@ -413,9 +415,9 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget, row_selected: ?usize) void
             var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
             defer cell.deinit();
             var is_set = dir_cache.items[dir_num].selected;
-            _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .gravity_x = 0.5 });
+            _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .selection_info = &selection_info }, .{ .gravity_x = 0.5 });
             if (row_selected == dir_num) {
-                dvui.currentWindow().addSelectionEvent(dir_num, !is_set, cell.data().borderRectScale().r);
+                selection_info.add(dir_num, !is_set, cell.data());
             }
         }
         {
