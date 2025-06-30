@@ -17,9 +17,10 @@ pub const InitOptions = struct {
 
 pub const ContentPosition = enum { start, center };
 
-wd: WidgetData = undefined,
-init_options: InitOptions = undefined,
-prevClip: Rect.Physical = .{},
+wd: WidgetData,
+init_options: InitOptions,
+/// SAFETY: Set by `install`
+prevClip: Rect.Physical = undefined,
 insert_pt: dvui.Point = .{},
 row_size: Size = .{},
 max_row_width: f32 = 0.0,
@@ -27,11 +28,12 @@ max_row_width_prev: f32 = 0.0,
 width_nobreak: f32 = 0.0, // width if all children were on one row
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FlexBoxWidget {
-    var self = FlexBoxWidget{};
     const defaults = Options{ .name = "FlexBox" };
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-    self.init_options = init_opts;
-    self.max_row_width_prev = dvui.dataGet(null, self.wd.id, "_mrw", f32) orelse 0.0;
+    var self = FlexBoxWidget{
+        .wd = WidgetData.init(src, .{}, defaults.override(opts)),
+        .init_options = init_opts,
+    };
+    if (dvui.dataGet(null, self.wd.id, "_mrw", f32)) |mrw| self.max_row_width_prev = mrw;
     return self;
 }
 

@@ -17,20 +17,21 @@ pub const InitOptions = struct {
     rect: Rect.Physical,
 };
 
-wd: WidgetData = undefined,
-init_options: InitOptions = undefined,
+wd: WidgetData,
+init_options: InitOptions,
 
 prev_menu_root: ?dvui.MenuWidget.Root = null,
-winId: dvui.WidgetId = undefined,
+winId: dvui.WidgetId,
 focused: bool = false,
 activePt: Point.Natural = .{},
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ContextWidget {
-    var self = ContextWidget{};
     const defaults = Options{ .name = "Context" };
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .rect = dvui.parentGet().data().rectScale().rectFromPhysical(init_opts.rect) }));
-    self.init_options = init_opts;
-    self.winId = dvui.subwindowCurrentId();
+    var self = ContextWidget{
+        .wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .rect = dvui.parentGet().data().rectScale().rectFromPhysical(init_opts.rect) })),
+        .init_options = init_opts,
+        .winId = dvui.subwindowCurrentId(),
+    };
     if (dvui.focusedWidgetIdInCurrentSubwindow()) |fid| {
         if (fid == self.wd.id) {
             self.focused = true;

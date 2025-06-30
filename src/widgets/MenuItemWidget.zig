@@ -22,21 +22,22 @@ pub const InitOptions = struct {
     highlight_only: bool = false,
 };
 
-wd: WidgetData = undefined,
-focused_last_frame: bool = undefined,
+wd: WidgetData,
+focused_last_frame: bool,
 highlight: bool = false,
-init_opts: InitOptions = undefined,
+init_opts: InitOptions,
 activated: bool = false,
 show_active: bool = false,
 mouse_over: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) MenuItemWidget {
-    var self = MenuItemWidget{};
     const options = defaults.override(opts);
-    self.wd = WidgetData.init(src, .{}, options);
-    self.init_opts = init_opts;
-    self.focused_last_frame = dvui.dataGet(null, self.wd.id, "_focus_last", bool) orelse false;
-    return self;
+    const wd = WidgetData.init(src, .{}, options);
+    return .{
+        .wd = wd,
+        .init_opts = init_opts,
+        .focused_last_frame = dvui.dataGet(null, wd.id, "_focus_last", bool) orelse false,
+    };
 }
 
 pub fn install(self: *MenuItemWidget) void {

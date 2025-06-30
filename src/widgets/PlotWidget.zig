@@ -1,11 +1,16 @@
 pub const PlotWidget = @This();
 
+/// SAFETY: Set in `install`
 box: BoxWidget = undefined,
+/// SAFETY: Set in `install`
 data_rs: RectScale = undefined,
+/// SAFETY: Set in `install`
 old_clip: Rect.Physical = undefined,
-init_options: InitOptions = undefined,
+init_options: InitOptions,
+/// SAFETY: Set in `install`, might point to `x_axis_store`
 x_axis: *Axis = undefined,
 x_axis_store: Axis = .{},
+/// SAFETY: Set in `install`, might point to `y_axis_store`
 y_axis: *Axis = undefined,
 y_axis_store: Axis = .{},
 mouse_point: ?Point.Physical = null,
@@ -74,11 +79,10 @@ pub const Line = struct {
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) PlotWidget {
-    var self = PlotWidget{};
-    self.init_options = init_opts;
-    self.box = BoxWidget.init(src, .{ .dir = .vertical }, defaults.override(opts));
-
-    return self;
+    return .{
+        .init_options = init_opts,
+        .box = BoxWidget.init(src, .{ .dir = .vertical }, defaults.override(opts)),
+    };
 }
 
 pub fn dataToScreen(self: *PlotWidget, data: Data) dvui.Point.Physical {
@@ -278,20 +282,30 @@ pub fn deinit(self: *PlotWidget) void {
         self.data_max = .{ .x = 10, .y = 10 };
     }
 
-    if (self.init_options.x_axis == null or self.init_options.x_axis.?.min == null) {
+    if (self.init_options.x_axis) |x_axis| {
+        if (x_axis.min == null) {
+            x_axis.min = self.data_min.x;
+        }
+        if (x_axis.max == null) {
+            x_axis.max = self.data_max.x;
+        }
+    } else {
         self.x_axis.min = self.data_min.x;
-    }
-    if (self.init_options.x_axis == null or self.init_options.x_axis.?.max == null) {
         self.x_axis.max = self.data_max.x;
+        dvui.dataSet(null, self.box.data().id, "_x_axis", self.x_axis.*);
     }
-    if (self.init_options.y_axis == null or self.init_options.y_axis.?.min == null) {
+    if (self.init_options.y_axis) |y_axis| {
+        if (y_axis.min == null) {
+            y_axis.min = self.data_min.y;
+        }
+        if (y_axis.max == null) {
+            y_axis.max = self.data_max.y;
+        }
+    } else {
         self.y_axis.min = self.data_min.y;
-    }
-    if (self.init_options.y_axis == null or self.init_options.y_axis.?.max == null) {
         self.y_axis.max = self.data_max.y;
+        dvui.dataSet(null, self.box.data().id, "_y_axis", self.y_axis.*);
     }
-    dvui.dataSet(null, self.box.data().id, "_x_axis", self.x_axis.*);
-    dvui.dataSet(null, self.box.data().id, "_y_axis", self.y_axis.*);
 
     if (self.hover_data) |hd| {
         var p = self.box.data().contentRectScale().pointFromPhysical(self.mouse_point.?);

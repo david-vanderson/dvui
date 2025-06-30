@@ -10,7 +10,7 @@ const WidgetData = dvui.WidgetData;
 
 const ReorderWidget = @This();
 
-wd: WidgetData = undefined,
+wd: WidgetData,
 id_reorderable: ?usize = null, // matches Reorderable.reorder_id
 drag_point: ?dvui.Point.Physical = null,
 drag_ending: bool = false,
@@ -18,13 +18,14 @@ reorderable_size: Size = .{},
 found_slot: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, opts: Options) ReorderWidget {
-    var self = ReorderWidget{};
     const defaults = Options{ .name = "Reorder" };
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-    self.id_reorderable = dvui.dataGet(null, self.wd.id, "_id_reorderable", usize) orelse null;
-    self.drag_point = dvui.dataGet(null, self.wd.id, "_drag_point", dvui.Point.Physical) orelse null;
-    self.reorderable_size = dvui.dataGet(null, self.wd.id, "_reorderable_size", dvui.Size) orelse dvui.Size{};
-    return self;
+    const wd = WidgetData.init(src, .{}, defaults.override(opts));
+    return .{
+        .wd = wd,
+        .id_reorderable = dvui.dataGet(null, wd.id, "_id_reorderable", usize),
+        .drag_point = dvui.dataGet(null, wd.id, "_drag_point", dvui.Point.Physical),
+        .reorderable_size = dvui.dataGet(null, wd.id, "_reorderable_size", dvui.Size) orelse .{},
+    };
 }
 
 pub fn install(self: *ReorderWidget) void {
@@ -211,23 +212,23 @@ pub const Reorderable = struct {
         reinstall: bool = true,
     };
 
-    wd: WidgetData = undefined,
-    reorder: *ReorderWidget = undefined,
-    init_options: InitOptions = undefined,
-    options: Options = undefined,
+    wd: WidgetData,
+    reorder: *ReorderWidget,
+    init_options: InitOptions,
+    options: Options,
     installed: bool = false,
     floating_widget: ?dvui.FloatingWidget = null,
     target_rs: ?dvui.RectScale = null,
 
     pub fn init(src: std.builtin.SourceLocation, reorder: *ReorderWidget, init_opts: InitOptions, opts: Options) Reorderable {
-        var self = Reorderable{};
-        self.reorder = reorder;
         const defaults = Options{ .name = "Reorderable" };
-        self.init_options = init_opts;
-        self.options = defaults.override(opts);
-        self.wd = WidgetData.init(src, .{}, self.options.override(.{ .rect = .{} }));
-
-        return self;
+        const options = defaults.override(opts);
+        return .{
+            .reorder = reorder,
+            .init_options = init_opts,
+            .options = options,
+            .wd = WidgetData.init(src, .{}, options.override(.{ .rect = .{} })),
+        };
     }
 
     // can call this after init before install

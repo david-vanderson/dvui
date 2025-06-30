@@ -58,16 +58,17 @@ pub var defaults: Options = .{
 };
 
 pub const InitOptions = struct {
-    dir: enums.Direction = undefined,
+    dir: enums.Direction,
 };
 
-wd: WidgetData = undefined,
+wd: WidgetData,
 
-init_opts: InitOptions = undefined,
-winId: dvui.WidgetId = undefined,
+init_opts: InitOptions,
+winId: dvui.WidgetId,
 parentMenu: ?*MenuWidget = null,
 parentSubwindowId: ?dvui.WidgetId = null,
-last_focus: dvui.WidgetId = undefined,
+last_focus: dvui.WidgetId,
+/// SAFETY: Set in `install`
 box: BoxWidget = undefined,
 
 // whether submenus should be open
@@ -86,20 +87,20 @@ child_popup_rect: ?Rect.Physical = null,
 mouse_mode: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) MenuWidget {
-    var self = MenuWidget{};
-    const options = defaults.override(opts);
-    self.wd = WidgetData.init(src, .{}, options);
-    self.init_opts = init_opts;
-    self.last_focus = dvui.lastFocusedIdInFrame(null);
+    var self = MenuWidget{
+        .wd = WidgetData.init(src, .{}, defaults.override(opts)),
+        .init_opts = init_opts,
+        .winId = dvui.subwindowCurrentId(),
+        .last_focus = dvui.lastFocusedIdInFrame(null),
+    };
 
-    self.winId = dvui.subwindowCurrentId();
     if (dvui.dataGet(null, self.wd.id, "_sub_act", bool)) |a| {
         self.submenus_activated = a;
     } else if (current()) |pm| {
         self.submenus_activated = pm.submenus_in_child;
     }
 
-    self.mouse_mode = dvui.dataGet(null, self.wd.id, "_mouse_mode", bool) orelse false;
+    if (dvui.dataGet(null, self.wd.id, "_mouse_mode", bool)) |mouse_mode| self.mouse_mode = mouse_mode;
 
     return self;
 }

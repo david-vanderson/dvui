@@ -46,8 +46,7 @@ pub const InitOptions = struct {
         },
     };
 
-    /// If null, same as .internal = .{}
-    text: ?TextOption = null,
+    text: TextOption = .{ .internal = .{} },
     /// Faded text shown when the textEntry is empty
     placeholder: ?[]const u8 = null,
 
@@ -62,31 +61,32 @@ pub const InitOptions = struct {
     multiline: bool = false,
 };
 
-wd: WidgetData = undefined,
+wd: WidgetData,
+/// SAFETY: Set in `install`
 prevClip: Rect.Physical = undefined,
+/// SAFETY: Set in `install`
 scroll: ScrollAreaWidget = undefined,
-scroll_init_opts: ScrollAreaWidget.InitOpts = undefined,
+scroll_init_opts: ScrollAreaWidget.InitOpts,
+/// SAFETY: Set in `install`
 scrollClip: Rect.Physical = undefined,
+/// SAFETY: Set in `install`
 textLayout: TextLayoutWidget = undefined,
+/// SAFETY: Set in `install`
 textClip: Rect.Physical = undefined,
-padding: Rect = undefined,
+padding: Rect,
 
-init_opts: InitOptions = undefined,
-text_opt: InitOptions.TextOption = undefined,
-text: []u8 = undefined,
-len: usize = undefined,
+init_opts: InitOptions,
+text: []u8,
+len: usize,
 text_changed: bool = false,
 enter_pressed: bool = false, // not valid if multiline
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextEntryWidget {
-    var self = TextEntryWidget{};
-    self.init_opts = init_opts;
-    self.text_opt = init_opts.text orelse .{ .internal = .{} };
-    self.scroll_init_opts = .{
-        .vertical = if (self.init_opts.scroll_vertical orelse self.init_opts.multiline) .auto else .none,
-        .vertical_bar = self.init_opts.scroll_vertical_bar orelse .auto,
-        .horizontal = if (self.init_opts.scroll_horizontal orelse true) .auto else .none,
-        .horizontal_bar = self.init_opts.scroll_horizontal_bar orelse (if (self.init_opts.multiline) .auto else .hide),
+    var scroll_init_opts = ScrollAreaWidget.InitOpts{
+        .vertical = if (init_opts.scroll_vertical orelse init_opts.multiline) .auto else .none,
+        .vertical_bar = init_opts.scroll_vertical_bar orelse .auto,
+        .horizontal = if (init_opts.scroll_horizontal orelse true) .auto else .none,
+        .horizontal_bar = init_opts.scroll_horizontal_bar orelse (if (init_opts.multiline) .auto else .hide),
     };
 
     var options = defaults.min_sizeM(14, 1).override(opts);
@@ -95,33 +95,40 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         // max size not given, so default to the same as min size for direction
         // we can scroll in
         const ms = options.min_size_contentGet();
-        const maxw = if (self.scroll_init_opts.horizontal == .auto) ms.w else dvui.max_float_safe;
-        const maxh = if (self.scroll_init_opts.vertical == .auto) ms.h else dvui.max_float_safe;
+        const maxw = if (scroll_init_opts.horizontal == .auto) ms.w else dvui.max_float_safe;
+        const maxh = if (scroll_init_opts.vertical == .auto) ms.h else dvui.max_float_safe;
         options = options.override(.{ .max_size_content = .{ .w = maxw, .h = maxh } });
     }
 
     // padding is interpreted as the padding for the TextLayoutWidget, but
     // we also need to add it to content size because TextLayoutWidget is
     // inside the scroll area
-    self.padding = options.paddingGet();
+    const padding = options.paddingGet();
     options.padding = null;
-    options.min_size_content.?.w += self.padding.x + self.padding.w;
-    options.min_size_content.?.h += self.padding.y + self.padding.h;
-    options.max_size_content.?.w += self.padding.x + self.padding.w;
-    options.max_size_content.?.h += self.padding.y + self.padding.h;
+    options.min_size_content.?.w += padding.x + padding.w;
+    options.min_size_content.?.h += padding.y + padding.h;
+    options.max_size_content.?.w += padding.x + padding.w;
+    options.max_size_content.?.h += padding.y + padding.h;
 
-    self.wd = WidgetData.init(src, .{}, options);
-    self.scroll_init_opts.focus_id = self.wd.id;
+    const wd = WidgetData.init(src, .{}, options);
+    scroll_init_opts.focus_id = wd.id;
 
-    switch (self.text_opt) {
-        .buffer => |b| self.text = b,
-        .buffer_dynamic => |b| self.text = b.backing.*,
-        .internal => self.text = dvui.dataGetSliceDefault(null, self.wd.id, "_buffer", []u8, &.{}),
-    }
+    const text = switch (init_opts.text) {
+        .buffer => |b| b,
+        .buffer_dynamic => |b| b.backing.*,
+        .internal => dvui.dataGetSliceDefault(null, wd.id, "_buffer", []u8, &.{}),
+    };
+    const len_byte = std.mem.indexOfScalar(u8, text, 0) orelse text.len;
+    const len_utf8_boundary = dvui.findUtf8Start(text[0..len_byte], len_byte);
 
-    self.len = std.mem.indexOfScalar(u8, self.text, 0) orelse self.text.len;
-    self.len = dvui.findUtf8Start(self.text[0..self.len], self.len);
-    return self;
+    return .{
+        .wd = wd,
+        .scroll_init_opts = scroll_init_opts,
+        .padding = padding,
+        .init_opts = init_opts,
+        .text = text,
+        .len = len_utf8_boundary,
+    };
 }
 
 pub fn install(self: *TextEntryWidget) void {
@@ -373,7 +380,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
     const space_left = self.text.len - self.len;
     if (space_left < new.len) {
         var new_size = realloc_bin_size * (@divTrunc(self.len + new.len, realloc_bin_size) + 1);
-        switch (self.text_opt) {
+        switch (self.init_opts.text) {
             .buffer => {},
             .buffer_dynamic => |b| {
                 new_size = @min(new_size, b.limit);
@@ -854,7 +861,7 @@ pub fn deinit(self: *TextEntryWidget) void {
     if (self.len == 0 or self.len + realloc_bin_size + @divTrunc(realloc_bin_size, 2) <= self.text.len) {
         // we want to shrink the allocation
         const new_len = if (self.len == 0) 0 else realloc_bin_size * (@divTrunc(self.len, realloc_bin_size) + 1);
-        switch (self.text_opt) {
+        switch (self.init_opts.text) {
             .buffer => {},
             .buffer_dynamic => |b| {
                 if (b.allocator.resize(self.text, new_len)) {
