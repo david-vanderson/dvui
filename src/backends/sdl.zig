@@ -19,6 +19,9 @@ pub const c = blk: {
     });
 };
 
+/// Only available in sdl2
+extern "SDL_config" fn MACOS_enable_scroll_momentum() callconv(.c) void;
+
 pub const kind: dvui.enums.Backend = if (sdl3) .sdl3 else .sdl2;
 
 pub const SDLBackend = @This();
@@ -68,8 +71,13 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     // use the string version instead of the #define so we compile with SDL < 2.24
 
     _ = c.SDL_SetHint("SDL_HINT_WINDOWS_DPI_SCALING", "1");
+    if (sdl3) _ = c.SDL_SetHint(c.SDL_HINT_MAC_SCROLL_MOMENTUM, "1");
 
-    try toErr(c.SDL_Init(c.SDL_INIT_VIDEO), "SDL_Init in initWindow");
+    try toErr(c.SDL_Init(c.SDL_INIT_VIDEO | c.SDL_INIT_EVENTS), "SDL_Init in initWindow");
+
+    if (!sdl3 and builtin.os.tag == .macos) {
+        MACOS_enable_scroll_momentum();
+    }
 
     const hidden_flag = if (options.hidden) c.SDL_WINDOW_HIDDEN else 0;
     const fullscreen_flag = if (options.fullscreen) c.SDL_WINDOW_FULLSCREEN else 0;
@@ -1027,31 +1035,17 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             return try win.addEventMouseButton(SDL_mouse_button_to_dvui(event.button.button), .release);
         },
         if (sdl3) c.SDL_EVENT_MOUSE_WHEEL else c.SDL_MOUSEWHEEL => {
+            // .precise added in 2.0.18
+            const ticks_x = if (sdl3) event.wheel.x else event.wheel.preciseX;
+            const ticks_y = if (sdl3) event.wheel.y else event.wheel.preciseY;
+
             if (self.log_events) {
-                log.debug("event MOUSEWHEEL {d} {d} {d}\n", .{ event.wheel.x, event.wheel.y, event.wheel.which });
-            }
-
-            var ticks_x = if (sdl3) event.wheel.x else @as(f32, @floatFromInt(event.wheel.x));
-            var ticks_y = if (sdl3) event.wheel.y else @as(f32, @floatFromInt(event.wheel.y));
-
-            // TODO: some real solution to interpreting the mouse wheel across OSes
-            switch (builtin.target.os.tag) {
-                .windows, .linux => {
-                    ticks_x *= dvui.scroll_speed;
-                    ticks_y *= dvui.scroll_speed;
-                },
-                .macos => {
-                    // TODO: Is this divided by 2 because of retina scale?
-                    //       In that case, should we scale by content_scale?
-                    ticks_x *= dvui.scroll_speed / 2;
-                    ticks_y *= dvui.scroll_speed / 2;
-                },
-                else => {},
+                log.debug("event MOUSEWHEEL {d} {d} {d}\n", .{ ticks_x, ticks_y, event.wheel.which });
             }
 
             var ret = false;
-            if (ticks_x != 0) ret = try win.addEventMouseWheel(ticks_x, .horizontal);
-            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y, .vertical);
+            if (ticks_x != 0) ret = try win.addEventMouseWheel(ticks_x * dvui.scroll_speed, .horizontal);
+            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed, .vertical);
             return ret;
         },
         if (sdl3) c.SDL_EVENT_FINGER_DOWN else c.SDL_FINGERDOWN => {
