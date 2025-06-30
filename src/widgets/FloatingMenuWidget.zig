@@ -175,7 +175,7 @@ pub fn widget(self: *FloatingMenuWidget) Widget {
 }
 
 pub fn data(self: *FloatingMenuWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *FloatingMenuWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {

@@ -32,7 +32,7 @@ pub fn widget(self: *OverlayWidget) Widget {
 }
 
 pub fn data(self: *OverlayWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *OverlayWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {

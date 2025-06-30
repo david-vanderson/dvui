@@ -1800,7 +1800,7 @@ pub fn widget(self: *Self) Widget {
 }
 
 pub fn data(self: *Self) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *Self, id: WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {

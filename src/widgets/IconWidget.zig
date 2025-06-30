@@ -40,7 +40,7 @@ pub fn install(self: *IconWidget) void {
 }
 
 pub fn data(self: *IconWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn matchEvent(self: *IconWidget, e: *dvui.Event) bool {

@@ -100,7 +100,7 @@ pub fn widget(self: *BoxWidget) Widget {
 }
 
 pub fn data(self: *BoxWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *BoxWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {

@@ -134,7 +134,7 @@ pub fn widget(self: *ScaleWidget) Widget {
 }
 
 pub fn data(self: *ScaleWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *ScaleWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {

@@ -223,7 +223,7 @@ pub fn widget(self: *ScrollContainerWidget) Widget {
 }
 
 pub fn data(self: *ScrollContainerWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *ScrollContainerWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {

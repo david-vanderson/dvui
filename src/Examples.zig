@@ -4736,7 +4736,7 @@ pub const StrokeTest = struct {
     }
 
     pub fn data(self: *Self) *dvui.WidgetData {
-        return &self.wd;
+        return self.wd.validate();
     }
 
     pub fn rectFor(self: *Self, id: dvui.WidgetId, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {

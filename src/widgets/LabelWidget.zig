@@ -92,7 +92,7 @@ fn logAndHighlight(src: std.builtin.SourceLocation, opts: Options, err: anyerror
 }
 
 pub fn data(self: *LabelWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn install(self: *LabelWidget) void {
