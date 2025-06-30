@@ -321,7 +321,7 @@ pub fn minSizeReportToParent(self: *const WidgetData) void {
     }
 }
 
-pub inline fn validate(self: *const WidgetData) *WidgetData {
+pub fn validate(self: *const WidgetData) *WidgetData {
     std.debug.assert(self.id != WidgetId.undef); // Indicates a use after deinit() error.
     return @constCast(self);
 }

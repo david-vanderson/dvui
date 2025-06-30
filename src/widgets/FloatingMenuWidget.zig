@@ -263,7 +263,7 @@ pub fn deinit(self: *FloatingMenuWidget) void {
         // only the last popup can do the check, you can't query the focus
         // status of children, only parents
         self.menu.close_chain(.unintentional);
-        dvui.refresh(null, @src(), self.wd.id);
+        dvui.refresh(null, @src(), self.data().id);
     }
 
     self.menu.deinit();
