@@ -16,7 +16,6 @@ id_branch: ?usize = null, // matches Reorderable.reorder_id
 drag_point: ?dvui.Point.Physical = null,
 drag_ending: bool = false,
 branch_size: Size = .{},
-found_slot: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, opts: Options) TreeWidget {
     var self = TreeWidget{};
@@ -138,7 +137,6 @@ pub fn deinit(self: *TreeWidget) void {
 pub fn dragStart(self: *TreeWidget, branch_id: usize, p: dvui.Point.Physical) void {
     self.id_branch = branch_id;
     self.drag_point = p;
-    self.found_slot = true;
     dvui.captureMouse(self.data());
 }
 
@@ -391,19 +389,10 @@ pub const Branch = struct {
         self.wd.minSizeMax(self.wd.options.padSize(s));
     }
 
-    pub fn processEvent(self: *Branch, e: *dvui.Event, bubbling: bool) void {
-        _ = bubbling;
-
-        if (e.bubbleable()) {
-            self.wd.parent.processEvent(e, true);
-        }
-    }
-
     pub fn deinit(self: *Branch) void {
         if (self.can_expand) {
-            if (self.expanded) {
+            if (self.expanded)
                 self.expander_vbox.deinit();
-            }
 
             dvui.dataSet(null, self.wd.id, "_expanded", self.expanded);
         } else {
