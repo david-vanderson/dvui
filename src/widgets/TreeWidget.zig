@@ -47,25 +47,8 @@ pub fn tree(src: std.builtin.SourceLocation, opts: Options) *TreeWidget {
     return ret;
 }
 
-pub fn needFinalSlot(self: *TreeWidget) bool {
-    return self.drag_point != null and !self.found_slot;
-}
-
-pub fn finalSlot(self: *TreeWidget) bool {
-    if (self.needFinalSlot()) {
-        var r = self.branch(@src(), .{ .last_slot = true }, .{});
-        defer r.deinit();
-
-        if (r.insertBefore()) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 pub fn widget(self: *TreeWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *TreeWidget) *WidgetData {
@@ -95,13 +78,11 @@ pub fn processEvents(self: *TreeWidget) void {
         if (!self.matchEvent(e))
             continue;
 
-        self.processEvent(e, false);
+        self.processEvent(e);
     }
 }
 
-pub fn processEvent(self: *TreeWidget, e: *dvui.Event, bubbling: bool) void {
-    _ = bubbling;
-
+pub fn processEvent(self: *TreeWidget, e: *dvui.Event) void {
     if (dvui.captured(self.wd.id)) {
         switch (e.evt) {
             .mouse => |me| {
@@ -113,20 +94,15 @@ pub fn processEvent(self: *TreeWidget, e: *dvui.Event, bubbling: bool) void {
                 } else if (me.action == .motion) {
                     self.drag_point = me.p;
 
-                    var scrolldrag = dvui.Event{ .evt = .{ .scroll_drag = .{
+                    dvui.scrollDrag(.{
                         .mouse_pt = me.p,
                         .screen_rect = self.wd.rectScale().r,
                         .capture_id = self.wd.id,
-                    } } };
-                    self.wd.parent.processEvent(&scrolldrag, true);
+                    });
                 }
             },
             else => {},
         }
-    }
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
     }
 }
 
@@ -394,19 +370,8 @@ pub const Branch = struct {
         return false;
     }
 
-    pub fn reinstall(self: *Branch) void {
-        // send our target rect to the parent for sizing
-        self.wd.minSizeMax(self.button.wd.rect.size());
-        self.wd.minSizeReportToParent();
-
-        // reinstall ourselves getting the next rect from parent
-        self.wd = WidgetData.init(self.wd.src, .{}, self.options);
-        self.wd.register();
-        dvui.parentSet(self.widget());
-    }
-
     pub fn widget(self: *Branch) Widget {
-        return Widget.init(self, Branch.data, Branch.rectFor, Branch.screenRectScale, Branch.minSizeForChild, Branch.processEvent);
+        return Widget.init(self, Branch.data, Branch.rectFor, Branch.screenRectScale, Branch.minSizeForChild);
     }
 
     pub fn data(self: *Branch) *WidgetData {
@@ -461,32 +426,6 @@ pub const Branch = struct {
         self.* = undefined;
     }
 };
-
-pub fn reorderSlice(comptime T: type, slice: []T, removed_idx: ?usize, insert_before_idx: ?usize) bool {
-    if (removed_idx) |ri| {
-        if (insert_before_idx) |ibi| {
-            // save this index
-            const removed = slice[ri];
-            if (ri < ibi) {
-                // moving down, shift others up
-                for (ri..ibi - 1) |i| {
-                    slice[i] = slice[i + 1];
-                }
-                slice[ibi - 1] = removed;
-            } else {
-                // moving up, shift others down
-                for (ibi..ri, 0..) |_, i| {
-                    slice[ri - i] = slice[ri - i - 1];
-                }
-                slice[ibi] = removed;
-            }
-
-            return true;
-        }
-    }
-
-    return false;
-}
 
 test {
     @import("std").testing.refAllDecls(@This());
