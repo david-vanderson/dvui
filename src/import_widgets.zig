@@ -34,6 +34,7 @@ pub const SuggestionWidget = @import("widgets/SuggestionWidget.zig");
 pub const TabsWidget = @import("widgets/TabsWidget.zig");
 pub const TextEntryWidget = @import("widgets/TextEntryWidget.zig");
 pub const TextLayoutWidget = @import("widgets/TextLayoutWidget.zig");
+pub const TreeWidget = @import("widgets/TreeWidget.zig");
 pub const VirtualParentWidget = @import("widgets/VirtualParentWidget.zig");
 pub const GridWidget = @import("widgets/GridWidget.zig");
 // Needed for autodocs "backlink" to work
