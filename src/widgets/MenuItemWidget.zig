@@ -22,21 +22,22 @@ pub const InitOptions = struct {
     highlight_only: bool = false,
 };
 
-wd: WidgetData = undefined,
-focused_last_frame: bool = undefined,
+wd: WidgetData,
+focused_last_frame: bool,
 highlight: bool = false,
-init_opts: InitOptions = undefined,
+init_opts: InitOptions,
 activated: bool = false,
 show_active: bool = false,
 mouse_over: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) MenuItemWidget {
-    var self = MenuItemWidget{};
     const options = defaults.override(opts);
-    self.wd = WidgetData.init(src, .{}, options);
-    self.init_opts = init_opts;
-    self.focused_last_frame = dvui.dataGet(null, self.wd.id, "_focus_last", bool) orelse false;
-    return self;
+    const wd = WidgetData.init(src, .{}, options);
+    return .{
+        .wd = wd,
+        .init_opts = init_opts,
+        .focused_last_frame = dvui.dataGet(null, wd.id, "_focus_last", bool) orelse false,
+    };
 }
 
 pub fn install(self: *MenuItemWidget) void {
@@ -69,8 +70,7 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
 
             if (!self.focused_last_frame) {
                 // in case we are in a scrollable dropdown, scroll
-                var scrollto = Event{ .evt = .{ .scroll_to = .{ .screen_rect = self.wd.borderRectScale().r } } };
-                self.wd.parent.processEvent(&scrollto, true);
+                dvui.scrollTo(.{ .screen_rect = self.wd.borderRectScale().r });
             }
         }
     }
@@ -105,7 +105,7 @@ pub fn processEvents(self: *MenuItemWidget) void {
         if (!self.matchEvent(e))
             continue;
 
-        self.processEvent(e, false);
+        self.processEvent(e);
     }
 }
 
@@ -127,7 +127,7 @@ pub fn activeRect(self: *const MenuItemWidget) ?Rect.Natural {
 }
 
 pub fn widget(self: *MenuItemWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *MenuItemWidget) *WidgetData {
@@ -147,8 +147,7 @@ pub fn minSizeForChild(self: *MenuItemWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
-pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
+pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .focus) {
@@ -246,10 +245,6 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
         },
         else => {},
     }
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
-    }
 }
 
 pub fn deinit(self: *MenuItemWidget) void {
@@ -270,23 +265,20 @@ test "menuItem click sets last_focused_id_this_frame" {
     defer t.deinit();
 
     const fns = struct {
-        var last_focused_id_set: ?dvui.WidgetId = null;
+        var last_focused_id_set: dvui.WidgetId = .zero;
 
         fn frame() !dvui.App.Result {
             var m = dvui.menu(@src(), .vertical, .{ .padding = .all(10), .tag = "menu" });
             defer m.deinit();
 
-            const last_focused = dvui.lastFocusedIdInFrame();
+            const last_focused = dvui.lastFocusedIdInFrame(null);
 
             if (dvui.menuItemLabel(@src(), "item 1", .{}, .{ .tag = "item 1" })) |_| {
                 dvui.focusWidget(m.data().id, null, null);
             }
             _ = dvui.menuItemLabel(@src(), "item 2", .{}, .{ .tag = "item 2" });
 
-            last_focused_id_set = null;
-            if (last_focused != dvui.lastFocusedIdInFrame()) {
-                last_focused_id_set = dvui.lastFocusedIdInFrame();
-            }
+            last_focused_id_set = dvui.lastFocusedIdInFrame(last_focused);
 
             return .ok;
         }

@@ -1,16 +1,20 @@
 pub const DropdownWidget = @This();
 
-options: Options = undefined,
-init_options: InitOptions = undefined,
-menu: MenuWidget = undefined,
+options: Options,
+init_options: InitOptions,
+menu: MenuWidget,
+/// SAFETY: Will always be set by `install`
+/// TODO: This will panic if `install` is not called but `deinit` is.
+///       Is that a scenario we should handle?
 menuItem: MenuItemWidget = undefined,
 drop: ?FloatingMenuWidget = null,
 drop_first_frame: bool = false,
-drop_mi: ?MenuItemWidget = null,
+/// SAFETY: Will always be set by `addChoice` before use
+drop_mi: MenuItemWidget = undefined,
 drop_mi_id: ?dvui.WidgetId = null,
 drop_mi_index: usize = 0,
 drop_height: f32 = 0,
-drop_adjust: f32 = undefined,
+drop_adjust: f32 = 0,
 
 pub var defaults: Options = .{
     .color_fill = .{ .name = .fill_control },
@@ -27,11 +31,13 @@ pub const InitOptions = struct {
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) DropdownWidget {
-    var self = DropdownWidget{};
-    self.options = defaults.override(opts);
-    self.init_options = init_opts;
-    self.menu = MenuWidget.init(src, .{ .dir = .horizontal }, self.options.wrapOuter());
-    self.drop_adjust = dvui.dataGet(null, self.menu.wd.id, "_drop_adjust", f32) orelse 0;
+    const options = defaults.override(opts);
+    var self = DropdownWidget{
+        .options = options,
+        .init_options = init_opts,
+        .menu = MenuWidget.init(src, .{ .dir = .horizontal }, options.wrapOuter()),
+    };
+    if (dvui.dataGet(null, self.menu.wd.id, "_drop_adjust", f32)) |adjust| self.drop_adjust = adjust;
     return self;
 }
 
@@ -106,12 +112,11 @@ pub fn dropped(self: *DropdownWidget) bool {
             if (drag_scroll and e.evt == .mouse and !e.evt.mouse.button.touch() and (e.evt.mouse.action == .motion or e.evt.mouse.action == .position)) {
                 if (e.evt.mouse.p.x >= scroll_rs.r.x and e.evt.mouse.p.x <= scroll_rs.r.x + scroll_rs.r.w and (e.evt.mouse.p.y <= scroll_rs.r.y or e.evt.mouse.p.y >= scroll_rs.r.y + scroll_rs.r.h)) {
                     if (e.evt.mouse.action == .motion) {
-                        var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
+                        dvui.scrollDrag(.{
                             .mouse_pt = e.evt.mouse.p,
                             .screen_rect = drop.menu.data().rectScale().r,
                             .capture_id = drop.wd.id,
-                        } } };
-                        drop.scroll.scroll.?.processEvent(&scrolldrag, true);
+                        });
                     } else if (e.evt.mouse.action == .position) {
                         dvui.currentWindow().inject_motion_event = true;
                     }
@@ -178,22 +183,22 @@ pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
     }
 
     self.drop_mi = MenuItemWidget.init(@src(), .{}, .{ .id_extra = self.drop_mi_index, .expand = .horizontal });
-    self.drop_mi_id = self.drop_mi.?.data().id;
-    self.drop_mi.?.install();
-    self.drop_mi.?.processEvents();
-    self.drop_mi.?.drawBackground(.{});
+    self.drop_mi_id = self.drop_mi.data().id;
+    self.drop_mi.install();
+    self.drop_mi.processEvents();
+    self.drop_mi.drawBackground(.{});
 
     if (self.drop_first_frame) {
         if (self.init_options.selected_index) |si| {
             if (si == self.drop_mi_index) {
-                dvui.focusWidget(self.drop_mi.?.wd.id, null, null);
+                dvui.focusWidget(self.drop_mi.wd.id, null, null);
                 dvui.dataSet(null, self.menu.wd.id, "_drop_adjust", self.drop_height);
             }
         }
     }
     self.drop_mi_index += 1;
 
-    return &self.drop_mi.?;
+    return &self.drop_mi;
 }
 
 pub fn deinit(self: *DropdownWidget) void {

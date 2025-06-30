@@ -49,14 +49,18 @@ pub const InitOptions = struct {
 };
 
 parent_tooltip: ?*FloatingTooltipWidget = null,
+/// SAFETY: Set by `install`
 prev_rendering: bool = undefined,
-wd: WidgetData = undefined,
+wd: WidgetData,
+/// SAFETY: Set by `install`
 prev_windowId: dvui.WidgetId = undefined,
-prevClip: Rect.Physical = .{},
-scale_val: f32 = undefined,
+/// SAFETY: Set by `install`
+prevClip: Rect.Physical = undefined,
+scale_val: f32,
+/// SAFETY: Set by `install`, so is only valid if `installed` is true
 scaler: dvui.ScaleWidget = undefined,
-options: Options = undefined,
-init_options: InitOptions = undefined,
+options: Options,
+init_options: InitOptions,
 showing: bool = false,
 mouse_good_this_frame: bool = false,
 installed: bool = false,
@@ -77,25 +81,27 @@ tt_child_shown: bool = false,
 /// Use FloatingWindowWidget for a floating window that the user can change
 /// size, move around, and adjust stacking.
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Options) FloatingTooltipWidget {
-    var self = FloatingTooltipWidget{};
+    var self = FloatingTooltipWidget{
+        .wd = WidgetData.init(src, .{ .subwindow = true }, (Options{ .name = "FloatingTooltip" }).override(.{
+            // passing options.rect will stop WidgetData.init from calling
+            // rectFor/minSizeForChild which is important because we are outside
+            // normal layout
+            .rect = opts_in.rect orelse .{},
+        })),
+        // get scale from parent
+        .scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale(),
+        .options = defaults.override(opts_in),
+        .init_options = init_opts,
+    };
 
-    // get scale from parent
-    self.scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale();
-    self.options = defaults.override(opts_in);
     if (self.options.min_size_content) |msc| {
         self.options.min_size_content = msc.scale(self.scale_val, Size);
     }
 
-    // passing options.rect will stop WidgetData.init from calling
-    // rectFor/minSizeForChild which is important because we are outside
-    // normal layout
-    self.wd = WidgetData.init(src, .{ .subwindow = true }, (Options{ .name = "FloatingTooltip" }).override(.{ .rect = self.options.rect orelse .{} }));
-
     // if a rect got passed, we don't want to also pass it to scaler
     self.options.rect = null;
 
-    self.init_options = init_opts;
-    self.showing = dvui.dataGet(null, self.wd.id, "_showing", bool) orelse false;
+    if (dvui.dataGet(null, self.wd.id, "_showing", bool)) |showing| self.showing = showing;
 
     return self;
 }
@@ -194,7 +200,7 @@ pub fn install(self: *FloatingTooltipWidget) void {
 }
 
 pub fn widget(self: *FloatingTooltipWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *FloatingTooltipWidget) *WidgetData {
@@ -212,13 +218,6 @@ pub fn screenRectScale(self: *FloatingTooltipWidget, rect: Rect) RectScale {
 
 pub fn minSizeForChild(self: *FloatingTooltipWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
-}
-
-pub fn processEvent(self: *FloatingTooltipWidget, e: *Event, bubbling: bool) void {
-    // no event processing, everything stops
-    _ = self;
-    _ = e;
-    _ = bubbling;
 }
 
 pub fn deinit(self: *FloatingTooltipWidget) void {

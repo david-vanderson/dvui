@@ -142,12 +142,11 @@ pub fn scrollPage(self: *ScrollInfo, dir: enums.Direction, up: bool) void {
     // the last page is offset fraction 1.0, so there is
     // one less scroll position between 0 and 1.0
     fi = 1.0 / ((1.0 / fi) - 1);
-    var f: f32 = undefined;
-    if (up) {
-        f = self.offsetFraction(dir) - fi;
-    } else {
-        f = self.offsetFraction(dir) + fi;
-    }
+    const f: f32 = if (up)
+        self.offsetFraction(dir) - fi
+    else
+        self.offsetFraction(dir) + fi;
+
     self.scrollToFraction(dir, f);
 }
 

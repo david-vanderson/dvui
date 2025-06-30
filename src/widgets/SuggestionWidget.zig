@@ -1,15 +1,16 @@
 pub const SuggestionWidget = @This();
 
-id: dvui.WidgetId = undefined,
-options: Options = undefined,
-init_options: InitOptions = undefined,
+id: dvui.WidgetId,
+/// Is for the floating menu widget that might open
+options: Options,
+init_options: InitOptions,
 
-// menu catches the close_popup from drop if you click off of it
+/// SAFETY: Set in `install`
 menu: *MenuWidget = undefined,
 drop: ?*FloatingMenuWidget = null,
 drop_mi: ?MenuItemWidget = null,
 drop_mi_index: usize = 0,
-selected_index: usize = undefined, // 0 indexed
+selected_index: usize = 0, // 0 indexed
 activate_selected: bool = false,
 
 pub var defaults: Options = .{
@@ -22,12 +23,13 @@ pub const InitOptions = struct {
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) SuggestionWidget {
-    var self = SuggestionWidget{};
-    self.id = dvui.parentGet().extendId(src, opts.idExtra());
-    self.options = defaults.override(opts);
-    self.init_options = init_opts;
-    self.selected_index = dvui.dataGet(null, self.id, "_selected", usize) orelse 0;
-    return self;
+    const id = dvui.parentGet().extendId(src, opts.idExtra());
+    return .{
+        .id = id,
+        .options = defaults.override(opts),
+        .init_options = init_opts,
+        .selected_index = dvui.dataGet(null, id, "_selected", usize) orelse 0,
+    };
 }
 
 pub fn install(self: *SuggestionWidget) void {

@@ -10,7 +10,7 @@ const WidgetData = dvui.WidgetData;
 
 const ReorderWidget = @This();
 
-wd: WidgetData = undefined,
+wd: WidgetData,
 id_reorderable: ?usize = null, // matches Reorderable.reorder_id
 drag_point: ?dvui.Point.Physical = null,
 drag_ending: bool = false,
@@ -18,13 +18,14 @@ reorderable_size: Size = .{},
 found_slot: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, opts: Options) ReorderWidget {
-    var self = ReorderWidget{};
     const defaults = Options{ .name = "Reorder" };
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-    self.id_reorderable = dvui.dataGet(null, self.wd.id, "_id_reorderable", usize) orelse null;
-    self.drag_point = dvui.dataGet(null, self.wd.id, "_drag_point", dvui.Point.Physical) orelse null;
-    self.reorderable_size = dvui.dataGet(null, self.wd.id, "_reorderable_size", dvui.Size) orelse dvui.Size{};
-    return self;
+    const wd = WidgetData.init(src, .{}, defaults.override(opts));
+    return .{
+        .wd = wd,
+        .id_reorderable = dvui.dataGet(null, wd.id, "_id_reorderable", usize),
+        .drag_point = dvui.dataGet(null, wd.id, "_drag_point", dvui.Point.Physical),
+        .reorderable_size = dvui.dataGet(null, wd.id, "_reorderable_size", dvui.Size) orelse .{},
+    };
 }
 
 pub fn install(self: *ReorderWidget) void {
@@ -52,7 +53,7 @@ pub fn finalSlot(self: *ReorderWidget) bool {
 }
 
 pub fn widget(self: *ReorderWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *ReorderWidget) *WidgetData {
@@ -82,13 +83,11 @@ pub fn processEvents(self: *ReorderWidget) void {
         if (!self.matchEvent(e))
             continue;
 
-        self.processEvent(e, false);
+        self.processEvent(e);
     }
 }
 
-pub fn processEvent(self: *ReorderWidget, e: *dvui.Event, bubbling: bool) void {
-    _ = bubbling;
-
+pub fn processEvent(self: *ReorderWidget, e: *dvui.Event) void {
     if (dvui.captured(self.wd.id)) {
         switch (e.evt) {
             .mouse => |me| {
@@ -99,21 +98,15 @@ pub fn processEvent(self: *ReorderWidget, e: *dvui.Event, bubbling: bool) void {
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (me.action == .motion) {
                     self.drag_point = me.p;
-
-                    var scrolldrag = dvui.Event{ .evt = .{ .scroll_drag = .{
+                    dvui.scrollDrag(.{
                         .mouse_pt = me.p,
                         .screen_rect = self.wd.rectScale().r,
                         .capture_id = self.wd.id,
-                    } } };
-                    self.wd.parent.processEvent(&scrolldrag, true);
+                    });
                 }
             },
             else => {},
         }
-    }
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
     }
 }
 
@@ -219,23 +212,23 @@ pub const Reorderable = struct {
         reinstall: bool = true,
     };
 
-    wd: WidgetData = undefined,
-    reorder: *ReorderWidget = undefined,
-    init_options: InitOptions = undefined,
-    options: Options = undefined,
+    wd: WidgetData,
+    reorder: *ReorderWidget,
+    init_options: InitOptions,
+    options: Options,
     installed: bool = false,
     floating_widget: ?dvui.FloatingWidget = null,
     target_rs: ?dvui.RectScale = null,
 
     pub fn init(src: std.builtin.SourceLocation, reorder: *ReorderWidget, init_opts: InitOptions, opts: Options) Reorderable {
-        var self = Reorderable{};
-        self.reorder = reorder;
         const defaults = Options{ .name = "Reorderable" };
-        self.init_options = init_opts;
-        self.options = defaults.override(opts);
-        self.wd = WidgetData.init(src, .{}, self.options.override(.{ .rect = .{} }));
-
-        return self;
+        const options = defaults.override(opts);
+        return .{
+            .reorder = reorder,
+            .init_options = init_opts,
+            .options = options,
+            .wd = WidgetData.init(src, .{}, options.override(.{ .rect = .{} })),
+        };
     }
 
     // can call this after init before install
@@ -335,7 +328,7 @@ pub const Reorderable = struct {
     }
 
     pub fn widget(self: *Reorderable) Widget {
-        return Widget.init(self, Reorderable.data, Reorderable.rectFor, Reorderable.screenRectScale, Reorderable.minSizeForChild, Reorderable.processEvent);
+        return Widget.init(self, Reorderable.data, Reorderable.rectFor, Reorderable.screenRectScale, Reorderable.minSizeForChild);
     }
 
     pub fn data(self: *Reorderable) *WidgetData {
@@ -353,14 +346,6 @@ pub const Reorderable = struct {
 
     pub fn minSizeForChild(self: *Reorderable, s: Size) void {
         self.wd.minSizeMax(self.wd.options.padSize(s));
-    }
-
-    pub fn processEvent(self: *Reorderable, e: *dvui.Event, bubbling: bool) void {
-        _ = bubbling;
-
-        if (e.bubbleable()) {
-            self.wd.parent.processEvent(e, true);
-        }
     }
 
     pub fn deinit(self: *Reorderable) void {

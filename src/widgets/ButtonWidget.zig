@@ -26,17 +26,17 @@ pub const InitOptions = struct {
     draw_focus: bool = true,
 };
 
-wd: WidgetData = undefined,
-init_options: InitOptions = undefined,
+wd: WidgetData,
+init_options: InitOptions,
 hover: bool = false,
 focus: bool = false,
 click: bool = false,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ButtonWidget {
-    var self = ButtonWidget{};
-    self.init_options = init_opts;
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-    return self;
+pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) ButtonWidget {
+    return .{
+        .wd = .init(src, .{}, defaults.override(opts)),
+        .init_options = init_options,
+    };
 }
 
 pub fn install(self: *ButtonWidget) void {
@@ -51,13 +51,7 @@ pub fn matchEvent(self: *ButtonWidget, e: *Event) bool {
 }
 
 pub fn processEvents(self: *ButtonWidget) void {
-    const evts = dvui.events();
-    for (evts) |*e| {
-        if (!self.matchEvent(e))
-            continue;
-
-        self.processEvent(e, false);
-    }
+    self.click = dvui.clicked(self.data(), .{ .hovered = &self.hover });
 }
 
 pub fn drawBackground(self: *ButtonWidget) void {
@@ -94,7 +88,7 @@ pub fn clicked(self: *ButtonWidget) bool {
 }
 
 pub fn widget(self: *ButtonWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *ButtonWidget) *WidgetData {
@@ -112,59 +106,6 @@ pub fn screenRectScale(self: *ButtonWidget, rect: Rect) RectScale {
 
 pub fn minSizeForChild(self: *ButtonWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
-}
-
-pub fn processEvent(self: *ButtonWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
-    switch (e.evt) {
-        .mouse => |me| {
-            if (me.action == .focus) {
-                e.handle(@src(), self.data());
-                dvui.focusWidget(self.wd.id, null, e.num);
-            } else if (me.action == .press and me.button.pointer()) {
-                e.handle(@src(), self.data());
-                dvui.captureMouse(self.data());
-
-                // drag prestart is just for touch events
-                dvui.dragPreStart(me.p, .{});
-            } else if (me.action == .release and me.button.pointer()) {
-                if (dvui.captured(self.wd.id)) {
-                    e.handle(@src(), self.data());
-                    dvui.captureMouse(null);
-                    dvui.dragEnd();
-                    if (self.data().borderRectScale().r.contains(me.p)) {
-                        self.click = true;
-                        dvui.refresh(null, @src(), self.wd.id);
-                    }
-                }
-            } else if (me.action == .motion and me.button.touch()) {
-                if (dvui.captured(self.wd.id)) {
-                    if (dvui.dragging(me.p)) |_| {
-                        // if we overcame the drag threshold, then that
-                        // means the person probably didn't want to touch
-                        // this button, maybe they were trying to scroll
-                        dvui.captureMouse(null);
-                        dvui.dragEnd();
-                    }
-                }
-            } else if (me.action == .position) {
-                dvui.cursorSet(.arrow);
-                self.hover = true;
-            }
-        },
-        .key => |ke| {
-            if (ke.action == .down and ke.matchBind("activate")) {
-                e.handle(@src(), self.data());
-                self.click = true;
-                dvui.refresh(null, @src(), self.wd.id);
-            }
-        },
-        else => {},
-    }
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
-    }
 }
 
 pub fn deinit(self: *ButtonWidget) void {

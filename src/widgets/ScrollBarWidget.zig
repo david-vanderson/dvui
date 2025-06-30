@@ -24,23 +24,20 @@ pub const InitOptions = struct {
     focus_id: ?dvui.WidgetId = null,
 };
 
-wd: WidgetData = undefined,
+wd: WidgetData,
 grabRect: Rect = Rect{},
-si: *ScrollInfo = undefined,
+si: *ScrollInfo,
 focus_id: ?dvui.WidgetId = null,
-dir: enums.Direction = undefined,
+dir: enums.Direction,
 highlight: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ScrollBarWidget {
-    var self = ScrollBarWidget{};
-    self.si = init_opts.scroll_info;
-    self.focus_id = init_opts.focus_id;
-    self.dir = init_opts.direction;
-
-    const options = defaults.override(opts);
-    self.wd = WidgetData.init(src, .{}, options);
-
-    return self;
+    return .{
+        .si = init_opts.scroll_info,
+        .focus_id = init_opts.focus_id,
+        .dir = init_opts.direction,
+        .wd = WidgetData.init(src, .{}, defaults.override(opts)),
+    };
 }
 
 pub fn install(self: *ScrollBarWidget) void {
@@ -164,10 +161,6 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
                 }
             },
             else => {},
-        }
-
-        if (e.bubbleable()) {
-            self.wd.parent.processEvent(e, true);
         }
     }
 }
