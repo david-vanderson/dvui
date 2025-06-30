@@ -318,8 +318,8 @@ pub const Reorderable = struct {
 
     pub fn reinstall(self: *Reorderable) void {
         // send our target rect to the parent for sizing
-        self.wd.minSizeMax(self.wd.rect.size());
-        self.wd.minSizeReportToParent();
+        self.data().minSizeMax(self.data().rect.size());
+        self.data().minSizeReportToParent();
 
         // reinstall ourselves getting the next rect from parent
         self.wd = WidgetData.init(self.wd.src, .{}, self.options);

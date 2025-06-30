@@ -70,7 +70,7 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
 
             if (!self.focused_last_frame) {
                 // in case we are in a scrollable dropdown, scroll
-                dvui.scrollTo(.{ .screen_rect = self.wd.borderRectScale().r });
+                dvui.scrollTo(.{ .screen_rect = self.data().borderRectScale().r });
             }
         }
     }
@@ -140,11 +140,11 @@ pub fn rectFor(self: *MenuItemWidget, id: dvui.WidgetId, min_size: Size, e: Opti
 }
 
 pub fn screenRectScale(self: *MenuItemWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *MenuItemWidget, s: Size) void {
-    self.wd.minSizeMax(self.data().options.padSize(s));
+    self.data().minSizeMax(self.data().options.padSize(s));
 }
 
 pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
