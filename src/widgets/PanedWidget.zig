@@ -42,41 +42,45 @@ pub const InitOptions = struct {
     } = null,
 };
 
-wd: WidgetData = undefined,
-init_opts: InitOptions = undefined,
+wd: WidgetData,
+init_opts: InitOptions,
 
 mouse_dist: f32 = 1000, // logical
-handle_thick: f32 = undefined, // logical
-split_ratio: *f32 = undefined,
-prevClip: Rect.Physical = .{},
-collapsed_state: bool = false,
-collapsing: bool = false,
+handle_thick: f32, // logical
+split_ratio: *f32,
+/// SAFETY: Set in `install`
+prevClip: Rect.Physical = undefined,
+collapsed_state: bool,
+collapsing: bool,
 first_side: bool = true,
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) PanedWidget {
-    var self = PanedWidget{};
     const defaults = Options{ .name = "Paned" };
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-    self.init_opts = init_options;
+    const wd = WidgetData.init(src, .{}, defaults.override(opts));
 
-    const rect = self.wd.contentRect();
-    const our_size = switch (self.init_opts.direction) {
+    const rect = wd.contentRect();
+    const our_size = switch (init_options.direction) {
         .horizontal => rect.w,
         .vertical => rect.h,
     };
 
-    self.collapsing = dvui.dataGet(null, self.wd.id, "_collapsing", bool) orelse false;
+    var self = PanedWidget{
+        .wd = wd,
+        .init_opts = init_options,
+        .collapsing = dvui.dataGet(null, wd.id, "_collapsing", bool) orelse false,
+        .collapsed_state = dvui.dataGet(null, wd.id, "_collapsed", bool) orelse (our_size < init_options.collapsed_size),
 
-    self.collapsed_state = dvui.dataGet(null, self.wd.id, "_collapsed", bool) orelse (our_size < self.init_opts.collapsed_size);
+        // might be changed in processEvents
+        .handle_thick = init_options.handle_size,
+
+        .split_ratio = if (init_options.split_ratio) |srp| srp else blk: {
+            const default: f32 = if (our_size < init_options.collapsed_size) 1.0 else 0.5;
+            break :blk dvui.dataGetPtrDefault(null, wd.id, "_split_ratio", f32, default);
+        },
+    };
+
     if (self.collapsing) {
         self.collapsed_state = false;
-    }
-
-    if (self.init_opts.split_ratio) |srp| {
-        self.split_ratio = srp;
-    } else {
-        const default: f32 = if (our_size < self.init_opts.collapsed_size) 1.0 else 0.5;
-        self.split_ratio = dvui.dataGetPtrDefault(null, self.wd.id, "_split_ratio", f32, default);
     }
 
     if (!self.collapsing and !self.collapsed_state and our_size < self.init_opts.collapsed_size) {
@@ -112,9 +116,6 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
             self.collapsed_state = true;
         }
     }
-
-    // might be changed in processEvents
-    self.handle_thick = self.init_opts.handle_size;
 
     return self;
 }

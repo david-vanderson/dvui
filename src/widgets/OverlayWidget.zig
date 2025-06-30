@@ -11,7 +11,7 @@ const WidgetData = dvui.WidgetData;
 
 const OverlayWidget = @This();
 
-wd: WidgetData = undefined,
+wd: WidgetData,
 
 pub fn init(src: std.builtin.SourceLocation, opts: Options) OverlayWidget {
     const defaults = Options{ .name = "Overlay" };

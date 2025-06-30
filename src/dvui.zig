@@ -304,10 +304,10 @@ pub fn tagGet(name: []const u8) ?TagData {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub const Alignment = struct {
-    id: WidgetId = undefined,
-    scale: f32 = undefined,
-    max: ?f32 = undefined,
-    next: f32 = undefined,
+    id: WidgetId,
+    scale: f32,
+    max: ?f32,
+    next: f32,
 
     pub fn init() Alignment {
         const wd = dvui.parentGet().data();
@@ -496,7 +496,7 @@ pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?st
 
     // Test if we can successfully open this font
     _ = try fontCacheInit(ttf_bytes, .{ .name = name, .size = 14 });
-    try cw.font_bytes.put(name, FontBytesEntry{ .ttf_bytes = ttf_bytes, .allocator = ttf_bytes_allocator });
+    try cw.font_bytes.put(cw.gpa, name, FontBytesEntry{ .ttf_bytes = ttf_bytes, .allocator = ttf_bytes_allocator });
 }
 
 const GlyphInfo = struct {
@@ -1620,7 +1620,7 @@ pub const Path = struct {
             const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = new_path, .opts = options } } };
 
             var sw = cw.subwindowCurrent();
-            sw.render_cmds.append(cmd) catch |err| {
+            sw.render_cmds.append(cw.arena(), cmd) catch |err| {
                 logError(@src(), err, "Could not append to render_cmds_after", .{});
             };
             return;
@@ -1687,7 +1687,6 @@ pub const Path = struct {
                     .y = bb.y - norm.y * inside_len,
                 },
                 .col = col,
-                .uv = undefined,
             });
 
             const idx_ai = if (opts.blur > 0) ai * 2 else ai;
@@ -1724,7 +1723,6 @@ pub const Path = struct {
                         .y = bb.y + norm.y * outside_len,
                     },
                     .col = .transparent,
-                    .uv = undefined,
                 });
 
                 // indexes for aa fade from inner to outer
@@ -1737,7 +1735,10 @@ pub const Path = struct {
         }
 
         if (opts.center) |center| {
-            builder.appendVertex(.{ .pos = center, .col = col, .uv = undefined });
+            builder.appendVertex(.{
+                .pos = center,
+                .col = col,
+            });
         }
 
         return builder.build();
@@ -1780,11 +1781,11 @@ pub const Path = struct {
 
             var sw = cw.subwindowCurrent();
             if (opts.after) {
-                sw.render_cmds_after.append(cmd) catch |err| {
+                sw.render_cmds_after.append(cw.arena(), cmd) catch |err| {
                     logError(@src(), err, "Could not append to render_cmds_after", .{});
                 };
             } else {
-                sw.render_cmds.append(cmd) catch |err| {
+                sw.render_cmds.append(cw.arena(), cmd) catch |err| {
                     logError(@src(), err, "Could not append to render_cmds_after", .{});
                 };
             }
@@ -1885,7 +1886,6 @@ pub const Path = struct {
                             .y = bb.y - halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
                         },
                         .col = .transparent,
-                        .uv = undefined,
                     });
 
                     builder.appendVertex(.{
@@ -1894,7 +1894,6 @@ pub const Path = struct {
                             .y = bb.y + halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
                         },
                         .col = .transparent,
-                        .uv = undefined,
                     });
 
                     // add indexes for endcap fringe
@@ -1943,7 +1942,6 @@ pub const Path = struct {
                     .y = bb.y - halfnorm.y * opts.thickness,
                 },
                 .col = col,
-                .uv = undefined,
             });
 
             // side 1 AA vertex
@@ -1953,7 +1951,6 @@ pub const Path = struct {
                     .y = bb.y - halfnorm.y * (opts.thickness + aa_size),
                 },
                 .col = .transparent,
-                .uv = undefined,
             });
 
             // side 2 inner vertex
@@ -1963,7 +1960,6 @@ pub const Path = struct {
                     .y = bb.y + halfnorm.y * opts.thickness,
                 },
                 .col = col,
-                .uv = undefined,
             });
 
             // side 2 AA vertex
@@ -1973,7 +1969,6 @@ pub const Path = struct {
                     .y = bb.y + halfnorm.y * (opts.thickness + aa_size),
                 },
                 .col = .transparent,
-                .uv = undefined,
             });
 
             // triangles must be counter-clockwise (y going down) to avoid backface culling
@@ -1999,7 +1994,6 @@ pub const Path = struct {
                         .y = bb.y - halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
                     },
                     .col = .transparent,
-                    .uv = undefined,
                 });
                 builder.appendVertex(.{
                     .pos = .{
@@ -2007,7 +2001,6 @@ pub const Path = struct {
                         .y = bb.y + halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
                     },
                     .col = .transparent,
-                    .uv = undefined,
                 });
 
                 builder.appendTriangles(&.{
@@ -2217,7 +2210,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .triangles = .{ .tri = tri_copy, .tex = tex } } };
 
         var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
+        try sw.render_cmds.append(cw.arena(), cmd);
         return;
     }
 
@@ -2240,8 +2233,6 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?WidgetId) void {
     const cw = currentWindow();
-    const arena = cw.arena();
-
     for (cw.subwindows.items) |*sw| {
         if (id == sw.id) {
             // this window was here previously, just update data, so it stays in the same place in the stack
@@ -2255,14 +2246,20 @@ pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal:
                 log.warn("subwindowAdd {x} is clearing some drawing commands (did you try to draw between subwindowCurrentSet and subwindowAdd?)\n", .{id});
             }
 
-            sw.render_cmds = std.ArrayList(RenderCommand).init(arena);
-            sw.render_cmds_after = std.ArrayList(RenderCommand).init(arena);
+            sw.render_cmds = .empty;
+            sw.render_cmds_after = .empty;
             return;
         }
     }
 
     // haven't seen this window before
-    const sw = Window.Subwindow{ .id = id, .rect = rect, .rect_pixels = rect_pixels, .modal = modal, .stay_above_parent_window = stay_above_parent_window, .render_cmds = std.ArrayList(RenderCommand).init(arena), .render_cmds_after = std.ArrayList(RenderCommand).init(arena) };
+    const sw = Window.Subwindow{
+        .id = id,
+        .rect = rect,
+        .rect_pixels = rect_pixels,
+        .modal = modal,
+        .stay_above_parent_window = stay_above_parent_window,
+    };
     if (stay_above_parent_window) |subwin_id| {
         // it wants to be above subwin_id
         var i: usize = 0;
@@ -2280,10 +2277,10 @@ pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal:
         }
 
         // i points just past all subwindows that want to be on top of this subwin_id
-        cw.subwindows.insert(i, sw) catch @panic("Could not add subwindow to list");
+        cw.subwindows.insert(cw.gpa, i, sw) catch @panic("Could not add subwindow to list");
     } else {
         // just put it on the top
-        cw.subwindows.append(sw) catch @panic("Could not add subwindow to list");
+        cw.subwindows.append(cw.gpa, sw) catch @panic("Could not add subwindow to list");
     }
 }
 
@@ -3500,7 +3497,7 @@ pub fn tabIndexSet(widget_id: WidgetId, tab_index: ?u16) void {
 
     var cw = currentWindow();
     const ti = TabIndex{ .windowId = cw.subwindow_currentId, .widgetId = widget_id, .tabIndex = (tab_index orelse math.maxInt(u16)) };
-    cw.tab_index.append(ti) catch |err| {
+    cw.tab_index.append(cw.gpa, ti) catch |err| {
         logError(@src(), err, "Could not set tab index. This might break keyboard navigation as the widget may become unreachable via tab", .{});
     };
 }
@@ -5743,14 +5740,12 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         .vertical => Rect{ .y = (br.h - knobsize) * (1 - perc), .w = knobsize, .h = knobsize },
     };
 
-    var fill_color: Color = undefined;
-    if (captured(b.data().id)) {
-        fill_color = options.color(.fill_press);
-    } else if (hovered) {
-        fill_color = options.color(.fill_hover);
-    } else {
-        fill_color = options.color(.fill);
-    }
+    const fill_color: Color = if (captured(b.data().id))
+        options.color(.fill_press)
+    else if (hovered)
+        options.color(.fill_hover)
+    else
+        options.color(.fill);
     var knob = BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = .{ .color = fill_color } });
     knob.install();
     knob.drawBackground();
@@ -6740,7 +6735,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
 
         var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
+        try sw.render_cmds.append(cw.arena(), cmd);
         return;
     }
 
@@ -7000,7 +6995,8 @@ pub fn textureFromTarget(target: TextureTarget) Backend.TextureError!Texture {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn textureDestroyLater(texture: Texture) void {
-    currentWindow().texture_trash.append(texture) catch |err| {
+    const cw = currentWindow();
+    cw.texture_trash.append(cw.arena(), texture) catch |err| {
         dvui.log.err("textureDestroyLater got {!}\n", .{err});
     };
 }
@@ -7052,7 +7048,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .opts = opts } } };
 
         var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
+        try sw.render_cmds.append(cw.arena(), cmd);
         return;
     }
 
@@ -7105,8 +7101,8 @@ pub fn renderImage(name: []const u8, bytes: ImageInitOptions.ImageBytes, rs: Rec
 /// Captures dvui drawing to part of the screen in a `Texture`.
 pub const Picture = struct {
     r: Rect.Physical, // pixels captured
-    texture: dvui.TextureTarget = undefined,
-    target: dvui.RenderTarget = undefined,
+    texture: dvui.TextureTarget,
+    target: dvui.RenderTarget,
 
     /// Begin recording drawing to the physical pixels in rect (enlarged to pixel boundaries).
     ///
@@ -7118,23 +7114,27 @@ pub const Picture = struct {
             log.err("Picture.start() was called with an empty rect", .{});
             return null;
         }
-        var ret: Picture = .{ .r = rect };
 
+        var r = rect;
         // enlarge texture to pixels boundaries
-        const x_start = @floor(ret.r.x);
-        const x_end = @ceil(ret.r.x + ret.r.w);
-        ret.r.x = x_start;
-        ret.r.w = @round(x_end - x_start);
+        const x_start = @floor(r.x);
+        const x_end = @ceil(r.x + r.w);
+        r.x = x_start;
+        r.w = @round(x_end - x_start);
 
-        const y_start = @floor(ret.r.y);
-        const y_end = @ceil(ret.r.y + ret.r.h);
-        ret.r.y = y_start;
-        ret.r.h = @round(y_end - y_start);
+        const y_start = @floor(r.y);
+        const y_end = @ceil(r.y + r.h);
+        r.y = y_start;
+        r.h = @round(y_end - y_start);
 
-        ret.texture = dvui.textureCreateTarget(@intFromFloat(ret.r.w), @intFromFloat(ret.r.h), .linear) catch return null;
-        ret.target = dvui.renderTarget(.{ .texture = ret.texture, .offset = ret.r.topLeft() });
+        const texture = dvui.textureCreateTarget(@intFromFloat(r.w), @intFromFloat(r.h), .linear) catch return null;
+        const target = dvui.renderTarget(.{ .texture = texture, .offset = r.topLeft() });
 
-        return ret;
+        return .{
+            .r = r,
+            .texture = texture,
+            .target = target,
+        };
     }
 
     /// Stop recording.

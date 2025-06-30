@@ -13,7 +13,7 @@ const WidgetData = dvui.WidgetData;
 
 const VirtualParentWidget = @This();
 
-wd: WidgetData = undefined,
+wd: WidgetData,
 child_rect_union: ?Rect = null,
 
 pub fn init(src: std.builtin.SourceLocation, opts: Options) VirtualParentWidget {

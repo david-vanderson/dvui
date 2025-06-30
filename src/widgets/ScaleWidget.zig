@@ -29,21 +29,24 @@ pub const InitOptions = struct {
     pinch_zoom: PinchZoom = .none,
 };
 
-wd: WidgetData = undefined,
-init_options: InitOptions = undefined,
+wd: WidgetData,
+init_options: InitOptions,
+/// SAFETY: Set in `install`
 scale: *f32 = undefined,
-touchPoints: *[2]?dvui.Point.Physical = undefined,
+touchPoints: *[2]?dvui.Point.Physical,
 old_dist: ?f32 = null,
+/// SAFETY: Will be set when `old_dist` is not null
 old_scale: f32 = undefined,
 layout: dvui.BasicLayout = .{},
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ScaleWidget {
-    var self = ScaleWidget{};
     const defaults = Options{ .name = "Scale" };
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-    self.init_options = init_opts;
-    self.touchPoints = dvui.dataGetPtrDefault(null, self.wd.id, "_touchPoints", [2]?dvui.Point.Physical, .{ null, null });
-    return self;
+    const wd = WidgetData.init(src, .{}, defaults.override(opts));
+    return .{
+        .wd = wd,
+        .init_options = init_opts,
+        .touchPoints = dvui.dataGetPtrDefault(null, wd.id, "_touchPoints", [2]?dvui.Point.Physical, .{ null, null }),
+    };
 }
 
 pub fn install(self: *ScaleWidget) void {
@@ -104,20 +107,18 @@ pub fn processEvent(self: *ScaleWidget, e: *Event) void {
             .motion => {
                 if (self.touchPoints[0] != null and self.touchPoints[1] != null) {
                     e.handle(@src(), self.data());
-                    var dx: f32 = undefined;
-                    var dy: f32 = undefined;
 
                     if (self.old_dist == null) {
-                        dx = self.touchPoints[0].?.x - self.touchPoints[1].?.x;
-                        dy = self.touchPoints[0].?.y - self.touchPoints[1].?.y;
+                        const dx = self.touchPoints[0].?.x - self.touchPoints[1].?.x;
+                        const dy = self.touchPoints[0].?.y - self.touchPoints[1].?.y;
                         self.old_dist = @sqrt(dx * dx + dy * dy);
                         self.old_scale = self.scale.*;
                     }
 
                     self.touchPoints[idx] = e.evt.mouse.p;
 
-                    dx = self.touchPoints[0].?.x - self.touchPoints[1].?.x;
-                    dy = self.touchPoints[0].?.y - self.touchPoints[1].?.y;
+                    const dx = self.touchPoints[0].?.x - self.touchPoints[1].?.x;
+                    const dy = self.touchPoints[0].?.y - self.touchPoints[1].?.y;
                     const new_dist: f32 = @sqrt(dx * dx + dy * dy);
 
                     self.scale.* = std.math.clamp(self.old_scale * new_dist / self.old_dist.?, 0.1, 10);
@@ -137,13 +138,11 @@ pub fn data(self: *ScaleWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *ScaleWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    var s: f32 = undefined;
-    if (self.scale.* > 0) {
-        s = 1.0 / self.scale.*;
-    } else {
+    const s = if (self.scale.* > 0)
+        1.0 / self.scale.*
+    else
         // prevent divide by zero
-        s = 1_000_000.0;
-    }
+        1_000_000.0;
 
     return self.layout.rectFor(self.wd.contentRect().justSize().scale(s, Rect), id, min_size, e, g);
 }

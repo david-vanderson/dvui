@@ -47,38 +47,45 @@ pub const InitOptions = struct {
     avoid: FloatingMenuAvoid = .auto,
 };
 
+/// SAFETY: Set by `install`
 prev_rendering: bool = undefined,
-wd: WidgetData = undefined,
-options: Options = undefined,
+wd: WidgetData,
+/// options is for our embedded ScrollAreaWidget
+options: Options,
 prev_windowId: dvui.WidgetId = .zero,
 prev_last_focus: dvui.WidgetId = undefined,
 parent_popup: ?*FloatingMenuWidget = null,
 have_popup_child: bool = false,
+init_options: InitOptions,
+/// SAFETY: Set by `install`
+prevClip: Rect.Physical = undefined,
+scale_val: f32,
+/// TODO: If `install` isn't called, this will panic in `deinti`. Should we handle that?
+/// SAFETY: Set by `install`
 menu: MenuWidget = undefined,
-init_options: InitOptions = undefined,
-prevClip: Rect.Physical = .{},
-scale_val: f32 = undefined,
+/// SAFETY: Set by `install`
 scaler: dvui.ScaleWidget = undefined,
+/// SAFETY: Set by `install`
 scroll: ScrollAreaWidget = undefined,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingMenuWidget {
-    var self = FloatingMenuWidget{};
-
-    // options is really for our embedded ScrollAreaWidget, so save them for the
-    // end of install()
-    self.options = defaults.override(opts);
-
+pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) FloatingMenuWidget {
     // the widget itself doesn't have any styling, it comes from the
     // embedded MenuWidget
     // passing options.rect will stop WidgetData.init from calling
     // rectFor/minSizeForChild which is important because we are outside
     // normal layout
-    self.wd = WidgetData.init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{} });
+    const wd = WidgetData.init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{} });
 
-    // get scale from parent
-    self.scale_val = self.wd.parent.screenRectScale(Rect{}).s / dvui.windowNaturalScale();
+    var self = FloatingMenuWidget{
+        .wd = wd,
+        // options is really for our embedded ScrollAreaWidget, so save them for the
+        // end of install()
+        .options = defaults.override(opts),
+        // get scale from parent
+        .scale_val = wd.parent.screenRectScale(Rect{}).s / dvui.windowNaturalScale(),
+        .init_options = init_options,
+    };
 
-    self.init_options = init_opts;
     if (self.init_options.avoid == .auto) {
         if (dvui.MenuWidget.current()) |pm| {
             self.init_options.avoid = switch (pm.init_opts.dir) {

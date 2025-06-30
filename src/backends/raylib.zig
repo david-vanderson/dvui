@@ -18,10 +18,10 @@ pub const Context = *RaylibBackend;
 
 const log = std.log.scoped(.RaylibBackend);
 
-gpa: std.mem.Allocator = undefined,
+gpa: std.mem.Allocator,
 we_own_window: bool = false,
-shader: c.Shader = undefined,
-VAO: u32 = undefined,
+shader: c.Shader,
+VAO: u32,
 arena: std.mem.Allocator = undefined,
 log_events: bool = false,
 pressed_keys: std.bit_set.ArrayBitSet(u32, 512) = std.bit_set.ArrayBitSet(u32, 512).initEmpty(),
@@ -30,7 +30,7 @@ mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButton
 touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
 dvui_consumed_events: bool = false,
 cursor_last: dvui.enums.Cursor = .arrow,
-frame_buffers: std.AutoArrayHashMap(u32, u32) = undefined,
+frame_buffers: std.AutoArrayHashMap(u32, u32),
 fb_width: ?c_int = null,
 fb_height: ?c_int = null,
 

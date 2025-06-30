@@ -40,10 +40,10 @@ pub const InitOptions = struct {
     process_events_after: bool = true,
 };
 
-wd: WidgetData = undefined,
-si: *ScrollInfo = undefined,
-init_opts: InitOptions = undefined,
-last_focus: dvui.WidgetId = undefined,
+wd: WidgetData,
+si: *ScrollInfo,
+init_opts: InitOptions,
+last_focus: dvui.WidgetId,
 parentScroll: ?*ScrollContainerWidget = null,
 
 // si.viewport.x/y might be updated in the middle of a frame, this prevents
@@ -64,14 +64,15 @@ seen_scroll_drag: bool = false,
 finger_down: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, init_options: InitOptions, opts: Options) ScrollContainerWidget {
-    var self = ScrollContainerWidget{ .init_opts = init_options };
     const options = defaults.override(opts);
+    var self = ScrollContainerWidget{
+        .wd = WidgetData.init(src, .{}, options),
+        .si = io_scroll_info,
+        .init_opts = init_options,
+        .last_focus = dvui.lastFocusedIdInFrame(null),
+    };
 
-    self.wd = WidgetData.init(src, .{}, options);
-    self.last_focus = dvui.lastFocusedIdInFrame(null);
-
-    self.si = io_scroll_info;
-    self.finger_down = dvui.dataGet(null, self.wd.id, "_finger_down", bool) orelse false;
+    if (dvui.dataGet(null, self.wd.id, "_finger_down", bool)) |down| self.finger_down = down;
 
     const crect = self.wd.contentRect();
     self.si.viewport.w = crect.w;

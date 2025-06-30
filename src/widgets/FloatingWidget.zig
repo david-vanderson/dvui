@@ -15,11 +15,15 @@ pub var defaults: Options = .{
     .name = "Floating",
 };
 
+/// SAFETY: Set by `install`
 prev_rendering: bool = undefined,
-wd: WidgetData = undefined,
+wd: WidgetData,
+/// SAFETY: Set by `install`
 prev_windowId: dvui.WidgetId = undefined,
-prevClip: Rect.Physical = .{},
-scale_val: f32 = undefined,
+/// SAFETY: Set by `install`
+prevClip: Rect.Physical = undefined,
+scale_val: f32,
+/// SAFETY: Set by `install`
 scaler: dvui.ScaleWidget = undefined,
 
 /// FloatingWidget is a subwindow to show any temporary floating thing.
@@ -32,21 +36,21 @@ scaler: dvui.ScaleWidget = undefined,
 /// Use FloatingWindowWidget for a floating window that the user can change
 /// size, move around, and adjust stacking.
 pub fn init(src: std.builtin.SourceLocation, opts_in: Options) FloatingWidget {
-    var self = FloatingWidget{};
-
-    // get scale from parent
-    self.scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale();
+    const scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale();
     var opts = opts_in;
     if (opts.min_size_content) |msc| {
-        opts.min_size_content = msc.scale(self.scale_val, Size);
+        opts.min_size_content = msc.scale(scale_val, Size);
     }
-
-    // passing options.rect will stop WidgetData.init from calling
-    // rectFor/minSizeForChild which is important because we are outside
-    // normal layout
-    self.wd = WidgetData.init(src, .{ .subwindow = true }, defaults.override(opts).override(.{ .rect = opts.rect orelse .{} }));
-
-    return self;
+    return .{
+        // get scale from parent
+        .scale_val = scale_val,
+        .wd = WidgetData.init(src, .{ .subwindow = true }, defaults.override(opts).override(.{
+            // passing options.rect will stop WidgetData.init from calling
+            // rectFor/minSizeForChild which is important because we are outside
+            // normal layout
+            .rect = opts.rect orelse .{},
+        })),
+    };
 }
 
 pub fn install(self: *FloatingWidget) void {
