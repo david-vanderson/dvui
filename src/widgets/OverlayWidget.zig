@@ -11,7 +11,7 @@ const WidgetData = dvui.WidgetData;
 
 const OverlayWidget = @This();
 
-wd: WidgetData = undefined,
+wd: WidgetData,
 
 pub fn init(src: std.builtin.SourceLocation, opts: Options) OverlayWidget {
     const defaults = Options{ .name = "Overlay" };
@@ -28,7 +28,7 @@ pub fn drawBackground(self: *OverlayWidget) void {
 }
 
 pub fn widget(self: *OverlayWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *OverlayWidget) *WidgetData {
@@ -46,13 +46,6 @@ pub fn screenRectScale(self: *OverlayWidget, rect: Rect) RectScale {
 
 pub fn minSizeForChild(self: *OverlayWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
-}
-
-pub fn processEvent(self: *OverlayWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
-    }
 }
 
 pub fn deinit(self: *OverlayWidget) void {

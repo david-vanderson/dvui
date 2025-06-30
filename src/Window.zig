@@ -15,7 +15,8 @@ previous_window: ?*Window = null,
 
 /// list of subwindows including base, later windows are on top of earlier
 /// windows
-subwindows: std.ArrayList(Subwindow),
+/// Uses `gpa` allocator
+subwindows: std.ArrayListUnmanaged(Subwindow) = .empty,
 
 /// id of the subwindow widgets are being added to
 subwindow_currentId: WidgetId = .zero,
@@ -39,6 +40,7 @@ text_input_rect: ?Rect.Natural = null,
 snap_to_pixels: bool = true,
 alpha: f32 = 1.0,
 
+/// Uses `arena` allocator
 events: std.ArrayListUnmanaged(Event) = .{},
 event_num: u16 = 0,
 /// mouse_pt tracks the last position we got a mouse event for
@@ -74,30 +76,45 @@ secs_since_last_frame: f32 = 0,
 extra_frames_needed: u8 = 0,
 clipRect: dvui.Rect.Physical = .{},
 
-theme: Theme = undefined,
+theme: Theme,
 
+/// Uses `gpa` allocator
 min_sizes: dvui.TrackingAutoHashMap(WidgetId, Size, .put_only) = .empty,
+/// Uses `gpa` allocator
 tags: dvui.TrackingAutoHashMap([]const u8, dvui.TagData, .put_only) = .empty,
 data_mutex: std.Thread.Mutex = .{},
+/// Uses `gpa` allocator
 datas: dvui.TrackingAutoHashMap(u64, SavedData, .get_and_put) = .empty,
-datas_trash: std.ArrayList(SavedData) = undefined,
+/// Uses `arena` allocator
+datas_trash: std.ArrayListUnmanaged(SavedData) = .empty,
+/// Uses `gpa` allocator
 animations: dvui.TrackingAutoHashMap(u64, Animation, .get_and_put) = .empty,
-tab_index_prev: std.ArrayList(dvui.TabIndex),
-tab_index: std.ArrayList(dvui.TabIndex),
+/// Uses `gpa` allocator
+tab_index_prev: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
+/// Uses `gpa` allocator
+tab_index: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
+/// Uses `gpa` allocator
 font_cache: dvui.TrackingAutoHashMap(u64, dvui.FontCacheEntry, .get_and_put) = .empty,
-font_bytes: std.StringHashMap(dvui.FontBytesEntry),
+/// Uses `gpa` allocator
+font_bytes: std.StringHashMapUnmanaged(dvui.FontBytesEntry) = .empty,
+/// Uses `gpa` allocator
 texture_cache: dvui.TrackingAutoHashMap(u64, dvui.TextureCacheEntry, .get_and_put) = .empty,
-texture_trash: std.ArrayList(dvui.Texture) = undefined,
+/// Uses `arena` allocator
+texture_trash: std.ArrayListUnmanaged(dvui.Texture) = .empty,
 dialog_mutex: std.Thread.Mutex = .{},
-dialogs: std.ArrayList(Dialog),
-toasts: std.ArrayList(Toast),
-keybinds: std.StringHashMap(dvui.enums.Keybind),
-themes: std.StringArrayHashMap(Theme),
+/// Uses `gpa` allocator
+dialogs: std.ArrayListUnmanaged(Dialog) = .empty,
+/// Uses `gpa` allocator
+toasts: std.ArrayListUnmanaged(Toast) = .empty,
+/// Uses `gpa` allocator
+keybinds: std.StringHashMapUnmanaged(dvui.enums.Keybind) = .empty,
+/// Uses `gpa` allocator
+themes: std.StringArrayHashMapUnmanaged(Theme) = .empty,
 
 cursor_requested: ?dvui.enums.Cursor = null,
 cursor_dragging: ?dvui.enums.Cursor = null,
 
-wd: WidgetData = undefined,
+wd: WidgetData,
 rect_pixels: dvui.Rect.Physical = .{},
 natural_scale: f32 = 1.0,
 /// can set separately but gets folded into natural_scale
@@ -111,10 +128,7 @@ gpa: std.mem.Allocator,
 _arena: dvui.ShrinkingArenaAllocator,
 _lifo_arena: dvui.ShrinkingArenaAllocator,
 /// Used to allocate widgets with a fixed location
-_widget_stack: std.heap.FixedBufferAllocator,
-/// The peak amount of bytes used by the widget stack since
-/// the creation of `Window`. Used to resize the stack ifs needed.
-peak_widget_stack: usize = 0,
+_widget_stack: dvui.ShrinkingArenaAllocator,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
@@ -141,11 +155,13 @@ debug_touch_simulate_down: bool = false,
 
 pub const Subwindow = struct {
     id: WidgetId,
-    rect: Rect = Rect{},
-    rect_pixels: dvui.Rect.Physical = .{},
+    rect: Rect,
+    rect_pixels: dvui.Rect.Physical,
     focused_widgetId: ?WidgetId = null,
-    render_cmds: std.ArrayList(dvui.RenderCommand),
-    render_cmds_after: std.ArrayList(dvui.RenderCommand),
+    /// Uses `arena` allocator
+    render_cmds: std.ArrayListUnmanaged(dvui.RenderCommand) = .empty,
+    /// Uses `arena` allocator
+    render_cmds_after: std.ArrayListUnmanaged(dvui.RenderCommand) = .empty,
     used: bool = true,
     modal: bool = false,
     stay_above_parent_window: ?WidgetId = null,
@@ -172,9 +188,6 @@ const SavedData = struct {
 pub const InitOptions = struct {
     id_extra: usize = 0,
     arena: ?dvui.ShrinkingArenaAllocator = null,
-    /// For reference, the `dvui.Examples.demo` window uses
-    /// about 0x5000 stack space at its peak
-    default_widget_stack_capacity: usize = 0x10000,
     theme: ?*Theme = null,
     keybinds: ?enum {
         none,
@@ -195,21 +208,26 @@ pub fn init(
         .gpa = gpa,
         ._arena = init_opts.arena orelse .init(gpa),
         ._lifo_arena = .init(gpa),
-        ._widget_stack = .init(try gpa.alloc(u8, init_opts.default_widget_stack_capacity)),
-        .subwindows = .init(gpa),
-        .tab_index_prev = .init(gpa),
-        .tab_index = .init(gpa),
-        .dialogs = .init(gpa),
-        .toasts = .init(gpa),
-        .keybinds = .init(gpa),
-        .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
+        ._widget_stack = .init(gpa),
+        .wd = WidgetData{
+            .src = src,
+            .id = hashval,
+            .init_options = .{ .subwindow = true },
+            .options = .{ .name = "Window" },
+            // Unused
+            .min_size = undefined,
+            // Set in `begin`
+            .rect = undefined,
+            // Set in `begin`
+            .parent = undefined,
+        },
         .backend = backend_ctx,
         .font_bytes = try dvui.Font.initTTFBytesDatabase(gpa),
-        .themes = .init(gpa),
+        .theme = if (init_opts.theme) |t| t.* else @import("themes/Adwaita.zig").light,
     };
 
-    try self.themes.putNoClobber("Adwaita Light", @import("themes/Adwaita.zig").light);
-    try self.themes.putNoClobber("Adwaita Dark", @import("themes/Adwaita.zig").dark);
+    try self.themes.putNoClobber(self.gpa, "Adwaita Light", @import("themes/Adwaita.zig").light);
+    try self.themes.putNoClobber(self.gpa, "Adwaita Dark", @import("themes/Adwaita.zig").dark);
 
     inline for (@typeInfo(Theme.QuickTheme.builtin).@"struct".decls) |decl| {
         const quick_theme = Theme.QuickTheme.fromString(self.arena(), @field(Theme.QuickTheme.builtin, decl.name)) catch {
@@ -217,22 +235,17 @@ pub fn init(
         };
         defer quick_theme.deinit();
         const theme = try quick_theme.value.toTheme(self.gpa);
-        try self.themes.putNoClobber(theme.name, theme);
+        try self.themes.putNoClobber(self.gpa, theme.name, theme);
     }
 
     // Sort themes alphabetically
     const Context = struct {
-        hashmap: *std.StringArrayHashMap(Theme),
+        hashmap: *std.StringArrayHashMapUnmanaged(Theme),
         pub fn lessThan(ctx: @This(), lhs: usize, rhs: usize) bool {
             return std.ascii.orderIgnoreCase(ctx.hashmap.values()[lhs].name, ctx.hashmap.values()[rhs].name) == .lt;
         }
     };
     self.themes.sort(Context{ .hashmap = &self.themes });
-    if (init_opts.theme) |t| {
-        self.theme = t.*;
-    } else {
-        self.theme = self.themes.get("Adwaita Light").?;
-    }
 
     try self.initEvents();
 
@@ -245,91 +258,91 @@ pub fn init(
     };
 
     if (kb == .windows or kb == .mac) {
-        try self.keybinds.putNoClobber("activate", .{ .key = .enter, .also = "activate_1" });
-        try self.keybinds.putNoClobber("activate_1", .{ .key = .space });
+        try self.keybinds.putNoClobber(self.gpa, "activate", .{ .key = .enter, .also = "activate_1" });
+        try self.keybinds.putNoClobber(self.gpa, "activate_1", .{ .key = .space });
 
-        try self.keybinds.putNoClobber("next_widget", .{ .key = .tab, .shift = false });
-        try self.keybinds.putNoClobber("prev_widget", .{ .key = .tab, .shift = true });
+        try self.keybinds.putNoClobber(self.gpa, "next_widget", .{ .key = .tab, .shift = false });
+        try self.keybinds.putNoClobber(self.gpa, "prev_widget", .{ .key = .tab, .shift = true });
     }
 
     switch (kb) {
         .none => {},
         .windows => {
             // zig fmt: off
-                try self.keybinds.putNoClobber("cut",        .{ .key = .x, .control = true });
-                try self.keybinds.putNoClobber("copy",       .{ .key = .c, .control = true });
-                try self.keybinds.putNoClobber("paste",      .{ .key = .v, .control = true });
-                try self.keybinds.putNoClobber("select_all", .{ .key = .a, .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "cut",        .{ .key = .x, .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "copy",       .{ .key = .c, .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "paste",      .{ .key = .v, .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "select_all", .{ .key = .a, .control = true });
 
                 // use with mod.matchBind
-                try self.keybinds.putNoClobber("ctrl/cmd",   .{ .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "ctrl/cmd",   .{ .control = true });
 
-                try self.keybinds.putNoClobber("text_start",        .{ .key = .home, .shift = false, .control = true });
-                try self.keybinds.putNoClobber("text_end",          .{ .key = .end,  .shift = false, .control = true });
-                try self.keybinds.putNoClobber("text_start_select", .{ .key = .home, .shift = true,  .control = true });
-                try self.keybinds.putNoClobber("text_end_select",   .{ .key = .end,  .shift = true,  .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "text_start",        .{ .key = .home, .shift = false, .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "text_end",          .{ .key = .end,  .shift = false, .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "text_start_select", .{ .key = .home, .shift = true,  .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "text_end_select",   .{ .key = .end,  .shift = true,  .control = true });
 
-                try self.keybinds.putNoClobber("line_start",        .{ .key = .home, .shift = false, .control = false });
-                try self.keybinds.putNoClobber("line_end",          .{ .key = .end,  .shift = false, .control = false });
-                try self.keybinds.putNoClobber("line_start_select", .{ .key = .home, .shift = true,  .control = false });
-                try self.keybinds.putNoClobber("line_end_select",   .{ .key = .end,  .shift = true,  .control = false });
+                try self.keybinds.putNoClobber(self.gpa, "line_start",        .{ .key = .home, .shift = false, .control = false });
+                try self.keybinds.putNoClobber(self.gpa, "line_end",          .{ .key = .end,  .shift = false, .control = false });
+                try self.keybinds.putNoClobber(self.gpa, "line_start_select", .{ .key = .home, .shift = true,  .control = false });
+                try self.keybinds.putNoClobber(self.gpa, "line_end_select",   .{ .key = .end,  .shift = true,  .control = false });
 
-                try self.keybinds.putNoClobber("word_left",         .{ .key = .left,  .shift = false, .control = true });
-                try self.keybinds.putNoClobber("word_right",        .{ .key = .right, .shift = false, .control = true });
-                try self.keybinds.putNoClobber("word_left_select",  .{ .key = .left,  .shift = true,  .control = true });
-                try self.keybinds.putNoClobber("word_right_select", .{ .key = .right, .shift = true,  .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "word_left",         .{ .key = .left,  .shift = false, .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "word_right",        .{ .key = .right, .shift = false, .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "word_left_select",  .{ .key = .left,  .shift = true,  .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "word_right_select", .{ .key = .right, .shift = true,  .control = true });
 
-                try self.keybinds.putNoClobber("char_left",         .{ .key = .left,  .shift = false, .control = false });
-                try self.keybinds.putNoClobber("char_right",        .{ .key = .right, .shift = false, .control = false });
-                try self.keybinds.putNoClobber("char_left_select",  .{ .key = .left,  .shift = true,  .control = false });
-                try self.keybinds.putNoClobber("char_right_select", .{ .key = .right, .shift = true,  .control = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_left",         .{ .key = .left,  .shift = false, .control = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_right",        .{ .key = .right, .shift = false, .control = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_left_select",  .{ .key = .left,  .shift = true,  .control = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_right_select", .{ .key = .right, .shift = true,  .control = false });
 
-                try self.keybinds.putNoClobber("char_up",          .{ .key = .up,   .shift = false });
-                try self.keybinds.putNoClobber("char_down",        .{ .key = .down, .shift = false });
-                try self.keybinds.putNoClobber("char_up_select",   .{ .key = .up,   .shift = true });
-                try self.keybinds.putNoClobber("char_down_select", .{ .key = .down, .shift = true });
+                try self.keybinds.putNoClobber(self.gpa, "char_up",          .{ .key = .up,   .shift = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_down",        .{ .key = .down, .shift = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_up_select",   .{ .key = .up,   .shift = true });
+                try self.keybinds.putNoClobber(self.gpa, "char_down_select", .{ .key = .down, .shift = true });
 
-                try self.keybinds.putNoClobber("delete_prev_word", .{ .key = .backspace, .control = true });
-                try self.keybinds.putNoClobber("delete_next_word", .{ .key = .delete,    .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "delete_prev_word", .{ .key = .backspace, .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "delete_next_word", .{ .key = .delete,    .control = true });
                 // zig fmt: on
         },
         .mac => {
             // zig fmt: off
-                try self.keybinds.putNoClobber("cut",        .{ .key = .x, .command = true });
-                try self.keybinds.putNoClobber("copy",       .{ .key = .c, .command = true });
-                try self.keybinds.putNoClobber("paste",      .{ .key = .v, .command = true });
-                try self.keybinds.putNoClobber("select_all", .{ .key = .a, .command = true });
+                try self.keybinds.putNoClobber(self.gpa, "cut",        .{ .key = .x, .command = true });
+                try self.keybinds.putNoClobber(self.gpa, "copy",       .{ .key = .c, .command = true });
+                try self.keybinds.putNoClobber(self.gpa, "paste",      .{ .key = .v, .command = true });
+                try self.keybinds.putNoClobber(self.gpa, "select_all", .{ .key = .a, .command = true });
 
                 // use with mod.matchBind
-                try self.keybinds.putNoClobber("ctrl/cmd",   .{ .command = true });
+                try self.keybinds.putNoClobber(self.gpa, "ctrl/cmd",   .{ .command = true });
 
-                try self.keybinds.putNoClobber("text_start",        .{ .key = .up,   .shift = false, .command = true });
-                try self.keybinds.putNoClobber("text_end",          .{ .key = .down, .shift = false, .command = true });
-                try self.keybinds.putNoClobber("text_start_select", .{ .key = .up,   .shift = true,  .command = true });
-                try self.keybinds.putNoClobber("text_end_select",   .{ .key = .down, .shift = true,  .command = true });
+                try self.keybinds.putNoClobber(self.gpa, "text_start",        .{ .key = .up,   .shift = false, .command = true });
+                try self.keybinds.putNoClobber(self.gpa, "text_end",          .{ .key = .down, .shift = false, .command = true });
+                try self.keybinds.putNoClobber(self.gpa, "text_start_select", .{ .key = .up,   .shift = true,  .command = true });
+                try self.keybinds.putNoClobber(self.gpa, "text_end_select",   .{ .key = .down, .shift = true,  .command = true });
 
-                try self.keybinds.putNoClobber("line_start",        .{ .key = .left,  .shift = false, .command = true });
-                try self.keybinds.putNoClobber("line_end",          .{ .key = .right, .shift = false, .command = true });
-                try self.keybinds.putNoClobber("line_start_select", .{ .key = .left,  .shift = true,  .command = true });
-                try self.keybinds.putNoClobber("line_end_select",   .{ .key = .right, .shift = true,  .command = true });
+                try self.keybinds.putNoClobber(self.gpa, "line_start",        .{ .key = .left,  .shift = false, .command = true });
+                try self.keybinds.putNoClobber(self.gpa, "line_end",          .{ .key = .right, .shift = false, .command = true });
+                try self.keybinds.putNoClobber(self.gpa, "line_start_select", .{ .key = .left,  .shift = true,  .command = true });
+                try self.keybinds.putNoClobber(self.gpa, "line_end_select",   .{ .key = .right, .shift = true,  .command = true });
 
-                try self.keybinds.putNoClobber("word_left",         .{ .key = .left,  .shift = false, .alt = true });
-                try self.keybinds.putNoClobber("word_right",        .{ .key = .right, .shift = false, .alt = true });
-                try self.keybinds.putNoClobber("word_left_select",  .{ .key = .left,  .shift = true,  .alt = true });
-                try self.keybinds.putNoClobber("word_right_select", .{ .key = .right, .shift = true,  .alt = true });
+                try self.keybinds.putNoClobber(self.gpa, "word_left",         .{ .key = .left,  .shift = false, .alt = true });
+                try self.keybinds.putNoClobber(self.gpa, "word_right",        .{ .key = .right, .shift = false, .alt = true });
+                try self.keybinds.putNoClobber(self.gpa, "word_left_select",  .{ .key = .left,  .shift = true,  .alt = true });
+                try self.keybinds.putNoClobber(self.gpa, "word_right_select", .{ .key = .right, .shift = true,  .alt = true });
 
-                try self.keybinds.putNoClobber("char_left",         .{ .key = .left,  .shift = false, .alt = false });
-                try self.keybinds.putNoClobber("char_right",        .{ .key = .right, .shift = false, .alt = false });
-                try self.keybinds.putNoClobber("char_left_select",  .{ .key = .left,  .shift = true,  .alt = false });
-                try self.keybinds.putNoClobber("char_right_select", .{ .key = .right, .shift = true,  .alt = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_left",         .{ .key = .left,  .shift = false, .alt = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_right",        .{ .key = .right, .shift = false, .alt = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_left_select",  .{ .key = .left,  .shift = true,  .alt = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_right_select", .{ .key = .right, .shift = true,  .alt = false });
 
-                try self.keybinds.putNoClobber("char_up",          .{ .key = .up,   .shift = false, .command = false });
-                try self.keybinds.putNoClobber("char_down",        .{ .key = .down, .shift = false, .command = false });
-                try self.keybinds.putNoClobber("char_up_select",   .{ .key = .up,   .shift = true,  .command = false });
-                try self.keybinds.putNoClobber("char_down_select", .{ .key = .down, .shift = true,  .command = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_up",          .{ .key = .up,   .shift = false, .command = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_down",        .{ .key = .down, .shift = false, .command = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_up_select",   .{ .key = .up,   .shift = true,  .command = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_down_select", .{ .key = .down, .shift = true,  .command = false });
 
-                try self.keybinds.putNoClobber("delete_prev_word", .{ .key = .backspace, .alt = true });
-                try self.keybinds.putNoClobber("delete_next_word", .{ .key = .delete,    .alt = true });
+                try self.keybinds.putNoClobber(self.gpa, "delete_prev_word", .{ .key = .backspace, .alt = true });
+                try self.keybinds.putNoClobber(self.gpa, "delete_next_word", .{ .key = .delete,    .alt = true });
                 // zig fmt: on
         },
     }
@@ -366,12 +379,12 @@ pub fn deinit(self: *Self) void {
     for (self.datas_trash.items) |sd| {
         sd.free(self.gpa);
     }
-    self.datas_trash.deinit();
+    self.datas_trash.deinit(self.arena());
 
     for (self.texture_trash.items) |tex| {
         self.backend.textureDestroy(tex);
     }
-    self.texture_trash.deinit();
+    self.texture_trash.deinit(self.arena());
 
     {
         var it = self.datas.iterator();
@@ -384,7 +397,7 @@ pub fn deinit(self: *Self) void {
         self.debug_under_mouse_info = "";
     }
 
-    self.subwindows.deinit();
+    self.subwindows.deinit(self.gpa);
     self.min_sizes.deinit(self.gpa);
 
     {
@@ -397,8 +410,8 @@ pub fn deinit(self: *Self) void {
     }
 
     self.animations.deinit(self.gpa);
-    self.tab_index_prev.deinit();
-    self.tab_index.deinit();
+    self.tab_index_prev.deinit(self.gpa);
+    self.tab_index.deinit(self.gpa);
 
     {
         var it = self.font_cache.iterator();
@@ -417,12 +430,12 @@ pub fn deinit(self: *Self) void {
         self.texture_cache.deinit(self.gpa);
     }
 
-    self.dialogs.deinit();
-    self.toasts.deinit();
-    self.keybinds.deinit();
+    self.dialogs.deinit(self.gpa);
+    self.toasts.deinit(self.gpa);
+    self.keybinds.deinit(self.gpa);
     self._arena.deinit();
     self._lifo_arena.deinit();
-    self.gpa.free(self._widget_stack.buffer);
+    self._widget_stack.deinit();
 
     {
         var it = self.font_bytes.valueIterator();
@@ -432,14 +445,14 @@ pub fn deinit(self: *Self) void {
             }
         }
     }
-    self.font_bytes.deinit();
+    self.font_bytes.deinit(self.gpa);
 
     {
         for (self.themes.values()) |*theme| {
             theme.deinit(self.gpa);
         }
     }
-    self.themes.deinit();
+    self.themes.deinit(self.gpa);
     self.* = undefined;
 }
 
@@ -966,8 +979,6 @@ pub fn begin(
     self: *Self,
     time_ns: i128,
 ) dvui.Backend.GenericError!void {
-    const larena = self.arena();
-
     var micros_since_last: u32 = 1;
     if (time_ns > self.frame_time_ns) {
         // enforce monotinicity
@@ -1006,8 +1017,8 @@ pub fn begin(
         self.debug_under_mouse_info = "";
     }
 
-    self.datas_trash = std.ArrayList(SavedData).init(larena);
-    self.texture_trash = std.ArrayList(dvui.Texture).init(larena);
+    self.datas_trash = .empty;
+    self.texture_trash = .empty;
 
     {
         var i: usize = 0;
@@ -1062,9 +1073,10 @@ pub fn begin(
         //std.debug.print("datas {d}\n", .{self.datas.count()});
     }
 
-    self.tab_index_prev.deinit();
-    self.tab_index_prev = self.tab_index;
-    self.tab_index = @TypeOf(self.tab_index).init(self.tab_index.allocator);
+    // Swap current and previous tab index lists
+    std.mem.swap(@TypeOf(self.tab_index), &self.tab_index, &self.tab_index_prev);
+    // Retain capacity because it's likely to be small and that the same capacity will be needed again
+    self.tab_index.clearRetainingCapacity();
 
     self.rect_pixels = .fromSize(self.backend.pixelSize());
     dvui.clipSet(self.rect_pixels);
@@ -1230,7 +1242,7 @@ pub fn textInputRequested(self: *const Self) ?Rect.Natural {
     return self.text_input_rect;
 }
 
-pub fn renderCommands(self: *Self, queue: std.ArrayList(dvui.RenderCommand)) !void {
+pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
     const oldsnap = dvui.snapToPixels();
     defer _ = dvui.snapToPixelsSet(oldsnap);
 
@@ -1240,7 +1252,7 @@ pub fn renderCommands(self: *Self, queue: std.ArrayList(dvui.RenderCommand)) !vo
     const old_rendering = dvui.renderingSet(true);
     defer _ = dvui.renderingSet(old_rendering);
 
-    for (queue.items) |*drc| {
+    for (queue) |*drc| {
         _ = dvui.snapToPixelsSet(drc.snap);
         dvui.clipSet(drc.clip);
         switch (drc.cmd) {
@@ -1274,15 +1286,13 @@ pub fn dataSetAdvanced(self: *Self, id: WidgetId, key: []const u8, data_in: anyt
 
     const dt = @typeInfo(@TypeOf(data_in));
     const dt_type_str = @typeName(@TypeOf(data_in));
-    var bytes: []const u8 = undefined;
-    if (copy_slice) {
-        bytes = std.mem.sliceAsBytes(data_in);
+    const bytes: []const u8 = if (copy_slice) blk: {
+        var bytes = std.mem.sliceAsBytes(data_in);
         if (dt.pointer.sentinel() != null) {
             bytes.len += @sizeOf(dt.pointer.child);
         }
-    } else {
-        bytes = std.mem.asBytes(&data_in);
-    }
+        break :blk bytes;
+    } else std.mem.asBytes(&data_in);
 
     const alignment = comptime blk: {
         if (copy_slice) {
@@ -1321,7 +1331,7 @@ pub fn dataSetAdvanced(self: *Self, id: WidgetId, key: []const u8, data_in: anyt
 
     if (previous_kv) |kv| {
         //std.debug.print("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, kv.key });
-        self.datas_trash.append(kv.value) catch |err| {
+        self.datas_trash.append(self.arena(), kv.value) catch |err| {
             log.err("Previous data could not be added to the trash, got {!} for id {x} key {s}\n", .{ err, id, key });
             return;
         };
@@ -1354,7 +1364,7 @@ pub fn dataRemove(self: *Self, id: WidgetId, key: []const u8) void {
     defer self.data_mutex.unlock();
 
     if (self.datas.fetchRemove(hash)) |dd| {
-        self.datas_trash.append(dd.value) catch |err| {
+        self.datas_trash.append(self.arena(), dd.value) catch |err| {
             log.err("Previous data could not be added to the trash, got {!} for id {x} key {s}\n", .{ err, id, key });
             return;
         };
@@ -1379,7 +1389,7 @@ pub fn dialogAdd(self: *Self, id: WidgetId, display: dvui.DialogDisplayFn) *std.
             break;
         }
     } else {
-        self.dialogs.append(Dialog{ .id = id, .display = display }) catch |err| {
+        self.dialogs.append(self.gpa, Dialog{ .id = id, .display = display }) catch |err| {
             dvui.logError(@src(), err, "Could not add dialog to the list", .{});
         };
     }
@@ -1460,7 +1470,7 @@ pub fn toastAdd(self: *Self, id: WidgetId, subwindow_id: ?WidgetId, display: dvu
             break;
         }
     } else {
-        self.toasts.append(Toast{ .id = id, .subwindow_id = subwindow_id, .display = display }) catch |err| {
+        self.toasts.append(self.gpa, Toast{ .id = id, .subwindow_id = subwindow_id, .display = display }) catch |err| {
             dvui.logError(@src(), err, "Could not add toast {x} to the list", .{id});
         };
     }
@@ -1620,15 +1630,17 @@ pub fn endRendering(self: *Self, opts: endOptions) void {
     }
 
     for (self.subwindows.items) |*sw| {
-        self.renderCommands(sw.render_cmds) catch |err| {
+        self.renderCommands(sw.render_cmds.items) catch |err| {
             dvui.logError(@src(), err, "Failed to render commands for subwindow {x}", .{sw.id});
         };
-        sw.render_cmds.clearAndFree();
+        // Set to empty because it's allocated on the arena and will be freed there
+        sw.render_cmds = .empty;
 
-        self.renderCommands(sw.render_cmds_after) catch |err| {
+        self.renderCommands(sw.render_cmds_after.items) catch |err| {
             dvui.logError(@src(), err, "Failed to render commands after for subwindow {x}", .{sw.id});
         };
-        sw.render_cmds_after.clearAndFree();
+        // Set to empty because it's allocated on the arena and will be freed there
+        sw.render_cmds_after = .empty;
     }
 
     self.end_rendering_done = true;
@@ -1650,15 +1662,16 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     for (self.datas_trash.items) |sd| {
         sd.free(self.gpa);
     }
-    self.datas_trash.clearAndFree();
+    // Set to empty because it's allocated on the arena and will be freed there
+    self.datas_trash = .empty;
 
     for (self.texture_trash.items) |tex| {
         self.backend.textureDestroy(tex);
     }
-    self.texture_trash.clearAndFree();
+    // Set to empty because it's allocated on the arena and will be freed there
+    self.texture_trash = .empty;
 
-    // events may have been tagged with a focus widget that never showed up, so
-    // we wouldn't even get them bubbled
+    // events may have been tagged with a focus widget that never showed up
     const evts = dvui.events();
     for (evts) |*e| {
         if (self.drag_state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release) {
@@ -1729,32 +1742,22 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // std.log.debug("peak widget stack {d} (0x{0x})", .{self.peak_widget_stack});
 
     // self._arena.debug_log();
-    _ = self._arena.reset(.retain_capacity);
+    _ = self._arena.reset(.shrink_to_peak_usage);
     if (self._lifo_arena.current_usage != 0 and !self._lifo_arena.has_expanded()) {
-        log.warn("Arena was not empty at the end of the frame, {d} byte left. Did you forget to free memory somewhere?", .{self._lifo_arena.current_usage});
+        log.warn("Arena was not empty at the end of the frame, {d} bytes left. Did you forget to free memory somewhere?", .{self._lifo_arena.current_usage});
         // const buf: [*]u8 = @ptrCast(self._lifo_arena.arena.state.buffer_list.first.?);
         // std.log.debug("Arena content {s}", .{buf[@sizeOf(usize)..self._lifo_arena.current_usage]});
     }
     // self._lifo_arena.debug_log();
-    _ = self._lifo_arena.reset(.retain_capacity);
+    _ = self._lifo_arena.reset(.shrink_to_peak_usage);
 
-    // Widget stack
-    if (self._widget_stack.end_index != 0) {
-        log.warn("Widget stack was not empty at the end of the frame. Did you forget to call deinti?", .{});
-        self._widget_stack.reset();
+    if (self._widget_stack.current_usage != 0 and !self._widget_stack.has_expanded()) {
+        log.warn("Widget stack was not empty at the end of the frame, {d} bytes left. Did you forget to call deinit?", .{self._widget_stack.current_usage});
+        // const buf: [*]u8 = @ptrCast(self._widget_stack.arena.state.buffer_list.first.?);
+        // std.log.debug("Widget stack content {s}", .{buf[@sizeOf(usize)..self._widget_stack.current_usage]});
     }
-    if (self._widget_stack.buffer.len < self.peak_widget_stack) {
-        log.warn("Widget stack overflowed, consider increasing the default widget stack size", .{});
-        const new_len = self.peak_widget_stack + 0x400;
-        if (self.gpa.resize(self._widget_stack.buffer, new_len)) {
-            self._widget_stack.buffer.len = new_len;
-        } else {
-            // do realloc ourselves as we don't need to copy any memory from the old allocation
-            const new_buf = try self.gpa.alloc(u8, new_len);
-            self.gpa.free(self._widget_stack.buffer);
-            self._widget_stack.buffer = new_buf;
-        }
-    }
+    // self._widget_stack.debug_log();
+    _ = self._widget_stack.reset(.shrink_to_peak_usage);
 
     try self.initEvents();
 
@@ -1800,7 +1803,7 @@ fn initEvents(self: *Self) std.mem.Allocator.Error!void {
 }
 
 pub fn widget(self: *Self) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *Self) *WidgetData {
@@ -1823,25 +1826,6 @@ pub fn minSizeForChild(self: *Self, s: Size) void {
     // os window doesn't size itself based on children
     _ = self;
     _ = s;
-}
-
-pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
-    // window does cleanup events, but not normal events
-    switch (e.evt) {
-        .close_popup => |cp| {
-            e.handle(@src(), self.data());
-            if (cp.intentional) {
-                // when a popup is closed due to a menu item being chosen,
-                // the window that spawned it (which had focus previously)
-                // should become focused again
-                dvui.focusSubwindow(self.wd.id, null);
-            }
-        },
-        else => {},
-    }
-
-    // can't bubble past the base window
-    _ = bubbling;
 }
 
 const Options = dvui.Options;

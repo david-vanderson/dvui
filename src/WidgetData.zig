@@ -16,49 +16,47 @@ pub const InitOptions = struct {
     subwindow: bool = false,
 };
 
-id: WidgetId = undefined,
-parent: Widget = undefined,
-init_options: InitOptions = undefined,
-rect: Rect = Rect{},
-min_size: Size = Size{},
-options: Options = undefined,
+id: WidgetId,
+parent: Widget,
+init_options: InitOptions,
+rect: Rect,
+min_size: Size,
+options: Options,
 src: std.builtin.SourceLocation,
 rect_scale_cache: ?RectScale = null,
 
-pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
-    var self = WidgetData{ .src = src };
-    self.init_options = init_options;
-    self.options = opts;
+pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, options: Options) WidgetData {
+    const parent = dvui.parentGet();
+    const id = parent.extendId(src, options.idExtra());
+    const min_size = options.min_sizeGet().min(options.max_sizeGet());
 
-    self.parent = dvui.parentGet();
-    self.id = self.parent.extendId(src, opts.idExtra());
+    const ms = dvui.minSize(id, min_size);
 
-    self.min_size = self.options.min_sizeGet();
-    self.min_size = self.min_size.min(self.options.max_sizeGet());
-
-    const ms = dvui.minSize(self.id, self.min_size);
-
-    if (self.options.rect) |r| {
-        self.rect = r;
-        if (self.options.expandGet().isHorizontal()) {
-            self.rect.w = self.parent.data().contentRect().w;
-        } else if (self.rect.w == 0) {
-            self.rect.w = ms.w;
+    const rect = if (options.rect) |r|
+        r.toSize(.{
+            .w = if (options.expandGet().isHorizontal())
+                parent.data().contentRect().w
+            else if (r.w == 0) ms.w else r.w,
+            .h = if (options.expandGet().isVertical())
+                parent.data().contentRect().h
+            else if (r.h == 0) ms.h else r.h,
+        })
+    else blk: {
+        if (options.expandGet() == .ratio and (ms.w == 0 or ms.h == 0)) {
+            dvui.log.debug("rectFor {x} expand is .ratio but min size is zero\n", .{id});
         }
+        break :blk parent.rectFor(id, ms, options.expandGet(), options.gravityGet());
+    };
 
-        if (self.options.expandGet().isVertical()) {
-            self.rect.h = self.parent.data().contentRect().h;
-        } else if (self.rect.h == 0) {
-            self.rect.h = ms.h;
-        }
-    } else {
-        if (self.options.expandGet() == .ratio and (ms.w == 0 or ms.h == 0)) {
-            dvui.log.debug("rectFor {x} expand is .ratio but min size is zero\n", .{self.id});
-        }
-        self.rect = self.parent.rectFor(self.id, ms, self.options.expandGet(), self.options.gravityGet());
-    }
-
-    return self;
+    return .{
+        .id = id,
+        .parent = parent,
+        .init_options = init_options,
+        .min_size = min_size,
+        .rect = rect,
+        .options = options,
+        .src = src,
+    };
 }
 
 pub fn register(self: *WidgetData) void {
@@ -85,11 +83,9 @@ pub fn register(self: *WidgetData) void {
 
         if (cw.scroll_to_focused) {
             cw.scroll_to_focused = false;
-
-            var scrollto = dvui.Event{ .evt = .{ .scroll_to = .{
+            dvui.scrollTo(.{
                 .screen_rect = self.rectScale().r,
-            } } };
-            self.parent.processEvent(&scrollto, true);
+            });
         }
     }
 

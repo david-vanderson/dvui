@@ -31,28 +31,28 @@ const Data = struct {
     min_space_taken: f32,
 };
 
-wd: WidgetData = undefined,
-init_opts: InitOptions = undefined,
+wd: WidgetData,
+init_opts: InitOptions,
 max_space: f32 = 0, // equal_space max min size of child in direction
 max_thick: f32 = 0, // max min size of child against direction
-data_prev: ?Data = undefined,
+data_prev: ?Data,
 min_space_taken: f32 = 0,
 packed_children: f32 = 0,
 total_weight: f32 = 0,
 child_rect: Rect = Rect{},
 child_positioned: bool = false,
-ratio_extra: f32 = undefined,
-ran_off: bool = undefined,
-pixels_per_w: f32 = undefined,
+ratio_extra: f32 = 0,
+ran_off: bool = false,
+pixels_per_w: f32 = 0,
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) BoxWidget {
-    var self = BoxWidget{ .init_opts = init_options };
     const defaults = Options{ .name = "Box" };
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-    self.data_prev = dvui.dataGet(null, self.wd.id, "_data", Data);
-    self.ran_off = false;
-    self.pixels_per_w = 0;
-    return self;
+    const wd = WidgetData.init(src, .{}, defaults.override(opts));
+    return .{
+        .wd = wd,
+        .init_opts = init_options,
+        .data_prev = dvui.dataGet(null, wd.id, "_data", Data),
+    };
 }
 
 pub fn install(self: *BoxWidget) void {
@@ -96,7 +96,7 @@ pub fn matchEvent(self: *BoxWidget, e: *Event) bool {
 }
 
 pub fn widget(self: *BoxWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *BoxWidget) *WidgetData {
@@ -148,9 +148,7 @@ pub fn rectFor(self: *BoxWidget, id: dvui.WidgetId, min_size: Size, e: Options.E
     // min size after ratio
     const child_min_size = ms;
 
-    var ret: Rect = undefined;
-
-    if (self.init_opts.equal_space) {
+    const ret: Rect = if (self.init_opts.equal_space) blk: {
         // position child inside the space we allocate for it
         switch (self.init_opts.dir) {
             .horizontal => {
@@ -158,18 +156,18 @@ pub fn rectFor(self: *BoxWidget, id: dvui.WidgetId, min_size: Size, e: Options.E
                 ms.h = available.h;
                 const avail = dvui.placeIn(available, ms, .none, g);
                 self.removeSpace(avail, g);
-                ret = dvui.placeIn(avail, child_min_size, e, g);
+                break :blk dvui.placeIn(avail, child_min_size, e, g);
             },
             .vertical => {
                 ms.h = self.pixels_per_w;
                 ms.w = available.w;
                 const avail = dvui.placeIn(available, ms, .none, g);
                 self.removeSpace(avail, g);
-                ret = dvui.placeIn(avail, child_min_size, e, g);
+                break :blk dvui.placeIn(avail, child_min_size, e, g);
             },
         }
-    } else {
-        // adjust min size for normal expand (since you only get prorated extra space)
+    } else blk: {
+        //  adjust min size for normal expand (since you only get prorated extra space)
         // - keep the expand in the non box direction
         var ee: Options.Expand = .none;
         switch (self.init_opts.dir) {
@@ -183,9 +181,10 @@ pub fn rectFor(self: *BoxWidget, id: dvui.WidgetId, min_size: Size, e: Options.E
             },
         }
 
-        ret = dvui.placeIn(available, ms, ee, g);
+        const ret = dvui.placeIn(available, ms, ee, g);
         self.removeSpace(ret, g);
-    }
+        break :blk ret;
+    };
 
     switch (self.init_opts.dir) {
         .horizontal => if (ret.w + 0.001 < child_min_size.w) {
@@ -238,34 +237,22 @@ pub fn minSizeForChild(self: *BoxWidget, s: Size) void {
     }
 }
 
-pub fn processEvent(self: *BoxWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
-    }
-}
-
 pub fn deinit(self: *BoxWidget) void {
     defer dvui.widgetFree(self);
-    var ms: Size = undefined;
-    var extra_space = false;
-    if (self.init_opts.dir == .horizontal) {
-        if (self.init_opts.equal_space) {
-            ms.w = self.max_space * self.packed_children;
-        } else {
-            ms.w = self.min_space_taken;
-        }
-        ms.h = self.max_thick;
-        extra_space = self.child_rect.w > 0.001;
-    } else {
-        if (self.init_opts.equal_space) {
-            ms.h = self.max_space * self.packed_children;
-        } else {
-            ms.h = self.min_space_taken;
-        }
-        ms.w = self.max_thick;
-        extra_space = self.child_rect.h > 0.001;
-    }
+    const extra_space = (if (self.init_opts.dir == .horizontal) self.child_rect.w else self.child_rect.h) > 0.001;
+    const ms: Size = if (self.init_opts.dir == .horizontal) .{
+        .w = if (self.init_opts.equal_space)
+            self.max_space * self.packed_children
+        else
+            self.min_space_taken,
+        .h = self.max_thick,
+    } else .{
+        .h = if (self.init_opts.equal_space)
+            self.max_space * self.packed_children
+        else
+            self.min_space_taken,
+        .w = self.max_thick,
+    };
 
     if ((self.init_opts.equal_space and self.packed_children > 0) or self.total_weight > 0) {
         if (extra_space) {

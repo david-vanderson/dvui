@@ -23,7 +23,7 @@ pub const InitOptions = struct {
     }
 };
 
-wd: WidgetData = undefined,
+wd: WidgetData,
 label_str: []const u8,
 /// An allocator to free `label_str` on `deinit`
 allocator: ?std.mem.Allocator,
@@ -138,24 +138,6 @@ pub fn draw(self: *LabelWidget) void {
 
 pub fn matchEvent(self: *LabelWidget, e: *Event) bool {
     return dvui.eventMatchSimple(e, self.data());
-}
-
-pub fn processEvents(self: *LabelWidget) void {
-    const evts = dvui.events();
-    for (evts) |*e| {
-        if (!self.matchEvent(e))
-            continue;
-
-        self.processEvent(e, false);
-    }
-}
-
-pub fn processEvent(self: *LabelWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
-
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
-    }
 }
 
 pub fn deinit(self: *LabelWidget) void {

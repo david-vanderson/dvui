@@ -13,7 +13,7 @@ const WidgetData = dvui.WidgetData;
 
 const VirtualParentWidget = @This();
 
-wd: WidgetData = undefined,
+wd: WidgetData,
 child_rect_union: ?Rect = null,
 
 pub fn init(src: std.builtin.SourceLocation, opts: Options) VirtualParentWidget {
@@ -29,7 +29,7 @@ pub fn install(self: *VirtualParentWidget) void {
 }
 
 pub fn widget(self: *VirtualParentWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *VirtualParentWidget) *WidgetData {
@@ -52,13 +52,6 @@ pub fn screenRectScale(self: *VirtualParentWidget, rect: Rect) RectScale {
 
 pub fn minSizeForChild(self: *VirtualParentWidget, s: Size) void {
     self.wd.parent.minSizeForChild(s);
-}
-
-pub fn processEvent(self: *VirtualParentWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
-    }
 }
 
 pub fn deinit(self: *VirtualParentWidget) void {

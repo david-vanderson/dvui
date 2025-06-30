@@ -14,27 +14,28 @@ pub const InitOptions = struct {
     invalidate: bool = false,
 };
 
-wd: WidgetData = undefined,
-hash: u64 = undefined,
-refresh_prev_value: u8 = undefined,
+wd: WidgetData,
+hash: u64,
+refresh_prev_value: u8,
 state: enum { ok, texture_create_error, unsupported } = .ok,
 caching_tex: ?dvui.TextureTarget = null,
-tex_uv: Size = undefined,
+tex_uv: Size,
+/// SAFETY: Must be set when `caching_tex` is not null
 old_target: dvui.RenderTarget = undefined,
 old_clip: ?Rect.Physical = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) CacheWidget {
     _ = init_opts;
-    var self = CacheWidget{};
     const defaults = Options{ .name = "Cache" };
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-
-    self.hash = dvui.hashIdKey(self.wd.id, "_tex");
-    if (dvui.dataGet(null, self.wd.id, "_tex_uv", Size)) |uv| self.tex_uv = uv;
-    if (dvui.dataGet(null, self.wd.id, "_unsupported", bool) orelse false) self.state = .unsupported;
-    self.tex_uv = dvui.dataGet(null, self.wd.id, "_tex_uv", Size) orelse .{};
-    self.refresh_prev_value = dvui.currentWindow().extra_frames_needed;
+    const wd = WidgetData.init(src, .{}, defaults.override(opts));
+    var self = CacheWidget{
+        .wd = wd,
+        .hash = dvui.hashIdKey(wd.id, "_tex"),
+        .tex_uv = dvui.dataGet(null, wd.id, "_tex_uv", Size) orelse .{},
+        .refresh_prev_value = dvui.currentWindow().extra_frames_needed,
+    };
     dvui.currentWindow().extra_frames_needed = 0;
+    if (dvui.dataGet(null, self.wd.id, "_unsupported", bool) orelse false) self.state = .unsupported;
     return self;
 }
 
@@ -131,7 +132,7 @@ pub fn uncached(self: *CacheWidget) bool {
 }
 
 pub fn widget(self: *CacheWidget) Widget {
-    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *CacheWidget) *WidgetData {
@@ -149,13 +150,6 @@ pub fn screenRectScale(self: *CacheWidget, rect: Rect) RectScale {
 
 pub fn minSizeForChild(self: *CacheWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
-}
-
-pub fn processEvent(self: *CacheWidget, e: *dvui.Event, bubbling: bool) void {
-    _ = bubbling;
-    if (e.bubbleable()) {
-        self.wd.parent.processEvent(e, true);
-    }
 }
 
 /// This deinit function returns an error because of the additional

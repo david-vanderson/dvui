@@ -1,10 +1,11 @@
 pub const TabsWidget = @This();
 
-options: Options = undefined,
-init_options: InitOptions = undefined,
-scroll: ScrollAreaWidget = undefined,
+init_options: InitOptions,
+scroll: ScrollAreaWidget,
+/// SAFETY: Set in `install`
 box: BoxWidget = undefined,
 tab_index: usize = 0,
+/// SAFETY: Set in `addTab`
 tab_button: ButtonWidget = undefined,
 
 pub var defaults: Options = .{
@@ -18,16 +19,14 @@ pub const InitOptions = struct {
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TabsWidget {
-    var self = TabsWidget{};
-    self.options = defaults.override(opts);
-    self.init_options = init_opts;
-    var scroll_opts: ScrollAreaWidget.InitOpts = .{};
-    switch (self.init_options.dir) {
-        .horizontal => scroll_opts = .{ .vertical = .none, .horizontal = .auto, .horizontal_bar = .hide },
-        .vertical => scroll_opts = .{ .vertical = .auto, .vertical_bar = .hide },
-    }
-    self.scroll = ScrollAreaWidget.init(src, scroll_opts, self.options);
-    return self;
+    const scroll_opts: ScrollAreaWidget.InitOpts = switch (init_opts.dir) {
+        .horizontal => .{ .vertical = .none, .horizontal = .auto, .horizontal_bar = .hide },
+        .vertical => .{ .vertical = .auto, .vertical_bar = .hide },
+    };
+    return .{
+        .init_options = init_opts,
+        .scroll = ScrollAreaWidget.init(src, scroll_opts, defaults.override(opts)),
+    };
 }
 
 pub fn install(self: *TabsWidget) void {
