@@ -314,14 +314,14 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 if (e.evt == .mouse) {
                     const me = e.evt.mouse;
                     if (me.action == .press and me.button.touch()) {
-                        dvui.captureMouse(fc.data());
+                        dvui.captureMouse(fc.data(), e.num);
                         self.te_show_context_menu = false;
                         offset = fcrs.r.topRight().diff(me.p);
 
                         // give an extra offset of half the cursor height
                         offset.y -= self.sel_start_r.h * 0.5 * rs.s;
                     } else if (me.action == .release and me.button.touch()) {
-                        dvui.captureMouse(null);
+                        dvui.captureMouse(null, e.num);
                         dvui.dragEnd();
                     } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
                         const corner = me.p.plus(offset);
@@ -384,14 +384,14 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 if (e.evt == .mouse) {
                     const me = e.evt.mouse;
                     if (me.action == .press and me.button.touch()) {
-                        dvui.captureMouse(fc.data());
+                        dvui.captureMouse(fc.data(), e.num);
                         self.te_show_context_menu = false;
                         offset = fcrs.r.topLeft().diff(me.p);
 
                         // give an extra offset of half the cursor height
                         offset.y -= self.sel_start_r.h * 0.5 * rs.s;
                     } else if (me.action == .release and me.button.touch()) {
-                        dvui.captureMouse(null);
+                        dvui.captureMouse(null, e.num);
                         dvui.dragEnd();
                     } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
                         const corner = me.p.plus(offset);
@@ -1550,7 +1550,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
             } else if (me.action == .press and me.button.pointer()) {
                 e.handle(@src(), self.data());
                 // capture and start drag
-                dvui.captureMouse(self.data());
+                dvui.captureMouse(self.data(), e.num);
                 dvui.dragPreStart(me.p, .{ .cursor = .ibeam });
 
                 if (me.button.touch()) {
@@ -1619,7 +1619,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                         dvui.refresh(null, @src(), self.wd.id);
                     }
 
-                    dvui.captureMouse(null);
+                    dvui.captureMouse(null, e.num);
                     dvui.dragEnd();
                 }
             } else if (me.action == .motion and dvui.captured(self.wd.id)) {
@@ -1641,7 +1641,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                         });
                     } else {
                         // user intended to scroll with a finger swipe
-                        dvui.captureMouse(null); // stop possible drag and capture
+                        dvui.captureMouse(null, e.num); // stop possible drag and capture
                         dvui.dragEnd();
                     }
                 }

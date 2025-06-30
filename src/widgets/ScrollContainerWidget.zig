@@ -506,10 +506,10 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     // don't let this event go through to floating window
                     // which would capture the mouse preventing scrolling
                     e.handle(@src(), self.data());
-                    dvui.captureMouse(self.data());
+                    dvui.captureMouse(self.data(), e.num);
                 } else if (me.action == .release and dvui.captured(self.wd.id)) {
                     e.handle(@src(), self.data());
-                    dvui.captureMouse(null);
+                    dvui.captureMouse(null, e.num);
                     dvui.dragEnd();
                 } else if (me.action == .motion and me.button.touch()) {
                     e.handle(@src(), self.data());
@@ -519,7 +519,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     // a touch down on a button, which captures.  Then when the
                     // drag starts the button gives up capture, so we get here,
                     // never having seen the touch down.
-                    dvui.captureMouse(self.data());
+                    dvui.captureMouse(self.data(), e.num);
 
                     self.processMotionScroll(me.action.motion);
                 }

@@ -2261,7 +2261,8 @@ pub fn reorderListsAdvanced() void {
     defer vbox.deinit();
 
     if (added_idx) |ai| {
-        reorder.dragStart(ai, added_idx_p.?); // reorder grabs capture
+        // FIXME: What events should/shouldn't be marked by this?
+        reorder.dragStart(ai, added_idx_p.?, 0); // reorder grabs capture
     }
 
     var seen_non_floating = false;
@@ -2304,7 +2305,8 @@ pub fn reorderListsAdvanced() void {
         dvui.label(@src(), "{s}", .{s}, .{});
 
         if (dvui.ReorderWidget.draggable(@src(), .{ .top_left = reorderable.wd.rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
-            reorder.dragStart(i, p); // reorder grabs capture
+            // FIXME: What events should/shouldn't be marked by this?
+            reorder.dragStart(i, p, 0); // reorder grabs capture
         }
     }
 
@@ -3015,7 +3017,7 @@ pub fn scrollCanvas() void {
                         .mouse => |me| {
                             if (me.action == .press and me.button.pointer()) {
                                 e.handle(@src(), dragBox.data());
-                                dvui.captureMouse(dbox.data());
+                                dvui.captureMouse(dbox.data(), e.num);
                                 dvui.dragPreStart(me.p, .{ .name = "box_transfer" });
                             } else if (me.action == .motion) {
                                 if (dvui.captured(dbox.data().id)) {
@@ -3025,7 +3027,7 @@ pub fn scrollCanvas() void {
                                         drag_box_window.* = i;
                                         drag_box_content.* = k;
                                         // give up capture so target can get mouse events, but don't end drag
-                                        dvui.captureMouse(null);
+                                        dvui.captureMouse(null, e.num);
                                     }
                                 }
                             } else if (me.action == .position) {
@@ -3049,13 +3051,13 @@ pub fn scrollCanvas() void {
                 .mouse => |me| {
                     if (me.action == .press and me.button.pointer()) {
                         e.handle(@src(), dragBox.data());
-                        dvui.captureMouse(dragBox.data());
+                        dvui.captureMouse(dragBox.data(), e.num);
                         const offset = me.p.diff(dragBox.data().rectScale().r.topLeft()); // pixel offset from dragBox corner
                         dvui.dragPreStart(me.p, .{ .offset = offset });
                     } else if (me.action == .release and me.button.pointer()) {
                         if (dvui.captured(dragBox.data().id)) {
                             e.handle(@src(), dragBox.data());
-                            dvui.captureMouse(null);
+                            dvui.captureMouse(null, e.num);
                             dvui.dragEnd();
                         }
                     } else if (me.action == .motion) {
@@ -3094,12 +3096,12 @@ pub fn scrollCanvas() void {
             .mouse => |me| {
                 if (me.action == .press and me.button.pointer()) {
                     e.handle(@src(), scrollContainer.data());
-                    dvui.captureMouse(scrollContainer.data());
+                    dvui.captureMouse(scrollContainer.data(), e.num);
                     dvui.dragPreStart(me.p, .{});
                 } else if (me.action == .release and me.button.pointer()) {
                     if (dvui.captured(scrollContainer.data().id)) {
                         e.handle(@src(), scrollContainer.data());
-                        dvui.captureMouse(null);
+                        dvui.captureMouse(null, e.num);
                         dvui.dragEnd();
                     }
                 } else if (me.action == .motion) {
@@ -4778,7 +4780,7 @@ pub const StrokeTest = struct {
                             }
 
                             if (dragi != null) {
-                                dvui.captureMouse(self.data());
+                                dvui.captureMouse(self.data(), e.num);
                                 dvui.dragPreStart(me.p, .{ .cursor = .crosshair });
                             }
                         }
@@ -4786,7 +4788,7 @@ pub const StrokeTest = struct {
                     .release => {
                         if (me.button == .left) {
                             e.handle(@src(), self.data());
-                            dvui.captureMouse(null);
+                            dvui.captureMouse(null, e.num);
                             dvui.dragEnd();
                         }
                     },
