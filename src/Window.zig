@@ -797,20 +797,6 @@ pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, y
     return ret;
 }
 
-pub fn addSelectionEvent(self: *Self, selection_id: u64, selected: bool, screen_rect: Rect.Physical) void {
-    self.event_num += 1;
-    self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
-        .selection = .{ .selection_id = selection_id, .selected = selected, .screen_rect = screen_rect },
-    } }) catch |err| {
-        dvui.logError(@src(), err, "Dropping selection event for selection_id {d}\n", .{selection_id});
-        return;
-    };
-    self.positionMouseEventAdd() catch |err| {
-        dvui.logError(@src(), err, "Unable to add position event for selection_id {d}\n", .{selection_id});
-        return;
-    };
-}
-
 pub fn FPS(self: *const Self) f32 {
     const diff = self.frame_times[0];
     if (diff == 0) {
