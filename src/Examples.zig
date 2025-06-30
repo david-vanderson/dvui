@@ -70,7 +70,6 @@ var animating_window_show: bool = false;
 var animating_window_closing: bool = false;
 var animating_window_rect = Rect{ .x = 100, .y = 100, .w = 300, .h = 200 };
 var paned_collapsed_width: f32 = 400;
-var tree_removed_path: ?[]const u8 = null;
 
 var progress_mutex = std.Thread.Mutex{};
 var progress_val: f32 = 0.0;
@@ -2361,9 +2360,9 @@ const tree_palette = &[_]dvui.Color{
     .{ .r = 0x4b, .g = 0x5b, .b = 0xab, .a = 0xff },
 };
 
-pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, outer_tree: *dvui.TreeWidget) !void {
+pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, outer_tree: *dvui.TreeWidget, uniqueId: dvui.WidgetId) !void {
     const recursor = struct {
-        fn search(alloc: std.mem.Allocator, directory: []const u8, tree: *dvui.TreeWidget, color_id: *usize) !void {
+        fn search(alloc: std.mem.Allocator, directory: []const u8, tree: *dvui.TreeWidget, uid: dvui.WidgetId, color_id: *usize) !void {
             var dir = try std.fs.cwd().openDir(directory, .{ .access_sub_paths = true, .iterate = true });
             defer dir.close();
 
@@ -2394,7 +2393,7 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
                 defer alloc.free(abs_path);
 
                 if (branch.insertBefore()) {
-                    if (tree_removed_path) |removed_path| {
+                    if (dvui.dataGetSlice(null, uid, "removed_path", []u8)) |removed_path| {
                         const old_sub_path = std.fs.path.basename(removed_path);
 
                         const new_path = try std.fs.path.join(alloc, &.{ if (entry.kind == .directory) abs_path else directory, old_sub_path });
@@ -2406,14 +2405,13 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
                             try std.fs.renameAbsolute(removed_path, new_path);
                         }
 
-                        alloc.free(removed_path);
-                        tree_removed_path = null;
+                        dvui.dataRemove(null, uid, "removed_path");
                     }
                 }
 
                 if (branch.floating()) {
-                    if (tree_removed_path == null)
-                        tree_removed_path = alloc.dupe(u8, abs_path) catch null;
+                    if (dvui.dataGetSlice(null, uid, "removed_path", []u8) == null)
+                        dvui.dataSetSlice(null, uid, "removed_path", abs_path);
                 }
 
                 switch (entry.kind) {
@@ -2498,6 +2496,7 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
                                 alloc,
                                 abs_path,
                                 tree,
+                                uid,
                                 color_id,
                             );
                         }
@@ -2565,7 +2564,7 @@ pub fn recurseFiles(allocator: std.mem.Allocator, root_directory: []const u8, ou
             .alpha = 0.15,
         },
     })) {
-        try recursor(allocator, root_directory, outer_tree, &color_index);
+        try recursor(allocator, root_directory, outer_tree, uniqueId, &color_index);
     }
 
     return;
@@ -2583,14 +2582,14 @@ pub fn reorderTree() void {
         dvui.dataSetSlice(null, uniqueId, "root_dir", directory);
         dvui.label(@src(), "Root Directory: {s}", .{directory}, .{});
 
-        if (tree_removed_path) |removed_path| {
+        if (dvui.dataGetSlice(null, uniqueId, "removed_path", []u8)) |removed_path| {
             dvui.label(@src(), "Removed: {s}", .{removed_path}, .{});
         }
 
         var tree = dvui.TreeWidget.tree(@src(), .{ .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
         defer tree.deinit();
 
-        recurseFiles(dvui.currentWindow().gpa, directory, tree) catch std.debug.panic("Failed to recurse files", .{});
+        recurseFiles(dvui.currentWindow().gpa, directory, tree, uniqueId) catch std.debug.panic("Failed to recurse files", .{});
     }
 }
 
