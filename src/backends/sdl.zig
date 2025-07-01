@@ -550,6 +550,15 @@ pub fn openURL(self: *SDLBackend, url: []const u8) !void {
     try toErr(c.SDL_OpenURL(c_url.ptr), "SDL_OpenURL in openURL");
 }
 
+pub fn preferredColorScheme(_: *SDLBackend) ?dvui.enums.ColorScheme {
+    if (!sdl3) return null;
+    return switch (c.SDL_GetSystemTheme()) {
+        c.SDL_SYSTEM_THEME_DARK => .dark,
+        c.SDL_SYSTEM_THEME_LIGHT => .light,
+        else => null,
+    };
+}
+
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
     const size = self.pixelSize();
