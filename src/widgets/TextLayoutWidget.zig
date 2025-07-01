@@ -100,16 +100,16 @@ pub const Selection = struct {
 /// here is not a word, and everything else is.
 pub const word_breaks = " \n!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
 
-wd: WidgetData = undefined,
+wd: WidgetData,
 corners: [4]?Rect = [_]?Rect{null} ** 4,
 corners_min_size: [4]?Size = [_]?Size{null} ** 4,
 corners_last_seen: ?u8 = null,
 insert_pt: Point = Point{},
 current_line_height: f32 = 0.0,
 prevClip: Rect.Physical = .{},
-break_lines: bool = undefined,
+break_lines: bool,
 current_line_width: f32 = 0.0, // width of lines if break_lines was false
-touch_edit_just_focused: bool = undefined,
+touch_edit_just_focused: bool,
 
 cursor_pt: ?Point = null,
 click_pt: ?Point = null,
@@ -118,6 +118,7 @@ click_num: u8 = 0,
 bytes_seen: usize = 0,
 first_byte_in_line: usize = 0,
 selection_in: ?*Selection = null,
+/// SAFETY: Set in `install`, might point to `selection_store`
 selection: *Selection = undefined,
 selection_store: Selection = .{},
 
@@ -185,6 +186,7 @@ sel_end_r_new: ?Rect = null,
 sel_pts: [2]?Point = [2]?Point{ null, null },
 
 cursor_seen: bool = false,
+/// SAFETY: Set in `textAddEx`
 cursor_rect: Rect = undefined,
 scroll_to_cursor: bool = false,
 scroll_to_cursor_next_frame: bool = false,
@@ -201,23 +203,25 @@ te_show_draggables: bool = true,
 te_show_context_menu: bool = true,
 te_focus_on_touchdown: bool = false,
 focus_at_start: bool = false,
+/// SAFETY: Set in `touchEditing`
 te_floating: FloatingWidget = undefined,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextLayoutWidget {
     const options = defaults.override(opts);
-    var self = TextLayoutWidget{ .wd = WidgetData.init(src, .{}, options), .selection_in = init_opts.selection };
-    self.break_lines = init_opts.break_lines;
-    self.touch_edit_just_focused = init_opts.touch_edit_just_focused;
-    self.touch_editing = dvui.dataGet(null, self.wd.id, "_touch_editing", bool) orelse false;
-    self.te_first = dvui.dataGet(null, self.wd.id, "_te_first", bool) orelse true;
-    self.te_show_draggables = dvui.dataGet(null, self.wd.id, "_te_show_draggables", bool) orelse true;
-    self.te_show_context_menu = dvui.dataGet(null, self.wd.id, "_te_show_context_menu", bool) orelse true;
-    self.te_focus_on_touchdown = dvui.dataGet(null, self.wd.id, "_te_focus_on_touchdown", bool) orelse false;
-
-    self.sel_start_r = dvui.dataGet(null, self.wd.id, "_sel_start_r", Rect) orelse .{};
-    self.sel_end_r = dvui.dataGet(null, self.wd.id, "_sel_end_r", Rect) orelse .{};
-
-    self.click_num = dvui.dataGet(null, self.wd.id, "_click_num", u8) orelse 0;
+    var self = TextLayoutWidget{
+        .wd = WidgetData.init(src, .{}, options),
+        .selection_in = init_opts.selection,
+        .break_lines = init_opts.break_lines,
+        .touch_edit_just_focused = init_opts.touch_edit_just_focused,
+    };
+    if (dvui.dataGet(null, self.wd.id, "_touch_editing", bool)) |val| self.touch_editing = val;
+    if (dvui.dataGet(null, self.wd.id, "_te_first", bool)) |val| self.te_first = val;
+    if (dvui.dataGet(null, self.wd.id, "_te_show_draggables", bool)) |val| self.te_show_draggables = val;
+    if (dvui.dataGet(null, self.wd.id, "_te_show_context_menu", bool)) |val| self.te_show_context_menu = val;
+    if (dvui.dataGet(null, self.wd.id, "_te_focus_on_touchdown", bool)) |val| self.te_focus_on_touchdown = val;
+    if (dvui.dataGet(null, self.wd.id, "_sel_start_r", Rect)) |val| self.sel_start_r = val;
+    if (dvui.dataGet(null, self.wd.id, "_sel_end_r", Rect)) |val| self.sel_end_r = val;
+    if (dvui.dataGet(null, self.wd.id, "_click_num", u8)) |val| self.click_num = val;
 
     if (dvui.dataGet(null, self.wd.id, "_scroll_to_cursor", bool) orelse false) {
         dvui.dataRemove(null, self.wd.id, "_scroll_to_cursor");
@@ -228,49 +232,49 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, show_touch_draggables: bool = true }) void {
-    self.focus_at_start = opts.focused orelse (self.wd.id == dvui.focusedWidgetId());
+    self.focus_at_start = opts.focused orelse (self.data().id == dvui.focusedWidgetId());
 
-    self.wd.register();
+    self.data().register();
     dvui.parentSet(self.widget());
 
     if (self.selection_in) |sel| {
         self.selection = sel;
     } else {
-        if (dvui.dataGet(null, self.wd.id, "_selection", Selection)) |s| {
+        if (dvui.dataGet(null, self.data().id, "_selection", Selection)) |s| {
             self.selection_store = s;
         }
         self.selection = &self.selection_store;
     }
 
-    if (dvui.captured(self.wd.id)) {
-        if (dvui.dataGet(null, self.wd.id, "_sel_move_mouse_byte", usize)) |p| {
+    if (dvui.captured(self.data().id)) {
+        if (dvui.dataGet(null, self.data().id, "_sel_move_mouse_byte", usize)) |p| {
             self.sel_move = .{ .mouse = .{ .byte = p } };
         }
 
-        if (dvui.dataGet(null, self.wd.id, "_sel_move_expand_pt_which", @TypeOf(self.sel_move.expand_pt.which))) |w| {
-            if (dvui.dataGet(null, self.wd.id, "_sel_move_expand_pt_bytes", [2]usize)) |bytes| {
+        if (dvui.dataGet(null, self.data().id, "_sel_move_expand_pt_which", @TypeOf(self.sel_move.expand_pt.which))) |w| {
+            if (dvui.dataGet(null, self.data().id, "_sel_move_expand_pt_bytes", [2]usize)) |bytes| {
                 // set done to true, only matters if we are dragging which sets it back to false
                 self.sel_move = .{ .expand_pt = .{ .which = w, .bytes = bytes, .done = true } };
             }
         }
     }
 
-    if (dvui.dataGet(null, self.wd.id, "_sel_move_cursor_updown_pt", Point)) |p| {
+    if (dvui.dataGet(null, self.data().id, "_sel_move_cursor_updown_pt", Point)) |p| {
         self.sel_move = .{ .cursor_updown = .{ .pt = p } };
-        dvui.dataRemove(null, self.wd.id, "_sel_move_cursor_updown_pt");
-        if (dvui.dataGet(null, self.wd.id, "_sel_move_cursor_updown_select", bool)) |cud| {
+        dvui.dataRemove(null, self.data().id, "_sel_move_cursor_updown_pt");
+        if (dvui.dataGet(null, self.data().id, "_sel_move_cursor_updown_select", bool)) |cud| {
             self.sel_move.cursor_updown.select = cud;
-            dvui.dataRemove(null, self.wd.id, "_sel_move_cursor_updown_select");
+            dvui.dataRemove(null, self.data().id, "_sel_move_cursor_updown_select");
         }
     }
 
-    const rs = self.wd.contentRectScale();
+    const rs = self.data().contentRectScale();
 
-    self.wd.borderAndBackground(.{});
+    self.data().borderAndBackground(.{});
 
     self.prevClip = dvui.clip(rs.r);
 
-    if (opts.show_touch_draggables and self.touch_editing and self.te_show_draggables and self.focus_at_start and self.wd.visible()) {
+    if (opts.show_touch_draggables and self.touch_editing and self.te_show_draggables and self.focus_at_start and self.data().visible()) {
         const size = 36;
         {
 
@@ -299,12 +303,12 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
             fc.install();
 
-            var offset: Point.Physical = dvui.dataGet(null, fc.wd.id, "_offset", Point.Physical) orelse .{};
+            var offset: Point.Physical = dvui.dataGet(null, fc.data().id, "_offset", Point.Physical) orelse .{};
 
-            const fcrs = fc.wd.rectScale();
+            const fcrs = fc.data().rectScale();
             const evts = dvui.events();
             for (evts) |*e| {
-                if (!dvui.eventMatch(e, .{ .id = fc.wd.id, .r = fcrs.r }))
+                if (!dvui.eventMatch(e, .{ .id = fc.data().id, .r = fcrs.r }))
                     continue;
 
                 if (e.evt == .mouse) {
@@ -319,17 +323,17 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                     } else if (me.action == .release and me.button.touch()) {
                         dvui.captureMouse(null);
                         dvui.dragEnd();
-                    } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
+                    } else if (me.action == .motion and dvui.captured(fc.data().id)) {
                         const corner = me.p.plus(offset);
-                        self.sel_pts[0] = self.wd.contentRectScale().pointFromPhysical(corner);
+                        self.sel_pts[0] = self.data().contentRectScale().pointFromPhysical(corner);
                         self.sel_pts[1] = self.sel_end_r.topLeft().plus(.{ .y = self.sel_end_r.h / 2 });
 
                         self.sel_pts[0].?.y = @min(self.sel_pts[0].?.y, self.sel_pts[1].?.y);
 
                         dvui.scrollDrag(.{
                             .mouse_pt = e.evt.mouse.p,
-                            .screen_rect = self.wd.rectScale().r,
-                            .capture_id = self.wd.id,
+                            .screen_rect = self.data().rectScale().r,
+                            .capture_id = self.data().id,
                         });
                     }
                 }
@@ -343,10 +347,10 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
                 path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
-                path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.wd.options.color(.border), .closed = true });
+                path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.data().options.color(.border), .closed = true });
             }
 
-            dvui.dataSet(null, fc.wd.id, "_offset", offset);
+            dvui.dataSet(null, fc.data().id, "_offset", offset);
             fc.deinit();
         }
 
@@ -369,12 +373,12 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
             fc.install();
 
-            var offset: Point.Physical = dvui.dataGet(null, fc.wd.id, "_offset", Point.Physical) orelse .{};
+            var offset: Point.Physical = dvui.dataGet(null, fc.data().id, "_offset", Point.Physical) orelse .{};
 
-            const fcrs = fc.wd.rectScale();
+            const fcrs = fc.data().rectScale();
             const evts = dvui.events();
             for (evts) |*e| {
-                if (!dvui.eventMatch(e, .{ .id = fc.wd.id, .r = fcrs.r }))
+                if (!dvui.eventMatch(e, .{ .id = fc.data().id, .r = fcrs.r }))
                     continue;
 
                 if (e.evt == .mouse) {
@@ -389,17 +393,17 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                     } else if (me.action == .release and me.button.touch()) {
                         dvui.captureMouse(null);
                         dvui.dragEnd();
-                    } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
+                    } else if (me.action == .motion and dvui.captured(fc.data().id)) {
                         const corner = me.p.plus(offset);
                         self.sel_pts[0] = self.sel_start_r.topLeft().plus(.{ .y = self.sel_start_r.h / 2 });
-                        self.sel_pts[1] = self.wd.contentRectScale().pointFromPhysical(corner);
+                        self.sel_pts[1] = self.data().contentRectScale().pointFromPhysical(corner);
 
                         self.sel_pts[1].?.y = @max(self.sel_pts[0].?.y, self.sel_pts[1].?.y);
 
                         dvui.scrollDrag(.{
                             .mouse_pt = e.evt.mouse.p,
-                            .screen_rect = self.wd.rectScale().r,
-                            .capture_id = self.wd.id,
+                            .screen_rect = self.data().rectScale().r,
+                            .capture_id = self.data().id,
                         });
                     }
                 }
@@ -413,10 +417,10 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
                 path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
-                path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.wd.options.color(.border), .closed = true });
+                path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.data().options.color(.border), .closed = true });
             }
 
-            dvui.dataSet(null, fc.wd.id, "_offset", offset);
+            dvui.dataSet(null, fc.data().id, "_offset", offset);
             fc.deinit();
         }
     }
@@ -727,7 +731,7 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
                 clr.count -= 1;
 
                 self.scroll_to_cursor_next_frame = true;
-                dvui.refresh(null, @src(), self.wd.id);
+                dvui.refresh(null, @src(), self.data().id);
             }
         },
         .cursor_updown => {},
@@ -735,12 +739,7 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
             if (wlr.count < 0) {
                 // maintain our list of previous starts of words, looking backwards
                 var idx = txt.len -| 1;
-                var last_kind: enum { punc, word } = undefined;
-                if (std.mem.indexOfAnyPos(u8, txt, idx, word_breaks) != null) {
-                    last_kind = .punc;
-                } else {
-                    last_kind = .word;
-                }
+                var last_kind: enum { punc, word } = if (std.mem.indexOfAnyPos(u8, txt, idx, word_breaks) != null) .punc else .word;
 
                 var word_start_count: usize = 0;
 
@@ -823,7 +822,7 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
                 }
 
                 self.scroll_to_cursor_next_frame = true;
-                dvui.refresh(null, @src(), self.wd.id);
+                dvui.refresh(null, @src(), self.data().id);
             }
         },
     }
@@ -867,7 +866,7 @@ fn cursorSeen(self: *TextLayoutWidget) void {
                     self.selection.end = @max(self.selection.end, ep.bytes[1]);
                 }
 
-                dvui.refresh(null, @src(), self.wd.id);
+                dvui.refresh(null, @src(), self.data().id);
             }
         },
         .char_left_right => |*clr| {
@@ -908,7 +907,7 @@ fn cursorSeen(self: *TextLayoutWidget) void {
                 clr.count = 0;
 
                 self.scroll_to_cursor_next_frame = true;
-                dvui.refresh(null, @src(), self.wd.id);
+                dvui.refresh(null, @src(), self.data().id);
             }
         },
         .cursor_updown => |*cud| {
@@ -921,14 +920,14 @@ fn cursorSeen(self: *TextLayoutWidget) void {
 
                 // forward the pixel position we want the cursor to be in to
                 // the next frame
-                dvui.dataSet(null, self.wd.id, "_sel_move_cursor_updown_pt", updown_pt);
-                dvui.dataSet(null, self.wd.id, "_sel_move_cursor_updown_select", cud.select);
-                dvui.refresh(null, @src(), self.wd.id);
+                dvui.dataSet(null, self.data().id, "_sel_move_cursor_updown_pt", updown_pt);
+                dvui.dataSet(null, self.data().id, "_sel_move_cursor_updown_select", cud.select);
+                dvui.refresh(null, @src(), self.data().id);
 
                 // scroll up/down to where we want the cursor, don't need
                 // overscroll because we are staying within the current text
                 dvui.scrollTo(.{
-                    .screen_rect = self.screenRectScale(cr_new.outset(self.wd.options.paddingGet())).r,
+                    .screen_rect = self.screenRectScale(cr_new.outset(self.data().options.paddingGet())).r,
                 });
 
                 // even though we scrolled to where we thought the cursor would
@@ -944,14 +943,14 @@ fn cursorSeen(self: *TextLayoutWidget) void {
                 wlr.count = 0;
 
                 self.scroll_to_cursor_next_frame = true;
-                dvui.refresh(null, @src(), self.wd.id);
+                dvui.refresh(null, @src(), self.data().id);
             }
         },
     }
 
     if (self.scroll_to_cursor) {
         dvui.scrollTo(.{
-            .screen_rect = self.screenRectScale(cr.outset(self.wd.options.paddingGet())).r,
+            .screen_rect = self.screenRectScale(cr.outset(self.data().options.paddingGet())).r,
             // cursor might just have transitioned to a new line, so scroll area has not expanded yet
             .over_scroll = true,
         });
@@ -969,7 +968,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
 
     const cw = dvui.currentWindow();
 
-    const options = self.wd.options.override(opts);
+    const options = self.data().options.override(opts);
     const msize = options.fontGet().sizeM(1, 1);
     const line_height = options.fontGet().lineHeight();
     self.current_line_height = @max(self.current_line_height, line_height);
@@ -979,13 +978,13 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
     };
     defer if (text.ptr != txt.ptr) cw.lifo().free(txt);
 
-    var container_width = self.wd.contentRect().w;
+    var container_width = self.data().contentRect().w;
     if (container_width == 0) {
         // if we are not being shown at all, probably this is the first
         // frame for us and we should calculate our min height assuming we
         // get at least our min width
 
-        container_width = self.wd.options.min_size_contentGet().w;
+        container_width = self.data().options.min_size_contentGet().w;
         if (container_width == 0) {
             // wasn't given a min width, assume something
             container_width = 500;
@@ -1158,7 +1157,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 self.selection.end = @max(sel_bytes[0].?, sel_bytes[1].?);
 
                 // changing touch selection, need to refresh to move draggables
-                dvui.refresh(null, @src(), self.wd.id);
+                dvui.refresh(null, @src(), self.data().id);
             } else if (sel_bytes[0] != null or sel_bytes[1] != null) {
                 self.selection.end = sel_bytes[0] orelse sel_bytes[1].?;
             }
@@ -1191,7 +1190,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
         }
 
         { // Scope here is for deallocating rtxt before handling copying to clipboard on the arena
-            const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, self.wd.contentRect().h - self.insert_pt.y) });
+            const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, self.data().contentRect().h - self.insert_pt.y) });
             //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
             var rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
 
@@ -1225,9 +1224,9 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
         // might size based on that (might be in a scroll area)
         self.insert_pt.x += s.w;
         self.current_line_width += s.w;
-        const size = self.wd.options.padSize(.{ .w = self.current_line_width, .h = self.insert_pt.y + s.h });
-        self.wd.min_size.w = @max(self.wd.min_size.w, size.w + width_after);
-        self.wd.min_size.h = @max(self.wd.min_size.h, size.h);
+        const size = self.data().options.padSize(.{ .w = self.current_line_width, .h = self.insert_pt.y + s.h });
+        self.data().min_size.w = @max(self.data().min_size.w, size.w + width_after);
+        self.data().min_size.h = @max(self.data().min_size.h, size.h);
 
         if (self.copy_sel) |sel| {
             // we are copying to clipboard
@@ -1239,14 +1238,14 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 // initialize or realloc
                 if (self.copy_slice) |slice| {
                     const old_len = slice.len;
-                    self.copy_slice = cw.lifo().realloc(slice, slice.len + (cend - cstart)) catch slice;
+                    self.copy_slice = cw.arena().realloc(slice, slice.len + (cend - cstart)) catch slice;
                     if (self.copy_slice.?.len == old_len) {
                         dvui.log.debug("copy_slice realloc failed, copying will be incomplete", .{});
                     } else {
                         @memcpy(self.copy_slice.?[old_len..], txt[cstart..cend]);
                     }
                 } else {
-                    self.copy_slice = cw.lifo().dupe(u8, txt[cstart..cend]) catch |err| blk: {
+                    self.copy_slice = cw.arena().dupe(u8, txt[cstart..cend]) catch |err| blk: {
                         dvui.logError(@src(), err, "Could not allocate copy slice for text: {s}", .{txt[cstart..cend]});
                         break :blk null;
                     };
@@ -1256,7 +1255,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 if (sel.end <= self.bytes_seen + end) {
                     dvui.clipboardTextSet(self.copy_slice.?);
                     self.copy_sel = null;
-                    cw.lifo().free(self.copy_slice.?);
+                    cw.arena().free(self.copy_slice.?);
                     self.copy_slice = null;
                 }
             }
@@ -1279,9 +1278,9 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
             self.current_line_height = line_height;
 
             if (newline) {
-                const newline_size = self.wd.options.padSize(.{ .w = self.current_line_width, .h = self.insert_pt.y + s.h });
-                self.wd.min_size.w = @max(self.wd.min_size.w, newline_size.w);
-                self.wd.min_size.h = @max(self.wd.min_size.h, newline_size.h);
+                const newline_size = self.data().options.padSize(.{ .w = self.current_line_width, .h = self.insert_pt.y + s.h });
+                self.data().min_size.w = @max(self.data().min_size.w, newline_size.w);
+                self.data().min_size.h = @max(self.data().min_size.h, newline_size.h);
                 self.current_line_width = 0.0;
             } else if (txt.len > 0) {
                 self.lineBreak();
@@ -1298,7 +1297,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
             self.sel_end_r_new = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = s.h };
         }
 
-        if (self.wd.options.rect != null) {
+        if (self.data().options.rect != null) {
             // we were given a rect, so don't need to calculate our min height,
             // so stop as soon as we run off the end of the clipping region
             // this helps for performance
@@ -1327,7 +1326,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     self.selection.start = @min(self.selection.start, self.bytes_seen);
     self.selection.end = @min(self.selection.end, self.bytes_seen);
 
-    const options = self.wd.options.override(opts);
+    const options = self.data().options.override(opts);
     const text_height = options.fontGet().textHeight();
 
     if (!self.cursor_seen) {
@@ -1341,7 +1340,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
         self.copy_sel = null;
         if (self.copy_slice) |cs| {
-            dvui.currentWindow().lifo().free(cs);
+            dvui.currentWindow().arena().free(cs);
         }
         self.copy_slice = null;
     }
@@ -1381,7 +1380,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
     if (self.sel_start_r_new) |start_r| {
         if (!self.sel_start_r.equals(start_r)) {
-            dvui.refresh(null, @src(), self.wd.id);
+            dvui.refresh(null, @src(), self.data().id);
         }
         self.sel_start_r = start_r;
     }
@@ -1389,13 +1388,13 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     if (self.selection.start > self.bytes_seen or self.bytes_seen == 0) {
         self.sel_start_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = text_height };
         if (self.selection.start > self.bytes_seen) {
-            dvui.refresh(null, @src(), self.wd.id);
+            dvui.refresh(null, @src(), self.data().id);
         }
     }
 
     if (self.sel_end_r_new) |end_r| {
         if (!self.sel_end_r.equals(end_r)) {
-            dvui.refresh(null, @src(), self.wd.id);
+            dvui.refresh(null, @src(), self.data().id);
         }
         self.sel_end_r = end_r;
     }
@@ -1403,28 +1402,28 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     if (self.selection.end > self.bytes_seen or self.bytes_seen == 0) {
         self.sel_end_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = text_height };
         if (self.selection.end > self.bytes_seen) {
-            dvui.refresh(null, @src(), self.wd.id);
+            dvui.refresh(null, @src(), self.data().id);
         }
     }
 }
 
 pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
-    if (self.touch_editing and self.te_show_context_menu and self.focus_at_start and self.wd.visible()) {
+    if (self.touch_editing and self.te_show_context_menu and self.focus_at_start and self.data().visible()) {
         self.te_floating = dvui.FloatingWidget.init(@src(), .{});
 
         const r = dvui.windowRectScale().rectFromPhysical(dvui.clipGet());
         if (dvui.minSizeGet(self.te_floating.data().id)) |_| {
             const ms = dvui.minSize(self.te_floating.data().id, self.te_floating.data().options.min_sizeGet());
-            self.te_floating.wd.rect.w = ms.w;
-            self.te_floating.wd.rect.h = ms.h;
+            self.te_floating.data().rect.w = ms.w;
+            self.te_floating.data().rect.h = ms.h;
 
-            self.te_floating.wd.rect.x = r.x + r.w - self.te_floating.wd.rect.w;
-            self.te_floating.wd.rect.y = r.y - self.te_floating.wd.rect.h - self.wd.options.paddingGet().y;
+            self.te_floating.data().rect.x = r.x + r.w - self.te_floating.data().rect.w;
+            self.te_floating.data().rect.y = r.y - self.te_floating.data().rect.h - self.data().options.paddingGet().y;
 
-            self.te_floating.wd.rect = .cast(dvui.placeOnScreen(dvui.windowRect(), .{ .x = self.te_floating.wd.rect.x, .y = self.te_floating.wd.rect.y }, .vertical, .cast(self.te_floating.wd.rect)));
+            self.te_floating.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), .{ .x = self.te_floating.data().rect.x, .y = self.te_floating.data().rect.y }, .vertical, .cast(self.te_floating.data().rect)));
         } else {
             // need another frame to get our min size
-            dvui.refresh(null, @src(), self.te_floating.wd.id);
+            dvui.refresh(null, @src(), self.te_floating.data().id);
         }
 
         self.te_floating.install();
@@ -1470,7 +1469,7 @@ pub fn widget(self: *TextLayoutWidget) Widget {
 }
 
 pub fn data(self: *TextLayoutWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *TextLayoutWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -1479,24 +1478,18 @@ pub fn rectFor(self: *TextLayoutWidget, id: dvui.WidgetId, min_size: Size, e: Op
     // For corner widgets, they might want to be closer to the border than the
     // text, so fit them without padding, but then need to adjust origin
     // because screenRectScale assumes we placed in the contentRect
-    var ret = dvui.placeIn(self.wd.backgroundRect().justSize(), min_size, e, g);
-    ret.x -= self.wd.options.paddingGet().x;
-    ret.y -= self.wd.options.paddingGet().y;
+    var ret = dvui.placeIn(self.data().backgroundRect().justSize(), min_size, e, g);
+    ret.x -= self.data().options.paddingGet().x;
+    ret.y -= self.data().options.paddingGet().y;
 
-    var i: usize = undefined;
-    if (g.y < 0.5) {
-        if (g.x < 0.5) {
-            i = 0; // upleft
-        } else {
-            i = 1; // upright
-        }
-    } else {
-        if (g.x < 0.5) {
-            i = 2; // downleft
-        } else {
-            i = 3; // downright
-        }
-    }
+    const i: usize = if (g.y < 0.5) if (g.x < 0.5)
+        0 // upleft
+    else
+        1 // upright
+    else if (g.x < 0.5)
+        2 // downleft
+    else
+        3; // downright
 
     self.corners[i] = ret;
     self.corners_last_seen = @intCast(i);
@@ -1504,7 +1497,7 @@ pub fn rectFor(self: *TextLayoutWidget, id: dvui.WidgetId, min_size: Size, e: Op
 }
 
 pub fn screenRectScale(self: *TextLayoutWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *TextLayoutWidget, s: Size) void {
@@ -1531,7 +1524,7 @@ pub fn matchEvent(self: *TextLayoutWidget, e: *Event) bool {
     if (self.touch_editing and e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.touch()) {
         self.te_show_draggables = true;
         self.te_show_context_menu = true;
-        dvui.refresh(null, @src(), self.wd.id);
+        dvui.refresh(null, @src(), self.data().id);
     }
 
     return dvui.eventMatchSimple(e, self.data());
@@ -1553,7 +1546,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
             if (me.action == .focus) {
                 e.handle(@src(), self.data());
                 // focus so that we can receive keyboard input
-                dvui.focusWidget(self.wd.id, null, e.num);
+                dvui.focusWidget(self.data().id, null, e.num);
             } else if (me.action == .press and me.button.pointer()) {
                 e.handle(@src(), self.data());
                 // capture and start drag
@@ -1566,11 +1559,11 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                         self.te_show_context_menu = false;
 
                         // need to refresh draggables
-                        dvui.refresh(null, @src(), self.wd.id);
+                        dvui.refresh(null, @src(), self.data().id);
                     }
                 } else {
                     // a click always sets sel_move - has the highest priority
-                    const p = self.wd.contentRectScale().pointFromPhysical(me.p);
+                    const p = self.data().contentRectScale().pointFromPhysical(me.p);
                     self.sel_move = .{ .mouse = .{ .down_pt = p } };
                     self.scroll_to_cursor = true;
 
@@ -1585,10 +1578,10 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
             } else if (me.action == .release and me.button.pointer()) {
                 e.handle(@src(), self.data());
 
-                if (dvui.captured(self.wd.id)) {
+                if (dvui.captured(self.data().id)) {
                     if (!self.touch_editing and dvui.dragging(me.p) == null) {
                         // click without drag
-                        self.click_pt = self.wd.contentRectScale().pointFromPhysical(me.p);
+                        self.click_pt = self.data().contentRectScale().pointFromPhysical(me.p);
 
                         self.click_num += 1;
                         if (self.click_num == 4) {
@@ -1599,7 +1592,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                     if (me.button.touch()) {
                         // this was a touch-release without drag, which transitions
                         // us between touch editing
-                        const p = self.wd.contentRectScale().pointFromPhysical(me.p);
+                        const p = self.data().contentRectScale().pointFromPhysical(me.p);
 
                         if (self.te_focus_on_touchdown) {
                             self.touch_editing = !self.touch_editing;
@@ -1623,28 +1616,28 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                                 self.sel_move = .{ .expand_pt = .{ .which = .word, .pt = p } };
                             }
                         }
-                        dvui.refresh(null, @src(), self.wd.id);
+                        dvui.refresh(null, @src(), self.data().id);
                     }
 
                     dvui.captureMouse(null);
                     dvui.dragEnd();
                 }
-            } else if (me.action == .motion and dvui.captured(self.wd.id)) {
+            } else if (me.action == .motion and dvui.captured(self.data().id)) {
                 if (dvui.dragging(me.p)) |_| {
                     self.click_num = 0;
                     if (!me.button.touch()) {
                         e.handle(@src(), self.data());
                         if (self.sel_move == .mouse) {
-                            self.sel_move.mouse.drag_pt = self.wd.contentRectScale().pointFromPhysical(me.p);
+                            self.sel_move.mouse.drag_pt = self.data().contentRectScale().pointFromPhysical(me.p);
                         } else if (self.sel_move == .expand_pt) {
-                            self.sel_move.expand_pt.pt = self.wd.contentRectScale().pointFromPhysical(me.p);
+                            self.sel_move.expand_pt.pt = self.data().contentRectScale().pointFromPhysical(me.p);
                             self.sel_move.expand_pt.done = false;
                             self.sel_move.expand_pt.dragging = true;
                         }
                         dvui.scrollDrag(.{
                             .mouse_pt = me.p,
-                            .screen_rect = self.wd.rectScale().r,
-                            .capture_id = self.wd.id,
+                            .screen_rect = self.data().rectScale().r,
+                            .capture_id = self.data().id,
                         });
                     } else {
                         // user intended to scroll with a finger swipe
@@ -1655,7 +1648,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
             } else if (me.action == .motion) {
                 self.click_num = 0;
             } else if (me.action == .position) {
-                self.cursor_pt = self.wd.contentRectScale().pointFromPhysical(me.p);
+                self.cursor_pt = self.data().contentRectScale().pointFromPhysical(me.p);
             }
         },
         .key => |ke| blk: {
@@ -1793,33 +1786,33 @@ pub fn deinit(self: *TextLayoutWidget) void {
         }
     }
 
-    dvui.dataSet(null, self.wd.id, "_touch_editing", self.touch_editing);
-    dvui.dataSet(null, self.wd.id, "_te_first", self.te_first);
-    dvui.dataSet(null, self.wd.id, "_te_show_draggables", self.te_show_draggables);
-    dvui.dataSet(null, self.wd.id, "_te_show_context_menu", self.te_show_context_menu);
-    dvui.dataSet(null, self.wd.id, "_te_focus_on_touchdown", self.te_focus_on_touchdown);
-    dvui.dataSet(null, self.wd.id, "_sel_start_r", self.sel_start_r);
-    dvui.dataSet(null, self.wd.id, "_sel_end_r", self.sel_end_r);
-    dvui.dataSet(null, self.wd.id, "_selection", self.selection.*);
+    dvui.dataSet(null, self.data().id, "_touch_editing", self.touch_editing);
+    dvui.dataSet(null, self.data().id, "_te_first", self.te_first);
+    dvui.dataSet(null, self.data().id, "_te_show_draggables", self.te_show_draggables);
+    dvui.dataSet(null, self.data().id, "_te_show_context_menu", self.te_show_context_menu);
+    dvui.dataSet(null, self.data().id, "_te_focus_on_touchdown", self.te_focus_on_touchdown);
+    dvui.dataSet(null, self.data().id, "_sel_start_r", self.sel_start_r);
+    dvui.dataSet(null, self.data().id, "_sel_end_r", self.sel_end_r);
+    dvui.dataSet(null, self.data().id, "_selection", self.selection.*);
 
     if (self.scroll_to_cursor_next_frame) {
-        dvui.dataSet(null, self.wd.id, "_scroll_to_cursor", true);
+        dvui.dataSet(null, self.data().id, "_scroll_to_cursor", true);
     }
 
-    if (dvui.captured(self.wd.id)) {
+    if (dvui.captured(self.data().id)) {
         if (self.sel_move == .mouse) {
             // once we figure out where the mousedown was, we need to save it
             // as long as we are dragging
-            dvui.dataSet(null, self.wd.id, "_sel_move_mouse_byte", self.sel_move.mouse.byte.?);
+            dvui.dataSet(null, self.data().id, "_sel_move_mouse_byte", self.sel_move.mouse.byte.?);
         } else if (self.sel_move == .expand_pt and (self.sel_move.expand_pt.which == .word or self.sel_move.expand_pt.which == .line)) {
-            dvui.dataSet(null, self.wd.id, "_sel_move_expand_pt_which", self.sel_move.expand_pt.which);
-            dvui.dataSet(null, self.wd.id, "_sel_move_expand_pt_bytes", self.sel_move.expand_pt.bytes);
+            dvui.dataSet(null, self.data().id, "_sel_move_expand_pt_which", self.sel_move.expand_pt.which);
+            dvui.dataSet(null, self.data().id, "_sel_move_expand_pt_bytes", self.sel_move.expand_pt.bytes);
         }
     }
     if (self.click_num == 0) {
-        dvui.dataRemove(null, self.wd.id, "_click_num");
+        dvui.dataRemove(null, self.data().id, "_click_num");
     } else {
-        dvui.dataSet(null, self.wd.id, "_click_num", self.click_num);
+        dvui.dataSet(null, self.data().id, "_click_num", self.click_num);
     }
     dvui.clipSet(self.prevClip);
 
@@ -1827,12 +1820,12 @@ pub fn deinit(self: *TextLayoutWidget) void {
     const left_height = (self.corners_min_size[0] orelse Size{}).h + (self.corners_min_size[2] orelse Size{}).h;
     const right_height = (self.corners_min_size[1] orelse Size{}).h + (self.corners_min_size[3] orelse Size{}).h;
     // adjust for corner widgets not being inside textLayout's padding
-    const padded = self.wd.options.padSize(.{ .h = @max(left_height, right_height) }).padNeg(self.wd.options.paddingGet());
-    self.wd.min_size.h = @max(self.wd.min_size.h, padded.h);
+    const padded = self.data().options.padSize(.{ .h = @max(left_height, right_height) }).padNeg(self.data().options.paddingGet());
+    self.data().min_size.h = @max(self.data().min_size.h, padded.h);
 
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 

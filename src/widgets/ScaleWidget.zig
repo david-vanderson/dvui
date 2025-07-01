@@ -29,33 +29,36 @@ pub const InitOptions = struct {
     pinch_zoom: PinchZoom = .none,
 };
 
-wd: WidgetData = undefined,
-init_options: InitOptions = undefined,
+wd: WidgetData,
+init_options: InitOptions,
+/// SAFETY: Set in `install`
 scale: *f32 = undefined,
-touchPoints: *[2]?dvui.Point.Physical = undefined,
+touchPoints: *[2]?dvui.Point.Physical,
 old_dist: ?f32 = null,
+/// SAFETY: Will be set when `old_dist` is not null
 old_scale: f32 = undefined,
 layout: dvui.BasicLayout = .{},
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ScaleWidget {
-    var self = ScaleWidget{};
     const defaults = Options{ .name = "Scale" };
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-    self.init_options = init_opts;
-    self.touchPoints = dvui.dataGetPtrDefault(null, self.wd.id, "_touchPoints", [2]?dvui.Point.Physical, .{ null, null });
-    return self;
+    const wd = WidgetData.init(src, .{}, defaults.override(opts));
+    return .{
+        .wd = wd,
+        .init_options = init_opts,
+        .touchPoints = dvui.dataGetPtrDefault(null, wd.id, "_touchPoints", [2]?dvui.Point.Physical, .{ null, null }),
+    };
 }
 
 pub fn install(self: *ScaleWidget) void {
     if (self.init_options.scale) |init_s| {
         self.scale = init_s;
     } else {
-        self.scale = dvui.dataGetPtrDefault(null, self.wd.id, "_scale", f32, 1.0);
+        self.scale = dvui.dataGetPtrDefault(null, self.data().id, "_scale", f32, 1.0);
     }
 
     dvui.parentSet(self.widget());
-    self.wd.register();
-    self.wd.borderAndBackground(.{});
+    self.data().register();
+    self.data().borderAndBackground(.{});
 }
 
 pub fn matchEvent(self: *ScaleWidget, e: *Event) bool {
@@ -64,7 +67,7 @@ pub fn matchEvent(self: *ScaleWidget, e: *Event) bool {
         !e.handled and
         e.evt == .mouse and
         (self.init_options.pinch_zoom == .global or e.evt.mouse.floating_win == dvui.subwindowCurrentId()) and
-        self.wd.borderRectScale().r.contains(e.evt.mouse.p) and
+        self.data().borderRectScale().r.contains(e.evt.mouse.p) and
         dvui.clipGet().contains(e.evt.mouse.p) and
         (e.evt.mouse.button == .touch0 or e.evt.mouse.button == .touch1);
 }
@@ -96,7 +99,7 @@ pub fn processEvent(self: *ScaleWidget, e: *Event) void {
             },
             .release => {
                 self.touchPoints[idx] = null;
-                if (dvui.captured(self.wd.id)) {
+                if (dvui.captured(self.data().id)) {
                     e.handle(@src(), self.data());
                     dvui.captureMouse(null);
                 }
@@ -104,20 +107,18 @@ pub fn processEvent(self: *ScaleWidget, e: *Event) void {
             .motion => {
                 if (self.touchPoints[0] != null and self.touchPoints[1] != null) {
                     e.handle(@src(), self.data());
-                    var dx: f32 = undefined;
-                    var dy: f32 = undefined;
 
                     if (self.old_dist == null) {
-                        dx = self.touchPoints[0].?.x - self.touchPoints[1].?.x;
-                        dy = self.touchPoints[0].?.y - self.touchPoints[1].?.y;
+                        const dx = self.touchPoints[0].?.x - self.touchPoints[1].?.x;
+                        const dy = self.touchPoints[0].?.y - self.touchPoints[1].?.y;
                         self.old_dist = @sqrt(dx * dx + dy * dy);
                         self.old_scale = self.scale.*;
                     }
 
                     self.touchPoints[idx] = e.evt.mouse.p;
 
-                    dx = self.touchPoints[0].?.x - self.touchPoints[1].?.x;
-                    dy = self.touchPoints[0].?.y - self.touchPoints[1].?.y;
+                    const dx = self.touchPoints[0].?.x - self.touchPoints[1].?.x;
+                    const dy = self.touchPoints[0].?.y - self.touchPoints[1].?.y;
                     const new_dist: f32 = @sqrt(dx * dx + dy * dy);
 
                     self.scale.* = std.math.clamp(self.old_scale * new_dist / self.old_dist.?, 0.1, 10);
@@ -133,38 +134,36 @@ pub fn widget(self: *ScaleWidget) Widget {
 }
 
 pub fn data(self: *ScaleWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *ScaleWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    var s: f32 = undefined;
-    if (self.scale.* > 0) {
-        s = 1.0 / self.scale.*;
-    } else {
+    const s = if (self.scale.* > 0)
+        1.0 / self.scale.*
+    else
         // prevent divide by zero
-        s = 1_000_000.0;
-    }
+        1_000_000.0;
 
-    return self.layout.rectFor(self.wd.contentRect().justSize().scale(s, Rect), id, min_size, e, g);
+    return self.layout.rectFor(self.data().contentRect().justSize().scale(s, Rect), id, min_size, e, g);
 }
 
 pub fn screenRectScale(self: *ScaleWidget, rect: Rect) RectScale {
-    var rs = self.wd.contentRectScale();
+    var rs = self.data().contentRectScale();
     rs.s *= self.scale.*;
     return rs.rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *ScaleWidget, s: Size) void {
     const ms = self.layout.minSizeForChild(s.scale(self.scale.*, Size));
-    self.wd.minSizeMax(self.wd.options.padSize(ms));
+    self.data().minSizeMax(self.data().options.padSize(ms));
 }
 
 pub fn deinit(self: *ScaleWidget) void {
     defer dvui.widgetFree(self);
-    dvui.dataSet(null, self.wd.id, "_scale", self.scale.*);
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    dvui.dataSet(null, self.data().id, "_scale", self.scale.*);
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 

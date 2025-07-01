@@ -14,27 +14,28 @@ pub const InitOptions = struct {
     invalidate: bool = false,
 };
 
-wd: WidgetData = undefined,
-hash: u64 = undefined,
-refresh_prev_value: u8 = undefined,
+wd: WidgetData,
+hash: u64,
+refresh_prev_value: u8,
 state: enum { ok, texture_create_error, unsupported } = .ok,
 caching_tex: ?dvui.TextureTarget = null,
-tex_uv: Size = undefined,
+tex_uv: Size,
+/// SAFETY: Must be set when `caching_tex` is not null
 old_target: dvui.RenderTarget = undefined,
 old_clip: ?Rect.Physical = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) CacheWidget {
     _ = init_opts;
-    var self = CacheWidget{};
     const defaults = Options{ .name = "Cache" };
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-
-    self.hash = dvui.hashIdKey(self.wd.id, "_tex");
-    if (dvui.dataGet(null, self.wd.id, "_tex_uv", Size)) |uv| self.tex_uv = uv;
-    if (dvui.dataGet(null, self.wd.id, "_unsupported", bool) orelse false) self.state = .unsupported;
-    self.tex_uv = dvui.dataGet(null, self.wd.id, "_tex_uv", Size) orelse .{};
-    self.refresh_prev_value = dvui.currentWindow().extra_frames_needed;
+    const wd = WidgetData.init(src, .{}, defaults.override(opts));
+    var self = CacheWidget{
+        .wd = wd,
+        .hash = dvui.hashIdKey(wd.id, "_tex"),
+        .tex_uv = dvui.dataGet(null, wd.id, "_tex_uv", Size) orelse .{},
+        .refresh_prev_value = dvui.currentWindow().extra_frames_needed,
+    };
     dvui.currentWindow().extra_frames_needed = 0;
+    if (dvui.dataGet(null, self.wd.id, "_unsupported", bool) orelse false) self.state = .unsupported;
     return self;
 }
 
@@ -44,14 +45,14 @@ fn getCachedTexture(self: *CacheWidget) ?dvui.Texture {
 }
 
 fn drawCachedTexture(self: *CacheWidget, t: dvui.Texture) void {
-    const rs = self.wd.contentRectScale();
+    const rs = self.data().contentRectScale();
 
     dvui.renderTexture(t, rs, .{
         .uv = (Rect{}).toSize(self.tex_uv),
     }) catch |err| {
         dvui.logError(@src(), err, "Could not render texture", .{});
     };
-    //if (self.wd.options.debugGet()) {
+    //if (self.data().options.debugGet()) {
     //    dvui.log.debug("drawing {d} {d} {d}x{d} {d}x{d} {d} {d}", .{ rs.r.x, rs.r.y, rs.r.w, rs.r.h, t.texture.width, t.texture.height, self.tex_uv.w, self.tex_uv.h });
     //}
 }
@@ -73,20 +74,20 @@ pub fn invalidate(self: *CacheWidget) void {
 
 pub fn install(self: *CacheWidget) void {
     dvui.parentSet(self.widget());
-    self.wd.register();
-    self.wd.borderAndBackground(.{});
+    self.data().register();
+    self.data().borderAndBackground(.{});
 
     if (self.state != .ok) return;
 
     if (self.getCachedTexture()) |t| {
         // successful cache, draw texture and enforce min size
         self.drawCachedTexture(t);
-        self.wd.minSizeMax(self.wd.rect.size());
+        self.data().minSizeMax(self.data().rect.size());
     } else {
 
         // we need to cache, but only do it if we didn't have any refreshes from last frame
-        if (dvui.dataGet(null, self.wd.id, "_cache_now", bool) orelse false) {
-            const rs = self.wd.contentRectScale();
+        if (dvui.dataGet(null, self.data().id, "_cache_now", bool) orelse false) {
+            const rs = self.data().contentRectScale();
             const w: u32 = @intFromFloat(@ceil(rs.r.w));
             const h: u32 = @intFromFloat(@ceil(rs.r.h));
             self.tex_uv = .{ .w = rs.r.w / @ceil(rs.r.w), .h = rs.r.h / @ceil(rs.r.h) };
@@ -94,9 +95,9 @@ pub fn install(self: *CacheWidget) void {
             self.caching_tex = dvui.textureCreateTarget(w, h, .linear) catch |err| blk: switch (err) {
                 error.TextureCreate => {
                     self.state = .texture_create_error;
-                    if (dvui.dataGet(null, self.wd.id, "_texture_create_error", bool) orelse false) {
+                    if (dvui.dataGet(null, self.data().id, "_texture_create_error", bool) orelse false) {
                         // indicate that texture failed last frame to prevent backends that always return errors from forever refreshing
-                        dvui.dataSet(null, self.wd.id, "_texture_create_error", true);
+                        dvui.dataSet(null, self.data().id, "_texture_create_error", true);
                     }
                     break :blk null;
                 },
@@ -119,7 +120,7 @@ pub fn install(self: *CacheWidget) void {
                 dvui.clipSet(rs.r);
             } else if (self.state != .texture_create_error) {
                 // `textureCreateTarget` returned null, indicating render target are unsupported
-                dvui.dataSet(null, self.wd.id, "_unsupported", true);
+                dvui.dataSet(null, self.data().id, "_unsupported", true);
             }
         }
     }
@@ -135,20 +136,20 @@ pub fn widget(self: *CacheWidget) Widget {
 }
 
 pub fn data(self: *CacheWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *CacheWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
-    return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *CacheWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *CacheWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s));
+    self.data().minSizeMax(self.data().options.padSize(s));
 }
 
 /// This deinit function returns an error because of the additional
@@ -158,8 +159,8 @@ pub fn deinit(self: *CacheWidget) void {
     const cw = dvui.currentWindow();
     if (self.state == .ok and self.uncached()) {
         if (dvui.currentWindow().extra_frames_needed == 0) {
-            dvui.dataSet(null, self.wd.id, "_cache_now", true);
-            dvui.refresh(null, @src(), self.wd.id);
+            dvui.dataSet(null, self.data().id, "_cache_now", true);
+            dvui.refresh(null, @src(), self.data().id);
         }
     }
     cw.extra_frames_needed = @max(cw.extra_frames_needed, self.refresh_prev_value);
@@ -182,12 +183,12 @@ pub fn deinit(self: *CacheWidget) void {
         // draw texture so we see it this frame
         self.drawCachedTexture(texture);
 
-        dvui.dataSet(null, self.wd.id, "_tex_uv", self.tex_uv);
-        dvui.dataRemove(null, self.wd.id, "_cache_now");
+        dvui.dataSet(null, self.data().id, "_tex_uv", self.tex_uv);
+        dvui.dataRemove(null, self.data().id, "_cache_now");
     }
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 

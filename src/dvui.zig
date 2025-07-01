@@ -154,6 +154,8 @@ const dvui = @This();
 
 pub const WidgetId = enum(u64) {
     zero = 0,
+    // This may not work in future and is illegal behaviour / arch specfic to compare to undefined.
+    undef = 0xAAAAAAAAAAAAAAAA,
     _,
 
     pub fn asU64(self: WidgetId) u64 {
@@ -305,10 +307,10 @@ pub fn tagGet(name: []const u8) ?TagData {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub const Alignment = struct {
-    id: WidgetId = undefined,
-    scale: f32 = undefined,
-    max: ?f32 = undefined,
-    next: f32 = undefined,
+    id: WidgetId,
+    scale: f32,
+    max: ?f32,
+    next: f32,
 
     pub fn init() Alignment {
         const wd = dvui.parentGet().data();
@@ -497,7 +499,7 @@ pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?st
 
     // Test if we can successfully open this font
     _ = try fontCacheInit(ttf_bytes, .{ .name = name, .size = 14 });
-    try cw.font_bytes.put(name, FontBytesEntry{ .ttf_bytes = ttf_bytes, .allocator = ttf_bytes_allocator });
+    try cw.font_bytes.put(cw.gpa, name, FontBytesEntry{ .ttf_bytes = ttf_bytes, .allocator = ttf_bytes_allocator });
 }
 
 const GlyphInfo = struct {
@@ -1378,7 +1380,7 @@ pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void
                         cw.last_focused_id_this_frame = wid;
                     } else {
                         // walk parent chain
-                        var wd = cw.wd.parent.data();
+                        var wd = cw.data().parent.data();
 
                         while (true) : (wd = wd.parent.data()) {
                             if (wd.id == wid) {
@@ -1386,7 +1388,7 @@ pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void
                                 break;
                             }
 
-                            if (wd.id == cw.wd.id) {
+                            if (wd.id == cw.data().id) {
                                 // got to base Window
                                 break;
                             }
@@ -1621,7 +1623,7 @@ pub const Path = struct {
             const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = new_path, .opts = options } } };
 
             var sw = cw.subwindowCurrent();
-            sw.render_cmds.append(cmd) catch |err| {
+            sw.render_cmds.append(cw.arena(), cmd) catch |err| {
                 logError(@src(), err, "Could not append to render_cmds_after", .{});
             };
             return;
@@ -1688,7 +1690,6 @@ pub const Path = struct {
                     .y = bb.y - norm.y * inside_len,
                 },
                 .col = col,
-                .uv = undefined,
             });
 
             const idx_ai = if (opts.blur > 0) ai * 2 else ai;
@@ -1725,7 +1726,6 @@ pub const Path = struct {
                         .y = bb.y + norm.y * outside_len,
                     },
                     .col = .transparent,
-                    .uv = undefined,
                 });
 
                 // indexes for aa fade from inner to outer
@@ -1738,7 +1738,10 @@ pub const Path = struct {
         }
 
         if (opts.center) |center| {
-            builder.appendVertex(.{ .pos = center, .col = col, .uv = undefined });
+            builder.appendVertex(.{
+                .pos = center,
+                .col = col,
+            });
         }
 
         return builder.build();
@@ -1781,11 +1784,11 @@ pub const Path = struct {
 
             var sw = cw.subwindowCurrent();
             if (opts.after) {
-                sw.render_cmds_after.append(cmd) catch |err| {
+                sw.render_cmds_after.append(cw.arena(), cmd) catch |err| {
                     logError(@src(), err, "Could not append to render_cmds_after", .{});
                 };
             } else {
-                sw.render_cmds.append(cmd) catch |err| {
+                sw.render_cmds.append(cw.arena(), cmd) catch |err| {
                     logError(@src(), err, "Could not append to render_cmds_after", .{});
                 };
             }
@@ -1886,7 +1889,6 @@ pub const Path = struct {
                             .y = bb.y - halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
                         },
                         .col = .transparent,
-                        .uv = undefined,
                     });
 
                     builder.appendVertex(.{
@@ -1895,7 +1897,6 @@ pub const Path = struct {
                             .y = bb.y + halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
                         },
                         .col = .transparent,
-                        .uv = undefined,
                     });
 
                     // add indexes for endcap fringe
@@ -1944,7 +1945,6 @@ pub const Path = struct {
                     .y = bb.y - halfnorm.y * opts.thickness,
                 },
                 .col = col,
-                .uv = undefined,
             });
 
             // side 1 AA vertex
@@ -1954,7 +1954,6 @@ pub const Path = struct {
                     .y = bb.y - halfnorm.y * (opts.thickness + aa_size),
                 },
                 .col = .transparent,
-                .uv = undefined,
             });
 
             // side 2 inner vertex
@@ -1964,7 +1963,6 @@ pub const Path = struct {
                     .y = bb.y + halfnorm.y * opts.thickness,
                 },
                 .col = col,
-                .uv = undefined,
             });
 
             // side 2 AA vertex
@@ -1974,7 +1972,6 @@ pub const Path = struct {
                     .y = bb.y + halfnorm.y * (opts.thickness + aa_size),
                 },
                 .col = .transparent,
-                .uv = undefined,
             });
 
             // triangles must be counter-clockwise (y going down) to avoid backface culling
@@ -2000,7 +1997,6 @@ pub const Path = struct {
                         .y = bb.y - halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
                     },
                     .col = .transparent,
-                    .uv = undefined,
                 });
                 builder.appendVertex(.{
                     .pos = .{
@@ -2008,7 +2004,6 @@ pub const Path = struct {
                         .y = bb.y + halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
                     },
                     .col = .transparent,
-                    .uv = undefined,
                 });
 
                 builder.appendTriangles(&.{
@@ -2218,7 +2213,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .triangles = .{ .tri = tri_copy, .tex = tex } } };
 
         var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
+        try sw.render_cmds.append(cw.arena(), cmd);
         return;
     }
 
@@ -2241,8 +2236,6 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?WidgetId) void {
     const cw = currentWindow();
-    const arena = cw.arena();
-
     for (cw.subwindows.items) |*sw| {
         if (id == sw.id) {
             // this window was here previously, just update data, so it stays in the same place in the stack
@@ -2256,14 +2249,20 @@ pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal:
                 log.warn("subwindowAdd {x} is clearing some drawing commands (did you try to draw between subwindowCurrentSet and subwindowAdd?)\n", .{id});
             }
 
-            sw.render_cmds = std.ArrayList(RenderCommand).init(arena);
-            sw.render_cmds_after = std.ArrayList(RenderCommand).init(arena);
+            sw.render_cmds = .empty;
+            sw.render_cmds_after = .empty;
             return;
         }
     }
 
     // haven't seen this window before
-    const sw = Window.Subwindow{ .id = id, .rect = rect, .rect_pixels = rect_pixels, .modal = modal, .stay_above_parent_window = stay_above_parent_window, .render_cmds = std.ArrayList(RenderCommand).init(arena), .render_cmds_after = std.ArrayList(RenderCommand).init(arena) };
+    const sw = Window.Subwindow{
+        .id = id,
+        .rect = rect,
+        .rect_pixels = rect_pixels,
+        .modal = modal,
+        .stay_above_parent_window = stay_above_parent_window,
+    };
     if (stay_above_parent_window) |subwin_id| {
         // it wants to be above subwin_id
         var i: usize = 0;
@@ -2281,10 +2280,10 @@ pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal:
         }
 
         // i points just past all subwindows that want to be on top of this subwin_id
-        cw.subwindows.insert(i, sw) catch @panic("Could not add subwindow to list");
+        cw.subwindows.insert(cw.gpa, i, sw) catch @panic("Could not add subwindow to list");
     } else {
         // just put it on the top
-        cw.subwindows.append(sw) catch @panic("Could not add subwindow to list");
+        cw.subwindows.append(cw.gpa, sw) catch @panic("Could not add subwindow to list");
     }
 }
 
@@ -2457,7 +2456,7 @@ pub const CaptureMouse = struct {
 /// (which is what you would expect for e.g. background highlight)
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn captureMouse(wd: ?*WidgetData) void {
+pub fn captureMouse(wd: ?*const WidgetData) void {
     const cm = if (wd) |data| CaptureMouse{
         .id = data.id,
         .rect = data.borderRectScale().r,
@@ -2660,7 +2659,7 @@ pub fn FPS() f32 {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn parentGet() Widget {
-    return currentWindow().wd.parent;
+    return currentWindow().data().parent;
 }
 
 /// Make w the new parent widget.  See `parentGet`.
@@ -2668,7 +2667,7 @@ pub fn parentGet() Widget {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn parentSet(w: Widget) void {
     const cw = currentWindow();
-    cw.wd.parent = w;
+    cw.data().parent = w;
 }
 
 /// Make a previous parent widget the current parent.
@@ -2679,11 +2678,11 @@ pub fn parentSet(w: Widget) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn parentReset(id: WidgetId, w: Widget) void {
     const cw = currentWindow();
-    const actual_current = cw.wd.parent.data().id;
+    const actual_current = cw.data().parent.data().id;
     if (id != actual_current) {
         cw.debug_widget_id = actual_current;
 
-        var wd = cw.wd.parent.data();
+        var wd = cw.data().parent.data();
 
         log.err("widget is not closed within its parent. did you forget to call `.deinit()`?", .{});
 
@@ -2693,16 +2692,16 @@ pub fn parentReset(id: WidgetId, w: Widget) void {
                 wd.src.line,
                 wd.options.name orelse "???",
                 wd.id,
-                if (wd.id == cw.wd.id) "\n" else "",
+                if (wd.id == cw.data().id) "\n" else "",
             });
 
-            if (wd.id == cw.wd.id) {
+            if (wd.id == cw.data().id) {
                 // got to base Window
                 break;
             }
         }
     }
-    cw.wd.parent = w;
+    cw.data().parent = w;
 }
 
 /// Set if dvui should immediately render, and return the previous setting.
@@ -2724,8 +2723,8 @@ pub fn renderingSet(r: bool) bool {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn windowRect() Rect.Natural {
-    // Window.wd.rect is the definition of natural
-    return .cast(currentWindow().wd.rect);
+    // Window.data().rect is the definition of natural
+    return .cast(currentWindow().data().rect);
 }
 
 /// Get the OS window size in pixels.  See `windowRect`.
@@ -3247,6 +3246,97 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     return true;
 }
 
+pub const ClickOptions = struct {
+    /// Is set to true if the cursor is hovering the click rect
+    hovered: ?*bool = null,
+    /// If not null, this will be set when the cursor is within the click rect
+    hover_cursor: ?enums.Cursor = .hand,
+    /// The rect in which clicks are checked
+    ///
+    /// Defaults to the border rect of the `WidgetData`
+    rect: ?Rect.Physical = null,
+};
+
+/// Handles all events needed for clicking behaviour, used by `ButtonWidget`.
+pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
+    var is_clicked = false;
+    const click_rect = opts.rect orelse wd.borderRectScale().r;
+    for (dvui.events()) |*e| {
+        if (!dvui.eventMatch(e, .{ .id = wd.id, .r = click_rect }))
+            continue;
+
+        switch (e.evt) {
+            .mouse => |me| {
+                if (me.action == .focus) {
+                    e.handle(@src(), wd);
+
+                    // focus this widget for events after this one (starting with e.num)
+                    dvui.focusWidget(wd.id, null, e.num);
+                } else if (me.action == .press and me.button.pointer()) {
+                    e.handle(@src(), wd);
+                    dvui.captureMouse(wd);
+
+                    // for touch events, we want to cancel our click if a drag is started
+                    dvui.dragPreStart(me.p, .{});
+                } else if (me.action == .release and me.button.pointer()) {
+                    // mouse button was released, do we still have mouse capture?
+                    if (dvui.captured(wd.id)) {
+                        e.handle(@src(), wd);
+
+                        // cancel our capture
+                        dvui.captureMouse(null);
+                        dvui.dragEnd();
+
+                        // if the release was within our border, the click is successful
+                        if (click_rect.contains(me.p)) {
+                            is_clicked = true;
+
+                            // if the user interacts successfully with a
+                            // widget, it usually means part of the GUI is
+                            // changing, so the convention is to call refresh
+                            // so the user doesn't have to remember
+                            dvui.refresh(null, @src(), wd.id);
+                        }
+                    }
+                } else if (me.action == .motion and me.button.touch()) {
+                    if (dvui.captured(wd.id)) {
+                        if (dvui.dragging(me.p)) |_| {
+                            // touch: if we overcame the drag threshold, then
+                            // that means the person probably didn't want to
+                            // touch this button, they were trying to scroll
+                            dvui.captureMouse(null);
+                            dvui.dragEnd();
+                        }
+                    }
+                } else if (me.action == .position) {
+                    // TODO: Should this mark this event as handled? If the click_rect
+                    //       is above another widget with hover effects or click behaviour,
+                    //       we don't want that widget to highlight as if the next click
+                    //       would apply to it.
+
+                    // a single .position mouse event is at the end of each
+                    // frame, so this means the mouse ended above us
+                    if (opts.hover_cursor) |cursor| {
+                        dvui.cursorSet(cursor);
+                    }
+                    if (opts.hovered) |hovered| {
+                        hovered.* = true;
+                    }
+                }
+            },
+            .key => |ke| {
+                if (ke.action == .down and ke.matchBind("activate")) {
+                    e.handle(@src(), wd);
+                    is_clicked = true;
+                    dvui.refresh(null, @src(), wd.id);
+                }
+            },
+            else => {},
+        }
+    }
+    return is_clicked;
+}
+
 /// Animation state - see `animation` and `animationGet`.
 ///
 /// start_time and `end_time` are relative to the current frame time.  At the
@@ -3410,7 +3500,7 @@ pub fn tabIndexSet(widget_id: WidgetId, tab_index: ?u16) void {
 
     var cw = currentWindow();
     const ti = TabIndex{ .windowId = cw.subwindow_currentId, .widgetId = widget_id, .tabIndex = (tab_index orelse math.maxInt(u16)) };
-    cw.tab_index.append(ti) catch |err| {
+    cw.tab_index.append(cw.gpa, ti) catch |err| {
         logError(@src(), err, "Could not set tab index. This might break keyboard navigation as the widget may become unreachable via tab", .{});
     };
 }
@@ -3579,7 +3669,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
 
     const evts = events();
     for (evts) |*e| {
-        if (!eventMatch(e, .{ .id = over.wd.id, .r = over.wd.contentRectScale().r }))
+        if (!eventMatch(e, .{ .id = over.data().id, .r = over.data().contentRectScale().r }))
             continue;
 
         if (e.evt == .mouse and e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
@@ -4490,7 +4580,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     defer bc.deinit();
 
     var expanded: bool = init_opts.default_expanded;
-    if (dvui.dataGet(null, bc.wd.id, "_expand", bool)) |e| {
+    if (dvui.dataGet(null, bc.data().id, "_expand", bool)) |e| {
         expanded = e;
     }
 
@@ -4515,7 +4605,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     }
     labelNoFmt(@src(), label_str, .{}, options.strip());
 
-    dvui.dataSet(null, bc.wd.id, "_expand", expanded);
+    dvui.dataSet(null, bc.data().id, "_expand", expanded);
 
     return expanded;
 }
@@ -4906,7 +4996,7 @@ pub fn gridHeadingCheckbox(
     if (clicked) {
         selection.* = if (selected) .select_all else .select_none;
     }
-    return clicked;
+    return is_clicked;
 }
 
 /// A checkbox column that allows selection of boolean items.
@@ -5164,8 +5254,6 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
 /// A clickable label.  Good for hyperlinks.
 /// Returns true if it's been clicked.
 pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) bool {
-    var ret = false;
-
     var lw = LabelWidget.init(src, fmt, args, .{}, opts.override(.{ .name = "LabelClick" }));
     // now lw has a Rect from its parent but hasn't processed events or drawn
 
@@ -5176,72 +5264,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
     // draw border and background
     lw.install();
 
-    // loop over all events this frame in order of arrival
-    for (dvui.events()) |*e| {
-
-        // skip if lw would not normally process this event
-        if (!lw.matchEvent(e))
-            continue;
-
-        switch (e.evt) {
-            .mouse => |me| {
-                if (me.action == .focus) {
-                    e.handle(@src(), lw.data());
-
-                    // focus this widget for events after this one (starting with e.num)
-                    dvui.focusWidget(lwid, null, e.num);
-                } else if (me.action == .press and me.button.pointer()) {
-                    e.handle(@src(), lw.data());
-                    dvui.captureMouse(lw.data());
-
-                    // for touch events, we want to cancel our click if a drag is started
-                    dvui.dragPreStart(me.p, .{});
-                } else if (me.action == .release and me.button.pointer()) {
-                    // mouse button was released, do we still have mouse capture?
-                    if (dvui.captured(lwid)) {
-                        e.handle(@src(), lw.data());
-
-                        // cancel our capture
-                        dvui.captureMouse(null);
-                        dvui.dragEnd();
-
-                        // if the release was within our border, the click is successful
-                        if (lw.data().borderRectScale().r.contains(me.p)) {
-                            ret = true;
-
-                            // if the user interacts successfully with a
-                            // widget, it usually means part of the GUI is
-                            // changing, so the convention is to call refresh
-                            // so the user doesn't have to remember
-                            dvui.refresh(null, @src(), lwid);
-                        }
-                    }
-                } else if (me.action == .motion and me.button.touch()) {
-                    if (dvui.captured(lwid)) {
-                        if (dvui.dragging(me.p)) |_| {
-                            // touch: if we overcame the drag threshold, then
-                            // that means the person probably didn't want to
-                            // touch this button, they were trying to scroll
-                            dvui.captureMouse(null);
-                            dvui.dragEnd();
-                        }
-                    }
-                } else if (me.action == .position) {
-                    // a single .position mouse event is at the end of each
-                    // frame, so this means the mouse ended above us
-                    dvui.cursorSet(.hand);
-                }
-            },
-            .key => |ke| {
-                if (ke.action == .down and ke.matchBind("activate")) {
-                    e.handle(@src(), lw.data());
-                    ret = true;
-                    dvui.refresh(null, @src(), lwid);
-                }
-            },
-            else => {},
-        }
-    }
+    const ret = dvui.clicked(lw.data(), .{});
 
     // draw text
     lw.draw();
@@ -5711,19 +5734,17 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         .vertical => Rect{ .y = (br.h - knobsize) * (1 - perc), .w = knobsize, .h = knobsize },
     };
 
-    var fill_color: Color = undefined;
-    if (captured(b.data().id)) {
-        fill_color = options.color(.fill_press);
-    } else if (hovered) {
-        fill_color = options.color(.fill_hover);
-    } else {
-        fill_color = options.color(.fill);
-    }
+    const fill_color: Color = if (captured(b.data().id))
+        options.color(.fill_press)
+    else if (hovered)
+        options.color(.fill_hover)
+    else
+        options.color(.fill);
     var knob = BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = .{ .color = fill_color } });
     knob.install();
     knob.drawBackground();
     if (b.data().id == focusedWidgetId()) {
-        knob.wd.focusBorder();
+        knob.data().focusBorder();
     }
     knob.deinit();
 
@@ -5800,7 +5821,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         var te = TextEntryWidget.init(@src(), .{ .text = .{ .buffer = te_buf } }, options.strip().override(.{ .min_size_content = .{}, .expand = .both, .tab_index = 0 }));
         te.install();
 
-        if (firstFrame(te.wd.id)) {
+        if (firstFrame(te.data().id)) {
             var sel = te.textLayout.selection;
             sel.start = 0;
             sel.cursor = 0;
@@ -6020,10 +6041,10 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             }
         }
 
-        b.wd.borderAndBackground(.{ .fill_color = if (hover) b.wd.options.color(.fill_hover) else b.wd.options.color(.fill) });
+        b.data().borderAndBackground(.{ .fill_color = if (hover) b.data().options.color(.fill_hover) else b.data().options.color(.fill) });
 
         // only draw handle if we have a min and max
-        if (b.wd.visible() and init_opts.min != null and init_opts.max != null) {
+        if (b.data().visible() and init_opts.min != null and init_opts.max != null) {
             const how_far = (init_opts.value.* - init_opts.min.?) / (init_opts.max.? - init_opts.min.?);
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
@@ -6192,7 +6213,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 
     const rs = s.borderRectScale();
 
-    if (bw.wd.visible()) {
+    if (bw.data().visible()) {
         checkmark(target.*, bw.focused(), rs, bw.pressed(), bw.hovered(), options);
     }
 
@@ -6278,7 +6299,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 
     const rs = s.borderRectScale();
 
-    if (bw.wd.visible()) {
+    if (bw.data().visible()) {
         radioCircle(active, bw.focused(), rs, bw.pressed(), bw.hovered(), options);
     }
 
@@ -6588,7 +6609,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
         }
     }
 
-    if (init_opts.value != null and result.value == .Empty and focusedWidgetId() != te.wd.id) {
+    if (init_opts.value != null and result.value == .Empty and focusedWidgetId() != te.data().id) {
         // If the text entry is empty and we loose focus,
         // reset the hex value by invalidating the stored previous value
         dataRemove(null, id, "value");
@@ -6711,7 +6732,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
 
         var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
+        try sw.render_cmds.append(cw.arena(), cmd);
         return;
     }
 
@@ -6971,7 +6992,8 @@ pub fn textureFromTarget(target: TextureTarget) Backend.TextureError!Texture {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn textureDestroyLater(texture: Texture) void {
-    currentWindow().texture_trash.append(texture) catch |err| {
+    const cw = currentWindow();
+    cw.texture_trash.append(cw.arena(), texture) catch |err| {
         dvui.log.err("textureDestroyLater got {!}\n", .{err});
     };
 }
@@ -7023,7 +7045,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .opts = opts } } };
 
         var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
+        try sw.render_cmds.append(cw.arena(), cmd);
         return;
     }
 
@@ -7076,8 +7098,8 @@ pub fn renderImage(name: []const u8, bytes: ImageInitOptions.ImageBytes, rs: Rec
 /// Captures dvui drawing to part of the screen in a `Texture`.
 pub const Picture = struct {
     r: Rect.Physical, // pixels captured
-    texture: dvui.TextureTarget = undefined,
-    target: dvui.RenderTarget = undefined,
+    texture: dvui.TextureTarget,
+    target: dvui.RenderTarget,
 
     /// Begin recording drawing to the physical pixels in rect (enlarged to pixel boundaries).
     ///
@@ -7089,23 +7111,27 @@ pub const Picture = struct {
             log.err("Picture.start() was called with an empty rect", .{});
             return null;
         }
-        var ret: Picture = .{ .r = rect };
 
+        var r = rect;
         // enlarge texture to pixels boundaries
-        const x_start = @floor(ret.r.x);
-        const x_end = @ceil(ret.r.x + ret.r.w);
-        ret.r.x = x_start;
-        ret.r.w = @round(x_end - x_start);
+        const x_start = @floor(r.x);
+        const x_end = @ceil(r.x + r.w);
+        r.x = x_start;
+        r.w = @round(x_end - x_start);
 
-        const y_start = @floor(ret.r.y);
-        const y_end = @ceil(ret.r.y + ret.r.h);
-        ret.r.y = y_start;
-        ret.r.h = @round(y_end - y_start);
+        const y_start = @floor(r.y);
+        const y_end = @ceil(r.y + r.h);
+        r.y = y_start;
+        r.h = @round(y_end - y_start);
 
-        ret.texture = dvui.textureCreateTarget(@intFromFloat(ret.r.w), @intFromFloat(ret.r.h), .linear) catch return null;
-        ret.target = dvui.renderTarget(.{ .texture = ret.texture, .offset = ret.r.topLeft() });
+        const texture = dvui.textureCreateTarget(@intFromFloat(r.w), @intFromFloat(r.h), .linear) catch return null;
+        const target = dvui.renderTarget(.{ .texture = texture, .offset = r.topLeft() });
 
-        return ret;
+        return .{
+            .r = r,
+            .texture = texture,
+            .target = target,
+        };
     }
 
     /// Stop recording.
@@ -7302,9 +7328,9 @@ pub const BasicLayout = struct {
                     wd.src.line,
                     wd.options.name orelse "???",
                     wd.id,
-                    if (wd.id == cw.wd.id) "\n" else "",
+                    if (wd.id == cw.data().id) "\n" else "",
                 });
-                if (wd.id == cw.wd.id) {
+                if (wd.id == cw.data().id) {
                     break;
                 }
             }

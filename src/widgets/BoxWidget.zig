@@ -31,35 +31,35 @@ const Data = struct {
     min_space_taken: f32,
 };
 
-wd: WidgetData = undefined,
-init_opts: InitOptions = undefined,
+wd: WidgetData,
+init_opts: InitOptions,
 max_space: f32 = 0, // equal_space max min size of child in direction
 max_thick: f32 = 0, // max min size of child against direction
-data_prev: ?Data = undefined,
+data_prev: ?Data,
 min_space_taken: f32 = 0,
 packed_children: f32 = 0,
 total_weight: f32 = 0,
 child_rect: Rect = Rect{},
 child_positioned: bool = false,
-ratio_extra: f32 = undefined,
-ran_off: bool = undefined,
-pixels_per_w: f32 = undefined,
+ratio_extra: f32 = 0,
+ran_off: bool = false,
+pixels_per_w: f32 = 0,
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) BoxWidget {
-    var self = BoxWidget{ .init_opts = init_options };
     const defaults = Options{ .name = "Box" };
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-    self.data_prev = dvui.dataGet(null, self.wd.id, "_data", Data);
-    self.ran_off = false;
-    self.pixels_per_w = 0;
-    return self;
+    const wd = WidgetData.init(src, .{}, defaults.override(opts));
+    return .{
+        .wd = wd,
+        .init_opts = init_options,
+        .data_prev = dvui.dataGet(null, wd.id, "_data", Data),
+    };
 }
 
 pub fn install(self: *BoxWidget) void {
-    self.wd.register();
+    self.data().register();
 
     // our rect for children has to start at 0,0
-    self.child_rect = self.wd.contentRect().justSize();
+    self.child_rect = self.data().contentRect().justSize();
 
     if (self.data_prev) |dp| {
         if (self.init_opts.equal_space) {
@@ -88,7 +88,7 @@ pub fn install(self: *BoxWidget) void {
 }
 
 pub fn drawBackground(self: *BoxWidget) void {
-    self.wd.borderAndBackground(.{});
+    self.data().borderAndBackground(.{});
 }
 
 pub fn matchEvent(self: *BoxWidget, e: *Event) bool {
@@ -100,7 +100,7 @@ pub fn widget(self: *BoxWidget) Widget {
 }
 
 pub fn data(self: *BoxWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *BoxWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -113,7 +113,7 @@ pub fn rectFor(self: *BoxWidget, id: dvui.WidgetId, min_size: Size, e: Options.E
 
     if (self.child_positioned) {
         // don't pack this, we treat this like overlay - put it where they asked
-        return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+        return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
     }
 
     self.packed_children += 1;
@@ -148,9 +148,7 @@ pub fn rectFor(self: *BoxWidget, id: dvui.WidgetId, min_size: Size, e: Options.E
     // min size after ratio
     const child_min_size = ms;
 
-    var ret: Rect = undefined;
-
-    if (self.init_opts.equal_space) {
+    const ret: Rect = if (self.init_opts.equal_space) blk: {
         // position child inside the space we allocate for it
         switch (self.init_opts.dir) {
             .horizontal => {
@@ -158,18 +156,18 @@ pub fn rectFor(self: *BoxWidget, id: dvui.WidgetId, min_size: Size, e: Options.E
                 ms.h = available.h;
                 const avail = dvui.placeIn(available, ms, .none, g);
                 self.removeSpace(avail, g);
-                ret = dvui.placeIn(avail, child_min_size, e, g);
+                break :blk dvui.placeIn(avail, child_min_size, e, g);
             },
             .vertical => {
                 ms.h = self.pixels_per_w;
                 ms.w = available.w;
                 const avail = dvui.placeIn(available, ms, .none, g);
                 self.removeSpace(avail, g);
-                ret = dvui.placeIn(avail, child_min_size, e, g);
+                break :blk dvui.placeIn(avail, child_min_size, e, g);
             },
         }
-    } else {
-        // adjust min size for normal expand (since you only get prorated extra space)
+    } else blk: {
+        //  adjust min size for normal expand (since you only get prorated extra space)
         // - keep the expand in the non box direction
         var ee: Options.Expand = .none;
         switch (self.init_opts.dir) {
@@ -183,9 +181,10 @@ pub fn rectFor(self: *BoxWidget, id: dvui.WidgetId, min_size: Size, e: Options.E
             },
         }
 
-        ret = dvui.placeIn(available, ms, ee, g);
+        const ret = dvui.placeIn(available, ms, ee, g);
         self.removeSpace(ret, g);
-    }
+        break :blk ret;
+    };
 
     switch (self.init_opts.dir) {
         .horizontal => if (ret.w + 0.001 < child_min_size.w) {
@@ -218,12 +217,12 @@ fn removeSpace(self: *BoxWidget, r: Rect, g: Options.Gravity) void {
 }
 
 pub fn screenRectScale(self: *BoxWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *BoxWidget, s: Size) void {
     if (self.child_positioned) {
-        self.wd.minSizeMax(self.wd.options.padSize(s));
+        self.data().minSizeMax(self.data().options.padSize(s));
         return;
     }
 
@@ -240,25 +239,20 @@ pub fn minSizeForChild(self: *BoxWidget, s: Size) void {
 
 pub fn deinit(self: *BoxWidget) void {
     defer dvui.widgetFree(self);
-    var ms: Size = undefined;
-    var extra_space = false;
-    if (self.init_opts.dir == .horizontal) {
-        if (self.init_opts.equal_space) {
-            ms.w = self.max_space * self.packed_children;
-        } else {
-            ms.w = self.min_space_taken;
-        }
-        ms.h = self.max_thick;
-        extra_space = self.child_rect.w > 0.001;
-    } else {
-        if (self.init_opts.equal_space) {
-            ms.h = self.max_space * self.packed_children;
-        } else {
-            ms.h = self.min_space_taken;
-        }
-        ms.w = self.max_thick;
-        extra_space = self.child_rect.h > 0.001;
-    }
+    const extra_space = (if (self.init_opts.dir == .horizontal) self.child_rect.w else self.child_rect.h) > 0.001;
+    const ms: Size = if (self.init_opts.dir == .horizontal) .{
+        .w = if (self.init_opts.equal_space)
+            self.max_space * self.packed_children
+        else
+            self.min_space_taken,
+        .h = self.max_thick,
+    } else .{
+        .h = if (self.init_opts.equal_space)
+            self.max_space * self.packed_children
+        else
+            self.min_space_taken,
+        .w = self.max_thick,
+    };
 
     if ((self.init_opts.equal_space and self.packed_children > 0) or self.total_weight > 0) {
         if (extra_space) {
@@ -267,14 +261,14 @@ pub fn deinit(self: *BoxWidget) void {
             // - maybe one is no longer expanded
             // - maybe one's min size shrunk (label changing text)
             // equal_space could mean we don't exactly use all the space (due to floating point)
-            dvui.refresh(null, @src(), self.wd.id);
+            dvui.refresh(null, @src(), self.data().id);
         }
 
         if (!self.init_opts.equal_space and self.pixels_per_w > 0 and self.ran_off) {
             // we have expanded children, thought we had extra space, but ran
             // off the end:
             // - maybe one's min size got bigger (label changing text)
-            dvui.refresh(null, @src(), self.wd.id);
+            dvui.refresh(null, @src(), self.data().id);
         }
 
         // if total_weight is 0, we are tight around all children, so our min
@@ -282,14 +276,14 @@ pub fn deinit(self: *BoxWidget) void {
         // minSizeSetAndRefresh()
     }
 
-    self.wd.minSizeMax(self.wd.options.padSize(ms));
+    self.data().minSizeMax(self.data().options.padSize(ms));
 
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
 
-    dvui.dataSet(null, self.wd.id, "_data", Data{ .packed_children = self.packed_children, .total_weight = self.total_weight, .min_space_taken = self.min_space_taken });
+    dvui.dataSet(null, self.data().id, "_data", Data{ .packed_children = self.packed_children, .total_weight = self.total_weight, .min_space_taken = self.min_space_taken });
 
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 

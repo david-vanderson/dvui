@@ -26,24 +26,24 @@ pub const InitOptions = struct {
     draw_focus: bool = true,
 };
 
-wd: WidgetData = undefined,
-init_options: InitOptions = undefined,
+wd: WidgetData,
+init_options: InitOptions,
 hover: bool = false,
 focus: bool = false,
 click: bool = false,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ButtonWidget {
-    var self = ButtonWidget{};
-    self.init_options = init_opts;
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-    return self;
+pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) ButtonWidget {
+    return .{
+        .wd = .init(src, .{}, defaults.override(opts)),
+        .init_options = init_options,
+    };
 }
 
 pub fn install(self: *ButtonWidget) void {
-    self.wd.register();
+    self.data().register();
     dvui.parentSet(self.widget());
 
-    dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
+    dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
 }
 
 pub fn matchEvent(self: *ButtonWidget, e: *Event) bool {
@@ -51,34 +51,28 @@ pub fn matchEvent(self: *ButtonWidget, e: *Event) bool {
 }
 
 pub fn processEvents(self: *ButtonWidget) void {
-    const evts = dvui.events();
-    for (evts) |*e| {
-        if (!self.matchEvent(e))
-            continue;
-
-        self.processEvent(e);
-    }
+    self.click = dvui.clicked(self.data(), .{ .hovered = &self.hover });
 }
 
 pub fn drawBackground(self: *ButtonWidget) void {
     var fill_color: ?Color = null;
-    if (dvui.captured(self.wd.id)) {
-        fill_color = self.wd.options.color(.fill_press);
+    if (dvui.captured(self.data().id)) {
+        fill_color = self.data().options.color(.fill_press);
     } else if (self.hover) {
-        fill_color = self.wd.options.color(.fill_hover);
+        fill_color = self.data().options.color(.fill_hover);
     }
 
-    self.wd.borderAndBackground(.{ .fill_color = fill_color });
+    self.data().borderAndBackground(.{ .fill_color = fill_color });
 }
 
 pub fn drawFocus(self: *ButtonWidget) void {
     if (self.init_options.draw_focus and self.focused()) {
-        self.wd.focusBorder();
+        self.data().focusBorder();
     }
 }
 
 pub fn focused(self: *ButtonWidget) bool {
-    return self.wd.id == dvui.focusedWidgetId();
+    return self.data().id == dvui.focusedWidgetId();
 }
 
 pub fn hovered(self: *ButtonWidget) bool {
@@ -86,7 +80,7 @@ pub fn hovered(self: *ButtonWidget) bool {
 }
 
 pub fn pressed(self: *ButtonWidget) bool {
-    return dvui.captured(self.wd.id);
+    return dvui.captured(self.data().id);
 }
 
 pub fn clicked(self: *ButtonWidget) bool {
@@ -98,75 +92,27 @@ pub fn widget(self: *ButtonWidget) Widget {
 }
 
 pub fn data(self: *ButtonWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *ButtonWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
-    return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *ButtonWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *ButtonWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s));
-}
-
-pub fn processEvent(self: *ButtonWidget, e: *Event) void {
-    switch (e.evt) {
-        .mouse => |me| {
-            if (me.action == .focus) {
-                e.handle(@src(), self.data());
-                dvui.focusWidget(self.wd.id, null, e.num);
-            } else if (me.action == .press and me.button.pointer()) {
-                e.handle(@src(), self.data());
-                dvui.captureMouse(self.data());
-
-                // drag prestart is just for touch events
-                dvui.dragPreStart(me.p, .{});
-            } else if (me.action == .release and me.button.pointer()) {
-                if (dvui.captured(self.wd.id)) {
-                    e.handle(@src(), self.data());
-                    dvui.captureMouse(null);
-                    dvui.dragEnd();
-                    if (self.data().borderRectScale().r.contains(me.p)) {
-                        self.click = true;
-                        dvui.refresh(null, @src(), self.wd.id);
-                    }
-                }
-            } else if (me.action == .motion and me.button.touch()) {
-                if (dvui.captured(self.wd.id)) {
-                    if (dvui.dragging(me.p)) |_| {
-                        // if we overcame the drag threshold, then that
-                        // means the person probably didn't want to touch
-                        // this button, maybe they were trying to scroll
-                        dvui.captureMouse(null);
-                        dvui.dragEnd();
-                    }
-                }
-            } else if (me.action == .position) {
-                dvui.cursorSet(.arrow);
-                self.hover = true;
-            }
-        },
-        .key => |ke| {
-            if (ke.action == .down and ke.matchBind("activate")) {
-                e.handle(@src(), self.data());
-                self.click = true;
-                dvui.refresh(null, @src(), self.wd.id);
-            }
-        },
-        else => {},
-    }
+    self.data().minSizeMax(self.data().options.padSize(s));
 }
 
 pub fn deinit(self: *ButtonWidget) void {
     defer dvui.widgetFree(self);
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 
