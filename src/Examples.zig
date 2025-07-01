@@ -2372,8 +2372,10 @@ const ConstTreeEntry = struct {
 
 const MutableTreeEntry = struct {
     name: []const u8,
-    children: std.ArrayList(MutableTreeEntry) = undefined,
+    children: Children = .empty,
     kind: TreeEntryKind = .file,
+
+    const Children = std.ArrayListUnmanaged(MutableTreeEntry);
 };
 
 const tree_palette = &[_]dvui.Color{
@@ -2392,9 +2394,11 @@ const tree_palette = &[_]dvui.Color{
     .{ .r = 0x4b, .g = 0x5b, .b = 0xab, .a = 0xff },
 };
 
-fn exampleRemoveTreeEntry(directory: []const u8, entries: *std.ArrayList(MutableTreeEntry), old_directory: []const u8, uniqueId: dvui.WidgetId) void {
+fn exampleRemoveTreeEntry(directory: []const u8, entries: *MutableTreeEntry.Children, old_directory: []const u8, uniqueId: dvui.WidgetId) void {
     for (entries.items, 0..) |*e, i| {
-        const abs_path = std.fs.path.join(dvui.currentWindow().arena(), &.{ directory, e.name }) catch "";
+        const alloc = dvui.currentWindow().lifo();
+        const abs_path = std.fs.path.join(alloc, &.{ directory, e.name }) catch "";
+        defer alloc.free(abs_path);
 
         if (std.mem.eql(u8, old_directory, abs_path)) {
             dvui.dataSet(null, uniqueId, "removed_entry", entries.swapRemove(i));
@@ -2406,29 +2410,33 @@ fn exampleRemoveTreeEntry(directory: []const u8, entries: *std.ArrayList(Mutable
     }
 }
 
-fn examplePlaceTreeEntry(directory: []const u8, placement_entry: *MutableTreeEntry, entries: *std.ArrayList(MutableTreeEntry), new_directory: []const u8, uniqueId: dvui.WidgetId) void {
+fn examplePlaceTreeEntry(directory: []const u8, entries: *MutableTreeEntry.Children, new_directory: []const u8, uniqueId: dvui.WidgetId) void {
     if (std.mem.containsAtLeast(u8, new_directory, 1, directory)) {
         if (dvui.dataGetPtr(null, uniqueId, "removed_entry", MutableTreeEntry)) |removed_entry| {
+            const alloc = dvui.currentWindow().lifo();
             {
-                const new_path = std.fs.path.join(dvui.currentWindow().arena(), &.{ directory, std.fs.path.basename(new_directory) }) catch "";
+                const new_path = std.fs.path.join(alloc, &.{ directory, std.fs.path.basename(new_directory) }) catch "";
+                defer alloc.free(new_path);
 
                 if (std.mem.eql(u8, new_path, new_directory)) {
-                    entries.append(removed_entry.*) catch std.debug.panic("Failed to append entry", .{});
+                    entries.appendAssumeCapacity(removed_entry.*);
                     return;
                 }
             }
 
             for (entries.items) |*current_entry| {
-                const abs_path = std.fs.path.join(dvui.currentWindow().arena(), &.{ directory, current_entry.name }) catch "";
+                const abs_path = std.fs.path.join(alloc, &.{ directory, current_entry.name }) catch "";
+                defer alloc.free(abs_path);
 
                 if (current_entry.kind == .directory) {
-                    const new_path = std.fs.path.join(dvui.currentWindow().arena(), &.{ abs_path, std.fs.path.basename(new_directory) }) catch "";
+                    const new_path = std.fs.path.join(alloc, &.{ abs_path, std.fs.path.basename(new_directory) }) catch "";
+                    defer alloc.free(new_path);
 
                     if (std.mem.eql(u8, new_path, new_directory)) {
-                        current_entry.children.append(removed_entry.*) catch std.debug.panic("Failed to append entry", .{});
+                        current_entry.children.appendAssumeCapacity(removed_entry.*);
                         return;
                     }
-                    examplePlaceTreeEntry(abs_path, placement_entry, &current_entry.children, new_directory, uniqueId);
+                    examplePlaceTreeEntry(abs_path, &current_entry.children, new_directory, uniqueId);
                 }
             }
 
@@ -2437,82 +2445,83 @@ fn examplePlaceTreeEntry(directory: []const u8, placement_entry: *MutableTreeEnt
     }
 }
 
-fn exampleFileStructure() []const ConstTreeEntry {
-    return &[_]ConstTreeEntry{
-        .{
-            .name = "src",
-            .kind = .directory,
-            .children = &[_]ConstTreeEntry{
-                .{ .name = "main.zig", .kind = .file },
-                .{ .name = "utils.zig", .kind = .file },
-                .{ .name = "config.zig", .kind = .file },
-                .{
-                    .name = "components",
-                    .kind = .directory,
-                    .children = &[_]ConstTreeEntry{
-                        .{ .name = "button.zig", .kind = .file },
-                        .{ .name = "input.zig", .kind = .file },
-                        .{ .name = "modal.zig", .kind = .file },
-                    },
-                },
-                .{
-                    .name = "styles",
-                    .kind = .directory,
-                    .children = &[_]ConstTreeEntry{
-                        .{ .name = "theme.zig", .kind = .file },
-                        .{ .name = "colors.zig", .kind = .file },
-                    },
+// Should be able to fit all entries (including nested) in `example_file_structure`
+// This could be calculated at comptime but it's a lot of code to traverse the tree for little gain
+const example_file_structure_max_children = 36;
+const example_file_structure: []const ConstTreeEntry = &[_]ConstTreeEntry{
+    .{
+        .name = "src",
+        .kind = .directory,
+        .children = &[_]ConstTreeEntry{
+            .{ .name = "main.zig", .kind = .file },
+            .{ .name = "utils.zig", .kind = .file },
+            .{ .name = "config.zig", .kind = .file },
+            .{
+                .name = "components",
+                .kind = .directory,
+                .children = &[_]ConstTreeEntry{
+                    .{ .name = "button.zig", .kind = .file },
+                    .{ .name = "input.zig", .kind = .file },
+                    .{ .name = "modal.zig", .kind = .file },
                 },
             },
-        },
-        .{
-            .name = "assets",
-            .kind = .directory,
-            .children = &[_]ConstTreeEntry{
-                .{ .name = "images", .kind = .directory, .children = &[_]ConstTreeEntry{
-                    .{ .name = "logo.png", .kind = .file },
-                    .{ .name = "icon.svg", .kind = .file },
-                    .{ .name = "background.jpg", .kind = .file },
-                } },
-                .{ .name = "fonts", .kind = .directory, .children = &[_]ConstTreeEntry{
-                    .{ .name = "main.ttf", .kind = .file },
-                    .{ .name = "bold.ttf", .kind = .file },
-                } },
+            .{
+                .name = "styles",
+                .kind = .directory,
+                .children = &[_]ConstTreeEntry{
+                    .{ .name = "theme.zig", .kind = .file },
+                    .{ .name = "colors.zig", .kind = .file },
+                },
             },
         },
-        .{
-            .name = "docs",
-            .kind = .directory,
-            .children = &[_]ConstTreeEntry{
-                .{ .name = "README.md", .kind = .file },
-                .{ .name = "API.md", .kind = .file },
-                .{ .name = "CHANGELOG.md", .kind = .file },
-                .{ .name = "examples", .kind = .directory, .children = &[_]ConstTreeEntry{
-                    .{ .name = "basic.zig", .kind = .file },
-                    .{ .name = "advanced.zig", .kind = .file },
-                } },
-            },
+    },
+    .{
+        .name = "assets",
+        .kind = .directory,
+        .children = &[_]ConstTreeEntry{
+            .{ .name = "images", .kind = .directory, .children = &[_]ConstTreeEntry{
+                .{ .name = "logo.png", .kind = .file },
+                .{ .name = "icon.svg", .kind = .file },
+                .{ .name = "background.jpg", .kind = .file },
+            } },
+            .{ .name = "fonts", .kind = .directory, .children = &[_]ConstTreeEntry{
+                .{ .name = "main.ttf", .kind = .file },
+                .{ .name = "bold.ttf", .kind = .file },
+            } },
         },
-        .{ .name = "build.zig", .kind = .file },
-        .{ .name = "build.zig.zon", .kind = .file },
-        .{ .name = ".gitignore", .kind = .file },
-        .{ .name = "LICENSE", .kind = .file },
-        .{
-            .name = "tests",
-            .kind = .directory,
-            .children = &[_]ConstTreeEntry{
-                .{ .name = "unit.zig", .kind = .file },
-                .{ .name = "integration.zig", .kind = .file },
-                .{ .name = "fixtures", .kind = .directory, .children = &[_]ConstTreeEntry{
-                    .{ .name = "test_data.json", .kind = .file },
-                    .{ .name = "sample.txt", .kind = .file },
-                } },
-            },
+    },
+    .{
+        .name = "docs",
+        .kind = .directory,
+        .children = &[_]ConstTreeEntry{
+            .{ .name = "README.md", .kind = .file },
+            .{ .name = "API.md", .kind = .file },
+            .{ .name = "CHANGELOG.md", .kind = .file },
+            .{ .name = "examples", .kind = .directory, .children = &[_]ConstTreeEntry{
+                .{ .name = "basic.zig", .kind = .file },
+                .{ .name = "advanced.zig", .kind = .file },
+            } },
         },
-    };
-}
+    },
+    .{ .name = "build.zig", .kind = .file },
+    .{ .name = "build.zig.zon", .kind = .file },
+    .{ .name = ".gitignore", .kind = .file },
+    .{ .name = "LICENSE", .kind = .file },
+    .{
+        .name = "tests",
+        .kind = .directory,
+        .children = &[_]ConstTreeEntry{
+            .{ .name = "unit.zig", .kind = .file },
+            .{ .name = "integration.zig", .kind = .file },
+            .{ .name = "fixtures", .kind = .directory, .children = &[_]ConstTreeEntry{
+                .{ .name = "test_data.json", .kind = .file },
+                .{ .name = "sample.txt", .kind = .file },
+            } },
+        },
+    },
+};
 
-fn exampleFileTreeSearch(directory: []const u8, base_entries: *std.ArrayList(MutableTreeEntry), entries: *std.ArrayList(MutableTreeEntry), tree: *dvui.TreeWidget, uniqueId: dvui.WidgetId, color_id: *usize, branch_options: dvui.Options, expander_options: dvui.Options) !void {
+fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.Children, entries: *MutableTreeEntry.Children, tree: *dvui.TreeWidget, uniqueId: dvui.WidgetId, color_id: *usize, branch_options: dvui.Options, expander_options: dvui.Options) !void {
     var id_extra: usize = 0;
     for (entries.items) |*entry| {
         id_extra += 1;
@@ -2526,17 +2535,20 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *std.ArrayList(Mut
         const branch = tree.branch(@src(), .{ .expanded = false }, branch_opts_override.override(branch_options));
         defer branch.deinit();
 
-        const abs_path = try std.fs.path.join(dvui.currentWindow().arena(), &.{ directory, entry.name });
+        const alloc = dvui.currentWindow().lifo();
+        const abs_path = std.fs.path.join(alloc, &.{ directory, entry.name }) catch "";
+        defer alloc.free(abs_path);
 
         if (branch.insertBefore()) {
             if (dvui.dataGetSlice(null, uniqueId, "removed_path", []u8)) |removed_path| {
                 const old_sub_path = std.fs.path.basename(removed_path);
 
-                const new_path = try std.fs.path.join(dvui.currentWindow().arena(), &.{ if (entry.kind == .directory) abs_path else directory, old_sub_path });
+                const new_path = try std.fs.path.join(alloc, &.{ if (entry.kind == .directory) abs_path else directory, old_sub_path });
+                defer alloc.free(new_path);
 
                 if (!std.mem.eql(u8, removed_path, new_path)) {
                     exampleRemoveTreeEntry("~", base_entries, removed_path, uniqueId);
-                    examplePlaceTreeEntry("~", entry, base_entries, new_path, uniqueId);
+                    examplePlaceTreeEntry("~", base_entries, new_path, uniqueId);
                 }
 
                 dvui.dataRemove(null, uniqueId, "removed_path");
@@ -2607,19 +2619,38 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *std.ArrayList(Mut
     }
 }
 
-fn exampleFileTreeSetup(const_file_tree: []const ConstTreeEntry, mutable_file_tree: *std.ArrayList(MutableTreeEntry)) !void {
+/// Used to keep the data slices for the children alive
+///
+/// This is needed because we want to automatically deallocate when we are done
+fn keepExampleFileTreeDataAlive(const_file_tree: []const ConstTreeEntry) void {
     for (const_file_tree) |const_entry| {
+        const id: dvui.WidgetId = @enumFromInt(dvui.hashIdKey(@enumFromInt(@intFromPtr(const_file_tree.ptr)), const_entry.name));
+        const child_slice = dvui.dataGetSlice(null, id, "child_slice", []MutableTreeEntry) orelse @panic("File tree slice did not exist");
+        std.mem.doNotOptimizeAway(child_slice);
+        if (const_entry.children.len > 0) {
+            keepExampleFileTreeDataAlive(const_entry.children);
+        }
+    }
+}
+
+fn exampleFileTreeSetup(const_file_tree: []const ConstTreeEntry, mutable_file_tree: *MutableTreeEntry.Children) void {
+    for (const_file_tree) |const_entry| {
+        const id: dvui.WidgetId = @enumFromInt(dvui.hashIdKey(@enumFromInt(@intFromPtr(const_file_tree.ptr)), const_entry.name));
+        // Allocate a data slice with the max amount of children possible which will be kept alive later.
+        dvui.dataSetSliceCopies(null, id, "child_slice", &[1]MutableTreeEntry{undefined}, example_file_structure_max_children);
         var mutable_entry = MutableTreeEntry{
             .name = const_entry.name,
             .kind = const_entry.kind,
-            .children = std.ArrayList(MutableTreeEntry).init(dvui.currentWindow().gpa),
+            .children = MutableTreeEntry.Children.initBuffer(
+                dvui.dataGetSlice(null, id, "child_slice", []MutableTreeEntry) orelse @panic("Could not set slice for file tree"),
+            ),
         };
 
         if (const_entry.children.len > 0) {
-            exampleFileTreeSetup(const_entry.children, &mutable_entry.children) catch std.debug.panic("Failed to setup children", .{});
+            exampleFileTreeSetup(const_entry.children, &mutable_entry.children);
         }
 
-        mutable_file_tree.append(mutable_entry) catch std.debug.panic("Failed to append entry", .{});
+        mutable_file_tree.appendAssumeCapacity(mutable_entry);
     }
 }
 
@@ -2631,14 +2662,23 @@ pub fn exampleFileTree(src: std.builtin.SourceLocation, tree_options: dvui.Optio
 
     var color_index: usize = 0;
 
-    if (dvui.dataGetPtr(null, uniqueId, "mutable_data", std.ArrayList(MutableTreeEntry))) |mutable_file_tree| {
+    if (dvui.dataGetPtr(null, uniqueId, "mutable_data", MutableTreeEntry.Children)) |mutable_file_tree| {
+        // Keep the array list buffer alive
+        const data_slice = dvui.dataGetSlice(null, uniqueId, "mutable_slice", []MutableTreeEntry);
+        std.mem.doNotOptimizeAway(data_slice);
+
         if (mutable_file_tree.items.len == 0) {
-            exampleFileTreeSetup(exampleFileStructure(), mutable_file_tree) catch std.debug.panic("Failed to setup file tree", .{});
+            exampleFileTreeSetup(example_file_structure, mutable_file_tree);
+        } else {
+            keepExampleFileTreeDataAlive(example_file_structure);
         }
 
         exampleFileTreeSearch("~", mutable_file_tree, mutable_file_tree, tree, uniqueId, &color_index, branch_options, expander_options) catch std.debug.panic("Failed to recurse files", .{});
     } else {
-        dvui.dataSet(null, uniqueId, "mutable_data", std.ArrayList(MutableTreeEntry).init(dvui.currentWindow().gpa));
+        dvui.dataSetSliceCopies(null, uniqueId, "mutable_slice", &[1]MutableTreeEntry{undefined}, example_file_structure_max_children);
+        dvui.dataSet(null, uniqueId, "mutable_data", MutableTreeEntry.Children.initBuffer(
+            dvui.dataGetSlice(null, uniqueId, "mutable_slice", []MutableTreeEntry) orelse @panic("Could not set slice for file tree"),
+        ));
     }
 }
 
