@@ -1,16 +1,20 @@
 pub const DropdownWidget = @This();
 
-options: Options = undefined,
-init_options: InitOptions = undefined,
-menu: MenuWidget = undefined,
+options: Options,
+init_options: InitOptions,
+menu: MenuWidget,
+/// SAFETY: Will always be set by `install`
+/// TODO: This will panic if `install` is not called but `deinit` is.
+///       Is that a scenario we should handle?
 menuItem: MenuItemWidget = undefined,
 drop: ?FloatingMenuWidget = null,
 drop_first_frame: bool = false,
-drop_mi: ?MenuItemWidget = null,
+/// SAFETY: Will always be set by `addChoice` before use
+drop_mi: MenuItemWidget = undefined,
 drop_mi_id: ?dvui.WidgetId = null,
 drop_mi_index: usize = 0,
 drop_height: f32 = 0,
-drop_adjust: f32 = undefined,
+drop_adjust: f32 = 0,
 
 pub var defaults: Options = .{
     .color_fill = .{ .name = .fill_control },
@@ -27,11 +31,13 @@ pub const InitOptions = struct {
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) DropdownWidget {
-    var self = DropdownWidget{};
-    self.options = defaults.override(opts);
-    self.init_options = init_opts;
-    self.menu = MenuWidget.init(src, .{ .dir = .horizontal }, self.options.wrapOuter());
-    self.drop_adjust = dvui.dataGet(null, self.menu.wd.id, "_drop_adjust", f32) orelse 0;
+    const options = defaults.override(opts);
+    var self = DropdownWidget{
+        .options = options,
+        .init_options = init_opts,
+        .menu = MenuWidget.init(src, .{ .dir = .horizontal }, options.wrapOuter()),
+    };
+    if (dvui.dataGet(null, self.menu.wd.id, "_drop_adjust", f32)) |adjust| self.drop_adjust = adjust;
     return self;
 }
 
@@ -76,7 +82,7 @@ pub fn dropped(self: *DropdownWidget) bool {
     if (self.menuItem.activeRect()) |r| {
         self.drop = FloatingMenuWidget.init(@src(), .{ .from = r, .avoid = .none }, .{ .min_size_content = .cast(r.size()) });
         var drop = &self.drop.?;
-        self.drop_first_frame = dvui.firstFrame(drop.wd.id);
+        self.drop_first_frame = dvui.firstFrame(drop.data().id);
 
         const s = drop.scale_val;
 
@@ -96,8 +102,8 @@ pub fn dropped(self: *DropdownWidget) bool {
         drop.menu.submenus_activated = true;
 
         // only want a mouse-up to choose something if the mouse has moved in the dropup
-        var eat_mouse_up = dvui.dataGet(null, drop.wd.id, "_eat_mouse_up", bool) orelse true;
-        var drag_scroll = dvui.dataGet(null, drop.wd.id, "_drag_scroll", bool) orelse false;
+        var eat_mouse_up = dvui.dataGet(null, drop.data().id, "_eat_mouse_up", bool) orelse true;
+        var drag_scroll = dvui.dataGet(null, drop.data().id, "_drag_scroll", bool) orelse false;
 
         const drop_rs = drop.data().rectScale();
         const scroll_rs = drop.scroll.data().contentRectScale();
@@ -125,17 +131,17 @@ pub fn dropped(self: *DropdownWidget) bool {
                     if (eat_mouse_up) {
                         e.handle(@src(), drop.data());
                         eat_mouse_up = false;
-                        dvui.dataSet(null, drop.wd.id, "_eat_mouse_up", eat_mouse_up);
+                        dvui.dataSet(null, drop.data().id, "_eat_mouse_up", eat_mouse_up);
                     }
                 } else if (e.evt.mouse.action == .motion or (e.evt.mouse.action == .press and e.evt.mouse.button.pointer())) {
                     if (eat_mouse_up) {
                         eat_mouse_up = false;
-                        dvui.dataSet(null, drop.wd.id, "_eat_mouse_up", eat_mouse_up);
+                        dvui.dataSet(null, drop.data().id, "_eat_mouse_up", eat_mouse_up);
                     }
 
                     if (!drag_scroll) {
                         drag_scroll = true;
-                        dvui.dataSet(null, drop.wd.id, "_drag_scroll", drag_scroll);
+                        dvui.dataSet(null, drop.data().id, "_drag_scroll", drag_scroll);
                     }
                 }
             }
@@ -177,22 +183,22 @@ pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
     }
 
     self.drop_mi = MenuItemWidget.init(@src(), .{}, .{ .id_extra = self.drop_mi_index, .expand = .horizontal });
-    self.drop_mi_id = self.drop_mi.?.data().id;
-    self.drop_mi.?.install();
-    self.drop_mi.?.processEvents();
-    self.drop_mi.?.drawBackground(.{});
+    self.drop_mi_id = self.drop_mi.data().id;
+    self.drop_mi.install();
+    self.drop_mi.processEvents();
+    self.drop_mi.drawBackground(.{});
 
     if (self.drop_first_frame) {
         if (self.init_options.selected_index) |si| {
             if (si == self.drop_mi_index) {
-                dvui.focusWidget(self.drop_mi.?.wd.id, null, null);
+                dvui.focusWidget(self.drop_mi.data().id, null, null);
                 dvui.dataSet(null, self.menu.wd.id, "_drop_adjust", self.drop_height);
             }
         }
     }
     self.drop_mi_index += 1;
 
-    return &self.drop_mi.?;
+    return &self.drop_mi;
 }
 
 pub fn deinit(self: *DropdownWidget) void {

@@ -46,8 +46,7 @@ pub const InitOptions = struct {
         },
     };
 
-    /// If null, same as .internal = .{}
-    text: ?TextOption = null,
+    text: TextOption = .{ .internal = .{} },
     /// Faded text shown when the textEntry is empty
     placeholder: ?[]const u8 = null,
 
@@ -62,31 +61,32 @@ pub const InitOptions = struct {
     multiline: bool = false,
 };
 
-wd: WidgetData = undefined,
+wd: WidgetData,
+/// SAFETY: Set in `install`
 prevClip: Rect.Physical = undefined,
+/// SAFETY: Set in `install`
 scroll: ScrollAreaWidget = undefined,
-scroll_init_opts: ScrollAreaWidget.InitOpts = undefined,
+scroll_init_opts: ScrollAreaWidget.InitOpts,
+/// SAFETY: Set in `install`
 scrollClip: Rect.Physical = undefined,
+/// SAFETY: Set in `install`
 textLayout: TextLayoutWidget = undefined,
+/// SAFETY: Set in `install`
 textClip: Rect.Physical = undefined,
-padding: Rect = undefined,
+padding: Rect,
 
-init_opts: InitOptions = undefined,
-text_opt: InitOptions.TextOption = undefined,
-text: []u8 = undefined,
-len: usize = undefined,
+init_opts: InitOptions,
+text: []u8,
+len: usize,
 text_changed: bool = false,
 enter_pressed: bool = false, // not valid if multiline
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextEntryWidget {
-    var self = TextEntryWidget{};
-    self.init_opts = init_opts;
-    self.text_opt = init_opts.text orelse .{ .internal = .{} };
-    self.scroll_init_opts = .{
-        .vertical = if (self.init_opts.scroll_vertical orelse self.init_opts.multiline) .auto else .none,
-        .vertical_bar = self.init_opts.scroll_vertical_bar orelse .auto,
-        .horizontal = if (self.init_opts.scroll_horizontal orelse true) .auto else .none,
-        .horizontal_bar = self.init_opts.scroll_horizontal_bar orelse (if (self.init_opts.multiline) .auto else .hide),
+    var scroll_init_opts = ScrollAreaWidget.InitOpts{
+        .vertical = if (init_opts.scroll_vertical orelse init_opts.multiline) .auto else .none,
+        .vertical_bar = init_opts.scroll_vertical_bar orelse .auto,
+        .horizontal = if (init_opts.scroll_horizontal orelse true) .auto else .none,
+        .horizontal_bar = init_opts.scroll_horizontal_bar orelse (if (init_opts.multiline) .auto else .hide),
     };
 
     var options = defaults.min_sizeM(14, 1).override(opts);
@@ -95,60 +95,67 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         // max size not given, so default to the same as min size for direction
         // we can scroll in
         const ms = options.min_size_contentGet();
-        const maxw = if (self.scroll_init_opts.horizontal == .auto) ms.w else dvui.max_float_safe;
-        const maxh = if (self.scroll_init_opts.vertical == .auto) ms.h else dvui.max_float_safe;
+        const maxw = if (scroll_init_opts.horizontal == .auto) ms.w else dvui.max_float_safe;
+        const maxh = if (scroll_init_opts.vertical == .auto) ms.h else dvui.max_float_safe;
         options = options.override(.{ .max_size_content = .{ .w = maxw, .h = maxh } });
     }
 
     // padding is interpreted as the padding for the TextLayoutWidget, but
     // we also need to add it to content size because TextLayoutWidget is
     // inside the scroll area
-    self.padding = options.paddingGet();
+    const padding = options.paddingGet();
     options.padding = null;
-    options.min_size_content.?.w += self.padding.x + self.padding.w;
-    options.min_size_content.?.h += self.padding.y + self.padding.h;
-    options.max_size_content.?.w += self.padding.x + self.padding.w;
-    options.max_size_content.?.h += self.padding.y + self.padding.h;
+    options.min_size_content.?.w += padding.x + padding.w;
+    options.min_size_content.?.h += padding.y + padding.h;
+    options.max_size_content.?.w += padding.x + padding.w;
+    options.max_size_content.?.h += padding.y + padding.h;
 
-    self.wd = WidgetData.init(src, .{}, options);
-    self.scroll_init_opts.focus_id = self.wd.id;
+    const wd = WidgetData.init(src, .{}, options);
+    scroll_init_opts.focus_id = wd.id;
 
-    switch (self.text_opt) {
-        .buffer => |b| self.text = b,
-        .buffer_dynamic => |b| self.text = b.backing.*,
-        .internal => self.text = dvui.dataGetSliceDefault(null, self.wd.id, "_buffer", []u8, &.{}),
-    }
+    const text = switch (init_opts.text) {
+        .buffer => |b| b,
+        .buffer_dynamic => |b| b.backing.*,
+        .internal => dvui.dataGetSliceDefault(null, wd.id, "_buffer", []u8, &.{}),
+    };
+    const len_byte = std.mem.indexOfScalar(u8, text, 0) orelse text.len;
+    const len_utf8_boundary = dvui.findUtf8Start(text[0..len_byte], len_byte);
 
-    self.len = std.mem.indexOfScalar(u8, self.text, 0) orelse self.text.len;
-    self.len = dvui.findUtf8Start(self.text[0..self.len], self.len);
-    return self;
+    return .{
+        .wd = wd,
+        .scroll_init_opts = scroll_init_opts,
+        .padding = padding,
+        .init_opts = init_opts,
+        .text = text,
+        .len = len_utf8_boundary,
+    };
 }
 
 pub fn install(self: *TextEntryWidget) void {
-    self.wd.register();
+    self.data().register();
 
-    dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
+    dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
 
     dvui.parentSet(self.widget());
 
-    self.wd.borderAndBackground(.{});
+    self.data().borderAndBackground(.{});
 
-    self.prevClip = dvui.clip(self.wd.borderRectScale().r);
+    self.prevClip = dvui.clip(self.data().borderRectScale().r);
     const borderClip = dvui.clipGet();
 
-    self.scroll = ScrollAreaWidget.init(@src(), self.scroll_init_opts, self.wd.options.strip().override(.{ .expand = .both }));
+    self.scroll = ScrollAreaWidget.init(@src(), self.scroll_init_opts, self.data().options.strip().override(.{ .expand = .both }));
     // scrollbars process mouse events here
     self.scroll.install();
 
     self.scrollClip = dvui.clipGet();
 
-    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .touch_edit_just_focused = false }, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding }));
-    self.textLayout.install(.{ .focused = self.wd.id == dvui.focusedWidgetId(), .show_touch_draggables = (self.len > 0) });
+    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .touch_edit_just_focused = false }, self.data().options.strip().override(.{ .expand = .both, .padding = self.padding }));
+    self.textLayout.install(.{ .focused = self.data().id == dvui.focusedWidgetId(), .show_touch_draggables = (self.len > 0) });
     self.textClip = dvui.clipGet();
 
     if (self.len == 0) {
         if (self.init_opts.placeholder) |placeholder| {
-            self.textLayout.addText(placeholder, .{ .color_text = .fromColor(self.textLayout.wd.options.color(.text).opacity(0.75)) });
+            self.textLayout.addText(placeholder, .{ .color_text = .fromColor(self.textLayout.data().options.color(.text).opacity(0.75)) });
         }
     }
 
@@ -224,10 +231,10 @@ pub fn processEvents(self: *TextEntryWidget) void {
 }
 
 pub fn draw(self: *TextEntryWidget) void {
-    const focused = (self.wd.id == dvui.focusedWidgetId());
+    const focused = (self.data().id == dvui.focusedWidgetId());
 
     if (focused) {
-        dvui.wantTextInput(self.wd.borderRectScale().r.toNatural());
+        dvui.wantTextInput(self.data().borderRectScale().r.toNatural());
     }
 
     // set clip back to what textLayout had, so we don't draw over the scrollbars
@@ -264,16 +271,16 @@ pub fn draw(self: *TextEntryWidget) void {
                     pstr[i * pc.len + pci] = pc[pci];
                 }
             }
-            self.textLayout.addText(pstr, self.wd.options.strip());
+            self.textLayout.addText(pstr, self.data().options.strip());
         } else {
             dvui.log.warn("Could not allocate password_str, falling back to one single password_str", .{});
-            self.textLayout.addText(pc, self.wd.options.strip());
+            self.textLayout.addText(pc, self.data().options.strip());
         }
     } else {
-        self.textLayout.addText(self.text[0..self.len], self.wd.options.strip());
+        self.textLayout.addText(self.text[0..self.len], self.data().options.strip());
     }
 
-    self.textLayout.addTextDone(self.wd.options.strip());
+    self.textLayout.addTextDone(self.data().options.strip());
 
     if (self.init_opts.password_char) |pc| {
         // reset selection
@@ -308,7 +315,7 @@ pub fn draw(self: *TextEntryWidget) void {
     dvui.clipSet(self.prevClip);
 
     if (focused) {
-        self.wd.focusBorder();
+        self.data().focusBorder();
     }
 }
 
@@ -320,7 +327,7 @@ pub fn drawCursor(self: *TextEntryWidget) void {
 
         var crect = self.textLayout.cursor_rect.plus(.{ .x = -1 });
         crect.w = 2;
-        self.textLayout.screenRectScale(crect).r.fill(.{}, .{ .color = self.wd.options.color(.accent) });
+        self.textLayout.screenRectScale(crect).r.fill(.{}, .{ .color = self.data().options.color(.accent) });
     }
 }
 
@@ -329,20 +336,20 @@ pub fn widget(self: *TextEntryWidget) Widget {
 }
 
 pub fn data(self: *TextEntryWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *TextEntryWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
-    return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *TextEntryWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *TextEntryWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s));
+    self.data().minSizeMax(self.data().options.padSize(s));
 }
 
 pub fn textSet(self: *TextEntryWidget, text: []const u8, selected: bool) void {
@@ -373,12 +380,12 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
     const space_left = self.text.len - self.len;
     if (space_left < new.len) {
         var new_size = realloc_bin_size * (@divTrunc(self.len + new.len, realloc_bin_size) + 1);
-        switch (self.text_opt) {
+        switch (self.init_opts.text) {
             .buffer => {},
             .buffer_dynamic => |b| {
                 new_size = @min(new_size, b.limit);
                 b.backing.* = b.allocator.realloc(self.text, new_size) catch blk: {
-                    dvui.log.debug("{x} TextEntryWidget.textTyped failed to realloc backing\n", .{self.wd.id});
+                    dvui.log.debug("{x} TextEntryWidget.textTyped failed to realloc backing\n", .{self.data().id});
                     break :blk b.backing.*;
                 };
                 self.text = b.backing.*;
@@ -387,8 +394,8 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
                 new_size = @min(new_size, i.limit);
                 // NOTE: Using prev_text is safe because data is trashed and stays valid until the end of the frame
                 const prev_text = self.text;
-                dvui.dataSetSliceCopies(null, self.wd.id, "_buffer", &[_]u8{0}, new_size);
-                self.text = dvui.dataGetSlice(null, self.wd.id, "_buffer", []u8).?;
+                dvui.dataSetSliceCopies(null, self.data().id, "_buffer", &[_]u8{0}, new_size);
+                self.text = dvui.dataGetSlice(null, self.data().id, "_buffer", []u8).?;
                 const min_len = @min(prev_text.len, self.text.len);
                 @memcpy(self.text[0..min_len], prev_text[0..min_len]);
             },
@@ -440,7 +447,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
 
     // we might have dropped to a new line, so make sure the cursor is visible
     self.textLayout.scroll_to_cursor_next_frame = true;
-    dvui.refresh(null, @src(), self.wd.id);
+    dvui.refresh(null, @src(), self.data().id);
 }
 
 /// Remove all characters that not present in filter_chars.
@@ -771,7 +778,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             self.textTyped("\n", false);
                         } else {
                             self.enter_pressed = true;
-                            dvui.refresh(null, @src(), self.wd.id);
+                            dvui.refresh(null, @src(), self.data().id);
                         }
                     }
                 },
@@ -799,7 +806,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
         .mouse => |me| {
             if (me.action == .focus) {
                 e.handle(@src(), self.data());
-                dvui.focusWidget(self.wd.id, null, e.num);
+                dvui.focusWidget(self.data().id, null, e.num);
             }
         },
     }
@@ -854,21 +861,21 @@ pub fn deinit(self: *TextEntryWidget) void {
     if (self.len == 0 or self.len + realloc_bin_size + @divTrunc(realloc_bin_size, 2) <= self.text.len) {
         // we want to shrink the allocation
         const new_len = if (self.len == 0) 0 else realloc_bin_size * (@divTrunc(self.len, realloc_bin_size) + 1);
-        switch (self.text_opt) {
+        switch (self.init_opts.text) {
             .buffer => {},
             .buffer_dynamic => |b| {
                 if (b.allocator.resize(self.text, new_len)) {
                     b.backing.*.len = new_len;
                     self.text.len = new_len;
                 } else {
-                    dvui.log.debug("{x} TextEntryWidget.deinit failed to resize backing\n", .{self.wd.id});
+                    dvui.log.debug("{x} TextEntryWidget.deinit failed to resize backing\n", .{self.data().id});
                 }
             },
             .internal => {
                 // NOTE: Using prev_text is safe because data is trashed and stays valid until the end of the frame
                 const prev_text = self.text;
-                dvui.dataSetSliceCopies(null, self.wd.id, "_buffer", &[_]u8{0}, new_len);
-                self.text = dvui.dataGetSlice(null, self.wd.id, "_buffer", []u8).?;
+                dvui.dataSetSliceCopies(null, self.data().id, "_buffer", &[_]u8{0}, new_len);
+                self.text = dvui.dataGetSlice(null, self.data().id, "_buffer", []u8).?;
                 const min_len = @min(prev_text.len, self.text.len);
                 @memcpy(self.text[0..min_len], prev_text[0..min_len]);
             },
@@ -879,9 +886,9 @@ pub fn deinit(self: *TextEntryWidget) void {
     self.scroll.deinit();
 
     dvui.clipSet(self.prevClip);
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 
