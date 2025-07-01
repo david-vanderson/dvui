@@ -92,6 +92,7 @@ pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
 pub const testing = @import("testing.zig");
 pub const select = @import("select.zig");
+pub const navigation = @import("navigation.zig");
 pub const ShrinkingArenaAllocator = @import("shrinking_arena_allocator.zig");
 pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHashMap;
 
@@ -4983,7 +4984,7 @@ pub fn gridHeadingCheckbox(
     var cell = g.headerCell(src, col_num, opts.cellOptions(col_num, 0));
     defer cell.deinit();
 
-    var clicked = false;
+    var is_clicked = false;
     var selected = selection.* == .select_all;
     {
         _ = dvui.separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
@@ -4991,9 +4992,9 @@ pub fn gridHeadingCheckbox(
         var hbox = dvui.box(@src(), .horizontal, header_options);
         defer hbox.deinit();
 
-        clicked = dvui.checkbox(@src(), &selected, null, .{}, checkbox_opts);
+        is_clicked = dvui.checkbox(@src(), &selected, null, .{}, checkbox_opts);
     }
-    if (clicked) {
+    if (is_clicked) {
         selection.* = if (selected) .select_all else .select_none;
     }
     return is_clicked;
