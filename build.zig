@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const back_to_build: ?enums_backend.Backend = b.option(enums_backend.Backend, "backend", "Backend to build");
+    var back_to_build = b.option(enums_backend.Backend, "backend", "Backend to build");
 
     const test_step = b.step("test", "Test the dvui codebase");
     const check_step = b.step("check", "Check that the entire dvui codebase has no syntax errors");
@@ -24,6 +24,9 @@ pub fn build(b: *std.Build) !void {
     const test_filters = b.option([]const []const u8, "test-filter", "Skip tests that do not match any filter") orelse &[0][]const u8{};
 
     const generate_doc_images = b.option(bool, "generate-images", "Add this to 'docs' to generate images") orelse false;
+    if (generate_doc_images) {
+        back_to_build = .sdl2;
+    }
 
     const build_options = b.addOptions();
     build_options.addOption(
@@ -50,13 +53,6 @@ pub fn build(b: *std.Build) !void {
         b.option(bool, "log-error-trace", "If error logs should include the error return trace (automatically enabled with log stack traces)"),
     );
 
-    var sdl3_options = b.addOptions();
-    sdl3_options.addOption(
-        ?bool,
-        "callbacks",
-        b.option(bool, "sdl3-callbacks", "Use callbacks for live resizing on windows/mac"),
-    );
-
     const dvui_opts = DvuiModuleOptions{
         .b = b,
         .target = target,
@@ -68,314 +64,17 @@ pub fn build(b: *std.Build) !void {
         .build_options = build_options,
     };
 
-    if (back_to_build == .custom) {
-        // For export to users who are bringing their own backend.  Use in your build.zig:
-        // const dvui_mod = dvui_dep.module("dvui");
-        // @import("dvui").linkBackend(dvui_mod, your_backend_module);
-        _ = addDvuiModule("dvui", dvui_opts);
-        // does not need to be tested as only dependent would hit this path and test themselves
-    }
-
-    // Deprecated modules
-    if (back_to_build == null or back_to_build == .sdl) {
-        // The sdl backend name is deprecated. This is here to provide a useful error during transition
-        const files = b.addWriteFiles();
-        const source_path = files.add("sdl-deprecated.zig",
-            \\comptime { @compileError("The module 'dvui_sdl' is deprecated. Use either 'dvui_sdl2' or 'dvui_sdl3'"); }
-        );
-        _ = b.addModule("sdl", .{ .root_source_file = source_path });
-        _ = b.addModule("dvui_sdl", .{ .root_source_file = source_path });
-
-        if (back_to_build == .sdl) {
-            const deprecation_message = b.addFail("Backend 'sdl' is deprecated. Use either 'sdl2' or 'sdl3'");
-            b.getInstallStep().dependOn(&deprecation_message.step);
-        }
-    }
-
-    // Testing
-    if (back_to_build == null or back_to_build == .testing) {
-        const test_dvui_and_app = back_to_build == .testing;
-
-        const testing_mod = b.addModule("testing", .{
-            .root_source_file = b.path("src/backends/testing.zig"),
-            .target = target,
-            .optimize = optimize,
-        });
-        dvui_opts.addChecks(testing_mod, "testing-backend");
-        dvui_opts.addTests(testing_mod, "testing-backend");
-
-        const dvui_testing = addDvuiModule("dvui_testing", dvui_opts);
-        dvui_opts.addChecks(dvui_testing, "dvui_testing");
-        if (test_dvui_and_app) {
-            dvui_opts.addTests(dvui_testing, "dvui_testing");
-        }
-
-        linkBackend(dvui_testing, testing_mod);
-        addExample("testing-app", b.path("examples/app.zig"), dvui_testing, test_dvui_and_app, dvui_opts);
-    }
-
-    // SDL2
-    if (back_to_build == null or back_to_build == .sdl2) {
-        const test_dvui_and_app = back_to_build == .sdl2;
-
-        const sdl_mod = b.addModule("sdl2", .{
-            .root_source_file = b.path("src/backends/sdl.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-        });
-        dvui_opts.addChecks(sdl_mod, "sdl2-backend");
-        dvui_opts.addTests(sdl_mod, "sdl2-backend");
-
-        var sdl2_options = b.addOptions();
-
-        if (b.systemIntegrationOption("sdl2", .{})) {
-            // SDL2 from system
-            sdl2_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
-            sdl_mod.linkSystemLibrary("SDL2", .{});
-        } else {
-            // SDL2 compiled from source
-            sdl2_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
-            if (target.result.os.tag == .linux) {
-                const sdl_dep = b.lazyDependency("sdl", .{
-                    .target = target,
-                    .optimize = optimize,
-                    // trying to compile opengles (version 1) fails on
-                    // newer linux distros like arch, because they don't
-                    // have /usr/include/gles/gl.h
-                    // https://github.com/david-vanderson/dvui/issues/131
-                    .render_driver_ogl_es = false,
-                });
-                if (sdl_dep) |sd| {
-                    sdl_mod.linkLibrary(sd.artifact("SDL2"));
-                }
-            } else {
-                const sdl_dep = b.lazyDependency("sdl", .{ .target = target, .optimize = optimize });
-                if (sdl_dep) |sd| {
-                    sdl_mod.linkLibrary(sd.artifact("SDL2"));
-                }
+    if (back_to_build) |backend| {
+        buildBackend(backend, true, dvui_opts);
+    } else {
+        for (std.meta.tags(enums_backend.Backend)) |backend| {
+            switch (backend) {
+                .custom, .sdl => continue,
+                else => {},
             }
-        }
-        sdl_mod.addOptions("sdl_options", sdl2_options);
-
-        const dvui_sdl = addDvuiModule("dvui_sdl2", dvui_opts);
-        dvui_opts.addChecks(dvui_sdl, "dvui_sdl2");
-        if (test_dvui_and_app) {
-            dvui_opts.addTests(dvui_sdl, "dvui_sdl2");
-        }
-
-        linkBackend(dvui_sdl, sdl_mod);
-        addExample("sdl2-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, true, dvui_opts);
-        addExample("sdl2-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, true, dvui_opts);
-        addExample("sdl2-app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
-    }
-
-    // SDL3
-    if (back_to_build == null or back_to_build == .sdl3) {
-        // if we are building all the backends, here's where we do dvui tests
-        const test_dvui_and_app = true;
-
-        const sdl_mod = b.addModule("sdl3", .{
-            .root_source_file = b.path("src/backends/sdl.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-        });
-        dvui_opts.addChecks(sdl_mod, "sdl3-backend");
-        dvui_opts.addTests(sdl_mod, "sdl3-backend");
-
-        if (b.systemIntegrationOption("sdl3", .{})) {
-            // SDL3 from system
-            sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
-            sdl_mod.linkSystemLibrary("SDL3", .{});
-        } else {
-            // SDL3 compiled from source
-            sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
-            if (b.lazyDependency("sdl3", .{
-                .target = target,
-                .optimize = optimize,
-            })) |sdl3| {
-                sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
-            }
-        }
-        sdl_mod.addOptions("sdl_options", sdl3_options);
-
-        const dvui_sdl = addDvuiModule("dvui_sdl3", dvui_opts);
-        dvui_opts.addChecks(dvui_sdl, "dvui_sdl3");
-        if (test_dvui_and_app) {
-            dvui_opts.addTests(dvui_sdl, "dvui_sdl3");
-        }
-
-        linkBackend(dvui_sdl, sdl_mod);
-        addExample("sdl3-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, true, dvui_opts);
-        addExample("sdl3-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, true, dvui_opts);
-        addExample("sdl3-app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
-    }
-
-    // Raylib
-    if (back_to_build == null or back_to_build == .raylib) {
-        const test_dvui_and_app = back_to_build == .raylib;
-
-        const linux_display_backend: LinuxDisplayBackend = b.option(LinuxDisplayBackend, "linux_display_backend", "If using raylib, which linux display?") orelse blk: {
-            _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
-                error.EnvironmentVariableNotFound => break :blk .X11,
-                else => @panic("Unknown error checking for WAYLAND_DISPLAY environment variable"),
-            };
-
-            _ = std.process.getEnvVarOwned(b.allocator, "DISPLAY") catch |err| switch (err) {
-                error.EnvironmentVariableNotFound => break :blk .Wayland,
-                else => @panic("Unknown error checking for DISPLAY environment variable"),
-            };
-
-            break :blk .Both;
-        };
-
-        const raylib_mod = b.addModule("raylib", .{
-            .root_source_file = b.path("src/backends/raylib.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-        });
-        dvui_opts.addChecks(raylib_mod, "raylib-backend");
-        dvui_opts.addTests(raylib_mod, "raylib-backend");
-
-        const maybe_ray = b.lazyDependency(
-            "raylib",
-            .{
-                .target = target,
-                .optimize = optimize,
-                .linux_display_backend = linux_display_backend,
-            },
-        );
-        if (maybe_ray) |ray| {
-            raylib_mod.linkLibrary(ray.artifact("raylib"));
-
-            // This is to support variable framerate
-            raylib_mod.addIncludePath(ray.path("src/external/glfw/include/GLFW"));
-
-            // This seems wonky to me, but is copied from raylib's src/build.zig
-            if (b.lazyDependency("raygui", .{})) |raygui_dep| {
-                if (b.lazyImport(@This(), "raylib")) |_| {
-                    // we want to write this:
-                    //raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
-                    // but that causes a second invocation of the raylib dependency but without our linux_display_backend
-                    // so it defaults to .Both which causes an error if there is no wayland-scanner
-
-                    const raylib = ray.artifact("raylib");
-                    var gen_step = b.addWriteFiles();
-                    raylib.step.dependOn(&gen_step.step);
-
-                    const raygui_c_path = gen_step.add("raygui.c", "#define RAYGUI_IMPLEMENTATION\n#include \"raygui.h\"\n");
-                    raylib.addCSourceFile(.{ .file = raygui_c_path });
-                    raylib.addIncludePath(raygui_dep.path("src"));
-                    raylib.addIncludePath(ray.path("src"));
-
-                    raylib.installHeader(raygui_dep.path("src/raygui.h"), "raygui.h");
-                }
-            }
-        }
-
-        var dvui_opts_raylib = dvui_opts;
-        dvui_opts_raylib.add_stb_image = false;
-        const dvui_raylib = addDvuiModule("dvui_raylib", dvui_opts_raylib);
-        dvui_opts.addChecks(dvui_raylib, "dvui_raylib");
-        if (test_dvui_and_app) {
-            dvui_opts.addTests(dvui_raylib, "dvui_raylib");
-        }
-
-        linkBackend(dvui_raylib, raylib_mod);
-        addExample("raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib, true, dvui_opts_raylib);
-        addExample("raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib, true, dvui_opts_raylib);
-        addExample("raylib-app", b.path("examples/app.zig"), dvui_raylib, test_dvui_and_app, dvui_opts_raylib);
-    }
-
-    // Dx11
-    if (back_to_build == null or back_to_build == .dx11) {
-        const test_dvui_and_app = back_to_build == .dx11;
-
-        if (target.result.os.tag == .windows) {
-            const dx11_mod = b.addModule("dx11", .{
-                .root_source_file = b.path("src/backends/dx11.zig"),
-                .target = target,
-                .optimize = optimize,
-                .link_libc = true,
-            });
-            dvui_opts.addChecks(dx11_mod, "dx11-backend");
-            dvui_opts.addTests(dx11_mod, "dx11-backend");
-
-            if (b.lazyDependency("win32", .{})) |zigwin32| {
-                dx11_mod.addImport("win32", zigwin32.module("win32"));
-            }
-
-            const dvui_dx11 = addDvuiModule("dvui_dx11", dvui_opts);
-            dvui_opts.addChecks(dvui_dx11, "dvui_dx11");
-            if (test_dvui_and_app) {
-                dvui_opts.addTests(dvui_dx11, "dvui_dx11");
-            }
-
-            linkBackend(dvui_dx11, dx11_mod);
-            addExample("dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11, true, dvui_opts);
-            addExample("dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11, true, dvui_opts);
-            addExample("dx11-app", b.path("examples/app.zig"), dvui_dx11, test_dvui_and_app, dvui_opts);
-        }
-    }
-
-    // Web
-    if (back_to_build == null or back_to_build == .web) {
-        const test_dvui_and_app = back_to_build == .web;
-
-        const export_symbol_names = &[_][]const u8{
-            "dvui_init",
-            "dvui_deinit",
-            "dvui_update",
-            "add_event",
-            "arena_u8",
-            "gpa_u8",
-            "gpa_free",
-            "new_font",
-        };
-
-        const web_mod = b.addModule("web", .{
-            .root_source_file = b.path("src/backends/web.zig"),
-            .target = target,
-            .optimize = optimize,
-        });
-        web_mod.export_symbol_names = export_symbol_names;
-        dvui_opts.addChecks(web_mod, "web-backend");
-        dvui_opts.addTests(web_mod, "web-backend");
-
-        // NOTE: exported module uses the standard target so it can be overridden by users
-        const dvui_web = addDvuiModule("dvui_web", dvui_opts);
-        dvui_opts.addChecks(web_mod, "dvui_web");
-        if (test_dvui_and_app) {
-            dvui_opts.addTests(web_mod, "dvui_web");
-        }
-
-        linkBackend(dvui_web, web_mod);
-
-        // Examples, must be compiled for wasm32
-        {
-            const wasm_dvui_opts = DvuiModuleOptions{
-                .b = b,
-                .target = b.resolveTargetQuery(.{
-                    .cpu_arch = .wasm32,
-                    .os_tag = .freestanding,
-                }),
-                .optimize = optimize,
-                .build_options = build_options,
-                .test_filters = test_filters,
-                // no tests or checks needed, they are check above in native build
-            };
-
-            const web_mod_wasm = b.createModule(.{
-                .root_source_file = b.path("src/backends/web.zig"),
-            });
-            web_mod_wasm.export_symbol_names = export_symbol_names;
-
-            const dvui_web_wasm = addDvuiModule("dvui_web_wasm", wasm_dvui_opts);
-            linkBackend(dvui_web_wasm, web_mod_wasm);
-            addWebExample("web-test", b.path("examples/web-test.zig"), dvui_web_wasm, wasm_dvui_opts);
-            addWebExample("web-app", b.path("examples/app.zig"), dvui_web_wasm, wasm_dvui_opts);
+            // if we are building all the backends, here's where we do dvui tests
+            const test_dvui_and_app = backend == .sdl3;
+            buildBackend(backend, test_dvui_and_app, dvui_opts);
         }
     }
 
@@ -427,6 +126,306 @@ pub fn build(b: *std.Build) !void {
         run_add_logo.addFileArg(b.path("docs/logo.svg"));
         const indexhtml_file = run_add_logo.captureStdOut();
         docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
+    }
+}
+
+pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvui_opts: DvuiModuleOptions) void {
+    const b = dvui_opts.b;
+    const target = dvui_opts.target;
+    const optimize = dvui_opts.optimize;
+    switch (backend) {
+        .custom => {
+            // For export to users who are bringing their own backend.  Use in your build.zig:
+            // const dvui_mod = dvui_dep.module("dvui");
+            // @import("dvui").linkBackend(dvui_mod, your_backend_module);
+            _ = addDvuiModule("dvui", dvui_opts);
+            // does not need to be tested as only dependent would hit this path and test themselves
+        },
+        // Deprecated modules
+        .sdl => {
+            // The sdl backend name is deprecated. This is here to provide a useful error during transition
+            const files = b.addWriteFiles();
+            const source_path = files.add("sdl-deprecated.zig",
+                \\comptime { @compileError("The module 'dvui_sdl' is deprecated. Use either 'dvui_sdl2' or 'dvui_sdl3'"); }
+            );
+            _ = b.addModule("sdl", .{ .root_source_file = source_path });
+            _ = b.addModule("dvui_sdl", .{ .root_source_file = source_path });
+
+            // This indicates that we are trying to build this specific backend only
+            if (test_dvui_and_app) {
+                const deprecation_message = b.addFail("Backend 'sdl' is deprecated. Use either 'sdl2' or 'sdl3'");
+                b.getInstallStep().dependOn(&deprecation_message.step);
+            }
+        },
+        .testing => {
+            const testing_mod = b.addModule("testing", .{
+                .root_source_file = b.path("src/backends/testing.zig"),
+                .target = target,
+                .optimize = optimize,
+            });
+            dvui_opts.addChecks(testing_mod, "testing-backend");
+            dvui_opts.addTests(testing_mod, "testing-backend");
+
+            const dvui_testing = addDvuiModule("dvui_testing", dvui_opts);
+            dvui_opts.addChecks(dvui_testing, "dvui_testing");
+            if (test_dvui_and_app) {
+                dvui_opts.addTests(dvui_testing, "dvui_testing");
+            }
+
+            linkBackend(dvui_testing, testing_mod);
+            addExample("testing-app", b.path("examples/app.zig"), dvui_testing, test_dvui_and_app, dvui_opts);
+        },
+        .sdl2 => {
+            const sdl_mod = b.addModule("sdl2", .{
+                .root_source_file = b.path("src/backends/sdl.zig"),
+                .target = target,
+                .optimize = optimize,
+                .link_libc = true,
+            });
+            dvui_opts.addChecks(sdl_mod, "sdl2-backend");
+            dvui_opts.addTests(sdl_mod, "sdl2-backend");
+
+            const sdl2_options = b.addOptions();
+
+            if (b.systemIntegrationOption("sdl2", .{})) {
+                // SDL2 from system
+                sdl2_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
+                sdl_mod.linkSystemLibrary("SDL2", .{});
+            } else {
+                // SDL2 compiled from source
+                sdl2_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
+                if (target.result.os.tag == .linux) {
+                    const sdl_dep = b.lazyDependency("sdl", .{
+                        .target = target,
+                        .optimize = optimize,
+                        // trying to compile opengles (version 1) fails on
+                        // newer linux distros like arch, because they don't
+                        // have /usr/include/gles/gl.h
+                        // https://github.com/david-vanderson/dvui/issues/131
+                        .render_driver_ogl_es = false,
+                    });
+                    if (sdl_dep) |sd| {
+                        sdl_mod.linkLibrary(sd.artifact("SDL2"));
+                    }
+                } else {
+                    const sdl_dep = b.lazyDependency("sdl", .{ .target = target, .optimize = optimize });
+                    if (sdl_dep) |sd| {
+                        sdl_mod.linkLibrary(sd.artifact("SDL2"));
+                    }
+                }
+            }
+            sdl_mod.addOptions("sdl_options", sdl2_options);
+
+            const dvui_sdl = addDvuiModule("dvui_sdl2", dvui_opts);
+            dvui_opts.addChecks(dvui_sdl, "dvui_sdl2");
+            if (test_dvui_and_app) {
+                dvui_opts.addTests(dvui_sdl, "dvui_sdl2");
+            }
+
+            linkBackend(dvui_sdl, sdl_mod);
+            addExample("sdl2-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, true, dvui_opts);
+            addExample("sdl2-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, true, dvui_opts);
+            addExample("sdl2-app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
+        },
+        .sdl3 => {
+            const sdl_mod = b.addModule("sdl3", .{
+                .root_source_file = b.path("src/backends/sdl.zig"),
+                .target = target,
+                .optimize = optimize,
+                .link_libc = true,
+            });
+            dvui_opts.addChecks(sdl_mod, "sdl3-backend");
+            dvui_opts.addTests(sdl_mod, "sdl3-backend");
+
+            const sdl3_options = b.addOptions();
+            sdl3_options.addOption(
+                ?bool,
+                "callbacks",
+                b.option(bool, "sdl3-callbacks", "Use callbacks for live resizing on windows/mac"),
+            );
+
+            if (b.systemIntegrationOption("sdl3", .{})) {
+                // SDL3 from system
+                sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
+                sdl_mod.linkSystemLibrary("SDL3", .{});
+            } else {
+                // SDL3 compiled from source
+                sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
+                if (b.lazyDependency("sdl3", .{
+                    .target = target,
+                    .optimize = optimize,
+                })) |sdl3| {
+                    sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
+                }
+            }
+            sdl_mod.addOptions("sdl_options", sdl3_options);
+
+            const dvui_sdl = addDvuiModule("dvui_sdl3", dvui_opts);
+            dvui_opts.addChecks(dvui_sdl, "dvui_sdl3");
+            if (test_dvui_and_app) {
+                dvui_opts.addTests(dvui_sdl, "dvui_sdl3");
+            }
+
+            linkBackend(dvui_sdl, sdl_mod);
+            addExample("sdl3-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, true, dvui_opts);
+            addExample("sdl3-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, true, dvui_opts);
+            addExample("sdl3-app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
+        },
+        .raylib => {
+            const linux_display_backend: LinuxDisplayBackend = b.option(LinuxDisplayBackend, "linux_display_backend", "If using raylib, which linux display?") orelse blk: {
+                _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
+                    error.EnvironmentVariableNotFound => break :blk .X11,
+                    else => @panic("Unknown error checking for WAYLAND_DISPLAY environment variable"),
+                };
+
+                _ = std.process.getEnvVarOwned(b.allocator, "DISPLAY") catch |err| switch (err) {
+                    error.EnvironmentVariableNotFound => break :blk .Wayland,
+                    else => @panic("Unknown error checking for DISPLAY environment variable"),
+                };
+
+                break :blk .Both;
+            };
+
+            const raylib_mod = b.addModule("raylib", .{
+                .root_source_file = b.path("src/backends/raylib.zig"),
+                .target = target,
+                .optimize = optimize,
+                .link_libc = true,
+            });
+            dvui_opts.addChecks(raylib_mod, "raylib-backend");
+            dvui_opts.addTests(raylib_mod, "raylib-backend");
+
+            const maybe_ray = b.lazyDependency(
+                "raylib",
+                .{
+                    .target = target,
+                    .optimize = optimize,
+                    .linux_display_backend = linux_display_backend,
+                },
+            );
+            if (maybe_ray) |ray| {
+                raylib_mod.linkLibrary(ray.artifact("raylib"));
+
+                // This is to support variable framerate
+                raylib_mod.addIncludePath(ray.path("src/external/glfw/include/GLFW"));
+
+                // This seems wonky to me, but is copied from raylib's src/build.zig
+                if (b.lazyDependency("raygui", .{})) |raygui_dep| {
+                    if (b.lazyImport(@This(), "raylib")) |_| {
+                        // we want to write this:
+                        //raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
+                        // but that causes a second invocation of the raylib dependency but without our linux_display_backend
+                        // so it defaults to .Both which causes an error if there is no wayland-scanner
+
+                        const raylib = ray.artifact("raylib");
+                        var gen_step = b.addWriteFiles();
+                        raylib.step.dependOn(&gen_step.step);
+
+                        const raygui_c_path = gen_step.add("raygui.c", "#define RAYGUI_IMPLEMENTATION\n#include \"raygui.h\"\n");
+                        raylib.addCSourceFile(.{ .file = raygui_c_path });
+                        raylib.addIncludePath(raygui_dep.path("src"));
+                        raylib.addIncludePath(ray.path("src"));
+
+                        raylib.installHeader(raygui_dep.path("src/raygui.h"), "raygui.h");
+                    }
+                }
+            }
+
+            var dvui_opts_raylib = dvui_opts;
+            dvui_opts_raylib.add_stb_image = false;
+            const dvui_raylib = addDvuiModule("dvui_raylib", dvui_opts_raylib);
+            dvui_opts.addChecks(dvui_raylib, "dvui_raylib");
+            if (test_dvui_and_app) {
+                dvui_opts.addTests(dvui_raylib, "dvui_raylib");
+            }
+
+            linkBackend(dvui_raylib, raylib_mod);
+            addExample("raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib, true, dvui_opts_raylib);
+            addExample("raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib, true, dvui_opts_raylib);
+            addExample("raylib-app", b.path("examples/app.zig"), dvui_raylib, test_dvui_and_app, dvui_opts_raylib);
+        },
+        .dx11 => {
+            if (target.result.os.tag == .windows) {
+                const dx11_mod = b.addModule("dx11", .{
+                    .root_source_file = b.path("src/backends/dx11.zig"),
+                    .target = target,
+                    .optimize = optimize,
+                    .link_libc = true,
+                });
+                dvui_opts.addChecks(dx11_mod, "dx11-backend");
+                dvui_opts.addTests(dx11_mod, "dx11-backend");
+
+                if (b.lazyDependency("win32", .{})) |zigwin32| {
+                    dx11_mod.addImport("win32", zigwin32.module("win32"));
+                }
+
+                const dvui_dx11 = addDvuiModule("dvui_dx11", dvui_opts);
+                dvui_opts.addChecks(dvui_dx11, "dvui_dx11");
+                if (test_dvui_and_app) {
+                    dvui_opts.addTests(dvui_dx11, "dvui_dx11");
+                }
+
+                linkBackend(dvui_dx11, dx11_mod);
+                addExample("dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11, true, dvui_opts);
+                addExample("dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11, true, dvui_opts);
+                addExample("dx11-app", b.path("examples/app.zig"), dvui_dx11, test_dvui_and_app, dvui_opts);
+            }
+        },
+        .web => {
+            const export_symbol_names = &[_][]const u8{
+                "dvui_init",
+                "dvui_deinit",
+                "dvui_update",
+                "add_event",
+                "arena_u8",
+                "gpa_u8",
+                "gpa_free",
+                "new_font",
+            };
+
+            const web_mod = b.addModule("web", .{
+                .root_source_file = b.path("src/backends/web.zig"),
+                .target = target,
+                .optimize = optimize,
+            });
+            web_mod.export_symbol_names = export_symbol_names;
+            dvui_opts.addChecks(web_mod, "web-backend");
+            dvui_opts.addTests(web_mod, "web-backend");
+
+            // NOTE: exported module uses the standard target so it can be overridden by users
+            const dvui_web = addDvuiModule("dvui_web", dvui_opts);
+            dvui_opts.addChecks(web_mod, "dvui_web");
+            if (test_dvui_and_app) {
+                dvui_opts.addTests(web_mod, "dvui_web");
+            }
+
+            linkBackend(dvui_web, web_mod);
+
+            // Examples, must be compiled for wasm32
+            {
+                const wasm_dvui_opts = DvuiModuleOptions{
+                    .b = b,
+                    .target = b.resolveTargetQuery(.{
+                        .cpu_arch = .wasm32,
+                        .os_tag = .freestanding,
+                    }),
+                    .optimize = optimize,
+                    .build_options = dvui_opts.build_options,
+                    .test_filters = dvui_opts.test_filters,
+                    // no tests or checks needed, they are check above in native build
+                };
+
+                const web_mod_wasm = b.createModule(.{
+                    .root_source_file = b.path("src/backends/web.zig"),
+                });
+                web_mod_wasm.export_symbol_names = export_symbol_names;
+
+                const dvui_web_wasm = addDvuiModule("dvui_web_wasm", wasm_dvui_opts);
+                linkBackend(dvui_web_wasm, web_mod_wasm);
+                addWebExample("web-test", b.path("examples/web-test.zig"), dvui_web_wasm, wasm_dvui_opts);
+                addWebExample("web-app", b.path("examples/app.zig"), dvui_web_wasm, wasm_dvui_opts);
+            }
+        },
     }
 }
 
