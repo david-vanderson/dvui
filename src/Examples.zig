@@ -2408,10 +2408,17 @@ fn exampleRemoveTreeEntry(directory: []const u8, entries: *std.ArrayList(Mutable
 
 fn examplePlaceTreeEntry(directory: []const u8, placement_entry: *MutableTreeEntry, entries: *std.ArrayList(MutableTreeEntry), new_directory: []const u8, uniqueId: dvui.WidgetId) void {
     if (std.mem.containsAtLeast(u8, new_directory, 1, directory)) {
-        if (dvui.dataGet(null, uniqueId, "removed_entry", MutableTreeEntry)) |*removed_entry| {
-            for (entries.items) |*current_entry| {
-                if (current_entry.kind == .file) continue;
+        if (dvui.dataGetPtr(null, uniqueId, "removed_entry", MutableTreeEntry)) |removed_entry| {
+            {
+                const new_path = std.fs.path.join(dvui.currentWindow().arena(), &.{ directory, std.fs.path.basename(new_directory) }) catch "";
 
+                if (std.mem.eql(u8, new_path, new_directory)) {
+                    entries.append(removed_entry.*) catch std.debug.panic("Failed to append entry", .{});
+                    return;
+                }
+            }
+
+            for (entries.items) |*current_entry| {
                 const abs_path = std.fs.path.join(dvui.currentWindow().arena(), &.{ directory, current_entry.name }) catch "";
 
                 if (current_entry.kind == .directory) {
@@ -2424,6 +2431,8 @@ fn examplePlaceTreeEntry(directory: []const u8, placement_entry: *MutableTreeEnt
                     examplePlaceTreeEntry(abs_path, placement_entry, &current_entry.children, new_directory, uniqueId);
                 }
             }
+
+            dvui.dataRemove(null, uniqueId, "removed_entry");
         }
     }
 }
