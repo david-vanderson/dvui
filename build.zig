@@ -14,10 +14,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    var back_to_build: ?enums_backend.Backend = b.option(enums_backend.Backend, "backend", "Backend to build");
-    if (back_to_build == null) {
-        back_to_build = .sdl3;
-    }
+    var back_to_build = b.option(enums_backend.Backend, "backend", "Backend to build");
 
     const test_step = b.step("test", "Test the dvui codebase");
     const check_step = b.step("check", "Check that the entire dvui codebase has no syntax errors");
@@ -56,13 +53,6 @@ pub fn build(b: *std.Build) !void {
         b.option(bool, "log-error-trace", "If error logs should include the error return trace (automatically enabled with log stack traces)"),
     );
 
-    var sdl3_options = b.addOptions();
-    sdl3_options.addOption(
-        ?bool,
-        "callbacks",
-        b.option(bool, "sdl3-callbacks", "Use callbacks for live resizing on windows/mac"),
-    );
-
     const dvui_opts = DvuiModuleOptions{
         .b = b,
         .target = target,
@@ -74,7 +64,76 @@ pub fn build(b: *std.Build) !void {
         .build_options = build_options,
     };
 
-    switch (back_to_build.?) {
+    if (back_to_build) |backend| {
+        buildBackend(backend, true, dvui_opts);
+    } else {
+        for (std.meta.tags(enums_backend.Backend)) |backend| {
+            switch (backend) {
+                .custom, .sdl => continue,
+                else => {},
+            }
+            // if we are building all the backends, here's where we do dvui tests
+            const test_dvui_and_app = backend == .sdl3;
+            buildBackend(backend, test_dvui_and_app, dvui_opts);
+        }
+    }
+
+    // Docs
+    {
+        const docs_step = b.step("docs", "Build documentation");
+        const docs = b.addLibrary(.{ .name = "dvui", .root_module = b.createModule(.{
+            .root_source_file = b.path("src/dvui.zig"),
+            .target = target,
+        }) });
+
+        const install_docs = b.addInstallDirectory(.{
+            .source_dir = docs.getEmittedDocs(),
+            .install_dir = .prefix,
+            .install_subdir = "docs",
+            // Seems a bit drastic but by default only index.html is installed
+            // and I override it below. Maybe there is a cleaner way ?
+            .exclude_extensions = &.{".html"},
+        });
+        docs_step.dependOn(&install_docs.step);
+
+        if (generate_doc_images) {
+            if (b.modules.get("dvui_sdl2")) |dvui| {
+                const image_tests = b.addTest(.{
+                    .name = "generate-images",
+                    .root_module = dvui,
+                    .filters = &.{"DOCIMG"},
+                    .test_runner = .{ .mode = .simple, .path = b.path("docs/image_gen_test_runner.zig") },
+                    .use_lld = use_lld,
+                });
+                docs_step.dependOn(&b.addRunArtifact(image_tests).step);
+            } else {
+                docs_step.dependOn(&b.addFail("'generate-images' requires the sdl2 backend").step);
+            }
+        }
+
+        // Don't add to normal install step as it fails in ci
+        // b.getInstallStep().dependOn(docs_step);
+
+        // Use customized index.html
+        const add_doc_logo = b.addExecutable(.{
+            .name = "addDocLogo",
+            .root_source_file = b.path("docs/add_doc_logo.zig"),
+            .target = b.graph.host,
+        });
+        const run_add_logo = b.addRunArtifact(add_doc_logo);
+        run_add_logo.addFileArg(b.path("docs/index.html"));
+        run_add_logo.addFileArg(b.path("docs/favicon.svg"));
+        run_add_logo.addFileArg(b.path("docs/logo.svg"));
+        const indexhtml_file = run_add_logo.captureStdOut();
+        docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
+    }
+}
+
+pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvui_opts: DvuiModuleOptions) void {
+    const b = dvui_opts.b;
+    const target = dvui_opts.target;
+    const optimize = dvui_opts.optimize;
+    switch (backend) {
         .custom => {
             // For export to users who are bringing their own backend.  Use in your build.zig:
             // const dvui_mod = dvui_dep.module("dvui");
@@ -92,14 +151,13 @@ pub fn build(b: *std.Build) !void {
             _ = b.addModule("sdl", .{ .root_source_file = source_path });
             _ = b.addModule("dvui_sdl", .{ .root_source_file = source_path });
 
-            if (back_to_build == .sdl) {
+            // This indicates that we are trying to build this specific backend only
+            if (test_dvui_and_app) {
                 const deprecation_message = b.addFail("Backend 'sdl' is deprecated. Use either 'sdl2' or 'sdl3'");
                 b.getInstallStep().dependOn(&deprecation_message.step);
             }
         },
         .testing => {
-            const test_dvui_and_app = back_to_build == .testing;
-
             const testing_mod = b.addModule("testing", .{
                 .root_source_file = b.path("src/backends/testing.zig"),
                 .target = target,
@@ -118,8 +176,6 @@ pub fn build(b: *std.Build) !void {
             addExample("testing-app", b.path("examples/app.zig"), dvui_testing, test_dvui_and_app, dvui_opts);
         },
         .sdl2 => {
-            const test_dvui_and_app = back_to_build == .sdl2;
-
             const sdl_mod = b.addModule("sdl2", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
@@ -129,7 +185,7 @@ pub fn build(b: *std.Build) !void {
             dvui_opts.addChecks(sdl_mod, "sdl2-backend");
             dvui_opts.addTests(sdl_mod, "sdl2-backend");
 
-            var sdl2_options = b.addOptions();
+            const sdl2_options = b.addOptions();
 
             if (b.systemIntegrationOption("sdl2", .{})) {
                 // SDL2 from system
@@ -172,9 +228,6 @@ pub fn build(b: *std.Build) !void {
             addExample("sdl2-app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
         },
         .sdl3 => {
-            // if we are building all the backends, here's where we do dvui tests
-            const test_dvui_and_app = true;
-
             const sdl_mod = b.addModule("sdl3", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
@@ -183,6 +236,13 @@ pub fn build(b: *std.Build) !void {
             });
             dvui_opts.addChecks(sdl_mod, "sdl3-backend");
             dvui_opts.addTests(sdl_mod, "sdl3-backend");
+
+            const sdl3_options = b.addOptions();
+            sdl3_options.addOption(
+                ?bool,
+                "callbacks",
+                b.option(bool, "sdl3-callbacks", "Use callbacks for live resizing on windows/mac"),
+            );
 
             if (b.systemIntegrationOption("sdl3", .{})) {
                 // SDL3 from system
@@ -212,8 +272,6 @@ pub fn build(b: *std.Build) !void {
             addExample("sdl3-app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
         },
         .raylib => {
-            const test_dvui_and_app = back_to_build == .raylib;
-
             const linux_display_backend: LinuxDisplayBackend = b.option(LinuxDisplayBackend, "linux_display_backend", "If using raylib, which linux display?") orelse blk: {
                 _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
                     error.EnvironmentVariableNotFound => break :blk .X11,
@@ -287,8 +345,6 @@ pub fn build(b: *std.Build) !void {
             addExample("raylib-app", b.path("examples/app.zig"), dvui_raylib, test_dvui_and_app, dvui_opts_raylib);
         },
         .dx11 => {
-            const test_dvui_and_app = back_to_build == .dx11;
-
             if (target.result.os.tag == .windows) {
                 const dx11_mod = b.addModule("dx11", .{
                     .root_source_file = b.path("src/backends/dx11.zig"),
@@ -316,8 +372,6 @@ pub fn build(b: *std.Build) !void {
             }
         },
         .web => {
-            const test_dvui_and_app = back_to_build == .web;
-
             const export_symbol_names = &[_][]const u8{
                 "dvui_init",
                 "dvui_deinit",
@@ -356,8 +410,8 @@ pub fn build(b: *std.Build) !void {
                         .os_tag = .freestanding,
                     }),
                     .optimize = optimize,
-                    .build_options = build_options,
-                    .test_filters = test_filters,
+                    .build_options = dvui_opts.build_options,
+                    .test_filters = dvui_opts.test_filters,
                     // no tests or checks needed, they are check above in native build
                 };
 
@@ -372,56 +426,6 @@ pub fn build(b: *std.Build) !void {
                 addWebExample("web-app", b.path("examples/app.zig"), dvui_web_wasm, wasm_dvui_opts);
             }
         },
-    }
-
-    // Docs
-    {
-        const docs_step = b.step("docs", "Build documentation");
-        const docs = b.addLibrary(.{ .name = "dvui", .root_module = b.createModule(.{
-            .root_source_file = b.path("src/dvui.zig"),
-            .target = target,
-        }) });
-
-        const install_docs = b.addInstallDirectory(.{
-            .source_dir = docs.getEmittedDocs(),
-            .install_dir = .prefix,
-            .install_subdir = "docs",
-            // Seems a bit drastic but by default only index.html is installed
-            // and I override it below. Maybe there is a cleaner way ?
-            .exclude_extensions = &.{".html"},
-        });
-        docs_step.dependOn(&install_docs.step);
-
-        if (generate_doc_images) {
-            if (b.modules.get("dvui_sdl2")) |dvui| {
-                const image_tests = b.addTest(.{
-                    .name = "generate-images",
-                    .root_module = dvui,
-                    .filters = &.{"DOCIMG"},
-                    .test_runner = .{ .mode = .simple, .path = b.path("docs/image_gen_test_runner.zig") },
-                    .use_lld = use_lld,
-                });
-                docs_step.dependOn(&b.addRunArtifact(image_tests).step);
-            } else {
-                docs_step.dependOn(&b.addFail("'generate-images' requires the sdl2 backend").step);
-            }
-        }
-
-        // Don't add to normal install step as it fails in ci
-        // b.getInstallStep().dependOn(docs_step);
-
-        // Use customized index.html
-        const add_doc_logo = b.addExecutable(.{
-            .name = "addDocLogo",
-            .root_source_file = b.path("docs/add_doc_logo.zig"),
-            .target = b.graph.host,
-        });
-        const run_add_logo = b.addRunArtifact(add_doc_logo);
-        run_add_logo.addFileArg(b.path("docs/index.html"));
-        run_add_logo.addFileArg(b.path("docs/favicon.svg"));
-        run_add_logo.addFileArg(b.path("docs/logo.svg"));
-        const indexhtml_file = run_add_logo.captureStdOut();
-        docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
     }
 }
 
