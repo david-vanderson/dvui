@@ -3630,9 +3630,6 @@ pub fn animations() void {
         var box = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
         defer box.deinit();
 
-        const pixel_data = dvui.Color.yellow.toRGBA() ++ dvui.Color.cyan.toRGBA() ++ dvui.Color.red.toRGBA() ++ dvui.Color.magenta.toRGBA();
-        var pixels = pixel_data;
-
         // example of how to run frames at a certain fps
         const millis_per_frame = 500;
         if (dvui.timerDoneOrNone(box.data().id)) {
@@ -3643,10 +3640,10 @@ pub fn animations() void {
         }
 
         const num_frames = 4;
-        const frame: i32 = blk: {
-            const millis = @divFloor(dvui.frameTimeNS(), 1_000_000);
+        const frame: std.math.IntFittingRange(0, num_frames) = blk: {
+            const millis = @divFloor(dvui.frameTimeNS(), std.time.ns_per_ms);
             const left = @as(i32, @intCast(@rem(millis, num_frames * millis_per_frame)));
-            break :blk @divTrunc(left, millis_per_frame);
+            break :blk @intCast(@divTrunc(left, millis_per_frame));
         };
 
         {
@@ -3656,11 +3653,12 @@ pub fn animations() void {
             _ = dvui.checkbox(@src(), &global.round_corners, "Round Corners", .{});
         }
 
-        std.mem.rotate(u8, &pixels, @intCast(frame * 4));
+        var pixels: [4]dvui.Color.PMA = .{ .yellow, .cyan, .red, .magenta };
+        std.mem.rotate(dvui.Color.PMA, &pixels, frame);
 
         var frame_box = dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 50, .h = 50 } });
         defer frame_box.deinit();
-        if (dvui.textureCreate(.cast(&pixels), 2, 2, .nearest) catch null) |tex| {
+        if (dvui.textureCreate(.{ .pma = &pixels }, 2, 2, .nearest) catch null) |tex| {
             dvui.textureDestroyLater(tex);
             dvui.renderTexture(tex, frame_box.data().contentRectScale(), .{ .corner_radius = if (global.round_corners) dvui.Rect.all(10) else .{} }) catch {
                 dvui.log.debug("Could not render animating texture", .{});
