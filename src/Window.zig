@@ -1573,17 +1573,17 @@ fn debugWindowShow(self: *Self) void {
     }
 
     var log_refresh = self.debugRefresh(null);
-    if (dvui.checkbox(@src(), &log_refresh, "Refresh Logging", .{}, .{})) {
+    if (dvui.checkbox(@src(), &log_refresh, "Refresh Logging", .{})) {
         _ = self.debugRefresh(log_refresh);
     }
 
     var log_event_handled = self.debugHandleEvents(null);
-    if (dvui.checkbox(@src(), &log_event_handled, "Log Handled Events", .{}, .{})) {
+    if (dvui.checkbox(@src(), &log_event_handled, "Log Handled Events", .{})) {
         _ = self.debugHandleEvents(log_event_handled);
     }
 
     var log_event_unhandled = self.debugUnhandledEvents(null);
-    if (dvui.checkbox(@src(), &log_event_unhandled, "Log Unhandled Events", .{}, .{})) {
+    if (dvui.checkbox(@src(), &log_event_unhandled, "Log Unhandled Events", .{})) {
         _ = self.debugUnhandledEvents(log_event_unhandled);
     }
 

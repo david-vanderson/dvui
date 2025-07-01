@@ -4226,7 +4226,7 @@ fn gridLayouts() void {
         const fixed_widths = [num_cols]f32{ checkbox_w, 80, 120, 80, 100, 300 };
         const equal_spacing = [num_cols]f32{ checkbox_w, -1, -1, -1, -1, -1 };
         const fit_window = [num_cols]f32{ checkbox_w, 0, 0, 0, 0, 0 };
-        var selection_state: dvui.GridColumnSelectAllState = .select_none;
+        var selection_state: dvui.select.SelectAllState = .select_none;
         var sort_dir: GridWidget.SortDirection = .unsorted;
         var layout_style: Layout = .proportional;
         var h_scroll: bool = false;
@@ -4402,7 +4402,6 @@ fn gridLayouts() void {
                 car.selected = switch (local.selection_state) {
                     .select_all => true,
                     .select_none => false,
-                    .unchanged => break,
                 };
             }
         }
@@ -4568,7 +4567,7 @@ fn gridVirtualScrolling() void {
             .size = .{ .w = col_width },
         },
     };
-    highlight_hovered_1.processEvents(grid, &local.scroll_info);
+    highlight_hovered_1.processEvents(grid);
     const highlight_hovered_2 = highlight_hovered_1.cellOptionsOverride(.{
         .border = .{ .w = 1, .h = 1 },
     });
@@ -4578,8 +4577,8 @@ fn gridVirtualScrolling() void {
     const first = scroller.startRow();
     const last = scroller.endRow(); // Note that endRow is exclusive, meaning it can be used as a slice end index.
     const CellStyle = GridWidget.CellStyle;
-    dvui.gridHeading(@src(), grid, "Number", 0, .fixed, CellStyle{ .cell_opts = .{ .size = .{ .w = col_width } } });
-    dvui.gridHeading(@src(), grid, "Is prime?", 1, .fixed, CellStyle{ .cell_opts = .{ .size = .{ .w = col_width } } });
+    dvui.gridHeading(@src(), grid, 0, "Number", .fixed, CellStyle{ .cell_opts = .{ .size = .{ .w = col_width } } });
+    dvui.gridHeading(@src(), grid, 1, "Is prime?", .fixed, CellStyle{ .cell_opts = .{ .size = .{ .w = col_width } } });
 
     for (first..last) |num| {
         {

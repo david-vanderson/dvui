@@ -4992,7 +4992,7 @@ pub fn gridHeadingCheckbox(
         var hbox = dvui.box(@src(), .horizontal, header_options);
         defer hbox.deinit();
 
-        is_clicked = dvui.checkbox(@src(), &selected, null, .{}, checkbox_opts);
+        is_clicked = dvui.checkbox(@src(), &selected, null, checkbox_opts);
     }
     if (is_clicked) {
         selection.* = if (selected) .select_all else .select_none;
@@ -6186,7 +6186,11 @@ pub var checkbox_defaults: Options = .{
     .padding = Rect.all(6),
 };
 
-pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, sel_opts: select.SelectOptions, opts: Options) bool {
+pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, opts: Options) bool {
+    return checkboxEx(src, target, label_str, .{}, opts);
+}
+
+pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, sel_opts: select.SelectOptions, opts: Options) bool {
     const options = checkbox_defaults.override(opts);
     var ret = false;
 
