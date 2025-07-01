@@ -102,8 +102,8 @@ fn initData() !void {
     try pirate_data.append(gpa, .{ .year = 2020, .pirates = 1_000_000, .temperature = 5 });
 }
 
-var keyboard_nav: dvui.navigation.GridKeyboard = .{ .max_cols = 3, .max_rows = 0 };
-
+var keyboard_nav: dvui.navigation.GridKeyboard = .{ .max_cols = 3, .max_rows = 0, .navigation_keys = .none };
+var initialized = false;
 // both dvui and SDL drawing
 fn gui_frame() !void {
     {
@@ -128,7 +128,10 @@ fn gui_frame() !void {
         {
             var grid = dvui.grid(@src(), .numCols(3), .{}, .{});
             defer grid.deinit();
-
+            if (!initialized) {
+                keyboard_nav.navigation_keys = .defaultKeys();
+                initialized = true;
+            }
             keyboard_nav.setLimits(3, pirate_data.len);
             keyboard_nav.processEvents(grid);
             const focus_cell = keyboard_nav.cellCursor();

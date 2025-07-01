@@ -19,8 +19,33 @@ pub const GridKeyboard = struct {
             return self.col_num == col_num and self.row_num == row_num;
         }
     };
+
+    pub const NavigationKeys = struct {
+        up: dvui.enums.Keybind,
+        down: dvui.enums.Keybind,
+        left: dvui.enums.Keybind,
+        right: dvui.enums.Keybind,
+
+        pub const none: NavigationKeys = .{
+            .up = .{},
+            .down = .{},
+            .left = .{},
+            .right = .{},
+        };
+
+        pub fn defaultKeys() NavigationKeys {
+            const cw = dvui.currentWindow();
+            return .{
+                .up = cw.keybinds.get("char_up") orelse unreachable,
+                .down = cw.keybinds.get("char_down") orelse unreachable,
+                .left = cw.keybinds.get("prev_widget") orelse unreachable,
+                .right = cw.keybinds.get("next_widget") orelse unreachable,
+            };
+        }
+    };
     max_cols: usize,
     max_rows: usize,
+    navigation_keys: NavigationKeys,
     cursor: Cell = .{ .col_num = 0, .row_num = 0 },
 
     pub fn setLimits(self: *GridKeyboard, max_cols: usize, max_rows: usize) void {
@@ -52,25 +77,18 @@ pub const GridKeyboard = struct {
         switch (e.evt) {
             .key => |*ke| {
                 if (ke.action == .down) {
-                    switch (ke.code) {
-                        .up => {
-                            e.handle(@src(), grid.data());
-                            self.cursor.row_num = if (self.cursor.row_num > 0) self.cursor.row_num - 1 else 0;
-                        },
-                        .down => {
-                            e.handle(@src(), grid.data());
-                            self.cursor.row_num += 1;
-                        },
-                        .tab => {
-                            if (ke.mod.shift()) {
-                                e.handle(@src(), grid.data());
-                                self.cursor.col_num = if (self.cursor.col_num > 0) self.cursor.col_num - 1 else 0;
-                            } else {
-                                e.handle(@src(), grid.data());
-                                self.cursor.col_num += 1;
-                            }
-                        },
-                        else => {},
+                    if (ke.matchKeyBind(self.navigation_keys.up)) {
+                        e.handle(@src(), grid.data());
+                        self.cursor.row_num = if (self.cursor.row_num > 0) self.cursor.row_num - 1 else 0;
+                    } else if (ke.matchKeyBind(self.navigation_keys.down)) {
+                        e.handle(@src(), grid.data());
+                        self.cursor.row_num += 1;
+                    } else if (ke.matchKeyBind(self.navigation_keys.left)) {
+                        e.handle(@src(), grid.data());
+                        self.cursor.col_num = if (self.cursor.col_num > 0) self.cursor.col_num - 1 else 0;
+                    } else if (ke.matchKeyBind(self.navigation_keys.right)) {
+                        e.handle(@src(), grid.data());
+                        self.cursor.col_num += 1;
                     }
                 }
             },
