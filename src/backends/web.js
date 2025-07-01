@@ -741,6 +741,19 @@ class Dvui {
                 );
                 window.open(url);
             },
+            wasm_preferred_color_scheme: () => {
+                if (
+                    window.matchMedia("(prefers-color-scheme: dark)").matches
+                ) {
+                    return 1;
+                }
+                if (
+                    window.matchMedia("(prefers-color-scheme: light)").matches
+                ) {
+                    return 2;
+                }
+                return 0;
+            },
             wasm_download_data: (
                 name_ptr,
                 name_len,

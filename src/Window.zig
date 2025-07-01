@@ -223,7 +223,10 @@ pub fn init(
         },
         .backend = backend_ctx,
         .font_bytes = try dvui.Font.initTTFBytesDatabase(gpa),
-        .theme = if (init_opts.theme) |t| t.* else Theme.builtin.adwaita_light,
+        .theme = if (init_opts.theme) |t| t.* else switch (backend_ctx.preferredColorScheme() orelse .light) {
+            .light => Theme.builtin.adwaita_light,
+            .dark => Theme.builtin.adwaita_dark,
+        },
     };
 
     inline for (@typeInfo(Theme.builtin).@"struct".decls) |decl| {
