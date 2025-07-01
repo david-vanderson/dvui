@@ -2610,7 +2610,7 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *std.ArrayList(Mut
 fn exampleFileTreeSetup(const_file_tree: []const ConstTreeEntry, mutable_file_tree: *std.ArrayList(MutableTreeEntry)) !void {
     for (const_file_tree) |const_entry| {
         var mutable_entry = MutableTreeEntry{
-            .name = dvui.currentWindow().gpa.dupe(u8, const_entry.name) catch std.debug.panic("Failed to dupe entry", .{}),
+            .name = const_entry.name,
             .kind = const_entry.kind,
             .children = std.ArrayList(MutableTreeEntry).init(dvui.currentWindow().gpa),
         };
@@ -2647,7 +2647,7 @@ pub fn fileTree(src: std.builtin.SourceLocation, root_directory: []const u8, tre
     defer tree.deinit();
 
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
-    recurseFiles(dvui.currentWindow().gpa, root_directory, tree, uniqueId, branch_options, expander_options) catch std.debug.panic("Failed to recurse files", .{});
+    recurseFiles(root_directory, tree, uniqueId, branch_options, expander_options) catch std.debug.panic("Failed to recurse files", .{});
 }
 
 fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, uniqueId: dvui.WidgetId, branch_options: dvui.Options, expander_options: dvui.Options) !void {
