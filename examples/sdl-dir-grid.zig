@@ -131,7 +131,7 @@ fn gui_frame() !void {
                 mode = .cached;
             }
             var selected = selection_mode == .multi_select;
-            if (dvui.checkbox(@src(), &selected, "Multi-Select", .{}, .{ .margin = dvui.Rect.all(6) })) {
+            if (dvui.checkbox(@src(), &selected, "Multi-Select", .{ .margin = dvui.Rect.all(6) })) {
                 selection_mode = if (selected) .multi_select else .single_select;
                 if (selection_mode == .single_select) {
                     switch (mode) {
@@ -140,7 +140,7 @@ fn gui_frame() !void {
                     }
                 }
             }
-            _ = dvui.checkbox(@src(), &row_select, "Row Select", .{}, .{ .margin = dvui.Rect.all(6) });
+            _ = dvui.checkbox(@src(), &row_select, "Row Select", .{ .margin = dvui.Rect.all(6) });
             dvui.labelNoFmt(@src(), "Filter: (contains): ", .{}, .{ .margin = dvui.Rect.all(6) });
             var text = dvui.textEntry(@src(), .{}, .{ .gravity_y = 0.5, .margin = dvui.Rect.all(6) });
             defer text.deinit();
@@ -279,7 +279,7 @@ pub fn directoryDisplay(grid: *dvui.GridWidget, row_selected: ?usize) !void {
             var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
             defer cell.deinit();
             var is_set = if (dir_num < selections.capacity()) selections.isSet(dir_num) else false;
-            _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .selection_info = &selection_info }, .{ .gravity_x = 0.5 });
+            _ = dvui.checkboxEx(@src(), &is_set, null, .{ .selection_id = dir_num, .selection_info = &selection_info }, .{ .gravity_x = 0.5 });
             if (row_num == row_selected) {
                 selection_info.add(dir_num, !is_set, cell.data());
             }
@@ -415,7 +415,7 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget, row_selected: ?usize) void
             var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
             defer cell.deinit();
             var is_set = dir_cache.items[dir_num].selected;
-            _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .selection_info = &selection_info }, .{ .gravity_x = 0.5 });
+            _ = dvui.checkboxEx(@src(), &is_set, null, .{ .selection_id = dir_num, .selection_info = &selection_info }, .{ .gravity_x = 0.5 });
             if (row_selected == dir_num) {
                 selection_info.add(dir_num, !is_set, cell.data());
             }
