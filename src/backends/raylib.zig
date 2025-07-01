@@ -462,6 +462,10 @@ pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
     }
 }
 
+pub fn preferredColorScheme(_: *RaylibBackend) ?dvui.enums.ColorScheme {
+    return null;
+}
+
 //TODO implement this function
 pub fn refresh(_: *RaylibBackend) void {}
 
