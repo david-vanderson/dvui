@@ -355,7 +355,7 @@ pub fn init(
 
     errdefer self.deinit();
 
-    self.focused_subwindowId = self.wd.id;
+    self.focused_subwindowId = self.data().id;
     self.frame_time_ns = 1;
 
     if (dvui.useFreeType) {
@@ -588,7 +588,7 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
         .focus_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
     });
 
-    const ret = (self.wd.id != self.focused_subwindowId);
+    const ret = (self.data().id != self.focused_subwindowId);
     try self.positionMouseEventAdd();
     return ret;
 }
@@ -615,7 +615,7 @@ pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) std.mem.All
         .focus_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
     });
 
-    const ret = (self.wd.id != self.focused_subwindowId);
+    const ret = (self.data().id != self.focused_subwindowId);
     try self.positionMouseEventAdd();
     return ret;
 }
@@ -649,7 +649,7 @@ pub fn addEventMouseMotion(self: *Self, newpt: Point.Physical) std.mem.Allocator
         },
     } });
 
-    const ret = (self.wd.id != winId);
+    const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
     return ret;
 }
@@ -691,7 +691,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
     self.positionMouseEventRemove();
 
     if (xynorm) |xyn| {
-        self.mouse_pt = (Point{ .x = xyn.x * self.wd.rect.w, .y = xyn.y * self.wd.rect.h }).scale(self.natural_scale, Point.Physical);
+        self.mouse_pt = (Point{ .x = xyn.x * self.data().rect.w, .y = xyn.y * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
     }
 
     const winId = self.windowFor(self.mouse_pt);
@@ -700,10 +700,10 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
         // normally the focus event is what focuses windows, but since the
         // base window is instantiated before events are added, it has to
         // do any event processing as the events come in, right now
-        if (winId == self.wd.id) {
+        if (winId == self.data().id) {
             // focus the window here so any more key events get routed
             // properly
-            self.focusSubwindowInternal(self.wd.id, null);
+            self.focusSubwindowInternal(self.data().id, null);
         }
 
         // add focus event
@@ -730,7 +730,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
         },
     } });
 
-    const ret = (self.wd.id != winId);
+    const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
     return ret;
 }
@@ -772,7 +772,7 @@ pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) st
         },
     });
 
-    const ret = (self.wd.id != winId);
+    const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
     return ret;
 }
@@ -785,11 +785,11 @@ pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) st
 pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, ynorm: f32, dxnorm: f32, dynorm: f32) std.mem.Allocator.Error!bool {
     self.positionMouseEventRemove();
 
-    const newpt = (Point{ .x = xnorm * self.wd.rect.w, .y = ynorm * self.wd.rect.h }).scale(self.natural_scale, Point.Physical);
+    const newpt = (Point{ .x = xnorm * self.data().rect.w, .y = ynorm * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
     //std.debug.print("touch motion {} {d} {d}\n", .{ finger, newpt.x, newpt.y });
     self.mouse_pt = newpt;
 
-    const dp = (Point{ .x = dxnorm * self.wd.rect.w, .y = dynorm * self.wd.rect.h }).scale(self.natural_scale, Point.Physical);
+    const dp = (Point{ .x = dxnorm * self.data().rect.w, .y = dynorm * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
 
     const winId = self.windowFor(self.mouse_pt);
 
@@ -804,7 +804,7 @@ pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, y
         },
     } });
 
-    const ret = (self.wd.id != winId);
+    const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
     return ret;
 }
@@ -1074,14 +1074,14 @@ pub fn begin(
     self.rect_pixels = .fromSize(self.backend.pixelSize());
     dvui.clipSet(self.rect_pixels);
 
-    self.wd.rect = Rect.Natural.fromSize(self.backend.windowSize()).scale(1.0 / self.content_scale, Rect);
-    self.natural_scale = if (self.wd.rect.w == 0) 1.0 else self.rect_pixels.w / self.wd.rect.w;
+    self.data().rect = Rect.Natural.fromSize(self.backend.windowSize()).scale(1.0 / self.content_scale, Rect);
+    self.natural_scale = if (self.data().rect.w == 0) 1.0 else self.rect_pixels.w / self.data().rect.w;
 
-    //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
+    //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.data().rect.w, self.data().rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
-    dvui.subwindowAdd(self.wd.id, self.wd.rect, self.rect_pixels, false, null);
+    dvui.subwindowAdd(self.data().id, self.data().rect, self.rect_pixels, false, null);
 
-    _ = dvui.subwindowCurrentSet(self.wd.id, .cast(self.wd.rect));
+    _ = dvui.subwindowCurrentSet(self.data().id, .cast(self.data().rect));
 
     self.extra_frames_needed -|= 1;
     self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
@@ -1135,11 +1135,11 @@ pub fn begin(
     }
     self.captured_last_frame = false;
 
-    self.wd.parent = self.widget();
+    self.data().parent = self.widget();
 
     // Window's wd is kept frame to frame, so manually reset the cache.
-    self.wd.rect_scale_cache = null;
-    self.wd.register();
+    self.data().rect_scale_cache = null;
+    self.data().register();
 
     self.layout = .{};
 
@@ -1173,7 +1173,7 @@ pub fn windowFor(self: *const Self, p: Point.Physical) WidgetId {
         }
     }
 
-    return self.wd.id;
+    return self.data().id;
 }
 
 pub fn subwindowCurrent(self: *const Self) *Subwindow {
@@ -1216,7 +1216,7 @@ pub fn cursorRequested(self: *const Self) dvui.enums.Cursor {
 /// Client code should cache this if switching the platform's cursor is
 /// expensive.
 pub fn cursorRequestedFloating(self: *const Self) ?dvui.enums.Cursor {
-    if (self.capture != null or self.windowFor(self.mouse_pt) != self.wd.id) {
+    if (self.capture != null or self.windowFor(self.mouse_pt) != self.data().id) {
         // gui owns the cursor if we have mouse capture or if the mouse is above
         // a floating window
         return self.cursorRequested();
@@ -1673,7 +1673,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
             self.drag_name = "";
         }
 
-        if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = self.rect_pixels, .cleanup = true }))
+        if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.rect_pixels, .cleanup = true }))
             continue;
 
         if (e.evt == .mouse) {
@@ -1799,12 +1799,12 @@ pub fn widget(self: *Self) Widget {
     return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
-pub fn data(self: *Self) *WidgetData {
-    return &self.wd;
+pub fn data(self: *const Self) *WidgetData {
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *Self, id: WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    return self.layout.rectFor(self.wd.rect, id, min_size, e, g);
+    return self.layout.rectFor(self.data().rect, id, min_size, e, g);
 }
 
 pub fn rectScale(self: *Self) RectScale {

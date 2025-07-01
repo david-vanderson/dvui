@@ -72,10 +72,10 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
     if (self.init_opts.scroll_info) |si| {
         self.si = si;
         if (self.init_opts.vertical != null) {
-            dvui.log.debug("ScrollAreaWidget {x} init_opts.vertical .{s} overridden by init_opts.scroll_info.vertical .{s}\n", .{ self.hbox.wd.id, @tagName(self.init_opts.vertical.?), @tagName(si.vertical) });
+            dvui.log.debug("ScrollAreaWidget {x} init_opts.vertical .{s} overridden by init_opts.scroll_info.vertical .{s}\n", .{ self.hbox.data().id, @tagName(self.init_opts.vertical.?), @tagName(si.vertical) });
         }
         if (self.init_opts.horizontal != null) {
-            dvui.log.debug("ScrollAreaWidget {x} init_opts.horizontal .{s} overridden by init_opts.scroll_info.horizontal .{s}\n", .{ self.hbox.wd.id, @tagName(self.init_opts.horizontal.?), @tagName(si.horizontal) });
+            dvui.log.debug("ScrollAreaWidget {x} init_opts.horizontal .{s} overridden by init_opts.scroll_info.horizontal .{s}\n", .{ self.hbox.data().id, @tagName(self.init_opts.horizontal.?), @tagName(si.horizontal) });
         }
     } else if (dvui.dataGet(null, self.hbox.data().id, "_scroll_info", ScrollInfo)) |si| {
         self.si_store = si;
@@ -175,7 +175,7 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
 }
 
 pub fn data(self: *ScrollAreaWidget) *WidgetData {
-    return &self.hbox.wd;
+    return self.hbox.data();
 }
 
 pub fn deinit(self: *ScrollAreaWidget) void {

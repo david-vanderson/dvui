@@ -104,7 +104,7 @@ pub fn install(self: *FloatingMenuWidget) void {
 
     dvui.parentSet(self.widget());
 
-    self.prev_windowId = dvui.subwindowCurrentSet(self.wd.id, null).id;
+    self.prev_windowId = dvui.subwindowCurrentSet(self.data().id, null).id;
     self.parent_popup = popupSet(self);
     // prevents parents from processing key events if focus is inside the floating window:w
     self.prev_last_focus = dvui.lastFocusedIdInFrame(null);
@@ -116,25 +116,25 @@ pub fn install(self: *FloatingMenuWidget) void {
         .auto => unreachable,
     };
 
-    self.wd.rect = Rect.fromPoint(.cast(self.init_options.from.topLeft()));
-    if (dvui.minSizeGet(self.wd.id)) |_| {
-        const ms = dvui.minSize(self.wd.id, self.options.min_sizeGet());
-        self.wd.rect = self.wd.rect.toSize(ms);
-        self.wd.rect = .cast(dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, .cast(self.wd.rect)));
+    self.data().rect = Rect.fromPoint(.cast(self.init_options.from.topLeft()));
+    if (dvui.minSizeGet(self.data().id)) |_| {
+        const ms = dvui.minSize(self.data().id, self.options.min_sizeGet());
+        self.data().rect = self.data().rect.toSize(ms);
+        self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, .cast(self.data().rect)));
     } else {
-        self.wd.rect = .cast(dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, .cast(self.wd.rect)));
-        dvui.focusSubwindow(self.wd.id, null);
+        self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, .cast(self.data().rect)));
+        dvui.focusSubwindow(self.data().id, null);
 
         // need a second frame to fit contents (FocusWindow calls refresh but
         // here for clarity)
-        dvui.refresh(null, @src(), self.wd.id);
+        dvui.refresh(null, @src(), self.data().id);
     }
 
-    const rs = self.wd.rectScale();
+    const rs = self.data().rectScale();
 
-    dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, null);
-    dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
-    self.wd.register();
+    dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, null);
+    dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
+    self.data().register();
 
     // first break out of whatever clip we were in (so box shadows work, since
     // they are outside our window)
@@ -162,7 +162,7 @@ pub fn install(self: *FloatingMenuWidget) void {
 
     // if no widget in this popup has focus, make the menu have focus to handle keyboard events
     if (dvui.focusedWidgetIdInCurrentSubwindow() == null) {
-        dvui.focusWidget(self.menu.wd.id, null, null);
+        dvui.focusWidget(self.menu.data().id, null, null);
     }
 }
 
@@ -175,20 +175,20 @@ pub fn widget(self: *FloatingMenuWidget) Widget {
 }
 
 pub fn data(self: *FloatingMenuWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *FloatingMenuWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
-    return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *FloatingMenuWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *FloatingMenuWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s));
+    self.data().minSizeMax(self.data().options.padSize(s));
 }
 
 pub fn chainFocused(self: *FloatingMenuWidget, self_call: bool) bool {
@@ -202,7 +202,7 @@ pub fn chainFocused(self: *FloatingMenuWidget, self_call: bool) bool {
     // we have to call chainFocused on our parent if we have one so we
     // can't return early
 
-    if (self.wd.id == dvui.focusedSubwindowId()) {
+    if (self.data().id == dvui.focusedSubwindowId()) {
         // we are focused
         ret = true;
     }
@@ -224,9 +224,9 @@ pub fn deinit(self: *FloatingMenuWidget) void {
     defer dvui.widgetFree(self);
 
     const evts = dvui.events();
-    const rs = self.wd.rectScale();
+    const rs = self.data().rectScale();
     for (evts) |*e| {
-        if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r, .cleanup = true }))
+        if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = rs.r, .cleanup = true }))
             continue;
 
         if (e.evt == .mouse) {
@@ -263,7 +263,7 @@ pub fn deinit(self: *FloatingMenuWidget) void {
         // only the last popup can do the check, you can't query the focus
         // status of children, only parents
         self.menu.close_chain(.unintentional);
-        dvui.refresh(null, @src(), self.wd.id);
+        dvui.refresh(null, @src(), self.data().id);
     }
 
     self.menu.deinit();
@@ -272,14 +272,14 @@ pub fn deinit(self: *FloatingMenuWidget) void {
 
     // in case no children ever show up, this will provide a visual indication
     // that there is an empty floating menu
-    self.wd.minSizeMax(self.wd.options.padSize(.{ .w = 20, .h = 20 }));
+    self.data().minSizeMax(self.data().options.padSize(.{ .w = 20, .h = 20 }));
 
-    self.wd.minSizeSetAndRefresh();
+    self.data().minSizeSetAndRefresh();
 
-    // outside normal layout, don't call minSizeForChild or self.wd.minSizeReportToParent();
+    // outside normal layout, don't call minSizeForChild or self.data().minSizeReportToParent();
 
     _ = popupSet(self.parent_popup);
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    dvui.parentReset(self.data().id, self.data().parent);
     dvui.currentWindow().last_focused_id_this_frame = self.prev_last_focus;
     _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
     dvui.clipSet(self.prevClip);

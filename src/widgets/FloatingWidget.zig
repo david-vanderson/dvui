@@ -58,19 +58,19 @@ pub fn install(self: *FloatingWidget) void {
 
     dvui.parentSet(self.widget());
 
-    self.prev_windowId = dvui.subwindowCurrentSet(self.wd.id, null).id;
+    self.prev_windowId = dvui.subwindowCurrentSet(self.data().id, null).id;
 
-    const rs = self.wd.rectScale();
+    const rs = self.data().rectScale();
 
-    dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, self.prev_windowId);
-    dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
-    self.wd.register();
+    dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, self.prev_windowId);
+    dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
+    self.data().register();
 
     // first break out of whatever clipping we were in
     self.prevClip = dvui.clipGet();
     dvui.clipSet(dvui.windowRectPixels());
 
-    self.wd.borderAndBackground(.{});
+    self.data().borderAndBackground(.{});
 
     // clip to just our window (using clipSet since we are not inside our parent)
     _ = dvui.clip(rs.r);
@@ -84,30 +84,30 @@ pub fn widget(self: *FloatingWidget) Widget {
 }
 
 pub fn data(self: *FloatingWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *FloatingWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
-    return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *FloatingWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *FloatingWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s));
+    self.data().minSizeMax(self.data().options.padSize(s));
 }
 
 pub fn deinit(self: *FloatingWidget) void {
     defer dvui.widgetFree(self);
     self.scaler.deinit();
-    self.wd.minSizeSetAndRefresh();
+    self.data().minSizeSetAndRefresh();
 
-    // outside normal layout, don't call minSizeForChild or self.wd.minSizeReportToParent();
+    // outside normal layout, don't call minSizeForChild or self.data().minSizeReportToParent();
 
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    dvui.parentReset(self.data().id, self.data().parent);
     _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
     dvui.clipSet(self.prevClip);
     _ = dvui.renderingSet(self.prev_rendering);

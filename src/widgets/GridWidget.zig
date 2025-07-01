@@ -331,7 +331,7 @@ pub fn deinit(self: *GridWidget) void {
 }
 
 pub fn data(self: *GridWidget) *WidgetData {
-    return &self.vbox.wd;
+    return self.vbox.data();
 }
 
 /// Create a header cell for the requested column
@@ -694,7 +694,7 @@ pub const HeaderResizeWidget = struct {
             .init_opts = init_options,
         };
 
-        if (dvui.dataGet(null, self.wd.id, "_offset", Point)) |offset| {
+        if (dvui.dataGet(null, self.data().id, "_offset", Point)) |offset| {
             self.offset = offset;
         }
 
@@ -702,8 +702,8 @@ pub const HeaderResizeWidget = struct {
     }
 
     pub fn install(self: *HeaderResizeWidget) void {
-        self.wd.register();
-        self.wd.borderAndBackground(.{});
+        self.data().register();
+        self.data().borderAndBackground(.{});
     }
 
     pub fn size(self: *HeaderResizeWidget) f32 {
@@ -737,7 +737,7 @@ pub const HeaderResizeWidget = struct {
     }
 
     pub fn matchEvent(self: *HeaderResizeWidget, e: *Event) bool {
-        var rs = self.wd.rectScale();
+        var rs = self.data().rectScale();
 
         // Clicking near the handle counts as clicking on the handle.
         const grab_extra = self.init_opts.grab_tolerance * rs.s;
@@ -751,7 +751,7 @@ pub const HeaderResizeWidget = struct {
                 rs.r.h += grab_extra;
             },
         }
-        return dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r });
+        return dvui.eventMatch(e, .{ .id = self.data().id, .r = rs.r });
     }
 
     pub fn processEvents(self: *HeaderResizeWidget) void {
@@ -765,12 +765,12 @@ pub const HeaderResizeWidget = struct {
     }
 
     pub fn data(self: *HeaderResizeWidget) *WidgetData {
-        return &self.wd;
+        return self.wd.validate();
     }
 
     pub fn processEvent(self: *HeaderResizeWidget, e: *Event) void {
         if (e.evt == .mouse) {
-            const rs = self.wd.rectScale();
+            const rs = self.data().rectScale();
             const cursor: Cursor = switch (self.direction) {
                 .vertical => .arrow_w_e,
                 .horizontal => .arrow_n_s,
@@ -788,11 +788,11 @@ pub const HeaderResizeWidget = struct {
                 dvui.captureMouse(null);
                 dvui.dragEnd();
                 self.offset = .{};
-            } else if (e.evt.mouse.action == .motion and dvui.captured(self.wd.id)) {
+            } else if (e.evt.mouse.action == .motion and dvui.captured(self.data().id)) {
                 e.handle(@src(), self.data());
                 // move if dragging
                 if (dvui.dragging(e.evt.mouse.p)) |dps| {
-                    dvui.refresh(null, @src(), self.wd.id);
+                    dvui.refresh(null, @src(), self.data().id);
                     const unclamped_size =
                         switch (self.direction) {
                             .vertical => self.size() + dps.x / rs.s + self.offset.x,
@@ -825,9 +825,9 @@ pub const HeaderResizeWidget = struct {
     }
 
     pub fn deinit(self: *HeaderResizeWidget) void {
-        dvui.dataSet(null, self.wd.id, "_offset", self.offset);
-        self.wd.minSizeSetAndRefresh();
-        self.wd.minSizeReportToParent();
+        dvui.dataSet(null, self.data().id, "_offset", self.offset);
+        self.data().minSizeSetAndRefresh();
+        self.data().minSizeReportToParent();
         self.* = undefined;
     }
 };
