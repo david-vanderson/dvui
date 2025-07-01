@@ -1641,7 +1641,9 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                         });
                     } else {
                         // user intended to scroll with a finger swipe
-                        dvui.captureMouse(null, e.num); // stop possible drag and capture
+                        // release our capture including this event so a
+                        // containing scroll container can get it
+                        dvui.captureMouse(null, e.num-1); // stop possible drag and capture
                         dvui.dragEnd();
                     }
                 }

@@ -3181,37 +3181,31 @@ pub const EventMatchOptions = struct {
 pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     if (e.handled) return false;
 
-    if (e.focus_windowId) |wid| {
-        // focusable event
-        if (opts.cleanup) {
-            // window is catching all focus-routed events that didn't get
-            // processed (maybe the focus widget never showed up)
-            if (wid != opts.id) {
-                // not the focused window
-                return false;
-            }
-        } else {
-            if (e.focus_widgetId != opts.id and e.focus_widgetId != opts.focus_id) {
-                // not the focused widget
-                return false;
-            }
-        }
-    }
-
     switch (e.evt) {
-        .key => {},
-        .text => {},
-        .mouse => |me| {
-            const capture = captureMouseGet();
-            var other_capture = false;
-            if (capture) |cm| blk: {
-                if (me.action == .wheel_x or me.action == .wheel_y) {
-                    // wheel is not affected by mouse capture
-                    break :blk;
+        .key, .text => {
+            if (e.focus_windowId) |wid| {
+                // focusable event
+                if (opts.cleanup) {
+                    // window is catching all focus-routed events that didn't get
+                    // processed (maybe the focus widget never showed up)
+                    if (wid != opts.id) {
+                        // not the focused window
+                        return false;
+                    }
+                } else {
+                    if (e.focus_widgetId != opts.id and e.focus_widgetId != opts.focus_id) {
+                        // not the focused widget
+                        return false;
+                    }
                 }
-
-                if (cm.id == opts.id) {
-                    // we have capture, we get all mouse events
+            }
+        },
+        .mouse => |me| {
+            var other_capture = false;
+            if (e.focus_widgetId) |fwid| {
+                // this event is during a mouse capture
+                if (fwid == opts.id) {
+                    // we have capture, we get all capturable mouse events (excludes wheel)
                     return true;
                 } else {
                     // someone else has capture
@@ -3238,13 +3232,15 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             }
 
             if (other_capture) {
-                // someone else has capture, but otherwise we would have gotten
-                // this mouse event
-                if (me.action == .position and capture.?.subwindow_id == subwindowCurrentId() and !capture.?.rect.intersect(opts.r).empty()) {
-                    // we might be trying to highlight a background around the widget with capture:
-                    // * we are in the same subwindow
-                    // * our rect overlaps with the capture rect
-                    return true;
+                if (captureMouseGet()) |capture| {
+                    // someone else has capture, but otherwise we would have gotten
+                    // this mouse event
+                    if (me.action == .position and e.focus_windowId.? == subwindowCurrentId() and !capture.rect.intersect(opts.r).empty()) {
+                        // we might be trying to highlight a background around the widget with capture:
+                        // * we are in the same subwindow
+                        // * our rect overlaps with the capture rect
+                        return true;
+                    }
                 }
 
                 return false;
