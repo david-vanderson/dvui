@@ -72,9 +72,9 @@ pub fn init(src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, init_o
         .last_focus = dvui.lastFocusedIdInFrame(null),
     };
 
-    if (dvui.dataGet(null, self.wd.id, "_finger_down", bool)) |down| self.finger_down = down;
+    if (dvui.dataGet(null, self.data().id, "_finger_down", bool)) |down| self.finger_down = down;
 
-    const crect = self.wd.contentRect();
+    const crect = self.data().contentRect();
     self.si.viewport.w = crect.w;
     self.si.viewport.h = crect.h;
 
@@ -319,7 +319,7 @@ pub fn processScrollDrag(
     self: *ScrollContainerWidget,
     sd: dvui.ScrollDragOptions,
 ) void {
-    const rs = self.wd.contentRectScale();
+    const rs = self.data().contentRectScale();
     var scrolly: f32 = 0;
     if (sd.mouse_pt.y <= rs.r.y and // want to scroll up
         sd.screen_rect.y < rs.r.y and // scrolling would show more of child
@@ -372,7 +372,7 @@ pub fn processScrollTo(
     self: *ScrollContainerWidget,
     st: dvui.ScrollToOptions,
 ) void {
-    const rs = self.wd.contentRectScale();
+    const rs = self.data().contentRectScale();
 
     if (self.si.vertical != .none) {
         const ypx = @max(0.0, rs.r.y - st.screen_rect.y);
@@ -530,33 +530,33 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     if (self.si.vertical != .none) {
                         self.si.scrollByOffset(.vertical, -10);
                     }
-                    dvui.refresh(null, @src(), self.wd.id);
+                    dvui.refresh(null, @src(), self.data().id);
                 } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
                     e.handle(@src(), self.data());
                     if (self.si.vertical != .none) {
                         self.si.scrollByOffset(.vertical, 10);
                     }
-                    dvui.refresh(null, @src(), self.wd.id);
+                    dvui.refresh(null, @src(), self.data().id);
                 } else if (ke.code == .left and (ke.action == .down or ke.action == .repeat)) {
                     e.handle(@src(), self.data());
                     if (self.si.horizontal != .none) {
                         self.si.scrollByOffset(.horizontal, -10);
                     }
-                    dvui.refresh(null, @src(), self.wd.id);
+                    dvui.refresh(null, @src(), self.data().id);
                 } else if (ke.code == .right and (ke.action == .down or ke.action == .repeat)) {
                     e.handle(@src(), self.data());
                     if (self.si.horizontal != .none) {
                         self.si.scrollByOffset(.horizontal, 10);
                     }
-                    dvui.refresh(null, @src(), self.wd.id);
+                    dvui.refresh(null, @src(), self.data().id);
                 } else if (ke.code == .page_up and (ke.action == .down or ke.action == .repeat)) {
                     e.handle(@src(), self.data());
                     self.si.scrollPageUp(.vertical);
-                    dvui.refresh(null, @src(), self.wd.id);
+                    dvui.refresh(null, @src(), self.data().id);
                 } else if (ke.code == .page_down and (ke.action == .down or ke.action == .repeat)) {
                     e.handle(@src(), self.data());
                     self.si.scrollPageDown(.vertical);
-                    dvui.refresh(null, @src(), self.wd.id);
+                    dvui.refresh(null, @src(), self.data().id);
                 }
             },
             else => {},
@@ -615,8 +615,8 @@ pub fn deinit(self: *ScrollContainerWidget) void {
         .given => {},
     }
 
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
     _ = scrollSet(self.parentScroll);
     dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
