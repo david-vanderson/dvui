@@ -121,10 +121,10 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
 }
 
 pub fn install(self: *PanedWidget) void {
-    self.wd.register();
+    self.data().register();
 
-    self.wd.borderAndBackground(.{});
-    self.prevClip = dvui.clip(self.wd.contentRectScale().r);
+    self.data().borderAndBackground(.{});
+    self.prevClip = dvui.clip(self.data().contentRectScale().r);
 
     dvui.parentSet(self.widget());
 }
@@ -146,7 +146,7 @@ pub fn processEvents(self: *PanedWidget) void {
 pub fn draw(self: *PanedWidget) void {
     if (self.collapsed()) return;
 
-    if (dvui.captured(self.wd.id)) {
+    if (dvui.captured(self.data().id)) {
         // we are dragging it, draw it fully
         self.mouse_dist = 0;
     }
@@ -163,7 +163,7 @@ pub fn draw(self: *PanedWidget) void {
         if (self.mouse_dist > self.handle_thick + 3) return;
     }
 
-    const rs = self.wd.contentRectScale();
+    const rs = self.data().contentRectScale();
     var r = rs.r;
     const thick = self.handle_thick * rs.s; // physical
     switch (self.init_opts.direction) {
@@ -182,7 +182,7 @@ pub fn draw(self: *PanedWidget) void {
             r.w = width;
         },
     }
-    r.fill(.all(thick), .{ .color = self.wd.options.color(.text).opacity(0.5) });
+    r.fill(.all(thick), .{ .color = self.data().options.color(.text).opacity(0.5) });
 }
 
 pub fn collapsed(self: *PanedWidget) bool {
@@ -203,7 +203,7 @@ pub fn showSecond(self: *PanedWidget) bool {
 }
 
 pub fn animateSplit(self: *PanedWidget, end_val: f32) void {
-    dvui.animation(self.wd.id, "_split_ratio", dvui.Animation{ .start_val = self.split_ratio.*, .end_val = end_val, .end_time = 250_000 });
+    dvui.animation(self.data().id, "_split_ratio", dvui.Animation{ .start_val = self.split_ratio.*, .end_val = end_val, .end_time = 250_000 });
 }
 
 pub fn widget(self: *PanedWidget) Widget {
@@ -211,12 +211,12 @@ pub fn widget(self: *PanedWidget) Widget {
 }
 
 pub fn data(self: *PanedWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *PanedWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) dvui.Rect {
     _ = id;
-    var r = self.wd.contentRect().justSize();
+    var r = self.data().contentRect().justSize();
     if (self.first_side) {
         self.first_side = false;
         if (self.collapsed()) {
@@ -270,16 +270,16 @@ pub fn rectFor(self: *PanedWidget, id: dvui.WidgetId, min_size: Size, e: Options
 }
 
 pub fn screenRectScale(self: *PanedWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *PanedWidget, s: dvui.Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s));
+    self.data().minSizeMax(self.data().options.padSize(s));
 }
 
 pub fn processEvent(self: *PanedWidget, e: *Event) void {
     if (e.evt == .mouse) {
-        const rs = self.wd.contentRectScale();
+        const rs = self.data().contentRectScale();
         const cursor: enums.Cursor = switch (self.init_opts.direction) {
             .horizontal => .arrow_w_e,
             .vertical => .arrow_n_s,
@@ -295,7 +295,7 @@ pub fn processEvent(self: *PanedWidget, e: *Event) void {
             self.handle_thick = std.math.clamp(hd.handle_size_max - mouse_dist_outside / 2, self.init_opts.handle_size, hd.handle_size_max);
         }
 
-        if (dvui.captured(self.wd.id) or self.mouse_dist <= @max(self.handle_thick / 2, 2)) {
+        if (dvui.captured(self.data().id) or self.mouse_dist <= @max(self.handle_thick / 2, 2)) {
             if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
                 e.handle(@src(), self.data());
                 // capture and start drag
@@ -306,7 +306,7 @@ pub fn processEvent(self: *PanedWidget, e: *Event) void {
                 // stop possible drag and capture
                 dvui.captureMouse(null);
                 dvui.dragEnd();
-            } else if (e.evt.mouse.action == .motion and dvui.captured(self.wd.id)) {
+            } else if (e.evt.mouse.action == .motion and dvui.captured(self.data().id)) {
                 e.handle(@src(), self.data());
                 // move if dragging
                 if (dvui.dragging(e.evt.mouse.p)) |dps| {
@@ -332,12 +332,12 @@ pub fn processEvent(self: *PanedWidget, e: *Event) void {
 pub fn deinit(self: *PanedWidget) void {
     defer dvui.widgetFree(self);
     dvui.clipSet(self.prevClip);
-    dvui.dataSet(null, self.wd.id, "_collapsing", self.collapsing);
-    dvui.dataSet(null, self.wd.id, "_collapsed", self.collapsed_state);
-    dvui.dataSet(null, self.wd.id, "_split_ratio", self.split_ratio.*);
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    dvui.dataSet(null, self.data().id, "_collapsing", self.collapsing);
+    dvui.dataSet(null, self.data().id, "_collapsed", self.collapsed_state);
+    dvui.dataSet(null, self.data().id, "_split_ratio", self.split_ratio.*);
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 

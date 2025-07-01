@@ -89,7 +89,7 @@ const AnimatingDialog = struct {
         var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id.asUsize(), .max_size_content = .width(300) });
 
         if (dvui.firstFrame(win.data().id)) {
-            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 0.0, .end_val = 1.0, .end_time = duration, .easing = easing });
+            dvui.animation(win.data().id, "rect_percent", .{ .start_val = 0.0, .end_val = 1.0, .end_time = duration, .easing = easing });
         }
 
         const winHeight = win.data().rect.h;
@@ -148,7 +148,7 @@ const AnimatingDialog = struct {
         }
 
         if (closing) {
-            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 1.0, .end_val = 0.0, .end_time = duration, .easing = easing });
+            dvui.animation(win.data().id, "rect_percent", .{ .start_val = 1.0, .end_val = 0.0, .end_time = duration, .easing = easing });
         }
     }
 
@@ -438,7 +438,7 @@ pub fn demo() void {
                 defer box.deinit();
 
                 var options: dvui.Options = .{ .gravity_x = 0.5, .gravity_y = 1.0 };
-                if (dvui.captured(bw.wd.id)) options = options.override(.{ .color_text = .{ .color = options.color(.text_press) } });
+                if (dvui.captured(bw.data().id)) options = options.override(.{ .color_text = .{ .color = options.color(.text_press) } });
 
                 dvui.label(@src(), "{s}", .{e.name()}, options);
 
@@ -1872,7 +1872,7 @@ pub fn layout() void {
 
             dvui.label(@src(), "Left Side", .{}, .{});
             dvui.label(@src(), "collapses when width < {d}", .{paned_collapsed_width}, .{});
-            dvui.label(@src(), "current width {d}", .{paned.wd.rect.w}, .{});
+            dvui.label(@src(), "current width {d}", .{paned.data().rect.w}, .{});
             if (paned.collapsed() and dvui.button(@src(), "Goto Right", .{}, .{})) {
                 paned.animateSplit(0.0);
             }
@@ -2240,7 +2240,7 @@ pub fn reorderListsAdvanced() void {
 
         dvui.label(@src(), "Drag to add : {d}", .{g.strings_len}, .{});
 
-        if (dvui.ReorderWidget.draggable(@src(), .{ .top_left = hbox2.wd.rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+        if (dvui.ReorderWidget.draggable(@src(), .{ .top_left = hbox2.data().rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
             // add to list, but will be removed if not dropped onto a list slot
             g.strings[g.strings_len] = g.strings_template[g.strings_len];
             added_idx = g.strings_len;
@@ -2303,7 +2303,7 @@ pub fn reorderListsAdvanced() void {
 
         dvui.label(@src(), "{s}", .{s}, .{});
 
-        if (dvui.ReorderWidget.draggable(@src(), .{ .top_left = reorderable.wd.rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+        if (dvui.ReorderWidget.draggable(@src(), .{ .top_left = reorderable.data().rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
             reorder.dragStart(i, p); // reorder grabs capture
         }
     }
@@ -3609,12 +3609,12 @@ pub fn animations() void {
         var mslabel = dvui.LabelWidget.init(@src(), "{d:0>3} ms into second", .{@as(u32, @intCast(left))}, .{}, .{});
         mslabel.install();
         mslabel.draw();
-        mslabel.deinit();
 
-        if (dvui.timerDoneOrNone(mslabel.wd.id)) {
+        if (dvui.timerDoneOrNone(mslabel.data().id)) {
             const wait = 1000 * (1000 - left);
-            dvui.timer(mslabel.wd.id, wait);
+            dvui.timer(mslabel.data().id, wait);
         }
+        mslabel.deinit();
 
         dvui.label(@src(), "Estimate of frame overhead {d:6} us", .{dvui.currentWindow().loop_target_slop}, .{});
         switch (dvui.backend.kind) {
@@ -3894,11 +3894,11 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
 
     // we won't have the height the first frame, so always set it
     var scroll_info: ScrollInfo = .{ .vertical = .given };
-    if (dvui.dataGet(null, fwin.wd.id, "scroll_info", ScrollInfo)) |si| {
+    if (dvui.dataGet(null, fwin.data().id, "scroll_info", ScrollInfo)) |si| {
         scroll_info = si;
         scroll_info.virtual_size.h = height;
     }
-    defer dvui.dataSet(null, fwin.wd.id, "scroll_info", scroll_info);
+    defer dvui.dataSet(null, fwin.data().id, "scroll_info", scroll_info);
 
     var scroll = dvui.scrollArea(@src(), .{ .scroll_info = &scroll_info }, .{ .expand = .both });
     defer scroll.deinit();
@@ -4705,11 +4705,11 @@ pub const StrokeTest = struct {
             self.processEvent(e);
         }
 
-        self.wd.borderAndBackground(.{});
+        self.data().borderAndBackground(.{});
 
         _ = dvui.parentSet(self.widget());
 
-        const rs = self.wd.contentRectScale();
+        const rs = self.data().contentRectScale();
         const fill_color = dvui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
         for (points, 0..) |p, i| {
             const rect = dvui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
@@ -4736,26 +4736,26 @@ pub const StrokeTest = struct {
     }
 
     pub fn data(self: *Self) *dvui.WidgetData {
-        return &self.wd;
+        return self.wd.validate();
     }
 
     pub fn rectFor(self: *Self, id: dvui.WidgetId, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {
         _ = id;
-        return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+        return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
     }
 
     pub fn screenRectScale(self: *Self, rect: dvui.Rect) dvui.RectScale {
-        return self.wd.contentRectScale().rectToRectScale(rect);
+        return self.data().contentRectScale().rectToRectScale(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: dvui.Size) void {
-        self.wd.minSizeMax(self.wd.options.padSize(s));
+        self.data().minSizeMax(self.data().options.padSize(s));
     }
 
     pub fn processEvent(self: *Self, e: *dvui.Event) void {
         switch (e.evt) {
             .mouse => |me| {
-                const rs = self.wd.contentRectScale();
+                const rs = self.data().contentRectScale();
                 const mp = rs.pointFromPhysical(me.p);
                 switch (me.action) {
                     .press => {
@@ -4796,7 +4796,7 @@ pub const StrokeTest = struct {
                             const dp = dps.scale(1 / rs.s, Point);
                             points[dragi.?].x += dp.x;
                             points[dragi.?].y += dp.y;
-                            dvui.refresh(null, @src(), self.wd.id);
+                            dvui.refresh(null, @src(), self.data().id);
                         }
                     },
                     .wheel_y => |ticks| {
@@ -4805,7 +4805,7 @@ pub const StrokeTest = struct {
                         const zs = @exp(@log(base) * ticks);
                         if (zs != 1.0) {
                             thickness *= zs;
-                            dvui.refresh(null, @src(), self.wd.id);
+                            dvui.refresh(null, @src(), self.data().id);
                         }
                     },
                     else => {},
@@ -4816,10 +4816,10 @@ pub const StrokeTest = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.wd.minSizeSetAndRefresh();
-        self.wd.minSizeReportToParent();
+        self.data().minSizeSetAndRefresh();
+        self.data().minSizeReportToParent();
 
-        dvui.parentReset(self.wd.id, self.wd.parent);
+        dvui.parentReset(self.data().id, self.data().parent);
         self.* = undefined;
     }
 };

@@ -8,7 +8,6 @@ const RectScale = dvui.RectScale;
 const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetId = dvui.WidgetId;
-
 const WidgetData = @This();
 
 pub const InitOptions = struct {
@@ -320,6 +319,11 @@ pub fn minSizeReportToParent(self: *const WidgetData) void {
     if (self.options.rect == null) {
         self.parent.minSizeForChild(self.min_size);
     }
+}
+
+pub fn validate(self: *const WidgetData) *WidgetData {
+    std.debug.assert(self.id != WidgetId.undef); // Indicates a use after deinit() error.
+    return @constCast(self);
 }
 
 test {

@@ -153,6 +153,8 @@ const dvui = @This();
 
 pub const WidgetId = enum(u64) {
     zero = 0,
+    // This may not work in future and is illegal behaviour / arch specfic to compare to undefined.
+    undef = 0xAAAAAAAAAAAAAAAA,
     _,
 
     pub fn asU64(self: WidgetId) u64 {
@@ -1377,7 +1379,7 @@ pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void
                         cw.last_focused_id_this_frame = wid;
                     } else {
                         // walk parent chain
-                        var wd = cw.wd.parent.data();
+                        var wd = cw.data().parent.data();
 
                         while (true) : (wd = wd.parent.data()) {
                             if (wd.id == wid) {
@@ -1385,7 +1387,7 @@ pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void
                                 break;
                             }
 
-                            if (wd.id == cw.wd.id) {
+                            if (wd.id == cw.data().id) {
                                 // got to base Window
                                 break;
                             }
@@ -2656,7 +2658,7 @@ pub fn FPS() f32 {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn parentGet() Widget {
-    return currentWindow().wd.parent;
+    return currentWindow().data().parent;
 }
 
 /// Make w the new parent widget.  See `parentGet`.
@@ -2664,7 +2666,7 @@ pub fn parentGet() Widget {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn parentSet(w: Widget) void {
     const cw = currentWindow();
-    cw.wd.parent = w;
+    cw.data().parent = w;
 }
 
 /// Make a previous parent widget the current parent.
@@ -2675,11 +2677,11 @@ pub fn parentSet(w: Widget) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn parentReset(id: WidgetId, w: Widget) void {
     const cw = currentWindow();
-    const actual_current = cw.wd.parent.data().id;
+    const actual_current = cw.data().parent.data().id;
     if (id != actual_current) {
         cw.debug_widget_id = actual_current;
 
-        var wd = cw.wd.parent.data();
+        var wd = cw.data().parent.data();
 
         log.err("widget is not closed within its parent. did you forget to call `.deinit()`?", .{});
 
@@ -2689,16 +2691,16 @@ pub fn parentReset(id: WidgetId, w: Widget) void {
                 wd.src.line,
                 wd.options.name orelse "???",
                 wd.id,
-                if (wd.id == cw.wd.id) "\n" else "",
+                if (wd.id == cw.data().id) "\n" else "",
             });
 
-            if (wd.id == cw.wd.id) {
+            if (wd.id == cw.data().id) {
                 // got to base Window
                 break;
             }
         }
     }
-    cw.wd.parent = w;
+    cw.data().parent = w;
 }
 
 /// Set if dvui should immediately render, and return the previous setting.
@@ -2720,8 +2722,8 @@ pub fn renderingSet(r: bool) bool {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn windowRect() Rect.Natural {
-    // Window.wd.rect is the definition of natural
-    return .cast(currentWindow().wd.rect);
+    // Window.data().rect is the definition of natural
+    return .cast(currentWindow().data().rect);
 }
 
 /// Get the OS window size in pixels.  See `windowRect`.
@@ -3666,7 +3668,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
 
     const evts = events();
     for (evts) |*e| {
-        if (!eventMatch(e, .{ .id = over.wd.id, .r = over.wd.contentRectScale().r }))
+        if (!eventMatch(e, .{ .id = over.data().id, .r = over.data().contentRectScale().r }))
             continue;
 
         if (e.evt == .mouse and e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
@@ -4577,7 +4579,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     defer bc.deinit();
 
     var expanded: bool = init_opts.default_expanded;
-    if (dvui.dataGet(null, bc.wd.id, "_expand", bool)) |e| {
+    if (dvui.dataGet(null, bc.data().id, "_expand", bool)) |e| {
         expanded = e;
     }
 
@@ -4602,7 +4604,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     }
     labelNoFmt(@src(), label_str, .{}, options.strip());
 
-    dvui.dataSet(null, bc.wd.id, "_expand", expanded);
+    dvui.dataSet(null, bc.data().id, "_expand", expanded);
 
     return expanded;
 }
@@ -5750,7 +5752,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
     knob.install();
     knob.drawBackground();
     if (b.data().id == focusedWidgetId()) {
-        knob.wd.focusBorder();
+        knob.data().focusBorder();
     }
     knob.deinit();
 
@@ -5827,7 +5829,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         var te = TextEntryWidget.init(@src(), .{ .text = .{ .buffer = te_buf } }, options.strip().override(.{ .min_size_content = .{}, .expand = .both, .tab_index = 0 }));
         te.install();
 
-        if (firstFrame(te.wd.id)) {
+        if (firstFrame(te.data().id)) {
             var sel = te.textLayout.selection;
             sel.start = 0;
             sel.cursor = 0;
@@ -6047,10 +6049,10 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             }
         }
 
-        b.wd.borderAndBackground(.{ .fill_color = if (hover) b.wd.options.color(.fill_hover) else b.wd.options.color(.fill) });
+        b.data().borderAndBackground(.{ .fill_color = if (hover) b.data().options.color(.fill_hover) else b.data().options.color(.fill) });
 
         // only draw handle if we have a min and max
-        if (b.wd.visible() and init_opts.min != null and init_opts.max != null) {
+        if (b.data().visible() and init_opts.min != null and init_opts.max != null) {
             const how_far = (init_opts.value.* - init_opts.min.?) / (init_opts.max.? - init_opts.min.?);
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
@@ -6216,7 +6218,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 
     const rs = s.borderRectScale();
 
-    if (bw.wd.visible()) {
+    if (bw.data().visible()) {
         checkmark(target.*, bw.focused(), rs, bw.pressed(), bw.hovered(), options);
     }
 
@@ -6302,7 +6304,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 
     const rs = s.borderRectScale();
 
-    if (bw.wd.visible()) {
+    if (bw.data().visible()) {
         radioCircle(active, bw.focused(), rs, bw.pressed(), bw.hovered(), options);
     }
 
@@ -6612,7 +6614,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
         }
     }
 
-    if (init_opts.value != null and result.value == .Empty and focusedWidgetId() != te.wd.id) {
+    if (init_opts.value != null and result.value == .Empty and focusedWidgetId() != te.data().id) {
         // If the text entry is empty and we loose focus,
         // reset the hex value by invalidating the stored previous value
         dataRemove(null, id, "value");
@@ -7331,9 +7333,9 @@ pub const BasicLayout = struct {
                     wd.src.line,
                     wd.options.name orelse "???",
                     wd.id,
-                    if (wd.id == cw.wd.id) "\n" else "",
+                    if (wd.id == cw.data().id) "\n" else "",
                 });
-                if (wd.id == cw.wd.id) {
+                if (wd.id == cw.data().id) {
                     break;
                 }
             }

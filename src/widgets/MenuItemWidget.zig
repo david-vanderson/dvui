@@ -41,18 +41,18 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *MenuItemWidget) void {
-    self.wd.register();
+    self.data().register();
 
-    dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
+    dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
 
-    self.wd.borderAndBackground(.{});
+    self.data().borderAndBackground(.{});
 
     dvui.parentSet(self.widget());
 }
 
 pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bool = false }) void {
     var focused: bool = false;
-    if (self.wd.id == dvui.focusedWidgetId()) {
+    if (self.data().id == dvui.focusedWidgetId()) {
         focused = true;
     }
 
@@ -62,7 +62,7 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
         dvui.focusWidget(null, null, null);
     }
 
-    if (focused or ((self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow()) and self.highlight)) {
+    if (focused or ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) and self.highlight)) {
         if (!self.init_opts.submenu or !dvui.MenuWidget.current().?.submenus_activated) {
             if (!self.init_opts.highlight_only) {
                 self.show_active = true;
@@ -70,27 +70,27 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
 
             if (!self.focused_last_frame) {
                 // in case we are in a scrollable dropdown, scroll
-                dvui.scrollTo(.{ .screen_rect = self.wd.borderRectScale().r });
+                dvui.scrollTo(.{ .screen_rect = self.data().borderRectScale().r });
             }
         }
     }
 
     self.focused_last_frame = focused;
 
-    if (self.wd.visible()) {
+    if (self.data().visible()) {
         if (self.show_active) {
             if (opts.focus_as_outline) {
-                self.wd.focusBorder();
+                self.data().focusBorder();
             } else {
-                const rs = self.wd.backgroundRectScale();
-                rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.wd.options.color(.accent) });
+                const rs = self.data().backgroundRectScale();
+                rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.accent) });
             }
-        } else if ((self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow()) or self.highlight) {
-            const rs = self.wd.backgroundRectScale();
-            rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.wd.options.color(.fill_hover) });
-        } else if (self.wd.options.backgroundGet()) {
-            const rs = self.wd.backgroundRectScale();
-            rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.wd.options.color(.fill) });
+        } else if ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) or self.highlight) {
+            const rs = self.data().backgroundRectScale();
+            rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill_hover) });
+        } else if (self.data().options.backgroundGet()) {
+            const rs = self.data().backgroundRectScale();
+            rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill) });
         }
     }
 }
@@ -112,7 +112,7 @@ pub fn processEvents(self: *MenuItemWidget) void {
 pub fn activeRect(self: *const MenuItemWidget) ?Rect.Natural {
     var act = false;
     if (self.init_opts.submenu) {
-        if (dvui.MenuWidget.current().?.submenus_activated and (self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow())) {
+        if (dvui.MenuWidget.current().?.submenus_activated and (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow())) {
             act = true;
         }
     } else if (self.activated) {
@@ -120,7 +120,7 @@ pub fn activeRect(self: *const MenuItemWidget) ?Rect.Natural {
     }
 
     if (act) {
-        return self.wd.backgroundRectScale().r.toNatural();
+        return self.data().backgroundRectScale().r.toNatural();
     } else {
         return null;
     }
@@ -130,21 +130,21 @@ pub fn widget(self: *MenuItemWidget) Widget {
     return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
-pub fn data(self: *MenuItemWidget) *WidgetData {
-    return &self.wd;
+pub fn data(self: *const MenuItemWidget) *WidgetData {
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *MenuItemWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
-    return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *MenuItemWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *MenuItemWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s));
+    self.data().minSizeMax(self.data().options.padSize(s));
 }
 
 pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
@@ -153,7 +153,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
             if (me.action == .focus) {
                 dvui.MenuWidget.current().?.mouse_mode = true;
                 e.handle(@src(), self.data());
-                dvui.focusWidget(self.wd.id, null, e.num);
+                dvui.focusWidget(self.data().id, null, e.num);
             } else if (me.action == .press and me.button.pointer()) {
                 // This works differently than normal (like buttons) where we
                 // captureMouse on press, to support the mouse
@@ -177,17 +177,17 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
             } else if (me.action == .release) {
                 dvui.MenuWidget.current().?.mouse_mode = true;
                 e.handle(@src(), self.data());
-                if (!self.init_opts.submenu and (self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow())) {
+                if (!self.init_opts.submenu and (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow())) {
                     self.activated = true;
-                    dvui.refresh(null, @src(), self.wd.id);
+                    dvui.refresh(null, @src(), self.data().id);
                 }
-                if (dvui.captured(self.wd.id)) {
+                if (dvui.captured(self.data().id)) {
                     // should only happen with touch
                     dvui.captureMouse(null);
                     dvui.dragEnd();
                 }
             } else if (me.action == .motion and me.button.touch()) {
-                if (dvui.captured(self.wd.id)) {
+                if (dvui.captured(self.data().id)) {
                     if (dvui.dragging(me.p)) |_| {
                         // if we overcame the drag threshold, then that
                         // means the person probably didn't want to touch
@@ -211,7 +211,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     // we shouldn't have gotten this event if the motion
                     // was towards a submenu (caught in MenuWidget)
                     dvui.focusSubwindow(null, null); // focuses the window we are in
-                    dvui.focusWidget(self.wd.id, null, null);
+                    dvui.focusWidget(self.data().id, null, null);
 
                     if (self.init_opts.submenu) {
                         dvui.MenuWidget.current().?.submenus_in_child = true;
@@ -227,7 +227,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     dvui.MenuWidget.current().?.submenus_activated = true;
                 } else {
                     self.activated = true;
-                    dvui.refresh(null, @src(), self.wd.id);
+                    dvui.refresh(null, @src(), self.data().id);
                 }
             } else if (ke.code == .right and ke.action == .down) {
                 if (self.init_opts.submenu and dvui.MenuWidget.current().?.init_opts.dir == .vertical) {
@@ -249,10 +249,10 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
 
 pub fn deinit(self: *MenuItemWidget) void {
     defer dvui.widgetFree(self);
-    dvui.dataSet(null, self.wd.id, "_focus_last", self.focused_last_frame);
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    dvui.dataSet(null, self.data().id, "_focus_last", self.focused_last_frame);
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 

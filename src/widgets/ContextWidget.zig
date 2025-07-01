@@ -48,8 +48,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 pub fn install(self: *ContextWidget) void {
     dvui.parentSet(self.widget());
     self.prev_menu_root = dvui.MenuWidget.Root.set(.{ .ptr = self, .close = menu_root_close });
-    self.wd.register();
-    self.wd.borderAndBackground(.{});
+    self.data().register();
+    self.data().borderAndBackground(.{});
 }
 
 pub fn activePoint(self: *ContextWidget) ?Point.Natural {
@@ -76,21 +76,21 @@ pub fn widget(self: *ContextWidget) Widget {
 }
 
 pub fn data(self: *ContextWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *ContextWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
-    dvui.log.debug("{s}:{d} ContextWidget should not have normal child widgets, only menu stuff", .{ self.wd.src.file, self.wd.src.line });
-    return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+    dvui.log.debug("{s}:{d} ContextWidget should not have normal child widgets, only menu stuff", .{ self.data().src.file, self.data().src.line });
+    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *ContextWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *ContextWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s));
+    self.data().minSizeMax(self.data().options.padSize(s));
 }
 
 pub fn processEvents(self: *ContextWidget) void {
@@ -115,7 +115,7 @@ pub fn processEvent(self: *ContextWidget, e: *Event) void {
             } else if (me.action == .press and me.button == .right) {
                 e.handle(@src(), self.data());
 
-                dvui.focusWidget(self.wd.id, null, e.num);
+                dvui.focusWidget(self.data().id, null, e.num);
                 self.focused = true;
 
                 // scale the point back to natural so we can use it in Popup
@@ -132,15 +132,15 @@ pub fn processEvent(self: *ContextWidget, e: *Event) void {
 pub fn deinit(self: *ContextWidget) void {
     defer dvui.widgetFree(self);
     if (self.focused) {
-        dvui.dataSet(null, self.wd.id, "_activePt", self.activePt);
+        dvui.dataSet(null, self.data().id, "_activePt", self.activePt);
     }
 
     // we are always given a rect, so we don't do normal layout, don't do these
-    //self.wd.minSizeSetAndRefresh();
-    //self.wd.minSizeReportToParent();
+    //self.data().minSizeSetAndRefresh();
+    //self.data().minSizeReportToParent();
 
     _ = dvui.MenuWidget.Root.set(self.prev_menu_root);
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 

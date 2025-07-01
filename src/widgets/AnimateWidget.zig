@@ -36,14 +36,14 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *AnimateWidget) void {
-    if (dvui.firstFrame(self.wd.id)) {
+    if (dvui.firstFrame(self.data().id)) {
         // start begin animation
         self.start();
     }
 
-    if (dvui.animationGet(self.wd.id, "_end")) |a| {
+    if (dvui.animationGet(self.data().id, "_end")) |a| {
         self.val = a.value();
-    } else if (dvui.animationGet(self.wd.id, "_start")) |a| {
+    } else if (dvui.animationGet(self.data().id, "_start")) |a| {
         self.val = a.value();
     }
 
@@ -55,22 +55,22 @@ pub fn install(self: *AnimateWidget) void {
                 dvui.themeGet().alpha *= std.math.clamp(v, 0, 1);
             },
             .vertical => {
-                if (dvui.minSizeGet(self.wd.id)) |ms| {
-                    if (self.wd.rect.h > ms.h + 0.001) {
+                if (dvui.minSizeGet(self.data().id)) |ms| {
+                    if (self.data().rect.h > ms.h + 0.001) {
                         // we are bigger than our min size (maybe expanded) - account for floating point
-                        const h = self.wd.rect.h;
-                        self.wd.rect.h *= @max(v, 0);
-                        self.wd.rect.y += self.wd.options.gravityGet().y * (h - self.wd.rect.h);
+                        const h = self.data().rect.h;
+                        self.data().rect.h *= @max(v, 0);
+                        self.data().rect.y += self.data().options.gravityGet().y * (h - self.data().rect.h);
                     }
                 }
             },
             .horizontal => {
-                if (dvui.minSizeGet(self.wd.id)) |ms| {
-                    if (self.wd.rect.w > ms.w + 0.001) {
+                if (dvui.minSizeGet(self.data().id)) |ms| {
+                    if (self.data().rect.w > ms.w + 0.001) {
                         // we are bigger than our min size (maybe expanded) - account for floating point
-                        const w = self.wd.rect.w;
-                        self.wd.rect.w *= @max(v, 0);
-                        self.wd.rect.x += self.wd.options.gravityGet().x * (w - self.wd.rect.w);
+                        const w = self.data().rect.w;
+                        self.data().rect.w *= @max(v, 0);
+                        self.data().rect.x += self.data().options.gravityGet().x * (w - self.data().rect.w);
                     }
                 }
             },
@@ -78,12 +78,12 @@ pub fn install(self: *AnimateWidget) void {
     }
 
     dvui.parentSet(self.widget());
-    self.wd.register();
-    self.wd.borderAndBackground(.{});
+    self.data().register();
+    self.data().borderAndBackground(.{});
 }
 
 pub fn start(self: *AnimateWidget) void {
-    dvui.animation(self.wd.id, "_start", .{
+    dvui.animation(self.data().id, "_start", .{
         .start_val = 0.0,
         .end_val = 1.0,
         .end_time = self.init_opts.duration,
@@ -92,7 +92,7 @@ pub fn start(self: *AnimateWidget) void {
 }
 
 pub fn startEnd(self: *AnimateWidget) void {
-    dvui.animation(self.wd.id, "_end", .{
+    dvui.animation(self.data().id, "_end", .{
         .start_val = 1.0,
         .end_val = 0.0,
         .end_time = self.init_opts.duration,
@@ -101,7 +101,7 @@ pub fn startEnd(self: *AnimateWidget) void {
 }
 
 pub fn end(self: *AnimateWidget) bool {
-    if (dvui.animationGet(self.wd.id, "_end")) |a| {
+    if (dvui.animationGet(self.data().id, "_end")) |a| {
         return a.done();
     }
 
@@ -113,20 +113,20 @@ pub fn widget(self: *AnimateWidget) Widget {
 }
 
 pub fn data(self: *AnimateWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *AnimateWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
-    return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *AnimateWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *AnimateWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s));
+    self.data().minSizeMax(self.data().options.padSize(s));
 }
 
 pub fn deinit(self: *AnimateWidget) void {
@@ -138,18 +138,18 @@ pub fn deinit(self: *AnimateWidget) void {
             },
             .vertical => {
                 // Negative height messes with layout
-                self.wd.min_size.h *= @max(v, 0);
+                self.data().min_size.h *= @max(v, 0);
             },
             .horizontal => {
                 // Negative width messes with layout
-                self.wd.min_size.w *= @max(v, 0);
+                self.data().min_size.w *= @max(v, 0);
             },
         }
     }
 
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
+    dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
 }
 

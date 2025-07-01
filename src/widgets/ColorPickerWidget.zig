@@ -167,7 +167,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
     indicator.install();
     indicator.drawBackground();
     if (b.data().id == dvui.focusedWidgetId()) {
-        indicator.wd.focusBorder();
+        indicator.data().focusBorder();
     }
     indicator.deinit();
 
@@ -311,7 +311,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
     knob.install();
     knob.drawBackground();
     if (b.data().id == dvui.focusedWidgetId()) {
-        knob.wd.focusBorder();
+        knob.data().focusBorder();
     }
     knob.deinit();
 
