@@ -1,4 +1,4 @@
-//! Helpers for mouse and keyboard
+//! Helpers for mouse and keyboard navigation.
 //!
 
 const std = @import("std");
@@ -20,6 +20,8 @@ pub const GridKeyboard = struct {
         }
     };
 
+    /// Direction keys.
+    /// - use defaultKeys() or provide your own bindings.
     pub const NavigationKeys = struct {
         up: dvui.enums.Keybind,
         down: dvui.enums.Keybind,
@@ -33,7 +35,7 @@ pub const GridKeyboard = struct {
             .right = .{},
         };
 
-        pub fn defaultKeys() NavigationKeys {
+        pub fn defaults() NavigationKeys {
             const cw = dvui.currentWindow();
             return .{
                 .up = cw.keybinds.get("char_up") orelse unreachable,
@@ -43,25 +45,24 @@ pub const GridKeyboard = struct {
             };
         }
     };
+    /// col_num will always be less than this value.
     max_cols: usize,
+    /// row_num will always be less than this value.
     max_rows: usize,
-    navigation_keys: NavigationKeys,
+    /// Customize navigation keys
+    /// - use .defaults() for default keys.
+    navigation_keys: NavigationKeys = .none,
+
+    /// result cursor. prefer to use cellCursor() instead.
     cursor: Cell = .{ .col_num = 0, .row_num = 0 },
 
+    /// Change max row and col limits
     pub fn setLimits(self: *GridKeyboard, max_cols: usize, max_rows: usize) void {
         self.max_cols = max_cols;
         self.max_rows = max_rows;
     }
 
-    pub fn matchEvent(e: *Event, wd: *WidgetData) bool {
-        const ret = dvui.eventMatch(e, .{
-            .id = wd.id,
-            .focus_id = dvui.focusedWidgetId() orelse .zero,
-            .r = wd.borderRectScale().r,
-        });
-        return ret;
-    }
-
+    /// Call this once per frame before the grid body cells are created.
     pub fn processEvents(self: *GridKeyboard, grid: *GridWidget) void {
         self.enforceCursorLimits();
 
@@ -73,7 +74,18 @@ pub const GridKeyboard = struct {
         }
     }
 
+    pub fn matchEvent(e: *Event, wd: *WidgetData) bool {
+        const ret = dvui.eventMatch(e, .{
+            .id = wd.id,
+            .focus_id = dvui.focusedWidgetId() orelse .zero,
+            .r = wd.borderRectScale().r,
+        });
+        return ret;
+    }
+
     pub fn processEvent(self: *GridKeyboard, e: *Event, grid: *GridWidget) void {
+        defer self.enforceCursorLimits();
+
         switch (e.evt) {
             .key => |*ke| {
                 if (ke.action == .down) {
@@ -94,8 +106,8 @@ pub const GridKeyboard = struct {
             },
             .mouse => |*me| {
                 if (me.action == .focus) {
-                    const clicked_cell = grid.pointToColRow(me.p);
-                    if (clicked_cell) |cell| {
+                    const focused_cell = grid.pointToColRow(me.p);
+                    if (focused_cell) |cell| {
                         self.cursor.col_num = cell.col_num;
                         self.cursor.row_num = cell.row_num;
                     }
@@ -103,7 +115,6 @@ pub const GridKeyboard = struct {
             },
             else => {},
         }
-        self.enforceCursorLimits();
     }
 
     pub fn enforceCursorLimits(self: *GridKeyboard) void {

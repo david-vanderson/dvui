@@ -39,7 +39,7 @@ pub fn main() !void {
     // init SDL backend (creates and owns OS window)
     var backend = try Backend.initWindow(.{
         .allocator = gpa,
-        .size = .{ .w = 800.0, .h = 600.0 },
+        .size = .{ .w = 1024.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
         .vsync = vsync,
         .title = "DVUI SDL Standalone Example",
@@ -102,7 +102,7 @@ fn initData() !void {
     try pirate_data.append(gpa, .{ .year = 2020, .pirates = 1_000_000, .temperature = 5 });
 }
 
-var keyboard_nav: dvui.navigation.GridKeyboard = .{ .max_cols = 3, .max_rows = 0, .navigation_keys = .none };
+var keyboard_nav: dvui.navigation.GridKeyboard = .{ .max_cols = 3, .max_rows = 0 };
 var initialized = false;
 // both dvui and SDL drawing
 fn gui_frame() !void {
@@ -120,16 +120,16 @@ fn gui_frame() !void {
         }
     }
 
-    var main_box = dvui.box(@src(), .horizontal, .{ .expand = .both, .color_fill = .fill_window, .background = true });
+    var main_box = dvui.box(@src(), .horizontal, .{ .expand = .both, .color_fill = .fill_window, .background = true, .border = dvui.Rect.all(1) });
     defer main_box.deinit();
     {
-        var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+        var vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .border = dvui.Rect.all(1) });
         defer vbox.deinit();
         {
             var grid = dvui.grid(@src(), .numCols(3), .{}, .{});
             defer grid.deinit();
             if (!initialized) {
-                keyboard_nav.navigation_keys = .defaultKeys();
+                keyboard_nav.navigation_keys = .defaults();
                 initialized = true;
             }
             keyboard_nav.setLimits(3, pirate_data.len);
@@ -172,16 +172,38 @@ fn gui_frame() !void {
         }
     }
     {
-        var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+        var vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .border = dvui.Rect.all(1) });
         defer vbox.deinit();
-        dvui.plotXY(
-            @src(),
-            .{ .title = "Pirates vs Global Temperature" },
-            5,
-            pirate_data.items(.year),
-            pirate_data.items(.temperature),
-            .{ .expand = .both },
-        );
+
+        var plot = dvui.plot(@src(), .{ .title = "Pirates vs Global Temperature" }, .{ .padding = .{}, .expand = .both, .background = true, .min_size_content = .{ .w = 500 } });
+        defer plot.deinit();
+        const thick = 2;
+        const scale = 200_000;
+        {
+            var s1 = plot.line();
+            defer s1.deinit();
+            for (pirate_data.items(.year), pirate_data.items(.temperature)) |x, y| {
+                s1.point(x, y);
+            }
+            s1.stroke(thick, .red);
+        }
+        {
+            var s2 = plot.line();
+            defer s2.deinit();
+            for (pirate_data.items(.year), pirate_data.items(.pirates)) |x, y| {
+                s2.point(x, y / scale);
+            }
+            s2.stroke(thick, .blue);
+        }
+
+        //        dvui.plotXY(
+        //            @src(),
+        //            .{ .title = "Pirates vs Global Temperature" },
+        //            5,
+        //            pirate_data.items(.year),
+        //            pirate_data.items(.temperature),
+        //            .{ .expand = .both },
+        //        );
     }
 }
 
