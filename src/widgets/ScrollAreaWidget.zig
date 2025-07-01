@@ -175,7 +175,7 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
 }
 
 pub fn data(self: *ScrollAreaWidget) *WidgetData {
-    return self.hbox.wd.validate();
+    return self.hbox.data();
 }
 
 pub fn deinit(self: *ScrollAreaWidget) void {
