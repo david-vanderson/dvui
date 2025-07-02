@@ -6,12 +6,13 @@ const dvui = @import("dvui.zig");
 const GridWidget = dvui.GridWidget;
 const Event = dvui.Event;
 const WidgetData = dvui.WidgetData;
+const WidgetId = dvui.WidgetId;
 
 /// Adds keyboard navigation to the grid
 /// Provides a "cursor" that can be moved using
 /// - tab, shift-tab, left-arrow, right-arrow
 pub const GridKeyboard = struct {
-    const Cell = struct {
+    pub const Cell = struct {
         col_num: usize,
         row_num: usize,
 
@@ -53,8 +54,18 @@ pub const GridKeyboard = struct {
     /// - use .defaults() for default keys.
     navigation_keys: NavigationKeys = .none,
 
+    /// Cursor should only be used if the grid or children have focus.
+    /// using cellCursor() is prefered.
+    is_focused: bool = false,
+
     /// result cursor. prefer to use cellCursor() instead.
     cursor: Cell = .{ .col_num = 0, .row_num = 0 },
+
+    last_focused_widget: WidgetId = .zero,
+
+    pub fn reset(self: *GridKeyboard) void {
+        self.last_focused_widget = dvui.lastFocusedIdInFrame(null);
+    }
 
     /// Change max row and col limits
     pub fn setLimits(self: *GridKeyboard, max_cols: usize, max_rows: usize) void {
@@ -73,29 +84,18 @@ pub const GridKeyboard = struct {
     /// Call this once per frame before the grid body cells are created.
     pub fn processEvents(self: *GridKeyboard, grid: *GridWidget) void {
         self.enforceCursorLimits();
+        self.is_focused = self.last_focused_widget != dvui.lastFocusedIdInFrame(null);
 
         for (dvui.events()) |*e| {
-            if (!matchEvent(e, grid.data()))
-                continue;
-
             self.processEvent(e, grid);
         }
     }
 
-    pub fn matchEvent(e: *Event, wd: *WidgetData) bool {
-        const ret = dvui.eventMatch(e, .{
-            .id = wd.id,
-            .focus_id = dvui.focusedWidgetId() orelse .zero,
-            .r = wd.borderRectScale().r,
-        });
-        return ret;
-    }
-
     pub fn processEvent(self: *GridKeyboard, e: *Event, grid: *GridWidget) void {
         defer self.enforceCursorLimits();
-
         switch (e.evt) {
             .key => |*ke| {
+                if (!self.is_focused or e.handled) return;
                 if (ke.action == .down) {
                     if (ke.matchKeyBind(self.navigation_keys.up)) {
                         e.handle(@src(), grid.data());
@@ -114,10 +114,14 @@ pub const GridKeyboard = struct {
             },
             .mouse => |*me| {
                 if (me.action == .focus) {
+                    // pointToRowCol will return null if the mouse focus event
+                    // is outside the grid.
                     const focused_cell = grid.pointToColRow(me.p);
                     if (focused_cell) |cell| {
                         self.cursor.col_num = cell.col_num;
                         self.cursor.row_num = cell.row_num;
+                    } else {
+                        self.is_focused = false;
                     }
                 }
             },
@@ -136,7 +140,9 @@ pub const GridKeyboard = struct {
             self.cursor.row_num = 0;
     }
 
-    pub fn cellCursor(self: *GridKeyboard) Cell {
-        return self.cursor;
+    /// returns the current cursor if the grid or one if
+    /// its children has focus
+    pub fn cellCursor(self: *GridKeyboard) ?Cell {
+        return if (self.is_focused) self.cursor else null;
     }
 };

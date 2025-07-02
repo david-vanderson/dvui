@@ -104,6 +104,7 @@ fn initData() !void {
 
 var keyboard_nav: dvui.navigation.GridKeyboard = .{ .max_cols = 3, .max_rows = 0 };
 var initialized = false;
+
 // both dvui and SDL drawing
 fn gui_frame() !void {
     {
@@ -126,24 +127,37 @@ fn gui_frame() !void {
         var vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .border = dvui.Rect.all(1) });
         defer vbox.deinit();
         {
+            var bottom_panel = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .gravity_y = 1.0 });
+            defer bottom_panel.deinit();
+            var text = dvui.textEntry(@src(), .{}, .{});
+            defer text.deinit();
+        }
+        {
+            const focused_cell = keyboard_nav.cellCursor();
+            keyboard_nav.reset();
+            keyboard_nav.setLimits(3, pirate_data.len);
+            //            const focus_cell = keyboard_nav.cellCursor();
+
             var grid = dvui.grid(@src(), .numCols(3), .{}, .{});
             defer grid.deinit();
             if (!initialized) {
-                keyboard_nav.navigation_keys = .defaults();
+                //keyboard_nav.navigation_keys = .defaults();
+                keyboard_nav.navigation_keys = .{
+                    .up = .{ .alt = true, .key = .w },
+                    .down = .{ .alt = true, .key = .s },
+                    .left = .{ .alt = true, .key = .a },
+                    .right = .{ .alt = true, .key = .d },
+                };
                 initialized = true;
             }
-            keyboard_nav.setLimits(3, pirate_data.len);
-            keyboard_nav.processEvents(grid);
-            const focus_cell = keyboard_nav.cellCursor();
 
             const style_base = CellStyle{ .opts = .{ .tab_index = 0, .expand = .horizontal } };
 
-            const style: CellStyleNav = .{ .base = style_base, .focus_col = focus_cell.col_num, .focus_row = focus_cell.row_num };
+            const style: CellStyleNav = .{ .base = style_base, .focus_cell = focused_cell };
 
             dvui.gridHeading(@src(), grid, 0, "Year", .fixed, .{});
             dvui.gridHeading(@src(), grid, 1, "Temperature", .fixed, .{});
             dvui.gridHeading(@src(), grid, 2, "Num Pirates", .fixed, .{});
-
             for (pirate_data.items(.year), pirate_data.items(.temperature), pirate_data.items(.pirates), 0..) |*year, *temp, *pirates, row_num| {
                 var col_num: usize = 0;
                 {
@@ -165,8 +179,13 @@ fn gui_frame() !void {
                     _ = dvui.textEntryNumber(@src(), f64, .{ .value = pirates, .min = 0, .max = 10_000_000_000 }, style.options(col_num, row_num));
                 }
             }
+            keyboard_nav.processEvents(grid);
             if (dvui.tagGet("grid_focus_next")) |focus_widget| {
-                dvui.focusWidget(focus_widget.id, null, null);
+                // TODO: can we tighten up the api here somehow? is_focused seems difficult to discover or
+                // know why you would need to use it here.
+                if (keyboard_nav.is_focused) {
+                    dvui.focusWidget(focus_widget.id, null, null);
+                }
             }
         }
     }
@@ -194,30 +213,22 @@ fn gui_frame() !void {
             }
             s2.stroke(thick, .blue);
         }
-
-        //        dvui.plotXY(
-        //            @src(),
-        //            .{ .title = "Pirates vs Global Temperature" },
-        //            5,
-        //            pirate_data.items(.year),
-        //            pirate_data.items(.temperature),
-        //            .{ .expand = .both },
-        //        );
     }
 }
 
 const CellStyleNav = struct {
     base: CellStyle,
-    focus_col: usize,
-    focus_row: usize,
+    focus_cell: ?dvui.navigation.GridKeyboard.Cell,
 
     pub fn cellOptions(self: *const CellStyleNav, col_num: usize, row_num: usize) dvui.GridWidget.CellOptions {
         return self.base.cellOptions(col_num, row_num);
     }
 
     pub fn options(self: *const CellStyleNav, col_num: usize, row_num: usize) dvui.Options {
-        if (row_num == self.focus_row and col_num == self.focus_col) {
-            return self.base.options(col_num, row_num).override(.{ .tag = "grid_focus_next" });
+        if (self.focus_cell) |focus_cell| {
+            if (row_num == focus_cell.row_num and col_num == focus_cell.col_num) {
+                return self.base.options(col_num, row_num).override(.{ .tag = "grid_focus_next" });
+            }
         }
         return self.base.options(col_num, row_num);
     }
