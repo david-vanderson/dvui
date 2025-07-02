@@ -522,17 +522,18 @@ pub fn addNullTerminator(self: *TextEntryWidget) void {
 pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
     switch (e.evt) {
         .key => |ke| blk: {
-            if (ke.action == .down and ke.matchBind("next_widget")) {
-                e.handle(@src(), self.data());
-                dvui.tabIndexNext(e.num);
-                break :blk;
-            }
-
-            if (ke.action == .down and ke.matchBind("prev_widget")) {
-                e.handle(@src(), self.data());
-                dvui.tabIndexPrev(e.num);
-                break :blk;
-            }
+            // TODO: Why does text entry widget process these events?
+            //            if (ke.action == .down and ke.matchBind("next_widget")) {
+            //                e.handle(@src(), self.data());
+            //                dvui.tabIndexNext(e.num);
+            //                break :blk;
+            //            }
+            //
+            //            if (ke.action == .down and ke.matchBind("prev_widget")) {
+            //                e.handle(@src(), self.data());
+            //                dvui.tabIndexPrev(e.num);
+            //                break :blk;
+            //            }
 
             if (ke.action == .down and ke.matchBind("paste")) {
                 e.handle(@src(), self.data());

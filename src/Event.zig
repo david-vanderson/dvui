@@ -52,7 +52,6 @@ pub const Key = struct {
     /// True if matches the named keybind (follows Keybind.also).  See `matchKeyBind`.
     pub fn matchBind(self: Key, keybind_name: []const u8) bool {
         const cw = dvui.currentWindow();
-
         var name = keybind_name;
         while (true) {
             if (cw.keybinds.get(name)) |kb| {

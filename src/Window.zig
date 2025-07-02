@@ -290,13 +290,14 @@ pub fn init(
                 try self.keybinds.putNoClobber(self.gpa, "char_left_select",  .{ .key = .left,  .shift = true,  .control = false });
                 try self.keybinds.putNoClobber(self.gpa, "char_right_select", .{ .key = .right, .shift = true,  .control = false });
 
-                try self.keybinds.putNoClobber(self.gpa, "char_up",          .{ .key = .up,   .shift = false });
-                try self.keybinds.putNoClobber(self.gpa, "char_down",        .{ .key = .down, .shift = false });
-                try self.keybinds.putNoClobber(self.gpa, "char_up_select",   .{ .key = .up,   .shift = true });
-                try self.keybinds.putNoClobber(self.gpa, "char_down_select", .{ .key = .down, .shift = true });
+                try self.keybinds.putNoClobber(self.gpa, "char_up",          .{ .key = .up,   .shift = false, .control = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_down",        .{ .key = .down, .shift = false, .control = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_up_select",   .{ .key = .up,   .shift = true, .control = false });
+                try self.keybinds.putNoClobber(self.gpa, "char_down_select", .{ .key = .down, .shift = true, .control = false });
 
                 try self.keybinds.putNoClobber(self.gpa, "delete_prev_word", .{ .key = .backspace, .control = true });
-                try self.keybinds.putNoClobber(self.gpa, "delete_next_word", .{ .key = .delete,    .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "grid_cell_up",          .{ .key = .up,   .shift = false, .control = true, .alt = false });
+                try self.keybinds.putNoClobber(self.gpa, "grid_cell_down",        .{ .key = .down, .shift = false, .control = true, .alt = false });
                 // zig fmt: on
         },
         .mac => {
@@ -336,6 +337,8 @@ pub fn init(
 
                 try self.keybinds.putNoClobber(self.gpa, "delete_prev_word", .{ .key = .backspace, .alt = true });
                 try self.keybinds.putNoClobber(self.gpa, "delete_next_word", .{ .key = .delete,    .alt = true });
+                try self.keybinds.putNoClobber(self.gpa, "grid_cell_up",          .{ .key = .up,   .shift = false, .command = true });
+                try self.keybinds.putNoClobber(self.gpa, "grid_cell_down",        .{ .key = .down, .shift = false, .command = true });
                 // zig fmt: on
         },
     }

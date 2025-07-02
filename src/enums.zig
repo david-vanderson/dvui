@@ -188,10 +188,11 @@ pub const Mod = enum(u16) {
     /// True if matches the named keybind ignoring Keybind.key (ignores
     /// Keybind.also).   Usually you want `matchBind`.
     pub fn matchKeyBind(self: Mod, kb: Keybind) bool {
-        return ((kb.shift == null or kb.shift.? == self.shift()) and
+        const res = ((kb.shift == null or kb.shift.? == self.shift()) and
             (kb.control == null or kb.control.? == self.control()) and
             (kb.alt == null or kb.alt.? == self.alt()) and
             (kb.command == null or kb.command.? == self.command()));
+        return res;
     }
 
     pub fn format(self: *const Mod, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {

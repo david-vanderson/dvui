@@ -130,7 +130,9 @@ fn gui_frame() !void {
             var bottom_panel = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .gravity_y = 1.0 });
             defer bottom_panel.deinit();
             var text = dvui.textEntry(@src(), .{}, .{});
-            defer text.deinit();
+            text.deinit();
+            text = dvui.textEntry(@src(), .{}, .{});
+            text.deinit();
         }
         {
             const focused_cell = keyboard_nav.cellCursor();
@@ -141,13 +143,7 @@ fn gui_frame() !void {
             var grid = dvui.grid(@src(), .numCols(3), .{}, .{});
             defer grid.deinit();
             if (!initialized) {
-                //keyboard_nav.navigation_keys = .defaults();
-                keyboard_nav.navigation_keys = .{
-                    .up = .{ .alt = true, .key = .w },
-                    .down = .{ .alt = true, .key = .s },
-                    .left = .{ .alt = true, .key = .a },
-                    .right = .{ .alt = true, .key = .d },
-                };
+                keyboard_nav.navigation_keys = .defaults();
                 initialized = true;
             }
 

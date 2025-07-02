@@ -39,8 +39,8 @@ pub const GridKeyboard = struct {
         pub fn defaults() NavigationKeys {
             const cw = dvui.currentWindow();
             return .{
-                .up = cw.keybinds.get("char_up") orelse unreachable,
-                .down = cw.keybinds.get("char_down") orelse unreachable,
+                .up = cw.keybinds.get("grid_cell_up") orelse unreachable,
+                .down = cw.keybinds.get("grid_cell_down") orelse unreachable,
                 .left = cw.keybinds.get("prev_widget") orelse unreachable,
                 .right = cw.keybinds.get("next_widget") orelse unreachable,
             };
