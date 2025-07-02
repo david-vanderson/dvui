@@ -79,6 +79,7 @@ pub const SuggestionWidget = widgets.SuggestionWidget;
 pub const TabsWidget = widgets.TabsWidget;
 pub const TextEntryWidget = widgets.TextEntryWidget;
 pub const TextLayoutWidget = widgets.TextLayoutWidget;
+pub const TreeWidget = widgets.TreeWidget;
 pub const VirtualParentWidget = widgets.VirtualParentWidget;
 pub const GridWidget = widgets.GridWidget;
 const se = @import("structEntry.zig");
