@@ -112,6 +112,8 @@ pub const SelectAllKeyboard = struct {
 
     /// reset() should be called immediately before the grid is initialized.
     /// and any cells are created.
+    /// If select-all is pressed and any widgets created between reset() and processEvents()
+    /// have focus, the select-all will be applied (if it has not been handled by another widget).
     pub fn reset(self: *SelectAllKeyboard) void {
         self.last_focused_in_frame = dvui.lastFocusedIdInFrame(null);
     }
