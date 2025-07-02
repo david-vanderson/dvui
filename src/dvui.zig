@@ -79,6 +79,7 @@ pub const SuggestionWidget = widgets.SuggestionWidget;
 pub const TabsWidget = widgets.TabsWidget;
 pub const TextEntryWidget = widgets.TextEntryWidget;
 pub const TextLayoutWidget = widgets.TextLayoutWidget;
+pub const TreeWidget = widgets.TreeWidget;
 pub const VirtualParentWidget = widgets.VirtualParentWidget;
 pub const GridWidget = widgets.GridWidget;
 const se = @import("structEntry.zig");
@@ -705,10 +706,10 @@ pub const FontCacheEntry = struct {
 
         const cw = currentWindow();
 
-        var pixels = try cw.lifo().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
+        var pixels = try cw.lifo().alloc(Color.PMA, @as(usize, @intFromFloat(size.w * size.h)));
         defer cw.lifo().free(pixels);
         // set all pixels to zero alpha
-        @memset(pixels, 0);
+        @memset(pixels, .transparent);
 
         //const num_glyphs = fce.glyph_info.count();
         //std.debug.print("font size {d} regen glyph atlas num {d} max size {}\n", .{ sized_font.size, num_glyphs, size });
@@ -746,13 +747,10 @@ pub const FontCacheEntry = struct {
                         const src = bitmap.buffer[@as(usize, @intCast(row * bitmap.pitch + col))];
 
                         // because of the extra edge, offset by 1 row and 1 col
-                        const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(size.w)) * 4 + (x + col + pad) * 4));
+                        const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(size.w)) + (x + col + pad)));
 
                         // premultiplied white
-                        pixels[di + 0] = src;
-                        pixels[di + 1] = src;
-                        pixels[di + 2] = src;
-                        pixels[di + 3] = src;
+                        pixels[di] = .{ .r = src, .g = src, .b = src, .a = src };
                     }
                 }
             } else {
@@ -767,18 +765,15 @@ pub const FontCacheEntry = struct {
 
                 c.stbtt_MakeCodepointBitmapSubpixel(&fce.face, bitmap.ptr, @as(c_int, @intCast(out_w)), @as(c_int, @intCast(out_h)), @as(c_int, @intCast(out_w)), fce.scaleFactor, fce.scaleFactor, 0.0, 0.0, @as(c_int, @intCast(codepoint)));
 
-                const stride = @as(usize, @intFromFloat(size.w)) * 4;
-                const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x * 4));
+                const stride = @as(usize, @intFromFloat(size.w));
+                const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x));
                 for (0..out_h) |row| {
                     for (0..out_w) |col| {
                         const src = bitmap[row * out_w + col];
-                        const dest = di + (row + pad) * stride + (col + pad) * 4;
+                        const dest = di + (row + pad) * stride + (col + pad);
 
                         // premultiplied white
-                        pixels[dest + 0] = src;
-                        pixels[dest + 1] = src;
-                        pixels[dest + 2] = src;
-                        pixels[dest + 3] = src;
+                        pixels[dest] = .{ .r = src, .g = src, .b = src, .a = src };
                     }
                 }
             }
@@ -792,7 +787,7 @@ pub const FontCacheEntry = struct {
             }
         }
 
-        fce.texture_atlas_cache = try textureCreate(.cast(pixels), @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
+        fce.texture_atlas_cache = try textureCreate(.{ .pma = pixels }, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
         return fce.texture_atlas_cache.?;
     }
 
@@ -1114,7 +1109,7 @@ pub const TextureCacheEntry = struct {
                 _ = cw.texture_cache.remove(h);
             },
             .pixels => |p| {
-                const h = dvui.TextureCacheEntry.hashImageBytes(p.bytes.pma);
+                const h = dvui.TextureCacheEntry.hashImageBytes(@ptrCast(p.bytes.pma));
                 _ = cw.texture_cache.remove(h);
             },
         }
@@ -1133,11 +1128,8 @@ pub const TextureCacheEntry = struct {
             return StbImageError.stbImageError;
         }
         defer c.stbi_image_free(data);
-        var pixels: []u8 = undefined;
-        pixels.ptr = data;
-        pixels.len = @intCast(w * h * 4);
 
-        const texture = try textureCreate(.fromRGBA(pixels), @intCast(w), @intCast(h), .linear);
+        const texture = try textureCreate(.fromRGBA(data[0..@intCast(w * h * @sizeOf(Color.PMA))]), @intCast(w), @intCast(h), .linear);
 
         const entry = TextureCacheEntry{ .texture = texture };
         try cw.texture_cache.put(cw.gpa, tex_hash, entry);
@@ -1146,7 +1138,7 @@ pub const TextureCacheEntry = struct {
 
     pub fn fromPixels(pma: dvui.RGBAPixelsPMA, width: u32, height: u32) Backend.TextureError!dvui.TextureCacheEntry {
         var cw = dvui.currentWindow();
-        const tex_hash = dvui.TextureCacheEntry.hashImageBytes(pma.pma);
+        const tex_hash = dvui.TextureCacheEntry.hashImageBytes(@ptrCast(pma.pma));
         if (cw.texture_cache.getPtr(tex_hash)) |tce| return tce.*;
         const texture = try dvui.textureCreate(pma, width, height, .linear);
         const entry = dvui.TextureCacheEntry{ .texture = texture };
@@ -6907,8 +6899,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
 ///
 /// To convert non PMA pixels, use `RGBAPixelsPMA.fromRGBA`
 pub const RGBAPixelsPMA = struct {
-    /// Should only ever store RGBA pixels with premultiplied alpha
-    pma: []u8,
+    pma: []Color.PMA,
 
     /// Alpha multiplies `pixels` in place
     pub fn fromRGBA(pixels: []u8) RGBAPixelsPMA {
@@ -6919,12 +6910,12 @@ pub const RGBAPixelsPMA = struct {
             pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * a, 255));
             pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * a, 255));
         }
-        return .{ .pma = pixels };
+        return .{ .pma = @ptrCast(pixels) };
     }
 
     /// Unapplies the alpha multiplication in place, returning the inner slice
     pub fn toRGBA(pma_pixels: RGBAPixelsPMA) []u8 {
-        var pixels = pma_pixels.pma;
+        var pixels: []u8 = @ptrCast(pma_pixels.pma);
         for (0..pixels.len / 4) |ii| {
             const i = ii * 4;
             const a = pixels[i + 3];
@@ -6941,7 +6932,7 @@ pub const RGBAPixelsPMA = struct {
     ///
     /// Does no modifications of the pixels
     pub fn cast(pixels: []u8) RGBAPixelsPMA {
-        return .{ .pma = pixels };
+        return .{ .pma = @ptrCast(pixels) };
     }
 };
 
@@ -6951,10 +6942,10 @@ pub const RGBAPixelsPMA = struct {
 ///
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn textureCreate(pixels: RGBAPixelsPMA, width: u32, height: u32, interpolation: enums.TextureInterpolation) Backend.TextureError!Texture {
-    if (pixels.pma.len != width * height * 4) {
-        log.err("Texture was created with an incorrect amount of pixels, expected {d} but got {d} (w: {d}, h: {d})", .{ pixels.pma.len, width * height * 4, width, height });
+    if (pixels.pma.len != width * height) {
+        log.err("Texture was created with an incorrect amount of pixels, expected {d} but got {d} (w: {d}, h: {d})", .{ pixels.pma.len, width * height, width, height });
     }
-    return currentWindow().backend.textureCreate(pixels.pma.ptr, width, height, interpolation);
+    return currentWindow().backend.textureCreate(@ptrCast(pixels.pma.ptr), width, height, interpolation);
 }
 
 /// Create a texture that can be rendered with `renderTexture` and drawn to
@@ -6973,13 +6964,13 @@ pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.Texture
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn textureReadTarget(arena: std.mem.Allocator, texture: TextureTarget) Backend.TextureError!RGBAPixelsPMA {
-    const size: usize = texture.width * texture.height * 4;
+    const size: usize = texture.width * texture.height * @sizeOf(Color.PMA);
     const pixels = try arena.alloc(u8, size);
     errdefer arena.free(pixels);
 
     try currentWindow().backend.textureReadTarget(texture, pixels.ptr);
 
-    return .{ .pma = pixels };
+    return .{ .pma = @ptrCast(pixels) };
 }
 
 /// Convert a target texture to a normal texture.  target is destroyed.

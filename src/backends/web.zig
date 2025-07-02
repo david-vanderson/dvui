@@ -56,6 +56,7 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_cursor(name: [*]const u8, name_len: usize) void;
     pub extern "dvui" fn wasm_text_input(x: f32, y: f32, w: f32, h: f32) void;
     pub extern "dvui" fn wasm_open_url(ptr: [*]const u8, len: usize) void;
+    pub extern "dvui" fn wasm_preferred_color_scheme() u8;
     pub extern "dvui" fn wasm_download_data(name_ptr: [*]const u8, name_len: usize, data_ptr: [*]const u8, data_len: usize) void;
     pub extern "dvui" fn wasm_clipboardTextSet(ptr: [*]const u8, len: usize) void;
 
@@ -111,6 +112,9 @@ pub const wasm = if (!builtin.is_test) struct {
     pub fn wasm_cursor(_: [*]const u8, _: usize) void {}
     pub fn wasm_text_input(_: f32, _: f32, _: f32, _: f32) void {}
     pub fn wasm_open_url(_: [*]const u8, _: usize) void {}
+    pub fn wasm_preferred_color_scheme() u8 {
+        return undefined;
+    }
     pub fn wasm_download_data(_: [*]const u8, _: usize, _: [*]const u8, _: usize) void {}
     pub fn wasm_clipboardTextSet(_: [*]const u8, _: usize) void {}
 
@@ -688,6 +692,14 @@ pub fn clipboardTextSet(_: *WebBackend, text: []const u8) !void {
 
 pub fn openURL(_: *WebBackend, url: []const u8) !void {
     wasm.wasm_open_url(url.ptr, url.len);
+}
+
+pub fn preferredColorScheme(_: *WebBackend) ?dvui.enums.ColorScheme {
+    return switch (wasm.wasm_preferred_color_scheme()) {
+        1 => .dark,
+        2 => .light,
+        else => null,
+    };
 }
 
 pub fn downloadData(name: []const u8, data: []const u8) !void {
