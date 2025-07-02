@@ -60,6 +60,14 @@ pub const GridKeyboard = struct {
     pub fn setLimits(self: *GridKeyboard, max_cols: usize, max_rows: usize) void {
         self.max_cols = max_cols;
         self.max_rows = max_rows;
+        self.enforceCursorLimits();
+    }
+
+    /// Move the cursor to the specified col and row.
+    pub fn scrollTo(self: *GridKeyboard, col_num: usize, row_num: usize) void {
+        self.cursor.col_num = col_num;
+        self.cursor.row_num = row_num;
+        self.enforceCursorLimits();
     }
 
     /// Call this once per frame before the grid body cells are created.
