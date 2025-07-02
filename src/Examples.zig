@@ -689,11 +689,11 @@ pub fn basicWidgets() void {
         dvui.label(@src(), "Link:", .{}, .{ .gravity_y = 0.5 });
 
         if (dvui.labelClick(@src(), "https://david-vanderson.github.io/", .{}, .{ .gravity_y = 0.5, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
-            dvui.openURL("https://david-vanderson.github.io/");
+            _ = dvui.openURL("https://david-vanderson.github.io/");
         }
 
         if (dvui.labelClick(@src(), "docs", .{}, .{ .gravity_y = 0.5, .margin = .{ .x = 10 }, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
-            dvui.openURL("https://david-vanderson.github.io/docs");
+            _ = dvui.openURL("https://david-vanderson.github.io/docs");
         }
     }
 
@@ -1944,7 +1944,7 @@ pub fn layoutText() void {
         tl.addText(lorem, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
 
         if (tl.addTextClick("This text is a link that is part of the text layout and goes to the dvui home page.", .{ .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } }, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) })) {
-            dvui.openURL("https://david-vanderson.github.io/");
+            _ = dvui.openURL("https://david-vanderson.github.io/");
         }
 
         tl.addText(lorem2, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
@@ -4272,7 +4272,7 @@ pub fn debuggingErrors() void {
         }
 
         if (dvui.labelClick(@src(), "See https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids", .{}, .{ .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
-            dvui.openURL("https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids");
+            _ = dvui.openURL("https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids");
         }
     }
 

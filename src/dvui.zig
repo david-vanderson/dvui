@@ -2616,13 +2616,33 @@ pub fn clipboardTextSet(text: []const u8) void {
 }
 
 /// Ask the system to open the given url.
+/// http:// and https:// urls can be opened.
+/// returns true if the backend reports the URL was opened.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn openURL(url: []const u8) void {
+pub fn openURL(url: []const u8) bool {
+    const parsed = std.Uri.parse(url) catch return false;
+    if (!std.ascii.eqlIgnoreCase(parsed.scheme, "http") and
+        !std.ascii.eqlIgnoreCase(parsed.scheme, "https"))
+    {
+        return false;
+    }
+    if (parsed.host != null and parsed.host.?.isEmpty()) {
+        return false;
+    }
+
     const cw = currentWindow();
     cw.backend.openURL(url) catch |err| {
         logError(@src(), err, "Could not open url '{s}'", .{url});
+        return false;
     };
+    return true;
+}
+
+test openURL {
+    try std.testing.expect(openURL("notepad.exe") == false);
+    try std.testing.expect(openURL("https://") == false);
+    try std.testing.expect(openURL("file:///") == false);
 }
 
 /// Seconds elapsed between last frame and current.  This value can be quite
