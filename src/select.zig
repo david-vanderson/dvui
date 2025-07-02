@@ -5,6 +5,7 @@
 
 const dvui = @import("dvui.zig");
 const WidgetData = dvui.WidgetData;
+const WidgetId = dvui.WidgetId;
 
 pub const SelectAllState = enum {
     select_all,
@@ -107,33 +108,35 @@ pub const MultiSelectMouse = struct {
 /// Helper for select all support via the "select_all" keyboard binding.
 pub const SelectAllKeyboard = struct {
     selection_changed: bool = false,
+    last_focused_in_frame: WidgetId = .zero,
 
+    /// reset() should be called immediately before the grid is initialized.
+    /// and any cells are created.
+    pub fn reset(self: *SelectAllKeyboard) void {
+        self.last_focused_in_frame = dvui.lastFocusedIdInFrame(null);
+    }
+
+    // processEvents() should be called after all grid cells have been created
+    // and before the grid is deinit()-ed.
     pub fn processEvents(self: *SelectAllKeyboard, select_all_state: *dvui.select.SelectAllState, wd: *dvui.WidgetData) void {
         self.selection_changed = false;
-        var is_select_all = false;
-        var is_in_widget: bool = false;
         for (dvui.events()) |*e| {
-            if (e.evt == .mouse and e.evt.mouse.action == .position) {
-                if (wd.backgroundRectScale().r.contains(e.evt.mouse.p)) {
-                    is_in_widget = true;
-                }
-            } else if (e.evt == .key and !e.handled) {
-                const ke = e.evt.key;
-                if (ke.matchBind("select_all") and ke.action == .down) {
-                    e.handle(@src(), wd);
-                    is_select_all = true;
+            if (self.last_focused_in_frame != dvui.lastFocusedIdInFrame(null)) {
+                if (e.evt == .key and !e.handled) {
+                    const ke = e.evt.key;
+                    if (ke.matchBind("select_all") and ke.action == .down) {
+                        e.handle(@src(), wd);
+                        if (select_all_state.* == .select_all) {
+                            select_all_state.* = .select_none;
+                        } else {
+                            select_all_state.* = .select_all;
+                        }
+                        // Show the results of the selection change.
+                        dvui.refresh(null, @src(), null);
+                        self.selection_changed = true;
+                    }
                 }
             }
-        }
-        if (is_in_widget and is_select_all) {
-            if (select_all_state.* == .select_all) {
-                select_all_state.* = .select_none;
-            } else {
-                select_all_state.* = .select_all;
-            }
-            // Show the results of the selection change.
-            dvui.refresh(null, @src(), null);
-            self.selection_changed = true;
         }
     }
 

@@ -95,7 +95,7 @@ var mode: enum { raw, cached } = .raw;
 var selection_mode: enum { multi_select, single_select } = .multi_select;
 var row_select: bool = false;
 var highlight_style: CellStyle.HoveredRow = .{ .cell_opts = .{ .color_fill_hover = .fill_hover, .background = true } };
-
+var initialized = false;
 // both dvui and SDL drawing
 fn gui_frame() !void {
     {
@@ -131,7 +131,7 @@ fn gui_frame() !void {
                 mode = .cached;
             }
             var selected = selection_mode == .multi_select;
-            if (dvui.checkbox(@src(), &selected, "Multi-Select", .{}, .{ .margin = dvui.Rect.all(6) })) {
+            if (dvui.checkbox(@src(), &selected, "Multi-Select", .{ .margin = dvui.Rect.all(6) })) {
                 selection_mode = if (selected) .multi_select else .single_select;
                 if (selection_mode == .single_select) {
                     switch (mode) {
@@ -140,7 +140,7 @@ fn gui_frame() !void {
                     }
                 }
             }
-            _ = dvui.checkbox(@src(), &row_select, "Row Select", .{}, .{ .margin = dvui.Rect.all(6) });
+            _ = dvui.checkbox(@src(), &row_select, "Row Select", .{ .margin = dvui.Rect.all(6) });
             dvui.labelNoFmt(@src(), "Filter: (contains): ", .{}, .{ .margin = dvui.Rect.all(6) });
             var text = dvui.textEntry(@src(), .{}, .{ .gravity_y = 0.5, .margin = dvui.Rect.all(6) });
             defer text.deinit();
@@ -148,8 +148,15 @@ fn gui_frame() !void {
         }
     }
     {
+        // This is sort of subtle. We need to reset the kb select before the grid is created, so that grid focus is included in select all
+        kb_select.reset();
+
         var grid = dvui.grid(@src(), .numCols(6), .{}, .{ .expand = .both, .background = true });
         defer grid.deinit();
+        if (!initialized) {
+            dvui.focusWidget(grid.data().id, null, null);
+            initialized = true;
+        }
 
         const row_clicked: ?usize = blk: {
             if (!row_select) break :blk null;
@@ -166,6 +173,7 @@ fn gui_frame() !void {
         };
 
         selection_info.reset();
+
         // Note: The extra check here is because I've chosen to unselect anything that was filtered.
         // If we were just doing selection it just needs multi_select.selectionChanged();
         // OR user might prefer to check if everything in the current filter is selected and
@@ -192,6 +200,13 @@ fn gui_frame() !void {
             highlight_style.processEvents(grid);
         const was_filtering = filtering;
 
+        switch (mode) {
+            .raw => directoryDisplay(grid, row_clicked) catch return,
+            .cached => directoryDisplayCached(grid, row_clicked),
+        }
+        filtering_changed = (was_filtering != filtering);
+
+        // process events afte body so cells have a chance to process select-all first.
         if (selection_mode == .multi_select) {
             kb_select.processEvents(&select_all_state, grid.data());
             if (kb_select.selectionChanged()) {
@@ -201,12 +216,6 @@ fn gui_frame() !void {
                 }
             }
         }
-
-        switch (mode) {
-            .raw => directoryDisplay(grid, row_clicked) catch return,
-            .cached => directoryDisplayCached(grid, row_clicked),
-        }
-        filtering_changed = (was_filtering != filtering);
 
         if (selection_mode == .multi_select) {
             multi_select.processEvents(&selection_info, grid.data());
@@ -279,7 +288,7 @@ pub fn directoryDisplay(grid: *dvui.GridWidget, row_selected: ?usize) !void {
             var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
             defer cell.deinit();
             var is_set = if (dir_num < selections.capacity()) selections.isSet(dir_num) else false;
-            _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .selection_info = &selection_info }, .{ .gravity_x = 0.5 });
+            _ = dvui.checkboxEx(@src(), &is_set, null, .{ .selection_id = dir_num, .selection_info = &selection_info }, .{ .gravity_x = 0.5 });
             if (row_num == row_selected) {
                 selection_info.add(dir_num, !is_set, cell.data());
             }
@@ -415,7 +424,7 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget, row_selected: ?usize) void
             var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
             defer cell.deinit();
             var is_set = dir_cache.items[dir_num].selected;
-            _ = dvui.checkbox(@src(), &is_set, null, .{ .selection_id = dir_num, .selection_info = &selection_info }, .{ .gravity_x = 0.5 });
+            _ = dvui.checkboxEx(@src(), &is_set, null, .{ .selection_id = dir_num, .selection_info = &selection_info }, .{ .gravity_x = 0.5 });
             if (row_selected == dir_num) {
                 selection_info.add(dir_num, !is_set, cell.data());
             }
