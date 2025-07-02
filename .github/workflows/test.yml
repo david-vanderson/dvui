@@ -55,7 +55,7 @@ jobs:
       - uses: mlugg/setup-zig@v2
 
       - name: Install libraries
-        if: ${{ matrix.os == 'ubuntu-latest' && matrix.backend != 'testing' }}
+        if: ${{ matrix.os == 'ubuntu-latest' && (matrix.backend == 'sdl2' || matrix.backend == 'sdl3' || matrix.backend == 'raylib') }}
         run: |
           sudo apt-get update
           sudo apt-get install mesa-common-dev libgl-dev libglx-dev libegl-dev libpulse-dev libxext-dev libxfixes-dev libxrender-dev libasound2-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev
