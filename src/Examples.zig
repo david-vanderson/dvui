@@ -1154,7 +1154,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
 
             la2.spacer(@src(), 0);
 
-            const file_error = dvui.dataGetPtrDefault(null, hbox2.data().id, "_file_error", bool, false);
+            const file_error = dvui.dataGetPtrDefault(null, hbox3.data().id, "_file_error", bool, false);
             var te_file = dvui.textEntry(@src(), .{}, if (file_error.*) errOptions else normalOptions);
             if (new_filename) |f| {
                 te_file.textLayout.selection.selectAll();
