@@ -2338,7 +2338,6 @@ pub fn reorderTree() void {
         @src(),
         .{
             .background = true,
-            .expand = .both,
             .border = dvui.Rect.all(1),
             .padding = dvui.Rect.all(4),
         },
