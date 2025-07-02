@@ -225,6 +225,8 @@ fn gui_frame() !void {
     }
 }
 
+// TODO: Merge this with the navigation struct. They need to talk to each other to work out if we are
+// tabbing in or tabbing out of the widget.
 const CellStyleNav = struct {
     base: CellStyle,
     focus_cell: ?dvui.navigation.GridKeyboard.Cell,
