@@ -46,10 +46,16 @@ pub const GridKeyboard = struct {
             };
         }
     };
+
+    /// Should the cursor wrap to the next row at the end of a column.
+    wrap_cursor: bool,
+    /// Should we tab out of the grid at the last row_col. TODO: Rename this
+    tab_out: bool,
+
     /// col_num will always be less than this value.
-    max_cols: usize,
+    num_cols: usize,
     /// row_num will always be less than this value.
-    max_rows: usize,
+    num_rows: usize,
     /// Customize navigation keys
     /// - use .defaults() for default keys.
     navigation_keys: NavigationKeys = .none,
@@ -69,8 +75,8 @@ pub const GridKeyboard = struct {
 
     /// Change max row and col limits
     pub fn setLimits(self: *GridKeyboard, max_cols: usize, max_rows: usize) void {
-        self.max_cols = max_cols;
-        self.max_rows = max_rows;
+        self.num_cols = max_cols;
+        self.num_rows = max_rows;
         self.enforceCursorLimits();
     }
 
@@ -105,10 +111,33 @@ pub const GridKeyboard = struct {
                         self.cursor.row_num += 1;
                     } else if (ke.matchKeyBind(self.navigation_keys.left)) {
                         e.handle(@src(), grid.data());
-                        self.cursor.col_num = if (self.cursor.col_num > 0) self.cursor.col_num - 1 else 0;
+                        if (self.tab_out and self.cursor.eq(0, 0)) {
+                            std.debug.print("tabbing out\n", .{});
+                            dvui.tabIndexPrev(e.num);
+                            self.is_focused = false;
+                        } else if (self.cursor.col_num > 0) {
+                            self.cursor.col_num -= 1;
+                        } else if (self.wrap_cursor) {
+                            if (self.cursor.row_num > 0) {
+                                self.cursor.col_num = self.num_cols;
+                                self.cursor.row_num -= 1;
+                            }
+                        }
                     } else if (ke.matchKeyBind(self.navigation_keys.right)) {
                         e.handle(@src(), grid.data());
-                        self.cursor.col_num += 1;
+                        if (self.tab_out and self.cursor.col_num == self.num_cols - 1 and self.cursor.row_num == self.num_rows - 1) {
+                            std.debug.print("tabbing out\n", .{});
+                            dvui.tabIndexNext(e.num);
+                            self.is_focused = false;
+                        } else if (self.cursor.col_num < self.num_cols) {
+                            self.cursor.col_num += 1;
+                        }
+                        if (self.wrap_cursor and self.cursor.col_num >= self.num_cols) {
+                            if (self.cursor.row_num < self.num_rows - 1) {
+                                self.cursor.col_num = 0;
+                                self.cursor.row_num += 1;
+                            }
+                        }
                     }
                 }
             },
@@ -130,12 +159,12 @@ pub const GridKeyboard = struct {
     }
 
     pub fn enforceCursorLimits(self: *GridKeyboard) void {
-        if (self.max_cols > 0)
-            self.cursor.col_num = @min(self.cursor.col_num, self.max_cols - 1)
+        if (self.num_cols > 0)
+            self.cursor.col_num = @min(self.cursor.col_num, self.num_cols - 1)
         else
             self.cursor.col_num = 0;
-        if (self.max_rows > 0)
-            self.cursor.row_num = @min(self.cursor.row_num, self.max_rows - 1)
+        if (self.num_rows > 0)
+            self.cursor.row_num = @min(self.cursor.row_num, self.num_rows - 1)
         else
             self.cursor.row_num = 0;
     }
@@ -143,6 +172,6 @@ pub const GridKeyboard = struct {
     /// returns the current cursor if the grid or one if
     /// its children has focus
     pub fn cellCursor(self: *GridKeyboard) ?Cell {
-        return if (self.is_focused) self.cursor else null;
+        return self.cursor;
     }
 };

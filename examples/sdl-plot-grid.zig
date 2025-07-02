@@ -102,7 +102,7 @@ fn initData() !void {
     try pirate_data.append(gpa, .{ .year = 2020, .pirates = 1_000_000, .temperature = 5 });
 }
 
-var keyboard_nav: dvui.navigation.GridKeyboard = .{ .max_cols = 3, .max_rows = 0 };
+var keyboard_nav: dvui.navigation.GridKeyboard = .{ .num_cols = 3, .num_rows = 0, .wrap_cursor = true, .tab_out = true };
 var initialized = false;
 
 // both dvui and SDL drawing
@@ -142,14 +142,10 @@ fn gui_frame() !void {
 
             var grid = dvui.grid(@src(), .numCols(3), .{}, .{});
             defer grid.deinit();
-            if (!initialized) {
-                keyboard_nav.navigation_keys = .defaults();
-                initialized = true;
-            }
 
             const style_base = CellStyle{ .opts = .{ .tab_index = 0, .expand = .horizontal } };
 
-            const style: CellStyleNav = .{ .base = style_base, .focus_cell = focused_cell };
+            const style: CellStyleNav = .{ .base = style_base, .focus_cell = focused_cell, .tab_index = 2 };
 
             dvui.gridHeading(@src(), grid, 0, "Year", .fixed, .{});
             dvui.gridHeading(@src(), grid, 1, "Temperature", .fixed, .{});
@@ -176,11 +172,19 @@ fn gui_frame() !void {
                 }
             }
             keyboard_nav.processEvents(grid);
+            if (!initialized) {
+                // TODO: Need to make this initialization better.
+                keyboard_nav.navigation_keys = .defaults();
+                keyboard_nav.scrollTo(0, 0);
+                keyboard_nav.is_focused = true;
+            }
+
             if (dvui.tagGet("grid_focus_next")) |focus_widget| {
                 // TODO: can we tighten up the api here somehow? is_focused seems difficult to discover or
-                // know why you would need to use it here.
-                if (keyboard_nav.is_focused) {
+                // know why you would need to use it here. Maybe rename this to shouldFocus? or focusChanged????
+                if (keyboard_nav.is_focused or !initialized) {
                     dvui.focusWidget(focus_widget.id, null, null);
+                    initialized = true;
                 }
             }
         }
@@ -189,7 +193,16 @@ fn gui_frame() !void {
         var vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .border = dvui.Rect.all(1) });
         defer vbox.deinit();
 
-        var plot = dvui.plot(@src(), .{ .title = "Pirates vs Global Temperature" }, .{ .padding = .{}, .expand = .both, .background = true, .min_size_content = .{ .w = 500 } });
+        var plot = dvui.plot(
+            @src(),
+            .{ .title = "Pirates vs Global Temperature" },
+            .{
+                .padding = .{},
+                .expand = .both,
+                .background = true,
+                .min_size_content = .{ .w = 500 },
+            },
+        );
         defer plot.deinit();
         const thick = 2;
         const scale = 200_000;
@@ -215,6 +228,7 @@ fn gui_frame() !void {
 const CellStyleNav = struct {
     base: CellStyle,
     focus_cell: ?dvui.navigation.GridKeyboard.Cell,
+    tab_index: ?u16 = null,
 
     pub fn cellOptions(self: *const CellStyleNav, col_num: usize, row_num: usize) dvui.GridWidget.CellOptions {
         return self.base.cellOptions(col_num, row_num);
@@ -223,7 +237,7 @@ const CellStyleNav = struct {
     pub fn options(self: *const CellStyleNav, col_num: usize, row_num: usize) dvui.Options {
         if (self.focus_cell) |focus_cell| {
             if (row_num == focus_cell.row_num and col_num == focus_cell.col_num) {
-                return self.base.options(col_num, row_num).override(.{ .tag = "grid_focus_next" });
+                return self.base.options(col_num, row_num).override(.{ .tag = "grid_focus_next", .tab_index = self.tab_index });
             }
         }
         return self.base.options(col_num, row_num);
