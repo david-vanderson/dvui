@@ -222,12 +222,10 @@ pub const Branch = struct {
                 if (!rs.r.intersect(dragRect).empty()) {
                     // user is dragging a reorderable over this rect
                     if (!self.expanded) {
-                        if (dvui.animationGet(self.wd.id, "hover_expand")) |anim| {
-                            if (anim.done()) {
-                                self.expanded = true;
-                            }
+                        if (dvui.timerDone(self.data().id)) {
+                            self.expanded = true;
                         } else {
-                            _ = dvui.animation(self.wd.id, "hover_expand", .{ .end_time = 1_000_000 });
+                            _ = dvui.timer(self.data().id, 500_000);
                         }
                     }
 
