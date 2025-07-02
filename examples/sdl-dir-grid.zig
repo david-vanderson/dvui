@@ -95,7 +95,7 @@ var mode: enum { raw, cached } = .raw;
 var selection_mode: enum { multi_select, single_select } = .multi_select;
 var row_select: bool = false;
 var highlight_style: CellStyle.HoveredRow = .{ .cell_opts = .{ .color_fill_hover = .fill_hover, .background = true } };
-
+var initialized = false;
 // both dvui and SDL drawing
 fn gui_frame() !void {
     {
@@ -148,8 +148,15 @@ fn gui_frame() !void {
         }
     }
     {
+        // This is sort of subtle. We need to reset the kb select before the grid is created, so that grid focus is included in select all
+        kb_select.reset();
+
         var grid = dvui.grid(@src(), .numCols(6), .{}, .{ .expand = .both, .background = true });
         defer grid.deinit();
+        if (!initialized) {
+            dvui.focusWidget(grid.data().id, null, null);
+            initialized = true;
+        }
 
         const row_clicked: ?usize = blk: {
             if (!row_select) break :blk null;
@@ -166,6 +173,7 @@ fn gui_frame() !void {
         };
 
         selection_info.reset();
+
         // Note: The extra check here is because I've chosen to unselect anything that was filtered.
         // If we were just doing selection it just needs multi_select.selectionChanged();
         // OR user might prefer to check if everything in the current filter is selected and
@@ -192,6 +200,13 @@ fn gui_frame() !void {
             highlight_style.processEvents(grid);
         const was_filtering = filtering;
 
+        switch (mode) {
+            .raw => directoryDisplay(grid, row_clicked) catch return,
+            .cached => directoryDisplayCached(grid, row_clicked),
+        }
+        filtering_changed = (was_filtering != filtering);
+
+        // process events afte body so cells have a chance to process select-all first.
         if (selection_mode == .multi_select) {
             kb_select.processEvents(&select_all_state, grid.data());
             if (kb_select.selectionChanged()) {
@@ -201,12 +216,6 @@ fn gui_frame() !void {
                 }
             }
         }
-
-        switch (mode) {
-            .raw => directoryDisplay(grid, row_clicked) catch return,
-            .cached => directoryDisplayCached(grid, row_clicked),
-        }
-        filtering_changed = (was_filtering != filtering);
 
         if (selection_mode == .multi_select) {
             multi_select.processEvents(&selection_info, grid.data());
