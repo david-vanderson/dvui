@@ -90,7 +90,9 @@ pub const GridKeyboard = struct {
     /// Call this once per frame before the grid body cells are created.
     pub fn processEvents(self: *GridKeyboard, grid: *GridWidget) void {
         self.enforceCursorLimits();
-        self.is_focused = self.last_focused_widget != dvui.lastFocusedIdInFrame(null);
+
+        self.is_focused = self.last_focused_widget == dvui.focusedWidgetId() and dvui.lastFocusedIdInFrame(null) == .zero;
+        std.debug.print("{} : self = {x} fw = {?x}, lfif = {x}\n", .{ self.is_focused, self.last_focused_widget, dvui.focusedWidgetId(), dvui.lastFocusedIdInFrame(null) });
 
         for (dvui.events()) |*e| {
             self.processEvent(e, grid);
@@ -149,6 +151,7 @@ pub const GridKeyboard = struct {
                     if (focused_cell) |cell| {
                         self.cursor.col_num = cell.col_num;
                         self.cursor.row_num = cell.row_num;
+                        self.is_focused = true;
                     } else {
                         self.is_focused = false;
                     }

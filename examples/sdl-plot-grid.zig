@@ -135,8 +135,15 @@ fn gui_frame() !void {
             text.deinit();
         }
         {
+            var top_panel = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .gravity_y = 0 });
+            defer top_panel.deinit();
+            var text = dvui.textEntry(@src(), .{}, .{});
+            text.deinit();
+            text = dvui.textEntry(@src(), .{}, .{});
+            text.deinit();
+        }
+        {
             const focused_cell = keyboard_nav.cellCursor();
-            keyboard_nav.reset();
             keyboard_nav.setLimits(3, pirate_data.len);
             //            const focus_cell = keyboard_nav.cellCursor();
 
@@ -145,11 +152,14 @@ fn gui_frame() !void {
 
             const style_base = CellStyle{ .opts = .{ .tab_index = 0, .expand = .horizontal } };
 
-            const style: CellStyleNav = .{ .base = style_base, .focus_cell = focused_cell, .tab_index = 2 };
+            const style: CellStyleNav = .{ .base = style_base, .focus_cell = focused_cell, .tab_index = 3 };
 
             dvui.gridHeading(@src(), grid, 0, "Year", .fixed, .{});
             dvui.gridHeading(@src(), grid, 1, "Temperature", .fixed, .{});
             dvui.gridHeading(@src(), grid, 2, "Num Pirates", .fixed, .{});
+            std.debug.print("fw = {?x}, lfif = {x}\n", .{ dvui.focusedWidgetId(), dvui.lastFocusedIdInFrame(null) });
+            keyboard_nav.processEvents(grid);
+
             for (pirate_data.items(.year), pirate_data.items(.temperature), pirate_data.items(.pirates), 0..) |*year, *temp, *pirates, row_num| {
                 var col_num: usize = 0;
                 {
@@ -171,10 +181,11 @@ fn gui_frame() !void {
                     _ = dvui.textEntryNumber(@src(), f64, .{ .value = pirates, .min = 0, .max = 10_000_000_000 }, style.options(col_num, row_num));
                 }
             }
-            keyboard_nav.processEvents(grid);
             if (!initialized) {
                 // TODO: Need to make this initialization better.
                 keyboard_nav.navigation_keys = .defaults();
+                keyboard_nav.navigation_keys.up = .{ .key = .up };
+                keyboard_nav.navigation_keys.down = .{ .key = .down };
                 keyboard_nav.scrollTo(0, 0);
                 keyboard_nav.is_focused = true;
             }
@@ -187,6 +198,7 @@ fn gui_frame() !void {
                     initialized = true;
                 }
             }
+            keyboard_nav.reset();
         }
     }
     {
