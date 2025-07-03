@@ -1256,8 +1256,6 @@ const winapi = if (builtin.os.tag == .windows) struct {
 
 // This must be exposed in the app's root source file.
 pub fn main() !u8 {
-    const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
-
     if (builtin.os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         _ = winapi.AttachConsole(0xFFFFFFFF);
@@ -1278,7 +1276,7 @@ pub fn main() !u8 {
 
     log.info("version: {} no callbacks", .{getSDLVersion()});
 
-    const init_opts = app.config.get();
+    const init_opts = dvui.App.get().config.get();
 
     var gpa_instance: std.heap.DebugAllocator(.{}) = .init;
     defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
@@ -1307,12 +1305,12 @@ pub fn main() !u8 {
     var win = try dvui.Window.init(@src(), gpa, back.backend(), .{});
     defer win.deinit();
 
-    if (app.initFn) |initFn| {
+    if (dvui.App.get().initFn) |initFn| {
         try win.begin(win.frame_time_ns);
         try initFn(&win);
         _ = try win.end(.{});
     }
-    defer if (app.deinitFn) |deinitFn| deinitFn();
+    defer if (dvui.App.get().deinitFn) |deinitFn| deinitFn();
 
     var interrupted = false;
 
@@ -1333,7 +1331,7 @@ pub fn main() !u8 {
         try toErr(c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 255), "SDL_SetRenderDrawColor in sdl main");
         try toErr(c.SDL_RenderClear(back.renderer), "SDL_RenderClear in sdl main");
 
-        const res = try app.frameFn();
+        const res = try dvui.App.get().frameFn();
 
         const end_micros = try win.end(.{});
 
@@ -1371,11 +1369,9 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
     _ = argv;
     //_ = c.SDL_SetAppMetadata("dvui-demo", "0.1", "com.example.dvui-demo");
 
-    const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
-
     log.info("version: {} callbacks", .{getSDLVersion()});
 
-    const init_opts = app.config.get();
+    const init_opts = dvui.App.get().config.get();
 
     const gpa = appState.gpa.allocator();
 
@@ -1406,7 +1402,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
         return c.SDL_APP_FAILURE;
     };
 
-    if (app.initFn) |initFn| {
+    if (dvui.App.get().initFn) |initFn| {
         appState.win.begin(appState.win.frame_time_ns) catch |err| {
             log.err("dvui.Window.begin failed: {!}", .{err});
             return c.SDL_APP_FAILURE;
@@ -1431,8 +1427,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
 fn appQuit(_: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
     _ = result;
 
-    const app = dvui.App.get() orelse unreachable;
-    if (app.deinitFn) |deinitFn| deinitFn();
+    if (dvui.App.get().deinitFn) |deinitFn| deinitFn();
     appState.win.deinit();
     appState.back.deinit();
     if (appState.gpa.deinit() != .ok) @panic("Memory leak on exit!");
@@ -1479,7 +1474,7 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     toErr(c.SDL_SetRenderDrawColor(appState.back.renderer, 0, 0, 0, 255), "SDL_SetRenderDrawColor in sdl main") catch return c.SDL_APP_FAILURE;
     toErr(c.SDL_RenderClear(appState.back.renderer), "SDL_RenderClear in sdl main") catch return c.SDL_APP_FAILURE;
 
-    const app = dvui.App.get() orelse unreachable;
+    const app = dvui.App.get();
     const res = app.frameFn() catch |err| {
         log.err("dvui.App.frameFn failed: {!}", .{err});
         return c.SDL_APP_FAILURE;
