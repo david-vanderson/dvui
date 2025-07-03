@@ -3,6 +3,8 @@ const Allocator = std.mem.Allocator;
 const Alignment = std.mem.Alignment;
 const ArenaAllocator = std.heap.ArenaAllocator;
 
+const log = std.log.scoped(.shrinking_arena);
+
 const InitOptions = struct {
     /// If this is set to `false` all memory returned will
     /// not be reused until `reset` is called.
@@ -110,10 +112,10 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
         }
 
         pub fn debug_log(self: *const Self) void {
-            std.log.debug("{*} current used: {d}", .{ self, self.current_usage });
-            std.log.debug("{*} peak used: {d}", .{ self, self.peak_usage });
-            std.log.debug("{*} arena buf len: {d}", .{ self, self.arena.state.buffer_list.len() });
-            std.log.debug("{*} arena capacity: {d}", .{ self, self.arena.queryCapacity() });
+            log.debug("{x} current used: {d}", .{ @intFromPtr(self), self.current_usage });
+            log.debug("{x} peak used: {d}", .{ @intFromPtr(self), self.peak_usage });
+            log.debug("{x} arena buf len: {d}", .{ @intFromPtr(self), self.arena.state.buffer_list.len() });
+            log.debug("{x} arena capacity: {d}", .{ @intFromPtr(self), self.arena.queryCapacity() });
         }
 
         pub fn allocator(self: *Self) Allocator {
@@ -232,7 +234,7 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
                     .instruction_addresses = &addresses,
                 };
                 std.debug.captureStackTrace(ret_addr, &trace);
-                std.log.debug("Free from lifo arena failed. Somewhere between when this was allocated and this call to free there was another allocation that was not freed first. Stack trace: {}", .{trace});
+                log.debug("Free from lifo arena failed. Somewhere between when this was allocated and this call to free there was another allocation that was not freed first. Stack trace: {}", .{trace});
             }
         }
 
@@ -261,6 +263,7 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
                 if (has_never_free and !self.never_free.arena.allocator().rawResize(in_memory, alignment, new_len, ret_addr)) {
                     // reset the size in the normal arena, which should always succeed
                     std.debug.assert(self.arena.allocator().rawResize(memory, alignment, memory.len, ret_addr));
+                    // log.debug("A false negative resize/remap failure was introduced", .{});
                     self.never_free.failed_remap = true;
                     return false;
                 }
