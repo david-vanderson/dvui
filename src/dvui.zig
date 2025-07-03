@@ -215,6 +215,7 @@ pub fn widgetFree(ptr: anytype) void {
 }
 
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {
+    @branchHint(.cold);
     const stack_trace_frame_count = @import("build_options").log_stack_trace orelse if (builtin.mode == .Debug) 12 else 0;
     const stack_trace_enabled = stack_trace_frame_count > 0;
     const err_trace_enabled = if (@import("build_options").log_error_trace) |enabled| enabled else stack_trace_enabled;
