@@ -1039,20 +1039,7 @@ pub fn openURL(self: Context, url: []const u8) !void {
 }
 
 pub fn preferredColorScheme(_: Context) ?dvui.enums.ColorScheme {
-    var out: [4]u8 = undefined;
-    var len: u32 = 4;
-    win32ToErr(win32.RegGetValueW(
-        win32.HKEY_CURRENT_USER,
-        std.unicode.utf8ToUtf16LeStringLiteral("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"),
-        std.unicode.utf8ToUtf16LeStringLiteral("AppsUseLightTheme"),
-        win32.RRF_RT_REG_DWORD,
-        null,
-        &out,
-        &len,
-    ), "RegGetValueW in preferredColorScheme") catch return null;
-
-    const val = std.mem.littleToNative(i32, @bitCast(out));
-    return if (val > 0) .light else .dark;
+    return dvui.Backend.Common.windowsGetPreferredColorScheme();
 }
 
 pub fn refresh(_: Context) void {}
