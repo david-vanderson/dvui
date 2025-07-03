@@ -99,7 +99,7 @@ pub const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch 
 pub const useFreeType = !wasm;
 
 /// The amount of physical pixels to scroll per "tick" of the scroll wheel
-pub const scroll_speed = 20;
+pub var scroll_speed: f32 = 20;
 
 /// Used as a default maximum in various places:
 /// * Options.max_size_content
