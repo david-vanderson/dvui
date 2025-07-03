@@ -92,7 +92,6 @@ pub const GridKeyboard = struct {
         self.enforceCursorLimits();
 
         self.is_focused = self.last_focused_widget == dvui.focusedWidgetId() and dvui.lastFocusedIdInFrame(null) == .zero;
-        std.debug.print("{} : self = {x} fw = {?x}, lfif = {x}\n", .{ self.is_focused, self.last_focused_widget, dvui.focusedWidgetId(), dvui.lastFocusedIdInFrame(null) });
 
         for (dvui.events()) |*e| {
             self.processEvent(e, grid);

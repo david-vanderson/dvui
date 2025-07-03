@@ -143,12 +143,14 @@ fn gui_frame() !void {
             text.deinit();
         }
         {
-            const focused_cell = keyboard_nav.cellCursor();
-            keyboard_nav.setLimits(3, pirate_data.len);
             //            const focus_cell = keyboard_nav.cellCursor();
 
             var grid = dvui.grid(@src(), .numCols(3), .{}, .{});
             defer grid.deinit();
+
+            keyboard_nav.setLimits(3, pirate_data.len);
+            keyboard_nav.processEvents(grid);
+            const focused_cell = keyboard_nav.cellCursor();
 
             const style_base = CellStyle{ .opts = .{ .tab_index = 0, .expand = .horizontal } };
 
@@ -157,8 +159,6 @@ fn gui_frame() !void {
             dvui.gridHeading(@src(), grid, 0, "Year", .fixed, .{});
             dvui.gridHeading(@src(), grid, 1, "Temperature", .fixed, .{});
             dvui.gridHeading(@src(), grid, 2, "Num Pirates", .fixed, .{});
-            std.debug.print("fw = {?x}, lfif = {x}\n", .{ dvui.focusedWidgetId(), dvui.lastFocusedIdInFrame(null) });
-            keyboard_nav.processEvents(grid);
 
             for (pirate_data.items(.year), pirate_data.items(.temperature), pirate_data.items(.pirates), 0..) |*year, *temp, *pirates, row_num| {
                 var col_num: usize = 0;
@@ -184,8 +184,6 @@ fn gui_frame() !void {
             if (!initialized) {
                 // TODO: Need to make this initialization better.
                 keyboard_nav.navigation_keys = .defaults();
-                keyboard_nav.navigation_keys.up = .{ .key = .up };
-                keyboard_nav.navigation_keys.down = .{ .key = .down };
                 keyboard_nav.scrollTo(0, 0);
                 keyboard_nav.is_focused = true;
             }
