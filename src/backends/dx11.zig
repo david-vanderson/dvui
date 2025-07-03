@@ -1039,20 +1039,7 @@ pub fn openURL(self: Context, url: []const u8) !void {
 }
 
 pub fn preferredColorScheme(_: Context) ?dvui.enums.ColorScheme {
-    var out: [4]u8 = undefined;
-    var len: u32 = 4;
-    win32ToErr(win32.RegGetValueW(
-        win32.HKEY_CURRENT_USER,
-        std.unicode.utf8ToUtf16LeStringLiteral("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"),
-        std.unicode.utf8ToUtf16LeStringLiteral("AppsUseLightTheme"),
-        win32.RRF_RT_REG_DWORD,
-        null,
-        &out,
-        &len,
-    ), "RegGetValueW in preferredColorScheme") catch return null;
-
-    const val = std.mem.littleToNative(i32, @bitCast(out));
-    return if (val > 0) .light else .dark;
+    return dvui.Backend.Common.windowsGetPreferredColorScheme();
 }
 
 pub fn refresh(_: Context) void {}
@@ -1547,26 +1534,8 @@ fn convertVKeyToDvuiKey(vkey: win32.VIRTUAL_KEY) dvui.enums.Key {
     };
 }
 
-// win32 is Windows exclusive so this can be unconditionally defined
-extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
-
-fn wWinMain(
-    _: win32.HINSTANCE,
-    _: ?win32.HINSTANCE,
-    _: ?[*:0]const u16,
-    _: win32.SHOW_WINDOW_CMD,
-) callconv(std.os.windows.WINAPI) void {
-    _ = AttachConsole(0xFFFFFFFF);
-    return main() catch |e| {
-        if (@errorReturnTrace()) |trace| {
-            std.debug.dumpStackTrace(trace.*);
-        }
-        std.debug.panic("{s}", .{@errorName(e)});
-    };
-}
-
 pub fn main() !void {
-    _ = win32.AttachConsole(0xFFFFFFFF);
+    try dvui.Backend.Common.windowsAttachConsole();
 
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 

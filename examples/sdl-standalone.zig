@@ -26,7 +26,7 @@ var g_win: ?*dvui.Window = null;
 pub fn main() !void {
     if (@import("builtin").os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
-        _ = winapi.AttachConsole(0xFFFFFFFF);
+        try dvui.Backend.Common.windowsAttachConsole();
     }
     std.log.info("SDL version: {}", .{Backend.getSDLVersion()});
 
@@ -232,8 +232,3 @@ fn gui_frame() void {
     // look at demo() for examples of dvui widgets, shows in a floating window
     dvui.Examples.demo();
 }
-
-// Optional: windows os only
-const winapi = if (builtin.os.tag == .windows) struct {
-    extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
-} else struct {};

@@ -551,12 +551,16 @@ pub fn openURL(self: *SDLBackend, url: []const u8) !void {
 }
 
 pub fn preferredColorScheme(_: *SDLBackend) ?dvui.enums.ColorScheme {
-    if (!sdl3) return null;
-    return switch (c.SDL_GetSystemTheme()) {
-        c.SDL_SYSTEM_THEME_DARK => .dark,
-        c.SDL_SYSTEM_THEME_LIGHT => .light,
-        else => null,
-    };
+    if (sdl3) {
+        return switch (c.SDL_GetSystemTheme()) {
+            c.SDL_SYSTEM_THEME_DARK => .dark,
+            c.SDL_SYSTEM_THEME_LIGHT => .light,
+            else => null,
+        };
+    } else if (builtin.target.os.tag == .windows) {
+        return dvui.Backend.Common.windowsGetPreferredColorScheme();
+    }
+    return null;
 }
 
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
@@ -1245,18 +1249,13 @@ pub fn getSDLVersion() std.SemanticVersion {
     }
 }
 
-// Optional: windows os only
-const winapi = if (builtin.os.tag == .windows) struct {
-    extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
-} else struct {};
-
 // This must be exposed in the app's root source file.
 pub fn main() !u8 {
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
     if (builtin.os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
-        _ = winapi.AttachConsole(0xFFFFFFFF);
+        try dvui.Backend.Common.windowsAttachConsole();
     }
 
     if (sdl3 and (sdl_options.callbacks orelse true) and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows)) {
