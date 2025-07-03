@@ -867,17 +867,12 @@ pub fn EndDrawingWaitEventTimeout(_: *RaylibBackend, timeout_micros: u32) void {
     return;
 }
 
-// Optional: windows os only
-const winapi = if (builtin.os.tag == .windows) struct {
-    extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
-} else struct {};
-
 pub fn main() !void {
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
     if (builtin.os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
-        _ = winapi.AttachConsole(0xFFFFFFFF);
+        try dvui.Backend.Common.windowsAttachConsole();
     }
 
     var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
