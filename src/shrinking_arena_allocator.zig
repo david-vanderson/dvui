@@ -171,18 +171,8 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
         }
 
         fn remap(ctx: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
-            const self: *Self = @ptrCast(@alignCast(ctx));
-            const end_before = self.arena.state.end_index;
-            const buf = self.arena.allocator().rawRemap(memory, alignment, new_len, ret_addr) orelse return null;
-            if (self.arena.state.end_index != end_before) {
-                if (new_len < memory.len) {
-                    self.current_usage -= memory.len - new_len;
-                } else {
-                    self.current_usage += new_len - memory.len;
-                    self.peak_usage = @max(self.peak_usage, self.current_usage);
-                }
-            }
-            return buf;
+            // NOTE: Calling resize here is only okay because `ArenaAllocator` does the same!
+            return if (resize(ctx, memory, alignment, new_len, ret_addr)) memory.ptr else null;
         }
 
         fn resize(ctx: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ret_addr: usize) bool {
