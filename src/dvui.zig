@@ -2824,7 +2824,10 @@ pub fn hashIdKey(id: WidgetId, key: []const u8) u64 {
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the data to.
 ///
-/// Stored data with the same id/key will be freed at next `win.end()`.
+/// Stored data with the same id/key will be overwritten if it has the same size,
+/// otherwise the data will be freed at the next call to `Window.end`. This means
+/// that if a pointer to the same id/key was retrieved earlier, the value behind
+/// that pointer would be modified.
 ///
 /// If you want to store the contents of a slice, use `dataSetSlice`.
 pub fn dataSet(win: ?*Window, id: WidgetId, key: []const u8, data: anytype) void {
@@ -2836,7 +2839,10 @@ pub fn dataSet(win: ?*Window, id: WidgetId, key: []const u8, data: anytype) void
 ///
 /// Can be called from any thread.
 ///
-/// Stored data with the same id/key will be freed at next `win.end()`.
+/// Stored data with the same id/key will be overwritten if it has the same size,
+/// otherwise the data will be freed at the next call to `Window.end`. This means
+/// that if the slice with the same id/key was retrieved earlier, the value behind
+/// that slice would be modified.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the data to.
@@ -2942,6 +2948,8 @@ pub fn dataGetDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: 
 /// where there is no call to any `dataGet`/`dataSet` functions for that id/key
 /// combination.
 ///
+/// The pointer will always be valid until the next call to `Window.end`.
+///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetPtrDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type, default: T) *T {
     if (dataGetPtr(win, id, key, T)) |ptr| {
@@ -2962,6 +2970,8 @@ pub fn dataGetPtrDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime 
 /// Returns a pointer to internal storage, which will be freed after a frame
 /// where there is no call to any `dataGet`/`dataSet` functions for that id/key
 /// combination.
+///
+/// The pointer will always be valid until the next call to `Window.end`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetPtr(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type) ?*T {
@@ -2985,6 +2995,8 @@ pub fn dataGetPtr(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type
 /// The returned slice points to internal storage, which will be freed after
 /// a frame where there is no call to any `dataGet`/`dataSet` functions for that
 /// id/key combination.
+///
+/// The slice will always be valid until the next call to `Window.end`.
 pub fn dataGetSlice(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type) ?T {
     const dt = @typeInfo(T);
     if (dt != .pointer or dt.pointer.size != .slice) {
@@ -3015,6 +3027,8 @@ pub fn dataGetSlice(win: ?*Window, id: WidgetId, key: []const u8, comptime T: ty
 /// The returned slice points to internal storage, which will be freed after
 /// a frame where there is no call to any `dataGet`/`dataSet` functions for that
 /// id/key combination.
+///
+/// The slice will always be valid until the next call to `Window.end`.
 pub fn dataGetSliceDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
     return dataGetSlice(win, id, key, T) orelse blk: {
         dataSetSlice(win, id, key, default);
@@ -3037,7 +3051,7 @@ pub fn dataGetInternal(win: ?*Window, id: WidgetId, key: []const u8, comptime T:
 }
 
 /// Remove key (and data if any) for given id.  The data will be freed at next
-/// `win.end()`.
+/// `Window.end`.
 ///
 /// Can be called from any thread.
 ///

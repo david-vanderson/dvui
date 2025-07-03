@@ -1301,36 +1301,49 @@ pub fn dataSetAdvanced(self: *Self, id: WidgetId, key: []const u8, data_in: anyt
     self.data_mutex.lock();
     defer self.data_mutex.unlock();
 
-    var sd = SavedData{ .alignment = alignment, .data = self.gpa.allocWithOptions(u8, bytes.len * num_copies, alignment, null) catch |err| switch (err) {
-        error.OutOfMemory => {
-            log.err("dataSet got {!} for id {x} key {s}\n", .{ err, id, key });
-            return;
-        },
-    } };
-
-    for (0..num_copies) |i| {
-        @memcpy(sd.data[i * bytes.len ..][0..bytes.len], bytes);
-    }
-
-    if (builtin.mode == .Debug) {
-        sd.type_str = dt_type_str;
-        sd.copy_slice = copy_slice;
-    }
-
-    const previous_kv = self.datas.fetchPut(self.gpa, hash, sd) catch |err| switch (err) {
-        error.OutOfMemory => {
-            log.err("dataSet got {!} for id {x} key {s}\n", .{ err, id, key });
-            sd.free(self.gpa);
-            return;
-        },
+    const entry = self.datas.getOrPut(self.gpa, hash) catch |err| {
+        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+        return;
     };
 
-    if (previous_kv) |kv| {
-        //std.debug.print("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, kv.key });
-        self.datas_trash.append(self.arena(), kv.value) catch |err| {
-            log.err("Previous data could not be added to the trash, got {!} for id {x} key {s}\n", .{ err, id, key });
+    const is_same_size = entry.value_ptr.data.len == bytes.len * num_copies;
+    const should_trash = entry.found_existing and !is_same_size;
+    if (should_trash) {
+        // log.debug("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, key });
+        if (builtin.mode == .Debug) {
+            if (!std.mem.eql(u8, entry.value_ptr.type_str, @typeName(@TypeOf(data_in))) or entry.value_ptr.copy_slice != copy_slice) {
+                std.debug.panic(
+                    "dataSetAdvanced: stored type {s} (slice {}) doesn't match asked for type {s} (slice {})",
+                    .{ entry.value_ptr.type_str, entry.value_ptr.copy_slice, @typeName(@TypeOf(data_in)), copy_slice },
+                );
+            }
+        }
+        self.datas_trash.append(self.arena(), entry.value_ptr.*) catch |err| {
+            // Remove from map so it dataGet doesn't return an undefined value
+            _ = self.datas.remove(hash);
+            dvui.logError(@src(), err, "Previous data could not be added to the trash, id {x} key {s}", .{ id, key });
             return;
         };
+    }
+    if (!entry.found_existing or should_trash) {
+        entry.value_ptr.* = .{
+            .alignment = alignment,
+            .data = self.gpa.allocWithOptions(u8, bytes.len * num_copies, alignment, null) catch |err| switch (err) {
+                error.OutOfMemory => {
+                    dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+                    return;
+                },
+            },
+        };
+        if (builtin.mode == .Debug) {
+            entry.value_ptr.type_str = dt_type_str;
+            entry.value_ptr.copy_slice = copy_slice;
+        }
+    }
+
+    // Set data
+    for (0..num_copies) |i| {
+        @memcpy(entry.value_ptr.data[i * bytes.len ..][0..bytes.len], bytes);
     }
 }
 
@@ -1361,7 +1374,7 @@ pub fn dataRemove(self: *Self, id: WidgetId, key: []const u8) void {
 
     if (self.datas.fetchRemove(hash)) |dd| {
         self.datas_trash.append(self.arena(), dd.value) catch |err| {
-            log.err("Previous data could not be added to the trash, got {!} for id {x} key {s}\n", .{ err, id, key });
+            dvui.logError(@src(), err, "Previous data could not be added to the trash, id {x} key {s}", .{ id, key });
             return;
         };
     }
@@ -1655,6 +1668,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // Call this before freeing data so backend can use data allocated during frame.
     try self.backend.end();
 
+    // log.debug("Datas trash {d}", .{self.datas_trash.items.len});
     for (self.datas_trash.items) |sd| {
         sd.free(self.gpa);
     }
