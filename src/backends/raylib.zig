@@ -873,6 +873,8 @@ const winapi = if (builtin.os.tag == .windows) struct {
 } else struct {};
 
 pub fn main() !void {
+    const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
+
     if (builtin.os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         _ = winapi.AttachConsole(0xFFFFFFFF);
@@ -882,7 +884,7 @@ pub fn main() !void {
     const gpa = gpa_instance.allocator();
     defer _ = gpa_instance.deinit();
 
-    const init_opts = dvui.App.get().config.get();
+    const init_opts = app.config.get();
 
     // init Raylib backend (creates OS window)
     // initWindow() means the backend calls CloseWindow for you in deinit()
@@ -902,12 +904,12 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), gpa, b.backend(), .{});
     defer win.deinit();
 
-    if (dvui.App.get().initFn) |initFn| {
+    if (app.initFn) |initFn| {
         try win.begin(win.frame_time_ns);
         try initFn(&win);
         _ = try win.end(.{});
     }
-    defer if (dvui.App.get().deinitFn) |deinitFn| deinitFn();
+    defer if (app.deinitFn) |deinitFn| deinitFn();
 
     main_loop: while (true) {
         c.BeginDrawing();
@@ -930,7 +932,7 @@ pub fn main() !void {
         // the previous frame's render
         b.clear();
 
-        const res = try dvui.App.get().frameFn();
+        const res = try app.frameFn();
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()

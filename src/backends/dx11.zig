@@ -1568,6 +1568,8 @@ fn wWinMain(
 pub fn main() !void {
     _ = win32.AttachConsole(0xFFFFFFFF);
 
+    const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
+
     const window_class = win32.L("DvuiWindow");
 
     var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
@@ -1579,7 +1581,7 @@ pub fn main() !void {
         win32.GetLastError(),
     );
 
-    const init_opts = dvui.App.get().config.get();
+    const init_opts = app.config.get();
 
     var window_state: WindowState = undefined;
 
@@ -1599,12 +1601,12 @@ pub fn main() !void {
 
     const win = b.getWindow();
 
-    if (dvui.App.get().initFn) |initFn| {
+    if (app.initFn) |initFn| {
         try win.begin(win.frame_time_ns);
         try initFn(win);
         _ = try win.end(.{});
     }
-    defer if (dvui.App.get().deinitFn) |deinitFn| deinitFn();
+    defer if (app.deinitFn) |deinitFn| deinitFn();
 
     while (true) switch (serviceMessageQueue()) {
         .queue_empty => {
@@ -1615,7 +1617,7 @@ pub fn main() !void {
             try win.begin(nstime);
 
             // both dvui and dx11 drawing
-            const res = try dvui.App.get().frameFn();
+            const res = try app.frameFn();
 
             // marks end of dvui frame, don't call dvui functions after this
             // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
