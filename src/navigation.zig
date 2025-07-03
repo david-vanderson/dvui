@@ -28,12 +28,16 @@ pub const GridKeyboard = struct {
         down: dvui.enums.Keybind,
         left: dvui.enums.Keybind,
         right: dvui.enums.Keybind,
+        home: dvui.enums.Keybind,
+        end: dvui.enums.Keybind,
 
         pub const none: NavigationKeys = .{
             .up = .{},
             .down = .{},
             .left = .{},
             .right = .{},
+            .home = .{},
+            .end = .{},
         };
 
         pub fn defaults() NavigationKeys {
@@ -43,6 +47,8 @@ pub const GridKeyboard = struct {
                 .down = cw.keybinds.get("grid_cell_down") orelse unreachable,
                 .left = cw.keybinds.get("prev_widget") orelse unreachable,
                 .right = cw.keybinds.get("next_widget") orelse unreachable,
+                .home = cw.keybinds.get("text_start") orelse unreachable,
+                .end = cw.keybinds.get("text_end") orelse unreachable,
             };
         }
     };
@@ -103,7 +109,14 @@ pub const GridKeyboard = struct {
         switch (e.evt) {
             .key => |*ke| {
                 if (!self.is_focused or e.handled) return;
-                if (ke.action == .down) {
+                if (ke.action == .down or ke.action == .repeat) {
+                    if (ke.matchBind("text_start")) {
+                        e.handle(@src(), grid.data());
+                        self.scrollTo(0, 0);
+                    } else if (ke.matchBind("text_end")) {
+                        e.handle(@src(), grid.data());
+                        self.scrollTo(self.num_cols - 1, self.num_rows - 1);
+                    }
                     if (ke.matchKeyBind(self.navigation_keys.up)) {
                         e.handle(@src(), grid.data());
                         self.cursor.row_num = if (self.cursor.row_num > 0) self.cursor.row_num - 1 else 0;
