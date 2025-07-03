@@ -1117,7 +1117,7 @@ pub const TextureCacheEntry = struct {
         }
     }
 
-    pub fn fromImageFile(name: []const u8, image_bytes: []const u8) (Backend.TextureError || StbImageError)!TextureCacheEntry {
+    pub fn fromImageFile(name: []const u8, image_bytes: []const u8, interpolation: enums.TextureInterpolation) (Backend.TextureError || StbImageError)!TextureCacheEntry {
         var cw = currentWindow();
         const tex_hash = TextureCacheEntry.hashImageBytes(image_bytes);
         if (cw.texture_cache.get(tex_hash)) |tce| return tce;
@@ -1131,18 +1131,18 @@ pub const TextureCacheEntry = struct {
         }
         defer c.stbi_image_free(data);
 
-        const texture = try textureCreate(.fromRGBA(data[0..@intCast(w * h * @sizeOf(Color.PMA))]), @intCast(w), @intCast(h), .linear);
+        const texture = try textureCreate(.fromRGBA(data[0..@intCast(w * h * @sizeOf(Color.PMA))]), @intCast(w), @intCast(h), interpolation);
 
         const entry = TextureCacheEntry{ .texture = texture };
         try cw.texture_cache.put(cw.gpa, tex_hash, entry);
         return entry;
     }
 
-    pub fn fromPixels(pma: dvui.RGBAPixelsPMA, width: u32, height: u32) Backend.TextureError!dvui.TextureCacheEntry {
+    pub fn fromPixels(pma: dvui.RGBAPixelsPMA, width: u32, height: u32, interpolation: enums.TextureInterpolation) Backend.TextureError!dvui.TextureCacheEntry {
         var cw = dvui.currentWindow();
         const tex_hash = dvui.TextureCacheEntry.hashImageBytes(@ptrCast(pma.pma));
         if (cw.texture_cache.getPtr(tex_hash)) |tce| return tce.*;
-        const texture = try dvui.textureCreate(pma, width, height, .linear);
+        const texture = try dvui.textureCreate(pma, width, height, interpolation);
         const entry = dvui.TextureCacheEntry{ .texture = texture };
         try cw.texture_cache.put(cw.gpa, tex_hash, entry);
         return entry;
@@ -5423,6 +5423,8 @@ pub const ImageInitOptions = struct {
     /// - ratio => fit in rect maintaining aspect ratio
     shrink: ?Options.Expand = null,
 
+    interpolation: enums.TextureInterpolation = .linear,
+
     uv: Rect = .{ .w = 1, .h = 1 },
 };
 
@@ -5491,7 +5493,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
         .background_color = renderBackground,
     };
     const content_rs = wd.contentRectScale();
-    renderImage(init_opts.name, init_opts.bytes, content_rs, render_tex_opts) catch |err| logError(@src(), err, "Could not render image {s} at {}", .{ init_opts.name, content_rs });
+    renderImage(init_opts.name, init_opts.bytes, content_rs, render_tex_opts, init_opts.interpolation) catch |err| logError(@src(), err, "Could not render image {s} at {}", .{ init_opts.name, content_rs });
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
 
@@ -7128,12 +7130,12 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     try renderTexture(tce.texture, rs, opts);
 }
 
-pub fn renderImage(name: []const u8, bytes: ImageInitOptions.ImageBytes, rs: RectScale, opts: RenderTextureOptions) Backend.GenericError!void {
+pub fn renderImage(name: []const u8, bytes: ImageInitOptions.ImageBytes, rs: RectScale, opts: RenderTextureOptions, interpolation: enums.TextureInterpolation) Backend.GenericError!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
     const cached_tex = switch (bytes) {
-        .imageFile => |b| dvui.TextureCacheEntry.fromImageFile(name, b),
-        .pixels => |p| dvui.TextureCacheEntry.fromPixels(p.bytes, p.width, p.height),
+        .imageFile => |b| dvui.TextureCacheEntry.fromImageFile(name, b, interpolation),
+        .pixels => |p| dvui.TextureCacheEntry.fromPixels(p.bytes, p.width, p.height, interpolation),
     };
     const tce = cached_tex catch return;
     try renderTexture(tce.texture, rs, opts);
