@@ -3,7 +3,31 @@ const Allocator = std.mem.Allocator;
 const Alignment = std.mem.Alignment;
 const ArenaAllocator = std.heap.ArenaAllocator;
 
-const InitOptions = struct {};
+const InitOptions = struct {
+    /// If this is set to `false` all memory returned will
+    /// not be reused until `reset` is called.
+    reuse_memory: bool = true,
+};
+
+///
+const NeverFree = struct {
+    arena: ArenaAllocator,
+    map: std.AutoHashMapUnmanaged([*]u8, [*]u8) = .empty,
+    /// This is needed so that we can simulate `has_expanded` if `arena`
+    /// fails to remap, which is the only reason `ShrinkingArenaAllocator` would fail
+    failed_remap: bool = false,
+
+    fn deinit(self: *NeverFree) void {
+        self.arena.deinit();
+        self.map.deinit(self.arena.child_allocator);
+    }
+
+    fn reset(self: *NeverFree) void {
+        self.failed_remap = false;
+        _ = self.arena.reset(.retain_capacity);
+        self.map.clearRetainingCapacity();
+    }
+};
 
 /// This is a wrapper of the `ArenaAllocator` that keeps
 /// track of the peak memory used in order to retain only
@@ -15,24 +39,34 @@ const InitOptions = struct {};
 /// for these the large files does no make sense when only
 /// a fraction of that is used during a normal frame.
 pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
-    _ = opts;
+    const has_never_free = !opts.reuse_memory;
     return struct {
         arena: ArenaAllocator,
         peak_usage: usize = 0,
         current_usage: usize = 0,
 
+        never_free: if (has_never_free) NeverFree else void = undefined,
+
         const Self = @This();
 
         pub fn init(child_allocator: Allocator) Self {
-            return .{ .arena = .init(child_allocator) };
+            return .{
+                .arena = .init(child_allocator),
+                .never_free = if (has_never_free) .{ .arena = .init(child_allocator) },
+            };
         }
 
         pub fn initArena(arena: ArenaAllocator) Self {
-            return .{ .arena = arena };
+            return .{
+                .arena = arena,
+                .never_free = if (has_never_free) .{ .arena = .init(arena.child_allocator) },
+            };
         }
 
-        pub fn deinit(self: Self) void {
+        pub fn deinit(self: *Self) void {
             self.arena.deinit();
+            if (has_never_free) self.never_free.deinit();
+            self.* = undefined;
         }
 
         pub const ResetMode = union(enum) {
@@ -65,12 +99,14 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
         pub fn reset(self: *Self, mode: ResetMode) bool {
             defer self.current_usage = 0;
             defer self.peak_usage = 0;
-            return switch (mode) {
-                .free_all => self.arena.reset(.free_all),
-                .retain_capacity => self.arena.reset(.retain_capacity),
-                .shrink_to_peak_usage => self.arena.reset(.{ .retain_with_limit = self.peak_usage + self.peak_usage / 2 }),
-                .shrink_to_peak_usage_exact => self.arena.reset(.{ .retain_with_limit = self.peak_usage }),
+            if (has_never_free) self.never_free.reset();
+            const arena_mode: ArenaAllocator.ResetMode = switch (mode) {
+                .free_all => .free_all,
+                .retain_capacity => .retain_capacity,
+                .shrink_to_peak_usage => .{ .retain_with_limit = self.peak_usage + self.peak_usage / 2 },
+                .shrink_to_peak_usage_exact => .{ .retain_with_limit = self.peak_usage },
             };
+            return self.arena.reset(arena_mode);
         }
 
         pub fn debug_log(self: *const Self) void {
@@ -111,6 +147,7 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
         }
 
         pub fn has_expanded(self: *const Self) bool {
+            if (has_never_free and self.never_free.failed_remap) return true;
             if (self.arena.state.buffer_list.first) |first| {
                 // If there is a second buffer, we expanded past our first
                 return first.next != null;
@@ -119,8 +156,18 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
 
         /// Attempts to free the given memory and returns whether it
         /// succeeded or not.
-        fn attemptFree(self: *Self, memory: []u8, alignment: Alignment, ret_addr: usize) bool {
+        fn attemptFree(self: *Self, in_memory: []u8, alignment: Alignment, ret_addr: usize) bool {
             const end_before = self.arena.state.end_index;
+
+            const memory = if (has_never_free)
+                // If the ptr is not in the map, it's likely not allocated by us
+                if (self.never_free.map.get(in_memory.ptr)) |ptr| ptr[0..in_memory.len] else in_memory
+                // We intentionally do not free `in_memory` from `never_free_arena` and to not remove
+                // the entry from `never_free_map` because we might be freeing the first field in a
+                // larger struct, so the translation needs to remain
+            else
+                in_memory;
+
             self.arena.allocator().rawFree(memory, alignment, ret_addr);
 
             if (memory.len == 0) {
@@ -146,10 +193,29 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
 
         fn alloc(ctx: *anyopaque, len: usize, alignment: Alignment, ret_addr: usize) ?[*]u8 {
             const self: *Self = @ptrCast(@alignCast(ctx));
+            return self.attemptAlloc(len, alignment, ret_addr) catch return null;
+        }
+
+        fn attemptAlloc(self: *Self, len: usize, alignment: Alignment, ret_addr: usize) Allocator.Error!?[*]u8 {
             const buf = self.arena.allocator().rawAlloc(len, alignment, ret_addr) orelse return null;
+            errdefer self.arena.allocator().rawFree(buf[0..len], alignment, ret_addr);
+
             self.current_usage += len;
+            errdefer self.current_usage -= len;
+            const prev_peak = self.peak_usage;
+            errdefer self.peak_usage = prev_peak;
             self.peak_usage = @max(self.peak_usage, self.current_usage);
-            return buf;
+
+            if (has_never_free) {
+                const never_free_buf = self.never_free.arena.allocator().rawAlloc(len, alignment, ret_addr) orelse return Allocator.Error.OutOfMemory;
+                errdefer self.never_free.arena.allocator().rawFree(buf[0..len], alignment, ret_addr);
+
+                try self.never_free.map.put(self.never_free.arena.child_allocator, never_free_buf, buf);
+
+                return never_free_buf;
+            } else {
+                return buf;
+            }
         }
 
         fn free(ctx: *anyopaque, memory: []u8, alignment: Alignment, ret_addr: usize) void {
@@ -175,8 +241,15 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
             return if (resize(ctx, memory, alignment, new_len, ret_addr)) memory.ptr else null;
         }
 
-        fn resize(ctx: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ret_addr: usize) bool {
+        fn resize(ctx: *anyopaque, in_memory: []u8, alignment: Alignment, new_len: usize, ret_addr: usize) bool {
             const self: *Self = @ptrCast(@alignCast(ctx));
+
+            const memory = if (has_never_free)
+                // If the ptr is not in the map, it's likely not allocated by us
+                if (self.never_free.map.get(in_memory.ptr)) |ptr| ptr[0..in_memory.len] else in_memory
+            else
+                in_memory;
+
             if (self.arena.allocator().rawResize(memory, alignment, new_len, ret_addr)) {
                 if (new_len < memory.len) {
                     self.current_usage -= memory.len - new_len;
@@ -184,6 +257,14 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
                     self.current_usage += new_len - memory.len;
                     self.peak_usage = @max(self.peak_usage, self.current_usage);
                 }
+
+                if (has_never_free and !self.never_free.arena.allocator().rawResize(in_memory, alignment, new_len, ret_addr)) {
+                    // reset the size in the normal arena, which should always succeed
+                    std.debug.assert(self.arena.allocator().rawResize(memory, alignment, memory.len, ret_addr));
+                    self.never_free.failed_remap = true;
+                    return false;
+                }
+
                 return true;
             } else {
                 return false;
