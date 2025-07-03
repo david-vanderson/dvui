@@ -23,14 +23,6 @@ pub const kind: dvui.enums.Backend = if (sdl3) .sdl3 else .sdl2;
 
 pub const SDLBackend = @This();
 pub const Context = *SDLBackend;
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-
-// used when doing sdl callbacks
-pub var gwin: dvui.Window = undefined;
-pub var gback: SDLBackend = undefined;
-pub var ginterrupted: bool = false;
-pub var ghave_resize: bool = false;
-pub var gno_wait: bool = false;
 
 const log = std.log.scoped(.SDLBackend);
 
@@ -1288,9 +1280,9 @@ pub fn main() !u8 {
 
     const init_opts = app.config.get();
 
-    const gpa = gpa_instance.allocator();
-
+    var gpa_instance: std.heap.DebugAllocator(.{}) = .init;
     defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
+    const gpa = gpa_instance.allocator();
 
     // init SDL backend (creates and owns OS window)
     var back = try initWindow(.{
@@ -1359,6 +1351,19 @@ pub fn main() !u8 {
     return 0;
 }
 
+/// used when doing sdl callbacks
+const CallbackState = struct {
+    win: dvui.Window,
+    back: SDLBackend,
+    gpa: std.heap.GeneralPurposeAllocator(.{}) = .init,
+    interrupted: bool = false,
+    have_resize: bool = false,
+    no_wait: bool = false,
+};
+
+/// used when doing sdl callbacks
+var appState: CallbackState = .{ .win = undefined, .back = undefined };
+
 // sdl3 callback
 fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callconv(.c) c.SDL_AppResult {
     _ = appstate;
@@ -1372,10 +1377,10 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
 
     const init_opts = app.config.get();
 
-    const gpa = gpa_instance.allocator();
+    const gpa = appState.gpa.allocator();
 
     // init SDL backend (creates and owns OS window)
-    gback = initWindow(.{
+    appState.back = initWindow(.{
         .allocator = gpa,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
@@ -1396,23 +1401,23 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
     }
 
     //// init dvui Window (maps onto a single OS window)
-    gwin = dvui.Window.init(@src(), gpa, gback.backend(), .{}) catch |err| {
+    appState.win = dvui.Window.init(@src(), gpa, appState.back.backend(), .{}) catch |err| {
         log.err("dvui.Window.init failed: {!}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
     if (app.initFn) |initFn| {
-        gwin.begin(gwin.frame_time_ns) catch |err| {
+        appState.win.begin(appState.win.frame_time_ns) catch |err| {
             log.err("dvui.Window.begin failed: {!}", .{err});
             return c.SDL_APP_FAILURE;
         };
 
-        initFn(&gwin) catch |err| {
+        initFn(&appState.win) catch |err| {
             log.err("dvui.App.initFn failed: {!}", .{err});
             return c.SDL_APP_FAILURE;
         };
 
-        _ = gwin.end(.{}) catch |err| {
+        _ = appState.win.end(.{}) catch |err| {
             log.err("dvui.Window.end failed: {!}", .{err});
             return c.SDL_APP_FAILURE;
         };
@@ -1423,15 +1428,14 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
 
 // sdl3 callback
 // This function runs once at shutdown.
-fn appQuit(appstate: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
-    _ = appstate;
+fn appQuit(_: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
     _ = result;
 
     const app = dvui.App.get() orelse unreachable;
     if (app.deinitFn) |deinitFn| deinitFn();
-    gwin.deinit();
-    gback.deinit();
-    if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
+    appState.win.deinit();
+    appState.back.deinit();
+    if (appState.gpa.deinit() != .ok) @panic("Memory leak on exit!");
 
     // SDL will clean up the window/renderer for us.
 }
@@ -1440,7 +1444,7 @@ fn appQuit(appstate: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
 // This function runs when a new event (mouse input, keypresses, etc) occurs.
 fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
     const e = event.?.*;
-    _ = gback.addEvent(&gwin, e) catch |err| {
+    _ = appState.back.addEvent(&appState.win, e) catch |err| {
         log.err("dvui.Window.addEvent failed: {!}", .{err});
         return c.SDL_APP_FAILURE;
     };
@@ -1448,7 +1452,7 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
     if (event.?.type == c.SDL_EVENT_WINDOW_RESIZED) {
         //std.debug.print("resize {d}x{d}\n", .{e.window.data1, e.window.data2});
         // getting a resize event means we are likely in a callback, so don't call any wait functions
-        ghave_resize = true;
+        appState.have_resize = true;
     }
 
     if (event.?.type == c.SDL_EVENT_QUIT) {
@@ -1462,18 +1466,18 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
 // This function runs once per frame, and is the heart of the program.
 fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     // beginWait coordinates with waitTime below to run frames only when needed
-    const nstime = gwin.beginWait(ginterrupted or gno_wait);
+    const nstime = appState.win.beginWait(appState.interrupted or appState.no_wait);
 
     // marks the beginning of a frame for dvui, can call dvui functions after this
-    gwin.begin(nstime) catch |err| {
+    appState.win.begin(nstime) catch |err| {
         log.err("dvui.Window.begin failed: {!}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
     // if dvui widgets might not cover the whole window, then need to clear
     // the previous frame's render
-    toErr(c.SDL_SetRenderDrawColor(gback.renderer, 0, 0, 0, 255), "SDL_SetRenderDrawColor in sdl main") catch return c.SDL_APP_FAILURE;
-    toErr(c.SDL_RenderClear(gback.renderer), "SDL_RenderClear in sdl main") catch return c.SDL_APP_FAILURE;
+    toErr(c.SDL_SetRenderDrawColor(appState.back.renderer, 0, 0, 0, 255), "SDL_SetRenderDrawColor in sdl main") catch return c.SDL_APP_FAILURE;
+    toErr(c.SDL_RenderClear(appState.back.renderer), "SDL_RenderClear in sdl main") catch return c.SDL_APP_FAILURE;
 
     const app = dvui.App.get() orelse unreachable;
     const res = app.frameFn() catch |err| {
@@ -1481,19 +1485,19 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_FAILURE;
     };
 
-    const end_micros = gwin.end(.{}) catch |err| {
+    const end_micros = appState.win.end(.{}) catch |err| {
         log.err("dvui.Window.end failed: {!}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
-    gback.setCursor(gwin.cursorRequested()) catch return c.SDL_APP_FAILURE;
-    gback.textInputRect(gwin.textInputRequested()) catch return c.SDL_APP_FAILURE;
+    appState.back.setCursor(appState.win.cursorRequested()) catch return c.SDL_APP_FAILURE;
+    appState.back.textInputRect(appState.win.textInputRequested()) catch return c.SDL_APP_FAILURE;
 
-    gback.renderPresent() catch return c.SDL_APP_FAILURE;
+    appState.back.renderPresent() catch return c.SDL_APP_FAILURE;
 
     if (res != .ok) return c.SDL_APP_SUCCESS;
 
-    const wait_event_micros = gwin.waitTime(end_micros, null);
+    const wait_event_micros = appState.win.waitTime(end_micros, null);
 
     //std.debug.print("waitEventTimeout {d} {} resize {}\n", .{wait_event_micros, gno_wait, ghave_resize});
 
@@ -1504,14 +1508,14 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     // During a callback we don't want to call SDL_WaitEvent or
     // SDL_WaitEventTimeout.  Otherwise all event handling gets screwed up and
     // either never recovers or recovers after many seconds.
-    if (gno_wait or ghave_resize) {
-        ghave_resize = false;
+    if (appState.no_wait or appState.have_resize) {
+        appState.have_resize = false;
         return c.SDL_APP_CONTINUE;
     }
 
-    gno_wait = true;
-    ginterrupted = gback.waitEventTimeout(wait_event_micros) catch return c.SDL_APP_FAILURE;
-    gno_wait = false;
+    appState.no_wait = true;
+    appState.interrupted = appState.back.waitEventTimeout(wait_event_micros) catch return c.SDL_APP_FAILURE;
+    appState.no_wait = false;
 
     return c.SDL_APP_CONTINUE;
 }
