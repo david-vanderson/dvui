@@ -28,6 +28,10 @@ const window_class = win32.L("DvuiStandaloneWindow");
 /// - dvui renders the whole application
 /// - render frames only when needed
 pub fn main() !void {
+    if (@import("builtin").os.tag == .windows) { // optional
+        // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
+        try dvui.Backend.Common.windowsAttachConsole();
+    }
     defer _ = gpa_instance.deinit();
 
     Backend.RegisterClass(window_class, .{}) catch win32.panicWin32(
