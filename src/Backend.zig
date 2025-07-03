@@ -6,6 +6,8 @@ const dvui = @import("dvui.zig");
 const Implementation = @import("backend");
 const Backend = @This();
 
+pub const Common = @import("backends/common.zig");
+
 pub const GenericError = std.mem.Allocator.Error || error{BackendError};
 pub const TextureError = GenericError || error{ TextureCreate, TextureRead };
 

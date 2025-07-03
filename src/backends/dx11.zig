@@ -1547,26 +1547,8 @@ fn convertVKeyToDvuiKey(vkey: win32.VIRTUAL_KEY) dvui.enums.Key {
     };
 }
 
-// win32 is Windows exclusive so this can be unconditionally defined
-extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
-
-fn wWinMain(
-    _: win32.HINSTANCE,
-    _: ?win32.HINSTANCE,
-    _: ?[*:0]const u16,
-    _: win32.SHOW_WINDOW_CMD,
-) callconv(std.os.windows.WINAPI) void {
-    _ = AttachConsole(0xFFFFFFFF);
-    return main() catch |e| {
-        if (@errorReturnTrace()) |trace| {
-            std.debug.dumpStackTrace(trace.*);
-        }
-        std.debug.panic("{s}", .{@errorName(e)});
-    };
-}
-
 pub fn main() !void {
-    _ = win32.AttachConsole(0xFFFFFFFF);
+    try dvui.Backend.Common.windowsAttachConsole();
 
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 

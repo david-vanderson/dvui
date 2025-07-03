@@ -1245,18 +1245,13 @@ pub fn getSDLVersion() std.SemanticVersion {
     }
 }
 
-// Optional: windows os only
-const winapi = if (builtin.os.tag == .windows) struct {
-    extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
-} else struct {};
-
 // This must be exposed in the app's root source file.
 pub fn main() !u8 {
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
     if (builtin.os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
-        _ = winapi.AttachConsole(0xFFFFFFFF);
+        try dvui.Backend.Common.windowsAttachConsole();
     }
 
     if (sdl3 and (sdl_options.callbacks orelse true) and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows)) {
