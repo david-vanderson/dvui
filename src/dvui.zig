@@ -2272,10 +2272,14 @@ pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal:
         }
 
         // i points just past all subwindows that want to be on top of this subwin_id
-        cw.subwindows.insert(cw.gpa, i, sw) catch @panic("Could not add subwindow to list");
+        cw.subwindows.insert(cw.gpa, i, sw) catch |err| {
+            logError(@src(), err, "Could not insert {x} {} into subwindow list, events in this other other subwindwos might not work properly", .{ id, rect_pixels });
+        };
     } else {
         // just put it on the top
-        cw.subwindows.append(cw.gpa, sw) catch @panic("Could not add subwindow to list");
+        cw.subwindows.append(cw.gpa, sw) catch |err| {
+            logError(@src(), err, "Could not insert {x} {} into subwindow list, events in this other other subwindwos might not work properly", .{ id, rect_pixels });
+        };
     }
 }
 
