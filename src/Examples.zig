@@ -417,6 +417,9 @@ pub fn demo() void {
                 scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
                 invalidate = true;
             }
+
+            _ = dvui.sliderEntry(@src(), "scroll {d:0.1}", .{ .value = &dvui.scroll_speed, .min = 0.1, .max = 50, .interval = 0.1 }, .{ .gravity_y = 0.5 });
+
         }
 
         var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .background = true, .min_size_content = .width(width), .corner_radius = .{ .w = 5, .h = 5 } });
