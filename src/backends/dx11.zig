@@ -1228,7 +1228,7 @@ pub fn wndProc(
             const float_delta: f32 = @floatFromInt(delta);
             const wheel_delta: f32 = @floatFromInt(win32.WHEEL_DELTA);
             _ = stateFromHwnd(hwnd).dvui_window.addEventMouseWheel(
-                float_delta / wheel_delta * 20,
+                float_delta / wheel_delta * dvui.scroll_speed,
                 switch (msg) {
                     win32.WM_MOUSEWHEEL => .vertical,
                     win32.WM_MOUSEHWHEEL => .horizontal,

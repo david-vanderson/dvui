@@ -98,6 +98,9 @@ pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHas
 pub const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
 pub const useFreeType = !wasm;
 
+/// The amount of physical pixels to scroll per "tick" of the scroll wheel
+pub const scroll_speed = 20;
+
 /// Used as a default maximum in various places:
 /// * Options.max_size_content
 /// * Font.textSizeEx max_width
