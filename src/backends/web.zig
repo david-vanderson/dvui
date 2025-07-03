@@ -803,7 +803,8 @@ pub const panic = std.debug.FullPanic(struct {
 pub var back: WebBackend = undefined;
 
 fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
-    const init_opts = dvui.App.get().config.get();
+    const app = dvui.App.get() orelse return 404;
+    const init_opts = app.config.get();
     // TODO: Allow web backend to set title of browser tab via init_opts
     // TODO: Respect min size (maybe max size?) via css on the canvas element
     // TODO: Use the icon to set the browser tab icon (if possible considering size requirements)
@@ -822,7 +823,7 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 
     win_ok = true;
 
-    if (dvui.App.get().initFn) |initFn| {
+    if (app.initFn) |initFn| {
         win.begin(win.frame_time_ns) catch |err| {
             log.err("dvui.Window.begin failed: {!}", .{err});
             return 3;
@@ -843,7 +844,8 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 }
 
 fn dvui_deinit() callconv(.c) void {
-    if (dvui.App.get().deinitFn) |deinitFn| deinitFn();
+    const app = dvui.App.get() orelse return;
+    if (app.deinitFn) |deinitFn| deinitFn();
 
     win.deinit();
     back.deinit();
@@ -860,6 +862,8 @@ fn dvui_update() callconv(.c) i32 {
 }
 
 fn update() !i32 {
+    const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
+
     const nstime = win.beginWait(back.hasEvent());
 
     try win.begin(nstime);
@@ -868,7 +872,7 @@ fn update() !i32 {
     // backend is directly sending the events to dvui
     //try backend.addAllEvents(&win);
 
-    const res = try dvui.App.get().frameFn();
+    const res = try app.frameFn();
 
     const end_micros = try win.end(.{});
 
