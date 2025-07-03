@@ -125,10 +125,10 @@ capture: ?dvui.CaptureMouse = null,
 captured_last_frame: bool = false,
 
 gpa: std.mem.Allocator,
-_arena: dvui.ShrinkingArenaAllocator(.{}),
-_lifo_arena: dvui.ShrinkingArenaAllocator(.{}),
+_arena: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
+_lifo_arena: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
 /// Used to allocate widgets with a fixed location
-_widget_stack: dvui.ShrinkingArenaAllocator(.{}),
+_widget_stack: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
