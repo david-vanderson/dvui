@@ -125,10 +125,10 @@ capture: ?dvui.CaptureMouse = null,
 captured_last_frame: bool = false,
 
 gpa: std.mem.Allocator,
-_arena: dvui.ShrinkingArenaAllocator,
-_lifo_arena: dvui.ShrinkingArenaAllocator,
+_arena: dvui.ShrinkingArenaAllocator(.{}),
+_lifo_arena: dvui.ShrinkingArenaAllocator(.{}),
 /// Used to allocate widgets with a fixed location
-_widget_stack: dvui.ShrinkingArenaAllocator,
+_widget_stack: dvui.ShrinkingArenaAllocator(.{}),
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
@@ -187,7 +187,7 @@ const SavedData = struct {
 
 pub const InitOptions = struct {
     id_extra: usize = 0,
-    arena: ?dvui.ShrinkingArenaAllocator = null,
+    arena: ?std.heap.ArenaAllocator = null,
     theme: ?*Theme = null,
     keybinds: ?enum {
         none,
@@ -206,7 +206,7 @@ pub fn init(
 
     var self = Self{
         .gpa = gpa,
-        ._arena = init_opts.arena orelse .init(gpa),
+        ._arena = if (init_opts.arena) |a| .initArena(a) else .init(gpa),
         ._lifo_arena = .init(gpa),
         ._widget_stack = .init(gpa),
         .wd = WidgetData{
