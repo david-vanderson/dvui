@@ -42,6 +42,7 @@ var slider_entry_min: bool = true;
 var slider_entry_max: bool = true;
 var slider_entry_interval: bool = true;
 var slider_entry_vector: bool = false;
+var slider_entry_label: bool = false;
 var text_entry_buf = std.mem.zeroes([50]u8);
 var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
@@ -741,7 +742,14 @@ pub fn basicWidgets() void {
 
         dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
         if (!slider_entry_vector) {
-            _ = dvui.sliderEntry(@src(), "val: {d:0.3}", .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) }, .{ .gravity_y = 0.5 });
+            var custom_label: ?[]u8 = null;
+            if (slider_entry_label) {
+                const whole = @round(slider_entry_val);
+                const part = @round((slider_entry_val - whole) * 100);
+                custom_label = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d} and {d}p", .{whole, part}) catch null;
+            }
+            defer if (custom_label) |cl| dvui.currentWindow().lifo().free(cl);
+            _ = dvui.sliderEntry(@src(), "val: {d:0.3}", .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null), .label = custom_label }, .{ .gravity_y = 0.5 });
             dvui.label(@src(), "(enter, ctrl-click or touch-tap)", .{}, .{ .gravity_y = 0.5 });
         } else {
             _ = dvui.sliderVector(@src(), "{d:0.2}", 3, &slider_vector_array, .{ .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) }, .{});
@@ -756,6 +764,7 @@ pub fn basicWidgets() void {
         _ = dvui.checkbox(@src(), &slider_entry_max, "Max", .{});
         _ = dvui.checkbox(@src(), &slider_entry_interval, "Interval", .{});
         _ = dvui.checkbox(@src(), &slider_entry_vector, "Vector", .{});
+        _ = dvui.checkbox(@src(), &slider_entry_label, "Custom Label", .{});
     }
 
     _ = dvui.spacer(@src(), .{ .min_size_content = .height(4) });

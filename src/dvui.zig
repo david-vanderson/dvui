@@ -5804,6 +5804,7 @@ pub const SliderEntryInitOptions = struct {
     min: ?f32 = null,
     max: ?f32 = null,
     interval: ?f32 = null,
+    label: ?[]const u8 = null,
 };
 
 /// Combines a slider and a text entry box on key press.  Displays value on top of slider.
@@ -6086,7 +6087,12 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s, Rect.Physical), .{ .color = options.color(.fill_press) });
         }
 
-        label(@src(), label_fmt orelse "{d:.3}", .{init_opts.value.*}, options.strip().override(.{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 }));
+        const label_opts = options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
+        if (init_opts.label) |l| {
+            label(@src(), "{s}", .{l}, label_opts);
+        } else {
+            label(@src(), label_fmt orelse "{d:.3}", .{init_opts.value.*}, label_opts);
+        }
     }
 
     if (b.data().id == focusedWidgetId()) {
