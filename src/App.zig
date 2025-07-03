@@ -94,10 +94,12 @@ pub const Result = enum {
 };
 
 /// Used internally to get the dvui_app if it's defined
-pub fn get() ?App {
+pub fn get() App {
     const root = @import("root");
-    // return error instead of failing compile to allow for reference in tests without dvui_app defined
-    if (!@hasDecl(root, "dvui_app")) return null;
+    if (!@hasDecl(root, "dvui_app")) {
+        // panic instead of failing compile to allow for reference in tests without dvui_app defined
+        @panic("`pub const dvui_app: dvui.App` was not defined in the root file");
+    }
 
     if (!@hasDecl(root, "main") or @field(root, "main") != main) {
         @compileError(
