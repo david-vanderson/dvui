@@ -551,12 +551,16 @@ pub fn openURL(self: *SDLBackend, url: []const u8) !void {
 }
 
 pub fn preferredColorScheme(_: *SDLBackend) ?dvui.enums.ColorScheme {
-    if (!sdl3) return null;
-    return switch (c.SDL_GetSystemTheme()) {
-        c.SDL_SYSTEM_THEME_DARK => .dark,
-        c.SDL_SYSTEM_THEME_LIGHT => .light,
-        else => null,
-    };
+    if (sdl3) {
+        return switch (c.SDL_GetSystemTheme()) {
+            c.SDL_SYSTEM_THEME_DARK => .dark,
+            c.SDL_SYSTEM_THEME_LIGHT => .light,
+            else => null,
+        };
+    } else if (builtin.target.os.tag == .windows) {
+        return dvui.Backend.Common.windowsGetPreferredColorScheme();
+    }
+    return null;
 }
 
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {

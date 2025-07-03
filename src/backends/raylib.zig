@@ -463,6 +463,9 @@ pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
 }
 
 pub fn preferredColorScheme(_: *RaylibBackend) ?dvui.enums.ColorScheme {
+    if (builtin.target.os.tag == .windows) {
+        return dvui.Backend.Common.windowsGetPreferredColorScheme();
+    }
     return null;
 }
 
