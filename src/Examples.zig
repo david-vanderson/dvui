@@ -3453,7 +3453,7 @@ pub fn scrollCanvas() void {
     tl.format("Virtual size {d}x{d}\n", .{ scroll_info.virtual_size.w, scroll_info.virtual_size.h }, .{});
     tl.format("Scroll Offset {d}x{d}\n", .{ scroll_info.viewport.x, scroll_info.viewport.y }, .{});
     tl.format("Origin {d}x{d}\n", .{ origin.x, origin.y }, .{});
-    tl.format("Scale {d}", .{scale}, .{});
+    tl.format("Scale {d}", .{scale.*}, .{});
     tl.deinit();
 
     var scrollArea = dvui.scrollArea(@src(), .{ .scroll_info = scroll_info }, .{ .expand = .both, .min_size_content = .{ .w = 300, .h = 300 } });
