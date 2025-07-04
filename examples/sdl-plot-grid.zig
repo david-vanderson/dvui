@@ -211,8 +211,9 @@ fn gui_frame() !void {
             defer grid.deinit();
             //ui.currentWindow().debug_widget_id = dvui.focusedWidgetId() orelse .zero;
             // 3 real + 1 virtual column
-            keyboard_nav.setLimits(3, pirate_data.len);
-            keyboard_nav.processEvents(grid); // TODO: processEventsBefore() and processEventsAfter() - event though it doesn;t process any events.
+            keyboard_nav.setLimits(4, pirate_data.len);
+            GridConverter.g = grid;
+            keyboard_nav.processEvents(grid.data(), GridConverter.pointToCell);
             // maybe return the cell from processEvents?
             const focused_cell = keyboard_nav.cellCursor();
 
@@ -227,28 +228,33 @@ fn gui_frame() !void {
 
             for (pirate_data.items(.year), pirate_data.items(.temperature), pirate_data.items(.pirates), 0..) |*year, *temp, *pirates, row_num| {
                 var col_num: usize = 0;
+                var focus_col: usize = 0;
                 {
                     defer col_num += 1;
                     var cell = grid.bodyCell(@src(), col_num, row_num, style.cellOptions(col_num, row_num));
                     defer cell.deinit();
                     //var choice: usize = 2;
-                    var text = dvui.textEntry(@src(), .{}, style.options(col_num, row_num));
+                    var text = dvui.textEntry(@src(), .{}, style.options(focus_col, row_num));
+                    focus_col += 1;
                     text.deinit();
                     //_ = dvui.dropdown(@src(), &years, &choice, style.options(col_num, row_num));
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = year, .min = -9999, .max = 9999 }, .{});
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = year, .min = -9999, .max = 9999 }, style.options(focus_col, row_num));
+                    focus_col += 1;
                 }
                 {
                     defer col_num += 1;
+                    defer focus_col += 1;
+
                     var cell = grid.bodyCell(@src(), col_num, row_num, style.cellOptions(col_num, row_num));
                     defer cell.deinit();
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = temp, .min = -10, .max = 10 }, style.options(col_num, row_num));
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = temp, .min = -10, .max = 10 }, style.options(focus_col, row_num));
                 }
                 {
                     defer col_num += 1;
-                    defer col_num += 1;
+                    defer focus_col += 1;
                     var cell = grid.bodyCell(@src(), col_num, row_num, style.cellOptions(col_num, row_num));
                     defer cell.deinit();
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = pirates, .min = 0, .max = 10_000_000_000 }, style.options(col_num, row_num));
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = pirates, .min = 0, .max = 10_000_000_000 }, style.options(focus_col, row_num));
                 }
             }
             if (!initialized) {
@@ -261,7 +267,6 @@ fn gui_frame() !void {
             if (dvui.tagGet("grid_focus_next")) |focus_widget| {
                 // TODO: can we tighten up the api here somehow? is_focused seems difficult to discover or
                 // know why you would need to use it here. Maybe rename this to shouldFocus? or focusChanged????
-                std.debug.print("HOCUS FOCUS: {} {}\n", .{ keyboard_nav.is_focused, !dvui.navigation.was_mouse_focus });
                 if ((keyboard_nav.is_focused and !dvui.navigation.was_mouse_focus) or !initialized) {
                     dvui.focusWidget(focus_widget.id, null, null);
                     initialized = true;
@@ -310,7 +315,7 @@ fn gui_frame() !void {
 // tabbing in or tabbing out of the widget.
 const CellStyleNav = struct {
     base: CellStyle,
-    focus_cell: ?dvui.navigation.GridKeyboard.Cell,
+    focus_cell: ?dvui.GridWidget.Cell,
     tab_index: ?u16 = null,
 
     pub fn cellOptions(self: *const CellStyleNav, col_num: usize, row_num: usize) dvui.GridWidget.CellOptions {
@@ -324,6 +329,23 @@ const CellStyleNav = struct {
             }
         }
         return self.base.options(col_num, row_num).override(.{ .tab_index = 0 });
+    }
+};
+
+const GridConverter = struct {
+    var g: *dvui.GridWidget = undefined;
+    var cell_w: f32 = 0;
+    pub fn pointToCell(p: dvui.Point.Physical) ?dvui.GridWidget.Cell {
+        var result = g.pointToCell(p);
+        if (result) |*r| {
+            if (r.col_num == 0) {
+                if (p.toNatural().x > g.colWidth(0) / 2)
+                    r.col_num += 1;
+            } else {
+                r.col_num += 1;
+            }
+        }
+        return result;
     }
 };
 

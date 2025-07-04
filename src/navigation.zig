@@ -7,21 +7,14 @@ const GridWidget = dvui.GridWidget;
 const Event = dvui.Event;
 const WidgetData = dvui.WidgetData;
 const WidgetId = dvui.WidgetId;
+const Point = dvui.Point;
+const Cell = GridWidget.Cell;
 
 /// Adds keyboard navigation to the grid
 /// Provides a "cursor" that can be moved using
 /// - tab, shift-tab, left-arrow, right-arrow
 pub var was_mouse_focus: bool = false;
 pub const GridKeyboard = struct {
-    pub const Cell = struct {
-        col_num: usize,
-        row_num: usize,
-
-        pub fn eq(self: Cell, col_num: usize, row_num: usize) bool {
-            return self.col_num == col_num and self.row_num == row_num;
-        }
-    };
-
     /// Direction keys.
     /// - use defaultKeys() or provide your own bindings.
     pub const NavigationKeys = struct {
@@ -95,41 +88,45 @@ pub const GridKeyboard = struct {
     }
 
     /// Call this once per frame before the grid body cells are created.
-    pub fn processEvents(self: *GridKeyboard, grid: *GridWidget) void {
+    pub fn processEvents(self: *GridKeyboard, wd: *WidgetData, cellConverter: fn (
+        point: Point.Physical,
+    ) ?Cell) void {
         self.enforceCursorLimits();
 
         self.is_focused = self.last_focused_widget == dvui.focusedWidgetId() and dvui.lastFocusedIdInFrame(null) == .zero;
 
         for (dvui.events()) |*e| {
-            self.processEvent(e, grid);
+            self.processEvent(e, wd, cellConverter);
         }
     }
 
-    pub fn processEvent(self: *GridKeyboard, e: *Event, grid: *GridWidget) void {
+    pub fn processEvent(self: *GridKeyboard, e: *Event, wd: *WidgetData, cellConverter: fn (
+        point: Point.Physical,
+    ) ?Cell) void {
         defer self.enforceCursorLimits();
         switch (e.evt) {
             .key => |*ke| {
                 if (!self.is_focused or e.handled) return;
                 if (ke.action == .down or ke.action == .repeat) {
                     if (ke.matchBind("text_start")) {
-                        e.handle(@src(), grid.data());
+                        e.handle(@src(), wd);
                         self.scrollTo(0, 0);
                         was_mouse_focus = false;
                     } else if (ke.matchBind("text_end")) {
-                        e.handle(@src(), grid.data());
+                        e.handle(@src(), wd);
                         self.scrollTo(self.num_cols - 1, self.num_rows - 1);
                         was_mouse_focus = false;
                     }
                     if (ke.matchKeyBind(self.navigation_keys.up)) {
-                        e.handle(@src(), grid.data());
+                        e.handle(@src(), wd);
                         self.cursor.row_num = if (self.cursor.row_num > 0) self.cursor.row_num - 1 else 0;
                         was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.down)) {
-                        e.handle(@src(), grid.data());
+                        e.handle(@src(), wd);
                         self.cursor.row_num += 1;
                         was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.left)) {
-                        e.handle(@src(), grid.data());
+                        e.handle(@src(), wd);
                         was_mouse_focus = false;
                         if (self.tab_out and self.cursor.eq(0, 0)) {
                             std.debug.print("tabbing out\n", .{});
@@ -144,7 +141,7 @@ pub const GridKeyboard = struct {
                             }
                         }
                     } else if (ke.matchKeyBind(self.navigation_keys.right)) {
-                        e.handle(@src(), grid.data());
+                        e.handle(@src(), wd);
                         was_mouse_focus = false;
                         if (self.tab_out and self.cursor.col_num == self.num_cols - 1 and self.cursor.row_num == self.num_rows - 1) {
                             std.debug.print("tabbing out\n", .{});
@@ -164,10 +161,9 @@ pub const GridKeyboard = struct {
             },
             .mouse => |*me| {
                 if (me.action == .focus) {
-                    std.debug.print("FOCUS: {}\n", .{me});
                     // pointToRowCol will return null if the mouse focus event
                     // is outside the grid.
-                    const focused_cell = grid.pointToColRow(me.p);
+                    const focused_cell = cellConverter(me.p);
                     if (focused_cell) |cell| {
                         self.cursor.col_num = cell.col_num;
                         self.cursor.row_num = cell.row_num;

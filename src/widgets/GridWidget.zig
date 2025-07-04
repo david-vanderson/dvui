@@ -49,6 +49,23 @@ pub var defaults: Options = .{
 
 pub var scrollbar_padding_defaults: Size = .{ .h = 10, .w = 10 };
 
+pub const Cell = struct {
+    col_num: usize,
+    row_num: usize,
+
+    // TODO: Something better here pls.
+    pub fn colRow(col_num: usize, row_num: usize) Cell {
+        return .{
+            .col_num = col_num,
+            .row_num = row_num,
+        };
+    }
+
+    pub fn eq(self: Cell, col_num: usize, row_num: usize) bool {
+        return self.col_num == col_num and self.row_num == row_num;
+    }
+};
+
 pub const CellOptions = struct {
     // Set the height or width of a cell.
     // width is ignored when col_widths is supplied to init_opts.
@@ -482,7 +499,7 @@ pub fn pointToBodyRelative(self: *GridWidget, point: Point.Physical) ?Point {
 
 /// Convert a screen physical coord into a grid cell position.
 /// Not valid when using variable row heights.
-pub fn pointToColRow(self: *GridWidget, point: Point.Physical) ?struct { col_num: usize, row_num: usize } {
+pub fn pointToCell(self: *GridWidget, point: Point.Physical) ?Cell {
     if (self.init_opts.var_row_heights) return null;
     if (self.resizing or self.init_opts.resize_cols) return null;
     if (self.row_height < 1) return null;
