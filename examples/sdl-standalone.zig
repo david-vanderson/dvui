@@ -26,7 +26,7 @@ var g_win: ?*dvui.Window = null;
 pub fn main() !void {
     if (@import("builtin").os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
-        try dvui.Backend.Common.windowsAttachConsole();
+        dvui.Backend.Common.windowsAttachConsole() catch {};
     }
     std.log.info("SDL version: {}", .{Backend.getSDLVersion()});
 

@@ -1255,7 +1255,7 @@ pub fn main() !u8 {
 
     if (builtin.os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
-        try dvui.Backend.Common.windowsAttachConsole();
+        dvui.Backend.Common.windowsAttachConsole() catch {};
     }
 
     if (sdl3 and (sdl_options.callbacks orelse true) and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows)) {
