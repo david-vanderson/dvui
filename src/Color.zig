@@ -265,14 +265,48 @@ pub fn average(self: Color, other: Color) Color {
     };
 }
 
-/// A color premultiplied by alpha, mostly used for vertex colors
+/// A color premultiplied by alpha
+///
+/// This type is safe to `@bitCast` to and from a `[@sizeOf(Color.PMA)]u8`.
+/// This also means `@ptrCast` of `[]Color.PMA` to and from `[]u8` is safe,
+/// as long as the length is a multiple of `@sizeOf(Color.PMA)`.
+///
+/// The pixel format will always be RGBA.
 pub const PMA = extern struct {
     r: u8,
     g: u8,
     b: u8,
     a: u8,
 
+    // duplicated names from Color
+    pub const white: PMA = .fromColor(.white);
+    pub const silver: PMA = .fromColor(.silver);
+    pub const gray: PMA = .fromColor(.gray);
+    pub const black: PMA = .fromColor(.black);
+    pub const red: PMA = .fromColor(.red);
+    pub const maroon: PMA = .fromColor(.maroon);
+    pub const yellow: PMA = .fromColor(.yellow);
+    pub const olive: PMA = .fromColor(.olive);
+    pub const lime: PMA = .fromColor(.lime);
+    pub const green: PMA = .fromColor(.green);
+    pub const aqua: PMA = .fromColor(.aqua);
+    pub const teal: PMA = .fromColor(.teal);
+    pub const blue: PMA = .fromColor(.blue);
+    pub const navy: PMA = .fromColor(.navy);
+    pub const fuchsia: PMA = .fromColor(.fuchsia);
+    pub const purple: PMA = .fromColor(.purple);
+    pub const cyan = PMA.aqua;
+    pub const magenta = PMA.fuchsia;
+    pub const darl_cyan = PMA.teal;
+    pub const dark_magenta = PMA.purple;
+
     pub const transparent = PMA{ .r = 0, .g = 0, .b = 0, .a = 0 };
+
+    comptime {
+        std.debug.assert(@sizeOf(Color.PMA) == 4);
+        // Validate that the memory layout of @ptrCast(Color.PMA) is the same as an RGBA []u8
+        std.debug.assert(std.mem.eql(u8, &.{ 12, 34, 56, 78 }, @ptrCast(&[_]Color.PMA{.{ .r = 12, .g = 34, .b = 56, .a = 78 }})));
+    }
 
     /// Convert premultiplied alpha color to a `Color`.
     pub fn toColor(self: PMA) Color {

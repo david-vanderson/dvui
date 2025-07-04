@@ -131,22 +131,31 @@ pub fn picker(src: std.builtin.SourceLocation, opts: Options) bool {
     return picked;
 }
 
+pub const builtin = struct {
+    pub const adwaita_light = @import("themes/Adwaita.zig").light;
+    pub const adwaita_dark = @import("themes/Adwaita.zig").dark;
+    pub const dracula = QuickTheme.builtin.dracula.toTheme(null) catch unreachable;
+    pub const gruvbox = QuickTheme.builtin.gruvbox.toTheme(null) catch unreachable;
+    pub const jungle = QuickTheme.builtin.jungle.toTheme(null) catch unreachable;
+    pub const opendyslexic = QuickTheme.builtin.opendyslexic.toTheme(null) catch unreachable;
+};
+
 pub const QuickTheme = struct {
     pub const builtin = struct {
-        pub const jungle = @embedFile("themes/jungle.json");
-        pub const dracula = @embedFile("themes/dracula.json");
-        pub const gruvbox = @embedFile("themes/gruvbox.json");
-        pub const opendyslexic = @embedFile("themes/opendyslexic.json");
+        pub const dracula: QuickTheme = @import("themes/dracula.zon");
+        pub const gruvbox: QuickTheme = @import("themes/gruvbox.zon");
+        pub const jungle: QuickTheme = @import("themes/jungle.zon");
+        pub const opendyslexic: QuickTheme = @import("themes/opendyslexic.zon");
     };
 
-    name: []u8,
+    name: []const u8,
 
     // fonts
     font_size: f32 = 14,
-    font_name_body: []u8,
-    font_name_heading: []u8,
-    font_name_caption: []u8,
-    font_name_title: []u8,
+    font_name_body: []const u8,
+    font_name_heading: []const u8,
+    font_name_caption: []const u8,
+    font_name_title: []const u8,
 
     // used for focus
     color_focus: []const u8 = "#638465",
@@ -171,18 +180,8 @@ pub const QuickTheme = struct {
 
     color_border: []const u8 = "#60827d",
 
-    pub const colorFieldNames = &.{
-        "color_focus",
-        "color_text",
-        "color_text_press",
-        "color_fill_text",
-        "color_fill_container",
-        "color_fill_control",
-        "color_fill_hover",
-        "color_fill_press",
-        "color_border",
-    };
-
+    /// Parses a json object with the fields of `QuickTheme`,
+    /// allocating copies of all the string data
     pub fn fromString(
         arena: std.mem.Allocator,
         string: []const u8,
@@ -195,7 +194,11 @@ pub const QuickTheme = struct {
         );
     }
 
-    pub fn toTheme(self: @This(), gpa: std.mem.Allocator) (std.mem.Allocator.Error || Color.FromHexError)!Theme {
+    /// If an allocator is provided, all name slices will be duplicated
+    /// by that allocator and freed in `Theme.deinit`. Else the names
+    /// will be used directly which is good for embedded/static slices.
+    pub fn toTheme(self: @This(), gpa: ?std.mem.Allocator) (std.mem.Allocator.Error || Color.FromHexError)!Theme {
+        @setEvalBranchQuota(1500);
         const color_accent = try Color.tryFromHex(self.color_focus);
         const color_err = try Color.tryFromHex("#ffaaaa");
         const color_text = try Color.tryFromHex(self.color_text);
@@ -208,7 +211,7 @@ pub const QuickTheme = struct {
         const color_border = try Color.tryFromHex(self.color_border);
 
         return Theme{
-            .name = try gpa.dupe(u8, self.name),
+            .name = if (gpa) |alloc| try alloc.dupe(u8, self.name) else self.name,
             .dark = color_text.brightness() > color_fill.brightness(),
             .alpha = 1.0,
             .color_accent = color_accent,
@@ -221,15 +224,42 @@ pub const QuickTheme = struct {
             .color_fill_hover = color_fill_hover,
             .color_fill_press = color_fill_press,
             .color_border = color_border,
-            .font_body = .{ .size = @round(self.font_size), .name = try gpa.dupe(u8, self.font_name_body) },
-            .font_heading = .{ .size = @round(self.font_size), .name = try gpa.dupe(u8, self.font_name_heading) },
-            .font_caption = .{ .size = @round(self.font_size * 0.77), .name = try gpa.dupe(u8, self.font_name_caption) },
-            .font_caption_heading = .{ .size = @round(self.font_size * 0.77), .name = try gpa.dupe(u8, self.font_name_caption) },
-            .font_title = .{ .size = @round(self.font_size * 2.15), .name = try gpa.dupe(u8, self.font_name_title) },
-            .font_title_1 = .{ .size = @round(self.font_size * 1.77), .name = try gpa.dupe(u8, self.font_name_title) },
-            .font_title_2 = .{ .size = @round(self.font_size * 1.54), .name = try gpa.dupe(u8, self.font_name_title) },
-            .font_title_3 = .{ .size = @round(self.font_size * 1.3), .name = try gpa.dupe(u8, self.font_name_title) },
-            .font_title_4 = .{ .size = @round(self.font_size * 1.15), .name = try gpa.dupe(u8, self.font_name_title) },
+            .font_body = .{
+                .size = @round(self.font_size),
+                .name = if (gpa) |alloc| try alloc.dupe(u8, self.font_name_body) else self.font_name_body,
+            },
+            .font_heading = .{
+                .size = @round(self.font_size),
+                .name = if (gpa) |alloc| try alloc.dupe(u8, self.font_name_heading) else self.font_name_heading,
+            },
+            .font_caption = .{
+                .size = @round(self.font_size * 0.77),
+                .name = if (gpa) |alloc| try alloc.dupe(u8, self.font_name_caption) else self.font_name_caption,
+            },
+            .font_caption_heading = .{
+                .size = @round(self.font_size * 0.77),
+                .name = if (gpa) |alloc| try alloc.dupe(u8, self.font_name_caption) else self.font_name_caption,
+            },
+            .font_title = .{
+                .size = @round(self.font_size * 2.15),
+                .name = if (gpa) |alloc| try alloc.dupe(u8, self.font_name_title) else self.font_name_title,
+            },
+            .font_title_1 = .{
+                .size = @round(self.font_size * 1.77),
+                .name = if (gpa) |alloc| try alloc.dupe(u8, self.font_name_title) else self.font_name_title,
+            },
+            .font_title_2 = .{
+                .size = @round(self.font_size * 1.54),
+                .name = if (gpa) |alloc| try alloc.dupe(u8, self.font_name_title) else self.font_name_title,
+            },
+            .font_title_3 = .{
+                .size = @round(self.font_size * 1.3),
+                .name = if (gpa) |alloc| try alloc.dupe(u8, self.font_name_title) else self.font_name_title,
+            },
+            .font_title_4 = .{
+                .size = @round(self.font_size * 1.15),
+                .name = if (gpa) |alloc| try alloc.dupe(u8, self.font_name_title) else self.font_name_title,
+            },
             .style_accent = .{
                 .color_accent = .{ .color = Color.average(color_accent, color_accent) },
                 .color_text = .{ .color = Color.average(color_accent, color_text) },
@@ -248,7 +278,7 @@ pub const QuickTheme = struct {
                 .color_fill_press = .{ .color = Color.average(color_err, color_fill_press) },
                 .color_border = .{ .color = Color.average(color_err, color_border) },
             },
-            .allocated_strings = true,
+            .allocated_strings = gpa != null,
         };
     }
 };

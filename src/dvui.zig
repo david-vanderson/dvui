@@ -79,6 +79,7 @@ pub const SuggestionWidget = widgets.SuggestionWidget;
 pub const TabsWidget = widgets.TabsWidget;
 pub const TextEntryWidget = widgets.TextEntryWidget;
 pub const TextLayoutWidget = widgets.TextLayoutWidget;
+pub const TreeWidget = widgets.TreeWidget;
 pub const VirtualParentWidget = widgets.VirtualParentWidget;
 pub const GridWidget = widgets.GridWidget;
 const se = @import("structEntry.zig");
@@ -91,11 +92,14 @@ pub const StructFieldOptions = se.StructFieldOptions;
 pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
 pub const testing = @import("testing.zig");
-pub const ShrinkingArenaAllocator = @import("shrinking_arena_allocator.zig");
+pub const ShrinkingArenaAllocator = @import("shrinking_arena_allocator.zig").ShrinkingArenaAllocator;
 pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHashMap;
 
 pub const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
 pub const useFreeType = !wasm;
+
+/// The amount of physical pixels to scroll per "tick" of the scroll wheel
+pub var scroll_speed: f32 = 20;
 
 /// Used as a default maximum in various places:
 /// * Options.max_size_content
@@ -153,6 +157,8 @@ const dvui = @This();
 
 pub const WidgetId = enum(u64) {
     zero = 0,
+    // This may not work in future and is illegal behaviour / arch specfic to compare to undefined.
+    undef = 0xAAAAAAAAAAAAAAAA,
     _,
 
     pub fn asU64(self: WidgetId) u64 {
@@ -212,6 +218,7 @@ pub fn widgetFree(ptr: anytype) void {
 }
 
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {
+    @branchHint(.cold);
     const stack_trace_frame_count = @import("build_options").log_stack_trace orelse if (builtin.mode == .Debug) 12 else 0;
     const stack_trace_enabled = stack_trace_frame_count > 0;
     const err_trace_enabled = if (@import("build_options").log_error_trace) |enabled| enabled else stack_trace_enabled;
@@ -701,10 +708,10 @@ pub const FontCacheEntry = struct {
 
         const cw = currentWindow();
 
-        var pixels = try cw.lifo().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
+        var pixels = try cw.lifo().alloc(Color.PMA, @as(usize, @intFromFloat(size.w * size.h)));
         defer cw.lifo().free(pixels);
         // set all pixels to zero alpha
-        @memset(pixels, 0);
+        @memset(pixels, .transparent);
 
         //const num_glyphs = fce.glyph_info.count();
         //std.debug.print("font size {d} regen glyph atlas num {d} max size {}\n", .{ sized_font.size, num_glyphs, size });
@@ -742,13 +749,10 @@ pub const FontCacheEntry = struct {
                         const src = bitmap.buffer[@as(usize, @intCast(row * bitmap.pitch + col))];
 
                         // because of the extra edge, offset by 1 row and 1 col
-                        const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(size.w)) * 4 + (x + col + pad) * 4));
+                        const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(size.w)) + (x + col + pad)));
 
                         // premultiplied white
-                        pixels[di + 0] = src;
-                        pixels[di + 1] = src;
-                        pixels[di + 2] = src;
-                        pixels[di + 3] = src;
+                        pixels[di] = .{ .r = src, .g = src, .b = src, .a = src };
                     }
                 }
             } else {
@@ -763,18 +767,15 @@ pub const FontCacheEntry = struct {
 
                 c.stbtt_MakeCodepointBitmapSubpixel(&fce.face, bitmap.ptr, @as(c_int, @intCast(out_w)), @as(c_int, @intCast(out_h)), @as(c_int, @intCast(out_w)), fce.scaleFactor, fce.scaleFactor, 0.0, 0.0, @as(c_int, @intCast(codepoint)));
 
-                const stride = @as(usize, @intFromFloat(size.w)) * 4;
-                const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x * 4));
+                const stride = @as(usize, @intFromFloat(size.w));
+                const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x));
                 for (0..out_h) |row| {
                     for (0..out_w) |col| {
                         const src = bitmap[row * out_w + col];
-                        const dest = di + (row + pad) * stride + (col + pad) * 4;
+                        const dest = di + (row + pad) * stride + (col + pad);
 
                         // premultiplied white
-                        pixels[dest + 0] = src;
-                        pixels[dest + 1] = src;
-                        pixels[dest + 2] = src;
-                        pixels[dest + 3] = src;
+                        pixels[dest] = .{ .r = src, .g = src, .b = src, .a = src };
                     }
                 }
             }
@@ -788,7 +789,7 @@ pub const FontCacheEntry = struct {
             }
         }
 
-        fce.texture_atlas_cache = try textureCreate(.cast(pixels), @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
+        fce.texture_atlas_cache = try textureCreate(.{ .pma = pixels }, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
         return fce.texture_atlas_cache.?;
     }
 
@@ -1110,13 +1111,13 @@ pub const TextureCacheEntry = struct {
                 _ = cw.texture_cache.remove(h);
             },
             .pixels => |p| {
-                const h = dvui.TextureCacheEntry.hashImageBytes(p.bytes.pma);
+                const h = dvui.TextureCacheEntry.hashImageBytes(@ptrCast(p.bytes.pma));
                 _ = cw.texture_cache.remove(h);
             },
         }
     }
 
-    pub fn fromImageFile(name: []const u8, image_bytes: []const u8) (Backend.TextureError || StbImageError)!TextureCacheEntry {
+    pub fn fromImageFile(name: []const u8, image_bytes: []const u8, interpolation: enums.TextureInterpolation) (Backend.TextureError || StbImageError)!TextureCacheEntry {
         var cw = currentWindow();
         const tex_hash = TextureCacheEntry.hashImageBytes(image_bytes);
         if (cw.texture_cache.get(tex_hash)) |tce| return tce;
@@ -1129,22 +1130,19 @@ pub const TextureCacheEntry = struct {
             return StbImageError.stbImageError;
         }
         defer c.stbi_image_free(data);
-        var pixels: []u8 = undefined;
-        pixels.ptr = data;
-        pixels.len = @intCast(w * h * 4);
 
-        const texture = try textureCreate(.fromRGBA(pixels), @intCast(w), @intCast(h), .linear);
+        const texture = try textureCreate(.fromRGBA(data[0..@intCast(w * h * @sizeOf(Color.PMA))]), @intCast(w), @intCast(h), interpolation);
 
         const entry = TextureCacheEntry{ .texture = texture };
         try cw.texture_cache.put(cw.gpa, tex_hash, entry);
         return entry;
     }
 
-    pub fn fromPixels(pma: dvui.RGBAPixelsPMA, width: u32, height: u32) Backend.TextureError!dvui.TextureCacheEntry {
+    pub fn fromPixels(pma: dvui.RGBAPixelsPMA, width: u32, height: u32, interpolation: enums.TextureInterpolation) Backend.TextureError!dvui.TextureCacheEntry {
         var cw = dvui.currentWindow();
-        const tex_hash = dvui.TextureCacheEntry.hashImageBytes(pma.pma);
+        const tex_hash = dvui.TextureCacheEntry.hashImageBytes(@ptrCast(pma.pma));
         if (cw.texture_cache.getPtr(tex_hash)) |tce| return tce.*;
-        const texture = try dvui.textureCreate(pma, width, height, .linear);
+        const texture = try dvui.textureCreate(pma, width, height, interpolation);
         const entry = dvui.TextureCacheEntry{ .texture = texture };
         try cw.texture_cache.put(cw.gpa, tex_hash, entry);
         return entry;
@@ -1370,7 +1368,7 @@ pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void
                         cw.last_focused_id_this_frame = wid;
                     } else {
                         // walk parent chain
-                        var wd = cw.wd.parent.data();
+                        var wd = cw.data().parent.data();
 
                         while (true) : (wd = wd.parent.data()) {
                             if (wd.id == wid) {
@@ -1378,7 +1376,7 @@ pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void
                                 break;
                             }
 
-                            if (wd.id == cw.wd.id) {
+                            if (wd.id == cw.data().id) {
                                 // got to base Window
                                 break;
                             }
@@ -2270,10 +2268,14 @@ pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal:
         }
 
         // i points just past all subwindows that want to be on top of this subwin_id
-        cw.subwindows.insert(cw.gpa, i, sw) catch @panic("Could not add subwindow to list");
+        cw.subwindows.insert(cw.gpa, i, sw) catch |err| {
+            logError(@src(), err, "Could not insert {x} {} into subwindow list, events in this other other subwindwos might not work properly", .{ id, rect_pixels });
+        };
     } else {
         // just put it on the top
-        cw.subwindows.append(cw.gpa, sw) catch @panic("Could not add subwindow to list");
+        cw.subwindows.append(cw.gpa, sw) catch |err| {
+            logError(@src(), err, "Could not insert {x} {} into subwindow list, events in this other other subwindwos might not work properly", .{ id, rect_pixels });
+        };
     }
 }
 
@@ -2629,13 +2631,33 @@ pub fn clipboardTextSet(text: []const u8) void {
 }
 
 /// Ask the system to open the given url.
+/// http:// and https:// urls can be opened.
+/// returns true if the backend reports the URL was opened.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn openURL(url: []const u8) void {
+pub fn openURL(url: []const u8) bool {
+    const parsed = std.Uri.parse(url) catch return false;
+    if (!std.ascii.eqlIgnoreCase(parsed.scheme, "http") and
+        !std.ascii.eqlIgnoreCase(parsed.scheme, "https"))
+    {
+        return false;
+    }
+    if (parsed.host != null and parsed.host.?.isEmpty()) {
+        return false;
+    }
+
     const cw = currentWindow();
     cw.backend.openURL(url) catch |err| {
         logError(@src(), err, "Could not open url '{s}'", .{url});
+        return false;
     };
+    return true;
+}
+
+test openURL {
+    try std.testing.expect(openURL("notepad.exe") == false);
+    try std.testing.expect(openURL("https://") == false);
+    try std.testing.expect(openURL("file:///") == false);
 }
 
 /// Seconds elapsed between last frame and current.  This value can be quite
@@ -2663,7 +2685,7 @@ pub fn FPS() f32 {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn parentGet() Widget {
-    return currentWindow().wd.parent;
+    return currentWindow().data().parent;
 }
 
 /// Make w the new parent widget.  See `parentGet`.
@@ -2671,7 +2693,7 @@ pub fn parentGet() Widget {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn parentSet(w: Widget) void {
     const cw = currentWindow();
-    cw.wd.parent = w;
+    cw.data().parent = w;
 }
 
 /// Make a previous parent widget the current parent.
@@ -2682,11 +2704,11 @@ pub fn parentSet(w: Widget) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn parentReset(id: WidgetId, w: Widget) void {
     const cw = currentWindow();
-    const actual_current = cw.wd.parent.data().id;
+    const actual_current = cw.data().parent.data().id;
     if (id != actual_current) {
         cw.debug_widget_id = actual_current;
 
-        var wd = cw.wd.parent.data();
+        var wd = cw.data().parent.data();
 
         log.err("widget is not closed within its parent. did you forget to call `.deinit()`?", .{});
 
@@ -2696,16 +2718,16 @@ pub fn parentReset(id: WidgetId, w: Widget) void {
                 wd.src.line,
                 wd.options.name orelse "???",
                 wd.id,
-                if (wd.id == cw.wd.id) "\n" else "",
+                if (wd.id == cw.data().id) "\n" else "",
             });
 
-            if (wd.id == cw.wd.id) {
+            if (wd.id == cw.data().id) {
                 // got to base Window
                 break;
             }
         }
     }
-    cw.wd.parent = w;
+    cw.data().parent = w;
 }
 
 /// Set if dvui should immediately render, and return the previous setting.
@@ -2727,8 +2749,8 @@ pub fn renderingSet(r: bool) bool {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn windowRect() Rect.Natural {
-    // Window.wd.rect is the definition of natural
-    return .cast(currentWindow().wd.rect);
+    // Window.data().rect is the definition of natural
+    return .cast(currentWindow().data().rect);
 }
 
 /// Get the OS window size in pixels.  See `windowRect`.
@@ -2838,7 +2860,10 @@ pub fn hashIdKey(id: WidgetId, key: []const u8) u64 {
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the data to.
 ///
-/// Stored data with the same id/key will be freed at next `win.end()`.
+/// Stored data with the same id/key will be overwritten if it has the same size,
+/// otherwise the data will be freed at the next call to `Window.end`. This means
+/// that if a pointer to the same id/key was retrieved earlier, the value behind
+/// that pointer would be modified.
 ///
 /// If you want to store the contents of a slice, use `dataSetSlice`.
 pub fn dataSet(win: ?*Window, id: WidgetId, key: []const u8, data: anytype) void {
@@ -2850,7 +2875,10 @@ pub fn dataSet(win: ?*Window, id: WidgetId, key: []const u8, data: anytype) void
 ///
 /// Can be called from any thread.
 ///
-/// Stored data with the same id/key will be freed at next `win.end()`.
+/// Stored data with the same id/key will be overwritten if it has the same size,
+/// otherwise the data will be freed at the next call to `Window.end`. This means
+/// that if the slice with the same id/key was retrieved earlier, the value behind
+/// that slice would be modified.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the data to.
@@ -2956,6 +2984,8 @@ pub fn dataGetDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: 
 /// where there is no call to any `dataGet`/`dataSet` functions for that id/key
 /// combination.
 ///
+/// The pointer will always be valid until the next call to `Window.end`.
+///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetPtrDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type, default: T) *T {
     if (dataGetPtr(win, id, key, T)) |ptr| {
@@ -2976,6 +3006,8 @@ pub fn dataGetPtrDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime 
 /// Returns a pointer to internal storage, which will be freed after a frame
 /// where there is no call to any `dataGet`/`dataSet` functions for that id/key
 /// combination.
+///
+/// The pointer will always be valid until the next call to `Window.end`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetPtr(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type) ?*T {
@@ -2999,6 +3031,8 @@ pub fn dataGetPtr(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type
 /// The returned slice points to internal storage, which will be freed after
 /// a frame where there is no call to any `dataGet`/`dataSet` functions for that
 /// id/key combination.
+///
+/// The slice will always be valid until the next call to `Window.end`.
 pub fn dataGetSlice(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type) ?T {
     const dt = @typeInfo(T);
     if (dt != .pointer or dt.pointer.size != .slice) {
@@ -3029,6 +3063,8 @@ pub fn dataGetSlice(win: ?*Window, id: WidgetId, key: []const u8, comptime T: ty
 /// The returned slice points to internal storage, which will be freed after
 /// a frame where there is no call to any `dataGet`/`dataSet` functions for that
 /// id/key combination.
+///
+/// The slice will always be valid until the next call to `Window.end`.
 pub fn dataGetSliceDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
     return dataGetSlice(win, id, key, T) orelse blk: {
         dataSetSlice(win, id, key, default);
@@ -3051,7 +3087,7 @@ pub fn dataGetInternal(win: ?*Window, id: WidgetId, key: []const u8, comptime T:
 }
 
 /// Remove key (and data if any) for given id.  The data will be freed at next
-/// `win.end()`.
+/// `Window.end`.
 ///
 /// Can be called from any thread.
 ///
@@ -3669,7 +3705,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
 
     const evts = events();
     for (evts) |*e| {
-        if (!eventMatch(e, .{ .id = over.wd.id, .r = over.wd.contentRectScale().r }))
+        if (!eventMatch(e, .{ .id = over.data().id, .r = over.data().contentRectScale().r }))
             continue;
 
         if (e.evt == .mouse and e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
@@ -4580,7 +4616,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     defer bc.deinit();
 
     var expanded: bool = init_opts.default_expanded;
-    if (dvui.dataGet(null, bc.wd.id, "_expand", bool)) |e| {
+    if (dvui.dataGet(null, bc.data().id, "_expand", bool)) |e| {
         expanded = e;
     }
 
@@ -4605,7 +4641,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     }
     labelNoFmt(@src(), label_str, .{}, options.strip());
 
-    dvui.dataSet(null, bc.wd.id, "_expand", expanded);
+    dvui.dataSet(null, bc.data().id, "_expand", expanded);
 
     return expanded;
 }
@@ -5390,6 +5426,8 @@ pub const ImageInitOptions = struct {
     /// - ratio => fit in rect maintaining aspect ratio
     shrink: ?Options.Expand = null,
 
+    interpolation: enums.TextureInterpolation = .linear,
+
     uv: Rect = .{ .w = 1, .h = 1 },
 };
 
@@ -5458,7 +5496,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
         .background_color = renderBackground,
     };
     const content_rs = wd.contentRectScale();
-    renderImage(init_opts.name, init_opts.bytes, content_rs, render_tex_opts) catch |err| logError(@src(), err, "Could not render image {s} at {}", .{ init_opts.name, content_rs });
+    renderImage(init_opts.name, init_opts.bytes, content_rs, render_tex_opts, init_opts.interpolation) catch |err| logError(@src(), err, "Could not render image {s} at {}", .{ init_opts.name, content_rs });
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
 
@@ -5753,7 +5791,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
     knob.install();
     knob.drawBackground();
     if (b.data().id == focusedWidgetId()) {
-        knob.wd.focusBorder();
+        knob.data().focusBorder();
     }
     knob.deinit();
 
@@ -5779,6 +5817,7 @@ pub const SliderEntryInitOptions = struct {
     min: ?f32 = null,
     max: ?f32 = null,
     interval: ?f32 = null,
+    label: ?[]const u8 = null,
 };
 
 /// Combines a slider and a text entry box on key press.  Displays value on top of slider.
@@ -5830,7 +5869,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         var te = TextEntryWidget.init(@src(), .{ .text = .{ .buffer = te_buf } }, options.strip().override(.{ .min_size_content = .{}, .expand = .both, .tab_index = 0 }));
         te.install();
 
-        if (firstFrame(te.wd.id)) {
+        if (firstFrame(te.data().id)) {
             var sel = te.textLayout.selection;
             sel.start = 0;
             sel.cursor = 0;
@@ -6050,10 +6089,10 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             }
         }
 
-        b.wd.borderAndBackground(.{ .fill_color = if (hover) b.wd.options.color(.fill_hover) else b.wd.options.color(.fill) });
+        b.data().borderAndBackground(.{ .fill_color = if (hover) b.data().options.color(.fill_hover) else b.data().options.color(.fill) });
 
         // only draw handle if we have a min and max
-        if (b.wd.visible() and init_opts.min != null and init_opts.max != null) {
+        if (b.data().visible() and init_opts.min != null and init_opts.max != null) {
             const how_far = (init_opts.value.* - init_opts.min.?) / (init_opts.max.? - init_opts.min.?);
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
@@ -6061,7 +6100,12 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s, Rect.Physical), .{ .color = options.color(.fill_press) });
         }
 
-        label(@src(), label_fmt orelse "{d:.3}", .{init_opts.value.*}, options.strip().override(.{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 }));
+        const label_opts = options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
+        if (init_opts.label) |l| {
+            label(@src(), "{s}", .{l}, label_opts);
+        } else {
+            label(@src(), label_fmt orelse "{d:.3}", .{init_opts.value.*}, label_opts);
+        }
     }
 
     if (b.data().id == focusedWidgetId()) {
@@ -6219,7 +6263,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 
     const rs = s.borderRectScale();
 
-    if (bw.wd.visible()) {
+    if (bw.data().visible()) {
         checkmark(target.*, bw.focused(), rs, bw.pressed(), bw.hovered(), options);
     }
 
@@ -6305,7 +6349,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 
     const rs = s.borderRectScale();
 
-    if (bw.wd.visible()) {
+    if (bw.data().visible()) {
         radioCircle(active, bw.focused(), rs, bw.pressed(), bw.hovered(), options);
     }
 
@@ -6615,7 +6659,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
         }
     }
 
-    if (init_opts.value != null and result.value == .Empty and focusedWidgetId() != te.wd.id) {
+    if (init_opts.value != null and result.value == .Empty and focusedWidgetId() != te.data().id) {
         // If the text entry is empty and we loose focus,
         // reset the hex value by invalidating the stored previous value
         dataRemove(null, id, "value");
@@ -6908,8 +6952,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
 ///
 /// To convert non PMA pixels, use `RGBAPixelsPMA.fromRGBA`
 pub const RGBAPixelsPMA = struct {
-    /// Should only ever store RGBA pixels with premultiplied alpha
-    pma: []u8,
+    pma: []Color.PMA,
 
     /// Alpha multiplies `pixels` in place
     pub fn fromRGBA(pixels: []u8) RGBAPixelsPMA {
@@ -6920,12 +6963,12 @@ pub const RGBAPixelsPMA = struct {
             pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * a, 255));
             pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * a, 255));
         }
-        return .{ .pma = pixels };
+        return .{ .pma = @ptrCast(pixels) };
     }
 
     /// Unapplies the alpha multiplication in place, returning the inner slice
     pub fn toRGBA(pma_pixels: RGBAPixelsPMA) []u8 {
-        var pixels = pma_pixels.pma;
+        var pixels: []u8 = @ptrCast(pma_pixels.pma);
         for (0..pixels.len / 4) |ii| {
             const i = ii * 4;
             const a = pixels[i + 3];
@@ -6942,7 +6985,7 @@ pub const RGBAPixelsPMA = struct {
     ///
     /// Does no modifications of the pixels
     pub fn cast(pixels: []u8) RGBAPixelsPMA {
-        return .{ .pma = pixels };
+        return .{ .pma = @ptrCast(pixels) };
     }
 };
 
@@ -6952,10 +6995,10 @@ pub const RGBAPixelsPMA = struct {
 ///
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn textureCreate(pixels: RGBAPixelsPMA, width: u32, height: u32, interpolation: enums.TextureInterpolation) Backend.TextureError!Texture {
-    if (pixels.pma.len != width * height * 4) {
-        log.err("Texture was created with an incorrect amount of pixels, expected {d} but got {d} (w: {d}, h: {d})", .{ pixels.pma.len, width * height * 4, width, height });
+    if (pixels.pma.len != width * height) {
+        log.err("Texture was created with an incorrect amount of pixels, expected {d} but got {d} (w: {d}, h: {d})", .{ pixels.pma.len, width * height, width, height });
     }
-    return currentWindow().backend.textureCreate(pixels.pma.ptr, width, height, interpolation);
+    return currentWindow().backend.textureCreate(@ptrCast(pixels.pma.ptr), width, height, interpolation);
 }
 
 /// Create a texture that can be rendered with `renderTexture` and drawn to
@@ -6974,13 +7017,13 @@ pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.Texture
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn textureReadTarget(arena: std.mem.Allocator, texture: TextureTarget) Backend.TextureError!RGBAPixelsPMA {
-    const size: usize = texture.width * texture.height * 4;
+    const size: usize = texture.width * texture.height * @sizeOf(Color.PMA);
     const pixels = try arena.alloc(u8, size);
     errdefer arena.free(pixels);
 
     try currentWindow().backend.textureReadTarget(texture, pixels.ptr);
 
-    return .{ .pma = pixels };
+    return .{ .pma = @ptrCast(pixels) };
 }
 
 /// Convert a target texture to a normal texture.  target is destroyed.
@@ -7090,12 +7133,12 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     try renderTexture(tce.texture, rs, opts);
 }
 
-pub fn renderImage(name: []const u8, bytes: ImageInitOptions.ImageBytes, rs: RectScale, opts: RenderTextureOptions) Backend.GenericError!void {
+pub fn renderImage(name: []const u8, bytes: ImageInitOptions.ImageBytes, rs: RectScale, opts: RenderTextureOptions, interpolation: enums.TextureInterpolation) Backend.GenericError!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
     const cached_tex = switch (bytes) {
-        .imageFile => |b| dvui.TextureCacheEntry.fromImageFile(name, b),
-        .pixels => |p| dvui.TextureCacheEntry.fromPixels(p.bytes, p.width, p.height),
+        .imageFile => |b| dvui.TextureCacheEntry.fromImageFile(name, b, interpolation),
+        .pixels => |p| dvui.TextureCacheEntry.fromPixels(p.bytes, p.width, p.height, interpolation),
     };
     const tce = cached_tex catch return;
     try renderTexture(tce.texture, rs, opts);
@@ -7334,9 +7377,9 @@ pub const BasicLayout = struct {
                     wd.src.line,
                     wd.options.name orelse "???",
                     wd.id,
-                    if (wd.id == cw.wd.id) "\n" else "",
+                    if (wd.id == cw.data().id) "\n" else "",
                 });
-                if (wd.id == cw.wd.id) {
+                if (wd.id == cw.data().id) {
                     break;
                 }
             }

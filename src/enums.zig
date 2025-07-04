@@ -374,6 +374,8 @@ pub const Cursor = enum(u8) {
     hand,
 };
 
+pub const ColorScheme = enum { light, dark };
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

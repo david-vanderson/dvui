@@ -12,6 +12,10 @@ const window_icon_png = @embedFile("zig-favicon.png");
 //Figure out the best way to integrate raylib and dvui Event Handling
 
 pub fn main() !void {
+    if (@import("builtin").os.tag == .windows) { // optional
+        // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
+        try dvui.Backend.Common.windowsAttachConsole();
+    }
     var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_instance.allocator();
 

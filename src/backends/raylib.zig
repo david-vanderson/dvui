@@ -462,6 +462,13 @@ pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
     }
 }
 
+pub fn preferredColorScheme(_: *RaylibBackend) ?dvui.enums.ColorScheme {
+    if (builtin.target.os.tag == .windows) {
+        return dvui.Backend.Common.windowsGetPreferredColorScheme();
+    }
+    return null;
+}
+
 //TODO implement this function
 pub fn refresh(_: *RaylibBackend) void {}
 
@@ -595,14 +602,14 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     //scroll wheel movement
     const scroll_wheel = c.GetMouseWheelMoveV();
     if (scroll_wheel.x != 0) {
-        if (try win.addEventMouseWheel(-scroll_wheel.x * 25, .horizontal)) disable_raylib_input = true;
+        if (try win.addEventMouseWheel(-scroll_wheel.x * dvui.scroll_speed, .horizontal)) disable_raylib_input = true;
 
         if (self.log_events) {
             std.debug.print("raylib event Mouse Wheel: {}\n", .{scroll_wheel});
         }
     }
     if (scroll_wheel.y != 0) {
-        if (try win.addEventMouseWheel(scroll_wheel.y * 25, .vertical)) disable_raylib_input = true;
+        if (try win.addEventMouseWheel(scroll_wheel.y * dvui.scroll_speed, .vertical)) disable_raylib_input = true;
 
         if (self.log_events) {
             std.debug.print("raylib event Mouse Wheel: {}\n", .{scroll_wheel});
@@ -863,17 +870,12 @@ pub fn EndDrawingWaitEventTimeout(_: *RaylibBackend, timeout_micros: u32) void {
     return;
 }
 
-// Optional: windows os only
-const winapi = if (builtin.os.tag == .windows) struct {
-    extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
-} else struct {};
-
 pub fn main() !void {
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
     if (builtin.os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
-        _ = winapi.AttachConsole(0xFFFFFFFF);
+        try dvui.Backend.Common.windowsAttachConsole();
     }
 
     var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};

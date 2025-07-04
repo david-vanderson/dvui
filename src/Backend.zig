@@ -6,6 +6,8 @@ const dvui = @import("dvui.zig");
 const Implementation = @import("backend");
 const Backend = @This();
 
+pub const Common = @import("backends/common.zig");
+
 pub const GenericError = std.mem.Allocator.Error || error{BackendError};
 pub const TextureError = GenericError || error{ TextureCreate, TextureRead };
 
@@ -116,6 +118,11 @@ pub fn clipboardTextSet(self: Backend, text: []const u8) GenericError!void {
 /// Open URL in system browser
 pub fn openURL(self: Backend, url: []const u8) GenericError!void {
     return self.impl.openURL(url);
+}
+
+/// Get the preferredColorScheme if available
+pub fn preferredColorScheme(self: Backend) ?dvui.enums.ColorScheme {
+    return self.impl.preferredColorScheme();
 }
 
 /// Called by `dvui.refresh` when it is called from a background

@@ -42,6 +42,7 @@ var slider_entry_min: bool = true;
 var slider_entry_max: bool = true;
 var slider_entry_interval: bool = true;
 var slider_entry_vector: bool = false;
+var slider_entry_label: bool = false;
 var text_entry_buf = std.mem.zeroes([50]u8);
 var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
@@ -89,7 +90,7 @@ const AnimatingDialog = struct {
         var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id.asUsize(), .max_size_content = .width(300) });
 
         if (dvui.firstFrame(win.data().id)) {
-            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 0.0, .end_val = 1.0, .end_time = duration, .easing = easing });
+            dvui.animation(win.data().id, "rect_percent", .{ .start_val = 0.0, .end_val = 1.0, .end_time = duration, .easing = easing });
         }
 
         const winHeight = win.data().rect.h;
@@ -148,7 +149,7 @@ const AnimatingDialog = struct {
         }
 
         if (closing) {
-            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 1.0, .end_val = 0.0, .end_time = duration, .easing = easing });
+            dvui.animation(win.data().id, "rect_percent", .{ .start_val = 1.0, .end_val = 0.0, .end_time = duration, .easing = easing });
         }
     }
 
@@ -327,7 +328,7 @@ pub const demoKind = enum {
             .layout => "Layout",
             .text_layout => "Text Layout",
             .plots => "Plots",
-            .reorderable => "Reorderable",
+            .reorderable => "Reorder / Tree",
             .menus => "Menus / Focus",
             .scrolling => "Scrolling",
             .scroll_canvas => "Scroll Canvas",
@@ -348,7 +349,7 @@ pub const demoKind = enum {
             .layout => .{ .scale = 0.45, .offset = .{ .x = -50 } },
             .text_layout => .{ .scale = 0.45, .offset = .{} },
             .plots => .{ .scale = 0.45, .offset = .{} },
-            .reorderable => .{ .scale = 0.45, .offset = .{ .y = -200 } },
+            .reorderable => .{ .scale = 0.45, .offset = .{} },
             .menus => .{ .scale = 0.45, .offset = .{} },
             .scrolling => .{ .scale = 0.45, .offset = .{ .x = -150, .y = 0 } },
             .scroll_canvas => .{ .scale = 0.35, .offset = .{ .y = -120 } },
@@ -438,7 +439,7 @@ pub fn demo() void {
                 defer box.deinit();
 
                 var options: dvui.Options = .{ .gravity_x = 0.5, .gravity_y = 1.0 };
-                if (dvui.captured(bw.wd.id)) options = options.override(.{ .color_text = .{ .color = options.color(.text_press) } });
+                if (dvui.captured(bw.data().id)) options = options.override(.{ .color_text = .{ .color = options.color(.text_press) } });
 
                 dvui.label(@src(), "{s}", .{e.name()}, options);
 
@@ -689,11 +690,11 @@ pub fn basicWidgets() void {
         dvui.label(@src(), "Link:", .{}, .{ .gravity_y = 0.5 });
 
         if (dvui.labelClick(@src(), "https://david-vanderson.github.io/", .{}, .{ .gravity_y = 0.5, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
-            dvui.openURL("https://david-vanderson.github.io/");
+            _ = dvui.openURL("https://david-vanderson.github.io/");
         }
 
         if (dvui.labelClick(@src(), "docs", .{}, .{ .gravity_y = 0.5, .margin = .{ .x = 10 }, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
-            dvui.openURL("https://david-vanderson.github.io/docs");
+            _ = dvui.openURL("https://david-vanderson.github.io/docs");
         }
     }
 
@@ -741,7 +742,14 @@ pub fn basicWidgets() void {
 
         dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
         if (!slider_entry_vector) {
-            _ = dvui.sliderEntry(@src(), "val: {d:0.3}", .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) }, .{ .gravity_y = 0.5 });
+            var custom_label: ?[]u8 = null;
+            if (slider_entry_label) {
+                const whole = @round(slider_entry_val);
+                const part = @round((slider_entry_val - whole) * 100);
+                custom_label = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d} and {d}p", .{ whole, part }) catch null;
+            }
+            defer if (custom_label) |cl| dvui.currentWindow().lifo().free(cl);
+            _ = dvui.sliderEntry(@src(), "val: {d:0.3}", .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null), .label = custom_label }, .{ .gravity_y = 0.5 });
             dvui.label(@src(), "(enter, ctrl-click or touch-tap)", .{}, .{ .gravity_y = 0.5 });
         } else {
             _ = dvui.sliderVector(@src(), "{d:0.2}", 3, &slider_vector_array, .{ .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) }, .{});
@@ -756,6 +764,7 @@ pub fn basicWidgets() void {
         _ = dvui.checkbox(@src(), &slider_entry_max, "Max", .{});
         _ = dvui.checkbox(@src(), &slider_entry_interval, "Interval", .{});
         _ = dvui.checkbox(@src(), &slider_entry_vector, "Vector", .{});
+        _ = dvui.checkbox(@src(), &slider_entry_label, "Custom Label", .{});
     }
 
     _ = dvui.spacer(@src(), .{ .min_size_content = .height(4) });
@@ -1154,7 +1163,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
 
             la2.spacer(@src(), 0);
 
-            const file_error = dvui.dataGetPtrDefault(null, hbox2.data().id, "_file_error", bool, false);
+            const file_error = dvui.dataGetPtrDefault(null, hbox3.data().id, "_file_error", bool, false);
             var te_file = dvui.textEntry(@src(), .{}, if (file_error.*) errOptions else normalOptions);
             if (new_filename) |f| {
                 te_file.textLayout.selection.selectAll();
@@ -1872,7 +1881,7 @@ pub fn layout() void {
 
             dvui.label(@src(), "Left Side", .{}, .{});
             dvui.label(@src(), "collapses when width < {d}", .{paned_collapsed_width}, .{});
-            dvui.label(@src(), "current width {d}", .{paned.wd.rect.w}, .{});
+            dvui.label(@src(), "current width {d}", .{paned.data().rect.w}, .{});
             if (paned.collapsed() and dvui.button(@src(), "Goto Right", .{}, .{})) {
                 paned.animateSplit(0.0);
             }
@@ -1944,7 +1953,7 @@ pub fn layoutText() void {
         tl.addText(lorem, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
 
         if (tl.addTextClick("This text is a link that is part of the text layout and goes to the dvui home page.", .{ .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } }, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) })) {
-            dvui.openURL("https://david-vanderson.github.io/");
+            _ = dvui.openURL("https://david-vanderson.github.io/");
         }
 
         tl.addText(lorem2, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
@@ -2083,12 +2092,10 @@ const reorderLayout = enum {
 
 /// ![image](Examples-reorderable.png)
 pub fn reorderLists() void {
-    const g = struct {
-        var layout: reorderLayout = .vertical;
-    };
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+    const layo = dvui.dataGetPtrDefault(null, uniqueId, "reorderLayout", reorderLayout, .horizontal);
 
-    const expander_o: dvui.ExpanderOptions = .{ .default_expanded = true };
-    if (dvui.expander(@src(), "Simple", expander_o, .{ .expand = .horizontal })) {
+    if (dvui.expander(@src(), "Simple", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
         var vbox = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
         defer vbox.deinit();
 
@@ -2098,8 +2105,8 @@ pub fn reorderLists() void {
 
             const entries = [_][]const u8{ "Vertical", "Horizontal", "Flex" };
             for (0..3) |i| {
-                if (dvui.radio(@src(), @intFromEnum(g.layout) == i, entries[i], .{ .id_extra = i })) {
-                    g.layout = @enumFromInt(i);
+                if (dvui.radio(@src(), @intFromEnum(layo.*) == i, entries[i], .{ .id_extra = i })) {
+                    layo.* = @enumFromInt(i);
                 }
             }
         }
@@ -2112,15 +2119,22 @@ pub fn reorderLists() void {
             dvui.label(@src(), "to reorder.", .{}, .{});
         }
 
-        reorderListsSimple(g.layout);
+        reorderListsSimple(layo.*);
     }
 
-    if (dvui.expander(@src(), "Advanced", expander_o, .{ .expand = .horizontal })) {
+    if (dvui.expander(@src(), "Advanced", .{}, .{ .expand = .horizontal })) {
         var vbox = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
         defer vbox.deinit();
 
         dvui.label(@src(), "Drag off list to remove.", .{}, .{});
         reorderListsAdvanced();
+    }
+
+    if (dvui.expander(@src(), "Tree", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+        var vbox = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 }, .expand = .both });
+        defer vbox.deinit();
+
+        reorderTree();
     }
 }
 
@@ -2240,7 +2254,7 @@ pub fn reorderListsAdvanced() void {
 
         dvui.label(@src(), "Drag to add : {d}", .{g.strings_len}, .{});
 
-        if (dvui.ReorderWidget.draggable(@src(), .{ .top_left = hbox2.wd.rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+        if (dvui.ReorderWidget.draggable(@src(), .{ .top_left = hbox2.data().rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
             // add to list, but will be removed if not dropped onto a list slot
             g.strings[g.strings_len] = g.strings_template[g.strings_len];
             added_idx = g.strings_len;
@@ -2306,7 +2320,7 @@ pub fn reorderListsAdvanced() void {
 
         dvui.label(@src(), "{s}", .{s}, .{});
 
-        if (dvui.ReorderWidget.draggable(@src(), .{ .top_left = reorderable.wd.rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+        if (dvui.ReorderWidget.draggable(@src(), .{ .top_left = reorderable.data().rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
             // marking all events for capture, this will only be a problem if some
             // mouse events (in the same frame) came before this drag, and would
             // have interacted with a widget that hasn't run yet
@@ -2332,6 +2346,562 @@ pub fn reorderListsAdvanced() void {
     }
 
     g.reorder(removed_idx, insert_before_idx);
+}
+
+pub fn reorderTree() void {
+    exampleFileTree(
+        @src(),
+        .{
+            .background = true,
+            .border = dvui.Rect.all(1),
+            .padding = dvui.Rect.all(4),
+        },
+        .{
+            .padding = dvui.Rect.all(1),
+        },
+        .{
+            .border = .{ .x = 1 },
+            .corner_radius = dvui.Rect.all(4),
+            .box_shadow = .{
+                .color = .{ .color = .black },
+                .offset = .{ .x = -5, .y = 5 },
+                .shrink = 5,
+                .blur = 10,
+                .alpha = 0.15,
+            },
+        },
+    ) catch std.debug.panic("Failed to recurse files", .{});
+}
+
+const TreeEntryKind = enum {
+    file,
+    directory,
+};
+
+const ConstTreeEntry = struct {
+    name: []const u8,
+    children: []const ConstTreeEntry = &[_]ConstTreeEntry{},
+    kind: TreeEntryKind = .file,
+};
+
+const MutableTreeEntry = struct {
+    name: []const u8,
+    children: Children = .empty,
+    kind: TreeEntryKind = .file,
+
+    const Children = std.ArrayListUnmanaged(MutableTreeEntry);
+};
+
+const tree_palette = &[_]dvui.Color{
+    .{ .r = 0x5e, .g = 0x31, .b = 0x5b, .a = 0xff },
+    .{ .r = 0x8c, .g = 0x3f, .b = 0x5d, .a = 0xff },
+    .{ .r = 0xba, .g = 0x61, .b = 0x56, .a = 0xff },
+    .{ .r = 0xf2, .g = 0xa6, .b = 0x5e, .a = 0xff },
+    .{ .r = 0xff, .g = 0xe4, .b = 0x78, .a = 0xff },
+    .{ .r = 0xcf, .g = 0xff, .b = 0x70, .a = 0xff },
+    .{ .r = 0x8f, .g = 0xde, .b = 0x5d, .a = 0xff },
+    .{ .r = 0x3c, .g = 0xa3, .b = 0x70, .a = 0xff },
+    .{ .r = 0x3d, .g = 0x6e, .b = 0x70, .a = 0xff },
+    .{ .r = 0x32, .g = 0x3e, .b = 0x4f, .a = 0xff },
+    .{ .r = 0x32, .g = 0x29, .b = 0x47, .a = 0xff },
+    .{ .r = 0x47, .g = 0x3b, .b = 0x78, .a = 0xff },
+    .{ .r = 0x4b, .g = 0x5b, .b = 0xab, .a = 0xff },
+};
+
+fn exampleRemoveTreeEntry(directory: []const u8, entries: *MutableTreeEntry.Children, old_directory: []const u8, uniqueId: dvui.WidgetId) void {
+    for (entries.items, 0..) |*e, i| {
+        const alloc = dvui.currentWindow().lifo();
+        const abs_path = std.fs.path.join(alloc, &.{ directory, e.name }) catch "";
+        defer alloc.free(abs_path);
+
+        if (std.mem.eql(u8, old_directory, abs_path)) {
+            dvui.dataSet(null, uniqueId, "removed_entry", entries.swapRemove(i));
+        }
+
+        if (e.children.items.len > 0) {
+            exampleRemoveTreeEntry(abs_path, &e.children, old_directory, uniqueId);
+        }
+    }
+}
+
+fn examplePlaceTreeEntry(directory: []const u8, entries: *MutableTreeEntry.Children, new_directory: []const u8, uniqueId: dvui.WidgetId) void {
+    if (std.mem.containsAtLeast(u8, new_directory, 1, directory)) {
+        if (dvui.dataGetPtr(null, uniqueId, "removed_entry", MutableTreeEntry)) |removed_entry| {
+            const alloc = dvui.currentWindow().lifo();
+            {
+                const new_path = std.fs.path.join(alloc, &.{ directory, std.fs.path.basename(new_directory) }) catch "";
+                defer alloc.free(new_path);
+
+                if (std.mem.eql(u8, new_path, new_directory)) {
+                    entries.appendAssumeCapacity(removed_entry.*);
+                    return;
+                }
+            }
+
+            for (entries.items) |*current_entry| {
+                const abs_path = std.fs.path.join(alloc, &.{ directory, current_entry.name }) catch "";
+                defer alloc.free(abs_path);
+
+                if (current_entry.kind == .directory) {
+                    const new_path = std.fs.path.join(alloc, &.{ abs_path, std.fs.path.basename(new_directory) }) catch "";
+                    defer alloc.free(new_path);
+
+                    if (std.mem.eql(u8, new_path, new_directory)) {
+                        current_entry.children.appendAssumeCapacity(removed_entry.*);
+                        return;
+                    }
+                    examplePlaceTreeEntry(abs_path, &current_entry.children, new_directory, uniqueId);
+                }
+            }
+
+            dvui.dataRemove(null, uniqueId, "removed_entry");
+        }
+    }
+}
+
+// Should be able to fit all entries (including nested) in `example_file_structure`
+// This could be calculated at comptime but it's a lot of code to traverse the tree for little gain
+const example_file_structure_max_children = 36;
+const example_file_structure: []const ConstTreeEntry = &[_]ConstTreeEntry{
+    .{
+        .name = "src",
+        .kind = .directory,
+        .children = &[_]ConstTreeEntry{
+            .{ .name = "main.zig", .kind = .file },
+            .{ .name = "utils.zig", .kind = .file },
+            .{ .name = "config.zig", .kind = .file },
+            .{
+                .name = "components",
+                .kind = .directory,
+                .children = &[_]ConstTreeEntry{
+                    .{ .name = "button.zig", .kind = .file },
+                    .{ .name = "input.zig", .kind = .file },
+                    .{ .name = "modal.zig", .kind = .file },
+                },
+            },
+            .{
+                .name = "styles",
+                .kind = .directory,
+                .children = &[_]ConstTreeEntry{
+                    .{ .name = "theme.zig", .kind = .file },
+                    .{ .name = "colors.zig", .kind = .file },
+                },
+            },
+        },
+    },
+    .{
+        .name = "assets",
+        .kind = .directory,
+        .children = &[_]ConstTreeEntry{
+            .{ .name = "images", .kind = .directory, .children = &[_]ConstTreeEntry{
+                .{ .name = "logo.png", .kind = .file },
+                .{ .name = "icon.svg", .kind = .file },
+                .{ .name = "background.jpg", .kind = .file },
+            } },
+            .{ .name = "fonts", .kind = .directory, .children = &[_]ConstTreeEntry{
+                .{ .name = "main.ttf", .kind = .file },
+                .{ .name = "bold.ttf", .kind = .file },
+            } },
+        },
+    },
+    .{
+        .name = "docs",
+        .kind = .directory,
+        .children = &[_]ConstTreeEntry{
+            .{ .name = "README.md", .kind = .file },
+            .{ .name = "API.md", .kind = .file },
+            .{ .name = "CHANGELOG.md", .kind = .file },
+            .{ .name = "examples", .kind = .directory, .children = &[_]ConstTreeEntry{
+                .{ .name = "basic.zig", .kind = .file },
+                .{ .name = "advanced.zig", .kind = .file },
+            } },
+        },
+    },
+    .{ .name = "build.zig", .kind = .file },
+    .{ .name = "build.zig.zon", .kind = .file },
+    .{ .name = ".gitignore", .kind = .file },
+    .{ .name = "LICENSE", .kind = .file },
+    .{
+        .name = "tests",
+        .kind = .directory,
+        .children = &[_]ConstTreeEntry{
+            .{ .name = "unit.zig", .kind = .file },
+            .{ .name = "integration.zig", .kind = .file },
+            .{ .name = "fixtures", .kind = .directory, .children = &[_]ConstTreeEntry{
+                .{ .name = "test_data.json", .kind = .file },
+                .{ .name = "sample.txt", .kind = .file },
+            } },
+        },
+    },
+};
+
+fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.Children, entries: *MutableTreeEntry.Children, tree: *dvui.TreeWidget, uniqueId: dvui.WidgetId, color_id: *usize, branch_options: dvui.Options, expander_options: dvui.Options) !void {
+    var id_extra: usize = 0;
+    for (entries.items) |*entry| {
+        id_extra += 1;
+        const color = tree_palette[color_id.* % tree_palette.len];
+
+        var branch_opts_override = dvui.Options{
+            .id_extra = id_extra,
+            .expand = .horizontal,
+        };
+
+        const branch = tree.branch(@src(), .{ .expanded = false }, branch_opts_override.override(branch_options));
+        defer branch.deinit();
+
+        const alloc = dvui.currentWindow().lifo();
+        const abs_path = std.fs.path.join(alloc, &.{ directory, entry.name }) catch "";
+        defer alloc.free(abs_path);
+
+        if (branch.insertBefore()) {
+            if (dvui.dataGetSlice(null, uniqueId, "removed_path", []u8)) |removed_path| {
+                const old_sub_path = std.fs.path.basename(removed_path);
+
+                const new_path = try std.fs.path.join(alloc, &.{ if (entry.kind == .directory) abs_path else directory, old_sub_path });
+                defer alloc.free(new_path);
+
+                if (!std.mem.eql(u8, removed_path, new_path)) {
+                    exampleRemoveTreeEntry("~", base_entries, removed_path, uniqueId);
+                    examplePlaceTreeEntry("~", base_entries, new_path, uniqueId);
+                }
+
+                dvui.dataRemove(null, uniqueId, "removed_path");
+            }
+        }
+
+        if (branch.floating()) {
+            if (dvui.dataGetSlice(null, uniqueId, "removed_path", []u8) == null)
+                dvui.dataSetSlice(null, uniqueId, "removed_path", abs_path);
+        }
+
+        if (entry.kind == .directory) {
+            dvui.icon(
+                @src(),
+                "FolderIcon",
+                dvui.entypo.folder,
+                .{ .fill_color = color },
+                .{
+                    .gravity_y = 0.5,
+                },
+            );
+
+            _ = dvui.label(@src(), "{s}", .{entry.name}, .{});
+
+            dvui.icon(
+                @src(),
+                "DropIcon",
+                if (branch.expanded) dvui.entypo.triangle_down else dvui.entypo.triangle_right,
+                .{ .fill_color = color },
+                .{
+                    .gravity_y = 0.5,
+                    .gravity_x = 1.0,
+                },
+            );
+
+            var expander_opts_override = dvui.Options{
+                .margin = .{ .x = 14 },
+                .color_border = .{ .color = color },
+                .background = if (expander_options.border != null) true else false,
+                .expand = .horizontal,
+            };
+
+            if (branch.expander(@src(), .{ .indent = 14 }, expander_opts_override.override(expander_options))) {
+                exampleFileTreeSearch(
+                    abs_path,
+                    base_entries,
+                    &entry.children,
+                    tree,
+                    uniqueId,
+                    color_id,
+                    branch_options,
+                    expander_options,
+                ) catch std.debug.panic("Failed to recurse files", .{});
+            }
+
+            color_id.* = color_id.* + 1;
+        } else {
+            dvui.icon(@src(), "FileIcon", dvui.entypo.text_document, .{ .fill_color = color }, .{
+                .gravity_y = 0.5,
+            });
+
+            _ = dvui.label(@src(), "{s}", .{entry.name}, .{});
+
+            if (branch.button.clicked()) {
+                std.log.debug("Clicked: {s}", .{abs_path});
+            }
+        }
+    }
+}
+
+/// Used to keep the data slices for the children alive
+///
+/// This is needed because we want to automatically deallocate when we are done
+fn keepExampleFileTreeDataAlive(const_file_tree: []const ConstTreeEntry) void {
+    for (const_file_tree) |const_entry| {
+        const id: dvui.WidgetId = @enumFromInt(dvui.hashIdKey(@enumFromInt(@intFromPtr(const_file_tree.ptr)), const_entry.name));
+        const child_slice = dvui.dataGetSlice(null, id, "child_slice", []MutableTreeEntry) orelse @panic("File tree slice did not exist");
+        std.mem.doNotOptimizeAway(child_slice);
+        if (const_entry.children.len > 0) {
+            keepExampleFileTreeDataAlive(const_entry.children);
+        }
+    }
+}
+
+fn exampleFileTreeSetup(const_file_tree: []const ConstTreeEntry, mutable_file_tree: *MutableTreeEntry.Children) void {
+    for (const_file_tree) |const_entry| {
+        const id: dvui.WidgetId = @enumFromInt(dvui.hashIdKey(@enumFromInt(@intFromPtr(const_file_tree.ptr)), const_entry.name));
+        // Allocate a data slice with the max amount of children possible which will be kept alive later.
+        dvui.dataSetSliceCopies(null, id, "child_slice", &[1]MutableTreeEntry{undefined}, example_file_structure_max_children);
+        var mutable_entry = MutableTreeEntry{
+            .name = const_entry.name,
+            .kind = const_entry.kind,
+            .children = MutableTreeEntry.Children.initBuffer(
+                dvui.dataGetSlice(null, id, "child_slice", []MutableTreeEntry) orelse @panic("Could not set slice for file tree"),
+            ),
+        };
+
+        if (const_entry.children.len > 0) {
+            exampleFileTreeSetup(const_entry.children, &mutable_entry.children);
+        }
+
+        mutable_file_tree.appendAssumeCapacity(mutable_entry);
+    }
+}
+
+pub fn exampleFileTree(src: std.builtin.SourceLocation, tree_options: dvui.Options, branch_options: dvui.Options, expander_options: dvui.Options) !void {
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+
+    var tree = dvui.TreeWidget.tree(src, tree_options);
+    defer tree.deinit();
+
+    var color_index: usize = 0;
+
+    if (dvui.dataGetPtr(null, uniqueId, "mutable_data", MutableTreeEntry.Children)) |mutable_file_tree| {
+        // Keep the array list buffer alive
+        const data_slice = dvui.dataGetSlice(null, uniqueId, "mutable_slice", []MutableTreeEntry);
+        std.mem.doNotOptimizeAway(data_slice);
+
+        if (mutable_file_tree.items.len == 0) {
+            exampleFileTreeSetup(example_file_structure, mutable_file_tree);
+        } else {
+            keepExampleFileTreeDataAlive(example_file_structure);
+        }
+
+        exampleFileTreeSearch("~", mutable_file_tree, mutable_file_tree, tree, uniqueId, &color_index, branch_options, expander_options) catch std.debug.panic("Failed to recurse files", .{});
+    } else {
+        dvui.dataSetSliceCopies(null, uniqueId, "mutable_slice", &[1]MutableTreeEntry{undefined}, example_file_structure_max_children);
+        dvui.dataSet(null, uniqueId, "mutable_data", MutableTreeEntry.Children.initBuffer(
+            dvui.dataGetSlice(null, uniqueId, "mutable_slice", []MutableTreeEntry) orelse @panic("Could not set slice for file tree"),
+        ));
+    }
+}
+
+pub fn fileTree(src: std.builtin.SourceLocation, root_directory: []const u8, tree_options: dvui.Options, branch_options: dvui.Options, expander_options: dvui.Options) !void {
+    var tree = dvui.TreeWidget.tree(src, tree_options);
+    defer tree.deinit();
+
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+    recurseFiles(root_directory, tree, uniqueId, branch_options, expander_options) catch std.debug.panic("Failed to recurse files", .{});
+}
+
+fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, uniqueId: dvui.WidgetId, branch_options: dvui.Options, expander_options: dvui.Options) !void {
+    const recursor = struct {
+        fn search(directory: []const u8, tree: *dvui.TreeWidget, uid: dvui.WidgetId, color_id: *usize, branch_opts: dvui.Options, expander_opts: dvui.Options) !void {
+            var dir = std.fs.cwd().openDir(directory, .{ .access_sub_paths = true, .iterate = true }) catch return;
+            defer dir.close();
+
+            const padding = dvui.Rect.all(2);
+
+            var iter = dir.iterate();
+
+            var id_extra: usize = 0;
+            while (try iter.next()) |entry| {
+                id_extra += 1;
+
+                var branch_opts_override = dvui.Options{
+                    .id_extra = id_extra,
+                    .expand = .horizontal,
+                };
+
+                const color = tree_palette[color_id.* % tree_palette.len];
+
+                const branch = tree.branch(@src(), .{
+                    .expanded = false,
+                }, branch_opts_override.override(branch_opts));
+                defer branch.deinit();
+
+                const abs_path = try std.fs.path.join(
+                    dvui.currentWindow().arena(),
+                    &.{ directory, entry.name },
+                );
+
+                if (branch.insertBefore()) {
+                    if (dvui.dataGetSlice(null, uid, "removed_path", []u8)) |removed_path| {
+                        const old_sub_path = std.fs.path.basename(removed_path);
+
+                        const new_path = try std.fs.path.join(dvui.currentWindow().arena(), &.{ if (entry.kind == .directory) abs_path else directory, old_sub_path });
+
+                        if (!std.mem.eql(u8, removed_path, new_path)) {
+                            std.log.debug("DVUI/TreeWidget: Moved {s} to {s}", .{ removed_path, new_path });
+
+                            try std.fs.renameAbsolute(removed_path, new_path);
+                        }
+
+                        dvui.dataRemove(null, uid, "removed_path");
+                    }
+                }
+
+                if (branch.floating()) {
+                    if (dvui.dataGetSlice(null, uid, "removed_path", []u8) == null)
+                        dvui.dataSetSlice(null, uid, "removed_path", abs_path);
+                }
+
+                switch (entry.kind) {
+                    .file => {
+                        const icon = dvui.entypo.text_document;
+                        const icon_color = color;
+                        const text_color = dvui.themeGet().color_text;
+
+                        _ = dvui.icon(
+                            @src(),
+                            "FileIcon",
+                            icon,
+                            .{ .fill_color = icon_color },
+                            .{
+                                .gravity_y = 0.5,
+                                .padding = padding,
+                            },
+                        );
+                        dvui.label(
+                            @src(),
+                            "{s}",
+                            .{entry.name},
+                            .{
+                                .color_text = .{ .color = text_color },
+                                .padding = padding,
+                            },
+                        );
+
+                        if (branch.button.clicked()) {
+                            std.log.debug("Clicked: {s}", .{abs_path});
+                        }
+                    },
+                    .directory => {
+                        const folder_name = std.fs.path.basename(abs_path);
+                        const icon_color = color;
+
+                        _ = dvui.icon(
+                            @src(),
+                            "FolderIcon",
+                            dvui.entypo.folder,
+                            .{
+                                .fill_color = icon_color,
+                            },
+                            .{
+                                .gravity_y = 0.5,
+                                .padding = padding,
+                            },
+                        );
+                        dvui.label(@src(), "{s}", .{folder_name}, .{
+                            .color_text = .{ .color = dvui.themeGet().color_text },
+                            .padding = padding,
+                        });
+                        _ = dvui.icon(
+                            @src(),
+                            "DropIcon",
+                            if (branch.expanded) dvui.entypo.triangle_down else dvui.entypo.triangle_right,
+                            .{ .fill_color = icon_color },
+                            .{
+                                .gravity_y = 0.5,
+                                .gravity_x = 1.0,
+                                .padding = padding,
+                            },
+                        );
+
+                        var expander_opts_override = dvui.Options{
+                            .margin = .{ .x = 14 },
+                            .color_border = .{ .color = color },
+                            .expand = .horizontal,
+                        };
+
+                        if (branch.expander(@src(), .{ .indent = 14 }, expander_opts_override.override(expander_opts))) {
+                            try search(
+                                abs_path,
+                                tree,
+                                uid,
+                                color_id,
+                                branch_opts,
+                                expander_opts,
+                            );
+                        }
+                        color_id.* = color_id.* + 1;
+                    },
+                    else => {},
+                }
+            }
+        }
+    }.search;
+
+    var color_index: usize = 0;
+
+    const root_branch = outer_tree.branch(@src(), .{
+        .expanded = true,
+    }, .{
+        .id_extra = 0,
+        .expand = .horizontal,
+        //.color_fill_hover = .fill,
+    });
+    defer root_branch.deinit();
+
+    dvui.icon(
+        @src(),
+        "FolderIcon",
+        dvui.entypo.folder,
+        .{
+            .fill_color = tree_palette[0],
+        },
+        .{
+            .gravity_y = 0.5,
+            .padding = dvui.Rect.all(10),
+        },
+    );
+
+    const folder_name = std.fs.path.basename(root_directory);
+    dvui.label(@src(), "{s}", .{folder_name}, .{
+        .color_text = .{ .color = dvui.themeGet().color_text },
+        .padding = dvui.Rect.all(10),
+    });
+    dvui.icon(
+        @src(),
+        "DropIcon",
+        if (root_branch.expanded) dvui.entypo.triangle_down else dvui.entypo.triangle_right,
+        .{ .fill_color = tree_palette[0] },
+        .{
+            .gravity_y = 0.5,
+            .gravity_x = 1.0,
+            .padding = dvui.Rect.all(10),
+        },
+    );
+
+    if (root_branch.expander(@src(), .{ .indent = 14.0 }, .{
+        .color_fill = .fill_window,
+        .color_border = .{ .color = tree_palette[0] },
+        .expand = .horizontal,
+        .corner_radius = root_branch.button.wd.options.corner_radius,
+        .background = true,
+        .border = .{ .x = 1 },
+        .box_shadow = .{
+            .color = .{ .color = .black },
+            .offset = .{ .x = -5, .y = 5 },
+            .shrink = 5,
+            .blur = 10,
+            .alpha = 0.15,
+        },
+    })) {
+        try recursor(root_directory, outer_tree, uniqueId, &color_index, branch_options, expander_options);
+    }
+
+    return;
 }
 
 /// ![image](Examples-menus.png)
@@ -2886,7 +3456,7 @@ pub fn scrollCanvas() void {
     tl.format("Virtual size {d}x{d}\n", .{ scroll_info.virtual_size.w, scroll_info.virtual_size.h }, .{});
     tl.format("Scroll Offset {d}x{d}\n", .{ scroll_info.viewport.x, scroll_info.viewport.y }, .{});
     tl.format("Origin {d}x{d}\n", .{ origin.x, origin.y }, .{});
-    tl.format("Scale {d}", .{scale}, .{});
+    tl.format("Scale {d}", .{scale.*}, .{});
     tl.deinit();
 
     var scrollArea = dvui.scrollArea(@src(), .{ .scroll_info = scroll_info }, .{ .expand = .both, .min_size_content = .{ .w = 300, .h = 300 } });
@@ -3615,12 +4185,12 @@ pub fn animations() void {
         var mslabel = dvui.LabelWidget.init(@src(), "{d:0>3} ms into second", .{@as(u32, @intCast(left))}, .{}, .{});
         mslabel.install();
         mslabel.draw();
-        mslabel.deinit();
 
-        if (dvui.timerDoneOrNone(mslabel.wd.id)) {
+        if (dvui.timerDoneOrNone(mslabel.data().id)) {
             const wait = 1000 * (1000 - left);
-            dvui.timer(mslabel.wd.id, wait);
+            dvui.timer(mslabel.data().id, wait);
         }
+        mslabel.deinit();
 
         dvui.label(@src(), "Estimate of frame overhead {d:6} us", .{dvui.currentWindow().loop_target_slop}, .{});
         switch (dvui.backend.kind) {
@@ -3636,9 +4206,6 @@ pub fn animations() void {
         var box = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
         defer box.deinit();
 
-        const pixel_data = dvui.Color.yellow.toRGBA() ++ dvui.Color.cyan.toRGBA() ++ dvui.Color.red.toRGBA() ++ dvui.Color.magenta.toRGBA();
-        var pixels = pixel_data;
-
         // example of how to run frames at a certain fps
         const millis_per_frame = 500;
         if (dvui.timerDoneOrNone(box.data().id)) {
@@ -3649,10 +4216,10 @@ pub fn animations() void {
         }
 
         const num_frames = 4;
-        const frame: i32 = blk: {
-            const millis = @divFloor(dvui.frameTimeNS(), 1_000_000);
+        const frame: std.math.IntFittingRange(0, num_frames) = blk: {
+            const millis = @divFloor(dvui.frameTimeNS(), std.time.ns_per_ms);
             const left = @as(i32, @intCast(@rem(millis, num_frames * millis_per_frame)));
-            break :blk @divTrunc(left, millis_per_frame);
+            break :blk @intCast(@divTrunc(left, millis_per_frame));
         };
 
         {
@@ -3662,11 +4229,12 @@ pub fn animations() void {
             _ = dvui.checkbox(@src(), &global.round_corners, "Round Corners", .{});
         }
 
-        std.mem.rotate(u8, &pixels, @intCast(frame * 4));
+        var pixels: [4]dvui.Color.PMA = .{ .yellow, .cyan, .red, .magenta };
+        std.mem.rotate(dvui.Color.PMA, &pixels, frame);
 
         var frame_box = dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 50, .h = 50 } });
         defer frame_box.deinit();
-        if (dvui.textureCreate(.cast(&pixels), 2, 2, .nearest) catch null) |tex| {
+        if (dvui.textureCreate(.{ .pma = &pixels }, 2, 2, .nearest) catch null) |tex| {
             dvui.textureDestroyLater(tex);
             dvui.renderTexture(tex, frame_box.data().contentRectScale(), .{ .corner_radius = if (global.round_corners) dvui.Rect.all(10) else .{} }) catch {
                 dvui.log.debug("Could not render animating texture", .{});
@@ -3692,6 +4260,13 @@ fn makeLabels(src: std.builtin.SourceLocation, count: usize) void {
 
 /// ![image](Examples-debugging.png)
 pub fn debuggingErrors() void {
+    {
+        var hbox = dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+        dvui.label(@src(), "Scroll Speed", .{}, .{});
+        _ = dvui.sliderEntry(@src(), "{d:0.1}", .{ .value = &dvui.scroll_speed, .min = 0.1, .max = 50, .interval = 0.1 }, .{});
+    }
+
     _ = dvui.checkbox(@src(), &dvui.currentWindow().snap_to_pixels, "Snap to pixels", .{});
     dvui.label(@src(), "on non-hdpi screens watch the window title \"DVUI Demo\"", .{}, .{ .margin = .{ .x = 10 } });
     dvui.label(@src(), "- text, icons, and images rounded to nearest pixel", .{}, .{ .margin = .{ .x = 10 } });
@@ -3719,7 +4294,7 @@ pub fn debuggingErrors() void {
         }
 
         if (dvui.labelClick(@src(), "See https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids", .{}, .{ .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
-            dvui.openURL("https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids");
+            _ = dvui.openURL("https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids");
         }
     }
 
@@ -3900,11 +4475,11 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
 
     // we won't have the height the first frame, so always set it
     var scroll_info: ScrollInfo = .{ .vertical = .given };
-    if (dvui.dataGet(null, fwin.wd.id, "scroll_info", ScrollInfo)) |si| {
+    if (dvui.dataGet(null, fwin.data().id, "scroll_info", ScrollInfo)) |si| {
         scroll_info = si;
         scroll_info.virtual_size.h = height;
     }
-    defer dvui.dataSet(null, fwin.wd.id, "scroll_info", scroll_info);
+    defer dvui.dataSet(null, fwin.data().id, "scroll_info", scroll_info);
 
     var scroll = dvui.scrollArea(@src(), .{ .scroll_info = &scroll_info }, .{ .expand = .both });
     defer scroll.deinit();
@@ -4711,11 +5286,11 @@ pub const StrokeTest = struct {
             self.processEvent(e);
         }
 
-        self.wd.borderAndBackground(.{});
+        self.data().borderAndBackground(.{});
 
         _ = dvui.parentSet(self.widget());
 
-        const rs = self.wd.contentRectScale();
+        const rs = self.data().contentRectScale();
         const fill_color = dvui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
         for (points, 0..) |p, i| {
             const rect = dvui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
@@ -4742,26 +5317,26 @@ pub const StrokeTest = struct {
     }
 
     pub fn data(self: *Self) *dvui.WidgetData {
-        return &self.wd;
+        return self.wd.validate();
     }
 
     pub fn rectFor(self: *Self, id: dvui.WidgetId, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {
         _ = id;
-        return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+        return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
     }
 
     pub fn screenRectScale(self: *Self, rect: dvui.Rect) dvui.RectScale {
-        return self.wd.contentRectScale().rectToRectScale(rect);
+        return self.data().contentRectScale().rectToRectScale(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: dvui.Size) void {
-        self.wd.minSizeMax(self.wd.options.padSize(s));
+        self.data().minSizeMax(self.data().options.padSize(s));
     }
 
     pub fn processEvent(self: *Self, e: *dvui.Event) void {
         switch (e.evt) {
             .mouse => |me| {
-                const rs = self.wd.contentRectScale();
+                const rs = self.data().contentRectScale();
                 const mp = rs.pointFromPhysical(me.p);
                 switch (me.action) {
                     .press => {
@@ -4802,7 +5377,7 @@ pub const StrokeTest = struct {
                             const dp = dps.scale(1 / rs.s, Point);
                             points[dragi.?].x += dp.x;
                             points[dragi.?].y += dp.y;
-                            dvui.refresh(null, @src(), self.wd.id);
+                            dvui.refresh(null, @src(), self.data().id);
                         }
                     },
                     .wheel_y => |ticks| {
@@ -4811,7 +5386,7 @@ pub const StrokeTest = struct {
                         const zs = @exp(@log(base) * ticks);
                         if (zs != 1.0) {
                             thickness *= zs;
-                            dvui.refresh(null, @src(), self.wd.id);
+                            dvui.refresh(null, @src(), self.data().id);
                         }
                     },
                     else => {},
@@ -4822,10 +5397,10 @@ pub const StrokeTest = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.wd.minSizeSetAndRefresh();
-        self.wd.minSizeReportToParent();
+        self.data().minSizeSetAndRefresh();
+        self.data().minSizeReportToParent();
 
-        dvui.parentReset(self.wd.id, self.wd.parent);
+        dvui.parentReset(self.data().id, self.data().parent);
         self.* = undefined;
     }
 };
