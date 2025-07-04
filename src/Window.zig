@@ -146,8 +146,7 @@ debug_under_mouse_info: []u8 = "",
 
 debug_toggle_mutex: std.Thread.Mutex = .{},
 debug_refresh: bool = false,
-debug_handled_event: bool = false,
-debug_unhandled_events: bool = false,
+debug_events: bool = false,
 
 /// when true, left mouse button works like a finger
 debug_touch_simulate_events: bool = false,
@@ -483,26 +482,13 @@ pub fn arena(self: *Self) std.mem.Allocator {
 }
 
 /// called from any thread
-pub fn debugHandleEvents(self: *Self, val: ?bool) bool {
+pub fn debugEvents(self: *Self, val: ?bool) bool {
     self.debug_toggle_mutex.lock();
     defer self.debug_toggle_mutex.unlock();
 
-    const previous = self.debug_handled_event;
+    const previous = self.debug_events;
     if (val) |v| {
-        self.debug_handled_event = v;
-    }
-
-    return previous;
-}
-
-/// called from any thread
-pub fn debugUnhandledEvents(self: *Self, val: ?bool) bool {
-    self.debug_toggle_mutex.lock();
-    defer self.debug_toggle_mutex.unlock();
-
-    const previous = self.debug_unhandled_events;
-    if (val) |v| {
-        self.debug_unhandled_events = v;
+        self.debug_events = v;
     }
 
     return previous;
@@ -1649,14 +1635,9 @@ fn debugWindowShow(self: *Self) void {
         _ = self.debugRefresh(log_refresh);
     }
 
-    var log_event_handled = self.debugHandleEvents(null);
-    if (dvui.checkbox(@src(), &log_event_handled, "Log Handled Events", .{})) {
-        _ = self.debugHandleEvents(log_event_handled);
-    }
-
-    var log_event_unhandled = self.debugUnhandledEvents(null);
-    if (dvui.checkbox(@src(), &log_event_unhandled, "Log Unhandled Events", .{})) {
-        _ = self.debugUnhandledEvents(log_event_unhandled);
+    var log_events = self.debugEvents(null);
+    if (dvui.checkbox(@src(), &log_events, "Event Logging", .{})) {
+        _ = self.debugEvents(log_events);
     }
 
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false, .min_size_content = .height(200) });
@@ -1767,7 +1748,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         }
     }
 
-    if (self.debug_unhandled_events) {
+    if (self.debug_events) {
         for (evts) |*e| {
             if (e.handled) continue;
             var action: []const u8 = "";
