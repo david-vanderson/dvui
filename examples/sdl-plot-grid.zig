@@ -212,9 +212,7 @@ fn gui_frame() !void {
             //ui.currentWindow().debug_widget_id = dvui.focusedWidgetId() orelse .zero;
             // 3 real + 1 virtual column
             keyboard_nav.setLimits(4, pirate_data.len);
-            GridConverter.g = grid;
-            keyboard_nav.processEvents(grid.data(), GridConverter.pointToCell);
-            // maybe return the cell from processEvents?
+            keyboard_nav.processEventsCustom(grid, pointToCellConverter);
             const focused_cell = keyboard_nav.cellCursor();
 
             const style_base = CellStyle{ .opts = .{ .tab_index = null, .expand = .horizontal } };
@@ -332,22 +330,18 @@ const CellStyleNav = struct {
     }
 };
 
-const GridConverter = struct {
-    var g: *dvui.GridWidget = undefined;
-    var cell_w: f32 = 0;
-    pub fn pointToCell(p: dvui.Point.Physical) ?dvui.GridWidget.Cell {
-        var result = g.pointToCell(p);
-        if (result) |*r| {
-            if (r.col_num == 0) {
-                if (p.toNatural().x > g.colWidth(0) / 2)
-                    r.col_num += 1;
-            } else {
+pub fn pointToCellConverter(g: *dvui.GridWidget, p: dvui.Point.Physical) ?dvui.GridWidget.Cell {
+    var result = g.pointToCell(p);
+    if (result) |*r| {
+        if (r.col_num == 0) {
+            if (p.toNatural().x > g.colWidth(0) / 2)
                 r.col_num += 1;
-            }
+        } else {
+            r.col_num += 1;
         }
-        return result;
     }
-};
+    return result;
+}
 
 const PirateDatum = struct { year: f64, temperature: f64, pirates: f64 };
 

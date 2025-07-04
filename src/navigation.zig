@@ -87,8 +87,13 @@ pub const GridKeyboard = struct {
         self.enforceCursorLimits();
     }
 
+    pub fn processEvents(self: *GridKeyboard, grid: *GridWidget) void {
+        self.processEventsCustom(grid, GridWidget.pointToCell);
+    }
+
     /// Call this once per frame before the grid body cells are created.
-    pub fn processEvents(self: *GridKeyboard, wd: *WidgetData, cellConverter: fn (
+    pub fn processEventsCustom(self: *GridKeyboard, grid: *GridWidget, cellConverter: fn (
+        grid: *GridWidget,
         point: Point.Physical,
     ) ?Cell) void {
         self.enforceCursorLimits();
@@ -96,11 +101,12 @@ pub const GridKeyboard = struct {
         self.is_focused = self.last_focused_widget == dvui.focusedWidgetId() and dvui.lastFocusedIdInFrame(null) == .zero;
 
         for (dvui.events()) |*e| {
-            self.processEvent(e, wd, cellConverter);
+            self.processEvent(e, grid, cellConverter);
         }
     }
 
-    pub fn processEvent(self: *GridKeyboard, e: *Event, wd: *WidgetData, cellConverter: fn (
+    pub fn processEvent(self: *GridKeyboard, e: *Event, grid: *GridWidget, cellConverter: fn (
+        grid: *GridWidget,
         point: Point.Physical,
     ) ?Cell) void {
         defer self.enforceCursorLimits();
@@ -109,24 +115,24 @@ pub const GridKeyboard = struct {
                 if (!self.is_focused or e.handled) return;
                 if (ke.action == .down or ke.action == .repeat) {
                     if (ke.matchBind("text_start")) {
-                        e.handle(@src(), wd);
+                        e.handle(@src(), grid.data());
                         self.scrollTo(0, 0);
                         was_mouse_focus = false;
                     } else if (ke.matchBind("text_end")) {
-                        e.handle(@src(), wd);
+                        e.handle(@src(), grid.data());
                         self.scrollTo(self.num_cols - 1, self.num_rows - 1);
                         was_mouse_focus = false;
                     }
                     if (ke.matchKeyBind(self.navigation_keys.up)) {
-                        e.handle(@src(), wd);
+                        e.handle(@src(), grid.data());
                         self.cursor.row_num = if (self.cursor.row_num > 0) self.cursor.row_num - 1 else 0;
                         was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.down)) {
-                        e.handle(@src(), wd);
+                        e.handle(@src(), grid.data());
                         self.cursor.row_num += 1;
                         was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.left)) {
-                        e.handle(@src(), wd);
+                        e.handle(@src(), grid.data());
                         was_mouse_focus = false;
                         if (self.tab_out and self.cursor.eq(0, 0)) {
                             std.debug.print("tabbing out\n", .{});
@@ -141,7 +147,7 @@ pub const GridKeyboard = struct {
                             }
                         }
                     } else if (ke.matchKeyBind(self.navigation_keys.right)) {
-                        e.handle(@src(), wd);
+                        e.handle(@src(), grid.data());
                         was_mouse_focus = false;
                         if (self.tab_out and self.cursor.col_num == self.num_cols - 1 and self.cursor.row_num == self.num_rows - 1) {
                             std.debug.print("tabbing out\n", .{});
@@ -163,7 +169,7 @@ pub const GridKeyboard = struct {
                 if (me.action == .focus) {
                     // pointToRowCol will return null if the mouse focus event
                     // is outside the grid.
-                    const focused_cell = cellConverter(me.p);
+                    const focused_cell = cellConverter(grid, me.p);
                     if (focused_cell) |cell| {
                         self.cursor.col_num = cell.col_num;
                         self.cursor.row_num = cell.row_num;
