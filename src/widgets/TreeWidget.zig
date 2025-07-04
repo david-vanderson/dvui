@@ -87,7 +87,7 @@ pub fn processEvent(self: *TreeWidget, e: *dvui.Event) void {
             .mouse => |me| {
                 if ((me.action == .press or me.action == .release) and me.button.pointer()) {
                     self.drag_ending = true;
-                    dvui.captureMouse(null);
+                    dvui.captureMouse(null, e.num);
                     dvui.dragEnd();
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (me.action == .motion) {
@@ -137,7 +137,7 @@ pub fn deinit(self: *TreeWidget) void {
 pub fn dragStart(self: *TreeWidget, branch_id: usize, p: dvui.Point.Physical) void {
     self.id_branch = branch_id;
     self.drag_point = p;
-    dvui.captureMouse(self.data());
+    dvui.captureMouse(self.data(), 0);
 }
 
 pub fn branch(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: Branch.InitOptions, opts: Options) *Branch {
@@ -289,7 +289,7 @@ pub const Branch = struct {
                 .mouse => |me| {
                     if (me.action == .press and me.button.pointer()) {
                         e.handle(@src(), self.button.data());
-                        dvui.captureMouse(self.button.data());
+                        dvui.captureMouse(self.button.data(), e.num);
                         const top_left = self.button.wd.rectScale().r.topLeft();
                         dvui.dragPreStart(me.p, .{ .offset = top_left });
                     } else if (me.action == .motion) {
