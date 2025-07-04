@@ -1418,7 +1418,7 @@ pub fn focusedWidgetIdInCurrentSubwindow() ?WidgetId {
 
 /// Last widget id we saw this frame that was the focused widget.
 ///
-/// Pass result to `lastFocusedIdInFrameFrom` to know if any widget was focused
+/// Pass result to `lastFocusedIdInFrameSince` to know if any widget was focused
 /// between the two calls.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
@@ -1438,7 +1438,7 @@ pub fn lastFocusedIdInFrame() WidgetId {
 /// events the focused widget got but didn't handle.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn lastFocusedIdInFrameFrom(prev: WidgetId) ?WidgetId {
+pub fn lastFocusedIdInFrameSince(prev: WidgetId) ?WidgetId {
     const last_focused_id = lastFocusedIdInFrame();
     if (prev != last_focused_id) {
         return last_focused_id;

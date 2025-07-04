@@ -200,7 +200,7 @@ pub fn processEvent(self: *MenuWidget, e: *Event) void {
 }
 
 pub fn processEventsAfter(self: *MenuWidget) void {
-    const focus_id = dvui.lastFocusedIdInFrameFrom(self.last_focus);
+    const focus_id = dvui.lastFocusedIdInFrameSince(self.last_focus);
 
     const evts = dvui.events();
     for (evts) |*e| {
