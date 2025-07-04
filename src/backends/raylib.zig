@@ -875,7 +875,7 @@ pub fn main() !void {
 
     if (builtin.os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
-        try dvui.Backend.Common.windowsAttachConsole();
+        dvui.Backend.Common.windowsAttachConsole() catch {};
     }
 
     var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};

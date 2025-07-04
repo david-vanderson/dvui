@@ -1535,7 +1535,7 @@ fn convertVKeyToDvuiKey(vkey: win32.VIRTUAL_KEY) dvui.enums.Key {
 }
 
 pub fn main() !void {
-    try dvui.Backend.Common.windowsAttachConsole();
+    dvui.Backend.Common.windowsAttachConsole() catch {};
 
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
