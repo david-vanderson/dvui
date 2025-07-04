@@ -417,9 +417,6 @@ pub fn demo() void {
                 scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
                 invalidate = true;
             }
-
-            _ = dvui.sliderEntry(@src(), "scroll {d:0.1}", .{ .value = &dvui.scroll_speed, .min = 0.1, .max = 50, .interval = 0.1 }, .{ .gravity_y = 0.5 });
-
         }
 
         var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .background = true, .min_size_content = .width(width), .corner_radius = .{ .w = 5, .h = 5 } });
@@ -749,7 +746,7 @@ pub fn basicWidgets() void {
             if (slider_entry_label) {
                 const whole = @round(slider_entry_val);
                 const part = @round((slider_entry_val - whole) * 100);
-                custom_label = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d} and {d}p", .{whole, part}) catch null;
+                custom_label = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d} and {d}p", .{ whole, part }) catch null;
             }
             defer if (custom_label) |cl| dvui.currentWindow().lifo().free(cl);
             _ = dvui.sliderEntry(@src(), "val: {d:0.3}", .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null), .label = custom_label }, .{ .gravity_y = 0.5 });
@@ -4257,6 +4254,13 @@ fn makeLabels(src: std.builtin.SourceLocation, count: usize) void {
 
 /// ![image](Examples-debugging.png)
 pub fn debuggingErrors() void {
+    {
+        var hbox = dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+        dvui.label(@src(), "Scroll Speed", .{}, .{});
+        _ = dvui.sliderEntry(@src(), "{d:0.1}", .{ .value = &dvui.scroll_speed, .min = 0.1, .max = 50, .interval = 0.1 }, .{});
+    }
+
     _ = dvui.checkbox(@src(), &dvui.currentWindow().snap_to_pixels, "Snap to pixels", .{});
     dvui.label(@src(), "on non-hdpi screens watch the window title \"DVUI Demo\"", .{}, .{ .margin = .{ .x = 10 } });
     dvui.label(@src(), "- text, icons, and images rounded to nearest pixel", .{}, .{ .margin = .{ .x = 10 } });
