@@ -1302,13 +1302,6 @@ pub fn focusSubwindow(subwindow_id: ?WidgetId, event_num: ?u16) void {
     currentWindow().focusSubwindowInternal(subwindow_id, event_num);
 }
 
-/// Helper used by `focusWidget`.  Overwrites the focus information for `Event`s with num >
-/// `event_num`.  This is how a button can get a tab, move focus to a textEntry,
-/// and that textEntry get a keydown all in the same frame.
-pub fn focusRemainingEvents(event_num: u16, focusWindowId: WidgetId, focusWidgetId: ?WidgetId) void {
-    currentWindow().focusRemainingEventsInternal(event_num, focusWindowId, focusWidgetId, .keyboard_and_text);
-}
-
 /// Raise a subwindow to the top of the stack.
 ///
 /// Any subwindows directly above it with "stay_above_parent_window" set will also be moved to stay above it.
@@ -1366,7 +1359,7 @@ pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void
             if (sw.focused_widgetId != id) {
                 sw.focused_widgetId = id;
                 if (event_num) |en| {
-                    focusRemainingEvents(en, sw.id, sw.focused_widgetId);
+                    cw.focusEventsInternal(en, sw.id, sw.focused_widgetId);
                 }
                 refresh(null, @src(), null);
 
@@ -2471,14 +2464,14 @@ pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
     if (cm) |capture| {
         // log.debug("Mouse capture (event {d}): {any}", .{ event_num, cm });
         cw.captured_last_frame = true;
-        cw.focusRemainingEventsInternal(event_num, capture.subwindow_id, capture.id, .mouse_only);
+        cw.captureEventsInternal(event_num, capture.id);
     } else {
         // Unmark all following mouse events
-        cw.focusRemainingEventsInternal(event_num, null, null, .mouse_only);
+        cw.captureEventsInternal(event_num, null);
         // log.debug("Mouse uncapture (event {d}): {?any}", .{ event_num, cw.capture });
         // for (dvui.events()) |*e| {
         //     if (e.evt == .mouse) {
-        //         log.debug("{s}: win {?x}, widget {?x}", .{ @tagName(e.evt.mouse.action), e.focus_windowId, e.focus_widgetId });
+        //         log.debug("{s}: win {?x}, widget {?x}", .{ @tagName(e.evt.mouse.action), e.target_windowId, e.target_widgetId });
         //     }
         // }
     }
@@ -3185,7 +3178,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
 
     switch (e.evt) {
         .key, .text => {
-            if (e.focus_windowId) |wid| {
+            if (e.target_windowId) |wid| {
                 // focusable event
                 if (opts.cleanup) {
                     // window is catching all focus-routed events that didn't get
@@ -3195,7 +3188,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                         return false;
                     }
                 } else {
-                    if (e.focus_widgetId != opts.id and e.focus_widgetId != opts.focus_id) {
+                    if (e.target_widgetId != opts.id and e.target_widgetId != opts.focus_id) {
                         // not the focused widget
                         return false;
                     }
@@ -3204,7 +3197,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
         },
         .mouse => |me| {
             var other_capture = false;
-            if (e.focus_widgetId) |fwid| {
+            if (e.target_widgetId) |fwid| {
                 // this event is during a mouse capture
                 if (fwid == opts.id) {
                     // we have capture, we get all capturable mouse events (excludes wheel)
@@ -3237,7 +3230,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                 if (captureMouseGet()) |capture| {
                     // someone else has capture, but otherwise we would have gotten
                     // this mouse event
-                    if (me.action == .position and e.focus_windowId.? == subwindowCurrentId() and !capture.rect.intersect(opts.r).empty()) {
+                    if (me.action == .position and capture.subwindow_id == subwindowCurrentId() and !capture.rect.intersect(opts.r).empty()) {
                         // we might be trying to highlight a background around the widget with capture:
                         // * we are in the same subwindow
                         // * our rect overlaps with the capture rect
