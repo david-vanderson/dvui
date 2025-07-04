@@ -271,10 +271,11 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
                 return true;
             }
 
-            // Set the end index to and invalid state so the next allocation is guaranteed to
-            // create a new buffer. If it wouldn't create a new buffer, an ArrayList that is
-            // remapping would free it's previous buffer and freeLIFO would log an error
-            self.arena.state.end_index = std.math.maxInt(usize) / 4;
+            // Pretend to have allocated memory to the new_len, which should guarantee
+            // the allocation of a new buffer on the next call to alloc. If it wouldn't
+            // create a new buffer, an ArrayList that is remapping would free it's
+            // previous buffer and freeLIFO would log an error
+            self.arena.state.end_index += new_len;
             return false;
         }
     };
