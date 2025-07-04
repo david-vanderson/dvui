@@ -7,8 +7,12 @@ const Event = @This();
 
 /// Should not be set directly, use the `handle` method
 handled: bool = false,
-focus_windowId: ?dvui.WidgetId = null,
-focus_widgetId: ?dvui.WidgetId = null,
+
+/// For key events these represents focus. For mouse events widgetId represents
+/// capture, windowId unused.
+target_windowId: ?dvui.WidgetId = null,
+target_widgetId: ?dvui.WidgetId = null,
+
 // num increments within a frame, used in focusRemainingEvents
 num: u16 = 0,
 evt: union(enum) {
@@ -33,14 +37,6 @@ pub fn handle(self: *Event, src: std.builtin.SourceLocation, wd: *const dvui.Wid
         dvui.log.debug("{s}:{d} {s} {s} event (num {d}) handled by {s} ({x})", .{ src.file, src.line, @tagName(self.evt), action, self.num, wd.options.name orelse "???", wd.id });
     }
     self.handled = true;
-}
-
-pub fn focusable(self: *const Event) bool {
-    return switch (self.evt) {
-        // Only wheel events cannot be focused/captured
-        .mouse => |me| me.action != .wheel_x and me.action != .wheel_y,
-        else => true,
-    };
 }
 
 pub const Text = struct {
