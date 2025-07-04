@@ -789,7 +789,7 @@ pub const FontCacheEntry = struct {
             }
         }
 
-        fce.texture_atlas_cache = try textureCreate(.{ .pma = pixels }, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
+        fce.texture_atlas_cache = try textureCreate(pixels, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
         return fce.texture_atlas_cache.?;
     }
 
@@ -1090,11 +1090,12 @@ pub const TextureTarget = struct {
 pub const TextureCacheEntry = struct {
     texture: Texture,
 
-    fn hashImageBytes(bytes: []const u8) u64 {
+    fn hashImagePtr(bytes: []const u8) u64 {
         var h = fnv.init();
         h.update(std.mem.asBytes(&bytes.ptr));
         return h.final();
     }
+
     fn hashIcon(bytes: []const u8, height: u32, opt: IconRenderOptions) u64 {
         var h = fnv.init();
         h.update(std.mem.asBytes(&bytes.ptr));
@@ -1102,29 +1103,12 @@ pub const TextureCacheEntry = struct {
         h.update(std.mem.asBytes(&opt));
         return h.final();
     }
-    /// only valid between window.begin and window.end
-    pub fn invalidateCachedImage(image_bytes: ImageInitOptions.ImageBytes) void {
-        var cw = dvui.currentWindow();
-        switch (image_bytes) {
-            .imageFile => |b| {
-                const h = dvui.TextureCacheEntry.hashImageBytes(b);
-                if (cw.texture_cache.fetchRemove(h)) |ice| {
-                    textureDestroyLater(ice.value.texture);
-                }
-            },
-            .pixels => |p| {
-                const h = dvui.TextureCacheEntry.hashImageBytes(@ptrCast(p.bytes.pma));
-                if (cw.texture_cache.fetchRemove(h)) |ice| {
-                    textureDestroyLater(ice.value.texture);
-                }
-            },
-        }
-    }
 
     pub fn fromImageFile(name: []const u8, image_bytes: []const u8, interpolation: enums.TextureInterpolation) (Backend.TextureError || StbImageError)!TextureCacheEntry {
         var cw = currentWindow();
-        const tex_hash = TextureCacheEntry.hashImageBytes(image_bytes);
+        const tex_hash = TextureCacheEntry.hashImagePtr(image_bytes);
         if (cw.texture_cache.get(tex_hash)) |tce| return tce;
+        //std.debug.print("regenerating texture for imageFile\n", .{});
         var w: c_int = undefined;
         var h: c_int = undefined;
         var channels_in_file: c_int = undefined;
@@ -1135,22 +1119,24 @@ pub const TextureCacheEntry = struct {
         }
         defer c.stbi_image_free(data);
 
-        const texture = try textureCreate(.fromRGBA(data[0..@intCast(w * h * @sizeOf(Color.PMA))]), @intCast(w), @intCast(h), interpolation);
+        const texture = try textureCreate(Color.PMA.sliceFromRGBA(data[0..@intCast(w * h * @sizeOf(Color.PMA))]), @intCast(w), @intCast(h), interpolation);
 
         const entry = TextureCacheEntry{ .texture = texture };
         try cw.texture_cache.put(cw.gpa, tex_hash, entry);
         return entry;
     }
 
-    pub fn fromPixels(pma: dvui.RGBAPixelsPMA, width: u32, height: u32, interpolation: enums.TextureInterpolation) Backend.TextureError!dvui.TextureCacheEntry {
+    pub fn fromPixelsPMA(pma: []dvui.Color.PMA, width: u32, height: u32, interpolation: enums.TextureInterpolation) Backend.TextureError!dvui.TextureCacheEntry {
         var cw = dvui.currentWindow();
-        const tex_hash = dvui.TextureCacheEntry.hashImageBytes(@ptrCast(pma.pma));
+        const tex_hash = dvui.TextureCacheEntry.hashImagePtr(@ptrCast(pma));
         if (cw.texture_cache.getPtr(tex_hash)) |tce| return tce.*;
+        //std.debug.print("regenerating texture for pixelsPMA\n", .{});
         const texture = try dvui.textureCreate(pma, width, height, interpolation);
         const entry = dvui.TextureCacheEntry{ .texture = texture };
         try cw.texture_cache.put(cw.gpa, tex_hash, entry);
         return entry;
     }
+
     /// Render `tvg_bytes` at `height` into a `Texture`.  Name is for debugging.
     ///
     /// Only valid between `Window.begin`and `Window.end`.
@@ -1211,8 +1197,7 @@ pub const TextureCacheEntry = struct {
             log.warn("iconTexture Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, height });
             return TvgError.tvgError;
         };
-        const pixels = dvui.RGBAPixelsPMA.cast(img.pixels);
-        const texture = try textureCreate(pixels, @intCast(img.width), @intCast(img.height), .linear);
+        const texture = try textureCreate(@ptrCast(img.pixels), @intCast(img.width), @intCast(img.height), .linear);
         const entry = TextureCacheEntry{ .texture = texture };
         try cw.texture_cache.put(cw.gpa, icon_hash, entry);
         return entry;
@@ -5381,8 +5366,64 @@ pub fn icon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []cons
     iw.deinit();
 }
 
-pub fn imageSize(name: []const u8, bytes: ImageInitOptions.ImageBytes) !Size {
-    switch (bytes) {
+/// Source data for `image()` and `imageSize()`.
+pub const ImageSource = struct {
+    bytes: union(enum) {
+        /// bytes of an supported image file (i.e. png, jpeg, gif, ...)
+        imageFile: []const u8,
+
+        /// bytes of an premultiplied rgba u8 array in row major order
+        pixelsPMA: struct {
+            rgba: []Color.PMA,
+            width: u32,
+            height: u32,
+        },
+
+        /// bytes of a non premultiplied rgba u8 array in row major order, will
+        /// be converted to premultiplied when making a texture
+        pixels: struct {
+            rgba: []Color,
+            width: u32,
+            height: u32,
+        },
+    },
+
+    interpolation: enums.TextureInterpolation = .linear,
+
+    /// Used for debugging output.
+    name: []const u8 = "image",
+
+    /// Ensures next time `image()` is called a new texture will be generated.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn invalidateTexture(self: *const ImageSource) void {
+        var cw = dvui.currentWindow();
+        switch (self.bytes) {
+            .imageFile => |b| {
+                const h = dvui.TextureCacheEntry.hashImagePtr(b);
+                if (cw.texture_cache.fetchRemove(h)) |ice| {
+                    textureDestroyLater(ice.value.texture);
+                }
+            },
+            .pixelsPMA => |p| {
+                const h = dvui.TextureCacheEntry.hashImagePtr(@ptrCast(p.rgba));
+                if (cw.texture_cache.fetchRemove(h)) |ice| {
+                    textureDestroyLater(ice.value.texture);
+                }
+            },
+            .pixels => |p| {
+                const h = dvui.TextureCacheEntry.hashImagePtr(@ptrCast(p.rgba));
+                if (cw.texture_cache.fetchRemove(h)) |ice| {
+                    textureDestroyLater(ice.value.texture);
+                }
+            },
+        }
+    }
+};
+
+/// Get Size
+pub fn imageSize(source: ImageSource) !Size {
+    switch (source.bytes) {
         .imageFile => |b| {
             var w: c_int = undefined;
             var h: c_int = undefined;
@@ -5391,35 +5432,18 @@ pub fn imageSize(name: []const u8, bytes: ImageInitOptions.ImageBytes) !Size {
             if (ok == 1) {
                 return .{ .w = @floatFromInt(w), .h = @floatFromInt(h) };
             } else {
-                log.warn("imageSize stbi_info error on image \"{s}\": {s}\n", .{ name, c.stbi_failure_reason() });
+                log.warn("imageSize stbi_info error on image \"{s}\": {s}\n", .{ source.name, c.stbi_failure_reason() });
                 return StbImageError.stbImageError;
             }
         },
+        .pixelsPMA => |a| return .{ .w = @floatFromInt(a.width), .h = @floatFromInt(a.height) },
         .pixels => |a| return .{ .w = @floatFromInt(a.width), .h = @floatFromInt(a.height) },
     }
 }
 
 pub const ImageInitOptions = struct {
-    pub const ImageType = enum {
-        /// bytes of an supported image file (i.e. png, jpeg, gif, ...)
-        imageFile,
-        /// bytes of an premultiplied rgba u8 array in row major order
-        pixels,
-    };
-    pub const PixelBytes = struct {
-        bytes: RGBAPixelsPMA,
-        width: u32,
-        height: u32,
-    };
-    pub const ImageBytes = union(ImageType) {
-        imageFile: []const u8,
-        pixels: PixelBytes,
-    };
-    /// Used for debugging output.
-    name: []const u8 = "image",
-
-    /// Bytes of the image file.
-    bytes: ImageBytes,
+    /// Data to create the texture.
+    source: ImageSource,
 
     /// If min size is larger than the rect we got, how to shrink it:
     /// - null => use expand setting
@@ -5430,8 +5454,6 @@ pub const ImageInitOptions = struct {
     /// - ratio => fit in rect maintaining aspect ratio
     shrink: ?Options.Expand = null,
 
-    interpolation: enums.TextureInterpolation = .linear,
-
     uv: Rect = .{ .w = 1, .h = 1 },
 };
 
@@ -5439,7 +5461,7 @@ pub const ImageInitOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts: Options) WidgetData {
-    const options = (Options{ .name = init_opts.name }).override(opts);
+    const options = (Options{ .name = init_opts.source.name }).override(opts);
 
     var size = Size{};
     if (options.min_size_content) |msc| {
@@ -5447,7 +5469,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
         size = msc;
     } else {
         // user didn't give us one, use natural size
-        size = dvui.imageSize(init_opts.name, init_opts.bytes) catch .{ .w = 10, .h = 10 };
+        size = dvui.imageSize(init_opts.source) catch .{ .w = 10, .h = 10 };
     }
 
     var wd = WidgetData.init(src, .{}, options.override(.{ .min_size_content = size }));
@@ -5500,7 +5522,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
         .background_color = renderBackground,
     };
     const content_rs = wd.contentRectScale();
-    renderImage(init_opts.name, init_opts.bytes, content_rs, render_tex_opts, init_opts.interpolation) catch |err| logError(@src(), err, "Could not render image {s} at {}", .{ init_opts.name, content_rs });
+    renderImage(init_opts.source, content_rs, render_tex_opts) catch |err| logError(@src(), err, "Could not render image {s} at {}", .{ init_opts.source.name, content_rs });
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
 
@@ -6952,57 +6974,16 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     try renderTriangles(builder.build_unowned(), texture_atlas);
 }
 
-/// Holds a slice of premultiplied alpha (PMA) RGBA pixels
-///
-/// To convert non PMA pixels, use `RGBAPixelsPMA.fromRGBA`
-pub const RGBAPixelsPMA = struct {
-    pma: []Color.PMA,
-
-    /// Alpha multiplies `pixels` in place
-    pub fn fromRGBA(pixels: []u8) RGBAPixelsPMA {
-        for (0..pixels.len / 4) |ii| {
-            const i = ii * 4;
-            const a = pixels[i + 3];
-            pixels[i + 0] = @intCast(@divTrunc(@as(u16, pixels[i + 0]) * a, 255));
-            pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * a, 255));
-            pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * a, 255));
-        }
-        return .{ .pma = @ptrCast(pixels) };
-    }
-
-    /// Unapplies the alpha multiplication in place, returning the inner slice
-    pub fn toRGBA(pma_pixels: RGBAPixelsPMA) []u8 {
-        var pixels: []u8 = @ptrCast(pma_pixels.pma);
-        for (0..pixels.len / 4) |ii| {
-            const i = ii * 4;
-            const a = pixels[i + 3];
-            if (a == 0) continue;
-            pixels[i + 0] = @intCast(@divTrunc(@as(u16, pixels[i + 0]) * 255, a));
-            pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * 255, a));
-            pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * 255, a));
-        }
-        return pixels;
-    }
-
-    /// Should only be used where it is guaranteed that the pixels are already
-    /// alpha multiplied or have no transparency
-    ///
-    /// Does no modifications of the pixels
-    pub fn cast(pixels: []u8) RGBAPixelsPMA {
-        return .{ .pma = @ptrCast(pixels) };
-    }
-};
-
 /// Create a texture that can be rendered with `renderTexture`.
 ///
 /// Remember to destroy the texture at some point, see `textureDestroyLater`.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn textureCreate(pixels: RGBAPixelsPMA, width: u32, height: u32, interpolation: enums.TextureInterpolation) Backend.TextureError!Texture {
-    if (pixels.pma.len != width * height) {
-        log.err("Texture was created with an incorrect amount of pixels, expected {d} but got {d} (w: {d}, h: {d})", .{ pixels.pma.len, width * height, width, height });
+pub fn textureCreate(pixels: []const Color.PMA, width: u32, height: u32, interpolation: enums.TextureInterpolation) Backend.TextureError!Texture {
+    if (pixels.len != width * height) {
+        log.err("Texture was created with an incorrect amount of pixels, expected {d} but got {d} (w: {d}, h: {d})", .{ pixels.len, width * height, width, height });
     }
-    return currentWindow().backend.textureCreate(@ptrCast(pixels.pma.ptr), width, height, interpolation);
+    return currentWindow().backend.textureCreate(@ptrCast(pixels.ptr), width, height, interpolation);
 }
 
 /// Create a texture that can be rendered with `renderTexture` and drawn to
@@ -7020,14 +7001,14 @@ pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.Texture
 /// Returns pixels allocated by arena.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn textureReadTarget(arena: std.mem.Allocator, texture: TextureTarget) Backend.TextureError!RGBAPixelsPMA {
+pub fn textureReadTarget(arena: std.mem.Allocator, texture: TextureTarget) Backend.TextureError![]Color.PMA {
     const size: usize = texture.width * texture.height * @sizeOf(Color.PMA);
     const pixels = try arena.alloc(u8, size);
     errdefer arena.free(pixels);
 
     try currentWindow().backend.textureReadTarget(texture, pixels.ptr);
 
-    return .{ .pma = @ptrCast(pixels) };
+    return @ptrCast(pixels);
 }
 
 /// Convert a target texture to a normal texture.  target is destroyed.
@@ -7137,12 +7118,29 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     try renderTexture(tce.texture, rs, opts);
 }
 
-pub fn renderImage(name: []const u8, bytes: ImageInitOptions.ImageBytes, rs: RectScale, opts: RenderTextureOptions, interpolation: enums.TextureInterpolation) Backend.GenericError!void {
+pub fn renderImage(source: ImageSource, rs: RectScale, opts: RenderTextureOptions) Backend.GenericError!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
-    const cached_tex = switch (bytes) {
-        .imageFile => |b| dvui.TextureCacheEntry.fromImageFile(name, b, interpolation),
-        .pixels => |p| dvui.TextureCacheEntry.fromPixels(p.bytes, p.width, p.height, interpolation),
+    const cached_tex = switch (source.bytes) {
+        .imageFile => |b| dvui.TextureCacheEntry.fromImageFile(source.name, b, source.interpolation),
+        .pixelsPMA => |p| dvui.TextureCacheEntry.fromPixelsPMA(p.rgba, p.width, p.height, source.interpolation),
+        .pixels => |p| blk: {
+            var cw = dvui.currentWindow();
+            const tex_hash = dvui.TextureCacheEntry.hashImagePtr(@ptrCast(p.rgba));
+            if (cw.texture_cache.getPtr(tex_hash)) |tce| break :blk tce.*;
+
+            //std.debug.print("regenerating texture for pixels\n", .{});
+            const copy = currentWindow().lifo().dupe(Color, p.rgba) catch |err| {
+                log.err("renderImage got {!} for {s}, skipping", .{ err, source.name });
+                return;
+            };
+            defer currentWindow().lifo().free(copy);
+
+            const texture = dvui.textureCreate(Color.PMA.sliceFromRGBA(@ptrCast(copy)), p.width, p.height, source.interpolation) catch |err| break :blk err;
+            const entry = dvui.TextureCacheEntry{ .texture = texture };
+            try cw.texture_cache.put(cw.gpa, tex_hash, entry);
+            break :blk entry;
+        },
     };
     const tce = cached_tex catch return;
     try renderTexture(tce.texture, rs, opts);
@@ -7195,7 +7193,7 @@ pub const Picture = struct {
     /// Encode texture as png.  Call after `stop` before `deinit`.
     pub fn png(self: *Picture, allocator: std.mem.Allocator) Backend.TextureError![]u8 {
         const pma_pixels = try dvui.textureReadTarget(allocator, self.texture);
-        const pixels = pma_pixels.toRGBA();
+        const pixels = Color.PMA.sliceToRGBA(pma_pixels);
         defer allocator.free(pixels);
 
         return try dvui.pngEncode(allocator, pixels, self.texture.width, self.texture.height, .{});

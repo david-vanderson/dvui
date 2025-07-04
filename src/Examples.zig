@@ -775,8 +775,8 @@ pub fn basicWidgets() void {
 
         dvui.label(@src(), "Raster Images", .{}, .{ .gravity_y = 0.5 });
 
-        const imgsize = dvui.imageSize("zig favicon", .{ .imageFile = zig_favicon }) catch dvui.Size.all(50);
-        _ = dvui.image(@src(), .{ .name = "zig favicon", .bytes = .{ .imageFile = zig_favicon } }, .{
+        const imgsize = dvui.imageSize(.{ .bytes = .{ .imageFile = zig_favicon } }) catch dvui.Size.all(50);
+        _ = dvui.image(@src(), .{ .source = .{ .name = "zig favicon", .bytes = .{ .imageFile = zig_favicon } } }, .{
             .gravity_y = 0.5,
             .min_size_content = .{ .w = imgsize.w + icon_image_size_extra, .h = imgsize.h + icon_image_size_extra },
             .rotation = icon_image_rotation,
@@ -944,7 +944,7 @@ pub fn dropdownAdvanced() void {
 
             var opts: Options = if (mi.show_active) dvui.themeGet().style_accent else .{};
 
-            _ = dvui.image(@src(), .{ .name = "zig favicon", .bytes = .{ .imageFile = zig_favicon } }, opts.override(.{ .gravity_x = 0.5 }));
+            _ = dvui.image(@src(), .{ .source = .{ .name = "zig favicon", .bytes = .{ .imageFile = zig_favicon } } }, opts.override(.{ .gravity_x = 0.5 }));
             dvui.labelNoFmt(@src(), "image above text", .{}, opts.override(.{ .gravity_x = 0.5, .padding = .{} }));
 
             if (mi.activeRect()) |_| {
@@ -1674,7 +1674,7 @@ pub fn layout() void {
 
             const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation, .corner_radius = layout_corner_radius };
             if (Static.img) {
-                _ = dvui.image(@src(), .{ .name = "zig favicon", .bytes = .{ .imageFile = zig_favicon }, .shrink = if (Static.shrink) Static.shrinkE else null, .uv = Static.uv }, options.override(.{
+                _ = dvui.image(@src(), .{ .source = .{ .name = "zig favicon", .bytes = .{ .imageFile = zig_favicon } }, .shrink = if (Static.shrink) Static.shrinkE else null, .uv = Static.uv }, options.override(.{
                     .min_size_content = Static.size,
                     .background = Static.background,
                     .color_fill = .{ .color = dvui.themeGet().color_text },
@@ -4206,9 +4206,15 @@ pub fn animations() void {
         var box = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
         defer box.deinit();
 
+        const pixels = dvui.dataGetPtrDefault(null, box.data().id, "pixels", [4]dvui.Color.PMA, .{ .yellow, .cyan, .red, .magenta });
+        const image_source: dvui.ImageSource = .{ .bytes = .{ .pixelsPMA = .{ .rgba = pixels, .width = 2, .height = 2 } }, .interpolation = .nearest };
+
         // example of how to run frames at a certain fps
         const millis_per_frame = 500;
         if (dvui.timerDoneOrNone(box.data().id)) {
+            std.mem.rotate(dvui.Color.PMA, pixels, 1);
+            image_source.invalidateTexture();
+
             const millis = @divFloor(dvui.frameTimeNS(), 1_000_000);
             const left = @as(i32, @intCast(@rem(millis, millis_per_frame)));
             const wait = 1000 * (millis_per_frame - left);
@@ -4227,21 +4233,13 @@ pub fn animations() void {
             defer hbox.deinit();
             dvui.label(@src(), "frame: {d}", .{frame}, .{});
             _ = dvui.checkbox(@src(), &global.round_corners, "Round Corners", .{});
+            //dvui.label(@src(), "num textures: {d}", .{dvui.backend.num_textures}, .{});
         }
-
-        var pixels: [4]dvui.Color.PMA = .{ .yellow, .cyan, .red, .magenta };
-        std.mem.rotate(dvui.Color.PMA, &pixels, frame);
 
         var frame_box = dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 50, .h = 50 } });
         defer frame_box.deinit();
-        if (dvui.textureCreate(.{ .pma = &pixels }, 2, 2, .nearest) catch null) |tex| {
-            dvui.textureDestroyLater(tex);
-            dvui.renderTexture(tex, frame_box.data().contentRectScale(), .{ .corner_radius = if (global.round_corners) dvui.Rect.all(10) else .{} }) catch {
-                dvui.log.debug("Could not render animating texture", .{});
-            };
-        } else {
-            dvui.log.debug("Could not create animating texture frame", .{});
-        }
+
+        _ = dvui.image(@src(), .{ .source = image_source }, .{ .expand = .both, .corner_radius = if (global.round_corners) dvui.Rect.all(10) else .{} });
     }
 }
 
