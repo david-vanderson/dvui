@@ -1108,11 +1108,15 @@ pub const TextureCacheEntry = struct {
         switch (image_bytes) {
             .imageFile => |b| {
                 const h = dvui.TextureCacheEntry.hashImageBytes(b);
-                _ = cw.texture_cache.remove(h);
+                if (cw.texture_cache.fetchRemove(h)) |ice| {
+                    textureDestroyLater(ice.value.texture);
+                }
             },
             .pixels => |p| {
                 const h = dvui.TextureCacheEntry.hashImageBytes(@ptrCast(p.bytes.pma));
-                _ = cw.texture_cache.remove(h);
+                if (cw.texture_cache.fetchRemove(h)) |ice| {
+                    textureDestroyLater(ice.value.texture);
+                }
             },
         }
     }
