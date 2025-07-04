@@ -265,20 +265,20 @@ test "menuItem click sets last_focused_id_this_frame" {
     defer t.deinit();
 
     const fns = struct {
-        var last_focused_id_set: dvui.WidgetId = .zero;
+        var last_focused_id_set: ?dvui.WidgetId = null;
 
         fn frame() !dvui.App.Result {
             var m = dvui.menu(@src(), .vertical, .{ .padding = .all(10), .tag = "menu" });
             defer m.deinit();
 
-            const last_focused = dvui.lastFocusedIdInFrame(null);
+            const last_focused = dvui.lastFocusedIdInFrame();
 
             if (dvui.menuItemLabel(@src(), "item 1", .{}, .{ .tag = "item 1" })) |_| {
                 dvui.focusWidget(m.data().id, null, null);
             }
             _ = dvui.menuItemLabel(@src(), "item 2", .{}, .{ .tag = "item 2" });
 
-            last_focused_id_set = dvui.lastFocusedIdInFrame(last_focused);
+            last_focused_id_set = dvui.lastFocusedIdInFrameFrom(last_focused);
 
             return .ok;
         }
