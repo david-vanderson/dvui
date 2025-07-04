@@ -242,8 +242,8 @@ pub fn install(self: *FloatingWindowWidget) void {
 
     dvui.parentSet(self.widget());
     self.prev_windowInfo = dvui.subwindowCurrentSet(self.data().id, .cast(self.data().rect));
-    // prevents parents from processing key events if focus is inside the floating window:w
-    self.prev_last_focus = dvui.lastFocusedIdInFrame(null);
+    // prevents parents from processing key events if focus is inside the floating window
+    self.prev_last_focus = dvui.lastFocusedIdInFrame();
 
     // reset clip to whole OS window
     // - if modal fade everything below us

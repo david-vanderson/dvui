@@ -69,7 +69,7 @@ pub fn init(src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, init_o
         .wd = WidgetData.init(src, .{}, options),
         .si = io_scroll_info,
         .init_opts = init_options,
-        .last_focus = dvui.lastFocusedIdInFrame(null),
+        .last_focus = dvui.lastFocusedIdInFrame(),
     };
 
     if (dvui.dataGet(null, self.data().id, "_finger_down", bool)) |down| self.finger_down = down;
@@ -456,7 +456,7 @@ pub fn processMotionScroll(self: *ScrollContainerWidget, motion: dvui.Point.Phys
 }
 
 pub fn processEventsAfter(self: *ScrollContainerWidget) void {
-    const focus_id = dvui.lastFocusedIdInFrame(self.last_focus);
+    const focus_id = dvui.lastFocusedIdInFrameFrom(self.last_focus);
 
     const evts = dvui.events();
     for (evts) |*e| {
