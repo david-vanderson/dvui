@@ -2261,7 +2261,9 @@ pub fn reorderListsAdvanced() void {
     defer vbox.deinit();
 
     if (added_idx) |ai| {
-        // FIXME: What events should/shouldn't be marked by this?
+        // marking all events for capture, this will only be a problem if some
+        // mouse events (in the same frame) came before this drag, and would
+        // have interacted with a widget that hasn't run yet
         reorder.dragStart(ai, added_idx_p.?, 0); // reorder grabs capture
     }
 
@@ -2305,7 +2307,9 @@ pub fn reorderListsAdvanced() void {
         dvui.label(@src(), "{s}", .{s}, .{});
 
         if (dvui.ReorderWidget.draggable(@src(), .{ .top_left = reorderable.wd.rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
-            // FIXME: What events should/shouldn't be marked by this?
+            // marking all events for capture, this will only be a problem if some
+            // mouse events (in the same frame) came before this drag, and would
+            // have interacted with a widget that hasn't run yet
             reorder.dragStart(i, p, 0); // reorder grabs capture
         }
     }
