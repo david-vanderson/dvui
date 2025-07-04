@@ -2508,7 +2508,9 @@ pub fn captureMouseMaintain(cm: CaptureMouse) void {
                 // found modal before we found current
                 // cancel the capture, and cancel
                 // any drag being done
-                // FIXME: What events should/shouldn't be marked by this?
+                //
+                // mark all events as not captured, we are being interrupted by
+                // a modal dialog anyway
                 captureMouse(null, 0);
                 dragEnd();
                 return;
