@@ -148,8 +148,21 @@ fn initData() !void {
     try pirate_data.append(gpa, .{ .year = 2026, .pirates = 500, .temperature = 4.2 });
 }
 
+const years: [50][]const u8 = createYears();
+
+fn createYears() [50][]const u8 {
+    var result: [50][]const u8 = undefined;
+    for (0..50) |i| {
+        const y = 1700 + i * 8;
+        result[i] = std.fmt.comptimePrint("{d}", .{y});
+    }
+    return result;
+}
+// 3 real cols, but the first is split into 2 navigable columns
 var keyboard_nav: dvui.navigation.GridKeyboard = .{ .num_cols = 3, .num_rows = 0, .wrap_cursor = true, .tab_out = true };
 var initialized = false;
+
+var c1_first_widget_focused: bool = true;
 
 // both dvui and SDL drawing
 fn gui_frame() !void {
@@ -188,17 +201,19 @@ fn gui_frame() !void {
             text.deinit();
             text = dvui.textEntry(@src(), .{}, .{});
             text.deinit();
+            var choice: usize = 2;
+            _ = dvui.dropdown(@src(), &years, &choice, .{});
         }
         {
             //            const focus_cell = keyboard_nav.cellCursor();
 
             var grid = dvui.grid(@src(), .numCols(3), .{}, .{});
             defer grid.deinit();
-            dvui.currentWindow().debug_widget_id = dvui.focusedWidgetId() orelse .zero;
-
+            //ui.currentWindow().debug_widget_id = dvui.focusedWidgetId() orelse .zero;
+            // 3 real + 1 virtual column
             keyboard_nav.setLimits(3, pirate_data.len);
-            keyboard_nav.processEvents(grid); // TODO: consider a different api here over pe() / reset()
-            // maybe return the cell from "pe"?
+            keyboard_nav.processEvents(grid); // TODO: processEventsBefore() and processEventsAfter() - event though it doesn;t process any events.
+            // maybe return the cell from processEvents?
             const focused_cell = keyboard_nav.cellCursor();
 
             const style_base = CellStyle{ .opts = .{ .tab_index = null, .expand = .horizontal } };
@@ -216,7 +231,11 @@ fn gui_frame() !void {
                     defer col_num += 1;
                     var cell = grid.bodyCell(@src(), col_num, row_num, style.cellOptions(col_num, row_num));
                     defer cell.deinit();
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = year, .min = -9999, .max = 9999 }, style.options(col_num, row_num));
+                    //var choice: usize = 2;
+                    var text = dvui.textEntry(@src(), .{}, style.options(col_num, row_num));
+                    text.deinit();
+                    //_ = dvui.dropdown(@src(), &years, &choice, style.options(col_num, row_num));
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = year, .min = -9999, .max = 9999 }, .{});
                 }
                 {
                     defer col_num += 1;
@@ -225,6 +244,7 @@ fn gui_frame() !void {
                     _ = dvui.textEntryNumber(@src(), f64, .{ .value = temp, .min = -10, .max = 10 }, style.options(col_num, row_num));
                 }
                 {
+                    defer col_num += 1;
                     defer col_num += 1;
                     var cell = grid.bodyCell(@src(), col_num, row_num, style.cellOptions(col_num, row_num));
                     defer cell.deinit();
@@ -241,7 +261,8 @@ fn gui_frame() !void {
             if (dvui.tagGet("grid_focus_next")) |focus_widget| {
                 // TODO: can we tighten up the api here somehow? is_focused seems difficult to discover or
                 // know why you would need to use it here. Maybe rename this to shouldFocus? or focusChanged????
-                if (keyboard_nav.is_focused or !initialized) {
+                std.debug.print("HOCUS FOCUS: {} {}\n", .{ keyboard_nav.is_focused, !dvui.navigation.was_mouse_focus });
+                if ((keyboard_nav.is_focused and !dvui.navigation.was_mouse_focus) or !initialized) {
                     dvui.focusWidget(focus_widget.id, null, null);
                     initialized = true;
                 }
@@ -302,7 +323,7 @@ const CellStyleNav = struct {
                 return self.base.options(col_num, row_num).override(.{ .tag = "grid_focus_next", .tab_index = self.tab_index });
             }
         }
-        return self.base.options(col_num, row_num);
+        return self.base.options(col_num, row_num).override(.{ .tab_index = 0 });
     }
 };
 
