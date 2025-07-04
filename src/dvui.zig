@@ -1434,6 +1434,9 @@ pub fn lastFocusedIdInFrame() WidgetId {
 /// * `focusWidget` with the id of the last widget to call `WidgetData.register`
 /// * `focusWidget` with the id of a widget in the parent chain
 ///
+/// If return is non null, can pass to `eventMatch` .focus_id to match key
+/// events the focused widget got but didn't handle.
+///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn lastFocusedIdInFrameFrom(prev: WidgetId) ?WidgetId {
     const last_focused_id = lastFocusedIdInFrame();
