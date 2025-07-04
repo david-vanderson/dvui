@@ -1199,13 +1199,23 @@ pub fn begin(
 }
 
 fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
-    try self.events.append(self.arena(), .{ .num = self.event_num + 1, .evt = .{ .mouse = .{
-        .action = .position,
-        .button = .none,
-        .mod = self.modifiers,
-        .p = self.mouse_pt,
-        .floating_win = self.windowFor(self.mouse_pt),
-    } } });
+    const widget_id, const window_id = if (self.capture) |cap|
+        .{ cap.id, cap.subwindow_id }
+    else
+        .{ null, null };
+
+    try self.events.append(self.arena(), .{
+        .num = self.event_num + 1,
+        .focus_widgetId = widget_id,
+        .focus_windowId = window_id,
+        .evt = .{ .mouse = .{
+            .action = .position,
+            .button = .none,
+            .mod = self.modifiers,
+            .p = self.mouse_pt,
+            .floating_win = self.windowFor(self.mouse_pt),
+        } },
+    });
 }
 
 fn positionMouseEventRemove(self: *Self) void {
