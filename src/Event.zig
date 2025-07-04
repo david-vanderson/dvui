@@ -7,8 +7,12 @@ const Event = @This();
 
 /// Should not be set directly, use the `handle` method
 handled: bool = false,
-focus_windowId: ?dvui.WidgetId = null,
-focus_widgetId: ?dvui.WidgetId = null,
+
+/// For key events these represents focus. For mouse events widgetId represents
+/// capture, windowId unused.
+target_windowId: ?dvui.WidgetId = null,
+target_widgetId: ?dvui.WidgetId = null,
+
 // num increments within a frame, used in focusRemainingEvents
 num: u16 = 0,
 evt: union(enum) {
