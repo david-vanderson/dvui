@@ -107,7 +107,7 @@ pub fn install(self: *FloatingMenuWidget) void {
     self.prev_windowId = dvui.subwindowCurrentSet(self.data().id, null).id;
     self.parent_popup = popupSet(self);
     // prevents parents from processing key events if focus is inside the floating window:w
-    self.prev_last_focus = dvui.lastFocusedIdInFrame(null);
+    self.prev_last_focus = dvui.lastFocusedIdInFrame();
 
     const avoid: dvui.PlaceOnScreenAvoid = switch (self.init_options.avoid) {
         .none => .none,

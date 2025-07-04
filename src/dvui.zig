@@ -1418,23 +1418,29 @@ pub fn focusedWidgetIdInCurrentSubwindow() ?WidgetId {
 
 /// Last widget id we saw this frame that was the focused widget.
 ///
-/// Pass result from previous call for the last focused id only if it changed.
-/// If so, some widget that ran between them had focus.  This means one of:
+/// Pass result to `lastFocusedIdInFrameFrom` to know if any widget was focused
+/// between the two calls.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn lastFocusedIdInFrame() WidgetId {
+    return currentWindow().last_focused_id_this_frame;
+}
+
+/// Pass result from `lastFocusedIdInFrame`.  Returns the id of a widget that
+/// was focused between the two calls, if any.
+///
+/// If so, this means one of:
 /// * a widget had focus when it called `WidgetData.register`
 /// * `focusWidget` with the id of the last widget to call `WidgetData.register`
 /// * `focusWidget` with the id of a widget in the parent chain
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn lastFocusedIdInFrame(prev: ?WidgetId) WidgetId {
-    const last_focused_id = currentWindow().last_focused_id_this_frame;
-    if (prev) |p| {
-        if (p != last_focused_id) {
-            return last_focused_id;
-        } else {
-            return .zero;
-        }
-    } else {
+pub fn lastFocusedIdInFrameFrom(prev: WidgetId) ?WidgetId {
+    const last_focused_id = lastFocusedIdInFrame();
+    if (prev != last_focused_id) {
         return last_focused_id;
+    } else {
+        return null;
     }
 }
 
@@ -3191,7 +3197,7 @@ pub const EventMatchOptions = struct {
 
     /// Additional Id for keyboard focus, use to match children with
     /// `lastFocusedIdInFrame()`.
-    focus_id: WidgetId = .zero,
+    focus_id: ?WidgetId = null,
 
     /// Physical pixel rect used to match pointer events.
     r: Rect.Physical,
@@ -3228,7 +3234,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                         return false;
                     }
                 } else {
-                    if (e.target_widgetId != opts.id and e.target_widgetId != opts.focus_id) {
+                    if (e.target_widgetId != opts.id and (opts.focus_id == null or opts.focus_id.? != e.target_widgetId)) {
                         // not the focused widget
                         return false;
                     }
