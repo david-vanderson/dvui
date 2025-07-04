@@ -316,9 +316,17 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
         };
     };
 
+    switch (preferredColorScheme(@ptrCast(hwnd)) orelse .light) {
+        .dark => resToErr(
+            win32.DwmSetWindowAttribute(hwnd, win32.DWMWA_USE_IMMERSIVE_DARK_MODE, &win32.TRUE, @sizeOf(win32.BOOL)),
+            "DwmSetWindowAttribute dark window in initWindow",
+        ) catch {},
+        .light => {},
+    }
+
     if (options.size) |size| {
         const dpi = win32.GetDpiForWindow(hwnd);
-        try toLastErr(@intCast(dpi), "GetDpiForWindow in initWindow");
+        try boolToErr(@intCast(dpi), "GetDpiForWindow in initWindow");
         const screen_width = win32.GetSystemMetricsForDpi(@intFromEnum(win32.SM_CXSCREEN), dpi);
         const screen_height = win32.GetSystemMetricsForDpi(@intFromEnum(win32.SM_CYSCREEN), dpi);
         var wnd_size: win32.RECT = .{
@@ -327,14 +335,14 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
             .right = @min(screen_width, @as(i32, @intFromFloat(@round(win32.scaleDpi(f32, size.w, dpi))))),
             .bottom = @min(screen_height, @as(i32, @intFromFloat(@round(win32.scaleDpi(f32, size.h, dpi))))),
         };
-        try toLastErr(
+        try boolToErr(
             win32.AdjustWindowRectEx(&wnd_size, style, 0, style_ex),
             "AdjustWindowRectEx in initWindow",
         );
 
         const wnd_width = wnd_size.right - wnd_size.left;
         const wnd_height = wnd_size.bottom - wnd_size.top;
-        try toLastErr(win32.SetWindowPos(
+        try boolToErr(win32.SetWindowPos(
             hwnd,
             null,
             @divFloor(screen_width - wnd_width, 2),
@@ -346,7 +354,7 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
     }
     // Returns 0 if the window was previously hidden
     _ = win32.ShowWindow(hwnd, .{ .SHOWNORMAL = 1 });
-    try toLastErr(win32.UpdateWindow(hwnd), "UpdateWindow in initWindow");
+    try boolToErr(win32.UpdateWindow(hwnd), "UpdateWindow in initWindow");
     return contextFromHwnd(hwnd);
 }
 
@@ -360,7 +368,7 @@ pub fn deinit(self: Context) void {
 pub fn handleSwapChainResizing(self: Context, width: c_uint, height: c_uint) !void {
     const state = stateFromHwnd(hwndFromContext(self));
     cleanupRenderTarget(state);
-    try toErr(
+    try resToErr(
         state.swap_chain.ResizeBuffers(0, width, height, win32.DXGI_FORMAT_UNKNOWN, 0),
         "ResizeBuffers in handleSwapChainResizing",
     );
@@ -394,14 +402,14 @@ pub fn serviceMessageQueue() ServiceResult {
     return .queue_empty;
 }
 
-fn toErr(res: win32.HRESULT, what: []const u8) !void {
+fn resToErr(res: win32.HRESULT, what: []const u8) !void {
     if (win32.SUCCEEDED(res)) return;
     std.log.err("{s} failed, hresult=0x{x}", .{ what, res });
     return dvui.Backend.GenericError.BackendError;
 }
 
 /// Check the return value and prints `win32.GetLastError()` on failure
-fn toLastErr(res: win32.BOOL, what: []const u8) !void {
+fn boolToErr(res: win32.BOOL, what: []const u8) !void {
     if (res != win32.FALSE) return;
     return lastErr(what);
 }
@@ -409,7 +417,12 @@ fn toLastErr(res: win32.BOOL, what: []const u8) !void {
 /// prints `win32.GetLastError()`
 fn lastErr(what: []const u8) !void {
     const err = win32.GetLastError();
-    if (err == win32.NO_ERROR) return std.log.err("{s} failed, error={}", .{ what, err });
+    return win32ToErr(err, what);
+}
+
+fn win32ToErr(err: win32.WIN32_ERROR, what: []const u8) !void {
+    if (err == win32.NO_ERROR) return;
+    std.log.err("{s} failed, error={}", .{ what, err });
     return dvui.Backend.GenericError.BackendError;
 }
 
@@ -436,7 +449,7 @@ fn initShader(state: *WindowState) !void {
             const as_str: [*:0]const u8 = @ptrCast(msg.vtable.GetBufferPointer(error_message.?));
             log.err("vertex shader compilation failed with:\n{s}", .{as_str});
         }
-        try toErr(compile_shader, "vertex shader compilation");
+        try resToErr(compile_shader, "vertex shader compilation");
         unreachable;
     }
     state.dx_options.vertex_bytes = vs_blob.?;
@@ -466,7 +479,7 @@ fn initShader(state: *WindowState) !void {
             const as_str: [*:0]const u8 = @ptrCast(msg.vtable.GetBufferPointer(error_message.?));
             log.err("pixel shader compilation failed with:\n{s}", .{as_str});
         }
-        try toErr(ps_res, "pixel shader compile");
+        try resToErr(ps_res, "pixel shader compile");
         unreachable;
     }
     state.dx_options.pixel_bytes = ps_blob.?;
@@ -477,7 +490,7 @@ fn initShader(state: *WindowState) !void {
     }
 
     var vertex_shader_result: @TypeOf(state.dx_options.vertex_shader.?) = undefined;
-    try toErr(state.device.CreateVertexShader(
+    try resToErr(state.device.CreateVertexShader(
         @ptrCast(state.dx_options.vertex_bytes.?.GetBufferPointer()),
         state.dx_options.vertex_bytes.?.GetBufferSize(),
         null,
@@ -486,7 +499,7 @@ fn initShader(state: *WindowState) !void {
     state.dx_options.vertex_shader = vertex_shader_result;
 
     var pixel_shader_result: @TypeOf(state.dx_options.pixel_shader.?) = undefined;
-    try toErr(state.device.CreatePixelShader(
+    try resToErr(state.device.CreatePixelShader(
         @ptrCast(state.dx_options.pixel_bytes.?.GetBufferPointer()),
         state.dx_options.pixel_bytes.?.GetBufferSize(),
         null,
@@ -505,7 +518,7 @@ fn createRasterizerState(state: *WindowState) !void {
 
     // TODO: is this variable needed?
     var rasterizer_result: @TypeOf(state.dx_options.rasterizer.?) = undefined;
-    try toErr(
+    try resToErr(
         state.device.CreateRasterizerState(&raster_desc, &rasterizer_result),
         "CreateRasterizerState in createRasterizerState",
     );
@@ -517,14 +530,14 @@ fn createRasterizerState(state: *WindowState) !void {
 fn createRenderTarget(state: *WindowState) !void {
     var back_buffer: ?*win32.ID3D11Texture2D = null;
 
-    try toErr(
+    try resToErr(
         state.swap_chain.GetBuffer(0, win32.IID_ID3D11Texture2D, @ptrCast(&back_buffer)),
         "GetBuffer in createRenderTarget",
     );
     defer _ = back_buffer.?.IUnknown.Release();
 
     var render_target_result: @TypeOf(state.render_target.?) = undefined;
-    try toErr(state.device.CreateRenderTargetView(
+    try resToErr(state.device.CreateRenderTargetView(
         @ptrCast(back_buffer),
         null,
         &render_target_result,
@@ -549,7 +562,7 @@ fn createInputLayout(state: *WindowState) !void {
     const num_elements = input_layout_desc.len;
 
     var vertex_layout_result: @TypeOf(state.dx_options.vertex_layout.?) = undefined;
-    try toErr(state.device.CreateInputLayout(
+    try resToErr(state.device.CreateInputLayout(
         input_layout_desc,
         num_elements,
         @ptrCast(state.dx_options.vertex_bytes.?.GetBufferPointer()),
@@ -580,7 +593,7 @@ fn recreateShaderView(state: *WindowState, texture: *anyopaque) !void {
     }
 
     var texture_view_result: @TypeOf(state.dx_options.texture_view.?) = undefined;
-    try toErr(state.device.CreateShaderResourceView(
+    try resToErr(state.device.CreateShaderResourceView(
         &tex.ID3D11Resource,
         &rvd,
         &texture_view_result,
@@ -610,12 +623,12 @@ fn createSampler(state: *WindowState, interpolation: dvui.enums.TextureInterpola
 
     // TODO: Handle errors better
     var blend_state_result: @TypeOf(state.dx_options.blend_state.?) = undefined;
-    try toErr(state.device.CreateBlendState(&blend_desc, &blend_state_result), "CreateBlendState in createSampler");
+    try resToErr(state.device.CreateBlendState(&blend_desc, &blend_state_result), "CreateBlendState in createSampler");
     state.dx_options.blend_state = blend_state_result;
     state.device_context.OMSetBlendState(state.dx_options.blend_state, null, 0xffffffff);
 
     var sampler_result: *win32.ID3D11SamplerState = undefined;
-    try toErr(state.device.CreateSamplerState(&samp_desc, &sampler_result), "CreateSamplerState in createSampler");
+    try resToErr(state.device.CreateSamplerState(&samp_desc, &sampler_result), "CreateSamplerState in createSampler");
     switch (interpolation) {
         .linear => state.dx_options.sampler_linear = sampler_result,
         .nearest => state.dx_options.sampler_nearest = sampler_result,
@@ -634,7 +647,7 @@ fn createBuffer(state: *WindowState, bind_type: anytype, comptime InitialType: t
     data.pSysMem = @ptrCast(initial_data.ptr);
 
     var buffer: *win32.ID3D11Buffer = undefined;
-    try toErr(state.device.CreateBuffer(&bd, &data, &buffer), "CreateBuffer in createBuffer");
+    try resToErr(state.device.CreateBuffer(&bd, &data, &buffer), "CreateBuffer in createBuffer");
 
     // argument no longer pointer-to-optional since zigwin32 update - 2025-01-10
     //if (buffer) |buf| {
@@ -669,7 +682,7 @@ pub fn textureCreate(self: Context, pixels: [*]u8, width: u32, height: u32, inte
     resource_data.pSysMem = pixels;
     resource_data.SysMemPitch = width * 4; // 4 byte per pixel (RGBA)
 
-    toErr(
+    resToErr(
         state.device.CreateTexture2D(&tex_desc, &resource_data, &texture),
         "CreateTexture2D in textureCreate",
     ) catch return dvui.Backend.TextureError.TextureCreate;
@@ -699,7 +712,7 @@ pub fn textureCreateTarget(self: Context, width: u32, height: u32, interpolation
         .MiscFlags = .{},
     };
     var texture: *win32.ID3D11Texture2D = undefined;
-    toErr(
+    resToErr(
         state.device.CreateTexture2D(&texture_desc, null, &texture),
         "CreateTexture2D target",
     ) catch return dvui.Backend.TextureError.TextureCreate;
@@ -729,7 +742,7 @@ pub fn textureReadTarget(self: Context, texture: dvui.TextureTarget, pixels_out:
         .MiscFlags = .{},
     };
     var staging: *win32.ID3D11Texture2D = undefined;
-    toErr(
+    resToErr(
         state.device.CreateTexture2D(&texture_desc, null, &staging),
         "CreateTexture2D in textureReadTarget",
     ) catch return dvui.Backend.TextureError.TextureCreate;
@@ -739,7 +752,7 @@ pub fn textureReadTarget(self: Context, texture: dvui.TextureTarget, pixels_out:
     defer state.device_context.Unmap(&staging.ID3D11Resource, 0);
 
     var mapped: win32.D3D11_MAPPED_SUBRESOURCE = undefined;
-    toErr(
+    resToErr(
         state.device_context.Map(&staging.ID3D11Resource, 0, win32.D3D11_MAP.READ, 0, &mapped),
         "Map in textureReadTarget",
     ) catch return dvui.Backend.TextureError.TextureRead;
@@ -790,7 +803,7 @@ pub fn renderTarget(self: Context, texture: ?dvui.TextureTarget) !void {
         const target: *win32.ID3D11Texture2D = @ptrCast(@alignCast(tex.ptr));
         var render_target: @TypeOf(state.render_target.?) = undefined;
         errdefer state.render_target = null;
-        try toErr(state.device.CreateRenderTargetView(
+        try resToErr(state.device.CreateRenderTargetView(
             @ptrCast(&target.ID3D11Resource),
             null,
             &render_target,
@@ -899,14 +912,14 @@ pub fn begin(self: Context, arena: std.mem.Allocator) !void {
 
 pub fn end(self: Context) !void {
     const state = stateFromHwnd(hwndFromContext(self));
-    try toErr(state.swap_chain.Present(if (state.vsync) 1 else 0, 0), "Present in end");
+    try resToErr(state.swap_chain.Present(if (state.vsync) 1 else 0, 0), "Present in end");
 }
 
 pub fn pixelSize(self: Context) dvui.Size.Physical {
     const hwnd = hwndFromContext(self);
     const state = stateFromHwnd(hwnd);
     var rect: win32.RECT = undefined;
-    toErr(win32.GetClientRect(hwnd, &rect), "GetClientRect in pixelSize") catch return state.last_pixel_size;
+    resToErr(win32.GetClientRect(hwnd, &rect), "GetClientRect in pixelSize") catch return state.last_pixel_size;
     std.debug.assert(rect.left == 0);
     std.debug.assert(rect.top == 0);
     state.last_pixel_size = .{
@@ -923,7 +936,7 @@ pub fn windowSize(self: Context) dvui.Size.Natural {
     // apply dpi scaling manually as there is no convenient api to get the window
     // size of the client size. `win32.GetWindowRect` includes window decorations
     const dpi = win32.GetDpiForWindow(hwnd);
-    toLastErr(@intCast(dpi), "GetDpiForWindow in windowSize") catch return state.last_window_size;
+    boolToErr(@intCast(dpi), "GetDpiForWindow in windowSize") catch return state.last_window_size;
     state.last_window_size = .{
         .w = size.w / win32.scaleFromDpi(f32, dpi),
         .h = size.h / win32.scaleFromDpi(f32, dpi),
@@ -954,8 +967,8 @@ pub fn sleep(_: Context, ns: u64) void {
 
 pub fn clipboardText(self: Context) ![]const u8 {
     const state = stateFromHwnd(hwndFromContext(self));
-    toLastErr(win32.OpenClipboard(hwndFromContext(self)), "OpenClipboard in clipboardText") catch return "";
-    defer toLastErr(win32.CloseClipboard(), "CloseClipboard in clipboardText") catch {};
+    boolToErr(win32.OpenClipboard(hwndFromContext(self)), "OpenClipboard in clipboardText") catch return "";
+    defer boolToErr(win32.CloseClipboard(), "CloseClipboard in clipboardText") catch {};
 
     // istg, windows. why. why utf16.
     const data_handle = win32.GetClipboardData(@intFromEnum(win32.CF_UNICODETEXT)) orelse {
@@ -967,7 +980,7 @@ pub fn clipboardText(self: Context) ![]const u8 {
     {
         const handle: isize = @intCast(@intFromPtr(data_handle));
         const data: [*:0]u16 = @ptrCast(@alignCast(win32.GlobalLock(handle) orelse return ""));
-        defer toLastErr(win32.GlobalUnlock(handle), "GlobalUnlock in clipboardText") catch {};
+        defer boolToErr(win32.GlobalUnlock(handle), "GlobalUnlock in clipboardText") catch {};
 
         // we want this to be a sane format.
         res = std.unicode.utf16LeToUtf8Alloc(state.arena, std.mem.span(data)) catch |err| switch (err) {
@@ -981,8 +994,8 @@ pub fn clipboardText(self: Context) ![]const u8 {
 
 pub fn clipboardTextSet(self: Context, text: []const u8) !void {
     const state = stateFromHwnd(hwndFromContext(self));
-    toLastErr(win32.OpenClipboard(hwndFromContext(self)), "OpenClipboard in clipboardTextSet") catch return;
-    defer toLastErr(win32.CloseClipboard(), "CloseClipboard in clipboardTextSet") catch {};
+    boolToErr(win32.OpenClipboard(hwndFromContext(self)), "OpenClipboard in clipboardTextSet") catch return;
+    defer boolToErr(win32.CloseClipboard(), "CloseClipboard in clipboardTextSet") catch {};
 
     const handle = win32.GlobalAlloc(win32.GMEM_MOVEABLE, text.len * @sizeOf(u16) + 1); // don't forget the nullbyte
     if (handle == 0) return std.mem.Allocator.Error.OutOfMemory;
@@ -994,13 +1007,13 @@ pub fn clipboardTextSet(self: Context, text: []const u8) !void {
     defer state.arena.free(as_utf16);
 
     const data: [*:0]u16 = @ptrCast(@alignCast(win32.GlobalLock(handle) orelse return));
-    defer toLastErr(win32.GlobalUnlock(handle), "GlobalUnlock in clipboardTextSet") catch {};
+    defer boolToErr(win32.GlobalUnlock(handle), "GlobalUnlock in clipboardTextSet") catch {};
 
     for (as_utf16, 0..) |wide, i| {
         data[i] = wide;
     }
 
-    try toLastErr(win32.EmptyClipboard(), "EmptyClipboard in clipboardTextSet");
+    try boolToErr(win32.EmptyClipboard(), "EmptyClipboard in clipboardTextSet");
     const handle_usize: usize = @intCast(handle);
     _ = win32.SetClipboardData(@intFromEnum(win32.CF_UNICODETEXT), @ptrFromInt(handle_usize)) orelse try lastErr("SetClipboardData in clipboardTextSet");
 }
@@ -1023,6 +1036,10 @@ pub fn openURL(self: Context, url: []const u8) !void {
         null,
         win32.SW_SHOW.SHOWNORMAL,
     );
+}
+
+pub fn preferredColorScheme(_: Context) ?dvui.enums.ColorScheme {
+    return dvui.Backend.Common.windowsGetPreferredColorScheme();
 }
 
 pub fn refresh(_: Context) void {}
@@ -1138,7 +1155,7 @@ pub fn wndProc(
         win32.WM_PAINT => {
             var ps: win32.PAINTSTRUCT = undefined;
             if (win32.BeginPaint(hwnd, &ps) == null) lastErr("BeginPaint") catch return -1;
-            toLastErr(win32.EndPaint(hwnd, &ps), "EndPaint") catch return -1;
+            boolToErr(win32.EndPaint(hwnd, &ps), "EndPaint") catch return -1;
             return 0;
         },
         win32.WM_SIZE => {
@@ -1198,7 +1215,7 @@ pub fn wndProc(
             const float_delta: f32 = @floatFromInt(delta);
             const wheel_delta: f32 = @floatFromInt(win32.WHEEL_DELTA);
             _ = stateFromHwnd(hwnd).dvui_window.addEventMouseWheel(
-                float_delta / wheel_delta * 20,
+                float_delta / wheel_delta * dvui.scroll_speed,
                 switch (msg) {
                     win32.WM_MOUSEWHEEL => .vertical,
                     win32.WM_MOUSEHWHEEL => .horizontal,
@@ -1360,7 +1377,7 @@ fn createDeviceD3D(hwnd: win32.HWND) ?Directx11Options {
     var device_context: *win32.ID3D11DeviceContext = undefined;
     var swap_chain: *win32.IDXGISwapChain = undefined;
 
-    toErr(switch (win32.D3D11CreateDeviceAndSwapChain(
+    resToErr(switch (win32.D3D11CreateDeviceAndSwapChain(
         null,
         win32.D3D_DRIVER_TYPE_HARDWARE,
         null,
@@ -1517,26 +1534,8 @@ fn convertVKeyToDvuiKey(vkey: win32.VIRTUAL_KEY) dvui.enums.Key {
     };
 }
 
-// win32 is Windows exclusive so this can be unconditionally defined
-extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
-
-fn wWinMain(
-    _: win32.HINSTANCE,
-    _: ?win32.HINSTANCE,
-    _: ?[*:0]const u16,
-    _: win32.SHOW_WINDOW_CMD,
-) callconv(std.os.windows.WINAPI) void {
-    _ = AttachConsole(0xFFFFFFFF);
-    return main() catch |e| {
-        if (@errorReturnTrace()) |trace| {
-            std.debug.dumpStackTrace(trace.*);
-        }
-        std.debug.panic("{s}", .{@errorName(e)});
-    };
-}
-
 pub fn main() !void {
-    _ = win32.AttachConsole(0xFFFFFFFF);
+    try dvui.Backend.Common.windowsAttachConsole();
 
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 

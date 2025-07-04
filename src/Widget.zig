@@ -69,7 +69,7 @@ pub fn init(
 }
 
 pub fn data(self: Widget) *WidgetData {
-    return self.vtable.data(self.ptr);
+    return self.vtable.data(self.ptr).validate();
 }
 
 pub fn extendId(self: Widget, src: std.builtin.SourceLocation, id_extra: usize) dvui.WidgetId {

@@ -125,10 +125,10 @@ capture: ?dvui.CaptureMouse = null,
 captured_last_frame: bool = false,
 
 gpa: std.mem.Allocator,
-_arena: dvui.ShrinkingArenaAllocator,
-_lifo_arena: dvui.ShrinkingArenaAllocator,
+_arena: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
+_lifo_arena: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
 /// Used to allocate widgets with a fixed location
-_widget_stack: dvui.ShrinkingArenaAllocator,
+_widget_stack: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
@@ -187,7 +187,7 @@ const SavedData = struct {
 
 pub const InitOptions = struct {
     id_extra: usize = 0,
-    arena: ?dvui.ShrinkingArenaAllocator = null,
+    arena: ?std.heap.ArenaAllocator = null,
     theme: ?*Theme = null,
     keybinds: ?enum {
         none,
@@ -206,7 +206,7 @@ pub fn init(
 
     var self = Self{
         .gpa = gpa,
-        ._arena = init_opts.arena orelse .init(gpa),
+        ._arena = if (init_opts.arena) |a| .initArena(a) else .init(gpa),
         ._lifo_arena = .init(gpa),
         ._widget_stack = .init(gpa),
         .wd = WidgetData{
@@ -223,18 +223,14 @@ pub fn init(
         },
         .backend = backend_ctx,
         .font_bytes = try dvui.Font.initTTFBytesDatabase(gpa),
-        .theme = if (init_opts.theme) |t| t.* else @import("themes/Adwaita.zig").light,
+        .theme = if (init_opts.theme) |t| t.* else switch (backend_ctx.preferredColorScheme() orelse .light) {
+            .light => Theme.builtin.adwaita_light,
+            .dark => Theme.builtin.adwaita_dark,
+        },
     };
 
-    try self.themes.putNoClobber(self.gpa, "Adwaita Light", @import("themes/Adwaita.zig").light);
-    try self.themes.putNoClobber(self.gpa, "Adwaita Dark", @import("themes/Adwaita.zig").dark);
-
-    inline for (@typeInfo(Theme.QuickTheme.builtin).@"struct".decls) |decl| {
-        const quick_theme = Theme.QuickTheme.fromString(self.arena(), @field(Theme.QuickTheme.builtin, decl.name)) catch {
-            @panic("Failure loading builtin theme. This is a problem with DVUI.");
-        };
-        defer quick_theme.deinit();
-        const theme = try quick_theme.value.toTheme(self.gpa);
+    inline for (@typeInfo(Theme.builtin).@"struct".decls) |decl| {
+        const theme = @field(Theme.builtin, decl.name);
         try self.themes.putNoClobber(self.gpa, theme.name, theme);
     }
 
@@ -362,7 +358,7 @@ pub fn init(
 
     errdefer self.deinit();
 
-    self.focused_subwindowId = self.wd.id;
+    self.focused_subwindowId = self.data().id;
     self.frame_time_ns = 1;
 
     if (dvui.useFreeType) {
@@ -620,7 +616,7 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
         .target_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
     });
 
-    const ret = (self.wd.id != self.focused_subwindowId);
+    const ret = (self.data().id != self.focused_subwindowId);
     try self.positionMouseEventAdd();
     return ret;
 }
@@ -652,7 +648,7 @@ pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) std.mem.All
         .target_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
     });
 
-    const ret = (self.wd.id != self.focused_subwindowId);
+    const ret = (self.data().id != self.focused_subwindowId);
     try self.positionMouseEventAdd();
     return ret;
 }
@@ -692,7 +688,7 @@ pub fn addEventMouseMotion(self: *Self, newpt: Point.Physical) std.mem.Allocator
         },
     });
 
-    const ret = (self.wd.id != winId);
+    const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
     return ret;
 }
@@ -734,7 +730,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
     self.positionMouseEventRemove();
 
     if (xynorm) |xyn| {
-        self.mouse_pt = (Point{ .x = xyn.x * self.wd.rect.w, .y = xyn.y * self.wd.rect.h }).scale(self.natural_scale, Point.Physical);
+        self.mouse_pt = (Point{ .x = xyn.x * self.data().rect.w, .y = xyn.y * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
     }
 
     const widget_id = if (self.capture) |cap| cap.id else null;
@@ -744,10 +740,10 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
         // normally the focus event is what focuses windows, but since the
         // base window is instantiated before events are added, it has to
         // do any event processing as the events come in, right now
-        if (winId == self.wd.id) {
+        if (winId == self.data().id) {
             // focus the window here so any more key events get routed
             // properly
-            self.focusSubwindowInternal(self.wd.id, null);
+            self.focusSubwindowInternal(self.data().id, null);
         }
 
         // add focus event
@@ -782,7 +778,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
         },
     });
 
-    const ret = (self.wd.id != winId);
+    const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
     return ret;
 }
@@ -824,7 +820,7 @@ pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) st
         },
     });
 
-    const ret = (self.wd.id != winId);
+    const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
     return ret;
 }
@@ -837,11 +833,11 @@ pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) st
 pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, ynorm: f32, dxnorm: f32, dynorm: f32) std.mem.Allocator.Error!bool {
     self.positionMouseEventRemove();
 
-    const newpt = (Point{ .x = xnorm * self.wd.rect.w, .y = ynorm * self.wd.rect.h }).scale(self.natural_scale, Point.Physical);
+    const newpt = (Point{ .x = xnorm * self.data().rect.w, .y = ynorm * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
     //std.debug.print("touch motion {} {d} {d}\n", .{ finger, newpt.x, newpt.y });
     self.mouse_pt = newpt;
 
-    const dp = (Point{ .x = dxnorm * self.wd.rect.w, .y = dynorm * self.wd.rect.h }).scale(self.natural_scale, Point.Physical);
+    const dp = (Point{ .x = dxnorm * self.data().rect.w, .y = dynorm * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
 
     const winId = self.windowFor(self.mouse_pt);
 
@@ -862,7 +858,7 @@ pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, y
         },
     });
 
-    const ret = (self.wd.id != winId);
+    const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
     return ret;
 }
@@ -1132,14 +1128,14 @@ pub fn begin(
     self.rect_pixels = .fromSize(self.backend.pixelSize());
     dvui.clipSet(self.rect_pixels);
 
-    self.wd.rect = Rect.Natural.fromSize(self.backend.windowSize()).scale(1.0 / self.content_scale, Rect);
-    self.natural_scale = if (self.wd.rect.w == 0) 1.0 else self.rect_pixels.w / self.wd.rect.w;
+    self.data().rect = Rect.Natural.fromSize(self.backend.windowSize()).scale(1.0 / self.content_scale, Rect);
+    self.natural_scale = if (self.data().rect.w == 0) 1.0 else self.rect_pixels.w / self.data().rect.w;
 
-    //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
+    //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.data().rect.w, self.data().rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
-    dvui.subwindowAdd(self.wd.id, self.wd.rect, self.rect_pixels, false, null);
+    dvui.subwindowAdd(self.data().id, self.data().rect, self.rect_pixels, false, null);
 
-    _ = dvui.subwindowCurrentSet(self.wd.id, .cast(self.wd.rect));
+    _ = dvui.subwindowCurrentSet(self.data().id, .cast(self.data().rect));
 
     self.extra_frames_needed -|= 1;
     self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
@@ -1193,11 +1189,11 @@ pub fn begin(
     }
     self.captured_last_frame = false;
 
-    self.wd.parent = self.widget();
+    self.data().parent = self.widget();
 
     // Window's wd is kept frame to frame, so manually reset the cache.
-    self.wd.rect_scale_cache = null;
-    self.wd.register();
+    self.data().rect_scale_cache = null;
+    self.data().register();
 
     self.layout = .{};
 
@@ -1237,7 +1233,7 @@ pub fn windowFor(self: *const Self, p: Point.Physical) WidgetId {
         }
     }
 
-    return self.wd.id;
+    return self.data().id;
 }
 
 pub fn subwindowCurrent(self: *const Self) *Subwindow {
@@ -1280,7 +1276,7 @@ pub fn cursorRequested(self: *const Self) dvui.enums.Cursor {
 /// Client code should cache this if switching the platform's cursor is
 /// expensive.
 pub fn cursorRequestedFloating(self: *const Self) ?dvui.enums.Cursor {
-    if (self.capture != null or self.windowFor(self.mouse_pt) != self.wd.id) {
+    if (self.capture != null or self.windowFor(self.mouse_pt) != self.data().id) {
         // gui owns the cursor if we have mouse capture or if the mouse is above
         // a floating window
         return self.cursorRequested();
@@ -1361,36 +1357,49 @@ pub fn dataSetAdvanced(self: *Self, id: WidgetId, key: []const u8, data_in: anyt
     self.data_mutex.lock();
     defer self.data_mutex.unlock();
 
-    var sd = SavedData{ .alignment = alignment, .data = self.gpa.allocWithOptions(u8, bytes.len * num_copies, alignment, null) catch |err| switch (err) {
-        error.OutOfMemory => {
-            log.err("dataSet got {!} for id {x} key {s}\n", .{ err, id, key });
-            return;
-        },
-    } };
-
-    for (0..num_copies) |i| {
-        @memcpy(sd.data[i * bytes.len ..][0..bytes.len], bytes);
-    }
-
-    if (builtin.mode == .Debug) {
-        sd.type_str = dt_type_str;
-        sd.copy_slice = copy_slice;
-    }
-
-    const previous_kv = self.datas.fetchPut(self.gpa, hash, sd) catch |err| switch (err) {
-        error.OutOfMemory => {
-            log.err("dataSet got {!} for id {x} key {s}\n", .{ err, id, key });
-            sd.free(self.gpa);
-            return;
-        },
+    const entry = self.datas.getOrPut(self.gpa, hash) catch |err| {
+        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+        return;
     };
 
-    if (previous_kv) |kv| {
-        //std.debug.print("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, kv.key });
-        self.datas_trash.append(self.arena(), kv.value) catch |err| {
-            log.err("Previous data could not be added to the trash, got {!} for id {x} key {s}\n", .{ err, id, key });
+    const is_same_size = entry.value_ptr.data.len == bytes.len * num_copies;
+    const should_trash = entry.found_existing and !is_same_size;
+    if (should_trash) {
+        // log.debug("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, key });
+        if (builtin.mode == .Debug) {
+            if (!std.mem.eql(u8, entry.value_ptr.type_str, @typeName(@TypeOf(data_in))) or entry.value_ptr.copy_slice != copy_slice) {
+                std.debug.panic(
+                    "dataSetAdvanced: stored type {s} (slice {}) doesn't match asked for type {s} (slice {})",
+                    .{ entry.value_ptr.type_str, entry.value_ptr.copy_slice, @typeName(@TypeOf(data_in)), copy_slice },
+                );
+            }
+        }
+        self.datas_trash.append(self.arena(), entry.value_ptr.*) catch |err| {
+            // Remove from map so it dataGet doesn't return an undefined value
+            _ = self.datas.remove(hash);
+            dvui.logError(@src(), err, "Previous data could not be added to the trash, id {x} key {s}", .{ id, key });
             return;
         };
+    }
+    if (!entry.found_existing or should_trash) {
+        entry.value_ptr.* = .{
+            .alignment = alignment,
+            .data = self.gpa.allocWithOptions(u8, bytes.len * num_copies, alignment, null) catch |err| switch (err) {
+                error.OutOfMemory => {
+                    dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+                    return;
+                },
+            },
+        };
+        if (builtin.mode == .Debug) {
+            entry.value_ptr.type_str = dt_type_str;
+            entry.value_ptr.copy_slice = copy_slice;
+        }
+    }
+
+    // Set data
+    for (0..num_copies) |i| {
+        @memcpy(entry.value_ptr.data[i * bytes.len ..][0..bytes.len], bytes);
     }
 }
 
@@ -1421,7 +1430,7 @@ pub fn dataRemove(self: *Self, id: WidgetId, key: []const u8) void {
 
     if (self.datas.fetchRemove(hash)) |dd| {
         self.datas_trash.append(self.arena(), dd.value) catch |err| {
-            log.err("Previous data could not be added to the trash, got {!} for id {x} key {s}\n", .{ err, id, key });
+            dvui.logError(@src(), err, "Previous data could not be added to the trash, id {x} key {s}", .{ id, key });
             return;
         };
     }
@@ -1715,6 +1724,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // Call this before freeing data so backend can use data allocated during frame.
     try self.backend.end();
 
+    // log.debug("Datas trash {d}", .{self.datas_trash.items.len});
     for (self.datas_trash.items) |sd| {
         sd.free(self.gpa);
     }
@@ -1736,7 +1746,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
             self.drag_name = "";
         }
 
-        if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = self.rect_pixels, .cleanup = true }))
+        if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.rect_pixels, .cleanup = true }))
             continue;
 
         if (e.evt == .mouse) {
@@ -1862,12 +1872,12 @@ pub fn widget(self: *Self) Widget {
     return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
-pub fn data(self: *Self) *WidgetData {
-    return &self.wd;
+pub fn data(self: *const Self) *WidgetData {
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *Self, id: WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    return self.layout.rectFor(self.wd.rect, id, min_size, e, g);
+    return self.layout.rectFor(self.data().rect, id, min_size, e, g);
 }
 
 pub fn rectScale(self: *Self) RectScale {

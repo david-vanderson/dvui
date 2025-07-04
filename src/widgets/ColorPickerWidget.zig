@@ -167,7 +167,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
     indicator.install();
     indicator.drawBackground();
     if (b.data().id == dvui.focusedWidgetId()) {
-        indicator.wd.focusBorder();
+        indicator.data().focusBorder();
     }
     indicator.deinit();
 
@@ -311,7 +311,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
     knob.install();
     knob.drawBackground();
     if (b.data().id == dvui.focusedWidgetId()) {
-        knob.wd.focusBorder();
+        knob.data().focusBorder();
     }
     knob.deinit();
 
@@ -328,7 +328,7 @@ pub fn getHueSelectorTexture(dir: dvui.enums.Direction) dvui.Backend.TextureErro
             .vertical => .{ 1, hue_selector_colors.len },
         };
         // FIXME: textureCreate should not need a non const pointer to pixels
-        res.value_ptr.texture = try dvui.textureCreate(.cast(@constCast(&hue_selector_pixels)), width, height, .linear);
+        res.value_ptr.texture = try dvui.textureCreate(.{ .pma = @constCast(&hue_selector_colors) }, width, height, .linear);
     }
     return res.value_ptr.texture;
 }
@@ -338,26 +338,14 @@ pub fn getValueSaturationTexture(hue: f32) dvui.Backend.TextureError!dvui.Textur
     const cw = dvui.currentWindow();
     const res = try cw.texture_cache.getOrPut(cw.gpa, hue_texture_id);
     if (!res.found_existing) {
-        var pixels = Color.white.toRGBA() ** 2 ++ Color.black.toRGBA() ** 2;
-        comptime std.debug.assert(pixels.len == 2 * 2 * 4);
+        var pixels: [4]Color.PMA = .{ .white, .cast(Color.HSV.toColor(.{ .h = hue })), .black, .black };
         // set top right corner to the max value of that hue
-        @memcpy(pixels[4..8], &Color.HSV.toColor(.{ .h = hue }).toRGBA());
-        res.value_ptr.texture = try dvui.textureCreate(.cast(&pixels), 2, 2, .linear);
+        res.value_ptr.texture = try dvui.textureCreate(.{ .pma = &pixels }, 2, 2, .linear);
     }
     return res.value_ptr.texture;
 }
 
-const hue_selector_colors: [7]Color = .{ .red, .yellow, .lime, .cyan, .blue, .magenta, .red };
-const hue_selector_pixels: [hue_selector_colors.len * 4]u8 = blk: {
-    var pixels: [hue_selector_colors.len * 4]u8 = undefined;
-    for (0.., hue_selector_colors) |i, c| {
-        pixels[i * 4 + 0] = c.r;
-        pixels[i * 4 + 1] = c.g;
-        pixels[i * 4 + 2] = c.b;
-        pixels[i * 4 + 3] = c.a;
-    }
-    break :blk pixels;
-};
+const hue_selector_colors: [7]Color.PMA = .{ .red, .yellow, .lime, .cyan, .blue, .magenta, .red };
 
 const Options = dvui.Options;
 const Color = dvui.Color;

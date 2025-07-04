@@ -21,6 +21,10 @@ pub const c = RaylibBackend.c;
 /// - dvui renders the whole application
 /// - render frames only when needed
 pub fn main() !void {
+    if (@import("builtin").os.tag == .windows) { // optional
+        // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
+        try dvui.Backend.Common.windowsAttachConsole();
+    }
     defer _ = gpa_instance.deinit();
 
     // init Raylib backend (creates OS window)

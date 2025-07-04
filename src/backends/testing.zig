@@ -142,12 +142,15 @@ pub fn clipboardTextSet(self: *TestingBackend, text: []const u8) std.mem.Allocat
 /// Open URL in system browser
 pub fn openURL(_: *TestingBackend, _: []const u8) std.mem.Allocator.Error!void {}
 
+pub fn preferredColorScheme(_: *TestingBackend) ?dvui.enums.ColorScheme {
+    return null;
+}
+
 /// Called by dvui.refresh() when it is called from a background
 /// thread.  Used to wake up the gui thread.  It only has effect if you
 /// are using waitTime() or some other method of waiting until a new
 /// event comes in.
 pub fn refresh(_: *TestingBackend) void {}
-
 pub fn backend(self: *TestingBackend) dvui.Backend {
     return dvui.Backend.init(self);
 }

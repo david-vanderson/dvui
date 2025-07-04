@@ -41,33 +41,33 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *ScrollBarWidget) void {
-    self.wd.register();
-    self.wd.borderAndBackground(.{});
+    self.data().register();
+    self.data().borderAndBackground(.{});
 
-    self.grabRect = self.wd.contentRect();
+    self.grabRect = self.data().contentRect();
     switch (self.dir) {
         .vertical => {
             self.grabRect.h = @min(self.grabRect.h, @max(20.0, self.grabRect.h * self.si.visibleFraction(self.dir)));
-            const insideH = self.wd.contentRect().h - self.grabRect.h;
+            const insideH = self.data().contentRect().h - self.grabRect.h;
             self.grabRect.y += insideH * self.si.offsetFraction(self.dir);
         },
         .horizontal => {
             self.grabRect.w = @min(self.grabRect.w, @max(20.0, self.grabRect.w * self.si.visibleFraction(self.dir)));
-            const insideH = self.wd.contentRect().w - self.grabRect.w;
+            const insideH = self.data().contentRect().w - self.grabRect.w;
             self.grabRect.x += insideH * self.si.offsetFraction(self.dir);
         },
     }
 
-    const grabrs = self.wd.parent.screenRectScale(self.grabRect);
+    const grabrs = self.data().parent.screenRectScale(self.grabRect);
     self.processEvents(grabrs.r);
 }
 
 pub fn data(self: *ScrollBarWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
-    const rs = self.wd.borderRectScale();
+    const rs = self.data().borderRectScale();
     const evts = dvui.events();
     for (evts) |*e| {
         if (!dvui.eventMatchSimple(e, self.data()))
@@ -101,7 +101,7 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
                                     self.si.scrollPageDown(self.dir);
                                 }
 
-                                dvui.refresh(null, @src(), self.wd.id);
+                                dvui.refresh(null, @src(), self.data().id);
                             }
                         }
                     },
@@ -136,7 +136,7 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
                                     f = (grabmid - min) / (max - min);
                                 }
                                 self.si.scrollToFraction(self.dir, f);
-                                dvui.refresh(null, @src(), self.wd.id);
+                                dvui.refresh(null, @src(), self.data().id);
                             }
                         }
                     },
@@ -148,7 +148,7 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
                         if (self.dir == .horizontal) {
                             e.handle(@src(), self.data());
                             self.si.scrollByOffset(self.dir, ticks);
-                            dvui.refresh(null, @src(), self.wd.id);
+                            dvui.refresh(null, @src(), self.data().id);
                         }
                     },
                     .wheel_y => |ticks| {
@@ -156,7 +156,7 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
                         // horizontal scrollBar seems still natural to be scrolled
                         e.handle(@src(), self.data());
                         self.si.scrollByOffset(self.dir, -ticks);
-                        dvui.refresh(null, @src(), self.wd.id);
+                        dvui.refresh(null, @src(), self.data().id);
                     },
                 }
             },
@@ -175,21 +175,21 @@ pub const Grab = struct {
 };
 
 pub fn grab(self: *ScrollBarWidget) Grab {
-    var fill = self.wd.options.color(.text).opacity(0.5);
-    if (dvui.captured(self.wd.id) or self.highlight) {
-        fill = self.wd.options.color(.text).opacity(0.3);
+    var fill = self.data().options.color(.text).opacity(0.5);
+    if (dvui.captured(self.data().id) or self.highlight) {
+        fill = self.data().options.color(.text).opacity(0.3);
     }
 
     return .{
-        .rect = self.wd.parent.screenRectScale(self.grabRect.insetAll(2)).r,
+        .rect = self.data().parent.screenRectScale(self.grabRect.insetAll(2)).r,
         .color = fill,
     };
 }
 
 pub fn deinit(self: *ScrollBarWidget) void {
     defer dvui.widgetFree(self);
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
     self.* = undefined;
 }
 

@@ -19,18 +19,13 @@ pub const c = blk: {
     });
 };
 
+/// Only available in sdl2
+extern "SDL_config" fn MACOS_enable_scroll_momentum() callconv(.c) void;
+
 pub const kind: dvui.enums.Backend = if (sdl3) .sdl3 else .sdl2;
 
 pub const SDLBackend = @This();
 pub const Context = *SDLBackend;
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-
-// used when doing sdl callbacks
-pub var gwin: dvui.Window = undefined;
-pub var gback: SDLBackend = undefined;
-pub var ginterrupted: bool = false;
-pub var ghave_resize: bool = false;
-pub var gno_wait: bool = false;
 
 const log = std.log.scoped(.SDLBackend);
 
@@ -76,8 +71,13 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     // use the string version instead of the #define so we compile with SDL < 2.24
 
     _ = c.SDL_SetHint("SDL_HINT_WINDOWS_DPI_SCALING", "1");
+    if (sdl3) _ = c.SDL_SetHint(c.SDL_HINT_MAC_SCROLL_MOMENTUM, "1");
 
-    try toErr(c.SDL_Init(c.SDL_INIT_VIDEO), "SDL_Init in initWindow");
+    try toErr(c.SDL_Init(c.SDL_INIT_VIDEO | c.SDL_INIT_EVENTS), "SDL_Init in initWindow");
+
+    if (!sdl3 and builtin.os.tag == .macos) {
+        MACOS_enable_scroll_momentum();
+    }
 
     const hidden_flag = if (options.hidden) c.SDL_WINDOW_HIDDEN else 0;
     const fullscreen_flag = if (options.fullscreen) c.SDL_WINDOW_FULLSCREEN else 0;
@@ -548,6 +548,19 @@ pub fn openURL(self: *SDLBackend, url: []const u8) !void {
     const c_url = try self.arena.dupeZ(u8, url);
     defer self.arena.free(c_url);
     try toErr(c.SDL_OpenURL(c_url.ptr), "SDL_OpenURL in openURL");
+}
+
+pub fn preferredColorScheme(_: *SDLBackend) ?dvui.enums.ColorScheme {
+    if (sdl3) {
+        return switch (c.SDL_GetSystemTheme()) {
+            c.SDL_SYSTEM_THEME_DARK => .dark,
+            c.SDL_SYSTEM_THEME_LIGHT => .light,
+            else => null,
+        };
+    } else if (builtin.target.os.tag == .windows) {
+        return dvui.Backend.Common.windowsGetPreferredColorScheme();
+    }
+    return null;
 }
 
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
@@ -1026,29 +1039,17 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             return try win.addEventMouseButton(SDL_mouse_button_to_dvui(event.button.button), .release);
         },
         if (sdl3) c.SDL_EVENT_MOUSE_WHEEL else c.SDL_MOUSEWHEEL => {
+            // .precise added in 2.0.18
+            const ticks_x = if (sdl3) event.wheel.x else event.wheel.preciseX;
+            const ticks_y = if (sdl3) event.wheel.y else event.wheel.preciseY;
+
             if (self.log_events) {
-                log.debug("event MOUSEWHEEL {d} {d} {d}\n", .{ event.wheel.x, event.wheel.y, event.wheel.which });
-            }
-
-            var ticks_x = if (sdl3) event.wheel.x else @as(f32, @floatFromInt(event.wheel.x));
-            var ticks_y = if (sdl3) event.wheel.y else @as(f32, @floatFromInt(event.wheel.y));
-
-            // TODO: some real solution to interpreting the mouse wheel across OSes
-            switch (builtin.target.os.tag) {
-                .windows, .linux => {
-                    ticks_x *= 20;
-                    ticks_y *= 20;
-                },
-                .macos => {
-                    ticks_x *= 10;
-                    ticks_y *= 10;
-                },
-                else => {},
+                log.debug("event MOUSEWHEEL {d} {d} {d}\n", .{ ticks_x, ticks_y, event.wheel.which });
             }
 
             var ret = false;
-            if (ticks_x != 0) ret = try win.addEventMouseWheel(ticks_x, .horizontal);
-            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y, .vertical);
+            if (ticks_x != 0) ret = try win.addEventMouseWheel(ticks_x * dvui.scroll_speed, .horizontal);
+            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed, .vertical);
             return ret;
         },
         if (sdl3) c.SDL_EVENT_FINGER_DOWN else c.SDL_FINGERDOWN => {
@@ -1248,18 +1249,13 @@ pub fn getSDLVersion() std.SemanticVersion {
     }
 }
 
-// Optional: windows os only
-const winapi = if (builtin.os.tag == .windows) struct {
-    extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
-} else struct {};
-
 // This must be exposed in the app's root source file.
 pub fn main() !u8 {
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
     if (builtin.os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
-        _ = winapi.AttachConsole(0xFFFFFFFF);
+        try dvui.Backend.Common.windowsAttachConsole();
     }
 
     if (sdl3 and (sdl_options.callbacks orelse true) and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows)) {
@@ -1279,9 +1275,9 @@ pub fn main() !u8 {
 
     const init_opts = app.config.get();
 
-    const gpa = gpa_instance.allocator();
-
+    var gpa_instance: std.heap.DebugAllocator(.{}) = .init;
     defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
+    const gpa = gpa_instance.allocator();
 
     // init SDL backend (creates and owns OS window)
     var back = try initWindow(.{
@@ -1350,6 +1346,19 @@ pub fn main() !u8 {
     return 0;
 }
 
+/// used when doing sdl callbacks
+const CallbackState = struct {
+    win: dvui.Window,
+    back: SDLBackend,
+    gpa: std.heap.GeneralPurposeAllocator(.{}) = .init,
+    interrupted: bool = false,
+    have_resize: bool = false,
+    no_wait: bool = false,
+};
+
+/// used when doing sdl callbacks
+var appState: CallbackState = .{ .win = undefined, .back = undefined };
+
 // sdl3 callback
 fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callconv(.c) c.SDL_AppResult {
     _ = appstate;
@@ -1363,10 +1372,10 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
 
     const init_opts = app.config.get();
 
-    const gpa = gpa_instance.allocator();
+    const gpa = appState.gpa.allocator();
 
     // init SDL backend (creates and owns OS window)
-    gback = initWindow(.{
+    appState.back = initWindow(.{
         .allocator = gpa,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
@@ -1387,23 +1396,23 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
     }
 
     //// init dvui Window (maps onto a single OS window)
-    gwin = dvui.Window.init(@src(), gpa, gback.backend(), .{}) catch |err| {
+    appState.win = dvui.Window.init(@src(), gpa, appState.back.backend(), .{}) catch |err| {
         log.err("dvui.Window.init failed: {!}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
     if (app.initFn) |initFn| {
-        gwin.begin(gwin.frame_time_ns) catch |err| {
+        appState.win.begin(appState.win.frame_time_ns) catch |err| {
             log.err("dvui.Window.begin failed: {!}", .{err});
             return c.SDL_APP_FAILURE;
         };
 
-        initFn(&gwin) catch |err| {
+        initFn(&appState.win) catch |err| {
             log.err("dvui.App.initFn failed: {!}", .{err});
             return c.SDL_APP_FAILURE;
         };
 
-        _ = gwin.end(.{}) catch |err| {
+        _ = appState.win.end(.{}) catch |err| {
             log.err("dvui.Window.end failed: {!}", .{err});
             return c.SDL_APP_FAILURE;
         };
@@ -1414,15 +1423,14 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
 
 // sdl3 callback
 // This function runs once at shutdown.
-fn appQuit(appstate: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
-    _ = appstate;
+fn appQuit(_: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
     _ = result;
 
     const app = dvui.App.get() orelse unreachable;
     if (app.deinitFn) |deinitFn| deinitFn();
-    gwin.deinit();
-    gback.deinit();
-    if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
+    appState.win.deinit();
+    appState.back.deinit();
+    if (appState.gpa.deinit() != .ok) @panic("Memory leak on exit!");
 
     // SDL will clean up the window/renderer for us.
 }
@@ -1431,7 +1439,7 @@ fn appQuit(appstate: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
 // This function runs when a new event (mouse input, keypresses, etc) occurs.
 fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
     const e = event.?.*;
-    _ = gback.addEvent(&gwin, e) catch |err| {
+    _ = appState.back.addEvent(&appState.win, e) catch |err| {
         log.err("dvui.Window.addEvent failed: {!}", .{err});
         return c.SDL_APP_FAILURE;
     };
@@ -1439,7 +1447,7 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
     if (event.?.type == c.SDL_EVENT_WINDOW_RESIZED) {
         //std.debug.print("resize {d}x{d}\n", .{e.window.data1, e.window.data2});
         // getting a resize event means we are likely in a callback, so don't call any wait functions
-        ghave_resize = true;
+        appState.have_resize = true;
     }
 
     if (event.?.type == c.SDL_EVENT_QUIT) {
@@ -1453,18 +1461,18 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
 // This function runs once per frame, and is the heart of the program.
 fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     // beginWait coordinates with waitTime below to run frames only when needed
-    const nstime = gwin.beginWait(ginterrupted or gno_wait);
+    const nstime = appState.win.beginWait(appState.interrupted or appState.no_wait);
 
     // marks the beginning of a frame for dvui, can call dvui functions after this
-    gwin.begin(nstime) catch |err| {
+    appState.win.begin(nstime) catch |err| {
         log.err("dvui.Window.begin failed: {!}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
     // if dvui widgets might not cover the whole window, then need to clear
     // the previous frame's render
-    toErr(c.SDL_SetRenderDrawColor(gback.renderer, 0, 0, 0, 255), "SDL_SetRenderDrawColor in sdl main") catch return c.SDL_APP_FAILURE;
-    toErr(c.SDL_RenderClear(gback.renderer), "SDL_RenderClear in sdl main") catch return c.SDL_APP_FAILURE;
+    toErr(c.SDL_SetRenderDrawColor(appState.back.renderer, 0, 0, 0, 255), "SDL_SetRenderDrawColor in sdl main") catch return c.SDL_APP_FAILURE;
+    toErr(c.SDL_RenderClear(appState.back.renderer), "SDL_RenderClear in sdl main") catch return c.SDL_APP_FAILURE;
 
     const app = dvui.App.get() orelse unreachable;
     const res = app.frameFn() catch |err| {
@@ -1472,19 +1480,19 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_FAILURE;
     };
 
-    const end_micros = gwin.end(.{}) catch |err| {
+    const end_micros = appState.win.end(.{}) catch |err| {
         log.err("dvui.Window.end failed: {!}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
-    gback.setCursor(gwin.cursorRequested()) catch return c.SDL_APP_FAILURE;
-    gback.textInputRect(gwin.textInputRequested()) catch return c.SDL_APP_FAILURE;
+    appState.back.setCursor(appState.win.cursorRequested()) catch return c.SDL_APP_FAILURE;
+    appState.back.textInputRect(appState.win.textInputRequested()) catch return c.SDL_APP_FAILURE;
 
-    gback.renderPresent() catch return c.SDL_APP_FAILURE;
+    appState.back.renderPresent() catch return c.SDL_APP_FAILURE;
 
     if (res != .ok) return c.SDL_APP_SUCCESS;
 
-    const wait_event_micros = gwin.waitTime(end_micros, null);
+    const wait_event_micros = appState.win.waitTime(end_micros, null);
 
     //std.debug.print("waitEventTimeout {d} {} resize {}\n", .{wait_event_micros, gno_wait, ghave_resize});
 
@@ -1495,14 +1503,14 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     // During a callback we don't want to call SDL_WaitEvent or
     // SDL_WaitEventTimeout.  Otherwise all event handling gets screwed up and
     // either never recovers or recovers after many seconds.
-    if (gno_wait or ghave_resize) {
-        ghave_resize = false;
+    if (appState.no_wait or appState.have_resize) {
+        appState.have_resize = false;
         return c.SDL_APP_CONTINUE;
     }
 
-    gno_wait = true;
-    ginterrupted = gback.waitEventTimeout(wait_event_micros) catch return c.SDL_APP_FAILURE;
-    gno_wait = false;
+    appState.no_wait = true;
+    appState.interrupted = appState.back.waitEventTimeout(wait_event_micros) catch return c.SDL_APP_FAILURE;
+    appState.no_wait = false;
 
     return c.SDL_APP_CONTINUE;
 }
