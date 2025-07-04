@@ -299,12 +299,12 @@ pub fn processEvent(self: *PanedWidget, e: *Event) void {
             if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
                 e.handle(@src(), self.data());
                 // capture and start drag
-                dvui.captureMouse(self.data());
+                dvui.captureMouse(self.data(), e.num);
                 dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = cursor });
             } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
                 e.handle(@src(), self.data());
                 // stop possible drag and capture
-                dvui.captureMouse(null);
+                dvui.captureMouse(null, e.num);
                 dvui.dragEnd();
             } else if (e.evt.mouse.action == .motion and dvui.captured(self.data().id)) {
                 e.handle(@src(), self.data());

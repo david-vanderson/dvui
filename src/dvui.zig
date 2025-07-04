@@ -1300,13 +1300,6 @@ pub fn focusSubwindow(subwindow_id: ?WidgetId, event_num: ?u16) void {
     currentWindow().focusSubwindowInternal(subwindow_id, event_num);
 }
 
-/// Helper used by `focusWidget`.  Overwrites the focus information for `Event`s with num >
-/// `event_num`.  This is how a button can get a tab, move focus to a textEntry,
-/// and that textEntry get a keydown all in the same frame.
-pub fn focusRemainingEvents(event_num: u16, focusWindowId: WidgetId, focusWidgetId: ?WidgetId) void {
-    currentWindow().focusRemainingEventsInternal(event_num, focusWindowId, focusWidgetId);
-}
-
 /// Raise a subwindow to the top of the stack.
 ///
 /// Any subwindows directly above it with "stay_above_parent_window" set will also be moved to stay above it.
@@ -1364,7 +1357,7 @@ pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void
             if (sw.focused_widgetId != id) {
                 sw.focused_widgetId = id;
                 if (event_num) |en| {
-                    focusRemainingEvents(en, sw.id, sw.focused_widgetId);
+                    cw.focusEventsInternal(en, sw.id, sw.focused_widgetId);
                 }
                 refresh(null, @src(), null);
 
@@ -2455,23 +2448,34 @@ pub const CaptureMouse = struct {
 /// (which is what you would expect for e.g. background highlight)
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn captureMouse(wd: ?*const WidgetData) void {
+pub fn captureMouse(wd: ?*const WidgetData, event_num: u16) void {
     const cm = if (wd) |data| CaptureMouse{
         .id = data.id,
         .rect = data.borderRectScale().r,
         .subwindow_id = subwindowCurrentId(),
     } else null;
-    captureMouseCustom(cm);
+    captureMouseCustom(cm, event_num);
 }
 /// In most cases, use `captureMouse` but if you want to customize the
 /// "capture zone" you can use this function instead.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn captureMouseCustom(cm: ?CaptureMouse) void {
+pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
     const cw = currentWindow();
-    cw.capture = cm;
-    if (cm != null) {
+    defer cw.capture = cm;
+    if (cm) |capture| {
+        // log.debug("Mouse capture (event {d}): {any}", .{ event_num, cm });
         cw.captured_last_frame = true;
+        cw.captureEventsInternal(event_num, capture.id);
+    } else {
+        // Unmark all following mouse events
+        cw.captureEventsInternal(event_num, null);
+        // log.debug("Mouse uncapture (event {d}): {?any}", .{ event_num, cw.capture });
+        // for (dvui.events()) |*e| {
+        //     if (e.evt == .mouse) {
+        //         log.debug("{s}: win {?x}, widget {?x}", .{ @tagName(e.evt.mouse.action), e.target_windowId, e.target_widgetId });
+        //     }
+        // }
     }
 }
 /// If the widget ID passed has mouse capture, this maintains that capture for
@@ -2499,7 +2503,10 @@ pub fn captureMouseMaintain(cm: CaptureMouse) void {
                 // found modal before we found current
                 // cancel the capture, and cancel
                 // any drag being done
-                captureMouse(null);
+                //
+                // mark all events as not captured, we are being interrupted by
+                // a modal dialog anyway
+                captureMouse(null, 0);
                 dragEnd();
                 return;
             }
@@ -3205,37 +3212,31 @@ pub const EventMatchOptions = struct {
 pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     if (e.handled) return false;
 
-    if (e.focus_windowId) |wid| {
-        // focusable event
-        if (opts.cleanup) {
-            // window is catching all focus-routed events that didn't get
-            // processed (maybe the focus widget never showed up)
-            if (wid != opts.id) {
-                // not the focused window
-                return false;
-            }
-        } else {
-            if (e.focus_widgetId != opts.id and e.focus_widgetId != opts.focus_id) {
-                // not the focused widget
-                return false;
-            }
-        }
-    }
-
     switch (e.evt) {
-        .key => {},
-        .text => {},
-        .mouse => |me| {
-            const capture = captureMouseGet();
-            var other_capture = false;
-            if (capture) |cm| blk: {
-                if (me.action == .wheel_x or me.action == .wheel_y) {
-                    // wheel is not affected by mouse capture
-                    break :blk;
+        .key, .text => {
+            if (e.target_windowId) |wid| {
+                // focusable event
+                if (opts.cleanup) {
+                    // window is catching all focus-routed events that didn't get
+                    // processed (maybe the focus widget never showed up)
+                    if (wid != opts.id) {
+                        // not the focused window
+                        return false;
+                    }
+                } else {
+                    if (e.target_widgetId != opts.id and e.target_widgetId != opts.focus_id) {
+                        // not the focused widget
+                        return false;
+                    }
                 }
-
-                if (cm.id == opts.id) {
-                    // we have capture, we get all mouse events
+            }
+        },
+        .mouse => |me| {
+            var other_capture = false;
+            if (e.target_widgetId) |fwid| {
+                // this event is during a mouse capture
+                if (fwid == opts.id) {
+                    // we have capture, we get all capturable mouse events (excludes wheel)
                     return true;
                 } else {
                     // someone else has capture
@@ -3262,13 +3263,15 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             }
 
             if (other_capture) {
-                // someone else has capture, but otherwise we would have gotten
-                // this mouse event
-                if (me.action == .position and capture.?.subwindow_id == subwindowCurrentId() and !capture.?.rect.intersect(opts.r).empty()) {
-                    // we might be trying to highlight a background around the widget with capture:
-                    // * we are in the same subwindow
-                    // * our rect overlaps with the capture rect
-                    return true;
+                if (captureMouseGet()) |capture| {
+                    // someone else has capture, but otherwise we would have gotten
+                    // this mouse event
+                    if (me.action == .position and capture.subwindow_id == subwindowCurrentId() and !capture.rect.intersect(opts.r).empty()) {
+                        // we might be trying to highlight a background around the widget with capture:
+                        // * we are in the same subwindow
+                        // * our rect overlaps with the capture rect
+                        return true;
+                    }
                 }
 
                 return false;
@@ -3307,7 +3310,7 @@ pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
                     dvui.focusWidget(wd.id, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     e.handle(@src(), wd);
-                    dvui.captureMouse(wd);
+                    dvui.captureMouse(wd, e.num);
 
                     // for touch events, we want to cancel our click if a drag is started
                     dvui.dragPreStart(me.p, .{});
@@ -3317,7 +3320,7 @@ pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
                         e.handle(@src(), wd);
 
                         // cancel our capture
-                        dvui.captureMouse(null);
+                        dvui.captureMouse(null, e.num);
                         dvui.dragEnd();
 
                         // if the release was within our border, the click is successful
@@ -3337,7 +3340,7 @@ pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
                             // touch: if we overcame the drag threshold, then
                             // that means the person probably didn't want to
                             // touch this button, they were trying to scroll
-                            dvui.captureMouse(null);
+                            dvui.captureMouse(null, e.num);
                             dvui.dragEnd();
                         }
                     }
@@ -5684,12 +5687,12 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
                     focusWidget(b.data().id, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     // capture
-                    captureMouse(b.data());
+                    captureMouse(b.data(), e.num);
                     e.handle(@src(), b.data());
                     p = me.p;
                 } else if (me.action == .release and me.button.pointer()) {
                     // stop capture
-                    captureMouse(null);
+                    captureMouse(null, e.num);
                     dragEnd();
                     e.handle(@src(), b.data());
                 } else if (me.action == .motion and captured(b.data().id)) {
@@ -5960,7 +5963,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                             text_mode = true;
                             refresh(null, @src(), b.data().id);
                         } else {
-                            captureMouse(b.data());
+                            captureMouse(b.data(), e.num);
                             dataSet(null, b.data().id, "_start_x", me.p.x);
                             dataSet(null, b.data().id, "_start_v", init_opts.value.*);
 
@@ -5980,7 +5983,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                             refresh(null, @src(), b.data().id);
                         }
                         e.handle(@src(), b.data());
-                        captureMouse(null);
+                        captureMouse(null, e.num);
                         dragEnd();
                         dataRemove(null, b.data().id, "_start_x");
                         dataRemove(null, b.data().id, "_start_v");

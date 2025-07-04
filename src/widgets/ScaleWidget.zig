@@ -94,14 +94,14 @@ pub fn processEvent(self: *ScaleWidget, e: *Event) void {
 
                     // end any drag that might have been happening
                     dvui.dragEnd();
-                    dvui.captureMouse(self.data());
+                    dvui.captureMouse(self.data(), e.num);
                 }
             },
             .release => {
                 self.touchPoints[idx] = null;
                 if (dvui.captured(self.data().id)) {
                     e.handle(@src(), self.data());
-                    dvui.captureMouse(null);
+                    dvui.captureMouse(null, e.num);
                 }
             },
             .motion => {

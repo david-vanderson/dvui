@@ -545,7 +545,7 @@ pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?WidgetId, event_num: ?
         if (event_num) |en| {
             for (self.subwindows.items) |*sw| {
                 if (self.focused_subwindowId == sw.id) {
-                    self.focusRemainingEventsInternal(en, sw.id, sw.focused_widgetId);
+                    self.focusEventsInternal(en, sw.id, sw.focused_widgetId);
                     break;
                 }
             }
@@ -553,14 +553,39 @@ pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?WidgetId, event_num: ?
     }
 }
 
-pub fn focusRemainingEventsInternal(self: *Self, event_num: u16, focusWindowId: WidgetId, focusWidgetId: ?WidgetId) void {
+// Only for keyboard events
+pub fn focusEventsInternal(self: *Self, event_num: u16, windowId: ?WidgetId, widgetId: ?WidgetId) void {
     var evts = self.events.items;
     var k: usize = 0;
     while (k < evts.len) : (k += 1) {
         var e: *Event = &evts[k];
-        if (e.num > event_num and e.focus_windowId != null) {
-            e.focus_windowId = focusWindowId;
-            e.focus_widgetId = focusWidgetId;
+        if (e.num > event_num) {
+            switch (e.evt) {
+                .key, .text => {
+                    e.target_windowId = windowId;
+                    e.target_widgetId = widgetId;
+                },
+                .mouse => {},
+            }
+        }
+    }
+}
+
+// Only for mouse/touch events
+pub fn captureEventsInternal(self: *Self, event_num: u16, widgetId: ?WidgetId) void {
+    var evts = self.events.items;
+    var k: usize = 0;
+    while (k < evts.len) : (k += 1) {
+        var e: *Event = &evts[k];
+        if (e.num > event_num) {
+            switch (e.evt) {
+                .key, .text => {},
+                .mouse => |me| {
+                    if (me.action != .wheel_x and me.action != .wheel_y) {
+                        e.target_widgetId = widgetId;
+                    }
+                },
+            }
         }
     }
 }
@@ -587,8 +612,8 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
         .evt = .{ .key = event },
-        .focus_windowId = self.focused_subwindowId,
-        .focus_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
+        .target_windowId = self.focused_subwindowId,
+        .target_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
     });
 
     const ret = (self.data().id != self.focused_subwindowId);
@@ -613,9 +638,14 @@ pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) std.mem.All
     self.event_num += 1;
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
-        .evt = .{ .text = .{ .txt = try self.arena().dupe(u8, text), .selected = selected } },
-        .focus_windowId = self.focused_subwindowId,
-        .focus_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
+        .evt = .{
+            .text = .{
+                .txt = try self.arena().dupe(u8, text),
+                .selected = selected,
+            },
+        },
+        .target_windowId = self.focused_subwindowId,
+        .target_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
     });
 
     const ret = (self.data().id != self.focused_subwindowId);
@@ -641,16 +671,22 @@ pub fn addEventMouseMotion(self: *Self, newpt: Point.Physical) std.mem.Allocator
     // - generate a .focus event here instead of just doing focusWindow(winId, null);
     // - how to make it optional?
 
+    const widget_id = if (self.capture) |cap| cap.id else null;
+
     self.event_num += 1;
-    try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
-        .mouse = .{
-            .action = .{ .motion = dp },
-            .button = if (self.debug_touch_simulate_events and self.debug_touch_simulate_down) .touch0 else .none,
-            .mod = self.modifiers,
-            .p = self.mouse_pt,
-            .floating_win = winId,
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .target_widgetId = widget_id,
+        .evt = .{
+            .mouse = .{
+                .action = .{ .motion = dp },
+                .button = if (self.debug_touch_simulate_events and self.debug_touch_simulate_down) .touch0 else .none,
+                .mod = self.modifiers,
+                .p = self.mouse_pt,
+                .floating_win = winId,
+            },
         },
-    } });
+    });
 
     const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
@@ -697,6 +733,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
         self.mouse_pt = (Point{ .x = xyn.x * self.data().rect.w, .y = xyn.y * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
     }
 
+    const widget_id = if (self.capture) |cap| cap.id else null;
     const winId = self.windowFor(self.mouse_pt);
 
     if (action == .press and bb.pointer()) {
@@ -711,27 +748,35 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
 
         // add focus event
         self.event_num += 1;
-        try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
+        try self.events.append(self.arena(), Event{
+            .num = self.event_num,
+            .target_widgetId = widget_id,
+            .evt = .{
+                .mouse = .{
+                    .action = .focus,
+                    .button = bb,
+                    .mod = self.modifiers,
+                    .p = self.mouse_pt,
+                    .floating_win = winId,
+                },
+            },
+        });
+    }
+
+    self.event_num += 1;
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .target_widgetId = widget_id,
+        .evt = .{
             .mouse = .{
-                .action = .focus,
+                .action = action,
                 .button = bb,
                 .mod = self.modifiers,
                 .p = self.mouse_pt,
                 .floating_win = winId,
             },
-        } });
-    }
-
-    self.event_num += 1;
-    try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
-        .mouse = .{
-            .action = action,
-            .button = bb,
-            .mod = self.modifiers,
-            .p = self.mouse_pt,
-            .floating_win = winId,
         },
-    } });
+    });
 
     const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
@@ -796,16 +841,22 @@ pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, y
 
     const winId = self.windowFor(self.mouse_pt);
 
+    const widget_id = if (self.capture) |cap| cap.id else null;
+
     self.event_num += 1;
-    try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
-        .mouse = .{
-            .action = .{ .motion = dp },
-            .button = finger,
-            .mod = self.modifiers,
-            .p = self.mouse_pt,
-            .floating_win = winId,
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .target_widgetId = widget_id,
+        .evt = .{
+            .mouse = .{
+                .action = .{ .motion = dp },
+                .button = finger,
+                .mod = self.modifiers,
+                .p = self.mouse_pt,
+                .floating_win = winId,
+            },
         },
-    } });
+    });
 
     const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
@@ -1150,13 +1201,19 @@ pub fn begin(
 }
 
 fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
-    try self.events.append(self.arena(), .{ .num = self.event_num + 1, .evt = .{ .mouse = .{
-        .action = .position,
-        .button = .none,
-        .mod = self.modifiers,
-        .p = self.mouse_pt,
-        .floating_win = self.windowFor(self.mouse_pt),
-    } } });
+    const widget_id = if (self.capture) |cap| cap.id else null;
+
+    try self.events.append(self.arena(), .{
+        .num = self.event_num + 1,
+        .target_widgetId = widget_id,
+        .evt = .{ .mouse = .{
+            .action = .position,
+            .button = .none,
+            .mod = self.modifiers,
+            .p = self.mouse_pt,
+            .floating_win = self.windowFor(self.mouse_pt),
+        } },
+    });
 }
 
 fn positionMouseEventRemove(self: *Self) void {
@@ -1270,7 +1327,6 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
             },
             .triangles => |t| {
                 try dvui.renderTriangles(t.tri, t.tex);
-                // FIXME: free the triangles?
             },
         }
     }

@@ -171,7 +171,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 if (me.button.touch()) {
                     // with touch we have to capture otherwise any motion will
                     // cause scroll to capture
-                    dvui.captureMouse(self.data());
+                    dvui.captureMouse(self.data(), e.num);
                     dvui.dragPreStart(me.p, .{});
                 }
             } else if (me.action == .release) {
@@ -183,7 +183,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 }
                 if (dvui.captured(self.data().id)) {
                     // should only happen with touch
-                    dvui.captureMouse(null);
+                    dvui.captureMouse(null, e.num);
                     dvui.dragEnd();
                 }
             } else if (me.action == .motion and me.button.touch()) {
@@ -192,7 +192,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                         // if we overcame the drag threshold, then that
                         // means the person probably didn't want to touch
                         // this, maybe they were trying to scroll
-                        dvui.captureMouse(null);
+                        dvui.captureMouse(null, e.num);
                         dvui.dragEnd();
                     }
                 }
