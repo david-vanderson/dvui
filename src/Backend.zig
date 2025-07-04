@@ -69,9 +69,9 @@ pub fn drawClippedTriangles(self: Backend, texture: ?dvui.Texture, vtx: []const 
     return self.impl.drawClippedTriangles(texture, vtx, idx, clipr);
 }
 
-/// Create a `dvui.Texture` from the given `pixels` in RGBA.  The returned
-/// pointer is what will later be passed to `drawClippedTriangles`.
-pub fn textureCreate(self: Backend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) TextureError!dvui.Texture {
+/// Create a `dvui.Texture` from premultiplied alpha `pixels` in RGBA.  The
+/// returned pointer is what will later be passed to `drawClippedTriangles`.
+pub fn textureCreate(self: Backend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) TextureError!dvui.Texture {
     return self.impl.textureCreate(pixels, width, height, interpolation);
 }
 

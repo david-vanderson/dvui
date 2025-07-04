@@ -327,8 +327,7 @@ pub fn getHueSelectorTexture(dir: dvui.enums.Direction) dvui.Backend.TextureErro
             .horizontal => .{ hue_selector_colors.len, 1 },
             .vertical => .{ 1, hue_selector_colors.len },
         };
-        // FIXME: textureCreate should not need a non const pointer to pixels
-        res.value_ptr.texture = try dvui.textureCreate(.{ .pma = @constCast(&hue_selector_colors) }, width, height, .linear);
+        res.value_ptr.texture = try dvui.textureCreate(&hue_selector_colors, width, height, .linear);
     }
     return res.value_ptr.texture;
 }
@@ -340,7 +339,7 @@ pub fn getValueSaturationTexture(hue: f32) dvui.Backend.TextureError!dvui.Textur
     if (!res.found_existing) {
         var pixels: [4]Color.PMA = .{ .white, .cast(Color.HSV.toColor(.{ .h = hue })), .black, .black };
         // set top right corner to the max value of that hue
-        res.value_ptr.texture = try dvui.textureCreate(.{ .pma = &pixels }, 2, 2, .linear);
+        res.value_ptr.texture = try dvui.textureCreate(&pixels, 2, 2, .linear);
     }
     return res.value_ptr.texture;
 }
