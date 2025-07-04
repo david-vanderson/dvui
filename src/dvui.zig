@@ -93,6 +93,7 @@ pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
 pub const testing = @import("testing.zig");
 pub const ShrinkingArenaAllocator = @import("shrinking_arena_allocator.zig").ShrinkingArenaAllocator;
+pub const StackAllocator = @import("stack_allocator.zig").StackAllocator;
 pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHashMap;
 
 pub const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
@@ -210,10 +211,9 @@ pub fn widgetAlloc(comptime T: type) *T {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetFree(ptr: anytype) void {
     const ws = &currentWindow()._widget_stack;
-    // NOTE: We cannot use `allocatorLIFO` because of widgets that
-    //       store other widgets in their fields, which would cause
-    //       errors when attempting to free as they are not on the
-    //       top of the stack
+    // FIXME: It's not optimal to have to walk a list every time
+    //        the allocator expands
+    if (!ws.ownsSlice(std.mem.asBytes(ptr))) return;
     ws.allocator().destroy(ptr);
 }
 
