@@ -456,7 +456,7 @@ pub fn processMotionScroll(self: *ScrollContainerWidget, motion: dvui.Point.Phys
 }
 
 pub fn processEventsAfter(self: *ScrollContainerWidget) void {
-    const focus_id = dvui.lastFocusedIdInFrameFrom(self.last_focus);
+    const focus_id = dvui.lastFocusedIdInFrameSince(self.last_focus);
 
     const evts = dvui.events();
     for (evts) |*e| {

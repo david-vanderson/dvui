@@ -278,7 +278,7 @@ test "menuItem click sets last_focused_id_this_frame" {
             }
             _ = dvui.menuItemLabel(@src(), "item 2", .{}, .{ .tag = "item 2" });
 
-            last_focused_id_set = dvui.lastFocusedIdInFrameFrom(last_focused);
+            last_focused_id_set = dvui.lastFocusedIdInFrameSince(last_focused);
 
             return .ok;
         }

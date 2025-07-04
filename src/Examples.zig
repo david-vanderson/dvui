@@ -3185,7 +3185,7 @@ pub fn focus() void {
             }
         }
 
-        const have_focus = dvui.lastFocusedIdInFrameFrom(last_focus_id) != null;
+        const have_focus = dvui.lastFocusedIdInFrameSince(last_focus_id) != null;
         dvui.label(@src(), "Anything here with focus: {s}", .{if (have_focus) "Yes" else "No"}, .{});
     }
 
