@@ -261,7 +261,7 @@ pub const GridKeyboard = struct {
 
     /// returns the current cursor if the grid or one if
     /// its children has focus
-    pub fn cellCursor(self: *GridKeyboard) ?Cell {
+    pub fn cellCursor(self: *GridKeyboard) Cell {
         return self.cursor;
     }
 };
