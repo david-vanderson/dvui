@@ -89,6 +89,8 @@ pub const GridKeyboard = struct {
         self.last_focused_widget = dvui.lastFocusedIdInFrame();
     }
 
+    /// Calculate the number of rows to scroll based on the
+    /// grid's viewport height / row height.
     pub fn numScrollDefault(grid: *GridWidget) isize {
         const default: isize = 5;
         if (grid.row_height < 1) {
@@ -111,6 +113,9 @@ pub const GridKeyboard = struct {
         self.enforceCursorLimits();
     }
 
+    /// Scroll by a col and/or row offset. Accepts +ve and -ve offset.
+    /// Scrolling off the end of a row will either stop at the start/end of the row
+    /// or if wrap_curor is set to true, will wrap 1 cell.
     pub fn scrollBy(self: *GridKeyboard, num_cols: isize, num_rows: isize) void {
         var should_wrap: bool = false;
         if (num_cols < 0) {
@@ -156,11 +161,15 @@ pub const GridKeyboard = struct {
         self.enforceCursorLimits();
     }
 
+    /// Call this once per frame before the grid body cells are created.
     pub fn processEvents(self: *GridKeyboard, grid: *GridWidget) void {
         self.processEventsCustom(grid, GridWidget.pointToCell);
     }
 
     /// Call this once per frame before the grid body cells are created.
+    /// Used when multiple focusable widgets are in a single grid cell.
+    /// The passed in cellConverter must identify the correct cursor cell for
+    /// a physical screen positon.
     pub fn processEventsCustom(self: *GridKeyboard, grid: *GridWidget, cellConverter: fn (
         grid: *GridWidget,
         point: Point.Physical,

@@ -119,7 +119,12 @@ fn createYears() [50][]const u8 {
     }
     return result;
 }
-// 3 real cols, but 4 virtual cols as first cell is split into 2.
+
+// This example demonstrates an advanced usage of the keyboard navigation. The navigation maintains a virtual 8 column cursor
+// over the 5 columns grid. That is because the first 3 columns have 2 widgets that can get keyboard focus.
+// The 2 widgets in the first 3 columns are actually laid out vertically, even though the tab focus treats them as columns.
+// This allows the user to arrow-down and just jump through the text boxes in the column, or just jump through the sliders,
+// while still getting correct focus when tabbing through the widgets.
 var keyboard_nav: dvui.navigation.GridKeyboard = .{ .num_cols = 8, .num_rows = 0, .wrap_cursor = true, .tab_out = true, .num_scroll = 5 };
 var initialized = false;
 var col_widths: [5]f32 = .{ 100, 100, 100, 35, 35 };
@@ -279,8 +284,6 @@ fn gui_frame() !void {
                     initialized = true;
                 }
             }
-            // TODO: Name this something else. Or rethink the processEvents() style API?
-            // processEvents() has a lot going for it though.
             keyboard_nav.gridEnd();
             if (row_to_add) |row_num| {
                 data.insert(gpa, row_num, .{ .x = 50, .y1 = 0, .y2 = 0 }) catch {};
@@ -359,16 +362,20 @@ const CellStyleNav = struct {
     }
 };
 
+/// The job of this function is to turn a screen position into a cell.
+/// In this example, even though there are two widgets in the cell, the first one
+/// always gets focus whenever someone clicks in the cell.
+/// So all it needs to do is map the clicked in grid column to the correct virtual focus column .
 pub fn pointToCellConverter(g: *dvui.GridWidget, p: dvui.Point.Physical) ?dvui.GridWidget.Cell {
     var result = g.pointToCell(p);
     if (result) |*r| {
         // This will always focus the text box on mouse click in the cell,
         // but still allow kb nav of the sliders.
         r.col_num = switch (r.col_num) {
-            0 => 0,
-            1 => 2,
-            2 => 4,
-            3 => 5,
+            0 => 0, // Col 0 contains 2 focus widgets
+            1 => 2, // Col 1 contains 2 focus widgets
+            2 => 4, // Col 2 contains 2 focus widgets
+            3 => 5, // Col 3 and 4 only have 1 widget.
             4 => 6,
             else => unreachable,
         };
