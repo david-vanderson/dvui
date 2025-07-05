@@ -121,7 +121,7 @@ fn createYears() [50][]const u8 {
 // 3 real cols, but 4 virtual cols as first cell is split into 2.
 var keyboard_nav: dvui.navigation.GridKeyboard = .{ .num_cols = 6, .num_rows = 0, .wrap_cursor = true, .tab_out = true, .num_scroll = 5 };
 var initialized = false;
-var col_widths: [5]f32 = .{ 200, 100, 100, 35, 35 };
+var col_widths: [5]f32 = .{ 150, 100, 100, 35, 35 };
 // both dvui and SDL drawing
 fn gui_frame() !void {
     {
@@ -192,7 +192,12 @@ fn gui_frame() !void {
                     defer cell_num.col_num += 1;
                     var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
                     defer cell.deinit();
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = x, .min = 0, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .max_size_content = .width(50) }));
+                    var fraction: f32 = @floatCast(x.*);
+                    fraction /= 100;
+                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50) }))) {
+                        x.* = fraction * 10000;
+                        x.* = @round(x.*) / 100;
+                    }
                     focus_cell.col_num += 1;
                     _ = dvui.textEntryNumber(@src(), f64, .{ .value = x, .min = 0, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .max_size_content = .width(50) }));
                     focus_cell.col_num += 1;
@@ -237,9 +242,6 @@ fn gui_frame() !void {
             }
 
             if (dvui.tagGet("grid_focus_next")) |focus_widget| {
-                // TODO: can we tighten up the api here somehow? is_focused seems difficult to discover or
-                // know why you would need to use it here. Maybe rename this to shouldFocus? or focusChanged????
-                //                if ((keyboard_nav.is_focused and !dvui.navigation.was_mouse_focus) or !initialized) {
                 if ((keyboard_nav.shouldFocus()) or !initialized) {
                     dvui.focusWidget(focus_widget.id, null, null);
                     initialized = true;
