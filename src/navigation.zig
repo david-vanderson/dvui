@@ -86,7 +86,7 @@ pub const GridKeyboard = struct {
     /// Must be called after all body cells are created.
     /// and before any new widgets are created.
     pub fn gridEnd(self: *GridKeyboard) void {
-        self.last_focused_widget = dvui.lastFocusedIdInFrame(null);
+        self.last_focused_widget = dvui.lastFocusedIdInFrame();
     }
 
     pub fn numScrollDefault(grid: *GridWidget) isize {
@@ -167,7 +167,7 @@ pub const GridKeyboard = struct {
     ) ?Cell) void {
         self.enforceCursorLimits();
 
-        self.is_focused = self.last_focused_widget == dvui.focusedWidgetId() and dvui.lastFocusedIdInFrame(null) == .zero;
+        self.is_focused = self.last_focused_widget == dvui.focusedWidgetId() and dvui.lastFocusedIdInFrame() == .zero;
 
         for (dvui.events()) |*e| {
             self.processEvent(e, grid, cellConverter);
