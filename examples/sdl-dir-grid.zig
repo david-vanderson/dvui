@@ -165,7 +165,7 @@ fn gui_frame() !void {
                 if (e.evt != .mouse) continue;
                 const me = e.evt.mouse;
                 if (me.action != .press) continue;
-                if (grid.pointToColRow(me.p)) |cell| {
+                if (grid.pointToCell(me.p)) |cell| {
                     if (cell.col_num > 0) break :blk cell.row_num;
                 }
             }
@@ -282,10 +282,10 @@ pub fn directoryDisplay(grid: *dvui.GridWidget, row_selected: ?usize) !void {
             }
         }
         defer row_num += 1;
-        var col_num: usize = 0;
+        var cell_num: dvui.GridWidget.Cell = .colRow(0, row_num);
         {
-            defer col_num += 1;
-            var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
+            defer cell_num.col_num += 1;
+            var cell = grid.bodyCell(@src(), cell_num, highlight_style.cellOptions(cell_num));
             defer cell.deinit();
             var is_set = if (dir_num < selections.capacity()) selections.isSet(dir_num) else false;
             _ = dvui.checkboxEx(@src(), &is_set, null, .{ .selection_id = dir_num, .selection_info = &selection_info }, .{ .gravity_x = 0.5 });
@@ -294,19 +294,18 @@ pub fn directoryDisplay(grid: *dvui.GridWidget, row_selected: ?usize) !void {
             }
         }
         {
-            defer col_num += 1;
+            defer cell_num.col_num += 1;
             var cell = grid.bodyCell(
                 @src(),
-                col_num,
-                row_num,
-                highlight_style.cellOptions(col_num, row_num).override(.{ .size = .{ .w = 300 } }),
+                cell_num,
+                highlight_style.cellOptions(cell_num).override(.{ .size = .{ .w = 300 } }),
             );
             defer cell.deinit();
             dvui.labelNoFmt(@src(), entry.name, .{}, .{});
         }
         {
-            defer col_num += 1;
-            var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
+            defer cell_num.col_num += 1;
+            var cell = grid.bodyCell(@src(), cell_num, highlight_style.cellOptions(cell_num));
             defer cell.deinit();
             dvui.labelNoFmt(@src(), @tagName(entry.kind), .{}, .{});
         }
@@ -316,27 +315,27 @@ pub fn directoryDisplay(grid: *dvui.GridWidget, row_selected: ?usize) !void {
                 continue;
             };
             {
-                defer col_num += 1;
-                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
+                defer cell_num.col_num += 1;
+                var cell = grid.bodyCell(@src(), cell_num, highlight_style.cellOptions(cell_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{d}", .{stats.size}, .{});
             }
             {
-                defer col_num += 1;
-                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
+                defer cell_num.col_num += 1;
+                var cell = grid.bodyCell(@src(), cell_num, highlight_style.cellOptions(cell_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{d}", .{stats.mode}, .{});
             }
             {
-                defer col_num += 1;
-                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
+                defer cell_num.col_num += 1;
+                var cell = grid.bodyCell(@src(), cell_num, highlight_style.cellOptions(cell_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{[year]:0>4}-{[month]:0>2}-{[day]:0>2} {[hour]:0>2}:{[minute]:0>2}:{[second]:0>2}", fromNsTimestamp(stats.mtime), .{});
             }
         } else {
-            const end_col = col_num + 3;
-            while (col_num != end_col) : (col_num += 1) {
-                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
+            const end_col = cell_num.col_num + 3;
+            while (cell_num.col_num != end_col) : (cell_num.col_num += 1) {
+                var cell = grid.bodyCell(@src(), cell_num, highlight_style.cellOptions(cell_num));
                 defer cell.deinit();
             }
         }
@@ -407,9 +406,9 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget, row_selected: ?usize) void
     }
     filtering = false;
 
-    var row_num: usize = 0;
+    var cell_num: dvui.GridWidget.Cell = .colRow(0, 0);
     for (dir_cache.items, 0..) |*entry, dir_num| {
-        var col_num: usize = 0;
+        cell_num.col_num = 0;
         if (filename_filter.len > 0) {
             if (std.mem.indexOf(u8, entry.name, filename_filter)) |_| {} else {
                 // Clear selection of anything filtered. Not all apps would want to do this.
@@ -418,10 +417,10 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget, row_selected: ?usize) void
                 continue;
             }
         }
-        defer row_num += 1;
+        defer cell_num.row_num += 1;
         {
-            defer col_num += 1;
-            var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
+            defer cell_num.col_num += 1;
+            var cell = grid.bodyCell(@src(), cell_num, highlight_style.cellOptions(cell_num));
             defer cell.deinit();
             var is_set = dir_cache.items[dir_num].selected;
             _ = dvui.checkboxEx(@src(), &is_set, null, .{ .selection_id = dir_num, .selection_info = &selection_info }, .{ .gravity_x = 0.5 });
@@ -430,40 +429,40 @@ pub fn directoryDisplayCached(grid: *dvui.GridWidget, row_selected: ?usize) void
             }
         }
         {
-            defer col_num += 1;
-            var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
+            defer cell_num.col_num += 1;
+            var cell = grid.bodyCell(@src(), cell_num, highlight_style.cellOptions(cell_num));
             defer cell.deinit();
             dvui.labelNoFmt(@src(), entry.name, .{}, .{});
         }
         {
-            defer col_num += 1;
-            var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
+            defer cell_num.col_num += 1;
+            var cell = grid.bodyCell(@src(), cell_num, highlight_style.cellOptions(cell_num));
             defer cell.deinit();
             dvui.labelNoFmt(@src(), @tagName(entry.kind), .{}, .{});
         }
         if (entry.kind == .file) {
             {
-                defer col_num += 1;
-                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
+                defer cell_num.col_num += 1;
+                var cell = grid.bodyCell(@src(), cell_num, highlight_style.cellOptions(cell_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{d}", .{entry.size}, .{});
             }
             {
-                defer col_num += 1;
-                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
+                defer cell_num.col_num += 1;
+                var cell = grid.bodyCell(@src(), cell_num, highlight_style.cellOptions(cell_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{d}", .{entry.mode}, .{});
             }
             {
-                defer col_num += 1;
-                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
+                defer cell_num.col_num += 1;
+                var cell = grid.bodyCell(@src(), cell_num, highlight_style.cellOptions(cell_num));
                 defer cell.deinit();
                 dvui.label(@src(), "{[year]:0>4}-{[month]:0>2}-{[day]:0>2} {[hour]:0>2}:{[minute]:0>2}:{[second]:0>2}", fromNsTimestamp(entry.mtime), .{});
             }
         } else {
-            const end_col = col_num + 3;
-            while (col_num != end_col) : (col_num += 1) {
-                var cell = grid.bodyCell(@src(), col_num, row_num, highlight_style.cellOptions(col_num, row_num));
+            const end_col = cell_num.col_num + 3;
+            while (cell_num.col_num != end_col) : (cell_num.col_num += 1) {
+                var cell = grid.bodyCell(@src(), cell_num, highlight_style.cellOptions(cell_num));
                 defer cell.deinit();
             }
         }

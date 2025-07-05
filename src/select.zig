@@ -115,7 +115,7 @@ pub const SelectAllKeyboard = struct {
     /// If select-all is pressed and any widgets created between reset() and processEvents()
     /// have focus, the select-all will be applied (if it has not been handled by another widget).
     pub fn reset(self: *SelectAllKeyboard) void {
-        self.last_focused_in_frame = dvui.lastFocusedIdInFrame(null);
+        self.last_focused_in_frame = dvui.lastFocusedIdInFrame();
     }
 
     // processEvents() should be called after all grid cells have been created
@@ -123,7 +123,7 @@ pub const SelectAllKeyboard = struct {
     pub fn processEvents(self: *SelectAllKeyboard, select_all_state: *dvui.select.SelectAllState, wd: *dvui.WidgetData) void {
         self.selection_changed = false;
         for (dvui.events()) |*e| {
-            if (self.last_focused_in_frame != dvui.lastFocusedIdInFrame(null)) {
+            if (self.last_focused_in_frame != dvui.lastFocusedIdInFrame()) {
                 if (e.evt == .key and !e.handled) {
                     const ke = e.evt.key;
                     if (ke.matchBind("select_all") and ke.action == .down) {
