@@ -299,6 +299,9 @@ pub fn init(
 
                 try self.keybinds.putNoClobber(self.gpa, "delete_prev_word", .{ .key = .backspace, .control = true });
                 try self.keybinds.putNoClobber(self.gpa, "delete_next_word", .{ .key = .delete,    .control = true });
+
+                try self.keybinds.putNoClobber(self.gpa, "grid_cell_up",          .{ .key = .up,   .shift = false, .control = false, .alt = false });
+                try self.keybinds.putNoClobber(self.gpa, "grid_cell_down",        .{ .key = .down, .shift = false, .control = false, .alt = false });
                 // zig fmt: on
         },
         .mac => {
@@ -338,6 +341,9 @@ pub fn init(
 
                 try self.keybinds.putNoClobber(self.gpa, "delete_prev_word", .{ .key = .backspace, .alt = true });
                 try self.keybinds.putNoClobber(self.gpa, "delete_next_word", .{ .key = .delete,    .alt = true });
+
+                try self.keybinds.putNoClobber(self.gpa, "grid_cell_up",          .{ .key = .up,   .shift = false, .command = false });
+                try self.keybinds.putNoClobber(self.gpa, "grid_cell_down",        .{ .key = .down, .shift = false, .command = false });
                 // zig fmt: on
         },
     }
