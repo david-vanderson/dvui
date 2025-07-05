@@ -39,11 +39,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-fn getCachedTexture(self: *CacheWidget) ?dvui.Texture {
-    const entry = dvui.currentWindow().texture_cache.getPtr(self.hash) orelse return null;
-    return entry.texture;
-}
-
 fn drawCachedTexture(self: *CacheWidget, t: dvui.Texture) void {
     const rs = self.data().contentRectScale();
 
@@ -59,7 +54,7 @@ fn drawCachedTexture(self: *CacheWidget, t: dvui.Texture) void {
 
 /// Must be called before install().
 pub fn invalidate(self: *CacheWidget) void {
-    if (self.getCachedTexture()) |t| {
+    if (dvui.textureGetCached(self.hash)) |t| {
         // if we had a texture, show it this frame because our contents needs a frame to get sizing
         self.drawCachedTexture(t);
 
@@ -79,7 +74,7 @@ pub fn install(self: *CacheWidget) void {
 
     if (self.state != .ok) return;
 
-    if (self.getCachedTexture()) |t| {
+    if (dvui.textureGetCached(self.hash)) |t| {
         // successful cache, draw texture and enforce min size
         self.drawCachedTexture(t);
         self.data().minSizeMax(self.data().rect.size());
@@ -127,8 +122,8 @@ pub fn install(self: *CacheWidget) void {
 }
 
 /// Must be called after install().
-pub fn uncached(self: *CacheWidget) bool {
-    return (self.caching_tex != null or self.getCachedTexture() == null);
+pub fn uncached(self: *const CacheWidget) bool {
+    return (self.caching_tex != null or dvui.textureGetCached(self.hash) == null);
 }
 
 pub fn widget(self: *CacheWidget) Widget {
@@ -176,10 +171,7 @@ pub fn deinit(self: *CacheWidget) void {
             dvui.logError(@src(), err, "Could not get texture from caching target", .{});
             break :blk;
         };
-        cw.texture_cache.put(cw.gpa, self.hash, .{ .texture = texture }) catch |err| {
-            dvui.logError(@src(), err, "Could not put texture into the cache", .{});
-            break :blk;
-        };
+        dvui.textureAddToCache(self.hash, texture);
         // draw texture so we see it this frame
         self.drawCachedTexture(texture);
 
