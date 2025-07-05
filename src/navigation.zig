@@ -54,8 +54,8 @@ pub const GridKeyboard = struct {
                 .right = cw.keybinds.get("next_widget") orelse unreachable,
                 .first = cw.keybinds.get("text_start") orelse unreachable,
                 .last = cw.keybinds.get("text_end") orelse unreachable,
-                .col_first = cw.keybinds.get("line_start") orelse unreachable,
-                .col_last = cw.keybinds.get("line_end") orelse unreachable,
+                .col_first = .{},
+                .col_last = .{},
                 .scroll_up = .{ .key = .page_up },
                 .scroll_down = .{ .key = .page_down },
             };
@@ -134,14 +134,12 @@ pub const GridKeyboard = struct {
                 self.cursor.row_num -= @intCast(-num_rows);
             } else {
                 self.cursor.row_num = 0;
-                should_wrap = true;
             }
         } else if (num_rows > 0) {
             if (self.cursor.row_num < self.num_rows - 1) {
                 self.cursor.row_num += @intCast(num_rows);
             } else {
                 self.cursor.row_num = self.num_rows - 1;
-                should_wrap = true;
             }
         }
         if (should_wrap and self.wrap_cursor) {
@@ -202,11 +200,11 @@ pub const GridKeyboard = struct {
                     } else if (ke.matchKeyBind(self.navigation_keys.scroll_up)) {
                         e.handle(@src(), grid.data());
                         self.scrollBy(0, -self.num_scroll);
-                        grid.bsi.scrollPageDown(.horizontal);
+                        grid.bsi.scrollPageUp(.vertical);
                     } else if (ke.matchKeyBind(self.navigation_keys.scroll_down)) {
                         e.handle(@src(), grid.data());
                         self.scrollBy(0, self.num_scroll);
-                        grid.bsi.scrollPageUp(.horizontal);
+                        grid.bsi.scrollPageDown(.vertical);
                     } else if (ke.matchKeyBind(self.navigation_keys.up)) {
                         e.handle(@src(), grid.data());
                         self.scrollBy(0, -1);
