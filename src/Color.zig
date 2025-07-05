@@ -354,6 +354,32 @@ pub const PMA = extern struct {
     pub fn castToColor(self: PMA) Color {
         return .{ .r = self.r, .g = self.g, .b = self.b, .a = self.a };
     }
+
+    /// Alpha multiplies `pixels` in place
+    pub fn sliceFromRGBA(pixels: []u8) []Color.PMA {
+        for (0..pixels.len / 4) |ii| {
+            const i = ii * 4;
+            const a = pixels[i + 3];
+            pixels[i + 0] = @intCast(@divTrunc(@as(u16, pixels[i + 0]) * a, 255));
+            pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * a, 255));
+            pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * a, 255));
+        }
+        return @ptrCast(pixels);
+    }
+
+    /// Unapplies the alpha multiplication in place, returning the inner slice
+    pub fn sliceToRGBA(pma_pixels: []Color.PMA) []u8 {
+        var pixels: []u8 = @ptrCast(pma_pixels);
+        for (0..pixels.len / 4) |ii| {
+            const i = ii * 4;
+            const a = pixels[i + 3];
+            if (a == 0) continue;
+            pixels[i + 0] = @intCast(@divTrunc(@as(u16, pixels[i + 0]) * 255, a));
+            pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * 255, a));
+            pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * 255, a));
+        }
+        return pixels;
+    }
 };
 
 pub const HexString = [7]u8;

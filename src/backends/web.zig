@@ -46,7 +46,7 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_canvas_height() f32;
 
     pub extern "dvui" fn wasm_frame_buffer() u8;
-    pub extern "dvui" fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32, interp: u8) u32;
+    pub extern "dvui" fn wasm_textureCreate(pixels: [*]const u8, width: u32, height: u32, interp: u8) u32;
     pub extern "dvui" fn wasm_textureCreateTarget(width: u32, height: u32, interp: u8) u32;
     pub extern "dvui" fn wasm_textureRead(texture: u32, pixels_out: [*]u8, width: u32, height: u32) void;
     pub extern "dvui" fn wasm_renderTarget(u32) void;
@@ -98,7 +98,7 @@ pub const wasm = if (!builtin.is_test) struct {
     pub fn wasm_frame_buffer() u8 {
         return undefined;
     }
-    pub fn wasm_textureCreate(_: [*]u8, _: u32, _: u32, _: u8) u32 {
+    pub fn wasm_textureCreate(_: [*]const u8, _: u32, _: u32, _: u8) u32 {
         return undefined;
     }
     pub fn wasm_textureCreateTarget(_: u32, _: u32, _: u8) u32 {
@@ -623,7 +623,7 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const
     );
 }
 
-pub fn textureCreate(_: *WebBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
+pub fn textureCreate(_: *WebBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
     const wasm_interp: u8 = switch (interpolation) {
         .nearest => 0,
         .linear => 1,
