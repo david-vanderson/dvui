@@ -158,16 +158,14 @@ fn createYears() [50][]const u8 {
     }
     return result;
 }
-// 3 real cols, but the first is split into 2 navigable columns
-var keyboard_nav: dvui.navigation.GridKeyboard = .{ .num_cols = 3, .num_rows = 0, .wrap_cursor = true, .tab_out = true };
+// 3 real cols, but 4 virtual cols as first cell is split into 2.
+var keyboard_nav: dvui.navigation.GridKeyboard = .{ .num_cols = 4, .num_rows = 0, .wrap_cursor = true, .tab_out = true, .num_scroll = 5 };
 var initialized = false;
-
-var c1_first_widget_focused: bool = true;
 
 // both dvui and SDL drawing
 fn gui_frame() !void {
     {
-        dvui.currentWindow().debug_window_show = true;
+        dvui.currentWindow().debug_window_show = false;
         var m = dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
         defer m.deinit();
 
@@ -211,6 +209,8 @@ fn gui_frame() !void {
             defer grid.deinit();
             //ui.currentWindow().debug_widget_id = dvui.focusedWidgetId() orelse .zero;
             // 3 real + 1 virtual column
+            // TODO: Make the naming consistent.
+            keyboard_nav.num_scroll = dvui.navigation.GridKeyboard.numScrollDefault(grid);
             keyboard_nav.setLimits(4, pirate_data.len);
             keyboard_nav.processEventsCustom(grid, pointToCellConverter);
             const focused_cell = keyboard_nav.cellCursor();

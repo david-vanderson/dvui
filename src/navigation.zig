@@ -1,5 +1,9 @@
 //! Helpers for mouse and keyboard navigation.
 //!
+//!
+
+// TODO: Issue if you click below a text box. but in the cell. It flicks focus as it isn't actually focused
+// But it only happens on hte first click. not sure why???
 
 const std = @import("std");
 const dvui = @import("dvui.zig");
@@ -22,16 +26,24 @@ pub const GridKeyboard = struct {
         down: dvui.enums.Keybind,
         left: dvui.enums.Keybind,
         right: dvui.enums.Keybind,
-        home: dvui.enums.Keybind,
-        end: dvui.enums.Keybind,
+        first: dvui.enums.Keybind,
+        last: dvui.enums.Keybind,
+        col_first: dvui.enums.Keybind,
+        col_last: dvui.enums.Keybind,
+        scroll_up: dvui.enums.Keybind,
+        scroll_down: dvui.enums.Keybind,
 
         pub const none: NavigationKeys = .{
             .up = .{},
             .down = .{},
             .left = .{},
             .right = .{},
-            .home = .{},
-            .end = .{},
+            .first = .{},
+            .last = .{},
+            .col_first = .{},
+            .col_last = .{},
+            .scroll_up = .{},
+            .scroll_down = .{},
         };
 
         pub fn defaults() NavigationKeys {
@@ -41,16 +53,23 @@ pub const GridKeyboard = struct {
                 .down = cw.keybinds.get("grid_cell_down") orelse unreachable,
                 .left = cw.keybinds.get("prev_widget") orelse unreachable,
                 .right = cw.keybinds.get("next_widget") orelse unreachable,
-                .home = cw.keybinds.get("text_start") orelse unreachable,
-                .end = cw.keybinds.get("text_end") orelse unreachable,
+                .first = cw.keybinds.get("text_start") orelse unreachable,
+                .last = cw.keybinds.get("text_end") orelse unreachable,
+                .col_first = cw.keybinds.get("line_start") orelse unreachable,
+                .col_last = cw.keybinds.get("line_end") orelse unreachable,
+                .scroll_up = .{ .key = .page_up },
+                .scroll_down = .{ .key = .page_down },
             };
         }
     };
 
     /// Should the cursor wrap to the next row at the end of a column.
     wrap_cursor: bool,
-    /// Should we tab out of the grid at the last row_col. TODO: Rename this
+    /// Should we tab out of the grid at the first/last row_col. TODO: Rename this
     tab_out: bool,
+
+    /// Number of rows to move the cursor up/down on scroll_up/scroll_down
+    num_scroll: isize,
 
     /// col_num will always be less than this value.
     num_cols: usize,
@@ -73,6 +92,14 @@ pub const GridKeyboard = struct {
         self.last_focused_widget = dvui.lastFocusedIdInFrame(null);
     }
 
+    pub fn numScrollDefault(grid: *GridWidget) isize {
+        const default: isize = 5;
+        if (grid.row_height < 1) {
+            return default;
+        }
+        return @intFromFloat(@trunc(grid.bsi.viewport.h / grid.row_height));
+    }
+
     /// Change max row and col limits
     pub fn setLimits(self: *GridKeyboard, max_cols: usize, max_rows: usize) void {
         self.num_cols = max_cols;
@@ -84,6 +111,53 @@ pub const GridKeyboard = struct {
     pub fn scrollTo(self: *GridKeyboard, col_num: usize, row_num: usize) void {
         self.cursor.col_num = col_num;
         self.cursor.row_num = row_num;
+        self.enforceCursorLimits();
+    }
+
+    pub fn scrollBy(self: *GridKeyboard, num_cols: isize, num_rows: isize) void {
+        var should_wrap: bool = false;
+        if (num_cols < 0) {
+            if (self.cursor.col_num >= -num_cols) {
+                self.cursor.col_num -= @intCast(-num_cols);
+            } else {
+                self.cursor.col_num = 0;
+                should_wrap = true;
+            }
+        } else if (num_cols > 0) {
+            if (self.cursor.col_num < self.num_cols - 1) {
+                self.cursor.col_num += @intCast(num_cols);
+            } else {
+                should_wrap = true;
+            }
+        }
+        if (num_rows < 0) {
+            if (self.cursor.row_num >= -num_rows) {
+                self.cursor.row_num -= @intCast(-num_rows);
+            } else {
+                self.cursor.row_num = 0;
+                should_wrap = true;
+            }
+        } else if (num_rows > 0) {
+            if (self.cursor.row_num < self.num_rows - 1) {
+                self.cursor.row_num += @intCast(num_rows);
+            } else {
+                self.cursor.row_num = self.num_rows - 1;
+                should_wrap = true;
+            }
+        }
+        if (should_wrap and self.wrap_cursor) {
+            if (self.cursor.col_num == 0) {
+                if (self.cursor.row_num > 0) {
+                    self.cursor.col_num = self.num_cols - 1;
+                    self.cursor.row_num -= 1;
+                }
+            } else if (self.cursor.col_num == self.num_cols - 1) {
+                self.cursor.col_num = 0;
+                if (self.cursor.row_num < self.num_rows - 1) {
+                    self.cursor.row_num += 1;
+                }
+            }
+        }
         self.enforceCursorLimits();
     }
 
@@ -114,22 +188,37 @@ pub const GridKeyboard = struct {
             .key => |*ke| {
                 if (!self.is_focused or e.handled) return;
                 if (ke.action == .down or ke.action == .repeat) {
-                    if (ke.matchBind("text_start")) {
+                    if (ke.matchKeyBind(self.navigation_keys.first)) {
                         e.handle(@src(), grid.data());
                         self.scrollTo(0, 0);
                         was_mouse_focus = false;
-                    } else if (ke.matchBind("text_end")) {
+                    } else if (ke.matchKeyBind(self.navigation_keys.last)) {
                         e.handle(@src(), grid.data());
                         self.scrollTo(self.num_cols - 1, self.num_rows - 1);
                         was_mouse_focus = false;
-                    }
-                    if (ke.matchKeyBind(self.navigation_keys.up)) {
+                    } else if (ke.matchKeyBind(self.navigation_keys.col_first)) {
                         e.handle(@src(), grid.data());
-                        self.cursor.row_num = if (self.cursor.row_num > 0) self.cursor.row_num - 1 else 0;
+                        self.scrollTo(0, self.cursor.row_num);
+                        was_mouse_focus = false;
+                    } else if (ke.matchKeyBind(self.navigation_keys.col_last)) {
+                        e.handle(@src(), grid.data());
+                        self.scrollTo(self.num_cols - 1, self.cursor.row_num);
+                        was_mouse_focus = false;
+                    } else if (ke.matchKeyBind(self.navigation_keys.scroll_up)) {
+                        e.handle(@src(), grid.data());
+                        self.scrollBy(0, -self.num_scroll);
+                        was_mouse_focus = false;
+                    } else if (ke.matchKeyBind(self.navigation_keys.scroll_down)) {
+                        e.handle(@src(), grid.data());
+                        self.scrollBy(0, self.num_scroll);
+                        was_mouse_focus = false;
+                    } else if (ke.matchKeyBind(self.navigation_keys.up)) {
+                        e.handle(@src(), grid.data());
+                        self.scrollBy(0, -1);
                         was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.down)) {
                         e.handle(@src(), grid.data());
-                        self.cursor.row_num += 1;
+                        self.scrollBy(0, 1);
                         was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.left)) {
                         e.handle(@src(), grid.data());
@@ -138,29 +227,18 @@ pub const GridKeyboard = struct {
                             std.debug.print("tabbing out\n", .{});
                             dvui.tabIndexPrev(e.num);
                             self.is_focused = false;
-                        } else if (self.cursor.col_num > 0) {
-                            self.cursor.col_num -= 1;
-                        } else if (self.wrap_cursor) {
-                            if (self.cursor.row_num > 0) {
-                                self.cursor.col_num = self.num_cols;
-                                self.cursor.row_num -= 1;
-                            }
+                        } else {
+                            self.scrollBy(-1, 0);
                         }
                     } else if (ke.matchKeyBind(self.navigation_keys.right)) {
                         e.handle(@src(), grid.data());
                         was_mouse_focus = false;
-                        if (self.tab_out and self.cursor.col_num == self.num_cols - 1 and self.cursor.row_num == self.num_rows - 1) {
+                        if (self.tab_out and self.cursor.eq(self.num_cols - 1, self.num_rows - 1)) {
                             std.debug.print("tabbing out\n", .{});
                             dvui.tabIndexNext(e.num);
                             self.is_focused = false;
-                        } else if (self.cursor.col_num < self.num_cols) {
-                            self.cursor.col_num += 1;
-                        }
-                        if (self.wrap_cursor and self.cursor.col_num >= self.num_cols) {
-                            if (self.cursor.row_num < self.num_rows - 1) {
-                                self.cursor.col_num = 0;
-                                self.cursor.row_num += 1;
-                            }
+                        } else {
+                            self.scrollBy(1, 0);
                         }
                     }
                 }
