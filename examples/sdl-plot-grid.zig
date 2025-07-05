@@ -120,9 +120,9 @@ fn createYears() [50][]const u8 {
     return result;
 }
 // 3 real cols, but 4 virtual cols as first cell is split into 2.
-var keyboard_nav: dvui.navigation.GridKeyboard = .{ .num_cols = 6, .num_rows = 0, .wrap_cursor = true, .tab_out = true, .num_scroll = 5 };
+var keyboard_nav: dvui.navigation.GridKeyboard = .{ .num_cols = 8, .num_rows = 0, .wrap_cursor = true, .tab_out = true, .num_scroll = 5 };
 var initialized = false;
-var col_widths: [5]f32 = .{ 150, 100, 100, 35, 35 };
+var col_widths: [5]f32 = .{ 100, 100, 100, 35, 35 };
 // both dvui and SDL drawing
 fn gui_frame() !void {
     {
@@ -168,7 +168,7 @@ fn gui_frame() !void {
             // 3 real + 1 virtual column
             // TODO: Make the naming consistent.
             keyboard_nav.num_scroll = dvui.navigation.GridKeyboard.numScrollDefault(grid);
-            keyboard_nav.setLimits(6, data.len);
+            keyboard_nav.setLimits(8, data.len);
             keyboard_nav.processEventsCustom(grid, pointToCellConverter);
             const focused_cell = keyboard_nav.cellCursor();
 
@@ -189,18 +189,63 @@ fn gui_frame() !void {
             for (data.items(.x), data.items(.y1), data.items(.y2), 0..) |*x, *y1, *y2, row_num| {
                 var cell_num: dvui.GridWidget.Cell = .colRow(0, row_num);
                 var focus_cell: dvui.GridWidget.Cell = .colRow(0, row_num);
+                // X Column
                 {
                     defer cell_num.col_num += 1;
                     var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
                     defer cell.deinit();
+                    var cell_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+                    defer cell_vbox.deinit();
+
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = x, .min = 0, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .gravity_y = 0 }));
+                    focus_cell.col_num += 1;
+
                     var fraction: f32 = @floatCast(x.*);
                     fraction /= 100;
-                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50) }))) {
+                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .gravity_y = 1 }))) {
                         x.* = fraction * 10000;
                         x.* = @round(x.*) / 100;
                     }
                     focus_cell.col_num += 1;
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = x, .min = 0, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .max_size_content = .width(50) }));
+                }
+                // Y1 Columnn
+                {
+                    defer cell_num.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    var cell_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+                    defer cell_vbox.deinit();
+
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = y1, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell));
+                    focus_cell.col_num += 1;
+
+                    var fraction: f32 = @floatCast(y1.*);
+                    fraction += 100;
+                    fraction /= 200;
+                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1 }))) {
+                        y1.* = fraction * 200;
+                        y1.* = @round(y1.*) - 100;
+                    }
+                    focus_cell.col_num += 1;
+                }
+                // Y2 Column
+                {
+                    defer cell_num.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    var cell_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+                    defer cell_vbox.deinit();
+
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = y2, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell));
+                    focus_cell.col_num += 1;
+
+                    var fraction: f32 = @floatCast(y2.*);
+                    fraction += 100;
+                    fraction /= 200;
+                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1 }))) {
+                        y2.* = fraction * 200;
+                        y2.* = @round(y2.*) - 100;
+                    }
                     focus_cell.col_num += 1;
                 }
                 {
@@ -208,21 +253,7 @@ fn gui_frame() !void {
                     defer focus_cell.col_num += 1;
                     var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
                     defer cell.deinit();
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = y1, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell));
-                }
-                {
-                    defer cell_num.col_num += 1;
-                    defer focus_cell.col_num += 1;
-                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
-                    defer cell.deinit();
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = y2, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell));
-                }
-                {
-                    defer cell_num.col_num += 1;
-                    defer focus_cell.col_num += 1;
-                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
-                    defer cell.deinit();
-                    if (dvui.buttonIcon(@src(), "Insert", dvui.entypo.add_to_list, .{}, .{}, style.options(focus_cell).override(.{ .expand = .both }))) {
+                    if (dvui.buttonIcon(@src(), "Insert", dvui.entypo.add_to_list, .{}, .{}, style.options(focus_cell).override(.{ .expand = .horizontal }))) {
                         row_to_add = cell_num.row_num + 1;
                     }
                 }
@@ -231,7 +262,7 @@ fn gui_frame() !void {
                     defer focus_cell.col_num += 1;
                     var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
                     defer cell.deinit();
-                    if (dvui.buttonIcon(@src(), "Delete", dvui.entypo.cross, .{}, .{}, style.options(focus_cell).override(.{ .expand = .both }))) {
+                    if (dvui.buttonIcon(@src(), "Delete", dvui.entypo.cross, .{}, .{}, style.options(focus_cell).override(.{ .expand = .horizontal }))) {
                         row_to_delete = cell_num.row_num;
                     }
                 }
@@ -331,11 +362,16 @@ const CellStyleNav = struct {
 pub fn pointToCellConverter(g: *dvui.GridWidget, p: dvui.Point.Physical) ?dvui.GridWidget.Cell {
     var result = g.pointToCell(p);
     if (result) |*r| {
-        // For grid col 0 and click in 2nd half of cell, then count as virtual col 1
-        // For all other columns, increase their col num by 1 to include the virtual column
-        if (r.col_num > 0 or p.toNatural().x > 56) {
-            r.col_num += 1;
-        }
+        // This will always focus the text box on mouse click in the cell,
+        // but still allow kb nav of the sliders.
+        r.col_num = switch (r.col_num) {
+            0 => 0,
+            1 => 2,
+            2 => 4,
+            3 => 5,
+            4 => 6,
+            else => unreachable,
+        };
     }
     return result;
 }
