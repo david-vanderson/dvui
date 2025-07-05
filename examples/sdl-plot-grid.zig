@@ -96,57 +96,16 @@ pub fn main() !void {
     }
 }
 
+const Datum = struct { x: f64, y1: f64, y2: f64 };
+
+var data: std.MultiArrayList(Datum) = .empty;
+
 fn initData() !void {
-    try pirate_data.append(gpa, .{ .year = 1700, .pirates = 987232, .temperature = -1.02 });
-    try pirate_data.append(gpa, .{ .year = 1708, .pirates = 939021, .temperature = -0.99 });
-    try pirate_data.append(gpa, .{ .year = 1716, .pirates = 902102, .temperature = -0.87 });
-    try pirate_data.append(gpa, .{ .year = 1724, .pirates = 854001, .temperature = -0.75 });
-    try pirate_data.append(gpa, .{ .year = 1732, .pirates = 801234, .temperature = -0.63 });
-    try pirate_data.append(gpa, .{ .year = 1740, .pirates = 756789, .temperature = -0.51 });
-    try pirate_data.append(gpa, .{ .year = 1748, .pirates = 712345, .temperature = -0.39 });
-    try pirate_data.append(gpa, .{ .year = 1756, .pirates = 667890, .temperature = -0.27 });
-    try pirate_data.append(gpa, .{ .year = 1764, .pirates = 623456, .temperature = -0.15 });
-    try pirate_data.append(gpa, .{ .year = 1772, .pirates = 578901, .temperature = -0.03 });
-    try pirate_data.append(gpa, .{ .year = 1780, .pirates = 534567, .temperature = 0.09 });
-    try pirate_data.append(gpa, .{ .year = 1788, .pirates = 490123, .temperature = 0.21 });
-    try pirate_data.append(gpa, .{ .year = 1796, .pirates = 445678, .temperature = 0.33 });
-    try pirate_data.append(gpa, .{ .year = 1804, .pirates = 401234, .temperature = 0.45 });
-    try pirate_data.append(gpa, .{ .year = 1812, .pirates = 356789, .temperature = 0.57 });
-    try pirate_data.append(gpa, .{ .year = 1820, .pirates = 312345, .temperature = 0.69 });
-    try pirate_data.append(gpa, .{ .year = 1828, .pirates = 267890, .temperature = 0.81 });
-    try pirate_data.append(gpa, .{ .year = 1836, .pirates = 223456, .temperature = 0.93 });
-    try pirate_data.append(gpa, .{ .year = 1844, .pirates = 178901, .temperature = 1.05 });
-    try pirate_data.append(gpa, .{ .year = 1852, .pirates = 134567, .temperature = 1.17 });
-    try pirate_data.append(gpa, .{ .year = 1860, .pirates = 90123, .temperature = 1.29 });
-    try pirate_data.append(gpa, .{ .year = 1868, .pirates = 85678, .temperature = 1.41 });
-    try pirate_data.append(gpa, .{ .year = 1876, .pirates = 81234, .temperature = 1.53 });
-    try pirate_data.append(gpa, .{ .year = 1884, .pirates = 76789, .temperature = 1.65 });
-    try pirate_data.append(gpa, .{ .year = 1892, .pirates = 72345, .temperature = 1.77 });
-    try pirate_data.append(gpa, .{ .year = 1900, .pirates = 67890, .temperature = 1.89 });
-    try pirate_data.append(gpa, .{ .year = 1908, .pirates = 63456, .temperature = 2.01 });
-    try pirate_data.append(gpa, .{ .year = 1916, .pirates = 58901, .temperature = 2.13 });
-    try pirate_data.append(gpa, .{ .year = 1924, .pirates = 54567, .temperature = 2.25 });
-    try pirate_data.append(gpa, .{ .year = 1932, .pirates = 50123, .temperature = 2.37 });
-    try pirate_data.append(gpa, .{ .year = 1940, .pirates = 45678, .temperature = 2.49 });
-    try pirate_data.append(gpa, .{ .year = 1948, .pirates = 41234, .temperature = 2.61 });
-    try pirate_data.append(gpa, .{ .year = 1956, .pirates = 36789, .temperature = 2.73 });
-    try pirate_data.append(gpa, .{ .year = 1964, .pirates = 32345, .temperature = 2.85 });
-    try pirate_data.append(gpa, .{ .year = 1972, .pirates = 27890, .temperature = 2.97 });
-    try pirate_data.append(gpa, .{ .year = 1980, .pirates = 23456, .temperature = 3.09 });
-    try pirate_data.append(gpa, .{ .year = 1988, .pirates = 19012, .temperature = 3.21 });
-    try pirate_data.append(gpa, .{ .year = 1996, .pirates = 14567, .temperature = 3.33 });
-    try pirate_data.append(gpa, .{ .year = 2000, .pirates = 10000, .temperature = 3.4 });
-    try pirate_data.append(gpa, .{ .year = 2004, .pirates = 8000, .temperature = 3.5 });
-    try pirate_data.append(gpa, .{ .year = 2008, .pirates = 6000, .temperature = 3.6 });
-    try pirate_data.append(gpa, .{ .year = 2012, .pirates = 4000, .temperature = 3.7 });
-    try pirate_data.append(gpa, .{ .year = 2016, .pirates = 2000, .temperature = 3.8 });
-    try pirate_data.append(gpa, .{ .year = 2020, .pirates = 1000, .temperature = 3.9 });
-    try pirate_data.append(gpa, .{ .year = 2021, .pirates = 900, .temperature = 3.95 });
-    try pirate_data.append(gpa, .{ .year = 2022, .pirates = 800, .temperature = 4.0 });
-    try pirate_data.append(gpa, .{ .year = 2023, .pirates = 700, .temperature = 4.05 });
-    try pirate_data.append(gpa, .{ .year = 2024, .pirates = 600, .temperature = 4.1 });
-    try pirate_data.append(gpa, .{ .year = 2025, .pirates = 550, .temperature = 4.15 });
-    try pirate_data.append(gpa, .{ .year = 2026, .pirates = 500, .temperature = 4.2 });
+    try data.append(gpa, .{ .x = 0, .y1 = -50, .y2 = 50 });
+    try data.append(gpa, .{ .x = 25, .y1 = -25, .y2 = 25 });
+    try data.append(gpa, .{ .x = 50, .y1 = 0, .y2 = 0 });
+    try data.append(gpa, .{ .x = 75, .y1 = 25, .y2 = -25 });
+    try data.append(gpa, .{ .x = 100, .y1 = 50, .y2 = -50 });
 }
 
 const years: [50][]const u8 = createYears();
@@ -212,7 +171,7 @@ fn gui_frame() !void {
             // 3 real + 1 virtual column
             // TODO: Make the naming consistent.
             keyboard_nav.num_scroll = dvui.navigation.GridKeyboard.numScrollDefault(grid);
-            keyboard_nav.setLimits(4, pirate_data.len);
+            keyboard_nav.setLimits(4, data.len);
             keyboard_nav.processEventsCustom(grid, pointToCellConverter);
             const focused_cell = keyboard_nav.cellCursor();
 
@@ -221,23 +180,20 @@ fn gui_frame() !void {
 
             const style: CellStyleNav = .{ .base = style_base, .focus_cell = focused_cell, .tab_index = null };
 
-            dvui.gridHeading(@src(), grid, 0, "Year", .fixed, .{});
-            dvui.gridHeading(@src(), grid, 1, "Temperature", .fixed, .{});
-            dvui.gridHeading(@src(), grid, 2, "Num Pirates", .fixed, .{});
+            dvui.gridHeading(@src(), grid, 0, "X", .fixed, .{});
+            dvui.gridHeading(@src(), grid, 1, "Y1", .fixed, .{});
+            dvui.gridHeading(@src(), grid, 2, "Y2", .fixed, .{});
 
-            for (pirate_data.items(.year), pirate_data.items(.temperature), pirate_data.items(.pirates), 0..) |*year, *temp, *pirates, row_num| {
+            for (data.items(.x), data.items(.y1), data.items(.y2), 0..) |*x, *y1, *y2, row_num| {
                 var cell_num: dvui.GridWidget.Cell = .colRow(0, row_num);
                 var focus_cell: dvui.GridWidget.Cell = .colRow(0, row_num);
                 {
                     defer cell_num.col_num += 1;
                     var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
                     defer cell.deinit();
-                    //var choice: usize = 2;
-                    var text = dvui.textEntry(@src(), .{}, style.options(focus_cell));
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = x, .min = 0, .max = 100, .show_min_max = true }, style.options(focus_cell));
                     focus_cell.col_num += 1;
-                    text.deinit();
-                    //_ = dvui.dropdown(@src(), &years, &choice, style.options(col_num, row_num));
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = year, .min = -9999, .max = 9999 }, style.options(focus_cell));
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = x, .min = 0, .max = 100, .show_min_max = true }, style.options(focus_cell));
                     focus_cell.col_num += 1;
                 }
                 {
@@ -245,14 +201,14 @@ fn gui_frame() !void {
                     defer focus_cell.col_num += 1;
                     var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
                     defer cell.deinit();
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = temp, .min = -10, .max = 10 }, style.options(focus_cell));
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = y1, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell));
                 }
                 {
                     defer cell_num.col_num += 1;
                     defer focus_cell.col_num += 1;
                     var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
                     defer cell.deinit();
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = pirates, .min = 0, .max = 10_000_000_000 }, style.options(focus_cell));
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = y2, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell));
                 }
             }
             if (!initialized) {
@@ -277,10 +233,19 @@ fn gui_frame() !void {
     {
         var vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .border = dvui.Rect.all(1) });
         defer vbox.deinit();
-
+        var x_axis: dvui.PlotWidget.Axis = .{ .name = "X", .min = 0, .max = 100 };
+        var y_axis: dvui.PlotWidget.Axis = .{
+            .name = "Y",
+            .min = @min(minVal(data.items(.y1)), minVal(data.items(.y2))),
+            .max = @max(maxVal(data.items(.y1)), maxVal(data.items(.y2))),
+        };
         var plot = dvui.plot(
             @src(),
-            .{ .title = "Pirates vs Global Temperature" },
+            .{
+                .title = "X vs Y",
+                .x_axis = &x_axis,
+                .y_axis = &y_axis,
+            },
             .{
                 .padding = .{},
                 .expand = .both,
@@ -290,11 +255,10 @@ fn gui_frame() !void {
         );
         defer plot.deinit();
         const thick = 2;
-        const scale = 200_000;
         {
             var s1 = plot.line();
             defer s1.deinit();
-            for (pirate_data.items(.year), pirate_data.items(.temperature)) |x, y| {
+            for (data.items(.x), data.items(.y1)) |x, y| {
                 s1.point(x, y);
             }
             s1.stroke(thick, .red);
@@ -302,8 +266,8 @@ fn gui_frame() !void {
         {
             var s2 = plot.line();
             defer s2.deinit();
-            for (pirate_data.items(.year), pirate_data.items(.pirates)) |x, y| {
-                s2.point(x, (1_000_000 - y) / scale);
+            for (data.items(.x), data.items(.y2)) |x, y| {
+                s2.point(x, y);
             }
             s2.stroke(thick, .blue);
         }
@@ -344,6 +308,18 @@ pub fn pointToCellConverter(g: *dvui.GridWidget, p: dvui.Point.Physical) ?dvui.G
     return result;
 }
 
-const PirateDatum = struct { year: f64, temperature: f64, pirates: f64 };
+pub fn maxVal(slice: []f64) f64 {
+    var max: f64 = -std.math.floatMin(f64);
+    for (slice) |v| {
+        if (v > max) max = v;
+    }
+    return max;
+}
 
-var pirate_data: std.MultiArrayList(PirateDatum) = .empty;
+pub fn minVal(slice: []f64) f64 {
+    var min: f64 = std.math.floatMax(f64);
+    for (slice) |v| {
+        if (v < min) min = v;
+    }
+    return min;
+}

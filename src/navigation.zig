@@ -1,9 +1,5 @@
 //! Helpers for mouse and keyboard navigation.
 //!
-//!
-
-// TODO: Issue if you click below a text box. but in the cell. It flicks focus as it isn't actually focused
-// But it only happens on hte first click. not sure why???
 
 const std = @import("std");
 const dvui = @import("dvui.zig");
