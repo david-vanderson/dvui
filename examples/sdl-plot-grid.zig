@@ -265,7 +265,8 @@ fn gui_frame() !void {
             if (dvui.tagGet("grid_focus_next")) |focus_widget| {
                 // TODO: can we tighten up the api here somehow? is_focused seems difficult to discover or
                 // know why you would need to use it here. Maybe rename this to shouldFocus? or focusChanged????
-                if ((keyboard_nav.is_focused and !dvui.navigation.was_mouse_focus) or !initialized) {
+                //                if ((keyboard_nav.is_focused and !dvui.navigation.was_mouse_focus) or !initialized) {
+                if ((keyboard_nav.is_focused) or !initialized) {
                     dvui.focusWidget(focus_widget.id, null, null);
                     initialized = true;
                 }
@@ -333,10 +334,10 @@ const CellStyleNav = struct {
 pub fn pointToCellConverter(g: *dvui.GridWidget, p: dvui.Point.Physical) ?dvui.GridWidget.Cell {
     var result = g.pointToCell(p);
     if (result) |*r| {
-        if (r.col_num == 0) {
-            if (p.toNatural().x > g.colWidth(0) / 2)
-                r.col_num += 1;
-        } else {
+        // For grid col 0 and click in 2nd half of cell, then count as virtual col 1
+        // For all other columns, increase their col num by 1 to include the virtual column
+        // + 12/2 = 6 pixels to account for margin/padding.
+        if (r.col_num > 0 or p.toNatural().x > (g.colWidth(0) + 12) / 2) {
             r.col_num += 1;
         }
     }

@@ -17,7 +17,6 @@ const Cell = GridWidget.Cell;
 /// Adds keyboard navigation to the grid
 /// Provides a "cursor" that can be moved using
 /// - tab, shift-tab, left-arrow, right-arrow
-pub var was_mouse_focus: bool = false;
 pub const GridKeyboard = struct {
     /// Direction keys.
     /// - use defaultKeys() or provide your own bindings.
@@ -55,8 +54,8 @@ pub const GridKeyboard = struct {
                 .right = cw.keybinds.get("next_widget") orelse unreachable,
                 .first = cw.keybinds.get("text_start") orelse unreachable,
                 .last = cw.keybinds.get("text_end") orelse unreachable,
-                .col_first = cw.keybinds.get("line_start") orelse unreachable,
-                .col_last = cw.keybinds.get("line_end") orelse unreachable,
+                .col_first = .{},
+                .col_last = .{},
                 .scroll_up = .{ .key = .page_up },
                 .scroll_down = .{ .key = .page_down },
             };
@@ -97,7 +96,7 @@ pub const GridKeyboard = struct {
         if (grid.row_height < 1) {
             return default;
         }
-        return @intFromFloat(@trunc(grid.bsi.viewport.h / grid.row_height));
+        return @intFromFloat(@round(grid.bsi.viewport.h / grid.row_height));
     }
 
     /// Change max row and col limits
@@ -135,14 +134,12 @@ pub const GridKeyboard = struct {
                 self.cursor.row_num -= @intCast(-num_rows);
             } else {
                 self.cursor.row_num = 0;
-                should_wrap = true;
             }
         } else if (num_rows > 0) {
             if (self.cursor.row_num < self.num_rows - 1) {
                 self.cursor.row_num += @intCast(num_rows);
             } else {
                 self.cursor.row_num = self.num_rows - 1;
-                should_wrap = true;
             }
         }
         if (should_wrap and self.wrap_cursor) {
@@ -191,35 +188,29 @@ pub const GridKeyboard = struct {
                     if (ke.matchKeyBind(self.navigation_keys.first)) {
                         e.handle(@src(), grid.data());
                         self.scrollTo(0, 0);
-                        was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.last)) {
                         e.handle(@src(), grid.data());
                         self.scrollTo(self.num_cols - 1, self.num_rows - 1);
-                        was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.col_first)) {
                         e.handle(@src(), grid.data());
                         self.scrollTo(0, self.cursor.row_num);
-                        was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.col_last)) {
                         e.handle(@src(), grid.data());
                         self.scrollTo(self.num_cols - 1, self.cursor.row_num);
-                        was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.scroll_up)) {
                         e.handle(@src(), grid.data());
                         self.scrollBy(0, -self.num_scroll);
-                        was_mouse_focus = false;
+                        grid.bsi.scrollPageUp(.vertical);
                     } else if (ke.matchKeyBind(self.navigation_keys.scroll_down)) {
                         e.handle(@src(), grid.data());
                         self.scrollBy(0, self.num_scroll);
-                        was_mouse_focus = false;
+                        grid.bsi.scrollPageDown(.vertical);
                     } else if (ke.matchKeyBind(self.navigation_keys.up)) {
                         e.handle(@src(), grid.data());
                         self.scrollBy(0, -1);
-                        was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.down)) {
                         e.handle(@src(), grid.data());
                         self.scrollBy(0, 1);
-                        was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.left)) {
                         e.handle(@src(), grid.data());
                         if (self.tab_out and self.cursor.eqColRow(0, 0)) {
@@ -248,10 +239,8 @@ pub const GridKeyboard = struct {
                         self.cursor.col_num = cell.col_num;
                         self.cursor.row_num = cell.row_num;
                         self.is_focused = true;
-                        was_mouse_focus = true;
                     } else {
                         self.is_focused = false;
-                        was_mouse_focus = false;
                     }
                 }
             },
@@ -272,7 +261,7 @@ pub const GridKeyboard = struct {
 
     /// returns the current cursor if the grid or one if
     /// its children has focus
-    pub fn cellCursor(self: *GridKeyboard) ?Cell {
+    pub fn cellCursor(self: *GridKeyboard) Cell {
         return self.cursor;
     }
 };
