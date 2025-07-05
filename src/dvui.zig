@@ -5390,9 +5390,6 @@ pub const ImageSource = struct {
 
     interpolation: enums.TextureInterpolation = .linear,
 
-    /// Used for debugging output.
-    name: []const u8 = "image",
-
     /// Ensures next time `image()` is called a new texture will be generated.
     ///
     /// Only valid between `Window.begin`and `Window.end`.
@@ -5461,7 +5458,7 @@ pub const ImageInitOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts: Options) WidgetData {
-    const options = (Options{ .name = init_opts.source.name }).override(opts);
+    const options = (Options{ .name = "image" }).override(opts);
 
     var size = Size{};
     if (options.min_size_content) |msc| {
@@ -5522,7 +5519,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
         .background_color = renderBackground,
     };
     const content_rs = wd.contentRectScale();
-    renderImage(init_opts.source, content_rs, render_tex_opts) catch |err| logError(@src(), err, "Could not render image {s} at {}", .{ init_opts.source.name, content_rs });
+    renderImage(init_opts.source, content_rs, render_tex_opts) catch |err| logError(@src(), err, "Could not render image {?s} at {}", .{ opts.name, content_rs });
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
 
