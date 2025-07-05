@@ -5148,7 +5148,10 @@ fn gridVirtualScrolling() void {
         .internal = .{ .w = 1, .h = 1 },
     };
 
-    const cell_style: GridWidget.CellStyle.Join(CellStyle.HoveredRow, CellStyle.Borders) = .{ .style1 = highlight_hovered, .style2 = borders };
+    const cell_style: CellStyle.Join(CellStyle.HoveredRow, CellStyle.Borders) = .{
+        .style1 = highlight_hovered,
+        .style2 = borders,
+    };
 
     // Virtual scrolling
     const scroller: dvui.GridWidget.VirtualScroller = .init(grid, .{ .total_rows = num_rows, .scroll_info = &local.scroll_info });
