@@ -85,7 +85,7 @@ pub fn drawClippedTriangles(_: *TestingBackend, _: ?dvui.Texture, _: []const dvu
 
 /// Create a texture from the given pixels in RGBA.  The returned
 /// pointer is what will later be passed to drawClippedTriangles.
-pub fn textureCreate(self: *TestingBackend, pixels: [*]u8, width: u32, height: u32, _: dvui.enums.TextureInterpolation) !dvui.Texture {
+pub fn textureCreate(self: *TestingBackend, pixels: [*]const u8, width: u32, height: u32, _: dvui.enums.TextureInterpolation) !dvui.Texture {
     const new_pixels = self.allocator.dupe(u8, pixels[0 .. width * height * 4]) catch @panic("Couldn't create texture: OOM");
     return .{
         .width = width,
