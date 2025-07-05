@@ -119,9 +119,9 @@ fn createYears() [50][]const u8 {
     return result;
 }
 // 3 real cols, but 4 virtual cols as first cell is split into 2.
-var keyboard_nav: dvui.navigation.GridKeyboard = .{ .num_cols = 4, .num_rows = 0, .wrap_cursor = true, .tab_out = true, .num_scroll = 5 };
+var keyboard_nav: dvui.navigation.GridKeyboard = .{ .num_cols = 6, .num_rows = 0, .wrap_cursor = true, .tab_out = true, .num_scroll = 5 };
 var initialized = false;
-
+var col_widths: [5]f32 = .{ 200, 100, 100, 35, 35 };
 // both dvui and SDL drawing
 fn gui_frame() !void {
     {
@@ -138,7 +138,6 @@ fn gui_frame() !void {
             }
         }
     }
-
     var main_box = dvui.box(@src(), .horizontal, .{ .expand = .both, .color_fill = .fill_window, .background = true, .border = dvui.Rect.all(1) });
     defer main_box.deinit();
     {
@@ -147,10 +146,8 @@ fn gui_frame() !void {
         {
             var bottom_panel = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .gravity_y = 1.0 });
             defer bottom_panel.deinit();
-            var text = dvui.textEntry(@src(), .{}, .{});
-            text.deinit();
-            text = dvui.textEntry(@src(), .{}, .{});
-            text.deinit();
+            if (dvui.button(@src(), "Add (NOT)", .{ .draw_focus = false }, .{})) {}
+            _ = dvui.button(@src(), "Delete (NOT)", .{ .draw_focus = false }, .{});
         }
         {
             var top_panel = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .gravity_y = 0 });
@@ -164,18 +161,20 @@ fn gui_frame() !void {
         }
         {
             //            const focus_cell = keyboard_nav.cellCursor();
-
-            var grid = dvui.grid(@src(), .numCols(3), .{}, .{});
+            var grid = dvui.grid(@src(), .{ .col_widths = &col_widths }, .{}, .{});
             defer grid.deinit();
             //ui.currentWindow().debug_widget_id = dvui.focusedWidgetId() orelse .zero;
             // 3 real + 1 virtual column
             // TODO: Make the naming consistent.
             keyboard_nav.num_scroll = dvui.navigation.GridKeyboard.numScrollDefault(grid);
-            keyboard_nav.setLimits(4, data.len);
+            keyboard_nav.setLimits(6, data.len);
             keyboard_nav.processEventsCustom(grid, pointToCellConverter);
             const focused_cell = keyboard_nav.cellCursor();
 
-            const style_base = CellStyle{ .opts = .{ .tab_index = null, .expand = .horizontal } };
+            const style_base = CellStyle{ .opts = .{
+                .tab_index = null,
+                .expand = .horizontal,
+            } };
             //const style_base = CellStyle{ .opts = .{ .expand = .horizontal } };
 
             const style: CellStyleNav = .{ .base = style_base, .focus_cell = focused_cell, .tab_index = null };
@@ -183,6 +182,7 @@ fn gui_frame() !void {
             dvui.gridHeading(@src(), grid, 0, "X", .fixed, .{});
             dvui.gridHeading(@src(), grid, 1, "Y1", .fixed, .{});
             dvui.gridHeading(@src(), grid, 2, "Y2", .fixed, .{});
+            var row_to_delete: ?usize = null;
 
             for (data.items(.x), data.items(.y1), data.items(.y2), 0..) |*x, *y1, *y2, row_num| {
                 var cell_num: dvui.GridWidget.Cell = .colRow(0, row_num);
@@ -191,9 +191,9 @@ fn gui_frame() !void {
                     defer cell_num.col_num += 1;
                     var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
                     defer cell.deinit();
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = x, .min = 0, .max = 100, .show_min_max = true }, style.options(focus_cell));
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = x, .min = 0, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .max_size_content = .width(50) }));
                     focus_cell.col_num += 1;
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = x, .min = 0, .max = 100, .show_min_max = true }, style.options(focus_cell));
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = x, .min = 0, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .max_size_content = .width(50) }));
                     focus_cell.col_num += 1;
                 }
                 {
@@ -210,24 +210,49 @@ fn gui_frame() !void {
                     defer cell.deinit();
                     _ = dvui.textEntryNumber(@src(), f64, .{ .value = y2, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell));
                 }
+                {
+                    defer cell_num.col_num += 1;
+                    defer focus_cell.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    if (dvui.buttonIcon(@src(), "Insert", dvui.entypo.add_to_list, .{}, .{}, style.options(focus_cell).override(.{ .expand = .both }))) {
+                        data.insert(gpa, cell_num.row_num + 1, .{ .x = 100, .y1 = 0, .y2 = 0 }) catch {};
+                    }
+                }
+                {
+                    defer cell_num.col_num += 1;
+                    defer focus_cell.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    if (dvui.buttonIcon(@src(), "Delete", dvui.entypo.cross, .{}, .{}, style.options(focus_cell).override(.{ .expand = .both }))) {
+                        row_to_delete = cell_num.row_num;
+                    }
+                }
             }
             if (!initialized) {
-                // TODO: Need to make this initialization better.
                 keyboard_nav.navigation_keys = .defaults();
                 keyboard_nav.scrollTo(0, 0);
-                keyboard_nav.is_focused = true;
+                keyboard_nav.is_focused = true; // We want the grid focused by default.
             }
 
             if (dvui.tagGet("grid_focus_next")) |focus_widget| {
                 // TODO: can we tighten up the api here somehow? is_focused seems difficult to discover or
                 // know why you would need to use it here. Maybe rename this to shouldFocus? or focusChanged????
                 //                if ((keyboard_nav.is_focused and !dvui.navigation.was_mouse_focus) or !initialized) {
-                if ((keyboard_nav.is_focused) or !initialized) {
+                if ((keyboard_nav.shouldFocus()) or !initialized) {
                     dvui.focusWidget(focus_widget.id, null, null);
                     initialized = true;
                 }
             }
-            keyboard_nav.reset();
+            // TODO: Name this something else. Or rethink the processEvents() style API?
+            // processEvents() has a lot going for it though.
+            keyboard_nav.gridEnd();
+            if (row_to_delete) |row_num| {
+                if (data.len > 1)
+                    data.orderedRemove(row_num)
+                else
+                    data.set(0, .{ .x = 0, .y1 = 0, .y2 = 0 });
+            }
         }
     }
     {
@@ -235,7 +260,7 @@ fn gui_frame() !void {
         defer vbox.deinit();
         var x_axis: dvui.PlotWidget.Axis = .{ .name = "X", .min = 0, .max = 100 };
         var y_axis: dvui.PlotWidget.Axis = .{
-            .name = "Y",
+            .name = "Y1\nY2",
             .min = @min(minVal(data.items(.y1)), minVal(data.items(.y2))),
             .max = @max(maxVal(data.items(.y1)), maxVal(data.items(.y2))),
         };
@@ -245,6 +270,7 @@ fn gui_frame() !void {
                 .title = "X vs Y",
                 .x_axis = &x_axis,
                 .y_axis = &y_axis,
+                .mouse_hover = true,
             },
             .{
                 .padding = .{},

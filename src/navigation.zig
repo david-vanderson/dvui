@@ -83,7 +83,9 @@ pub const GridKeyboard = struct {
 
     last_focused_widget: WidgetId = .zero,
 
-    pub fn reset(self: *GridKeyboard) void {
+    /// Must be called after all body cells are created.
+    /// and before any new widgets are created.
+    pub fn gridEnd(self: *GridKeyboard) void {
         self.last_focused_widget = dvui.lastFocusedIdInFrame(null);
     }
 
@@ -259,5 +261,10 @@ pub const GridKeyboard = struct {
     /// its children has focus
     pub fn cellCursor(self: *GridKeyboard) Cell {
         return self.cursor;
+    }
+
+    /// Should the widget in cellCursor() be focused this frame?
+    pub fn shouldFocus(self: *const GridKeyboard) bool {
+        return self.is_focused;
     }
 };

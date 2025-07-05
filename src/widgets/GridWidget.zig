@@ -147,6 +147,7 @@ pub const InitOpts = struct {
     var_row_heights: bool = false,
 };
 
+// TODO: Can I make that const?
 pub const WidthsOrNum = union(enum) {
     col_widths: []f32,
     num_cols: usize,
