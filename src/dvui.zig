@@ -5421,6 +5421,8 @@ pub const ImageSource = union(enum) {
         invalidation_strategy: InavalidationStrategy = .ptr,
     },
 
+    /// When providing a texture directly, `hash` will return 0 and it will
+    /// not be inserted into the texture cache.
     texture: Texture,
 
     pub const InavalidationStrategy = enum {
@@ -5437,8 +5439,12 @@ pub const ImageSource = union(enum) {
         always,
     };
 
-    /// Pass the return value of this to `dvui.textureInvalidate` to remove
-    /// the texture from the cache.
+    /// Pass the return value of this to `dvui.textureInvalidate` to
+    /// remove the texture from the cache.
+    ///
+    /// When providing a texture directly with `ImageSource.texture`,
+    /// this function will always return 0 as it doesn't interact with
+    /// the texture cache.
     pub fn hash(self: ImageSource) u64 {
         var h = fnv.init();
         switch (self) {
@@ -5470,11 +5476,7 @@ pub const ImageSource = union(enum) {
                 h.update(std.mem.asBytes(&pixels.width));
                 h.update(std.mem.asBytes(&pixels.height));
             },
-            .texture => |tex| {
-                h.update(std.mem.asBytes(&tex.width));
-                h.update(std.mem.asBytes(&tex.height));
-                h.update(std.mem.asBytes(&tex.ptr));
-            },
+            .texture => return 0,
         }
         return h.final();
     }
