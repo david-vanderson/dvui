@@ -8,6 +8,7 @@
 const dvui = @import("../../dvui.zig");
 const GridWidget = dvui.GridWidget;
 const CellOptions = GridWidget.CellOptions;
+const Cell = GridWidget.Cell;
 const Options = dvui.Options;
 const Rect = dvui.Rect;
 
@@ -23,16 +24,14 @@ cell_opts: CellOptions = .{},
 opts: Options = .{},
 
 /// Returns the cellOptions for this cell. col and row are ignored.
-pub fn cellOptions(self: *const CellStyle, col: usize, row: usize) CellOptions {
-    _ = row;
-    _ = col;
+pub fn cellOptions(self: *const CellStyle, cell: Cell) CellOptions {
+    _ = cell;
     return self.cell_opts;
 }
 
 /// Return widget options for this cell. col and row are ignored.
-pub fn options(self: *const CellStyle, col: usize, row: usize) Options {
-    _ = row;
-    _ = col;
+pub fn options(self: *const CellStyle, cell: Cell) Options {
+    _ = cell;
     return self.opts;
 }
 
@@ -64,12 +63,12 @@ pub fn Join(T1: type, T2: type) type {
             return .{ .style1 = style1, .style2 = style2 };
         }
 
-        pub fn cellOptions(self: Self, col_num: usize, row_num: usize) CellOptions {
-            return self.style1.cellOptions(col_num, row_num).override(self.style2.cellOptions(col_num, row_num));
+        pub fn cellOptions(self: Self, cell: Cell) CellOptions {
+            return self.style1.cellOptions(cell).override(self.style2.cellOptions(cell));
         }
 
-        pub fn options(self: Self, col_num: usize, row_num: usize) Options {
-            return self.style1.options(col_num, row_num).override(self.style2.options(col_num, row_num));
+        pub fn options(self: Self, cell: Cell) Options {
+            return self.style1.options(cell).override(self.style2.options(cell));
         }
     };
 }
@@ -85,16 +84,16 @@ pub const Banded = struct {
     alt_cell_opts: CellOptions = .{},
     opts: Options = .{},
 
-    pub fn cellOptions(self: *const Banded, col: usize, row: usize) CellOptions {
+    pub fn cellOptions(self: *const Banded, cell: Cell) CellOptions {
         switch (self.banding) {
             .rows => {
-                return if (row % 2 == 0)
+                return if (cell.row % 2 == 0)
                     self.cell_opts
                 else
                     self.alt_cell_opts;
             },
             .cols => {
-                return if (col % 2 == 0)
+                return if (cell.col % 2 == 0)
                     self.cell_opts
                 else
                     self.alt_cell_opts;
@@ -120,9 +119,8 @@ pub const Banded = struct {
         };
     }
 
-    pub fn options(self: *const Banded, col: usize, row: usize) Options {
-        _ = row;
-        _ = col;
+    pub fn options(self: *const Banded, cell: Cell) Options {
+        _ = cell;
         return self.opts;
     }
 
@@ -169,18 +167,16 @@ pub const HoveredRow = struct {
         };
     }
 
-    pub fn cellOptions(self: *const HoveredRow, col: usize, row: usize) CellOptions {
-        _ = col;
+    pub fn cellOptions(self: *const HoveredRow, cell: Cell) CellOptions {
         const highlighted_row = self.highlighted_row orelse return self.cell_opts;
-        if (row != highlighted_row) return self.cell_opts;
+        if (cell.row != highlighted_row) return self.cell_opts;
 
         return self.cell_opts.override(.{ .color_fill = self.cell_opts.color_fill_hover });
     }
 
-    pub fn options(self: *const HoveredRow, col: usize, row: usize) Options {
-        _ = col;
+    pub fn options(self: *const HoveredRow, cell: Cell) Options {
         const highlighted_row = self.highlighted_row orelse return self.opts;
-        if (row != highlighted_row) return self.opts;
+        if (cell.row != highlighted_row) return self.opts;
 
         return self.opts.override(.{ .color_fill = self.opts.color_fill_hover });
     }
@@ -214,15 +210,15 @@ pub const Borders = struct {
     cell_opts: CellOptions = .{},
     opts: Options = .{},
 
-    pub fn cellOptions(self: *const Borders, col: usize, row: usize) CellOptions {
+    pub fn cellOptions(self: *const Borders, cell: Cell) CellOptions {
         var border = self.internal;
-        if (col == 0)
+        if (cell.col == 0)
             border.x = self.external.x;
-        if (row == 0)
+        if (cell.row == 0)
             border.y = self.external.y;
-        if (row == self.num_rows - 1)
+        if (cell.row == self.num_rows - 1)
             border.h = self.external.h;
-        if (col == self.num_cols - 1)
+        if (cell.col == self.num_cols - 1)
             border.w = self.external.w;
         return self.cell_opts.override(.{ .border = border, .background = true });
     }
@@ -239,9 +235,8 @@ pub const Borders = struct {
         };
     }
 
-    pub fn options(self: *const Borders, col: usize, row: usize) Options {
-        _ = row;
-        _ = col;
+    pub fn options(self: *const Borders, cell: Cell) Options {
+        _ = cell;
         return self.opts;
     }
 

@@ -222,9 +222,7 @@ pub const GridKeyboard = struct {
                         was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.left)) {
                         e.handle(@src(), grid.data());
-                        was_mouse_focus = false;
-                        if (self.tab_out and self.cursor.eq(0, 0)) {
-                            std.debug.print("tabbing out\n", .{});
+                        if (self.tab_out and self.cursor.eqColRow(0, 0)) {
                             dvui.tabIndexPrev(e.num);
                             self.is_focused = false;
                         } else {
@@ -232,9 +230,7 @@ pub const GridKeyboard = struct {
                         }
                     } else if (ke.matchKeyBind(self.navigation_keys.right)) {
                         e.handle(@src(), grid.data());
-                        was_mouse_focus = false;
-                        if (self.tab_out and self.cursor.eq(self.num_cols - 1, self.num_rows - 1)) {
-                            std.debug.print("tabbing out\n", .{});
+                        if (self.tab_out and self.cursor.eqColRow(self.num_cols - 1, self.num_rows - 1)) {
                             dvui.tabIndexNext(e.num);
                             self.is_focused = false;
                         } else {

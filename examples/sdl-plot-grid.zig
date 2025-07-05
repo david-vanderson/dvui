@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const dvui = @import("dvui");
 const Backend = dvui.backend;
 const CellStyle = dvui.GridWidget.CellStyle;
+
 comptime {
     std.debug.assert(@hasDecl(Backend, "SDLBackend"));
 }
@@ -225,34 +226,33 @@ fn gui_frame() !void {
             dvui.gridHeading(@src(), grid, 2, "Num Pirates", .fixed, .{});
 
             for (pirate_data.items(.year), pirate_data.items(.temperature), pirate_data.items(.pirates), 0..) |*year, *temp, *pirates, row_num| {
-                var col_num: usize = 0;
-                var focus_col: usize = 0;
+                var cell_num: dvui.GridWidget.Cell = .colRow(0, row_num);
+                var focus_cell: dvui.GridWidget.Cell = .colRow(0, row_num);
                 {
-                    defer col_num += 1;
-                    var cell = grid.bodyCell(@src(), col_num, row_num, style.cellOptions(col_num, row_num));
+                    defer cell_num.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
                     defer cell.deinit();
                     //var choice: usize = 2;
-                    var text = dvui.textEntry(@src(), .{}, style.options(focus_col, row_num));
-                    focus_col += 1;
+                    var text = dvui.textEntry(@src(), .{}, style.options(focus_cell));
+                    focus_cell.col_num += 1;
                     text.deinit();
                     //_ = dvui.dropdown(@src(), &years, &choice, style.options(col_num, row_num));
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = year, .min = -9999, .max = 9999 }, style.options(focus_col, row_num));
-                    focus_col += 1;
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = year, .min = -9999, .max = 9999 }, style.options(focus_cell));
+                    focus_cell.col_num += 1;
                 }
                 {
-                    defer col_num += 1;
-                    defer focus_col += 1;
-
-                    var cell = grid.bodyCell(@src(), col_num, row_num, style.cellOptions(col_num, row_num));
+                    defer cell_num.col_num += 1;
+                    defer focus_cell.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
                     defer cell.deinit();
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = temp, .min = -10, .max = 10 }, style.options(focus_col, row_num));
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = temp, .min = -10, .max = 10 }, style.options(focus_cell));
                 }
                 {
-                    defer col_num += 1;
-                    defer focus_col += 1;
-                    var cell = grid.bodyCell(@src(), col_num, row_num, style.cellOptions(col_num, row_num));
+                    defer cell_num.col_num += 1;
+                    defer focus_cell.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
                     defer cell.deinit();
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = pirates, .min = 0, .max = 10_000_000_000 }, style.options(focus_col, row_num));
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = pirates, .min = 0, .max = 10_000_000_000 }, style.options(focus_cell));
                 }
             }
             if (!initialized) {
@@ -316,17 +316,17 @@ const CellStyleNav = struct {
     focus_cell: ?dvui.GridWidget.Cell,
     tab_index: ?u16 = null,
 
-    pub fn cellOptions(self: *const CellStyleNav, col_num: usize, row_num: usize) dvui.GridWidget.CellOptions {
-        return self.base.cellOptions(col_num, row_num);
+    pub fn cellOptions(self: *const CellStyleNav, cell: dvui.GridWidget.Cell) dvui.GridWidget.CellOptions {
+        return self.base.cellOptions(cell);
     }
 
-    pub fn options(self: *const CellStyleNav, col_num: usize, row_num: usize) dvui.Options {
+    pub fn options(self: *const CellStyleNav, cell: dvui.GridWidget.Cell) dvui.Options {
         if (self.focus_cell) |focus_cell| {
-            if (row_num == focus_cell.row_num and col_num == focus_cell.col_num) {
-                return self.base.options(col_num, row_num).override(.{ .tag = "grid_focus_next", .tab_index = self.tab_index });
+            if (focus_cell.eq(cell)) {
+                return self.base.options(cell).override(.{ .tag = "grid_focus_next", .tab_index = self.tab_index });
             }
         }
-        return self.base.options(col_num, row_num).override(.{ .tab_index = 0 });
+        return self.base.options(cell).override(.{ .tab_index = 0 });
     }
 };
 

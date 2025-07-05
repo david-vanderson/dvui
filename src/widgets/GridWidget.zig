@@ -61,7 +61,11 @@ pub const Cell = struct {
         };
     }
 
-    pub fn eq(self: Cell, col_num: usize, row_num: usize) bool {
+    pub fn eq(lhs: Cell, rhs: Cell) bool {
+        return lhs.col_num == rhs.col_num and lhs.row_num == rhs.row_num;
+    }
+
+    pub fn eqColRow(self: Cell, col_num: usize, row_num: usize) bool {
         return self.col_num == col_num and self.row_num == row_num;
     }
 };
@@ -421,16 +425,16 @@ pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: u
 /// If var_row_heights is true, size.h is always used as the row height,
 /// otherwise the height for all body cells in the grid is set to the max size.h
 ///
-pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: usize, row_num: usize, opts: CellOptions) *BoxWidget {
-    if (row_num < self.cur_row) {
+pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, cell: Cell, opts: CellOptions) *BoxWidget {
+    if (cell.row_num < self.cur_row) {
         self.this_row_y = self.rows_y_offset;
         self.next_row_y = self.rows_y_offset;
-        self.cur_row = row_num;
-    } else if (row_num > self.cur_row) {
+        self.cur_row = cell.row_num;
+    } else if (cell.row_num > self.cur_row) {
         self.this_row_y = self.next_row_y;
-        self.cur_row = row_num;
+        self.cur_row = cell.row_num;
     }
-    self.max_row = @max(self.max_row, row_num);
+    self.max_row = @max(self.max_row, cell.row_num);
     if (self.bscroll == null) {
         self.bodyScrollContainerCreate();
     }
@@ -438,7 +442,7 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: usi
         if (opts.width() > 0) {
             break :width opts.width();
         } else {
-            break :width self.colWidth(col_num);
+            break :width self.colWidth(cell.col_num);
         }
     };
     const cell_height: f32 = height: {
@@ -451,30 +455,30 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: usi
         }
     };
 
-    const row_num_f: f32 = @floatFromInt(row_num);
-    const pos_x = self.posX(col_num);
+    const row_num_f: f32 = @floatFromInt(cell.row_num);
+    const pos_x = self.posX(cell.col_num);
     const pos_y = if (self.init_opts.var_row_heights) self.this_row_y else self.row_height * row_num_f;
     var cell_opts = opts.toOptions();
     cell_opts.rect = .{ .x = pos_x, .y = pos_y, .w = cell_width, .h = cell_height };
 
     // To support being called in a loop, combine col and row numbers as id_extra.
     // 9_223_372_036_854_775K cols should be enough for anybody.
-    cell_opts.id_extra = (col_num << @bitSizeOf(usize) / 2) | row_num;
+    cell_opts.id_extra = (cell.col_num << @bitSizeOf(usize) / 2) | cell.row_num;
 
-    var cell = dvui.widgetAlloc(BoxWidget);
-    cell.* = BoxWidget.init(src, .{ .dir = .horizontal }, cell_opts);
-    cell.install();
-    cell.drawBackground();
-    const first_frame = dvui.firstFrame(cell.data().id);
+    var cell_box = dvui.widgetAlloc(BoxWidget);
+    cell_box.* = BoxWidget.init(src, .{ .dir = .horizontal }, cell_opts);
+    cell_box.install();
+    cell_box.drawBackground();
+    const first_frame = dvui.firstFrame(cell_box.data().id);
     // Determine heights for next frame.
     if (!first_frame) {
-        const cell_size = cell.data().rect.size();
+        const cell_size = cell_box.data().rect.size();
         self.row_height = @max(self.row_height, cell_size.h);
-        self.colWidthSet(col_num, cell_size.w);
+        self.colWidthSet(cell.col_num, cell_size.w);
     }
     self.next_row_y = @max(self.next_row_y, self.this_row_y + if (opts.height() > 0) opts.height() else self.row_height);
 
-    return cell;
+    return cell_box;
 }
 
 /// Set the starting y value in the scroll container to begin rendering rows.
