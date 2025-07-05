@@ -212,13 +212,13 @@ pub const Borders = struct {
 
     pub fn cellOptions(self: *const Borders, cell: Cell) CellOptions {
         var border = self.internal;
-        if (cell.col == 0)
+        if (cell.col_num == 0)
             border.x = self.external.x;
-        if (cell.row == 0)
+        if (cell.row_num == 0)
             border.y = self.external.y;
-        if (cell.row == self.num_rows - 1)
+        if (cell.row_num == self.num_rows - 1)
             border.h = self.external.h;
-        if (cell.col == self.num_cols - 1)
+        if (cell.col_num == self.num_cols - 1)
             border.w = self.external.w;
         return self.cell_opts.override(.{ .border = border, .background = true });
     }

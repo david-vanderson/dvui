@@ -5129,27 +5129,31 @@ fn gridVirtualScrolling() void {
     }
     local.last_col_width = col_width;
 
-    // Highlight hovered row.
-    // Each column has slightly different border requirements, so create separate options for each.
-    // Calls cellOptionsOverride after processEvents() so that the hovered row only needs to be calculated once.
-    var highlight_hovered_1: GridWidget.CellStyle.HoveredRow = .{
+    // Demonstrates how to combine two cellstyles together, drawing borders and
+    // highlighting the hovered row.
+    const CellStyle = GridWidget.CellStyle;
+    var highlight_hovered: CellStyle.HoveredRow = .{
         .cell_opts = .{
-            .border = .{ .x = 1, .w = 1, .h = 1 },
             .background = true,
             .color_fill_hover = .fill_hover,
             .size = .{ .w = col_width },
         },
     };
-    highlight_hovered_1.processEvents(grid);
-    const highlight_hovered_2 = highlight_hovered_1.cellOptionsOverride(.{
-        .border = .{ .w = 1, .h = 1 },
-    });
+    highlight_hovered.processEvents(grid);
+
+    const borders: CellStyle.Borders = .{
+        .num_cols = 2,
+        .num_rows = num_rows,
+        .external = .{ .x = 1, .w = 1, .h = 1 },
+        .internal = .{ .w = 1, .h = 1 },
+    };
+
+    const cell_style: GridWidget.CellStyle.Join(CellStyle.HoveredRow, CellStyle.Borders) = .{ .style1 = highlight_hovered, .style2 = borders };
 
     // Virtual scrolling
     const scroller: dvui.GridWidget.VirtualScroller = .init(grid, .{ .total_rows = num_rows, .scroll_info = &local.scroll_info });
     const first = scroller.startRow();
     const last = scroller.endRow(); // Note that endRow is exclusive, meaning it can be used as a slice end index.
-    const CellStyle = GridWidget.CellStyle;
     dvui.gridHeading(@src(), grid, 0, "Number", .fixed, CellStyle{ .cell_opts = .{ .size = .{ .w = col_width } } });
     dvui.gridHeading(@src(), grid, 1, "Is prime?", .fixed, CellStyle{ .cell_opts = .{ .size = .{ .w = col_width } } });
 
@@ -5157,7 +5161,7 @@ fn gridVirtualScrolling() void {
         var cell_num: GridWidget.Cell = .colRow(0, num);
         {
             defer cell_num.col_num += 1;
-            var cell = grid.bodyCell(@src(), cell_num, highlight_hovered_1.cellOptions(cell_num));
+            var cell = grid.bodyCell(@src(), cell_num, cell_style.cellOptions(cell_num));
             defer cell.deinit();
             dvui.label(@src(), "{d}", .{num}, .{});
         }
@@ -5165,7 +5169,7 @@ fn gridVirtualScrolling() void {
             defer cell_num.col_num += 1;
             const check_img = @embedFile("icons/entypo/check.tvg");
 
-            var cell = grid.bodyCell(@src(), cell_num, highlight_hovered_2.cellOptions(cell_num));
+            var cell = grid.bodyCell(@src(), cell_num, cell_style.cellOptions(cell_num));
             defer cell.deinit();
             if (local.isPrime(num)) {
                 dvui.icon(@src(), "Check", check_img, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .background = false });
