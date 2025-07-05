@@ -265,7 +265,8 @@ fn gui_frame() !void {
             if (dvui.tagGet("grid_focus_next")) |focus_widget| {
                 // TODO: can we tighten up the api here somehow? is_focused seems difficult to discover or
                 // know why you would need to use it here. Maybe rename this to shouldFocus? or focusChanged????
-                if ((keyboard_nav.is_focused and !dvui.navigation.was_mouse_focus) or !initialized) {
+                //                if ((keyboard_nav.is_focused and !dvui.navigation.was_mouse_focus) or !initialized) {
+                if ((keyboard_nav.is_focused) or !initialized) {
                     dvui.focusWidget(focus_widget.id, null, null);
                     initialized = true;
                 }

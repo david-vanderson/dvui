@@ -17,7 +17,6 @@ const Cell = GridWidget.Cell;
 /// Adds keyboard navigation to the grid
 /// Provides a "cursor" that can be moved using
 /// - tab, shift-tab, left-arrow, right-arrow
-pub var was_mouse_focus: bool = false;
 pub const GridKeyboard = struct {
     /// Direction keys.
     /// - use defaultKeys() or provide your own bindings.
@@ -97,7 +96,7 @@ pub const GridKeyboard = struct {
         if (grid.row_height < 1) {
             return default;
         }
-        return @intFromFloat(@trunc(grid.bsi.viewport.h / grid.row_height));
+        return @intFromFloat(@round(grid.bsi.viewport.h / grid.row_height));
     }
 
     /// Change max row and col limits
@@ -191,40 +190,32 @@ pub const GridKeyboard = struct {
                     if (ke.matchKeyBind(self.navigation_keys.first)) {
                         e.handle(@src(), grid.data());
                         self.scrollTo(0, 0);
-                        was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.last)) {
                         e.handle(@src(), grid.data());
                         self.scrollTo(self.num_cols - 1, self.num_rows - 1);
-                        was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.col_first)) {
                         e.handle(@src(), grid.data());
                         self.scrollTo(0, self.cursor.row_num);
-                        was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.col_last)) {
                         e.handle(@src(), grid.data());
                         self.scrollTo(self.num_cols - 1, self.cursor.row_num);
-                        was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.scroll_up)) {
                         e.handle(@src(), grid.data());
                         self.scrollBy(0, -self.num_scroll);
-                        was_mouse_focus = false;
+                        grid.bsi.scrollPageDown(.horizontal);
                     } else if (ke.matchKeyBind(self.navigation_keys.scroll_down)) {
                         e.handle(@src(), grid.data());
                         self.scrollBy(0, self.num_scroll);
-                        was_mouse_focus = false;
+                        grid.bsi.scrollPageUp(.horizontal);
                     } else if (ke.matchKeyBind(self.navigation_keys.up)) {
                         e.handle(@src(), grid.data());
                         self.scrollBy(0, -1);
-                        was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.down)) {
                         e.handle(@src(), grid.data());
                         self.scrollBy(0, 1);
-                        was_mouse_focus = false;
                     } else if (ke.matchKeyBind(self.navigation_keys.left)) {
                         e.handle(@src(), grid.data());
-                        was_mouse_focus = false;
                         if (self.tab_out and self.cursor.eq(0, 0)) {
-                            std.debug.print("tabbing out\n", .{});
                             dvui.tabIndexPrev(e.num);
                             self.is_focused = false;
                         } else {
@@ -232,9 +223,7 @@ pub const GridKeyboard = struct {
                         }
                     } else if (ke.matchKeyBind(self.navigation_keys.right)) {
                         e.handle(@src(), grid.data());
-                        was_mouse_focus = false;
                         if (self.tab_out and self.cursor.eq(self.num_cols - 1, self.num_rows - 1)) {
-                            std.debug.print("tabbing out\n", .{});
                             dvui.tabIndexNext(e.num);
                             self.is_focused = false;
                         } else {
@@ -252,10 +241,8 @@ pub const GridKeyboard = struct {
                         self.cursor.col_num = cell.col_num;
                         self.cursor.row_num = cell.row_num;
                         self.is_focused = true;
-                        was_mouse_focus = true;
                     } else {
                         self.is_focused = false;
-                        was_mouse_focus = false;
                     }
                 }
             },
