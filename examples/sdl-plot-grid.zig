@@ -146,8 +146,8 @@ fn gui_frame() !void {
         {
             var bottom_panel = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .gravity_y = 1.0 });
             defer bottom_panel.deinit();
-            if (dvui.button(@src(), "Add (NOT)", .{ .draw_focus = false }, .{})) {}
-            _ = dvui.button(@src(), "Delete (NOT)", .{ .draw_focus = false }, .{});
+            if (dvui.button(@src(), "Add (NOT)", .{ .draw_focus = true }, .{})) {}
+            _ = dvui.button(@src(), "Delete (NOT)", .{ .draw_focus = true }, .{});
         }
         {
             var top_panel = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .gravity_y = 0 });
