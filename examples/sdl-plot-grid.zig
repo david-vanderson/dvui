@@ -183,6 +183,7 @@ fn gui_frame() !void {
             dvui.gridHeading(@src(), grid, 1, "Y1", .fixed, .{});
             dvui.gridHeading(@src(), grid, 2, "Y2", .fixed, .{});
             var row_to_delete: ?usize = null;
+            var row_to_add: ?usize = null;
 
             for (data.items(.x), data.items(.y1), data.items(.y2), 0..) |*x, *y1, *y2, row_num| {
                 var cell_num: dvui.GridWidget.Cell = .colRow(0, row_num);
@@ -216,7 +217,7 @@ fn gui_frame() !void {
                     var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
                     defer cell.deinit();
                     if (dvui.buttonIcon(@src(), "Insert", dvui.entypo.add_to_list, .{}, .{}, style.options(focus_cell).override(.{ .expand = .both }))) {
-                        data.insert(gpa, cell_num.row_num + 1, .{ .x = 100, .y1 = 0, .y2 = 0 }) catch {};
+                        row_to_add = cell_num.row_num + 1;
                     }
                 }
                 {
@@ -247,6 +248,9 @@ fn gui_frame() !void {
             // TODO: Name this something else. Or rethink the processEvents() style API?
             // processEvents() has a lot going for it though.
             keyboard_nav.gridEnd();
+            if (row_to_add) |row_num| {
+                data.insert(gpa, row_num, .{ .x = 50, .y1 = 0, .y2 = 0 }) catch {};
+            }
             if (row_to_delete) |row_num| {
                 if (data.len > 1)
                     data.orderedRemove(row_num)
