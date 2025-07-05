@@ -242,8 +242,8 @@ pub fn install(self: *FloatingWindowWidget) void {
 
     dvui.parentSet(self.widget());
     self.prev_windowInfo = dvui.subwindowCurrentSet(self.data().id, .cast(self.data().rect));
-    // prevents parents from processing key events if focus is inside the floating window:w
-    self.prev_last_focus = dvui.lastFocusedIdInFrame(null);
+    // prevents parents from processing key events if focus is inside the floating window
+    self.prev_last_focus = dvui.lastFocusedIdInFrame();
 
     // reset clip to whole OS window
     // - if modal fade everything below us
@@ -385,7 +385,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
                 }
 
                 if (me.action == .release and me.button.pointer()) {
-                    dvui.captureMouse(null); // stop drag and capture
+                    dvui.captureMouse(null, e.num); // stop drag and capture
                     dvui.dragEnd();
                     e.handle(@src(), self.data());
                     continue;
@@ -395,7 +395,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
             if (dragPart(me, rs) == .bottom_right) {
                 if (me.action == .press and me.button.pointer()) {
                     // capture and start drag
-                    dvui.captureMouse(self.data());
+                    dvui.captureMouse(self.data(), e.num);
                     self.drag_part = .bottom_right;
                     dvui.dragStart(me.p, .{ .cursor = .arrow_nw_se, .offset = .diff(rs.r.bottomRight(), me.p) });
                     e.handle(@src(), self.data());
@@ -447,7 +447,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                             }
                             e.handle(@src(), self.data());
                             // capture and start drag
-                            dvui.captureMouse(self.data());
+                            dvui.captureMouse(self.data(), e.num);
                             self.drag_part = dp;
                             dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = self.drag_part.?.cursor() });
                         }
@@ -455,7 +455,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                     .release => {
                         if (me.button.pointer() and dvui.captured(self.data().id)) {
                             e.handle(@src(), self.data());
-                            dvui.captureMouse(null); // stop drag and capture
+                            dvui.captureMouse(null, e.num); // stop drag and capture
                             dvui.dragEnd();
                         }
                     },

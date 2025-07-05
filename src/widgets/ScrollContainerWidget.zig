@@ -69,7 +69,7 @@ pub fn init(src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, init_o
         .wd = WidgetData.init(src, .{}, options),
         .si = io_scroll_info,
         .init_opts = init_options,
-        .last_focus = dvui.lastFocusedIdInFrame(null),
+        .last_focus = dvui.lastFocusedIdInFrame(),
     };
 
     if (dvui.dataGet(null, self.data().id, "_finger_down", bool)) |down| self.finger_down = down;
@@ -456,10 +456,18 @@ pub fn processMotionScroll(self: *ScrollContainerWidget, motion: dvui.Point.Phys
 }
 
 pub fn processEventsAfter(self: *ScrollContainerWidget) void {
-    const focus_id = dvui.lastFocusedIdInFrame(self.last_focus);
+    const focus_id = dvui.lastFocusedIdInFrameSince(self.last_focus);
 
     const evts = dvui.events();
     for (evts) |*e| {
+        if (dvui.captured(self.wd.id) and e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.touch()) {
+            // release our capture even if this event was already handled, see
+            // comment in the .motion handling
+            dvui.captureMouse(null, e.num);
+            dvui.dragEnd();
+            if (!e.handled) e.handle(@src(), self.data());
+        }
+
         if (!dvui.eventMatch(e, .{ .id = self.data().id, .focus_id = focus_id, .r = self.init_opts.event_rect orelse self.data().borderRectScale().r }))
             continue;
 
@@ -506,10 +514,10 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     // don't let this event go through to floating window
                     // which would capture the mouse preventing scrolling
                     e.handle(@src(), self.data());
-                    dvui.captureMouse(self.data());
+                    dvui.captureMouse(self.data(), e.num);
                 } else if (me.action == .release and dvui.captured(self.data().id)) {
                     e.handle(@src(), self.data());
-                    dvui.captureMouse(null);
+                    dvui.captureMouse(null, e.num);
                     dvui.dragEnd();
                 } else if (me.action == .motion and me.button.touch()) {
                     e.handle(@src(), self.data());
@@ -519,7 +527,15 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     // a touch down on a button, which captures.  Then when the
                     // drag starts the button gives up capture, so we get here,
                     // never having seen the touch down.
-                    dvui.captureMouse(self.data());
+                    //
+                    // We will give up capture on any touch release even if it
+                    // was already handled to deal with:
+                    // * finger down/motion/up in same frame in textLayout
+                    // * textLayout gives up capture on the motion event
+                    // * textLayout processes the finger up
+                    // * we capture here on the motion event
+                    // * we would never see the finger up (already processed)
+                    dvui.captureMouse(self.data(), e.num);
 
                     self.processMotionScroll(me.action.motion);
                 }

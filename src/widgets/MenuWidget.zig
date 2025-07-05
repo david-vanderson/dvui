@@ -91,7 +91,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         .wd = WidgetData.init(src, .{}, defaults.override(opts)),
         .init_opts = init_opts,
         .winId = dvui.subwindowCurrentId(),
-        .last_focus = dvui.lastFocusedIdInFrame(null),
+        .last_focus = dvui.lastFocusedIdInFrame(),
     };
 
     if (dvui.dataGet(null, self.wd.id, "_sub_act", bool)) |a| {
@@ -200,7 +200,7 @@ pub fn processEvent(self: *MenuWidget, e: *Event) void {
 }
 
 pub fn processEventsAfter(self: *MenuWidget) void {
-    const focus_id = dvui.lastFocusedIdInFrame(self.last_focus);
+    const focus_id = dvui.lastFocusedIdInFrameSince(self.last_focus);
 
     const evts = dvui.events();
     for (evts) |*e| {

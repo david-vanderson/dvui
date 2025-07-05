@@ -125,10 +125,10 @@ capture: ?dvui.CaptureMouse = null,
 captured_last_frame: bool = false,
 
 gpa: std.mem.Allocator,
-_arena: dvui.ShrinkingArenaAllocator,
-_lifo_arena: dvui.ShrinkingArenaAllocator,
+_arena: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
+_lifo_arena: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
 /// Used to allocate widgets with a fixed location
-_widget_stack: dvui.ShrinkingArenaAllocator,
+_widget_stack: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
@@ -146,8 +146,7 @@ debug_under_mouse_info: []u8 = "",
 
 debug_toggle_mutex: std.Thread.Mutex = .{},
 debug_refresh: bool = false,
-debug_handled_event: bool = false,
-debug_unhandled_events: bool = false,
+debug_events: bool = false,
 
 /// when true, left mouse button works like a finger
 debug_touch_simulate_events: bool = false,
@@ -187,7 +186,7 @@ const SavedData = struct {
 
 pub const InitOptions = struct {
     id_extra: usize = 0,
-    arena: ?dvui.ShrinkingArenaAllocator = null,
+    arena: ?std.heap.ArenaAllocator = null,
     theme: ?*Theme = null,
     keybinds: ?enum {
         none,
@@ -206,7 +205,7 @@ pub fn init(
 
     var self = Self{
         .gpa = gpa,
-        ._arena = init_opts.arena orelse .init(gpa),
+        ._arena = if (init_opts.arena) |a| .initArena(a) else .init(gpa),
         ._lifo_arena = .init(gpa),
         ._widget_stack = .init(gpa),
         .wd = WidgetData{
@@ -489,26 +488,13 @@ pub fn arena(self: *Self) std.mem.Allocator {
 }
 
 /// called from any thread
-pub fn debugHandleEvents(self: *Self, val: ?bool) bool {
+pub fn debugEvents(self: *Self, val: ?bool) bool {
     self.debug_toggle_mutex.lock();
     defer self.debug_toggle_mutex.unlock();
 
-    const previous = self.debug_handled_event;
+    const previous = self.debug_events;
     if (val) |v| {
-        self.debug_handled_event = v;
-    }
-
-    return previous;
-}
-
-/// called from any thread
-pub fn debugUnhandledEvents(self: *Self, val: ?bool) bool {
-    self.debug_toggle_mutex.lock();
-    defer self.debug_toggle_mutex.unlock();
-
-    const previous = self.debug_unhandled_events;
-    if (val) |v| {
-        self.debug_unhandled_events = v;
+        self.debug_events = v;
     }
 
     return previous;
@@ -551,7 +537,7 @@ pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?WidgetId, event_num: ?
         if (event_num) |en| {
             for (self.subwindows.items) |*sw| {
                 if (self.focused_subwindowId == sw.id) {
-                    self.focusRemainingEventsInternal(en, sw.id, sw.focused_widgetId);
+                    self.focusEventsInternal(en, sw.id, sw.focused_widgetId);
                     break;
                 }
             }
@@ -559,14 +545,39 @@ pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?WidgetId, event_num: ?
     }
 }
 
-pub fn focusRemainingEventsInternal(self: *Self, event_num: u16, focusWindowId: WidgetId, focusWidgetId: ?WidgetId) void {
+// Only for keyboard events
+pub fn focusEventsInternal(self: *Self, event_num: u16, windowId: ?WidgetId, widgetId: ?WidgetId) void {
     var evts = self.events.items;
     var k: usize = 0;
     while (k < evts.len) : (k += 1) {
         var e: *Event = &evts[k];
-        if (e.num > event_num and e.focus_windowId != null) {
-            e.focus_windowId = focusWindowId;
-            e.focus_widgetId = focusWidgetId;
+        if (e.num > event_num) {
+            switch (e.evt) {
+                .key, .text => {
+                    e.target_windowId = windowId;
+                    e.target_widgetId = widgetId;
+                },
+                .mouse => {},
+            }
+        }
+    }
+}
+
+// Only for mouse/touch events
+pub fn captureEventsInternal(self: *Self, event_num: u16, widgetId: ?WidgetId) void {
+    var evts = self.events.items;
+    var k: usize = 0;
+    while (k < evts.len) : (k += 1) {
+        var e: *Event = &evts[k];
+        if (e.num > event_num) {
+            switch (e.evt) {
+                .key, .text => {},
+                .mouse => |me| {
+                    if (me.action != .wheel_x and me.action != .wheel_y) {
+                        e.target_widgetId = widgetId;
+                    }
+                },
+            }
         }
     }
 }
@@ -593,8 +604,8 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
         .evt = .{ .key = event },
-        .focus_windowId = self.focused_subwindowId,
-        .focus_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
+        .target_windowId = self.focused_subwindowId,
+        .target_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
     });
 
     const ret = (self.data().id != self.focused_subwindowId);
@@ -619,9 +630,14 @@ pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) std.mem.All
     self.event_num += 1;
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
-        .evt = .{ .text = .{ .txt = try self.arena().dupe(u8, text), .selected = selected } },
-        .focus_windowId = self.focused_subwindowId,
-        .focus_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
+        .evt = .{
+            .text = .{
+                .txt = try self.arena().dupe(u8, text),
+                .selected = selected,
+            },
+        },
+        .target_windowId = self.focused_subwindowId,
+        .target_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
     });
 
     const ret = (self.data().id != self.focused_subwindowId);
@@ -647,16 +663,22 @@ pub fn addEventMouseMotion(self: *Self, newpt: Point.Physical) std.mem.Allocator
     // - generate a .focus event here instead of just doing focusWindow(winId, null);
     // - how to make it optional?
 
+    const widget_id = if (self.capture) |cap| cap.id else null;
+
     self.event_num += 1;
-    try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
-        .mouse = .{
-            .action = .{ .motion = dp },
-            .button = if (self.debug_touch_simulate_events and self.debug_touch_simulate_down) .touch0 else .none,
-            .mod = self.modifiers,
-            .p = self.mouse_pt,
-            .floating_win = winId,
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .target_widgetId = widget_id,
+        .evt = .{
+            .mouse = .{
+                .action = .{ .motion = dp },
+                .button = if (self.debug_touch_simulate_events and self.debug_touch_simulate_down) .touch0 else .none,
+                .mod = self.modifiers,
+                .p = self.mouse_pt,
+                .floating_win = winId,
+            },
         },
-    } });
+    });
 
     const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
@@ -703,6 +725,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
         self.mouse_pt = (Point{ .x = xyn.x * self.data().rect.w, .y = xyn.y * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
     }
 
+    const widget_id = if (self.capture) |cap| cap.id else null;
     const winId = self.windowFor(self.mouse_pt);
 
     if (action == .press and bb.pointer()) {
@@ -717,27 +740,35 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
 
         // add focus event
         self.event_num += 1;
-        try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
+        try self.events.append(self.arena(), Event{
+            .num = self.event_num,
+            .target_widgetId = widget_id,
+            .evt = .{
+                .mouse = .{
+                    .action = .focus,
+                    .button = bb,
+                    .mod = self.modifiers,
+                    .p = self.mouse_pt,
+                    .floating_win = winId,
+                },
+            },
+        });
+    }
+
+    self.event_num += 1;
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .target_widgetId = widget_id,
+        .evt = .{
             .mouse = .{
-                .action = .focus,
+                .action = action,
                 .button = bb,
                 .mod = self.modifiers,
                 .p = self.mouse_pt,
                 .floating_win = winId,
             },
-        } });
-    }
-
-    self.event_num += 1;
-    try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
-        .mouse = .{
-            .action = action,
-            .button = bb,
-            .mod = self.modifiers,
-            .p = self.mouse_pt,
-            .floating_win = winId,
         },
-    } });
+    });
 
     const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
@@ -802,16 +833,22 @@ pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, y
 
     const winId = self.windowFor(self.mouse_pt);
 
+    const widget_id = if (self.capture) |cap| cap.id else null;
+
     self.event_num += 1;
-    try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
-        .mouse = .{
-            .action = .{ .motion = dp },
-            .button = finger,
-            .mod = self.modifiers,
-            .p = self.mouse_pt,
-            .floating_win = winId,
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .target_widgetId = widget_id,
+        .evt = .{
+            .mouse = .{
+                .action = .{ .motion = dp },
+                .button = finger,
+                .mod = self.modifiers,
+                .p = self.mouse_pt,
+                .floating_win = winId,
+            },
         },
-    } });
+    });
 
     const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
@@ -1156,13 +1193,19 @@ pub fn begin(
 }
 
 fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
-    try self.events.append(self.arena(), .{ .num = self.event_num + 1, .evt = .{ .mouse = .{
-        .action = .position,
-        .button = .none,
-        .mod = self.modifiers,
-        .p = self.mouse_pt,
-        .floating_win = self.windowFor(self.mouse_pt),
-    } } });
+    const widget_id = if (self.capture) |cap| cap.id else null;
+
+    try self.events.append(self.arena(), .{
+        .num = self.event_num + 1,
+        .target_widgetId = widget_id,
+        .evt = .{ .mouse = .{
+            .action = .position,
+            .button = .none,
+            .mod = self.modifiers,
+            .p = self.mouse_pt,
+            .floating_win = self.windowFor(self.mouse_pt),
+        } },
+    });
 }
 
 fn positionMouseEventRemove(self: *Self) void {
@@ -1276,7 +1319,6 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
             },
             .triangles => |t| {
                 try dvui.renderTriangles(t.tri, t.tex);
-                // FIXME: free the triangles?
             },
         }
     }
@@ -1307,36 +1349,49 @@ pub fn dataSetAdvanced(self: *Self, id: WidgetId, key: []const u8, data_in: anyt
     self.data_mutex.lock();
     defer self.data_mutex.unlock();
 
-    var sd = SavedData{ .alignment = alignment, .data = self.gpa.allocWithOptions(u8, bytes.len * num_copies, alignment, null) catch |err| switch (err) {
-        error.OutOfMemory => {
-            log.err("dataSet got {!} for id {x} key {s}\n", .{ err, id, key });
-            return;
-        },
-    } };
-
-    for (0..num_copies) |i| {
-        @memcpy(sd.data[i * bytes.len ..][0..bytes.len], bytes);
-    }
-
-    if (builtin.mode == .Debug) {
-        sd.type_str = dt_type_str;
-        sd.copy_slice = copy_slice;
-    }
-
-    const previous_kv = self.datas.fetchPut(self.gpa, hash, sd) catch |err| switch (err) {
-        error.OutOfMemory => {
-            log.err("dataSet got {!} for id {x} key {s}\n", .{ err, id, key });
-            sd.free(self.gpa);
-            return;
-        },
+    const entry = self.datas.getOrPut(self.gpa, hash) catch |err| {
+        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+        return;
     };
 
-    if (previous_kv) |kv| {
-        //std.debug.print("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, kv.key });
-        self.datas_trash.append(self.arena(), kv.value) catch |err| {
-            log.err("Previous data could not be added to the trash, got {!} for id {x} key {s}\n", .{ err, id, key });
+    const is_same_size = entry.value_ptr.data.len == bytes.len * num_copies;
+    const should_trash = entry.found_existing and !is_same_size;
+    if (should_trash) {
+        // log.debug("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, key });
+        if (builtin.mode == .Debug) {
+            if (!std.mem.eql(u8, entry.value_ptr.type_str, @typeName(@TypeOf(data_in))) or entry.value_ptr.copy_slice != copy_slice) {
+                std.debug.panic(
+                    "dataSetAdvanced: stored type {s} (slice {}) doesn't match asked for type {s} (slice {})",
+                    .{ entry.value_ptr.type_str, entry.value_ptr.copy_slice, @typeName(@TypeOf(data_in)), copy_slice },
+                );
+            }
+        }
+        self.datas_trash.append(self.arena(), entry.value_ptr.*) catch |err| {
+            // Remove from map so it dataGet doesn't return an undefined value
+            _ = self.datas.remove(hash);
+            dvui.logError(@src(), err, "Previous data could not be added to the trash, id {x} key {s}", .{ id, key });
             return;
         };
+    }
+    if (!entry.found_existing or should_trash) {
+        entry.value_ptr.* = .{
+            .alignment = alignment,
+            .data = self.gpa.allocWithOptions(u8, bytes.len * num_copies, alignment, null) catch |err| switch (err) {
+                error.OutOfMemory => {
+                    dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+                    return;
+                },
+            },
+        };
+        if (builtin.mode == .Debug) {
+            entry.value_ptr.type_str = dt_type_str;
+            entry.value_ptr.copy_slice = copy_slice;
+        }
+    }
+
+    // Set data
+    for (0..num_copies) |i| {
+        @memcpy(entry.value_ptr.data[i * bytes.len ..][0..bytes.len], bytes);
     }
 }
 
@@ -1367,7 +1422,7 @@ pub fn dataRemove(self: *Self, id: WidgetId, key: []const u8) void {
 
     if (self.datas.fetchRemove(hash)) |dd| {
         self.datas_trash.append(self.arena(), dd.value) catch |err| {
-            log.err("Previous data could not be added to the trash, got {!} for id {x} key {s}\n", .{ err, id, key });
+            dvui.logError(@src(), err, "Previous data could not be added to the trash, id {x} key {s}", .{ id, key });
             return;
         };
     }
@@ -1586,14 +1641,9 @@ fn debugWindowShow(self: *Self) void {
         _ = self.debugRefresh(log_refresh);
     }
 
-    var log_event_handled = self.debugHandleEvents(null);
-    if (dvui.checkbox(@src(), &log_event_handled, "Log Handled Events", .{})) {
-        _ = self.debugHandleEvents(log_event_handled);
-    }
-
-    var log_event_unhandled = self.debugUnhandledEvents(null);
-    if (dvui.checkbox(@src(), &log_event_unhandled, "Log Unhandled Events", .{})) {
-        _ = self.debugUnhandledEvents(log_event_unhandled);
+    var log_events = self.debugEvents(null);
+    if (dvui.checkbox(@src(), &log_events, "Event Logging", .{})) {
+        _ = self.debugEvents(log_events);
     }
 
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false, .min_size_content = .height(200) });
@@ -1661,6 +1711,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // Call this before freeing data so backend can use data allocated during frame.
     try self.backend.end();
 
+    // log.debug("Datas trash {d}", .{self.datas_trash.items.len});
     for (self.datas_trash.items) |sd| {
         sd.free(self.gpa);
     }
@@ -1703,7 +1754,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         }
     }
 
-    if (self.debug_unhandled_events) {
+    if (self.debug_events) {
         for (evts) |*e| {
             if (e.handled) continue;
             var action: []const u8 = "";

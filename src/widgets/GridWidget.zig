@@ -835,13 +835,13 @@ pub const HeaderResizeWidget = struct {
             if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
                 e.handle(@src(), self.data());
                 // capture and start drag
-                dvui.captureMouse(self.data());
+                dvui.captureMouse(self.data(), e.num);
                 dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = cursor });
                 self.offset = .{};
             } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
                 e.handle(@src(), self.data());
                 // stop possible drag and capture
-                dvui.captureMouse(null);
+                dvui.captureMouse(null, e.num);
                 dvui.dragEnd();
                 self.offset = .{};
             } else if (e.evt.mouse.action == .motion and dvui.captured(self.data().id)) {

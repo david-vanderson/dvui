@@ -94,11 +94,14 @@ pub const easing = @import("easing.zig");
 pub const testing = @import("testing.zig");
 pub const select = @import("select.zig");
 pub const navigation = @import("navigation.zig");
-pub const ShrinkingArenaAllocator = @import("shrinking_arena_allocator.zig");
+pub const ShrinkingArenaAllocator = @import("shrinking_arena_allocator.zig").ShrinkingArenaAllocator;
 pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHashMap;
 
 pub const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
 pub const useFreeType = !wasm;
+
+/// The amount of physical pixels to scroll per "tick" of the scroll wheel
+pub var scroll_speed: f32 = 20;
 
 /// Used as a default maximum in various places:
 /// * Options.max_size_content
@@ -217,6 +220,7 @@ pub fn widgetFree(ptr: anytype) void {
 }
 
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {
+    @branchHint(.cold);
     const stack_trace_frame_count = @import("build_options").log_stack_trace orelse if (builtin.mode == .Debug) 12 else 0;
     const stack_trace_enabled = stack_trace_frame_count > 0;
     const err_trace_enabled = if (@import("build_options").log_error_trace) |enabled| enabled else stack_trace_enabled;
@@ -1106,16 +1110,20 @@ pub const TextureCacheEntry = struct {
         switch (image_bytes) {
             .imageFile => |b| {
                 const h = dvui.TextureCacheEntry.hashImageBytes(b);
-                _ = cw.texture_cache.remove(h);
+                if (cw.texture_cache.fetchRemove(h)) |ice| {
+                    textureDestroyLater(ice.value.texture);
+                }
             },
             .pixels => |p| {
                 const h = dvui.TextureCacheEntry.hashImageBytes(@ptrCast(p.bytes.pma));
-                _ = cw.texture_cache.remove(h);
+                if (cw.texture_cache.fetchRemove(h)) |ice| {
+                    textureDestroyLater(ice.value.texture);
+                }
             },
         }
     }
 
-    pub fn fromImageFile(name: []const u8, image_bytes: []const u8) (Backend.TextureError || StbImageError)!TextureCacheEntry {
+    pub fn fromImageFile(name: []const u8, image_bytes: []const u8, interpolation: enums.TextureInterpolation) (Backend.TextureError || StbImageError)!TextureCacheEntry {
         var cw = currentWindow();
         const tex_hash = TextureCacheEntry.hashImageBytes(image_bytes);
         if (cw.texture_cache.get(tex_hash)) |tce| return tce;
@@ -1129,18 +1137,18 @@ pub const TextureCacheEntry = struct {
         }
         defer c.stbi_image_free(data);
 
-        const texture = try textureCreate(.fromRGBA(data[0..@intCast(w * h * @sizeOf(Color.PMA))]), @intCast(w), @intCast(h), .linear);
+        const texture = try textureCreate(.fromRGBA(data[0..@intCast(w * h * @sizeOf(Color.PMA))]), @intCast(w), @intCast(h), interpolation);
 
         const entry = TextureCacheEntry{ .texture = texture };
         try cw.texture_cache.put(cw.gpa, tex_hash, entry);
         return entry;
     }
 
-    pub fn fromPixels(pma: dvui.RGBAPixelsPMA, width: u32, height: u32) Backend.TextureError!dvui.TextureCacheEntry {
+    pub fn fromPixels(pma: dvui.RGBAPixelsPMA, width: u32, height: u32, interpolation: enums.TextureInterpolation) Backend.TextureError!dvui.TextureCacheEntry {
         var cw = dvui.currentWindow();
         const tex_hash = dvui.TextureCacheEntry.hashImageBytes(@ptrCast(pma.pma));
         if (cw.texture_cache.getPtr(tex_hash)) |tce| return tce.*;
-        const texture = try dvui.textureCreate(pma, width, height, .linear);
+        const texture = try dvui.textureCreate(pma, width, height, interpolation);
         const entry = dvui.TextureCacheEntry{ .texture = texture };
         try cw.texture_cache.put(cw.gpa, tex_hash, entry);
         return entry;
@@ -1298,13 +1306,6 @@ pub fn focusSubwindow(subwindow_id: ?WidgetId, event_num: ?u16) void {
     currentWindow().focusSubwindowInternal(subwindow_id, event_num);
 }
 
-/// Helper used by `focusWidget`.  Overwrites the focus information for `Event`s with num >
-/// `event_num`.  This is how a button can get a tab, move focus to a textEntry,
-/// and that textEntry get a keydown all in the same frame.
-pub fn focusRemainingEvents(event_num: u16, focusWindowId: WidgetId, focusWidgetId: ?WidgetId) void {
-    currentWindow().focusRemainingEventsInternal(event_num, focusWindowId, focusWidgetId);
-}
-
 /// Raise a subwindow to the top of the stack.
 ///
 /// Any subwindows directly above it with "stay_above_parent_window" set will also be moved to stay above it.
@@ -1362,7 +1363,7 @@ pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void
             if (sw.focused_widgetId != id) {
                 sw.focused_widgetId = id;
                 if (event_num) |en| {
-                    focusRemainingEvents(en, sw.id, sw.focused_widgetId);
+                    cw.focusEventsInternal(en, sw.id, sw.focused_widgetId);
                 }
                 refresh(null, @src(), null);
 
@@ -1419,23 +1420,32 @@ pub fn focusedWidgetIdInCurrentSubwindow() ?WidgetId {
 
 /// Last widget id we saw this frame that was the focused widget.
 ///
-/// Pass result from previous call for the last focused id only if it changed.
-/// If so, some widget that ran between them had focus.  This means one of:
+/// Pass result to `lastFocusedIdInFrameSince` to know if any widget was focused
+/// between the two calls.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn lastFocusedIdInFrame() WidgetId {
+    return currentWindow().last_focused_id_this_frame;
+}
+
+/// Pass result from `lastFocusedIdInFrame`.  Returns the id of a widget that
+/// was focused between the two calls, if any.
+///
+/// If so, this means one of:
 /// * a widget had focus when it called `WidgetData.register`
 /// * `focusWidget` with the id of the last widget to call `WidgetData.register`
 /// * `focusWidget` with the id of a widget in the parent chain
 ///
+/// If return is non null, can pass to `eventMatch` .focus_id to match key
+/// events the focused widget got but didn't handle.
+///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn lastFocusedIdInFrame(prev: ?WidgetId) WidgetId {
-    const last_focused_id = currentWindow().last_focused_id_this_frame;
-    if (prev) |p| {
-        if (p != last_focused_id) {
-            return last_focused_id;
-        } else {
-            return .zero;
-        }
-    } else {
+pub fn lastFocusedIdInFrameSince(prev: WidgetId) ?WidgetId {
+    const last_focused_id = lastFocusedIdInFrame();
+    if (prev != last_focused_id) {
         return last_focused_id;
+    } else {
+        return null;
     }
 }
 
@@ -2273,10 +2283,14 @@ pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal:
         }
 
         // i points just past all subwindows that want to be on top of this subwin_id
-        cw.subwindows.insert(cw.gpa, i, sw) catch @panic("Could not add subwindow to list");
+        cw.subwindows.insert(cw.gpa, i, sw) catch |err| {
+            logError(@src(), err, "Could not insert {x} {} into subwindow list, events in this other other subwindwos might not work properly", .{ id, rect_pixels });
+        };
     } else {
         // just put it on the top
-        cw.subwindows.append(cw.gpa, sw) catch @panic("Could not add subwindow to list");
+        cw.subwindows.append(cw.gpa, sw) catch |err| {
+            logError(@src(), err, "Could not insert {x} {} into subwindow list, events in this other other subwindwos might not work properly", .{ id, rect_pixels });
+        };
     }
 }
 
@@ -2449,23 +2463,34 @@ pub const CaptureMouse = struct {
 /// (which is what you would expect for e.g. background highlight)
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn captureMouse(wd: ?*const WidgetData) void {
+pub fn captureMouse(wd: ?*const WidgetData, event_num: u16) void {
     const cm = if (wd) |data| CaptureMouse{
         .id = data.id,
         .rect = data.borderRectScale().r,
         .subwindow_id = subwindowCurrentId(),
     } else null;
-    captureMouseCustom(cm);
+    captureMouseCustom(cm, event_num);
 }
 /// In most cases, use `captureMouse` but if you want to customize the
 /// "capture zone" you can use this function instead.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn captureMouseCustom(cm: ?CaptureMouse) void {
+pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
     const cw = currentWindow();
-    cw.capture = cm;
-    if (cm != null) {
+    defer cw.capture = cm;
+    if (cm) |capture| {
+        // log.debug("Mouse capture (event {d}): {any}", .{ event_num, cm });
         cw.captured_last_frame = true;
+        cw.captureEventsInternal(event_num, capture.id);
+    } else {
+        // Unmark all following mouse events
+        cw.captureEventsInternal(event_num, null);
+        // log.debug("Mouse uncapture (event {d}): {?any}", .{ event_num, cw.capture });
+        // for (dvui.events()) |*e| {
+        //     if (e.evt == .mouse) {
+        //         log.debug("{s}: win {?x}, widget {?x}", .{ @tagName(e.evt.mouse.action), e.target_windowId, e.target_widgetId });
+        //     }
+        // }
     }
 }
 /// If the widget ID passed has mouse capture, this maintains that capture for
@@ -2493,7 +2518,10 @@ pub fn captureMouseMaintain(cm: CaptureMouse) void {
                 // found modal before we found current
                 // cancel the capture, and cancel
                 // any drag being done
-                captureMouse(null);
+                //
+                // mark all events as not captured, we are being interrupted by
+                // a modal dialog anyway
+                captureMouse(null, 0);
                 dragEnd();
                 return;
             }
@@ -2618,13 +2646,33 @@ pub fn clipboardTextSet(text: []const u8) void {
 }
 
 /// Ask the system to open the given url.
+/// http:// and https:// urls can be opened.
+/// returns true if the backend reports the URL was opened.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn openURL(url: []const u8) void {
+pub fn openURL(url: []const u8) bool {
+    const parsed = std.Uri.parse(url) catch return false;
+    if (!std.ascii.eqlIgnoreCase(parsed.scheme, "http") and
+        !std.ascii.eqlIgnoreCase(parsed.scheme, "https"))
+    {
+        return false;
+    }
+    if (parsed.host != null and parsed.host.?.isEmpty()) {
+        return false;
+    }
+
     const cw = currentWindow();
     cw.backend.openURL(url) catch |err| {
         logError(@src(), err, "Could not open url '{s}'", .{url});
+        return false;
     };
+    return true;
+}
+
+test openURL {
+    try std.testing.expect(openURL("notepad.exe") == false);
+    try std.testing.expect(openURL("https://") == false);
+    try std.testing.expect(openURL("file:///") == false);
 }
 
 /// Seconds elapsed between last frame and current.  This value can be quite
@@ -2827,7 +2875,10 @@ pub fn hashIdKey(id: WidgetId, key: []const u8) u64 {
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the data to.
 ///
-/// Stored data with the same id/key will be freed at next `win.end()`.
+/// Stored data with the same id/key will be overwritten if it has the same size,
+/// otherwise the data will be freed at the next call to `Window.end`. This means
+/// that if a pointer to the same id/key was retrieved earlier, the value behind
+/// that pointer would be modified.
 ///
 /// If you want to store the contents of a slice, use `dataSetSlice`.
 pub fn dataSet(win: ?*Window, id: WidgetId, key: []const u8, data: anytype) void {
@@ -2839,7 +2890,10 @@ pub fn dataSet(win: ?*Window, id: WidgetId, key: []const u8, data: anytype) void
 ///
 /// Can be called from any thread.
 ///
-/// Stored data with the same id/key will be freed at next `win.end()`.
+/// Stored data with the same id/key will be overwritten if it has the same size,
+/// otherwise the data will be freed at the next call to `Window.end`. This means
+/// that if the slice with the same id/key was retrieved earlier, the value behind
+/// that slice would be modified.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the data to.
@@ -2945,6 +2999,8 @@ pub fn dataGetDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: 
 /// where there is no call to any `dataGet`/`dataSet` functions for that id/key
 /// combination.
 ///
+/// The pointer will always be valid until the next call to `Window.end`.
+///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetPtrDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type, default: T) *T {
     if (dataGetPtr(win, id, key, T)) |ptr| {
@@ -2965,6 +3021,8 @@ pub fn dataGetPtrDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime 
 /// Returns a pointer to internal storage, which will be freed after a frame
 /// where there is no call to any `dataGet`/`dataSet` functions for that id/key
 /// combination.
+///
+/// The pointer will always be valid until the next call to `Window.end`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetPtr(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type) ?*T {
@@ -2988,6 +3046,8 @@ pub fn dataGetPtr(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type
 /// The returned slice points to internal storage, which will be freed after
 /// a frame where there is no call to any `dataGet`/`dataSet` functions for that
 /// id/key combination.
+///
+/// The slice will always be valid until the next call to `Window.end`.
 pub fn dataGetSlice(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type) ?T {
     const dt = @typeInfo(T);
     if (dt != .pointer or dt.pointer.size != .slice) {
@@ -3018,6 +3078,8 @@ pub fn dataGetSlice(win: ?*Window, id: WidgetId, key: []const u8, comptime T: ty
 /// The returned slice points to internal storage, which will be freed after
 /// a frame where there is no call to any `dataGet`/`dataSet` functions for that
 /// id/key combination.
+///
+/// The slice will always be valid until the next call to `Window.end`.
 pub fn dataGetSliceDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
     return dataGetSlice(win, id, key, T) orelse blk: {
         dataSetSlice(win, id, key, default);
@@ -3040,7 +3102,7 @@ pub fn dataGetInternal(win: ?*Window, id: WidgetId, key: []const u8, comptime T:
 }
 
 /// Remove key (and data if any) for given id.  The data will be freed at next
-/// `win.end()`.
+/// `Window.end`.
 ///
 /// Can be called from any thread.
 ///
@@ -3140,7 +3202,7 @@ pub const EventMatchOptions = struct {
 
     /// Additional Id for keyboard focus, use to match children with
     /// `lastFocusedIdInFrame()`.
-    focus_id: WidgetId = .zero,
+    focus_id: ?WidgetId = null,
 
     /// Physical pixel rect used to match pointer events.
     r: Rect.Physical,
@@ -3165,37 +3227,31 @@ pub const EventMatchOptions = struct {
 pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     if (e.handled) return false;
 
-    if (e.focus_windowId) |wid| {
-        // focusable event
-        if (opts.cleanup) {
-            // window is catching all focus-routed events that didn't get
-            // processed (maybe the focus widget never showed up)
-            if (wid != opts.id) {
-                // not the focused window
-                return false;
-            }
-        } else {
-            if (e.focus_widgetId != opts.id and e.focus_widgetId != opts.focus_id) {
-                // not the focused widget
-                return false;
-            }
-        }
-    }
-
     switch (e.evt) {
-        .key => {},
-        .text => {},
-        .mouse => |me| {
-            const capture = captureMouseGet();
-            var other_capture = false;
-            if (capture) |cm| blk: {
-                if (me.action == .wheel_x or me.action == .wheel_y) {
-                    // wheel is not affected by mouse capture
-                    break :blk;
+        .key, .text => {
+            if (e.target_windowId) |wid| {
+                // focusable event
+                if (opts.cleanup) {
+                    // window is catching all focus-routed events that didn't get
+                    // processed (maybe the focus widget never showed up)
+                    if (wid != opts.id) {
+                        // not the focused window
+                        return false;
+                    }
+                } else {
+                    if (e.target_widgetId != opts.id and (opts.focus_id == null or opts.focus_id.? != e.target_widgetId)) {
+                        // not the focused widget
+                        return false;
+                    }
                 }
-
-                if (cm.id == opts.id) {
-                    // we have capture, we get all mouse events
+            }
+        },
+        .mouse => |me| {
+            var other_capture = false;
+            if (e.target_widgetId) |fwid| {
+                // this event is during a mouse capture
+                if (fwid == opts.id) {
+                    // we have capture, we get all capturable mouse events (excludes wheel)
                     return true;
                 } else {
                     // someone else has capture
@@ -3222,13 +3278,15 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             }
 
             if (other_capture) {
-                // someone else has capture, but otherwise we would have gotten
-                // this mouse event
-                if (me.action == .position and capture.?.subwindow_id == subwindowCurrentId() and !capture.?.rect.intersect(opts.r).empty()) {
-                    // we might be trying to highlight a background around the widget with capture:
-                    // * we are in the same subwindow
-                    // * our rect overlaps with the capture rect
-                    return true;
+                if (captureMouseGet()) |capture| {
+                    // someone else has capture, but otherwise we would have gotten
+                    // this mouse event
+                    if (me.action == .position and capture.subwindow_id == subwindowCurrentId() and !capture.rect.intersect(opts.r).empty()) {
+                        // we might be trying to highlight a background around the widget with capture:
+                        // * we are in the same subwindow
+                        // * our rect overlaps with the capture rect
+                        return true;
+                    }
                 }
 
                 return false;
@@ -3267,7 +3325,7 @@ pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
                     dvui.focusWidget(wd.id, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     e.handle(@src(), wd);
-                    dvui.captureMouse(wd);
+                    dvui.captureMouse(wd, e.num);
 
                     // for touch events, we want to cancel our click if a drag is started
                     dvui.dragPreStart(me.p, .{});
@@ -3277,7 +3335,7 @@ pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
                         e.handle(@src(), wd);
 
                         // cancel our capture
-                        dvui.captureMouse(null);
+                        dvui.captureMouse(null, e.num);
                         dvui.dragEnd();
 
                         // if the release was within our border, the click is successful
@@ -3297,7 +3355,7 @@ pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
                             // touch: if we overcame the drag threshold, then
                             // that means the person probably didn't want to
                             // touch this button, they were trying to scroll
-                            dvui.captureMouse(null);
+                            dvui.captureMouse(null, e.num);
                             dvui.dragEnd();
                         }
                     }
@@ -5243,6 +5301,8 @@ pub const ImageInitOptions = struct {
     /// - ratio => fit in rect maintaining aspect ratio
     shrink: ?Options.Expand = null,
 
+    interpolation: enums.TextureInterpolation = .linear,
+
     uv: Rect = .{ .w = 1, .h = 1 },
 };
 
@@ -5311,7 +5371,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
         .background_color = renderBackground,
     };
     const content_rs = wd.contentRectScale();
-    renderImage(init_opts.name, init_opts.bytes, content_rs, render_tex_opts) catch |err| logError(@src(), err, "Could not render image {s} at {}", .{ init_opts.name, content_rs });
+    renderImage(init_opts.name, init_opts.bytes, content_rs, render_tex_opts, init_opts.interpolation) catch |err| logError(@src(), err, "Could not render image {s} at {}", .{ init_opts.name, content_rs });
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
 
@@ -5502,12 +5562,12 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
                     focusWidget(b.data().id, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     // capture
-                    captureMouse(b.data());
+                    captureMouse(b.data(), e.num);
                     e.handle(@src(), b.data());
                     p = me.p;
                 } else if (me.action == .release and me.button.pointer()) {
                     // stop capture
-                    captureMouse(null);
+                    captureMouse(null, e.num);
                     dragEnd();
                     e.handle(@src(), b.data());
                 } else if (me.action == .motion and captured(b.data().id)) {
@@ -5632,6 +5692,7 @@ pub const SliderEntryInitOptions = struct {
     min: ?f32 = null,
     max: ?f32 = null,
     interval: ?f32 = null,
+    label: ?[]const u8 = null,
 };
 
 /// Combines a slider and a text entry box on key press.  Displays value on top of slider.
@@ -5777,7 +5838,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                             text_mode = true;
                             refresh(null, @src(), b.data().id);
                         } else {
-                            captureMouse(b.data());
+                            captureMouse(b.data(), e.num);
                             dataSet(null, b.data().id, "_start_x", me.p.x);
                             dataSet(null, b.data().id, "_start_v", init_opts.value.*);
 
@@ -5797,7 +5858,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                             refresh(null, @src(), b.data().id);
                         }
                         e.handle(@src(), b.data());
-                        captureMouse(null);
+                        captureMouse(null, e.num);
                         dragEnd();
                         dataRemove(null, b.data().id, "_start_x");
                         dataRemove(null, b.data().id, "_start_v");
@@ -5914,7 +5975,12 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s, Rect.Physical), .{ .color = options.color(.fill_press) });
         }
 
-        label(@src(), label_fmt orelse "{d:.3}", .{init_opts.value.*}, options.strip().override(.{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 }));
+        const label_opts = options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
+        if (init_opts.label) |l| {
+            label(@src(), "{s}", .{l}, label_opts);
+        } else {
+            label(@src(), label_fmt orelse "{d:.3}", .{init_opts.value.*}, label_opts);
+        }
     }
 
     if (b.data().id == focusedWidgetId()) {
@@ -6949,12 +7015,12 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     try renderTexture(tce.texture, rs, opts);
 }
 
-pub fn renderImage(name: []const u8, bytes: ImageInitOptions.ImageBytes, rs: RectScale, opts: RenderTextureOptions) Backend.GenericError!void {
+pub fn renderImage(name: []const u8, bytes: ImageInitOptions.ImageBytes, rs: RectScale, opts: RenderTextureOptions, interpolation: enums.TextureInterpolation) Backend.GenericError!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
     const cached_tex = switch (bytes) {
-        .imageFile => |b| dvui.TextureCacheEntry.fromImageFile(name, b),
-        .pixels => |p| dvui.TextureCacheEntry.fromPixels(p.bytes, p.width, p.height),
+        .imageFile => |b| dvui.TextureCacheEntry.fromImageFile(name, b, interpolation),
+        .pixels => |p| dvui.TextureCacheEntry.fromPixels(p.bytes, p.width, p.height, interpolation),
     };
     const tce = cached_tex catch return;
     try renderTexture(tce.texture, rs, opts);

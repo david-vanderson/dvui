@@ -858,9 +858,12 @@ pub fn getText(self: *const TextEntryWidget) []u8 {
 
 pub fn deinit(self: *TextEntryWidget) void {
     defer dvui.widgetFree(self);
-    if (self.len == 0 or self.len + realloc_bin_size + @divTrunc(realloc_bin_size, 2) <= self.text.len) {
+    const needed_binds = @divTrunc(self.len, realloc_bin_size) + 1;
+    const current_bins = @divTrunc(self.text.len, realloc_bin_size);
+    // dvui.log.debug("TextEntry {x} needs {d} bins, has {d}", .{ self.data().id, needed_binds, current_bins });
+    if (self.len == 0 or needed_binds < current_bins) {
         // we want to shrink the allocation
-        const new_len = if (self.len == 0) 0 else realloc_bin_size * (@divTrunc(self.len, realloc_bin_size) + 1);
+        const new_len = if (self.len == 0) 0 else realloc_bin_size * needed_binds;
         switch (self.init_opts.text) {
             .buffer => {},
             .buffer_dynamic => |b| {

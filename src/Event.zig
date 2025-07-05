@@ -7,8 +7,12 @@ const Event = @This();
 
 /// Should not be set directly, use the `handle` method
 handled: bool = false,
-focus_windowId: ?dvui.WidgetId = null,
-focus_widgetId: ?dvui.WidgetId = null,
+
+/// For key events these represents focus. For mouse events widgetId represents
+/// capture, windowId unused.
+target_windowId: ?dvui.WidgetId = null,
+target_widgetId: ?dvui.WidgetId = null,
+
 // num increments within a frame, used in focusRemainingEvents
 num: u16 = 0,
 evt: union(enum) {
@@ -23,7 +27,7 @@ evt: union(enum) {
 /// matched this event, using `dvui.matchEvent` or similar.
 /// This makes it possible to see which widget handled the event.
 pub fn handle(self: *Event, src: std.builtin.SourceLocation, wd: *const dvui.WidgetData) void {
-    if (dvui.currentWindow().debug_handled_event) {
+    if (dvui.currentWindow().debug_events) {
         var action: []const u8 = "";
         switch (self.evt) {
             .mouse => action = @tagName(self.evt.mouse.action),

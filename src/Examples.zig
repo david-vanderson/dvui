@@ -42,6 +42,7 @@ var slider_entry_min: bool = true;
 var slider_entry_max: bool = true;
 var slider_entry_interval: bool = true;
 var slider_entry_vector: bool = false;
+var slider_entry_label: bool = false;
 var text_entry_buf = std.mem.zeroes([50]u8);
 var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
@@ -689,11 +690,11 @@ pub fn basicWidgets() void {
         dvui.label(@src(), "Link:", .{}, .{ .gravity_y = 0.5 });
 
         if (dvui.labelClick(@src(), "https://david-vanderson.github.io/", .{}, .{ .gravity_y = 0.5, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
-            dvui.openURL("https://david-vanderson.github.io/");
+            _ = dvui.openURL("https://david-vanderson.github.io/");
         }
 
         if (dvui.labelClick(@src(), "docs", .{}, .{ .gravity_y = 0.5, .margin = .{ .x = 10 }, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
-            dvui.openURL("https://david-vanderson.github.io/docs");
+            _ = dvui.openURL("https://david-vanderson.github.io/docs");
         }
     }
 
@@ -741,7 +742,14 @@ pub fn basicWidgets() void {
 
         dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
         if (!slider_entry_vector) {
-            _ = dvui.sliderEntry(@src(), "val: {d:0.3}", .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) }, .{ .gravity_y = 0.5 });
+            var custom_label: ?[]u8 = null;
+            if (slider_entry_label) {
+                const whole = @round(slider_entry_val);
+                const part = @round((slider_entry_val - whole) * 100);
+                custom_label = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d} and {d}p", .{ whole, part }) catch null;
+            }
+            defer if (custom_label) |cl| dvui.currentWindow().lifo().free(cl);
+            _ = dvui.sliderEntry(@src(), "val: {d:0.3}", .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null), .label = custom_label }, .{ .gravity_y = 0.5 });
             dvui.label(@src(), "(enter, ctrl-click or touch-tap)", .{}, .{ .gravity_y = 0.5 });
         } else {
             _ = dvui.sliderVector(@src(), "{d:0.2}", 3, &slider_vector_array, .{ .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) }, .{});
@@ -756,6 +764,7 @@ pub fn basicWidgets() void {
         _ = dvui.checkbox(@src(), &slider_entry_max, "Max", .{});
         _ = dvui.checkbox(@src(), &slider_entry_interval, "Interval", .{});
         _ = dvui.checkbox(@src(), &slider_entry_vector, "Vector", .{});
+        _ = dvui.checkbox(@src(), &slider_entry_label, "Custom Label", .{});
     }
 
     _ = dvui.spacer(@src(), .{ .min_size_content = .height(4) });
@@ -1154,7 +1163,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
 
             la2.spacer(@src(), 0);
 
-            const file_error = dvui.dataGetPtrDefault(null, hbox2.data().id, "_file_error", bool, false);
+            const file_error = dvui.dataGetPtrDefault(null, hbox3.data().id, "_file_error", bool, false);
             var te_file = dvui.textEntry(@src(), .{}, if (file_error.*) errOptions else normalOptions);
             if (new_filename) |f| {
                 te_file.textLayout.selection.selectAll();
@@ -1944,7 +1953,7 @@ pub fn layoutText() void {
         tl.addText(lorem, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
 
         if (tl.addTextClick("This text is a link that is part of the text layout and goes to the dvui home page.", .{ .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } }, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) })) {
-            dvui.openURL("https://david-vanderson.github.io/");
+            _ = dvui.openURL("https://david-vanderson.github.io/");
         }
 
         tl.addText(lorem2, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
@@ -2266,7 +2275,10 @@ pub fn reorderListsAdvanced() void {
     defer vbox.deinit();
 
     if (added_idx) |ai| {
-        reorder.dragStart(ai, added_idx_p.?); // reorder grabs capture
+        // marking all events for capture, this will only be a problem if some
+        // mouse events (in the same frame) came before this drag, and would
+        // have interacted with a widget that hasn't run yet
+        reorder.dragStart(ai, added_idx_p.?, 0); // reorder grabs capture
     }
 
     var seen_non_floating = false;
@@ -2309,7 +2321,10 @@ pub fn reorderListsAdvanced() void {
         dvui.label(@src(), "{s}", .{s}, .{});
 
         if (dvui.ReorderWidget.draggable(@src(), .{ .top_left = reorderable.data().rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
-            reorder.dragStart(i, p); // reorder grabs capture
+            // marking all events for capture, this will only be a problem if some
+            // mouse events (in the same frame) came before this drag, and would
+            // have interacted with a widget that hasn't run yet
+            reorder.dragStart(i, p, 0); // reorder grabs capture
         }
     }
 
@@ -3146,7 +3161,7 @@ pub fn focus() void {
         var b = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10, .y = 2 }, .border = dvui.Rect.all(1) });
         defer b.deinit();
 
-        const last_focus_id = dvui.lastFocusedIdInFrame(null);
+        const last_focus_id = dvui.lastFocusedIdInFrame();
 
         var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
         tl.addText("This shows how to detect if any widgets in a dynamic extent have focus.", .{});
@@ -3170,7 +3185,7 @@ pub fn focus() void {
             }
         }
 
-        const have_focus = (last_focus_id != dvui.lastFocusedIdInFrame(null));
+        const have_focus = dvui.lastFocusedIdInFrameSince(last_focus_id) != null;
         dvui.label(@src(), "Anything here with focus: {s}", .{if (have_focus) "Yes" else "No"}, .{});
     }
 
@@ -3441,7 +3456,7 @@ pub fn scrollCanvas() void {
     tl.format("Virtual size {d}x{d}\n", .{ scroll_info.virtual_size.w, scroll_info.virtual_size.h }, .{});
     tl.format("Scroll Offset {d}x{d}\n", .{ scroll_info.viewport.x, scroll_info.viewport.y }, .{});
     tl.format("Origin {d}x{d}\n", .{ origin.x, origin.y }, .{});
-    tl.format("Scale {d}", .{scale}, .{});
+    tl.format("Scale {d}", .{scale.*}, .{});
     tl.deinit();
 
     var scrollArea = dvui.scrollArea(@src(), .{ .scroll_info = scroll_info }, .{ .expand = .both, .min_size_content = .{ .w = 300, .h = 300 } });
@@ -3576,7 +3591,7 @@ pub fn scrollCanvas() void {
                         .mouse => |me| {
                             if (me.action == .press and me.button.pointer()) {
                                 e.handle(@src(), dragBox.data());
-                                dvui.captureMouse(dbox.data());
+                                dvui.captureMouse(dbox.data(), e.num);
                                 dvui.dragPreStart(me.p, .{ .name = "box_transfer" });
                             } else if (me.action == .motion) {
                                 if (dvui.captured(dbox.data().id)) {
@@ -3586,7 +3601,7 @@ pub fn scrollCanvas() void {
                                         drag_box_window.* = i;
                                         drag_box_content.* = k;
                                         // give up capture so target can get mouse events, but don't end drag
-                                        dvui.captureMouse(null);
+                                        dvui.captureMouse(null, e.num);
                                     }
                                 }
                             } else if (me.action == .position) {
@@ -3610,13 +3625,13 @@ pub fn scrollCanvas() void {
                 .mouse => |me| {
                     if (me.action == .press and me.button.pointer()) {
                         e.handle(@src(), dragBox.data());
-                        dvui.captureMouse(dragBox.data());
+                        dvui.captureMouse(dragBox.data(), e.num);
                         const offset = me.p.diff(dragBox.data().rectScale().r.topLeft()); // pixel offset from dragBox corner
                         dvui.dragPreStart(me.p, .{ .offset = offset });
                     } else if (me.action == .release and me.button.pointer()) {
                         if (dvui.captured(dragBox.data().id)) {
                             e.handle(@src(), dragBox.data());
-                            dvui.captureMouse(null);
+                            dvui.captureMouse(null, e.num);
                             dvui.dragEnd();
                         }
                     } else if (me.action == .motion) {
@@ -3655,12 +3670,12 @@ pub fn scrollCanvas() void {
             .mouse => |me| {
                 if (me.action == .press and me.button.pointer()) {
                     e.handle(@src(), scrollContainer.data());
-                    dvui.captureMouse(scrollContainer.data());
+                    dvui.captureMouse(scrollContainer.data(), e.num);
                     dvui.dragPreStart(me.p, .{});
                 } else if (me.action == .release and me.button.pointer()) {
                     if (dvui.captured(scrollContainer.data().id)) {
                         e.handle(@src(), scrollContainer.data());
-                        dvui.captureMouse(null);
+                        dvui.captureMouse(null, e.num);
                         dvui.dragEnd();
                     }
                 } else if (me.action == .motion) {
@@ -4245,6 +4260,13 @@ fn makeLabels(src: std.builtin.SourceLocation, count: usize) void {
 
 /// ![image](Examples-debugging.png)
 pub fn debuggingErrors() void {
+    {
+        var hbox = dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+        dvui.label(@src(), "Scroll Speed", .{}, .{});
+        _ = dvui.sliderEntry(@src(), "{d:0.1}", .{ .value = &dvui.scroll_speed, .min = 0.1, .max = 50, .interval = 0.1 }, .{});
+    }
+
     _ = dvui.checkbox(@src(), &dvui.currentWindow().snap_to_pixels, "Snap to pixels", .{});
     dvui.label(@src(), "on non-hdpi screens watch the window title \"DVUI Demo\"", .{}, .{ .margin = .{ .x = 10 } });
     dvui.label(@src(), "- text, icons, and images rounded to nearest pixel", .{}, .{ .margin = .{ .x = 10 } });
@@ -4272,7 +4294,7 @@ pub fn debuggingErrors() void {
         }
 
         if (dvui.labelClick(@src(), "See https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids", .{}, .{ .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
-            dvui.openURL("https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids");
+            _ = dvui.openURL("https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids");
         }
     }
 
@@ -5360,7 +5382,7 @@ pub const StrokeTest = struct {
                             }
 
                             if (dragi != null) {
-                                dvui.captureMouse(self.data());
+                                dvui.captureMouse(self.data(), e.num);
                                 dvui.dragPreStart(me.p, .{ .cursor = .crosshair });
                             }
                         }
@@ -5368,7 +5390,7 @@ pub const StrokeTest = struct {
                     .release => {
                         if (me.button == .left) {
                             e.handle(@src(), self.data());
-                            dvui.captureMouse(null);
+                            dvui.captureMouse(null, e.num);
                             dvui.dragEnd();
                         }
                     },

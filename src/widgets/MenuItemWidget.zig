@@ -171,7 +171,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 if (me.button.touch()) {
                     // with touch we have to capture otherwise any motion will
                     // cause scroll to capture
-                    dvui.captureMouse(self.data());
+                    dvui.captureMouse(self.data(), e.num);
                     dvui.dragPreStart(me.p, .{});
                 }
             } else if (me.action == .release) {
@@ -183,7 +183,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 }
                 if (dvui.captured(self.data().id)) {
                     // should only happen with touch
-                    dvui.captureMouse(null);
+                    dvui.captureMouse(null, e.num);
                     dvui.dragEnd();
                 }
             } else if (me.action == .motion and me.button.touch()) {
@@ -192,7 +192,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                         // if we overcame the drag threshold, then that
                         // means the person probably didn't want to touch
                         // this, maybe they were trying to scroll
-                        dvui.captureMouse(null);
+                        dvui.captureMouse(null, e.num);
                         dvui.dragEnd();
                     }
                 }
@@ -265,20 +265,20 @@ test "menuItem click sets last_focused_id_this_frame" {
     defer t.deinit();
 
     const fns = struct {
-        var last_focused_id_set: dvui.WidgetId = .zero;
+        var last_focused_id_set: ?dvui.WidgetId = null;
 
         fn frame() !dvui.App.Result {
             var m = dvui.menu(@src(), .vertical, .{ .padding = .all(10), .tag = "menu" });
             defer m.deinit();
 
-            const last_focused = dvui.lastFocusedIdInFrame(null);
+            const last_focused = dvui.lastFocusedIdInFrame();
 
             if (dvui.menuItemLabel(@src(), "item 1", .{}, .{ .tag = "item 1" })) |_| {
                 dvui.focusWidget(m.data().id, null, null);
             }
             _ = dvui.menuItemLabel(@src(), "item 2", .{}, .{ .tag = "item 2" });
 
-            last_focused_id_set = dvui.lastFocusedIdInFrame(last_focused);
+            last_focused_id_set = dvui.lastFocusedIdInFrameSince(last_focused);
 
             return .ok;
         }
