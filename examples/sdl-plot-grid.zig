@@ -221,13 +221,13 @@ fn gui_frame() !void {
                     var cell_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
                     defer cell_vbox.deinit();
 
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = y1, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell));
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = y1, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .color_text = .red }));
                     focus_cell.col_num += 1;
 
                     var fraction: f32 = @floatCast(y1.*);
                     fraction += 100;
                     fraction /= 200;
-                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1 }))) {
+                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1, .color_accent = .red }))) {
                         y1.* = fraction * 200;
                         y1.* = @round(y1.*) - 100;
                     }
@@ -241,13 +241,13 @@ fn gui_frame() !void {
                     var cell_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
                     defer cell_vbox.deinit();
 
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = y2, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell));
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = y2, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .color_text = .blue }));
                     focus_cell.col_num += 1;
 
                     var fraction: f32 = @floatCast(y2.*);
                     fraction += 100;
                     fraction /= 200;
-                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1 }))) {
+                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1, .color_accent = .blue }))) {
                         y2.* = fraction * 200;
                         y2.* = @round(y2.*) - 100;
                     }
