@@ -1168,11 +1168,31 @@ pub const TextureTarget = struct {
     height: u32,
 };
 
+/// Gets a texture from the internal texture cache. If a texture
+/// isn't used for one frame it gets removed from the cache and
+/// destroyed.
+///
+/// If you want to lazily create a texture, you could do:
+/// ```zig
+/// const texture = dvui.textureGetCached(key) orelse blk: {
+///     const texture = ...; // Create your texture here
+///     dvui.textureAddToCache(key, texture);
+///     break :blk texture;
+/// }
+/// ```
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn textureGetCached(key: Texture.CacheKey) ?Texture {
     const cw = currentWindow();
     return cw.texture_cache.get(key);
 }
 
+/// Add a texture to the cache. This is useful if you want to load
+/// and image from disk, create a texture from it and then unload
+/// it from memory. The texture will remain in the cache as long
+/// as it's key is accessed at least once per frame.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn textureAddToCache(key: Texture.CacheKey, texture: Texture) void {
     const cw = currentWindow();
     const prev = cw.texture_cache.fetchPut(cw.gpa, key, texture) catch |err| {
@@ -1184,6 +1204,10 @@ pub fn textureAddToCache(key: Texture.CacheKey, texture: Texture) void {
     }
 }
 
+/// Remove a key from the cache. This can force the re-creation
+/// of a texture created by `ImageSource` for example.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn textureInvalidateCache(key: Texture.CacheKey) void {
     const cw = currentWindow();
     const prev = cw.texture_cache.fetchRemove(key);
@@ -1194,6 +1218,8 @@ pub fn textureInvalidateCache(key: Texture.CacheKey) void {
 
 /// Takes in svg bytes and returns a tvg bytes that can be used
 /// with `icon` or `iconTexture`
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn svgToTvg(allocator: std.mem.Allocator, svg_bytes: []const u8) (std.mem.Allocator.Error || TvgError)![]const u8 {
     return tvg.tvg_from_svg(allocator, svg_bytes, .{}) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
