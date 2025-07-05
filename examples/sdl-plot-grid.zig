@@ -53,7 +53,8 @@ pub fn main() !void {
     _ = Backend.c.SDL_EnableScreenSaver();
 
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
+    var theme = dvui.Theme.builtin.adwaita_light;
+    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{ .theme = &theme });
     defer win.deinit();
 
     var interrupted = false;
@@ -332,8 +333,7 @@ pub fn pointToCellConverter(g: *dvui.GridWidget, p: dvui.Point.Physical) ?dvui.G
     if (result) |*r| {
         // For grid col 0 and click in 2nd half of cell, then count as virtual col 1
         // For all other columns, increase their col num by 1 to include the virtual column
-        // + 12/2 = 6 pixels to account for margin/padding.
-        if (r.col_num > 0 or p.toNatural().x > (g.colWidth(0) + 12) / 2) {
+        if (r.col_num > 0 or p.toNatural().x > 56) {
             r.col_num += 1;
         }
     }
