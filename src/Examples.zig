@@ -4734,7 +4734,7 @@ fn gridStyling() void {
                 temp += interval;
                 row_num += 1;
             }) {
-                var cell = grid.bodyCell(@src(), 0, row_num, cell_opts.cellOptions(0, row_num));
+                var cell = grid.bodyCell(@src(), .colRow(0, row_num), cell_opts.cellOptions(.colRow(0, row_num)));
                 defer cell.deinit();
                 dvui.label(@src(), "{d}", .{temp}, .{ .gravity_x = 0.5, .expand = .horizontal });
             }
@@ -4747,7 +4747,7 @@ fn gridStyling() void {
                 temp += interval;
                 row_num += 1;
             }) {
-                var cell = grid.bodyCell(@src(), 1, row_num, cell_opts.cellOptions(1, row_num));
+                var cell = grid.bodyCell(@src(), .colRow(1, row_num), cell_opts.cellOptions(.colRow(1, row_num)));
                 defer cell.deinit();
                 dvui.label(@src(), "{d}", .{@divFloor(temp * 9, 5) + 32}, .{ .gravity_x = 0.5, .expand = .horizontal });
             }
@@ -4792,16 +4792,6 @@ fn gridLayouts() void {
         var resize_rows: bool = false;
 
         /// Create a textArea for the description so that the text can wrap.
-        fn customDescriptionColumn(src: std.builtin.SourceLocation, grid: *GridWidget, col_num: usize, data: []Car, opts: *const GridWidget.CellStyle.Banded) void {
-            for (data, 0..) |*car, row_num| {
-                var col = grid.bodyCell(src, col_num, row_num, opts.cellOptions(col_num, row_num));
-                defer col.deinit();
-                var text = dvui.textLayout(@src(), .{ .break_lines = true }, .{ .expand = .both, .background = false });
-                defer text.deinit();
-                text.addText(car.description, opts.options(col_num, row_num));
-            }
-        }
-
         const ConditionTextColor = struct {
             base_opts: *const GridWidget.CellStyle.Banded,
 
@@ -4811,12 +4801,12 @@ fn gridLayouts() void {
                 };
             }
 
-            pub fn cellOptions(self: *const ConditionTextColor, col: usize, row: usize) GridWidget.CellOptions {
-                return self.base_opts.cellOptions(col, row);
+            pub fn cellOptions(self: *const ConditionTextColor, cell: GridWidget.Cell) GridWidget.CellOptions {
+                return self.base_opts.cellOptions(cell);
             }
 
-            pub fn options(self: *const ConditionTextColor, col: usize, row: usize) dvui.Options {
-                return self.base_opts.options(col, row).override(conditionTextColor(row));
+            pub fn options(self: *const ConditionTextColor, cell: GridWidget.Cell) dvui.Options {
+                return self.base_opts.options(cell).override(conditionTextColor(cell.row_num));
             }
             /// Set the text color of the Condition text, based on the condition.
             fn conditionTextColor(row_num: usize) Options {
@@ -4980,30 +4970,54 @@ fn gridLayouts() void {
             local.sort("Description");
         }
 
-        // Selection
-        {
-            // Make the checkbox column fixed width. (This width is used if init_opts.col_widths is null)
-            _ = dvui.gridColumnCheckbox(@src(), grid, 0, Car, all_cars[0..], "selected", banded.optionsOverride(.{ .gravity_y = 0 }));
-        }
-        // Make
-        {
-            dvui.gridColumnFromSlice(@src(), grid, 1, Car, all_cars[0..], "make", "{s}", banded);
-        }
-        // Model
-        {
-            dvui.gridColumnFromSlice(@src(), grid, 2, Car, all_cars[0..], "model", "{s}", banded);
-        }
-        // Year
-        {
-            dvui.gridColumnFromSlice(@src(), grid, 3, Car, all_cars[0..], "year", "{d}", banded);
-        }
-        // Condition
-        {
-            dvui.gridColumnFromSlice(@src(), grid, 4, Car, all_cars[0..], "condition", "{s}", local.ConditionTextColor.init(&banded_centered));
-        }
-        // Description
-        {
-            local.customDescriptionColumn(@src(), grid, 5, all_cars[0..], &banded);
+        for (all_cars[0..], 0..) |*car, row_num| {
+            var cell: GridWidget.Cell = .colRow(0, row_num);
+
+            // Selection
+            {
+                defer cell.col_num += 1;
+                var cell_box = grid.bodyCell(@src(), cell, banded.cellOptions(cell));
+                defer cell_box.deinit();
+                _ = dvui.checkbox(@src(), &car.selected, null, banded.options(cell).override(.{ .gravity_y = 0, .gravity_x = 0.5 }));
+            }
+            // Make
+            {
+                defer cell.col_num += 1;
+                var cell_box = grid.bodyCell(@src(), cell, banded.cellOptions(cell));
+                defer cell_box.deinit();
+                dvui.labelNoFmt(@src(), car.make, .{}, banded.options(cell));
+            }
+            // Model
+            {
+                defer cell.col_num += 1;
+                var cell_box = grid.bodyCell(@src(), cell, banded.cellOptions(cell));
+                defer cell_box.deinit();
+                dvui.labelNoFmt(@src(), car.model, .{}, banded.options(cell));
+            }
+            // Year
+            {
+                defer cell.col_num += 1;
+                var cell_box = grid.bodyCell(@src(), cell, banded.cellOptions(cell));
+                defer cell_box.deinit();
+                dvui.label(@src(), "{d}", .{car.year}, banded.options(cell));
+            }
+            // Condition
+            {
+                defer cell.col_num += 1;
+                var cell_box = grid.bodyCell(@src(), cell, banded.cellOptions(cell));
+                defer cell_box.deinit();
+                const cell_style = local.ConditionTextColor.init(&banded_centered);
+                dvui.labelNoFmt(@src(), @tagName(car.condition), .{}, cell_style.options(cell));
+            }
+            // Description
+            {
+                defer cell.col_num += 1;
+                var cell_box = grid.bodyCell(@src(), cell, banded.cellOptions(cell));
+                defer cell_box.deinit();
+                var text = dvui.textLayout(@src(), .{ .break_lines = true }, .{ .expand = .both, .background = false });
+                defer text.deinit();
+                text.addText(car.description, banded.options(cell));
+            }
         }
     }
     {
@@ -5140,15 +5154,18 @@ fn gridVirtualScrolling() void {
     dvui.gridHeading(@src(), grid, 1, "Is prime?", .fixed, CellStyle{ .cell_opts = .{ .size = .{ .w = col_width } } });
 
     for (first..last) |num| {
+        var cell_num: GridWidget.Cell = .colRow(0, num);
         {
-            var cell = grid.bodyCell(@src(), 0, num, highlight_hovered_1.cellOptions(0, num));
+            defer cell_num.col_num += 1;
+            var cell = grid.bodyCell(@src(), cell_num, highlight_hovered_1.cellOptions(cell_num));
             defer cell.deinit();
             dvui.label(@src(), "{d}", .{num}, .{});
         }
         {
+            defer cell_num.col_num += 1;
             const check_img = @embedFile("icons/entypo/check.tvg");
 
-            var cell = grid.bodyCell(@src(), 1, num, highlight_hovered_2.cellOptions(1, num));
+            var cell = grid.bodyCell(@src(), cell_num, highlight_hovered_2.cellOptions(cell_num));
             defer cell.deinit();
             if (local.isPrime(num)) {
                 dvui.icon(@src(), "Check", check_img, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .background = false });
@@ -5171,16 +5188,16 @@ fn gridVariableRowHeights() void {
         .opts = .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .both },
     };
     for (1..10) |row_num| {
+        const cell_num: GridWidget.Cell = .colRow(0, row_num);
         const row_num_i: i32 = @intCast(row_num);
         const row_height = 70 - (@abs(row_num_i - 5) * 10);
         var cell = grid.bodyCell(
             @src(),
-            0,
-            row_num,
-            cell_style.cellOptions(0, row_num).override(.{ .size = .{ .h = @floatFromInt(row_height), .w = 500 } }),
+            cell_num,
+            cell_style.cellOptions(cell_num).override(.{ .size = .{ .h = @floatFromInt(row_height), .w = 500 } }),
         );
         defer cell.deinit();
-        dvui.label(@src(), "h = {d}", .{row_height}, cell_style.options(0, row_num));
+        dvui.label(@src(), "h = {d}", .{row_height}, cell_style.options(cell_num));
     }
 }
 

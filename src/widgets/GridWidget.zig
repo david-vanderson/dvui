@@ -53,7 +53,13 @@ pub const Cell = struct {
     col_num: usize,
     row_num: usize,
 
-    // TODO: Something better here pls.
+    pub fn col(col_num: usize) Cell {
+        return .{
+            .col_num = col_num,
+            .row_num = 0,
+        };
+    }
+
     pub fn colRow(col_num: usize, row_num: usize) Cell {
         return .{
             .col_num = col_num,

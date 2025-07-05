@@ -87,13 +87,13 @@ pub const Banded = struct {
     pub fn cellOptions(self: *const Banded, cell: Cell) CellOptions {
         switch (self.banding) {
             .rows => {
-                return if (cell.row % 2 == 0)
+                return if (cell.row_num % 2 == 0)
                     self.cell_opts
                 else
                     self.alt_cell_opts;
             },
             .cols => {
-                return if (cell.col % 2 == 0)
+                return if (cell.col_num % 2 == 0)
                     self.cell_opts
                 else
                     self.alt_cell_opts;
@@ -158,7 +158,7 @@ pub const HoveredRow = struct {
                 // This is one for the debugger, whenever I get that working again.
                 {
                     // Translate mouse screen position to a logical position relative to the top-left of the grid body.
-                    if (grid.pointToColRow(e.evt.mouse.p)) |cell| {
+                    if (grid.pointToCell(e.evt.mouse.p)) |cell| {
                         break :row cell.row_num;
                     }
                 }
@@ -169,7 +169,7 @@ pub const HoveredRow = struct {
 
     pub fn cellOptions(self: *const HoveredRow, cell: Cell) CellOptions {
         const highlighted_row = self.highlighted_row orelse return self.cell_opts;
-        if (cell.row != highlighted_row) return self.cell_opts;
+        if (cell.row_num != highlighted_row) return self.cell_opts;
 
         return self.cell_opts.override(.{ .color_fill = self.cell_opts.color_fill_hover });
     }
