@@ -228,8 +228,8 @@ fn gui_frame() !void {
                     fraction += 100;
                     fraction /= 200;
                     if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1, .color_accent = .red }))) {
-                        y1.* = fraction * 200;
-                        y1.* = @round(y1.*) - 100;
+                        y1.* = fraction * 20000;
+                        y1.* = @round((y1.* - 10000)) / 100;
                     }
                     focus_cell.col_num += 1;
                 }
@@ -248,8 +248,8 @@ fn gui_frame() !void {
                     fraction += 100;
                     fraction /= 200;
                     if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1, .color_accent = .blue }))) {
-                        y2.* = fraction * 200;
-                        y2.* = @round(y2.*) - 100;
+                        y2.* = fraction * 20000;
+                        y2.* = @round((y2.* - 10000)) / 100;
                     }
                     focus_cell.col_num += 1;
                 }
