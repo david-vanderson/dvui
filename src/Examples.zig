@@ -5515,9 +5515,9 @@ fn gridSelection() void {
             if (local.single_select.selectionChanged()) {
                 if (local.single_select.id_to_unselect) |unselect_row| {
                     local.selections.unset(unselect_row);
-                    if (local.single_select.id_to_select) |select_row| {
-                        local.selections.set(select_row);
-                    }
+                }
+                if (local.single_select.id_to_select) |select_row| {
+                    local.selections.set(select_row);
                 }
             }
         }
