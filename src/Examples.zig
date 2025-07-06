@@ -4553,6 +4553,7 @@ pub fn grids(height: f32) void {
         layout,
         scrolling,
         row_heights,
+        selection,
         const num_grids = @typeInfo(@This()).@"enum".fields.len;
     };
     const local = struct {
@@ -4568,6 +4569,7 @@ pub fn grids(height: f32) void {
                 .layout => "Layouts and data",
                 .scrolling => "Virtual scrolling",
                 .row_heights => "Variable row heights",
+                .selection => "Selection",
             };
         }
     };
@@ -4578,7 +4580,6 @@ pub fn grids(height: f32) void {
         var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
         tabs.install();
         defer tabs.deinit();
-
         for (0..GridType.num_grids) |tab_num| {
             const this_tab: GridType = @enumFromInt(tab_num);
 
@@ -4593,6 +4594,7 @@ pub fn grids(height: f32) void {
         .layout => gridLayouts(),
         .scrolling => gridVirtualScrolling(),
         .row_heights => gridVariableRowHeights(),
+        .selection => gridSelection(),
     }
 }
 
@@ -5235,6 +5237,289 @@ fn gridVariableRowHeights() void {
     }
 }
 
+const DirEntry = struct {
+    name: []const u8,
+    kind: std.fs.Dir.Entry.Kind,
+    size: u65,
+    mode: u32,
+    mtime: i128,
+
+    pub const Iterator = struct {
+        idx: usize,
+        slice: []const DirEntry,
+
+        pub fn init(slice: []const DirEntry) Iterator {
+            return .{
+                .idx = 0,
+                .slice = slice,
+            };
+        }
+
+        pub fn next(self: *Iterator) ?*const DirEntry {
+            if (self.idx < self.slice.len) {
+                defer self.idx += 1;
+                return &self.slice[self.idx];
+            }
+            return null;
+        }
+    };
+};
+
+fn gridSelection() void {
+    const CellStyle = dvui.GridWidget.CellStyle;
+    const local = struct {
+        var initialized: bool = false;
+        var selection_mode: enum { multi_select, single_select } = .multi_select;
+        var row_select: bool = false;
+        var filename_filter: []u8 = "";
+        var multi_select: dvui.select.MultiSelectMouse = .{};
+        var kb_select: dvui.select.SelectAllKeyboard = .{};
+        var single_select: dvui.select.SingleSelect = .{};
+        var filtering: bool = false;
+        var filtering_changed = false;
+        var select_all_state: dvui.select.SelectAllState = .select_none;
+        var selection_info: dvui.select.SelectionInfo = .{};
+        var selections: std.StaticBitSet(directory_examples.len) = .initEmpty();
+        var highlight_style: CellStyle.HoveredRow = .{ .cell_opts = .{ .color_fill_hover = .fill_hover, .background = true } };
+
+        pub fn isFiltered(entry: *const DirEntry) bool {
+            if (filename_filter.len > 0) {
+                return std.mem.indexOf(u8, entry.name, filename_filter) != null;
+            }
+            return false;
+        }
+
+        pub fn selectAll(state: dvui.select.SelectAllState) void {
+            switch (state) {
+                .select_all => {
+                    selections = .initFull();
+                    for (0..selections.capacity()) |i| {
+                        if (isFiltered(&directory_examples[i])) {
+                            selections.unset(i);
+                        }
+                    }
+                },
+                .select_none => selections = .initEmpty(),
+            }
+        }
+
+        pub fn fromNsTimestamp(timestamp_ns: i128) struct { year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8 } {
+            const days_per_400_years = 146_097;
+            const days_per_100_years = 36_524;
+            const days_per_4_years = 1_460;
+
+            // Split into days and nanoseconds of the day
+            const days_since_epoch: i128 = @divTrunc(timestamp_ns, std.time.ns_per_day);
+            const nanos_of_day: i128 = @rem(timestamp_ns, std.time.ns_per_day);
+
+            // Convert nanoseconds of the day to hours, minutes, seconds
+            const hour: u8 = @intCast(@divTrunc(nanos_of_day, (std.time.ns_per_s * 3_600)));
+            const minute: u8 = @intCast(@divTrunc((@mod(nanos_of_day, (std.time.ns_per_s * 3_600))), (std.time.ns_per_s * 60)));
+            const second: u8 = @intCast(@divTrunc((@mod(nanos_of_day, (std.time.ns_per_s * 60))), std.time.ns_per_s));
+
+            // Shift to Gregorian calendar
+            const days_since_gregorian_epoch: i128 = days_since_epoch + 719_468; // Difference between unix epoch and gregorian epoch
+
+            // 400-year eras
+            const era: i128 = @divTrunc(days_since_gregorian_epoch, days_per_400_years);
+            const day_of_era: i128 = days_since_gregorian_epoch - era * days_per_400_years;
+
+            const year_of_era: i128 = @divTrunc(
+                day_of_era - @divTrunc(day_of_era, days_per_4_years) + @divTrunc(day_of_era, days_per_100_years) - @divTrunc(day_of_era, days_per_400_years - 1),
+                365,
+            );
+            const day_of_year: i128 = day_of_era - (365 * year_of_era + @divTrunc(year_of_era, 4) - @divTrunc(year_of_era, 100));
+
+            const month_part: i128 = @divTrunc(5 * day_of_year + 2, 153);
+            const day: u8 = @intCast(day_of_year - @divTrunc(153 * month_part + 2, 5) + 1);
+            const month: u8 = @intCast(month_part + 3 - 12 * @divTrunc(month_part, 10));
+            const year: u16 = @intCast(year_of_era + era * 400 + @divTrunc(month_part, 10));
+
+            return .{
+                .year = year, // year 65535 bug.
+                .month = month,
+                .day = day,
+                .hour = hour,
+                .minute = minute,
+                .second = second,
+            };
+        }
+    };
+    var outer_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+    defer outer_vbox.deinit();
+    {
+        var top_controls = dvui.box(@src(), .horizontal, .{ .gravity_y = 0 });
+        defer top_controls.deinit();
+        dvui.labelNoFmt(@src(), "Filter (contains): ", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
+        var text = dvui.textEntry(@src(), .{}, .{ .expand = .horizontal });
+        local.filename_filter = text.getText();
+        defer text.deinit();
+    }
+    {
+        var vbox = dvui.box(@src(), .vertical, .{ .gravity_y = 1.0 });
+        defer vbox.deinit();
+        if (dvui.expander(@src(), "Options", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+            var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            var selected = local.selection_mode == .multi_select;
+            if (dvui.checkbox(@src(), &selected, "Multi-Select", .{ .margin = dvui.Rect.all(6) })) {
+                local.selection_mode = if (selected) .multi_select else .single_select;
+                if (local.selection_mode == .single_select) {
+                    local.selectAll(.select_none);
+                }
+            }
+            _ = dvui.checkbox(@src(), &local.row_select, "Row Select", .{ .margin = dvui.Rect.all(6) });
+        }
+    }
+    {
+        // This is sort of subtle. We need to reset the kb select before the grid is created, so that grid focus is included in select all
+        local.kb_select.reset();
+
+        var grid = dvui.grid(@src(), .numCols(6), .{ .scroll_opts = .{ .horizontal_bar = .auto } }, .{ .expand = .both, .background = true });
+        defer grid.deinit();
+        if (!local.initialized) {
+            dvui.focusWidget(grid.data().id, null, null);
+            local.initialized = true;
+        }
+
+        const row_clicked: ?usize = blk: {
+            if (!local.row_select) break :blk null;
+            for (dvui.events()) |*e| {
+                if (!dvui.eventMatchSimple(e, grid.data())) continue;
+                if (e.evt != .mouse) continue;
+                const me = e.evt.mouse;
+                if (me.action != .press) continue;
+                if (grid.pointToCell(me.p)) |cell| {
+                    if (cell.col_num > 0) break :blk cell.row_num;
+                }
+            }
+            break :blk null;
+        };
+
+        local.selection_info.reset();
+
+        // Note: The extra check here is because I've chosen to unselect anything that was filtered.
+        // If we were just doing selection it just needs multi_select.selectionChanged();
+        // OR user might prefer to check if everything in the current filter is selected and
+        // set the select_all state based on that. So this gives quite a bit more flexibility
+        // than previous.
+        if (local.filtering_changed or local.multi_select.selectionChanged()) {
+            local.select_all_state = .select_none;
+        }
+        if (local.selection_mode == .multi_select) {
+            if (dvui.gridHeadingCheckbox(@src(), grid, 0, &local.select_all_state, .{})) {
+                local.selectAll(local.select_all_state);
+            }
+        }
+        dvui.gridHeading(@src(), grid, 1, "Name", .fixed, CellStyle{ .cell_opts = .{ .size = .{ .w = 300 } } });
+        dvui.gridHeading(@src(), grid, 2, "Kind", .fixed, .{});
+        dvui.gridHeading(@src(), grid, 3, "Size", .fixed, .{});
+        dvui.gridHeading(@src(), grid, 4, "Mode", .fixed, .{});
+        dvui.gridHeading(@src(), grid, 5, "MTime", .fixed, .{});
+
+        if (local.row_select)
+            local.highlight_style.processEvents(grid);
+        const was_filtering = local.filtering;
+
+        {
+            var itr: DirEntry.Iterator = .init(&directory_examples);
+            var dir_num: usize = 0;
+            var row_num: usize = 0;
+            local.filtering = false;
+            while (itr.next()) |entry| : (dir_num += 1) {
+                if (local.isFiltered(entry)) {
+                    local.filtering = true;
+                    local.selections.unset(dir_num);
+                    continue;
+                }
+                defer row_num += 1;
+                var cell_num: dvui.GridWidget.Cell = .colRow(0, row_num);
+                {
+                    defer cell_num.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, local.highlight_style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    var is_set = if (dir_num < local.selections.capacity()) local.selections.isSet(dir_num) else false;
+                    _ = dvui.checkboxEx(@src(), &is_set, null, .{ .selection_id = dir_num, .selection_info = &local.selection_info }, .{ .gravity_x = 0.5 });
+                    if (row_num == row_clicked) {
+                        local.selection_info.add(dir_num, !is_set, cell.data());
+                    }
+                }
+                {
+                    defer cell_num.col_num += 1;
+                    var cell = grid.bodyCell(
+                        @src(),
+                        cell_num,
+                        local.highlight_style.cellOptions(cell_num).override(.{ .size = .{ .w = 300 } }),
+                    );
+                    defer cell.deinit();
+                    dvui.labelNoFmt(@src(), entry.name, .{}, .{});
+                }
+                {
+                    defer cell_num.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, local.highlight_style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    dvui.labelNoFmt(@src(), @tagName(entry.kind), .{}, .{});
+                }
+                if (entry.kind == .file) {
+                    {
+                        defer cell_num.col_num += 1;
+                        var cell = grid.bodyCell(@src(), cell_num, local.highlight_style.cellOptions(cell_num));
+                        defer cell.deinit();
+                        dvui.label(@src(), "{d}", .{entry.size}, .{});
+                    }
+                    {
+                        defer cell_num.col_num += 1;
+                        var cell = grid.bodyCell(@src(), cell_num, local.highlight_style.cellOptions(cell_num));
+                        defer cell.deinit();
+                        dvui.label(@src(), "{d}", .{entry.mode}, .{});
+                    }
+                    {
+                        defer cell_num.col_num += 1;
+                        var cell = grid.bodyCell(@src(), cell_num, local.highlight_style.cellOptions(cell_num));
+                        defer cell.deinit();
+                        dvui.label(@src(), "{[year]:0>4}-{[month]:0>2}-{[day]:0>2} {[hour]:0>2}:{[minute]:0>2}:{[second]:0>2}", local.fromNsTimestamp(entry.mtime), .{});
+                    }
+                } else {
+                    const end_col = cell_num.col_num + 3;
+                    while (cell_num.col_num != end_col) : (cell_num.col_num += 1) {
+                        var cell = grid.bodyCell(@src(), cell_num, local.highlight_style.cellOptions(cell_num));
+                        defer cell.deinit();
+                    }
+                }
+            }
+        }
+
+        local.filtering_changed = (was_filtering != local.filtering);
+
+        // process events afte body so cells have a chance to process select-all first.
+        if (local.selection_mode == .multi_select) {
+            local.kb_select.processEvents(&local.select_all_state, grid.data());
+            if (local.kb_select.selectionChanged()) {
+                local.selectAll(local.select_all_state);
+            }
+        }
+
+        if (local.selection_mode == .multi_select) {
+            local.multi_select.processEvents(&local.selection_info, grid.data());
+            if (local.multi_select.selectionChanged()) {
+                for (local.multi_select.selectionIdStart()..local.multi_select.selectionIdEnd() + 1) |row_num| {
+                    local.selections.setValue(row_num, local.multi_select.should_select);
+                }
+            }
+        } else {
+            local.single_select.processEvents(&local.selection_info, grid.data());
+            if (local.single_select.selectionChanged()) {
+                if (local.single_select.id_to_unselect) |unselect_row| {
+                    local.selections.unset(unselect_row);
+                    if (local.single_select.id_to_select) |select_row| {
+                        local.selections.set(select_row);
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn background_dialog(win: *dvui.Window, delay_ns: u64) void {
     std.time.sleep(delay_ns);
     dvui.dialog(@src(), .{}, .{ .window = win, .modal = false, .title = "Background Dialog", .message = "This non modal dialog was added from a non-GUI thread." });
@@ -5811,3 +6096,56 @@ test "DOCIMG themeEditor" {
     try dvui.testing.settle(frame);
     try t.saveImage(frame, null, "Examples-themeEditor.png");
 }
+
+// Sample data for directory grid
+const directory_examples = [_]DirEntry{
+    .{ .name = "archive.zip", .kind = .file, .size = 5_242_880, .mode = 0o644, .mtime = 1_625_077_800_000_000_000 },
+    .{ .name = "assets", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_077_850_000_000_000 },
+    .{ .name = "backup.tar", .kind = .file, .size = 15_728_640, .mode = 0o644, .mtime = 1_625_078_000_000_000_000 },
+    .{ .name = "binfile.bin", .kind = .file, .size = 8_192, .mode = 0o644, .mtime = 1_625_078_200_000_000_000 },
+    .{ .name = "build", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_078_250_000_000_000 },
+    .{ .name = "code.zig", .kind = .file, .size = 5_120, .mode = 0o644, .mtime = 1_625_078_400_000_000_000 },
+    .{ .name = "config", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_078_450_000_000_000 },
+    .{ .name = "config.json", .kind = .file, .size = 2_048, .mode = 0o644, .mtime = 1_625_078_600_000_000_000 },
+    .{ .name = "data", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_078_700_000_000_000 },
+    .{ .name = "data.csv", .kind = .file, .size = 3_072, .mode = 0o644, .mtime = 1_625_078_800_000_000_000 },
+    .{ .name = "database.db", .kind = .file, .size = 10_485_760, .mode = 0o644, .mtime = 1_625_079_000_000_000_000 },
+    .{ .name = "docs", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_079_100_000_000_000 },
+    .{ .name = "draft.docx", .kind = .file, .size = 40_960, .mode = 0o644, .mtime = 1_625_081_000_000_000_000 },
+    .{ .name = "draft2.docx", .kind = .file, .size = 81_920, .mode = 0o644, .mtime = 1_625_081_200_000_000_000 },
+    .{ .name = "dump.sql", .kind = .file, .size = 512_000, .mode = 0o644, .mtime = 1_625_081_400_000_000_000 },
+    .{ .name = "example.zig", .kind = .file, .size = 2_048, .mode = 0o644, .mtime = 1_625_081_600_000_000_000 },
+    .{ .name = "favicon.ico", .kind = .file, .size = 1_024, .mode = 0o644, .mtime = 1_625_081_800_000_000_000 },
+    .{ .name = "file1.txt", .kind = .file, .size = 1_234, .mode = 0o644, .mtime = 1_625_082_000_000_000_000 },
+    .{ .name = "file2.txt", .kind = .file, .size = 5_678, .mode = 0o644, .mtime = 1_625_082_200_000_000_000 },
+    .{ .name = "file3.log", .kind = .file, .size = 4_321, .mode = 0o644, .mtime = 1_625_082_400_000_000_000 },
+    .{ .name = "images", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_082_500_000_000_000 },
+    .{ .name = "header.h", .kind = .file, .size = 1_024, .mode = 0o644, .mtime = 1_625_082_600_000_000_000 },
+    .{ .name = "image.png", .kind = .file, .size = 204_800, .mode = 0o644, .mtime = 1_625_082_800_000_000_000 },
+    .{ .name = "index.html", .kind = .file, .size = 4_096, .mode = 0o644, .mtime = 1_625_083_000_000_000_000 },
+    .{ .name = "lib", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_083_100_000_000_000 },
+    .{ .name = "logfile.log", .kind = .file, .size = 8_192, .mode = 0o644, .mtime = 1_625_083_200_000_000_000 },
+    .{ .name = "Makefile", .kind = .file, .size = 512, .mode = 0o644, .mtime = 1_625_083_400_000_000_000 },
+    .{ .name = "media", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_083_500_000_000_000 },
+    .{ .name = "music.mp3", .kind = .file, .size = 5_120_000, .mode = 0o644, .mtime = 1_625_083_600_000_000_000 },
+    .{ .name = "notes.md", .kind = .file, .size = 2_048, .mode = 0o644, .mtime = 1_625_083_800_000_000_000 },
+    .{ .name = "notes.txt", .kind = .file, .size = 1_024, .mode = 0o644, .mtime = 1_625_084_000_000_000_000 },
+    .{ .name = "old_backup.tar.gz", .kind = .file, .size = 10_485_760, .mode = 0o644, .mtime = 1_625_084_200_000_000_000 },
+    .{ .name = "photo.jpg", .kind = .file, .size = 307_200, .mode = 0o644, .mtime = 1_625_084_400_000_000_000 },
+    .{ .name = "photos", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_084_500_000_000_000 },
+    .{ .name = "plan.docx", .kind = .file, .size = 20_480, .mode = 0o644, .mtime = 1_625_084_600_000_000_000 },
+    .{ .name = "presentation.pptx", .kind = .file, .size = 2_097_152, .mode = 0o644, .mtime = 1_625_084_800_000_000_000 },
+    .{ .name = "readme.txt", .kind = .file, .size = 1_024, .mode = 0o644, .mtime = 1_625_085_000_000_000_000 },
+    .{ .name = "report.pdf", .kind = .file, .size = 524_288, .mode = 0o644, .mtime = 1_625_085_200_000_000_000 },
+    .{ .name = "resources", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_085_300_000_000_000 },
+    .{ .name = "script.js", .kind = .file, .size = 4_096, .mode = 0o644, .mtime = 1_625_085_400_000_000_000 },
+    .{ .name = "script.sh", .kind = .file, .size = 4_096, .mode = 0o755, .mtime = 1_625_085_600_000_000_000 },
+    .{ .name = "settings.yaml", .kind = .file, .size = 3_072, .mode = 0o644, .mtime = 1_625_085_800_000_000_000 },
+    .{ .name = "source.c", .kind = .file, .size = 5_120, .mode = 0o644, .mtime = 1_625_086_000_000_000_000 },
+    .{ .name = "spreadsheet.xlsx", .kind = .file, .size = 1_048_576, .mode = 0o644, .mtime = 1_625_086_200_000_000_000 },
+    .{ .name = "style.css", .kind = .file, .size = 2_048, .mode = 0o644, .mtime = 1_625_086_400_000_000_000 },
+    .{ .name = "test.zig", .kind = .file, .size = 1_024, .mode = 0o644, .mtime = 1_625_086_600_000_000_000 },
+    .{ .name = "thumbnail.jpg", .kind = .file, .size = 102_400, .mode = 0o644, .mtime = 1_625_086_800_000_000_000 },
+    .{ .name = "todo.txt", .kind = .file, .size = 512, .mode = 0o644, .mtime = 1_625_087_000_000_000_000 },
+    .{ .name = "video.mp4", .kind = .file, .size = 10_485_760, .mode = 0o644, .mtime = 1_625_087_200_000_000_000 },
+};
