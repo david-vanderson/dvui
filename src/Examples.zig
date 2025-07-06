@@ -5469,7 +5469,7 @@ fn gridSelection() void {
                         defer cell_num.col_num += 1;
                         var cell = grid.bodyCell(@src(), cell_num, local.highlight_style.cellOptions(cell_num));
                         defer cell.deinit();
-                        dvui.label(@src(), "{d}", .{entry.size}, .{});
+                        dvui.label(@src(), "{d}", .{entry.size}, .{ .gravity_x = 1.0 });
                     }
                     {
                         defer cell_num.col_num += 1;
