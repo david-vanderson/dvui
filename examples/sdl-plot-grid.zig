@@ -125,7 +125,7 @@ fn createYears() [50][]const u8 {
 // The 2 widgets in the first 3 columns are actually laid out vertically, even though the tab focus treats them as columns.
 // This allows the user to arrow-down and just jump through the text boxes in the column, or just jump through the sliders,
 // while still getting correct focus when tabbing through the widgets.
-var keyboard_nav: dvui.navigation.GridKeyboard = .{ .num_cols = 8, .num_rows = 0, .wrap_cursor = true, .tab_out = true, .num_scroll = 5 };
+var keyboard_nav: dvui.GridWidget.KeyboardNavigation = .{ .num_cols = 8, .num_rows = 0, .wrap_cursor = true, .tab_out = true, .num_scroll = 5 };
 var initialized = false;
 var col_widths: [5]f32 = .{ 100, 100, 100, 35, 35 };
 // both dvui and SDL drawing
@@ -172,7 +172,7 @@ fn gui_frame() !void {
             //ui.currentWindow().debug_widget_id = dvui.focusedWidgetId() orelse .zero;
             // 3 real + 1 virtual column
             // TODO: Make the naming consistent.
-            keyboard_nav.num_scroll = dvui.navigation.GridKeyboard.numScrollDefault(grid);
+            keyboard_nav.num_scroll = dvui.GridWidget.KeyboardNavigation.numScrollDefault(grid);
             keyboard_nav.setLimits(8, data.len);
             keyboard_nav.processEventsCustom(grid, pointToCellConverter);
             const focused_cell = keyboard_nav.cellCursor();
