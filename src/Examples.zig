@@ -5802,7 +5802,7 @@ pub fn gridNavigation() void {
             }
             local.keyboard_nav.gridEnd();
             if (row_to_add) |row_num| {
-                local.data.insert(dvui.currentWindow().gpa, row_num, .{ .x = 50, .y1 = 0, .y2 = 0 }) catch {};
+                local.data.insert(local.fba.allocator(), row_num, .{ .x = 50, .y1 = 0, .y2 = 0 }) catch {};
             }
             if (row_to_delete) |row_num| {
                 if (local.data.len > 1)
