@@ -413,8 +413,8 @@ pub fn pointToCellConverter(g: *dvui.GridWidget, p: dvui.Point.Physical) ?dvui.G
             0 => 0, // Col 0 contains 2 focus widgets
             1 => 2, // Col 1 contains 2 focus widgets
             2 => 4, // Col 2 contains 2 focus widgets
-            3 => 5, // Col 3 and 4 only have 1 widget.
-            4 => 6,
+            3 => 6, // Col 3 and 4 only have 1 widget.
+            4 => 7,
             else => unreachable,
         };
     }

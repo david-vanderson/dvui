@@ -471,6 +471,7 @@ pub fn demo() void {
                     .debugging => debuggingErrors(),
                     .grid => grids(0),
                 }
+                if (e != .grid) {}
             }
 
             if (use_cache) {
@@ -4537,7 +4538,7 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
 const grid_panel_size: Size = .{ .w = 250 };
 
 pub fn grids(height: f32) void {
-    // Below is a workaround for standaline demos being placed in a scroll-area.
+    // Below is a workaround for standalone demos being placed in a scroll-area.
     // By default the scroll-area will scroll instead of the grid.
     // Fix the height of the box around the tabs to prevent this.
     // This would not be required for normal usage.
@@ -4547,15 +4548,16 @@ pub fn grids(height: f32) void {
         min_size_content = .{ .h = height };
         max_size_content = .height(height);
     }
-
     const GridType = enum {
         styling,
         layout,
         scrolling,
         row_heights,
         selection,
+        navigation,
         const num_grids = @typeInfo(@This()).@"enum".fields.len;
     };
+
     const local = struct {
         var active_grid: GridType = .styling;
 
@@ -4570,6 +4572,7 @@ pub fn grids(height: f32) void {
                 .scrolling => "Virtual scrolling",
                 .row_heights => "Variable row heights",
                 .selection => "Selection",
+                .navigation => "Keyboard Navigation",
             };
         }
     };
@@ -4595,6 +4598,7 @@ pub fn grids(height: f32) void {
         .scrolling => gridVirtualScrolling(),
         .row_heights => gridVariableRowHeights(),
         .selection => gridSelection(),
+        .navigation => gridNavigation(),
     }
 }
 
@@ -5411,7 +5415,7 @@ fn gridSelection() void {
                 local.selectAll(local.select_all_state);
             }
         }
-        dvui.gridHeading(@src(), grid, 1, "Name", .fixed, CellStyle{ .cell_opts = .{ .size = .{ .w = 300 } } });
+        dvui.gridHeading(@src(), grid, 1, "Name", .fixed, .{});
         dvui.gridHeading(@src(), grid, 2, "Kind", .fixed, .{});
         dvui.gridHeading(@src(), grid, 3, "Size", .fixed, .{});
         dvui.gridHeading(@src(), grid, 4, "Mode", .fixed, .{});
@@ -5449,7 +5453,7 @@ fn gridSelection() void {
                     var cell = grid.bodyCell(
                         @src(),
                         cell_num,
-                        local.highlight_style.cellOptions(cell_num).override(.{ .size = .{ .w = 300 } }),
+                        local.highlight_style.cellOptions(cell_num),
                     );
                     defer cell.deinit();
                     dvui.labelNoFmt(@src(), entry.name, .{}, .{});
@@ -5516,6 +5520,337 @@ fn gridSelection() void {
                     }
                 }
             }
+        }
+    }
+}
+
+/// This example demonstrates an advanced usage of the keyboard navigation. The navigation maintains a virtual 8 column cursor
+/// over the 5 columns grid. That is because the first 3 columns have 2 widgets that can get keyboard focus.
+/// The 2 widgets in the first 3 columns are actually laid out vertically, even though the tab focus treats them as columns.
+/// This allows the user to arrow-down and just jump through the text boxes in the column, or just jump through the sliders,
+/// while still getting correct focus when tabbing through the widgets.
+pub fn gridNavigation() void {
+    const CellStyle = dvui.GridWidget.CellStyle;
+    const local = struct {
+        var keyboard_nav: dvui.GridWidget.KeyboardNavigation = .{ .num_cols = 8, .num_rows = 0, .wrap_cursor = true, .tab_out = true, .num_scroll = 5 };
+        var initialized = false;
+        var col_widths: [5]f32 = .{ 100, 100, 100, 35, 35 };
+        var plot_title: []const u8 = "X vs Y";
+        var x_axis_title: []const u8 = "X";
+        var y_axis_title: []const u8 = "Y";
+        var plot_buffer: [@sizeOf(Datum) * 100]u8 = undefined;
+        var fba: std.heap.FixedBufferAllocator = .init(&plot_buffer);
+
+        const CellStyleNav = struct {
+            base: CellStyle,
+            focus_cell: ?dvui.GridWidget.Cell,
+            tab_index: ?u16 = null,
+
+            pub fn cellOptions(self: *const CellStyleNav, cell: dvui.GridWidget.Cell) dvui.GridWidget.CellOptions {
+                return self.base.cellOptions(cell);
+            }
+
+            pub fn options(self: *const CellStyleNav, cell: dvui.GridWidget.Cell) dvui.Options {
+                if (self.focus_cell) |focus_cell| {
+                    if (focus_cell.eq(cell)) {
+                        // Normally this isn't required, but the demo app can have two copies of the grid displayed at once.
+                        if (dvui.tagGet("grid_focus_next") == null) {
+                            return self.base.options(cell).override(.{ .tag = "grid_focus_next", .tab_index = self.tab_index });
+                        }
+                    }
+                }
+                return self.base.options(cell).override(.{ .tab_index = 0 });
+            }
+        };
+
+        /// The job of this function is to turn a screen position into a cell.
+        /// If there were just 1 widget per cell, grid.pointToCell(p) could do this, but
+        /// in this example there are two widgets in the cell. We simplify the logic slightly by
+        /// always focusing the first widget (the text box) when the cell is clicked.
+        /// The example is set up with a grid of 8 virtual columns, covering the 5 physical columns.
+        /// So all it needs to do is map the clicked in grid column to the correct virtual focus column .
+        pub fn pointToCellConverter(g: *dvui.GridWidget, p: dvui.Point.Physical) ?dvui.GridWidget.Cell {
+            var result = g.pointToCell(p);
+            if (result) |*r| {
+                // This will always focus the text box on mouse click in the cell,
+                // but still allow kb nav of the sliders.
+                r.col_num = switch (r.col_num) {
+                    0 => 0, // Col 0 contains 2 focus widgets
+                    1 => 2, // Col 1 contains 2 focus widgets
+                    2 => 4, // Col 2 contains 2 focus widgets
+                    3 => 6, // Col 3 and 4 only have 1 widget.
+                    4 => 7,
+                    else => unreachable,
+                };
+            }
+            return result;
+        }
+
+        pub fn maxVal(slice: []f64) f64 {
+            var max: f64 = -std.math.floatMin(f64);
+            for (slice) |v| {
+                if (v > max) max = v;
+            }
+            return max;
+        }
+
+        pub fn minVal(slice: []f64) f64 {
+            var min: f64 = std.math.floatMax(f64);
+            for (slice) |v| {
+                if (v < min) min = v;
+            }
+            return min;
+        }
+
+        const Datum = struct { x: f64, y1: f64, y2: f64 };
+
+        var data: std.MultiArrayList(Datum) = .empty;
+
+        fn initData() !void {
+            plot_title = "X vs Y";
+            x_axis_title = "X";
+            y_axis_title = "Y";
+            const alloc = fba.allocator();
+            try data.append(alloc, .{ .x = 0, .y1 = -50, .y2 = 50 });
+            try data.append(alloc, .{ .x = 25, .y1 = -25, .y2 = 25 });
+            try data.append(alloc, .{ .x = 50, .y1 = 0, .y2 = 0 });
+            try data.append(alloc, .{ .x = 75, .y1 = 25, .y2 = -25 });
+            try data.append(alloc, .{ .x = 100, .y1 = 50, .y2 = -50 });
+        }
+    };
+    var main_box = dvui.box(@src(), .horizontal, .{ .expand = .both, .color_fill = .fill_window, .background = true, .border = dvui.Rect.all(1) });
+    defer main_box.deinit();
+    if (dvui.firstFrame(main_box.data().id)) {
+        local.initialized = false;
+        local.initData() catch |err| {
+            dvui.logError(@src(), err, "Error initializing plot data", .{});
+            return;
+        };
+    }
+    {
+        var vbox = dvui.box(@src(), .vertical, .{ .expand = .vertical, .border = dvui.Rect.all(1) });
+        defer vbox.deinit();
+        {
+            var bottom_panel = dvui.box(@src(), .vertical, .{ .gravity_y = 1.0 });
+            defer bottom_panel.deinit();
+            {
+                var hbox = dvui.box(@src(), .horizontal, .{});
+                defer hbox.deinit();
+                {
+                    dvui.labelNoFmt(@src(), "X Axis:", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
+                    var text = dvui.textEntry(@src(), .{}, .{
+                        .tab_index = 3,
+                        .max_size_content = .width(100),
+                    });
+                    defer text.deinit();
+                    if (dvui.firstFrame(text.data().id)) {
+                        text.textSet(local.x_axis_title, false);
+                    }
+                    local.x_axis_title = text.getText();
+                }
+                {
+                    dvui.labelNoFmt(@src(), "Y Axis:", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
+                    var text = dvui.textEntry(@src(), .{}, .{ .tab_index = 4, .max_size_content = .width(100) });
+                    defer text.deinit();
+                    if (dvui.firstFrame(text.data().id)) {
+                        text.textSet(local.y_axis_title, false);
+                    }
+                    local.y_axis_title = text.getText();
+                }
+            }
+            {
+                {
+                    var tl = dvui.textLayout(@src(), .{ .break_lines = true }, .{ .background = false });
+                    defer tl.deinit();
+                    tl.addText(
+                        \\ This example demonstrates keyboard focus and 
+                        \\        navigation. Use tab, shift-tab, up, down, 
+                        \\ctrl/cmd-home, ctrl/cmd-end and pg up, pg down 
+                        \\                   to navigate between cells.
+                    , .{ .background = false, .gravity_x = 0.5 });
+                }
+            }
+        }
+        {
+            var top_panel = dvui.box(@src(), .horizontal, .{ .gravity_y = 0 });
+            defer top_panel.deinit();
+            dvui.labelNoFmt(@src(), "Plot Title:", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
+            var text = dvui.textEntry(@src(), .{}, .{ .tab_index = 1, .expand = .horizontal });
+            defer text.deinit();
+
+            if (dvui.firstFrame(text.data().id)) {
+                text.textSet(local.plot_title, false);
+            }
+            local.plot_title = text.getText();
+        }
+        {
+            var grid = dvui.grid(@src(), .{ .col_widths = &local.col_widths }, .{ .scroll_opts = .{ .vertical_bar = .show } }, .{ .expand = .vertical, .border = dvui.Rect.all(1) });
+            defer grid.deinit();
+
+            local.keyboard_nav.num_scroll = dvui.GridWidget.KeyboardNavigation.numScrollDefault(grid);
+            local.keyboard_nav.setLimits(8, local.data.len);
+            local.keyboard_nav.processEventsCustom(grid, local.pointToCellConverter);
+            const focused_cell = local.keyboard_nav.cellCursor();
+
+            const style_base = CellStyle{ .opts = .{
+                .tab_index = null,
+                .expand = .horizontal,
+            } };
+
+            const style: local.CellStyleNav = .{ .base = style_base, .focus_cell = focused_cell, .tab_index = 2 };
+
+            dvui.gridHeading(@src(), grid, 0, "X", .fixed, .{});
+            dvui.gridHeading(@src(), grid, 1, "Y1", .fixed, .{});
+            dvui.gridHeading(@src(), grid, 2, "Y2", .fixed, .{});
+            var row_to_delete: ?usize = null;
+            var row_to_add: ?usize = null;
+
+            for (local.data.items(.x), local.data.items(.y1), local.data.items(.y2), 0..) |*x, *y1, *y2, row_num| {
+                var cell_num: dvui.GridWidget.Cell = .colRow(0, row_num);
+                var focus_cell: dvui.GridWidget.Cell = .colRow(0, row_num);
+                // X Column
+                {
+                    defer cell_num.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    var cell_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+                    defer cell_vbox.deinit();
+
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = x, .min = 0, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .gravity_y = 0 }));
+                    focus_cell.col_num += 1;
+
+                    var fraction: f32 = @floatCast(x.*);
+                    fraction /= 100;
+                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .gravity_y = 1 }))) {
+                        x.* = fraction * 10000;
+                        x.* = @round(x.*) / 100;
+                    }
+                    focus_cell.col_num += 1;
+                }
+                // Y1 Columnn
+                {
+                    defer cell_num.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    var cell_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+                    defer cell_vbox.deinit();
+
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = y1, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .color_text = .red }));
+                    focus_cell.col_num += 1;
+
+                    var fraction: f32 = @floatCast(y1.*);
+                    fraction += 100;
+                    fraction /= 200;
+                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1, .color_accent = .red }))) {
+                        y1.* = fraction * 20000;
+                        y1.* = @round((y1.* - 10000)) / 100;
+                    }
+                    focus_cell.col_num += 1;
+                }
+                // Y2 Column
+                {
+                    defer cell_num.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    var cell_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+                    defer cell_vbox.deinit();
+
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = y2, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .color_text = .blue }));
+                    focus_cell.col_num += 1;
+
+                    var fraction: f32 = @floatCast(y2.*);
+                    fraction += 100;
+                    fraction /= 200;
+                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1, .color_accent = .blue }))) {
+                        y2.* = fraction * 20000;
+                        y2.* = @round((y2.* - 10000)) / 100;
+                    }
+                    focus_cell.col_num += 1;
+                }
+                {
+                    defer cell_num.col_num += 1;
+                    defer focus_cell.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    if (dvui.buttonIcon(@src(), "Insert", dvui.entypo.add_to_list, .{}, .{}, style.options(focus_cell).override(.{ .expand = .horizontal }))) {
+                        row_to_add = cell_num.row_num + 1;
+                    }
+                }
+                {
+                    defer cell_num.col_num += 1;
+                    defer focus_cell.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    if (dvui.buttonIcon(@src(), "Delete", dvui.entypo.cross, .{}, .{}, style.options(focus_cell).override(.{ .expand = .horizontal }))) {
+                        row_to_delete = cell_num.row_num;
+                    }
+                }
+            }
+            if (!local.initialized) {
+                local.keyboard_nav.navigation_keys = .defaults();
+                local.keyboard_nav.scrollTo(0, 0);
+                local.keyboard_nav.is_focused = true; // We want the grid focused by default.
+            }
+
+            if (dvui.tagGet("grid_focus_next")) |focus_widget| {
+                if ((local.keyboard_nav.shouldFocus()) or !local.initialized) {
+                    dvui.focusWidget(focus_widget.id, null, null);
+                    local.initialized = true;
+                }
+            }
+            local.keyboard_nav.gridEnd();
+            if (row_to_add) |row_num| {
+                local.data.insert(dvui.currentWindow().gpa, row_num, .{ .x = 50, .y1 = 0, .y2 = 0 }) catch {};
+            }
+            if (row_to_delete) |row_num| {
+                if (local.data.len > 1)
+                    local.data.orderedRemove(row_num)
+                else
+                    local.data.set(0, .{ .x = 0, .y1 = 0, .y2 = 0 });
+            }
+        }
+    }
+    {
+        var vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .border = dvui.Rect.all(1) });
+        defer vbox.deinit();
+        var x_axis: dvui.PlotWidget.Axis = .{ .name = local.x_axis_title, .min = 0, .max = 100 };
+        var y_axis: dvui.PlotWidget.Axis = .{
+            .name = local.y_axis_title,
+            .min = @min(local.minVal(local.data.items(.y1)), local.minVal(local.data.items(.y2))),
+            .max = @max(local.maxVal(local.data.items(.y1)), local.maxVal(local.data.items(.y2))),
+        };
+        var plot = dvui.plot(
+            @src(),
+            .{
+                .title = local.plot_title,
+                .x_axis = &x_axis,
+                .y_axis = &y_axis,
+                .mouse_hover = true,
+            },
+            .{
+                .padding = .{},
+                .expand = .both,
+                .background = true,
+                .min_size_content = .{ .w = 500 },
+            },
+        );
+        defer plot.deinit();
+        const thick = 2;
+        {
+            var s1 = plot.line();
+            defer s1.deinit();
+            for (local.data.items(.x), local.data.items(.y1)) |x, y| {
+                s1.point(x, y);
+            }
+            s1.stroke(thick, .red);
+        }
+        {
+            var s2 = plot.line();
+            defer s2.deinit();
+            for (local.data.items(.x), local.data.items(.y2)) |x, y| {
+                s2.point(x, y);
+            }
+            s2.stroke(thick, .blue);
         }
     }
 }
