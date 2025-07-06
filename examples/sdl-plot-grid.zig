@@ -128,6 +128,10 @@ fn createYears() [50][]const u8 {
 var keyboard_nav: dvui.GridWidget.KeyboardNavigation = .{ .num_cols = 8, .num_rows = 0, .wrap_cursor = true, .tab_out = true, .num_scroll = 5 };
 var initialized = false;
 var col_widths: [5]f32 = .{ 100, 100, 100, 35, 35 };
+var plot_title: []const u8 = "X vs Y";
+var x_axis_title: []const u8 = "X";
+var y_axis_title: []const u8 = "Y";
+
 // both dvui and SDL drawing
 fn gui_frame() !void {
     {
@@ -147,31 +151,65 @@ fn gui_frame() !void {
     var main_box = dvui.box(@src(), .horizontal, .{ .expand = .both, .color_fill = .fill_window, .background = true, .border = dvui.Rect.all(1) });
     defer main_box.deinit();
     {
-        var vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .border = dvui.Rect.all(1) });
+        var vbox = dvui.box(@src(), .vertical, .{ .expand = .vertical, .border = dvui.Rect.all(1) });
         defer vbox.deinit();
         {
-            var bottom_panel = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .gravity_y = 1.0 });
+            var bottom_panel = dvui.box(@src(), .vertical, .{ .gravity_y = 1.0 });
             defer bottom_panel.deinit();
-            if (dvui.button(@src(), "Add (NOT)", .{ .draw_focus = true }, .{})) {}
-            _ = dvui.button(@src(), "Delete (NOT)", .{ .draw_focus = true }, .{});
+            {
+                var hbox = dvui.box(@src(), .horizontal, .{});
+                defer hbox.deinit();
+                {
+                    dvui.labelNoFmt(@src(), "X Axis:", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
+                    var text = dvui.textEntry(@src(), .{}, .{
+                        .tab_index = 3,
+                        .max_size_content = .width(100),
+                    });
+                    defer text.deinit();
+                    if (dvui.firstFrame(text.data().id)) {
+                        text.textSet(x_axis_title, true);
+                    }
+                    x_axis_title = text.getText();
+                }
+                {
+                    dvui.labelNoFmt(@src(), "Y Axis:", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
+                    var text = dvui.textEntry(@src(), .{}, .{ .tab_index = 4, .max_size_content = .width(100) });
+                    defer text.deinit();
+                    if (dvui.firstFrame(text.data().id)) {
+                        text.textSet(y_axis_title, true);
+                    }
+                    y_axis_title = text.getText();
+                }
+            }
+            {
+                {
+                    var tl = dvui.textLayout(@src(), .{ .break_lines = true }, .{ .background = false });
+                    defer tl.deinit();
+                    tl.addText(
+                        \\ This example demonstrates keyboard focus and 
+                        \\        navigation. Use tab, shift-tab, up, down, 
+                        \\ctrl/cmd-home, ctrl/cmd-end and pg up, pg down 
+                        \\                   to navigate between cells.
+                    , .{ .background = false, .gravity_x = 0.5 });
+                }
+            }
         }
         {
-            var top_panel = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .gravity_y = 0 });
+            var top_panel = dvui.box(@src(), .horizontal, .{ .gravity_y = 0 });
             defer top_panel.deinit();
-            var text = dvui.textEntry(@src(), .{}, .{});
-            text.deinit();
-            text = dvui.textEntry(@src(), .{}, .{});
-            text.deinit();
-            var choice: usize = 2;
-            _ = dvui.dropdown(@src(), &years, &choice, .{});
+            dvui.labelNoFmt(@src(), "Plot Title:", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
+            var text = dvui.textEntry(@src(), .{}, .{ .tab_index = 1, .expand = .horizontal });
+            defer text.deinit();
+
+            if (dvui.firstFrame(text.data().id)) {
+                text.textSet(plot_title, true);
+            }
+            plot_title = text.getText();
         }
         {
-            //            const focus_cell = keyboard_nav.cellCursor();
-            var grid = dvui.grid(@src(), .{ .col_widths = &col_widths }, .{}, .{});
+            var grid = dvui.grid(@src(), .{ .col_widths = &col_widths }, .{ .scroll_opts = .{ .vertical_bar = .show } }, .{ .expand = .vertical, .border = dvui.Rect.all(1) });
             defer grid.deinit();
-            //ui.currentWindow().debug_widget_id = dvui.focusedWidgetId() orelse .zero;
-            // 3 real + 1 virtual column
-            // TODO: Make the naming consistent.
+
             keyboard_nav.num_scroll = dvui.GridWidget.KeyboardNavigation.numScrollDefault(grid);
             keyboard_nav.setLimits(8, data.len);
             keyboard_nav.processEventsCustom(grid, pointToCellConverter);
@@ -183,7 +221,7 @@ fn gui_frame() !void {
             } };
             //const style_base = CellStyle{ .opts = .{ .expand = .horizontal } };
 
-            const style: CellStyleNav = .{ .base = style_base, .focus_cell = focused_cell, .tab_index = null };
+            const style: CellStyleNav = .{ .base = style_base, .focus_cell = focused_cell, .tab_index = 2 };
 
             dvui.gridHeading(@src(), grid, 0, "X", .fixed, .{});
             dvui.gridHeading(@src(), grid, 1, "Y1", .fixed, .{});
@@ -299,16 +337,16 @@ fn gui_frame() !void {
     {
         var vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .border = dvui.Rect.all(1) });
         defer vbox.deinit();
-        var x_axis: dvui.PlotWidget.Axis = .{ .name = "X", .min = 0, .max = 100 };
+        var x_axis: dvui.PlotWidget.Axis = .{ .name = x_axis_title, .min = 0, .max = 100 };
         var y_axis: dvui.PlotWidget.Axis = .{
-            .name = "Y1\nY2",
+            .name = y_axis_title,
             .min = @min(minVal(data.items(.y1)), minVal(data.items(.y2))),
             .max = @max(maxVal(data.items(.y1)), maxVal(data.items(.y2))),
         };
         var plot = dvui.plot(
             @src(),
             .{
-                .title = "X vs Y",
+                .title = plot_title,
                 .x_axis = &x_axis,
                 .y_axis = &y_axis,
                 .mouse_hover = true,
