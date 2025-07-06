@@ -5610,12 +5610,14 @@ pub fn gridNavigation() void {
             plot_title = "X vs Y";
             x_axis_title = "X";
             y_axis_title = "Y";
-            const alloc = fba.allocator();
-            try data.append(alloc, .{ .x = 0, .y1 = -50, .y2 = 50 });
-            try data.append(alloc, .{ .x = 25, .y1 = -25, .y2 = 25 });
-            try data.append(alloc, .{ .x = 50, .y1 = 0, .y2 = 0 });
-            try data.append(alloc, .{ .x = 75, .y1 = 25, .y2 = -25 });
-            try data.append(alloc, .{ .x = 100, .y1 = 50, .y2 = -50 });
+            if (data.len == 0) {
+                const alloc = fba.allocator();
+                try data.append(alloc, .{ .x = 0, .y1 = -50, .y2 = 50 });
+                try data.append(alloc, .{ .x = 25, .y1 = -25, .y2 = 25 });
+                try data.append(alloc, .{ .x = 50, .y1 = 0, .y2 = 0 });
+                try data.append(alloc, .{ .x = 75, .y1 = 25, .y2 = -25 });
+                try data.append(alloc, .{ .x = 100, .y1 = 50, .y2 = -50 });
+            }
         }
     };
     var main_box = dvui.box(@src(), .horizontal, .{ .expand = .both, .color_fill = .fill_window, .background = true, .border = dvui.Rect.all(1) });
