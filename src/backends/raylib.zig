@@ -292,7 +292,7 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
     }
 }
 
-pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
+pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
     const texid = c.rlLoadTexture(pixels, @intCast(width), @intCast(height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
     if (texid <= 0) return dvui.Backend.TextureError.TextureCreate;
 

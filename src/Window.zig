@@ -98,7 +98,7 @@ font_cache: dvui.TrackingAutoHashMap(u64, dvui.FontCacheEntry, .get_and_put) = .
 /// Uses `gpa` allocator
 font_bytes: std.StringHashMapUnmanaged(dvui.FontBytesEntry) = .empty,
 /// Uses `gpa` allocator
-texture_cache: dvui.TrackingAutoHashMap(u64, dvui.TextureCacheEntry, .get_and_put) = .empty,
+texture_cache: dvui.TrackingAutoHashMap(dvui.Texture.CacheKey, dvui.Texture, .get_and_put) = .empty,
 /// Uses `arena` allocator
 texture_trash: std.ArrayListUnmanaged(dvui.Texture) = .empty,
 dialog_mutex: std.Thread.Mutex = .{},
@@ -426,7 +426,7 @@ pub fn deinit(self: *Self) void {
     {
         var it = self.texture_cache.iterator();
         while (it.next()) |item| {
-            self.backend.textureDestroy(item.value_ptr.texture);
+            self.backend.textureDestroy(item.value_ptr.*);
         }
         self.texture_cache.deinit(self.gpa);
     }
@@ -1170,7 +1170,7 @@ pub fn begin(
         defer self.lifo().free(deadTextures);
         for (deadTextures) |id| {
             const ice = self.texture_cache.fetchRemove(id).?;
-            self.backend.textureDestroy(ice.value.texture);
+            self.backend.textureDestroy(ice.value);
         }
         //std.debug.print("texture_cache {d}\n", .{self.texture_cache.count()});
     }
