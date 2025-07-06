@@ -4567,12 +4567,12 @@ pub fn grids(height: f32) void {
 
         fn tabName(grid_type: GridType) []const u8 {
             return switch (grid_type) {
-                .styling => "Styling and sorting",
-                .layout => "Layouts and data",
-                .scrolling => "Virtual scrolling",
-                .row_heights => "Variable row heights",
-                .selection => "Selection",
-                .navigation => "Keyboard Navigation",
+                .styling => "Styling and\nsorting",
+                .layout => "Layouts and\ndata",
+                .scrolling => "Virtual\nscrolling",
+                .row_heights => "Variable row\nheights",
+                .selection => "Selection\n ",
+                .navigation => "Keyboard\nnavigation",
             };
         }
     };
@@ -5288,7 +5288,7 @@ fn gridSelection() void {
 
         pub fn isFiltered(entry: *const DirEntry) bool {
             if (filename_filter.len > 0) {
-                return std.mem.indexOf(u8, entry.name, filename_filter) != null;
+                return std.mem.indexOf(u8, entry.name, filename_filter) == null;
             }
             return false;
         }
