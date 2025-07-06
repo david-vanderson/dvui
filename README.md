@@ -49,7 +49,7 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 
 ### Projects using DVUI
 
-* [Graphl Visual IDE](https://github.com/MichaelBelousov/graphl) - [Demo](https://graphl.tech/graphl/demo/)
+* [Graphl Visual Programming Language](https://github.com/MichaelBelousov/graphl) - [Demo](https://graphl.tech/graphl/demo/)
 * [Podcast Player](https://github.com/david-vanderson/podcast)
 * [Graphical Janet REPL](https://codeberg.org/iacore/janet-graphical-repl)
 * [FIDO2/ Passkey compatible authenticator implementation for Linux](https://github.com/r4gus/keypass)
