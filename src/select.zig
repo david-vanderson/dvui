@@ -13,12 +13,12 @@ pub const SelectAllState = enum {
 };
 
 pub const SelectOptions = struct {
-    selection_id: u64 = 0,
+    selection_id: usize = 0,
     selection_info: ?*SelectionInfo = null,
 };
 
 pub const SelectionEvent = struct {
-    selection_id: u64,
+    selection_id: usize,
     selected: bool,
     screen_rect: dvui.Rect.Physical,
 
@@ -37,7 +37,7 @@ pub const SelectionInfo = struct {
         self.event_count = 0;
     }
 
-    pub fn add(self: *SelectionInfo, selection_id: u64, selected: bool, wd: *WidgetData) void {
+    pub fn add(self: *SelectionInfo, selection_id: usize, selected: bool, wd: *WidgetData) void {
         if (self.event_count < max_per_frame) {
             self.sel_events[self.event_count] = .{ .selection_id = selection_id, .selected = selected, .screen_rect = wd.borderRectScale().r };
             self.event_count += 1;
@@ -57,8 +57,8 @@ pub const SelectionInfo = struct {
 /// - must persist accross frames
 /// - call processEvents after the "selectables" have been deinit()-ed.
 pub const MultiSelectMouse = struct {
-    first_selected_id: ?u64 = null,
-    second_selected_id: ?u64 = null,
+    first_selected_id: ?usize = null,
+    second_selected_id: ?usize = null,
     should_select: bool = false,
     shift_held: bool = false,
     selection_changed: bool = false,
@@ -95,12 +95,12 @@ pub const MultiSelectMouse = struct {
     }
 
     // Returns the lowest id selected.
-    pub fn selectionIdStart(self: *MultiSelectMouse) u64 {
+    pub fn selectionIdStart(self: *MultiSelectMouse) usize {
         return @min(self.first_selected_id orelse 0, self.second_selected_id orelse self.first_selected_id orelse 0);
     }
 
     // Returns the highest id selected.
-    pub fn selectionIdEnd(self: *MultiSelectMouse) u64 {
+    pub fn selectionIdEnd(self: *MultiSelectMouse) usize {
         return @max(self.first_selected_id orelse 0, self.second_selected_id orelse self.first_selected_id orelse 0);
     }
 };
@@ -152,8 +152,8 @@ pub const SelectAllKeyboard = struct {
 /// - must persist accross frames
 /// - call processEvents after the "selectables" have been deinit()-ed.
 pub const SingleSelect = struct {
-    id_to_select: ?u64 = null,
-    id_to_unselect: ?u64 = null,
+    id_to_select: ?usize = null,
+    id_to_unselect: ?usize = null,
     selection_changed: bool = false,
 
     pub fn processEvents(self: *SingleSelect, sel_info: *SelectionInfo, wd: *dvui.WidgetData) void {
