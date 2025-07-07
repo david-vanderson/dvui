@@ -5174,14 +5174,9 @@ fn gridVirtualScrolling() void {
     };
     highlight_hovered.processEvents(grid);
 
-    const borders: CellStyle.Borders = .{
-        .num_cols = 2,
-        .num_rows = num_rows,
-        .external = .{ .x = 1, .w = 1, .h = 1 },
-        .internal = .{ .w = 1, .h = 1 },
-    };
+    const borders: CellStyle.Borders = .initBox(2, num_rows, 1);
 
-    const cell_style: CellStyle.Join(CellStyle.HoveredRow, CellStyle.Borders) = .{
+    const cell_style: CellStyle.Combine(CellStyle.HoveredRow, CellStyle.Borders) = .{
         .style1 = highlight_hovered,
         .style2 = borders,
     };

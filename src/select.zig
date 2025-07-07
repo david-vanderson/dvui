@@ -1,8 +1,7 @@
 //! Helpers for Multi and Single selection
 //!
 
-// TODO: Select or SelectION???
-
+const std = @import("std");
 const dvui = @import("dvui.zig");
 const WidgetData = dvui.WidgetData;
 const WidgetId = dvui.WidgetId;
@@ -29,26 +28,23 @@ pub const SelectionEvent = struct {
 };
 
 pub const SelectionInfo = struct {
-    const max_per_frame = 5;
-    sel_events: [max_per_frame]SelectionEvent = undefined,
-    event_count: u8 = 0,
+    sel_events: std.ArrayListUnmanaged(SelectionEvent) = .empty,
 
     pub fn reset(self: *SelectionInfo) void {
-        self.event_count = 0;
+        self.sel_events = .empty;
     }
 
     pub fn add(self: *SelectionInfo, selection_id: usize, selected: bool, wd: *WidgetData) void {
-        if (self.event_count < max_per_frame) {
-            self.sel_events[self.event_count] = .{ .selection_id = selection_id, .selected = selected, .screen_rect = wd.borderRectScale().r };
-            self.event_count += 1;
-        } else {
-            dvui.log.debug("Dropping selection event for selection_id {d}\n", .{selection_id});
-            return;
-        }
+        self.sel_events.append(
+            dvui.currentWindow().arena(),
+            .{ .selection_id = selection_id, .selected = selected, .screen_rect = wd.borderRectScale().r },
+        ) catch |err| {
+            dvui.logError(@src(), err, "Dropping selection event for selection_id {d}\n", .{selection_id});
+        };
     }
 
-    pub fn events(self: *SelectionInfo) []SelectionEvent {
-        return self.sel_events[0..self.event_count];
+    pub fn events(self: *const SelectionInfo) []SelectionEvent {
+        return self.sel_events.items;
     }
 };
 
@@ -110,16 +106,14 @@ pub const SelectAllKeyboard = struct {
     selection_changed: bool = false,
     last_focused_in_frame: WidgetId = .zero,
 
-    /// reset() should be called immediately before the grid is initialized.
-    /// and any cells are created.
-    /// If select-all is pressed and any widgets created between reset() and processEvents()
-    /// have focus, the select-all will be applied (if it has not been handled by another widget).
+    /// reset() should be called immediately before the first "selectable" is created.
+    /// If using with a GridWidget, call reset before the first body cell is created.
     pub fn reset(self: *SelectAllKeyboard) void {
         self.last_focused_in_frame = dvui.lastFocusedIdInFrame();
     }
 
-    // processEvents() should be called after all grid cells have been created
-    // and before the grid is deinit()-ed.
+    // processEvents() should be called after all selectables have been created
+    // If using with a GridWidget, call processEvents after all body cells have been created.
     pub fn processEvents(self: *SelectAllKeyboard, select_all_state: *dvui.select.SelectAllState, wd: *dvui.WidgetData) void {
         self.selection_changed = false;
         for (dvui.events()) |*e| {
@@ -150,7 +144,10 @@ pub const SelectAllKeyboard = struct {
 /// Implement single selection
 /// deselects the previously selected item and selects the new item.
 /// - must persist accross frames
-/// - call processEvents after the "selectables" have been deinit()-ed.
+/// - call processEvents after the "selectables" have been created.
+/// Note: May be inaccurate if multiple seletcion events occur in a single frame.
+///   Implement additonal checks or process the raw events if you need to ensure
+///   that only a single item is selected.
 pub const SingleSelect = struct {
     id_to_select: ?usize = null,
     id_to_unselect: ?usize = null,

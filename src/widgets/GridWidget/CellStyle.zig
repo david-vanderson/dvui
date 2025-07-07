@@ -53,7 +53,7 @@ pub fn optionsOverride(self: *const CellStyle, opts: Options) CellStyle {
 
 /// Allow two CellStyle to be used together.
 /// Returns the result of style1.override(style2) for cellOptions() and options()
-pub fn Join(T1: type, T2: type) type {
+pub fn Combine(T1: type, T2: type) type {
     return struct {
         const Self = @This();
         style1: T1,
@@ -209,6 +209,24 @@ pub const Borders = struct {
     num_rows: usize,
     cell_opts: CellOptions = .{},
     opts: Options = .{},
+
+    pub fn initBox(num_cols: usize, num_rows: usize, border_width: f32) Borders {
+        return .{
+            .external = Rect.all(border_width),
+            .internal = .{ .w = 1, .h = 1 },
+            .num_cols = num_cols,
+            .num_rows = num_rows,
+        };
+    }
+
+    pub fn initOutline(num_cols: usize, num_rows: usize, border_width: f32) Borders {
+        return .{
+            .external = Rect.all(border_width),
+            .internal = Rect.all(0),
+            .num_cols = num_cols,
+            .num_rows = num_rows,
+        };
+    }
 
     pub fn cellOptions(self: *const Borders, cell: Cell) CellOptions {
         var border = self.internal;
