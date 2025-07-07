@@ -33,10 +33,13 @@ pub const SelectionEvent = struct {
 pub const SelectionInfo = struct {
     sel_events: std.ArrayListUnmanaged(SelectionEvent) = .empty,
 
+    /// Clear queued selection events.
+    /// must be called each frame before being used.
     pub fn reset(self: *SelectionInfo) void {
         self.sel_events = .empty;
     }
 
+    /// Add a selection event.
     pub fn add(self: *SelectionInfo, selection_id: usize, selected: bool, wd: *WidgetData) void {
         self.sel_events.append(
             dvui.currentWindow().arena(),
