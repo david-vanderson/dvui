@@ -392,12 +392,18 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
             },
             .internal => |i| {
                 new_size = @min(new_size, i.limit);
-                // NOTE: Using prev_text is safe because data is trashed and stays valid until the end of the frame
-                const prev_text = self.text;
-                dvui.dataSetSliceCopies(null, self.data().id, "_buffer", &[_]u8{0}, new_size);
-                self.text = dvui.dataGetSlice(null, self.data().id, "_buffer", []u8).?;
-                const min_len = @min(prev_text.len, self.text.len);
-                @memcpy(self.text[0..min_len], prev_text[0..min_len]);
+                // If we are the same size then there is no work to do
+                // This is important because same sized data allocations will be reused
+                if (new_size != self.text.len) {
+                    // NOTE: Using prev_text is safe because data is trashed and stays valid until the end of the frame
+                    const prev_text = self.text;
+                    dvui.dataSetSliceCopies(null, self.data().id, "_buffer", &[_]u8{0}, new_size);
+                    self.text = dvui.dataGetSlice(null, self.data().id, "_buffer", []u8).?;
+                    const min_len = @min(prev_text.len, self.text.len);
+                    if (self.text.ptr != prev_text.ptr) {
+                        @memcpy(self.text[0..min_len], prev_text[0..min_len]);
+                    }
+                }
             },
         }
     }
