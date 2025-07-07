@@ -5350,7 +5350,12 @@ fn gridSelection() void {
         defer top_controls.deinit();
         dvui.labelNoFmt(@src(), "Filter (contains): ", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
         var text = dvui.textEntry(@src(), .{}, .{ .expand = .horizontal });
-        local.filename_filter = text.getText();
+        if (text.text_changed) {
+            local.filename_filter = text.getText();
+            local.filtering_changed = true;
+        } else {
+            local.filtering_changed = false;
+        }
         defer text.deinit();
     }
     {
@@ -5418,7 +5423,6 @@ fn gridSelection() void {
 
         if (local.row_select)
             local.highlight_style.processEvents(grid);
-        const was_filtering = local.filtering;
 
         {
             var itr: DirEntry.Iterator = .init(&directory_examples);
@@ -5488,8 +5492,6 @@ fn gridSelection() void {
                 }
             }
         }
-
-        local.filtering_changed = (was_filtering != local.filtering);
 
         if (local.selection_mode == .multi_select) {
             local.kb_select.processEvents(&local.select_all_state, grid.data());
