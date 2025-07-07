@@ -641,7 +641,11 @@ pub fn basicWidgets() void {
         dvui.labelEx(@src(), "Multi-line\nLabel", .{}, .{ .align_x = 0.5 }, .{ .gravity_y = 0.5 });
 
         _ = dvui.button(@src(), "Button", .{}, .{ .gravity_y = 0.5 });
-        _ = dvui.button(@src(), "Multi-line\nButton", .{}, .{});
+        _ = dvui.button(@src(), "Multi-line\nButton", .{}, .{ .gravity_y = 0.5 });
+
+        var ttout: dvui.WidgetData = undefined;
+        _ = dvui.button(@src(), "Button\nwith Tooltip", .{}, .{ .gravity_y = 0.5, .data_out = &ttout });
+        dvui.tooltip(@src(), .{ .active_rect = ttout.borderRectScale().r }, "Here's a tooltip", .{}, .{});
 
         {
             var vbox = dvui.box(@src(), .vertical, .{});
