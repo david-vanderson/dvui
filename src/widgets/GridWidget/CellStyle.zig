@@ -51,7 +51,7 @@ pub fn optionsOverride(self: *const CellStyle, opts: Options) CellStyle {
     };
 }
 
-/// Allow two CellStyle to be used together.
+/// Allow two CellStyles to be used together.
 /// Returns the result of style1.override(style2) for cellOptions() and options()
 pub fn Combine(T1: type, T2: type) type {
     return struct {

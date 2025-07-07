@@ -5,10 +5,10 @@
 //!  - Horizontal and vertical scrolling.
 //!  - Individual cell styling.
 //!
-//! If `var_row_heights` is false, rows and columns can be laid out in any order,
+//! If `row_height_variable` is false, rows and columns can be laid out in any order,
 //! including sparse layouts where not all rows or columns are provided.
 //!
-//! If `var_row_heights` is true, rows must be laid out sequentially—either:
+//! If `row_height_variable` is true, rows must be laid out sequentially—either:
 //!  1. All rows for a column before moving to the next column, or
 //!  2. All columns for a row before moving to the next row.
 //!
@@ -145,7 +145,7 @@ pub const InitOpts = struct {
     resize_cols: bool = false,
     // If var row heights is set to false, size.h is ignored.
     // When using var row heights row_nr must be populated sequentially for each column when creating bodyCells.
-    var_row_heights: bool = false,
+    row_height_variable: bool = false,
 };
 
 // TODO: Can I make that const?
@@ -342,7 +342,7 @@ pub fn deinit(self: *GridWidget) void {
 
     // Create a spacer widget to report body virtual size to scroll area
     const max_row_f: f32 = @floatFromInt(self.max_row);
-    const this_height: f32 = if (self.init_opts.var_row_heights) self.next_row_y else (max_row_f + 1) * self.row_height;
+    const this_height: f32 = if (self.init_opts.row_height_variable) self.next_row_y else (max_row_f + 1) * self.row_height;
     const this_size: Size = .{ .h = this_height, .w = self.totalWidth() };
     _ = dvui.spacer(@src(), .{ .min_size_content = this_size, .background = false });
 
@@ -419,9 +419,9 @@ pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: u
 /// Returns a hbox for the created cell.
 /// - deinit() must be called on this hbox before any new body cells are created.
 ///
-/// If var_row_heights is false:
+/// If row_height_variable is false:
 ///   - body cells can be created using any order of col_num and row_num
-/// if var_row_heights is true then either:
+/// if row_height_variable is true then either:
 ///   - All rows for a column must be created in ascending row order.
 ///   - All columns for a row must be created before creating moving to the next row.
 ///
@@ -430,7 +430,7 @@ pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: u
 /// If a different size.w is specified for any cells in the same column,
 /// the max size.w is used for that column.
 /// - Heights
-/// If var_row_heights is true, size.h is always used as the row height,
+/// If row_height_variable is true, size.h is always used as the row height,
 /// otherwise the height for all body cells in the grid is set to the max size.h
 ///
 pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, cell: Cell, opts: CellOptions) *BoxWidget {
@@ -456,8 +456,8 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, cell: Cell, 
     const cell_height: f32 = height: {
         if (opts.height() > 0) {
             // If the user specifies a height, use that if it is bigger than the current height.
-            // If using var_row_heights or resizing then always use the height the user supplied.
-            break :height if (self.resizing or self.init_opts.var_row_heights) opts.height() else @max(opts.height(), self.row_height);
+            // If using row_height_variable or resizing then always use the height the user supplied.
+            break :height if (self.resizing or self.init_opts.row_height_variable) opts.height() else @max(opts.height(), self.row_height);
         } else {
             break :height if (self.resizing) 0 else self.row_height;
         }
@@ -465,7 +465,7 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, cell: Cell, 
 
     const row_num_f: f32 = @floatFromInt(cell.row_num);
     const pos_x = self.posX(cell.col_num);
-    const pos_y = if (self.init_opts.var_row_heights) self.this_row_y else self.row_height * row_num_f;
+    const pos_y = if (self.init_opts.row_height_variable) self.this_row_y else self.row_height * row_num_f;
     var cell_opts = opts.toOptions();
     cell_opts.rect = .{ .x = pos_x, .y = pos_y, .w = cell_width, .h = cell_height };
 
@@ -512,7 +512,7 @@ pub fn pointToBodyRelative(self: *GridWidget, point: Point.Physical) ?Point {
 /// Convert a screen physical coord into a grid cell position.
 /// Not valid when using variable row heights.
 pub fn pointToCell(self: *GridWidget, point: Point.Physical) ?Cell {
-    if (self.init_opts.var_row_heights) return null;
+    if (self.init_opts.row_height_variable) return null;
     if (self.resizing or self.init_opts.resize_cols) return null;
     if (self.row_height < 1) return null;
 
@@ -890,17 +890,15 @@ pub const HeaderResizeWidget = struct {
 };
 
 /// Adds keyboard navigation to the grid
-/// Provides a "cursor" that can be moved using
-/// - tab, shift-tab, left-arrow, right-arrow
-/// Usage is as follows:
-/// - The struct instance must be persisted between frames.
+/// Provides a "cursor" that can be moved using keyboard bindings.
+/// Usage:
+/// - The struct instance must be persisted accross frames.
 /// - Call setLimits() if the size of the grid could have changed.
 /// - Call processEvents() prior to creating any grid body cells.
-/// - Call cellCusor to find the currently focused cell.
+/// - Call cellCusor() to find the currently focused cell.
 /// - Use shouldFocus() to determine whether to focus the widget within the focused cell.
-///   shouldFocus() wil lreturn false when nothing inside the grid should have focus.e.g. the user clicked oustide the grid.
+///   shouldFocus() will return false when nothing inside the grid has focus. e.g. the user clicked oustide the grid.
 /// - Call endGrid() after all grid body cells have been created.
-///
 pub const KeyboardNavigation = struct {
     /// Direction keys.
     /// - use defaultKeys() or provide your own bindings.
@@ -940,8 +938,8 @@ pub const KeyboardNavigation = struct {
                 .right = cw.keybinds.get("next_widget") orelse unreachable,
                 .first = cw.keybinds.get("text_start") orelse unreachable,
                 .last = cw.keybinds.get("text_end") orelse unreachable,
-                .col_first = .{},
-                .col_last = .{},
+                .col_first = .{}, // Typically "home". Not bound by default so TextEntryWidget can process.
+                .col_last = .{}, // Typically "end". Not bound by default so TextEntryWidget can process.
                 .scroll_up = .{ .key = .page_up },
                 .scroll_down = .{ .key = .page_down },
             };
@@ -1168,6 +1166,6 @@ pub const KeyboardNavigation = struct {
 
 test {
     // TODO: Don't include grid tests yet.
-    // _ = @import("GridWidget/testing.zig");
+    _ = @import("GridWidget/testing.zig");
     @import("std").testing.refAllDecls(@This());
 }

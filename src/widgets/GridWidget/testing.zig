@@ -18,7 +18,7 @@ test "basic by col" {
                 }
                 for (0..10) |col| {
                     for (0..10) |row| {
-                        var cell = grid.bodyCell(@src(), col, row, .{});
+                        var cell = grid.bodyCell(@src(), .colRow(col, row), .{});
                         defer cell.deinit();
                         dvui.label(@src(), "{}:{}", .{ col, row }, .{});
                     }
@@ -49,7 +49,7 @@ test "basic by row" {
                 }
                 for (0..10) |row| {
                     for (0..10) |col| {
-                        var cell = grid.bodyCell(@src(), col, row, .{});
+                        var cell = grid.bodyCell(@src(), .colRow(col, row), .{});
                         defer cell.deinit();
                         dvui.label(@src(), "{}:{}", .{ col, row }, .{});
                     }
@@ -88,7 +88,7 @@ test "one cell" {
         fn frame() !dvui.App.Result {
             var grid = dvui.grid(@src(), .numCols(1), .{}, .{});
             defer grid.deinit();
-            var cell = grid.bodyCell(@src(), 0, 0, .{});
+            var cell = grid.bodyCell(@src(), .colRow(0, 0), .{});
             defer cell.deinit();
             dvui.labelNoFmt(@src(), "0:0", .{}, .{});
             return .ok;
@@ -109,7 +109,7 @@ test "populate by col expand" {
             defer grid.deinit();
             for (0..10) |col| {
                 for (0..10) |row| {
-                    var cell = grid.bodyCell(@src(), col, row, .{});
+                    var cell = grid.bodyCell(@src(), .colRow(col, row), .{});
                     defer cell.deinit();
                     dvui.label(@src(), "{}:{}", .{ col, row }, .{});
                 }
@@ -132,7 +132,7 @@ test "populate by col no expand" {
             defer grid.deinit();
             for (0..10) |col| {
                 for (0..10) |row| {
-                    var cell = grid.bodyCell(@src(), col, row, .{});
+                    var cell = grid.bodyCell(@src(), .colRow(col, row), .{});
                     defer cell.deinit();
                     dvui.label(@src(), "{}:{}", .{ col, row }, .{});
                 }
@@ -155,7 +155,7 @@ test "populate by row" {
             defer grid.deinit();
             for (0..10) |row| {
                 for (0..10) |col| {
-                    var cell = grid.bodyCell(@src(), col, row, .{});
+                    var cell = grid.bodyCell(@src(), .colRow(col, row), .{});
                     defer cell.deinit();
                     dvui.label(@src(), "{}:{}", .{ col, row }, .{});
                 }
@@ -179,7 +179,7 @@ test "populate by reverse rol, col" {
             defer grid.deinit();
             for (0..10) |row| {
                 for (0..10) |col| {
-                    var cell = grid.bodyCell(@src(), 9 - col, 9 - row, .{});
+                    var cell = grid.bodyCell(@src(), .colRow(9 - col, 9 - row), .{});
                     defer cell.deinit();
                     dvui.label(@src(), "{}:{}", .{ 9 - col, 9 - row }, .{});
                 }
@@ -202,7 +202,7 @@ test "col out of bounds" {
             defer grid.deinit();
             for (0..10) |col| {
                 for (0..10) |row| {
-                    var cell = grid.bodyCell(@src(), col, row, .{});
+                    var cell = grid.bodyCell(@src(), .colRow(col, row), .{});
                     defer cell.deinit();
                     dvui.label(@src(), "{}:{}", .{ col, row }, .{});
                 }
@@ -225,7 +225,7 @@ test "col widths" {
             defer grid.deinit();
             for (0..10) |col| {
                 for (0..10) |row| {
-                    var cell = grid.bodyCell(@src(), col, row, .{});
+                    var cell = grid.bodyCell(@src(), .colRow(col, row), .{});
                     defer cell.deinit();
                     dvui.label(@src(), "{}:{}", .{ col, row }, .{});
                 }
@@ -247,7 +247,7 @@ test "cell widths" {
             defer grid.deinit();
             for (0..10) |col| {
                 for (0..10) |row| {
-                    var cell = grid.bodyCell(@src(), col, row, .{ .size = .{ .w = 50 } });
+                    var cell = grid.bodyCell(@src(), .colRow(col, row), .{ .size = .{ .w = 50 } });
                     defer cell.deinit();
                     dvui.label(@src(), "{}:{}", .{ col, row }, .{});
                 }
@@ -270,7 +270,7 @@ test "cell heights non variable" {
             for (0..10) |col| {
                 for (0..10) |row| {
                     const row_f: f32 = @floatFromInt(row);
-                    var cell = grid.bodyCell(@src(), col, row, .{ .size = .{ .h = 20 * row_f }, .border = dvui.Rect.all(1) });
+                    var cell = grid.bodyCell(@src(), .colRow(col, row), .{ .size = .{ .h = 20 * row_f }, .border = dvui.Rect.all(1) });
                     defer cell.deinit();
                     dvui.label(@src(), "{}:{}", .{ col, row }, .{});
                 }
@@ -294,7 +294,7 @@ test "cell heights non variable reverse" {
                 for (0..10) |i| {
                     const i_f: f32 = @floatFromInt(i);
                     const row = 9 - i;
-                    var cell = grid.bodyCell(@src(), col, row, .{ .size = .{ .h = 20 * i_f }, .border = dvui.Rect.all(1) });
+                    var cell = grid.bodyCell(@src(), .colRow(col, row), .{ .size = .{ .h = 20 * i_f }, .border = dvui.Rect.all(1) });
                     defer cell.deinit();
                     dvui.label(@src(), "{}:{}", .{ col, row }, .{});
                 }
@@ -312,12 +312,12 @@ test "variable cell_heights by col" {
     defer t.deinit();
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var grid = dvui.grid(@src(), .numCols(10), .{ .var_row_heights = true }, .{});
+            var grid = dvui.grid(@src(), .numCols(10), .{ .row_height_variable = true }, .{});
             defer grid.deinit();
             for (0..10) |col| {
                 for (0..10) |row| {
                     const row_f: f32 = @floatFromInt(row);
-                    var cell = grid.bodyCell(@src(), col, row, .{ .size = .{ .h = @abs(5 - row_f) * 15 + 30 }, .border = dvui.Rect.all(1) });
+                    var cell = grid.bodyCell(@src(), .colRow(col, row), .{ .size = .{ .h = @abs(5 - row_f) * 15 + 30 }, .border = dvui.Rect.all(1) });
                     defer cell.deinit();
                     dvui.label(@src(), "{}:{}", .{ col, row }, .{});
                 }
@@ -335,12 +335,12 @@ test "variable cell_heights by row" {
     defer t.deinit();
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var grid = dvui.grid(@src(), .numCols(10), .{ .var_row_heights = true }, .{});
+            var grid = dvui.grid(@src(), .numCols(10), .{ .row_height_variable = true }, .{});
             defer grid.deinit();
             for (0..10) |row| {
                 for (0..10) |col| {
                     const row_f: f32 = @floatFromInt(row);
-                    var cell = grid.bodyCell(@src(), col, row, .{ .size = .{ .h = @abs(5 - row_f) * 15 + 30 }, .border = dvui.Rect.all(1) });
+                    var cell = grid.bodyCell(@src(), .colRow(col, row), .{ .size = .{ .h = @abs(5 - row_f) * 15 + 30 }, .border = dvui.Rect.all(1) });
                     defer cell.deinit();
                     dvui.label(@src(), "{}:{}", .{ col, row }, .{});
                 }
@@ -362,7 +362,7 @@ test "styling" {
             defer grid.deinit();
             for (0..10) |row| {
                 for (0..10) |col| {
-                    var cell = grid.bodyCell(@src(), col, row, .{
+                    var cell = grid.bodyCell(@src(), .colRow(col, row), .{
                         .border = dvui.Rect.all(15),
                         .padding = dvui.Rect.all(15),
                         .margin = dvui.Rect.all(15),
@@ -388,7 +388,7 @@ test "styling empty" {
             defer grid.deinit();
             for (0..10) |row| {
                 for (0..10) |col| {
-                    var cell = grid.bodyCell(@src(), col, row, .{
+                    var cell = grid.bodyCell(@src(), .colRow(col, row), .{
                         .border = dvui.Rect.all(15),
                         .padding = dvui.Rect.all(15),
                         .margin = dvui.Rect.all(15),
@@ -432,7 +432,7 @@ test "body then header" {
             var grid = dvui.grid(@src(), .numCols(10), .{}, .{});
             defer grid.deinit();
             {
-                var cell = grid.bodyCell(@src(), 0, 0, .{});
+                var cell = grid.bodyCell(@src(), .colRow(0, 0), .{});
                 defer cell.deinit();
                 dvui.labelNoFmt(@src(), "Body", .{}, .{});
             }
@@ -471,7 +471,7 @@ test "vary header height" {
                 }
                 for (0..4) |col| {
                     for (0..4) |row| {
-                        var cell = grid.bodyCell(@src(), col, row, .{});
+                        var cell = grid.bodyCell(@src(), .colRow(col, row), .{});
                         defer cell.deinit();
                         dvui.label(@src(), "{}:{}", .{ col, row }, .{});
                     }
@@ -502,7 +502,7 @@ test "vary row height" {
                 }
                 for (0..4) |col| {
                     for (0..4) |row| {
-                        var cell = grid.bodyCell(@src(), col, row, .{
+                        var cell = grid.bodyCell(@src(), .colRow(col, row), .{
                             .border = dvui.Rect.all(1),
                         });
                         defer cell.deinit();
@@ -536,7 +536,7 @@ test "sparse" {
             defer grid.deinit();
             {
                 for (0..10) |col_row| {
-                    var cell = grid.bodyCell(@src(), col_row, col_row, .{
+                    var cell = grid.bodyCell(@src(), .colRow(col_row, col_row), .{
                         .border = dvui.Rect.all(1),
                     });
                     defer cell.deinit();
@@ -562,7 +562,7 @@ test "sparse reverse" {
             {
                 for (0..10) |i| {
                     const col_row = 9 - i;
-                    var cell = grid.bodyCell(@src(), col_row, col_row, .{
+                    var cell = grid.bodyCell(@src(), .colRow(col_row, col_row), .{
                         .border = dvui.Rect.all(1),
                     });
                     defer cell.deinit();
@@ -593,7 +593,7 @@ test "more header cells than body cells" {
                 }
                 for (0..2) |col| {
                     for (0..4) |row| {
-                        var cell = grid.bodyCell(@src(), col, row, .{
+                        var cell = grid.bodyCell(@src(), .colRow(col, row), .{
                             .border = dvui.Rect.all(1),
                         });
                         defer cell.deinit();
@@ -625,7 +625,7 @@ test "more body cells than header cells" {
                 }
                 for (0..4) |col| {
                     for (0..4) |row| {
-                        var cell = grid.bodyCell(@src(), col, row, .{
+                        var cell = grid.bodyCell(@src(), .colRow(col, row), .{
                             .border = dvui.Rect.all(1),
                         });
                         defer cell.deinit();
@@ -662,7 +662,7 @@ test "resize cols" {
                 }
                 for (0..4) |col| {
                     for (0..4) |row| {
-                        var cell = grid.bodyCell(@src(), col, row, .{
+                        var cell = grid.bodyCell(@src(), .colRow(col, row), .{
                             .border = dvui.Rect.all(1),
                         });
                         defer cell.deinit();
@@ -702,7 +702,7 @@ test "resize rows" {
                 }
                 for (0..4) |col| {
                     for (0..4) |row| {
-                        var cell = grid.bodyCell(@src(), col, row, .{
+                        var cell = grid.bodyCell(@src(), .colRow(col, row), .{
                             .border = dvui.Rect.all(1),
                         });
                         defer cell.deinit();
@@ -737,7 +737,7 @@ test "add rows" {
                     .{ 0, 10 };
                 for (0..10) |col| {
                     for (start..end) |row| {
-                        var cell = grid.bodyCell(@src(), col, row, .{
+                        var cell = grid.bodyCell(@src(), .colRow(col, row), .{
                             .border = dvui.Rect.all(1),
                         });
                         defer cell.deinit();
@@ -769,7 +769,7 @@ test "remove rows" {
                     .{ 0, 5 };
                 for (0..10) |col| {
                     for (start..end) |row| {
-                        var cell = grid.bodyCell(@src(), col, row, .{
+                        var cell = grid.bodyCell(@src(), .colRow(col, row), .{
                             .border = dvui.Rect.all(1),
                         });
                         defer cell.deinit();
@@ -801,7 +801,7 @@ test "add cols" {
                     .{ 0, 10 };
                 for (start..end) |col| {
                     for (0..10) |row| {
-                        var cell = grid.bodyCell(@src(), col, row, .{
+                        var cell = grid.bodyCell(@src(), .colRow(col, row), .{
                             .border = dvui.Rect.all(1),
                         });
                         defer cell.deinit();
@@ -834,7 +834,7 @@ test "remove cols" {
             {
                 for (start..end) |col| {
                     for (0..10) |row| {
-                        var cell = grid.bodyCell(@src(), col, row, .{
+                        var cell = grid.bodyCell(@src(), .colRow(col, row), .{
                             .border = dvui.Rect.all(1),
                         });
                         defer cell.deinit();
@@ -867,7 +867,7 @@ test "remove cols and shrink" {
             {
                 for (start..end) |col| {
                     for (0..10) |row| {
-                        var cell = grid.bodyCell(@src(), col, row, .{
+                        var cell = grid.bodyCell(@src(), .colRow(col, row), .{
                             .border = dvui.Rect.all(1),
                         });
                         defer cell.deinit();
@@ -939,7 +939,7 @@ test "header body resize" {
                 }
                 for (0..10) |col| {
                     for (0..10) |row| {
-                        var cell = grid.bodyCell(@src(), col, row, .{});
+                        var cell = grid.bodyCell(@src(), .colRow(col, row), .{});
                         defer cell.deinit();
                         dvui.label(@src(), "{}:{}", .{ col, row }, .{ .font_style = .heading });
                     }

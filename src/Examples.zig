@@ -5210,7 +5210,7 @@ fn gridVirtualScrolling() void {
 }
 
 fn gridVariableRowHeights() void {
-    var grid = dvui.grid(@src(), .numCols(1), .{ .var_row_heights = true }, .{
+    var grid = dvui.grid(@src(), .numCols(1), .{ .row_height_variable = true }, .{
         .expand = .both,
         .padding = Rect.all(0),
     });
@@ -5381,6 +5381,7 @@ fn gridSelection() void {
             local.initialized = true;
         }
 
+        // Find out if any row was clicked on.
         const row_clicked: ?usize = blk: {
             if (!local.row_select) break :blk null;
             for (dvui.events()) |*e| {
@@ -5439,6 +5440,7 @@ fn gridSelection() void {
                     defer cell.deinit();
                     var is_set = if (dir_num < local.selections.capacity()) local.selections.isSet(dir_num) else false;
                     _ = dvui.checkboxEx(@src(), &is_set, null, .{ .selection_id = dir_num, .selection_info = &local.selection_info }, .{ .gravity_x = 0.5 });
+                    // If this is the row that the user clicked on, add a selection event for it.
                     if (row_num == row_clicked) {
                         local.selection_info.add(dir_num, !is_set, cell.data());
                     }
@@ -5490,15 +5492,12 @@ fn gridSelection() void {
 
         local.filtering_changed = (was_filtering != local.filtering);
 
-        // process events afte body so cells have a chance to process select-all first.
         if (local.selection_mode == .multi_select) {
             local.kb_select.processEvents(&local.select_all_state, grid.data());
             if (local.kb_select.selectionChanged()) {
                 local.selectAll(local.select_all_state);
             }
-        }
 
-        if (local.selection_mode == .multi_select) {
             local.multi_select.processEvents(&local.selection_info, grid.data());
             if (local.multi_select.selectionChanged()) {
                 for (local.multi_select.selectionIdStart()..local.multi_select.selectionIdEnd() + 1) |row_num| {
