@@ -384,8 +384,8 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
             .buffer => {},
             .buffer_dynamic => |b| {
                 new_size = @min(new_size, b.limit);
-                b.backing.* = b.allocator.realloc(self.text, new_size) catch blk: {
-                    dvui.log.debug("{x} TextEntryWidget.textTyped failed to realloc backing\n", .{self.data().id});
+                b.backing.* = b.allocator.realloc(self.text, new_size) catch |err| blk: {
+                    dvui.logError(@src(), err, "{x} TextEntryWidget.textTyped failed to realloc backing (current size {d}, new size {d})", .{ self.data().id, self.text.len, new_size });
                     break :blk b.backing.*;
                 };
                 self.text = b.backing.*;
@@ -871,7 +871,7 @@ pub fn deinit(self: *TextEntryWidget) void {
                     b.backing.*.len = new_len;
                     self.text.len = new_len;
                 } else {
-                    dvui.log.debug("{x} TextEntryWidget.deinit failed to resize backing\n", .{self.data().id});
+                    dvui.logError(@src(), std.mem.Allocator.Error.OutOfMemory, "{x} TextEntryWidget.textTyped failed to realloc backing (current size {d}, new size {d})", .{ self.data().id, self.text.len, new_len });
                 }
             },
             .internal => {
