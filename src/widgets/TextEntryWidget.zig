@@ -384,20 +384,26 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
             .buffer => {},
             .buffer_dynamic => |b| {
                 new_size = @min(new_size, b.limit);
-                b.backing.* = b.allocator.realloc(self.text, new_size) catch blk: {
-                    dvui.log.debug("{x} TextEntryWidget.textTyped failed to realloc backing\n", .{self.data().id});
+                b.backing.* = b.allocator.realloc(self.text, new_size) catch |err| blk: {
+                    dvui.logError(@src(), err, "{x} TextEntryWidget.textTyped failed to realloc backing (current size {d}, new size {d})", .{ self.data().id, self.text.len, new_size });
                     break :blk b.backing.*;
                 };
                 self.text = b.backing.*;
             },
             .internal => |i| {
                 new_size = @min(new_size, i.limit);
-                // NOTE: Using prev_text is safe because data is trashed and stays valid until the end of the frame
-                const prev_text = self.text;
-                dvui.dataSetSliceCopies(null, self.data().id, "_buffer", &[_]u8{0}, new_size);
-                self.text = dvui.dataGetSlice(null, self.data().id, "_buffer", []u8).?;
-                const min_len = @min(prev_text.len, self.text.len);
-                @memcpy(self.text[0..min_len], prev_text[0..min_len]);
+                // If we are the same size then there is no work to do
+                // This is important because same sized data allocations will be reused
+                if (new_size != self.text.len) {
+                    // NOTE: Using prev_text is safe because data is trashed and stays valid until the end of the frame
+                    const prev_text = self.text;
+                    dvui.dataSetSliceCopies(null, self.data().id, "_buffer", &[_]u8{0}, new_size);
+                    self.text = dvui.dataGetSlice(null, self.data().id, "_buffer", []u8).?;
+                    const min_len = @min(prev_text.len, self.text.len);
+                    if (self.text.ptr != prev_text.ptr) {
+                        @memcpy(self.text[0..min_len], prev_text[0..min_len]);
+                    }
+                }
             },
         }
     }
@@ -871,7 +877,7 @@ pub fn deinit(self: *TextEntryWidget) void {
                     b.backing.*.len = new_len;
                     self.text.len = new_len;
                 } else {
-                    dvui.log.debug("{x} TextEntryWidget.deinit failed to resize backing\n", .{self.data().id});
+                    dvui.logError(@src(), std.mem.Allocator.Error.OutOfMemory, "{x} TextEntryWidget.textTyped failed to realloc backing (current size {d}, new size {d})", .{ self.data().id, self.text.len, new_len });
                 }
             },
             .internal => {
