@@ -1073,7 +1073,11 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
             font.name = font_entries[Sfont.dropdown];
         }
 
-        var te_opts: dvui.TextEntryWidget.InitOptions = .{ .multiline = true, .text = .{ .buffer_dynamic = .{ .backing = &text_entry_multiline_buf, .allocator = text_entry_multiline_fba.allocator() } } };
+        var te_opts: dvui.TextEntryWidget.InitOptions = .{ .multiline = true, .text = .{ .buffer_dynamic = .{
+            .backing = &text_entry_multiline_buf,
+            .allocator = text_entry_multiline_fba.allocator(),
+            .limit = text_entry_multiline_allocator_buf.len,
+        } } };
         if (text_entry_multiline_break) {
             te_opts.break_lines = true;
             te_opts.scroll_horizontal = false;
