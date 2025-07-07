@@ -18,6 +18,10 @@ tag: ?[]const u8 = null,
 /// Use to name the kind of widget for debugging.
 name: ?[]const u8 = null,
 
+/// Pass a pointer to get a copy of the widget's `data` when `register` was
+/// called.  Useful for getting id/rect info out of a higher-level function.
+data_out: ?*dvui.WidgetData = null,
+
 /// Specific placement within parent.  Null is normal, meaning parent picks a
 /// rect for the child widget.
 ///
@@ -362,6 +366,7 @@ pub fn strip(self: *const Options) Options {
         .id_extra = null,
         .tag = null,
         .name = null,
+        .data_out = null,
         .rect = null,
         .min_size_content = null,
         .max_size_content = null,
@@ -392,26 +397,6 @@ pub fn strip(self: *const Options) Options {
 
         .rotation = self.rotation,
     };
-}
-
-pub fn wrapOuter(self: *const Options) Options {
-    var ret = self.*;
-    ret.tab_index = null;
-    ret.border = Rect{};
-    ret.padding = Rect{};
-    ret.background = false;
-    return ret;
-}
-
-pub fn wrapInner(self: *const Options) Options {
-    return self.strip().override(.{
-        .tab_index = self.tab_index,
-        .border = self.border,
-        .padding = self.padding,
-        .corner_radius = self.corner_radius,
-        .background = self.background,
-        .expand = .both,
-    });
 }
 
 pub fn override(self: *const Options, over: Options) Options {

@@ -61,6 +61,10 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, options:
 pub fn register(self: *WidgetData) void {
     self.rect_scale_cache = self.rectScale();
 
+    if (self.options.data_out) |do| {
+        do.* = self.*;
+    }
+
     // for normal widgets this is fine, but subwindows have to take care to
     // call captureMouseMaintain after subwindowCurrentSet and subwindowAdd
     if (!self.init_options.subwindow) {
