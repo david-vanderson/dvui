@@ -92,7 +92,7 @@ pub const StructFieldOptions = se.StructFieldOptions;
 pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
 pub const testing = @import("testing.zig");
-pub const select = @import("select.zig");
+pub const selection = @import("selection.zig");
 pub const ShrinkingArenaAllocator = @import("shrinking_arena_allocator.zig").ShrinkingArenaAllocator;
 pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHashMap;
 
@@ -4935,7 +4935,7 @@ pub fn gridHeadingCheckbox(
     src: std.builtin.SourceLocation,
     g: *GridWidget,
     col_num: usize,
-    selection: *select.SelectAllState,
+    select_state: *selection.SelectAllState,
     cell_style: anytype, // GridWidget.CellStyle
 ) bool {
     const header_defaults: Options = .{
@@ -4959,7 +4959,7 @@ pub fn gridHeadingCheckbox(
     defer cell.deinit();
 
     var is_clicked = false;
-    var selected = selection.* == .select_all;
+    var selected = select_state.* == .select_all;
     {
         _ = dvui.separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
 
@@ -4969,7 +4969,7 @@ pub fn gridHeadingCheckbox(
         is_clicked = dvui.checkbox(@src(), &selected, null, checkbox_opts);
     }
     if (is_clicked) {
-        selection.* = if (selected) .select_all else .select_none;
+        select_state.* = if (selected) .select_all else .select_none;
     }
     return is_clicked;
 }
@@ -6235,7 +6235,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     return checkboxEx(src, target, label_str, .{}, opts);
 }
 
-pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, sel_opts: select.SelectOptions, opts: Options) bool {
+pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, sel_opts: selection.SelectOptions, opts: Options) bool {
     const options = checkbox_defaults.override(opts);
     var ret = false;
 

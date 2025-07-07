@@ -1,10 +1,13 @@
 //! Helpers for Multi and Single selection
-//!
+//! Implements an event queue for selections.
+//! Selectable objects can optionally raise selection events which
+//! are the processed by these helpers
 
 const std = @import("std");
 const dvui = @import("dvui.zig");
 const WidgetData = dvui.WidgetData;
 const WidgetId = dvui.WidgetId;
+const Rect = dvui.Rect;
 
 pub const SelectAllState = enum {
     select_all,
@@ -19,7 +22,7 @@ pub const SelectOptions = struct {
 pub const SelectionEvent = struct {
     selection_id: usize,
     selected: bool,
-    screen_rect: dvui.Rect.Physical,
+    screen_rect: Rect.Physical,
 
     pub fn eventMatch(self: *SelectionEvent, wd: *WidgetData) bool {
         return wd.borderRectScale().r.contains(self.screen_rect.topLeft()) or
@@ -59,7 +62,9 @@ pub const MultiSelectMouse = struct {
     shift_held: bool = false,
     selection_changed: bool = false,
 
-    pub fn processEvents(self: *MultiSelectMouse, sel_info: *SelectionInfo, wd: *dvui.WidgetData) void {
+    /// Process any selection events
+    /// - must be called after the selectables have been created and deinit-ed.
+    pub fn processEvents(self: *MultiSelectMouse, sel_info: *SelectionInfo, wd: *WidgetData) void {
         self.selection_changed = false;
         for (dvui.events()) |*e| {
             if (e.evt == .key) {
@@ -86,6 +91,7 @@ pub const MultiSelectMouse = struct {
         }
     }
 
+    /// Returns true if any selections changed this frame.
     pub fn selectionChanged(self: *MultiSelectMouse) bool {
         return self.selection_changed;
     }
@@ -114,7 +120,7 @@ pub const SelectAllKeyboard = struct {
 
     // processEvents() should be called after all selectables have been created
     // If using with a GridWidget, call processEvents after all body cells have been created.
-    pub fn processEvents(self: *SelectAllKeyboard, select_all_state: *dvui.select.SelectAllState, wd: *dvui.WidgetData) void {
+    pub fn processEvents(self: *SelectAllKeyboard, select_all_state: *SelectAllState, wd: *WidgetData) void {
         self.selection_changed = false;
         for (dvui.events()) |*e| {
             if (self.last_focused_in_frame != dvui.lastFocusedIdInFrame()) {
@@ -136,6 +142,7 @@ pub const SelectAllKeyboard = struct {
         }
     }
 
+    /// Returns true if any selections changed this frame.
     pub fn selectionChanged(self: *const SelectAllKeyboard) bool {
         return self.selection_changed;
     }
@@ -145,15 +152,15 @@ pub const SelectAllKeyboard = struct {
 /// deselects the previously selected item and selects the new item.
 /// - must persist accross frames
 /// - call processEvents after the "selectables" have been created.
-/// Note: May be inaccurate if multiple seletcion events occur in a single frame.
+/// Note: May be inaccurate if multiple selection events occur in a single frame.
 ///   Implement additonal checks or process the raw events if you need to ensure
-///   that only a single item is selected.
+///   that only a single item is selected. (required for very low frame rate environments)
 pub const SingleSelect = struct {
     id_to_select: ?usize = null,
     id_to_unselect: ?usize = null,
     selection_changed: bool = false,
 
-    pub fn processEvents(self: *SingleSelect, sel_info: *SelectionInfo, wd: *dvui.WidgetData) void {
+    pub fn processEvents(self: *SingleSelect, sel_info: *SelectionInfo, wd: *WidgetData) void {
         self.selection_changed = false;
         for (sel_info.events()) |*se| {
             if (se.eventMatch(wd)) {
@@ -172,6 +179,7 @@ pub const SingleSelect = struct {
         }
     }
 
+    /// Returns true if any selections changed this frame.
     pub fn selectionChanged(self: *SingleSelect) bool {
         return self.selection_changed;
     }

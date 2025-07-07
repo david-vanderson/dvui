@@ -4818,7 +4818,7 @@ fn gridLayouts() void {
         const fixed_widths = [num_cols]f32{ checkbox_w, 80, 120, 80, 100, 300 };
         const equal_spacing = [num_cols]f32{ checkbox_w, -1, -1, -1, -1, -1 };
         const fit_window = [num_cols]f32{ checkbox_w, 0, 0, 0, 0, 0 };
-        var selection_state: dvui.select.SelectAllState = .select_none;
+        var selection_state: dvui.selection.SelectAllState = .select_none;
         var sort_dir: GridWidget.SortDirection = .unsorted;
         var layout_style: Layout = .proportional;
         var h_scroll: bool = false;
@@ -5271,13 +5271,13 @@ fn gridSelection() void {
         var selection_mode: enum { multi_select, single_select } = .multi_select;
         var row_select: bool = false;
         var filename_filter: []u8 = "";
-        var multi_select: dvui.select.MultiSelectMouse = .{};
-        var kb_select: dvui.select.SelectAllKeyboard = .{};
-        var single_select: dvui.select.SingleSelect = .{};
+        var multi_select: dvui.selection.MultiSelectMouse = .{};
+        var kb_select: dvui.selection.SelectAllKeyboard = .{};
+        var single_select: dvui.selection.SingleSelect = .{};
         var filtering: bool = false;
         var filtering_changed = false;
-        var select_all_state: dvui.select.SelectAllState = .select_none;
-        var selection_info: dvui.select.SelectionInfo = .{};
+        var select_all_state: dvui.selection.SelectAllState = .select_none;
+        var selection_info: dvui.selection.SelectionInfo = .{};
         var selections: std.StaticBitSet(directory_examples.len) = .initEmpty();
         var highlight_style: CellStyle.HoveredRow = .{ .cell_opts = .{ .color_fill_hover = .fill_hover, .background = true } };
 
@@ -5288,7 +5288,7 @@ fn gridSelection() void {
             return false;
         }
 
-        pub fn selectAll(state: dvui.select.SelectAllState) void {
+        pub fn selectAll(state: dvui.selection.SelectAllState) void {
             switch (state) {
                 .select_all => {
                     selections = .initFull();
