@@ -30,12 +30,32 @@ pub const InitOptions = struct {
     selected_index: ?usize = null,
 };
 
+pub fn wrapOuter(opts: Options) Options {
+    var ret = opts;
+    ret.tab_index = null;
+    ret.border = Rect{};
+    ret.padding = Rect{};
+    ret.background = false;
+    return ret;
+}
+
+pub fn wrapInner(opts: Options) Options {
+    return opts.strip().override(.{
+        .tab_index = opts.tab_index,
+        .border = opts.border,
+        .padding = opts.padding,
+        .corner_radius = opts.corner_radius,
+        .background = opts.background,
+        .expand = .both,
+    });
+}
+
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) DropdownWidget {
     const options = defaults.override(opts);
     var self = DropdownWidget{
         .options = options,
         .init_options = init_opts,
-        .menu = MenuWidget.init(src, .{ .dir = .horizontal }, options.wrapOuter()),
+        .menu = MenuWidget.init(src, .{ .dir = .horizontal }, wrapOuter(options)),
     };
     if (dvui.dataGet(null, self.menu.wd.id, "_drop_adjust", f32)) |adjust| self.drop_adjust = adjust;
     return self;
@@ -44,7 +64,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 pub fn install(self: *DropdownWidget) void {
     self.menu.install();
 
-    self.menuItem = MenuItemWidget.init(@src(), .{ .submenu = true }, self.options.wrapInner());
+    self.menuItem = MenuItemWidget.init(@src(), .{ .submenu = true }, wrapInner(self.options));
     self.menuItem.install();
     self.menuItem.processEvents();
     self.menuItem.drawBackground(.{ .focus_as_outline = true });
