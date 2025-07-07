@@ -5,10 +5,10 @@
 //!  - Horizontal and vertical scrolling.
 //!  - Individual cell styling.
 //!
-//! If `var_row_heights` is false, rows and columns can be laid out in any order,
+//! If `row_height_variable` is false, rows and columns can be laid out in any order,
 //! including sparse layouts where not all rows or columns are provided.
 //!
-//! If `var_row_heights` is true, rows must be laid out sequentially—either:
+//! If `row_height_variable` is true, rows must be laid out sequentially—either:
 //!  1. All rows for a column before moving to the next column, or
 //!  2. All columns for a row before moving to the next row.
 //!
@@ -30,6 +30,7 @@ const Cursor = dvui.enums.Cursor;
 const MaxSize = Options.MaxSize;
 const ScrollInfo = dvui.ScrollInfo;
 const WidgetData = dvui.WidgetData;
+const WidgetId = dvui.WidgetId;
 const Event = dvui.Event;
 const BoxWidget = dvui.BoxWidget;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
@@ -48,6 +49,33 @@ pub var defaults: Options = .{
 };
 
 pub var scrollbar_padding_defaults: Size = .{ .h = 10, .w = 10 };
+
+pub const Cell = struct {
+    col_num: usize,
+    row_num: usize,
+
+    pub fn col(col_num: usize) Cell {
+        return .{
+            .col_num = col_num,
+            .row_num = 0,
+        };
+    }
+
+    pub fn colRow(col_num: usize, row_num: usize) Cell {
+        return .{
+            .col_num = col_num,
+            .row_num = row_num,
+        };
+    }
+
+    pub fn eq(lhs: Cell, rhs: Cell) bool {
+        return lhs.col_num == rhs.col_num and lhs.row_num == rhs.row_num;
+    }
+
+    pub fn eqColRow(self: Cell, col_num: usize, row_num: usize) bool {
+        return self.col_num == col_num and self.row_num == row_num;
+    }
+};
 
 pub const CellOptions = struct {
     // Set the height or width of a cell.
@@ -117,9 +145,10 @@ pub const InitOpts = struct {
     resize_cols: bool = false,
     // If var row heights is set to false, size.h is ignored.
     // When using var row heights row_nr must be populated sequentially for each column when creating bodyCells.
-    var_row_heights: bool = false,
+    row_height_variable: bool = false,
 };
 
+// TODO: Can I make that const?
 pub const WidthsOrNum = union(enum) {
     col_widths: []f32,
     num_cols: usize,
@@ -177,7 +206,7 @@ pub fn init(src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitO
         .init_opts = init_opts,
         .cols = cols,
         .vbox = BoxWidget.init(src, .{ .dir = .vertical }, options),
-        // SAFETY: Set bellow
+        // SAFETY: Set below
         .col_widths = undefined,
     };
     if (dvui.dataGet(null, self.data().id, "_resizing", bool)) |resizing| {
@@ -313,7 +342,7 @@ pub fn deinit(self: *GridWidget) void {
 
     // Create a spacer widget to report body virtual size to scroll area
     const max_row_f: f32 = @floatFromInt(self.max_row);
-    const this_height: f32 = if (self.init_opts.var_row_heights) self.next_row_y else (max_row_f + 1) * self.row_height;
+    const this_height: f32 = if (self.init_opts.row_height_variable) self.next_row_y else (max_row_f + 1) * self.row_height;
     const this_size: Size = .{ .h = this_height, .w = self.totalWidth() };
     _ = dvui.spacer(@src(), .{ .min_size_content = this_size, .background = false });
 
@@ -390,9 +419,9 @@ pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: u
 /// Returns a hbox for the created cell.
 /// - deinit() must be called on this hbox before any new body cells are created.
 ///
-/// If var_row_heights is false:
+/// If row_height_variable is false:
 ///   - body cells can be created using any order of col_num and row_num
-/// if var_row_heights is true then either:
+/// if row_height_variable is true then either:
 ///   - All rows for a column must be created in ascending row order.
 ///   - All columns for a row must be created before creating moving to the next row.
 ///
@@ -401,19 +430,19 @@ pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: u
 /// If a different size.w is specified for any cells in the same column,
 /// the max size.w is used for that column.
 /// - Heights
-/// If var_row_heights is true, size.h is always used as the row height,
+/// If row_height_variable is true, size.h is always used as the row height,
 /// otherwise the height for all body cells in the grid is set to the max size.h
 ///
-pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: usize, row_num: usize, opts: CellOptions) *BoxWidget {
-    if (row_num < self.cur_row) {
+pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, cell: Cell, opts: CellOptions) *BoxWidget {
+    if (cell.row_num < self.cur_row) {
         self.this_row_y = self.rows_y_offset;
         self.next_row_y = self.rows_y_offset;
-        self.cur_row = row_num;
-    } else if (row_num > self.cur_row) {
+        self.cur_row = cell.row_num;
+    } else if (cell.row_num > self.cur_row) {
         self.this_row_y = self.next_row_y;
-        self.cur_row = row_num;
+        self.cur_row = cell.row_num;
     }
-    self.max_row = @max(self.max_row, row_num);
+    self.max_row = @max(self.max_row, cell.row_num);
     if (self.bscroll == null) {
         self.bodyScrollContainerCreate();
     }
@@ -421,43 +450,43 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: usi
         if (opts.width() > 0) {
             break :width opts.width();
         } else {
-            break :width self.colWidth(col_num);
+            break :width self.colWidth(cell.col_num);
         }
     };
     const cell_height: f32 = height: {
         if (opts.height() > 0) {
             // If the user specifies a height, use that if it is bigger than the current height.
-            // If using var_row_heights or resizing then always use the height the user supplied.
-            break :height if (self.resizing or self.init_opts.var_row_heights) opts.height() else @max(opts.height(), self.row_height);
+            // If using row_height_variable or resizing then always use the height the user supplied.
+            break :height if (self.resizing or self.init_opts.row_height_variable) opts.height() else @max(opts.height(), self.row_height);
         } else {
             break :height if (self.resizing) 0 else self.row_height;
         }
     };
 
-    const row_num_f: f32 = @floatFromInt(row_num);
-    const pos_x = self.posX(col_num);
-    const pos_y = if (self.init_opts.var_row_heights) self.this_row_y else self.row_height * row_num_f;
+    const row_num_f: f32 = @floatFromInt(cell.row_num);
+    const pos_x = self.posX(cell.col_num);
+    const pos_y = if (self.init_opts.row_height_variable) self.this_row_y else self.row_height * row_num_f;
     var cell_opts = opts.toOptions();
     cell_opts.rect = .{ .x = pos_x, .y = pos_y, .w = cell_width, .h = cell_height };
 
     // To support being called in a loop, combine col and row numbers as id_extra.
     // 9_223_372_036_854_775K cols should be enough for anybody.
-    cell_opts.id_extra = (col_num << @bitSizeOf(usize) / 2) | row_num;
+    cell_opts.id_extra = (cell.col_num << @bitSizeOf(usize) / 2) | cell.row_num;
 
-    var cell = dvui.widgetAlloc(BoxWidget);
-    cell.* = BoxWidget.init(src, .{ .dir = .horizontal }, cell_opts);
-    cell.install();
-    cell.drawBackground();
-    const first_frame = dvui.firstFrame(cell.data().id);
+    var cell_box = dvui.widgetAlloc(BoxWidget);
+    cell_box.* = BoxWidget.init(src, .{ .dir = .horizontal }, cell_opts);
+    cell_box.install();
+    cell_box.drawBackground();
+    const first_frame = dvui.firstFrame(cell_box.data().id);
     // Determine heights for next frame.
     if (!first_frame) {
-        const cell_size = cell.data().rect.size();
+        const cell_size = cell_box.data().rect.size();
         self.row_height = @max(self.row_height, cell_size.h);
-        self.colWidthSet(col_num, cell_size.w);
+        self.colWidthSet(cell.col_num, cell_size.w);
     }
     self.next_row_y = @max(self.next_row_y, self.this_row_y + if (opts.height() > 0) opts.height() else self.row_height);
 
-    return cell;
+    return cell_box;
 }
 
 /// Set the starting y value in the scroll container to begin rendering rows.
@@ -476,6 +505,30 @@ pub fn pointToBodyRelative(self: *GridWidget, point: Point.Physical) ?Point {
     if (scroll_wd.rect.contains(result) and result.y >= self.header_height) {
         result.y -= self.header_height;
         return result;
+    }
+    return null;
+}
+
+/// Convert a screen physical coord into a grid cell position.
+/// Not valid when using variable row heights.
+pub fn pointToCell(self: *GridWidget, point: Point.Physical) ?Cell {
+    if (self.init_opts.row_height_variable) return null;
+    if (self.resizing or self.init_opts.resize_cols) return null;
+    if (self.row_height < 1) return null;
+
+    if (self.pointToBodyRelative(point)) |point_rel| {
+        const row_num: usize = @intFromFloat(@trunc((self.frame_viewport.y + point_rel.y) / self.row_height));
+        const col_num = blk: {
+            var total_w: f32 = 0;
+            for (self.col_widths, 0..) |w, col| {
+                total_w += w;
+                if (point_rel.x < total_w) {
+                    break :blk col;
+                }
+            }
+            return null;
+        };
+        return .{ .col_num = col_num, .row_num = row_num };
     }
     return null;
 }
@@ -537,7 +590,7 @@ pub fn colWidthSet(self: *GridWidget, col_num: usize, width: f32) void {
 }
 
 /// Returns the x position of the requested column
-pub fn posX(self: *GridWidget, col_num: usize) f32 {
+pub fn posX(self: *const GridWidget, col_num: usize) f32 {
     const end = @min(col_num, self.col_widths.len);
     var total: f32 = 0;
     for (self.col_widths[0..end]) |w| {
@@ -547,7 +600,7 @@ pub fn posX(self: *GridWidget, col_num: usize) f32 {
 }
 
 /// Returns the total width of all columns
-pub fn totalWidth(self: *GridWidget) f32 {
+pub fn totalWidth(self: *const GridWidget) f32 {
     var total: f32 = 0;
     for (self.col_widths) |w| {
         total += w;
@@ -710,14 +763,14 @@ pub const HeaderResizeWidget = struct {
         self.data().borderAndBackground(.{});
     }
 
-    pub fn size(self: *HeaderResizeWidget) f32 {
+    pub fn size(self: *const HeaderResizeWidget) f32 {
         if (self.init_opts.num < self.init_opts.sizes.len)
             return self.init_opts.sizes[self.init_opts.num]
         else
             return 0;
     }
 
-    pub fn sizeOf(self: *HeaderResizeWidget, col_num: usize) f32 {
+    pub fn sizeOf(self: *const HeaderResizeWidget, col_num: usize) f32 {
         if (col_num < self.init_opts.sizes.len)
             return self.init_opts.sizes[col_num]
         else
@@ -729,7 +782,7 @@ pub const HeaderResizeWidget = struct {
             self.init_opts.sizes[self.init_opts.num] = s;
     }
 
-    pub fn sizeTotal(self: *HeaderResizeWidget) f32 {
+    pub fn sizeTotal(self: *const HeaderResizeWidget) f32 {
         var total: f32 = switch (self.direction) {
             .vertical => scrollbar_padding_defaults.w,
             .horizontal => scrollbar_padding_defaults.h,
@@ -740,7 +793,7 @@ pub const HeaderResizeWidget = struct {
         return total;
     }
 
-    pub fn matchEvent(self: *HeaderResizeWidget, e: *Event) bool {
+    pub fn matchEvent(self: *const HeaderResizeWidget, e: *Event) bool {
         var rs = self.data().rectScale();
 
         // Clicking near the handle counts as clicking on the handle.
@@ -768,7 +821,7 @@ pub const HeaderResizeWidget = struct {
         }
     }
 
-    pub fn data(self: *HeaderResizeWidget) *WidgetData {
+    pub fn data(self: *const HeaderResizeWidget) *WidgetData {
         return self.wd.validate();
     }
 
@@ -835,8 +888,283 @@ pub const HeaderResizeWidget = struct {
         self.* = undefined;
     }
 };
+
+/// Adds keyboard navigation to the grid
+/// Provides a "cursor" that can be moved using keyboard bindings.
+/// Usage:
+/// - The struct instance must be persisted accross frames.
+/// - Call setLimits() if the size of the grid could have changed.
+/// - Call processEvents() prior to creating any grid body cells.
+/// - Call cellCusor() to find the currently focused cell.
+/// - Use shouldFocus() to determine whether to focus the widget within the focused cell.
+///   shouldFocus() will return false when nothing inside the grid has focus. e.g. the user clicked oustide the grid.
+/// - Call endGrid() after all grid body cells have been created.
+pub const KeyboardNavigation = struct {
+    /// Direction keys.
+    /// - use defaultKeys() or provide your own bindings.
+    pub const NavigationKeys = struct {
+        up: dvui.enums.Keybind,
+        down: dvui.enums.Keybind,
+        left: dvui.enums.Keybind,
+        right: dvui.enums.Keybind,
+        first: dvui.enums.Keybind,
+        last: dvui.enums.Keybind,
+        col_first: dvui.enums.Keybind,
+        col_last: dvui.enums.Keybind,
+        scroll_up: dvui.enums.Keybind,
+        scroll_down: dvui.enums.Keybind,
+
+        /// Don't assign any keys.
+        pub const none: NavigationKeys = .{
+            .up = .{},
+            .down = .{},
+            .left = .{},
+            .right = .{},
+            .first = .{},
+            .last = .{},
+            .col_first = .{},
+            .col_last = .{},
+            .scroll_up = .{},
+            .scroll_down = .{},
+        };
+
+        /// Use the platform default navigation keys.
+        pub fn defaults() NavigationKeys {
+            const cw = dvui.currentWindow();
+            return .{
+                .up = .{ .key = .up, .shift = false, .control = false, .command = false, .alt = false },
+                .down = .{ .key = .down, .shift = false, .control = false, .command = false, .alt = false },
+                .left = cw.keybinds.get("prev_widget") orelse unreachable,
+                .right = cw.keybinds.get("next_widget") orelse unreachable,
+                .first = cw.keybinds.get("text_start") orelse unreachable,
+                .last = cw.keybinds.get("text_end") orelse unreachable,
+                .col_first = .{}, // Typically "home". Not bound by default so TextEntryWidget can process.
+                .col_last = .{}, // Typically "end". Not bound by default so TextEntryWidget can process.
+                .scroll_up = .{ .key = .page_up },
+                .scroll_down = .{ .key = .page_down },
+            };
+        }
+    };
+
+    /// Should the cursor wrap to the next row at the end of a column.
+    wrap_cursor: bool,
+    /// Should we tab out of the grid at when shift-tab/tab is pressed in the first/last row_col.
+    /// - generally set to true if tab is being used as a navigation key.
+    tab_out: bool,
+    /// Number of rows to move the cursor up/down on scroll_up/scroll_down
+    num_scroll: isize,
+    /// col_num will always be less than this value.
+    num_cols: usize,
+    /// row_num will always be less than this value.
+    num_rows: usize,
+    /// Customize navigation keys
+    /// - use .defaults() for default keys.
+    navigation_keys: NavigationKeys = .none,
+    /// Cursor should only be used if the grid or children have focus.
+    /// using shouldFocus() is prefered.
+    is_focused: bool = false,
+    /// result cursor. using cellCursor() is preferred.
+    cursor: Cell = .{ .col_num = 0, .row_num = 0 },
+
+    /// Internal use.
+    last_focused_widget: WidgetId = .zero,
+
+    /// Call this once per frame before the grid body cells are created.
+    pub fn processEvents(self: *KeyboardNavigation, grid: *GridWidget) void {
+        self.processEventsCustom(grid, GridWidget.pointToCell);
+    }
+
+    /// Call this once per frame before the grid body cells are created.
+    /// Used when multiple focusable widgets are in a single grid cell.
+    /// The passed in cellConverter must identify the correct cursor cell for
+    /// a physical screen positon.
+    pub fn processEventsCustom(self: *KeyboardNavigation, grid: *GridWidget, cellConverter: fn (
+        grid: *GridWidget,
+        point: Point.Physical,
+    ) ?Cell) void {
+        self.enforceCursorLimits();
+
+        self.is_focused = self.last_focused_widget == dvui.focusedWidgetId() and dvui.lastFocusedIdInFrame() == .zero;
+
+        for (dvui.events()) |*e| {
+            self.processEvent(e, grid, cellConverter);
+        }
+    }
+
+    /// Must be called after all body cells are created.
+    /// and before any new widgets are created.
+    pub fn gridEnd(self: *KeyboardNavigation) void {
+        self.last_focused_widget = dvui.lastFocusedIdInFrame();
+    }
+
+    /// Calculate the number of rows to scroll based on the
+    /// grid's viewport height / row height.
+    pub fn numScrollDefault(grid: *const GridWidget) isize {
+        const default: isize = 5;
+        if (grid.row_height < 1) {
+            return default;
+        }
+        return @intFromFloat(@round(grid.bsi.viewport.h / grid.row_height));
+    }
+
+    /// Change max row and col limits
+    pub fn setLimits(self: *KeyboardNavigation, max_cols: usize, max_rows: usize) void {
+        self.num_cols = max_cols;
+        self.num_rows = max_rows;
+        self.enforceCursorLimits();
+    }
+
+    /// Move the cursor to the specified col and row.
+    pub fn scrollTo(self: *KeyboardNavigation, col_num: usize, row_num: usize) void {
+        self.cursor.col_num = col_num;
+        self.cursor.row_num = row_num;
+        self.enforceCursorLimits();
+    }
+
+    /// Scroll by a col and/or row offset. Accepts +ve and -ve offset.
+    /// Scrolling off the end of a row will either stop at the start/end of the row
+    /// or if wrap_curor is set to true, will wrap 1 cell.
+    pub fn scrollBy(self: *KeyboardNavigation, num_cols: isize, num_rows: isize) void {
+        var should_wrap: bool = false;
+        if (num_cols < 0) {
+            if (self.cursor.col_num >= -num_cols) {
+                self.cursor.col_num -= @intCast(-num_cols);
+            } else {
+                self.cursor.col_num = 0;
+                should_wrap = true;
+            }
+        } else if (num_cols > 0) {
+            if (self.cursor.col_num < self.num_cols - 1) {
+                self.cursor.col_num += @intCast(num_cols);
+            } else {
+                should_wrap = true;
+            }
+        }
+        if (num_rows < 0) {
+            if (self.cursor.row_num >= -num_rows) {
+                self.cursor.row_num -= @intCast(-num_rows);
+            } else {
+                self.cursor.row_num = 0;
+            }
+        } else if (num_rows > 0) {
+            if (self.cursor.row_num < self.num_rows - 1) {
+                self.cursor.row_num += @intCast(num_rows);
+            } else {
+                self.cursor.row_num = self.num_rows - 1;
+            }
+        }
+        if (should_wrap and self.wrap_cursor) {
+            if (self.cursor.col_num == 0) {
+                if (self.cursor.row_num > 0) {
+                    self.cursor.col_num = self.num_cols - 1;
+                    self.cursor.row_num -= 1;
+                }
+            } else if (self.cursor.col_num == self.num_cols - 1) {
+                self.cursor.col_num = 0;
+                if (self.cursor.row_num < self.num_rows - 1) {
+                    self.cursor.row_num += 1;
+                }
+            }
+        }
+        self.enforceCursorLimits();
+    }
+
+    pub fn processEvent(self: *KeyboardNavigation, e: *Event, grid: *GridWidget, cellConverter: fn (
+        grid: *GridWidget,
+        point: Point.Physical,
+    ) ?Cell) void {
+        defer self.enforceCursorLimits();
+        switch (e.evt) {
+            .key => |*ke| {
+                if (!self.is_focused or e.handled) return;
+                if (ke.action == .down or ke.action == .repeat) {
+                    if (ke.matchKeyBind(self.navigation_keys.first)) {
+                        e.handle(@src(), grid.data());
+                        self.scrollTo(0, 0);
+                    } else if (ke.matchKeyBind(self.navigation_keys.last)) {
+                        e.handle(@src(), grid.data());
+                        self.scrollTo(self.num_cols - 1, self.num_rows - 1);
+                    } else if (ke.matchKeyBind(self.navigation_keys.col_first)) {
+                        e.handle(@src(), grid.data());
+                        self.scrollTo(0, self.cursor.row_num);
+                    } else if (ke.matchKeyBind(self.navigation_keys.col_last)) {
+                        e.handle(@src(), grid.data());
+                        self.scrollTo(self.num_cols - 1, self.cursor.row_num);
+                    } else if (ke.matchKeyBind(self.navigation_keys.scroll_up)) {
+                        e.handle(@src(), grid.data());
+                        self.scrollBy(0, -self.num_scroll);
+                        grid.bsi.scrollPageUp(.vertical);
+                    } else if (ke.matchKeyBind(self.navigation_keys.scroll_down)) {
+                        e.handle(@src(), grid.data());
+                        self.scrollBy(0, self.num_scroll);
+                        grid.bsi.scrollPageDown(.vertical);
+                    } else if (ke.matchKeyBind(self.navigation_keys.up)) {
+                        e.handle(@src(), grid.data());
+                        self.scrollBy(0, -1);
+                    } else if (ke.matchKeyBind(self.navigation_keys.down)) {
+                        e.handle(@src(), grid.data());
+                        self.scrollBy(0, 1);
+                    } else if (ke.matchKeyBind(self.navigation_keys.left)) {
+                        e.handle(@src(), grid.data());
+                        if (self.tab_out and self.cursor.eqColRow(0, 0)) {
+                            dvui.tabIndexPrev(e.num);
+                            self.is_focused = false;
+                        } else {
+                            self.scrollBy(-1, 0);
+                        }
+                    } else if (ke.matchKeyBind(self.navigation_keys.right)) {
+                        e.handle(@src(), grid.data());
+                        if (self.tab_out and self.cursor.eqColRow(self.num_cols - 1, self.num_rows - 1)) {
+                            dvui.tabIndexNext(e.num);
+                            self.is_focused = false;
+                        } else {
+                            self.scrollBy(1, 0);
+                        }
+                    }
+                }
+            },
+            .mouse => |*me| {
+                if (me.action == .focus) {
+                    // pointToRowCol will return null if the mouse focus event
+                    // is outside the grid.
+                    const focused_cell = cellConverter(grid, me.p);
+                    if (focused_cell) |cell| {
+                        self.cursor.col_num = cell.col_num;
+                        self.cursor.row_num = cell.row_num;
+                        self.is_focused = true;
+                    } else {
+                        self.is_focused = false;
+                    }
+                }
+            },
+            else => {},
+        }
+    }
+
+    pub fn enforceCursorLimits(self: *KeyboardNavigation) void {
+        if (self.num_cols > 0)
+            self.cursor.col_num = @min(self.cursor.col_num, self.num_cols - 1)
+        else
+            self.cursor.col_num = 0;
+        if (self.num_rows > 0)
+            self.cursor.row_num = @min(self.cursor.row_num, self.num_rows - 1)
+        else
+            self.cursor.row_num = 0;
+    }
+
+    /// returns the current cursor
+    pub fn cellCursor(self: *const KeyboardNavigation) Cell {
+        return self.cursor;
+    }
+
+    /// Should the widget in cellCursor() be focused this frame?
+    pub fn shouldFocus(self: *const KeyboardNavigation) bool {
+        return self.is_focused;
+    }
+};
+
 test {
     // TODO: Don't include grid tests yet.
-    // _ = @import("GridWidget/testing.zig");
+    _ = @import("GridWidget/testing.zig");
     @import("std").testing.refAllDecls(@This());
 }
