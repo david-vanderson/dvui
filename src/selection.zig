@@ -92,17 +92,17 @@ pub const MultiSelectMouse = struct {
     }
 
     /// Returns true if any selections changed this frame.
-    pub fn selectionChanged(self: *MultiSelectMouse) bool {
+    pub fn selectionChanged(self: *const MultiSelectMouse) bool {
         return self.selection_changed;
     }
 
     // Returns the lowest id selected.
-    pub fn selectionIdStart(self: *MultiSelectMouse) usize {
+    pub fn selectionIdStart(self: *const MultiSelectMouse) usize {
         return @min(self.first_selected_id orelse 0, self.second_selected_id orelse self.first_selected_id orelse 0);
     }
 
     // Returns the highest id selected.
-    pub fn selectionIdEnd(self: *MultiSelectMouse) usize {
+    pub fn selectionIdEnd(self: *const MultiSelectMouse) usize {
         return @max(self.first_selected_id orelse 0, self.second_selected_id orelse self.first_selected_id orelse 0);
     }
 };
@@ -120,7 +120,7 @@ pub const SelectAllKeyboard = struct {
 
     // processEvents() should be called after all selectables have been created
     // If using with a GridWidget, call processEvents after all body cells have been created.
-    pub fn processEvents(self: *SelectAllKeyboard, select_all_state: *SelectAllState, wd: *WidgetData) void {
+    pub fn processEvents(self: *SelectAllKeyboard, select_all_state: *SelectAllState, wd: *const WidgetData) void {
         self.selection_changed = false;
         for (dvui.events()) |*e| {
             if (self.last_focused_in_frame != dvui.lastFocusedIdInFrame()) {
@@ -180,7 +180,7 @@ pub const SingleSelect = struct {
     }
 
     /// Returns true if any selections changed this frame.
-    pub fn selectionChanged(self: *SingleSelect) bool {
+    pub fn selectionChanged(self: *const SingleSelect) bool {
         return self.selection_changed;
     }
 };

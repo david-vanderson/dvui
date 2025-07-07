@@ -206,7 +206,7 @@ pub fn init(src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitO
         .init_opts = init_opts,
         .cols = cols,
         .vbox = BoxWidget.init(src, .{ .dir = .vertical }, options),
-        // SAFETY: Set bellow
+        // SAFETY: Set below
         .col_widths = undefined,
     };
     if (dvui.dataGet(null, self.data().id, "_resizing", bool)) |resizing| {
@@ -590,7 +590,7 @@ pub fn colWidthSet(self: *GridWidget, col_num: usize, width: f32) void {
 }
 
 /// Returns the x position of the requested column
-pub fn posX(self: *GridWidget, col_num: usize) f32 {
+pub fn posX(self: *const GridWidget, col_num: usize) f32 {
     const end = @min(col_num, self.col_widths.len);
     var total: f32 = 0;
     for (self.col_widths[0..end]) |w| {
@@ -600,7 +600,7 @@ pub fn posX(self: *GridWidget, col_num: usize) f32 {
 }
 
 /// Returns the total width of all columns
-pub fn totalWidth(self: *GridWidget) f32 {
+pub fn totalWidth(self: *const GridWidget) f32 {
     var total: f32 = 0;
     for (self.col_widths) |w| {
         total += w;
@@ -763,14 +763,14 @@ pub const HeaderResizeWidget = struct {
         self.data().borderAndBackground(.{});
     }
 
-    pub fn size(self: *HeaderResizeWidget) f32 {
+    pub fn size(self: *const HeaderResizeWidget) f32 {
         if (self.init_opts.num < self.init_opts.sizes.len)
             return self.init_opts.sizes[self.init_opts.num]
         else
             return 0;
     }
 
-    pub fn sizeOf(self: *HeaderResizeWidget, col_num: usize) f32 {
+    pub fn sizeOf(self: *const HeaderResizeWidget, col_num: usize) f32 {
         if (col_num < self.init_opts.sizes.len)
             return self.init_opts.sizes[col_num]
         else
@@ -782,7 +782,7 @@ pub const HeaderResizeWidget = struct {
             self.init_opts.sizes[self.init_opts.num] = s;
     }
 
-    pub fn sizeTotal(self: *HeaderResizeWidget) f32 {
+    pub fn sizeTotal(self: *const HeaderResizeWidget) f32 {
         var total: f32 = switch (self.direction) {
             .vertical => scrollbar_padding_defaults.w,
             .horizontal => scrollbar_padding_defaults.h,
@@ -793,7 +793,7 @@ pub const HeaderResizeWidget = struct {
         return total;
     }
 
-    pub fn matchEvent(self: *HeaderResizeWidget, e: *Event) bool {
+    pub fn matchEvent(self: *const HeaderResizeWidget, e: *Event) bool {
         var rs = self.data().rectScale();
 
         // Clicking near the handle counts as clicking on the handle.
@@ -821,7 +821,7 @@ pub const HeaderResizeWidget = struct {
         }
     }
 
-    pub fn data(self: *HeaderResizeWidget) *WidgetData {
+    pub fn data(self: *const HeaderResizeWidget) *WidgetData {
         return self.wd.validate();
     }
 
@@ -999,7 +999,7 @@ pub const KeyboardNavigation = struct {
 
     /// Calculate the number of rows to scroll based on the
     /// grid's viewport height / row height.
-    pub fn numScrollDefault(grid: *GridWidget) isize {
+    pub fn numScrollDefault(grid: *const GridWidget) isize {
         const default: isize = 5;
         if (grid.row_height < 1) {
             return default;
@@ -1152,9 +1152,8 @@ pub const KeyboardNavigation = struct {
             self.cursor.row_num = 0;
     }
 
-    /// returns the current cursor if the grid or one if
-    /// its children has focus
-    pub fn cellCursor(self: *KeyboardNavigation) Cell {
+    /// returns the current cursor
+    pub fn cellCursor(self: *const KeyboardNavigation) Cell {
         return self.cursor;
     }
 
