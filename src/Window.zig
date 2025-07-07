@@ -1180,9 +1180,6 @@ pub fn begin(
     self.captured_last_frame = false;
 
     self.data().parent = self.widget();
-
-    // Window's wd is kept frame to frame, so manually reset the cache.
-    self.data().rect_scale_cache = null;
     self.data().register();
 
     self.layout = .{};
