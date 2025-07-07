@@ -75,6 +75,7 @@ pub fn step(frame: dvui.App.frameFunction) !?u32 {
 pub const InitOptions = struct {
     allocator: std.mem.Allocator = if (@import("builtin").is_test) std.testing.allocator else undefined,
     window_size: dvui.Size = .{ .w = 600, .h = 400 },
+    window_init_opts: Window.InitOptions = .{},
     image_dir: ?[]const u8 = null,
     snapshot_dir: []const u8 = "snapshots",
 };
@@ -111,8 +112,18 @@ pub fn init(options: InitOptions) !Self {
         };
     }
 
+    var window_init_opts = options.window_init_opts;
+    // Define a defaults so that tests aren't platform dependent.
+    // These would otherwise check for OS tag or OS configuration.
+    if (window_init_opts.color_scheme == null) {
+        window_init_opts.color_scheme = .light;
+    }
+    if (window_init_opts.keybinds == null) {
+        window_init_opts.keybinds = .windows;
+    }
+
     const window = try options.allocator.create(Window);
-    window.* = try dvui.Window.init(@src(), options.allocator, backend.backend(), .{});
+    window.* = try dvui.Window.init(@src(), options.allocator, backend.backend(), window_init_opts);
 
     window.begin(0) catch unreachable;
 
@@ -335,4 +346,33 @@ const Window = dvui.Window;
 
 test {
     @import("std").testing.refAllDecls(@This());
+}
+
+test "Platform independent defaults" {
+    {
+        var t = try dvui.testing.init(.{});
+        defer t.deinit();
+
+        // Should always be in lightmode unless otherwise specified
+        try std.testing.expect(!t.window.theme.dark);
+
+        // Should always be windows unless otherwise specified
+        // TODO: We use ctrl/cmd as a proxy for keybind platform, should probably
+        //       be stored somewhere (maybe a key in the keybinds map?).
+        try std.testing.expect(t.window.keybinds.get("ctrl/cmd").?.control.?);
+    }
+    {
+        var t = try dvui.testing.init(.{
+            .window_init_opts = .{ .color_scheme = .dark, .keybinds = .mac },
+        });
+        defer t.deinit();
+
+        // Should be set to darkmode
+        try std.testing.expect(t.window.theme.dark);
+
+        // Should be set to `.mac`
+        // TODO: We use ctrl/cmd as a proxy for keybind platform, should probably
+        //       be stored somewhere (maybe a key in the keybinds map?).
+        try std.testing.expect(t.window.keybinds.get("ctrl/cmd").?.command.?);
+    }
 }

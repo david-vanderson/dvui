@@ -188,6 +188,10 @@ pub const InitOptions = struct {
     id_extra: usize = 0,
     arena: ?std.heap.ArenaAllocator = null,
     theme: ?*Theme = null,
+    /// `null` indicated that the OS will choose it's preferred theme
+    ///
+    /// Does nothing if the `theme` option is populated
+    color_scheme: ?dvui.enums.ColorScheme = null,
     keybinds: ?enum {
         none,
         windows,
@@ -222,7 +226,7 @@ pub fn init(
         },
         .backend = backend_ctx,
         .font_bytes = try dvui.Font.initTTFBytesDatabase(gpa),
-        .theme = if (init_opts.theme) |t| t.* else switch (backend_ctx.preferredColorScheme() orelse .light) {
+        .theme = if (init_opts.theme) |t| t.* else switch (init_opts.color_scheme orelse backend_ctx.preferredColorScheme() orelse .light) {
             .light => Theme.builtin.adwaita_light,
             .dark => Theme.builtin.adwaita_dark,
         },
