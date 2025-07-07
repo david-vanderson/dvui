@@ -904,3 +904,159 @@ pub fn deinit(self: *TextEntryWidget) void {
 test {
     @import("std").testing.refAllDecls(@This());
 }
+
+test "text internal" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const Local = struct {
+        var text: []const u8 = "";
+
+        // Set a limit that is not a multiple of the bin size
+        const limit = realloc_bin_size * 5 / 2;
+
+        fn frame() !dvui.App.Result {
+            var entry = TextEntryWidget.init(@src(), .{
+                .text = .{ .internal = .{ .limit = limit } },
+            }, .{ .tag = "entry" });
+            entry.install();
+            defer entry.deinit();
+
+            entry.processEvents();
+            entry.draw();
+            text = entry.getText();
+            return .ok;
+        }
+    };
+
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.tab, .none);
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.expectFocused("entry");
+
+    const text = "This is some short sample text!";
+    // text length should not be a multiple of the limit or bin size
+    try std.testing.expect(Local.limit % text.len != 0);
+    try std.testing.expect(realloc_bin_size % text.len != 0);
+
+    try dvui.testing.writeText(text);
+    try dvui.testing.settle(Local.frame);
+    try std.testing.expectEqualStrings(text, Local.text);
+
+    for (0..@divFloor(Local.limit, text.len)) |_| {
+        // Fill the internal buffer
+        try dvui.testing.writeText(text);
+    }
+    try dvui.testing.settle(Local.frame);
+
+    const full_text_buffer = (text ** (@divFloor(Local.limit, text.len) + 1))[0..Local.limit];
+    try std.testing.expectEqualStrings(full_text_buffer, Local.text);
+}
+
+test "text dynamic buffer" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const Local = struct {
+        var text: []const u8 = "";
+
+        // Set a limit that is not a multiple of the bin size
+        const limit = realloc_bin_size * 5 / 2;
+
+        var buffer: [limit]u8 = undefined;
+        var fba = std.heap.FixedBufferAllocator.init(&buffer);
+        var backing: []u8 = &.{};
+
+        fn frame() !dvui.App.Result {
+            var entry = TextEntryWidget.init(@src(), .{
+                .text = .{ .buffer_dynamic = .{
+                    .backing = &backing,
+                    .allocator = fba.allocator(),
+                    .limit = limit,
+                } },
+            }, .{ .tag = "entry" });
+            entry.install();
+            defer entry.deinit();
+
+            entry.processEvents();
+            entry.draw();
+            text = entry.getText();
+            return .ok;
+        }
+    };
+
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.tab, .none);
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.expectFocused("entry");
+
+    const text = "This is some short sample text!";
+    // limit should not be a multiple of the text length
+    try std.testing.expect(Local.limit % text.len != 0);
+    try std.testing.expect(realloc_bin_size % text.len != 0);
+
+    try dvui.testing.writeText(text);
+    try dvui.testing.settle(Local.frame);
+    try std.testing.expectEqualStrings(text, Local.text);
+
+    for (0..@divFloor(Local.limit, text.len)) |_| {
+        // Fill the internal buffer
+        // This verifies that any OOM error is handled by writing past the buffer size
+        try dvui.testing.writeText(text);
+    }
+    try dvui.testing.settle(Local.frame);
+
+    const full_text_buffer = (text ** (@divFloor(Local.limit, text.len) + 1))[0..Local.limit];
+    try std.testing.expectEqualStrings(full_text_buffer, Local.text);
+}
+
+test "text buffer" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const Local = struct {
+        var text: []const u8 = "";
+
+        // Set a limit that is not a multiple of the bin size
+        const limit = realloc_bin_size * 5 / 2;
+
+        var buffer: [limit]u8 = undefined;
+
+        fn frame() !dvui.App.Result {
+            var entry = TextEntryWidget.init(@src(), .{
+                .text = .{ .buffer = &buffer },
+            }, .{ .tag = "entry" });
+            entry.install();
+            defer entry.deinit();
+
+            entry.processEvents();
+            entry.draw();
+            text = entry.getText();
+            return .ok;
+        }
+    };
+
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.tab, .none);
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.expectFocused("entry");
+
+    const text = "This is some short sample text!";
+    // limit should not be a multiple of the text length
+    try std.testing.expect(Local.limit % text.len != 0);
+    try std.testing.expect(realloc_bin_size % text.len != 0);
+
+    try dvui.testing.writeText(text);
+    try dvui.testing.settle(Local.frame);
+    try std.testing.expectEqualStrings(text, Local.text);
+
+    for (0..@divFloor(Local.limit, text.len)) |_| {
+        // Fill the internal buffer
+        // This verifies that any OOM error is handled by writing past the buffer size
+        try dvui.testing.writeText(text);
+    }
+    try dvui.testing.settle(Local.frame);
+
+    const full_text_buffer = (text ** (@divFloor(Local.limit, text.len) + 1))[0..Local.limit];
+    try std.testing.expectEqualStrings(full_text_buffer, Local.text);
+}
