@@ -151,11 +151,6 @@ pub const HoveredRow = struct {
             for (evts) |*e| {
                 if (e.evt == .mouse and
                     e.evt.mouse.action == .position)
-                // and
-                //dvui.eventMatchSimple(e, grid.data()))
-                // TODO: Don't understand why this event match doesn't work.
-                // It doesn't really matter as below checks anyway. But is vey strange.
-                // This is one for the debugger, whenever I get that working again.
                 {
                     // Translate mouse screen position to a logical position relative to the top-left of the grid body.
                     if (grid.pointToCell(e.evt.mouse.p)) |cell| {
@@ -201,7 +196,6 @@ pub const HoveredRow = struct {
 /// Draw borders around cells.
 /// - external is used for any border touching the edge of the grid
 /// - internal is used for all other borders
-// TODO: Maybe set defaults so it draws a box nicely?
 pub const Borders = struct {
     external: Rect,
     internal: Rect,
