@@ -324,7 +324,8 @@ pub fn deinit(self: *GridWidget) void {
     defer self.* = undefined;
     defer dvui.widgetFree(self);
 
-    if (self.hsi.viewport.x != self.frame_viewport.x) self.hsi.viewport.x = self.bsi.viewport.x;
+    if (self.hsi.viewport.x != self.frame_viewport.x) self.hsi.viewport.x = self.hsi.viewport.x;
+    if (self.bsi.viewport.x != self.frame_viewport.x) self.hsi.viewport.x = self.bsi.viewport.x;
 
     // resizing if row heights changed or a resize was requested via init options.
     if (self.resizing) {

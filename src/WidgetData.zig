@@ -22,7 +22,7 @@ rect: Rect,
 min_size: Size,
 options: Options,
 src: std.builtin.SourceLocation,
-rect_scale_cache: ?RectScale = null,
+rect_scale: ?RectScale = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, options: Options) WidgetData {
     const parent = dvui.parentGet();
@@ -59,7 +59,14 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, options:
 }
 
 pub fn register(self: *WidgetData) void {
-    self.rect_scale_cache = self.rectScale();
+    self.rect_scale = if (self.init_options.subwindow)
+        dvui.windowRectScale().rectToRectScale(self.rect)
+    else
+        self.parent.screenRectScale(self.rect);
+
+    if (self.options.data_out) |do| {
+        do.* = self.*;
+    }
 
     // for normal widgets this is fine, but subwindows have to take care to
     // call captureMouseMaintain after subwindowCurrentSet and subwindowAdd
@@ -227,15 +234,16 @@ pub fn focusBorder(self: *const WidgetData) void {
 }
 
 pub fn rectScale(self: *const WidgetData) RectScale {
-    if (self.rect_scale_cache) |rsc| {
-        return rsc;
+    if (self.rect_scale) |rs| {
+        return rs;
     }
 
-    if (self.init_options.subwindow) {
-        return dvui.windowRectScale().rectToRectScale(self.rect);
-    }
+    dvui.logError(self.src, error.rectScale, "rect_scale is null for widget {x}, data().register() should be called before any rectScale functions", .{self.id});
 
-    return self.parent.screenRectScale(self.rect);
+    return if (self.init_options.subwindow)
+        dvui.windowRectScale().rectToRectScale(self.rect)
+    else
+        self.parent.screenRectScale(self.rect);
 }
 
 pub fn borderRect(self: *const WidgetData) Rect {

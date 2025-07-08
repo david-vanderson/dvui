@@ -3901,11 +3901,9 @@ pub fn dialogDisplay(id: WidgetId) !void {
         var hbox = dvui.box(@src(), .horizontal, .{ .gravity_x = 0.5, .gravity_y = 1.0 });
         defer hbox.deinit();
 
-        const tag_ok = if (default == null) null else std.fmt.allocPrint(dvui.currentWindow().arena(), "{x}_ok", .{hbox.data().id}) catch null;
-        const tag_cancel = if (default == null) null else std.fmt.allocPrint(dvui.currentWindow().arena(), "{x}_cancel", .{hbox.data().id}) catch null;
-
         if (cancel_label) |cl| {
-            if (dvui.button(@src(), cl, .{}, .{ .tab_index = 2, .tag = tag_cancel })) {
+            var cancel_data: WidgetData = undefined;
+            if (dvui.button(@src(), cl, .{}, .{ .tab_index = 2, .data_out = &cancel_data })) {
                 dvui.dialogRemove(id);
                 if (callafter) |ca| {
                     ca(id, .cancel) catch |err| {
@@ -3914,9 +3912,13 @@ pub fn dialogDisplay(id: WidgetId) !void {
                 }
                 return;
             }
+            if (default != null and dvui.firstFrame(hbox.data().id) and default.? == .cancel) {
+                dvui.focusWidget(cancel_data.id, null, null);
+            }
         }
 
-        if (dvui.button(@src(), ok_label, .{}, .{ .tab_index = 1, .tag = tag_ok })) {
+        var ok_data: WidgetData = undefined;
+        if (dvui.button(@src(), ok_label, .{}, .{ .tab_index = 1, .data_out = &ok_data })) {
             dvui.dialogRemove(id);
             if (callafter) |ca| {
                 ca(id, .ok) catch |err| {
@@ -3925,17 +3927,8 @@ pub fn dialogDisplay(id: WidgetId) !void {
             }
             return;
         }
-
-        if (default != null and dvui.firstFrame(hbox.data().id)) {
-            switch (default.?) {
-                .ok => if (dvui.tagGet(tag_ok.?)) |t| {
-                    dvui.focusWidget(t.id, null, null);
-                },
-                .cancel => if (dvui.tagGet(tag_cancel.?)) |t| {
-                    dvui.focusWidget(t.id, null, null);
-                },
-                else => {},
-            }
+        if (default != null and dvui.firstFrame(hbox.data().id) and default.? == .ok) {
+            dvui.focusWidget(ok_data.id, null, null);
         }
     }
 

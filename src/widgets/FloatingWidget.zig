@@ -55,6 +55,7 @@ pub fn init(src: std.builtin.SourceLocation, opts_in: Options) FloatingWidget {
 
 pub fn install(self: *FloatingWidget) void {
     self.prev_rendering = dvui.renderingSet(false);
+    self.data().register();
 
     dvui.parentSet(self.widget());
 
@@ -64,7 +65,6 @@ pub fn install(self: *FloatingWidget) void {
 
     dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, self.prev_windowId);
     dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
-    self.data().register();
 
     // first break out of whatever clipping we were in
     self.prevClip = dvui.clipGet();
