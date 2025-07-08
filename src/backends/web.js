@@ -1271,7 +1271,7 @@ class Dvui {
 
         this.hidden_input.addEventListener("beforeinput", (ev) => {
             ev.preventDefault();
-            if (ev.data) {
+            if (ev.data && !ev.isComposing) {
                 const str = utf8encoder.encode(ev.data);
                 const ptr = this.instance.exports.arena_u8(
                     str.length,
