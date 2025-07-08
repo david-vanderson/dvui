@@ -1331,7 +1331,9 @@ class Dvui {
                 );
                 this.touches.splice(tidx, 1);
             }
-            this.need_oskCheck = true;
+            // Osk has to be done within the event handler so that on-screen keyboard can show
+            // https://stackoverflow.com/a/6837575
+            this.oskCheck();
             this.requestRender();
         });
         this.gl.canvas.addEventListener("touchmove", (ev) => {
