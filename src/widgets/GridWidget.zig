@@ -324,8 +324,6 @@ pub fn deinit(self: *GridWidget) void {
     defer self.* = undefined;
     defer dvui.widgetFree(self);
 
-    if (self.bsi.viewport.x != self.frame_viewport.x) self.hsi.viewport.x = self.bsi.viewport.x;
-
     // resizing if row heights changed or a resize was requested via init options.
     if (self.resizing) {
         dvui.refresh(null, @src(), self.data().id);
@@ -717,8 +715,6 @@ pub const HeaderResizeWidget = struct {
         min_size: ?f32 = null,
         // Will not resize to more than this value
         max_size: ?f32 = null,
-        // The total width of all columns will not exceed this value.
-        max_size_total: ?f32 = null,
 
         pub const fixed: ?InitOptions = null;
     };
@@ -860,19 +856,10 @@ pub const HeaderResizeWidget = struct {
                         self.init_opts.min_size orelse 1,
                         self.init_opts.max_size orelse dvui.max_float_safe,
                     );
-                    const new_size = blk: {
-                        if (self.init_opts.max_size_total) |total_size| {
-                            // TODO: Make this less confusing!
-                            const overcommit = @max(self.sizeTotal() - self.size() + clamped_size - total_size, 0);
-                            break :blk @max(clamped_size - overcommit, self.init_opts.min_size orelse 1);
-                        } else {
-                            break :blk clamped_size;
-                        }
-                    };
-                    self.sizeSet(new_size);
+                    self.sizeSet(clamped_size);
                     switch (self.direction) {
-                        .vertical => self.offset.x = new_size - self.size(),
-                        .horizontal => self.offset.y = new_size - self.size(),
+                        .vertical => self.offset.x = unclamped_size - self.size(),
+                        .horizontal => self.offset.y = unclamped_size - self.size(),
                     }
                 }
             } else if (e.evt.mouse.action == .position) {
