@@ -1313,6 +1313,8 @@ class Dvui {
                 );
                 this.requestRender();
             }
+            // Reset value to empty after composition maybe put text there
+            ev.target.value = "";
         });
         this.gl.canvas.addEventListener("touchstart", (ev) => {
             ev.preventDefault();
