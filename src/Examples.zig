@@ -5182,7 +5182,8 @@ fn gridVirtualScrolling() void {
     };
     highlight_hovered.processEvents(grid);
 
-    const borders: CellStyle.Borders = .initBox(2, num_rows, 1);
+    var borders: CellStyle.Borders = .initBox(2, num_rows, 1, 1);
+    borders.external.y = 0; // The grid border already does this side.
 
     const cell_style: CellStyle.Combine(CellStyle.HoveredRow, CellStyle.Borders) = .{
         .style1 = highlight_hovered,
