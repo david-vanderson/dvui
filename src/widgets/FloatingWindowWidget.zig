@@ -161,7 +161,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             self.wd.rect.y = centering.y + (centering.h - self.wd.rect.h) / 2;
 
             if (dvui.snapToPixels()) {
-                const s = self.data().rectScale().s;
+                const s = dvui.windowNaturalScale();
                 self.wd.rect.x = @round(self.wd.rect.x * s) / s;
                 self.wd.rect.y = @round(self.wd.rect.y * s) / s;
             }
@@ -210,6 +210,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *FloatingWindowWidget) void {
+    self.data().register();
     self.prev_rendering = dvui.renderingSet(false);
 
     if (dvui.firstFrame(self.data().id)) {
@@ -256,7 +257,6 @@ pub fn drawBackground(self: *FloatingWindowWidget) void {
     const rs = self.data().rectScale();
     dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent_window) self.prev_windowInfo.id else null);
     dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
-    self.data().register();
 
     if (self.init_options.modal and !dvui.firstFrame(self.data().id)) {
         // paint over everything below
