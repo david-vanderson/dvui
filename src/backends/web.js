@@ -1293,7 +1293,6 @@ class Dvui {
             }
         });
         this.hidden_input.addEventListener("compositionend", (ev) => {
-            ev.preventDefault();
             if (ev.data) {
                 const str = utf8encoder.encode(ev.data);
                 const ptr = this.instance.exports.arena_u8(
