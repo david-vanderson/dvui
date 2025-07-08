@@ -258,6 +258,7 @@ class Dvui {
 
     constructor() {
         this.hidden_input = document.createElement("input");
+        this.hidden_input.setAttribute("autocapitalize", "none");
         this.hidden_input.style.position = "absolute";
         this.hidden_input.style.left = 0;
         this.hidden_input.style.top = 0;
