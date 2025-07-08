@@ -4546,7 +4546,7 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
 const grid_panel_size: Size = .{ .w = 250 };
 
 pub fn grids(height: f32) void {
-    // Below is a workaround for standaline demos being placed in a scroll-area.
+    // Below is a workaround for standalone demos being placed in a scroll-area.
     // By default the scroll-area will scroll instead of the grid.
     // Fix the height of the box around the tabs to prevent this.
     // This would not be required for normal usage.
@@ -4556,14 +4556,16 @@ pub fn grids(height: f32) void {
         min_size_content = .{ .h = height };
         max_size_content = .height(height);
     }
-
     const GridType = enum {
         styling,
         layout,
         scrolling,
         row_heights,
+        selection,
+        navigation,
         const num_grids = @typeInfo(@This()).@"enum".fields.len;
     };
+
     const local = struct {
         var active_grid: GridType = .styling;
 
@@ -4573,10 +4575,12 @@ pub fn grids(height: f32) void {
 
         fn tabName(grid_type: GridType) []const u8 {
             return switch (grid_type) {
-                .styling => "Styling and sorting",
-                .layout => "Layouts and data",
-                .scrolling => "Virtual scrolling",
-                .row_heights => "Variable row heights",
+                .styling => "Styling and\nsorting",
+                .layout => "Layouts and\ndata",
+                .scrolling => "Virtual\nscrolling",
+                .row_heights => "Variable row\nheights",
+                .selection => "Selection\n ",
+                .navigation => "Keyboard\nnavigation",
             };
         }
     };
@@ -4587,7 +4591,6 @@ pub fn grids(height: f32) void {
         var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
         tabs.install();
         defer tabs.deinit();
-
         for (0..GridType.num_grids) |tab_num| {
             const this_tab: GridType = @enumFromInt(tab_num);
 
@@ -4602,6 +4605,8 @@ pub fn grids(height: f32) void {
         .layout => gridLayouts(),
         .scrolling => gridVirtualScrolling(),
         .row_heights => gridVariableRowHeights(),
+        .selection => gridSelection(),
+        .navigation => gridNavigation(),
     }
 }
 
@@ -4770,7 +4775,7 @@ fn gridStyling() void {
                 temp += interval;
                 row_num += 1;
             }) {
-                var cell = grid.bodyCell(@src(), 0, row_num, cell_opts.cellOptions(0, row_num));
+                var cell = grid.bodyCell(@src(), .colRow(0, row_num), cell_opts.cellOptions(.colRow(0, row_num)));
                 defer cell.deinit();
                 dvui.label(@src(), "{d}", .{temp}, .{ .gravity_x = 0.5, .expand = .horizontal });
             }
@@ -4783,7 +4788,7 @@ fn gridStyling() void {
                 temp += interval;
                 row_num += 1;
             }) {
-                var cell = grid.bodyCell(@src(), 1, row_num, cell_opts.cellOptions(1, row_num));
+                var cell = grid.bodyCell(@src(), .colRow(1, row_num), cell_opts.cellOptions(.colRow(1, row_num)));
                 defer cell.deinit();
                 dvui.label(@src(), "{d}", .{@divFloor(temp * 9, 5) + 32}, .{ .gravity_x = 0.5, .expand = .horizontal });
             }
@@ -4821,23 +4826,13 @@ fn gridLayouts() void {
         const fixed_widths = [num_cols]f32{ checkbox_w, 80, 120, 80, 100, 300 };
         const equal_spacing = [num_cols]f32{ checkbox_w, -1, -1, -1, -1, -1 };
         const fit_window = [num_cols]f32{ checkbox_w, 0, 0, 0, 0, 0 };
-        var selection_state: dvui.GridColumnSelectAllState = .select_none;
+        var selection_state: dvui.selection.SelectAllState = .select_none;
         var sort_dir: GridWidget.SortDirection = .unsorted;
         var layout_style: Layout = .proportional;
         var h_scroll: bool = false;
         var resize_rows: bool = false;
 
         /// Create a textArea for the description so that the text can wrap.
-        fn customDescriptionColumn(src: std.builtin.SourceLocation, grid: *GridWidget, col_num: usize, data: []Car, opts: *const GridWidget.CellStyle.Banded) void {
-            for (data, 0..) |*car, row_num| {
-                var col = grid.bodyCell(src, col_num, row_num, opts.cellOptions(col_num, row_num));
-                defer col.deinit();
-                var text = dvui.textLayout(@src(), .{ .break_lines = true }, .{ .expand = .both, .background = false });
-                defer text.deinit();
-                text.addText(car.description, opts.options(col_num, row_num));
-            }
-        }
-
         const ConditionTextColor = struct {
             base_opts: *const GridWidget.CellStyle.Banded,
 
@@ -4847,12 +4842,12 @@ fn gridLayouts() void {
                 };
             }
 
-            pub fn cellOptions(self: *const ConditionTextColor, col: usize, row: usize) GridWidget.CellOptions {
-                return self.base_opts.cellOptions(col, row);
+            pub fn cellOptions(self: *const ConditionTextColor, cell: GridWidget.Cell) GridWidget.CellOptions {
+                return self.base_opts.cellOptions(cell);
             }
 
-            pub fn options(self: *const ConditionTextColor, col: usize, row: usize) dvui.Options {
-                return self.base_opts.options(col, row).override(conditionTextColor(row));
+            pub fn options(self: *const ConditionTextColor, cell: GridWidget.Cell) dvui.Options {
+                return self.base_opts.options(cell).override(conditionTextColor(cell.row_num));
             }
             /// Set the text color of the Condition text, based on the condition.
             fn conditionTextColor(row_num: usize) Options {
@@ -4997,7 +4992,6 @@ fn gridLayouts() void {
                 car.selected = switch (local.selection_state) {
                     .select_all => true,
                     .select_none => false,
-                    .unchanged => break,
                 };
             }
         }
@@ -5017,30 +5011,54 @@ fn gridLayouts() void {
             local.sort("Description");
         }
 
-        // Selection
-        {
-            // Make the checkbox column fixed width. (This width is used if init_opts.col_widths is null)
-            _ = dvui.gridColumnCheckbox(@src(), grid, 0, Car, all_cars[0..], "selected", banded.optionsOverride(.{ .gravity_y = 0 }));
-        }
-        // Make
-        {
-            dvui.gridColumnFromSlice(@src(), grid, 1, Car, all_cars[0..], "make", "{s}", banded);
-        }
-        // Model
-        {
-            dvui.gridColumnFromSlice(@src(), grid, 2, Car, all_cars[0..], "model", "{s}", banded);
-        }
-        // Year
-        {
-            dvui.gridColumnFromSlice(@src(), grid, 3, Car, all_cars[0..], "year", "{d}", banded);
-        }
-        // Condition
-        {
-            dvui.gridColumnFromSlice(@src(), grid, 4, Car, all_cars[0..], "condition", "{s}", local.ConditionTextColor.init(&banded_centered));
-        }
-        // Description
-        {
-            local.customDescriptionColumn(@src(), grid, 5, all_cars[0..], &banded);
+        for (all_cars[0..], 0..) |*car, row_num| {
+            var cell: GridWidget.Cell = .colRow(0, row_num);
+
+            // Selection
+            {
+                defer cell.col_num += 1;
+                var cell_box = grid.bodyCell(@src(), cell, banded.cellOptions(cell));
+                defer cell_box.deinit();
+                _ = dvui.checkbox(@src(), &car.selected, null, banded.options(cell).override(.{ .gravity_y = 0, .gravity_x = 0.5 }));
+            }
+            // Make
+            {
+                defer cell.col_num += 1;
+                var cell_box = grid.bodyCell(@src(), cell, banded.cellOptions(cell));
+                defer cell_box.deinit();
+                dvui.labelNoFmt(@src(), car.make, .{}, banded.options(cell));
+            }
+            // Model
+            {
+                defer cell.col_num += 1;
+                var cell_box = grid.bodyCell(@src(), cell, banded.cellOptions(cell));
+                defer cell_box.deinit();
+                dvui.labelNoFmt(@src(), car.model, .{}, banded.options(cell));
+            }
+            // Year
+            {
+                defer cell.col_num += 1;
+                var cell_box = grid.bodyCell(@src(), cell, banded.cellOptions(cell));
+                defer cell_box.deinit();
+                dvui.label(@src(), "{d}", .{car.year}, banded.options(cell));
+            }
+            // Condition
+            {
+                defer cell.col_num += 1;
+                var cell_box = grid.bodyCell(@src(), cell, banded.cellOptions(cell));
+                defer cell_box.deinit();
+                const cell_style = local.ConditionTextColor.init(&banded_centered);
+                dvui.labelNoFmt(@src(), @tagName(car.condition), .{}, cell_style.options(cell));
+            }
+            // Description
+            {
+                defer cell.col_num += 1;
+                var cell_box = grid.bodyCell(@src(), cell, banded.cellOptions(cell));
+                defer cell_box.deinit();
+                var text = dvui.textLayout(@src(), .{ .break_lines = true }, .{ .expand = .both, .background = false });
+                defer text.deinit();
+                text.addText(car.description, banded.options(cell));
+            }
         }
     }
     {
@@ -5152,40 +5170,45 @@ fn gridVirtualScrolling() void {
     }
     local.last_col_width = col_width;
 
-    // Highlight hovered row.
-    // Each column has slightly different border requirements, so create separate options for each.
-    // Calls cellOptionsOverride after processEvents() so that the hovered row only needs to be calculated once.
-    var highlight_hovered_1: GridWidget.CellStyle.HoveredRow = .{
+    // Demonstrates how to combine two cellstyles together, drawing borders and
+    // highlighting the hovered row.
+    const CellStyle = GridWidget.CellStyle;
+    var highlight_hovered: CellStyle.HoveredRow = .{
         .cell_opts = .{
-            .border = .{ .x = 1, .w = 1, .h = 1 },
             .background = true,
             .color_fill_hover = .fill_hover,
             .size = .{ .w = col_width },
         },
     };
-    highlight_hovered_1.processEvents(grid, &local.scroll_info);
-    const highlight_hovered_2 = highlight_hovered_1.cellOptionsOverride(.{
-        .border = .{ .w = 1, .h = 1 },
-    });
+    highlight_hovered.processEvents(grid);
+
+    const borders: CellStyle.Borders = .initBox(2, num_rows, 1);
+
+    const cell_style: CellStyle.Combine(CellStyle.HoveredRow, CellStyle.Borders) = .{
+        .style1 = highlight_hovered,
+        .style2 = borders,
+    };
 
     // Virtual scrolling
     const scroller: dvui.GridWidget.VirtualScroller = .init(grid, .{ .total_rows = num_rows, .scroll_info = &local.scroll_info });
     const first = scroller.startRow();
     const last = scroller.endRow(); // Note that endRow is exclusive, meaning it can be used as a slice end index.
-    const CellStyle = GridWidget.CellStyle;
-    dvui.gridHeading(@src(), grid, "Number", 0, .fixed, CellStyle{ .cell_opts = .{ .size = .{ .w = col_width } } });
-    dvui.gridHeading(@src(), grid, "Is prime?", 1, .fixed, CellStyle{ .cell_opts = .{ .size = .{ .w = col_width } } });
+    dvui.gridHeading(@src(), grid, 0, "Number", .fixed, CellStyle{ .cell_opts = .{ .size = .{ .w = col_width } } });
+    dvui.gridHeading(@src(), grid, 1, "Is prime?", .fixed, CellStyle{ .cell_opts = .{ .size = .{ .w = col_width } } });
 
     for (first..last) |num| {
+        var cell_num: GridWidget.Cell = .colRow(0, num);
         {
-            var cell = grid.bodyCell(@src(), 0, num, highlight_hovered_1.cellOptions(0, num));
+            defer cell_num.col_num += 1;
+            var cell = grid.bodyCell(@src(), cell_num, cell_style.cellOptions(cell_num));
             defer cell.deinit();
             dvui.label(@src(), "{d}", .{num}, .{});
         }
         {
+            defer cell_num.col_num += 1;
             const check_img = @embedFile("icons/entypo/check.tvg");
 
-            var cell = grid.bodyCell(@src(), 1, num, highlight_hovered_2.cellOptions(1, num));
+            var cell = grid.bodyCell(@src(), cell_num, cell_style.cellOptions(cell_num));
             defer cell.deinit();
             if (local.isPrime(num)) {
                 dvui.icon(@src(), "Check", check_img, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .background = false });
@@ -5195,7 +5218,7 @@ fn gridVirtualScrolling() void {
 }
 
 fn gridVariableRowHeights() void {
-    var grid = dvui.grid(@src(), .numCols(1), .{ .var_row_heights = true }, .{
+    var grid = dvui.grid(@src(), .numCols(1), .{ .row_height_variable = true }, .{
         .expand = .both,
         .padding = Rect.all(0),
     });
@@ -5208,16 +5231,633 @@ fn gridVariableRowHeights() void {
         .opts = .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .both },
     };
     for (1..10) |row_num| {
+        const cell_num: GridWidget.Cell = .colRow(0, row_num);
         const row_num_i: i32 = @intCast(row_num);
         const row_height = 70 - (@abs(row_num_i - 5) * 10);
         var cell = grid.bodyCell(
             @src(),
-            0,
-            row_num,
-            cell_style.cellOptions(0, row_num).override(.{ .size = .{ .h = @floatFromInt(row_height), .w = 500 } }),
+            cell_num,
+            cell_style.cellOptions(cell_num).override(.{ .size = .{ .h = @floatFromInt(row_height), .w = 500 } }),
         );
         defer cell.deinit();
-        dvui.label(@src(), "h = {d}", .{row_height}, cell_style.options(0, row_num));
+        dvui.label(@src(), "h = {d}", .{row_height}, cell_style.options(cell_num));
+    }
+}
+
+const DirEntry = struct {
+    name: []const u8,
+    kind: std.fs.Dir.Entry.Kind,
+    size: u65,
+    mode: u32,
+    mtime: i128,
+
+    pub const Iterator = struct {
+        idx: usize,
+        slice: []const DirEntry,
+
+        pub fn init(slice: []const DirEntry) Iterator {
+            return .{
+                .idx = 0,
+                .slice = slice,
+            };
+        }
+
+        pub fn next(self: *Iterator) ?*const DirEntry {
+            if (self.idx < self.slice.len) {
+                defer self.idx += 1;
+                return &self.slice[self.idx];
+            }
+            return null;
+        }
+    };
+};
+
+fn gridSelection() void {
+    const CellStyle = dvui.GridWidget.CellStyle;
+    const local = struct {
+        var initialized: bool = false;
+        var selection_mode: enum { multi_select, single_select } = .multi_select;
+        var row_select: bool = false;
+        var filename_filter: []u8 = "";
+        var multi_select: dvui.selection.MultiSelectMouse = .{};
+        var kb_select: dvui.selection.SelectAllKeyboard = .{};
+        var single_select: dvui.selection.SingleSelect = .{};
+        var filtering: bool = false;
+        var filtering_changed = false;
+        var select_all_state: dvui.selection.SelectAllState = .select_none;
+        var selection_info: dvui.selection.SelectionInfo = .{};
+        var selections: std.StaticBitSet(directory_examples.len) = .initEmpty();
+        var highlight_style: CellStyle.HoveredRow = .{ .cell_opts = .{ .color_fill_hover = .fill_hover, .background = true } };
+
+        pub fn isFiltered(entry: *const DirEntry) bool {
+            if (filename_filter.len > 0) {
+                return std.mem.indexOf(u8, entry.name, filename_filter) == null;
+            }
+            return false;
+        }
+
+        pub fn selectAll(state: dvui.selection.SelectAllState) void {
+            switch (state) {
+                .select_all => {
+                    selections = .initFull();
+                    for (0..selections.capacity()) |i| {
+                        if (isFiltered(&directory_examples[i])) {
+                            selections.unset(i);
+                        }
+                    }
+                },
+                .select_none => selections = .initEmpty(),
+            }
+        }
+
+        pub fn fromNsTimestamp(timestamp_ns: i128) struct { year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8 } {
+            const days_per_400_years = 146_097;
+            const days_per_100_years = 36_524;
+            const days_per_4_years = 1_460;
+
+            // Split into days and nanoseconds of the day
+            const days_since_epoch: i128 = @divTrunc(timestamp_ns, std.time.ns_per_day);
+            const nanos_of_day: i128 = @rem(timestamp_ns, std.time.ns_per_day);
+
+            // Convert nanoseconds of the day to hours, minutes, seconds
+            const hour: u8 = @intCast(@divTrunc(nanos_of_day, (std.time.ns_per_s * 3_600)));
+            const minute: u8 = @intCast(@divTrunc((@mod(nanos_of_day, (std.time.ns_per_s * 3_600))), (std.time.ns_per_s * 60)));
+            const second: u8 = @intCast(@divTrunc((@mod(nanos_of_day, (std.time.ns_per_s * 60))), std.time.ns_per_s));
+
+            // Shift to Gregorian calendar
+            const days_since_gregorian_epoch: i128 = days_since_epoch + 719_468; // Difference between unix epoch and gregorian epoch
+
+            // 400-year eras
+            const era: i128 = @divTrunc(days_since_gregorian_epoch, days_per_400_years);
+            const day_of_era: i128 = days_since_gregorian_epoch - era * days_per_400_years;
+
+            const year_of_era: i128 = @divTrunc(
+                day_of_era - @divTrunc(day_of_era, days_per_4_years) + @divTrunc(day_of_era, days_per_100_years) - @divTrunc(day_of_era, days_per_400_years - 1),
+                365,
+            );
+            const day_of_year: i128 = day_of_era - (365 * year_of_era + @divTrunc(year_of_era, 4) - @divTrunc(year_of_era, 100));
+
+            const month_part: i128 = @divTrunc(5 * day_of_year + 2, 153);
+            const day: u8 = @intCast(day_of_year - @divTrunc(153 * month_part + 2, 5) + 1);
+            const month: u8 = @intCast(month_part + 3 - 12 * @divTrunc(month_part, 10));
+            const year: u16 = @intCast(year_of_era + era * 400 + @divTrunc(month_part, 10));
+
+            return .{
+                .year = year, // year 65535 bug.
+                .month = month,
+                .day = day,
+                .hour = hour,
+                .minute = minute,
+                .second = second,
+            };
+        }
+    };
+    var outer_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+    defer outer_vbox.deinit();
+    {
+        var top_controls = dvui.box(@src(), .horizontal, .{ .gravity_y = 0 });
+        defer top_controls.deinit();
+        dvui.labelNoFmt(@src(), "Filter (contains): ", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
+        var text = dvui.textEntry(@src(), .{}, .{ .expand = .horizontal });
+        if (text.text_changed) {
+            local.filename_filter = text.getText();
+            local.filtering_changed = true;
+        } else {
+            local.filtering_changed = false;
+        }
+        defer text.deinit();
+    }
+    {
+        var vbox = dvui.box(@src(), .vertical, .{ .gravity_y = 1.0 });
+        defer vbox.deinit();
+        if (dvui.expander(@src(), "Options", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+            var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            var selected = local.selection_mode == .multi_select;
+            if (dvui.checkbox(@src(), &selected, "Multi-Select", .{ .margin = dvui.Rect.all(6) })) {
+                local.selection_mode = if (selected) .multi_select else .single_select;
+                if (local.selection_mode == .single_select) {
+                    local.selectAll(.select_none);
+                }
+            }
+            _ = dvui.checkbox(@src(), &local.row_select, "Row Select", .{ .margin = dvui.Rect.all(6) });
+        }
+    }
+    {
+        // This is sort of subtle. We need to reset the kb select before the grid is created, so that grid focus is included in select all
+        local.kb_select.reset();
+
+        var grid = dvui.grid(@src(), .numCols(6), .{ .scroll_opts = .{ .horizontal_bar = .auto } }, .{ .expand = .both, .background = true });
+        defer grid.deinit();
+        if (!local.initialized) {
+            dvui.focusWidget(grid.data().id, null, null);
+            local.initialized = true;
+        }
+
+        // Find out if any row was clicked on.
+        const row_clicked: ?usize = blk: {
+            if (!local.row_select) break :blk null;
+            for (dvui.events()) |*e| {
+                if (!dvui.eventMatchSimple(e, grid.data())) continue;
+                if (e.evt != .mouse) continue;
+                const me = e.evt.mouse;
+                if (me.action != .press) continue;
+                if (grid.pointToCell(me.p)) |cell| {
+                    if (cell.col_num > 0) break :blk cell.row_num;
+                }
+            }
+            break :blk null;
+        };
+
+        local.selection_info.reset();
+
+        // Note: The extra check here is because I've chosen to unselect anything that was filtered.
+        // If we were just doing selection it just needs multi_select.selectionChanged();
+        // OR user might prefer to check if everything in the current filter is selected and
+        // set the select_all state based on that. So this gives quite a bit more flexibility
+        // than previous.
+        if (local.filtering_changed or local.multi_select.selectionChanged()) {
+            local.select_all_state = .select_none;
+        }
+        if (local.selection_mode == .multi_select) {
+            if (dvui.gridHeadingCheckbox(@src(), grid, 0, &local.select_all_state, .{})) {
+                local.selectAll(local.select_all_state);
+            }
+        }
+        dvui.gridHeading(@src(), grid, 1, "Name", .fixed, .{});
+        dvui.gridHeading(@src(), grid, 2, "Kind", .fixed, .{});
+        dvui.gridHeading(@src(), grid, 3, "Size", .fixed, .{});
+        dvui.gridHeading(@src(), grid, 4, "Mode", .fixed, .{});
+        dvui.gridHeading(@src(), grid, 5, "MTime", .fixed, .{});
+
+        if (local.row_select)
+            local.highlight_style.processEvents(grid);
+
+        {
+            var itr: DirEntry.Iterator = .init(&directory_examples);
+            var dir_num: usize = 0;
+            var row_num: usize = 0;
+            local.filtering = false;
+            while (itr.next()) |entry| : (dir_num += 1) {
+                if (local.isFiltered(entry)) {
+                    local.filtering = true;
+                    local.selections.unset(dir_num);
+                    continue;
+                }
+                defer row_num += 1;
+                var cell_num: dvui.GridWidget.Cell = .colRow(0, row_num);
+                {
+                    defer cell_num.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, local.highlight_style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    var is_set = if (dir_num < local.selections.capacity()) local.selections.isSet(dir_num) else false;
+                    _ = dvui.checkboxEx(@src(), &is_set, null, .{ .selection_id = dir_num, .selection_info = &local.selection_info }, .{ .gravity_x = 0.5 });
+                    // If this is the row that the user clicked on, add a selection event for it.
+                    if (row_num == row_clicked) {
+                        local.selection_info.add(dir_num, !is_set, cell.data());
+                    }
+                }
+                {
+                    defer cell_num.col_num += 1;
+                    var cell = grid.bodyCell(
+                        @src(),
+                        cell_num,
+                        local.highlight_style.cellOptions(cell_num),
+                    );
+                    defer cell.deinit();
+                    dvui.labelNoFmt(@src(), entry.name, .{}, .{});
+                }
+                {
+                    defer cell_num.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, local.highlight_style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    dvui.labelNoFmt(@src(), @tagName(entry.kind), .{}, .{});
+                }
+                if (entry.kind == .file) {
+                    {
+                        defer cell_num.col_num += 1;
+                        var cell = grid.bodyCell(@src(), cell_num, local.highlight_style.cellOptions(cell_num));
+                        defer cell.deinit();
+                        dvui.label(@src(), "{d}", .{entry.size}, .{ .gravity_x = 1.0 });
+                    }
+                    {
+                        defer cell_num.col_num += 1;
+                        var cell = grid.bodyCell(@src(), cell_num, local.highlight_style.cellOptions(cell_num));
+                        defer cell.deinit();
+                        dvui.label(@src(), "{o}", .{entry.mode}, .{});
+                    }
+                    {
+                        defer cell_num.col_num += 1;
+                        var cell = grid.bodyCell(@src(), cell_num, local.highlight_style.cellOptions(cell_num));
+                        defer cell.deinit();
+                        dvui.label(@src(), "{[year]:0>4}-{[month]:0>2}-{[day]:0>2} {[hour]:0>2}:{[minute]:0>2}:{[second]:0>2}", local.fromNsTimestamp(entry.mtime), .{});
+                    }
+                } else {
+                    const end_col = cell_num.col_num + 3;
+                    while (cell_num.col_num != end_col) : (cell_num.col_num += 1) {
+                        var cell = grid.bodyCell(@src(), cell_num, local.highlight_style.cellOptions(cell_num));
+                        defer cell.deinit();
+                    }
+                }
+            }
+        }
+
+        if (local.selection_mode == .multi_select) {
+            local.kb_select.processEvents(&local.select_all_state, grid.data());
+            if (local.kb_select.selectionChanged()) {
+                local.selectAll(local.select_all_state);
+            }
+
+            local.multi_select.processEvents(&local.selection_info, grid.data());
+            if (local.multi_select.selectionChanged()) {
+                for (local.multi_select.selectionIdStart()..local.multi_select.selectionIdEnd() + 1) |row_num| {
+                    local.selections.setValue(row_num, local.multi_select.should_select);
+                }
+            }
+        } else {
+            local.single_select.processEvents(&local.selection_info, grid.data());
+            if (local.single_select.selectionChanged()) {
+                if (local.single_select.id_to_unselect) |unselect_row| {
+                    local.selections.unset(unselect_row);
+                }
+                if (local.single_select.id_to_select) |select_row| {
+                    local.selections.set(select_row);
+                }
+            }
+        }
+    }
+}
+
+/// This example demonstrates an advanced usage of the keyboard navigation. The navigation maintains a virtual 8 column cursor
+/// over the 5 columns grid. That is because the first 3 columns have 2 widgets that can get keyboard focus.
+/// The 2 widgets in the first 3 columns are actually laid out vertically, even though the tab focus treats them as columns.
+/// This allows the user to arrow-down and just jump through the text boxes in the column, or just jump through the sliders,
+/// while still getting correct focus when tabbing through the widgets.
+pub fn gridNavigation() void {
+    const CellStyle = dvui.GridWidget.CellStyle;
+    const local = struct {
+        var keyboard_nav: dvui.GridWidget.KeyboardNavigation = .{ .num_cols = 8, .num_rows = 0, .wrap_cursor = true, .tab_out = true, .num_scroll = 5 };
+        var initialized = false;
+        var col_widths: [5]f32 = .{ 100, 100, 100, 35, 35 };
+        var plot_title: []const u8 = "X vs Y";
+        var x_axis_title: []const u8 = "X";
+        var y_axis_title: []const u8 = "Y";
+        var plot_buffer: [@sizeOf(Datum) * 100]u8 = undefined;
+        var fba: std.heap.FixedBufferAllocator = .init(&plot_buffer);
+
+        const CellStyleNav = struct {
+            base: CellStyle,
+            focus_cell: ?dvui.GridWidget.Cell,
+            tab_index: ?u16 = null,
+
+            pub fn cellOptions(self: *const CellStyleNav, cell: dvui.GridWidget.Cell) dvui.GridWidget.CellOptions {
+                return self.base.cellOptions(cell);
+            }
+
+            pub fn options(self: *const CellStyleNav, cell: dvui.GridWidget.Cell) dvui.Options {
+                if (self.focus_cell) |focus_cell| {
+                    if (focus_cell.eq(cell)) {
+                        // Normally this isn't required, but the demo app can have two copies of the grid displayed at once.
+                        if (dvui.tagGet("grid_focus_next") == null) {
+                            return self.base.options(cell).override(.{ .tag = "grid_focus_next", .tab_index = self.tab_index });
+                        }
+                    }
+                }
+                return self.base.options(cell).override(.{ .tab_index = 0 });
+            }
+        };
+
+        /// The job of this function is to turn a screen position into a cell.
+        /// If there were just 1 widget per cell, grid.pointToCell(p) could do this, but
+        /// in this example there are two widgets in the cell. We simplify the logic slightly by
+        /// always focusing the first widget (the text box) when the cell is clicked.
+        /// The example is set up with a grid of 8 virtual columns, covering the 5 physical columns.
+        /// So all it needs to do is map the clicked in grid column to the correct virtual focus column .
+        pub fn pointToCellConverter(g: *dvui.GridWidget, p: dvui.Point.Physical) ?dvui.GridWidget.Cell {
+            var result = g.pointToCell(p);
+            if (result) |*r| {
+                // This will always focus the text box on mouse click in the cell,
+                // but still allow kb nav of the sliders.
+                r.col_num = switch (r.col_num) {
+                    0 => 0, // Col 0 contains 2 focus widgets
+                    1 => 2, // Col 1 contains 2 focus widgets
+                    2 => 4, // Col 2 contains 2 focus widgets
+                    3 => 6, // Col 3 and 4 only have 1 widget.
+                    4 => 7,
+                    else => unreachable,
+                };
+            }
+            return result;
+        }
+
+        pub fn maxVal(slice: []f64) f64 {
+            var max: f64 = -std.math.floatMin(f64);
+            for (slice) |v| {
+                if (v > max) max = v;
+            }
+            return max;
+        }
+
+        pub fn minVal(slice: []f64) f64 {
+            var min: f64 = std.math.floatMax(f64);
+            for (slice) |v| {
+                if (v < min) min = v;
+            }
+            return min;
+        }
+
+        const Datum = struct { x: f64, y1: f64, y2: f64 };
+
+        var data: std.MultiArrayList(Datum) = .empty;
+
+        fn initData() !void {
+            plot_title = "X vs Y";
+            x_axis_title = "X";
+            y_axis_title = "Y";
+            if (data.len == 0) {
+                const alloc = fba.allocator();
+                try data.append(alloc, .{ .x = 0, .y1 = -50, .y2 = 50 });
+                try data.append(alloc, .{ .x = 25, .y1 = -25, .y2 = 25 });
+                try data.append(alloc, .{ .x = 50, .y1 = 0, .y2 = 0 });
+                try data.append(alloc, .{ .x = 75, .y1 = 25, .y2 = -25 });
+                try data.append(alloc, .{ .x = 100, .y1 = 50, .y2 = -50 });
+            }
+        }
+    };
+    var main_box = dvui.box(@src(), .horizontal, .{ .expand = .both, .color_fill = .fill_window, .background = true, .border = dvui.Rect.all(1) });
+    defer main_box.deinit();
+    if (dvui.firstFrame(main_box.data().id)) {
+        local.initialized = false;
+        local.initData() catch |err| {
+            dvui.logError(@src(), err, "Error initializing plot data", .{});
+            return;
+        };
+    }
+    {
+        var vbox = dvui.box(@src(), .vertical, .{ .expand = .vertical, .border = dvui.Rect.all(1) });
+        defer vbox.deinit();
+        {
+            var bottom_panel = dvui.box(@src(), .vertical, .{ .gravity_y = 1.0 });
+            defer bottom_panel.deinit();
+            {
+                var hbox = dvui.box(@src(), .horizontal, .{});
+                defer hbox.deinit();
+                {
+                    dvui.labelNoFmt(@src(), "X Axis:", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
+                    var text = dvui.textEntry(@src(), .{}, .{
+                        .tab_index = 3,
+                        .max_size_content = .width(100),
+                    });
+                    defer text.deinit();
+                    if (dvui.firstFrame(text.data().id)) {
+                        text.textSet(local.x_axis_title, false);
+                    }
+                    local.x_axis_title = text.getText();
+                }
+                {
+                    dvui.labelNoFmt(@src(), "Y Axis:", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
+                    var text = dvui.textEntry(@src(), .{}, .{ .tab_index = 4, .max_size_content = .width(100) });
+                    defer text.deinit();
+                    if (dvui.firstFrame(text.data().id)) {
+                        text.textSet(local.y_axis_title, false);
+                    }
+                    local.y_axis_title = text.getText();
+                }
+            }
+            {
+                {
+                    var tl = dvui.textLayout(@src(), .{ .break_lines = true }, .{ .background = false });
+                    defer tl.deinit();
+                    tl.addText(
+                        \\ This example demonstrates keyboard focus and 
+                        \\        navigation. Use tab, shift-tab, up, down, 
+                        \\ctrl/cmd-home, ctrl/cmd-end and pg up, pg down 
+                        \\                   to navigate between cells.
+                    , .{ .background = false, .gravity_x = 0.5 });
+                }
+            }
+        }
+        {
+            var top_panel = dvui.box(@src(), .horizontal, .{ .gravity_y = 0 });
+            defer top_panel.deinit();
+            dvui.labelNoFmt(@src(), "Plot Title:", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
+            var text = dvui.textEntry(@src(), .{}, .{ .tab_index = 1, .expand = .horizontal });
+            defer text.deinit();
+
+            if (dvui.firstFrame(text.data().id)) {
+                text.textSet(local.plot_title, false);
+            }
+            local.plot_title = text.getText();
+        }
+        {
+            var grid = dvui.grid(@src(), .{ .col_widths = &local.col_widths }, .{ .scroll_opts = .{ .vertical_bar = .show } }, .{ .expand = .vertical, .border = dvui.Rect.all(1) });
+            defer grid.deinit();
+
+            local.keyboard_nav.num_scroll = dvui.GridWidget.KeyboardNavigation.numScrollDefault(grid);
+            local.keyboard_nav.setLimits(8, local.data.len);
+            local.keyboard_nav.processEventsCustom(grid, local.pointToCellConverter);
+            const focused_cell = local.keyboard_nav.cellCursor();
+
+            const style_base = CellStyle{ .opts = .{
+                .tab_index = null,
+                .expand = .horizontal,
+            } };
+
+            const style: local.CellStyleNav = .{ .base = style_base, .focus_cell = focused_cell, .tab_index = 2 };
+
+            dvui.gridHeading(@src(), grid, 0, "X", .fixed, .{});
+            dvui.gridHeading(@src(), grid, 1, "Y1", .fixed, .{});
+            dvui.gridHeading(@src(), grid, 2, "Y2", .fixed, .{});
+            var row_to_delete: ?usize = null;
+            var row_to_add: ?usize = null;
+
+            for (local.data.items(.x), local.data.items(.y1), local.data.items(.y2), 0..) |*x, *y1, *y2, row_num| {
+                var cell_num: dvui.GridWidget.Cell = .colRow(0, row_num);
+                var focus_cell: dvui.GridWidget.Cell = .colRow(0, row_num);
+                // X Column
+                {
+                    defer cell_num.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    var cell_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+                    defer cell_vbox.deinit();
+
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = x, .min = 0, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .gravity_y = 0 }));
+                    focus_cell.col_num += 1;
+
+                    var fraction: f32 = @floatCast(x.*);
+                    fraction /= 100;
+                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .gravity_y = 1 }))) {
+                        x.* = fraction * 10000;
+                        x.* = @round(x.*) / 100;
+                    }
+                    focus_cell.col_num += 1;
+                }
+                // Y1 Columnn
+                {
+                    defer cell_num.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    var cell_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+                    defer cell_vbox.deinit();
+
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = y1, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .color_text = .red }));
+                    focus_cell.col_num += 1;
+
+                    var fraction: f32 = @floatCast(y1.*);
+                    fraction += 100;
+                    fraction /= 200;
+                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1, .color_accent = .red }))) {
+                        y1.* = fraction * 20000;
+                        y1.* = @round((y1.* - 10000)) / 100;
+                    }
+                    focus_cell.col_num += 1;
+                }
+                // Y2 Column
+                {
+                    defer cell_num.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    var cell_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+                    defer cell_vbox.deinit();
+
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = y2, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .color_text = .blue }));
+                    focus_cell.col_num += 1;
+
+                    var fraction: f32 = @floatCast(y2.*);
+                    fraction += 100;
+                    fraction /= 200;
+                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1, .color_accent = .blue }))) {
+                        y2.* = fraction * 20000;
+                        y2.* = @round((y2.* - 10000)) / 100;
+                    }
+                    focus_cell.col_num += 1;
+                }
+                {
+                    defer cell_num.col_num += 1;
+                    defer focus_cell.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    if (dvui.buttonIcon(@src(), "Insert", dvui.entypo.add_to_list, .{}, .{}, style.options(focus_cell).override(.{ .expand = .horizontal }))) {
+                        row_to_add = cell_num.row_num + 1;
+                    }
+                }
+                {
+                    defer cell_num.col_num += 1;
+                    defer focus_cell.col_num += 1;
+                    var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
+                    defer cell.deinit();
+                    if (dvui.buttonIcon(@src(), "Delete", dvui.entypo.cross, .{}, .{}, style.options(focus_cell).override(.{ .expand = .horizontal }))) {
+                        row_to_delete = cell_num.row_num;
+                    }
+                }
+            }
+            if (!local.initialized) {
+                local.keyboard_nav.navigation_keys = .defaults();
+                local.keyboard_nav.scrollTo(0, 0);
+                local.keyboard_nav.is_focused = true; // We want the grid focused by default.
+            }
+
+            if (dvui.tagGet("grid_focus_next")) |focus_widget| {
+                if ((local.keyboard_nav.shouldFocus()) or !local.initialized) {
+                    dvui.focusWidget(focus_widget.id, null, null);
+                    local.initialized = true;
+                }
+            }
+            local.keyboard_nav.gridEnd();
+            if (row_to_add) |row_num| {
+                local.data.insert(local.fba.allocator(), row_num, .{ .x = 50, .y1 = 0, .y2 = 0 }) catch {};
+            }
+            if (row_to_delete) |row_num| {
+                if (local.data.len > 1)
+                    local.data.orderedRemove(row_num)
+                else
+                    local.data.set(0, .{ .x = 0, .y1 = 0, .y2 = 0 });
+            }
+        }
+    }
+    {
+        var vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .border = dvui.Rect.all(1) });
+        defer vbox.deinit();
+        var x_axis: dvui.PlotWidget.Axis = .{ .name = local.x_axis_title, .min = 0, .max = 100 };
+        var y_axis: dvui.PlotWidget.Axis = .{
+            .name = local.y_axis_title,
+            .min = @min(local.minVal(local.data.items(.y1)), local.minVal(local.data.items(.y2))),
+            .max = @max(local.maxVal(local.data.items(.y1)), local.maxVal(local.data.items(.y2))),
+        };
+        var plot = dvui.plot(
+            @src(),
+            .{
+                .title = local.plot_title,
+                .x_axis = &x_axis,
+                .y_axis = &y_axis,
+                .mouse_hover = true,
+            },
+            .{
+                .padding = .{},
+                .expand = .both,
+                .background = true,
+                .min_size_content = .{ .w = 500 },
+            },
+        );
+        defer plot.deinit();
+        const thick = 2;
+        {
+            var s1 = plot.line();
+            defer s1.deinit();
+            for (local.data.items(.x), local.data.items(.y1)) |x, y| {
+                s1.point(x, y);
+            }
+            s1.stroke(thick, .red);
+        }
+        {
+            var s2 = plot.line();
+            defer s2.deinit();
+            for (local.data.items(.x), local.data.items(.y2)) |x, y| {
+                s2.point(x, y);
+            }
+            s2.stroke(thick, .blue);
+        }
     }
 }
 
@@ -5797,3 +6437,56 @@ test "DOCIMG icon_browser" {
 //    try dvui.testing.settle(frame);
 //    try t.saveImage(frame, null, "Examples-themeEditor.png");
 //}
+
+// Sample data for directory grid
+const directory_examples = [_]DirEntry{
+    .{ .name = "archive.zip", .kind = .file, .size = 5_242_880, .mode = 0o644, .mtime = 1_625_077_800_000_000_000 },
+    .{ .name = "assets", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_077_850_000_000_000 },
+    .{ .name = "backup.tar", .kind = .file, .size = 15_728_640, .mode = 0o644, .mtime = 1_625_078_000_000_000_000 },
+    .{ .name = "binfile.bin", .kind = .file, .size = 8_192, .mode = 0o644, .mtime = 1_625_078_200_000_000_000 },
+    .{ .name = "build", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_078_250_000_000_000 },
+    .{ .name = "code.zig", .kind = .file, .size = 5_120, .mode = 0o644, .mtime = 1_625_078_400_000_000_000 },
+    .{ .name = "config", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_078_450_000_000_000 },
+    .{ .name = "config.json", .kind = .file, .size = 2_048, .mode = 0o644, .mtime = 1_625_078_600_000_000_000 },
+    .{ .name = "data", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_078_700_000_000_000 },
+    .{ .name = "data.csv", .kind = .file, .size = 3_072, .mode = 0o644, .mtime = 1_625_078_800_000_000_000 },
+    .{ .name = "database.db", .kind = .file, .size = 10_485_760, .mode = 0o644, .mtime = 1_625_079_000_000_000_000 },
+    .{ .name = "docs", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_079_100_000_000_000 },
+    .{ .name = "draft.docx", .kind = .file, .size = 40_960, .mode = 0o644, .mtime = 1_625_081_000_000_000_000 },
+    .{ .name = "draft2.docx", .kind = .file, .size = 81_920, .mode = 0o644, .mtime = 1_625_081_200_000_000_000 },
+    .{ .name = "dump.sql", .kind = .file, .size = 512_000, .mode = 0o644, .mtime = 1_625_081_400_000_000_000 },
+    .{ .name = "example.zig", .kind = .file, .size = 2_048, .mode = 0o644, .mtime = 1_625_081_600_000_000_000 },
+    .{ .name = "favicon.ico", .kind = .file, .size = 1_024, .mode = 0o644, .mtime = 1_625_081_800_000_000_000 },
+    .{ .name = "file1.txt", .kind = .file, .size = 1_234, .mode = 0o644, .mtime = 1_625_082_000_000_000_000 },
+    .{ .name = "file2.txt", .kind = .file, .size = 5_678, .mode = 0o644, .mtime = 1_625_082_200_000_000_000 },
+    .{ .name = "file3.log", .kind = .file, .size = 4_321, .mode = 0o644, .mtime = 1_625_082_400_000_000_000 },
+    .{ .name = "images", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_082_500_000_000_000 },
+    .{ .name = "header.h", .kind = .file, .size = 1_024, .mode = 0o644, .mtime = 1_625_082_600_000_000_000 },
+    .{ .name = "image.png", .kind = .file, .size = 204_800, .mode = 0o644, .mtime = 1_625_082_800_000_000_000 },
+    .{ .name = "index.html", .kind = .file, .size = 4_096, .mode = 0o644, .mtime = 1_625_083_000_000_000_000 },
+    .{ .name = "lib", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_083_100_000_000_000 },
+    .{ .name = "logfile.log", .kind = .file, .size = 8_192, .mode = 0o644, .mtime = 1_625_083_200_000_000_000 },
+    .{ .name = "Makefile", .kind = .file, .size = 512, .mode = 0o644, .mtime = 1_625_083_400_000_000_000 },
+    .{ .name = "media", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_083_500_000_000_000 },
+    .{ .name = "music.mp3", .kind = .file, .size = 5_120_000, .mode = 0o644, .mtime = 1_625_083_600_000_000_000 },
+    .{ .name = "notes.md", .kind = .file, .size = 2_048, .mode = 0o644, .mtime = 1_625_083_800_000_000_000 },
+    .{ .name = "notes.txt", .kind = .file, .size = 1_024, .mode = 0o644, .mtime = 1_625_084_000_000_000_000 },
+    .{ .name = "old_backup.tar.gz", .kind = .file, .size = 10_485_760, .mode = 0o644, .mtime = 1_625_084_200_000_000_000 },
+    .{ .name = "photo.jpg", .kind = .file, .size = 307_200, .mode = 0o644, .mtime = 1_625_084_400_000_000_000 },
+    .{ .name = "photos", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_084_500_000_000_000 },
+    .{ .name = "plan.docx", .kind = .file, .size = 20_480, .mode = 0o644, .mtime = 1_625_084_600_000_000_000 },
+    .{ .name = "presentation.pptx", .kind = .file, .size = 2_097_152, .mode = 0o644, .mtime = 1_625_084_800_000_000_000 },
+    .{ .name = "readme.txt", .kind = .file, .size = 1_024, .mode = 0o644, .mtime = 1_625_085_000_000_000_000 },
+    .{ .name = "report.pdf", .kind = .file, .size = 524_288, .mode = 0o644, .mtime = 1_625_085_200_000_000_000 },
+    .{ .name = "resources", .kind = .directory, .size = 0, .mode = 0o755, .mtime = 1_625_085_300_000_000_000 },
+    .{ .name = "script.js", .kind = .file, .size = 4_096, .mode = 0o644, .mtime = 1_625_085_400_000_000_000 },
+    .{ .name = "script.sh", .kind = .file, .size = 4_096, .mode = 0o755, .mtime = 1_625_085_600_000_000_000 },
+    .{ .name = "settings.yaml", .kind = .file, .size = 3_072, .mode = 0o644, .mtime = 1_625_085_800_000_000_000 },
+    .{ .name = "source.c", .kind = .file, .size = 5_120, .mode = 0o644, .mtime = 1_625_086_000_000_000_000 },
+    .{ .name = "spreadsheet.xlsx", .kind = .file, .size = 1_048_576, .mode = 0o644, .mtime = 1_625_086_200_000_000_000 },
+    .{ .name = "style.css", .kind = .file, .size = 2_048, .mode = 0o644, .mtime = 1_625_086_400_000_000_000 },
+    .{ .name = "test.zig", .kind = .file, .size = 1_024, .mode = 0o644, .mtime = 1_625_086_600_000_000_000 },
+    .{ .name = "thumbnail.jpg", .kind = .file, .size = 102_400, .mode = 0o644, .mtime = 1_625_086_800_000_000_000 },
+    .{ .name = "todo.txt", .kind = .file, .size = 512, .mode = 0o644, .mtime = 1_625_087_000_000_000_000 },
+    .{ .name = "video.mp4", .kind = .file, .size = 10_485_760, .mode = 0o644, .mtime = 1_625_087_200_000_000_000 },
+};
