@@ -1292,6 +1292,29 @@ class Dvui {
                 this.requestRender();
             }
         });
+        this.hidden_input.addEventListener("compositionend", (ev) => {
+            ev.preventDefault();
+            if (ev.data) {
+                const str = utf8encoder.encode(ev.data);
+                const ptr = this.instance.exports.arena_u8(
+                    str.length,
+                );
+                var dest = new Uint8Array(
+                    this.instance.exports.memory.buffer,
+                    ptr,
+                    str.length,
+                );
+                dest.set(str);
+                this.instance.exports.add_event(
+                    7,
+                    ptr,
+                    str.length,
+                    0,
+                    0,
+                );
+                this.requestRender();
+            }
+        });
         this.gl.canvas.addEventListener("touchstart", (ev) => {
             ev.preventDefault();
             let rect = this.gl.canvas.getBoundingClientRect();
