@@ -204,18 +204,18 @@ pub const Borders = struct {
     cell_opts: CellOptions = .{},
     opts: Options = .{},
 
-    pub fn initBox(num_cols: usize, num_rows: usize, border_width: f32) Borders {
+    pub fn initBox(num_cols: usize, num_rows: usize, border_external_w: f32, border_internal_w: f32) Borders {
         return .{
-            .external = Rect.all(border_width),
-            .internal = .{ .w = 1, .h = 1 },
+            .external = Rect.all(border_external_w),
+            .internal = .{ .w = border_internal_w, .h = border_internal_w },
             .num_cols = num_cols,
             .num_rows = num_rows,
         };
     }
 
-    pub fn initOutline(num_cols: usize, num_rows: usize, border_width: f32) Borders {
+    pub fn initOutline(num_cols: usize, num_rows: usize, border_external_w: f32) Borders {
         return .{
-            .external = Rect.all(border_width),
+            .external = Rect.all(border_external_w),
             .internal = Rect.all(0),
             .num_cols = num_cols,
             .num_rows = num_rows,
