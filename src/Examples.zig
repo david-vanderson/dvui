@@ -5548,20 +5548,29 @@ pub fn gridNavigation() void {
             focus_cell: ?dvui.GridWidget.Cell,
             tab_index: ?u16 = null,
 
+            // Internal
+            widget_data_focused: ?*dvui.WidgetData = null,
+            // Access via widget_data_focused preferred.
+            wd_store: dvui.WidgetData = undefined,
+
             pub fn cellOptions(self: *const CellStyleNav, cell: dvui.GridWidget.Cell) dvui.GridWidget.CellOptions {
                 return self.base.cellOptions(cell);
             }
 
-            pub fn options(self: *const CellStyleNav, cell: dvui.GridWidget.Cell) dvui.Options {
+            pub fn options(self: *CellStyleNav, cell: dvui.GridWidget.Cell) dvui.Options {
                 if (self.focus_cell) |focus_cell| {
                     if (focus_cell.eq(cell)) {
-                        // Normally this isn't required, but the demo app can have two copies of the grid displayed at once.
-                        if (dvui.tagGet("grid_focus_next") == null) {
-                            return self.base.options(cell).override(.{ .tag = "grid_focus_next", .tab_index = self.tab_index });
-                        }
+                        self.widget_data_focused = &self.wd_store;
+                        return self.base.options(cell).override(.{ .data_out = &self.wd_store, .tab_index = self.tab_index });
                     }
                 }
                 return self.base.options(cell).override(.{ .tab_index = 0 });
+            }
+
+            pub fn setFocus(self: *const CellStyleNav) void {
+                if (self.widget_data_focused) |wd| {
+                    dvui.focusWidget(wd.id, null, null);
+                }
             }
         };
 
@@ -5622,6 +5631,7 @@ pub fn gridNavigation() void {
             }
         }
     };
+
     var main_box = dvui.box(@src(), .horizontal, .{ .expand = .both, .color_fill = .fill_window, .background = true, .border = dvui.Rect.all(1) });
     defer main_box.deinit();
     if (dvui.firstFrame(main_box.data().id)) {
@@ -5701,7 +5711,7 @@ pub fn gridNavigation() void {
                 .expand = .horizontal,
             } };
 
-            const style: local.CellStyleNav = .{ .base = style_base, .focus_cell = focused_cell, .tab_index = 2 };
+            var style: local.CellStyleNav = .{ .base = style_base, .focus_cell = focused_cell, .tab_index = 2 };
 
             dvui.gridHeading(@src(), grid, 0, "X", .fixed, .{});
             dvui.gridHeading(@src(), grid, 1, "Y1", .fixed, .{});
@@ -5794,13 +5804,11 @@ pub fn gridNavigation() void {
                 local.keyboard_nav.navigation_keys = .defaults();
                 local.keyboard_nav.scrollTo(0, 0);
                 local.keyboard_nav.is_focused = true; // We want the grid focused by default.
+                local.initialized = true;
             }
 
-            if (dvui.tagGet("grid_focus_next")) |focus_widget| {
-                if ((local.keyboard_nav.shouldFocus()) or !local.initialized) {
-                    dvui.focusWidget(focus_widget.id, null, null);
-                    local.initialized = true;
-                }
+            if (local.keyboard_nav.shouldFocus()) {
+                style.setFocus();
             }
             local.keyboard_nav.gridEnd();
             if (row_to_add) |row_num| {
