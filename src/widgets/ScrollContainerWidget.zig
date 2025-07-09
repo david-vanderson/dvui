@@ -34,6 +34,7 @@ pub var defaults: Options = .{
 };
 
 pub const InitOptions = struct {
+    scroll_area: ?*dvui.ScrollAreaWidget,
     frame_viewport: ?Point = null,
     lock_visible: bool = false,
     event_rect: ?Rect.Physical = null,
@@ -88,6 +89,10 @@ pub fn install(self: *ScrollContainerWidget) void {
     const crect = self.data().contentRect();
     self.si.viewport.w = crect.w;
     self.si.viewport.h = crect.h;
+
+    if (self.init_opts.scroll_area) |sa| {
+        sa.setContainerRect(crect);
+    }
 
     switch (self.si.horizontal) {
         .none => self.si.virtual_size.w = crect.w,

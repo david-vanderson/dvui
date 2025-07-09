@@ -3418,7 +3418,7 @@ pub fn scrolling() void {
 
     _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
 
-    var scontainer = dvui.ScrollContainerWidget.init(@src(), siMain, .{ .frame_viewport = fv, .event_rect = main_area.data().borderRectScale().r }, .{ .expand = .both });
+    var scontainer = dvui.ScrollContainerWidget.init(@src(), siMain, .{ .scroll_area = &main_area, .frame_viewport = fv, .event_rect = main_area.data().borderRectScale().r }, .{ .expand = .both });
     scontainer.install();
     scontainer.processEvents();
     scontainer.processVelocity();
@@ -5691,7 +5691,7 @@ pub fn gridNavigation() void {
             local.plot_title = text.getText();
         }
         {
-            var grid = dvui.grid(@src(), .{ .col_widths = &local.col_widths }, .{ .scroll_opts = .{ .vertical_bar = .show } }, .{ .expand = .vertical, .border = dvui.Rect.all(1) });
+            var grid = dvui.grid(@src(), .{ .col_widths = &local.col_widths }, .{}, .{ .expand = .vertical, .border = dvui.Rect.all(1) });
             defer grid.deinit();
 
             local.keyboard_nav.num_scroll = dvui.GridWidget.KeyboardNavigation.numScrollDefault(grid);
