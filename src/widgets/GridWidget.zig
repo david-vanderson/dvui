@@ -635,6 +635,7 @@ fn bodyScrollContainerCreate(self: *GridWidget) void {
 
     if (self.bscroll == null) {
         self.bscroll = ScrollContainerWidget.init(@src(), self.bsi, .{
+            .scroll_area = &self.scroll,
             .frame_viewport = self.frame_viewport,
             .event_rect = self.scroll.data().borderRectScale().r,
         }, .{

@@ -61,7 +61,7 @@ pub fn install(self: *ScrollAreaWidget) void {
     self.installScrollBars();
 
     const container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
-    self.scroll = ScrollContainerWidget.init(@src(), self.si, .{ .lock_visible = self.init_opts.lock_visible, .frame_viewport = self.init_opts.frame_viewport, .process_events_after = self.init_opts.process_events_after }, container_opts);
+    self.scroll = ScrollContainerWidget.init(@src(), self.si, .{ .scroll_area = self, .lock_visible = self.init_opts.lock_visible, .frame_viewport = self.init_opts.frame_viewport, .process_events_after = self.init_opts.process_events_after }, container_opts);
 
     self.scroll.?.install();
     self.scroll.?.processEvents();
@@ -95,16 +95,18 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
 
     const focus_target = self.init_opts.focus_id orelse dvui.dataGet(null, self.hbox.data().id, "_scroll_id", dvui.WidgetId);
 
-    // If the viewport from last frame is zero, then likely we are on the first
-    // or second frame and ScrollContainer doesn't know how big it is yet.
-    // Assume ScrollContainer gets all our space.  Otherwise you always get a
-    // scrollbar on the second frame.
-    var do_viewport = false;
-    if (self.si.viewport.w == 0 and self.si.viewport.h == 0) {
-        do_viewport = true;
-        const crect = self.hbox.data().contentRect();
-        self.si.viewport.w = crect.w;
-        self.si.viewport.h = crect.h;
+    const crect = self.hbox.data().contentRect();
+
+    // First assume ScrollContainer gets all our space.
+    self.si.viewport.w = crect.w;
+    self.si.viewport.h = crect.h;
+
+    // Now adjust if we got insets from last frame.
+    if (dvui.dataGet(null, self.hbox.data().id, "_linsets", dvui.Size)) |inset| {
+        self.si.viewport.w -= inset.w;
+        self.si.viewport.h -= inset.h;
+    } else if (!dvui.firstFrame(self.hbox.data().id)) {
+        dvui.log.debug("ScrollAreaWidget {x} missing insets from last frame\n", .{self.hbox.data().id});
     }
 
     // due to floating point inaccuracies, give ourselves a tiny bit of extra wiggle room
@@ -114,7 +116,7 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
     if (self.si.vertical != .none) {
         if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar.autoAny() and (self.si.virtual_size.h > (self.si.viewport.h + 0.001)))) {
             do_vbar = true;
-            if (do_viewport) {
+            if (self.init_opts.vertical_bar != .auto_overlay) {
                 self.si.viewport.w -= ScrollBarWidget.defaults.min_sizeGet().w;
             }
         }
@@ -123,20 +125,18 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
     if (self.si.horizontal != .none) {
         if (self.init_opts.horizontal_bar == .show or (self.init_opts.horizontal_bar.autoAny() and (self.si.virtual_size.w > (self.si.viewport.w + 0.001)))) {
             do_hbar = true;
-            if (do_viewport) {
+            if (self.init_opts.horizontal_bar != .auto_overlay) {
                 self.si.viewport.h -= ScrollBarWidget.defaults.min_sizeGet().h;
             }
         }
     }
 
     // test for vbar again because hbar might have removed some of our room
-    if (!do_vbar) {
-        if (self.si.vertical != .none) {
-            if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar.autoAny() and (self.si.virtual_size.h > (self.si.viewport.h + 0.001)))) {
-                do_vbar = true;
-                if (do_viewport) {
-                    self.si.viewport.w -= ScrollBarWidget.defaults.min_sizeGet().w;
-                }
+    if (!do_vbar and do_hbar and self.si.vertical != .none) {
+        if (self.init_opts.vertical_bar.autoAny() and (self.si.virtual_size.h > (self.si.viewport.h + 0.001))) {
+            do_vbar = true;
+            if (self.init_opts.vertical_bar != .auto_overlay) {
+                self.si.viewport.w -= ScrollBarWidget.defaults.min_sizeGet().w;
             }
         }
     }
@@ -176,6 +176,11 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
 
 pub fn data(self: *ScrollAreaWidget) *WidgetData {
     return self.hbox.data();
+}
+
+pub fn setContainerRect(self: *ScrollAreaWidget, rect: dvui.Rect) void {
+    // only storing the topleft inset, assuming only scrollbars on bottom/right
+    dvui.dataSet(null, self.hbox.data().id, "_linsets", dvui.Size{ .w = rect.x, .h = rect.y });
 }
 
 pub fn deinit(self: *ScrollAreaWidget) void {
