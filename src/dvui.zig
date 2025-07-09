@@ -5251,7 +5251,7 @@ pub const ImageSource = union(enum) {
         // Optional name/filename for debugging
         name: []const u8 = "imageFile",
         interpolation: enums.TextureInterpolation = .linear,
-        invalidation_strategy: InavalidationStrategy = .ptr,
+        invalidation_strategy: InvalidationStrategy = .ptr,
     },
 
     /// bytes of an premultiplied rgba u8 array in row major order
@@ -5260,7 +5260,7 @@ pub const ImageSource = union(enum) {
         width: u32,
         height: u32,
         interpolation: enums.TextureInterpolation = .linear,
-        invalidation_strategy: InavalidationStrategy = .ptr,
+        invalidation_strategy: InvalidationStrategy = .ptr,
     },
 
     /// bytes of a non premultiplied rgba u8 array in row major order, will
@@ -5272,14 +5272,14 @@ pub const ImageSource = union(enum) {
         width: u32,
         height: u32,
         interpolation: enums.TextureInterpolation = .linear,
-        invalidation_strategy: InavalidationStrategy = .ptr,
+        invalidation_strategy: InvalidationStrategy = .ptr,
     },
 
     /// When providing a texture directly, `hash` will return 0 and it will
     /// not be inserted into the texture cache.
     texture: Texture,
 
-    pub const InavalidationStrategy = enum {
+    pub const InvalidationStrategy = enum {
         /// The pointer will be used to determine if the source has changed.
         ///
         /// Changing the data behind the pointer will NOT invalidate the texture
