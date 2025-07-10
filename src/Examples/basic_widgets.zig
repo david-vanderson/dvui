@@ -1,4 +1,3 @@
-/// ![image](Examples-basic_widgets.png)
 var checkbox_gray: bool = true;
 var checkbox_bool: bool = false;
 var slider_vector_array = [_]f32{ 0, 1, 2 };
@@ -20,6 +19,7 @@ const RadioChoice = enum(u8) {
 var radio_choice: RadioChoice = @enumFromInt(0);
 var dropdown_val: usize = 1;
 
+/// ![image](Examples-basic_widgets.png)
 pub fn basicWidgets() void {
     {
         var hbox = dvui.box(@src(), .horizontal, .{});
@@ -352,11 +352,11 @@ pub fn dropdownAdvanced() void {
     dd.deinit();
 }
 
-const zig_favicon = @import("../Examples.zig").zig_favicon;
-const zig_svg = @import("../Examples.zig").zig_svg;
-
 const std = @import("std");
 const dvui = @import("../dvui.zig");
+const Examples = @import("../Examples.zig");
 const entypo = dvui.entypo;
 const Options = dvui.Options;
-const Examples = @import("../Examples.zig");
+
+const zig_favicon = Examples.zig_favicon;
+const zig_svg = Examples.zig_svg;
