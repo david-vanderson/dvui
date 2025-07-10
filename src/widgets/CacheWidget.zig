@@ -15,6 +15,7 @@ pub const InitOptions = struct {
 };
 
 wd: WidgetData,
+init_opts: InitOptions,
 hash: u64,
 refresh_prev_value: u8,
 state: enum { ok, texture_create_error, unsupported } = .ok,
@@ -25,11 +26,11 @@ old_target: dvui.RenderTarget = undefined,
 old_clip: ?Rect.Physical = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) CacheWidget {
-    _ = init_opts;
     const defaults = Options{ .name = "Cache" };
     const wd = WidgetData.init(src, .{}, defaults.override(opts));
     var self = CacheWidget{
         .wd = wd,
+        .init_opts = init_opts,
         .hash = dvui.hashIdKey(wd.id, "_tex"),
         .tex_uv = dvui.dataGet(null, wd.id, "_tex_uv", Size) orelse .{},
         .refresh_prev_value = dvui.currentWindow().extra_frames_needed,
@@ -54,23 +55,27 @@ fn drawCachedTexture(self: *CacheWidget, t: dvui.Texture) void {
 
 /// Must be called before install().
 pub fn invalidate(self: *CacheWidget) void {
-    if (dvui.textureGetCached(self.hash)) |t| {
-        // if we had a texture, show it this frame because our contents needs a frame to get sizing
-        self.drawCachedTexture(t);
-
-        dvui.textureDestroyLater(t);
-        _ = dvui.currentWindow().texture_cache.remove(self.hash);
-
-        // now we've shown the texture, so prevent any widgets from drawing on top of it this frame
-        // - can happen if some widgets precalculate their size (like label)
-        self.old_clip = dvui.clip(.{});
-    }
+    self.init_opts.invalidate = true;
 }
 
 pub fn install(self: *CacheWidget) void {
     dvui.parentSet(self.widget());
     self.data().register();
     self.data().borderAndBackground(.{});
+
+    if (self.init_opts.invalidate) {
+        if (dvui.textureGetCached(self.hash)) |t| {
+            // if we had a texture, show it this frame because our contents needs a frame to get sizing
+            self.drawCachedTexture(t);
+
+            dvui.textureDestroyLater(t);
+            _ = dvui.currentWindow().texture_cache.remove(self.hash);
+
+            // now we've shown the texture, so prevent any widgets from drawing on top of it this frame
+            // - can happen if some widgets precalculate their size (like label)
+            self.old_clip = dvui.clip(.{});
+        }
+    }
 
     if (self.state != .ok) return;
 
