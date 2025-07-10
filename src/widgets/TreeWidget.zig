@@ -213,6 +213,8 @@ pub const Branch = struct {
                 self.floating_widget.?.install();
             } else {
                 self.wd = WidgetData.init(self.wd.src, .{}, self.options);
+                self.wd.register();
+                dvui.parentSet(self.widget());
 
                 var rs = self.wd.rectScale();
 
@@ -240,9 +242,6 @@ pub const Branch = struct {
                         rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent });
                     }
                 }
-
-                self.wd.register();
-                dvui.parentSet(self.widget());
             }
         } else {
             self.wd = WidgetData.init(self.wd.src, .{}, self.options);
