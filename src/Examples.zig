@@ -2719,8 +2719,8 @@ pub fn exampleFileTree(src: std.builtin.SourceLocation, tree_init_options: dvui.
     }
 }
 
-pub fn fileTree(src: std.builtin.SourceLocation, root_directory: []const u8, tree_options: dvui.Options, branch_options: dvui.Options, expander_options: dvui.Options) !void {
-    var tree = dvui.TreeWidget.tree(src, tree_options);
+pub fn fileTree(src: std.builtin.SourceLocation, root_directory: []const u8, tree_init_options: dvui.TreeWidget.InitOptions, tree_options: dvui.Options, branch_options: dvui.Options, expander_options: dvui.Options) !void {
+    var tree = dvui.TreeWidget.tree(src, tree_init_options, tree_options);
     defer tree.deinit();
 
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
