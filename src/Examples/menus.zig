@@ -6,7 +6,6 @@ const RadioChoice = enum(u8) {
 
 var checkbox_bool: bool = false;
 var radio_choice: RadioChoice = @enumFromInt(0);
-//var dropdown_val: usize = 1;
 
 /// ![image](Examples-menus.png)
 pub fn menus() void {
