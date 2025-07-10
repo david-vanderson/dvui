@@ -1438,6 +1438,14 @@ fn appQuit(_: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
 // sdl3 callback
 // This function runs when a new event (mouse input, keypresses, etc) occurs.
 fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
+    if (event.?.type == c.SDL_EVENT_USER) {
+        // SDL3 says this function might be called on whatever thread pushed
+        // the event.  Events from SDL itself are always on the main thread.
+        // EVENT_USER is what we use from other threads to wake dvui up, so to
+        // prevent concurrent access return early.
+        return c.SDL_APP_CONTINUE;
+    }
+
     const e = event.?.*;
     _ = appState.back.addEvent(&appState.win, e) catch |err| {
         log.err("dvui.Window.addEvent failed: {!}", .{err});
