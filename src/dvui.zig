@@ -4804,9 +4804,6 @@ pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOpt
 pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) *CacheWidget {
     var ret = widgetAlloc(CacheWidget);
     ret.* = CacheWidget.init(src, init_opts, opts);
-    if (init_opts.invalidate) {
-        ret.invalidate();
-    }
     ret.install();
     return ret;
 }
