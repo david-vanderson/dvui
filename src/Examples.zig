@@ -2372,7 +2372,7 @@ pub fn reorderTree() void {
     exampleFileTree(
         @src(),
         .{
-            .enable_reordering = false,
+            .enable_reordering = true,
         },
         .{
             .background = true,
