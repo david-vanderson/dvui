@@ -142,6 +142,18 @@ pub fn install(self: *FloatingMenuWidget) void {
     self.prevClip = dvui.clipGet();
     dvui.clipSet(dvui.windowRectPixels());
 
+    // do this while the clip is the whole window
+    const evts = dvui.events();
+    for (evts) |*e| {
+        if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = rs.r }))
+            continue;
+
+        if (e.evt == .mouse and e.evt.mouse.action == .focus) {
+            // focus but let the focus event propagate to widgets
+            dvui.focusSubwindow(self.data().id, e.num);
+        }
+    }
+
     self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
     self.scaler.install();
 
@@ -247,13 +259,6 @@ pub fn deinit(self: *FloatingMenuWidget) void {
                 e.handle(@src(), self.data());
                 dvui.tabIndexPrev(e.num);
             }
-        }
-    }
-
-    // check if a focus event is happening outside our window
-    for (evts) |e| {
-        if (!e.handled and e.evt == .mouse and e.evt.mouse.action == .focus) {
-            self.close();
         }
     }
 

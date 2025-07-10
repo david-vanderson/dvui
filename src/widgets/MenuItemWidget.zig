@@ -81,6 +81,10 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
         if (self.show_active) {
             if (opts.focus_as_outline) {
                 self.data().focusBorder();
+                if (self.highlight) {
+                    const rs = self.data().backgroundRectScale();
+                    rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill_hover) });
+                }
             } else {
                 const rs = self.data().backgroundRectScale();
                 rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.accent) });
@@ -153,6 +157,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
             if (me.action == .focus) {
                 dvui.MenuWidget.current().?.mouse_mode = true;
                 e.handle(@src(), self.data());
+                self.mouse_over = true;
                 dvui.focusWidget(self.data().id, null, e.num);
             } else if (me.action == .press and me.button.pointer()) {
                 // This works differently than normal (like buttons) where we
@@ -173,6 +178,11 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     // cause scroll to capture
                     dvui.captureMouse(self.data(), e.num);
                     dvui.dragPreStart(me.p, .{});
+                } else {
+                    // this is how we track if the click originated on a menu
+                    // item, so while this is happening we'll focus menu items
+                    // under the mouse
+                    dvui.dragStart(me.p, .{ .name = "_mi_mouse_down" });
                 }
             } else if (me.action == .release) {
                 dvui.MenuWidget.current().?.mouse_mode = true;
@@ -184,8 +194,8 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 if (dvui.captured(self.data().id)) {
                     // should only happen with touch
                     dvui.captureMouse(null, e.num);
-                    dvui.dragEnd();
                 }
+                dvui.dragEnd();
             } else if (me.action == .motion and me.button.touch()) {
                 if (dvui.captured(self.data().id)) {
                     if (dvui.dragging(me.p)) |_| {
@@ -197,25 +207,29 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     }
                 }
             } else if (me.action == .position) {
-                if (dvui.MenuWidget.current().?.mouse_mode) {
-                    dvui.cursorSet(.arrow);
-                    self.highlight = true;
-                }
-
                 // We get a .position mouse event every frame.  If we
                 // focus the menu item under the mouse even if it's not
                 // moving then it breaks keyboard navigation.
                 if (dvui.mouseTotalMotion().nonZero()) {
                     dvui.MenuWidget.current().?.mouse_mode = true;
                     self.mouse_over = true;
-                    // we shouldn't have gotten this event if the motion
-                    // was towards a submenu (caught in MenuWidget)
-                    dvui.focusSubwindow(null, null); // focuses the window we are in
-                    dvui.focusWidget(self.data().id, null, null);
 
-                    if (self.init_opts.submenu) {
-                        dvui.MenuWidget.current().?.submenus_in_child = true;
+                    if (dvui.draggingName("_mi_mouse_down")) {
+                        // we shouldn't have gotten this event if the motion
+                        // was towards a submenu (caught in MenuWidget)
+                        dvui.focusSubwindow(null, null); // focuses the window we are in
+                        dvui.focusWidget(self.data().id, null, null);
+
+                        if (self.init_opts.submenu) {
+                            dvui.MenuWidget.current().?.submenus_activated = true;
+                            dvui.MenuWidget.current().?.submenus_in_child = true;
+                        }
                     }
+                }
+
+                if (dvui.MenuWidget.current().?.mouse_mode) {
+                    dvui.cursorSet(.arrow);
+                    self.highlight = true;
                 }
             }
         },

@@ -172,7 +172,7 @@ pub fn processEvent(self: *MenuWidget, e: *Event) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .position) {
-                if (dvui.mouseTotalMotion().nonZero()) {
+                if (dvui.mouseTotalMotion().nonZero() and dvui.draggingName("_mi_mouse_down")) {
                     self.mouse_mode = true;
                     if (dvui.dataGet(null, self.data().id, "_child_popup", Rect.Physical)) |r| {
                         const center = Point.Physical{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
