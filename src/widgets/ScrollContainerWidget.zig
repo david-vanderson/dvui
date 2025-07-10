@@ -248,7 +248,7 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.WidgetId, min_size: Size, 
         // not expanded in the scrollArea's layout direction, or that only the
         // last child is.
         dvui.currentWindow().debug_widget_id = id;
-        dvui.log.debug("{s}:{d} ScrollContainerWidget.rectFor() got child {x} after expanded child", .{ @src().file, @src().line, id });
+        dvui.log.debug("{s}:{d} got child {x} after expanded child", .{ @src().file, @src().line, id });
     } else if (e.isVertical()) {
         self.seen_expanded_child = true;
     }
