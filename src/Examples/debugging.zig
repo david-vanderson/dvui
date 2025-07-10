@@ -145,4 +145,4 @@ fn makeLabels(src: std.builtin.SourceLocation, count: usize) void {
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const Examples = @import("../Examples.zig");
-const StrokeTest = Examples.StrokeTest;
+const StrokeTest = @import("StrokeTest.zig");
