@@ -469,7 +469,7 @@ pub fn demo() void {
                     .animations => animations(),
                     .struct_ui => structUI(),
                     .debugging => debuggingErrors(),
-                    .grid => grids(0),
+                    .grid => grids(),
                 }
             }
 
@@ -490,21 +490,25 @@ pub fn demo() void {
     }
 
     if (paned.showSecond()) {
-        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
-        defer scroll.deinit();
+        var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+        defer vbox.deinit();
 
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        {
+            var hbox = dvui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
 
-        if (paned.collapsed() and dvui.button(@src(), "Back to Demos", .{}, .{ .min_size_content = .{ .h = 30 }, .tag = "dvui_demo_window_back" })) {
-            paned.animateSplit(1.0);
+            if (paned.collapsed() and dvui.button(@src(), "Back to Demos", .{}, .{ .min_size_content = .{ .h = 30 }, .tag = "dvui_demo_window_back" })) {
+                paned.animateSplit(1.0);
+            }
+
+            dvui.label(@src(), "{s}", .{demo_active.name()}, .{ .font_style = .title_2, .gravity_y = 0.5 });
         }
 
-        dvui.label(@src(), "{s}", .{demo_active.name()}, .{ .font_style = .title_2, .gravity_y = 0.5 });
-        const header_height = hbox.data().rect.h;
-        hbox.deinit();
-
-        var vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .padding = Rect.all(4) });
-        defer vbox.deinit();
+        var scroll: ?*dvui.ScrollAreaWidget = null;
+        if (demo_active != .grid) {
+            scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false, .padding = Rect.all(4) });
+        }
+        defer if (scroll) |s| s.deinit();
 
         switch (demo_active) {
             .basic_widgets => basicWidgets(),
@@ -522,7 +526,7 @@ pub fn demo() void {
             .animations => animations(),
             .struct_ui => structUI(),
             .debugging => debuggingErrors(),
-            .grid => grids(scroll.si.viewport.h - header_height - 10),
+            .grid => grids(),
         }
     }
 
@@ -4545,17 +4549,7 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
 
 const grid_panel_size: Size = .{ .w = 250 };
 
-pub fn grids(height: f32) void {
-    // Below is a workaround for standalone demos being placed in a scroll-area.
-    // By default the scroll-area will scroll instead of the grid.
-    // Fix the height of the box around the tabs to prevent this.
-    // This would not be required for normal usage.
-    var min_size_content: ?Size = null;
-    var max_size_content: ?Options.MaxSize = null;
-    if (height > 0) {
-        min_size_content = .{ .h = height };
-        max_size_content = .height(height);
-    }
+pub fn grids() void {
     const GridType = enum {
         styling,
         layout,
@@ -4585,7 +4579,7 @@ pub fn grids(height: f32) void {
         }
     };
 
-    var tbox = dvui.box(@src(), .vertical, .{ .border = Rect.all(1), .expand = .horizontal, .min_size_content = min_size_content, .max_size_content = max_size_content });
+    var tbox = dvui.box(@src(), .vertical, .{ .border = Rect.all(1), .expand = .both });
     defer tbox.deinit();
     {
         var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
