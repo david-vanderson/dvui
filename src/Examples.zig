@@ -1,30 +1,5 @@
 //! ![demo](Examples-demo.png)
 
-const basicWidgets = @import("Examples/basic_widgets.zig").basicWidgets;
-const calculator = @import("Examples/calculator.zig").calculator;
-const textEntryWidgets = @import("Examples/text_entry.zig").textEntryWidgets;
-const styling = @import("Examples/styling.zig").styling;
-const layout = @import("Examples/layout.zig").layout;
-const layoutText = @import("Examples/text_layout.zig").layoutText;
-const plots = @import("Examples/plots.zig").plots;
-const reorderLists = @import("Examples/reorder_tree.zig").reorderLists;
-const menus = @import("Examples/menus.zig").menus;
-const scrolling = @import("Examples/scrolling.zig").scrolling;
-const scrollCanvas = @import("Examples/scroll_canvas.zig").scrollCanvas;
-const dialogs = @import("Examples/dialogs.zig").dialogs;
-const animations = @import("Examples/animations.zig").animations;
-const structUI = @import("Examples/struct_ui.zig").structUI;
-const debuggingErrors = @import("Examples/debugging.zig").debuggingErrors;
-const icon_browser = @import("examples/icon_browser.zig").icon_browser;
-
-const grid_examples = @import("Examples/grid.zig");
-const gridStyling = grid_examples.gridStyling;
-const gridLayouts = grid_examples.gridLayouts;
-const gridVirtualScrolling = grid_examples.gridVirtualScrolling;
-const gridVariableRowHeights = grid_examples.gridVariableRowHeights;
-const gridSelection = grid_examples.gridSelection;
-const gridNavigation = grid_examples.gridNavigation;
-
 pub const zig_favicon = @embedFile("zig-favicon.png");
 pub const zig_svg = @embedFile("zig-mark.svg");
 
@@ -785,3 +760,28 @@ const Point = dvui.Point;
 const Rect = dvui.Rect;
 const Size = dvui.Size;
 const entypo = dvui.entypo;
+
+const basicWidgets = @import("Examples/basic_widgets.zig").basicWidgets;
+const calculator = @import("Examples/calculator.zig").calculator;
+const textEntryWidgets = @import("Examples/text_entry.zig").textEntryWidgets;
+const styling = @import("Examples/styling.zig").styling;
+const layout = @import("Examples/layout.zig").layout;
+const layoutText = @import("Examples/text_layout.zig").layoutText;
+const plots = @import("Examples/plots.zig").plots;
+const reorderLists = @import("Examples/reorder_tree.zig").reorderLists;
+const menus = @import("Examples/menus.zig").menus;
+const scrolling = @import("Examples/scrolling.zig").scrolling;
+const scrollCanvas = @import("Examples/scroll_canvas.zig").scrollCanvas;
+const dialogs = @import("Examples/dialogs.zig").dialogs;
+const animations = @import("Examples/animations.zig").animations;
+const structUI = @import("Examples/struct_ui.zig").structUI;
+const debuggingErrors = @import("Examples/debugging.zig").debuggingErrors;
+const icon_browser = @import("examples/icon_browser.zig").icon_browser;
+
+const grid_examples = @import("Examples/grid.zig");
+const gridStyling = grid_examples.gridStyling;
+const gridLayouts = grid_examples.gridLayouts;
+const gridVirtualScrolling = grid_examples.gridVirtualScrolling;
+const gridVariableRowHeights = grid_examples.gridVariableRowHeights;
+const gridSelection = grid_examples.gridSelection;
+const gridNavigation = grid_examples.gridNavigation;
