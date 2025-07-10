@@ -2372,6 +2372,9 @@ pub fn reorderTree() void {
     exampleFileTree(
         @src(),
         .{
+            .enable_reordering = true,
+        },
+        .{
             .background = true,
             .border = dvui.Rect.all(1),
             .padding = dvui.Rect.all(4),
@@ -2688,10 +2691,10 @@ fn exampleFileTreeSetup(const_file_tree: []const ConstTreeEntry, mutable_file_tr
     }
 }
 
-pub fn exampleFileTree(src: std.builtin.SourceLocation, tree_options: dvui.Options, branch_options: dvui.Options, expander_options: dvui.Options) !void {
+pub fn exampleFileTree(src: std.builtin.SourceLocation, tree_init_options: dvui.TreeWidget.InitOptions, tree_options: dvui.Options, branch_options: dvui.Options, expander_options: dvui.Options) !void {
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
 
-    var tree = dvui.TreeWidget.tree(src, tree_options);
+    var tree = dvui.TreeWidget.tree(src, tree_init_options, tree_options);
     defer tree.deinit();
 
     var color_index: usize = 0;
@@ -2716,8 +2719,8 @@ pub fn exampleFileTree(src: std.builtin.SourceLocation, tree_options: dvui.Optio
     }
 }
 
-pub fn fileTree(src: std.builtin.SourceLocation, root_directory: []const u8, tree_options: dvui.Options, branch_options: dvui.Options, expander_options: dvui.Options) !void {
-    var tree = dvui.TreeWidget.tree(src, tree_options);
+pub fn fileTree(src: std.builtin.SourceLocation, root_directory: []const u8, tree_init_options: dvui.TreeWidget.InitOptions, tree_options: dvui.Options, branch_options: dvui.Options, expander_options: dvui.Options) !void {
+    var tree = dvui.TreeWidget.tree(src, tree_init_options, tree_options);
     defer tree.deinit();
 
     const uniqueId = dvui.parentGet().extendId(@src(), 0);

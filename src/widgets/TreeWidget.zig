@@ -16,10 +16,16 @@ id_branch: ?usize = null, // matches Reorderable.reorder_id
 drag_point: ?dvui.Point.Physical = null,
 drag_ending: bool = false,
 branch_size: Size = .{},
+init_options: InitOptions = undefined,
 
-pub fn init(src: std.builtin.SourceLocation, opts: Options) TreeWidget {
+pub const InitOptions = struct {
+    enable_reordering: bool = true,
+};
+
+pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TreeWidget {
     var self = TreeWidget{};
     const defaults = Options{ .name = "Tree" };
+    self.init_options = init_opts;
     self.wd = WidgetData.init(src, .{}, defaults.override(opts));
     self.id_branch = dvui.dataGet(null, self.wd.id, "_id_branch", usize) orelse null;
     self.drag_point = dvui.dataGet(null, self.wd.id, "_drag_point", dvui.Point.Physical) orelse null;
@@ -38,9 +44,9 @@ pub fn install(self: *TreeWidget) void {
     self.vbox.drawBackground();
 }
 
-pub fn tree(src: std.builtin.SourceLocation, opts: Options) *TreeWidget {
+pub fn tree(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) *TreeWidget {
     var ret = dvui.widgetAlloc(TreeWidget);
-    ret.* = TreeWidget.init(src, opts);
+    ret.* = TreeWidget.init(src, init_opts, opts);
     ret.install();
     ret.processEvents();
     return ret;
@@ -155,9 +161,6 @@ pub const Branch = struct {
         // if null, uses widget id
         // if non-null, must be unique among reorderables in a single reorder
         branch_id: ?usize = null,
-
-        // if false, caller responsible for drawing something when targetRectScale() returns true
-        draw_target: bool = true,
     };
 
     wd: WidgetData = undefined,
@@ -166,7 +169,7 @@ pub const Branch = struct {
     vbox: dvui.BoxWidget = undefined,
     expander_vbox: dvui.BoxWidget = undefined,
     tree: *TreeWidget = undefined,
-    init_options: InitOptions = undefined,
+    init_options: Branch.InitOptions = undefined,
     options: Options = undefined,
     installed: bool = false,
     floating_widget: ?dvui.FloatingWidget = null,
@@ -174,7 +177,7 @@ pub const Branch = struct {
     expanded: bool = false,
     can_expand: bool = false,
 
-    pub fn init(src: std.builtin.SourceLocation, reorder: *TreeWidget, init_opts: InitOptions, opts: Options) Branch {
+    pub fn init(src: std.builtin.SourceLocation, reorder: *TreeWidget, init_opts: Branch.InitOptions, opts: Options) Branch {
         var self = Branch{};
         self.tree = reorder;
         const defaults = Options{ .name = "Branch" };
@@ -237,7 +240,7 @@ pub const Branch = struct {
                         check_button_hovered = true;
                     }
 
-                    if (self.init_options.draw_target and self.target_rs != null) {
+                    if (self.target_rs != null) {
                         rs.r.h = 2.0;
                         rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent });
                     }
@@ -280,29 +283,31 @@ pub const Branch = struct {
         self.hbox.install();
         self.hbox.drawBackground();
 
-        loop: for (dvui.events()) |*e| {
-            if (!self.button.matchEvent(e))
-                continue;
+        if (self.tree.init_options.enable_reordering) {
+            loop: for (dvui.events()) |*e| {
+                if (!self.button.matchEvent(e))
+                    continue;
 
-            switch (e.evt) {
-                .mouse => |me| {
-                    if (me.action == .press and me.button.pointer()) {
-                        e.handle(@src(), self.button.data());
-                        dvui.captureMouse(self.button.data(), e.num);
-                        const top_left = self.button.wd.rectScale().r.topLeft();
-                        dvui.dragPreStart(me.p, .{ .offset = top_left });
-                    } else if (me.action == .motion) {
-                        if (dvui.captured(self.button.wd.id)) {
+                switch (e.evt) {
+                    .mouse => |me| {
+                        if (me.action == .press and me.button.pointer()) {
                             e.handle(@src(), self.button.data());
-                            if (dvui.dragging(me.p)) |_| {
-                                self.tree.dragStart(self.wd.id.asUsize(), me.p); // reorder grabs capture
+                            dvui.captureMouse(self.button.data(), e.num);
+                            const top_left = self.button.wd.rectScale().r.topLeft();
+                            dvui.dragPreStart(me.p, .{ .offset = top_left });
+                        } else if (me.action == .motion) {
+                            if (dvui.captured(self.button.wd.id)) {
+                                e.handle(@src(), self.button.data());
+                                if (dvui.dragging(me.p)) |_| {
+                                    self.tree.dragStart(self.wd.id.asUsize(), me.p); // reorder grabs capture
 
-                                break :loop;
+                                    break :loop;
+                                }
                             }
                         }
-                    }
-                },
-                else => {},
+                    },
+                    else => {},
+                }
             }
         }
     }
