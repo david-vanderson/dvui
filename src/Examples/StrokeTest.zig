@@ -10,8 +10,6 @@ pub var stroke_test_closed: bool = false;
 
 wd: dvui.WidgetData = undefined,
 
-const StrokeTest = @This();
-
 pub fn install(self: *Self, src: std.builtin.SourceLocation, options: dvui.Options) void {
     _ = dvui.sliderEntry(@src(), "thick: {d:0.2}", .{ .value = &thickness }, .{ .expand = .horizontal });
 
@@ -49,7 +47,7 @@ pub fn install(self: *Self, src: std.builtin.SourceLocation, options: dvui.Optio
         }
 
         const stroke_color = dvui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
-        dvui.Path.stroke(.{ .points = path }, .{ .thickness = rs.s * thickness, .color = stroke_color, .closed = stroke_test_closed, .endcap_style = StrokeTest.endcap_style });
+        dvui.Path.stroke(.{ .points = path }, .{ .thickness = rs.s * thickness, .color = stroke_color, .closed = stroke_test_closed, .endcap_style = Self.endcap_style });
     }
 }
 
