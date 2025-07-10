@@ -15,9 +15,9 @@ const dialogs = @import("Examples/dialogs.zig").dialogs;
 const animations = @import("Examples/animations.zig").animations;
 const structUI = @import("Examples/struct_ui.zig").structUI;
 const debuggingErrors = @import("Examples/debugging.zig").debuggingErrors;
-const grid_examples = @import("Examples/grid.zig");
 const icon_browser = @import("examples/icon_browser.zig").icon_browser;
 
+const grid_examples = @import("Examples/grid.zig");
 const gridStyling = grid_examples.gridStyling;
 const gridLayouts = grid_examples.gridLayouts;
 const gridVirtualScrolling = grid_examples.gridVirtualScrolling;
