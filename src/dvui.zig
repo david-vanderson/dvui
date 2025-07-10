@@ -2431,6 +2431,7 @@ pub fn draggingName(name: []const u8) bool {
 pub fn dragEnd() void {
     const cw = currentWindow();
     cw.drag_state = .none;
+    cw.drag_name = "";
 }
 
 /// The difference between the final mouse position this frame and last frame.

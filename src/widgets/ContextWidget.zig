@@ -123,6 +123,9 @@ pub fn processEvent(self: *ContextWidget, e: *Event) void {
 
                 // offset just enough so when Popup first appears nothing is highlighted
                 self.activePt.x += 1;
+
+                // allows right-click-drag-release-activate
+                dvui.dragStart(me.p, .{ .name = "_mi_mouse_down" });
             }
         },
         else => {},
