@@ -355,6 +355,7 @@ pub fn dropdownAdvanced() void {
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const Examples = @import("../Examples.zig");
+const icon_browser = @import("icon_browser.zig").icon_browser;
 const entypo = dvui.entypo;
 const Options = dvui.Options;
 
