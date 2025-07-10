@@ -59,10 +59,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, options:
 }
 
 pub fn register(self: *WidgetData) void {
-    self.rect_scale = if (self.init_options.subwindow)
-        dvui.windowRectScale().rectToRectScale(self.rect)
-    else
-        self.parent.screenRectScale(self.rect);
+    self.rect_scale = self.rectScaleFromParent();
 
     if (self.options.data_out) |do| {
         do.* = self.*;
@@ -233,17 +230,21 @@ pub fn focusBorder(self: *const WidgetData) void {
     }
 }
 
+fn rectScaleFromParent(self: *const WidgetData) RectScale {
+    return if (self.init_options.subwindow)
+        dvui.windowRectScale().rectToRectScale(self.rect)
+    else
+        self.parent.screenRectScale(self.rect);
+}
+
 pub fn rectScale(self: *const WidgetData) RectScale {
     if (self.rect_scale) |rs| {
         return rs;
     }
 
-    dvui.logError(self.src, error.rectScale, "rect_scale is null for widget {x}, data().register() should be called before any rectScale functions", .{self.id});
-
-    return if (self.init_options.subwindow)
-        dvui.windowRectScale().rectToRectScale(self.rect)
-    else
-        self.parent.screenRectScale(self.rect);
+    // This can happen if a widget calls rectScale before calling register.
+    // Reorderable does that to check if one is being dragged over another.
+    return self.rectScaleFromParent();
 }
 
 pub fn borderRect(self: *const WidgetData) Rect {

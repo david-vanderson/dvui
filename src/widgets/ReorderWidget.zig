@@ -258,7 +258,7 @@ pub const Reorderable = struct {
                 } else {
                     self.wd = WidgetData.init(self.data().src, .{}, self.options);
                 }
-                const rs = dvui.parentGet().screenRectScale(self.data().rect);
+                const rs = self.data().rectScale();
                 const dragRect = Rect.Physical.fromPoint(topleft).toSize(self.reorder.reorderable_size.scale(rs.s, Size.Physical));
 
                 if (!self.reorder.found_slot and !rs.r.intersect(dragRect).empty()) {
