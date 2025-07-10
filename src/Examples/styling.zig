@@ -70,7 +70,7 @@ pub fn styling() void {
             var vbox = dvui.box(@src(), .vertical, .{});
             defer vbox.deinit();
 
-            if (Examples.rgbSliders(@src(), &backbox_color, .{})) {
+            if (rgbSliders(@src(), &backbox_color, .{})) {
                 hsluv_hsl = .fromColor(backbox_color);
                 hsv_color = .fromColor(backbox_color);
             }
@@ -160,6 +160,33 @@ pub fn styling() void {
             };
         }
     }
+}
+
+// Let's wrap the sliderEntry widget so we have 3 that represent a Color
+pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) bool {
+    var hbox = dvui.boxEqual(src, .horizontal, opts);
+    defer hbox.deinit();
+
+    var red: f32 = @floatFromInt(color.r);
+    var green: f32 = @floatFromInt(color.g);
+    var blue: f32 = @floatFromInt(color.b);
+
+    var changed = false;
+    if (dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &red, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+        changed = true;
+    }
+    if (dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &green, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+        changed = true;
+    }
+    if (dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &blue, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+        changed = true;
+    }
+
+    color.r = @intFromFloat(red);
+    color.g = @intFromFloat(green);
+    color.b = @intFromFloat(blue);
+
+    return changed;
 }
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a HSLuv Color
