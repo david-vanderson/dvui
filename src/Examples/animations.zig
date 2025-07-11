@@ -182,16 +182,18 @@ pub fn animations() void {
         const millis = @divFloor(dvui.frameTimeNS(), 1_000_000);
         const left = @as(i32, @intCast(@rem(millis, 1000)));
 
-        var mslabel = dvui.LabelWidget.init(@src(), "{d:0>3} ms into second", .{@as(u32, @intCast(left))}, .{}, .{});
-        mslabel.install();
-        mslabel.draw();
+        {
+            var mslabel = dvui.LabelWidget.init(@src(), "{d:0>3} ms into second", .{@as(u32, @intCast(left))}, .{}, .{});
+            defer mslabel.deinit();
 
-        if (dvui.timerDoneOrNone(mslabel.data().id)) {
-            const wait = 1000 * (1000 - left);
-            dvui.timer(mslabel.data().id, wait);
+            mslabel.install();
+            mslabel.draw();
+
+            if (dvui.timerDoneOrNone(mslabel.data().id)) {
+                const wait = 1000 * (1000 - left);
+                dvui.timer(mslabel.data().id, wait);
+            }
         }
-        mslabel.deinit();
-
         dvui.label(@src(), "Estimate of frame overhead {d:6} us", .{dvui.currentWindow().loop_target_slop}, .{});
         switch (dvui.backend.kind) {
             .sdl2, .sdl3 => dvui.label(@src(), "sdl: updated when not interrupted by event", .{}, .{}),

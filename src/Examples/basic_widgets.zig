@@ -281,6 +281,7 @@ pub fn dropdownAdvanced() void {
 
     var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = g.choice }, .{ .min_size_content = .{ .w = 100 } });
     dd.install();
+    defer dd.deinit();
 
     // Here's what is shown when the dropdown is not dropped
     {
@@ -339,7 +340,6 @@ pub fn dropdownAdvanced() void {
         if (dd.addChoiceLabel("just text")) {
             g.choice = 1;
         }
-
         {
             var mi = dd.addChoice();
             defer mi.deinit();
@@ -358,8 +358,6 @@ pub fn dropdownAdvanced() void {
             }
         }
     }
-
-    dd.deinit();
 }
 
 const std = @import("std");
