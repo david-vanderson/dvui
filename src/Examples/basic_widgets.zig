@@ -1,4 +1,5 @@
 var checkbox_gray: bool = true;
+var checkbox_enabled: bool = true;
 var checkbox_bool: bool = false;
 var slider_vector_array = [_]f32{ 0, 1, 2 };
 var slider_val: f32 = 0.0;
@@ -49,7 +50,8 @@ pub fn basicWidgets() void {
                 var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .color_text = color });
                 defer bw.deinit();
                 bw.install();
-                bw.processEvents();
+                if (checkbox_enabled)
+                    bw.processEvents();
                 bw.drawBackground();
                 bw.drawFocus();
 
@@ -68,12 +70,16 @@ pub fn basicWidgets() void {
                 _ = dvui.spacer(@src(), .{ .min_size_content = .width(4) });
                 dvui.labelNoFmt(@src(), "Icon+Gray", .{}, opts);
 
-                if (bw.clicked()) {
+                if (bw.clicked() and checkbox_gray) {
                     dvui.toast(@src(), .{ .message = "This button is grayed out\nbut still clickable." });
                 }
             }
-
-            _ = dvui.checkbox(@src(), &checkbox_gray, "Gray", .{});
+            {
+                var hbox_inner = dvui.box(@src(), .horizontal, .{});
+                defer hbox_inner.deinit();
+                _ = dvui.checkbox(@src(), &checkbox_gray, "Gray", .{});
+                _ = dvui.checkbox(@src(), &checkbox_enabled, "Enabled", .{});
+            }
         }
     }
 
