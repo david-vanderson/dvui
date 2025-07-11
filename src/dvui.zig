@@ -193,6 +193,10 @@ pub fn currentWindow() *Window {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetAlloc(comptime T: type) *T {
+    if (@import("build_options").zig_arena orelse false) {
+        return currentWindow().arena().create(T) catch @panic("OOM");
+    }
+
     const cw = currentWindow();
     const alloc = cw._widget_stack.allocator();
     const ptr = alloc.create(T) catch {
@@ -210,6 +214,10 @@ pub fn widgetAlloc(comptime T: type) *T {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetFree(ptr: anytype) void {
+    if (@import("build_options").zig_arena orelse false) {
+        return;
+    }
+
     const ws = &currentWindow()._widget_stack;
     // NOTE: We cannot use `allocatorLIFO` because of widgets that
     //       store other widgets in their fields, which would cause
