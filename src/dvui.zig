@@ -1110,9 +1110,7 @@ pub const Texture = struct {
             height: u32,
             pub fn setPixel(self: *@This(), x: usize, y: usize, col: [4]u8) void {
                 const idx = (y * self.height + x) * 4;
-                for (0..4) |i| {
-                    self.pixels[idx + i] = col[i];
-                }
+                for (0..4) |i| self.pixels[idx + i] = col[i];
             }
             pub fn getPixel(self: *@This(), x: usize, y: usize) [4]u8 {
                 const idx = y * self.height + x;
@@ -1145,9 +1143,7 @@ pub const Texture = struct {
         if (icon_opts.stroke_color) |cx| ow_stroke = ImageAdapter.conv(cx);
         var ow_fill: ?tvg.Color = null;
         var disable_fill = false;
-        if (ow_fill != null and ow_fill.?.a == 0.0) {
-            disable_fill = true;
-        }
+        if (ow_fill != null and ow_fill.?.a == 0.0) disable_fill = true;
         if (icon_opts.fill_color) |cx| ow_fill = ImageAdapter.conv(cx);
         tvg.renderStream(cw.arena(), &img, fb.reader(), .{
             .overwrite_stroke_width = icon_opts.stroke_width,
@@ -5362,8 +5358,9 @@ pub const ImageSource = union(enum) {
                 // Using arena here instead of lifo as this buffer is likely to be large and we
                 // prefer that lifo doesn't reallocate as often. Arena is intended for larger,
                 // one of allocations and we can still free the buffer here
-                const copy = try currentWindow().arena().dupe(u8, pixels.rgba);
-                defer currentWindow().arena().free(copy);
+                // const copy = try currentWindow().arena().dupe(u8, pixels.rgba);
+                // defer currentWindow().arena().free(copy);
+                const copy = pixels.rgba;
                 // std.debug.print("regenerating texture for pixels\n", .{});
                 const texture = try Texture.fromPixelsPMA(Color.PMA.sliceFromRGBA(copy), pixels.width, pixels.height, pixels.interpolation);
                 if (pixels.invalidation_strategy == .always) {
