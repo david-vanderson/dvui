@@ -32,36 +32,36 @@ pub fn menus() void {
     {
         var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
         defer hbox.deinit();
+        {
+            var m = dvui.menu(@src(), .horizontal, .{});
+            defer m.deinit();
 
-        var m = dvui.menu(@src(), .horizontal, .{});
+            if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
+                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+                defer fw.deinit();
 
-        if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
-            var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
-            defer fw.deinit();
+                submenus();
 
-            submenus();
+                _ = dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
-            _ = dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
+                if (dvui.menuItemLabel(@src(), "Dialog", .{}, .{ .expand = .horizontal }) != null) {
+                    fw.close();
+                    Examples.show_dialog = true;
+                }
 
-            if (dvui.menuItemLabel(@src(), "Dialog", .{}, .{ .expand = .horizontal }) != null) {
-                fw.close();
-                Examples.show_dialog = true;
+                if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
+                    fw.close();
+                }
             }
 
-            if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
-                fw.close();
+            if (dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
+                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+                defer fw.deinit();
+                _ = dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
+                _ = dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
+                _ = dvui.menuItemLabel(@src(), "Dummy Super Long", .{}, .{ .expand = .horizontal });
             }
         }
-
-        if (dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
-            var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
-            defer fw.deinit();
-            _ = dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
-            _ = dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
-            _ = dvui.menuItemLabel(@src(), "Dummy Super Long", .{}, .{ .expand = .horizontal });
-        }
-
-        m.deinit();
 
         dvui.labelNoFmt(@src(), "Right click for a context menu", .{}, .{ .gravity_x = 1.0 });
     }
@@ -89,34 +89,37 @@ pub fn menus() void {
         tl.addText("This box has a complex tooltip with a fade in and nested tooltip.", .{});
         tl.deinit();
 
-        var tt: dvui.FloatingTooltipWidget = .init(@src(), .{
-            .active_rect = hbox.data().borderRectScale().r,
-            .interactive = true,
-        }, .{ .background = false, .border = .{} });
-        if (tt.shown()) {
-            var animator = dvui.animate(@src(), .{ .kind = .alpha, .duration = 250_000 }, .{ .expand = .both });
-            defer animator.deinit();
+        {
+            var tt: dvui.FloatingTooltipWidget = .init(@src(), .{
+                .active_rect = hbox.data().borderRectScale().r,
+                .interactive = true,
+            }, .{ .background = false, .border = .{} });
+            defer tt.deinit();
+            if (tt.shown()) {
+                var animator = dvui.animate(@src(), .{ .kind = .alpha, .duration = 250_000 }, .{ .expand = .both });
+                defer animator.deinit();
 
-            var vbox2 = dvui.box(@src(), .vertical, dvui.FloatingTooltipWidget.defaults.override(.{ .expand = .both }));
-            defer vbox2.deinit();
+                var vbox2 = dvui.box(@src(), .vertical, dvui.FloatingTooltipWidget.defaults.override(.{ .expand = .both }));
+                defer vbox2.deinit();
 
-            var tl2 = dvui.textLayout(@src(), .{}, .{ .background = false });
-            tl2.addText("This is the tooltip text", .{});
-            tl2.deinit();
+                var tl2 = dvui.textLayout(@src(), .{}, .{ .background = false });
+                tl2.addText("This is the tooltip text", .{});
+                tl2.deinit();
 
-            _ = dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
-
-            var tt2: dvui.FloatingTooltipWidget = .init(@src(), .{
-                .active_rect = tt.data().borderRectScale().r,
-            }, .{ .max_size_content = .width(200), .box_shadow = .{} });
-            if (tt2.shown()) {
-                var tl3 = dvui.textLayout(@src(), .{}, .{ .background = false });
-                tl3.addText("Text in a nested tooltip with box shadow", .{});
-                tl3.deinit();
+                _ = dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
+                {
+                    var tt2: dvui.FloatingTooltipWidget = .init(@src(), .{
+                        .active_rect = tt.data().borderRectScale().r,
+                    }, .{ .max_size_content = .width(200), .box_shadow = .{} });
+                    defer tt2.deinit();
+                    if (tt2.shown()) {
+                        var tl3 = dvui.textLayout(@src(), .{}, .{ .background = false });
+                        tl3.addText("Text in a nested tooltip with box shadow", .{});
+                        tl3.deinit();
+                    }
+                }
             }
-            tt2.deinit();
         }
-        tt.deinit();
     }
 
     _ = dvui.spacer(@src(), .{ .min_size_content = .height(12) });
@@ -125,15 +128,15 @@ pub fn menus() void {
         var hbox = dvui.box(@src(), .horizontal, .{});
         const layout_dir = dvui.dataGetPtrDefault(null, hbox.data().id, "layout_dir", dvui.enums.Direction, .horizontal);
         const active_tab = dvui.dataGetPtrDefault(null, hbox.data().id, "active_tab", usize, 0);
-
-        const entries = [_][]const u8{ "Horizontal", "Vertical" };
-        for (0..2) |i| {
-            if (dvui.radio(@src(), @intFromEnum(layout_dir.*) == i, entries[i], .{ .id_extra = i })) {
-                layout_dir.* = @enumFromInt(i);
+        {
+            defer hbox.deinit();
+            const entries = [_][]const u8{ "Horizontal", "Vertical" };
+            for (0..2) |i| {
+                if (dvui.radio(@src(), @intFromEnum(layout_dir.*) == i, entries[i], .{ .id_extra = i })) {
+                    layout_dir.* = @enumFromInt(i);
+                }
             }
         }
-        hbox.deinit();
-
         // reverse orientation because horizontal tabs go above content
         var tbox = dvui.box(@src(), if (layout_dir.* == .vertical) .horizontal else .vertical, .{ .max_size_content = .{ .w = 400, .h = 200 } });
         defer tbox.deinit();
@@ -223,13 +226,13 @@ pub fn focus() void {
 
         var te = dvui.textEntry(@src(), .{}, .{});
         const teId = te.data().id;
-
-        // firstFrame must be called before te.deinit()
-        if (dvui.firstFrame(te.data().id)) {
-            dvui.focusWidget(te.data().id, null, null);
+        {
+            defer te.deinit();
+            // firstFrame must be called before te.deinit()
+            if (dvui.firstFrame(te.data().id)) {
+                dvui.focusWidget(te.data().id, null, null);
+            }
         }
-
-        te.deinit();
 
         // Get a unique Id without making a widget
         const uniqueId = dvui.parentGet().extendId(@src(), 0);
@@ -304,6 +307,7 @@ pub fn focus() void {
 
         var hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .padding = dvui.Rect.all(4) });
         hbox.install();
+        defer hbox.deinit();
         const evts = dvui.events();
         for (evts) |*e| {
             if (!dvui.eventMatchSimple(e, hbox.data())) {
@@ -315,9 +319,7 @@ pub fn focus() void {
                 hbox.data().options.color_fill = .fill_hover;
             }
         }
-
         hbox.drawBackground();
-        defer hbox.deinit();
 
         inline for (@typeInfo(RadioChoice).@"enum".fields, 0..) |field, i| {
             if (dvui.radio(@src(), radio_choice == @as(RadioChoice, @enumFromInt(field.value)), "Radio " ++ field.name, .{ .id_extra = i })) {
