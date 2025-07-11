@@ -760,6 +760,11 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
     return dvui.Texture{ .ptr = texture, .width = width, .height = height };
 }
 
+pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8) !void {
+    const tx: [*c]c.SDL_Texture = @alignCast(@ptrCast(texture.ptr));
+    if (!c.SDL_UpdateTexture(tx, null, pixels, @intCast(texture.width * 4))) return error.TextureUpdate;
+}
+
 pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
     if (!sdl3) switch (interpolation) {
         .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),

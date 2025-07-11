@@ -9,7 +9,7 @@ const Backend = @This();
 pub const Common = @import("backends/common.zig");
 
 pub const GenericError = std.mem.Allocator.Error || error{BackendError};
-pub const TextureError = GenericError || error{ TextureCreate, TextureRead };
+pub const TextureError = GenericError || error{ TextureCreate, TextureRead, TextureUpdate, NotImplemented };
 
 /// The current implementation used
 pub const kind = Implementation.kind;
@@ -75,9 +75,18 @@ pub fn textureCreate(self: Backend, pixels: [*]const u8, width: u32, height: u32
     return self.impl.textureCreate(pixels, width, height, interpolation);
 }
 
+/// Update a `dvui.Texture` from premultiplied alpha `pixels` in RGBA.  The
+/// passed in texture must be created  with textureCreate
+pub fn textureUpdate(self: Backend, texture: dvui.Texture, pixels: [*]const u8) TextureError!void {
+    // we can handle backends that dont support textureUpdate by using destroy and create again!
+    if (comptime !@hasDecl(Implementation, "textureUpdate")) return TextureError.NotImplemented;
+    return self.impl.textureUpdate(texture, pixels);
+}
+
 /// Destroy `texture` made with `textureCreate`. After this call, this texture
 /// pointer will not be used by dvui.
 pub fn textureDestroy(self: Backend, texture: dvui.Texture) void {
+    // std.debug.print("destroy ptr {} w: {}, h:{}\n", .{ @intFromPtr(texture.ptr), texture.width, texture.height });
     return self.impl.textureDestroy(texture);
 }
 

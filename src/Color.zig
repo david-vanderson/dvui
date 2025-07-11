@@ -382,6 +382,87 @@ pub const PMA = extern struct {
     }
 };
 
+pub const PMAImage = struct {
+    pma: []PMA,
+    width: u32,
+    height: u32,
+    pub fn fromImageFile(dbg_name: []const u8, image_bytes: []const u8) dvui.StbImageError!PMAImage {
+        var w: c_int = undefined;
+        var h: c_int = undefined;
+        var channels_in_file: c_int = undefined;
+        const data = dvui.c.stbi_load_from_memory(image_bytes.ptr, @as(c_int, @intCast(image_bytes.len)), &w, &h, &channels_in_file, 4);
+        if (data == null) {
+            dvui.log.warn("imageTexture stbi_load error on image \"{s}\": {s}\n", .{ dbg_name, dvui.c.stbi_failure_reason() });
+            return dvui.StbImageError.stbImageError;
+        }
+        defer dvui.c.stbi_image_free(data);
+        return PMAImage{
+            .pma = PMA.sliceFromRGBA(data[0..@intCast(w * h * @sizeOf(Color.PMA))]),
+            .width = @intCast(w),
+            .height = @intCast(h),
+        };
+    }
+
+    /// the returned []PMA inside PMAImage must be freed with alloc
+    /// the render_alloc ist used for temporary allocations in the render process
+    pub fn fromTvgFile(dbg_name: []const u8, alloc: std.mem.Allocator, render_alloc: std.mem.Allocator, tvg_bytes: []const u8, height: u32, icon_opts: dvui.IconRenderOptions) !PMAImage {
+        const ImageAdapter = struct {
+            pixels: []u8,
+            width: u32,
+            height: u32,
+            pub fn setPixel(self: *@This(), x: usize, y: usize, col: [4]u8) void {
+                const idx = (y * self.height + x) * 4;
+                for (0..4) |i| self.pixels[idx + i] = col[i];
+            }
+            pub fn getPixel(self: *@This(), x: usize, y: usize) [4]u8 {
+                const idx = y * self.height + x;
+                const slice = self.pixels[idx * 4 .. (idx + 1) * 4];
+                var col: [4]u8 = undefined;
+                for (&col, slice) |*a, s| a.* = s;
+            }
+            fn conv(dcol: dvui.Color) dvui.tvg.Color {
+                return dvui.tvg.Color{
+                    .r = @as(f32, @floatFromInt(dcol.r)) / 255.0,
+                    .g = @as(f32, @floatFromInt(dcol.g)) / 255.0,
+                    .b = @as(f32, @floatFromInt(dcol.b)) / 255.0,
+                    .a = @as(f32, @floatFromInt(dcol.a)) / 255.0,
+                };
+            }
+        };
+
+        const img_raw_data = try alloc.alloc(u8, height * height * 4);
+
+        @memset(img_raw_data, 0);
+        var img = ImageAdapter{
+            .pixels = img_raw_data,
+            .width = height,
+            .height = height,
+        };
+        var fb = std.io.fixedBufferStream(tvg_bytes);
+
+        var ow_stroke: ?dvui.tvg.Color = null;
+        if (icon_opts.stroke_color) |cx| ow_stroke = ImageAdapter.conv(cx);
+        var ow_fill: ?dvui.tvg.Color = null;
+        var disable_fill = false;
+        if (ow_fill != null and ow_fill.?.a == 0.0) disable_fill = true;
+        if (icon_opts.fill_color) |cx| ow_fill = ImageAdapter.conv(cx);
+        dvui.tvg.renderStream(render_alloc, &img, fb.reader(), .{
+            .overwrite_stroke_width = icon_opts.stroke_width,
+            .overwrite_stroke = ow_stroke,
+            .overwrite_fill = ow_fill,
+            .disable_fill = disable_fill,
+        }) catch |err| {
+            dvui.log.warn("iconTexture Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, dbg_name, height });
+            return dvui.TvgError.tvgError;
+        };
+        return PMAImage{
+            .pma = std.mem.bytesAsSlice(PMA, img.pixels),
+            .width = img.width,
+            .height = img.height,
+        };
+    }
+};
+
 pub const HexString = [7]u8;
 
 /// Returns a hex color string in the format "#rrggbb"
