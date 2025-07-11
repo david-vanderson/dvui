@@ -834,13 +834,22 @@ pub fn dvuiColorToRaylib(color: dvui.Color) c.Color {
 pub fn dvuiRectToRaylib(rect: dvui.Rect.Physical) c.Rectangle {
     // raylib multiplies everything internally by the monitor scale, so we
     // have to divide by that
-    const s = c.GetWindowScaleDPI();
-    return c.Rectangle{
-        .x = rect.x / s.x,
-        .y = rect.y / s.y,
-        .width = rect.w / s.x,
-        .height = rect.h / s.y,
-    };
+    if (c.IsWindowState(c.FLAG_WINDOW_HIGHDPI)) {
+        const s = c.GetWindowScaleDPI();
+        return c.Rectangle{
+            .x = rect.x / s.x,
+            .y = rect.y / s.y,
+            .width = rect.w / s.x,
+            .height = rect.h / s.y,
+        };
+    } else {
+        return c.Rectangle{
+            .x = rect.x,
+            .y = rect.y,
+            .width = rect.w,
+            .height = rect.h,
+        };
+    }
 }
 
 pub fn EndDrawingWaitEventTimeout(_: *RaylibBackend, timeout_micros: u32) void {
