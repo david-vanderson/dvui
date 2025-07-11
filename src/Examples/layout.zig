@@ -263,7 +263,7 @@ pub fn layout() void {
     }
     dvui.label(@src(), "Collapsible Pane with Draggable Sash", .{}, .{});
     {
-        var paned = dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = paned_collapsed_width }, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 130 } });
+        var paned = dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = paned_collapsed_width }, .{ .expand = .horizontal, .background = false, .min_size_content = .{ .h = 130 } });
         defer paned.deinit();
 
         if (paned.showFirst()) {
