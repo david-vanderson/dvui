@@ -1,0 +1,368 @@
+/// ![image](Examples-scroll_canvas.png)
+pub fn scrollCanvas() void {
+    var vbox = dvui.box(@src(), .vertical, .{});
+    defer vbox.deinit();
+
+    const scroll_info = dvui.dataGetPtrDefault(null, vbox.data().id, "scroll_info", ScrollInfo, .{ .vertical = .given, .horizontal = .given });
+    const origin = dvui.dataGetPtrDefault(null, vbox.data().id, "origin", Point, .{});
+    const scale = dvui.dataGetPtrDefault(null, vbox.data().id, "scale", f32, 1.0);
+    const boxes = dvui.dataGetSliceDefault(null, vbox.data().id, "boxes", []Point, &.{ .{ .x = 50, .y = 10 }, .{ .x = 80, .y = 150 } });
+    const box_contents = dvui.dataGetSliceDefault(null, vbox.data().id, "box_contents", []u8, &.{ 1, 3 });
+
+    const drag_box_window = dvui.dataGetPtrDefault(null, vbox.data().id, "drag_box_window", usize, 0);
+    const drag_box_content = dvui.dataGetPtrDefault(null, vbox.data().id, "drag_box_content", usize, 0);
+
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .color_fill = .fill_window });
+    tl.addText("Click-drag to pan\n", .{});
+    tl.addText("Ctrl-wheel to zoom\n", .{});
+    tl.addText("Drag blue cubes from box to box\n\n", .{});
+    tl.format("Virtual size {d}x{d}\n", .{ scroll_info.virtual_size.w, scroll_info.virtual_size.h }, .{});
+    tl.format("Scroll Offset {d}x{d}\n", .{ scroll_info.viewport.x, scroll_info.viewport.y }, .{});
+    tl.format("Origin {d}x{d}\n", .{ origin.x, origin.y }, .{});
+    tl.format("Scale {d}", .{scale.*}, .{});
+    tl.deinit();
+
+    var scrollArea = dvui.scrollArea(@src(), .{ .scroll_info = scroll_info }, .{ .expand = .both, .min_size_content = .{ .w = 300, .h = 300 } });
+    var scrollContainer = &scrollArea.scroll.?;
+
+    // can use this to convert between viewport/virtual_size and screen coords
+    const scrollRectScale = scrollContainer.screenRectScale(.{});
+
+    var scaler = dvui.scale(@src(), .{ .scale = scale }, .{ .rect = .{ .x = -origin.x, .y = -origin.y } });
+
+    // can use this to convert between data and screen coords
+    const dataRectScale = scaler.screenRectScale(.{});
+
+    dvui.Path.stroke(.{ .points = &.{
+        dataRectScale.pointToPhysical(.{ .x = -10 }),
+        dataRectScale.pointToPhysical(.{ .x = 10 }),
+    } }, .{ .thickness = 1, .color = dvui.Color.black });
+
+    dvui.Path.stroke(.{ .points = &.{
+        dataRectScale.pointToPhysical(.{ .y = -10 }),
+        dataRectScale.pointToPhysical(.{ .y = 10 }),
+    } }, .{ .thickness = 1, .color = dvui.Color.black });
+
+    // keep record of bounding box
+    var mbbox: ?Rect.Physical = null;
+
+    const dragging_box = dvui.draggingName("box_transfer");
+    const evts = dvui.events();
+
+    for (boxes, 0..) |*b, i| {
+        var dragBox = dvui.box(@src(), .vertical, .{
+            .id_extra = i,
+            .rect = dvui.Rect{ .x = b.x, .y = b.y },
+            .padding = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
+            .background = true,
+            .color_fill = .fill_window,
+            .border = .{ .h = 1, .w = 1, .x = 1, .y = 1 },
+            .corner_radius = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
+            .color_border = if (dragging_box and i != drag_box_window.*) .lime else null,
+            .box_shadow = .{ .color = if (dragging_box and i != drag_box_window.*) .lime else .black },
+        });
+
+        const boxRect = dragBox.data().rectScale().r;
+        if (mbbox) |bb| {
+            mbbox = bb.unionWith(boxRect);
+        } else {
+            mbbox = boxRect;
+        }
+
+        // if user is dragging a box, we want first crack at events
+        if (dragging_box) {
+            for (evts) |*e| {
+                if (!dvui.eventMatchSimple(e, dragBox.data())) {
+                    continue;
+                }
+
+                switch (e.evt) {
+                    .mouse => |me| {
+                        if (me.action == .release and me.button.pointer()) {
+                            e.handle(@src(), dragBox.data());
+                            dvui.dragEnd();
+                            dvui.refresh(null, @src(), dragBox.data().id);
+
+                            if (drag_box_window.* != i) {
+                                // move box to new home
+                                box_contents[drag_box_window.*] -= 1;
+                                box_contents[1 - drag_box_window.*] += 1;
+                            }
+                        } else if (me.action == .position) {
+                            dvui.cursorSet(.crosshair);
+                        }
+                    },
+                    else => {},
+                }
+            }
+        }
+
+        dvui.label(@src(), "Box {d} {d:0>3.0}x{d:0>3.0}", .{ i, b.x, b.y }, .{});
+
+        {
+            var hbox = dvui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
+            if (dvui.buttonIcon(
+                @src(),
+                "left",
+                entypo.arrow_left,
+                .{},
+                .{},
+                .{ .min_size_content = .{ .h = 20 } },
+            )) {
+                b.x -= 10;
+            }
+
+            if (dvui.buttonIcon(
+                @src(),
+                "right",
+                entypo.arrow_right,
+                .{},
+                .{},
+                .{ .min_size_content = .{ .h = 20 } },
+            )) {
+                b.x += 10;
+            }
+        }
+
+        {
+            var hbox = dvui.box(@src(), .horizontal, .{ .margin = dvui.Rect.all(4), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4), .background = true, .color_fill = .fill_window });
+            defer hbox.deinit();
+
+            for (evts) |*e| {
+                if (!dvui.eventMatchSimple(e, hbox.data())) {
+                    continue;
+                }
+            }
+
+            for (0..box_contents[i]) |k| {
+                const dragging_this = dragging_box and i == drag_box_window.* and k == drag_box_content.*;
+
+                if (k > 0) {
+                    _ = dvui.spacer(@src(), .{ .min_size_content = .width(5), .id_extra = k });
+                }
+                const col = if (dragging_this) dvui.Color.lime.opacity(0.5) else dvui.Color.blue;
+                var dbox = dvui.box(@src(), .vertical, .{ .id_extra = k, .min_size_content = .{ .w = 20, .h = 20 }, .background = true, .color_fill = .{ .color = col } });
+                defer dbox.deinit();
+
+                for (evts) |*e| {
+                    if (!dvui.eventMatchSimple(e, dbox.data())) {
+                        continue;
+                    }
+
+                    switch (e.evt) {
+                        .mouse => |me| {
+                            if (me.action == .press and me.button.pointer()) {
+                                e.handle(@src(), dragBox.data());
+                                dvui.captureMouse(dbox.data(), e.num);
+                                dvui.dragPreStart(me.p, .{ .name = "box_transfer" });
+                            } else if (me.action == .motion) {
+                                if (dvui.captured(dbox.data().id)) {
+                                    e.handle(@src(), dragBox.data());
+                                    if (dvui.dragging(me.p)) |_| {
+                                        // started the drag
+                                        drag_box_window.* = i;
+                                        drag_box_content.* = k;
+                                        // give up capture so target can get mouse events, but don't end drag
+                                        dvui.captureMouse(null, e.num);
+                                    }
+                                }
+                            } else if (me.action == .position) {
+                                if (!dragging_box) {
+                                    dvui.cursorSet(.hand);
+                                }
+                            }
+                        },
+                        else => {},
+                    }
+                }
+            }
+        }
+
+        // process events to drag the box around
+        for (evts) |*e| {
+            if (!dragBox.matchEvent(e))
+                continue;
+
+            switch (e.evt) {
+                .mouse => |me| {
+                    if (me.action == .press and me.button.pointer()) {
+                        e.handle(@src(), dragBox.data());
+                        dvui.captureMouse(dragBox.data(), e.num);
+                        const offset = me.p.diff(dragBox.data().rectScale().r.topLeft()); // pixel offset from dragBox corner
+                        dvui.dragPreStart(me.p, .{ .offset = offset });
+                    } else if (me.action == .release and me.button.pointer()) {
+                        if (dvui.captured(dragBox.data().id)) {
+                            e.handle(@src(), dragBox.data());
+                            dvui.captureMouse(null, e.num);
+                            dvui.dragEnd();
+                        }
+                    } else if (me.action == .motion) {
+                        if (dvui.captured(dragBox.data().id)) {
+                            if (dvui.dragging(me.p)) |_| {
+                                const p = me.p.diff(dvui.dragOffset()); // pixel corner we want
+                                b.* = dataRectScale.pointFromPhysical(p);
+                                dvui.refresh(null, @src(), scrollContainer.data().id);
+
+                                dvui.scrollDrag(.{
+                                    .mouse_pt = e.evt.mouse.p,
+                                    .screen_rect = dragBox.data().rectScale().r,
+                                    .capture_id = dragBox.data().id,
+                                });
+                            }
+                        }
+                    }
+                },
+                else => {},
+            }
+        }
+
+        dragBox.deinit();
+    }
+
+    var zoom: f32 = 1;
+    var zoomP: Point.Physical = .{};
+
+    // process scroll area events after boxes so the boxes get first pick (so
+    // the button works)
+    for (evts) |*e| {
+        if (!scrollContainer.matchEvent(e))
+            continue;
+
+        switch (e.evt) {
+            .mouse => |me| {
+                if (me.action == .press and me.button.pointer()) {
+                    e.handle(@src(), scrollContainer.data());
+                    dvui.captureMouse(scrollContainer.data(), e.num);
+                    dvui.dragPreStart(me.p, .{});
+                } else if (me.action == .release and me.button.pointer()) {
+                    if (dvui.captured(scrollContainer.data().id)) {
+                        e.handle(@src(), scrollContainer.data());
+                        dvui.captureMouse(null, e.num);
+                        dvui.dragEnd();
+                    }
+                } else if (me.action == .motion) {
+                    if (me.button.touch() and dragging_box) {
+                        // eat touch motion events so they don't scroll
+                        e.handle(@src(), scrollContainer.data());
+                    }
+                    if (dvui.captured(scrollContainer.data().id)) {
+                        if (dvui.dragging(me.p)) |dps| {
+                            e.handle(@src(), scrollContainer.data());
+                            const rs = scrollRectScale;
+                            scroll_info.viewport.x -= dps.x / rs.s;
+                            scroll_info.viewport.y -= dps.y / rs.s;
+                            dvui.refresh(null, @src(), scrollContainer.data().id);
+                        }
+                    }
+                } else if (me.action == .wheel_y and me.mod.matchBind("ctrl/cmd")) {
+                    e.handle(@src(), scrollContainer.data());
+                    const base: f32 = 1.01;
+                    const zs = @exp(@log(base) * me.action.wheel_y);
+                    if (zs != 1.0) {
+                        zoom *= zs;
+                        zoomP = me.p;
+                    }
+                }
+            },
+            else => {},
+        }
+    }
+
+    if (zoom != 1.0) {
+        // scale around mouse point
+        // first get data point of mouse
+        const prevP = dataRectScale.pointFromPhysical(zoomP);
+
+        // scale
+        var pp = prevP.scale(1 / scale.*, Point);
+        scale.* *= zoom;
+        pp = pp.scale(scale.*, Point);
+
+        // get where the mouse would be now
+        const newP = dataRectScale.pointToPhysical(pp);
+
+        // convert both to viewport
+        const diff = scrollRectScale.pointFromPhysical(newP).diff(scrollRectScale.pointFromPhysical(zoomP));
+        scroll_info.viewport.x += diff.x;
+        scroll_info.viewport.y += diff.y;
+
+        dvui.refresh(null, @src(), scrollContainer.data().id);
+    }
+
+    scaler.deinit();
+
+    const scrollContainerId = scrollContainer.data().id;
+
+    // deinit is where scroll processes events
+    scrollArea.deinit();
+
+    // don't mess with scrolling if we aren't being shown (prevents weirdness
+    // when starting out)
+    if (!scroll_info.viewport.empty()) {
+        // add current viewport plus padding
+        const pad = 10;
+        var bbox = scroll_info.viewport.outsetAll(pad);
+        if (mbbox) |bb| {
+            // convert bb from screen space to viewport space
+            const scrollbbox = scrollRectScale.rectFromPhysical(bb);
+            bbox = bbox.unionWith(scrollbbox);
+        }
+
+        // adjust top if needed
+        if (bbox.y != 0) {
+            const adj = -bbox.y;
+            scroll_info.virtual_size.h += adj;
+            scroll_info.viewport.y += adj;
+            origin.y -= adj;
+            dvui.refresh(null, @src(), scrollContainerId);
+        }
+
+        // adjust left if needed
+        if (bbox.x != 0) {
+            const adj = -bbox.x;
+            scroll_info.virtual_size.w += adj;
+            scroll_info.viewport.x += adj;
+            origin.x -= adj;
+            dvui.refresh(null, @src(), scrollContainerId);
+        }
+
+        // adjust bottom if needed
+        if (bbox.h != scroll_info.virtual_size.h) {
+            scroll_info.virtual_size.h = bbox.h;
+            dvui.refresh(null, @src(), scrollContainerId);
+        }
+
+        // adjust right if needed
+        if (bbox.w != scroll_info.virtual_size.w) {
+            scroll_info.virtual_size.w = bbox.w;
+            dvui.refresh(null, @src(), scrollContainerId);
+        }
+    }
+
+    // Now we are after all widgets that deal with drag name "box_transfer".
+    // Any mouse release during a drag here means the user released the mouse
+    // outside any target widget.
+    if (dragging_box) {
+        var done = false;
+        for (evts) |*e| {
+            if (!e.handled and e.evt == .mouse and e.evt.mouse.action == .release) {
+                done = true;
+                dvui.dragEnd();
+                dvui.refresh(null, @src(), null);
+            }
+        }
+
+        if (!done) {
+            // still dragging, draw a half-opaque box to show we are dragging
+            const dr = Rect.Physical.fromPoint(dvui.currentWindow().mouse_pt.diff(.{ .x = 10, .y = 10 })).toSize(.all(20));
+            dr.fill(.{}, .{ .color = dvui.Color.lime.opacity(0.5) });
+        }
+    }
+}
+
+const dvui = @import("../dvui.zig");
+const entypo = dvui.entypo;
+const Point = dvui.Point;
+const Rect = dvui.Rect;
+const ScrollInfo = dvui.ScrollInfo;
