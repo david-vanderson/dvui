@@ -125,7 +125,7 @@ capture: ?dvui.CaptureMouse = null,
 captured_last_frame: bool = false,
 
 gpa: std.mem.Allocator,
-_arena: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
+_arena: if (zig_arena) std.heap.ArenaAllocator else dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
 _lifo_arena: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
 /// Used to allocate widgets with a fixed location
 _widget_stack: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
@@ -209,7 +209,7 @@ pub fn init(
 
     var self = Self{
         .gpa = gpa,
-        ._arena = if (init_opts.arena) |a| .initArena(a) else .init(gpa),
+        ._arena = if (init_opts.arena) |a| (if (zig_arena) a else .initArena(a)) else .init(gpa),
         ._lifo_arena = .init(gpa),
         ._widget_stack = .init(gpa),
         .wd = WidgetData{
@@ -471,6 +471,7 @@ pub fn deinit(self: *Self) void {
 /// For allocations that should live for the entire frame, see
 /// `Window.arena`
 pub fn lifo(self: *Self) std.mem.Allocator {
+    if (zig_arena) return self.arena();
     return self._lifo_arena.allocatorLIFO();
 }
 
@@ -1792,7 +1793,12 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // std.log.debug("peak widget stack {d} (0x{0x})", .{self.peak_widget_stack});
 
     // self._arena.debug_log();
-    _ = self._arena.reset(.shrink_to_peak_usage);
+    if (zig_arena) {
+        _ = self._arena.reset(.retain_capacity);
+    } else {
+        _ = self._arena.reset(.shrink_to_peak_usage);
+    }
+
     if (self._lifo_arena.current_usage != 0 and !self._lifo_arena.has_expanded()) {
         log.warn("Arena was not empty at the end of the frame, {d} bytes left. Did you forget to free memory somewhere?", .{self._lifo_arena.current_usage});
         // const buf: [*]u8 = @ptrCast(self._lifo_arena.arena.state.buffer_list.first.?);
@@ -1899,6 +1905,8 @@ const std = @import("std");
 const math = std.math;
 const builtin = @import("builtin");
 const dvui = @import("dvui.zig");
+
+const zig_arena = @import("build_options").zig_arena orelse false;
 
 test {
     @import("std").testing.refAllDecls(@This());

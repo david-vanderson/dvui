@@ -193,6 +193,10 @@ pub fn currentWindow() *Window {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetAlloc(comptime T: type) *T {
+    if (@import("build_options").zig_arena orelse false) {
+        return currentWindow().arena().create(T) catch @panic("OOM");
+    }
+
     const cw = currentWindow();
     const alloc = cw._widget_stack.allocator();
     const ptr = alloc.create(T) catch {
@@ -210,6 +214,10 @@ pub fn widgetAlloc(comptime T: type) *T {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetFree(ptr: anytype) void {
+    if (@import("build_options").zig_arena orelse false) {
+        return;
+    }
+
     const ws = &currentWindow()._widget_stack;
     // NOTE: We cannot use `allocatorLIFO` because of widgets that
     //       store other widgets in their fields, which would cause
@@ -5347,7 +5355,12 @@ pub const ImageSource = union(enum) {
     }
 };
 
-/// Get Size
+/// Get the size of a raster image.  If source is .imageFile, this only decodes
+/// enough info to get the size.
+///
+/// See `image`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn imageSize(source: ImageSource) !Size {
     switch (source) {
         .imageFile => |file| {
@@ -5384,7 +5397,10 @@ pub const ImageInitOptions = struct {
     uv: Rect = .{ .w = 1, .h = 1 },
 };
 
-/// Show raster image.
+/// Show raster image.  dvui will handle texture creation/destruction for you,
+/// unless the source is .texture.  See ImageSource.InvalidationStrategy.
+///
+/// See `imageSize`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts: Options) WidgetData {
