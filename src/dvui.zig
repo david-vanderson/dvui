@@ -5238,7 +5238,7 @@ pub const ImageSource = union(enum) {
         // Optional name/filename for debugging
         name: []const u8 = "imageFile",
         interpolation: enums.TextureInterpolation = .linear,
-        invalidate: InvalidationStrategy = .ptr,
+        invalidation: InvalidationStrategy = .ptr,
     },
 
     /// bytes of an premultiplied rgba u8 array in row major order
@@ -5247,7 +5247,7 @@ pub const ImageSource = union(enum) {
         width: u32,
         height: u32,
         interpolation: enums.TextureInterpolation = .linear,
-        invalidate: InvalidationStrategy = .ptr,
+        invalidation: InvalidationStrategy = .ptr,
     },
 
     /// bytes of a non premultiplied rgba u8 array in row major order, will
@@ -5259,7 +5259,7 @@ pub const ImageSource = union(enum) {
         width: u32,
         height: u32,
         interpolation: enums.TextureInterpolation = .linear,
-        invalidate: InvalidationStrategy = .ptr,
+        invalidation: InvalidationStrategy = .ptr,
     },
 
     /// When providing a texture directly, `hash` will return 0 and it will
@@ -5295,7 +5295,7 @@ pub const ImageSource = union(enum) {
 
         switch (self) {
             .imageFile => |file| {
-                switch (file.invalidate) {
+                switch (file.invalidation) {
                     .ptr => h.update(std.mem.asBytes(&file.bytes.ptr)),
                     .bytes => h.update(file.bytes),
                     .always => {
@@ -5306,7 +5306,7 @@ pub const ImageSource = union(enum) {
                 h.update(std.mem.asBytes(&@intFromEnum(file.interpolation)));
             },
             .pixelsPMA => |pixels| {
-                switch (pixels.invalidate) {
+                switch (pixels.invalidation) {
                     .ptr, .always => h.update(std.mem.asBytes(&pixels.rgba.ptr)),
                     .bytes => h.update(@ptrCast(pixels.rgba)),
                 }
@@ -5314,7 +5314,7 @@ pub const ImageSource = union(enum) {
                 h.update(img_dim_bytes);
             },
             .pixels => |pixels| {
-                switch (pixels.invalidate) {
+                switch (pixels.invalidation) {
                     .ptr, .always => h.update(std.mem.asBytes(&pixels.rgba.ptr)),
                     .bytes => h.update(std.mem.sliceAsBytes(pixels.rgba)),
                 }
@@ -5332,9 +5332,9 @@ pub const ImageSource = union(enum) {
     pub fn getTexture(self: ImageSource) !Texture {
         const key = self.hash();
         const invalidate = switch (self) {
-            .imageFile => |f| f.invalidate,
-            .pixels => |px| px.invalidate,
-            .pixelsPMA => |px| px.invalidate,
+            .imageFile => |f| f.invalidation,
+            .pixels => |px| px.invalidation,
+            .pixelsPMA => |px| px.invalidation,
             // return texture directly
             .texture => |tex| return tex,
         };
