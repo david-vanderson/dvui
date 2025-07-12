@@ -800,20 +800,29 @@ pub fn FieldOptions(comptime T: type) type {
 
 pub fn NamespaceFieldOptions(comptime T: type) type {
     var fields: [std.meta.fields(T).len]std.builtin.Type.StructField = undefined;
-
-    inline for (std.meta.fields(T), 0..) |field, i| {
+    var field_count = 0;
+    inline for (std.meta.fields(T)) |field| {
+        const type_info = @typeInfo(field.type);
+        if (type_info == .pointer) {
+            switch (@typeInfo(type_info.pointer.child)) {
+                .@"opaque" => continue,
+                .@"fn" => continue,
+                else => {},
+            }
+        }
         const FieldType = FieldOptions(field.type);
-        fields[i] = .{
+        fields[field_count] = .{
             .alignment = 1,
             .default_value_ptr = &(@as(FieldType, FieldType{})),
             .is_comptime = false,
             .name = field.name,
             .type = FieldType,
         };
+        field_count += 1;
     }
     return @Type(.{ .@"struct" = .{
         .decls = &.{},
-        .fields = &fields,
+        .fields = fields[0..field_count],
         .is_tuple = false,
         .layout = .auto,
     } });
