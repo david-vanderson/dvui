@@ -5,6 +5,8 @@ const Color = @This();
 const dvui = @import("dvui.zig");
 const ColorsFromTheme = dvui.Options.ColorsFromTheme;
 
+const tvg = @import("svg2tvg");
+
 r: u8 = 0xff,
 g: u8 = 0xff,
 b: u8 = 0xff,
@@ -420,8 +422,8 @@ pub const PMAImage = struct {
                 var col: [4]u8 = undefined;
                 for (&col, slice) |*a, s| a.* = s;
             }
-            fn conv(dcol: dvui.Color) dvui.tvg.Color {
-                return dvui.tvg.Color{
+            fn conv(dcol: dvui.Color) tvg.Color {
+                return tvg.Color{
                     .r = @as(f32, @floatFromInt(dcol.r)) / 255.0,
                     .g = @as(f32, @floatFromInt(dcol.g)) / 255.0,
                     .b = @as(f32, @floatFromInt(dcol.b)) / 255.0,
@@ -440,13 +442,13 @@ pub const PMAImage = struct {
         };
         var fb = std.io.fixedBufferStream(tvg_bytes);
 
-        var ow_stroke: ?dvui.tvg.Color = null;
+        var ow_stroke: ?tvg.Color = null;
         if (icon_opts.stroke_color) |cx| ow_stroke = ImageAdapter.conv(cx);
-        var ow_fill: ?dvui.tvg.Color = null;
+        var ow_fill: ?tvg.Color = null;
         var disable_fill = false;
         if (ow_fill != null and ow_fill.?.a == 0.0) disable_fill = true;
         if (icon_opts.fill_color) |cx| ow_fill = ImageAdapter.conv(cx);
-        dvui.tvg.renderStream(render_alloc, &img, fb.reader(), .{
+        tvg.renderStream(render_alloc, &img, fb.reader(), .{
             .overwrite_stroke_width = icon_opts.stroke_width,
             .overwrite_stroke = ow_stroke,
             .overwrite_fill = ow_fill,

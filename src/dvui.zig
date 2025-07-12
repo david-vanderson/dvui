@@ -20,7 +20,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
 pub const backend = @import("backend");
-pub const tvg = @import("svg2tvg");
+const tvg = @import("svg2tvg");
 
 pub const math = std.math;
 pub const fnv = std.hash.Fnv1a_64;
@@ -5326,7 +5326,7 @@ pub const ImageSource = union(enum) {
         return h.final();
     }
 
-    /// Will get the texture from cache or create it if it doesn't already exist;
+    /// Will get the texture from cache or create it if it doesn't already exist
     ///
     /// Only valid between `Window.begin` and `Window.end`
     pub fn getTexture(self: ImageSource) !Texture {
