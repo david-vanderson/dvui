@@ -5349,7 +5349,6 @@ pub const ImageSource = union(enum) {
             // cache was empty we create a new Texture
             const new_texture = try Texture.fromImageSource(self);
             textureAddToCache(key, new_texture);
-            std.log.warn("added {}, w: {}, h: {} to the cache", .{ key, new_texture.width, new_texture.height });
             return new_texture;
         }
     }
