@@ -320,9 +320,9 @@ fn textFieldWidget(
 // or unions)
 
 //=======Optional Field Widget and Options=======
-pub fn UnionFieldOptions(comptime T: type) type {
+pub fn UnionFieldOptions(comptime T: type, exclude: anytype) type {
     return struct {
-        fields: NamespaceFieldOptions(T) = .{},
+        fields: NamespaceFieldOptions(T, exclude) = .{},
         disabled: bool = false,
         label_override: ?[]const u8 = null,
     };
@@ -331,8 +331,9 @@ pub fn UnionFieldOptions(comptime T: type) type {
 pub fn unionFieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    exclude: anytype,
     result: *T,
-    opt: UnionFieldOptions(T),
+    opt: UnionFieldOptions(T, exclude),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
@@ -379,15 +380,15 @@ pub fn unionFieldWidget(
             });
             line.deinit();
 
-            fieldWidget(field.name, field.type, @ptrCast(field_result), @field(opt.fields, field.name), alloc, allocator, alignment);
+            fieldWidget(field.name, field.type, exclude, @ptrCast(field_result), @field(opt.fields, field.name), alloc, allocator, alignment);
         }
     }
 }
 
 //=======Optional Field Widget and Options=======
-pub fn OptionalFieldOptions(comptime T: type) type {
+pub fn OptionalFieldOptions(comptime T: type, comptime exclude: anytype) type {
     return struct {
-        child: FieldOptions(@typeInfo(T).optional.child) = .{},
+        child: FieldOptions(@typeInfo(T).optional.child, exclude) = .{},
         disabled: bool = false,
         label_override: ?[]const u8 = null,
     };
@@ -396,8 +397,9 @@ pub fn OptionalFieldOptions(comptime T: type) type {
 pub fn optionalFieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    comptime exclude: anytype,
     result: *T,
-    opt: OptionalFieldOptions(T),
+    opt: OptionalFieldOptions(T, exclude),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
@@ -426,21 +428,21 @@ pub fn optionalFieldWidget(
             .margin = .{ .w = 10, .x = 10 },
         });
         line.deinit();
-        fieldWidget("", Child, @ptrCast(result), opt.child, alloc, allocator, alignment);
+        fieldWidget("", Child, exclude, @ptrCast(result), opt.child, alloc, allocator, alignment);
     } else {
         result.* = null;
     }
 }
 
-pub fn PointerFieldOptions(comptime T: type) type {
+pub fn PointerFieldOptions(comptime T: type, exclude: anytype) type {
     const info = @typeInfo(T).pointer;
 
     if (info.size == .slice and info.child == u8) {
         return TextFieldOptions;
     } else if (info.size == .slice) {
-        return SliceFieldOptions(T);
+        return SliceFieldOptions(T, exclude);
     } else if (info.size == .one) {
-        return SinglePointerFieldOptions(T);
+        return SinglePointerFieldOptions(T, exclude);
     } else if (info.size == .c or info.size == .many) {
         @compileError("Many item pointers disallowed");
     }
@@ -449,8 +451,9 @@ pub fn PointerFieldOptions(comptime T: type) type {
 pub fn pointerFieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    comptime exclude: anytype,
     result: *T,
-    opt: PointerFieldOptions(T),
+    opt: PointerFieldOptions(T, exclude),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
@@ -460,18 +463,18 @@ pub fn pointerFieldWidget(
     if (info.size == .slice and info.child == u8) {
         textFieldWidget(name, T, result, opt, alloc, allocator, alignment);
     } else if (info.size == .slice) {
-        sliceFieldWidget(name, T, result, opt, alloc, allocator, alignment);
+        sliceFieldWidget(name, T, exclude, result, opt, alloc, allocator, alignment);
     } else if (info.size == .one) {
-        singlePointerFieldWidget(name, T, result, opt, alloc, allocator, alignment);
+        singlePointerFieldWidget(name, T, exclude, result, opt, alloc, allocator, alignment);
     } else if (info.size == .c or info.size == .many) {
         @compileError("structEntry does not support *C or Many pointers");
     }
 }
 
 //=======Single Item pointer and options=======
-pub fn SinglePointerFieldOptions(comptime T: type) type {
+pub fn SinglePointerFieldOptions(comptime T: type, exclude: anytype) type {
     return struct {
-        child: FieldOptions(@typeInfo(T).pointer.child) = .{},
+        child: FieldOptions(@typeInfo(T).pointer.child, exclude) = .{},
         disabled: bool = false,
         //label_override: ?[]const u8 = null,
     };
@@ -480,8 +483,9 @@ pub fn SinglePointerFieldOptions(comptime T: type) type {
 pub fn singlePointerFieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    comptime exclude: anytype,
     result: *T,
-    opt: SinglePointerFieldOptions(T),
+    opt: SinglePointerFieldOptions(T, exclude),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
@@ -519,7 +523,7 @@ pub fn singlePointerFieldWidget(
             dvui.label(@src(), ": {any}", .{result.*.*}, .{});
         },
         .mutate_value_in_place => {
-            fieldWidget(name, Child, result.*, opt.child, alloc, allocator, alignment);
+            fieldWidget(name, Child, exclude, result.*, opt.child, alloc, allocator, alignment);
         },
         .copy_value_and_alloc_new => {
             //TODO
@@ -530,9 +534,9 @@ pub fn singlePointerFieldWidget(
 
 //=========Array Field Widget and Options==========
 
-pub fn ArrayFieldOptions(comptime T: type) type {
+pub fn ArrayFieldOptions(comptime T: type, exclude: anytype) type {
     return struct {
-        child: FieldOptions(@typeInfo(T).array.child) = .{},
+        child: FieldOptions(@typeInfo(T).array.child, exclude) = .{},
         label_override: ?[]const u8 = null,
         disabled: bool = false,
     };
@@ -541,26 +545,27 @@ pub fn ArrayFieldOptions(comptime T: type) type {
 pub fn arrayFieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    comptime exclude: anytype,
     result: *T,
-    opt: ArrayFieldOptions(T),
+    opt: ArrayFieldOptions(T, exclude),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
 ) void {
     const SliceType = []@typeInfo(T).array.child;
     var slice_result: SliceType = &(result.*);
-    const slice_opts = SliceFieldOptions(SliceType){
+    const slice_opts = SliceFieldOptions(SliceType, exclude){
         .child = opt.child,
         .label_override = opt.label_override,
         .disabled = opt.disabled,
     };
-    sliceFieldWidget(name, SliceType, &slice_result, slice_opts, alloc, allocator, alignment);
+    sliceFieldWidget(name, SliceType, exclude, &slice_result, slice_opts, alloc, allocator, alignment);
 }
 
 //=======Single Item pointer and options=======
-pub fn SliceFieldOptions(comptime T: type) type {
+pub fn SliceFieldOptions(comptime T: type, exclude: anytype) type {
     return struct {
-        child: FieldOptions(@typeInfo(T).pointer.child) = .{},
+        child: FieldOptions(@typeInfo(T).pointer.child, exclude) = .{},
         label_override: ?[]const u8 = null,
         disabled: bool = false,
     };
@@ -569,8 +574,9 @@ pub fn SliceFieldOptions(comptime T: type) type {
 pub fn sliceFieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    comptime exclude: anytype,
     result: *T,
-    opt: SliceFieldOptions(T),
+    opt: SliceFieldOptions(T, exclude),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
@@ -651,7 +657,7 @@ pub fn sliceFieldWidget(
             },
         }
 
-        fieldWidget("name", Child, @alignCast(@ptrCast(&(result.*[i]))), opt.child, alloc, allocator, alignment);
+        fieldWidget("name", Child, exclude, @alignCast(@ptrCast(&(result.*[i]))), opt.child, alloc, allocator, alignment);
     }
 
     // show a final slot that allows dropping an entry at the end of the list
@@ -681,7 +687,7 @@ pub fn sliceFieldWidget(
                 //TODO realloc here with allocator parameter
             }
 
-            fieldWidget(@typeName(T), Child, @ptrCast(new_item), opt.child, alloc, allocator, alignment);
+            fieldWidget(@typeName(T), Child, exclude, @ptrCast(new_item), opt.child, alloc, allocator, alignment);
         },
         .copy_value_and_alloc_new => {
             //TODO
@@ -700,9 +706,9 @@ pub fn sliceFieldWidget(
 }
 
 //==========Struct Field Widget and Options
-pub fn StructFieldOptions(comptime T: type) type {
+pub fn StructFieldOptions(comptime T: type, exclude: anytype) type {
     return struct {
-        fields: NamespaceFieldOptions(T) = .{},
+        fields: NamespaceFieldOptions(T, exclude) = .{},
         disabled: bool = false,
         label_override: ?[]const u8 = null,
         use_expander: bool = true,
@@ -713,8 +719,9 @@ pub fn StructFieldOptions(comptime T: type) type {
 fn structFieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    comptime exclude: anytype,
     result: *T,
-    opt: StructFieldOptions(T),
+    opt: StructFieldOptions(T, exclude),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
 ) void {
@@ -761,6 +768,7 @@ fn structFieldWidget(
         defer left_alignment.deinit();
 
         inline for (fields, 0..) |field, i| {
+            if (comptime isExcluded(field.name, exclude)) continue;
             const options = @field(opt.fields, field.name);
             if (!options.disabled) {
                 const result_ptr = &@field(result.*, field.name);
@@ -776,44 +784,47 @@ fn structFieldWidget(
                 //defer hbox_aligned.deinit();
                 //left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-                fieldWidget(field.name, field.type, result_ptr, options, alloc, allocator, &left_alignment);
+                fieldWidget(field.name, field.type, exclude, result_ptr, options, alloc, allocator, &left_alignment);
             }
         }
     }
 }
 
 //=========Generic Field Widget and Options Implementations===========
-pub fn FieldOptions(comptime T: type) type {
+pub fn FieldOptions(comptime T: type, exclude: anytype) type {
     return switch (@typeInfo(T)) {
         .int => IntFieldOptions(T),
         .float => FloatFieldOptions(T),
         .@"enum" => EnumFieldOptions,
         .bool => BoolFieldOptions,
-        .@"struct" => StructFieldOptions(T),
-        .@"union" => UnionFieldOptions(T),
-        .optional => OptionalFieldOptions(T),
-        .pointer => PointerFieldOptions(T),
-        .array => ArrayFieldOptions(T),
+        .@"struct" => StructFieldOptions(T, exclude),
+        .@"union" => UnionFieldOptions(T, exclude),
+        .optional => OptionalFieldOptions(T, exclude),
+        .pointer => PointerFieldOptions(T, exclude),
+        .array => ArrayFieldOptions(T, exclude),
         else => @compileError("Invalid Type: " ++ @typeName(T)),
     };
 }
 
-pub fn NamespaceFieldOptions(comptime T: type) type {
+pub fn NamespaceFieldOptions(comptime T: type, exclude: anytype) type {
     var fields: [std.meta.fields(T).len]std.builtin.Type.StructField = undefined;
-
-    inline for (std.meta.fields(T), 0..) |field, i| {
-        const FieldType = FieldOptions(field.type);
-        fields[i] = .{
+    var field_count = 0;
+    inline for (std.meta.fields(T)) |field| {
+        if (isExcluded(field.name, exclude)) continue;
+        const FieldType = FieldOptions(field.type, exclude);
+        fields[field_count] = .{
             .alignment = 1,
             .default_value_ptr = &(@as(FieldType, FieldType{})),
             .is_comptime = false,
             .name = field.name,
             .type = FieldType,
         };
+        field_count += 1;
     }
+
     return @Type(.{ .@"struct" = .{
         .decls = &.{},
-        .fields = &fields,
+        .fields = fields[0..field_count],
         .is_tuple = false,
         .layout = .auto,
     } });
@@ -822,8 +833,9 @@ pub fn NamespaceFieldOptions(comptime T: type) type {
 pub fn fieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    comptime exclude: anytype,
     result: *T,
-    options: FieldOptions(T),
+    options: FieldOptions(T, exclude),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
@@ -833,11 +845,11 @@ pub fn fieldWidget(
         .float => floatFieldWidget(name, T, result, options, alignment),
         .bool => boolFieldWidget(name, result, options, alignment),
         .@"enum" => enumFieldWidget(name, T, result, options, alignment),
-        .pointer => pointerFieldWidget(name, T, result, options, alloc, allocator, alignment),
+        .pointer => pointerFieldWidget(name, T, exclude, result, options, alloc, allocator, alignment),
         .optional => optionalFieldWidget(name, T, result, options, alloc, allocator, alignment),
-        .@"union" => unionFieldWidget(name, T, result, options, alloc, allocator, alignment),
-        .@"struct" => structFieldWidget(name, T, result, options, alloc, allocator),
-        .array => arrayFieldWidget(name, T, result, options, alloc, allocator, alignment),
+        .@"union" => unionFieldWidget(name, T, exclude, result, options, alloc, allocator, alignment),
+        .@"struct" => structFieldWidget(name, T, exclude, result, options, alloc, allocator),
+        .array => arrayFieldWidget(name, T, exclude, result, options, alloc, allocator, alignment),
         else => @compileError("Invalid type: " ++ @typeName(T)),
     }
 }
@@ -846,39 +858,51 @@ pub fn fieldWidget(
 //============PUBLIC API FUNCTIONS===============
 //===============================================
 
+fn isExcluded(field_name: []const u8, exclusions: anytype) bool {
+    for (exclusions) |excluded_name| {
+        if (std.mem.eql(u8, field_name, @tagName(excluded_name))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 pub fn structEntry(
     comptime src: std.builtin.SourceLocation,
     comptime T: type,
+    comptime exclude: anytype,
     result: *T,
     opts: dvui.Options,
 ) void {
     var box = dvui.box(src, .vertical, opts);
     defer box.deinit();
-    structFieldWidget("", T, result, .{}, false, null);
+    structFieldWidget("", T, exclude, result, .{}, false, null);
 }
 
 pub fn structEntryEx(
     comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     comptime T: type,
+    comptime exclude: anytype,
     result: *T,
-    field_options: StructFieldOptions(T),
+    field_options: StructFieldOptions(T, exclude),
 ) void {
     var box = dvui.box(src, .vertical, .{ .expand = .both });
     defer box.deinit();
-    structFieldWidget(name, T, result, field_options, false, null);
+    structFieldWidget(name, T, exclude, result, field_options, false, null);
 }
 
 pub fn structEntryAlloc(
     comptime src: std.builtin.SourceLocation,
     allocator: std.mem.Allocator,
     comptime T: type,
+    comptime exclude: anytype,
     result: *T,
     opts: dvui.Options,
 ) void {
     var box = dvui.box(src, .vertical, opts);
     defer box.deinit();
-    structFieldWidget("", T, result, .{}, true, allocator);
+    structFieldWidget("", T, exclude, result, .{}, true, allocator);
 }
 
 pub fn structEntryExAlloc(
@@ -886,12 +910,13 @@ pub fn structEntryExAlloc(
     allocator: std.mem.Allocator,
     comptime name: []const u8,
     comptime T: type,
+    comptime exclude: anytype,
     result: *T,
     field_options: StructFieldOptions(T),
 ) void {
     var box = dvui.box(src, .vertical, .{ .expand = .both });
     defer box.deinit();
-    structFieldWidget(name, T, result, field_options, true, allocator);
+    structFieldWidget(name, T, exclude, result, field_options, true, allocator);
 }
 
 //===============================================
