@@ -320,9 +320,9 @@ fn textFieldWidget(
 // or unions)
 
 //=======Optional Field Widget and Options=======
-pub fn UnionFieldOptions(comptime T: type) type {
+pub fn UnionFieldOptions(comptime T: type, comptime follow_pointers: bool) type {
     return struct {
-        fields: NamespaceFieldOptions(T) = .{},
+        fields: NamespaceFieldOptions(T, follow_pointers) = .{},
         disabled: bool = false,
         label_override: ?[]const u8 = null,
     };
@@ -331,8 +331,9 @@ pub fn UnionFieldOptions(comptime T: type) type {
 pub fn unionFieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    comptime follow_pointers: bool,
     result: *T,
-    opt: UnionFieldOptions(T),
+    opt: UnionFieldOptions(T, follow_pointers),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
@@ -379,15 +380,15 @@ pub fn unionFieldWidget(
             });
             line.deinit();
 
-            fieldWidget(field.name, field.type, @ptrCast(field_result), @field(opt.fields, field.name), alloc, allocator, alignment);
+            fieldWidget(field.name, field.type, follow_pointers, @ptrCast(field_result), @field(opt.fields, field.name), alloc, allocator, alignment);
         }
     }
 }
 
 //=======Optional Field Widget and Options=======
-pub fn OptionalFieldOptions(comptime T: type) type {
+pub fn OptionalFieldOptions(comptime T: type, comptime follow_pointers: bool) type {
     return struct {
-        child: FieldOptions(@typeInfo(T).optional.child) = .{},
+        child: FieldOptions(@typeInfo(T).optional.child, follow_pointers) = .{},
         disabled: bool = false,
         label_override: ?[]const u8 = null,
     };
@@ -396,8 +397,9 @@ pub fn OptionalFieldOptions(comptime T: type) type {
 pub fn optionalFieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    comptime follow_pointers: bool,
     result: *T,
-    opt: OptionalFieldOptions(T),
+    opt: OptionalFieldOptions(T, follow_pointers),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
@@ -426,13 +428,13 @@ pub fn optionalFieldWidget(
             .margin = .{ .w = 10, .x = 10 },
         });
         line.deinit();
-        fieldWidget("", Child, @ptrCast(result), opt.child, alloc, allocator, alignment);
+        fieldWidget("", Child, follow_pointers, @ptrCast(result), opt.child, alloc, allocator, alignment);
     } else {
         result.* = null;
     }
 }
 
-pub fn PointerFieldOptions(comptime T: type) type {
+pub fn PointerFieldOptions(comptime T: type, comptime follow_pointers: bool) type {
     const info = @typeInfo(T).pointer;
 
     if (info.size == .slice and info.child == u8) {
@@ -440,7 +442,7 @@ pub fn PointerFieldOptions(comptime T: type) type {
     } else if (info.size == .slice) {
         return SliceFieldOptions(T);
     } else if (info.size == .one) {
-        return SinglePointerFieldOptions(T);
+        return SinglePointerFieldOptions(T, follow_pointers);
     } else if (info.size == .c or info.size == .many) {
         @compileError("Many item pointers disallowed");
     }
@@ -449,8 +451,9 @@ pub fn PointerFieldOptions(comptime T: type) type {
 pub fn pointerFieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    comptime follow_pointers: bool,
     result: *T,
-    opt: PointerFieldOptions(T),
+    opt: PointerFieldOptions(T, follow_pointers),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
@@ -460,18 +463,18 @@ pub fn pointerFieldWidget(
     if (info.size == .slice and info.child == u8) {
         textFieldWidget(name, T, result, opt, alloc, allocator, alignment);
     } else if (info.size == .slice) {
-        sliceFieldWidget(name, T, result, opt, alloc, allocator, alignment);
+        sliceFieldWidget(name, T, follow_pointers, result, opt, alloc, allocator, alignment);
     } else if (info.size == .one) {
-        singlePointerFieldWidget(name, T, result, opt, alloc, allocator, alignment);
+        singlePointerFieldWidget(name, T, follow_pointers, result, opt, alloc, allocator, alignment);
     } else if (info.size == .c or info.size == .many) {
         @compileError("structEntry does not support *C or Many pointers");
     }
 }
 
 //=======Single Item pointer and options=======
-pub fn SinglePointerFieldOptions(comptime T: type) type {
+pub fn SinglePointerFieldOptions(comptime T: type, follow_pointers: bool) type {
     return struct {
-        child: FieldOptions(@typeInfo(T).pointer.child) = .{},
+        child: FieldOptions(@typeInfo(T).pointer.child, follow_pointers) = .{},
         disabled: bool = false,
         //label_override: ?[]const u8 = null,
     };
@@ -480,8 +483,9 @@ pub fn SinglePointerFieldOptions(comptime T: type) type {
 pub fn singlePointerFieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    comptime follow_pointers: bool,
     result: *T,
-    opt: SinglePointerFieldOptions(T),
+    opt: SinglePointerFieldOptions(T, follow_pointers),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
@@ -519,7 +523,7 @@ pub fn singlePointerFieldWidget(
             dvui.label(@src(), ": {any}", .{result.*.*}, .{});
         },
         .mutate_value_in_place => {
-            fieldWidget(name, Child, result.*, opt.child, alloc, allocator, alignment);
+            fieldWidget(name, Child, follow_pointers, result.*, opt.child, alloc, allocator, alignment);
         },
         .copy_value_and_alloc_new => {
             //TODO
@@ -532,7 +536,7 @@ pub fn singlePointerFieldWidget(
 
 pub fn ArrayFieldOptions(comptime T: type) type {
     return struct {
-        child: FieldOptions(@typeInfo(T).array.child) = .{},
+        child: FieldOptions(@typeInfo(T).array.child, false) = .{},
         label_override: ?[]const u8 = null,
         disabled: bool = false,
     };
@@ -541,6 +545,7 @@ pub fn ArrayFieldOptions(comptime T: type) type {
 pub fn arrayFieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    comptime follow_pointers: bool,
     result: *T,
     opt: ArrayFieldOptions(T),
     comptime alloc: bool,
@@ -554,13 +559,13 @@ pub fn arrayFieldWidget(
         .label_override = opt.label_override,
         .disabled = opt.disabled,
     };
-    sliceFieldWidget(name, SliceType, &slice_result, slice_opts, alloc, allocator, alignment);
+    sliceFieldWidget(name, SliceType, follow_pointers, &slice_result, slice_opts, alloc, allocator, alignment);
 }
 
 //=======Single Item pointer and options=======
 pub fn SliceFieldOptions(comptime T: type) type {
     return struct {
-        child: FieldOptions(@typeInfo(T).pointer.child) = .{},
+        child: FieldOptions(@typeInfo(T).pointer.child, true) = .{},
         label_override: ?[]const u8 = null,
         disabled: bool = false,
     };
@@ -569,6 +574,7 @@ pub fn SliceFieldOptions(comptime T: type) type {
 pub fn sliceFieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    comptime follow_pointers: bool,
     result: *T,
     opt: SliceFieldOptions(T),
     comptime alloc: bool,
@@ -651,7 +657,7 @@ pub fn sliceFieldWidget(
             },
         }
 
-        fieldWidget("name", Child, @alignCast(@ptrCast(&(result.*[i]))), opt.child, alloc, allocator, alignment);
+        fieldWidget("name", Child, follow_pointers, @alignCast(@ptrCast(&(result.*[i]))), opt.child, alloc, allocator, alignment);
     }
 
     // show a final slot that allows dropping an entry at the end of the list
@@ -681,7 +687,7 @@ pub fn sliceFieldWidget(
                 //TODO realloc here with allocator parameter
             }
 
-            fieldWidget(@typeName(T), Child, @ptrCast(new_item), opt.child, alloc, allocator, alignment);
+            fieldWidget(@typeName(T), Child, follow_pointers, @ptrCast(new_item), opt.child, alloc, allocator, alignment);
         },
         .copy_value_and_alloc_new => {
             //TODO
@@ -700,9 +706,10 @@ pub fn sliceFieldWidget(
 }
 
 //==========Struct Field Widget and Options
-pub fn StructFieldOptions(comptime T: type) type {
+pub fn StructFieldOptions(comptime T: type, comptime follow_pointers: bool) type {
+    //if (follow_pointers == false) @compileError(std.fmt.comptimePrint("Type = {s}, follow = {}\n", .{ @typeName(T), follow_pointers }));
     return struct {
-        fields: NamespaceFieldOptions(T) = .{},
+        fields: NamespaceFieldOptions(T, follow_pointers) = .{},
         disabled: bool = false,
         label_override: ?[]const u8 = null,
         use_expander: bool = true,
@@ -713,8 +720,9 @@ pub fn StructFieldOptions(comptime T: type) type {
 fn structFieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    comptime follow_pointers: bool,
     result: *T,
-    opt: StructFieldOptions(T),
+    opt: StructFieldOptions(T, follow_pointers),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
 ) void {
@@ -761,6 +769,13 @@ fn structFieldWidget(
         defer left_alignment.deinit();
 
         inline for (fields, 0..) |field, i| {
+            const type_info = @typeInfo(field.type);
+            if ((type_info == .pointer and type_info.pointer.size != .slice) or (type_info == .optional and (@typeInfo(type_info.optional.child) == .pointer and @typeInfo(type_info.optional.child).pointer.size != .slice))) {
+                if (!follow_pointers) {
+                    //@compileLog("CONTINUING!!");
+                    continue;
+                }
+            }
             const options = @field(opt.fields, field.name);
             if (!options.disabled) {
                 const result_ptr = &@field(result.*, field.name);
@@ -776,44 +791,58 @@ fn structFieldWidget(
                 //defer hbox_aligned.deinit();
                 //left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-                fieldWidget(field.name, field.type, result_ptr, options, alloc, allocator, &left_alignment);
+                fieldWidget(field.name, field.type, follow_pointers, result_ptr, options, alloc, allocator, &left_alignment);
             }
         }
     }
 }
 
 //=========Generic Field Widget and Options Implementations===========
-pub fn FieldOptions(comptime T: type) type {
+pub fn FieldOptions(comptime T: type, comptime follow_pointers: bool) type {
+    //@compileLog("FieldOptions", @typeName(T), follow_pointers);
     return switch (@typeInfo(T)) {
         .int => IntFieldOptions(T),
         .float => FloatFieldOptions(T),
         .@"enum" => EnumFieldOptions,
         .bool => BoolFieldOptions,
-        .@"struct" => StructFieldOptions(T),
-        .@"union" => UnionFieldOptions(T),
-        .optional => OptionalFieldOptions(T),
-        .pointer => PointerFieldOptions(T),
+        .@"struct" => StructFieldOptions(T, follow_pointers), // Only follow pointers 1 level deep
+        .@"union" => UnionFieldOptions(T, follow_pointers),
+        .optional => OptionalFieldOptions(T, follow_pointers),
+        .pointer => PointerFieldOptions(T, follow_pointers),
         .array => ArrayFieldOptions(T),
         else => @compileError("Invalid Type: " ++ @typeName(T)),
     };
 }
 
-pub fn NamespaceFieldOptions(comptime T: type) type {
+pub fn NamespaceFieldOptions(comptime T: type, comptime follow_pointers: bool) type {
     var fields: [std.meta.fields(T).len]std.builtin.Type.StructField = undefined;
+    var field_count = 0;
+    inline for (std.meta.fields(T)) |field| {
+        const type_info = @typeInfo(field.type);
+        if ((type_info == .pointer and type_info.pointer.size != .slice) or (type_info == .optional and (@typeInfo(type_info.optional.child) == .pointer and @typeInfo(type_info.optional.child).pointer.size != .slice))) {
+            if (!follow_pointers) {
+                continue;
+            }
+            switch (@typeInfo(type_info.pointer.child)) {
+                .@"opaque" => continue,
+                .@"fn" => continue,
+                else => {},
+            }
+        }
 
-    inline for (std.meta.fields(T), 0..) |field, i| {
-        const FieldType = FieldOptions(field.type);
-        fields[i] = .{
+        const FieldType = FieldOptions(field.type, follow_pointers);
+        fields[field_count] = .{
             .alignment = 1,
             .default_value_ptr = &(@as(FieldType, FieldType{})),
             .is_comptime = false,
             .name = field.name,
             .type = FieldType,
         };
+        field_count += 1;
     }
     return @Type(.{ .@"struct" = .{
         .decls = &.{},
-        .fields = &fields,
+        .fields = fields[0..field_count],
         .is_tuple = false,
         .layout = .auto,
     } });
@@ -822,22 +851,24 @@ pub fn NamespaceFieldOptions(comptime T: type) type {
 pub fn fieldWidget(
     comptime name: []const u8,
     comptime T: type,
+    comptime follow_pointers: bool,
     result: *T,
-    options: FieldOptions(T),
+    options: FieldOptions(T, follow_pointers),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
 ) void {
+    //@compileLog("Field Widget", follow_pointers, @typeName(T), name);
     switch (@typeInfo(T)) {
         .int => intFieldWidget(name, T, result, options, alignment),
         .float => floatFieldWidget(name, T, result, options, alignment),
         .bool => boolFieldWidget(name, result, options, alignment),
         .@"enum" => enumFieldWidget(name, T, result, options, alignment),
-        .pointer => pointerFieldWidget(name, T, result, options, alloc, allocator, alignment),
-        .optional => optionalFieldWidget(name, T, result, options, alloc, allocator, alignment),
-        .@"union" => unionFieldWidget(name, T, result, options, alloc, allocator, alignment),
-        .@"struct" => structFieldWidget(name, T, result, options, alloc, allocator),
-        .array => arrayFieldWidget(name, T, result, options, alloc, allocator, alignment),
+        .pointer => pointerFieldWidget(name, T, follow_pointers, result, options, alloc, allocator, alignment),
+        .optional => optionalFieldWidget(name, T, follow_pointers, result, options, alloc, allocator, alignment),
+        .@"union" => unionFieldWidget(name, T, follow_pointers, result, options, alloc, allocator, alignment),
+        .@"struct" => structFieldWidget(name, T, follow_pointers, result, options, alloc, allocator),
+        .array => arrayFieldWidget(name, T, follow_pointers, result, options, alloc, allocator, alignment),
         else => @compileError("Invalid type: " ++ @typeName(T)),
     }
 }
@@ -849,36 +880,39 @@ pub fn fieldWidget(
 pub fn structEntry(
     comptime src: std.builtin.SourceLocation,
     comptime T: type,
+    comptime follow_pointers: bool,
     result: *T,
     opts: dvui.Options,
 ) void {
     var box = dvui.box(src, .vertical, opts);
     defer box.deinit();
-    structFieldWidget("", T, result, .{}, false, null);
+    structFieldWidget("", T, follow_pointers, result, .{}, false, null);
 }
 
 pub fn structEntryEx(
     comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     comptime T: type,
+    comptime follow_pointers: bool,
     result: *T,
-    field_options: StructFieldOptions(T),
+    field_options: StructFieldOptions(T, follow_pointers),
 ) void {
     var box = dvui.box(src, .vertical, .{ .expand = .both });
     defer box.deinit();
-    structFieldWidget(name, T, result, field_options, false, null);
+    structFieldWidget(name, T, follow_pointers, result, field_options, false, null);
 }
 
 pub fn structEntryAlloc(
     comptime src: std.builtin.SourceLocation,
     allocator: std.mem.Allocator,
     comptime T: type,
+    comptime follow_pointers: bool,
     result: *T,
     opts: dvui.Options,
 ) void {
     var box = dvui.box(src, .vertical, opts);
     defer box.deinit();
-    structFieldWidget("", T, result, .{}, true, allocator);
+    structFieldWidget("", T, follow_pointers, result, .{}, true, allocator);
 }
 
 pub fn structEntryExAlloc(
@@ -886,12 +920,13 @@ pub fn structEntryExAlloc(
     allocator: std.mem.Allocator,
     comptime name: []const u8,
     comptime T: type,
+    comptime follow_pointers: bool,
     result: *T,
     field_options: StructFieldOptions(T),
 ) void {
     var box = dvui.box(src, .vertical, .{ .expand = .both });
     defer box.deinit();
-    structFieldWidget(name, T, result, field_options, true, allocator);
+    structFieldWidget(name, T, follow_pointers, result, field_options, true, allocator);
 }
 
 //===============================================
