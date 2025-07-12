@@ -4,7 +4,6 @@ var text_entry_password_buf_obf_enable: bool = true;
 var text_entry_multiline_allocator_buf: [1000]u8 = undefined;
 var text_entry_multiline_fba = std.heap.FixedBufferAllocator.init(&text_entry_multiline_allocator_buf);
 var text_entry_multiline_buf: []u8 = &.{};
-var text_entry_multiline_initialized = false;
 var text_entry_multiline_break = false;
 
 /// ![image](Examples-text_entry.png)
@@ -142,9 +141,8 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
             },
         );
 
-        if (!text_entry_multiline_initialized) {
-            text_entry_multiline_initialized = true;
-            te.textTyped("This multiline text\nentry can scroll\nin both directions.", false);
+        if (dvui.firstFrame(te.data().id)) {
+            te.textSet("This multiline text\nentry can scroll\nin both directions.", false);
         }
 
         const bytes = te.len;
@@ -296,7 +294,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
         };
 
         const combo = dvui.comboBox(@src(), .{}, .{});
-
+        defer combo.deinit();
         // filter suggestions to match the start of the entry
         if (combo.te.text_changed) blk: {
             const arena = dvui.currentWindow().lifo();
@@ -317,7 +315,6 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
         if (combo.entries(dvui.dataGetSlice(null, combo.te.data().id, "suggestions", [][]const u8) orelse entries)) |index| {
             dvui.log.debug("Combo entry index picked: {d}", .{index});
         }
-        combo.deinit();
     }
 
     {
