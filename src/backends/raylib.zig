@@ -828,19 +828,32 @@ pub fn dvuiColorToRaylib(color: dvui.Color) c.Color {
     return c.Color{ .r = @intCast(color.r), .b = @intCast(color.b), .g = @intCast(color.g), .a = @intCast(color.a) };
 }
 
-/// Divides my the scaling of the monitor, only needed when rendering to
+/// Divides by the scaling of the monitor, only needed when rendering to
 /// the main render target. No conversion is needed when rendering to
 /// textures.
 pub fn dvuiRectToRaylib(rect: dvui.Rect.Physical) c.Rectangle {
-    // raylib multiplies everything internally by the monitor scale, so we
-    // have to divide by that
-    const s = c.GetWindowScaleDPI();
-    return c.Rectangle{
-        .x = rect.x / s.x,
-        .y = rect.y / s.y,
-        .width = rect.w / s.x,
-        .height = rect.h / s.y,
-    };
+    // We have to check this flag, because GetWindowScaleDPI() will report 1.25
+    // (if the display scale is 125%), but the flag determines whether raylib
+    // multiplies by it internally.
+    if (c.IsWindowState(c.FLAG_WINDOW_HIGHDPI)) {
+        // raylib multiplies everything internally by the monitor scale, so we
+        // have to divide by that
+        const s = c.GetWindowScaleDPI();
+        return c.Rectangle{
+            .x = rect.x / s.x,
+            .y = rect.y / s.y,
+            .width = rect.w / s.x,
+            .height = rect.h / s.y,
+        };
+    } else {
+        // In this case raylib does no changes.
+        return c.Rectangle{
+            .x = rect.x,
+            .y = rect.y,
+            .width = rect.w,
+            .height = rect.h,
+        };
+    }
 }
 
 pub fn EndDrawingWaitEventTimeout(_: *RaylibBackend, timeout_micros: u32) void {
