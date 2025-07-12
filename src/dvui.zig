@@ -1094,7 +1094,7 @@ pub const Texture = struct {
     /// Only valid to call while the underlying Texture is not destroyed!
     ///
     /// Only valid between `Window.begin` and `Window.end`.
-    pub fn updateContent(self: *Texture, src: ImageSource) !void {
+    pub fn updateImageSource(self: *Texture, src: ImageSource) !void {
         switch (src) {
             .imageFile => |f| {
                 const img = try Color.PMAImage.fromImageFile(f.name, f.bytes);
@@ -5291,7 +5291,7 @@ pub const ImageSource = union(enum) {
         // .always hashes ptr (for uniqueness) and image dimensions so we can update the texture if dimensions stay the same
         const img_dimensions = imageSize(self) catch Size{ .w = 0, .h = 0 };
         var dim: [2]u32 = .{ @intFromFloat(img_dimensions.w), @intFromFloat(img_dimensions.h) };
-        const img_dim_bytes = std.mem.asBytes(&dim);
+        const img_dim_bytes = std.mem.asBytes(&dim); // hashing u32 here instead of float because of unstable bit representation in floating point numbers
 
         switch (self) {
             .imageFile => |file| {
