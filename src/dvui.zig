@@ -5339,10 +5339,10 @@ pub const ImageSource = union(enum) {
             .texture => |tex| return tex,
         };
         if (textureGetCached(key)) |cached_texture| {
-            // if invalidate = always, we update the texture using updateContent for efficency, otherwise return the cached Texture
+            // if invalidate = always, we update the texture using updateImageSource for efficency, otherwise return the cached Texture
             if (invalidate == .always) {
                 var tex_mut = cached_texture;
-                try tex_mut.updateContent(self);
+                try tex_mut.updateImageSource(self);
                 return tex_mut;
             } else return cached_texture;
         } else {

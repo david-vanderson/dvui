@@ -79,8 +79,9 @@ pub fn textureCreate(self: Backend, pixels: [*]const u8, width: u32, height: u32
 /// passed in texture must be created  with textureCreate
 pub fn textureUpdate(self: Backend, texture: dvui.Texture, pixels: [*]const u8) TextureError!void {
     // we can handle backends that dont support textureUpdate by using destroy and create again!
-    if (comptime !@hasDecl(Implementation, "textureUpdate")) return TextureError.NotImplemented;
-    return self.impl.textureUpdate(texture, pixels);
+    if (comptime !@hasDecl(Implementation, "textureUpdate")) return TextureError.NotImplemented else {
+        return self.impl.textureUpdate(texture, pixels);
+    }
 }
 
 /// Destroy `texture` made with `textureCreate`. After this call, this texture
