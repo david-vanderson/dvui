@@ -5126,7 +5126,7 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, ini
     }
 
     if (mi.show_active) {
-        labelopts = labelopts.override(themeGet().style_accent);
+        labelopts = labelopts.override(themeGet().accent());
     }
 
     labelNoFmt(@src(), label_str, .{}, labelopts);
@@ -5149,7 +5149,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
     }
 
     if (mi.show_active) {
-        iconopts = iconopts.override(themeGet().style_accent);
+        iconopts = iconopts.override(themeGet().accent());
     }
 
     icon(@src(), name, tvg_bytes, .{}, iconopts);
@@ -6299,7 +6299,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
     var options = opts;
     if (checked) {
-        options = opts.override(themeGet().style_accent);
+        options = opts.override(themeGet().accent());
         rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill) });
     } else {
         rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill) });
@@ -6386,7 +6386,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
 
     var options = opts;
     if (active) {
-        options = opts.override(themeGet().style_accent);
+        options = opts.override(themeGet().accent());
         r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(.fill) });
     } else {
         r.insetAll(rs.s).fill(cornerRad, .{ .color = opts.color(fill) });

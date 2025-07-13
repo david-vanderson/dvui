@@ -49,7 +49,7 @@ pub const light = light: {
         .color_fill_press = (Color.HSLuv{ .s = 0, .l = 72 }).color(),
         .color_border = (Color.HSLuv{ .s = 0, .l = 63 }).color(),
 
-        .style_accent = Options{
+        .style_accent = .{
             .color_accent = .{ .color = light_accent_accent },
             .color_text = .{ .color = Color.white },
             .color_text_press = .{ .color = Color.white },
@@ -59,7 +59,7 @@ pub const light = light: {
             .color_border = .{ .color = light_accent_border },
         },
 
-        .style_err = Options{
+        .style_err = .{
             .color_accent = .{ .color = light_err_accent },
             .color_text = .{ .color = Color.white },
             .color_text_press = .{ .color = Color.white },
@@ -112,7 +112,7 @@ pub const dark = dark: {
         .color_fill_press = dark_fill_hsl.lighten(30).color(),
         .color_border = dark_fill_hsl.lighten(39).color(),
 
-        .style_accent = Options{
+        .style_accent = .{
             .color_accent = .{ .color = dark_accent_accent },
             .color_text = .{ .color = Color.white },
             .color_text_press = .{ .color = Color.white },
@@ -122,7 +122,7 @@ pub const dark = dark: {
             .color_border = .{ .color = dark_accent_border },
         },
 
-        .style_err = Options{
+        .style_err = .{
             .color_accent = .{ .color = dark_err_accent },
             .color_text = .{ .color = Color.white },
             .color_text_press = .{ .color = Color.white },
