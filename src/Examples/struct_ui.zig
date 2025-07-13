@@ -28,7 +28,7 @@ pub fn structUI() void {
 
     dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
     {
-        dvui.structEntryAlloc(@src(), dvui.currentWindow().gpa, Top, &Top.instance, .{ .margin = .{ .x = 10 } });
+        dvui.structEntryAlloc(@src(), dvui.currentWindow().gpa, Top, .{}, &Top.instance, .{ .margin = .{ .x = 10 } });
     }
 
     if (dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
@@ -41,21 +41,19 @@ pub fn themeEditor() void {
     var b2 = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer b2.deinit();
 
-    const color_field_options = dvui.StructFieldOptions(dvui.Color){ .fields = .{
+    const color_field_options = dvui.StructFieldOptions(dvui.Color, .{ .style_err, .style_accent }){ .fields = .{
         .r = .{ .min = 0, .max = 255, .widget_type = .slider },
         .g = .{ .min = 0, .max = 255, .widget_type = .slider },
         .b = .{ .min = 0, .max = 255, .widget_type = .slider },
         .a = .{ .disabled = true },
     } };
 
-    dvui.structEntryEx(@src(), "dvui.Theme", dvui.Theme, dvui.themeGet(), .{
+    dvui.structEntryEx(@src(), "dvui.Theme", dvui.Theme, .{ .style_err, .style_accent }, dvui.themeGet(), .{
         .use_expander = false,
         .label_override = "",
         .fields = .{
             .name = .{ .disabled = true },
             .dark = .{ .widget_type = .toggle },
-            .style_err = .{ .disabled = true },
-            .style_accent = .{ .disabled = true },
             .font_body = .{ .disabled = true },
             .font_heading = .{ .disabled = true },
             .font_caption = .{ .disabled = true },
