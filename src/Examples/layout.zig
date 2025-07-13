@@ -245,7 +245,12 @@ pub fn layout() void {
             }
         }
         {
-            var fbox = dvui.flexbox(@src(), .{ .justify_content = layout_flex_content_justify }, .{ .border = dvui.Rect.all(1), .background = true, .padding = .{ .w = 4, .h = 4 } });
+            var fbox = dvui.flexbox(@src(), .{ .justify_content = layout_flex_content_justify }, .{
+                .border = dvui.Rect.all(1),
+                .background = true,
+                .padding = .{ .w = 4, .h = 4 },
+                .expand = .horizontal,
+            });
             defer fbox.deinit();
 
             for (0..11) |i| {
