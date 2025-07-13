@@ -49,24 +49,27 @@ pub fn plots() void {
         };
     };
 
-    var plot = dvui.plot(@src(), .{
-        .title = "Plot Title",
-        .x_axis = &Static.xaxis,
-        .y_axis = &Static.yaxis,
-        .border_thick = 1.0,
-        .mouse_hover = true,
-    }, .{ .expand = .both });
-    var s1 = plot.line();
+    {
+        var plot = dvui.plot(@src(), .{
+            .title = "Plot Title",
+            .x_axis = &Static.xaxis,
+            .y_axis = &Static.yaxis,
+            .border_thick = 1.0,
+            .mouse_hover = true,
+        }, .{ .expand = .both });
+        defer plot.deinit();
 
-    const points: usize = 1000;
-    const freq: f32 = 5;
-    for (0..points + 1) |i| {
-        const fval: f64 = @sin(2.0 * std.math.pi * @as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(points)) * freq);
-        s1.point(@as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(points)), fval);
+        var s1 = plot.line();
+        defer s1.deinit();
+
+        const points: usize = 1000;
+        const freq: f32 = 5;
+        for (0..points + 1) |i| {
+            const fval: f64 = @sin(2.0 * std.math.pi * @as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(points)) * freq);
+            s1.point(@as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(points)), fval);
+        }
+        s1.stroke(1, dvui.themeGet().color_accent);
     }
-    s1.stroke(1, dvui.themeGet().color_accent);
-    s1.deinit();
-    plot.deinit();
 
     if (pic) |*p| {
         p.stop();

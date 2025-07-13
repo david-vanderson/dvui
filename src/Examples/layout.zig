@@ -143,38 +143,42 @@ pub fn layout() void {
         _ = dvui.sliderEntry(@src(), "border {d:0.0}", .{ .value = &layout_border.y, .min = 0, .max = 20.0, .interval = 1 }, .{});
         _ = dvui.sliderEntry(@src(), "padding {d:0.0}", .{ .value = &layout_padding.y, .min = 0, .max = 20.0, .interval = 1 }, .{});
         vbox2.deinit();
-
-        var hbox = dvui.box(@src(), .horizontal, .{});
-
-        vbox2 = dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
-        _ = dvui.sliderEntry(@src(), "margin {d:0.0}", .{ .value = &layout_margin.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        _ = dvui.sliderEntry(@src(), "border {d:0.0}", .{ .value = &layout_border.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        _ = dvui.sliderEntry(@src(), "padding {d:0.0}", .{ .value = &layout_padding.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        vbox2.deinit();
-
-        var o = dvui.overlay(@src(), .{ .min_size_content = .{ .w = 164, .h = 140 } });
-        var o2 = dvui.overlay(@src(), .{ .background = true, .gravity_x = 0.5, .gravity_y = 0.5 });
-        if (dvui.button(@src(), "reset", .{}, .{ .margin = layout_margin, .border = layout_border, .padding = layout_padding })) {
-            layout_margin = Rect.all(4);
-            layout_border = Rect.all(0);
-            layout_padding = Rect.all(4);
+        {
+            var hbox = dvui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
+            {
+                vbox2 = dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
+                defer vbox2.deinit();
+                _ = dvui.sliderEntry(@src(), "margin {d:0.0}", .{ .value = &layout_margin.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
+                _ = dvui.sliderEntry(@src(), "border {d:0.0}", .{ .value = &layout_border.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
+                _ = dvui.sliderEntry(@src(), "padding {d:0.0}", .{ .value = &layout_padding.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
+            }
+            {
+                var o = dvui.overlay(@src(), .{ .min_size_content = .{ .w = 164, .h = 140 } });
+                defer o.deinit();
+                var o2 = dvui.overlay(@src(), .{ .background = true, .gravity_x = 0.5, .gravity_y = 0.5 });
+                defer o2.deinit();
+                if (dvui.button(@src(), "reset", .{}, .{ .margin = layout_margin, .border = layout_border, .padding = layout_padding })) {
+                    layout_margin = Rect.all(4);
+                    layout_border = Rect.all(0);
+                    layout_padding = Rect.all(4);
+                }
+            }
+            {
+                vbox2 = dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
+                defer vbox2.deinit();
+                _ = dvui.sliderEntry(@src(), "margin {d:0.0}", .{ .value = &layout_margin.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
+                _ = dvui.sliderEntry(@src(), "border {d:0.0}", .{ .value = &layout_border.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
+                _ = dvui.sliderEntry(@src(), "padding {d:0.0}", .{ .value = &layout_padding.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
+            }
         }
-        o2.deinit();
-        o.deinit();
-
-        vbox2 = dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
-        _ = dvui.sliderEntry(@src(), "margin {d:0.0}", .{ .value = &layout_margin.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        _ = dvui.sliderEntry(@src(), "border {d:0.0}", .{ .value = &layout_border.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        _ = dvui.sliderEntry(@src(), "padding {d:0.0}", .{ .value = &layout_padding.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        vbox2.deinit();
-
-        hbox.deinit();
-
-        vbox2 = dvui.box(@src(), .vertical, .{ .gravity_x = 0.5 });
-        _ = dvui.sliderEntry(@src(), "margin {d:0.0}", .{ .value = &layout_margin.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        _ = dvui.sliderEntry(@src(), "border {d:0.0}", .{ .value = &layout_border.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        _ = dvui.sliderEntry(@src(), "padding {d:0.0}", .{ .value = &layout_padding.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        vbox2.deinit();
+        {
+            vbox2 = dvui.box(@src(), .vertical, .{ .gravity_x = 0.5 });
+            defer vbox2.deinit();
+            _ = dvui.sliderEntry(@src(), "margin {d:0.0}", .{ .value = &layout_margin.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
+            _ = dvui.sliderEntry(@src(), "border {d:0.0}", .{ .value = &layout_border.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
+            _ = dvui.sliderEntry(@src(), "padding {d:0.0}", .{ .value = &layout_padding.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        }
     }
 
     dvui.label(@src(), "Boxes", .{}, .{});
@@ -188,7 +192,6 @@ pub fn layout() void {
         hbox.install();
         hbox.drawBackground();
         defer hbox.deinit();
-
         {
             var hbox2 = dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = breakpoint / 2, .h = 140 }, .max_size_content = .width(breakpoint / 2), .expand = if (equal) .horizontal else .none });
             defer hbox2.deinit();
@@ -200,7 +203,6 @@ pub fn layout() void {
                 _ = dvui.button(@src(), "expand", .{}, .{ .expand = .both, .gravity_x = 0.5 });
                 _ = dvui.button(@src(), "a", .{}, .{ .gravity_x = 0.5 });
             }
-
             {
                 var vbox = dvui.boxEqual(@src(), .vertical, opts);
                 defer vbox.deinit();
@@ -210,7 +212,6 @@ pub fn layout() void {
                 _ = dvui.button(@src(), "a", .{}, .{ .gravity_x = 0.5 });
             }
         }
-
         {
             var vbox2 = dvui.box(@src(), .vertical, .{ .max_size_content = .zero, .expand = .both });
             defer vbox2.deinit();
@@ -222,7 +223,6 @@ pub fn layout() void {
                 _ = dvui.button(@src(), "expand", .{}, .{ .expand = .both, .gravity_y = 0.5 });
                 _ = dvui.button(@src(), "a", .{}, .{ .gravity_y = 0.5 });
             }
-
             {
                 var hbox2 = dvui.boxEqual(@src(), .horizontal, opts);
                 defer hbox2.deinit();
@@ -233,7 +233,6 @@ pub fn layout() void {
             }
         }
     }
-
     {
         {
             var hbox2 = dvui.box(@src(), .horizontal, .{});
@@ -249,7 +248,7 @@ pub fn layout() void {
             var fbox = dvui.flexbox(@src(), .{ .justify_content = layout_flex_content_justify }, .{ .border = dvui.Rect.all(1), .background = true, .padding = .{ .w = 4, .h = 4 } });
             defer fbox.deinit();
 
-            for (0..10) |i| {
+            for (0..11) |i| {
                 var labelbox = dvui.box(@src(), .vertical, .{ .id_extra = i, .margin = .{ .x = 4, .y = 4 }, .border = dvui.Rect.all(1), .background = true });
                 defer labelbox.deinit();
 
