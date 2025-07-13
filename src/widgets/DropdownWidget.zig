@@ -181,7 +181,7 @@ pub fn addChoiceLabel(self: *DropdownWidget, label_text: []const u8) bool {
 
     var opts = self.options.strip();
     if (mi.show_active) {
-        opts = opts.override(dvui.themeGet().style_accent);
+        opts = opts.override(dvui.themeGet().accent());
     }
 
     dvui.labelNoFmt(@src(), label_text, .{}, opts);
