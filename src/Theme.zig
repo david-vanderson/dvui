@@ -50,13 +50,35 @@ font_title_3: Font,
 font_title_4: Font,
 
 // used for highlighting menu/dropdown items
-style_accent: Options,
+style_accent: ColorStyles,
 
 // used for a button to perform dangerous actions
-style_err: Options,
+style_err: ColorStyles,
 
 // if true, need to free the strings in deinit()
 allocated_strings: bool = false,
+
+pub const ColorStyles = struct {
+    color_accent: ?Options.ColorOrName = null,
+    color_text: ?Options.ColorOrName = null,
+    color_text_press: ?Options.ColorOrName = null,
+    color_fill: ?Options.ColorOrName = null,
+    color_fill_hover: ?Options.ColorOrName = null,
+    color_fill_press: ?Options.ColorOrName = null,
+    color_border: ?Options.ColorOrName = null,
+
+    pub fn asOptions(self: ColorStyles) Options {
+        return .{
+            .color_accent = self.color_accent,
+            .color_text = self.color_text,
+            .color_text_press = self.color_text_press,
+            .color_fill = self.color_fill,
+            .color_fill_hover = self.color_fill_hover,
+            .color_fill_press = self.color_fill_press,
+            .color_border = self.color_border,
+        };
+    }
+};
 
 pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
     if (self.allocated_strings) {
@@ -87,6 +109,16 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
     ret.font_title_4.size += delta;
 
     return ret;
+}
+
+/// Gets the accent style `Options`
+pub fn accent(self: *const Theme) Options {
+    return self.style_accent.asOptions();
+}
+
+/// Gets the error style `Options`
+pub fn err(self: *const Theme) Options {
+    return self.style_err.asOptions();
 }
 
 pub fn picker(src: std.builtin.SourceLocation, opts: Options) bool {

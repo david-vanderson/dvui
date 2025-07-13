@@ -8,8 +8,8 @@ pub fn styling() void {
         var hbox = dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        _ = dvui.button(@src(), "Accent", .{}, dvui.themeGet().style_accent);
-        _ = dvui.button(@src(), "Error", .{}, dvui.themeGet().style_err);
+        _ = dvui.button(@src(), "Accent", .{}, dvui.themeGet().accent());
+        _ = dvui.button(@src(), "Error", .{}, dvui.themeGet().err());
         _ = dvui.button(@src(), "Window", .{}, .{ .color_fill = .fill_window });
         _ = dvui.button(@src(), "Content", .{}, .{ .color_fill = .fill });
         _ = dvui.button(@src(), "Control", .{}, .{});
