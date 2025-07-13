@@ -277,7 +277,7 @@ pub fn themeSet(theme: *const Theme) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn toggleDebugWindow() void {
     var cw = currentWindow();
-    cw.debug_window_show = !cw.debug_window_show;
+    cw.debug.open = !cw.debug.open;
 }
 
 pub const TagData = struct {
@@ -292,7 +292,7 @@ pub fn tag(name: []const u8, data: TagData) void {
     if (cw.tags.map.getPtr(name)) |old_data| {
         if (old_data.used) {
             dvui.log.err("duplicate tag name \"{s}\" id {x} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ name, data.id });
-            cw.debug_widget_id = data.id;
+            cw.debug.widget_id = data.id;
         }
 
         old_data.*.inner = data;
@@ -2728,7 +2728,7 @@ pub fn parentReset(id: WidgetId, w: Widget) void {
     const cw = currentWindow();
     const actual_current = cw.data().parent.data().id;
     if (id != actual_current) {
-        cw.debug_widget_id = actual_current;
+        cw.debug.widget_id = actual_current;
 
         var wd = cw.data().parent.data();
 
@@ -7342,7 +7342,7 @@ pub const BasicLayout = struct {
             //
             // If you want that to work, wrap the children in a vertical box.
             const cw = dvui.currentWindow();
-            cw.debug_widget_id = id;
+            cw.debug.widget_id = id;
             dvui.log.err("{s}:{d} rectFor() got child {x} after expanded child", .{ @src().file, @src().line, id });
             var wd = dvui.parentGet().data();
             while (true) : (wd = wd.parent.data()) {

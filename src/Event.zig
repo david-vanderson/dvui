@@ -27,7 +27,7 @@ evt: union(enum) {
 /// matched this event, using `dvui.matchEvent` or similar.
 /// This makes it possible to see which widget handled the event.
 pub fn handle(self: *Event, src: std.builtin.SourceLocation, wd: *const dvui.WidgetData) void {
-    if (dvui.currentWindow().debug_events) {
+    if (dvui.currentWindow().debug.logEvents(null)) {
         var action: []const u8 = "";
         switch (self.evt) {
             .mouse => action = @tagName(self.evt.mouse.action),
