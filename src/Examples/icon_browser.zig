@@ -1,5 +1,5 @@
 /// ![image](Examples-icon_browser.png)
-pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime icon_decl_name: []const u8, comptime icon_decl: type) void {
+pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime icon_decl_name: []const u8, comptime icon_decl: type) void {
     const num_icons = @typeInfo(icon_decl).@"struct".decls.len;
     const Settings = struct {
         icon_size: f32 = 20,

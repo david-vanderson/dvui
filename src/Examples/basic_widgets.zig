@@ -281,6 +281,7 @@ pub fn dropdownAdvanced() void {
 
     var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = g.choice }, .{ .min_size_content = .{ .w = 100 } });
     dd.install();
+    defer dd.deinit();
 
     // Here's what is shown when the dropdown is not dropped
     {
@@ -319,7 +320,7 @@ pub fn dropdownAdvanced() void {
             var hbox2 = dvui.box(@src(), .horizontal, .{ .expand = .both });
             defer hbox2.deinit();
 
-            var opts: Options = if (mi.show_active) dvui.themeGet().style_accent else .{};
+            var opts: Options = if (mi.show_active) dvui.themeGet().accent() else .{};
 
             dvui.icon(
                 @src(),
@@ -339,7 +340,6 @@ pub fn dropdownAdvanced() void {
         if (dd.addChoiceLabel("just text")) {
             g.choice = 1;
         }
-
         {
             var mi = dd.addChoice();
             defer mi.deinit();
@@ -347,7 +347,7 @@ pub fn dropdownAdvanced() void {
             var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
             defer vbox.deinit();
 
-            var opts: Options = if (mi.show_active) dvui.themeGet().style_accent else .{};
+            var opts: Options = if (mi.show_active) dvui.themeGet().accent() else .{};
 
             _ = dvui.image(@src(), .{ .source = .{ .imageFile = .{ .bytes = zig_favicon, .name = "zig favicon" } } }, opts.override(.{ .gravity_x = 0.5 }));
             dvui.labelNoFmt(@src(), "image above text", .{}, opts.override(.{ .gravity_x = 0.5, .padding = .{} }));
@@ -358,8 +358,6 @@ pub fn dropdownAdvanced() void {
             }
         }
     }
-
-    dd.deinit();
 }
 
 const std = @import("std");

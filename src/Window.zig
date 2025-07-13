@@ -269,8 +269,10 @@ pub fn init(
         .windows => {
             // zig fmt: off
                 try self.keybinds.putNoClobber(self.gpa, "cut",        .{ .key = .x, .control = true });
-                try self.keybinds.putNoClobber(self.gpa, "copy",       .{ .key = .c, .control = true });
-                try self.keybinds.putNoClobber(self.gpa, "paste",      .{ .key = .v, .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "copy",       .{ .key = .c, .control = true, .also = "copy_1" });
+                try self.keybinds.putNoClobber(self.gpa, "copy_1",       .{ .key = .insert, .control = true, .shift = false, .alt = false, .command = false });
+                try self.keybinds.putNoClobber(self.gpa, "paste",      .{ .key = .v, .control = true, .also = "paste_1" });
+                try self.keybinds.putNoClobber(self.gpa, "paste_1",       .{ .key = .insert, .control = false, .shift = true, .alt = false, .command = false });
                 try self.keybinds.putNoClobber(self.gpa, "select_all", .{ .key = .a, .control = true });
 
                 // use with mod.matchBind
