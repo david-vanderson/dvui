@@ -105,5 +105,26 @@ pub fn plots() void {
     }
 }
 
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG plots" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 300 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            plots();
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-plots.png");
+}
+
 const std = @import("std");
 const dvui = @import("../dvui.zig");

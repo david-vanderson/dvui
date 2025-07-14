@@ -77,6 +77,57 @@ pub fn themeEditor() void {
     });
 }
 
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG struct_ui" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 400, .h = 700 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            structUI();
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-struct_ui.png");
+}
+
+test "DOCIMG themeEditor" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 400, .h = 500 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            themeEditor();
+            return .ok;
+        }
+    }.frame;
+
+    // tab to a color editor expander and open it
+    try dvui.testing.pressKey(.tab, .none);
+    _ = try dvui.testing.step(frame);
+    try dvui.testing.pressKey(.tab, .none);
+    _ = try dvui.testing.step(frame);
+    try dvui.testing.pressKey(.tab, .none);
+    _ = try dvui.testing.step(frame);
+    try dvui.testing.pressKey(.tab, .none);
+    _ = try dvui.testing.step(frame);
+    try dvui.testing.pressKey(.tab, .none);
+    _ = try dvui.testing.step(frame);
+    try dvui.testing.pressKey(.enter, .none);
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-themeEditor.png");
+}
+
 pub fn themeSerialization() void {
     var serialize_box = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer serialize_box.deinit();

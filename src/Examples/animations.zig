@@ -370,6 +370,42 @@ const AnimatingDialog = struct {
     }
 };
 
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG animations" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 400 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            animations();
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+
+    // Tab to spinner expander and open it
+    for (0..4) |_| {
+        try dvui.testing.pressKey(.tab, .none);
+        _ = try dvui.testing.step(frame);
+    }
+    try dvui.testing.pressKey(.enter, .none);
+    _ = try dvui.testing.step(frame);
+
+    // Tab to easings expander and open it
+    try dvui.testing.pressKey(.tab, .lshift);
+    _ = try dvui.testing.step(frame);
+    try dvui.testing.pressKey(.enter, .none);
+    for (0..10) |_| {
+        _ = try dvui.testing.step(frame); // animation will never settle so run a fixed amount of frames
+    }
+    try t.saveImage(frame, null, "Examples-animations.png");
+}
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const enums = dvui.enums;

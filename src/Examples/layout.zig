@@ -296,6 +296,27 @@ pub fn layout() void {
     _ = dvui.sliderEntry(@src(), "collapse under {d:0.0}", .{ .value = &paned_collapsed_width, .min = 100, .max = 600, .interval = 10 }, .{});
 }
 
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG layout" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 800 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            layout();
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-layout.png");
+}
+
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const Examples = @import("../Examples.zig");

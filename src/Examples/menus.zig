@@ -329,6 +329,26 @@ pub fn focus() void {
     }
 }
 
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG menus" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 300, .h = 500 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            menus();
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-menus.png");
+}
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const entypo = dvui.entypo;

@@ -1,4 +1,4 @@
-/// ![image](Examples-icon_browser.png)
+/// ![image](Examples-iconBrowser.png)
 pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime icon_decl_name: []const u8, comptime icon_decl: type) void {
     const num_icons = @typeInfo(icon_decl).@"struct".decls.len;
     const Settings = struct {
@@ -97,6 +97,28 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
 
         cursor += settings.row_height;
     }
+}
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG iconBrowser" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 400, .h = 500 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            var show_flag: bool = true;
+            iconBrowser(@src(), &show_flag, "entypo", dvui.entypo);
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-iconBrowser.png");
 }
 
 const std = @import("std");

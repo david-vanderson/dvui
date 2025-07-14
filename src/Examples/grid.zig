@@ -1313,6 +1313,10 @@ const directory_examples = [_]DirEntry{
     .{ .name = "video.mp4", .kind = .file, .size = 10_485_760, .mode = 0o644, .mtime = 1_625_087_200_000_000_000 },
 };
 
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const Size = dvui.Size;

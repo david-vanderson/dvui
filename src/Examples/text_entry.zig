@@ -469,6 +469,27 @@ pub fn displayTextEntryNumberResult(result: anytype) void {
     }
 }
 
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG text_entry" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 500 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            textEntryWidgets(box.data().id);
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-text_entry.png");
+}
+
 const dvui = @import("../dvui.zig");
 const std = @import("std");
 const entypo = dvui.entypo;
