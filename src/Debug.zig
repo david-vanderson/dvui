@@ -259,26 +259,59 @@ pub fn show(self: *Debug) void {
 
         var it = self.options_override.iterator();
         var i: usize = 0;
+        var remove_override_id: ?dvui.WidgetId = null;
         while (it.next()) |entry| : (i += 1) {
             const id = entry.key_ptr.*;
             const options, const src = entry.value_ptr.*;
 
-            var button = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
-            button.install();
-            defer button.deinit();
-            button.processEvents();
-            button.drawBackground();
+            const row = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+            defer row.deinit();
 
-            if (button.clicked()) copyOptionsToClipboard(src, id, options);
+            var reset_wd: dvui.WidgetData = undefined;
+            if (dvui.buttonIcon(@src(), "Reset Option Override", dvui.entypo.back, .{}, .{}, .{
+                .gravity_y = 0.5,
+                .data_out = &reset_wd,
+            })) {
+                remove_override_id = id;
+            }
+            dvui.tooltip(@src(), .{
+                .active_rect = reset_wd.borderRectScale().r,
+                .position = .vertical,
+            }, "Remove the override", .{}, .{});
 
-            const stack = dvui.box(@src(), .vertical, .{
-                .expand = .both,
-                .color_fill = if (button.pressed()) .fill_press else null,
-            });
-            defer stack.deinit();
+            var copy_wd: dvui.WidgetData = undefined;
+            if (dvui.buttonIcon(@src(), "Copy Option Override", dvui.entypo.copy, .{}, .{}, .{
+                .gravity_y = 0.5,
+                .data_out = &copy_wd,
+            })) {
+                copyOptionsToClipboard(src, id, options);
+            }
+            dvui.tooltip(@src(), .{
+                .active_rect = copy_wd.borderRectScale().r,
+                .position = .vertical,
+            }, "Copy Options struct to clipboard", .{}, .{});
 
-            dvui.label(@src(), "{x} {s} (+{d})", .{ id, options.name orelse "???", options.idExtra() }, .{});
-            dvui.label(@src(), "{s}:{d}", .{ src.file, src.line }, .{ .font_style = .caption });
+            {
+                var button = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
+                button.install();
+                defer button.deinit();
+                button.processEvents();
+                button.drawBackground();
+
+                if (button.clicked()) self.widget_id = id;
+
+                const stack = dvui.box(@src(), .vertical, .{
+                    .expand = .both,
+                    .color_fill = if (button.pressed()) .fill_press else null,
+                });
+                defer stack.deinit();
+
+                dvui.label(@src(), "{x} {s} (+{d})", .{ id, options.name orelse "???", options.idExtra() }, .{ .padding = .all(1) });
+                dvui.label(@src(), "{s}:{d}", .{ src.file, src.line }, .{ .font_style = .caption, .padding = .all(1) });
+            }
+        }
+        if (remove_override_id) |id| {
+            _ = self.options_override.remove(id);
         }
     }
 
