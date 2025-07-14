@@ -24,9 +24,10 @@ options: Options,
 src: std.builtin.SourceLocation,
 rect_scale: ?RectScale = null,
 
-pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, options: Options) WidgetData {
+pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
     const parent = dvui.parentGet();
-    const id = parent.extendId(src, options.idExtra());
+    const id = parent.extendId(src, opts.idExtra());
+    const options = dvui.currentWindow().debug.options_override.get(id) orelse opts;
     const min_size = options.min_sizeGet().min(options.max_sizeGet());
 
     const ms = dvui.minSize(id, min_size);
