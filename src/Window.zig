@@ -132,25 +132,7 @@ _widget_stack: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
-debug_window_show: bool = false,
-/// 0 means no widget is selected
-debug_widget_id: WidgetId = .zero,
-debug_widget_panic: bool = false,
-debug_info_name_rect: []const u8 = "",
-debug_info_src_id_extra: []const u8 = "",
-debug_under_focus: bool = false,
-debug_under_mouse: bool = false,
-debug_under_mouse_esc_needed: bool = false,
-debug_under_mouse_quitting: bool = false,
-debug_under_mouse_info: []u8 = "",
-
-debug_toggle_mutex: std.Thread.Mutex = .{},
-debug_refresh: bool = false,
-debug_events: bool = false,
-
-/// when true, left mouse button works like a finger
-debug_touch_simulate_events: bool = false,
-debug_touch_simulate_down: bool = false,
+debug: @import("Debug.zig") = .{},
 
 pub const Subwindow = struct {
     id: WidgetId,
@@ -393,10 +375,7 @@ pub fn deinit(self: *Self) void {
         self.datas.deinit(self.gpa);
     }
 
-    if (self.debug_under_mouse_info.len > 0) {
-        self.gpa.free(self.debug_under_mouse_info);
-        self.debug_under_mouse_info = "";
-    }
+    self.debug.deinit(self.gpa);
 
     self.subwindows.deinit(self.gpa);
     self.min_sizes.deinit(self.gpa);
@@ -488,35 +467,9 @@ pub fn arena(self: *Self) std.mem.Allocator {
     return self._arena.allocator();
 }
 
-/// called from any thread
-pub fn debugEvents(self: *Self, val: ?bool) bool {
-    self.debug_toggle_mutex.lock();
-    defer self.debug_toggle_mutex.unlock();
-
-    const previous = self.debug_events;
-    if (val) |v| {
-        self.debug_events = v;
-    }
-
-    return previous;
-}
-
-/// called from any thread
-pub fn debugRefresh(self: *Self, val: ?bool) bool {
-    self.debug_toggle_mutex.lock();
-    defer self.debug_toggle_mutex.unlock();
-
-    const previous = self.debug_refresh;
-    if (val) |v| {
-        self.debug_refresh = v;
-    }
-
-    return previous;
-}
-
 /// called from gui thread
 pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?WidgetId) void {
-    if (self.debugRefresh(null)) {
+    if (self.debug.logRefresh(null)) {
         log.debug("{s}:{d} refresh {?x}", .{ src.file, src.line, id });
     }
     self.extra_frames_needed = 1;
@@ -524,7 +477,7 @@ pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?WidgetId
 
 /// called from any thread
 pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?WidgetId) void {
-    if (self.debugRefresh(null)) {
+    if (self.debug.logRefresh(null)) {
         log.debug("{s}:{d} refreshBackend {?x}", .{ src.file, src.line, id });
     }
     self.backend.refresh();
@@ -589,11 +542,11 @@ pub fn captureEventsInternal(self: *Self, event_num: u16, widgetId: ?WidgetId) v
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
 pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
-    if (self.debug_under_mouse and self.debug_under_mouse_esc_needed and event.action == .down and event.code == .escape) {
+    if (self.debug.target == .mouse_until_esc and event.action == .down and event.code == .escape) {
         // an escape will stop the debug stuff from following the mouse,
         // but need to stop it at the end of the frame when we've gotten
         // the info
-        self.debug_under_mouse_quitting = true;
+        self.debug.target = .quitting;
         return true;
     }
 
@@ -673,7 +626,7 @@ pub fn addEventMouseMotion(self: *Self, newpt: Point.Physical) std.mem.Allocator
         .evt = .{
             .mouse = .{
                 .action = .{ .motion = dp },
-                .button = if (self.debug_touch_simulate_events and self.debug_touch_simulate_down) .touch0 else .none,
+                .button = if (self.debug.touch_simulate_events and self.debug.touch_simulate_down) .touch0 else .none,
                 .mod = self.modifiers,
                 .p = self.mouse_pt,
                 .floating_win = winId,
@@ -702,21 +655,21 @@ pub fn addEventMouseButton(self: *Self, b: dvui.enums.Button, action: Event.Mous
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
 pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Action, xynorm: ?Point) std.mem.Allocator.Error!bool {
-    if (self.debug_under_mouse and !self.debug_under_mouse_esc_needed and action == .press and b.pointer()) {
+    if (self.debug.target == .mouse_until_click and action == .press and b.pointer()) {
         // a left click or touch will stop the debug stuff from following
         // the mouse, but need to stop it at the end of the frame when
         // we've gotten the info
-        self.debug_under_mouse_quitting = true;
+        self.debug.target = .quitting;
         return true;
     }
 
     var bb = b;
-    if (self.debug_touch_simulate_events and bb == .left) {
+    if (self.debug.touch_simulate_events and bb == .left) {
         bb = .touch0;
         if (action == .press) {
-            self.debug_touch_simulate_down = true;
+            self.debug.touch_simulate_down = true;
         } else if (action == .release) {
-            self.debug_touch_simulate_down = false;
+            self.debug.touch_simulate_down = false;
         }
     }
 
@@ -1048,14 +1001,8 @@ pub fn begin(
     self.cursor_requested = null;
     self.text_input_rect = null;
     self.last_focused_id_this_frame = .zero;
-    self.debug_info_name_rect = "";
-    self.debug_info_src_id_extra = "";
-    if (self.debug_under_mouse) {
-        if (self.debug_under_mouse_info.len > 0) {
-            self.gpa.free(self.debug_under_mouse_info);
-        }
-        self.debug_under_mouse_info = "";
-    }
+
+    self.debug.reset(self.gpa);
 
     self.datas_trash = .empty;
     self.texture_trash = .empty;
@@ -1551,118 +1498,6 @@ pub fn toastRemove(self: *Self, id: WidgetId) void {
     }
 }
 
-fn debugWindowShow(self: *Self) void {
-    if (self.debug_under_mouse_quitting) {
-        self.debug_under_mouse = false;
-        self.debug_under_mouse_esc_needed = false;
-        self.debug_under_mouse_quitting = false;
-    }
-
-    // disable so the widgets we are about to use to display this data
-    // don't modify the data, otherwise our iterator will get corrupted and
-    // even if you search for a widget here, the data won't be available
-    var dum = self.debug_under_mouse;
-    self.debug_under_mouse = false;
-    defer self.debug_under_mouse = dum;
-
-    var duf = self.debug_under_focus;
-    self.debug_under_focus = false;
-    defer self.debug_under_focus = duf;
-
-    var float = dvui.floatingWindow(@src(), .{ .open_flag = &self.debug_window_show }, .{ .min_size_content = .{ .w = 300, .h = 600 } });
-    defer float.deinit();
-
-    float.dragAreaSet(dvui.windowHeader("DVUI Debug", "", &self.debug_window_show));
-
-    {
-        var hbox = dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-
-        dvui.labelNoFmt(@src(), "Hex id of widget to highlight:", .{}, .{ .gravity_y = 0.5 });
-
-        var buf = [_]u8{0} ** 20;
-        if (self.debug_widget_id != .zero) {
-            _ = std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id}) catch unreachable;
-        }
-        var te = dvui.textEntry(@src(), .{
-            .text = .{ .buffer = &buf },
-        }, .{});
-        te.deinit();
-
-        self.debug_widget_id = @enumFromInt(std.fmt.parseInt(u64, std.mem.sliceTo(&buf, 0), 16) catch 0);
-    }
-
-    var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 } });
-    tl.install(.{});
-
-    self.debug_widget_panic = false;
-
-    var color: ?dvui.Options.ColorOrName = null;
-    if (self.debug_widget_id == .zero) {
-        // blend text and control colors
-        color = .{ .color = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill_control) };
-    }
-    if (dvui.button(@src(), "Panic", .{}, .{ .gravity_x = 1.0, .margin = dvui.Rect.all(8), .color_text = color })) {
-        if (self.debug_widget_id != .zero) {
-            self.debug_widget_panic = true;
-        } else {
-            dvui.dialog(@src(), .{}, .{ .title = "Disabled", .message = "Need valid widget Id to panic" });
-        }
-    }
-
-    if (tl.touchEditing()) |floating_widget| {
-        defer floating_widget.deinit();
-        tl.touchEditingMenu();
-    }
-    tl.processEvents();
-
-    tl.addText(self.debug_info_name_rect, .{});
-    tl.addText("\n\n", .{});
-    tl.addText(self.debug_info_src_id_extra, .{});
-    tl.deinit();
-
-    if (dvui.button(@src(), if (dum) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{}, .{})) {
-        dum = !dum;
-    }
-
-    if (dvui.button(@src(), if (dum) "Stop (Or Press Esc)" else "Debug Under Mouse (until esc)", .{}, .{})) {
-        dum = !dum;
-        self.debug_under_mouse_esc_needed = dum;
-    }
-
-    if (dvui.button(@src(), if (duf) "Stop Debugging Focus" else "Debug Focus", .{}, .{})) {
-        duf = !duf;
-    }
-
-    var log_refresh = self.debugRefresh(null);
-    if (dvui.checkbox(@src(), &log_refresh, "Refresh Logging", .{})) {
-        _ = self.debugRefresh(log_refresh);
-    }
-
-    var log_events = self.debugEvents(null);
-    if (dvui.checkbox(@src(), &log_events, "Event Logging", .{})) {
-        _ = self.debugEvents(log_events);
-    }
-
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false, .min_size_content = .height(200) });
-    defer scroll.deinit();
-
-    var iter = std.mem.splitScalar(u8, self.debug_under_mouse_info, '\n');
-    var i: usize = 0;
-    while (iter.next()) |line| : (i += 1) {
-        if (line.len > 0) {
-            var hbox = dvui.box(@src(), .horizontal, .{ .id_extra = i });
-            defer hbox.deinit();
-
-            if (dvui.buttonIcon(@src(), "find", dvui.entypo.magnifying_glass, .{}, .{}, .{})) {
-                self.debug_widget_id = @enumFromInt(std.fmt.parseInt(u64, std.mem.sliceTo(line, ' '), 16) catch 0);
-            }
-
-            dvui.labelNoFmt(@src(), line, .{}, .{ .gravity_y = 0.5 });
-        }
-    }
-}
-
 pub const endOptions = struct {
     show_toasts: bool = true,
 };
@@ -1675,9 +1510,7 @@ pub fn endRendering(self: *Self, opts: endOptions) void {
     }
     self.dialogsShow();
 
-    if (self.debug_window_show) {
-        self.debugWindowShow();
-    }
+    self.debug.show();
 
     for (self.subwindows.items) |*sw| {
         self.renderCommands(sw.render_cmds.items) catch |err| {
@@ -1726,7 +1559,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     const evts = dvui.events();
     for (evts) |*e| {
         if (self.drag_state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release) {
-            if (self.debug_events) {
+            if (self.debug.logEvents(null)) {
                 log.debug("clearing drag ({s}) for unhandled mouse release", .{self.drag_name});
             }
             self.drag_state = .none;
@@ -1754,7 +1587,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         }
     }
 
-    if (self.debug_events) {
+    if (self.debug.logEvents(null)) {
         for (evts) |*e| {
             if (e.handled) continue;
             var action: []const u8 = "";

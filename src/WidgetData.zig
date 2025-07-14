@@ -24,9 +24,10 @@ options: Options,
 src: std.builtin.SourceLocation,
 rect_scale: ?RectScale = null,
 
-pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, options: Options) WidgetData {
+pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
     const parent = dvui.parentGet();
-    const id = parent.extendId(src, options.idExtra());
+    const id = parent.extendId(src, opts.idExtra());
+    const options = if (dvui.currentWindow().debug.options_override.get(id)) |val| val.@"0" else opts;
     const min_size = options.min_sizeGet().min(options.max_sizeGet());
 
     const ms = dvui.minSize(id, min_size);
@@ -72,7 +73,6 @@ pub fn register(self: *WidgetData) void {
     }
 
     var cw = dvui.currentWindow();
-    const name: []const u8 = self.options.name orelse "???";
 
     if (self.options.tag) |t| {
         dvui.tag(t, .{ .id = self.id, .rect = self.rectScale().r, .visible = self.visible() });
@@ -100,34 +100,32 @@ pub fn register(self: *WidgetData) void {
         hasher.update(std.mem.asBytes(&(self.id == focused_widget_id)));
     }
 
-    if (cw.debug_under_focus and self.id == focused_widget_id) {
-        cw.debug_widget_id = self.id;
+    if (cw.debug.target == .focused and self.id == focused_widget_id) {
+        cw.debug.widget_id = self.id;
     }
 
-    if (cw.debug_under_mouse or self.id == cw.debug_widget_id) {
+    if (cw.debug.target.mouse() or self.id == cw.debug.widget_id) {
         var rs = self.rectScale();
 
-        if (cw.debug_under_mouse and
+        if (cw.debug.target.mouse() and
             rs.r.contains(cw.mouse_pt) and
             // prevents stuff in scroll area outside viewport being caught
             dvui.clipGet().contains(cw.mouse_pt) and
             // prevents stuff in lower subwindows being caught
             cw.windowFor(cw.mouse_pt) == dvui.subwindowCurrentId())
         {
-            const old = cw.debug_under_mouse_info;
-            cw.debug_under_mouse_info = std.fmt.allocPrint(cw.gpa, "{s}\n{x} {s}", .{ old, self.id, name }) catch |err| blk: {
-                dvui.logError(@src(), err, "Under mouse debug info could not be printed", .{});
-                break :blk "";
+            cw.debug.under_mouse_stack.append(cw.gpa, .{
+                .id = self.id,
+                // Fallback must be empty so that freeing the name will be valid
+                .name = cw.gpa.dupe(u8, self.options.name orelse "") catch "",
+            }) catch |err| {
+                dvui.logError(@src(), err, "Could not add debug info for widgets under mouse position. Widget {x} {s}", .{ self.id, self.options.name orelse "???" });
             };
-            if (old.len > 0) {
-                cw.gpa.free(old);
-            }
-
-            cw.debug_widget_id = self.id;
+            cw.debug.widget_id = self.id;
         }
 
-        if (self.id == cw.debug_widget_id) {
-            if (cw.debug_widget_panic) {
+        if (self.id == cw.debug.widget_id) {
+            if (cw.debug.widget_panic) {
                 @panic("Debug Window Panic");
             }
 
@@ -135,17 +133,10 @@ pub fn register(self: *WidgetData) void {
             if (dvui.minSizeGet(self.id)) |ms| {
                 min_size = ms;
             }
-            cw.debug_info_name_rect = std.fmt.allocPrint(cw.arena(), "{x} {s}\n\n{}\nmin {}\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{
-                self.id,
-                name,
-                rs.r,
-                min_size,
-                self.options.expandGet(),
-                rs.s,
-                self.options.paddingGet().scale(rs.s, Rect.Physical),
-                self.options.borderGet().scale(rs.s, Rect.Physical),
-                self.options.marginGet().scale(rs.s, Rect.Physical),
-            }) catch "ERROR allocPrint";
+
+            cw.debug.target_wd = self.*;
+            cw.debug.target_wd.?.parent = undefined;
+
             const clipr = dvui.clipGet();
             // clip to whole window so we always see the outline
             dvui.clipSet(dvui.windowRectPixels());
@@ -166,8 +157,6 @@ pub fn register(self: *WidgetData) void {
             outline_rect.stroke(.{}, .{ .thickness = 1 * rs.s, .color = dvui.themeGet().color_err, .after = true });
 
             dvui.clipSet(clipr);
-
-            cw.debug_info_src_id_extra = std.fmt.allocPrint(cw.arena(), "{s}:{d}\nid_extra {d}", .{ self.src.file, self.src.line, self.options.idExtra() }) catch "ERROR allocPrint";
         }
     }
 }
@@ -319,7 +308,7 @@ pub fn minSizeSetAndRefresh(self: *WidgetData) void {
         if (kv.used) {
             const name: []const u8 = self.options.name orelse "???";
             dvui.log.err("{s}:{d} duplicate widget id {x} (widget \"{s}\" highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ self.src.file, self.src.line, self.id, name });
-            cw.debug_widget_id = self.id;
+            cw.debug.widget_id = self.id;
         }
     }
 }
