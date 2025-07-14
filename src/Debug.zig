@@ -906,12 +906,16 @@ pub fn writeTypeAsCode(writer: std.io.AnyWriter, val: anytype) !void {
                     .array => try writeTypeAsCode(writer, val.*),
                     else => @compileError("Cannot write single item pointer"),
                 },
-                .c, .many, .slice => if (ptr.child != u8) @compileError("Cannot write non string many item pointer"),
+                .c, .many, .slice => if (ptr.child == u8)
+                    try writer.print("\"{s}\"", .{val})
+                else
+                    @compileError("Cannot write non string many item pointer"),
             }
-            try writer.print("\"{s}\"", .{val});
         },
-        .array => |array| {
-            try writer.print("[{d}].{{ ", .{array.len});
+        .array => |array| if (array.child == u8) {
+            try writer.print("\"{s}\"", .{val});
+        } else {
+            try writer.writeAll(".{ ");
             for (val) |v| {
                 try writeTypeAsCode(writer, v);
                 try writer.writeAll(", ");
@@ -943,16 +947,112 @@ pub fn writeTypeAsCode(writer: std.io.AnyWriter, val: anytype) !void {
             }
             try writer.writeAll("}");
         },
-        .@"union" => {
-            const active_tag = std.meta.activeTag(val);
-            try writer.print(".{{ .{s} = ", .{@tagName(active_tag)});
-            switch (active_tag) {
-                inline else => |tag| try writeTypeAsCode(writer, @field(val, @tagName(tag))),
-            }
-            try writer.writeAll(" }");
+        .@"union" => switch (std.meta.activeTag(val)) {
+            inline else => |tag| if (@FieldType(T, @tagName(tag)) == void) {
+                try writer.print(".{s}", .{@tagName(tag)});
+            } else {
+                try writer.print(".{{ .{s} = ", .{@tagName(tag)});
+                try writeTypeAsCode(writer, @field(val, @tagName(tag)));
+                try writer.writeAll(" }");
+            },
         },
         else => @compileError("Unhandled field type: " ++ @typeName(T)),
     }
+}
+
+test writeTypeAsCode {
+    var out = std.ArrayList(u8).init(std.testing.allocator);
+    defer out.deinit();
+    const writer = out.writer().any();
+
+    try writeTypeAsCode(writer, @as(f32, 12.34));
+    try std.testing.expectEqualStrings("12.34", out.items);
+    out.clearRetainingCapacity();
+    try writeTypeAsCode(writer, @as(f32, 12));
+    try std.testing.expectEqualStrings("12", out.items);
+    out.clearRetainingCapacity();
+    try writeTypeAsCode(writer, @as(u8, 43));
+    try std.testing.expectEqualStrings("43", out.items);
+    out.clearRetainingCapacity();
+    try writeTypeAsCode(writer, @as(i32, -5423));
+    try std.testing.expectEqualStrings("-5423", out.items);
+    out.clearRetainingCapacity();
+
+    try writeTypeAsCode(writer, true);
+    try std.testing.expectEqualStrings("true", out.items);
+    out.clearRetainingCapacity();
+    try writeTypeAsCode(writer, false);
+    try std.testing.expectEqualStrings("false", out.items);
+    out.clearRetainingCapacity();
+
+    try writeTypeAsCode(writer, @as(?f32, null));
+    try std.testing.expectEqualStrings("null", out.items);
+    out.clearRetainingCapacity();
+
+    try writeTypeAsCode(writer, @as([]const u8, "testing"));
+    try std.testing.expectEqualStrings(
+        \\"testing"
+    , out.items);
+    out.clearRetainingCapacity();
+    try writeTypeAsCode(writer, @as(*const [7]u8, "testing"));
+    try std.testing.expectEqualStrings(
+        \\"testing"
+    , out.items);
+    out.clearRetainingCapacity();
+
+    try writeTypeAsCode(writer, @as([3]u32, .{ 12, 34, 56 }));
+    try std.testing.expectEqualStrings(
+        \\.{ 12, 34, 56, }
+    , out.items);
+    out.clearRetainingCapacity();
+
+    try writeTypeAsCode(writer, @as(enum { a, b }, .a));
+    try std.testing.expectEqualStrings(".a", out.items);
+    out.clearRetainingCapacity();
+    try writeTypeAsCode(writer, .literal);
+    try std.testing.expectEqualStrings(".literal", out.items);
+    out.clearRetainingCapacity();
+
+    const A = struct {
+        a: bool,
+        b: u32 = 123,
+        c: ?[]const u8 = null,
+    };
+
+    try writeTypeAsCode(writer, A{ .a = true });
+    try std.testing.expectEqualStrings(
+        // Expect that `c` is not included as it defaults to `null`
+        \\.{ .a = true, .b = 123, }
+    , out.items);
+    out.clearRetainingCapacity();
+    try writeTypeAsCode(writer, A{ .a = false, .c = "testing text" });
+    try std.testing.expectEqualStrings(
+        \\.{ .a = false, .b = 123, .c = "testing text", }
+    , out.items);
+    out.clearRetainingCapacity();
+
+    const B = union(enum) {
+        a: u32,
+        b: struct { a: ?[]const u8 = null, b: f32 },
+        c,
+    };
+
+    try writeTypeAsCode(writer, B{ .a = 123 });
+    try std.testing.expectEqualStrings(
+        \\.{ .a = 123 }
+    , out.items);
+    out.clearRetainingCapacity();
+    try writeTypeAsCode(writer, B{ .b = .{ .b = 0.001 } });
+    try std.testing.expectEqualStrings(
+        \\.{ .b = .{ .b = 0.001, } }
+    , out.items);
+    out.clearRetainingCapacity();
+    try writeTypeAsCode(writer, B.c);
+    try std.testing.expectEqualStrings(
+        // the value type here is void, so it should use the shorthand
+        \\.c
+    , out.items);
+    out.clearRetainingCapacity();
 }
 
 const Options = dvui.Options;
