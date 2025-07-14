@@ -1,5 +1,6 @@
 open: bool = false,
 options_editor_open: bool = false,
+options_override_list_open: bool = false,
 
 /// 0 means no widget is selected
 widget_id: dvui.WidgetId = .zero,
@@ -14,7 +15,7 @@ target_wd: ?dvui.WidgetData = null,
 under_mouse_stack: std.ArrayListUnmanaged(struct { id: dvui.WidgetId, name: []const u8 }) = .empty,
 
 /// Uses `gpa` allocator
-options_override: std.AutoHashMapUnmanaged(dvui.WidgetId, Options) = .empty,
+options_override: std.AutoHashMapUnmanaged(dvui.WidgetId, struct { Options, std.builtin.SourceLocation }) = .empty,
 
 toggle_mutex: std.Thread.Mutex = .{},
 log_refresh: bool = false,
@@ -198,7 +199,7 @@ pub fn show(self: *Debug) void {
 
     if (self.target_wd) |wd| {
         if (self.options_editor_open) {
-            var options = self.options_override.get(wd.id) orelse wd.options;
+            var options, _ = self.options_override.get(wd.id) orelse .{ wd.options, undefined };
 
             var editor_float = dvui.floatingWindow(@src(), .{
                 .open_flag = &self.options_editor_open,
@@ -215,8 +216,8 @@ pub fn show(self: *Debug) void {
 
             editor_float.dragAreaSet(dvui.windowHeader(title, "", &self.options_editor_open));
 
-            if (optionsEditor(&options)) {
-                self.options_override.put(dvui.currentWindow().gpa, wd.id, options) catch |err| {
+            if (optionsEditor(&options, &wd)) {
+                self.options_override.put(dvui.currentWindow().gpa, wd.id, .{ options, wd.src }) catch |err| {
                     dvui.logError(@src(), err, "Could not add the override options for {x} {s}", .{ wd.id, wd.options.name orelse "???" });
                 };
             }
@@ -235,6 +236,50 @@ pub fn show(self: *Debug) void {
 
     if (dvui.button(@src(), if (debug_target == .focused) "Stop Debugging Focus" else "Debug Focus", .{}, .{})) {
         debug_target = if (debug_target == .focused) .none else .focused;
+    }
+
+    if (dvui.button(@src(), "Show all option overrides", .{}, .{})) {
+        self.options_override_list_open = true;
+    }
+
+    if (self.options_override_list_open) {
+        var list_float = dvui.floatingWindow(@src(), .{
+            .open_flag = &self.options_override_list_open,
+            .stay_above_parent_window = true,
+        }, .{ .min_size_content = .{ .w = 300, .h = 200 } });
+        defer list_float.deinit();
+
+        list_float.dragAreaSet(dvui.windowHeader("Options overrides", "", &self.options_override_list_open));
+
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .min_size_content = .{ .h = 200 }, .expand = .both });
+        defer scroll.deinit();
+
+        var menu = dvui.menu(@src(), .vertical, .{ .expand = .horizontal });
+        defer menu.deinit();
+
+        var it = self.options_override.iterator();
+        var i: usize = 0;
+        while (it.next()) |entry| : (i += 1) {
+            const id = entry.key_ptr.*;
+            const options, const src = entry.value_ptr.*;
+
+            var button = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
+            button.install();
+            defer button.deinit();
+            button.processEvents();
+            button.drawBackground();
+
+            if (button.clicked()) copyOptionsToClipboard(src, id, options);
+
+            const stack = dvui.box(@src(), .vertical, .{
+                .expand = .both,
+                .color_fill = if (button.pressed()) .fill_press else null,
+            });
+            defer stack.deinit();
+
+            dvui.label(@src(), "{x} {s} (+{d})", .{ id, options.name orelse "???", options.idExtra() }, .{});
+            dvui.label(@src(), "{s}:{d}", .{ src.file, src.line }, .{ .font_style = .caption });
+        }
     }
 
     var log_refresh = self.logRefresh(null);
@@ -264,7 +309,7 @@ pub fn show(self: *Debug) void {
 const OptionsEditorTab = enum { layout, style };
 
 /// Returns true if the options was modified
-pub fn optionsEditor(self: *Options) bool {
+pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
     var changed = false;
 
     var vbox = dvui.box(@src(), .vertical, .{ .name = "Editor Box", .expand = .both });
@@ -272,6 +317,18 @@ pub fn optionsEditor(self: *Options) bool {
 
     const active_tab = dvui.dataGetPtrDefault(null, vbox.data().id, "Tab", OptionsEditorTab, .layout);
     {
+        var overlay = dvui.overlay(@src(), .{ .expand = .horizontal });
+        defer overlay.deinit();
+
+        var button_wd: dvui.WidgetData = undefined;
+        if (dvui.buttonIcon(@src(), "Copy Options", dvui.entypo.copy, .{}, .{}, .{ .gravity_x = 1, .data_out = &button_wd })) {
+            copyOptionsToClipboard(wd.src, wd.id, self.*);
+        }
+        dvui.tooltip(@src(), .{
+            .active_rect = button_wd.borderRectScale().r,
+            .position = .vertical,
+        }, "Copy Options struct to clipboard", .{}, .{});
+
         var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
         tabs.install();
         defer tabs.deinit();
@@ -296,6 +353,19 @@ pub fn optionsEditor(self: *Options) bool {
     }
 
     return changed;
+}
+
+fn copyOptionsToClipboard(src: std.builtin.SourceLocation, id: dvui.WidgetId, options: Options) void {
+    dvui.log.debug("Copied Options struct for {s}:{d}", .{ src.file, src.line });
+    dvui.toast(@src(), .{ .message = "Options copied to clipboard" });
+
+    var out = std.ArrayList(u8).init(dvui.currentWindow().lifo());
+    defer out.deinit();
+    var writer = out.writer();
+    writeTypeAsCode(writer.any(), options) catch |err| {
+        dvui.logError(@src(), err, "Could not write Options struct for {x} {s}", .{ id, options.name orelse "???" });
+    };
+    dvui.clipboardTextSet(out.items);
 }
 
 fn layoutPage(self: *Options, id: dvui.WidgetId) bool {
@@ -782,6 +852,74 @@ fn stylePage(self: *Options, id: dvui.WidgetId) bool {
     }
 
     return changed;
+}
+
+/// Used to copy the code for any runtime type, used to copy
+/// modified `Options`.
+pub fn writeTypeAsCode(writer: std.io.AnyWriter, val: anytype) !void {
+    const T = @TypeOf(val);
+    switch (@typeInfo(T)) {
+        .optional => if (val) |v|
+            try writeTypeAsCode(writer, v)
+        else
+            try writer.writeAll("null"),
+        .null => try writer.writeAll("null"),
+        .@"enum", .enum_literal => try writer.print(".{s}", .{@tagName(val)}),
+        .float, .int, .comptime_float, .comptime_int => try writer.print("{d}", .{val}),
+        .bool => try writer.print("{any}", .{val}),
+        .pointer => |ptr| {
+            switch (ptr.size) {
+                .one => switch (@typeInfo(ptr.child)) {
+                    .array => try writeTypeAsCode(writer, val.*),
+                    else => @compileError("Cannot write single item pointer"),
+                },
+                .c, .many, .slice => if (ptr.child != u8) @compileError("Cannot write non string many item pointer"),
+            }
+            try writer.print("\"{s}\"", .{val});
+        },
+        .array => |array| {
+            try writer.print("[{d}].{{ ", .{array.len});
+            for (val) |v| {
+                try writeTypeAsCode(writer, v);
+                try writer.writeAll(", ");
+            }
+            try writer.writeAll("}");
+        },
+        .@"struct" => {
+            try writer.writeAll(".{ ");
+            inline for (std.meta.fields(T)) |field| blk: {
+                const ti = @typeInfo(field.type);
+                // Ignore single item pointers
+                const ptr_info: ?std.builtin.Type.Pointer = switch (ti) {
+                    .pointer => |ptr| ptr,
+                    .optional => |opt| if (@typeInfo(opt.child) == .pointer)
+                        @typeInfo(opt.child).pointer
+                    else
+                        null,
+                    else => null,
+                };
+                if (ptr_info != null and ptr_info.?.size == .one and @typeInfo(ptr_info.?.child) != .array) {
+                    continue;
+                }
+                if (field.defaultValue() != null and ti == .optional and @field(val, field.name) == null) {
+                    break :blk;
+                }
+                try writer.print(".{s} = ", .{field.name});
+                try writeTypeAsCode(writer, @field(val, field.name));
+                try writer.writeAll(", ");
+            }
+            try writer.writeAll("}");
+        },
+        .@"union" => {
+            const active_tag = std.meta.activeTag(val);
+            try writer.print(".{{ .{s} = ", .{@tagName(active_tag)});
+            switch (active_tag) {
+                inline else => |tag| try writeTypeAsCode(writer, @field(val, @tagName(tag))),
+            }
+            try writer.writeAll(" }");
+        },
+        else => @compileError("Unhandled field type: " ++ @typeName(T)),
+    }
 }
 
 const Options = dvui.Options;

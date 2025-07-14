@@ -27,7 +27,7 @@ rect_scale: ?RectScale = null,
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
     const parent = dvui.parentGet();
     const id = parent.extendId(src, opts.idExtra());
-    const options = dvui.currentWindow().debug.options_override.get(id) orelse opts;
+    const options = if (dvui.currentWindow().debug.options_override.get(id)) |val| val.@"0" else opts;
     const min_size = options.min_sizeGet().min(options.max_sizeGet());
 
     const ms = dvui.minSize(id, min_size);
