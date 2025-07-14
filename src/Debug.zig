@@ -1,4 +1,6 @@
 open: bool = false,
+options_editor_open: bool = false,
+
 /// 0 means no widget is selected
 widget_id: dvui.WidgetId = .zero,
 target: DebugTarget = .none,
@@ -10,6 +12,9 @@ target_wd: ?dvui.WidgetData = null,
 ///
 /// The name slice is also duplicated by the `gpa` allocator
 under_mouse_stack: std.ArrayListUnmanaged(struct { id: dvui.WidgetId, name: []const u8 }) = .empty,
+
+/// Uses `gpa` allocator
+options_override: std.AutoHashMapUnmanaged(dvui.WidgetId, Options) = .empty,
 
 toggle_mutex: std.Thread.Mutex = .{},
 log_refresh: bool = false,
@@ -51,6 +56,7 @@ pub fn deinit(self: *Debug, gpa: std.mem.Allocator) void {
         gpa.free(item.name);
     }
     self.under_mouse_stack.clearAndFree(gpa);
+    self.options_override.deinit(gpa);
 }
 
 /// Returns the previous value
@@ -124,18 +130,31 @@ pub fn show(self: *Debug) void {
     var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 } });
     tl.install(.{});
 
-    self.widget_panic = false;
+    {
+        var corner_box = dvui.box(@src(), .vertical, .{ .gravity_x = 1, .margin = .all(8) });
+        defer corner_box.deinit();
 
-    var color: ?dvui.Options.ColorOrName = null;
-    if (self.widget_id == .zero) {
-        // blend text and control colors
-        color = .{ .color = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill_control) };
-    }
-    if (dvui.button(@src(), "Panic", .{}, .{ .gravity_x = 1.0, .margin = dvui.Rect.all(8), .color_text = color })) {
-        if (self.widget_id != .zero) {
-            self.widget_panic = true;
-        } else {
-            dvui.dialog(@src(), .{}, .{ .title = "Disabled", .message = "Need valid widget Id to panic" });
+        var color: ?Options.ColorOrName = null;
+        if (self.widget_id == .zero) {
+            // blend text and control colors
+            color = .{ .color = .average(dvui.themeGet().color_text, dvui.themeGet().color_fill_control) };
+        }
+
+        if (dvui.button(@src(), "Edit Options", .{}, .{ .gravity_x = 1, .color_text = color })) {
+            if (self.widget_id != .zero) {
+                self.options_editor_open = true;
+            } else {
+                dvui.dialog(@src(), .{}, .{ .title = "Disabled", .message = "Need valid widget Id to edit options" });
+            }
+        }
+
+        self.widget_panic = false;
+        if (dvui.button(@src(), "Panic", .{}, .{ .gravity_x = 1, .color_text = color })) {
+            if (self.widget_id != .zero) {
+                self.widget_panic = true;
+            } else {
+                dvui.dialog(@src(), .{}, .{ .title = "Disabled", .message = "Need valid widget Id to panic" });
+            }
         }
     }
 
@@ -167,15 +186,44 @@ pub fn show(self: *Debug) void {
             wd.min_size,
             wd.options.expandGet(),
             rs.s,
-            wd.options.paddingGet().scale(rs.s, dvui.Rect.Physical),
-            wd.options.borderGet().scale(rs.s, dvui.Rect.Physical),
-            wd.options.marginGet().scale(rs.s, dvui.Rect.Physical),
+            wd.options.paddingGet().scale(rs.s, Rect.Physical),
+            wd.options.borderGet().scale(rs.s, Rect.Physical),
+            wd.options.marginGet().scale(rs.s, Rect.Physical),
             wd.src.file,
             wd.src.line,
             wd.options.id_extra,
         }, .{});
     }
     tl.deinit();
+
+    if (self.target_wd) |wd| {
+        if (self.options_editor_open) {
+            var options = self.options_override.get(wd.id) orelse wd.options;
+
+            var editor_float = dvui.floatingWindow(@src(), .{
+                .open_flag = &self.options_editor_open,
+                .stay_above_parent_window = true,
+            }, .{});
+            defer editor_float.deinit();
+
+            const title = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{x} {s} (+{d})", .{
+                wd.id,
+                wd.options.name orelse "???",
+                wd.options.idExtra(),
+            }) catch wd.options.name orelse "???";
+            defer dvui.currentWindow().lifo().free(title);
+
+            editor_float.dragAreaSet(dvui.windowHeader(title, "", &self.options_editor_open));
+
+            if (optionsEditor(&options)) {
+                self.options_override.put(dvui.currentWindow().gpa, wd.id, options) catch |err| {
+                    dvui.logError(@src(), err, "Could not add the override options for {x} {s}", .{ wd.id, wd.options.name orelse "???" });
+                };
+            }
+        }
+    } else {
+        self.options_editor_open = false;
+    }
 
     if (dvui.button(@src(), if (debug_target == .mouse_until_click) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{}, .{})) {
         debug_target = .mouse_until_click;
@@ -212,6 +260,532 @@ pub fn show(self: *Debug) void {
         dvui.label(@src(), "{x} {s}", .{ item.id, item.name }, .{ .gravity_y = 0.5 });
     }
 }
+
+const OptionsEditorTab = enum { layout, style };
+
+/// Returns true if the options was modified
+pub fn optionsEditor(self: *Options) bool {
+    var changed = false;
+
+    var vbox = dvui.box(@src(), .vertical, .{ .name = "Editor Box", .expand = .both });
+    defer vbox.deinit();
+
+    const active_tab = dvui.dataGetPtrDefault(null, vbox.data().id, "Tab", OptionsEditorTab, .layout);
+    {
+        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        tabs.install();
+        defer tabs.deinit();
+
+        if (tabs.addTabLabel(active_tab.* == .layout, "Layout")) {
+            active_tab.* = .layout;
+        }
+        if (tabs.addTabLabel(active_tab.* == .style, "Style")) {
+            active_tab.* = .style;
+        }
+    }
+
+    switch (active_tab.*) {
+        .layout => {
+            if (layoutPage(self, vbox.data().id)) changed = true;
+        },
+        .style => {
+            if (stylePage(self, vbox.data().id)) changed = true;
+        },
+        // NOTE: name and tag editing have been intentionally skipped as the memory
+        //       ownership would be unnecessarily complicated
+    }
+
+    return changed;
+}
+
+fn layoutPage(self: *Options, id: dvui.WidgetId) bool {
+    var changed = false;
+
+    const corner_radius_was_null = self.corner_radius == null;
+    self.corner_radius = self.corner_radiusGet();
+    defer if (corner_radius_was_null and !changed) {
+        self.corner_radius = null;
+    };
+    const corner_radius = &self.corner_radius.?;
+
+    const margin_was_null = self.margin == null;
+    self.margin = self.marginGet();
+    defer if (margin_was_null and !changed) {
+        self.margin = null;
+    };
+    const margin = &self.margin.?;
+
+    const border_was_null = self.border == null;
+    self.border = self.borderGet();
+    defer if (border_was_null and !changed) {
+        self.border = null;
+    };
+    const border = &self.border.?;
+
+    const padding_was_null = self.padding == null;
+    self.padding = self.paddingGet();
+    defer if (padding_was_null and !changed) {
+        self.padding = null;
+    };
+    const padding = &self.padding.?;
+
+    const gravity_y_was_null = self.gravity_y == null;
+    self.gravity_y = self.gravityGet().y;
+    defer if (gravity_y_was_null and !changed) {
+        self.gravity_y = null;
+    };
+    const gravity_y = &self.gravity_y.?;
+
+    const gravity_x_was_null = self.gravity_x == null;
+    self.gravity_x = self.gravityGet().x;
+    defer if (gravity_x_was_null and !changed) {
+        self.gravity_x = null;
+    };
+    const gravity_x = &self.gravity_x.?;
+
+    const rotation_was_null = self.rotation == null;
+    self.rotation = self.rotationGet();
+    defer if (rotation_was_null and !changed) {
+        self.rotation = null;
+    };
+    const rotation = &self.rotation.?;
+
+    const link_margin = dvui.dataGetPtrDefault(null, id, "link_margin", bool, true);
+    const link_border = dvui.dataGetPtrDefault(null, id, "link_border", bool, true);
+    const link_padding = dvui.dataGetPtrDefault(null, id, "link_padding", bool, true);
+    const link_radius = dvui.dataGetPtrDefault(null, id, "link_radius", bool, true);
+
+    { // First bar
+        var row = dvui.box(@src(), .horizontal, .{});
+        defer row.deinit();
+
+        {
+            dvui.labelNoFmt(@src(), "expand", .{}, .{ .gravity_y = 0.5 });
+            const expands = std.meta.tags(Options.Expand);
+            var dd = dvui.DropdownWidget.init(@src(), .{
+                .label = @tagName(self.expandGet()),
+                .selected_index = std.mem.indexOfScalar(Options.Expand, expands, self.expandGet()).?,
+            }, .{
+                .expand = .horizontal,
+                .min_size_content = .{ .w = 110 },
+                .gravity_y = 0.5,
+            });
+            dd.install();
+            defer dd.deinit();
+            if (dd.dropped()) {
+                for (expands) |new| {
+                    if (dd.addChoiceLabel(@tagName(new))) {
+                        self.expand = new;
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        if (dvui.sliderEntry(@src(), "rotation: {d:0.2}", .{
+            .min = std.math.pi * -2,
+            .max = std.math.pi * 2,
+            .interval = @as(f32, std.math.pi) / 100,
+            .value = rotation,
+        }, .{ .gravity_y = 0.5 })) {
+            changed = true;
+        }
+    }
+
+    { // Min size
+        var row = dvui.box(@src(), .horizontal, .{});
+        defer row.deinit();
+
+        var has_min_size = self.min_size_content != null;
+        if (dvui.checkbox(@src(), &has_min_size, "min size", .{ .gravity_y = 0.5, .min_size_content = .{ .w = 90 } })) {
+            if (self.min_size_content) |_| {
+                self.min_size_content = null;
+            } else {
+                self.min_size_content = .all(100);
+            }
+            changed = true;
+        }
+
+        if (self.min_size_content) |*size| {
+            if (dvui.sliderEntry(@src(), "width: {d:0.0}", .{ .value = &size.w, .min = 0, .max = 400.0, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+                changed = true;
+            }
+            if (dvui.sliderEntry(@src(), "height: {d:0.0}", .{ .value = &size.h, .min = 0, .max = 400.0, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+                changed = true;
+            }
+        }
+    }
+
+    { // Max size
+        var row = dvui.box(@src(), .horizontal, .{});
+        defer row.deinit();
+
+        var has_max_size = self.max_size_content != null;
+        if (dvui.checkbox(@src(), &has_max_size, "max size", .{ .gravity_y = 0.5, .min_size_content = .{ .w = 90 } })) {
+            if (self.max_size_content) |_| {
+                self.max_size_content = null;
+            } else {
+                self.max_size_content = .size(.all(400));
+            }
+            changed = true;
+        }
+
+        if (self.max_size_content) |*size| {
+            if (dvui.sliderEntry(@src(), "width: {d:0.0}", .{ .value = &size.w, .min = 0, .max = 400.0, .interval = 1 }, .{})) {
+                changed = true;
+            }
+            if (dvui.sliderEntry(@src(), "height: {d:0.0}", .{ .value = &size.h, .min = 0, .max = 400.0, .interval = 1 }, .{})) {
+                changed = true;
+            }
+        }
+    }
+
+    { // Top Row
+        var row = dvui.boxEqual(@src(), .horizontal, .{});
+        defer row.deinit();
+        { // Top Left
+            var col = dvui.box(@src(), .vertical, .{ .border = .all(1), .expand = .vertical });
+            defer col.deinit();
+
+            if (dvui.sliderEntry(@src(), "radius: {d:0}", .{ .value = &corner_radius.x, .min = 0, .max = 200, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+                changed = true;
+                if (link_radius.*) {
+                    corner_radius.* = .all(corner_radius.x);
+                }
+            }
+        }
+        { // Top Center
+            var col = dvui.box(@src(), .vertical, .{ .border = .all(1) });
+            defer col.deinit();
+
+            if (dvui.sliderEntry(@src(), "margin: {d:0.0}", .{ .value = &margin.y, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
+                changed = true;
+                if (link_margin.*) {
+                    margin.* = .all(margin.y);
+                }
+            }
+            if (dvui.sliderEntry(@src(), "border: {d:0.0}", .{ .value = &border.y, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
+                changed = true;
+                if (link_border.*) {
+                    border.* = .all(border.y);
+                }
+            }
+            if (dvui.sliderEntry(@src(), "padding: {d:0.0}", .{ .value = &padding.y, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
+                changed = true;
+                if (link_padding.*) {
+                    padding.* = .all(padding.y);
+                }
+            }
+        }
+        { // Top Right
+            var col = dvui.box(@src(), .vertical, .{ .border = .all(1), .expand = .vertical });
+            defer col.deinit();
+
+            if (dvui.sliderEntry(@src(), "radius: {d:0}", .{ .value = &corner_radius.y, .min = 0, .max = 200, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+                changed = true;
+                if (link_radius.*) {
+                    corner_radius.* = .all(corner_radius.y);
+                }
+            }
+        }
+    }
+
+    { // Middle Row
+        var row = dvui.boxEqual(@src(), .horizontal, .{});
+        defer row.deinit();
+        { // Middle Left
+            var col = dvui.box(@src(), .vertical, .{ .border = .all(1) });
+            defer col.deinit();
+
+            if (dvui.sliderEntry(@src(), "margin: {d:0.0}", .{ .value = &margin.x, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
+                changed = true;
+                if (link_margin.*) {
+                    margin.* = .all(margin.x);
+                }
+            }
+            if (dvui.sliderEntry(@src(), "border: {d:0.0}", .{ .value = &border.x, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
+                changed = true;
+                if (link_border.*) {
+                    border.* = .all(border.x);
+                }
+            }
+            if (dvui.sliderEntry(@src(), "padding: {d:0.0}", .{ .value = &padding.x, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
+                changed = true;
+                if (link_padding.*) {
+                    padding.* = .all(padding.x);
+                }
+            }
+        }
+        { // Middle Center
+            var col = dvui.box(@src(), .horizontal, .{ .border = .all(1), .expand = .both });
+            defer col.deinit();
+
+            if (dvui.slider(@src(), .vertical, gravity_y, .{ .expand = .vertical })) {
+                changed = true;
+            }
+
+            var side = dvui.box(@src(), .vertical, .{ .expand = .both });
+            defer side.deinit();
+
+            dvui.labelNoFmt(@src(), "gravity", .{}, .{ .gravity_y = 0.5 });
+
+            if (dvui.slider(@src(), .horizontal, gravity_x, .{ .expand = .horizontal, .gravity_y = 1 })) {
+                changed = true;
+            }
+        }
+        { // Middle Right
+            var col = dvui.box(@src(), .vertical, .{ .border = .all(1) });
+            defer col.deinit();
+
+            if (dvui.sliderEntry(@src(), "margin: {d:0.0}", .{ .value = &margin.w, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
+                changed = true;
+                if (link_margin.*) {
+                    margin.* = .all(margin.w);
+                }
+            }
+            if (dvui.sliderEntry(@src(), "border: {d:0.0}", .{ .value = &border.w, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
+                changed = true;
+                if (link_border.*) {
+                    border.* = .all(border.w);
+                }
+            }
+            if (dvui.sliderEntry(@src(), "padding: {d:0.0}", .{ .value = &padding.w, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
+                changed = true;
+                if (link_padding.*) {
+                    padding.* = .all(padding.w);
+                }
+            }
+        }
+    }
+
+    { // Bottom Row
+        var row = dvui.boxEqual(@src(), .horizontal, .{});
+        defer row.deinit();
+        { // Bottom Left
+            var col = dvui.box(@src(), .vertical, .{ .border = .all(1), .expand = .vertical });
+            defer col.deinit();
+
+            if (dvui.sliderEntry(@src(), "radius: {d:0}", .{ .value = &corner_radius.h, .min = 0, .max = 200, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+                changed = true;
+                if (link_radius.*) {
+                    corner_radius.* = .all(corner_radius.h);
+                }
+            }
+        }
+        { // Bottom Center
+            var col = dvui.box(@src(), .vertical, .{ .border = .all(1) });
+            defer col.deinit();
+
+            if (dvui.sliderEntry(@src(), "margin: {d:0.0}", .{ .value = &margin.h, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
+                changed = true;
+                if (link_margin.*) {
+                    margin.* = .all(margin.h);
+                }
+            }
+            if (dvui.sliderEntry(@src(), "border: {d:0.0}", .{ .value = &border.h, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
+                changed = true;
+                if (link_border.*) {
+                    border.* = .all(border.h);
+                }
+            }
+            if (dvui.sliderEntry(@src(), "padding: {d:0.0}", .{ .value = &padding.h, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
+                changed = true;
+                if (link_padding.*) {
+                    padding.* = .all(padding.h);
+                }
+            }
+        }
+        { // Bottom Right
+            var col = dvui.box(@src(), .vertical, .{ .border = .all(1), .expand = .vertical });
+            defer col.deinit();
+
+            if (dvui.sliderEntry(@src(), "radius: {d:0}", .{ .value = &corner_radius.w, .min = 0, .max = 200, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+                changed = true;
+                if (link_radius.*) {
+                    corner_radius.* = .all(corner_radius.w);
+                }
+            }
+        }
+    }
+
+    {
+        var row = dvui.box(@src(), .horizontal, .{});
+        defer row.deinit();
+
+        dvui.labelNoFmt(@src(), "Link: ", .{}, .{});
+
+        if (dvui.checkbox(@src(), link_margin, "margin", .{})) {
+            margin.* = .all(margin.x);
+            changed = true;
+        }
+        if (dvui.checkbox(@src(), link_border, "border", .{})) {
+            border.* = .all(border.x);
+            changed = true;
+        }
+        if (dvui.checkbox(@src(), link_padding, "padding", .{})) {
+            padding.* = .all(padding.x);
+            changed = true;
+        }
+        if (dvui.checkbox(@src(), link_radius, "radius", .{})) {
+            corner_radius.* = .all(corner_radius.x);
+            changed = true;
+        }
+    }
+
+    return changed;
+}
+
+fn stylePage(self: *Options, id: dvui.WidgetId) bool {
+    var changed = false;
+
+    var row = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+    {
+        dvui.label(@src(), "Font Style", .{}, .{ .gravity_y = 0.5 });
+        const font_styles = std.meta.tags(Options.FontStyle);
+        var dd = dvui.DropdownWidget.init(@src(), .{
+            .label = if (self.font_style) |style| @tagName(style) else "null",
+        }, .{
+            .min_size_content = .{ .w = 150 },
+            .gravity_y = 0.5,
+        });
+        dd.install();
+        defer dd.deinit();
+        if (dd.dropped()) {
+            if (dd.addChoiceLabel("Set to null")) {
+                self.font_style = null;
+                changed = true;
+            }
+            for (font_styles) |style| {
+                if (dd.addChoiceLabel(@tagName(style))) {
+                    self.font_style = style;
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    var background = self.backgroundGet();
+    if (dvui.checkbox(@src(), &background, "background", .{ .gravity_y = 0.5 })) {
+        changed = true;
+        self.background = background;
+    }
+
+    row.deinit();
+    row = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .margin = .{ .y = 5 } });
+    defer row.deinit();
+
+    const active_color = dvui.dataGetPtrDefault(null, id, "Color", Options.ColorAsk, .accent);
+
+    {
+        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
+        tabs.install();
+        defer tabs.deinit();
+
+        const colors = comptime std.meta.tags(Options.ColorAsk);
+        inline for (colors, 0..) |color_ask, i| {
+            const tab = tabs.addTab(active_color.* == color_ask, .{
+                .expand = .horizontal,
+                .padding = .all(2),
+                .id_extra = i,
+            });
+            defer tab.deinit();
+
+            if (tab.clicked()) {
+                active_color.* = color_ask;
+            }
+
+            var label_opts = tab.data().options.strip();
+            if (dvui.captured(tab.data().id)) {
+                label_opts.color_text = .{ .name = .text_press };
+            }
+
+            const field = "color_" ++ @tagName(color_ask);
+            const color: Options.ColorOrName = if (@field(self, field)) |color| color else switch (color_ask) {
+                .accent => .{ .name = .accent },
+                .text => .{ .name = .text },
+                .text_press => .{ .name = .text_press },
+                .fill => .{ .name = .fill },
+                .fill_hover => .{ .name = .fill_hover },
+                .fill_press => .{ .name = .fill_press },
+                .border => .{ .name = .border },
+            };
+
+            const color_indicator = dvui.overlay(@src(), .{
+                .expand = .ratio,
+                .min_size_content = .all(10),
+                .corner_radius = .all(100),
+                .border = .all(1),
+                .background = true,
+                .color_fill = .fromColor(color.resolve()),
+            });
+            // Used to o
+            const color_width = color_indicator.data().rectScale().r.w;
+            color_indicator.deinit();
+            dvui.labelNoFmt(@src(), @tagName(color_ask), .{}, .{ .margin = .{ .x = color_width } });
+        }
+    }
+
+    {
+        var col = dvui.box(@src(), .vertical, .{ .expand = .both, .margin = .all(5) });
+        defer col.deinit();
+
+        const field: ?*Options.ColorOrName = switch (active_color.*) {
+            inline else => |c| if (@field(self, "color_" ++ @tagName(c))) |*ptr| ptr else null,
+        };
+        const rgba_color: Options.ColorOrName = if (field) |ptr| ptr.* else switch (active_color.*) {
+            .accent => .{ .name = .accent },
+            .text => .{ .name = .text },
+            .text_press => .{ .name = .text_press },
+            .fill => .{ .name = .fill },
+            .fill_hover => .{ .name = .fill_hover },
+            .fill_press => .{ .name = .fill_press },
+            .border => .{ .name = .border },
+        };
+
+        var hsv = dvui.Color.HSV.fromColor(rgba_color.resolve());
+        if (dvui.colorPicker(@src(), .{ .hsv = &hsv, .dir = .horizontal }, .{})) {
+            changed = true;
+            if (field) |ptr| {
+                ptr.* = .fromColor(hsv.toColor());
+            } else switch (active_color.*) {
+                inline else => |c| @field(self, "color_" ++ @tagName(c)) = .fromColor(hsv.toColor()),
+            }
+        }
+
+        {
+            const colors = std.meta.tags(Options.ColorsFromTheme);
+            const current_color: ?Options.ColorsFromTheme = if (field) |ptr| switch (ptr.*) {
+                .name => |n| n,
+                .color => null,
+            } else null;
+            var dd = dvui.DropdownWidget.init(@src(), .{
+                .label = if (current_color) |c| @tagName(c) else "custom",
+                .selected_index = if (current_color) |c| std.mem.indexOfScalar(Options.ColorsFromTheme, colors, c) else null,
+            }, .{
+                .min_size_content = .{ .w = 110 },
+            });
+            dd.install();
+            defer dd.deinit();
+            if (dd.dropped()) {
+                for (colors) |color| {
+                    if (dd.addChoiceLabel(@tagName(color))) {
+                        changed = true;
+                        if (field) |ptr| {
+                            ptr.* = .{ .name = color };
+                        } else switch (active_color.*) {
+                            inline else => |c| @field(self, "color_" ++ @tagName(c)) = .{ .name = color },
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return changed;
+}
+
+const Options = dvui.Options;
+const Rect = dvui.Rect;
 
 const std = @import("std");
 const dvui = @import("dvui.zig");
