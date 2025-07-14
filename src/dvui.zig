@@ -1446,6 +1446,18 @@ pub fn cursorSet(cursor: enums.Cursor) void {
     }
 }
 
+/// Shows or hides the cursor, `true` meaning it's shown.
+///
+/// The previous value will be returned
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn cursorShow(value: ?bool) bool {
+    return currentWindow().backend.cursorShow(value) catch |err| {
+        logError(@src(), err, "Could not change cursor visibility", .{});
+        return true;
+    };
+}
+
 /// A collection of points that make up a shape that can later be rendered to the screen.
 ///
 /// This is the basic tool to create rectangles and more complex polygons to later be

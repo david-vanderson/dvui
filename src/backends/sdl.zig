@@ -368,6 +368,36 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) !bool {
     return false;
 }
 
+pub fn cursorShow(_: *SDLBackend, value: ?bool) !bool {
+    if (sdl3) {
+        const prev = c.SDL_CursorVisible();
+        if (value) |val| {
+            if (val) {
+                if (!c.SDL_ShowCursor()) {
+                    return logErr("SDL_ShowCursor in cursorShow");
+                }
+            } else {
+                if (!c.SDL_HideCursor()) {
+                    return logErr("SDL_HideCursor in cursorShow");
+                }
+            }
+        }
+        return prev;
+    } else {
+        const prev = switch (c.SDL_ShowCursor(c.SDL_QUERY)) {
+            c.SDL_ENABLE => true,
+            c.SDL_DISABLE => false,
+            else => return logErr("SDL_ShowCursor QUERY in cursorShow"),
+        };
+        if (value) |val| {
+            if (c.SDL_ShowCursor(if (val) c.SDL_ENABLE else c.SDL_DISABLE) < 0) {
+                return logErr("SDL_ShowCursor set in cursorShow");
+            }
+        }
+        return prev;
+    }
+}
+
 pub fn refresh(_: *SDLBackend) void {
     var ue = std.mem.zeroes(c.SDL_Event);
     ue.type = if (sdl3) c.SDL_EVENT_USER else c.SDL_USEREVENT;
