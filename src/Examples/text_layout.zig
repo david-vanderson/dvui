@@ -79,6 +79,27 @@ pub fn layoutText() void {
     }
 }
 
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG text_layout" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 500 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            layoutText();
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-text_layout.png");
+}
+
 const dvui = @import("../dvui.zig");
 const entypo = dvui.entypo;
 const TextLayoutWidget = dvui.TextLayoutWidget;

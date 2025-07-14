@@ -1,4 +1,4 @@
-/// ![image](Examples-scroll_canvas.png)
+/// ![image](Examples-scrollCanvas.png)
 pub fn scrollCanvas() void {
     var vbox = dvui.box(@src(), .vertical, .{});
     defer vbox.deinit();
@@ -359,6 +359,27 @@ pub fn scrollCanvas() void {
             dr.fill(.{}, .{ .color = dvui.Color.lime.opacity(0.5) });
         }
     }
+}
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG scrollCanvas" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 300, .h = 400 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            scrollCanvas();
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-scrollCanvas.png");
 }
 
 const dvui = @import("../dvui.zig");

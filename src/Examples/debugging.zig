@@ -142,6 +142,42 @@ fn makeLabels(src: std.builtin.SourceLocation, count: usize) void {
     dvui.label(@src(), "two", .{}, .{});
 }
 
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG debugging" {
+    // This tests intentionally logs errors, which fails with the normal test runner.
+    // We skip this test instead of downgrading all log.err to log.warn as we usually
+    // want to fail if dvui logs errors (for duplicate id's or similar)
+    if (!dvui.testing.is_dvui_doc_gen_runner) return error.SkipZigTest;
+
+    std.debug.print("IGNORE ERROR LOGS FOR THIS TEST, IT IS EXPECTED\n", .{});
+
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 500 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            debuggingErrors();
+            return .ok;
+        }
+    }.frame;
+
+    // Tab to duplicate id expander and open it
+    for (0..5) |_| {
+        try dvui.testing.pressKey(.tab, .none);
+        _ = try dvui.testing.step(frame);
+    }
+    try dvui.testing.pressKey(.enter, .none);
+    _ = try dvui.testing.step(frame);
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-debugging.png");
+}
+
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const Examples = @import("../Examples.zig");

@@ -228,6 +228,36 @@ fn background_progress(win: *dvui.Window, delay_ns: u64) void {
     }
 }
 
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG dialogs" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 400, .h = 300 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            dialogs(box.data().id);
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+
+    // Tab to the main window toast button
+    for (0..8) |_| {
+        try dvui.testing.pressKey(.tab, .none);
+        _ = try dvui.testing.step(frame);
+    }
+    try dvui.testing.pressKey(.enter, .none);
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-dialogs.png");
+}
+
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("../dvui.zig");

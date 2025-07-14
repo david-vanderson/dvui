@@ -122,4 +122,25 @@ pub fn round(val: f64) f64 {
     return @round(val * dec_places) / dec_places;
 }
 
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG calculator" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 250, .h = 250 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            calculator();
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-calculator.png");
+}
+
 const dvui = @import("../dvui.zig");

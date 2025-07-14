@@ -143,6 +143,10 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const Point = dvui.Point;

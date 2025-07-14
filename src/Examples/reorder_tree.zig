@@ -4,7 +4,6 @@ const reorderLayout = enum {
     flex,
 };
 
-/// ![image](Examples-reorderable.png)
 pub fn reorderLists() void {
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
     const layo = dvui.dataGetPtrDefault(null, uniqueId, "reorderLayout", reorderLayout, .horizontal);
@@ -820,5 +819,10 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
 
     return;
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
 const std = @import("std");
 const dvui = @import("../dvui.zig");
