@@ -125,7 +125,7 @@ const TestStruct = struct {
 var test_buf: [20]u8 = @splat('z');
 var testStruct: TestStruct = .{};
 var opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5) };
-
+var first_change: bool = true;
 // both dvui and SDL drawing
 fn gui_frame() void {
     {
@@ -157,6 +157,14 @@ fn gui_frame() void {
         defer al.deinit();
         dvui.se.intFieldWidget2(@src(), "int1", &testStruct.int1, .{}, &al);
         dvui.se.intFieldWidget2(@src(), "uint2", &testStruct.uint2, .{}, &al);
+        var buf = gpa.alloc(u8, 50) catch return;
+        buf = dvui.se.textFieldWidgetBuf(@src(), "slice5", &testStruct.slice5, .{}, buf, &al);
+        if (!first_change) {
+            gpa.free(buf);
+        } else {
+            first_change = false;
+        }
+        std.debug.print("slice 5 = {s}\n", .{testStruct.slice5});
         _ = dvui.separator(@src(), .{ .expand = .horizontal });
         wholeStruct(@src(), &testStruct, 0);
         _ = dvui.separator(@src(), .{ .expand = .horizontal });

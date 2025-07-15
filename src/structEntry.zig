@@ -279,7 +279,8 @@ pub fn textFieldWidget2(src: std.builtin.SourceLocation, comptime field_name: []
     textFieldWidget(field_name, @TypeOf(field_ptr), @constCast(&field_ptr), opts, false, null, alignment);
 }
 
-fn textFieldWidget(
+// TODO: Get rid of the allocation stuff.
+pub fn textFieldWidget(
     comptime name: []const u8,
     comptime T: type,
     result: *T,
@@ -360,6 +361,81 @@ fn textFieldWidget(
             //text_box.deinit();
         },
     }
+}
+
+pub fn textFieldWidgetBuf(
+    src: std.builtin.SourceLocation,
+    comptime field_name: []const u8,
+    field_ptr: anytype,
+    comptime opt: TextFieldOptions,
+    buffer: []u8,
+    alignment: *dvui.Alignment,
+) []u8 {
+    if (opt.disabled) return;
+    var return_buf = buffer;
+    //TODO respect alloc setting
+    var box = dvui.box(src, .horizontal, .{});
+    defer box.deinit();
+
+    dvui.label(@src(), "{s}", .{opt.label_override orelse field_name}, .{});
+
+    const ProvidedPointerTreatment = enum {
+        mutate_value_and_realloc,
+        mutate_value_in_place_only,
+        display_only,
+        copy_value_and_alloc_new,
+    };
+
+    comptime var treatment: ProvidedPointerTreatment = .display_only;
+    if (@typeInfo(@TypeOf(field_ptr.*)).pointer.is_const) {
+        treatment = .mutate_value_and_realloc;
+    } else {
+        treatment = .mutate_value_and_realloc;
+    }
+
+    switch (treatment) {
+        .mutate_value_and_realloc => {
+            var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
+            defer hbox_aligned.deinit();
+            alignment.record(box.data().id, hbox_aligned.data());
+
+            const text_box = dvui.textEntry(@src(), .{}, opt.dvui_opts);
+            defer text_box.deinit();
+            //            if (text_box.text.len == 0 or !std.mem.eql(u8, text_box.text[0..field_ptr.*.len], field_ptr.*)) {
+            if (text_box.text.len == 0) {
+                std.debug.print("Set text\n", .{});
+                text_box.textSet(field_ptr.*, false);
+            }
+            if (text_box.text_changed) {
+                @memcpy(buffer, text_box.text[0..buffer.len]);
+                std.debug.print("text = {s}\n", .{text_box.text});
+                std.debug.print("buffer = {s}\n", .{buffer});
+                return_buf = @constCast(field_ptr.*);
+                field_ptr.* = buffer;
+                std.debug.print("field_ptr = {s}\n", .{field_ptr.*});
+            }
+        },
+        .copy_value_and_alloc_new => {
+            //TODO
+            dvui.label(@src(), " : TODO {s}", .{field_ptr.*}, .{});
+            //var memory_handle = dvui.dataGet(null, box.widget().data().id, "memory_handle", []u8);
+            //if (memory_handle == null) {
+            //    const len = @max(64, result.*.len * 2);
+            //    const memory = try allocator.?.alloc(u8, len);
+            //    @memset(memory, 0);
+            //    std.mem.copyForwards(u8, memory, result.*);
+            //    dvui.dataSet(null, box.widget().data().id, "memory_handle", memory);
+            //    memory_handle = memory;
+            //}
+
+            ////WARNING: this could leak memory if result has been dynamically allocated
+            //result.* = memory_handle.?;
+            //const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer = memory_handle.? } }, opt.dvui_opts);
+            //text_box.deinit();
+        },
+        else => @compileError("Nope"),
+    }
+    return return_buf;
 }
 
 //===============================================
