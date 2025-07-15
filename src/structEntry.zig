@@ -271,10 +271,12 @@ pub const TextFieldOptions = struct {
     label_override: ?[]const u8 = null,
 };
 
-pub fn textFieldWidget2(src: std.builtin.SourceLocation, container: anytype, comptime field_name: []const u8, comptime opts: FloatFieldOptions(@TypeOf(@field(container, field_name))), alignment: *dvui.Alignment) void {
+// TODO: Handle allocations if required.
+pub fn textFieldWidget2(src: std.builtin.SourceLocation, comptime field_name: []const u8, field_ptr: anytype, comptime opts: TextFieldOptions, alignment: *dvui.Alignment) void {
     var box = dvui.box(src, .vertical, .{});
     defer box.deinit();
-    enumFieldWidget(field_name, @TypeOf(@field(container, field_name)), &@field(container, field_name), opts, null, alignment);
+    // TODO: Why constCast?
+    textFieldWidget(field_name, @TypeOf(field_ptr), @constCast(&field_ptr), opts, false, null, alignment);
 }
 
 fn textFieldWidget(

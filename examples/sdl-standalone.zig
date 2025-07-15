@@ -190,6 +190,23 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, container: anytype, depth: u
                     }
                 }
             },
+            inline .pointer => |ptr| {
+                if (ptr.size == .slice and ptr.child == u8) {
+                    dvui.se.textFieldWidget2(src, field.name, @field(container, field.name), .{}, &al);
+                } else if (ptr.size == .slice) {
+                    //sliceFieldWidget(name, T, exclude, result, opt, alloc, allocator, alignment);
+                } else if (ptr.size == .one) {
+                    //singlePointerFieldWidget(name, T, exclude, result, opt, alloc, allocator, alignment);
+                } else if (ptr.size == .c or ptr.size == .many) {
+                    @compileError("structEntry does not support *C or Many pointers");
+                } else {
+                    switch (@typeInfo(ptr.child)) {
+                        inline .int, .float, .@"enum" => processWidget(@src(), field.name, @field(container, field.name), &al),
+                        inline .@"struct" => if (depth > 0) wholeStruct(@src(), @field(container, field.name), depth - 1),
+                        else => {},
+                    }
+                }
+            },
             else => {},
         }
     }
