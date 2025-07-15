@@ -35,10 +35,10 @@ pub const DebugTarget = enum {
     focused,
     mouse_until_esc,
     mouse_until_click,
-    quitting,
+    mouse_quitting,
 
     pub fn mouse(self: DebugTarget) bool {
-        return self == .mouse_until_click or self == .mouse_until_esc;
+        return self == .mouse_until_click or self == .mouse_until_esc or self == .mouse_quitting;
     }
 };
 
@@ -94,7 +94,7 @@ pub fn logRefresh(self: *Debug, val: ?bool) bool {
 pub fn show(self: *Debug) void {
     if (!self.open) return;
 
-    if (self.target == .quitting) {
+    if (self.target == .mouse_quitting) {
         self.target = .none;
     }
 

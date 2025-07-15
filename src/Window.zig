@@ -546,7 +546,7 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
         // an escape will stop the debug stuff from following the mouse,
         // but need to stop it at the end of the frame when we've gotten
         // the info
-        self.debug.target = .quitting;
+        self.debug.target = .mouse_quitting;
         return true;
     }
 
@@ -659,7 +659,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
         // a left click or touch will stop the debug stuff from following
         // the mouse, but need to stop it at the end of the frame when
         // we've gotten the info
-        self.debug.target = .quitting;
+        self.debug.target = .mouse_quitting;
         return true;
     }
 
