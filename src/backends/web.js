@@ -722,6 +722,8 @@ class Dvui {
                 }
             },
             wasm_cursor: (name_ptr, name_len) => {
+                // Don't overwrite cursor if it is hidden
+                if (this.gl.canvas.style.cursor === "none") return;
                 let cursor_name = utf8decoder.decode(
                     new Uint8Array(
                         this.instance.exports.memory.buffer,
@@ -730,6 +732,15 @@ class Dvui {
                     ),
                 );
                 this.gl.canvas.style.cursor = cursor_name;
+            },
+            wasm_cursor_show: (value) => {
+                const prev = this.gl.canvas.style.cursor !== "none";
+                if (value == 0) {
+                    this.gl.canvas.style.cursor = "none";
+                } else if (value == 1) {
+                    this.gl.canvas.style.cursor = "default";
+                }
+                return prev;
             },
             wasm_text_input: (x, y, w, h) => {
                 if (w > 0 && h > 0) {
