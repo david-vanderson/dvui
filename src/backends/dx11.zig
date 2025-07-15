@@ -1042,6 +1042,25 @@ pub fn preferredColorScheme(_: Context) ?dvui.enums.ColorScheme {
     return dvui.Backend.Common.windowsGetPreferredColorScheme();
 }
 
+pub fn cursorShow(_: Context, value: ?bool) !bool {
+    var info: win32.CURSORINFO = undefined;
+    info.cbSize = @sizeOf(win32.CURSORINFO);
+    try boolToErr(win32.GetCursorInfo(&info), "GetCursorInfo in cursorShow");
+    const prev = info.flags == win32.CURSOR_SHOWING;
+    if (value) |val| {
+        // Count == 0 will hide cursor. Any value greater than 0 will show it
+        // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showcursor#remarks
+        const count = win32.ShowCursor(if (val) win32.TRUE else win32.FALSE);
+        if (!val and count > 0) {
+            // Keep hiding cursor until it's hidden
+            for (0..@intCast(count)) |_| {
+                if (win32.ShowCursor(win32.FALSE) == 0) break;
+            }
+        }
+    }
+    return prev;
+}
+
 pub fn refresh(_: Context) void {}
 
 pub fn setCursor(self: Context, new_cursor: dvui.enums.Cursor) void {
