@@ -6734,6 +6734,7 @@ pub const renderTextOptions = struct {
     text: []const u8,
     rs: RectScale,
     color: Color,
+    background_color: ?Color = null,
     sel_start: ?usize = null,
     sel_end: ?usize = null,
     sel_color: ?Color = null,
@@ -6907,6 +6908,13 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
         }
 
         x = nextx;
+    }
+
+    if (opts.background_color) |bgcol| {
+        opts.rs.r.toPoint(.{
+            .x = max_x,
+            .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
+        }).fill(.{}, .{ .color = bgcol, .blur = 0 });
     }
 
     if (sel) {
