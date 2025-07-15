@@ -1210,10 +1210,10 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 .text = rtxt,
                 .rs = rs,
                 .color = options.color(.text),
+                // TODO: Should this take `options.background` into account?
+                .background_color = if (options.color_fill) |fill| fill.resolve() else null,
                 .sel_start = self.selection.start -| self.bytes_seen,
                 .sel_end = self.selection.end -| self.bytes_seen,
-                .sel_color = options.color(.fill),
-                .sel_color_bg = options.color(.accent),
             }) catch |err| {
                 dvui.logError(@src(), err, "Failed to render text: {s}", .{rtxt});
             };
@@ -1643,7 +1643,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                         // user intended to scroll with a finger swipe
                         // release our capture including this event so a
                         // containing scroll container can get it
-                        dvui.captureMouse(null, e.num-1); // stop possible drag and capture
+                        dvui.captureMouse(null, e.num - 1); // stop possible drag and capture
                         dvui.dragEnd();
                     }
                 }
