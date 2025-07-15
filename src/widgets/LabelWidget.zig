@@ -15,8 +15,8 @@ pub var defaults: Options = .{
 };
 
 pub const InitOptions = struct {
-    align_x: f32 = 0.5,
-    align_y: f32 = 0.5,
+    align_x: f32 = 0,
+    align_y: f32 = 0,
 
     pub fn gravityGet(self: InitOptions) Options.Gravity {
         return .{ .x = self.align_x, .y = self.align_y };
