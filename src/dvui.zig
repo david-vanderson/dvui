@@ -6737,12 +6737,15 @@ pub const renderTextOptions = struct {
     background_color: ?Color = null,
     sel_start: ?usize = null,
     sel_end: ?usize = null,
-    sel_color: ?Color = null,
-    sel_color_bg: ?Color = null,
     debug: bool = false,
 };
 
-// only renders a single line of text
+/// Only renders a single line of text
+///
+/// Selection will be colored with the current themes accent color,
+/// with the text color being set to the themes fill color.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     if (opts.rs.s == 0) return;
     if (opts.text.len == 0) return;
@@ -6873,7 +6876,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
 
             v.pos.x = x + gi.leftBearing * target_fraction;
             v.pos.y = y + gi.topBearing * target_fraction;
-            v.col = .fromColor(if (sel_in) opts.sel_color orelse opts.color else opts.color);
+            v.col = .fromColor(if (sel_in) themeGet().color_fill else opts.color);
             v.uv = gi.uv;
             builder.appendVertex(v);
 
@@ -6918,14 +6921,12 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     }
 
     if (sel) {
-        if (opts.sel_color_bg) |bgcol| {
-            Rect.Physical.fromPoint(.{ .x = sel_start_x, .y = opts.rs.r.y })
-                .toPoint(.{
-                    .x = sel_end_x,
-                    .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
-                })
-                .fill(.{}, .{ .color = bgcol, .blur = 0 });
-        }
+        Rect.Physical.fromPoint(.{ .x = sel_start_x, .y = opts.rs.r.y })
+            .toPoint(.{
+                .x = sel_end_x,
+                .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
+            })
+            .fill(.{}, .{ .color = themeGet().color_accent, .blur = 0 });
     }
 
     try renderTriangles(builder.build_unowned(), texture_atlas);
