@@ -3708,7 +3708,7 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Rect.Physical {
     var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
 
-    dvui.labelNoFmt(@src(), str, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
+    dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{ .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
 
     if (openflag) |of| {
         if (dvui.buttonIcon(
@@ -5565,7 +5565,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
     // - gets a rectangle from bw
     // - draws itself
     // - reports its min size to bw
-    labelNoFmt(@src(), label_str, .{}, options);
+    labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, options);
 
     // draw focus
     bw.drawFocus();
