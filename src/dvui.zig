@@ -2222,9 +2222,9 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
     // expand clipping to full pixels before testing
     var clipping = clipGet();
     clipping.w = @max(0, @ceil(clipping.x - @floor(clipping.x) + clipping.w));
-    clipping.x = @max(0, @floor(clipping.x));
+    clipping.x = @floor(clipping.x);
     clipping.h = @max(0, @ceil(clipping.y - @floor(clipping.y) + clipping.h));
-    clipping.y = @max(0, @floor(clipping.y));
+    clipping.y = @floor(clipping.y);
 
     const clipr: ?Rect.Physical = if (triangles.bounds.clippedBy(clipping)) clipping.offsetNegPoint(cw.render_target.offset) else null;
 
