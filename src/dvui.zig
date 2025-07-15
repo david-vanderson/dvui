@@ -6858,14 +6858,26 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
         }
         last_codepoint = codepoint;
 
+        if (x + gi.leftBearing * target_fraction < x_start) {
+            // Glyph extends left of the start, like the first letter being
+            // "j", which has a negative left bearing.
+            //
+            // Shift the whole line over so it starts at x_start.  textSize()
+            // includes this extra space.
+
+            //std.debug.print("moving x from {d} to {d}\n", .{ x, x_start - gi.leftBearing * target_fraction });
+            x = x_start - gi.leftBearing * target_fraction;
+        }
+
         const nextx = x + gi.advance * target_fraction;
+        const leftx = x + gi.leftBearing * target_fraction;
 
         if (sel) {
             bytes_seen += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
             if (!sel_in and bytes_seen > sel_start and bytes_seen <= sel_end) {
                 // entering selection
                 sel_in = true;
-                sel_start_x = x;
+                sel_start_x = @min(x, leftx);
             } else if (sel_in and bytes_seen > sel_end) {
                 // leaving selection
                 sel_in = false;
@@ -6882,7 +6894,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
             const vtx_offset: u16 = @intCast(builder.vertexes.items.len);
             var v: Vertex = undefined;
 
-            v.pos.x = x + gi.leftBearing * target_fraction;
+            v.pos.x = leftx;
             v.pos.y = y + gi.topBearing * target_fraction;
             v.col = .fromColor(if (sel_in) opts.sel_color orelse opts.color else opts.color);
             v.uv = gi.uv;
@@ -6907,7 +6919,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
             v.uv[1] = gi.uv[1] + gi.h / atlas_size.h;
             builder.appendVertex(v);
 
-            v.pos.x = x + gi.leftBearing * target_fraction;
+            v.pos.x = leftx;
             v.uv[0] = gi.uv[0];
             builder.appendVertex(v);
 
