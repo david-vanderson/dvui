@@ -97,10 +97,36 @@ pub fn main() !void {
     }
 }
 
+const C1 = struct {
+    value: usize = 0,
+};
+
+const C2 = struct {
+    value2: f32 = 0,
+};
+
+const TestUnion = union(enum) {
+    c1: C1,
+    c2: C2,
+};
+
+const TestStruct = struct {
+    int1: i32 = 42,
+    oint1: ?i32 = 43,
+    uint2: usize = 38,
+    rect3: dvui.Rect = .all(2),
+    union4: TestUnion = .{ .c2 = .{ .value2 = 44 } },
+    slice5: []const u8 = "ABCDEF",
+    slice7: []u8 = &test_buf,
+    arr_ptr9: *[20]u8 = &test_buf,
+    array8: [13]u8 = @splat('y'),
+};
+
+var test_buf: [20]u8 = @splat('z');
+var testStruct: TestStruct = .{};
+
 // both dvui and SDL drawing
 fn gui_frame() void {
-    const backend = g_backend orelse return;
-
     {
         var m = dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
         defer m.deinit();
@@ -113,122 +139,66 @@ fn gui_frame() void {
                 m.close();
             }
         }
-
-        if (dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{ .expand = .none })) |r| {
-            var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
-            defer fw.deinit();
-            _ = dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
-            _ = dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
-            _ = dvui.menuItemLabel(@src(), "Dummy Super Long", .{}, .{ .expand = .horizontal });
-        }
     }
-
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
-    defer scroll.deinit();
-
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
-    const lorem = "This example shows how to use dvui in a normal application.";
-    tl.addText(lorem, .{});
-    tl.deinit();
-
-    var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    tl2.addText(
-        \\DVUI
-        \\- paints the entire window
-        \\- can show floating windows and dialogs
-        \\- example menu at the top of the window
-        \\- rest of the window is a scroll area
-    , .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
-    tl2.addText("\n\n", .{});
-    if (vsync) {
-        tl2.addText("Framerate is capped by vsync.", .{});
-    } else {
-        tl2.addText("Framerate is uncapped.", .{});
-    }
-    tl2.addText("\n\n", .{});
-    tl2.addText("Cursor is always being set by dvui.", .{});
-    tl2.addText("\n\n", .{});
-    if (dvui.useFreeType) {
-        tl2.addText("Fonts are being rendered by FreeType 2.", .{});
-    } else {
-        tl2.addText("Fonts are being rendered by stb_truetype.", .{});
-    }
-    tl2.deinit();
-
-    const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
-    if (dvui.button(@src(), label, .{}, .{})) {
-        dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
-    }
+    var hbox = dvui.box(@src(), .horizontal, .{ .color_fill = .fill_window, .background = true });
+    defer hbox.deinit();
 
     {
-        var scaler = dvui.scale(@src(), .{ .scale = &scale_val }, .{ .expand = .horizontal });
-        defer scaler.deinit();
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+        defer scroll.deinit();
 
-        {
-            var hbox = dvui.box(@src(), .horizontal, .{});
-            defer hbox.deinit();
+        //dvui.structEntryEx(@src(), "", TestStruct, .{}, &testStruct, .{});
+    }
+    {
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+        defer scroll.deinit();
+        var al = dvui.Alignment.init();
+        defer al.deinit();
+        dvui.se.intFieldWidget2(@src(), "int1", &testStruct.int1, .{}, &al);
+        dvui.se.intFieldWidget2(@src(), "uint2", &testStruct.uint2, .{}, &al);
+        _ = dvui.separator(@src(), .{ .expand = .horizontal });
+        wholeStruct(@src(), &testStruct, 0);
+        _ = dvui.separator(@src(), .{ .expand = .horizontal });
+        wholeStruct(@src(), &testStruct, 1);
+        _ = dvui.separator(@src(), .{ .expand = .horizontal });
+        var opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5) };
+        wholeStruct(@src(), &opts, 1);
+        _ = dvui.separator(@src(), .{ .expand = .horizontal });
+    }
+}
 
-            if (dvui.button(@src(), "Zoom In", .{}, .{})) {
-                scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
-            }
-
-            if (dvui.button(@src(), "Zoom Out", .{}, .{})) {
-                scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
-            }
-        }
-
-        dvui.labelNoFmt(@src(), "Below is drawn directly by the backend, not going through DVUI.", .{}, .{ .margin = .{ .x = 4 } });
-
-        var box = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
+pub fn wholeStruct(src: std.builtin.SourceLocation, container: anytype, depth: usize) void {
+    var al = dvui.Alignment.init();
+    defer al.deinit();
+    inline for (std.meta.fields(@TypeOf(container.*)), 0..) |field, i| {
+        //@compileLog(field.name, field.type);
+        var box = dvui.box(src, .vertical, .{ .id_extra = i });
         defer box.deinit();
-
-        // Here is some arbitrary drawing that doesn't have to go through DVUI.
-        // It can be interleaved with DVUI drawing.
-        // NOTE: This only works in the main window (not floating subwindows
-        // like dialogs).
-
-        // get the screen rectangle for the box
-        const rs = box.data().contentRectScale();
-
-        // rs.r is the pixel rectangle, rs.s is the scale factor (like for
-        // hidpi screens or display scaling)
-        var rect: if (Backend.sdl3) Backend.c.SDL_FRect else Backend.c.SDL_Rect = undefined;
-        if (Backend.sdl3) rect = .{
-            .x = (rs.r.x + 4 * rs.s),
-            .y = (rs.r.y + 4 * rs.s),
-            .w = (20 * rs.s),
-            .h = (20 * rs.s),
-        } else rect = .{
-            .x = @intFromFloat(rs.r.x + 4 * rs.s),
-            .y = @intFromFloat(rs.r.y + 4 * rs.s),
-            .w = @intFromFloat(20 * rs.s),
-            .h = @intFromFloat(20 * rs.s),
-        };
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 0, 255);
-        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
-
-        rect.x += if (Backend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 255, 0, 255);
-        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
-
-        rect.x += if (Backend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 255, 255);
-        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
-
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 255, 255);
-
-        if (Backend.sdl3)
-            _ = Backend.c.SDL_RenderLine(backend.renderer, (rs.r.x + 4 * rs.s), (rs.r.y + 30 * rs.s), (rs.r.x + rs.r.w - 8 * rs.s), (rs.r.y + 30 * rs.s))
-        else
-            _ = Backend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(rs.r.x + 4 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s), @intFromFloat(rs.r.x + rs.r.w - 8 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s));
+        switch (@typeInfo(field.type)) {
+            .int, .float => processWidget(@src(), field.name, &@field(container, field.name), &al),
+            inline .@"struct" => if (depth > 0) wholeStruct(@src(), &@field(container, field.name), depth - 1),
+            inline .optional => |opt| {
+                if (@field(container, field.name) == null) {
+                    dvui.label(@src(), "{s} is null", .{field.name}, .{ .id_extra = i });
+                } else {
+                    dvui.label(@src(), "{s}", .{field.name}, .{ .id_extra = i });
+                    //@compileLog(std.fmt.comptimePrint("child = {s} : {}", .{ @typeName(opt.child), @typeInfo(opt.child) }));
+                    switch (@typeInfo(opt.child)) {
+                        inline .int, .float => processWidget(@src(), field.name, &@field(container, field.name).?, &al),
+                        inline .@"struct" => if (depth > 0) wholeStruct(@src(), &@field(container, field.name).?, depth - 1),
+                        else => {},
+                    }
+                }
+            },
+            else => {},
+        }
     }
+}
 
-    if (dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
-        show_dialog_outside_frame = true;
+pub fn processWidget(src: std.builtin.SourceLocation, comptime field_name: []const u8, field: anytype, alignment: *dvui.Alignment) void {
+    switch (@typeInfo(@TypeOf(field.*))) {
+        inline .int => dvui.se.intFieldWidget2(src, field_name, field, .{}, alignment),
+        inline .float => dvui.se.floatFieldWidget2(src, field_name, field, .{}, alignment),
+        else => |ti| @compileError(std.fmt.comptimePrint("Type {s} for field {s} not yet supported\n", .{ ti.type, field_name })),
     }
-
-    // look at demo() for examples of dvui widgets, shows in a floating window
-    dvui.Examples.demo();
 }
