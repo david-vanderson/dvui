@@ -161,10 +161,10 @@ pub const EnumFieldOptions = struct {
     label_override: ?[]const u8 = null,
 };
 
-pub fn enumFieldWidget2(src: std.builtin.SourceLocation, container: anytype, comptime field_name: []const u8, comptime opts: FloatFieldOptions(@TypeOf(@field(container, field_name))), alignment: *dvui.Alignment) void {
+pub fn enumFieldWidget2(src: std.builtin.SourceLocation, comptime field_name: []const u8, field_ptr: anytype, comptime opts: EnumFieldOptions, alignment: *dvui.Alignment) void {
     var box = dvui.box(src, .vertical, .{});
     defer box.deinit();
-    enumFieldWidget(field_name, @TypeOf(@field(container, field_name)), &@field(container, field_name), opts, alignment);
+    enumFieldWidget(field_name, @TypeOf(field_ptr.*), field_ptr, opts, alignment);
 }
 
 fn enumFieldWidget(

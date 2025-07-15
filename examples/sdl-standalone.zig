@@ -124,6 +124,7 @@ const TestStruct = struct {
 
 var test_buf: [20]u8 = @splat('z');
 var testStruct: TestStruct = .{};
+var opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5) };
 
 // both dvui and SDL drawing
 fn gui_frame() void {
@@ -161,7 +162,6 @@ fn gui_frame() void {
         _ = dvui.separator(@src(), .{ .expand = .horizontal });
         wholeStruct(@src(), &testStruct, 1);
         _ = dvui.separator(@src(), .{ .expand = .horizontal });
-        var opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5) };
         wholeStruct(@src(), &opts, 1);
         _ = dvui.separator(@src(), .{ .expand = .horizontal });
     }
@@ -175,7 +175,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, container: anytype, depth: u
         var box = dvui.box(src, .vertical, .{ .id_extra = i });
         defer box.deinit();
         switch (@typeInfo(field.type)) {
-            .int, .float => processWidget(@src(), field.name, &@field(container, field.name), &al),
+            .int, .float, .@"enum" => processWidget(@src(), field.name, &@field(container, field.name), &al),
             inline .@"struct" => if (depth > 0) wholeStruct(@src(), &@field(container, field.name), depth - 1),
             inline .optional => |opt| {
                 if (@field(container, field.name) == null) {
@@ -184,7 +184,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, container: anytype, depth: u
                     dvui.label(@src(), "{s}", .{field.name}, .{ .id_extra = i });
                     //@compileLog(std.fmt.comptimePrint("child = {s} : {}", .{ @typeName(opt.child), @typeInfo(opt.child) }));
                     switch (@typeInfo(opt.child)) {
-                        inline .int, .float => processWidget(@src(), field.name, &@field(container, field.name).?, &al),
+                        inline .int, .float, .@"enum" => processWidget(@src(), field.name, &@field(container, field.name).?, &al),
                         inline .@"struct" => if (depth > 0) wholeStruct(@src(), &@field(container, field.name).?, depth - 1),
                         else => {},
                     }
@@ -199,6 +199,7 @@ pub fn processWidget(src: std.builtin.SourceLocation, comptime field_name: []con
     switch (@typeInfo(@TypeOf(field.*))) {
         inline .int => dvui.se.intFieldWidget2(src, field_name, field, .{}, alignment),
         inline .float => dvui.se.floatFieldWidget2(src, field_name, field, .{}, alignment),
+        inline .@"enum" => dvui.se.enumFieldWidget2(src, field_name, field, .{}, alignment),
         else => |ti| @compileError(std.fmt.comptimePrint("Type {s} for field {s} not yet supported\n", .{ ti.type, field_name })),
     }
 }
