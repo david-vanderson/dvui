@@ -589,18 +589,16 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const
     var h: i32 = std.math.maxInt(i32);
 
     if (maybe_clipr) |clipr| {
-        // figure out how much we are losing by truncating x and y, need to add that back to w and h
         x = @intFromFloat(clipr.x);
-        w = @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x)));
+        w = @intFromFloat(clipr.w);
+        h = @intFromFloat(clipr.h);
 
         if (wasm.wasm_frame_buffer() == 0) {
             // y needs to be converted to 0 at bottom first
             const ry: f32 = wasm.wasm_pixel_height() - clipr.y - clipr.h;
             y = @intFromFloat(ry);
-            h = @intFromFloat(@ceil(clipr.h + ry - @floor(ry)));
         } else {
             y = @intFromFloat(clipr.y);
-            h = @intFromFloat(@ceil(clipr.h + clipr.y - @floor(clipr.y)));
         }
     }
 

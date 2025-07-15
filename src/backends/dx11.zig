@@ -868,8 +868,8 @@ pub fn drawClippedTriangles(
         const new_clip: win32.RECT = .{
             .left = @intFromFloat(cr.x),
             .top = @intFromFloat(cr.y),
-            .right = @intFromFloat(@ceil(cr.x + cr.w)),
-            .bottom = @intFromFloat(@ceil(cr.y + cr.h)),
+            .right = @intFromFloat(cr.x + cr.w),
+            .bottom = @intFromFloat(cr.y + cr.h),
         };
         state.device_context.RSSetScissorRects(nums, @ptrCast(&new_clip));
     } else {

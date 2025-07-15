@@ -670,11 +670,12 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
             c.SDL_RenderGetClipRect(self.renderer, &oldclip);
         }
 
-        // figure out how much we are losing by truncating x and y, need to add that back to w and h
-        const clip = c.SDL_Rect{ .x = @as(c_int, @intFromFloat(clipr.x)), .y = @as(c_int, @intFromFloat(clipr.y)), .w = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x))))), .h = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.h + clipr.y - @floor(clipr.y))))) };
-        //std.debug.print("sdl clip {}\n", .{clipr});
-
-        //std.debug.print("SDL clip {} -> SDL_Rect{{ .x = {d}, .y = {d}, .w = {d}, .h = {d} }}\n", .{ clipr, clip.x, clip.y, clip.w, clip.h });
+        const clip = c.SDL_Rect{
+            .x = @intFromFloat(clipr.x),
+            .y = @intFromFloat(clipr.y),
+            .w = @intFromFloat(clipr.w),
+            .h = @intFromFloat(clipr.h),
+        };
         if (sdl3) {
             try toErr(
                 c.SDL_SetRenderClipRect(self.renderer, &clip),
