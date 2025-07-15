@@ -1,6 +1,6 @@
 /// ![image](Examples-scrollCanvas.png)
 pub fn scrollCanvas() void {
-    var vbox = dvui.box(@src(), .vertical, .{});
+    var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
     defer vbox.deinit();
 
     const scroll_info = dvui.dataGetPtrDefault(null, vbox.data().id, "scroll_info", ScrollInfo, .{ .vertical = .given, .horizontal = .given });
@@ -22,7 +22,7 @@ pub fn scrollCanvas() void {
     tl.format("Scale {d}", .{scale.*}, .{});
     tl.deinit();
 
-    var scrollArea = dvui.scrollArea(@src(), .{ .scroll_info = scroll_info }, .{ .expand = .both, .min_size_content = .{ .w = 300, .h = 300 } });
+    var scrollArea = dvui.scrollArea(@src(), .{ .scroll_info = scroll_info }, .{ .min_size_content = .{ .w = 300, .h = 300 } });
     var scrollContainer = &scrollArea.scroll.?;
 
     // can use this to convert between viewport/virtual_size and screen coords
@@ -33,15 +33,25 @@ pub fn scrollCanvas() void {
     // can use this to convert between data and screen coords
     const dataRectScale = scaler.screenRectScale(.{});
 
+    // get current mouse position
+    var mousePosPhysical: dvui.Point.Physical = undefined;
+    var mousePosData: dvui.Point = undefined;
+    for (dvui.events()) |*e| {
+        if (e.evt == .mouse and e.evt.mouse.action == .position) {
+            mousePosPhysical = e.evt.mouse.p;
+            mousePosData = dataRectScale.pointFromPhysical(mousePosPhysical);
+        }
+    }
+
     dvui.Path.stroke(.{ .points = &.{
         dataRectScale.pointToPhysical(.{ .x = -10 }),
         dataRectScale.pointToPhysical(.{ .x = 10 }),
-    } }, .{ .thickness = 1, .color = dvui.Color.black });
+    } }, .{ .thickness = 1, .color = dvui.themeGet().color_text });
 
     dvui.Path.stroke(.{ .points = &.{
         dataRectScale.pointToPhysical(.{ .y = -10 }),
         dataRectScale.pointToPhysical(.{ .y = 10 }),
-    } }, .{ .thickness = 1, .color = dvui.Color.black });
+    } }, .{ .thickness = 1, .color = dvui.themeGet().color_text });
 
     // keep record of bounding box
     var mbbox: ?Rect.Physical = null;
@@ -359,6 +369,8 @@ pub fn scrollCanvas() void {
             dr.fill(.{}, .{ .color = dvui.Color.lime.opacity(0.5) });
         }
     }
+
+    dvui.label(@src(), "Mouse Data Coords {d:0.2}x{d:0.2}", .{ mousePosData.x, mousePosData.y }, .{});
 }
 
 test {
