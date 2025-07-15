@@ -227,11 +227,11 @@ pub fn show(self: *Debug) void {
     }
 
     if (dvui.button(@src(), if (debug_target == .mouse_until_click) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{}, .{})) {
-        debug_target = .mouse_until_click;
+        debug_target = if (debug_target == .mouse_until_click) .none else .mouse_until_click;
     }
 
     if (dvui.button(@src(), if (debug_target == .mouse_until_esc) "Stop (Or Press Esc)" else "Debug Under Mouse (until esc)", .{}, .{})) {
-        debug_target = .mouse_until_esc;
+        debug_target = if (debug_target == .mouse_until_esc) .none else .mouse_until_esc;
     }
 
     if (dvui.button(@src(), if (debug_target == .focused) "Stop Debugging Focus" else "Debug Focus", .{}, .{})) {
