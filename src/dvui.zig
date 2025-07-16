@@ -6977,17 +6977,18 @@ pub fn textureCreate(pixels: []const Color.PMA, width: u32, height: u32, interpo
 
 /// Update a texture that was created with `textureCreate`.
 ///
-/// this is only valid to call while the Texture is not destroyed!
+/// If the backend does not support updating textures, it will be destroyed and
+/// recreated, changing the pointer inside tex.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn textureUpdate(Self: *Texture, pma: []const dvui.Color.PMA, interpolation: enums.TextureInterpolation) !void {
-    if (pma.len != Self.width * Self.height) @panic("Texture size and supplied Content did not match");
-    currentWindow().backend.textureUpdate(Self.*, @ptrCast(pma.ptr)) catch |err| {
+pub fn textureUpdate(tex: *Texture, pma: []const dvui.Color.PMA, interpolation: enums.TextureInterpolation) !void {
+    if (pma.len != tex.width * tex.height) @panic("Texture size and supplied Content did not match");
+    currentWindow().backend.textureUpdate(tex.*, @ptrCast(pma.ptr)) catch |err| {
         // texture update not supported by backend, destroy and create texture
         if (err == Backend.TextureError.NotImplemented) {
-            const new_tex = try textureCreate(pma, Self.width, Self.height, interpolation);
-            textureDestroyLater(Self.*);
-            Self.* = new_tex;
+            const new_tex = try textureCreate(pma, tex.width, tex.height, interpolation);
+            textureDestroyLater(tex.*);
+            tex.* = new_tex;
         } else {
             return err;
         }
