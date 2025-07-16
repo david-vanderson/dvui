@@ -525,7 +525,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
         const code = raylibKeyToDvui(event);
 
         //text input
-        if ((self.pressed_modifier.shiftOnly() or self.pressed_modifier.has(.none)) and event < std.math.maxInt(u8) and std.ascii.isPrint(@intCast(event))) {
+        if ((self.pressed_modifier.shiftOnly() or self.pressed_modifier == .none) and event < std.math.maxInt(u8) and std.ascii.isPrint(@intCast(event))) {
             const char: u8 = @intCast(event);
 
             const lowercase_alpha = std.ascii.toLower(char);
