@@ -65,7 +65,8 @@ pub fn main() !void {
         // the previous frame's render
         backend.clear();
 
-        dvui_frame();
+        const keep_running = dvui_frame();
+        if (!keep_running) break :main_loop;
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
@@ -86,7 +87,8 @@ pub fn main() !void {
     }
 }
 
-fn dvui_frame() void {
+// return true to keep running
+fn dvui_frame() bool {
     {
         var m = dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
         defer m.deinit();
@@ -95,8 +97,12 @@ fn dvui_frame() void {
             var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
 
-            if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{}) != null) {
+            if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
                 m.close();
+            }
+
+            if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
+                return false;
             }
         }
 
@@ -148,6 +154,10 @@ fn dvui_frame() void {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
+    if (dvui.button(@src(), "Debug Window", .{}, .{})) {
+        dvui.toggleDebugWindow();
+    }
+
     {
         var scaler = dvui.scale(@src(), .{ .scale = &scale_val }, .{ .expand = .horizontal });
         defer scaler.deinit();
@@ -193,4 +203,6 @@ fn dvui_frame() void {
 
     // look at demo() for examples of dvui widgets, shows in a floating window
     dvui.Examples.demo();
+
+    return true;
 }
