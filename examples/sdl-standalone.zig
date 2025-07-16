@@ -71,8 +71,8 @@ pub fn main() !void {
         _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 255);
         _ = Backend.c.SDL_RenderClear(backend.renderer);
 
-        // The demos we pass in here show up under "Platform-specific demos"
-        gui_frame();
+        const keep_running = gui_frame();
+        if (!keep_running) break :main_loop;
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
@@ -98,8 +98,9 @@ pub fn main() !void {
 }
 
 // both dvui and SDL drawing
-fn gui_frame() void {
-    const backend = g_backend orelse return;
+// return false if user wants to exit the app
+fn gui_frame() bool {
+    const backend = g_backend orelse return false;
 
     {
         var m = dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
@@ -109,8 +110,12 @@ fn gui_frame() void {
             var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
 
-            if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{}) != null) {
+            if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
                 m.close();
+            }
+
+            if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
+                return false;
             }
         }
 
@@ -231,4 +236,6 @@ fn gui_frame() void {
 
     // look at demo() for examples of dvui widgets, shows in a floating window
     dvui.Examples.demo();
+
+    return true;
 }
