@@ -126,6 +126,7 @@ pub const Mod = enum(u16) {
 
     //returns whether shift is the only modifier
     pub fn shiftOnly(self: Mod) bool {
+        if (self == .none) return false;
         const lsh = @intFromEnum(Mod.lshift);
         const rsh = @intFromEnum(Mod.rshift);
         const mask = lsh | rsh;
