@@ -1579,7 +1579,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                 e.handle(@src(), self.data());
 
                 if (dvui.captured(self.data().id)) {
-                    if (!self.touch_editing and dvui.dragging(me.p) == null) {
+                    if (!self.touch_editing and dvui.dragging(me.p, null) == null) {
                         // click without drag
                         self.click_pt = self.data().contentRectScale().pointFromPhysical(me.p);
 
@@ -1623,7 +1623,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                     dvui.dragEnd();
                 }
             } else if (me.action == .motion and dvui.captured(self.data().id)) {
-                if (dvui.dragging(me.p)) |_| {
+                if (dvui.dragging(me.p, null)) |_| {
                     self.click_num = 0;
                     if (!me.button.touch()) {
                         e.handle(@src(), self.data());

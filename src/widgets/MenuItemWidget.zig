@@ -198,7 +198,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 dvui.dragEnd();
             } else if (me.action == .motion and me.button.touch()) {
                 if (dvui.captured(self.data().id)) {
-                    if (dvui.dragging(me.p)) |_| {
+                    if (dvui.dragging(me.p, null)) |_| {
                         // if we overcame the drag threshold, then that
                         // means the person probably didn't want to touch
                         // this, maybe they were trying to scroll

@@ -169,7 +169,7 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
                 } else if (me.action == .motion) {
                     if (dvui.captured(iw.data().id)) {
                         e.handle(@src(), iw.data());
-                        if (dvui.dragging(me.p)) |_| {
+                        if (dvui.dragging(me.p, null)) |_| {
                             ret = me.p;
                             if (init_opts.reorderable) |reo| {
                                 reo.reorder.dragStart(reo.data().id.asUsize(), me.p, e.num); // reorder grabs capture

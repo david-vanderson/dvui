@@ -176,7 +176,7 @@ pub fn scrollCanvas() void {
                             } else if (me.action == .motion) {
                                 if (dvui.captured(dbox.data().id)) {
                                     e.handle(@src(), dragBox.data());
-                                    if (dvui.dragging(me.p)) |_| {
+                                    if (dvui.dragging(me.p, null)) |_| {
                                         // started the drag
                                         drag_box_window.* = i;
                                         drag_box_content.* = k;
@@ -216,7 +216,7 @@ pub fn scrollCanvas() void {
                         }
                     } else if (me.action == .motion) {
                         if (dvui.captured(dragBox.data().id)) {
-                            if (dvui.dragging(me.p)) |_| {
+                            if (dvui.dragging(me.p, null)) |_| {
                                 const p = me.p.diff(dvui.dragOffset()); // pixel corner we want
                                 b.* = dataRectScale.pointFromPhysical(p);
                                 dvui.refresh(null, @src(), scrollContainer.data().id);
@@ -264,7 +264,7 @@ pub fn scrollCanvas() void {
                         e.handle(@src(), scrollContainer.data());
                     }
                     if (dvui.captured(scrollContainer.data().id)) {
-                        if (dvui.dragging(me.p)) |dps| {
+                        if (dvui.dragging(me.p, null)) |dps| {
                             e.handle(@src(), scrollContainer.data());
                             const rs = scrollRectScale;
                             scroll_info.viewport.x -= dps.x / rs.s;
