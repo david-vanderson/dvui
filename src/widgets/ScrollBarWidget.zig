@@ -117,7 +117,7 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
                         if (dvui.captured(self.data().id)) {
                             e.handle(@src(), self.data());
                             // move if dragging
-                            if (dvui.dragging(me.p)) |dps| {
+                            if (dvui.dragging(me.p, null)) |dps| {
                                 _ = dps;
                                 const min = switch (self.dir) {
                                     .vertical => rs.r.y + grabrs.h / 2,

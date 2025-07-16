@@ -845,7 +845,7 @@ pub const HeaderResizeWidget = struct {
             } else if (e.evt.mouse.action == .motion and dvui.captured(self.data().id)) {
                 e.handle(@src(), self.data());
                 // move if dragging
-                if (dvui.dragging(e.evt.mouse.p)) |dps| {
+                if (dvui.dragging(e.evt.mouse.p, null)) |dps| {
                     dvui.refresh(null, @src(), self.data().id);
                     const unclamped_size =
                         switch (self.direction) {

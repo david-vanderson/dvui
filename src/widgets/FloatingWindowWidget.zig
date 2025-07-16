@@ -375,7 +375,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
             // If we are already dragging, do it here so it happens before drawing
             if (dvui.captured(self.data().id)) {
                 if (me.action == .motion) {
-                    if (dvui.dragging(me.p)) |dps| {
+                    if (dvui.dragging(me.p, null)) |dps| {
                         const p = me.p.plus(dvui.dragOffset()).toNatural();
                         self.dragAdjust(p, dps.toNatural(), self.drag_part.?);
                         // don't need refresh() because we're before drawing
@@ -462,7 +462,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                     .motion => {
                         if (dvui.captured(self.data().id)) {
                             // move if dragging
-                            if (dvui.dragging(me.p)) |dps| {
+                            if (dvui.dragging(me.p, null)) |dps| {
                                 const p = me.p.plus(dvui.dragOffset()).toNatural();
                                 self.dragAdjust(p, dps.toNatural(), self.drag_part.?);
 

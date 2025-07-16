@@ -112,7 +112,7 @@ pub fn processEvent(self: *Self, e: *dvui.Event) void {
                 },
                 .motion => {
                     e.handle(@src(), self.data());
-                    if (dvui.dragging(me.p)) |dps| {
+                    if (dvui.dragging(me.p, null)) |dps| {
                         const dp = dps.scale(1 / rs.s, Point);
                         points[dragi.?].x += dp.x;
                         points[dragi.?].y += dp.y;

@@ -2399,9 +2399,18 @@ pub fn dragOffset() Point.Physical {
 /// previous dragging call or the drag starting location (from `dragPreStart`
 /// or `dragStart`).  Otherwise return null, meaning a drag hasn't started yet.
 ///
+/// If name is given, returns null immediately if it doesn't match the name /
+/// given to `dragPreStart` or `dragStart`.  This is useful for widgets that need
+/// multiple different kinds of drags.
+///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dragging(p: Point.Physical) ?Point.Physical {
+pub fn dragging(p: Point.Physical, name: ?[]const u8) ?Point.Physical {
     const cw = currentWindow();
+
+    if (name) |n| {
+        if (!std.mem.eql(u8, n, cw.drag_name)) return null;
+    }
+
     switch (cw.drag_state) {
         .none => return null,
         .dragging => {
@@ -3358,7 +3367,7 @@ pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
                     }
                 } else if (me.action == .motion and me.button.touch()) {
                     if (dvui.captured(wd.id)) {
-                        if (dvui.dragging(me.p)) |_| {
+                        if (dvui.dragging(me.p, null)) |_| {
                             // touch: if we overcame the drag threshold, then
                             // that means the person probably didn't want to
                             // touch this button, they were trying to scroll
@@ -5965,7 +5974,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                             }
                         }
                     } else if (me.action == .release and me.button.pointer()) {
-                        if (me.button.touch() and dvui.dragging(me.p) == null) {
+                        if (me.button.touch() and dvui.dragging(me.p, null) == null) {
                             text_mode = true;
                             refresh(null, @src(), b.data().id);
                         }
@@ -5980,7 +5989,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                         // only update the value if we are exceeding the
                         // drag threshold to prevent the value from jumping while
                         // entering text mode via a non-drag touch-tap
-                        if (!me.button.touch() or dvui.dragging(me.p) != null) {
+                        if (!me.button.touch() or dvui.dragging(me.p, null) != null) {
                             p = me.p;
                         }
                     } else if (me.action == .position) {

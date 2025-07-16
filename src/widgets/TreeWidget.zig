@@ -298,7 +298,7 @@ pub const Branch = struct {
                         } else if (me.action == .motion) {
                             if (dvui.captured(self.button.wd.id)) {
                                 e.handle(@src(), self.button.data());
-                                if (dvui.dragging(me.p)) |_| {
+                                if (dvui.dragging(me.p, null)) |_| {
                                     self.tree.dragStart(self.wd.id.asUsize(), me.p); // reorder grabs capture
 
                                     break :loop;
