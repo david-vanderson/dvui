@@ -34,9 +34,16 @@ pub fn scrollCanvas() void {
     const dataRectScale = scaler.screenRectScale(.{});
 
     // get current mouse position
-    var mousePosPhysical: dvui.Point.Physical = undefined;
-    var mousePosData: dvui.Point = undefined;
+    var mousePosPhysical: dvui.Point.Physical = .{};
+    var mousePosData: dvui.Point = .{};
     for (dvui.events()) |*e| {
+        // using eventMatch means we will only get the mouse position if it is
+        // inside scrollContainer, and not in a floating subwindow above or
+        // captured by another widget
+        if (!dvui.eventMatchSimple(e, scrollContainer.data())) {
+            continue;
+        }
+
         if (e.evt == .mouse and e.evt.mouse.action == .position) {
             mousePosPhysical = e.evt.mouse.p;
             mousePosData = dataRectScale.pointFromPhysical(mousePosPhysical);
