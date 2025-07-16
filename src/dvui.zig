@@ -364,8 +364,9 @@ pub const Alignment = struct {
         dvui.dataSet(null, self.id, "_max_align", self.next);
         if (self.max) |m| {
             if (self.next != m) {
+                //std.debug.print("{}:{}\n", .{ self.next, m });
                 // something changed
-                refresh(null, @src(), self.id);
+                //                refresh(null, @src(), self.id);
             }
         }
         self.* = undefined;

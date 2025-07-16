@@ -88,12 +88,9 @@ pub fn main() !void {
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros, null);
         interrupted = try backend.waitEventTimeout(wait_event_micros);
-
-        // Example of how to show a dialog from another thread (outside of win.begin/win.end)
-        if (show_dialog_outside_frame) {
-            show_dialog_outside_frame = false;
-            dvui.dialog(@src(), .{}, .{ .window = &win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
-        }
+    }
+    if (!first_change) {
+        gpa.free(testStruct.slice5);
     }
 }
 
@@ -128,6 +125,7 @@ var opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5) };
 var first_change: bool = true;
 // both dvui and SDL drawing
 fn gui_frame() void {
+    dvui.currentWindow().debug_window_show = true;
     {
         var m = dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
         defer m.deinit();

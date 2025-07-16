@@ -276,7 +276,7 @@ pub fn textFieldWidget2(src: std.builtin.SourceLocation, comptime field_name: []
     var box = dvui.box(src, .vertical, .{});
     defer box.deinit();
     // TODO: Why constCast?
-    textFieldWidget(field_name, @TypeOf(field_ptr), @constCast(&field_ptr), opts, false, null, alignment);
+    textFieldWidget(field_name, @TypeOf(field_ptr), @constCast(&field_ptr), opts, alignment);
 }
 
 // TODO: Get rid of the allocation stuff.
@@ -285,8 +285,6 @@ pub fn textFieldWidget(
     comptime T: type,
     result: *T,
     opt: TextFieldOptions,
-    comptime alloc: bool,
-    allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
 ) void {
     if (opt.disabled) return;
@@ -305,19 +303,11 @@ pub fn textFieldWidget(
     };
 
     comptime var treatment: ProvidedPointerTreatment = .display_only;
-    comptime if (!alloc) {
-        if (@typeInfo(T).pointer.is_const) {
-            treatment = .display_only;
-        } else {
-            treatment = .mutate_value_in_place_only;
-        }
+    if (@typeInfo(T).pointer.is_const) {
+        treatment = .display_only;
     } else {
-        if (@typeInfo(T).pointer.is_const) {
-            treatment = .copy_value_and_alloc_new;
-        } else {
-            treatment = .mutate_value_and_realloc;
-        }
-    };
+        treatment = .mutate_value_in_place_only;
+    }
 
     switch (treatment) {
         .mutate_value_in_place_only => {
@@ -328,38 +318,10 @@ pub fn textFieldWidget(
             const text_box = dvui.textEntry(@src(), .{ .text = .{ .buffer = result.* } }, opt.dvui_opts);
             defer text_box.deinit();
         },
-        .mutate_value_and_realloc => {
-            var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
-            defer hbox_aligned.deinit();
-            alignment.record(box.data().id, hbox_aligned.data());
-
-            const text_box = dvui.textEntry(@src(), .{ .text = .{ .buffer_dynamic = .{
-                .allocator = allocator.?,
-                .backing = result,
-            } } }, opt.dvui_opts);
-            defer text_box.deinit();
-        },
         .display_only => {
             dvui.label(@src(), " : {s}", .{result.*}, .{});
         },
-        .copy_value_and_alloc_new => {
-            //TODO
-            dvui.label(@src(), " : TODO {s}", .{result.*}, .{});
-            //var memory_handle = dvui.dataGet(null, box.widget().data().id, "memory_handle", []u8);
-            //if (memory_handle == null) {
-            //    const len = @max(64, result.*.len * 2);
-            //    const memory = try allocator.?.alloc(u8, len);
-            //    @memset(memory, 0);
-            //    std.mem.copyForwards(u8, memory, result.*);
-            //    dvui.dataSet(null, box.widget().data().id, "memory_handle", memory);
-            //    memory_handle = memory;
-            //}
-
-            ////WARNING: this could leak memory if result has been dynamically allocated
-            //result.* = memory_handle.?;
-            //const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer = memory_handle.? } }, opt.dvui_opts);
-            //text_box.deinit();
-        },
+        else => @compileError("Nope"),
     }
 }
 
