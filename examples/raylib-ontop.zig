@@ -161,6 +161,10 @@ fn dvuiStuff() void {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
+    if (dvui.button(@src(), "Debug Window", .{}, .{})) {
+        dvui.toggleDebugWindow();
+    }
+
     // look at demo() for examples of dvui widgets, shows in a floating window
     dvui.Examples.demo();
 }

@@ -108,6 +108,10 @@ pub fn frame() !dvui.App.Result {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
+    if (dvui.button(@src(), "Debug Window", .{}, .{})) {
+        dvui.toggleDebugWindow();
+    }
+
     {
         var hbox = dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();

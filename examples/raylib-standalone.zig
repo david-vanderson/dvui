@@ -154,6 +154,10 @@ fn dvui_frame() bool {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
+    if (dvui.button(@src(), "Debug Window", .{}, .{})) {
+        dvui.toggleDebugWindow();
+    }
+
     {
         var scaler = dvui.scale(@src(), .{ .scale = &scale_val }, .{ .expand = .horizontal });
         defer scaler.deinit();
