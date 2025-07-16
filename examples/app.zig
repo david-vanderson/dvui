@@ -53,7 +53,7 @@ pub fn frame() !dvui.App.Result {
         var m = dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
         defer m.deinit();
 
-        if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
+        if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .tag = "first-focusable" })) |r| {
             var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
 
@@ -139,12 +139,12 @@ test "tab order" {
 
     try dvui.testing.settle(frame);
 
-    try dvui.testing.expectNotFocused("show-demo-btn");
+    try dvui.testing.expectNotFocused("first-focusable");
 
     try dvui.testing.pressKey(.tab, .none);
     try dvui.testing.settle(frame);
 
-    try dvui.testing.expectFocused("show-demo-btn");
+    try dvui.testing.expectFocused("first-focusable");
 }
 
 test "open example window" {
