@@ -82,11 +82,16 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 - Themes
 - FPS throttling
 
-## Usage
+## Getting Started
 
 [DVUI Demo](https://github.com/david-vanderson/dvui-demo) is a template project you can use as a starting point.
 - build.zig and build.zig.zon show how to reference dvui as a zig dependency
 - for applications, you can use the dvui.App layer to have dvui manage the mainloop for you
+
+Important Tips:
+* Use the debug window (`dvui.toggleDebugWindow()`)
+* Read the [devlog](https://david-vanderson.github.io/log)
+  * Especially about [units](https://david-vanderson.github.io/log/2025/#2025-05-12)
 
 ## Built-in Widgets
 
