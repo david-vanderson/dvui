@@ -161,14 +161,14 @@ pub const BoxShadow = struct {
     // if null uses Options.corner_radius
     corner_radius: ?Rect = null,
 
-    /// Shrink the shadow on all sides (before blur)
+    /// Shrink the shadow on all sides (before fade)
     shrink: f32 = 0,
 
     /// Offset down/right
     offset: dvui.Point = .{ .x = 1, .y = 1 },
 
     /// Extend the size of the transition to transparent at the edges
-    blur: f32 = 2,
+    fade: f32 = 2,
 
     /// Additional alpha multiply factor
     alpha: f32 = 0.5,

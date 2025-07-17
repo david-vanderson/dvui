@@ -282,7 +282,7 @@ pub fn reorderTree() void {
                 .color = .{ .color = .black },
                 .offset = .{ .x = -5, .y = 5 },
                 .shrink = 5,
-                .blur = 10,
+                .fade = 10,
                 .alpha = 0.15,
             },
         },
@@ -810,7 +810,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
             .color = .{ .color = .black },
             .offset = .{ .x = -5, .y = 5 },
             .shrink = 5,
-            .blur = 10,
+            .fade = 10,
             .alpha = 0.15,
         },
     })) {

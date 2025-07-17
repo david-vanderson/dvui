@@ -176,7 +176,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
 
         const prect = rs.r.insetAll(rs.s * bs.shrink).offsetPoint(bs.offset.scale(rs.s, dvui.Point.Physical));
 
-        prect.fill(radius.scale(rs.s, Rect.Physical), .{ .color = bs.color.resolve().opacity(bs.alpha), .blur = rs.s * bs.blur });
+        prect.fill(radius.scale(rs.s, Rect.Physical), .{ .color = bs.color.resolve().opacity(bs.alpha), .fade = rs.s * bs.fade });
     }
 
     var bg = self.options.backgroundGet();
