@@ -220,7 +220,7 @@ pub fn reorderListsAdvanced() void {
 
         if (reorderable.targetRectScale()) |rs| {
             // user is dragging a reorderable over this rect, could draw anything here
-            rs.r.fill(.{}, .{ .color = .green });
+            rs.r.fill(.{}, .{ .color = .green, .fade = 1.0 });
 
             // reset to use next space, need a separator
             _ = dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(6) });
@@ -254,7 +254,7 @@ pub fn reorderListsAdvanced() void {
 
         if (reorderable.targetRectScale()) |rs| {
             // user is dragging a reorderable over this rect
-            rs.r.fill(.{}, .{ .color = .green });
+            rs.r.fill(.{}, .{ .color = .green, .fade = 1.0 });
         }
     }
 
