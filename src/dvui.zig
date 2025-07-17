@@ -2142,10 +2142,10 @@ pub const Triangles = struct {
     pub fn uvFromRectuv(self: *Triangles, r: Rect.Physical, r_uv: Rect) void {
         for (self.vertexes) |*v| {
             const xfrac = (v.pos.x - r.x) / r.w;
-            v.uv[0] = std.math.clamp(r_uv.x + xfrac * (r_uv.w - r_uv.x), 0, 1);
+            v.uv[0] = std.math.clamp(r_uv.x + xfrac * r_uv.w, 0, 1);
 
             const yfrac = (v.pos.y - r.y) / r.h;
-            v.uv[1] = std.math.clamp(r_uv.y + yfrac * (r_uv.h - r_uv.y), 0, 1);
+            v.uv[1] = std.math.clamp(r_uv.y + yfrac * r_uv.h, 0, 1);
         }
     }
 
