@@ -33,7 +33,7 @@ pub fn install(self: *Self, src: std.builtin.SourceLocation, options: dvui.Optio
     const fill_color = dvui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
     for (points, 0..) |p, i| {
         const rect = dvui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
-        rs.rectToPhysical(rect).fill(.all(1), .{ .color = fill_color });
+        rs.rectToPhysical(rect).fill(.all(1), .{ .color = fill_color, .fade = 1.0 });
 
         _ = i;
         //_ = dvui.button(@src(), i, "Floating", .{}, .{ .rect = dvui.Rect.fromPoint(p) });

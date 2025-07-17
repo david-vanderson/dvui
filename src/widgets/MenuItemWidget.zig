@@ -83,18 +83,18 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
                 self.data().focusBorder();
                 if (self.highlight) {
                     const rs = self.data().backgroundRectScale();
-                    rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill_hover) });
+                    rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill_hover), .fade = 1.0 });
                 }
             } else {
                 const rs = self.data().backgroundRectScale();
-                rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.accent) });
+                rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.accent), .fade = 1.0 });
             }
         } else if ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) or self.highlight) {
             const rs = self.data().backgroundRectScale();
-            rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill_hover) });
+            rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill_hover), .fade = 1.0 });
         } else if (self.data().options.backgroundGet()) {
             const rs = self.data().backgroundRectScale();
-            rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill) });
+            rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill), .fade = 1.0 });
         }
     }
 }

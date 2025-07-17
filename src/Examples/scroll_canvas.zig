@@ -373,7 +373,7 @@ pub fn scrollCanvas() void {
         if (!done) {
             // still dragging, draw a half-opaque box to show we are dragging
             const dr = Rect.Physical.fromPoint(dvui.currentWindow().mouse_pt.diff(.{ .x = 10, .y = 10 })).toSize(.all(20));
-            dr.fill(.{}, .{ .color = dvui.Color.lime.opacity(0.5) });
+            dr.fill(.{}, .{ .color = dvui.Color.lime.opacity(0.5), .fade = 1.0 });
         }
     }
 

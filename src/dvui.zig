@@ -5754,7 +5754,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.accent) });
+        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.accent), .fade = 1.0 });
     }
 
     switch (dir) {
@@ -5768,7 +5768,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.fill) });
+        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
     }
 
     const knobRect = switch (dir) {
@@ -6092,7 +6092,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
 
-            knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s, Rect.Physical), .{ .color = options.color(.fill_press) });
+            knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s, Rect.Physical), .{ .color = options.color(.fill_press), .fade = 1.0 });
         }
 
         const label_opts = options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
@@ -6208,7 +6208,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 
     const rs = b.data().contentRectScale();
 
-    rs.r.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.fill) });
+    rs.r.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
 
     const perc = @max(0, @min(1, init_opts.percent));
     if (perc == 0) return;
@@ -6224,7 +6224,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.accent) });
+    part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.accent), .fade = 1.0 });
 }
 
 pub var checkbox_defaults: Options = .{
@@ -6279,7 +6279,7 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
     const cornerRad = opts.corner_radiusGet().scale(rs.s, Rect.Physical);
-    rs.r.fill(cornerRad, .{ .color = opts.color(.border) });
+    rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
         rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent });
@@ -6295,9 +6295,9 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     var options = opts;
     if (checked) {
         options = opts.override(themeGet().accent());
-        rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill) });
+        rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
     } else {
-        rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill) });
+        rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
     }
 
     if (checked) {
@@ -6366,7 +6366,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
     const cornerRad = Rect.Physical.all(1000);
     const r = rs.r;
-    r.fill(cornerRad, .{ .color = opts.color(.border) });
+    r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
         r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent });
@@ -6382,9 +6382,9 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     var options = opts;
     if (active) {
         options = opts.override(themeGet().accent());
-        r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(.fill) });
+        r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(.fill), .fade = 1.0 });
     } else {
-        r.insetAll(rs.s).fill(cornerRad, .{ .color = opts.color(fill) });
+        r.insetAll(rs.s).fill(cornerRad, .{ .color = opts.color(fill), .fade = 1.0 });
     }
 
     if (active) {
