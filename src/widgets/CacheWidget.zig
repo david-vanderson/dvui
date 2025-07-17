@@ -33,9 +33,9 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         .init_opts = init_opts,
         .hash = dvui.hashIdKey(wd.id, "_tex"),
         .tex_uv = dvui.dataGet(null, wd.id, "_tex_uv", Size) orelse .{},
-        .refresh_prev_value = dvui.currentWindow().extra_frames_needed,
+        .refresh_prev_value = dvui.currentWindow().event_state.extra_frames_needed,
     };
-    dvui.currentWindow().extra_frames_needed = 0;
+    dvui.currentWindow().event_state.extra_frames_needed = 0;
     if (dvui.dataGet(null, self.wd.id, "_unsupported", bool) orelse false) self.state = .unsupported;
     return self;
 }
@@ -158,12 +158,12 @@ pub fn deinit(self: *CacheWidget) void {
     defer dvui.widgetFree(self);
     const cw = dvui.currentWindow();
     if (self.state == .ok and self.uncached()) {
-        if (dvui.currentWindow().extra_frames_needed == 0) {
+        if (dvui.currentWindow().event_state.extra_frames_needed == 0) {
             dvui.dataSet(null, self.data().id, "_cache_now", true);
             dvui.refresh(null, @src(), self.data().id);
         }
     }
-    cw.extra_frames_needed = @max(cw.extra_frames_needed, self.refresh_prev_value);
+    cw.event_state.extra_frames_needed = @max(cw.event_state.extra_frames_needed, self.refresh_prev_value);
 
     if (self.old_clip) |clip| {
         dvui.clipSet(clip);

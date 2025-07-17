@@ -5,28 +5,470 @@
 //! `dvui.currentWindow` returns this when between `begin`/`end`.
 
 pub const Window = @This();
+const Debug = @import("Debug.zig");
+
 const Self = Window;
 
 // Would it make sense to have a separate scope for the window ?
 pub const log = std.log.scoped(.dvui);
 
+const EventState = struct {
+    debug: Debug = .{},
+    /// Uses `arena` allocator
+    events: std.ArrayListUnmanaged(Event) = .{},
+    event_num: u16 = 0,
+    /// mouse_pt tracks the last position we got a mouse event for
+    /// 1) used to add position info to mouse wheel events
+    /// 2) used to highlight the widget under the mouse (`dvui.Event.Mouse.Action` .position event)
+    /// 3) used to change the cursor (`dvui.Event.Mouse.Action` .position event)
+    // Start off screen so nothing is highlighted on the first frame
+    mouse_pt: Point.Physical = .{ .x = -1, .y = -1 },
+    mouse_pt_prev: Point.Physical = .{ .x = -1, .y = -1 },
+    /// Holds the current state of the modifiers from the most
+    /// recently added key event. Used for adding modifiers to
+    /// mouse events
+    modifiers: dvui.enums.Mod = .none,
+
+    capture: ?dvui.CaptureMouse = null,
+
+    /// list of subwindows including base, later windows are on top of earlier
+    /// windows
+    /// Uses `gpa` allocator
+    subwindows: std.ArrayListUnmanaged(Subwindow) = .empty,
+    /// id of the subwindow widgets are being added to
+    subwindow_currentId: WidgetId = .zero,
+    /// id of the subwindow that has focus
+    focused_subwindowId: WidgetId = .zero,
+
+    wd: WidgetData,
+
+    natural_scale: f32 = 1.0,
+    extra_frames_needed: u8 = 0,
+
+    string_arena: std.heap.ArenaAllocator,
+
+    pub fn init(gpa: std.mem.Allocator, wd: WidgetData, event_capacity: usize) std.mem.Allocator.Error!EventState {
+        const event_que = try std.ArrayListUnmanaged(Event).initCapacity(gpa, event_capacity);
+        errdefer event_que.deinit(gpa);
+        return EventState{
+            .wd = wd,
+            .events = event_que,
+            .string_arena = std.heap.ArenaAllocator.init(gpa),
+        };
+    }
+    pub fn deinit(self: *EventState) void {
+        self.events.deinit(self.string_arena.child_allocator);
+        self.string_arena.deinit();
+    }
+
+    fn resetEvents(self: *EventState) std.mem.Allocator.Error!void {
+        self.events.clearRetainingCapacity();
+        self.event_num = 0;
+        // We want a position mouse event to do mouse cursors.  It needs to be
+        // final so if there was a drag end the cursor will still be set
+        // correctly.  We don't know when the client gives us the last event,
+        // so make our position event now, and addEvent* functions will remove
+        // and re-add to keep it as the final event.
+        try self.positionMouseEventAdd();
+    }
+
+    fn addEvent(self: *EventState, event: Event) void {
+        if (self.events.items.len < self.events.capacity) {
+            self.events.appendAssumeCapacity(event);
+        } else {
+            std.log.warn("Event Capacity was breached", .{});
+        }
+    }
+
+    fn popEvent(self: *EventState) ?Event {
+        return self.events.pop();
+    }
+
+    fn positionMouseEventAdd(self: *EventState) std.mem.Allocator.Error!void {
+        const widget_id = if (self.capture) |cap| cap.id else null;
+        self.addEvent(.{
+            .num = self.event_num + 1,
+            .target_widgetId = widget_id,
+            .evt = .{ .mouse = .{
+                .action = .position,
+                .button = .none,
+                .mod = self.modifiers,
+                .p = self.mouse_pt,
+                .floating_win = self.windowFor(self.mouse_pt),
+            } },
+        });
+    }
+
+    fn positionMouseEventRemove(self: *EventState) void {
+        if (self.popEvent()) |e| {
+            if (e.evt != .mouse or e.evt.mouse.action != .position) {
+                log.err("positionMouseEventRemove removed a non-mouse or non-position event\n", .{});
+            }
+        }
+    }
+
+    /// Add a keyboard event (key up/down/repeat) to the dvui event list.
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
+    pub fn addEventKey(self: *EventState, event: Event.Key) std.mem.Allocator.Error!bool {
+        if (self.debug.target == .mouse_until_esc and event.action == .down and event.code == .escape) {
+            // an escape will stop the debug stuff from following the mouse,
+            // but need to stop it at the end of the frame when we've gotten
+            // the info
+            self.debug.target = .mouse_quitting;
+            return true;
+        }
+
+        self.positionMouseEventRemove();
+
+        self.modifiers = event.mod;
+
+        self.event_num += 1;
+        self.addEvent(Event{
+            .num = self.event_num,
+            .evt = .{ .key = event },
+            .target_windowId = self.focused_subwindowId,
+            .target_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
+        });
+
+        const ret = (self.data().id != self.focused_subwindowId);
+        try self.positionMouseEventAdd();
+        return ret;
+    }
+    /// Add an event that represents text being typed.  This is distinct from
+    /// key up/down because the text could come from an IME (Input Method
+    /// Editor).
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
+    pub fn addEventText(self: *EventState, text: []const u8) std.mem.Allocator.Error!bool {
+        return try self.addEventTextEx(text, false);
+    }
+
+    pub fn addEventTextEx(self: *EventState, text: []const u8, selected: bool) std.mem.Allocator.Error!bool {
+        self.positionMouseEventRemove();
+
+        self.event_num += 1;
+        self.addEvent(Event{
+            .num = self.event_num,
+            .evt = .{
+                .text = .{
+                    .txt = try self.string_arena.allocator().dupe(u8, text),
+                    .selected = selected,
+                },
+            },
+            .target_windowId = self.focused_subwindowId,
+            .target_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
+        });
+
+        const ret = (self.data().id != self.focused_subwindowId);
+        try self.positionMouseEventAdd();
+        return ret;
+    }
+
+    /// Add a mouse motion event that the mouse is now at physical pixel pt.  This
+    /// is only for a mouse - for touch motion use addEventTouchMotion().
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
+    pub fn addEventMouseMotion(self: *EventState, newpt: Point.Physical) std.mem.Allocator.Error!bool {
+        self.positionMouseEventRemove();
+
+        //log.debug("mouse motion {d} {d} -> {d} {d}", .{ x, y, newpt.x, newpt.y });
+        const dp = newpt.diff(self.mouse_pt);
+        self.mouse_pt = newpt;
+        const winId = self.windowFor(self.mouse_pt);
+
+        // maybe could do focus follows mouse here
+        // - generate a .focus event here instead of just doing focusWindow(winId, null);
+        // - how to make it optional?
+
+        const widget_id = if (self.capture) |cap| cap.id else null;
+
+        self.event_num += 1;
+        self.addEvent(Event{
+            .num = self.event_num,
+            .target_widgetId = widget_id,
+            .evt = .{
+                .mouse = .{
+                    .action = .{ .motion = dp },
+                    .button = if (self.debug.touch_simulate_events and self.debug.touch_simulate_down) .touch0 else .none,
+                    .mod = self.modifiers,
+                    .p = self.mouse_pt,
+                    .floating_win = winId,
+                },
+            },
+        });
+
+        const ret = (self.data().id != winId);
+        try self.positionMouseEventAdd();
+        return ret;
+    }
+
+    /// Add a mouse button event (like left button down/up).
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
+    pub fn addEventMouseButton(self: *EventState, b: dvui.enums.Button, action: Event.Mouse.Action) std.mem.Allocator.Error!bool {
+        return EventState.addEventPointer(self, b, action, null);
+    }
+
+    /// Add a touch up/down event.  This is similar to addEventMouseButton but
+    /// also includes a normalized (0-1) touch point.
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
+    pub fn addEventPointer(self: *EventState, b: dvui.enums.Button, action: Event.Mouse.Action, xynorm: ?Point) std.mem.Allocator.Error!bool {
+        if (self.debug.target == .mouse_until_click and action == .press and b.pointer()) {
+            // a left click or touch will stop the debug stuff from following
+            // the mouse, but need to stop it at the end of the frame when
+            // we've gotten the info
+            self.debug.target = .mouse_quitting;
+            return true;
+        }
+
+        var bb = b;
+        if (self.debug.touch_simulate_events and bb == .left) {
+            bb = .touch0;
+            if (action == .press) {
+                self.debug.touch_simulate_down = true;
+            } else if (action == .release) {
+                self.debug.touch_simulate_down = false;
+            }
+        }
+
+        self.positionMouseEventRemove();
+
+        if (xynorm) |xyn| {
+            self.mouse_pt = (Point{ .x = xyn.x * self.data().rect.w, .y = xyn.y * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
+        }
+
+        const widget_id = if (self.capture) |cap| cap.id else null;
+        const winId = self.windowFor(self.mouse_pt);
+
+        if (action == .press and bb.pointer()) {
+            // normally the focus event is what focuses windows, but since the
+            // base window is instantiated before events are added, it has to
+            // do any event processing as the events come in, right now
+            if (winId == self.data().id) {
+                // focus the window here so any more key events get routed
+                // properly
+                self.focusSubwindowInternal(self.data().id, null);
+            }
+
+            // add focus event
+            self.event_num += 1;
+            self.addEvent(Event{
+                .num = self.event_num,
+                .target_widgetId = widget_id,
+                .evt = .{
+                    .mouse = .{
+                        .action = .focus,
+                        .button = bb,
+                        .mod = self.modifiers,
+                        .p = self.mouse_pt,
+                        .floating_win = winId,
+                    },
+                },
+            });
+        }
+
+        self.event_num += 1;
+        self.addEvent(Event{
+            .num = self.event_num,
+            .target_widgetId = widget_id,
+            .evt = .{
+                .mouse = .{
+                    .action = action,
+                    .button = bb,
+                    .mod = self.modifiers,
+                    .p = self.mouse_pt,
+                    .floating_win = winId,
+                },
+            },
+        });
+
+        const ret = (self.data().id != winId);
+        try self.positionMouseEventAdd();
+        return ret;
+    }
+
+    /// Add a mouse wheel event.  Positive ticks means scrolling up / scrolling right.
+    ///
+    /// If the shift key is being held, any vertical scroll will be transformed to
+    /// horizontal.
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
+    pub fn addEventMouseWheel(self: *EventState, ticks: f32, dir: dvui.enums.Direction) std.mem.Allocator.Error!bool {
+        self.positionMouseEventRemove();
+
+        const winId = self.windowFor(self.mouse_pt);
+
+        //std.debug.print("mouse wheel {d}\n", .{ticks});
+
+        self.event_num += 1;
+        self.addEvent(Event{
+            .num = self.event_num,
+            .evt = .{
+                .mouse = .{
+                    .action = if (dir == .vertical)
+                        if (self.modifiers.shiftOnly())
+                            // Invert ticks so scrolling up takes you left
+                            // (matches behaviour of text editors and browsers)
+                            .{ .wheel_x = -ticks }
+                        else
+                            .{ .wheel_y = ticks }
+                    else
+                        .{ .wheel_x = ticks },
+                    .button = .none,
+                    .mod = self.modifiers,
+                    .p = self.mouse_pt,
+                    .floating_win = winId,
+                },
+            },
+        });
+
+        const ret = (self.data().id != winId);
+        try self.positionMouseEventAdd();
+        return ret;
+    }
+
+    /// Add an event that represents a finger moving while touching the screen.
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
+    pub fn addEventTouchMotion(self: *EventState, finger: dvui.enums.Button, xnorm: f32, ynorm: f32, dxnorm: f32, dynorm: f32) std.mem.Allocator.Error!bool {
+        self.positionMouseEventRemove();
+
+        const newpt = (Point{ .x = xnorm * self.data().rect.w, .y = ynorm * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
+        //std.debug.print("touch motion {} {d} {d}\n", .{ finger, newpt.x, newpt.y });
+        self.mouse_pt = newpt;
+
+        const dp = (Point{ .x = dxnorm * self.data().rect.w, .y = dynorm * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
+
+        const winId = self.windowFor(self.mouse_pt);
+
+        const widget_id = if (self.capture) |cap| cap.id else null;
+
+        self.event_num += 1;
+        self.addEvent(Event{
+            .num = self.event_num,
+            .target_widgetId = widget_id,
+            .evt = .{
+                .mouse = .{
+                    .action = .{ .motion = dp },
+                    .button = finger,
+                    .mod = self.modifiers,
+                    .p = self.mouse_pt,
+                    .floating_win = winId,
+                },
+            },
+        });
+
+        const ret = (self.data().id != winId);
+        try self.positionMouseEventAdd();
+        return ret;
+    }
+    pub fn windowFor(self: *const EventState, p: Point.Physical) WidgetId {
+        var i = self.subwindows.items.len;
+        while (i > 0) : (i -= 1) {
+            const sw = &self.subwindows.items[i - 1];
+            if (sw.modal or sw.rect_pixels.contains(p)) {
+                return sw.id;
+            }
+        }
+
+        return self.data().id;
+    }
+    pub fn data(self: *const EventState) *WidgetData {
+        return self.wd.validate();
+    }
+    pub fn focusSubwindowInternal(self: *EventState, subwindow_id: ?WidgetId, event_num: ?u16) void {
+        const winId = subwindow_id orelse self.subwindow_currentId;
+        if (self.focused_subwindowId != winId) {
+            self.focused_subwindowId = winId;
+            self.refreshWindow(@src(), null);
+            if (event_num) |en| {
+                for (self.subwindows.items) |*sw| {
+                    if (self.focused_subwindowId == sw.id) {
+                        self.focusEventsInternal(en, sw.id, sw.focused_widgetId);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    pub fn subwindowCurrent(self: *EventState) *Subwindow {
+        var i = self.subwindows.items.len;
+        while (i > 0) : (i -= 1) {
+            const sw = &self.subwindows.items[i - 1];
+            if (sw.id == self.subwindow_currentId) {
+                return sw;
+            }
+        }
+
+        log.warn("subwindowCurrent failed to find the current subwindow, returning base window\n", .{});
+        return &self.subwindows.items[0];
+    }
+    pub fn subwindowFocused(self: *EventState) *Subwindow {
+        var i = self.subwindows.items.len;
+        while (i > 0) : (i -= 1) {
+            const sw = &self.subwindows.items[i - 1];
+            if (sw.id == self.focused_subwindowId) {
+                return sw;
+            }
+        }
+
+        log.warn("subwindowFocused failed to find the focused subwindow, returning base window\n", .{});
+        return &self.subwindows.items[0];
+    }
+    /// called from gui thread
+    pub fn refreshWindow(self: *EventState, src: std.builtin.SourceLocation, id: ?WidgetId) void {
+        if (self.debug.logRefresh(null)) {
+            log.debug("{s}:{d} refresh {?x}", .{ src.file, src.line, id });
+        }
+        self.extra_frames_needed = 1;
+    }
+    // Only for keyboard events
+    pub fn focusEventsInternal(self: *EventState, event_num: u16, windowId: ?WidgetId, widgetId: ?WidgetId) void {
+        var evts = self.events.items;
+        var k: usize = 0;
+        while (k < evts.len) : (k += 1) {
+            var e: *Event = &evts[k];
+            if (e.num > event_num) {
+                switch (e.evt) {
+                    .key, .text => {
+                        e.target_windowId = windowId;
+                        e.target_widgetId = widgetId;
+                    },
+                    .mouse => {},
+                }
+            }
+        }
+    }
+    /// make the current mouse_pt the previous mouse pointer
+    /// resets string arena
+    pub fn endFrame(self: *EventState) void {
+        self.mouse_pt_prev = self.mouse_pt;
+        _ = self.string_arena.reset(.retain_capacity);
+    }
+};
+
 backend: dvui.Backend,
 previous_window: ?*Window = null,
-
-/// list of subwindows including base, later windows are on top of earlier
-/// windows
-/// Uses `gpa` allocator
-subwindows: std.ArrayListUnmanaged(Subwindow) = .empty,
-
-/// id of the subwindow widgets are being added to
-subwindow_currentId: WidgetId = .zero,
 
 /// natural rect of the last subwindow, dialogs use this
 /// to center themselves
 subwindow_currentRect: Rect.Natural = .{},
-
-/// id of the subwindow that has focus
-focused_subwindowId: WidgetId = .zero,
 
 last_focused_id_this_frame: WidgetId = .zero,
 last_registered_id_this_frame: WidgetId = .zero,
@@ -40,20 +482,7 @@ text_input_rect: ?Rect.Natural = null,
 snap_to_pixels: bool = true,
 alpha: f32 = 1.0,
 
-/// Uses `arena` allocator
-events: std.ArrayListUnmanaged(Event) = .{},
-event_num: u16 = 0,
-/// mouse_pt tracks the last position we got a mouse event for
-/// 1) used to add position info to mouse wheel events
-/// 2) used to highlight the widget under the mouse (`dvui.Event.Mouse.Action` .position event)
-/// 3) used to change the cursor (`dvui.Event.Mouse.Action` .position event)
-// Start off screen so nothing is highlighted on the first frame
-mouse_pt: Point.Physical = .{ .x = -1, .y = -1 },
-mouse_pt_prev: Point.Physical = .{ .x = -1, .y = -1 },
-/// Holds the current state of the modifiers from the most
-/// recently added key event. Used for adding modifiers to
-/// mouse events
-modifiers: dvui.enums.Mod = .none,
+event_state: EventState,
 inject_motion_event: bool = false,
 
 drag_state: enum {
@@ -73,7 +502,6 @@ loop_target_slop_frames: i32 = 0,
 frame_times: [30]u32 = [_]u32{0} ** 30,
 
 secs_since_last_frame: f32 = 0,
-extra_frames_needed: u8 = 0,
 clipRect: dvui.Rect.Physical = .{},
 
 theme: Theme,
@@ -114,14 +542,12 @@ themes: std.StringArrayHashMapUnmanaged(Theme) = .empty,
 cursor_requested: ?dvui.enums.Cursor = null,
 cursor_dragging: ?dvui.enums.Cursor = null,
 
-wd: WidgetData,
 rect_pixels: dvui.Rect.Physical = .{},
-natural_scale: f32 = 1.0,
+
 /// can set separately but gets folded into natural_scale
 content_scale: f32 = 1.0,
 layout: dvui.BasicLayout = .{},
 
-capture: ?dvui.CaptureMouse = null,
 captured_last_frame: bool = false,
 
 gpa: std.mem.Allocator,
@@ -131,8 +557,6 @@ _lifo_arena: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .De
 _widget_stack: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
-
-debug: @import("Debug.zig") = .{},
 
 pub const Subwindow = struct {
     id: WidgetId,
@@ -174,6 +598,7 @@ pub const InitOptions = struct {
     ///
     /// Does nothing if the `theme` option is populated
     color_scheme: ?dvui.enums.ColorScheme = null,
+    event_capacity: usize = 4096,
     keybinds: ?enum {
         none,
         windows,
@@ -189,23 +614,26 @@ pub fn init(
 ) !Self {
     const hashval = dvui.hashSrc(null, src, init_opts.id_extra);
 
+    const wd = WidgetData{
+        .src = src,
+        .id = hashval,
+        .init_options = .{ .subwindow = true },
+        .options = .{ .name = "Window" },
+        // Unused
+        .min_size = undefined,
+        // Set in `begin`
+        .rect = undefined,
+        // Set in `begin`
+        .parent = undefined,
+    };
+    var event_state = try EventState.init(gpa, wd, init_opts.event_capacity);
+    errdefer event_state.deinit();
     var self = Self{
         .gpa = gpa,
         ._arena = if (init_opts.arena) |a| (if (zig_arena) a else .initArena(a)) else .init(gpa),
         ._lifo_arena = .init(gpa),
         ._widget_stack = .init(gpa),
-        .wd = WidgetData{
-            .src = src,
-            .id = hashval,
-            .init_options = .{ .subwindow = true },
-            .options = .{ .name = "Window" },
-            // Unused
-            .min_size = undefined,
-            // Set in `begin`
-            .rect = undefined,
-            // Set in `begin`
-            .parent = undefined,
-        },
+        .event_state = event_state,
         .backend = backend_ctx,
         .font_bytes = try dvui.Font.initTTFBytesDatabase(gpa),
         .theme = if (init_opts.theme) |t| t.* else switch (init_opts.color_scheme orelse backend_ctx.preferredColorScheme() orelse .light) {
@@ -228,7 +656,7 @@ pub fn init(
     };
     self.themes.sort(Context{ .hashmap = &self.themes });
 
-    try self.initEvents();
+    try self.event_state.resetEvents();
 
     const kb = init_opts.keybinds orelse blk: {
         if (builtin.os.tag.isDarwin()) {
@@ -345,7 +773,7 @@ pub fn init(
 
     errdefer self.deinit();
 
-    self.focused_subwindowId = self.data().id;
+    self.event_state.focused_subwindowId = self.data().id;
     self.frame_time_ns = 1;
 
     if (dvui.useFreeType) {
@@ -375,9 +803,9 @@ pub fn deinit(self: *Self) void {
         self.datas.deinit(self.gpa);
     }
 
-    self.debug.deinit(self.gpa);
+    self.debug().deinit(self.gpa);
 
-    self.subwindows.deinit(self.gpa);
+    self.subwindows().deinit(self.gpa);
     self.min_sizes.deinit(self.gpa);
 
     {
@@ -433,6 +861,7 @@ pub fn deinit(self: *Self) void {
         }
     }
     self.themes.deinit(self.gpa);
+    self.event_state.deinit();
     self.* = undefined;
 }
 
@@ -466,60 +895,54 @@ pub fn lifo(self: *Self) std.mem.Allocator {
 pub fn arena(self: *Self) std.mem.Allocator {
     return self._arena.allocator();
 }
+pub fn debug(self: *Self) *Debug {
+    return &self.event_state.debug;
+}
+pub fn subwindows(self: *Self) *std.ArrayListUnmanaged(Subwindow) {
+    return &self.event_state.subwindows;
+}
+pub fn mouse_pt(self: *const Self) Point.Physical {
+    return self.event_state.mouse_pt;
+}
+pub fn mouse_pt_prev(self: *const Self) Point.Physical {
+    return self.event_state.mouse_pt_prev;
+}
+pub fn natural_scale(self: *const Self) f32 {
+    return self.event_state.natural_scale;
+}
+
+pub fn windowFor(self: *const Self, p: Point.Physical) WidgetId {
+    return self.event_state.windowFor(p);
+}
+
+pub fn subwindowCurrentId(self: *Self) WidgetId {
+    return self.event_state.subwindow_currentId;
+}
+pub fn focusedSubwindowId(self: *Self) WidgetId {
+    return self.event_state.focused_subwindowId;
+}
 
 /// called from gui thread
 pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?WidgetId) void {
-    if (self.debug.logRefresh(null)) {
-        log.debug("{s}:{d} refresh {?x}", .{ src.file, src.line, id });
-    }
-    self.extra_frames_needed = 1;
+    self.event_state.refreshWindow(src, id);
 }
 
 /// called from any thread
 pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?WidgetId) void {
-    if (self.debug.logRefresh(null)) {
+    if (self.debug().logRefresh(null)) {
         log.debug("{s}:{d} refreshBackend {?x}", .{ src.file, src.line, id });
     }
     self.backend.refresh();
 }
 
-pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?WidgetId, event_num: ?u16) void {
-    const winId = subwindow_id orelse self.subwindow_currentId;
-    if (self.focused_subwindowId != winId) {
-        self.focused_subwindowId = winId;
-        self.refreshWindow(@src(), null);
-        if (event_num) |en| {
-            for (self.subwindows.items) |*sw| {
-                if (self.focused_subwindowId == sw.id) {
-                    self.focusEventsInternal(en, sw.id, sw.focused_widgetId);
-                    break;
-                }
-            }
-        }
-    }
-}
-
 // Only for keyboard events
 pub fn focusEventsInternal(self: *Self, event_num: u16, windowId: ?WidgetId, widgetId: ?WidgetId) void {
-    var evts = self.events.items;
-    var k: usize = 0;
-    while (k < evts.len) : (k += 1) {
-        var e: *Event = &evts[k];
-        if (e.num > event_num) {
-            switch (e.evt) {
-                .key, .text => {
-                    e.target_windowId = windowId;
-                    e.target_widgetId = widgetId;
-                },
-                .mouse => {},
-            }
-        }
-    }
+    self.event_state.focusEventsInternal(event_num, windowId, widgetId);
 }
 
 // Only for mouse/touch events
 pub fn captureEventsInternal(self: *Self, event_num: u16, widgetId: ?WidgetId) void {
-    var evts = self.events.items;
+    var evts = self.event_state.events.items;
     var k: usize = 0;
     while (k < evts.len) : (k += 1) {
         var e: *Event = &evts[k];
@@ -542,31 +965,8 @@ pub fn captureEventsInternal(self: *Self, event_num: u16, widgetId: ?WidgetId) v
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
 pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
-    if (self.debug.target == .mouse_until_esc and event.action == .down and event.code == .escape) {
-        // an escape will stop the debug stuff from following the mouse,
-        // but need to stop it at the end of the frame when we've gotten
-        // the info
-        self.debug.target = .mouse_quitting;
-        return true;
-    }
-
-    self.positionMouseEventRemove();
-
-    self.modifiers = event.mod;
-
-    self.event_num += 1;
-    try self.events.append(self.arena(), Event{
-        .num = self.event_num,
-        .evt = .{ .key = event },
-        .target_windowId = self.focused_subwindowId,
-        .target_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
-    });
-
-    const ret = (self.data().id != self.focused_subwindowId);
-    try self.positionMouseEventAdd();
-    return ret;
+    return self.event_state.addEventKey(event);
 }
-
 /// Add an event that represents text being typed.  This is distinct from
 /// key up/down because the text could come from an IME (Input Method
 /// Editor).
@@ -575,28 +975,11 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
 pub fn addEventText(self: *Self, text: []const u8) std.mem.Allocator.Error!bool {
-    return try self.addEventTextEx(text, false);
+    return self.event_state.addEventText(text);
 }
 
 pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) std.mem.Allocator.Error!bool {
-    self.positionMouseEventRemove();
-
-    self.event_num += 1;
-    try self.events.append(self.arena(), Event{
-        .num = self.event_num,
-        .evt = .{
-            .text = .{
-                .txt = try self.arena().dupe(u8, text),
-                .selected = selected,
-            },
-        },
-        .target_windowId = self.focused_subwindowId,
-        .target_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
-    });
-
-    const ret = (self.data().id != self.focused_subwindowId);
-    try self.positionMouseEventAdd();
-    return ret;
+    return self.event_state.addEventTextEx(text, selected);
 }
 
 /// Add a mouse motion event that the mouse is now at physical pixel pt.  This
@@ -606,37 +989,7 @@ pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) std.mem.All
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
 pub fn addEventMouseMotion(self: *Self, newpt: Point.Physical) std.mem.Allocator.Error!bool {
-    self.positionMouseEventRemove();
-
-    //log.debug("mouse motion {d} {d} -> {d} {d}", .{ x, y, newpt.x, newpt.y });
-    const dp = newpt.diff(self.mouse_pt);
-    self.mouse_pt = newpt;
-    const winId = self.windowFor(self.mouse_pt);
-
-    // maybe could do focus follows mouse here
-    // - generate a .focus event here instead of just doing focusWindow(winId, null);
-    // - how to make it optional?
-
-    const widget_id = if (self.capture) |cap| cap.id else null;
-
-    self.event_num += 1;
-    try self.events.append(self.arena(), Event{
-        .num = self.event_num,
-        .target_widgetId = widget_id,
-        .evt = .{
-            .mouse = .{
-                .action = .{ .motion = dp },
-                .button = if (self.debug.touch_simulate_events and self.debug.touch_simulate_down) .touch0 else .none,
-                .mod = self.modifiers,
-                .p = self.mouse_pt,
-                .floating_win = winId,
-            },
-        },
-    });
-
-    const ret = (self.data().id != winId);
-    try self.positionMouseEventAdd();
-    return ret;
+    return self.event_state.addEventMouseMotion(newpt);
 }
 
 /// Add a mouse button event (like left button down/up).
@@ -645,7 +998,7 @@ pub fn addEventMouseMotion(self: *Self, newpt: Point.Physical) std.mem.Allocator
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
 pub fn addEventMouseButton(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Action) std.mem.Allocator.Error!bool {
-    return addEventPointer(self, b, action, null);
+    return self.event_state.addEventMouseButton(b, action);
 }
 
 /// Add a touch up/down event.  This is similar to addEventMouseButton but
@@ -655,78 +1008,7 @@ pub fn addEventMouseButton(self: *Self, b: dvui.enums.Button, action: Event.Mous
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
 pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Action, xynorm: ?Point) std.mem.Allocator.Error!bool {
-    if (self.debug.target == .mouse_until_click and action == .press and b.pointer()) {
-        // a left click or touch will stop the debug stuff from following
-        // the mouse, but need to stop it at the end of the frame when
-        // we've gotten the info
-        self.debug.target = .mouse_quitting;
-        return true;
-    }
-
-    var bb = b;
-    if (self.debug.touch_simulate_events and bb == .left) {
-        bb = .touch0;
-        if (action == .press) {
-            self.debug.touch_simulate_down = true;
-        } else if (action == .release) {
-            self.debug.touch_simulate_down = false;
-        }
-    }
-
-    self.positionMouseEventRemove();
-
-    if (xynorm) |xyn| {
-        self.mouse_pt = (Point{ .x = xyn.x * self.data().rect.w, .y = xyn.y * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
-    }
-
-    const widget_id = if (self.capture) |cap| cap.id else null;
-    const winId = self.windowFor(self.mouse_pt);
-
-    if (action == .press and bb.pointer()) {
-        // normally the focus event is what focuses windows, but since the
-        // base window is instantiated before events are added, it has to
-        // do any event processing as the events come in, right now
-        if (winId == self.data().id) {
-            // focus the window here so any more key events get routed
-            // properly
-            self.focusSubwindowInternal(self.data().id, null);
-        }
-
-        // add focus event
-        self.event_num += 1;
-        try self.events.append(self.arena(), Event{
-            .num = self.event_num,
-            .target_widgetId = widget_id,
-            .evt = .{
-                .mouse = .{
-                    .action = .focus,
-                    .button = bb,
-                    .mod = self.modifiers,
-                    .p = self.mouse_pt,
-                    .floating_win = winId,
-                },
-            },
-        });
-    }
-
-    self.event_num += 1;
-    try self.events.append(self.arena(), Event{
-        .num = self.event_num,
-        .target_widgetId = widget_id,
-        .evt = .{
-            .mouse = .{
-                .action = action,
-                .button = bb,
-                .mod = self.modifiers,
-                .p = self.mouse_pt,
-                .floating_win = winId,
-            },
-        },
-    });
-
-    const ret = (self.data().id != winId);
-    try self.positionMouseEventAdd();
-    return ret;
+    return self.event_state.addEventPointer(b, action, xynorm);
 }
 
 /// Add a mouse wheel event.  Positive ticks means scrolling up / scrolling right.
@@ -738,37 +1020,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
 pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) std.mem.Allocator.Error!bool {
-    self.positionMouseEventRemove();
-
-    const winId = self.windowFor(self.mouse_pt);
-
-    //std.debug.print("mouse wheel {d}\n", .{ticks});
-
-    self.event_num += 1;
-    try self.events.append(self.arena(), Event{
-        .num = self.event_num,
-        .evt = .{
-            .mouse = .{
-                .action = if (dir == .vertical)
-                    if (self.modifiers.shiftOnly())
-                        // Invert ticks so scrolling up takes you left
-                        // (matches behaviour of text editors and browsers)
-                        .{ .wheel_x = -ticks }
-                    else
-                        .{ .wheel_y = ticks }
-                else
-                    .{ .wheel_x = ticks },
-                .button = .none,
-                .mod = self.modifiers,
-                .p = self.mouse_pt,
-                .floating_win = winId,
-            },
-        },
-    });
-
-    const ret = (self.data().id != winId);
-    try self.positionMouseEventAdd();
-    return ret;
+    return self.event_state.addEventMouseWheel(ticks, dir);
 }
 
 /// Add an event that represents a finger moving while touching the screen.
@@ -777,36 +1029,7 @@ pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) st
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
 pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, ynorm: f32, dxnorm: f32, dynorm: f32) std.mem.Allocator.Error!bool {
-    self.positionMouseEventRemove();
-
-    const newpt = (Point{ .x = xnorm * self.data().rect.w, .y = ynorm * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
-    //std.debug.print("touch motion {} {d} {d}\n", .{ finger, newpt.x, newpt.y });
-    self.mouse_pt = newpt;
-
-    const dp = (Point{ .x = dxnorm * self.data().rect.w, .y = dynorm * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
-
-    const winId = self.windowFor(self.mouse_pt);
-
-    const widget_id = if (self.capture) |cap| cap.id else null;
-
-    self.event_num += 1;
-    try self.events.append(self.arena(), Event{
-        .num = self.event_num,
-        .target_widgetId = widget_id,
-        .evt = .{
-            .mouse = .{
-                .action = .{ .motion = dp },
-                .button = finger,
-                .mod = self.modifiers,
-                .p = self.mouse_pt,
-                .floating_win = winId,
-            },
-        },
-    });
-
-    const ret = (self.data().id != winId);
-    try self.positionMouseEventAdd();
-    return ret;
+    return self.event_state.addEventTouchMotion(finger, xnorm, ynorm, dxnorm, dynorm);
 }
 
 pub fn FPS(self: *const Self) f32 {
@@ -1002,20 +1225,20 @@ pub fn begin(
     self.text_input_rect = null;
     self.last_focused_id_this_frame = .zero;
 
-    self.debug.reset(self.gpa);
+    self.debug().reset(self.gpa);
 
     self.datas_trash = .empty;
     self.texture_trash = .empty;
 
     {
         var i: usize = 0;
-        while (i < self.subwindows.items.len) {
-            var sw = &self.subwindows.items[i];
+        while (i < self.subwindows().items.len) {
+            var sw = &self.subwindows().items[i];
             if (sw.used) {
                 sw.used = false;
                 i += 1;
             } else {
-                _ = self.subwindows.orderedRemove(i);
+                _ = self.subwindows().orderedRemove(i);
             }
         }
     }
@@ -1069,7 +1292,7 @@ pub fn begin(
     dvui.clipSet(self.rect_pixels);
 
     self.data().rect = Rect.Natural.fromSize(self.backend.windowSize()).scale(1.0 / self.content_scale, Rect);
-    self.natural_scale = if (self.data().rect.w == 0) 1.0 else self.rect_pixels.w / self.data().rect.w;
+    self.event_state.natural_scale = if (self.data().rect.w == 0) 1.0 else self.rect_pixels.w / self.data().rect.w;
 
     //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.data().rect.w, self.data().rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
@@ -1077,7 +1300,7 @@ pub fn begin(
 
     _ = dvui.subwindowCurrentSet(self.data().id, .cast(self.data().rect));
 
-    self.extra_frames_needed -|= 1;
+    self.event_state.extra_frames_needed -|= 1;
     self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
 
     {
@@ -1125,7 +1348,7 @@ pub fn begin(
 
     if (!self.captured_last_frame) {
         // widget that had capture went away
-        self.capture = null;
+        self.event_state.capture = null;
     }
     self.captured_last_frame = false;
 
@@ -1137,66 +1360,12 @@ pub fn begin(
     try self.backend.begin(self.arena());
 }
 
-fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
-    const widget_id = if (self.capture) |cap| cap.id else null;
-
-    try self.events.append(self.arena(), .{
-        .num = self.event_num + 1,
-        .target_widgetId = widget_id,
-        .evt = .{ .mouse = .{
-            .action = .position,
-            .button = .none,
-            .mod = self.modifiers,
-            .p = self.mouse_pt,
-            .floating_win = self.windowFor(self.mouse_pt),
-        } },
-    });
+pub fn subwindowCurrent(self: *Self) *Subwindow {
+    return self.event_state.subwindowCurrent();
 }
 
-fn positionMouseEventRemove(self: *Self) void {
-    if (self.events.pop()) |e| {
-        if (e.evt != .mouse or e.evt.mouse.action != .position) {
-            log.err("positionMouseEventRemove removed a non-mouse or non-position event\n", .{});
-        }
-    }
-}
-
-pub fn windowFor(self: *const Self, p: Point.Physical) WidgetId {
-    var i = self.subwindows.items.len;
-    while (i > 0) : (i -= 1) {
-        const sw = &self.subwindows.items[i - 1];
-        if (sw.modal or sw.rect_pixels.contains(p)) {
-            return sw.id;
-        }
-    }
-
-    return self.data().id;
-}
-
-pub fn subwindowCurrent(self: *const Self) *Subwindow {
-    var i = self.subwindows.items.len;
-    while (i > 0) : (i -= 1) {
-        const sw = &self.subwindows.items[i - 1];
-        if (sw.id == self.subwindow_currentId) {
-            return sw;
-        }
-    }
-
-    log.warn("subwindowCurrent failed to find the current subwindow, returning base window\n", .{});
-    return &self.subwindows.items[0];
-}
-
-pub fn subwindowFocused(self: *const Self) *Subwindow {
-    var i = self.subwindows.items.len;
-    while (i > 0) : (i -= 1) {
-        const sw = &self.subwindows.items[i - 1];
-        if (sw.id == self.focused_subwindowId) {
-            return sw;
-        }
-    }
-
-    log.warn("subwindowFocused failed to find the focused subwindow, returning base window\n", .{});
-    return &self.subwindows.items[0];
+pub fn subwindowFocused(self: *Self) *Subwindow {
+    return self.event_state.subwindowFocused();
 }
 
 /// Return the cursor the gui wants.  Client code should cache this if
@@ -1213,7 +1382,7 @@ pub fn cursorRequested(self: *const Self) dvui.enums.Cursor {
 /// Client code should cache this if switching the platform's cursor is
 /// expensive.
 pub fn cursorRequestedFloating(self: *const Self) ?dvui.enums.Cursor {
-    if (self.capture != null or self.windowFor(self.mouse_pt) != self.data().id) {
+    if (self.event_state.capture != null or self.windowFor(self.mouse_pt()) != self.data().id) {
         // gui owns the cursor if we have mouse capture or if the mouse is above
         // a floating window
         return self.cursorRequested();
@@ -1510,9 +1679,9 @@ pub fn endRendering(self: *Self, opts: endOptions) void {
     }
     self.dialogsShow();
 
-    self.debug.show();
+    self.debug().show();
 
-    for (self.subwindows.items) |*sw| {
+    for (self.subwindows().items) |*sw| {
         self.renderCommands(sw.render_cmds.items) catch |err| {
             dvui.logError(@src(), err, "Failed to render commands for subwindow {x}", .{sw.id});
         };
@@ -1559,7 +1728,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     const evts = dvui.events();
     for (evts) |*e| {
         if (self.drag_state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release) {
-            if (self.debug.logEvents(null)) {
+            if (self.debug().logEvents(null)) {
                 log.debug("clearing drag ({s}) for unhandled mouse release", .{self.drag_name});
             }
             self.drag_state = .none;
@@ -1587,7 +1756,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         }
     }
 
-    if (self.debug.logEvents(null)) {
+    if (self.debug().logEvents(null)) {
         for (evts) |*e| {
             if (e.handled) continue;
             var action: []const u8 = "";
@@ -1600,13 +1769,13 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         }
     }
 
-    self.mouse_pt_prev = self.mouse_pt;
+    self.event_state.endFrame();
 
     if (!self.subwindowFocused().used) {
         // our focused subwindow didn't show this frame, focus the highest one that did
-        var i = self.subwindows.items.len;
+        var i = self.subwindows().items.len;
         while (i > 0) : (i -= 1) {
-            const sw = self.subwindows.items[i - 1];
+            const sw = self.subwindows().items[i - 1];
             if (sw.used) {
                 //std.debug.print("focused subwindow lost, focusing {d}\n", .{i - 1});
                 dvui.focusSubwindow(sw.id, null);
@@ -1620,7 +1789,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // Check that the final event was our synthetic mouse position event.
     // If one of the addEvent* functions forgot to add the synthetic mouse
     // event to the end this will print a debug message.
-    self.positionMouseEventRemove();
+    self.event_state.positionMouseEventRemove();
 
     // Allocators
     // std.log.debug("peak lifo arena {d} (0x{0x})", .{self._lifo_arena.peak_usage});
@@ -1650,17 +1819,17 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // self._widget_stack.debug_log();
     _ = self._widget_stack.reset(.shrink_to_peak_usage);
 
-    try self.initEvents();
+    try self.event_state.resetEvents();
 
     if (self.inject_motion_event) {
         self.inject_motion_event = false;
-        _ = try self.addEventMouseMotion(self.mouse_pt);
+        _ = try self.addEventMouseMotion(self.mouse_pt());
     }
 
     defer dvui.current_window = self.previous_window;
 
     // This is what refresh affects
-    if (self.extra_frames_needed > 0) {
+    if (self.event_state.extra_frames_needed > 0) {
         return 0;
     }
 
@@ -1681,24 +1850,12 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     return ret;
 }
 
-fn initEvents(self: *Self) std.mem.Allocator.Error!void {
-    self.events = .{};
-    self.event_num = 0;
-
-    // We want a position mouse event to do mouse cursors.  It needs to be
-    // final so if there was a drag end the cursor will still be set
-    // correctly.  We don't know when the client gives us the last event,
-    // so make our position event now, and addEvent* functions will remove
-    // and re-add to keep it as the final event.
-    try self.positionMouseEventAdd();
-}
-
 pub fn widget(self: *Self) Widget {
     return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
 }
 
 pub fn data(self: *const Self) *WidgetData {
-    return self.wd.validate();
+    return self.event_state.data();
 }
 
 pub fn rectFor(self: *Self, id: WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -1706,7 +1863,7 @@ pub fn rectFor(self: *Self, id: WidgetId, min_size: Size, e: Options.Expand, g: 
 }
 
 pub fn rectScale(self: *Self) RectScale {
-    return .{ .r = self.rect_pixels, .s = self.natural_scale };
+    return .{ .r = self.rect_pixels, .s = self.natural_scale() };
 }
 
 pub fn screenRectScale(self: *Self, r: Rect) RectScale {

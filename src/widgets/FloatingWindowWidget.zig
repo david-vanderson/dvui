@@ -144,8 +144,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         if (self.auto_size) {
             // Track if any of our children called refresh(), and in deinit we
             // will turn off auto_size if none of them did.
-            self.auto_size_refresh_prev_value = dvui.currentWindow().extra_frames_needed;
-            dvui.currentWindow().extra_frames_needed = 0;
+            self.auto_size_refresh_prev_value = dvui.currentWindow().event_state.extra_frames_needed;
+            dvui.currentWindow().event_state.extra_frames_needed = 0;
 
             const ms = Size.min(Size.max(min_size, self.options.min_sizeGet()), .cast(dvui.windowRect().size()));
             self.wd.rect.w = ms.w;
@@ -182,7 +182,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
                 while (nudge) {
                     nudge = false;
                     // don't check against subwindows[0] - that's that main window
-                    for (cw.subwindows.items[1..]) |subw| {
+                    for (cw.subwindows().items[1..]) |subw| {
                         if (subw.id != self.wd.id and subw.rect.topLeft().equals(self.data().rect.topLeft())) {
                             self.wd.rect.x += 24;
                             self.wd.rect.y += 24;
@@ -542,10 +542,10 @@ pub fn deinit(self: *FloatingWindowWidget) void {
     self.layout.deinit();
 
     if (self.auto_size_refresh_prev_value) |pv| {
-        if (dvui.currentWindow().extra_frames_needed == 0) {
+        if (dvui.currentWindow().event_state.extra_frames_needed == 0) {
             self.auto_size = false;
         }
-        dvui.currentWindow().extra_frames_needed = @max(dvui.currentWindow().extra_frames_needed, pv);
+        dvui.currentWindow().event_state.extra_frames_needed = @max(dvui.currentWindow().event_state.extra_frames_needed, pv);
     }
 
     if (self.init_options.process_events_in_deinit) {

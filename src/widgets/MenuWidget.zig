@@ -177,8 +177,8 @@ pub fn processEvent(self: *MenuWidget, e: *Event) void {
                     if (dvui.dataGet(null, self.data().id, "_child_popup", Rect.Physical)) |r| {
                         const center = Point.Physical{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
                         const cw = dvui.currentWindow();
-                        const to_center = center.diff(cw.mouse_pt_prev);
-                        const movement = cw.mouse_pt.diff(cw.mouse_pt_prev);
+                        const to_center = center.diff(cw.mouse_pt_prev());
+                        const movement = cw.mouse_pt().diff(cw.mouse_pt_prev());
                         const dot_prod = movement.x * to_center.x + movement.y * to_center.y;
                         const cos = dot_prod / (to_center.length() * movement.length());
                         if (std.math.acos(cos) < std.math.pi / 3.0) {
