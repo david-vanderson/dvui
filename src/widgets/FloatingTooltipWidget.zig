@@ -136,7 +136,7 @@ pub fn shown(self: *FloatingTooltipWidget) bool {
             },
             .sticky => {
                 if (dvui.firstFrame(self.data().id)) {
-                    const mp = dvui.currentWindow().mouse_pt.toNatural();
+                    const mp = dvui.currentWindow().mouse_pt().toNatural();
                     dvui.dataSet(null, self.data().id, "_sticky_pt", mp);
                 } else {
                     const mp = dvui.dataGet(null, self.data().id, "_sticky_pt", dvui.Point.Natural) orelse dvui.Point.Natural{};

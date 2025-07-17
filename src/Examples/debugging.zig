@@ -12,7 +12,7 @@ pub fn debuggingErrors() void {
     dvui.label(@src(), "- text, icons, and images rounded to nearest pixel", .{}, .{ .margin = .{ .x = 10 } });
     dvui.label(@src(), "- text rendered at the closest smaller font (not stretched)", .{}, .{ .margin = .{ .x = 10 } });
 
-    _ = dvui.checkbox(@src(), &dvui.currentWindow().debug.touch_simulate_events, "Convert mouse events to touch", .{});
+    _ = dvui.checkbox(@src(), &dvui.currentWindow().debug().touch_simulate_events, "Convert mouse events to touch", .{});
     dvui.label(@src(), "- mouse drag will scroll", .{}, .{ .margin = .{ .x = 10 } });
     dvui.label(@src(), "- mouse click in text layout/entry shows touch draggables and menu", .{}, .{ .margin = .{ .x = 10 } });
 
