@@ -1593,7 +1593,9 @@ pub const Path = struct {
     }
 
     pub const FillConvexOptions = struct {
-        blur: f32 = 1.0,
+        /// Size (physical pixels) of fade to transparent centered on the edge.
+        /// If >1, then starts a half-pixel inside and the rest outside.
+        fade: f32 = 0.0,
         color: ?Color = null,
         center: ?Point.Physical = null,
     };
@@ -1645,10 +1647,7 @@ pub const Path = struct {
     /// Generates triangles to fill path (must be convex).
     ///
     /// Vertexes will have unset uv and color is alpha multiplied white fading to
-    /// transparent at the edge.
-    ///
-    /// blur is how many pixels wide the fade to transparent is, starting a half
-    /// pixel inside. Currently blur < 1 is treated as 1, but might change.
+    /// transparent at the edge if fade is > 0.
     pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillConvexOptions) std.mem.Allocator.Error!Triangles {
         if (path.points.len < 3) {
             return .empty;
@@ -1656,7 +1655,7 @@ pub const Path = struct {
 
         var vtx_count = path.points.len;
         var idx_count = (path.points.len - 2) * 3;
-        if (opts.blur > 0) {
+        if (opts.fade > 0) {
             vtx_count *= 2;
             idx_count += path.points.len * 6;
         }
@@ -1685,7 +1684,7 @@ pub const Path = struct {
             var norm: Point.Physical = .{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 };
 
             // inner vertex
-            const inside_len = @min(0.5, opts.blur / 2);
+            const inside_len = @min(0.5, opts.fade / 2);
             builder.appendVertex(.{
                 .pos = .{
                     .x = bb.x - norm.x * inside_len,
@@ -1694,8 +1693,8 @@ pub const Path = struct {
                 .col = col,
             });
 
-            const idx_ai = if (opts.blur > 0) ai * 2 else ai;
-            const idx_bi = if (opts.blur > 0) bi * 2 else bi;
+            const idx_ai = if (opts.fade > 0) ai * 2 else ai;
+            const idx_bi = if (opts.fade > 0) bi * 2 else bi;
 
             // indexes for fill
             // triangles must be counter-clockwise (y going down) to avoid backface culling
@@ -1705,7 +1704,7 @@ pub const Path = struct {
                 builder.appendTriangles(&.{ 0, idx_ai, idx_bi });
             }
 
-            if (opts.blur > 0) {
+            if (opts.fade > 0) {
                 // scale averaged normal by angle between which happens to be the same as
                 // dividing by the length^2
                 const d2 = norm.x * norm.x + norm.y * norm.y;
@@ -1713,7 +1712,7 @@ pub const Path = struct {
                     norm = norm.scale(1.0 / d2, Point.Physical);
                 }
 
-                // limit distance our vertexes can be from the point to 2 * blur so
+                // limit distance our vertexes can be from the point to 2 so
                 // very small angles don't produce huge geometries
                 const l = norm.length();
                 if (l > 2.0) {
@@ -1721,7 +1720,7 @@ pub const Path = struct {
                 }
 
                 // outer vertex
-                const outside_len = if (opts.blur <= 1) opts.blur / 2 else opts.blur - 0.5;
+                const outside_len = if (opts.fade <= 1) opts.fade / 2 else opts.fade - 0.5;
                 builder.appendVertex(.{
                     .pos = .{
                         .x = bb.x + norm.x * outside_len,
@@ -1833,7 +1832,7 @@ pub const Path = struct {
             defer tempPath.deinit();
 
             tempPath.addArc(center, opts.thickness, math.pi * 2.0, 0, true);
-            return tempPath.build().fillConvexTriangles(allocator, .{ .color = opts.color, .blur = 1.0 });
+            return tempPath.build().fillConvexTriangles(allocator, .{ .color = opts.color, .fade = 1.0 });
         }
 
         // a single segment can't be closed
@@ -6957,7 +6956,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
         opts.rs.r.toPoint(.{
             .x = max_x,
             .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
-        }).fill(.{}, .{ .color = bgcol, .blur = 0 });
+        }).fill(.{}, .{ .color = bgcol, .fade = 0 });
     }
 
     if (sel) {
@@ -6966,7 +6965,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
                 .x = sel_end_x,
                 .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
             })
-            .fill(.{}, .{ .color = themeGet().color_accent, .blur = 0 });
+            .fill(.{}, .{ .color = themeGet().color_accent, .fade = 0 });
     }
 
     try renderTriangles(builder.build_unowned(), texture_atlas);
@@ -7085,6 +7084,10 @@ pub const RenderTextureOptions = struct {
     uv: Rect = .{ .w = 1, .h = 1 },
     background_color: ?Color = null,
     debug: bool = false,
+
+    /// Size (physical pixels) of fade to transparent centered on the edge.
+    /// If >1, then starts a half-pixel inside and the rest outside.
+    fade: f32 = 0.0,
 };
 
 pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Backend.GenericError!void {
@@ -7106,7 +7109,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
 
     path.addRect(rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
 
-    var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod });
+    var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod, .fade = opts.fade });
     defer triangles.deinit(cw.lifo());
 
     triangles.uvFromRectuv(rs.r, opts.uv);
