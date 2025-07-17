@@ -248,7 +248,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, container: anytype, depth: u
     }
 }
 
-pub fn processWidget(src: std.builtin.SourceLocation, comptime field_name: []const u8, field: anytype, alignment: *dvui.Alignment) void {
+pub fn processWidget(src: std.builtin.SourceLocation, field_name: []const u8, field: anytype, alignment: *dvui.Alignment) void {
     switch (@typeInfo(@TypeOf(field.*))) {
         inline .int => dvui.se.intFieldWidget2(src, field_name, field, .{}, alignment),
         inline .float => dvui.se.floatFieldWidget2(src, field_name, field, .{}, alignment),
@@ -297,64 +297,32 @@ pub fn sliceFieldWidget2(
 
     //const Child = @typeInfo(@TypeOf(field_ptr.*)).pointer.child;
 
-    const ProvidedPointerTreatment = enum {
-        mutate_value_in_place_only,
-        display_only,
-    };
+    //const ProvidedPointerTreatment = enum {
+    //    mutate_value_in_place_only,
+    //    display_only,
+    //};
 
-    const treatment: ProvidedPointerTreatment = if (@typeInfo(@TypeOf(field_ptr.*)).pointer.is_const) .display_only else .mutate_value_in_place_only;
+    //    const treatment: ProvidedPointerTreatment = if (@typeInfo(@TypeOf(field_ptr.*)).pointer.is_const) .display_only else .mutate_value_in_place_only;
+    //
+    //    var removed_idx: ?usize = null;
+    //    var insert_before_idx: ?usize = null;
 
-    var removed_idx: ?usize = null;
-    var insert_before_idx: ?usize = null;
-
-    var reorder = dvui.reorder(@src(), .{
-        .min_size_content = .{ .w = 120 },
-        .background = true,
-        .border = dvui.Rect.all(1),
-        .padding = dvui.Rect.all(4),
-    });
-
-    var vbox = dvui.box(src, .vertical, .{ .expand = .both });
+    var vbox = dvui.box(src, .vertical, .{ .expand = .horizontal });
     dvui.label(@src(), "{s}", .{opt.label_override orelse field_name}, .{});
 
     for (field_ptr.*, 0..) |_, i| {
-        var reorderable = reorder.reorderable(@src(), .{}, .{
-            .id_extra = i,
-            .expand = .horizontal,
-        });
-        defer reorderable.deinit();
-
-        if (reorderable.removed()) {
-            removed_idx = i; // this entry is being dragged
-        } else if (reorderable.insertBefore()) {
-            insert_before_idx = i; // this entry was dropped onto
-        }
-
         var hbox = dvui.box(@src(), .horizontal, .{
-            .expand = .both,
+            .expand = .horizontal,
             .border = dvui.Rect.all(1),
             .background = true,
             .color_fill = .{ .name = .fill_window },
+            .id_extra = i,
         });
         defer hbox.deinit();
-
-        switch (treatment) {
-            .mutate_value_in_place_only => {
-                _ = dvui.ReorderWidget.draggable(@src(), .{ .reorderable = reorderable }, .{
-                    .expand = .vertical,
-                    .min_size_content = dvui.Size.all(22),
-                    .gravity_y = 0.5,
-                });
-            },
-            .display_only => {
-                //TODO
-            },
-        }
-
-        processWidget(@src(), field_name, &(field_ptr.*)[i], alignment);
+        var buf: [128]u8 = undefined;
+        const name = std.fmt.bufPrint(&buf, "{d}", .{i}) catch return;
+        processWidget(@src(), name, &(field_ptr.*)[i], alignment);
     }
 
     vbox.deinit();
-
-    reorder.deinit();
 }

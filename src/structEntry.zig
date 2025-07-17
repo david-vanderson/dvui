@@ -41,26 +41,15 @@ pub fn IntFieldOptions(comptime T: type) type {
     };
 }
 
-pub fn intFieldWidget2(src: std.builtin.SourceLocation, comptime field_name: []const u8, field_ptr: anytype, opts: IntFieldOptions(@TypeOf(field_ptr.*)), alignment: *dvui.Alignment) void {
-    var box = dvui.box(src, .vertical, .{});
-    defer box.deinit();
-    intFieldWidget(field_name, @TypeOf(field_ptr.*), field_ptr, opts, alignment);
-}
-
-pub fn intFieldWidget(
-    comptime name: []const u8,
-    comptime T: type,
-    result: *T,
-    opt: IntFieldOptions(T),
-    alignment: *dvui.Alignment,
-) void {
+pub fn intFieldWidget2(src: std.builtin.SourceLocation, field_name: []const u8, field_ptr: anytype, opt: IntFieldOptions(@TypeOf(field_ptr.*)), alignment: *dvui.Alignment) void {
     if (opt.disabled) return;
+    const T = @TypeOf(field_ptr.*);
     switch (opt.widget_type) {
         .number_entry => {
-            var box = dvui.box(@src(), .horizontal, .{});
+            var box = dvui.box(src, .horizontal, .{});
             defer box.deinit();
 
-            dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
+            dvui.label(@src(), "{s}", .{opt.label_override orelse field_name}, .{});
 
             var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
             defer hbox_aligned.deinit();
@@ -69,27 +58,27 @@ pub fn intFieldWidget(
             const maybe_num = dvui.textEntryNumber(@src(), T, .{
                 .min = opt.min,
                 .max = opt.max,
-                .value = result,
+                .value = field_ptr,
             }, opt.dvui_opts);
             if (maybe_num.value == .Valid) {
-                result.* = maybe_num.value.Valid;
+                field_ptr.* = maybe_num.value.Valid;
             }
-            dvui.label(@src(), "{}", .{result.*}, .{});
+            dvui.label(@src(), "{}", .{field_ptr.*}, .{});
         },
         .slider => {
-            var box = dvui.box(@src(), .horizontal, .{});
+            var box = dvui.box(src, .horizontal, .{});
             defer box.deinit();
 
-            dvui.label(@src(), "{s}", .{name}, .{});
+            dvui.label(@src(), "{s}", .{field_name}, .{});
 
-            var percent = intToNormalizedPercent(result.*, opt.min, opt.max);
+            var percent = intToNormalizedPercent(field_ptr.*, opt.min, opt.max);
             //TODO implement dvui_opts
             _ = dvui.slider(@src(), .horizontal, &percent, .{
                 .expand = .horizontal,
                 .min_size_content = .{ .w = 100, .h = 20 },
             });
-            result.* = normalizedPercentToInt(percent, T, opt.min, opt.max);
-            dvui.label(@src(), "{}", .{result.*}, .{});
+            field_ptr.* = normalizedPercentToInt(percent, T, opt.min, opt.max);
+            dvui.label(@src(), "{}", .{field_ptr.*}, .{});
         },
     }
 }
@@ -124,24 +113,15 @@ pub fn FloatFieldOptions(comptime T: type) type {
     };
 }
 
-pub fn floatFieldWidget2(src: std.builtin.SourceLocation, comptime field_name: []const u8, field_ptr: anytype, opts: FloatFieldOptions(@TypeOf(field_ptr.*)), alignment: *dvui.Alignment) void {
-    var box = dvui.box(src, .vertical, .{});
-    defer box.deinit();
-    floatFieldWidget(field_name, @TypeOf(field_ptr.*), field_ptr, opts, alignment);
-}
-
-pub fn floatFieldWidget(
-    comptime name: []const u8,
-    comptime T: type,
-    result: *T,
-    opt: FloatFieldOptions(T),
-    alignment: *dvui.Alignment,
-) void {
+pub fn floatFieldWidget2(src: std.builtin.SourceLocation, field_name: []const u8, field_ptr: anytype, opt: FloatFieldOptions(@TypeOf(field_ptr.*)), alignment: *dvui.Alignment) void {
     if (opt.disabled) return;
 
-    var box = dvui.box(@src(), .horizontal, .{});
+    const T = @TypeOf(field_ptr.*);
+
+    var box = dvui.box(src, .vertical, .{});
     defer box.deinit();
-    dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
+
+    dvui.label(@src(), "{s}", .{opt.label_override orelse field_name}, .{});
 
     var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
     defer hbox_aligned.deinit();
@@ -149,9 +129,9 @@ pub fn floatFieldWidget(
 
     const maybe_num = dvui.textEntryNumber(@src(), T, .{ .min = opt.min, .max = opt.max }, opt.dvui_opts);
     if (maybe_num.value == .Valid) {
-        result.* = maybe_num.value.Valid;
+        field_ptr.* = maybe_num.value.Valid;
     }
-    dvui.label(@src(), "{d}", .{result.*}, .{});
+    dvui.label(@src(), "{d}", .{field_ptr.*}, .{});
 }
 
 pub const EnumFieldOptions = struct {
@@ -272,29 +252,20 @@ pub const TextFieldOptions = struct {
 };
 
 // TODO: Handle allocations if required.
-pub fn textFieldWidget2(src: std.builtin.SourceLocation, comptime field_name: []const u8, field_ptr: anytype, comptime opts: TextFieldOptions, alignment: *dvui.Alignment) void {
-    var box = dvui.box(src, .vertical, .{});
-    defer box.deinit();
-    // TODO: Why constCast?
-    textFieldWidget(field_name, @TypeOf(field_ptr), @constCast(&field_ptr), opts, alignment);
-}
-
-// TODO: Get rid of the allocation stuff.
-// TODO: Why 2 levels of pointer here?
-pub fn textFieldWidget(
-    comptime name: []const u8,
-    comptime T: type,
-    result: *T,
-    opt: TextFieldOptions,
+pub fn textFieldWidget2(
+    src: std.builtin.SourceLocation,
+    field_name: []const u8,
+    field_ptr: anytype,
+    comptime opt: TextFieldOptions,
     alignment: *dvui.Alignment,
 ) void {
     if (opt.disabled) return;
-
+    const T = @TypeOf(field_ptr.*);
     //TODO respect alloc setting
-    var box = dvui.box(@src(), .horizontal, .{});
+    var box = dvui.box(src, .horizontal, .{});
     defer box.deinit();
 
-    dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
+    dvui.label(@src(), "{s}", .{opt.label_override orelse field_name}, .{});
 
     const ProvidedPointerTreatment = enum {
         mutate_value_and_realloc,
@@ -318,11 +289,11 @@ pub fn textFieldWidget(
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
 
-            const text_box = dvui.textEntry(@src(), .{ .text = .{ .buffer = result.*.* } }, opt.dvui_opts);
+            const text_box = dvui.textEntry(@src(), .{ .text = .{ .buffer = field_ptr.* } }, opt.dvui_opts);
             defer text_box.deinit();
         },
         .display_only => {
-            dvui.label(@src(), " : {s}", .{result.*.*}, .{});
+            dvui.label(@src(), " : {s}", .{field_ptr.*}, .{});
         },
         else => @compileError("Nope"),
     }
@@ -997,8 +968,8 @@ pub fn fieldWidget(
     alignment: *dvui.Alignment,
 ) void {
     switch (@typeInfo(T)) {
-        .int => intFieldWidget(name, T, result, options, alignment),
-        .float => floatFieldWidget(name, T, result, options, alignment),
+        //.int => intFieldWidget(name, T, result, options, alignment),
+        //.float => floatFieldWidget(name, T, result, options, alignment),
         .bool => boolFieldWidget(name, result, options, alignment),
         .@"enum" => enumFieldWidget(name, T, result, options, alignment),
         // .pointer => pointerFieldWidget(name, T, exclude, result, options, alloc, allocator, alignment),
