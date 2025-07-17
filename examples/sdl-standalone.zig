@@ -107,6 +107,8 @@ const TestUnion = union(enum) {
     c2: C2,
 };
 
+var c1: C1 = .{};
+
 const TestStruct = struct {
     int1: i32 = 42,
     oint1: ?i32 = 43,
@@ -115,8 +117,10 @@ const TestStruct = struct {
     union4: TestUnion = .{ .c2 = .{ .value2 = 44 } },
     slice5: []const u8 = "ABCDEF",
     slice7: []u8 = &test_buf,
-    arr_ptr9: *[20]u8 = &test_buf,
+    //arr_ptr9: *[20]u8 = &test_buf,
     array8: [13]u8 = @splat('y'),
+    slice_opt10: ?[]u8 = &test_buf,
+    struct_ptr_11: *C1 = &c1,
 };
 
 var test_buf: [20]u8 = @splat('z');
@@ -125,7 +129,7 @@ var opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5) };
 var first_change: bool = true;
 // both dvui and SDL drawing
 fn gui_frame() void {
-    dvui.currentWindow().debug_window_show = true;
+    //dvui.currentWindow().debug_window_show = true;
     {
         var m = dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
         defer m.deinit();
@@ -153,24 +157,45 @@ fn gui_frame() void {
         defer scroll.deinit();
         var al = dvui.Alignment.init();
         defer al.deinit();
-        dvui.se.intFieldWidget2(@src(), "int1", &testStruct.int1, .{}, &al);
-        dvui.se.intFieldWidget2(@src(), "uint2", &testStruct.uint2, .{}, &al);
-        var buf = gpa.alloc(u8, 50) catch return;
-        buf = dvui.se.textFieldWidgetBuf(@src(), "slice5", &testStruct.slice5, .{}, buf, &al);
-        if (!first_change) {
-            gpa.free(buf);
+        sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);
+        //dvui.se.intFieldWidget2(@src(), "int1", &testStruct.int1, .{}, &al);
+        //dvui.se.intFieldWidget2(@src(), "uint2", &testStruct.uint2, .{}, &al);
+        //var buf = gpa.alloc(u8, 50) catch return;
+        //buf = dvui.se.textFieldWidgetBuf(@src(), "slice5", &testStruct.slice5, .{}, buf, &al);
+        //if (!first_change) {
+        //    gpa.free(buf);
+        //} else {
+        //    first_change = false;
+        //}
+        processWidget(@src(), "slice7", &testStruct.slice7, &al);
+        if (dvui.se.optionalFieldWidget2(@src(), "slice_opt10", &testStruct.slice_opt10, .{}, &al)) |optional_box| {
+            defer optional_box.deinit();
+            testStruct.slice_opt10 = testStruct.slice7;
+            processWidget(@src(), "", &testStruct.slice_opt10.?, &al);
         } else {
-            first_change = false;
+            testStruct.slice_opt10 = null;
         }
-        std.debug.print("slice 5 = {s}\n", .{testStruct.slice5});
-        _ = dvui.separator(@src(), .{ .expand = .horizontal });
-        wholeStruct(@src(), &testStruct, 0);
-        _ = dvui.separator(@src(), .{ .expand = .horizontal });
+
+        //std.debug.print("slice 5 = {s}\n", .{testStruct.slice5});
+        //_ = dvui.separator(@src(), .{ .expand = .horizontal });
+        //wholeStruct(@src(), &testStruct, 0);
+        //_ = dvui.separator(@src(), .{ .expand = .horizontal });
         wholeStruct(@src(), &testStruct, 1);
-        _ = dvui.separator(@src(), .{ .expand = .horizontal });
-        wholeStruct(@src(), &opts, 1);
-        _ = dvui.separator(@src(), .{ .expand = .horizontal });
+        //_ = dvui.separator(@src(), .{ .expand = .horizontal });
+        //wholeStruct(@src(), &opts, 1);
+        //_ = dvui.separator(@src(), .{ .expand = .horizontal });
     }
+}
+
+pub fn defaultValue(T: type) ?T {
+    return switch (@typeInfo(T)) {
+        inline .bool => false,
+        inline .int => 0,
+        inline .float => 0.0,
+        inline .@"struct" => return .{}, // If you see an error here, it is because your struct requires initialization.
+        inline .@"enum" => |e| e.fields[0],
+        inline else => null,
+    };
 }
 
 pub fn wholeStruct(src: std.builtin.SourceLocation, container: anytype, depth: usize) void {
@@ -184,25 +209,30 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, container: anytype, depth: u
             .int, .float, .@"enum" => processWidget(@src(), field.name, &@field(container, field.name), &al),
             inline .@"struct" => if (depth > 0) wholeStruct(@src(), &@field(container, field.name), depth - 1),
             inline .optional => |opt| {
-                if (@field(container, field.name) == null) {
-                    dvui.label(@src(), "{s} is null", .{field.name}, .{ .id_extra = i });
-                } else {
-                    dvui.label(@src(), "{s}", .{field.name}, .{ .id_extra = i });
-                    //@compileLog(std.fmt.comptimePrint("child = {s} : {}", .{ @typeName(opt.child), @typeInfo(opt.child) }));
-                    switch (@typeInfo(opt.child)) {
-                        inline .int, .float, .@"enum" => processWidget(@src(), field.name, &@field(container, field.name).?, &al),
-                        inline .@"struct" => if (depth > 0) wholeStruct(@src(), &@field(container, field.name).?, depth - 1),
-                        else => {},
+                if (dvui.se.optionalFieldWidget2(@src(), field.name, &@field(container, field.name), .{}, &al)) |hbox| {
+                    defer hbox.deinit();
+                    if (@field(container, field.name) == null) {
+                        @field(container, field.name) = defaultValue(opt.child); // If there is no default value, it will remain null.
                     }
+                    if (@field(container, field.name) != null) {
+                        processWidget(@src(), "", &@field(container, field.name).?, &al);
+                    }
+                } else {
+                    @field(container, field.name) = null;
+                    dvui.label(@src(), "{s} is null", .{field.name}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
                 }
             },
             inline .pointer => |ptr| {
                 if (ptr.size == .slice and ptr.child == u8) {
-                    dvui.se.textFieldWidget2(src, field.name, @field(container, field.name), .{}, &al);
+                    processWidget(src, field.name, &@field(container, field.name), &al);
                 } else if (ptr.size == .slice) {
                     //sliceFieldWidget(name, T, exclude, result, opt, alloc, allocator, alignment);
                 } else if (ptr.size == .one) {
-                    //singlePointerFieldWidget(name, T, exclude, result, opt, alloc, allocator, alignment);
+                    dvui.label(@src(), "{s} is a single item pointer", .{field.name}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
+                    switch (@typeInfo(ptr.child)) {
+                        .@"struct" => wholeStruct(@src(), @field(container, field.name), depth - 1),
+                        else => processWidget(src, field.name, @field(container, field.name), &al),
+                    }
                 } else if (ptr.size == .c or ptr.size == .many) {
                     @compileError("structEntry does not support *C or Many pointers");
                 } else {
@@ -223,6 +253,108 @@ pub fn processWidget(src: std.builtin.SourceLocation, comptime field_name: []con
         inline .int => dvui.se.intFieldWidget2(src, field_name, field, .{}, alignment),
         inline .float => dvui.se.floatFieldWidget2(src, field_name, field, .{}, alignment),
         inline .@"enum" => dvui.se.enumFieldWidget2(src, field_name, field, .{}, alignment),
-        else => |ti| @compileError(std.fmt.comptimePrint("Type {s} for field {s} not yet supported\n", .{ ti.type, field_name })),
+        inline .pointer => |ptr| {
+            if (ptr.size == .slice and ptr.child == u8) {
+                dvui.se.textFieldWidget2(src, field_name, field, .{}, alignment);
+            }
+        },
+        else => |ti| @compileError(std.fmt.comptimePrint("Type {} for field {s} not yet supported\n", .{ ti, field_name })),
     }
+}
+
+//const SliceFieldWidget = struct {
+//    action: enum { none, add, remove },
+//    insert_before_idx: ?usize,
+//    reorder: *dvui.ReorderWidget,
+//    vbox: *dvui.BoxWidget,
+//
+//    pub fn deinit(self: SliceFieldWidget) void {
+//        // show a final slot that allows dropping an entry at the end of the list
+//        if (self.reorder.finalSlot()) {
+//            self.insert_before_idx = field_ptr.*.len; // entry was dropped into the final slot
+//        }
+//
+//        // returns true if the slice was reordered
+//        _ = dvui.ReorderWidget.reorderSlice(Child, field_ptr.*, removed_idx, insert_before_idx);
+//
+//        self.vbox.deinit();
+//        self.reorder.deinit();
+//    }
+//};
+//
+
+// TODO: So I think this should just display the data vertically. I don't really get what the "re-ordering does".
+
+// Re-ordering / add and remove are advanced options? Just default to displaying / edit in place?
+pub fn sliceFieldWidget2(
+    comptime src: std.builtin.SourceLocation,
+    comptime field_name: []const u8,
+    field_ptr: anytype,
+    opt: dvui.se.SliceFieldOptions,
+    alignment: *dvui.Alignment,
+) void {
+    if (@typeInfo(@TypeOf(field_ptr.*)).pointer.size != .slice) @compileError("must be called with slice");
+
+    //const Child = @typeInfo(@TypeOf(field_ptr.*)).pointer.child;
+
+    const ProvidedPointerTreatment = enum {
+        mutate_value_in_place_only,
+        display_only,
+    };
+
+    const treatment: ProvidedPointerTreatment = if (@typeInfo(@TypeOf(field_ptr.*)).pointer.is_const) .display_only else .mutate_value_in_place_only;
+
+    var removed_idx: ?usize = null;
+    var insert_before_idx: ?usize = null;
+
+    var reorder = dvui.reorder(@src(), .{
+        .min_size_content = .{ .w = 120 },
+        .background = true,
+        .border = dvui.Rect.all(1),
+        .padding = dvui.Rect.all(4),
+    });
+
+    var vbox = dvui.box(src, .vertical, .{ .expand = .both });
+    dvui.label(@src(), "{s}", .{opt.label_override orelse field_name}, .{});
+
+    for (field_ptr.*, 0..) |_, i| {
+        var reorderable = reorder.reorderable(@src(), .{}, .{
+            .id_extra = i,
+            .expand = .horizontal,
+        });
+        defer reorderable.deinit();
+
+        if (reorderable.removed()) {
+            removed_idx = i; // this entry is being dragged
+        } else if (reorderable.insertBefore()) {
+            insert_before_idx = i; // this entry was dropped onto
+        }
+
+        var hbox = dvui.box(@src(), .horizontal, .{
+            .expand = .both,
+            .border = dvui.Rect.all(1),
+            .background = true,
+            .color_fill = .{ .name = .fill_window },
+        });
+        defer hbox.deinit();
+
+        switch (treatment) {
+            .mutate_value_in_place_only => {
+                _ = dvui.ReorderWidget.draggable(@src(), .{ .reorderable = reorderable }, .{
+                    .expand = .vertical,
+                    .min_size_content = dvui.Size.all(22),
+                    .gravity_y = 0.5,
+                });
+            },
+            .display_only => {
+                //TODO
+            },
+        }
+
+        processWidget(@src(), field_name, &(field_ptr.*)[i], alignment);
+    }
+
+    vbox.deinit();
+
+    reorder.deinit();
 }

@@ -280,6 +280,7 @@ pub fn textFieldWidget2(src: std.builtin.SourceLocation, comptime field_name: []
 }
 
 // TODO: Get rid of the allocation stuff.
+// TODO: Why 2 levels of pointer here?
 pub fn textFieldWidget(
     comptime name: []const u8,
     comptime T: type,
@@ -305,6 +306,8 @@ pub fn textFieldWidget(
     comptime var treatment: ProvidedPointerTreatment = .display_only;
     if (@typeInfo(T).pointer.is_const) {
         treatment = .display_only;
+    } else if (@typeInfo(T).pointer.child == []const u8) {
+        treatment = .display_only;
     } else {
         treatment = .mutate_value_in_place_only;
     }
@@ -315,11 +318,11 @@ pub fn textFieldWidget(
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
 
-            const text_box = dvui.textEntry(@src(), .{ .text = .{ .buffer = result.* } }, opt.dvui_opts);
+            const text_box = dvui.textEntry(@src(), .{ .text = .{ .buffer = result.*.* } }, opt.dvui_opts);
             defer text_box.deinit();
         },
         .display_only => {
-            dvui.label(@src(), " : {s}", .{result.*}, .{});
+            dvui.label(@src(), " : {s}", .{result.*.*}, .{});
         },
         else => @compileError("Nope"),
     }
@@ -481,33 +484,46 @@ pub fn textFieldWidgetBuf(
 //}
 //
 ////=======Optional Field Widget and Options=======
-pub fn OptionalFieldOptions(comptime T: type, comptime exclude: anytype) type {
-    return struct {
-        child: FieldOptions(@typeInfo(T).optional.child, exclude) = .{},
-        disabled: bool = false,
-        label_override: ?[]const u8 = null,
-    };
-}
+pub const OptionalFieldOptions = struct {
+    disabled: bool = false,
+    label_override: ?[]const u8 = null,
+};
 
 pub fn optionalFieldWidget2(
     comptime src: std.builtin.SourceLocation,
-    container: anytype,
     comptime field_name: []const u8,
-    comptime opts: OptionalFieldOptions(@TypeOf(@field(container, field_name)), &.{.dataout}),
+    field_ptr: anytype,
+    comptime opts: OptionalFieldOptions,
     alignment: *dvui.Alignment,
-) void {
-    var box = dvui.box(src, .vertical, .{});
-    defer box.deinit();
-    optionalFieldWidget(
-        field_name,
-        @TypeOf(@field(container, field_name)),
-        &.{.data_out},
-        &@field(container, field_name),
-        opts,
-        false,
-        null,
-        alignment,
-    );
+) ?*dvui.BoxWidget {
+    _ = alignment;
+    const box = dvui.box(src, .vertical, .{});
+
+    var checkbox_state: bool = field_ptr.* != null;
+    {
+        var hbox = dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+        dvui.label(@src(), "{s}?", .{opts.label_override orelse field_name}, .{});
+        _ = dvui.checkbox(@src(), &checkbox_state, null, .{});
+    }
+
+    if (checkbox_state) {
+        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .both });
+        defer hbox.deinit();
+        var line = dvui.box(@src(), .vertical, .{
+            .border = border,
+            .expand = .vertical,
+            .background = true,
+            .margin = .{ .w = 10, .x = 10 },
+        });
+        line.deinit();
+    }
+    if (checkbox_state) {
+        return box;
+    } else {
+        box.deinit();
+        return null;
+    }
 }
 
 pub fn optionalFieldWidget(
@@ -552,118 +568,118 @@ pub fn optionalFieldWidget(
     }
 }
 
-pub fn PointerFieldOptions(comptime T: type, exclude: anytype) type {
-    const info = @typeInfo(T).pointer;
-
-    if (info.size == .slice and info.child == u8) {
-        return TextFieldOptions;
-    } else if (info.size == .slice) {
-        return SliceFieldOptions(T, exclude);
-    } else if (info.size == .one) {
-        return SinglePointerFieldOptions(T, exclude);
-    } else if (info.size == .c or info.size == .many) {
-        @compileError("Many item pointers disallowed");
-    }
-}
+//pub fn PointerFieldOptions(comptime T: type, exclude: anytype) type {
+//    const info = @typeInfo(T).pointer;
+//
+//    if (info.size == .slice and info.child == u8) {
+//        return TextFieldOptions;
+//    } else if (info.size == .slice) {
+//        return SliceFieldOptions(T, exclude);
+//    } else if (info.size == .one) {
+//        return SinglePointerFieldOptions(T, exclude);
+//    } else if (info.size == .c or info.size == .many) {
+//        @compileError("Many item pointers disallowed");
+//    }
+//}
 
 // TODO: This needs to change somehow.
-pub fn pointerFieldWidget2(src: std.builtin.SourceLocation, container: anytype, comptime field_name: []const u8, comptime opts: FloatFieldOptions(@TypeOf(@field(container, field_name))), alignment: *dvui.Alignment) void {
-    var box = dvui.box(src, .vertical, .{});
-    defer box.deinit();
-    pointerFieldWidget(field_name, @TypeOf(@field(container, field_name)), &@field(container, field_name), opts, false, null, alignment);
-}
-
-pub fn pointerFieldWidget(
-    comptime name: []const u8,
-    comptime T: type,
-    comptime exclude: anytype,
-    result: *T,
-    opt: PointerFieldOptions(T, exclude),
-    comptime alloc: bool,
-    allocator: ?std.mem.Allocator,
-    alignment: *dvui.Alignment,
-) void {
-    const info = @typeInfo(T).pointer;
-
-    if (info.size == .slice and info.child == u8) {
-        textFieldWidget(name, T, result, opt, alloc, allocator, alignment);
-    } else if (info.size == .slice) {
-        sliceFieldWidget(name, T, exclude, result, opt, alloc, allocator, alignment);
-    } else if (info.size == .one) {
-        singlePointerFieldWidget(name, T, exclude, result, opt, alloc, allocator, alignment);
-    } else if (info.size == .c or info.size == .many) {
-        @compileError("structEntry does not support *C or Many pointers");
-    }
-}
+//pub fn pointerFieldWidget2(src: std.builtin.SourceLocation, container: anytype, comptime field_name: []const u8, comptime opts: FloatFieldOptions(@TypeOf(@field(container, field_name))), alignment: *dvui.Alignment) void {
+//    var box = dvui.box(src, .vertical, .{});
+//    defer box.deinit();
+//    pointerFieldWidget(field_name, @TypeOf(@field(container, field_name)), &@field(container, field_name), opts, false, null, alignment);
+//}
+//
+//pub fn pointerFieldWidget(
+//    comptime name: []const u8,
+//    comptime T: type,
+//    comptime exclude: anytype,
+//    result: *T,
+//    opt: PointerFieldOptions(T, exclude),
+//    comptime alloc: bool,
+//    allocator: ?std.mem.Allocator,
+//    alignment: *dvui.Alignment,
+//) void {
+//    const info = @typeInfo(T).pointer;
+//
+//    if (info.size == .slice and info.child == u8) {
+//        textFieldWidget(name, T, result, opt, alloc, allocator, alignment);
+//    } else if (info.size == .slice) {
+//        sliceFieldWidget(name, T, exclude, result, opt, alloc, allocator, alignment);
+//    } else if (info.size == .one) {
+//        singlePointerFieldWidget(name, T, exclude, result, opt, alloc, allocator, alignment);
+//    } else if (info.size == .c or info.size == .many) {
+//        @compileError("structEntry does not support *C or Many pointers");
+//    }
+//}
 
 //=======Single Item pointer and options=======
-pub fn SinglePointerFieldOptions(comptime T: type, exclude: anytype) type {
-    return struct {
-        child: FieldOptions(@typeInfo(T).pointer.child, exclude) = .{},
-        disabled: bool = false,
-        //label_override: ?[]const u8 = null,
-    };
-}
-
-pub fn singlePointerFieldWidget2(src: std.builtin.SourceLocation, container: anytype, comptime field_name: []const u8, comptime opts: FloatFieldOptions(@TypeOf(@field(container, field_name))), alignment: *dvui.Alignment) void {
-    var box = dvui.box(src, .vertical, .{});
-    defer box.deinit();
-    singlePointerFieldWidget(field_name, @TypeOf(@field(container, field_name)), &@field(container, field_name), opts, false, null, alignment);
-}
-
-pub fn singlePointerFieldWidget(
-    comptime name: []const u8,
-    comptime T: type,
-    comptime exclude: anytype,
-    result: *T,
-    opt: SinglePointerFieldOptions(T, exclude),
-    comptime alloc: bool,
-    allocator: ?std.mem.Allocator,
-    alignment: *dvui.Alignment,
-) void {
-    if (opt.disabled) return;
-    var box = dvui.box(@src(), .horizontal, .{});
-    defer box.deinit();
-
-    const Child = @typeInfo(T).pointer.child;
-
-    const ProvidedPointerTreatment = enum {
-        mutate_value_in_place,
-        display_only,
-        copy_value_and_alloc_new,
-    };
-
-    comptime var treatment: ProvidedPointerTreatment = .display_only;
-    comptime if (alloc == false) {
-        if (@typeInfo(T).pointer.is_const) {
-            treatment = .display_only;
-        } else {
-            treatment = .mutate_value_in_place;
-        }
-    } else if (alloc == true) {
-        if (@typeInfo(T).pointer.is_const) {
-            treatment = .copy_value_and_alloc_new;
-        } else {
-            treatment = .mutate_value_in_place;
-        }
-    };
-
-    //dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
-    switch (treatment) {
-        .display_only => {
-            dvui.label(@src(), ": {any}", .{result.*.*}, .{});
-        },
-        .mutate_value_in_place => {
-            fieldWidget(name, Child, exclude, result.*, opt.child, alloc, allocator, alignment);
-        },
-        .copy_value_and_alloc_new => {
-            //TODO
-            dvui.label(@src(), ": TODO {any}", .{result.*.*}, .{});
-        },
-    }
-}
-
-//=========Array Field Widget and Options==========
+//pub fn SinglePointerFieldOptions(comptime T: type, exclude: anytype) type {
+//    return struct {
+//        child: FieldOptions(@typeInfo(T).pointer.child, exclude) = .{},
+//        disabled: bool = false,
+//        //label_override: ?[]const u8 = null,
+//    };
+//}
+//
+//pub fn singlePointerFieldWidget2(src: std.builtin.SourceLocation, container: anytype, comptime field_name: []const u8, comptime opts: FloatFieldOptions(@TypeOf(@field(container, field_name))), alignment: *dvui.Alignment) void {
+//    var box = dvui.box(src, .vertical, .{});
+//    defer box.deinit();
+//    singlePointerFieldWidget(field_name, @TypeOf(@field(container, field_name)), &@field(container, field_name), opts, false, null, alignment);
+//}
+//
+//pub fn singlePointerFieldWidget(
+//    comptime name: []const u8,
+//    comptime T: type,
+//    comptime exclude: anytype,
+//    result: *T,
+//    opt: SinglePointerFieldOptions(T, exclude),
+//    comptime alloc: bool,
+//    allocator: ?std.mem.Allocator,
+//    alignment: *dvui.Alignment,
+//) void {
+//    if (opt.disabled) return;
+//    var box = dvui.box(@src(), .horizontal, .{});
+//    defer box.deinit();
+//
+//    const Child = @typeInfo(T).pointer.child;
+//
+//    const ProvidedPointerTreatment = enum {
+//        mutate_value_in_place,
+//        display_only,
+//        copy_value_and_alloc_new,
+//    };
+//
+//    comptime var treatment: ProvidedPointerTreatment = .display_only;
+//    comptime if (alloc == false) {
+//        if (@typeInfo(T).pointer.is_const) {
+//            treatment = .display_only;
+//        } else {
+//            treatment = .mutate_value_in_place;
+//        }
+//    } else if (alloc == true) {
+//        if (@typeInfo(T).pointer.is_const) {
+//            treatment = .copy_value_and_alloc_new;
+//        } else {
+//            treatment = .mutate_value_in_place;
+//        }
+//    };
+//
+//    //dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
+//    switch (treatment) {
+//        .display_only => {
+//            dvui.label(@src(), ": {any}", .{result.*.*}, .{});
+//        },
+//        .mutate_value_in_place => {
+//            fieldWidget(name, Child, exclude, result.*, opt.child, alloc, allocator, alignment);
+//        },
+//        .copy_value_and_alloc_new => {
+//            //TODO
+//            dvui.label(@src(), ": TODO {any}", .{result.*.*}, .{});
+//        },
+//    }
+//}
+//
+////=========Array Field Widget and Options==========
 
 pub fn ArrayFieldOptions(comptime T: type, exclude: anytype) type {
     return struct {
@@ -700,13 +716,10 @@ pub fn arrayFieldWidget(
 }
 
 //=======Single Item pointer and options=======
-pub fn SliceFieldOptions(comptime T: type, exclude: anytype) type {
-    return struct {
-        child: FieldOptions(@typeInfo(T).pointer.child, exclude) = .{},
-        label_override: ?[]const u8 = null,
-        disabled: bool = false,
-    };
-}
+pub const SliceFieldOptions = struct {
+    label_override: ?[]const u8 = null,
+    disabled: bool = false,
+};
 
 pub fn sliceFieldWidget2(src: std.builtin.SourceLocation, container: anytype, comptime field_name: []const u8, comptime opts: FloatFieldOptions(@TypeOf(@field(container, field_name))), alignment: *dvui.Alignment) void {
     var box = dvui.box(src, .vertical, .{});
@@ -943,7 +956,7 @@ pub fn FieldOptions(comptime T: type, exclude: anytype) type {
         //        .@"struct" => StructFieldOptions(T, exclude),
         //        .@"union" => UnionFieldOptions(T, exclude),
         .optional => OptionalFieldOptions(T, exclude),
-        .pointer => PointerFieldOptions(T, exclude),
+        //.pointer => PointerFieldOptions(T, exclude),
         .array => ArrayFieldOptions(T, exclude),
         else => @compileError("Invalid Type: " ++ @typeName(T)),
     };
@@ -988,7 +1001,7 @@ pub fn fieldWidget(
         .float => floatFieldWidget(name, T, result, options, alignment),
         .bool => boolFieldWidget(name, result, options, alignment),
         .@"enum" => enumFieldWidget(name, T, result, options, alignment),
-        .pointer => pointerFieldWidget(name, T, exclude, result, options, alloc, allocator, alignment),
+        // .pointer => pointerFieldWidget(name, T, exclude, result, options, alloc, allocator, alignment),
         .optional => optionalFieldWidget(name, T, result, options, alloc, allocator, alignment),
         //        .@"union" => unionFieldWidget(name, T, exclude, result, options, alloc, allocator, alignment),
         //        .@"struct" => structFieldWidget(name, T, exclude, result, options, alloc, allocator),
