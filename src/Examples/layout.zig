@@ -106,18 +106,14 @@ pub fn layout() void {
 
             if (Static.img) {
                 dvui.label(@src(), "UVs", .{}, .{});
-                if (dvui.sliderEntry(@src(), "u0: {d:0.2}", .{ .min = 0, .max = 1, .value = &Static.uv.x }, .{})) {
-                    Static.uv.w = @max(Static.uv.w, Static.uv.x);
+                if (dvui.sliderEntry(@src(), "u x: {d:0.2}", .{ .min = 0, .max = 1, .value = &Static.uv.x }, .{})) {
+                    Static.uv.w = std.math.clamp(Static.uv.w, 0.0, 1.0 - Static.uv.x);
                 }
-                if (dvui.sliderEntry(@src(), "u1: {d:0.2}", .{ .min = 0, .max = 1, .value = &Static.uv.w }, .{})) {
-                    Static.uv.x = @min(Static.uv.x, Static.uv.w);
+                _ = dvui.sliderEntry(@src(), "u w: {d:0.2}", .{ .min = 0, .max = 1.0 - Static.uv.x, .value = &Static.uv.w }, .{});
+                if (dvui.sliderEntry(@src(), "v y: {d:0.2}", .{ .min = 0, .max = 1, .value = &Static.uv.y }, .{})) {
+                    Static.uv.h = std.math.clamp(Static.uv.h, 0.0, 1.0 - Static.uv.y);
                 }
-                if (dvui.sliderEntry(@src(), "v0: {d:0.2}", .{ .min = 0, .max = 1, .value = &Static.uv.y }, .{})) {
-                    Static.uv.h = @max(Static.uv.h, Static.uv.y);
-                }
-                if (dvui.sliderEntry(@src(), "v1: {d:0.2}", .{ .min = 0, .max = 1, .value = &Static.uv.h }, .{})) {
-                    Static.uv.y = @min(Static.uv.y, Static.uv.h);
-                }
+                _ = dvui.sliderEntry(@src(), "v h: {d:0.2}", .{ .min = 0, .max = 1.0 - Static.uv.y, .value = &Static.uv.h }, .{});
             }
         }
 
