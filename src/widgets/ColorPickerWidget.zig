@@ -74,7 +74,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
     if (texture) |tex| {
         dvui.renderTexture(tex, rs, .{
             .corner_radius = options.corner_radiusGet(),
-            .uv = .{ .x = 0.25, .y = 0.25, .w = 0.75, .h = 0.75 },
+            .uv = .{ .x = 0.25, .y = 0.25, .w = 0.5, .h = 0.5 },
         }) catch |err| {
             dvui.logError(@src(), err, "Could not render value saturation texture", .{});
         };
