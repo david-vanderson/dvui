@@ -193,52 +193,43 @@ pub const BoolFieldOptions = struct {
     label_override: ?[]const u8 = null,
 };
 
-pub fn boolFieldWidget2(src: std.builtin.SourceLocation, container: anytype, comptime field_name: []const u8, comptime opts: FloatFieldOptions(@TypeOf(@field(container, field_name))), alignment: *dvui.Alignment) void {
-    var box = dvui.box(src, .vertical, .{});
-    defer box.deinit();
-    boolFieldWidget(field_name, &@field(container, field_name), opts, alignment);
-}
-
-fn boolFieldWidget(
-    comptime name: []const u8,
-    result: *bool,
-    opt: BoolFieldOptions,
+pub fn boolFieldWidget2(
+    src: std.builtin.SourceLocation,
+    field_name: []const u8,
+    field_ptr: anytype,
+    comptime opt: BoolFieldOptions,
     alignment: *dvui.Alignment,
 ) void {
     if (opt.disabled) return;
-    var box = dvui.box(@src(), .horizontal, .{});
+    var box = dvui.box(src, .horizontal, .{});
     defer box.deinit();
 
     //TODO implement dvui_opts for other types
     switch (opt.widget_type) {
         .checkbox => {
-            dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
+            dvui.label(@src(), "{s}", .{opt.label_override orelse field_name}, .{});
 
             var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
 
-            _ = dvui.checkbox(@src(), result, "", opt.dvui_opts);
+            _ = dvui.checkbox(@src(), field_ptr, "", opt.dvui_opts);
         },
         .dropdown => {
             const entries = .{ "false", "true" };
-            var choice: usize = if (result.* == false) 0 else 1;
-            dvui.labelNoFmt(@src(), opt.label_override orelse name, .{}, .{});
+            var choice: usize = if (field_ptr.* == false) 0 else 1;
+            dvui.labelNoFmt(@src(), opt.label_override orelse field_name, .{}, .{});
             _ = dvui.dropdown(@src(), &entries, &choice, .{});
-            result.* = if (choice == 0) false else true;
+            field_ptr.* = if (choice == 0) false else true;
         },
         .toggle => {
-            switch (result.*) {
-                true => {
-                    if (dvui.button(@src(), name ++ " enabled", .{}, .{ .border = border, .background = true })) {
-                        result.* = !result.*;
-                    }
-                },
-                false => {
-                    if (dvui.button(@src(), name ++ " disabled", .{}, .{ .border = border, .background = true })) {
-                        result.* = !result.*;
-                    }
-                },
+            const button_label = std.fmt.allocPrint(
+                dvui.currentWindow().arena(),
+                "{s} {s}",
+                .{ field_name, if (field_ptr.*) "enabled" else "disabled" },
+            ) catch "";
+            if (dvui.button(@src(), button_label, .{}, .{ .border = border, .background = true })) {
+                field_ptr.* = !field_ptr.*;
             }
         },
     }
@@ -970,7 +961,7 @@ pub fn fieldWidget(
     switch (@typeInfo(T)) {
         //.int => intFieldWidget(name, T, result, options, alignment),
         //.float => floatFieldWidget(name, T, result, options, alignment),
-        .bool => boolFieldWidget(name, result, options, alignment),
+        //.bool => boolFieldWidget(name, result, options, alignment),
         .@"enum" => enumFieldWidget(name, T, result, options, alignment),
         // .pointer => pointerFieldWidget(name, T, exclude, result, options, alloc, allocator, alignment),
         .optional => optionalFieldWidget(name, T, result, options, alloc, allocator, alignment),

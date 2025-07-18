@@ -123,10 +123,47 @@ const TestStruct = struct {
     struct_ptr_11: *C1 = &c1,
 };
 
+// All possible runtime basic types.
+const BasicTypes = struct {
+    var static_int: usize = 44;
+    i8: i8 = 1,
+    u8: u8 = 2,
+    i16: i16 = 3,
+    u16: u16 = 4,
+    i32: i32 = 5,
+    u32: u32 = 6,
+    i64: i64 = 7,
+    u64: u64 = 8,
+    i128: i128 = 9,
+    u128: u128 = 10,
+    isize: isize = 11,
+    usize: usize = 12,
+    c_char: c_char = 'b',
+    c_short: c_short = 13,
+    c_ushort: c_ushort = 14,
+    c_int: c_int = 15,
+    c_uint: c_uint = 16,
+    c_long: c_long = 17,
+    c_ulong: c_ulong = 18,
+    c_longlong: c_longlong = 19,
+    c_ulonglong: c_ulonglong = 20,
+    f16: f16 = 1.1,
+    f32: f32 = 2.2,
+    f64: f64 = 3.3,
+    f80: f80 = 4.4,
+    f128: f128 = 5.5,
+    bool: bool = true,
+    void: void = {}, // The only possible value for `void`
+    anyerror: anyerror = error.DefaultError, // Initialized to a specific error
+};
+
 var test_buf: [20]u8 = @splat('z');
 var testStruct: TestStruct = .{};
 var opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5) };
 var first_change: bool = true;
+
+var basic_types: BasicTypes = .{};
+
 // both dvui and SDL drawing
 fn gui_frame() void {
     //dvui.currentWindow().debug_window_show = true;
@@ -157,7 +194,10 @@ fn gui_frame() void {
         defer scroll.deinit();
         var al = dvui.Alignment.init();
         defer al.deinit();
-        sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);
+
+        wholeStruct(@src(), &basic_types, 0);
+
+        //sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);
         //dvui.se.intFieldWidget2(@src(), "int1", &testStruct.int1, .{}, &al);
         //dvui.se.intFieldWidget2(@src(), "uint2", &testStruct.uint2, .{}, &al);
         //var buf = gpa.alloc(u8, 50) catch return;
@@ -167,20 +207,20 @@ fn gui_frame() void {
         //} else {
         //    first_change = false;
         //}
-        processWidget(@src(), "slice7", &testStruct.slice7, &al);
-        if (dvui.se.optionalFieldWidget2(@src(), "slice_opt10", &testStruct.slice_opt10, .{}, &al)) |optional_box| {
-            defer optional_box.deinit();
-            testStruct.slice_opt10 = testStruct.slice7;
-            processWidget(@src(), "", &testStruct.slice_opt10.?, &al);
-        } else {
-            testStruct.slice_opt10 = null;
-        }
+        //processWidget(@src(), "slice7", &testStruct.slice7, &al);
+        //if (dvui.se.optionalFieldWidget2(@src(), "slice_opt10", &testStruct.slice_opt10, .{}, &al)) |optional_box| {
+        //    defer optional_box.deinit();
+        //    testStruct.slice_opt10 = testStruct.slice7;
+        //    processWidget(@src(), "", &testStruct.slice_opt10.?, &al);
+        //} else {
+        //    testStruct.slice_opt10 = null;
+        //}
 
         //std.debug.print("slice 5 = {s}\n", .{testStruct.slice5});
         //_ = dvui.separator(@src(), .{ .expand = .horizontal });
         //wholeStruct(@src(), &testStruct, 0);
         //_ = dvui.separator(@src(), .{ .expand = .horizontal });
-        wholeStruct(@src(), &testStruct, 1);
+        //wholeStruct(@src(), &testStruct, 1);
         //_ = dvui.separator(@src(), .{ .expand = .horizontal });
         //wholeStruct(@src(), &opts, 1);
         //_ = dvui.separator(@src(), .{ .expand = .horizontal });
@@ -206,7 +246,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, container: anytype, depth: u
         var box = dvui.box(src, .vertical, .{ .id_extra = i });
         defer box.deinit();
         switch (@typeInfo(field.type)) {
-            .int, .float, .@"enum" => processWidget(@src(), field.name, &@field(container, field.name), &al),
+            .int, .float, .@"enum", .bool => processWidget(@src(), field.name, &@field(container, field.name), &al),
             inline .@"struct" => if (depth > 0) wholeStruct(@src(), &@field(container, field.name), depth - 1),
             inline .optional => |opt| {
                 if (dvui.se.optionalFieldWidget2(@src(), field.name, &@field(container, field.name), .{}, &al)) |hbox| {
@@ -226,7 +266,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, container: anytype, depth: u
                 if (ptr.size == .slice and ptr.child == u8) {
                     processWidget(src, field.name, &@field(container, field.name), &al);
                 } else if (ptr.size == .slice) {
-                    //sliceFieldWidget(name, T, exclude, result, opt, alloc, allocator, alignment);
+                    sliceFieldWidget2(src, field.name, @field(container, field.name), &al);
                 } else if (ptr.size == .one) {
                     dvui.label(@src(), "{s} is a single item pointer", .{field.name}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
                     switch (@typeInfo(ptr.child)) {
@@ -253,6 +293,7 @@ pub fn processWidget(src: std.builtin.SourceLocation, field_name: []const u8, fi
         inline .int => dvui.se.intFieldWidget2(src, field_name, field, .{}, alignment),
         inline .float => dvui.se.floatFieldWidget2(src, field_name, field, .{}, alignment),
         inline .@"enum" => dvui.se.enumFieldWidget2(src, field_name, field, .{}, alignment),
+        inline .bool => dvui.se.boolFieldWidget2(src, field_name, field, .{}, alignment),
         inline .pointer => |ptr| {
             if (ptr.size == .slice and ptr.child == u8) {
                 dvui.se.textFieldWidget2(src, field_name, field, .{}, alignment);
