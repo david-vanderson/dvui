@@ -44,6 +44,8 @@ pub fn IntFieldOptions(comptime T: type) type {
 pub fn intFieldWidget2(src: std.builtin.SourceLocation, field_name: []const u8, field_ptr: anytype, opt: IntFieldOptions(@TypeOf(field_ptr.*)), alignment: *dvui.Alignment) void {
     if (opt.disabled) return;
     const T = @TypeOf(field_ptr.*);
+    const read_only = @typeInfo(@TypeOf(field_ptr)).pointer.is_const;
+
     switch (opt.widget_type) {
         .number_entry => {
             var box = dvui.box(src, .horizontal, .{});
@@ -55,13 +57,15 @@ pub fn intFieldWidget2(src: std.builtin.SourceLocation, field_name: []const u8, 
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
 
-            const maybe_num = dvui.textEntryNumber(@src(), T, .{
-                .min = opt.min,
-                .max = opt.max,
-                .value = field_ptr,
-            }, opt.dvui_opts);
-            if (maybe_num.value == .Valid) {
-                field_ptr.* = maybe_num.value.Valid;
+            if (!read_only) {
+                const maybe_num = dvui.textEntryNumber(@src(), T, .{
+                    .min = opt.min,
+                    .max = opt.max,
+                    .value = field_ptr,
+                }, opt.dvui_opts);
+                if (maybe_num.value == .Valid) {
+                    field_ptr.* = maybe_num.value.Valid;
+                }
             }
             dvui.label(@src(), "{}", .{field_ptr.*}, .{});
         },
@@ -71,13 +75,14 @@ pub fn intFieldWidget2(src: std.builtin.SourceLocation, field_name: []const u8, 
 
             dvui.label(@src(), "{s}", .{field_name}, .{});
 
-            var percent = intToNormalizedPercent(field_ptr.*, opt.min, opt.max);
-            //TODO implement dvui_opts
-            _ = dvui.slider(@src(), .horizontal, &percent, .{
-                .expand = .horizontal,
-                .min_size_content = .{ .w = 100, .h = 20 },
-            });
-            field_ptr.* = normalizedPercentToInt(percent, T, opt.min, opt.max);
+            if (!read_only) {
+                var percent = intToNormalizedPercent(field_ptr.*, opt.min, opt.max);
+                _ = dvui.slider(@src(), .horizontal, &percent, .{
+                    .expand = .horizontal,
+                    .min_size_content = .{ .w = 100, .h = 20 },
+                });
+                field_ptr.* = normalizedPercentToInt(percent, T, opt.min, opt.max);
+            }
             dvui.label(@src(), "{}", .{field_ptr.*}, .{});
         },
     }
@@ -115,8 +120,8 @@ pub fn FloatFieldOptions(comptime T: type) type {
 
 pub fn floatFieldWidget2(src: std.builtin.SourceLocation, field_name: []const u8, field_ptr: anytype, opt: FloatFieldOptions(@TypeOf(field_ptr.*)), alignment: *dvui.Alignment) void {
     if (opt.disabled) return;
-
     const T = @TypeOf(field_ptr.*);
+    const read_only = @typeInfo(@TypeOf(field_ptr)).pointer.is_const;
 
     var box = dvui.box(src, .vertical, .{});
     defer box.deinit();
@@ -127,9 +132,11 @@ pub fn floatFieldWidget2(src: std.builtin.SourceLocation, field_name: []const u8
     defer hbox_aligned.deinit();
     alignment.record(box.data().id, hbox_aligned.data());
 
-    const maybe_num = dvui.textEntryNumber(@src(), T, .{ .min = opt.min, .max = opt.max }, opt.dvui_opts);
-    if (maybe_num.value == .Valid) {
-        field_ptr.* = maybe_num.value.Valid;
+    if (!read_only) {
+        const maybe_num = dvui.textEntryNumber(@src(), T, .{ .min = opt.min, .max = opt.max }, opt.dvui_opts);
+        if (maybe_num.value == .Valid) {
+            field_ptr.* = maybe_num.value.Valid;
+        }
     }
     dvui.label(@src(), "{d}", .{field_ptr.*}, .{});
 }
@@ -200,38 +207,47 @@ pub fn boolFieldWidget2(
     comptime opt: BoolFieldOptions,
     alignment: *dvui.Alignment,
 ) void {
+    const T = @TypeOf(field_ptr.*);
+    if (T != bool)
+        @compileError(std.fmt.comptimePrint("{s} must be of type bool, but is {s}.", .{ field_name, @typeName(T) }));
     if (opt.disabled) return;
+
+    const read_only = @typeInfo(@TypeOf(field_ptr)).pointer.is_const;
+
     var box = dvui.box(src, .horizontal, .{});
     defer box.deinit();
 
-    //TODO implement dvui_opts for other types
-    switch (opt.widget_type) {
-        .checkbox => {
-            dvui.label(@src(), "{s}", .{opt.label_override orelse field_name}, .{});
+    if (read_only) {
+        dvui.label(@src(), "{s} is {}", .{ opt.label_override orelse field_name, field_ptr.* }, .{});
+    } else {
+        switch (opt.widget_type) {
+            .checkbox => {
+                dvui.label(@src(), "{s}", .{opt.label_override orelse field_name}, .{});
 
-            var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
-            defer hbox_aligned.deinit();
-            alignment.record(box.data().id, hbox_aligned.data());
+                var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
+                defer hbox_aligned.deinit();
+                alignment.record(box.data().id, hbox_aligned.data());
 
-            _ = dvui.checkbox(@src(), field_ptr, "", opt.dvui_opts);
-        },
-        .dropdown => {
-            const entries = .{ "false", "true" };
-            var choice: usize = if (field_ptr.* == false) 0 else 1;
-            dvui.labelNoFmt(@src(), opt.label_override orelse field_name, .{}, .{});
-            _ = dvui.dropdown(@src(), &entries, &choice, .{});
-            field_ptr.* = if (choice == 0) false else true;
-        },
-        .toggle => {
-            const button_label = std.fmt.allocPrint(
-                dvui.currentWindow().arena(),
-                "{s} {s}",
-                .{ field_name, if (field_ptr.*) "enabled" else "disabled" },
-            ) catch "";
-            if (dvui.button(@src(), button_label, .{}, .{ .border = border, .background = true })) {
-                field_ptr.* = !field_ptr.*;
-            }
-        },
+                _ = dvui.checkbox(@src(), field_ptr, "", opt.dvui_opts);
+            },
+            .dropdown => {
+                const entries = .{ "false", "true" };
+                var choice: usize = if (field_ptr.* == false) 0 else 1;
+                dvui.labelNoFmt(@src(), opt.label_override orelse field_name, .{}, .{});
+                _ = dvui.dropdown(@src(), &entries, &choice, .{});
+                field_ptr.* = if (choice == 0) false else true;
+            },
+            .toggle => {
+                const button_label = std.fmt.allocPrint(
+                    dvui.currentWindow().arena(),
+                    "{s} {s}",
+                    .{ field_name, if (field_ptr.*) "enabled" else "disabled" },
+                ) catch "";
+                if (dvui.button(@src(), button_label, .{}, .{ .border = border, .background = true })) {
+                    field_ptr.* = !field_ptr.*;
+                }
+            },
+        }
     }
 }
 

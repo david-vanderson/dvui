@@ -162,7 +162,7 @@ var testStruct: TestStruct = .{};
 var opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5) };
 var first_change: bool = true;
 
-var basic_types: BasicTypes = .{};
+const basic_types: BasicTypes = .{};
 
 // both dvui and SDL drawing
 fn gui_frame() void {
