@@ -4408,9 +4408,9 @@ pub fn toastsShow(floating_window_data: ?*WidgetData) void {
         defer toast_win.deinit();
 
         toast_win.data().rect = dvui.placeIn(rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
-        toast_win.autoSize();
         toast_win.install();
         toast_win.drawBackground();
+        toast_win.autoSize(); // affects next frame
 
         var vbox = dvui.box(@src(), .vertical, .{});
         defer vbox.deinit();

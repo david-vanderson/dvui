@@ -498,7 +498,8 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
     }
 }
 
-/// Request that the window resize to fit contents up to max_size.
+/// Request that the window resize to fit contents up to max_size.  This takes
+/// effect next frame.
 ///
 /// If max_size width/height is zero, use up to the screen size.
 ///
