@@ -1212,7 +1212,7 @@ pub fn wndProc(
             _ = stateFromHwnd(hwnd).dvui_window.addEventMouseButton(
                 button,
                 switch (msg) {
-                    win32.WM_LBUTTONDOWN, win32.WM_LBUTTONDBLCLK, win32.WM_MBUTTONDOWN, win32.WM_XBUTTONDOWN => .press,
+                    win32.WM_LBUTTONDOWN, win32.WM_LBUTTONDBLCLK, win32.WM_RBUTTONDOWN, win32.WM_MBUTTONDOWN, win32.WM_XBUTTONDOWN => .press,
                     win32.WM_LBUTTONUP, win32.WM_RBUTTONUP, win32.WM_MBUTTONUP, win32.WM_XBUTTONUP => .release,
                     else => unreachable,
                 },
