@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 
@@ -41,6 +42,7 @@ packed_children: f32 = 0,
 total_weight: f32 = 0,
 child_rect: Rect = Rect{},
 child_positioned: bool = false,
+child_id: if (builtin.mode == .Debug) dvui.WidgetId else void,
 ratio_extra: f32 = 0,
 ran_off: bool = false,
 pixels_per_w: f32 = 0,
@@ -52,6 +54,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
         .wd = wd,
         .init_opts = init_options,
         .data_prev = dvui.dataGet(null, wd.id, "_data", Data),
+        .child_id = if (builtin.mode == .Debug) .zero else undefined,
     };
 }
 
@@ -104,7 +107,13 @@ pub fn data(self: *BoxWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *BoxWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    _ = id;
+    if (builtin.mode == .Debug) {
+        if (self.child_id != .zero) {
+            dvui.logError(@src(), error.BadOrder, "rectFor called before previous widget called minSizeForChild", .{});
+        }
+
+        self.child_id = id;
+    }
 
     self.child_positioned = switch (self.init_opts.dir) {
         .horizontal => g.x > 0 and g.x < 1.0,
@@ -221,6 +230,10 @@ pub fn screenRectScale(self: *BoxWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *BoxWidget, s: Size) void {
+    if (builtin.mode == .Debug) {
+        self.child_id = .zero;
+    }
+
     if (self.child_positioned) {
         self.data().minSizeMax(self.data().options.padSize(s));
         return;

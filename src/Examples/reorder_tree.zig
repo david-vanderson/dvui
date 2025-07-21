@@ -223,8 +223,9 @@ pub fn reorderListsAdvanced() void {
             rs.r.fill(.{}, .{ .color = .green, .fade = 1.0 });
 
             // reset to use next space, need a separator
+            reorderable.reinstall1();
             _ = dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(6) });
-            reorderable.reinstall();
+            reorderable.reinstall2();
         }
 
         // actual content of the list entry
