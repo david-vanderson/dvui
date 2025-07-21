@@ -5180,14 +5180,10 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
 /// Returns true if it's been clicked.
 pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) bool {
     var lw = LabelWidget.init(src, fmt, args, init_opts, opts.override(.{ .name = "LabelClick" }));
-    // now lw has a Rect from its parent but hasn't processed events or drawn
-
-    const lwid = lw.data().id;
-
-    dvui.tabIndexSet(lwid, lw.data().options.tab_index);
-
     // draw border and background
     lw.install();
+
+    dvui.tabIndexSet(lw.data().id, lw.data().options.tab_index);
 
     const ret = dvui.clicked(lw.data(), .{});
 
@@ -5195,7 +5191,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
     lw.draw();
 
     // draw an accent border if we are focused
-    if (lwid == dvui.focusedWidgetId()) {
+    if (lw.data().id == dvui.focusedWidgetId()) {
         lw.data().focusBorder();
     }
 
