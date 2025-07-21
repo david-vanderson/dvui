@@ -59,6 +59,7 @@ pub var defaults: Options = .{
 
 pub const InitOptions = struct {
     dir: enums.Direction,
+    parentSubwindowId: ?dvui.WidgetId = null,
 };
 
 wd: WidgetData,
@@ -66,7 +67,6 @@ wd: WidgetData,
 init_opts: InitOptions,
 winId: dvui.WidgetId,
 parentMenu: ?*MenuWidget = null,
-parentSubwindowId: ?dvui.WidgetId = null,
 last_focus: dvui.WidgetId,
 /// SAFETY: Set in `install`
 box: BoxWidget = undefined,
@@ -142,7 +142,7 @@ pub fn close_chain(self: *MenuWidget, reason: CloseReason) void {
             // when a popup is closed because the user chose to, the
             // window that spawned it (which had focus previously)
             // should become focused again
-            dvui.focusSubwindow(self.parentSubwindowId, null);
+            dvui.focusSubwindow(self.init_opts.parentSubwindowId, null);
         }
     }
 }
@@ -238,7 +238,7 @@ pub fn processEventsAfter(self: *MenuWidget) void {
                                 e.handle(@src(), self.data());
                                 if (self.parentMenu) |pm| {
                                     pm.submenus_activated = false;
-                                    if (self.parentSubwindowId) |sid| {
+                                    if (self.init_opts.parentSubwindowId) |sid| {
                                         dvui.focusSubwindow(sid, null);
                                     }
                                 }
