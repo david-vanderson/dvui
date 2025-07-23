@@ -122,12 +122,18 @@ pub fn FloatFieldOptions(comptime T: type) type {
     };
 }
 
-pub fn floatFieldWidget2(src: std.builtin.SourceLocation, field_name: []const u8, field_ptr: anytype, opt: FloatFieldOptions(@TypeOf(field_ptr.*)), alignment: *dvui.Alignment) void {
+pub fn floatFieldWidget2(
+    src: std.builtin.SourceLocation,
+    field_name: []const u8,
+    field_ptr: anytype,
+    opt: FloatFieldOptions(@TypeOf(field_ptr.*)),
+    alignment: *dvui.Alignment,
+) void {
     if (opt.disabled) return;
     const T = @TypeOf(field_ptr.*);
     const read_only = @typeInfo(@TypeOf(field_ptr)).pointer.is_const;
 
-    var box = dvui.box(src, .vertical, .{});
+    var box = dvui.box(src, .horizontal, .{});
     defer box.deinit();
 
     dvui.label(@src(), "{s}", .{opt.label_override orelse field_name}, .{});

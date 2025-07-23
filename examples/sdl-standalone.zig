@@ -187,8 +187,10 @@ fn gui_frame() void {
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
+        var al = dvui.Alignment.init();
+        defer al.deinit();
 
-        //dvui.structEntryEx(@src(), "", TestStruct, .{}, &testStruct, .{});
+        wholeStruct(@src(), &basic_types_const, 0);
     }
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
@@ -196,7 +198,7 @@ fn gui_frame() void {
         var al = dvui.Alignment.init();
         defer al.deinit();
 
-        wholeStruct(@src(), &basic_types_const, 0);
+        wholeStruct(@src(), &basic_types_var, 0);
 
         //sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);
         //dvui.se.intFieldWidget2(@src(), "int1", &testStruct.int1, .{}, &al);
@@ -226,7 +228,7 @@ fn gui_frame() void {
         //wholeStruct(@src(), &opts, 1);
         //_ = dvui.separator(@src(), .{ .expand = .horizontal });
     }
-    {
+    if (false) {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
         var al = dvui.Alignment.init();
@@ -248,8 +250,12 @@ pub fn defaultValue(T: type) ?T {
 }
 
 pub fn wholeStruct(src: std.builtin.SourceLocation, container: anytype, depth: usize) void {
+    var vbox = dvui.box(src, .vertical, .{ .expand = .both });
+    defer vbox.deinit();
+
     var al = dvui.Alignment.init();
     defer al.deinit();
+
     inline for (std.meta.fields(@TypeOf(container.*)), 0..) |field, i| {
         //@compileLog(field.name, field.type);
         var box = dvui.box(src, .vertical, .{ .id_extra = i });
