@@ -45,6 +45,10 @@ pub fn intFieldWidget2(src: std.builtin.SourceLocation, field_name: []const u8, 
     if (opt.disabled) return;
     const T = @TypeOf(field_ptr.*);
     const read_only = @typeInfo(@TypeOf(field_ptr)).pointer.is_const;
+    switch (@typeInfo(T)) {
+        .int => {},
+        else => @compileError(std.fmt.comptimePrint("{s} must be an integer type, but is a {s}", .{ field_name, @typeName(T) })),
+    }
 
     switch (opt.widget_type) {
         .number_entry => {

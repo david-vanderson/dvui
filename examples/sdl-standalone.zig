@@ -162,7 +162,8 @@ var testStruct: TestStruct = .{};
 var opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5) };
 var first_change: bool = true;
 
-const basic_types: BasicTypes = .{};
+var basic_types_var: BasicTypes = .{};
+const basic_types_const: BasicTypes = .{};
 
 // both dvui and SDL drawing
 fn gui_frame() void {
@@ -195,7 +196,7 @@ fn gui_frame() void {
         var al = dvui.Alignment.init();
         defer al.deinit();
 
-        wholeStruct(@src(), &basic_types, 0);
+        wholeStruct(@src(), &basic_types_const, 0);
 
         //sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);
         //dvui.se.intFieldWidget2(@src(), "int1", &testStruct.int1, .{}, &al);
@@ -224,6 +225,14 @@ fn gui_frame() void {
         //_ = dvui.separator(@src(), .{ .expand = .horizontal });
         //wholeStruct(@src(), &opts, 1);
         //_ = dvui.separator(@src(), .{ .expand = .horizontal });
+    }
+    {
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+        defer scroll.deinit();
+        var al = dvui.Alignment.init();
+        defer al.deinit();
+
+        wholeStruct(@src(), &basic_types_var, 0);
     }
 }
 
