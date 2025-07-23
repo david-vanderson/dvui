@@ -120,7 +120,7 @@ const TestStruct = struct {
     //arr_ptr9: *[20]u8 = &test_buf,
     array8: [13]u8 = @splat('y'),
     slice_opt10: ?[]u8 = &test_buf,
-    struct_ptr_11: *C1 = &c1,
+    //struct_ptr_11: *C1 = &c1, // TODO: FIX
 };
 
 // All possible runtime basic types.
@@ -190,7 +190,7 @@ fn gui_frame() void {
         var al = dvui.Alignment.init();
         defer al.deinit();
 
-        wholeStruct(@src(), &basic_types_const, 0);
+        wholeStruct(@src(), "basic_types_const", &basic_types_const, 0);
     }
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
@@ -198,7 +198,7 @@ fn gui_frame() void {
         var al = dvui.Alignment.init();
         defer al.deinit();
 
-        wholeStruct(@src(), &basic_types_var, 0);
+        wholeStruct(@src(), "basic_types_var", &basic_types_var, 0);
 
         //sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);
         //dvui.se.intFieldWidget2(@src(), "int1", &testStruct.int1, .{}, &al);
@@ -228,13 +228,13 @@ fn gui_frame() void {
         //wholeStruct(@src(), &opts, 1);
         //_ = dvui.separator(@src(), .{ .expand = .horizontal });
     }
-    if (false) {
+    {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
         var al = dvui.Alignment.init();
         defer al.deinit();
 
-        wholeStruct(@src(), &basic_types_var, 0);
+        wholeStruct(@src(), "test_struct", &testStruct, 1);
     }
 }
 
@@ -249,7 +249,8 @@ pub fn defaultValue(T: type) ?T {
     };
 }
 
-pub fn wholeStruct(src: std.builtin.SourceLocation, container: anytype, depth: usize) void {
+pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container: anytype, depth: usize) void {
+    _ = name;
     var vbox = dvui.box(src, .vertical, .{ .expand = .both });
     defer vbox.deinit();
 
@@ -262,7 +263,13 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, container: anytype, depth: u
         defer box.deinit();
         switch (@typeInfo(field.type)) {
             .int, .float, .@"enum", .bool => processWidget(@src(), field.name, &@field(container, field.name), &al),
-            inline .@"struct" => if (depth > 0) wholeStruct(@src(), &@field(container, field.name), depth - 1),
+            inline .@"struct" => {
+                if (depth > 0) {
+                    if (dvui.expander(@src(), field.name, .{}, .{ .expand = .horizontal })) {
+                        wholeStruct(@src(), field.name, &@field(container, field.name), depth - 1);
+                    }
+                }
+            },
             inline .optional => |opt| {
                 if (dvui.se.optionalFieldWidget2(@src(), field.name, &@field(container, field.name), .{}, &al)) |hbox| {
                     defer hbox.deinit();
@@ -285,7 +292,11 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, container: anytype, depth: u
                 } else if (ptr.size == .one) {
                     dvui.label(@src(), "{s} is a single item pointer", .{field.name}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
                     switch (@typeInfo(ptr.child)) {
-                        .@"struct" => wholeStruct(@src(), @field(container, field.name), depth - 1),
+                        .@"struct" => {
+                            if (dvui.expander(@src(), field.name, .{}, .{ .expand = .horizontal })) {
+                                wholeStruct(@src(), field.name, &@field(container, field.name), depth - 1);
+                            }
+                        },
                         else => processWidget(src, field.name, @field(container, field.name), &al),
                     }
                 } else if (ptr.size == .c or ptr.size == .many) {
@@ -293,7 +304,13 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, container: anytype, depth: u
                 } else {
                     switch (@typeInfo(ptr.child)) {
                         inline .int, .float, .@"enum" => processWidget(@src(), field.name, @field(container, field.name), &al),
-                        inline .@"struct" => if (depth > 0) wholeStruct(@src(), @field(container, field.name), depth - 1),
+                        inline .@"struct" => {
+                            if (depth > 0) {
+                                if (dvui.expander(@src(), field.name, .{}, .{ .expand = .horizontal })) {
+                                    wholeStruct(@src(), field.name, &@field(container, field.name), depth - 1);
+                                }
+                            }
+                        },
                         else => {},
                     }
                 }
