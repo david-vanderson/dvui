@@ -764,7 +764,7 @@ fn structFieldWidget(
         var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
         defer vbox.deinit();
 
-        var left_alignment = dvui.Alignment.init();
+        var left_alignment = dvui.Alignment.init(@src(), 0);
         defer left_alignment.deinit();
 
         inline for (fields, 0..) |field, i| {
