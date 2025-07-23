@@ -325,12 +325,13 @@ pub const Alignment = struct {
     max: ?f32,
     next: f32,
 
-    pub fn init() Alignment {
-        const wd = dvui.parentGet().data();
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize) Alignment {
+        const parent = dvui.parentGet();
+        const id = parent.extendId(src, id_extra);
         return .{
-            .id = wd.id,
-            .scale = wd.rectScale().s,
-            .max = dvui.dataGet(null, wd.id, "_max_align", f32),
+            .id = id,
+            .scale = parent.data().rectScale().s,
+            .max = dvui.dataGet(null, id, "_max_align", f32),
             .next = -1_000_000,
         };
     }

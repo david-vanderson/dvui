@@ -8,7 +8,7 @@ var text_entry_multiline_break = false;
 
 /// ![image](Examples-text_entry.png)
 pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
-    var left_alignment = dvui.Alignment.init();
+    var left_alignment = dvui.Alignment.init(@src(), 0);
     defer left_alignment.deinit();
 
     var enter_pressed = false;
@@ -171,7 +171,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
         var vbox = dvui.box(@src(), .vertical, .{});
         defer vbox.deinit();
 
-        var la2 = dvui.Alignment.init();
+        var la2 = dvui.Alignment.init(@src(), 0);
         defer la2.deinit();
 
         if (dvui.wasm) {
