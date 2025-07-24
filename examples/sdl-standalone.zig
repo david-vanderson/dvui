@@ -239,7 +239,7 @@ fn gui_frame() void {
     }
 }
 
-// TODO: I thought I saw a better way to do this, but can't remember what it was.
+// Note there is also StructField.default value. But .{} should be fine?
 pub fn defaultValue(T: type) ?T {
     return switch (@typeInfo(T)) {
         inline .bool => false,
@@ -248,7 +248,7 @@ pub fn defaultValue(T: type) ?T {
         inline .@"struct" => |si| {
             inline for (si.fields) |field| {
                 if (field.defaultValue() == null) {
-                    @compileError(std.fmt.comptimePrint("field {s} for struct {s} does not have a default initializer", .{ @typeName(T), field.name }));
+                    @compileError(std.fmt.comptimePrint("field {s} for struct {s} does not support default initialization", .{ @typeName(T), field.name }));
                 }
             }
             return .{};
