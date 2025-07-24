@@ -234,22 +234,31 @@ fn gui_frame() void {
         var al = dvui.Alignment.init();
         defer al.deinit();
 
-        wholeStruct(@src(), "test_struct", &testStruct, 1);
+        wholeStruct(@src(), "opts", &opts, 1);
+        //        wholeStruct(@src(), "test_struct", &testStruct, 1);
     }
 }
 
+// TODO: I thought I saw a better way to do this, but can't remember what it was.
 pub fn defaultValue(T: type) ?T {
     return switch (@typeInfo(T)) {
         inline .bool => false,
         inline .int => 0,
         inline .float => 0.0,
-        inline .@"struct" => return .{}, // If you see an error here, it is because your struct requires initialization.
-        inline .@"enum" => |e| e.fields[0],
+        inline .@"struct" => |si| {
+            inline for (si.fields) |field| {
+                if (field.defaultValue() == null) {
+                    @compileError(std.fmt.comptimePrint("field {s} for struct {s} does not have a default initializer", .{ @typeName(T), field.name }));
+                }
+            }
+            return .{};
+        },
+        inline .@"enum" => |e| @enumFromInt(e.fields[0].value),
         inline else => null,
     };
 }
 
-pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container: anytype, depth: usize) void {
+pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container: anytype, comptime depth: usize) void {
     _ = name;
     var vbox = dvui.box(src, .vertical, .{ .expand = .both });
     defer vbox.deinit();
@@ -258,6 +267,9 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
     defer al.deinit();
 
     inline for (std.meta.fields(@TypeOf(container.*)), 0..) |field, i| {
+        comptime if (std.mem.eql(u8, field.name, "max_size_content")) continue; // TODO: Needs to 1) Have exclusions and 2) Be able to specify defaults.
+        comptime if (std.mem.eql(u8, field.name, "font")) continue;
+
         //@compileLog(field.name, field.type);
         var box = dvui.box(src, .vertical, .{ .id_extra = i });
         defer box.deinit();
@@ -277,7 +289,16 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                         @field(container, field.name) = defaultValue(opt.child); // If there is no default value, it will remain null.
                     }
                     if (@field(container, field.name) != null) {
-                        processWidget(@src(), "", &@field(container, field.name).?, &al);
+                        switch (@typeInfo(opt.child)) {
+                            inline .@"struct" => {
+                                if (depth > 0) {
+                                    if (dvui.expander(@src(), field.name, .{}, .{ .expand = .horizontal })) {
+                                        wholeStruct(@src(), field.name, &@field(container, field.name).?, depth - 1);
+                                    }
+                                }
+                            },
+                            else => processWidget(@src(), field.name, &@field(container, field.name).?, &al),
+                        }
                     }
                 } else {
                     @field(container, field.name) = null;
@@ -320,7 +341,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
     }
 }
 
-pub fn processWidget(src: std.builtin.SourceLocation, field_name: []const u8, field: anytype, alignment: *dvui.Alignment) void {
+pub fn processWidget(src: std.builtin.SourceLocation, comptime field_name: []const u8, field: anytype, alignment: *dvui.Alignment) void {
     switch (@typeInfo(@TypeOf(field.*))) {
         inline .int => dvui.se.intFieldWidget2(src, field_name, field, .{}, alignment),
         inline .float => dvui.se.floatFieldWidget2(src, field_name, field, .{}, alignment),
@@ -331,7 +352,8 @@ pub fn processWidget(src: std.builtin.SourceLocation, field_name: []const u8, fi
                 dvui.se.textFieldWidget2(src, field_name, field, .{}, alignment);
             }
         },
-        else => |ti| @compileError(std.fmt.comptimePrint("Type {} for field {s} not yet supported\n", .{ ti, field_name })),
+        inline .@"union" => {}, // BIG TODO!
+        else => @compileError(std.fmt.comptimePrint("Type {s} for field {s} not yet supported\n", .{ @typeName(@TypeOf(field.*)), field_name })),
     }
 }
 
