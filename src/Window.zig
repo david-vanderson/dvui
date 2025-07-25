@@ -1506,7 +1506,7 @@ pub const endOptions = struct {
 /// case you want to do something after everything has been rendered.
 pub fn endRendering(self: *Self, opts: endOptions) void {
     if (opts.show_toasts) {
-        dvui.toastsShow(null);
+        dvui.toastsShow(null, dvui.windowRect());
     }
     self.dialogsShow();
 
