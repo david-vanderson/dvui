@@ -58,6 +58,17 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) void {
         }
     }
 
+    {
+        var vbox = dvui.box(@src(), .vertical, .{.min_size_content = .{.w = 250, .h = 80}, .border = .all(1)});
+        defer vbox.deinit();
+
+        if (dvui.button(@src(), "Toast In Box", .{}, .{})) {
+            dvui.toast(@src(), .{ .subwindow_id = vbox.data().id, .message = "Toast to this box" });
+        }
+
+        dvui.toastsShow(vbox.data().id, vbox.data().contentRectScale().r.toNatural());
+    }
+
     dvui.label(@src(), "\nDialogs and toasts from other threads", .{}, .{});
     {
         var hbox = dvui.box(@src(), .horizontal, .{});

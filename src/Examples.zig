@@ -90,7 +90,7 @@ pub fn demo() void {
     frame_counter += 1;
     float.dragAreaSet(dvui.windowHeader("DVUI Demo", fps_str, &show_demo_window));
 
-    dvui.toastsShow(float.data());
+    dvui.toastsShow(float.data().id, .cast(float.data().rect));
 
     var scaler = dvui.scale(@src(), .{ .scale = &scale_val }, .{ .expand = .both });
     defer scaler.deinit();

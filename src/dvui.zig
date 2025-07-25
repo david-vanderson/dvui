@@ -4390,25 +4390,20 @@ pub fn toastDisplay(id: WidgetId) !void {
 /// Standard way of showing toasts.  For the main window, this is called with
 /// null in Window.end().
 ///
-/// For floating windows, pass non-null floating_window_data. Then it shows
+/// For floating windows or other widgets, pass non-null id. Then it shows
 /// toasts that were previously added with non-null subwindow_id, and they are
-/// shown on top of that subwindow.
+/// shown on top of the current subwindow.
+///
+/// Toasts are shown in rect centered horizontally and 70% down vertically.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn toastsShow(floating_window_data: ?*WidgetData) void {
-    const id: ?WidgetId, const rect: Rect = blk: {
-        if (floating_window_data) |fwd| {
-            break :blk .{ fwd.id, fwd.rect };
-        } else {
-            break :blk .{ null, .cast(windowRect()) };
-        }
-    };
+pub fn toastsShow(id: ?WidgetId, rect: Rect.Natural) void {
     var ti = dvui.toastsFor(id);
     if (ti) |*it| {
         var toast_win = dvui.FloatingWindowWidget.init(@src(), .{ .stay_above_parent_window = id != null, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
         defer toast_win.deinit();
 
-        toast_win.data().rect = dvui.placeIn(rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
+        toast_win.data().rect = dvui.placeIn(.cast(rect), toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
         toast_win.install();
         toast_win.drawBackground();
         toast_win.autoSize(); // affects next frame
