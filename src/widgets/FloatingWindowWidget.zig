@@ -379,6 +379,8 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
                         const p = me.p.plus(dvui.dragOffset()).toNatural();
                         self.dragAdjust(p, dps.toNatural(), self.drag_part.?);
                         // don't need refresh() because we're before drawing
+                        // but we changed the rect, so need to upate WidgetData's rect_scale
+                        self.wd.rect_scale = self.wd.rectScaleFromParent();
                         e.handle(@src(), self.data());
                         continue;
                     }

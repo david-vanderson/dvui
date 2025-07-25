@@ -219,7 +219,7 @@ pub fn focusBorder(self: *const WidgetData) void {
     }
 }
 
-fn rectScaleFromParent(self: *const WidgetData) RectScale {
+pub fn rectScaleFromParent(self: *const WidgetData) RectScale {
     return if (self.init_options.subwindow)
         dvui.windowRectScale().rectToRectScale(self.rect)
     else
