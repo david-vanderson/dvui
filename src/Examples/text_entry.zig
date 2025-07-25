@@ -80,23 +80,25 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
     const Sfont = struct {
         var dropdown: usize = 0;
 
-        pub fn compareStrings(_: void, lhs: []const u8, rhs: []const u8) bool {
-            return std.mem.order(u8, lhs, rhs).compare(std.math.CompareOperator.lt);
+        const FontNameId = struct { []const u8, ?dvui.Font.FontId };
+
+        pub fn compare(_: void, lhs: FontNameId, rhs: FontNameId) bool {
+            return std.mem.order(u8, lhs.@"0", rhs.@"0").compare(std.math.CompareOperator.lt);
         }
     };
 
-    var font_entries: [][]const u8 = dvui.currentWindow().lifo().alloc([]const u8, dvui.currentWindow().font_bytes.count() + 1) catch &.{};
+    var font_entries: []Sfont.FontNameId = dvui.currentWindow().lifo().alloc(Sfont.FontNameId, dvui.currentWindow().font_bytes.count() + 1) catch &.{};
     defer dvui.currentWindow().lifo().free(font_entries);
     if (font_entries.len > 0) {
-        font_entries[0] = "Theme Body";
-        var it = dvui.currentWindow().font_bytes.keyIterator();
+        font_entries[0] = .{ "Theme Body", null };
+        var it = dvui.currentWindow().font_bytes.iterator();
         var i: usize = 0;
-        while (it.next()) |v| {
+        while (it.next()) |entry| {
             i += 1;
-            font_entries[i] = v.*;
+            font_entries[i] = .{ entry.value_ptr.name, entry.key_ptr.* };
         }
 
-        std.mem.sort([]const u8, font_entries[1..], {}, Sfont.compareStrings);
+        std.mem.sort(Sfont.FontNameId, font_entries[1..], {}, Sfont.compare);
 
         Sfont.dropdown = @min(Sfont.dropdown, font_entries.len - 1);
     }
@@ -118,7 +120,9 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
 
         var font = dvui.themeGet().font_body;
         if (Sfont.dropdown > 0) {
-            font.name = font_entries[Sfont.dropdown];
+            if (font_entries[Sfont.dropdown].@"1") |id| {
+                font.id = id;
+            }
         }
 
         var te_opts: dvui.TextEntryWidget.InitOptions = .{ .multiline = true, .text = .{ .buffer_dynamic = .{
@@ -159,7 +163,16 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
 
         left_alignment.spacer(@src(), 0);
 
-        _ = dvui.dropdown(@src(), font_entries, &Sfont.dropdown, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5 });
+        var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = Sfont.dropdown, .label = font_entries[Sfont.dropdown].@"0" }, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5 });
+        dd.install();
+        defer dd.deinit();
+        if (dd.dropped()) {
+            for (font_entries, 0..) |e, i| {
+                if (dd.addChoiceLabel(e.@"0")) {
+                    Sfont.dropdown = i;
+                }
+            }
+        }
     }
 
     {
@@ -232,7 +245,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
                 if (name.len == 0) {
                     dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Add a Name" });
                     name_error.* = true;
-                } else if (dvui.currentWindow().font_bytes.contains(name)) {
+                } else if (dvui.currentWindow().font_bytes.contains(.fromName(name))) {
                     const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Already have font named \"{s}\"", .{name}) catch name;
                     defer dvui.currentWindow().lifo().free(msg);
                     dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = msg });

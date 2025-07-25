@@ -96,7 +96,7 @@ tab_index: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
 font_cache: dvui.TrackingAutoHashMap(u64, dvui.FontCacheEntry, .get_and_put) = .empty,
 /// Uses `gpa` allocator
-font_bytes: std.StringHashMapUnmanaged(dvui.FontBytesEntry) = .empty,
+font_bytes: std.AutoHashMapUnmanaged(dvui.Font.FontId, dvui.FontBytesEntry) = .empty,
 /// Uses `gpa` allocator
 texture_cache: dvui.TrackingAutoHashMap(dvui.Texture.CacheKey, dvui.Texture, .get_and_put) = .empty,
 /// Uses `arena` allocator
