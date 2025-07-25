@@ -108,8 +108,6 @@ dialogs: std.ArrayListUnmanaged(Dialog) = .empty,
 toasts: std.ArrayListUnmanaged(Toast) = .empty,
 /// Uses `gpa` allocator
 keybinds: std.StringHashMapUnmanaged(dvui.enums.Keybind) = .empty,
-/// Uses `gpa` allocator
-themes: std.StringArrayHashMapUnmanaged(Theme) = .empty,
 
 cursor_requested: ?dvui.enums.Cursor = null,
 cursor_dragging: ?dvui.enums.Cursor = null,
@@ -213,20 +211,6 @@ pub fn init(
             .dark => Theme.builtin.adwaita_dark,
         },
     };
-
-    inline for (@typeInfo(Theme.builtin).@"struct".decls) |decl| {
-        const theme = @field(Theme.builtin, decl.name);
-        try self.themes.putNoClobber(self.gpa, theme.name, theme);
-    }
-
-    // Sort themes alphabetically
-    const Context = struct {
-        hashmap: *std.StringArrayHashMapUnmanaged(Theme),
-        pub fn lessThan(ctx: @This(), lhs: usize, rhs: usize) bool {
-            return std.ascii.orderIgnoreCase(ctx.hashmap.values()[lhs].name, ctx.hashmap.values()[rhs].name) == .lt;
-        }
-    };
-    self.themes.sort(Context{ .hashmap = &self.themes });
 
     try self.initEvents();
 
@@ -427,12 +411,6 @@ pub fn deinit(self: *Self) void {
     }
     self.font_bytes.deinit(self.gpa);
 
-    {
-        for (self.themes.values()) |*theme| {
-            theme.deinit(self.gpa);
-        }
-    }
-    self.themes.deinit(self.gpa);
     self.* = undefined;
 }
 
