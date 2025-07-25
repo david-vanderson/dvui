@@ -121,7 +121,10 @@ pub fn err(self: *const Theme) Options {
     return self.style_err.asOptions();
 }
 
-pub fn picker(src: std.builtin.SourceLocation, opts: Options) bool {
+/// To pick between the built in themes, pass `&Theme.builtins` as the `themes` argument
+///
+/// Sets the theme on the current `dvui.Window` upon selection
+pub fn picker(src: std.builtin.SourceLocation, themes: []const Theme, opts: Options) bool {
     var picked = false;
 
     const defaults: Options = .{
@@ -130,28 +133,25 @@ pub fn picker(src: std.builtin.SourceLocation, opts: Options) bool {
     };
 
     const options = defaults.override(opts);
-    const cw = dvui.currentWindow();
+    const current_theme_name = dvui.themeGet().name;
 
-    const theme_choice: usize = blk: {
-        for (cw.themes.values(), 0..) |val, i| {
-            if (std.mem.eql(u8, dvui.themeGet().name, val.name)) {
-                break :blk i;
-            }
+    const theme_choice: ?usize = for (themes, 0..) |val, i| {
+        if (std.mem.eql(u8, current_theme_name, val.name)) {
+            break i;
         }
-        break :blk 0;
-    };
+    } else null;
 
     var dd = dvui.DropdownWidget.init(
         src,
-        .{ .selected_index = theme_choice, .label = dvui.themeGet().name },
+        .{ .selected_index = theme_choice, .label = current_theme_name },
         options,
     );
     dd.install();
 
     if (dd.dropped()) {
-        for (cw.themes.values()) |*theme| {
+        for (themes) |theme| {
             if (dd.addChoiceLabel(theme.name)) {
-                dvui.themeSet(theme);
+                dvui.themeSet(&theme);
                 picked = true;
                 break;
             }
@@ -170,6 +170,23 @@ pub const builtin = struct {
     pub const gruvbox = QuickTheme.builtin.gruvbox.toTheme(null) catch unreachable;
     pub const jungle = QuickTheme.builtin.jungle.toTheme(null) catch unreachable;
     pub const opendyslexic = QuickTheme.builtin.opendyslexic.toTheme(null) catch unreachable;
+};
+
+/// A comptime array of all the builtin themes sorted alphabetically
+pub const builtins = blk: {
+    const S = struct {
+        fn lessThan(context: void, lhs: Theme, rhs: Theme) bool {
+            _ = context;
+            return std.mem.lessThan(u8, lhs.name, rhs.name);
+        }
+    };
+    const decls = @typeInfo(builtin).@"struct".decls;
+    var array: [decls.len]Theme = undefined;
+    for (decls, 0..) |decl, i| {
+        array[i] = @field(builtin, decl.name);
+    }
+    std.mem.sort(Theme, &array, {}, S.lessThan);
+    break :blk array;
 };
 
 pub const QuickTheme = struct {
