@@ -83,18 +83,18 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
                 self.data().focusBorder();
                 if (self.highlight) {
                     const rs = self.data().backgroundRectScale();
-                    rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill_hover) });
+                    rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill_hover), .fade = 1.0 });
                 }
             } else {
                 const rs = self.data().backgroundRectScale();
-                rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.accent) });
+                rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.accent), .fade = 1.0 });
             }
         } else if ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) or self.highlight) {
             const rs = self.data().backgroundRectScale();
-            rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill_hover) });
+            rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill_hover), .fade = 1.0 });
         } else if (self.data().options.backgroundGet()) {
             const rs = self.data().backgroundRectScale();
-            rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill) });
+            rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill), .fade = 1.0 });
         }
     }
 }
@@ -198,7 +198,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 dvui.dragEnd();
             } else if (me.action == .motion and me.button.touch()) {
                 if (dvui.captured(self.data().id)) {
-                    if (dvui.dragging(me.p)) |_| {
+                    if (dvui.dragging(me.p, null)) |_| {
                         // if we overcame the drag threshold, then that
                         // means the person probably didn't want to touch
                         // this, maybe they were trying to scroll

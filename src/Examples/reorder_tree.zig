@@ -4,7 +4,6 @@ const reorderLayout = enum {
     flex,
 };
 
-/// ![image](Examples-reorderable.png)
 pub fn reorderLists() void {
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
     const layo = dvui.dataGetPtrDefault(null, uniqueId, "reorderLayout", reorderLayout, .horizontal);
@@ -221,11 +220,12 @@ pub fn reorderListsAdvanced() void {
 
         if (reorderable.targetRectScale()) |rs| {
             // user is dragging a reorderable over this rect, could draw anything here
-            rs.r.fill(.{}, .{ .color = .green });
+            rs.r.fill(.{}, .{ .color = .green, .fade = 1.0 });
 
             // reset to use next space, need a separator
+            reorderable.reinstall1();
             _ = dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(6) });
-            reorderable.reinstall();
+            reorderable.reinstall2();
         }
 
         // actual content of the list entry
@@ -255,7 +255,7 @@ pub fn reorderListsAdvanced() void {
 
         if (reorderable.targetRectScale()) |rs| {
             // user is dragging a reorderable over this rect
-            rs.r.fill(.{}, .{ .color = .green });
+            rs.r.fill(.{}, .{ .color = .green, .fade = 1.0 });
         }
     }
 
@@ -283,7 +283,7 @@ pub fn reorderTree() void {
                 .color = .{ .color = .black },
                 .offset = .{ .x = -5, .y = 5 },
                 .shrink = 5,
-                .blur = 10,
+                .fade = 10,
                 .alpha = 0.15,
             },
         },
@@ -811,7 +811,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
             .color = .{ .color = .black },
             .offset = .{ .x = -5, .y = 5 },
             .shrink = 5,
-            .blur = 10,
+            .fade = 10,
             .alpha = 0.15,
         },
     })) {
@@ -820,5 +820,10 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
 
     return;
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
 const std = @import("std");
 const dvui = @import("../dvui.zig");

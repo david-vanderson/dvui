@@ -375,10 +375,12 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
             // If we are already dragging, do it here so it happens before drawing
             if (dvui.captured(self.data().id)) {
                 if (me.action == .motion) {
-                    if (dvui.dragging(me.p)) |dps| {
+                    if (dvui.dragging(me.p, null)) |dps| {
                         const p = me.p.plus(dvui.dragOffset()).toNatural();
                         self.dragAdjust(p, dps.toNatural(), self.drag_part.?);
                         // don't need refresh() because we're before drawing
+                        // but we changed the rect, so need to upate WidgetData's rect_scale
+                        self.wd.rect_scale = self.wd.rectScaleFromParent();
                         e.handle(@src(), self.data());
                         continue;
                     }
@@ -462,7 +464,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                     .motion => {
                         if (dvui.captured(self.data().id)) {
                             // move if dragging
-                            if (dvui.dragging(me.p)) |dps| {
+                            if (dvui.dragging(me.p, null)) |dps| {
                                 const p = me.p.plus(dvui.dragOffset()).toNatural();
                                 self.dragAdjust(p, dps.toNatural(), self.drag_part.?);
 
@@ -498,7 +500,8 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
     }
 }
 
-/// Request that the window resize to fit contents up to max_size.
+/// Request that the window resize to fit contents up to max_size.  This takes
+/// effect next frame.
 ///
 /// If max_size width/height is zero, use up to the screen size.
 ///

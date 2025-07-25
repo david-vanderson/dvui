@@ -868,8 +868,8 @@ pub fn drawClippedTriangles(
         const new_clip: win32.RECT = .{
             .left = @intFromFloat(cr.x),
             .top = @intFromFloat(cr.y),
-            .right = @intFromFloat(@ceil(cr.x + cr.w)),
-            .bottom = @intFromFloat(@ceil(cr.y + cr.h)),
+            .right = @intFromFloat(cr.x + cr.w),
+            .bottom = @intFromFloat(cr.y + cr.h),
         };
         state.device_context.RSSetScissorRects(nums, @ptrCast(&new_clip));
     } else {
@@ -1042,6 +1042,25 @@ pub fn preferredColorScheme(_: Context) ?dvui.enums.ColorScheme {
     return dvui.Backend.Common.windowsGetPreferredColorScheme();
 }
 
+pub fn cursorShow(_: Context, value: ?bool) !bool {
+    var info: win32.CURSORINFO = undefined;
+    info.cbSize = @sizeOf(win32.CURSORINFO);
+    try boolToErr(win32.GetCursorInfo(&info), "GetCursorInfo in cursorShow");
+    const prev = info.flags == win32.CURSOR_SHOWING;
+    if (value) |val| {
+        // Count == 0 will hide cursor. Any value greater than 0 will show it
+        // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showcursor#remarks
+        const count = win32.ShowCursor(if (val) win32.TRUE else win32.FALSE);
+        if (!val and count > 0) {
+            // Keep hiding cursor until it's hidden
+            for (0..@intCast(count)) |_| {
+                if (win32.ShowCursor(win32.FALSE) == 0) break;
+            }
+        }
+    }
+    return prev;
+}
+
 pub fn refresh(_: Context) void {}
 
 pub fn setCursor(self: Context, new_cursor: dvui.enums.Cursor) void {
@@ -1193,7 +1212,7 @@ pub fn wndProc(
             _ = stateFromHwnd(hwnd).dvui_window.addEventMouseButton(
                 button,
                 switch (msg) {
-                    win32.WM_LBUTTONDOWN, win32.WM_LBUTTONDBLCLK, win32.WM_MBUTTONDOWN, win32.WM_XBUTTONDOWN => .press,
+                    win32.WM_LBUTTONDOWN, win32.WM_LBUTTONDBLCLK, win32.WM_RBUTTONDOWN, win32.WM_MBUTTONDOWN, win32.WM_XBUTTONDOWN => .press,
                     win32.WM_LBUTTONUP, win32.WM_RBUTTONUP, win32.WM_MBUTTONUP, win32.WM_XBUTTONUP => .release,
                     else => unreachable,
                 },

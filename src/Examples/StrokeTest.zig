@@ -33,7 +33,7 @@ pub fn install(self: *Self, src: std.builtin.SourceLocation, options: dvui.Optio
     const fill_color = dvui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
     for (points, 0..) |p, i| {
         const rect = dvui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
-        rs.rectToPhysical(rect).fill(.all(1), .{ .color = fill_color });
+        rs.rectToPhysical(rect).fill(.all(1), .{ .color = fill_color, .fade = 1.0 });
 
         _ = i;
         //_ = dvui.button(@src(), i, "Floating", .{}, .{ .rect = dvui.Rect.fromPoint(p) });
@@ -112,7 +112,7 @@ pub fn processEvent(self: *Self, e: *dvui.Event) void {
                 },
                 .motion => {
                     e.handle(@src(), self.data());
-                    if (dvui.dragging(me.p)) |dps| {
+                    if (dvui.dragging(me.p, null)) |dps| {
                         const dp = dps.scale(1 / rs.s, Point);
                         points[dragi.?].x += dp.x;
                         points[dragi.?].y += dp.y;
@@ -141,6 +141,10 @@ pub fn deinit(self: *Self) void {
 
     dvui.parentReset(self.data().id, self.data().parent);
     self.* = undefined;
+}
+
+test {
+    @import("std").testing.refAllDecls(@This());
 }
 
 const std = @import("std");

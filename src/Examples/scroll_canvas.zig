@@ -1,6 +1,6 @@
-/// ![image](Examples-scroll_canvas.png)
+/// ![image](Examples-scrollCanvas.png)
 pub fn scrollCanvas() void {
-    var vbox = dvui.box(@src(), .vertical, .{});
+    var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
     defer vbox.deinit();
 
     const scroll_info = dvui.dataGetPtrDefault(null, vbox.data().id, "scroll_info", ScrollInfo, .{ .vertical = .given, .horizontal = .given });
@@ -22,7 +22,7 @@ pub fn scrollCanvas() void {
     tl.format("Scale {d}", .{scale.*}, .{});
     tl.deinit();
 
-    var scrollArea = dvui.scrollArea(@src(), .{ .scroll_info = scroll_info }, .{ .expand = .both, .min_size_content = .{ .w = 300, .h = 300 } });
+    var scrollArea = dvui.scrollArea(@src(), .{ .scroll_info = scroll_info }, .{ .min_size_content = .{ .w = 300, .h = 300 } });
     var scrollContainer = &scrollArea.scroll.?;
 
     // can use this to convert between viewport/virtual_size and screen coords
@@ -33,15 +33,32 @@ pub fn scrollCanvas() void {
     // can use this to convert between data and screen coords
     const dataRectScale = scaler.screenRectScale(.{});
 
+    // get current mouse position
+    var mousePosPhysical: dvui.Point.Physical = .{};
+    var mousePosData: dvui.Point = .{};
+    for (dvui.events()) |*e| {
+        // using eventMatch means we will only get the mouse position if it is
+        // inside scrollContainer, and not in a floating subwindow above or
+        // captured by another widget
+        if (!dvui.eventMatchSimple(e, scrollContainer.data())) {
+            continue;
+        }
+
+        if (e.evt == .mouse and e.evt.mouse.action == .position) {
+            mousePosPhysical = e.evt.mouse.p;
+            mousePosData = dataRectScale.pointFromPhysical(mousePosPhysical);
+        }
+    }
+
     dvui.Path.stroke(.{ .points = &.{
         dataRectScale.pointToPhysical(.{ .x = -10 }),
         dataRectScale.pointToPhysical(.{ .x = 10 }),
-    } }, .{ .thickness = 1, .color = dvui.Color.black });
+    } }, .{ .thickness = 1, .color = dvui.themeGet().color_text });
 
     dvui.Path.stroke(.{ .points = &.{
         dataRectScale.pointToPhysical(.{ .y = -10 }),
         dataRectScale.pointToPhysical(.{ .y = 10 }),
-    } }, .{ .thickness = 1, .color = dvui.Color.black });
+    } }, .{ .thickness = 1, .color = dvui.themeGet().color_text });
 
     // keep record of bounding box
     var mbbox: ?Rect.Physical = null;
@@ -159,7 +176,7 @@ pub fn scrollCanvas() void {
                             } else if (me.action == .motion) {
                                 if (dvui.captured(dbox.data().id)) {
                                     e.handle(@src(), dragBox.data());
-                                    if (dvui.dragging(me.p)) |_| {
+                                    if (dvui.dragging(me.p, null)) |_| {
                                         // started the drag
                                         drag_box_window.* = i;
                                         drag_box_content.* = k;
@@ -199,7 +216,7 @@ pub fn scrollCanvas() void {
                         }
                     } else if (me.action == .motion) {
                         if (dvui.captured(dragBox.data().id)) {
-                            if (dvui.dragging(me.p)) |_| {
+                            if (dvui.dragging(me.p, null)) |_| {
                                 const p = me.p.diff(dvui.dragOffset()); // pixel corner we want
                                 b.* = dataRectScale.pointFromPhysical(p);
                                 dvui.refresh(null, @src(), scrollContainer.data().id);
@@ -247,7 +264,7 @@ pub fn scrollCanvas() void {
                         e.handle(@src(), scrollContainer.data());
                     }
                     if (dvui.captured(scrollContainer.data().id)) {
-                        if (dvui.dragging(me.p)) |dps| {
+                        if (dvui.dragging(me.p, null)) |dps| {
                             e.handle(@src(), scrollContainer.data());
                             const rs = scrollRectScale;
                             scroll_info.viewport.x -= dps.x / rs.s;
@@ -356,9 +373,32 @@ pub fn scrollCanvas() void {
         if (!done) {
             // still dragging, draw a half-opaque box to show we are dragging
             const dr = Rect.Physical.fromPoint(dvui.currentWindow().mouse_pt.diff(.{ .x = 10, .y = 10 })).toSize(.all(20));
-            dr.fill(.{}, .{ .color = dvui.Color.lime.opacity(0.5) });
+            dr.fill(.{}, .{ .color = dvui.Color.lime.opacity(0.5), .fade = 1.0 });
         }
     }
+
+    dvui.label(@src(), "Mouse Data Coords {d:0.2}x{d:0.2}", .{ mousePosData.x, mousePosData.y }, .{});
+}
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG scrollCanvas" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 300, .h = 400 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            scrollCanvas();
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-scrollCanvas.png");
 }
 
 const dvui = @import("../dvui.zig");

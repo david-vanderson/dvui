@@ -89,6 +89,11 @@ pub fn addChoiceLabel(self: *SuggestionWidget, label_str: []const u8) bool {
 
 pub fn addChoice(self: *SuggestionWidget) *MenuItemWidget {
     self.drop_mi = MenuItemWidget.init(@src(), .{ .highlight_only = true }, .{ .id_extra = self.drop_mi_index, .expand = .horizontal, .padding = .{} });
+    self.drop_mi.?.install();
+    self.drop_mi.?.processEvents();
+    if (self.drop_mi.?.data().id == dvui.focusedWidgetId()) {
+        self.selected_index = self.drop_mi_index;
+    }
     if (self.selected_index == self.drop_mi_index) {
         if (self.activate_selected) {
             self.drop_mi.?.activated = true;
@@ -96,11 +101,6 @@ pub fn addChoice(self: *SuggestionWidget) *MenuItemWidget {
         } else {
             self.drop_mi.?.highlight = true;
         }
-    }
-    self.drop_mi.?.install();
-    self.drop_mi.?.processEvents();
-    if (self.drop_mi.?.data().id == dvui.focusedWidgetId()) {
-        self.selected_index = self.drop_mi_index;
     }
     self.drop_mi.?.drawBackground(.{});
 

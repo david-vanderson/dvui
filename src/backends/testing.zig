@@ -9,6 +9,7 @@ size: dvui.Size.Natural,
 size_pixels: dvui.Size.Physical,
 time: i128 = 0,
 clipboard: ?[]const u8 = null,
+cursor_shown: bool = true,
 
 pub const kind: dvui.enums.Backend = .testing;
 
@@ -144,6 +145,13 @@ pub fn openURL(_: *TestingBackend, _: []const u8) std.mem.Allocator.Error!void {
 
 pub fn preferredColorScheme(_: *TestingBackend) ?dvui.enums.ColorScheme {
     return null;
+}
+
+pub fn cursorShow(self: *TestingBackend, value: ?bool) bool {
+    defer if (value) |val| {
+        self.cursor_shown = val;
+    };
+    return self.cursor_shown;
 }
 
 /// Called by dvui.refresh() when it is called from a background

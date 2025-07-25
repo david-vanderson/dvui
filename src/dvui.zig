@@ -277,7 +277,7 @@ pub fn themeSet(theme: *const Theme) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn toggleDebugWindow() void {
     var cw = currentWindow();
-    cw.debug_window_show = !cw.debug_window_show;
+    cw.debug.open = !cw.debug.open;
 }
 
 pub const TagData = struct {
@@ -292,7 +292,7 @@ pub fn tag(name: []const u8, data: TagData) void {
     if (cw.tags.map.getPtr(name)) |old_data| {
         if (old_data.used) {
             dvui.log.err("duplicate tag name \"{s}\" id {x} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ name, data.id });
-            cw.debug_widget_id = data.id;
+            cw.debug.widget_id = data.id;
         }
 
         old_data.*.inner = data;
@@ -325,12 +325,13 @@ pub const Alignment = struct {
     max: ?f32,
     next: f32,
 
-    pub fn init() Alignment {
-        const wd = dvui.parentGet().data();
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize) Alignment {
+        const parent = dvui.parentGet();
+        const id = parent.extendId(src, id_extra);
         return .{
-            .id = wd.id,
-            .scale = wd.rectScale().s,
-            .max = dvui.dataGet(null, wd.id, "_max_align", f32),
+            .id = id,
+            .scale = parent.data().rectScale().s,
+            .max = dvui.dataGet(null, id, "_max_align", f32),
             .next = -1_000_000,
         };
     }
@@ -1447,6 +1448,18 @@ pub fn cursorSet(cursor: enums.Cursor) void {
     }
 }
 
+/// Shows or hides the cursor, `true` meaning it's shown.
+///
+/// The previous value will be returned
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn cursorShow(value: ?bool) bool {
+    return currentWindow().backend.cursorShow(value) catch |err| {
+        logError(@src(), err, "Could not change cursor visibility", .{});
+        return true;
+    };
+}
+
 /// A collection of points that make up a shape that can later be rendered to the screen.
 ///
 /// This is the basic tool to create rectangles and more complex polygons to later be
@@ -1582,7 +1595,9 @@ pub const Path = struct {
     }
 
     pub const FillConvexOptions = struct {
-        blur: f32 = 1.0,
+        /// Size (physical pixels) of fade to transparent centered on the edge.
+        /// If >1, then starts a half-pixel inside and the rest outside.
+        fade: f32 = 0.0,
         color: ?Color = null,
         center: ?Point.Physical = null,
     };
@@ -1634,10 +1649,7 @@ pub const Path = struct {
     /// Generates triangles to fill path (must be convex).
     ///
     /// Vertexes will have unset uv and color is alpha multiplied white fading to
-    /// transparent at the edge.
-    ///
-    /// blur is how many pixels wide the fade to transparent is, starting a half
-    /// pixel inside. Currently blur < 1 is treated as 1, but might change.
+    /// transparent at the edge if fade is > 0.
     pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillConvexOptions) std.mem.Allocator.Error!Triangles {
         if (path.points.len < 3) {
             return .empty;
@@ -1645,7 +1657,7 @@ pub const Path = struct {
 
         var vtx_count = path.points.len;
         var idx_count = (path.points.len - 2) * 3;
-        if (opts.blur > 0) {
+        if (opts.fade > 0) {
             vtx_count *= 2;
             idx_count += path.points.len * 6;
         }
@@ -1674,7 +1686,7 @@ pub const Path = struct {
             var norm: Point.Physical = .{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 };
 
             // inner vertex
-            const inside_len = @min(0.5, opts.blur / 2);
+            const inside_len = @min(0.5, opts.fade / 2);
             builder.appendVertex(.{
                 .pos = .{
                     .x = bb.x - norm.x * inside_len,
@@ -1683,8 +1695,8 @@ pub const Path = struct {
                 .col = col,
             });
 
-            const idx_ai = if (opts.blur > 0) ai * 2 else ai;
-            const idx_bi = if (opts.blur > 0) bi * 2 else bi;
+            const idx_ai = if (opts.fade > 0) ai * 2 else ai;
+            const idx_bi = if (opts.fade > 0) bi * 2 else bi;
 
             // indexes for fill
             // triangles must be counter-clockwise (y going down) to avoid backface culling
@@ -1694,7 +1706,7 @@ pub const Path = struct {
                 builder.appendTriangles(&.{ 0, idx_ai, idx_bi });
             }
 
-            if (opts.blur > 0) {
+            if (opts.fade > 0) {
                 // scale averaged normal by angle between which happens to be the same as
                 // dividing by the length^2
                 const d2 = norm.x * norm.x + norm.y * norm.y;
@@ -1702,7 +1714,7 @@ pub const Path = struct {
                     norm = norm.scale(1.0 / d2, Point.Physical);
                 }
 
-                // limit distance our vertexes can be from the point to 2 * blur so
+                // limit distance our vertexes can be from the point to 2 so
                 // very small angles don't produce huge geometries
                 const l = norm.length();
                 if (l > 2.0) {
@@ -1710,7 +1722,7 @@ pub const Path = struct {
                 }
 
                 // outer vertex
-                const outside_len = if (opts.blur <= 1) opts.blur / 2 else opts.blur - 0.5;
+                const outside_len = if (opts.fade <= 1) opts.fade / 2 else opts.fade - 0.5;
                 builder.appendVertex(.{
                     .pos = .{
                         .x = bb.x + norm.x * outside_len,
@@ -1822,7 +1834,7 @@ pub const Path = struct {
             defer tempPath.deinit();
 
             tempPath.addArc(center, opts.thickness, math.pi * 2.0, 0, true);
-            return tempPath.build().fillConvexTriangles(allocator, .{ .color = opts.color, .blur = 1.0 });
+            return tempPath.build().fillConvexTriangles(allocator, .{ .color = opts.color, .fade = 1.0 });
         }
 
         // a single segment can't be closed
@@ -2131,10 +2143,10 @@ pub const Triangles = struct {
     pub fn uvFromRectuv(self: *Triangles, r: Rect.Physical, r_uv: Rect) void {
         for (self.vertexes) |*v| {
             const xfrac = (v.pos.x - r.x) / r.w;
-            v.uv[0] = std.math.clamp(r_uv.x + xfrac * (r_uv.w - r_uv.x), 0, 1);
+            v.uv[0] = std.math.clamp(r_uv.x + xfrac * r_uv.w, 0, 1);
 
             const yfrac = (v.pos.y - r.y) / r.h;
-            v.uv[1] = std.math.clamp(r_uv.y + yfrac * (r_uv.h - r_uv.y), 0, 1);
+            v.uv[1] = std.math.clamp(r_uv.y + yfrac * r_uv.h, 0, 1);
         }
     }
 
@@ -2208,7 +2220,14 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
         return;
     }
 
-    const clipr: ?Rect.Physical = if (triangles.bounds.clippedBy(clipGet())) clipGet().offsetNegPoint(cw.render_target.offset) else null;
+    // expand clipping to full pixels before testing
+    var clipping = clipGet();
+    clipping.w = @max(0, @ceil(clipping.x - @floor(clipping.x) + clipping.w));
+    clipping.x = @floor(clipping.x);
+    clipping.h = @max(0, @ceil(clipping.y - @floor(clipping.y) + clipping.h));
+    clipping.y = @floor(clipping.y);
+
+    const clipr: ?Rect.Physical = if (triangles.bounds.clippedBy(clipping)) clipping.offsetNegPoint(cw.render_target.offset) else null;
 
     if (cw.render_target.offset.nonZero()) {
         const offset = cw.render_target.offset;
@@ -2381,9 +2400,18 @@ pub fn dragOffset() Point.Physical {
 /// previous dragging call or the drag starting location (from `dragPreStart`
 /// or `dragStart`).  Otherwise return null, meaning a drag hasn't started yet.
 ///
+/// If name is given, returns null immediately if it doesn't match the name /
+/// given to `dragPreStart` or `dragStart`.  This is useful for widgets that need
+/// multiple different kinds of drags.
+///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dragging(p: Point.Physical) ?Point.Physical {
+pub fn dragging(p: Point.Physical, name: ?[]const u8) ?Point.Physical {
     const cw = currentWindow();
+
+    if (name) |n| {
+        if (!std.mem.eql(u8, n, cw.drag_name)) return null;
+    }
+
     switch (cw.drag_state) {
         .none => return null,
         .dragging => {
@@ -2710,7 +2738,7 @@ pub fn parentReset(id: WidgetId, w: Widget) void {
     const cw = currentWindow();
     const actual_current = cw.data().parent.data().id;
     if (id != actual_current) {
-        cw.debug_widget_id = actual_current;
+        cw.debug.widget_id = actual_current;
 
         var wd = cw.data().parent.data();
 
@@ -3340,7 +3368,7 @@ pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
                     }
                 } else if (me.action == .motion and me.button.touch()) {
                     if (dvui.captured(wd.id)) {
-                        if (dvui.dragging(me.p)) |_| {
+                        if (dvui.dragging(me.p, null)) |_| {
                             // touch: if we overcame the drag threshold, then
                             // that means the person probably didn't want to
                             // touch this button, they were trying to scroll
@@ -3690,7 +3718,7 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Rect.Physical {
     var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
 
-    dvui.labelNoFmt(@src(), str, .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
+    dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{ .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
 
     if (openflag) |of| {
         if (dvui.buttonIcon(
@@ -4363,28 +4391,23 @@ pub fn toastDisplay(id: WidgetId) !void {
 /// Standard way of showing toasts.  For the main window, this is called with
 /// null in Window.end().
 ///
-/// For floating windows, pass non-null floating_window_data. Then it shows
+/// For floating windows or other widgets, pass non-null id. Then it shows
 /// toasts that were previously added with non-null subwindow_id, and they are
-/// shown on top of that subwindow.
+/// shown on top of the current subwindow.
+///
+/// Toasts are shown in rect centered horizontally and 70% down vertically.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn toastsShow(floating_window_data: ?*WidgetData) void {
-    const id: ?WidgetId, const rect: Rect = blk: {
-        if (floating_window_data) |fwd| {
-            break :blk .{ fwd.id, fwd.rect };
-        } else {
-            break :blk .{ null, .cast(windowRect()) };
-        }
-    };
+pub fn toastsShow(id: ?WidgetId, rect: Rect.Natural) void {
     var ti = dvui.toastsFor(id);
     if (ti) |*it| {
         var toast_win = dvui.FloatingWindowWidget.init(@src(), .{ .stay_above_parent_window = id != null, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
         defer toast_win.deinit();
 
-        toast_win.data().rect = dvui.placeIn(rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
-        toast_win.autoSize();
+        toast_win.data().rect = dvui.placeIn(.cast(rect), toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
         toast_win.install();
         toast_win.drawBackground();
+        toast_win.autoSize(); // affects next frame
 
         var vbox = dvui.box(@src(), .vertical, .{});
         defer vbox.deinit();
@@ -5154,14 +5177,10 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
 /// Returns true if it's been clicked.
 pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) bool {
     var lw = LabelWidget.init(src, fmt, args, init_opts, opts.override(.{ .name = "LabelClick" }));
-    // now lw has a Rect from its parent but hasn't processed events or drawn
-
-    const lwid = lw.data().id;
-
-    dvui.tabIndexSet(lwid, lw.data().options.tab_index);
-
     // draw border and background
     lw.install();
+
+    dvui.tabIndexSet(lw.data().id, lw.data().options.tab_index);
 
     const ret = dvui.clicked(lw.data(), .{});
 
@@ -5169,7 +5188,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
     lw.draw();
 
     // draw an accent border if we are focused
-    if (lwid == dvui.focusedWidgetId()) {
+    if (lw.data().id == dvui.focusedWidgetId()) {
         lw.data().focusBorder();
     }
 
@@ -5547,7 +5566,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
     // - gets a rectangle from bw
     // - draws itself
     // - reports its min size to bw
-    labelNoFmt(@src(), label_str, .{}, options);
+    labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, options);
 
     // draw focus
     bw.drawFocus();
@@ -5728,7 +5747,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.accent) });
+        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.accent), .fade = 1.0 });
     }
 
     switch (dir) {
@@ -5742,7 +5761,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.fill) });
+        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
     }
 
     const knobRect = switch (dir) {
@@ -5947,7 +5966,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                             }
                         }
                     } else if (me.action == .release and me.button.pointer()) {
-                        if (me.button.touch() and dvui.dragging(me.p) == null) {
+                        if (me.button.touch() and dvui.dragging(me.p, null) == null) {
                             text_mode = true;
                             refresh(null, @src(), b.data().id);
                         }
@@ -5962,7 +5981,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                         // only update the value if we are exceeding the
                         // drag threshold to prevent the value from jumping while
                         // entering text mode via a non-drag touch-tap
-                        if (!me.button.touch() or dvui.dragging(me.p) != null) {
+                        if (!me.button.touch() or dvui.dragging(me.p, null) != null) {
                             p = me.p;
                         }
                     } else if (me.action == .position) {
@@ -6066,7 +6085,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
 
-            knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s, Rect.Physical), .{ .color = options.color(.fill_press) });
+            knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s, Rect.Physical), .{ .color = options.color(.fill_press), .fade = 1.0 });
         }
 
         const label_opts = options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
@@ -6182,7 +6201,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 
     const rs = b.data().contentRectScale();
 
-    rs.r.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.fill) });
+    rs.r.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
 
     const perc = @max(0, @min(1, init_opts.percent));
     if (perc == 0) return;
@@ -6198,7 +6217,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.accent) });
+    part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.accent), .fade = 1.0 });
 }
 
 pub var checkbox_defaults: Options = .{
@@ -6253,7 +6272,7 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
     const cornerRad = opts.corner_radiusGet().scale(rs.s, Rect.Physical);
-    rs.r.fill(cornerRad, .{ .color = opts.color(.border) });
+    rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
         rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent });
@@ -6269,9 +6288,9 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     var options = opts;
     if (checked) {
         options = opts.override(themeGet().accent());
-        rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill) });
+        rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
     } else {
-        rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill) });
+        rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
     }
 
     if (checked) {
@@ -6340,7 +6359,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
     const cornerRad = Rect.Physical.all(1000);
     const r = rs.r;
-    r.fill(cornerRad, .{ .color = opts.color(.border) });
+    r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
         r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent });
@@ -6356,9 +6375,9 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     var options = opts;
     if (active) {
         options = opts.override(themeGet().accent());
-        r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(.fill) });
+        r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(.fill), .fade = 1.0 });
     } else {
-        r.insetAll(rs.s).fill(cornerRad, .{ .color = opts.color(fill) });
+        r.insetAll(rs.s).fill(cornerRad, .{ .color = opts.color(fill), .fade = 1.0 });
     }
 
     if (active) {
@@ -6735,14 +6754,18 @@ pub const renderTextOptions = struct {
     text: []const u8,
     rs: RectScale,
     color: Color,
+    background_color: ?Color = null,
     sel_start: ?usize = null,
     sel_end: ?usize = null,
-    sel_color: ?Color = null,
-    sel_color_bg: ?Color = null,
     debug: bool = false,
 };
 
-// only renders a single line of text
+/// Only renders a single line of text
+///
+/// Selection will be colored with the current themes accent color,
+/// with the text color being set to the themes fill color.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     if (opts.rs.s == 0) return;
     if (opts.text.len == 0) return;
@@ -6847,14 +6870,26 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
         }
         last_codepoint = codepoint;
 
+        if (x + gi.leftBearing * target_fraction < x_start) {
+            // Glyph extends left of the start, like the first letter being
+            // "j", which has a negative left bearing.
+            //
+            // Shift the whole line over so it starts at x_start.  textSize()
+            // includes this extra space.
+
+            //std.debug.print("moving x from {d} to {d}\n", .{ x, x_start - gi.leftBearing * target_fraction });
+            x = x_start - gi.leftBearing * target_fraction;
+        }
+
         const nextx = x + gi.advance * target_fraction;
+        const leftx = x + gi.leftBearing * target_fraction;
 
         if (sel) {
             bytes_seen += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
             if (!sel_in and bytes_seen > sel_start and bytes_seen <= sel_end) {
                 // entering selection
                 sel_in = true;
-                sel_start_x = x;
+                sel_start_x = @min(x, leftx);
             } else if (sel_in and bytes_seen > sel_end) {
                 // leaving selection
                 sel_in = false;
@@ -6871,9 +6906,9 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
             const vtx_offset: u16 = @intCast(builder.vertexes.items.len);
             var v: Vertex = undefined;
 
-            v.pos.x = x + gi.leftBearing * target_fraction;
+            v.pos.x = leftx;
             v.pos.y = y + gi.topBearing * target_fraction;
-            v.col = .fromColor(if (sel_in) opts.sel_color orelse opts.color else opts.color);
+            v.col = .fromColor(if (sel_in) themeGet().color_fill else opts.color);
             v.uv = gi.uv;
             builder.appendVertex(v);
 
@@ -6896,7 +6931,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
             v.uv[1] = gi.uv[1] + gi.h / atlas_size.h;
             builder.appendVertex(v);
 
-            v.pos.x = x + gi.leftBearing * target_fraction;
+            v.pos.x = leftx;
             v.uv[0] = gi.uv[0];
             builder.appendVertex(v);
 
@@ -6910,15 +6945,20 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
         x = nextx;
     }
 
+    if (opts.background_color) |bgcol| {
+        opts.rs.r.toPoint(.{
+            .x = max_x,
+            .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
+        }).fill(.{}, .{ .color = bgcol, .fade = 0 });
+    }
+
     if (sel) {
-        if (opts.sel_color_bg) |bgcol| {
-            Rect.Physical.fromPoint(.{ .x = sel_start_x, .y = opts.rs.r.y })
-                .toPoint(.{
-                    .x = sel_end_x,
-                    .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
-                })
-                .fill(.{}, .{ .color = bgcol, .blur = 0 });
-        }
+        Rect.Physical.fromPoint(.{ .x = sel_start_x, .y = opts.rs.r.y })
+            .toPoint(.{
+                .x = sel_end_x,
+                .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
+            })
+            .fill(.{}, .{ .color = themeGet().color_accent, .fade = 0 });
     }
 
     try renderTriangles(builder.build_unowned(), texture_atlas);
@@ -6938,17 +6978,18 @@ pub fn textureCreate(pixels: []const Color.PMA, width: u32, height: u32, interpo
 
 /// Update a texture that was created with `textureCreate`.
 ///
-/// this is only valid to call while the Texture is not destroyed!
+/// If the backend does not support updating textures, it will be destroyed and
+/// recreated, changing the pointer inside tex.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn textureUpdate(Self: *Texture, pma: []const dvui.Color.PMA, interpolation: enums.TextureInterpolation) !void {
-    if (pma.len != Self.width * Self.height) @panic("Texture size and supplied Content did not match");
-    currentWindow().backend.textureUpdate(Self.*, @ptrCast(pma.ptr)) catch |err| {
+pub fn textureUpdate(tex: *Texture, pma: []const dvui.Color.PMA, interpolation: enums.TextureInterpolation) !void {
+    if (pma.len != tex.width * tex.height) @panic("Texture size and supplied Content did not match");
+    currentWindow().backend.textureUpdate(tex.*, @ptrCast(pma.ptr)) catch |err| {
         // texture update not supported by backend, destroy and create texture
         if (err == Backend.TextureError.NotImplemented) {
-            const new_tex = try textureCreate(pma, Self.width, Self.height, interpolation);
-            textureDestroyLater(Self.*);
-            Self.* = new_tex;
+            const new_tex = try textureCreate(pma, tex.width, tex.height, interpolation);
+            textureDestroyLater(tex.*);
+            tex.* = new_tex;
         } else {
             return err;
         }
@@ -7036,6 +7077,10 @@ pub const RenderTextureOptions = struct {
     uv: Rect = .{ .w = 1, .h = 1 },
     background_color: ?Color = null,
     debug: bool = false,
+
+    /// Size (physical pixels) of fade to transparent centered on the edge.
+    /// If >1, then starts a half-pixel inside and the rest outside.
+    fade: f32 = 0.0,
 };
 
 pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Backend.GenericError!void {
@@ -7057,7 +7102,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
 
     path.addRect(rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
 
-    var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod });
+    var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod, .fade = opts.fade });
     defer triangles.deinit(cw.lifo());
 
     triangles.uvFromRectuv(rs.r, opts.uv);
@@ -7330,7 +7375,7 @@ pub const BasicLayout = struct {
             //
             // If you want that to work, wrap the children in a vertical box.
             const cw = dvui.currentWindow();
-            cw.debug_widget_id = id;
+            cw.debug.widget_id = id;
             dvui.log.err("{s}:{d} rectFor() got child {x} after expanded child", .{ @src().file, @src().line, id });
             var wd = dvui.parentGet().data();
             while (true) : (wd = wd.parent.data()) {

@@ -346,7 +346,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 path.addPoint(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
                 path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
+                path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control });
                 path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.data().options.color(.border), .closed = true });
             }
 
@@ -416,7 +416,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 path.addPoint(.{ .x = fcrs.r.x, .y = fcrs.r.y });
                 path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
+                path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control });
                 path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.data().options.color(.border), .closed = true });
             }
 
@@ -1210,10 +1210,10 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 .text = rtxt,
                 .rs = rs,
                 .color = options.color(.text),
+                // TODO: Should this take `options.background` into account?
+                .background_color = if (options.color_fill) |fill| fill.resolve() else null,
                 .sel_start = self.selection.start -| self.bytes_seen,
                 .sel_end = self.selection.end -| self.bytes_seen,
-                .sel_color = options.color(.fill),
-                .sel_color_bg = options.color(.accent),
             }) catch |err| {
                 dvui.logError(@src(), err, "Failed to render text: {s}", .{rtxt});
             };
@@ -1579,7 +1579,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                 e.handle(@src(), self.data());
 
                 if (dvui.captured(self.data().id)) {
-                    if (!self.touch_editing and dvui.dragging(me.p) == null) {
+                    if (!self.touch_editing and dvui.dragging(me.p, null) == null) {
                         // click without drag
                         self.click_pt = self.data().contentRectScale().pointFromPhysical(me.p);
 
@@ -1623,7 +1623,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                     dvui.dragEnd();
                 }
             } else if (me.action == .motion and dvui.captured(self.data().id)) {
-                if (dvui.dragging(me.p)) |_| {
+                if (dvui.dragging(me.p, null)) |_| {
                     self.click_num = 0;
                     if (!me.button.touch()) {
                         e.handle(@src(), self.data());
@@ -1643,7 +1643,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                         // user intended to scroll with a finger swipe
                         // release our capture including this event so a
                         // containing scroll container can get it
-                        dvui.captureMouse(null, e.num-1); // stop possible drag and capture
+                        dvui.captureMouse(null, e.num - 1); // stop possible drag and capture
                         dvui.dragEnd();
                     }
                 }

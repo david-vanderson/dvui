@@ -58,6 +58,17 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) void {
         }
     }
 
+    {
+        var vbox = dvui.box(@src(), .vertical, .{.min_size_content = .{.w = 250, .h = 80}, .border = .all(1)});
+        defer vbox.deinit();
+
+        if (dvui.button(@src(), "Toast In Box", .{}, .{})) {
+            dvui.toast(@src(), .{ .subwindow_id = vbox.data().id, .message = "Toast to this box" });
+        }
+
+        dvui.toastsShow(vbox.data().id, vbox.data().contentRectScale().r.toNatural());
+    }
+
     dvui.label(@src(), "\nDialogs and toasts from other threads", .{}, .{});
     {
         var hbox = dvui.box(@src(), .horizontal, .{});
@@ -226,6 +237,36 @@ fn background_progress(win: *dvui.Window, delay_ns: u64) void {
         progress_mutex.unlock();
         dvui.refresh(win, @src(), null);
     }
+}
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG dialogs" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 400, .h = 300 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            dialogs(box.data().id);
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+
+    // Tab to the main window toast button
+    for (0..8) |_| {
+        try dvui.testing.pressKey(.tab, .none);
+        _ = try dvui.testing.step(frame);
+    }
+    try dvui.testing.pressKey(.enter, .none);
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-dialogs.png");
 }
 
 const std = @import("std");

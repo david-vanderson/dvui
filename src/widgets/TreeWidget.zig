@@ -242,7 +242,7 @@ pub const Branch = struct {
 
                     if (self.target_rs != null) {
                         rs.r.h = 2.0;
-                        rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent });
+                        rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent, .fade = 1.0 });
                     }
                 }
             }
@@ -274,7 +274,7 @@ pub const Branch = struct {
             var rs = self.wd.rectScale();
             self.target_rs = rs;
             rs.r.h = 2.0;
-            rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent });
+            rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent, .fade = 1.0 });
         }
 
         self.tree.branch_size = self.button.wd.rect.size();
@@ -298,7 +298,7 @@ pub const Branch = struct {
                         } else if (me.action == .motion) {
                             if (dvui.captured(self.button.wd.id)) {
                                 e.handle(@src(), self.button.data());
-                                if (dvui.dragging(me.p)) |_| {
+                                if (dvui.dragging(me.p, null)) |_| {
                                     self.tree.dragStart(self.wd.id.asUsize(), me.p); // reorder grabs capture
 
                                     break :loop;

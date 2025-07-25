@@ -169,8 +169,7 @@ pub fn install(self: *FloatingMenuWidget) void {
         pm.child_popup_rect = rs.r;
     }
 
-    self.menu = MenuWidget.init(@src(), .{ .dir = .vertical }, self.options.strip().override(.{ .expand = .horizontal }));
-    self.menu.parentSubwindowId = self.prev_windowId;
+    self.menu = MenuWidget.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowId }, self.options.strip().override(.{ .expand = .horizontal }));
     self.menu.install();
 
     // if no widget in this popup has focus, make the menu have focus to handle keyboard events

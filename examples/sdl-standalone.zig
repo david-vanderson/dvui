@@ -71,8 +71,9 @@ pub fn main() !void {
         _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 255);
         _ = Backend.c.SDL_RenderClear(backend.renderer);
 
-        // The demos we pass in here show up under "Platform-specific demos"
+        const keep_running = true;
         gui_frame();
+        if (!keep_running) break :main_loop;
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
@@ -176,7 +177,7 @@ fn gui_frame() void {
             var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
 
-            if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{}) != null) {
+            if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
                 m.close();
             }
         }
@@ -187,7 +188,7 @@ fn gui_frame() void {
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
-        var al = dvui.Alignment.init();
+        var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
 
         wholeStruct(@src(), "basic_types_const", &basic_types_const, 0);
@@ -195,7 +196,7 @@ fn gui_frame() void {
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
-        var al = dvui.Alignment.init();
+        var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
 
         wholeStruct(@src(), "basic_types_var", &basic_types_var, 0);
@@ -231,7 +232,7 @@ fn gui_frame() void {
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
-        var al = dvui.Alignment.init();
+        var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
 
         wholeStruct(@src(), "opts", &opts, 1);
@@ -263,7 +264,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
     var vbox = dvui.box(src, .vertical, .{ .expand = .both });
     defer vbox.deinit();
 
-    var al = dvui.Alignment.init();
+    var al = dvui.Alignment.init(@src(), 0);
     defer al.deinit();
 
     inline for (std.meta.fields(@TypeOf(container.*)), 0..) |field, i| {

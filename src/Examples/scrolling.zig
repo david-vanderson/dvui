@@ -219,6 +219,27 @@ pub fn scrolling() void {
     // TODO: what happens if sizes are different?
 }
 
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG scrolling" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 400 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            scrolling();
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-scrolling.png");
+}
+
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const ScrollInfo = dvui.ScrollInfo;

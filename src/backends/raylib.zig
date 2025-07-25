@@ -204,23 +204,21 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
             // clip_rect is in pixels, but raylib multiplies by GetWindowScaleDPI(), so we
             // have to divide by that here
             const clipr = dvuiRectToRaylib(clip_rect);
-
-            // figure out how much we are losing by truncating x and y, need to add that back to w and h
-            const clipx: c_int = @intFromFloat(clipr.x);
-            const clipw: c_int = @intFromFloat(@ceil(clipr.width + clipr.x - @floor(clipr.x)));
-
-            const clipy: c_int = @intFromFloat(clipr.y);
-            const cliph: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.height + clipr.y - @floor(clipr.y)))));
-            c.BeginScissorMode(clipx, clipy, clipw, cliph);
+            c.BeginScissorMode(
+                @intFromFloat(clipr.x),
+                @intFromFloat(clipr.y),
+                @intFromFloat(clipr.width),
+                @intFromFloat(clipr.height),
+            );
         } else {
             // raylib does NOT multiply by the window scale when targeting a texture
-            const clipx: c_int = @intFromFloat(clip_rect.x);
-            const clipw: c_int = @intFromFloat(@ceil(clip_rect.w + clip_rect.x - @floor(clip_rect.x)));
             // need to swap y
-            const ry: f32 = @as(f32, @floatFromInt(self.fb_height.?)) - clip_rect.y - clip_rect.h;
-            const y: c_int = @intFromFloat(ry);
-            const h: c_int = @intFromFloat(@ceil(clip_rect.h + ry - @floor(ry)));
-            c.BeginScissorMode(clipx, y, clipw, h);
+            c.BeginScissorMode(
+                @intFromFloat(clip_rect.x),
+                @intFromFloat(@as(f32, @floatFromInt(self.fb_height.?)) - clip_rect.y - clip_rect.h),
+                @intFromFloat(clip_rect.w),
+                @intFromFloat(clip_rect.h),
+            );
         }
     }
 
@@ -469,6 +467,18 @@ pub fn preferredColorScheme(_: *RaylibBackend) ?dvui.enums.ColorScheme {
     return null;
 }
 
+pub fn cursorShow(_: *RaylibBackend, value: ?bool) bool {
+    const prev = !c.IsCursorHidden();
+    if (value) |val| {
+        if (val) {
+            c.ShowCursor();
+        } else {
+            c.HideCursor();
+        }
+    }
+    return prev;
+}
+
 //TODO implement this function
 pub fn refresh(_: *RaylibBackend) void {}
 
@@ -515,7 +525,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
         const code = raylibKeyToDvui(event);
 
         //text input
-        if ((self.pressed_modifier.shiftOnly() or self.pressed_modifier.has(.none)) and event < std.math.maxInt(u8) and std.ascii.isPrint(@intCast(event))) {
+        if ((self.pressed_modifier.shiftOnly() or self.pressed_modifier == .none) and event < std.math.maxInt(u8) and std.ascii.isPrint(@intCast(event))) {
             const char: u8 = @intCast(event);
 
             const lowercase_alpha = std.ascii.toLower(char);

@@ -87,7 +87,7 @@ pub fn styling() void {
 
         const border = dvui.dataGetPtrDefault(null, hbox.data().id, "border", bool, true);
         const radius = dvui.dataGetPtrDefault(null, hbox.data().id, "radius", f32, 5);
-        const blur = dvui.dataGetPtrDefault(null, hbox.data().id, "blur", f32, 2);
+        const fade = dvui.dataGetPtrDefault(null, hbox.data().id, "fade", f32, 2);
         const shrink = dvui.dataGetPtrDefault(null, hbox.data().id, "shrink", f32, 0);
         const offset = dvui.dataGetPtrDefault(null, hbox.data().id, "offset", dvui.Point, .{ .x = 1, .y = 1 });
         const alpha = dvui.dataGetPtrDefault(null, hbox.data().id, "alpha", f32, 0.5);
@@ -95,12 +95,12 @@ pub fn styling() void {
         // We are using two boxes here so the box shadow can have different corner_radius values.
 
         {
-            var vbox = dvui.box(@src(), .vertical, .{ .margin = dvui.Rect.all(30), .min_size_content = .{ .w = 200, .h = 100 }, .corner_radius = dvui.Rect.all(5), .background = true, .border = if (border.*) dvui.Rect.all(1) else null, .box_shadow = .{ .color = .fromColor(backbox_color), .corner_radius = dvui.Rect.all(radius.*), .shrink = shrink.*, .offset = offset.*, .blur = blur.*, .alpha = alpha.* } });
+            var vbox = dvui.box(@src(), .vertical, .{ .margin = dvui.Rect.all(30), .min_size_content = .{ .w = 200, .h = 100 }, .corner_radius = dvui.Rect.all(5), .background = true, .border = if (border.*) dvui.Rect.all(1) else null, .box_shadow = .{ .color = .fromColor(backbox_color), .corner_radius = dvui.Rect.all(radius.*), .shrink = shrink.*, .offset = offset.*, .fade = fade.*, .alpha = alpha.* } });
             defer vbox.deinit();
             dvui.label(@src(), "Box shadows", .{}, .{ .gravity_x = 0.5 });
             _ = dvui.checkbox(@src(), border, "border", .{});
             _ = dvui.sliderEntry(@src(), "radius: {d:0.0}", .{ .value = radius, .min = 0, .max = 50, .interval = 1 }, .{ .gravity_x = 0.5 });
-            _ = dvui.sliderEntry(@src(), "blur: {d:0.1}", .{ .value = blur, .min = 0, .max = 50, .interval = 0.1 }, .{ .gravity_x = 0.5 });
+            _ = dvui.sliderEntry(@src(), "fade: {d:0.1}", .{ .value = fade, .min = 0, .max = 50, .interval = 0.1 }, .{ .gravity_x = 0.5 });
             _ = dvui.sliderEntry(@src(), "shrink: {d:0.0}", .{ .value = shrink, .min = -10, .max = 50, .interval = 1 }, .{ .gravity_x = 0.5 });
             _ = dvui.sliderEntry(@src(), "x: {d:0.0}", .{ .value = &offset.x, .min = -20, .max = 20, .interval = 1 }, .{ .gravity_x = 0.5 });
             _ = dvui.sliderEntry(@src(), "y: {d:0.0}", .{ .value = &offset.y, .min = -20, .max = 20, .interval = 1 }, .{ .gravity_x = 0.5 });
@@ -207,6 +207,27 @@ pub fn hsluvSliders(src: std.builtin.SourceLocation, hsluv: *dvui.Color.HSLuv, o
     }
 
     return changed;
+}
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG styling" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 300 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            styling();
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-styling.png");
 }
 
 const std = @import("std");

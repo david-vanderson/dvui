@@ -169,7 +169,7 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
                 } else if (me.action == .motion) {
                     if (dvui.captured(iw.data().id)) {
                         e.handle(@src(), iw.data());
-                        if (dvui.dragging(me.p)) |_| {
+                        if (dvui.dragging(me.p, null)) |_| {
                             ret = me.p;
                             if (init_opts.reorderable) |reo| {
                                 reo.reorder.dragStart(reo.data().id.asUsize(), me.p, e.num); // reorder grabs capture
@@ -267,7 +267,7 @@ pub const Reorderable = struct {
                     self.reorder.found_slot = true;
 
                     if (self.init_options.draw_target) {
-                        rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent });
+                        rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent, .fade = 1.0 });
                     }
 
                     if (self.init_options.reinstall and !self.init_options.last_slot) {
@@ -317,10 +317,17 @@ pub const Reorderable = struct {
     }
 
     pub fn reinstall(self: *Reorderable) void {
+        self.reinstall1();
+        self.reinstall2();
+    }
+
+    pub fn reinstall1(self: *Reorderable) void {
         // send our target rect to the parent for sizing
         self.data().minSizeMax(self.data().rect.size());
         self.data().minSizeReportToParent();
+    }
 
+    pub fn reinstall2(self: *Reorderable) void {
         // reinstall ourselves getting the next rect from parent
         self.wd = WidgetData.init(self.wd.src, .{}, self.options);
         self.wd.register();

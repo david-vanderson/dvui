@@ -54,6 +54,7 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, clip: u8, x: i32, y: i32, w: i32, h: i32) void;
 
     pub extern "dvui" fn wasm_cursor(name: [*]const u8, name_len: usize) void;
+    pub extern "dvui" fn wasm_cursor_show(value: i8) bool;
     pub extern "dvui" fn wasm_text_input(x: f32, y: f32, w: f32, h: f32) void;
     pub extern "dvui" fn wasm_open_url(ptr: [*]const u8, len: usize) void;
     pub extern "dvui" fn wasm_preferred_color_scheme() u8;
@@ -110,6 +111,9 @@ pub const wasm = if (!builtin.is_test) struct {
     pub fn wasm_renderGeometry(_: u32, _: [*]const u8, _: usize, _: [*]const u8, _: usize, _: u8, _: u8, _: u8, _: u8, _: u8, _: i32, _: i32, _: i32, _: i32) void {}
 
     pub fn wasm_cursor(_: [*]const u8, _: usize) void {}
+    pub fn wasm_cursor_show(_: i8) bool {
+        return undefined;
+    }
     pub fn wasm_text_input(_: f32, _: f32, _: f32, _: f32) void {}
     pub fn wasm_open_url(_: [*]const u8, _: usize) void {}
     pub fn wasm_preferred_color_scheme() u8 {
@@ -585,18 +589,16 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const
     var h: i32 = std.math.maxInt(i32);
 
     if (maybe_clipr) |clipr| {
-        // figure out how much we are losing by truncating x and y, need to add that back to w and h
         x = @intFromFloat(clipr.x);
-        w = @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x)));
+        w = @intFromFloat(clipr.w);
+        h = @intFromFloat(clipr.h);
 
         if (wasm.wasm_frame_buffer() == 0) {
             // y needs to be converted to 0 at bottom first
             const ry: f32 = wasm.wasm_pixel_height() - clipr.y - clipr.h;
             y = @intFromFloat(ry);
-            h = @intFromFloat(@ceil(clipr.h + ry - @floor(ry)));
         } else {
             y = @intFromFloat(clipr.y);
-            h = @intFromFloat(@ceil(clipr.h + clipr.y - @floor(clipr.y)));
         }
     }
 
@@ -704,6 +706,10 @@ pub fn preferredColorScheme(_: *WebBackend) ?dvui.enums.ColorScheme {
 
 pub fn downloadData(name: []const u8, data: []const u8) !void {
     wasm.wasm_download_data(name.ptr, name.len, data.ptr, data.len);
+}
+
+pub fn cursorShow(_: *WebBackend, value: ?bool) bool {
+    return wasm.wasm_cursor_show(if (value) |val| @intFromBool(val) else -1);
 }
 
 pub fn refresh(_: *WebBackend) void {}

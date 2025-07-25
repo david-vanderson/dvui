@@ -64,7 +64,7 @@ pub fn contentScale(self: Backend) f32 {
 /// Render a triangle list using the idx indexes into the vtx vertexes
 /// clipped to to `clipr` (if given).  Vertex positions and `clipr` are in
 /// physical pixels.  If `texture` is given, the vertexes uv coords are
-/// normalized (0-1).
+/// normalized (0-1). `clipr` (if given) has whole pixel values.
 pub fn drawClippedTriangles(self: Backend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr: ?dvui.Rect.Physical) GenericError!void {
     return self.impl.drawClippedTriangles(texture, vtx, idx, clipr);
 }
@@ -133,6 +133,13 @@ pub fn openURL(self: Backend, url: []const u8) GenericError!void {
 /// Get the preferredColorScheme if available
 pub fn preferredColorScheme(self: Backend) ?dvui.enums.ColorScheme {
     return self.impl.preferredColorScheme();
+}
+
+/// Show/hide the cursor.
+///
+/// Returns the previous state of the cursor, `true` meaning shown
+pub fn cursorShow(self: Backend, value: ?bool) GenericError!bool {
+    return self.impl.cursorShow(value);
 }
 
 /// Called by `dvui.refresh` when it is called from a background

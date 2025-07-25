@@ -8,7 +8,7 @@ var text_entry_multiline_break = false;
 
 /// ![image](Examples-text_entry.png)
 pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
-    var left_alignment = dvui.Alignment.init();
+    var left_alignment = dvui.Alignment.init(@src(), 0);
     defer left_alignment.deinit();
 
     var enter_pressed = false;
@@ -171,7 +171,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
         var vbox = dvui.box(@src(), .vertical, .{});
         defer vbox.deinit();
 
-        var la2 = dvui.Alignment.init();
+        var la2 = dvui.Alignment.init(@src(), 0);
         defer la2.deinit();
 
         if (dvui.wasm) {
@@ -467,6 +467,27 @@ pub fn displayTextEntryNumberResult(result: anytype) void {
             dvui.label(@src(), "Parsed {d}", .{num}, .{ .gravity_y = 0.5 });
         },
     }
+}
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG text_entry" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 500 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+            textEntryWidgets(box.data().id);
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "Examples-text_entry.png");
 }
 
 const dvui = @import("../dvui.zig");

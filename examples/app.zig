@@ -49,6 +49,26 @@ pub fn frame() !dvui.App.Result {
     var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
     scaler.deinit();
 
+    {
+        var m = dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
+        defer m.deinit();
+
+        if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .tag = "first-focusable" })) |r| {
+            var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+            defer fw.deinit();
+
+            if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
+                m.close();
+            }
+
+            if (dvui.backend.kind != .web) {
+                if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
+                    return .close;
+                }
+            }
+        }
+    }
+
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
     defer scroll.deinit();
 
@@ -88,6 +108,10 @@ pub fn frame() !dvui.App.Result {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
+    if (dvui.button(@src(), "Debug Window", .{}, .{})) {
+        dvui.toggleDebugWindow();
+    }
+
     {
         var hbox = dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -107,15 +131,6 @@ pub fn frame() !dvui.App.Result {
         }
     }
 
-    //if (dvui.button(@src(), "Panic", .{}, .{})) {
-    //std.debug.panic("This is a panic message after {d}s", .{@divTrunc(dvui.currentWindow().frame_time_ns, std.time.ns_per_s)});
-    //}
-    if (dvui.backend.kind != .web) {
-        if (dvui.button(@src(), "Close", .{}, .{})) {
-            return .close;
-        }
-    }
-
     // look at demo() for examples of dvui widgets, shows in a floating window
     dvui.Examples.demo();
 
@@ -128,12 +143,12 @@ test "tab order" {
 
     try dvui.testing.settle(frame);
 
-    try dvui.testing.expectNotFocused("show-demo-btn");
+    try dvui.testing.expectNotFocused("first-focusable");
 
     try dvui.testing.pressKey(.tab, .none);
     try dvui.testing.settle(frame);
 
-    try dvui.testing.expectFocused("show-demo-btn");
+    try dvui.testing.expectFocused("first-focusable");
 }
 
 test "open example window" {
