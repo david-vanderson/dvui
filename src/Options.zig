@@ -454,7 +454,7 @@ pub fn hash(self: *const Options) u64 {
 
     hasher.update(asBytes(&self.font_style));
     const font = self.fontGet();
-    hasher.update(font.name);
+    hasher.update(asBytes(&font.id));
     hasher.update(asBytes(&font.line_height_factor));
     hasher.update(asBytes(&font.size));
 

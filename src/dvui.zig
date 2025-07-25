@@ -495,6 +495,7 @@ pub fn frameTimeNS() i128 {
 /// The bytes of a truetype font file and whether to free it.
 pub const FontBytesEntry = struct {
     ttf_bytes: []const u8,
+    name: []const u8,
 
     /// If not null, this will be used to free ttf_bytes.
     allocator: ?std.mem.Allocator,
@@ -504,7 +505,7 @@ pub const FontBytesEntry = struct {
 ///
 /// ttf_bytes are the bytes of the ttf file
 ///
-/// If ttf_bytes_allocator is not null, it will be used to free ttf_bytes in
+/// If ttf_bytes_allocator is not null, it will be used to free `ttf_bytes` AND `name` in
 /// `Window.deinit`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
@@ -512,8 +513,13 @@ pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?st
     var cw = currentWindow();
 
     // Test if we can successfully open this font
-    _ = try fontCacheInit(ttf_bytes, .{ .name = name, .size = 14 });
-    try cw.font_bytes.put(cw.gpa, name, FontBytesEntry{ .ttf_bytes = ttf_bytes, .allocator = ttf_bytes_allocator });
+    const id = Font.FontId.fromName(name);
+    _ = try fontCacheInit(ttf_bytes, .{ .id = id, .size = 14 }, name);
+    try cw.font_bytes.put(cw.gpa, id, FontBytesEntry{
+        .name = name,
+        .ttf_bytes = ttf_bytes,
+        .allocator = ttf_bytes_allocator,
+    });
 }
 
 const GlyphInfo = struct {
@@ -527,6 +533,8 @@ const GlyphInfo = struct {
 
 pub const FontCacheEntry = struct {
     face: if (useFreeType) c.FT_Face else c.stbtt_fontinfo,
+    // This name should come from `Window.font_bytes` and lives as long as it does
+    name: []const u8,
     scaleFactor: f32,
     height: f32,
     ascent: f32,
@@ -805,14 +813,14 @@ pub const FontCacheEntry = struct {
 
     /// If a codepoint is missing in the font it gets the glyph for
     /// `std.unicode.replacement_character`
-    pub fn glyphInfoGetOrReplacement(self: *FontCacheEntry, codepoint: u32, font_name: []const u8) std.mem.Allocator.Error!GlyphInfo {
-        return self.glyphInfoGet(codepoint, font_name) catch |err| switch (err) {
-            FontError.fontError => self.glyphInfoGet(std.unicode.replacement_character, font_name) catch unreachable,
+    pub fn glyphInfoGetOrReplacement(self: *FontCacheEntry, codepoint: u32) std.mem.Allocator.Error!GlyphInfo {
+        return self.glyphInfoGet(codepoint) catch |err| switch (err) {
+            FontError.fontError => self.glyphInfoGet(std.unicode.replacement_character) catch unreachable,
             else => |e| e,
         };
     }
 
-    pub fn glyphInfoGet(self: *FontCacheEntry, codepoint: u32, font_name: []const u8) (std.mem.Allocator.Error || FontError)!GlyphInfo {
+    pub fn glyphInfoGet(self: *FontCacheEntry, codepoint: u32) (std.mem.Allocator.Error || FontError)!GlyphInfo {
         if (self.glyph_info.get(codepoint)) |gi| {
             return gi;
         }
@@ -821,7 +829,7 @@ pub const FontCacheEntry = struct {
 
         if (useFreeType) {
             FontCacheEntry.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(LoadFlags{ .render = false })))) catch |err| {
-                log.warn("glyphInfoGet freetype error {!} font {s} codepoint {d}\n", .{ err, font_name, codepoint });
+                log.warn("glyphInfoGet freetype error {!} font {s} codepoint {d}\n", .{ err, self.name, codepoint });
                 return FontError.fontError;
             };
 
@@ -879,7 +887,6 @@ pub const FontCacheEntry = struct {
     /// size on invalid utf8
     pub fn textSizeRaw(
         fce: *FontCacheEntry,
-        font_name: []const u8,
         text: []const u8,
         max_width: ?f32,
         end_idx: ?*usize,
@@ -902,7 +909,7 @@ pub const FontCacheEntry = struct {
         var last_codepoint: u32 = 0;
         var last_glyph_index: u32 = 0;
         while (utf8.nextCodepoint()) |codepoint| {
-            const gi = try fce.glyphInfoGetOrReplacement(@as(u32, @intCast(codepoint)), font_name);
+            const gi = try fce.glyphInfoGetOrReplacement(codepoint);
 
             // kerning
             if (last_codepoint != 0) {
@@ -911,7 +918,7 @@ pub const FontCacheEntry = struct {
                     const glyph_index: u32 = c.FT_Get_Char_Index(fce.face, codepoint);
                     var kern: c.FT_Vector = undefined;
                     FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
-                        log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, font_name, last_codepoint, codepoint });
+                        log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
                         // Set fallback kern and continue to the best of out ability
                         kern.x = 0;
                         kern.y = 0;
@@ -986,19 +993,19 @@ pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*FontCacheEntry {
     const fontHash = font.hash();
     if (cw.font_cache.getPtr(fontHash)) |fce| return fce;
 
-    const ttf_bytes = if (cw.font_bytes.get(font.name)) |fbe|
-        fbe.ttf_bytes
+    const ttf_bytes, const name = if (cw.font_bytes.get(font.id)) |fbe|
+        .{ fbe.ttf_bytes, fbe.name }
     else blk: {
-        log.warn("Font \"{s}\" not in dvui database, using default", .{font.name});
-        break :blk Font.default_ttf_bytes;
+        log.warn("Font {} not in dvui database, using default", .{font.id});
+        break :blk .{ Font.default_ttf_bytes, @tagName(Font.default_font_id) };
     };
     //log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
 
-    const entry = fontCacheInit(ttf_bytes, font) catch {
-        if (std.mem.eql(u8, font.name, Font.default_font_name)) {
+    const entry = fontCacheInit(ttf_bytes, font, name) catch {
+        if (font.id == Font.default_font_id) {
             @panic("Default font could not be loaded");
         }
-        return fontCacheGet(font.switchFontName(Font.default_font_name));
+        return fontCacheGet(font.switchFont(Font.default_font_id));
     };
 
     //log.debug("- size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
@@ -1008,7 +1015,7 @@ pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*FontCacheEntry {
 }
 
 // Load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
-pub fn fontCacheInit(ttf_bytes: []const u8, font: Font) FontError!FontCacheEntry {
+pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontError!FontCacheEntry {
     const min_pixel_size = 1;
 
     if (useFreeType) {
@@ -1018,7 +1025,7 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font) FontError!FontCacheEntry
         args.memory_base = ttf_bytes.ptr;
         args.memory_size = @as(u31, @intCast(ttf_bytes.len));
         FontCacheEntry.intToError(c.FT_Open_Face(ft2lib, &args, 0, &face)) catch |err| {
-            log.warn("fontCacheInit freetype error {!} trying to FT_Open_Face font {s}\n", .{ err, font.name });
+            log.warn("fontCacheInit freetype error {!} trying to FT_Open_Face font {s}\n", .{ err, name });
             return FontError.fontError;
         };
 
@@ -1028,7 +1035,7 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font) FontError!FontCacheEntry
 
         while (true) : (pixel_size -= 1) {
             FontCacheEntry.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
-                log.warn("fontCacheInit freetype error {!} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, font.name });
+                log.warn("fontCacheInit freetype error {!} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, name });
                 return FontError.fontError;
             };
 
@@ -1042,6 +1049,7 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font) FontError!FontCacheEntry
             if (height <= font.size or pixel_size == min_pixel_size) {
                 return FontCacheEntry{
                     .face = face,
+                    .name = name,
                     .scaleFactor = 1.0, // not used with freetype
                     .height = @ceil(height),
                     .ascent = @floor(ascent),
@@ -1052,12 +1060,12 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font) FontError!FontCacheEntry
     } else {
         const offset = c.stbtt_GetFontOffsetForIndex(ttf_bytes.ptr, 0);
         if (offset < 0) {
-            log.warn("fontCacheInit stbtt error when calling stbtt_GetFontOffsetForIndex font {s}\n", .{font.name});
+            log.warn("fontCacheInit stbtt error when calling stbtt_GetFontOffsetForIndex font {s}\n", .{name});
             return FontError.fontError;
         }
         var face: c.stbtt_fontinfo = undefined;
         if (c.stbtt_InitFont(&face, ttf_bytes.ptr, offset) != 1) {
-            log.warn("fontCacheInit stbtt error when calling stbtt_InitFont font {s}\n", .{font.name});
+            log.warn("fontCacheInit stbtt error when calling stbtt_InitFont font {s}\n", .{name});
             return FontError.fontError;
         }
         const SF: f32 = c.stbtt_ScaleForPixelHeight(&face, @max(min_pixel_size, @floor(font.size)));
@@ -1073,6 +1081,7 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font) FontError!FontCacheEntry
 
         return FontCacheEntry{
             .face = face,
+            .name = name,
             .scaleFactor = SF,
             .height = @ceil(height),
             .ascent = @floor(ascent),
@@ -6796,14 +6805,14 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     // make sure the cache has all the glyphs we need
     var utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
     while (utf8it.nextCodepoint()) |codepoint| {
-        _ = try fce.glyphInfoGetOrReplacement(@as(u32, @intCast(codepoint)), opts.font.name);
+        _ = try fce.glyphInfoGetOrReplacement(codepoint);
     }
 
     // Generate new texture atlas if needed to update glyph uv coords
     const texture_atlas = fce.getTextureAtlas() catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
-            log.err("Could not get texture atlas for font {s}, text area marked in magenta, to display '{s}'", .{ opts.font.name, opts.text });
+            log.err("Could not get texture atlas for font {}, text area marked in magenta, to display '{s}'", .{ opts.font.id, opts.text });
             opts.rs.r.fill(.{}, .{ .color = .magenta });
             return;
         },
@@ -6840,7 +6849,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     var last_codepoint: u32 = 0;
     var last_glyph_index: u32 = 0;
     while (utf8it.nextCodepoint()) |codepoint| {
-        const gi = try fce.glyphInfoGetOrReplacement(@as(u32, @intCast(codepoint)), opts.font.name);
+        const gi = try fce.glyphInfoGetOrReplacement(codepoint);
 
         // kerning
         if (last_codepoint != 0) {
@@ -6849,7 +6858,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
                 const glyph_index: u32 = c.FT_Get_Char_Index(fce.face, codepoint);
                 var kern: c.FT_Vector = undefined;
                 FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
-                    log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, opts.font.name, last_codepoint, codepoint });
+                    log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
                     // Set fallback kern and continue to the best of out ability
                     kern.x = 0;
                     kern.y = 0;
