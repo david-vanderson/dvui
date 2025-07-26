@@ -1,0 +1,70 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "watch compile-sdl2-standalone",
+      "type": "shell",
+      "command": "zig build compile-sdl2-standalone --watch --color off",
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": {
+        "owner": "zig1",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+          "pattern": {
+          "regexp": "^([^\"]+\\.zig):(\\d+):(\\d+):\\s+(error|note|warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        },
+
+        "background": {
+            "activeOnStart": true,
+            "beginsPattern": "^.*\\.zig:\\d+:\\d+: error:.*$",
+            "endsPattern": "^Build Summary:.*$",    
+        }
+      }
+    },
+        {
+      "label": "watch compile-sdl3-app",
+      "type": "shell",
+      "command": "zig build compile-sdl3-app --watch --color off",
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": {
+        "owner": "zig",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+          "pattern": {
+          "regexp": "^([^\"]+\\.zig):(\\d+):(\\d+):\\s+(error|note|warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        },
+
+        "background": {
+            "activeOnStart": true,
+            "beginsPattern": "^.*\\.zig:\\d+:\\d+: error:.*$",
+            "endsPattern": "^Build Summary:.*$",    
+        }
+      }
+    }
+
+  ]
+}

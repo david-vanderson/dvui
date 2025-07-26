@@ -344,8 +344,8 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
 
 pub fn processWidget(src: std.builtin.SourceLocation, comptime field_name: []const u8, field: anytype, alignment: *dvui.Alignment) void {
     switch (@typeInfo(@TypeOf(field.*))) {
-        inline .int => dvui.se.intFieldWidget2(src, field_name, field, .{}, alignment),
-        inline .float => dvui.se.floatFieldWidget2(src, field_name, field, .{}, alignment),
+        inline .int => dvui.se.numberFieldWidget2(src, field_name, field, .{}, alignment),
+        inline .float => dvui.se.numberFieldWidget2(src, field_name, field, .{}, alignment),
         inline .@"enum" => dvui.se.enumFieldWidget2(src, field_name, field, .{}, alignment),
         inline .bool => dvui.se.boolFieldWidget2(src, field_name, field, .{}, alignment),
         inline .pointer => |ptr| {
