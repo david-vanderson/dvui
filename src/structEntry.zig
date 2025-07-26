@@ -30,7 +30,7 @@ const border = dvui.Rect.all(1);
 // inputs to the user for base types like ints
 // and floats.
 
-const FieldOptions = struct {
+pub const FieldOptions = struct {
     const DisplayMode = enum { none, read_only, read_write, read_create };
     display: DisplayMode = .read_write,
     label: ?[]const u8 = null,

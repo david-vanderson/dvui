@@ -198,7 +198,8 @@ fn gui_frame() void {
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
-
+        const oooo: StructOptions(BasicTypes) = .{};
+        std.debug.print("{}\n", .{oooo});
         wholeStruct(@src(), "basic_types_var", &basic_types_var, 0);
 
         //sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);
@@ -238,6 +239,37 @@ fn gui_frame() void {
         wholeStruct(@src(), "opts", &opts, 1);
         //        wholeStruct(@src(), "test_struct", &testStruct, 1);
     }
+}
+const default_field_options: dvui.se.FieldOptions = .{};
+
+pub fn StructOptions(T: type) type {
+    const struct_fields = std.meta.fields(T);
+    var result_fields: [struct_fields.len]std.builtin.Type.StructField = undefined;
+
+    for (struct_fields, 0..) |field, i| {
+        result_fields[i] = .{
+            .name = field.name,
+            .type = dvui.se.FieldOptions,
+            .default_value_ptr = &default_field_options,
+            .is_comptime = false,
+            .alignment = @alignOf(dvui.se.FieldOptions),
+        };
+    }
+
+    return @Type(.{ .@"struct" = .{
+        .layout = .auto,
+        .fields = &result_fields,
+        .decls = &.{},
+        .is_tuple = false,
+    } });
+    //        .@"enum" = .{
+    //            .tag_type = u8,
+    //            .fields = &[_]std.builtin.Type.EnumField{
+    //                .{ .name = name, .value = 0 },
+    //            },
+    //            .decls = &.{},
+    //            .is_exhaustive = true,
+    //        },
 }
 
 // Note there is also StructField.default value. But .{} should be fine?
