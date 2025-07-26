@@ -260,7 +260,7 @@ export fn arena_u8(len: usize) [*c]u8 {
 
 export fn new_font(ptr: [*c]u8, len: usize) void {
     if (win_ok) {
-        win.font_bytes.put(win.gpa, "Noto", dvui.FontBytesEntry{ .ttf_bytes = ptr[0..len], .allocator = gpa }) catch unreachable;
+        win.font_bytes.put(win.gpa, .Noto, dvui.FontBytesEntry{ .name = @tagName(dvui.Font.FontId.Noto), .ttf_bytes = ptr[0..len], .allocator = gpa }) catch unreachable;
     }
 }
 
@@ -810,11 +810,10 @@ pub var back: WebBackend = undefined;
 
 fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
     const app = dvui.App.get() orelse return 404;
-    const init_opts = app.config.get();
     // TODO: Allow web backend to set title of browser tab via init_opts
     // TODO: Respect min size (maybe max size?) via css on the canvas element
     // TODO: Use the icon to set the browser tab icon (if possible considering size requirements)
-    _ = init_opts;
+    const init_opts = app.config.get();
 
     const platform = platform_ptr[0..platform_len];
     log.debug("platform: {s}", .{platform});
@@ -823,7 +822,12 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
     back = WebBackend.init() catch {
         return 1;
     };
-    win = dvui.Window.init(@src(), gpa, back.backend(), .{ .keybinds = if (mac) .mac else .windows }) catch {
+
+    var win_opts = init_opts.window_init_options;
+    if (win_opts.keybinds == null) {
+        win_opts.keybinds = if (mac) .mac else .windows;
+    }
+    win = dvui.Window.init(@src(), gpa, back.backend(), win_opts) catch {
         return 2;
     };
 

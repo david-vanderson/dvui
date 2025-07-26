@@ -9,12 +9,18 @@ const window_icon_png = @embedFile("zig-favicon.png");
 // * expose the backend's main function
 // * use the backend's log function
 pub const dvui_app: dvui.App = .{
-    .config = .{ .options = .{
-        .size = .{ .w = 800.0, .h = 600.0 },
-        .min_size = .{ .w = 250.0, .h = 350.0 },
-        .title = "DVUI App Example",
-        .icon = window_icon_png,
-    } },
+    .config = .{
+        .options = .{
+            .size = .{ .w = 800.0, .h = 600.0 },
+            .min_size = .{ .w = 250.0, .h = 350.0 },
+            .title = "DVUI App Example",
+            .icon = window_icon_png,
+            .window_init_options = .{
+                // Could set a default theme here
+                // .theme = dvui.Theme.builtin.dracula,
+            },
+        },
+    },
     .frameFn = AppFrame,
     .initFn = AppInit,
     .deinitFn = AppDeinit,
