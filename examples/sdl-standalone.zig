@@ -279,7 +279,7 @@ pub fn defaultValue(T: type) ?T {
         inline .float => 0.0,
         inline .@"struct" => |si| {
             inline for (si.fields) |field| {
-                if (field.defaultValue() == null) {
+                if (field.defaultValue() == null) { // I suppose we should use StructField.defaultValue() here?
                     @compileError(std.fmt.comptimePrint("field {s} for struct {s} does not support default initialization", .{ @typeName(T), field.name }));
                 }
             }

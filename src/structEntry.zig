@@ -36,16 +36,54 @@ pub const FieldOptions = struct {
     label: ?[]const u8 = null,
 };
 
-pub fn NumberFieldOptions(T: type) type {
-    return struct {
-        display: FieldOptions.DisplayMode = .read_write,
-        label: ?[]const u8 = null,
+pub const NumberFieldOptions = struct {
+    display: FieldOptions.DisplayMode = .read_write,
+    label: ?[]const u8 = null,
 
-        widget_type: enum { number_entry, slider } = .number_entry,
-        min: ?T = null,
-        max: ?T = null,
-    };
-}
+    widget_type: enum { number_entry, slider } = .number_entry,
+    min: ?f64 = null,
+    max: ?f64 = null,
+
+    pub fn minValue(self: *const NumberFieldOptions, T: type) T {
+        return switch (@typeInfo(T)) {
+            .int => @intFromFloat(self.min orelse 0),
+            .float => @floatCast(self.min orelse 0),
+            else => unreachable,
+        };
+    }
+
+    pub fn maxValue(self: *const NumberFieldOptions, T: type) T {
+        return switch (@typeInfo(T)) {
+            .int => @intFromFloat(self.max orelse std.math.maxInt(T)),
+            .float => @floatCast(self.max orelse std.math.floatMax(T)),
+            else => unreachable,
+        };
+    }
+
+    pub fn cast(T: type, value: anytype) T {
+        return switch (@typeInfo(@TypeOf(value))) {
+            .int => switch (@typeInfo(T)) {
+                .int => @intCast(value),
+                .float => @floatFromInt(value),
+                else => unreachable,
+            },
+            .float => switch (@typeInfo(@TypeOf(value))) {
+                .int => @intFromError(value),
+                .float => @floatCast(value),
+                else => unreachable,
+            },
+            else => unreachable,
+        };
+    }
+
+    fn toNormalizedPercent(self: *const NumberFieldOptions, input_num: anytype, min: @TypeOf(input_num), max: @TypeOf(input_num)) f32 {
+        const input: f64 = cast(f64, input_num);
+        const range = cast(f64, max - min);
+
+        const progress = input - self.minValue();
+        return @as(f32, @floatCast(progress / range));
+    }
+};
 
 //pub fn IntFieldOptions(comptime T: type) type {
 //    return struct {
@@ -62,7 +100,7 @@ pub fn numberFieldWidget2(
     src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_ptr: anytype,
-    opt: NumberFieldOptions(@TypeOf(field_ptr.*)),
+    opt: NumberFieldOptions,
     alignment: *dvui.Alignment,
 ) void {
     if (opt.display == .none) return;
@@ -87,8 +125,8 @@ pub fn numberFieldWidget2(
 
             if (!read_only) {
                 const maybe_num = dvui.textEntryNumber(@src(), T, .{
-                    .min = opt.min,
-                    .max = opt.max,
+                    .min = opt.minValue(T),
+                    .max = opt.maxValue(T),
                     .value = field_ptr,
                 }, .{});
                 if (maybe_num.value == .Valid) {
@@ -104,18 +142,13 @@ pub fn numberFieldWidget2(
             dvui.label(@src(), "{s}", .{field_name}, .{});
 
             if (!read_only) {
-                const max = opt.max orelse switch (@typeInfo(T)) {
-                    .int => std.math.maxInt(T),
-                    .float => std.math.floatMax(T),
-                    else => unreachable,
-                };
-                var percent = toNormalizedPercent(field_ptr.*, opt.min orelse 0, max);
+                var percent = toNormalizedPercent(field_ptr.*, opt.minValue(T), opt.maxValue(T));
                 _ = dvui.slider(@src(), .horizontal, &percent, .{
                     .expand = .horizontal,
                     .min_size_content = .{ .w = 100, .h = 20 },
                 });
                 // TODO: min and max can now be null. they need to get better defaults earlier.
-                field_ptr.* = normalizedPercentToNum(percent, T, opt.min orelse 0, opt.max orelse 1);
+                field_ptr.* = normalizedPercentToNum(percent, T, opt.minValue(T), opt.maxValue(T));
             }
             dvui.label(@src(), "{}", .{field_ptr.*}, .{});
         },
