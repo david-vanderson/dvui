@@ -240,7 +240,6 @@ fn gui_frame() void {
         //        wholeStruct(@src(), "test_struct", &testStruct, 1);
     }
 }
-const default_field_options: dvui.se.FieldOptions = .{};
 
 pub fn StructOptions(T: type) type {
     const struct_fields = std.meta.fields(T);
@@ -250,7 +249,7 @@ pub fn StructOptions(T: type) type {
         result_fields[i] = .{
             .name = field.name,
             .type = dvui.se.FieldOptions,
-            .default_value_ptr = &default_field_options,
+            .default_value_ptr = &(@as(dvui.se.FieldOptions, dvui.se.FieldOptions{})), // TODO: Support NumberFieldOptions as well.
             .is_comptime = false,
             .alignment = @alignOf(dvui.se.FieldOptions),
         };
