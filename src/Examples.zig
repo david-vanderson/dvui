@@ -14,6 +14,7 @@ pub const demoKind = enum {
     calculator,
     text_entry,
     styling,
+    theming,
     layout,
     text_layout,
     plots,
@@ -33,6 +34,7 @@ pub const demoKind = enum {
             .calculator => "Calculator",
             .text_entry => "Text Entry",
             .styling => "Styling",
+            .theming => "Theming",
             .layout => "Layout",
             .text_layout => "Text Layout",
             .plots => "Plots",
@@ -54,6 +56,7 @@ pub const demoKind = enum {
             .calculator => .{ .scale = 0.45, .offset = .{} },
             .text_entry => .{ .scale = 0.45, .offset = .{} },
             .styling => .{ .scale = 0.45, .offset = .{} },
+            .theming => .{ .scale = 0.35, .offset = .{} },
             .layout => .{ .scale = 0.45, .offset = .{ .x = -50 } },
             .text_layout => .{ .scale = 0.45, .offset = .{} },
             .plots => .{ .scale = 0.45, .offset = .{} },
@@ -165,6 +168,7 @@ pub fn demo() void {
                     .calculator => calculator(),
                     .text_entry => textEntryWidgets(float.data().id),
                     .styling => styling(),
+                    .theming => theming(),
                     .layout => layout(),
                     .text_layout => layoutText(),
                     .plots => plots(),
@@ -222,6 +226,7 @@ pub fn demo() void {
             .calculator => calculator(),
             .text_entry => textEntryWidgets(float.data().id),
             .styling => styling(),
+            .theming => theming(),
             .layout => layout(),
             .text_layout => layoutText(),
             .plots => plots(),
@@ -421,6 +426,7 @@ const basicWidgets = @import("Examples/basic_widgets.zig").basicWidgets;
 const calculator = @import("Examples/calculator.zig").calculator;
 const textEntryWidgets = @import("Examples/text_entry.zig").textEntryWidgets;
 const styling = @import("Examples/styling.zig").styling;
+const theming = @import("Examples/theming.zig").theming;
 const layout = @import("Examples/layout.zig").layout;
 const layoutText = @import("Examples/text_layout.zig").layoutText;
 const plots = @import("Examples/plots.zig").plots;
