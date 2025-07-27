@@ -922,7 +922,7 @@ pub fn main() !void {
     b.log_events = true;
 
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, b.backend(), .{});
+    var win = try dvui.Window.init(@src(), gpa, b.backend(), init_opts.window_init_options);
     defer win.deinit();
 
     if (app.initFn) |initFn| {

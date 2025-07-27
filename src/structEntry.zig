@@ -150,9 +150,12 @@ fn enumFieldWidget(
             alignment.record(box.data().id, hbox_aligned.data());
 
             const entries = std.meta.fieldNames(T);
-            var choice: usize = @intFromEnum(result.*);
-            _ = dvui.dropdown(@src(), entries, &choice, opt.dvui_opts);
-            result.* = @enumFromInt(choice);
+            var choice: usize = inline for (entries, 0..) |field_name, i| {
+                if (result.* == std.meta.stringToEnum(T, field_name).?) break i;
+            } else 0;
+            if (dvui.dropdown(@src(), entries, &choice, opt.dvui_opts)) {
+                result.* = std.meta.stringToEnum(T, entries[choice]).?;
+            }
         },
         .radio => {
             inline for (@typeInfo(T).@"enum".fields) |field| {

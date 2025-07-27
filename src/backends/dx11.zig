@@ -136,6 +136,8 @@ const DirectxOptions = struct {
 
 pub const InitOptions = struct {
     dvui_gpa: std.mem.Allocator,
+    /// Passed to `dvui.Window.init`
+    dvui_window_init_options: dvui.Window.InitOptions = .{},
     /// The allocator used for temporary allocations used during init()
     allocator: std.mem.Allocator,
     /// The initial size of the application window
@@ -284,6 +286,7 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
         .window_state = window_state,
         .vsync = options.vsync,
         .dvui_gpa = options.dvui_gpa,
+        .dvui_window_init_options = options.dvui_window_init_options,
     };
     const hwnd = blk: {
         const wnd_title = try std.unicode.utf8ToUtf16LeAllocZ(options.allocator, options.title);
@@ -1108,6 +1111,7 @@ pub fn attach(
     dx_options: Directx11Options,
     opt: struct {
         vsync: bool,
+        window_init_opts: dvui.Window.InitOptions = .{},
     },
 ) !Context {
     const existing = win32.SetWindowLongPtrW(
@@ -1120,7 +1124,7 @@ pub fn attach(
     const addr: usize = @bitCast(win32.GetWindowLongPtrW(hwnd, win32.WINDOW_LONG_PTR_INDEX._USERDATA));
     if (addr == 0) @panic("unable to attach window state pointer to HWND, did you set cbWndExtra to be >= to @sizeof(usize)?");
 
-    var dvui_window = try dvui.Window.init(@src(), gpa, contextFromHwnd(hwnd).backend(), .{});
+    var dvui_window = try dvui.Window.init(@src(), gpa, contextFromHwnd(hwnd).backend(), opt.window_init_opts);
     errdefer dvui_window.deinit();
     window_state.* = .{
         .vsync = opt.vsync,
@@ -1152,6 +1156,7 @@ pub fn wndProc(
             errdefer dx_options.deinit();
             _ = attach(hwnd, args.window_state, args.dvui_gpa, dx_options, .{
                 .vsync = args.vsync,
+                .window_init_opts = args.dvui_window_init_options,
             }) catch |e| {
                 args.err = e;
                 return -1;
@@ -1361,6 +1366,7 @@ fn convertVertices(
 const CreateWindowArgs = struct {
     window_state: *WindowState,
     vsync: bool,
+    dvui_window_init_options: dvui.Window.InitOptions,
     dvui_gpa: std.mem.Allocator,
     err: ?anyerror = null,
 };
@@ -1577,6 +1583,7 @@ pub fn main() !void {
     const b = try initWindow(&window_state, .{
         .registered_class = window_class,
         .dvui_gpa = gpa,
+        .dvui_window_init_options = init_opts.window_init_options,
         .allocator = gpa,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
