@@ -8,26 +8,26 @@ const Font = @This();
 
 size: f32,
 line_height_factor: f32 = 1.2,
-name: []const u8,
+id: FontId,
 
 pub fn hash(font: Font) u64 {
     var h = dvui.fnv.init();
-    const bytes = if (dvui.currentWindow().font_bytes.get(font.name)) |fbe| fbe.ttf_bytes else Font.default_ttf_bytes;
+    const bytes = if (dvui.currentWindow().font_bytes.get(font.id)) |fbe| fbe.ttf_bytes else Font.default_ttf_bytes;
     h.update(std.mem.asBytes(&bytes.ptr));
     h.update(std.mem.asBytes(&font.size));
     return h.final();
 }
 
-pub fn switchFontName(self: Font, name: []const u8) Font {
-    return Font{ .size = self.size, .line_height_factor = self.line_height_factor, .name = name };
+pub fn switchFont(self: Font, id: FontId) Font {
+    return Font{ .size = self.size, .line_height_factor = self.line_height_factor, .id = id };
 }
 
 pub fn resize(self: Font, s: f32) Font {
-    return Font{ .size = s, .line_height_factor = self.line_height_factor, .name = self.name };
+    return Font{ .size = s, .line_height_factor = self.line_height_factor, .id = self.id };
 }
 
 pub fn lineHeightFactor(self: Font, factor: f32) Font {
-    return Font{ .size = self.size, .line_height_factor = factor, .name = self.name };
+    return Font{ .size = self.size, .line_height_factor = factor, .id = self.id };
 }
 
 pub fn textHeight(self: Font) f32 {
@@ -97,7 +97,7 @@ pub fn textSizeEx(self: Font, text: []const u8, max_width: ?f32, end_idx: ?*usiz
         max_width_sized = mwidth / target_fraction;
     }
 
-    var s = fce.textSizeRaw(self.name, text, max_width_sized, end_idx, end_metric) catch return .{ .w = 10, .h = 10 };
+    var s = fce.textSizeRaw(text, max_width_sized, end_idx, end_metric) catch return .{ .w = 10, .h = 10 };
 
     // do this check after calling textSizeRaw so that end_idx is set
     if (ask_size == 0.0) return Size{};
@@ -109,7 +109,69 @@ pub fn textSizeEx(self: Font, text: []const u8, max_width: ?f32, end_idx: ?*usiz
 // default bytes if font id is not found in database
 pub const default_ttf_bytes = TTFBytes.Vera;
 // NOTE: This font name should match the name in the font data base
-pub const default_font_name = "Vera";
+pub const default_font_id = FontId.Vera;
+
+pub const FontId = enum(u64) {
+    // The following predefined names for TTFBytes (verified at comptime)
+    // These give a more useful debug output for the builtin font
+    InvalidFontFile = dvui.fnv.hash("InvalidFontFile"),
+    Aleo = dvui.fnv.hash("Aleo"),
+    AleoBd = dvui.fnv.hash("AleoBd"),
+    Vera = dvui.fnv.hash("Vera"),
+    VeraBI = dvui.fnv.hash("VeraBI"),
+    VeraBd = dvui.fnv.hash("VeraBd"),
+    VeraIt = dvui.fnv.hash("VeraIt"),
+    VeraMoBI = dvui.fnv.hash("VeraMoBI"),
+    VeraMoBd = dvui.fnv.hash("VeraMoBd"),
+    VeraMoIt = dvui.fnv.hash("VeraMoIt"),
+    VeraMono = dvui.fnv.hash("VeraMono"),
+    VeraSe = dvui.fnv.hash("VeraSe"),
+    VeraSeBd = dvui.fnv.hash("VeraSeBd"),
+    Pixelify = dvui.fnv.hash("Pixelify"),
+    PixelifyBd = dvui.fnv.hash("PixelifyBd"),
+    PixelifyMe = dvui.fnv.hash("PixelifyMe"),
+    PixelifySeBd = dvui.fnv.hash("PixelifySeBd"),
+    Hack = dvui.fnv.hash("Hack"),
+    HackBd = dvui.fnv.hash("HackBd"),
+    HackIt = dvui.fnv.hash("HackIt"),
+    HackBdIt = dvui.fnv.hash("HackBdIt"),
+    OpenDyslexic = dvui.fnv.hash("OpenDyslexic"),
+    OpenDyslexicBd = dvui.fnv.hash("OpenDyslexicBd"),
+    OpenDyslexicIt = dvui.fnv.hash("OpenDyslexicIt"),
+    OpenDyslexicBdIt = dvui.fnv.hash("OpenDyslexicBdIt"),
+    // Not included in TTFBytes but should still be named
+    Noto = dvui.fnv.hash("Noto"),
+    _,
+
+    pub fn fromName(name: []const u8) FontId {
+        return @enumFromInt(dvui.fnv.hash(name));
+    }
+
+    pub fn format(self: *const FontId, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        const named_ids = std.meta.tags(FontId);
+        for (named_ids) |named| {
+            if (named == self.*) {
+                try writer.writeAll(@tagName(named));
+            }
+        } else {
+            try writer.print("Id 0x{x}", .{@intFromEnum(self.*)});
+        }
+    }
+
+    // Ensure that all builtin fonts have a named variant
+    comptime {
+        const EnumKV = struct { []const u8, FontId };
+        const fields = @typeInfo(FontId).@"enum".fields;
+        var kvs_array: [fields.len]EnumKV = undefined;
+        for (fields, 0..) |enumField, i| {
+            kvs_array[i] = .{ enumField.name, @field(FontId, enumField.name) };
+        }
+        const map = std.StaticStringMap(FontId).initComptime(kvs_array);
+        for (@typeInfo(TTFBytes).@"struct".decls) |decl| {
+            std.debug.assert(map.get(decl.name) == FontId.fromName(decl.name));
+        }
+    }
+};
 
 // functionality for accessing builtin fonts
 pub const TTFBytes = struct {
@@ -140,14 +202,22 @@ pub const TTFBytes = struct {
     //pub const OpenDyslexicBdIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold-Italic.otf");
 };
 
-pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) std.mem.Allocator.Error!std.StringHashMapUnmanaged(dvui.FontBytesEntry) {
-    var result: std.StringHashMapUnmanaged(dvui.FontBytesEntry) = .empty;
+pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) std.mem.Allocator.Error!@FieldType(dvui.Window, "font_bytes") {
+    var result: @FieldType(dvui.Window, "font_bytes") = .empty;
     inline for (@typeInfo(TTFBytes).@"struct".decls) |decl| {
-        try result.putNoClobber(allocator, decl.name, dvui.FontBytesEntry{ .ttf_bytes = @field(TTFBytes, decl.name), .allocator = null });
+        try result.putNoClobber(allocator, .fromName(decl.name), dvui.FontBytesEntry{
+            .ttf_bytes = @field(TTFBytes, decl.name),
+            .name = decl.name,
+            .allocator = null,
+        });
     }
 
     if (!dvui.wasm) {
-        try result.putNoClobber(allocator, "Noto", dvui.FontBytesEntry{ .ttf_bytes = @embedFile("fonts/NotoSansKR-Regular.ttf"), .allocator = null });
+        try result.putNoClobber(allocator, .Noto, dvui.FontBytesEntry{
+            .ttf_bytes = @embedFile("fonts/NotoSansKR-Regular.ttf"),
+            .name = @tagName(FontId.Noto),
+            .allocator = null,
+        });
     }
 
     return result;

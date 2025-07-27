@@ -111,7 +111,7 @@ pub fn demo() void {
                 dvui.toggleDebugWindow();
             }
 
-            if (dvui.Theme.picker(@src(), .{})) {
+            if (dvui.Theme.picker(@src(), &dvui.Theme.builtins, .{})) {
                 invalidate = true;
             }
 

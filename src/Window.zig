@@ -96,7 +96,7 @@ tab_index: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
 font_cache: dvui.TrackingAutoHashMap(u64, dvui.FontCacheEntry, .get_and_put) = .empty,
 /// Uses `gpa` allocator
-font_bytes: std.StringHashMapUnmanaged(dvui.FontBytesEntry) = .empty,
+font_bytes: std.AutoHashMapUnmanaged(dvui.Font.FontId, dvui.FontBytesEntry) = .empty,
 /// Uses `gpa` allocator
 texture_cache: dvui.TrackingAutoHashMap(dvui.Texture.CacheKey, dvui.Texture, .get_and_put) = .empty,
 /// Uses `arena` allocator
@@ -108,8 +108,6 @@ dialogs: std.ArrayListUnmanaged(Dialog) = .empty,
 toasts: std.ArrayListUnmanaged(Toast) = .empty,
 /// Uses `gpa` allocator
 keybinds: std.StringHashMapUnmanaged(dvui.enums.Keybind) = .empty,
-/// Uses `gpa` allocator
-themes: std.StringArrayHashMapUnmanaged(Theme) = .empty,
 
 cursor_requested: ?dvui.enums.Cursor = null,
 cursor_dragging: ?dvui.enums.Cursor = null,
@@ -169,7 +167,7 @@ const SavedData = struct {
 pub const InitOptions = struct {
     id_extra: usize = 0,
     arena: ?std.heap.ArenaAllocator = null,
-    theme: ?*Theme = null,
+    theme: ?Theme = null,
     /// `null` indicated that the OS will choose it's preferred theme
     ///
     /// Does nothing if the `theme` option is populated
@@ -208,25 +206,11 @@ pub fn init(
         },
         .backend = backend_ctx,
         .font_bytes = try dvui.Font.initTTFBytesDatabase(gpa),
-        .theme = if (init_opts.theme) |t| t.* else switch (init_opts.color_scheme orelse backend_ctx.preferredColorScheme() orelse .light) {
+        .theme = if (init_opts.theme) |t| t else switch (init_opts.color_scheme orelse backend_ctx.preferredColorScheme() orelse .light) {
             .light => Theme.builtin.adwaita_light,
             .dark => Theme.builtin.adwaita_dark,
         },
     };
-
-    inline for (@typeInfo(Theme.builtin).@"struct".decls) |decl| {
-        const theme = @field(Theme.builtin, decl.name);
-        try self.themes.putNoClobber(self.gpa, theme.name, theme);
-    }
-
-    // Sort themes alphabetically
-    const Context = struct {
-        hashmap: *std.StringArrayHashMapUnmanaged(Theme),
-        pub fn lessThan(ctx: @This(), lhs: usize, rhs: usize) bool {
-            return std.ascii.orderIgnoreCase(ctx.hashmap.values()[lhs].name, ctx.hashmap.values()[rhs].name) == .lt;
-        }
-    };
-    self.themes.sort(Context{ .hashmap = &self.themes });
 
     try self.initEvents();
 
@@ -427,12 +411,6 @@ pub fn deinit(self: *Self) void {
     }
     self.font_bytes.deinit(self.gpa);
 
-    {
-        for (self.themes.values()) |*theme| {
-            theme.deinit(self.gpa);
-        }
-    }
-    self.themes.deinit(self.gpa);
     self.* = undefined;
 }
 
