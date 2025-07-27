@@ -1,5 +1,17 @@
-var custom_theme = dvui.Theme.builtin.adwaita_light;
+var custom_theme = modified_adwaita_theme;
+var custom_theme_name_buffer: [128]u8 = "Adwaita modified".* ++ @as([128 - 16]u8, @splat(0));
 var hsv_color: dvui.Color.HSV = .fromColor(.black);
+
+const modified_adwaita_theme = blk: {
+    var theme = dvui.Theme.builtin.adwaita_light;
+
+    theme.name = "Adwaita modified";
+    theme.font_body.id = .Aleo;
+    theme.font_heading.id = .AleoBd;
+    theme.color_fill = .teal;
+
+    break :blk theme;
+};
 
 /// ![image](Examples-theming.png)
 pub fn theming() void {
@@ -23,13 +35,30 @@ pub fn theming() void {
             var theme_reset_dropdown = dvui.DropdownWidget.init(@src(), .{ .label = "Reset" }, .{});
             theme_reset_dropdown.install();
             if (theme_reset_dropdown.dropped()) {
-                for (dvui.Theme.builtins) |builtin_theme| {
+                for (.{modified_adwaita_theme} ++ dvui.Theme.builtins) |builtin_theme| {
                     if (theme_reset_dropdown.addChoiceLabel(builtin_theme.name)) {
                         custom_theme = builtin_theme;
+                        const len = @min(custom_theme_name_buffer.len, builtin_theme.name.len);
+                        @memcpy(custom_theme_name_buffer[0..len], builtin_theme.name[0..len]);
+                        @memset(custom_theme_name_buffer[len..], 0);
                     }
                 }
             }
             theme_reset_dropdown.deinit();
+        }
+
+        {
+            const hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+            defer hbox.deinit();
+
+            dvui.labelNoFmt(@src(), "Name:", .{}, .{ .gravity_y = 0.5 });
+            const text_entry = dvui.textEntry(@src(), .{
+                .text = .{ .buffer = &custom_theme_name_buffer },
+            }, .{});
+            defer text_entry.deinit();
+            if (text_entry.text_changed) {
+                custom_theme.name = text_entry.getText();
+            }
         }
 
         const active_page = dvui.dataGetPtrDefault(null, vbox.data().id, "Page", ThemeEditingPage, .Colors);
