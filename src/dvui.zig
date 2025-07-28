@@ -1550,23 +1550,18 @@ pub const Path = struct {
             }
 
             // how close our points will be to the perfect circle
-            const err = 0.1;
+            const err = 0.5;
 
             // angle that has err error between circle and segments
             const theta = math.acos(radius / (radius + err));
 
-            // make sure we never have less than 4 segments
-            // so a full circle can't be less than a diamond
-            const num_segments = @max(@ceil((start - end) / theta), 4.0);
-
-            const step = (start - end) / num_segments;
-
-            const num = @as(u32, @intFromFloat(num_segments));
             var a: f32 = start;
-            var i: u32 = 0;
-            while (i < num) : (i += 1) {
+            path.addPoint(.{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
+
+            while (a - end > theta) {
+                // move to next fixed theta, this prevents shimmering on things like a spinner
+                a = @floor((a - 0.001) / theta) * theta;
                 path.addPoint(.{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
-                a -= step;
             }
 
             if (!skip_end) {
