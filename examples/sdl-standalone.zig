@@ -190,15 +190,17 @@ fn gui_frame() void {
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
-        const ooo: dvui.se.StructOptions(BasicTypes) = .initDefaults();
-        wholeStruct(@src(), "basic_types_const", &basic_types_const, 0, .{ooo});
+        //wholeStruct(@src(), "basic_types_const", &basic_types_const, 0, .{});
     }
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
-        //wholeStruct(@src(), "basic_types_var", &basic_types_var, 0, oooo);
+        var ooo: dvui.se.StructOptions(BasicTypes) = .init(.{ .u8 = .{ .number = .{ .display = .none } } });
+        ooo.options.put(.u8, .{ .number = .{ .display = .none } });
+        ooo.options.put(.i8, .{ .number = .{ .min = 0, .max = 5, .widget_type = .slider } });
+        wholeStruct(@src(), "basic_types_var", &basic_types_var, 0, .{ooo});
 
         //sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);
         //dvui.se.intFieldWidget2(@src(), "int1", &testStruct.int1, .{}, &al);
@@ -278,11 +280,14 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
     // TODO: This is where the field names and field enums meet. Need to sort this out somehow...
     const opts: dvui.se.StructOptions(@TypeOf(container.*)) = opts: {
         inline for (options) |opt| {
+            //@compileLog(@TypeOf(opt).StructT, @TypeOf(container.*));
+
             if (@TypeOf(opt).StructT == @TypeOf(container.*)) {
+                //@compileLog("equal");
                 break :opts opt;
             }
         }
-        break :opts dvui.se.StructOptions(@TypeOf(container.*));
+        break :opts .initDefaults();
     };
     inline for (opts.options.values, 0..) |field_option, i| {
         const key = comptime @TypeOf(opts.options).Indexer.keyForIndex(i); // TODO There must be a way to iterate both? One is just the enum fields?

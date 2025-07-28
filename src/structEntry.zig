@@ -57,7 +57,12 @@ pub fn StructOptions(T: type) type {
             @as(?StructOptionsT.Value, null),
         )) Self {
             var self = initDefaults();
-            self.override(options);
+            inline for (0..self.options.values.len) |i| {
+                const key = comptime StructOptionsT.Indexer.keyForIndex(i);
+                if (@field(options, @tagName(key))) |*v| {
+                    self.options.values[i] = v.*;
+                }
+            }
             return self;
         }
 
@@ -69,15 +74,21 @@ pub fn StructOptions(T: type) type {
             return .{ .options = defaults };
         }
 
-        pub fn override(self: *Self, options: std.enums.EnumFieldStruct(
-            StructOptionsT.Key,
-            ?StructOptionsT.Value,
-            @as(?StructOptionsT.Value, null),
-        )) void {
-            for (options) |ovr| {
-                self.options.put(ovr.key, ovr.value);
-            }
-        }
+        //pub fn override(self: *Self, options: std.enums.EnumFieldStruct(
+        //    StructOptionsT.Key,
+        //    ?StructOptionsT.Value,
+        //    @as(?StructOptionsT.Value, null),
+        //)) void {
+        //    self.doOverride(StructOptionsT.Key, options);
+        //}
+        //
+        //fn doOverride(self: *Self, comptime KeyType: type, options: anytype) void {
+        //    inline for (std.enums.values(KeyType)) |key| {
+        //        if (@field(options, @tagName(key))) {
+        //            self.options.put(key, @field(options, @tagName(key)));
+        //        }
+        //    }
+        //}
 
         pub fn defaultFieldOption(FieldType: type) FieldOptions {
             return switch (@typeInfo(FieldType)) {
