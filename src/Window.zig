@@ -76,6 +76,10 @@ secs_since_last_frame: f32 = 0,
 extra_frames_needed: u8 = 0,
 clipRect: dvui.Rect.Physical = .{},
 
+/// The currently active theme where colors and fonts will be sourced.
+/// This field is intended to be assigned to directly.
+///
+/// See `dvui.themeSet`
 theme: Theme,
 
 /// Uses `gpa` allocator

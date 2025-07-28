@@ -9,32 +9,35 @@ const Theme = @This();
 
 name: []const u8,
 
-// widgets can use this if they need to adjust colors
+/// widgets can use this if they need to adjust colors
 dark: bool,
 
+/// alpha value to apply to all colors and rendering
 alpha: f32 = 1.0,
 
-// used for focus
+/// used for focus highlighting
 color_accent: Color,
 
 color_err: Color,
 
-// text/foreground color
+/// text/foreground color
 color_text: Color,
 
-// text/foreground color when widget is pressed
+/// text/foreground color when widget is pressed
 color_text_press: Color,
 
-// background color for displaying lots of text
+/// background color for displaying lots of text
 color_fill: Color,
 
-// background color for containers that have other widgets inside
+/// background color for containers that have other widgets inside
 color_fill_window: Color,
 
-// background color for controls like buttons
+/// background color for controls like buttons
 color_fill_control: Color,
 
+/// background color while hovering over controls like buttons
 color_fill_hover: Color,
+/// background color while pressing down on controls like buttons
 color_fill_press: Color,
 
 color_border: Color,
@@ -49,13 +52,13 @@ font_title_2: Font,
 font_title_3: Font,
 font_title_4: Font,
 
-// used for highlighting menu/dropdown items
+/// used for highlighting menu/dropdown items
 style_accent: ColorStyles,
 
-// used for a button to perform dangerous actions
+/// used for buttons to perform dangerous actions
 style_err: ColorStyles,
 
-// if true, need to free the strings in deinit()
+/// if true, all strings in `Theme` will be freed in `deinit`
 allocated_strings: bool = false,
 
 pub const ColorStyles = struct {
