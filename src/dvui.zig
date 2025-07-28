@@ -3920,7 +3920,7 @@ pub fn dialogDisplay(id: WidgetId) !void {
 
     {
         // Add the buttons at the bottom first, so that they are guaranteed to be shown
-        var hbox = dvui.box(@src(), .horizontal, .{ .gravity_x = 0.5, .gravity_y = 1.0 });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 0.5, .gravity_y = 1.0 });
         defer hbox.deinit();
 
         if (cancel_label) |cl| {
@@ -4412,7 +4412,7 @@ pub fn toastsShow(id: ?WidgetId, rect: Rect.Natural) void {
         toast_win.drawBackground();
         toast_win.autoSize(); // affects next frame
 
-        var vbox = dvui.box(@src(), .vertical, .{});
+        var vbox = dvui.box(@src(), .{}, .{});
         defer vbox.deinit();
 
         while (it.next()) |t| {
@@ -4781,25 +4781,14 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) *OverlayWidget {
 /// Extra space is allocated evenly to all packed children expanded in dir
 /// direction.
 ///
-/// See `boxEqual` and `flexbox`.
+/// If init_opts.equal_space is true, all packed children get equal space.
+///
+/// See `flexbox`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) *BoxWidget {
+pub fn box(src: std.builtin.SourceLocation, init_opts: BoxWidget.InitOptions, opts: Options) *BoxWidget {
     var ret = widgetAlloc(BoxWidget);
-    ret.* = BoxWidget.init(src, .{ .dir = dir }, opts);
-    ret.install();
-    ret.drawBackground();
-    return ret;
-}
-
-/// Same as `box` but all packed children receive equal space.
-///
-/// See `box` and `flexbox`.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) *BoxWidget {
-    var ret = widgetAlloc(BoxWidget);
-    ret.* = BoxWidget.init(src, .{ .dir = dir, .equal_space = true }, opts);
+    ret.* = BoxWidget.init(src, init_opts, opts);
     ret.install();
     ret.drawBackground();
     return ret;
@@ -4807,7 +4796,7 @@ pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Opt
 
 /// Box laying out children horizontally, making new rows as needed.
 ///
-/// See `box` and `boxEqual`.
+/// See `box`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) *FlexBoxWidget {
@@ -4970,7 +4959,7 @@ pub fn gridHeadingCheckbox(
     {
         _ = dvui.separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
 
-        var hbox = dvui.box(@src(), .horizontal, header_options);
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, header_options);
         defer hbox.deinit();
 
         is_clicked = dvui.checkbox(@src(), &selected, null, checkbox_opts);
@@ -5619,7 +5608,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
     // draw background/border
     bw.drawBackground();
     {
-        var outer_hbox = box(src, .horizontal, .{ .expand = .horizontal });
+        var outer_hbox = box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer outer_hbox.deinit();
         icon(@src(), label_str, tvg_bytes, .{}, opts.strip().override(.{ .gravity_x = 1.0, .color_text = opts.color_text }));
         labelEx(@src(), "{s}", .{label_str}, .{ .align_x = 0.5 }, opts.strip().override(.{ .expand = .both }));
@@ -5647,7 +5636,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
 
     const options = slider_defaults.override(opts);
 
-    var b = box(src, dir, options);
+    var b = box(src, .{ .dir = dir }, options);
     defer b.deinit();
 
     tabIndexSet(b.data().id, options.tab_index);
@@ -6199,7 +6188,7 @@ pub const Progress_InitOptions = struct {
 pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions, opts: Options) void {
     const options = progress_defaults.override(opts);
 
-    var b = box(src, init_opts.dir, options);
+    var b = box(src, .{ .dir = init_opts.dir }, options);
     defer b.deinit();
 
     const rs = b.data().contentRectScale();
@@ -6253,7 +6242,7 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
         }
     }
 
-    var b = box(@src(), .horizontal, options.strip().override(.{ .expand = .both }));
+    var b = box(@src(), .{ .dir = .horizontal }, options.strip().override(.{ .expand = .both }));
     defer b.deinit();
 
     const check_size = options.fontGet().textHeight();
@@ -6339,7 +6328,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
         ret = true;
     }
 
-    var b = box(@src(), .horizontal, options.strip().override(.{ .expand = .both }));
+    var b = box(@src(), .{ .dir = .horizontal }, options.strip().override(.{ .expand = .both }));
     defer b.deinit();
 
     const radio_size = options.fontGet().textHeight();
@@ -6696,7 +6685,7 @@ pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOp
     var changed = picker.color_changed;
     var rgb = init_opts.hsv.toColor();
 
-    var side_box = dvui.box(@src(), .vertical, .{});
+    var side_box = dvui.box(@src(), .{}, .{});
     defer side_box.deinit();
 
     const slider_expand = Options.Expand.fromDirection(.horizontal);

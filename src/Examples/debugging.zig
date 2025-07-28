@@ -1,7 +1,7 @@
 /// ![image](Examples-debugging.png)
 pub fn debuggingErrors() void {
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
         dvui.label(@src(), "Scroll Speed", .{}, .{});
         _ = dvui.sliderEntry(@src(), "{d:0.1}", .{ .value = &dvui.scroll_speed, .min = 0.1, .max = 50, .interval = 0.1 }, .{});
@@ -17,7 +17,7 @@ pub fn debuggingErrors() void {
     dvui.label(@src(), "- mouse click in text layout/entry shows touch draggables and menu", .{}, .{ .margin = .{ .x = 10 } });
 
     if (dvui.expander(@src(), "Virtual Parent (affects IDs but not layout)", .{}, .{ .expand = .horizontal })) {
-        var hbox = dvui.box(@src(), .horizontal, .{ .margin = .{ .x = 10 } });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = .{ .x = 10 } });
         defer hbox.deinit();
         dvui.label(@src(), "makeLabels twice:", .{}, .{});
 
@@ -26,7 +26,7 @@ pub fn debuggingErrors() void {
     }
 
     if (dvui.expander(@src(), "Duplicate id (will log error)", .{}, .{ .expand = .horizontal })) {
-        var b = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         for (0..2) |i| {
             dvui.label(@src(), "this should be highlighted (and error logged)", .{}, .{});
@@ -39,7 +39,7 @@ pub fn debuggingErrors() void {
     }
 
     if (dvui.expander(@src(), "Invalid utf-8 text", .{}, .{ .expand = .horizontal })) {
-        var b = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         dvui.labelNoFmt(@src(), "this \xFFtext\xFF includes some \xFF invalid utf-8\xFF\xFF\xFF which is replaced with \xFF", .{}, .{});
     }
@@ -53,7 +53,7 @@ pub fn debuggingErrors() void {
     }
 
     if (dvui.expander(@src(), "Key bindings", .{}, .{ .expand = .horizontal })) {
-        var b = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
 
         const g = struct {
@@ -159,7 +159,7 @@ test "DOCIMG debugging" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             debuggingErrors();
             return .ok;

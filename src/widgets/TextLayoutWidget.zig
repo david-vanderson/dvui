@@ -1434,7 +1434,7 @@ pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
 }
 
 pub fn touchEditingMenu(self: *TextLayoutWidget) void {
-    var hbox = dvui.box(@src(), .horizontal, .{
+    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
         .corner_radius = dvui.ButtonWidget.defaults.corner_radiusGet(),
         .background = true,
         .border = dvui.Rect.all(1),

@@ -70,7 +70,7 @@ pub fn install(self: *DropdownWidget) void {
     self.menuItem.drawBackground(.{ .focus_as_outline = true });
 
     if (self.init_options.label) |ll| {
-        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .both });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
 
         var lw = LabelWidget.initNoFmt(@src(), ll, .{}, self.options.strip().override(.{ .gravity_y = 0.5 }));
         lw.install();

@@ -9,7 +9,7 @@ var radio_choice: RadioChoice = @enumFromInt(0);
 
 /// ![image](Examples-menus.png)
 pub fn menus() void {
-    var vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .margin = .{ .x = 4 } });
+    var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .margin = .{ .x = 4 } });
     defer vbox.deinit();
 
     {
@@ -30,7 +30,7 @@ pub fn menus() void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer hbox.deinit();
         {
             var m = dvui.menu(@src(), .horizontal, .{});
@@ -69,7 +69,7 @@ pub fn menus() void {
     _ = dvui.spacer(@src(), .{ .min_size_content = .height(12) });
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .width(300) });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .width(300) });
         defer hbox.deinit();
 
         var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
@@ -82,7 +82,7 @@ pub fn menus() void {
     _ = dvui.spacer(@src(), .{ .min_size_content = .height(4) });
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .width(300) });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .width(300) });
         defer hbox.deinit();
 
         var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
@@ -99,7 +99,7 @@ pub fn menus() void {
                 var animator = dvui.animate(@src(), .{ .kind = .alpha, .duration = 250_000 }, .{ .expand = .both });
                 defer animator.deinit();
 
-                var vbox2 = dvui.box(@src(), .vertical, dvui.FloatingTooltipWidget.defaults.override(.{ .expand = .both }));
+                var vbox2 = dvui.box(@src(), .{}, dvui.FloatingTooltipWidget.defaults.override(.{ .expand = .both }));
                 defer vbox2.deinit();
 
                 var tl2 = dvui.textLayout(@src(), .{}, .{ .background = false });
@@ -125,7 +125,7 @@ pub fn menus() void {
     _ = dvui.spacer(@src(), .{ .min_size_content = .height(12) });
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         const layout_dir = dvui.dataGetPtrDefault(null, hbox.data().id, "layout_dir", dvui.enums.Direction, .horizontal);
         const active_tab = dvui.dataGetPtrDefault(null, hbox.data().id, "active_tab", usize, 0);
         {
@@ -138,7 +138,7 @@ pub fn menus() void {
             }
         }
         // reverse orientation because horizontal tabs go above content
-        var tbox = dvui.box(@src(), if (layout_dir.* == .vertical) .horizontal else .vertical, .{ .max_size_content = .{ .w = 400, .h = 200 } });
+        var tbox = dvui.box(@src(), .{ .dir = if (layout_dir.* == .vertical) .horizontal else .vertical }, .{ .max_size_content = .{ .w = 400, .h = 200 } });
         defer tbox.deinit();
 
         {
@@ -158,7 +158,7 @@ pub fn menus() void {
                     var tab = tabs.addTab(active_tab.* == i, .{});
                     defer tab.deinit();
 
-                    var tab_box = dvui.box(@src(), .horizontal, .{});
+                    var tab_box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
                     defer tab_box.deinit();
 
                     dvui.icon(@src(), "cycle", entypo.cycle, .{}, .{});
@@ -185,7 +185,7 @@ pub fn menus() void {
                 .horizontal => border.y = 0,
                 .vertical => border.x = 0,
             }
-            var vbox3 = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window, .border = border });
+            var vbox3 = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window, .border = border });
             defer vbox3.deinit();
 
             dvui.label(@src(), "This is tab {d}", .{active_tab.*}, .{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 });
@@ -217,7 +217,7 @@ pub fn submenus() void {
 
 pub fn focus() void {
     if (dvui.expander(@src(), "Changing Focus", .{}, .{ .expand = .horizontal })) {
-        var b = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
 
         var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
@@ -238,7 +238,7 @@ pub fn focus() void {
         const uniqueId = dvui.parentGet().extendId(@src(), 0);
 
         {
-            var hbox = dvui.box(@src(), .horizontal, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();
 
             if (dvui.button(@src(), "Focus Next textEntry", .{}, .{})) {
@@ -264,7 +264,7 @@ pub fn focus() void {
     _ = dvui.spacer(@src(), .{ .min_size_content = .height(10) });
 
     {
-        var b = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10, .y = 2 }, .border = dvui.Rect.all(1) });
+        var b = dvui.box(@src(), .{}, .{ .margin = .{ .x = 10, .y = 2 }, .border = dvui.Rect.all(1) });
         defer b.deinit();
 
         const last_focus_id = dvui.lastFocusedIdInFrame();
@@ -274,7 +274,7 @@ pub fn focus() void {
         tl.deinit();
 
         {
-            var hbox = dvui.box(@src(), .horizontal, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();
 
             for (0..6) |i| {
@@ -298,7 +298,7 @@ pub fn focus() void {
     _ = dvui.spacer(@src(), .{ .min_size_content = .height(10) });
 
     {
-        var b = dvui.box(@src(), .vertical, .{ .expand = .horizontal });
+        var b = dvui.box(@src(), .{}, .{ .expand = .horizontal });
         defer b.deinit();
 
         var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
@@ -339,7 +339,7 @@ test "DOCIMG menus" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             menus();
             return .ok;

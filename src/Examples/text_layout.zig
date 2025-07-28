@@ -9,7 +9,7 @@ pub fn layoutText() void {
         tl.install(.{});
         defer tl.deinit();
 
-        var cbox = dvui.box(@src(), .vertical, .{ .margin = dvui.Rect.all(6), .min_size_content = .{ .w = 40 } });
+        var cbox = dvui.box(@src(), .{ .dir = .vertical }, .{ .margin = dvui.Rect.all(6), .min_size_content = .{ .w = 40 } });
         if (dvui.buttonIcon(
             @src(),
             "play",
@@ -32,7 +32,7 @@ pub fn layoutText() void {
         }
         cbox.deinit();
 
-        cbox = dvui.box(@src(), .vertical, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .fill_window, .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
+        cbox = dvui.box(@src(), .{}, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .fill_window, .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
         dvui.icon(@src(), "aircraft", entypo.aircraft, .{}, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 });
         dvui.label(@src(), "Caption Heading", .{}, .{ .font_style = .caption_heading, .gravity_x = 0.5 });
         var tl_caption = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
@@ -89,7 +89,7 @@ test "DOCIMG text_layout" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             layoutText();
             return .ok;

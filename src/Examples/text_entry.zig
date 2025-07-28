@@ -13,7 +13,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
 
     var enter_pressed = false;
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Singleline", .{}, .{ .gravity_y = 0.5 });
@@ -28,7 +28,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         left_alignment.spacer(@src(), 0);
@@ -48,7 +48,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Password", .{}, .{ .gravity_y = 0.5 });
@@ -104,11 +104,11 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         {
-            var vbox = dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
+            var vbox = dvui.box(@src(), .{}, .{ .gravity_y = 0.5 });
             defer vbox.deinit();
 
             dvui.label(@src(), "Multiline", .{}, .{});
@@ -156,7 +156,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Multiline Font", .{}, .{ .gravity_y = 0.5 });
@@ -176,12 +176,12 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         left_alignment.spacer(@src(), 0);
 
-        var vbox = dvui.box(@src(), .vertical, .{});
+        var vbox = dvui.box(@src(), .{}, .{});
         defer vbox.deinit();
 
         var la2 = dvui.Alignment.init(@src(), 0);
@@ -192,7 +192,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
                 dvui.backend.wasm.wasm_add_noto_font();
             }
         } else {
-            var hbox2 = dvui.box(@src(), .horizontal, .{});
+            var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             dvui.label(@src(), "Name", .{}, .{ .gravity_y = 0.5 });
 
             la2.spacer(@src(), 0);
@@ -209,7 +209,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
             te_name.deinit();
             hbox2.deinit();
 
-            var hbox3 = dvui.box(@src(), .horizontal, .{});
+            var hbox3 = dvui.box(@src(), .{ .dir = .horizontal }, .{});
 
             var new_filename: ?[]const u8 = null;
 
@@ -295,7 +295,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
 
     // Combobox
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "ComboBox", .{}, .{ .gravity_y = 0.5 });
@@ -331,7 +331,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Suggest", .{}, .{ .gravity_y = 0.5 });
@@ -405,7 +405,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
     };
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Parse", .{}, .{ .gravity_y = 0.5 });
@@ -447,7 +447,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         left_alignment.spacer(@src(), 0);
@@ -492,7 +492,7 @@ test "DOCIMG text_entry" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             textEntryWidgets(box.data().id);
             return .ok;

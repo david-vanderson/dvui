@@ -1,6 +1,6 @@
 /// ![image](Examples-scrollCanvas.png)
 pub fn scrollCanvas() void {
-    var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+    var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
     defer vbox.deinit();
 
     const scroll_info = dvui.dataGetPtrDefault(null, vbox.data().id, "scroll_info", ScrollInfo, .{ .vertical = .given, .horizontal = .given });
@@ -67,7 +67,7 @@ pub fn scrollCanvas() void {
     const evts = dvui.events();
 
     for (boxes, 0..) |*b, i| {
-        var dragBox = dvui.box(@src(), .vertical, .{
+        var dragBox = dvui.box(@src(), .{}, .{
             .id_extra = i,
             .rect = dvui.Rect{ .x = b.x, .y = b.y },
             .padding = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
@@ -117,7 +117,7 @@ pub fn scrollCanvas() void {
         dvui.label(@src(), "Box {d} {d:0>3.0}x{d:0>3.0}", .{ i, b.x, b.y }, .{});
 
         {
-            var hbox = dvui.box(@src(), .horizontal, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();
             if (dvui.buttonIcon(
                 @src(),
@@ -143,7 +143,7 @@ pub fn scrollCanvas() void {
         }
 
         {
-            var hbox = dvui.box(@src(), .horizontal, .{ .margin = dvui.Rect.all(4), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4), .background = true, .color_fill = .fill_window });
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = dvui.Rect.all(4), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4), .background = true, .color_fill = .fill_window });
             defer hbox.deinit();
 
             for (evts) |*e| {
@@ -159,7 +159,7 @@ pub fn scrollCanvas() void {
                     _ = dvui.spacer(@src(), .{ .min_size_content = .width(5), .id_extra = k });
                 }
                 const col = if (dragging_this) dvui.Color.lime.opacity(0.5) else dvui.Color.blue;
-                var dbox = dvui.box(@src(), .vertical, .{ .id_extra = k, .min_size_content = .{ .w = 20, .h = 20 }, .background = true, .color_fill = .{ .color = col } });
+                var dbox = dvui.box(@src(), .{}, .{ .id_extra = k, .min_size_content = .{ .w = 20, .h = 20 }, .background = true, .color_fill = .{ .color = col } });
                 defer dbox.deinit();
 
                 for (evts) |*e| {
@@ -390,7 +390,7 @@ test "DOCIMG scrollCanvas" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             scrollCanvas();
             return .ok;

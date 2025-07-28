@@ -1,7 +1,7 @@
 /// ![image](Examples-plots.png)
 pub fn plots() void {
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Simple", .{}, .{});
@@ -12,7 +12,7 @@ pub fn plots() void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Color and Thick", .{}, .{});
@@ -27,7 +27,7 @@ pub fn plots() void {
         save = true;
     }
 
-    var vbox = dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 300, .h = 100 }, .expand = .ratio });
+    var vbox = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 100 }, .expand = .ratio });
     defer vbox.deinit();
 
     var pic: ?dvui.Picture = null;
@@ -115,7 +115,7 @@ test "DOCIMG plots" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             plots();
             return .ok;

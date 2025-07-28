@@ -155,7 +155,7 @@ Examples
 ```zig
 // caller is responsible for passing src and .id_extra if needed
 fn my_wrapper(src: std.builtin.SourceLocation, opts: Options) void {
-    var wrapper_box = dvui.box(src, .horizontal, opts);
+    var wrapper_box = dvui.box(src, .{ .dir = .horizontal }, opts);
     defer wrapper_box.deinit();
 
     // label is a child of wrapper_box, so can just call @src() here
@@ -164,13 +164,13 @@ fn my_wrapper(src: std.builtin.SourceLocation, opts: Options) void {
 
 pub fn frame() void {
     // normally we pass @src() and that is good enough
-    var vbox = dvui.box(@src(), .vertical, .{});
+    var vbox = dvui.box(@src(), .{}, .{});
     defer vbox.deinit();
 
     for (0..3) |i| {
         // this will be called multiple times with the same parent and
         // @src(), so pass .id_extra here to keep the IDs unique
-        var hbox = dvui.box(@src(), .horizontal, .{ .id_extra = i });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .id_extra = i });
 
         // label is a child of hbox, so can just call @src() here
         dvui.label(@src(), "Label {d}", .{i}, .{});

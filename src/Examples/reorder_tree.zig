@@ -9,11 +9,11 @@ pub fn reorderLists() void {
     const layo = dvui.dataGetPtrDefault(null, uniqueId, "reorderLayout", reorderLayout, .horizontal);
 
     if (dvui.expander(@src(), "Simple", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
-        var vbox = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
+        var vbox = dvui.box(@src(), .{}, .{ .margin = .{ .x = 10 } });
         defer vbox.deinit();
 
         {
-            var hbox2 = dvui.box(@src(), .horizontal, .{});
+            var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox2.deinit();
 
             const entries = [_][]const u8{ "Vertical", "Horizontal", "Flex" };
@@ -25,7 +25,7 @@ pub fn reorderLists() void {
         }
 
         {
-            var hbox2 = dvui.box(@src(), .horizontal, .{});
+            var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox2.deinit();
             dvui.label(@src(), "Drag", .{}, .{});
             dvui.icon(@src(), "drag_icon", dvui.entypo.menu, .{}, .{ .min_size_content = .{ .h = 22 } });
@@ -36,7 +36,7 @@ pub fn reorderLists() void {
     }
 
     if (dvui.expander(@src(), "Advanced", .{}, .{ .expand = .horizontal })) {
-        var vbox = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
+        var vbox = dvui.box(@src(), .{}, .{ .margin = .{ .x = 10 } });
         defer vbox.deinit();
 
         dvui.label(@src(), "Drag off list to remove.", .{}, .{});
@@ -44,7 +44,7 @@ pub fn reorderLists() void {
     }
 
     if (dvui.expander(@src(), "Tree", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
-        var vbox = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 }, .expand = .both });
+        var vbox = dvui.box(@src(), .{}, .{ .margin = .{ .x = 10 }, .expand = .both });
         defer vbox.deinit();
 
         reorderTree();
@@ -76,8 +76,8 @@ pub fn reorderListsSimple(lay: reorderLayout) void {
     var vbox: ?*dvui.BoxWidget = null;
     var fbox: ?*dvui.FlexBoxWidget = null;
     switch (lay) {
-        .vertical => vbox = dvui.box(@src(), .vertical, .{ .expand = .both }),
-        .horizontal => vbox = dvui.box(@src(), .horizontal, .{ .expand = .both }),
+        .vertical => vbox = dvui.box(@src(), .{}, .{ .expand = .both }),
+        .horizontal => vbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both }),
         .flex => fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both }),
     }
     defer {
@@ -98,7 +98,7 @@ pub fn reorderListsSimple(lay: reorderLayout) void {
         }
 
         // actual content of the list entry
-        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .fill_window });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .fill_window });
         defer hbox.deinit();
 
         dvui.label(@src(), "{s}", .{s}, .{});
@@ -152,7 +152,7 @@ pub fn reorderListsAdvanced() void {
         }
     };
 
-    var hbox = dvui.box(@src(), .horizontal, .{});
+    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
     defer hbox.deinit();
 
     // template you can drag to add to list
@@ -162,7 +162,7 @@ pub fn reorderListsAdvanced() void {
     if (g.strings_len == g.strings.len) {
         dvui.label(@src(), "List Full", .{}, .{ .gravity_x = 1.0 });
     } else {
-        var hbox2 = dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0, .border = dvui.Rect.all(1), .margin = dvui.Rect.all(4), .background = true, .color_fill = .fill_window });
+        var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0, .border = dvui.Rect.all(1), .margin = dvui.Rect.all(4), .background = true, .color_fill = .fill_window });
         defer hbox2.deinit();
 
         dvui.label(@src(), "Drag to add : {d}", .{g.strings_len}, .{});
@@ -184,7 +184,7 @@ pub fn reorderListsAdvanced() void {
     defer reorder.deinit();
 
     // determines layout of list
-    var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+    var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
     defer vbox.deinit();
 
     if (added_idx) |ai| {
@@ -229,7 +229,7 @@ pub fn reorderListsAdvanced() void {
         }
 
         // actual content of the list entry
-        var hbox2 = dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .fill_window });
+        var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .fill_window });
         defer hbox2.deinit();
 
         dvui.label(@src(), "{s}", .{s}, .{});

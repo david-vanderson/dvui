@@ -16,7 +16,7 @@ const BoxWidget = @This();
 
 pub const InitOptions = struct {
     /// Direction the box packs children in.
-    dir: enums.Direction,
+    dir: enums.Direction = .vertical,
 
     /// Whether to give equal space to all packed children.
     equal_space: bool = false,

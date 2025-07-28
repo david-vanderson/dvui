@@ -32,7 +32,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *ColorPickerWidget) void {
-    self.box = dvui.box(self.src, self.init_opts.dir, self.opts);
+    self.box = dvui.box(self.src, .{ .dir = self.init_opts.dir }, self.opts);
 
     if (valueSaturationBox(@src(), self.init_opts.hsv, .{})) {
         self.color_changed = true;
@@ -60,7 +60,7 @@ pub const value_saturation_box_defaults = Options{
 pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts: Options) bool {
     const options = value_saturation_box_defaults.override(opts);
 
-    var b = dvui.box(src, .horizontal, options);
+    var b = dvui.box(src, .{ .dir = .horizontal }, options);
     defer b.deinit();
 
     dvui.tabIndexSet(b.data().id, options.tab_index);
@@ -190,7 +190,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
 
     const options = hue_slider_defaults.override(opts);
 
-    var b = dvui.box(src, dir, options);
+    var b = dvui.box(src, .{ .dir = dir }, options);
     defer b.deinit();
 
     dvui.tabIndexSet(b.data().id, options.tab_index);
@@ -362,7 +362,7 @@ test "DOCIMG ColorPickerWidget" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
 
             var hsv: dvui.Color.HSV = .{ .h = 120, .s = 0.8, .v = 0.9 };

@@ -12,7 +12,7 @@ var paned_collapsed_width: f32 = 400;
 /// ![image](Examples-layout.png)
 pub fn layout() void {
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         const Static = struct {
@@ -26,11 +26,11 @@ pub fn layout() void {
         };
 
         {
-            var vbox = dvui.box(@src(), .vertical, .{});
+            var vbox = dvui.box(@src(), .{}, .{});
             defer vbox.deinit();
 
             {
-                var hbox2 = dvui.box(@src(), .horizontal, .{});
+                var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{});
                 defer hbox2.deinit();
 
                 dvui.label(@src(), "Layout", .{}, .{});
@@ -52,7 +52,7 @@ pub fn layout() void {
                 opts.max_size_content = .size(opts.min_size_contentGet());
             }
 
-            var o = dvui.box(@src(), .vertical, opts);
+            var o = dvui.box(@src(), .{}, opts);
             defer o.deinit();
             const old_clip = dvui.clip(o.data().backgroundRectScale().r);
             defer dvui.clipSet(old_clip);
@@ -79,7 +79,7 @@ pub fn layout() void {
         }
 
         {
-            var vbox = dvui.box(@src(), .vertical, .{});
+            var vbox = dvui.box(@src(), .{}, .{});
             defer vbox.deinit();
             dvui.label(@src(), "Gravity", .{}, .{});
             _ = dvui.sliderEntry(@src(), "X: {d:0.2}", .{ .value = &layout_gravity_x, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
@@ -95,7 +95,7 @@ pub fn layout() void {
         }
 
         {
-            var vbox = dvui.box(@src(), .vertical, .{});
+            var vbox = dvui.box(@src(), .{}, .{});
             defer vbox.deinit();
             dvui.label(@src(), "Expand", .{}, .{});
             inline for (std.meta.tags(dvui.Options.Expand)) |opt| {
@@ -118,7 +118,7 @@ pub fn layout() void {
         }
 
         if (Static.shrink) {
-            var vbox = dvui.box(@src(), .vertical, .{});
+            var vbox = dvui.box(@src(), .{}, .{});
             defer vbox.deinit();
             dvui.label(@src(), "Shrink", .{}, .{});
             inline for (std.meta.tags(dvui.Options.Expand)) |opt| {
@@ -131,19 +131,19 @@ pub fn layout() void {
 
     dvui.label(@src(), "margin/border/padding", .{}, .{});
     {
-        var vbox = dvui.box(@src(), .vertical, .{});
+        var vbox = dvui.box(@src(), .{}, .{});
         defer vbox.deinit();
 
-        var vbox2 = dvui.box(@src(), .vertical, .{ .gravity_x = 0.5 });
+        var vbox2 = dvui.box(@src(), .{}, .{ .gravity_x = 0.5 });
         _ = dvui.sliderEntry(@src(), "margin {d:0.0}", .{ .value = &layout_margin.y, .min = 0, .max = 20.0, .interval = 1 }, .{});
         _ = dvui.sliderEntry(@src(), "border {d:0.0}", .{ .value = &layout_border.y, .min = 0, .max = 20.0, .interval = 1 }, .{});
         _ = dvui.sliderEntry(@src(), "padding {d:0.0}", .{ .value = &layout_padding.y, .min = 0, .max = 20.0, .interval = 1 }, .{});
         vbox2.deinit();
         {
-            var hbox = dvui.box(@src(), .horizontal, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();
             {
-                vbox2 = dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
+                vbox2 = dvui.box(@src(), .{}, .{ .gravity_y = 0.5 });
                 defer vbox2.deinit();
                 _ = dvui.sliderEntry(@src(), "margin {d:0.0}", .{ .value = &layout_margin.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
                 _ = dvui.sliderEntry(@src(), "border {d:0.0}", .{ .value = &layout_border.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
@@ -161,7 +161,7 @@ pub fn layout() void {
                 }
             }
             {
-                vbox2 = dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
+                vbox2 = dvui.box(@src(), .{}, .{ .gravity_y = 0.5 });
                 defer vbox2.deinit();
                 _ = dvui.sliderEntry(@src(), "margin {d:0.0}", .{ .value = &layout_margin.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
                 _ = dvui.sliderEntry(@src(), "border {d:0.0}", .{ .value = &layout_border.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
@@ -169,7 +169,7 @@ pub fn layout() void {
             }
         }
         {
-            vbox2 = dvui.box(@src(), .vertical, .{ .gravity_x = 0.5 });
+            vbox2 = dvui.box(@src(), .{}, .{ .gravity_x = 0.5 });
             defer vbox2.deinit();
             _ = dvui.sliderEntry(@src(), "margin {d:0.0}", .{ .value = &layout_margin.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
             _ = dvui.sliderEntry(@src(), "border {d:0.0}", .{ .value = &layout_border.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
@@ -189,10 +189,10 @@ pub fn layout() void {
         hbox.drawBackground();
         defer hbox.deinit();
         {
-            var hbox2 = dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = breakpoint / 2, .h = 140 }, .max_size_content = .width(breakpoint / 2), .expand = if (equal) .horizontal else .none });
+            var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .min_size_content = .{ .w = breakpoint / 2, .h = 140 }, .max_size_content = .width(breakpoint / 2), .expand = if (equal) .horizontal else .none });
             defer hbox2.deinit();
             {
-                var vbox = dvui.box(@src(), .vertical, opts);
+                var vbox = dvui.box(@src(), .{}, opts);
                 defer vbox.deinit();
 
                 _ = dvui.button(@src(), "vertical", .{}, .{ .gravity_x = 0.5 });
@@ -200,7 +200,7 @@ pub fn layout() void {
                 _ = dvui.button(@src(), "a", .{}, .{ .gravity_x = 0.5 });
             }
             {
-                var vbox = dvui.boxEqual(@src(), .vertical, opts);
+                var vbox = dvui.box(@src(), .{ .equal_space = true }, opts);
                 defer vbox.deinit();
 
                 _ = dvui.button(@src(), "vert equal", .{}, .{ .gravity_x = 0.5 });
@@ -209,10 +209,10 @@ pub fn layout() void {
             }
         }
         {
-            var vbox2 = dvui.box(@src(), .vertical, .{ .max_size_content = .zero, .expand = .both });
+            var vbox2 = dvui.box(@src(), .{}, .{ .max_size_content = .zero, .expand = .both });
             defer vbox2.deinit();
             {
-                var hbox2 = dvui.box(@src(), .horizontal, opts);
+                var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, opts);
                 defer hbox2.deinit();
 
                 _ = dvui.button(@src(), "horizontal", .{}, .{ .gravity_y = 0.5 });
@@ -220,7 +220,7 @@ pub fn layout() void {
                 _ = dvui.button(@src(), "a", .{}, .{ .gravity_y = 0.5 });
             }
             {
-                var hbox2 = dvui.boxEqual(@src(), .horizontal, opts);
+                var hbox2 = dvui.box(@src(), .{ .dir = .horizontal, .equal_space = true }, opts);
                 defer hbox2.deinit();
 
                 _ = dvui.button(@src(), "horiz\nequal", .{}, .{ .gravity_y = 0.5 });
@@ -231,7 +231,7 @@ pub fn layout() void {
     }
     {
         {
-            var hbox2 = dvui.box(@src(), .horizontal, .{});
+            var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox2.deinit();
             dvui.label(@src(), "FlexBox", .{}, .{});
             inline for (std.meta.tags(dvui.FlexBoxWidget.ContentPosition)) |opt| {
@@ -250,7 +250,7 @@ pub fn layout() void {
             defer fbox.deinit();
 
             for (0..11) |i| {
-                var labelbox = dvui.box(@src(), .vertical, .{ .id_extra = i, .margin = .{ .x = 4, .y = 4 }, .border = dvui.Rect.all(1), .background = true });
+                var labelbox = dvui.box(@src(), .{}, .{ .id_extra = i, .margin = .{ .x = 4, .y = 4 }, .border = dvui.Rect.all(1), .background = true });
                 defer labelbox.deinit();
 
                 if (i % 2 == 0) {
@@ -267,7 +267,7 @@ pub fn layout() void {
         defer paned.deinit();
 
         if (paned.showFirst()) {
-            var vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true });
+            var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true });
             defer vbox.deinit();
 
             dvui.label(@src(), "Left Side", .{}, .{});
@@ -279,7 +279,7 @@ pub fn layout() void {
         }
 
         if (paned.showSecond()) {
-            var vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true });
+            var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true });
             defer vbox.deinit();
 
             dvui.label(@src(), "Right Side", .{}, .{});
@@ -302,7 +302,7 @@ test "DOCIMG layout" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             layout();
             return .ok;
