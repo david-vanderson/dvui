@@ -51,6 +51,15 @@ pub fn main() !void {
         .vsync = vsync,
         .title = "DVUI DX11 Standalone Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
+        .dvui_window_init_options = .{
+            // you can set the default theme here in the init options
+            // PS: we need to pass undefined as the backend pointer because we haven't created the
+            //     backend yet. The pointer is unused for color scheme in the dx11 backend
+            .theme = switch (Backend.preferredColorScheme(undefined) orelse .light) {
+                .light => dvui.Theme.builtin.adwaita_light,
+                .dark => dvui.Theme.builtin.adwaita_dark,
+            },
+        },
     });
     defer first_backend.deinit();
 
