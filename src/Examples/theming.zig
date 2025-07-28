@@ -244,7 +244,7 @@ fn fonts(theme: *dvui.Theme) bool {
     if (dvui.sliderEntry(@src(), "Size: {d:0}", .{ .min = 4, .max = 100, .interval = 1, .value = &edited_font.size }, .{})) {
         changed = true;
     }
-    if (dvui.sliderEntry(@src(), "Line height: {d:0}", .{ .min = 0, .max = 10, .interval = 0.1, .value = &edited_font.line_height_factor }, .{})) {
+    if (dvui.sliderEntry(@src(), "Line height: {d:0.1}", .{ .min = 0, .max = 10, .interval = 0.1, .value = &edited_font.line_height_factor }, .{})) {
         changed = true;
     }
 
