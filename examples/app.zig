@@ -41,6 +41,14 @@ var orig_content_scale: f32 = 1.0;
 pub fn AppInit(win: *dvui.Window) !void {
     orig_content_scale = win.content_scale;
     //try dvui.addFont("NOTO", @embedFile("../src/fonts/NotoSansKR-Regular.ttf"), null);
+
+    if (false) {
+        // If you need to set a theme based on the users preferred color scheme, do it here
+        win.theme = switch (win.backend.preferredColorScheme() orelse .light) {
+            .light => dvui.Theme.builtin.adwaita_light,
+            .dark => dvui.Theme.builtin.adwaita_dark,
+        };
+    }
 }
 
 // Run as app is shutting down before dvui.Window.deinit()
