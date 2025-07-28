@@ -54,6 +54,11 @@ pub fn toRGBA(self: @This()) [4]u8 {
     return .{ self.r, self.g, self.b, self.a };
 }
 
+/// Lighten color by converting to HSLuv, lightening, and back.
+pub fn lighten(self: Color, deltal: f32) Color {
+    return HSLuv.fromColor(self).lighten(deltal).color();
+}
+
 /// https://en.wikipedia.org/wiki/HSL_and_HSV#HSV_to_RGB
 pub const HSV = struct {
     /// Hue 0-360 (degrees)
