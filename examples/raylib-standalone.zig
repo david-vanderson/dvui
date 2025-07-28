@@ -169,7 +169,7 @@ fn dvui_frame() bool {
         defer scaler.deinit();
 
         {
-            var hbox = dvui.box(@src(), .horizontal, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();
 
             if (dvui.button(@src(), "Zoom In", .{}, .{})) {
@@ -183,7 +183,7 @@ fn dvui_frame() bool {
 
         dvui.labelNoFmt(@src(), "Below is drawn directly by the backend, not going through DVUI.", .{}, .{ .margin = .{ .x = 4 } });
 
-        var box = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
+        var box = dvui.box(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
         defer box.deinit();
 
         // Here is some arbitrary drawing that doesn't have to go through DVUI.

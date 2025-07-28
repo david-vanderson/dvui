@@ -61,7 +61,7 @@ pub fn main() !void {
         ray.ClearBackground(RaylibBackend.dvuiColorToRaylib(dvui.themeGet().color_fill_window));
 
         {
-            var b = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+            var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
             defer b.deinit();
 
             if (ray.GuiIsLocked()) {
@@ -111,7 +111,7 @@ fn colorPicker(result: *dvui.Color) void {
     const color_hex = result.toHexString();
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.labelNoFmt(@src(), &color_hex, .{}, .{

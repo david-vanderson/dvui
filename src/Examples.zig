@@ -108,7 +108,7 @@ pub fn demo() void {
 
         var invalidate: bool = false;
         {
-            var hbox = dvui.box(@src(), .horizontal, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();
             if (dvui.button(@src(), "Debug Window", .{}, .{})) {
                 dvui.toggleDebugWindow();
@@ -145,7 +145,7 @@ pub fn demo() void {
                 cache = dvui.cache(@src(), .{ .invalidate = invalidate }, .{ .expand = .both });
             }
             if (!use_cache or cache.uncached()) {
-                const box = dvui.box(@src(), .vertical, .{ .expand = .both });
+                const box = dvui.box(@src(), .{}, .{ .expand = .both });
                 defer box.deinit();
 
                 var options: dvui.Options = .{ .gravity_x = 0.5, .gravity_y = 1.0 };
@@ -160,7 +160,7 @@ pub fn demo() void {
                 const oldclip = dvui.clip(demo_scaler.data().contentRectScale().r);
                 defer dvui.clipSet(oldclip);
 
-                const box2 = dvui.box(@src(), .vertical, .{ .rect = dvui.Rect.fromPoint(e.scaleOffset().offset).toSize(.{ .w = 400, .h = 1000 }) });
+                const box2 = dvui.box(@src(), .{}, .{ .rect = dvui.Rect.fromPoint(e.scaleOffset().offset).toSize(.{ .w = 400, .h = 1000 }) });
                 defer box2.deinit();
 
                 switch (e) {
@@ -201,11 +201,11 @@ pub fn demo() void {
     }
 
     if (paned.showSecond()) {
-        var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+        var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
         defer vbox.deinit();
 
         {
-            var hbox = dvui.box(@src(), .horizontal, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();
 
             if (paned.collapsed() and dvui.button(@src(), "Back to Demos", .{}, .{ .min_size_content = .{ .h = 30 }, .tag = "dvui_demo_window_back" })) {
@@ -283,7 +283,7 @@ pub fn dialogDirect() void {
 
     {
         _ = dvui.spacer(@src(), .{ .expand = .vertical });
-        var hbox = dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0 });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0 });
         defer hbox.deinit();
 
         if (dvui.button(@src(), "Yes", .{}, .{})) {
@@ -304,7 +304,7 @@ pub fn show_stroke_test_window() void {
     dvui.label(@src(), "Stroke Test", .{}, .{});
     _ = dvui.checkbox(@src(), &StrokeTest.stroke_test_closed, "Closed", .{});
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Endcap Style", .{}, .{});
@@ -353,7 +353,7 @@ pub fn grids() void {
         }
     };
 
-    var tbox = dvui.box(@src(), .vertical, .{ .border = Rect.all(1), .expand = .both });
+    var tbox = dvui.box(@src(), .{}, .{ .border = Rect.all(1), .expand = .both });
     defer tbox.deinit();
     {
         var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });

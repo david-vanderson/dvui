@@ -127,7 +127,7 @@ pub fn frame() !dvui.App.Result {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
         dvui.label(@src(), "Pinch Zoom or Scale", .{}, .{});
         if (dvui.buttonIcon(@src(), "plus", dvui.entypo.plus, .{}, .{}, .{})) {

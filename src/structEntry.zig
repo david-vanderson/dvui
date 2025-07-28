@@ -32,12 +32,12 @@ fn intFieldWidget(
     if (opt.disabled) return;
     switch (opt.widget_type) {
         .number_entry => {
-            var box = dvui.box(@src(), .horizontal, .{});
+            var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer box.deinit();
 
             dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
 
-            var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
+            var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
 
@@ -52,7 +52,7 @@ fn intFieldWidget(
             dvui.label(@src(), "{}", .{result.*}, .{});
         },
         .slider => {
-            var box = dvui.box(@src(), .horizontal, .{});
+            var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer box.deinit();
 
             dvui.label(@src(), "{s}", .{name}, .{});
@@ -108,11 +108,11 @@ pub fn floatFieldWidget(
 ) void {
     if (opt.disabled) return;
 
-    var box = dvui.box(@src(), .horizontal, .{});
+    var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
     defer box.deinit();
     dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
 
-    var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
+    var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
     defer hbox_aligned.deinit();
     alignment.record(box.data().id, hbox_aligned.data());
 
@@ -139,13 +139,13 @@ fn enumFieldWidget(
 ) void {
     if (opt.disabled) return;
 
-    var box = dvui.box(@src(), .horizontal, .{});
+    var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
     defer box.deinit();
 
     dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
     switch (opt.widget_type) {
         .dropdown => {
-            var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
+            var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
 
@@ -186,7 +186,7 @@ fn boolFieldWidget(
     alignment: *dvui.Alignment,
 ) void {
     if (opt.disabled) return;
-    var box = dvui.box(@src(), .horizontal, .{});
+    var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
     defer box.deinit();
 
     //TODO implement dvui_opts for other types
@@ -194,7 +194,7 @@ fn boolFieldWidget(
         .checkbox => {
             dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
 
-            var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
+            var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
 
@@ -243,7 +243,7 @@ fn textFieldWidget(
     if (opt.disabled) return;
 
     //TODO respect alloc setting
-    var box = dvui.box(@src(), .horizontal, .{});
+    var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
     defer box.deinit();
 
     dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
@@ -272,7 +272,7 @@ fn textFieldWidget(
 
     switch (treatment) {
         .mutate_value_in_place_only => {
-            var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
+            var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
 
@@ -280,7 +280,7 @@ fn textFieldWidget(
             defer text_box.deinit();
         },
         .mutate_value_and_realloc => {
-            var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
+            var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
 
@@ -341,7 +341,7 @@ pub fn unionFieldWidget(
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
 ) void {
-    var box = dvui.box(@src(), .vertical, .{});
+    var box = dvui.box(@src(), .{}, .{});
     defer box.deinit();
 
     const FieldEnum = std.meta.FieldEnum(T);
@@ -350,7 +350,7 @@ pub fn unionFieldWidget(
     var choice: usize = @intFromEnum(std.meta.activeTag(result.*));
 
     {
-        var hbox = dvui.box(@src(), .vertical, .{});
+        var hbox = dvui.box(@src(), .{}, .{});
         defer hbox.deinit();
         const label = opt.label_override orelse name;
         if (label.len != 0) {
@@ -373,9 +373,9 @@ pub fn unionFieldWidget(
             }
             const field_result: *field.type = &@field(result.*, field.name);
 
-            var hbox = dvui.box(@src(), .horizontal, .{ .expand = .both });
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
             defer hbox.deinit();
-            var line = dvui.box(@src(), .vertical, .{
+            var line = dvui.box(@src(), .{}, .{
                 .border = border,
                 .expand = .vertical,
                 .background = true,
@@ -408,23 +408,23 @@ pub fn optionalFieldWidget(
     alignment: *dvui.Alignment,
 ) void {
     if (opt.disabled) return;
-    var box = dvui.box(@src(), .vertical, .{});
+    var box = dvui.box(@src(), .{}, .{});
     defer box.deinit();
 
     const Child = @typeInfo(T).optional.child;
 
     const checkbox_state = dvui.dataGetPtrDefault(null, box.widget().data().id, "checked", bool, false);
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
         dvui.label(@src(), "{s}?", .{opt.label_override orelse name}, .{});
         _ = dvui.checkbox(@src(), checkbox_state, null, .{});
     }
 
     if (checkbox_state.*) {
-        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .both });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
         defer hbox.deinit();
-        var line = dvui.box(@src(), .vertical, .{
+        var line = dvui.box(@src(), .{}, .{
             .border = border,
             .expand = .vertical,
             .background = true,
@@ -494,7 +494,7 @@ pub fn singlePointerFieldWidget(
     alignment: *dvui.Alignment,
 ) void {
     if (opt.disabled) return;
-    var box = dvui.box(@src(), .horizontal, .{});
+    var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
     defer box.deinit();
 
     const Child = @typeInfo(T).pointer.child;
@@ -620,7 +620,7 @@ pub fn sliceFieldWidget(
         .padding = dvui.Rect.all(4),
     });
 
-    var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+    var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
     dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
 
     for (result.*, 0..) |_, i| {
@@ -636,7 +636,7 @@ pub fn sliceFieldWidget(
             insert_before_idx = i; // this entry was dropped onto
         }
 
-        var hbox = dvui.box(@src(), .horizontal, .{
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
             .expand = .both,
             .border = dvui.Rect.all(1),
             .background = true,
@@ -678,7 +678,7 @@ pub fn sliceFieldWidget(
 
             _ = dvui.spacer(@src(), .{ .min_size_content = .height(4) });
 
-            var hbox = dvui.box(@src(), .horizontal, .{
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
                 .expand = .both,
                 .border = dvui.Rect.all(1),
                 .background = true,
@@ -732,7 +732,7 @@ fn structFieldWidget(
     if (opt.disabled) return;
     const fields = @typeInfo(T).@"struct".fields;
 
-    var box = dvui.box(@src(), .vertical, .{ .expand = .both });
+    var box = dvui.box(@src(), .{}, .{ .expand = .both });
     defer box.deinit();
 
     const label = opt.label_override orelse name;
@@ -752,7 +752,7 @@ fn structFieldWidget(
         separate = false;
     }
 
-    var hbox = dvui.box(@src(), .horizontal, .{ .expand = .both });
+    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
     defer hbox.deinit();
 
     if (separate) {
@@ -764,7 +764,7 @@ fn structFieldWidget(
     }
 
     if (expand) {
-        var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+        var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
         defer vbox.deinit();
 
         var left_alignment = dvui.Alignment.init(@src(), 0);
@@ -776,7 +776,7 @@ fn structFieldWidget(
             if (!options.disabled) {
                 const result_ptr = &@field(result.*, field.name);
 
-                var widgetbox = dvui.box(@src(), .vertical, .{
+                var widgetbox = dvui.box(@src(), .{}, .{
                     .expand = .both,
                     .id_extra = i,
                     //.margin = left_alignment.margin(hbox.data().id)
@@ -877,7 +877,7 @@ pub fn structEntry(
     result: *T,
     opts: dvui.Options,
 ) void {
-    var box = dvui.box(src, .vertical, opts);
+    var box = dvui.box(src, .{}, opts);
     defer box.deinit();
     structFieldWidget("", T, exclude, result, .{}, false, null);
 }
@@ -890,7 +890,7 @@ pub fn structEntryEx(
     result: *T,
     field_options: StructFieldOptions(T, exclude),
 ) void {
-    var box = dvui.box(src, .vertical, .{ .expand = .both });
+    var box = dvui.box(src, .{}, .{ .expand = .both });
     defer box.deinit();
     structFieldWidget(name, T, exclude, result, field_options, false, null);
 }
@@ -903,7 +903,7 @@ pub fn structEntryAlloc(
     result: *T,
     opts: dvui.Options,
 ) void {
-    var box = dvui.box(src, .vertical, opts);
+    var box = dvui.box(src, .{}, opts);
     defer box.deinit();
     structFieldWidget("", T, exclude, result, .{}, true, allocator);
 }
@@ -917,7 +917,7 @@ pub fn structEntryExAlloc(
     result: *T,
     field_options: StructFieldOptions(T),
 ) void {
-    var box = dvui.box(src, .vertical, .{ .expand = .both });
+    var box = dvui.box(src, .{}, .{ .expand = .both });
     defer box.deinit();
     structFieldWidget(name, T, exclude, result, field_options, true, allocator);
 }

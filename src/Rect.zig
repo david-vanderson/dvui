@@ -257,7 +257,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                     const res = rect.scale(0.5, Rect);
                     try std.testing.expectEqualDeep(Rect{ .x = 25, .y = 25, .w = 75, .h = 75 }, res);
 
-                    var box = dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
+                    var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
                     defer box.deinit();
                     Rect.Physical.cast(rect).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
                     Rect.Physical.cast(res).stroke(.{}, .{ .thickness = 1, .color = .red, .closed = true });
@@ -286,7 +286,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                     const res = rect.offset(.{ .x = 50, .y = 50 }); // width and height does nothing
                     try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 100, .h = 100 }, res);
 
-                    var box = dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
+                    var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
                     defer box.deinit();
                     Rect.Physical.cast(rect).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
                     Rect.Physical.cast(res).stroke(.{}, .{ .thickness = 1, .color = .red, .closed = true });
@@ -321,7 +321,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                     const res = rect.offsetNegPoint(.{ .x = 50, .y = 50 });
                     try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 100, .h = 100 }, res);
 
-                    var box = dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
+                    var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
                     defer box.deinit();
                     Rect.Physical.cast(rect).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
                     Rect.Physical.cast(res).stroke(.{}, .{ .thickness = 1, .color = .red, .closed = true });
@@ -354,7 +354,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                     const ab = Rect.intersect(a, b);
                     try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 50, .h = 50 }, ab);
 
-                    var box = dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
+                    var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
                     defer box.deinit();
                     Rect.Physical.cast(a).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
                     Rect.Physical.cast(b).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
@@ -388,7 +388,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                     const ab = Rect.unionWith(a, b);
                     try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 150, .h = 150 }, ab);
 
-                    var box = dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
+                    var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
                     defer box.deinit();
                     Rect.Physical.cast(a).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
                     Rect.Physical.cast(b).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
@@ -417,7 +417,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                     const res = rect.inset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
                     try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 75, .h = 75 }, res);
 
-                    var box = dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
+                    var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
                     defer box.deinit();
                     Rect.Physical.cast(rect).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
                     Rect.Physical.cast(res).stroke(.{}, .{ .thickness = 1, .color = .red, .closed = true });
@@ -451,7 +451,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                     const res = rect.outset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
                     try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 125, .h = 125 }, res);
 
-                    var box = dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
+                    var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
                     defer box.deinit();
                     Rect.Physical.cast(rect).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
                     Rect.Physical.cast(res).stroke(.{}, .{ .thickness = 1, .color = .red, .closed = true });

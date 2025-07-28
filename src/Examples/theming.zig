@@ -19,11 +19,11 @@ pub fn theming() void {
     defer paned.deinit();
 
     if (paned.showFirst()) {
-        const vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .margin = .{ .y = 10 } });
+        const vbox = dvui.box(@src(), .{}, .{ .expand = .both, .margin = .{ .y = 10 } });
         defer vbox.deinit();
 
         {
-            const hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+            const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
             defer hbox.deinit();
             if (paned.collapsed() and dvui.button(@src(), "To Preview", .{}, .{ .gravity_x = 1 })) {
                 paned.animateSplit(0);
@@ -48,7 +48,7 @@ pub fn theming() void {
         }
 
         {
-            const hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+            const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
             defer hbox.deinit();
 
             dvui.labelNoFmt(@src(), "Name:", .{}, .{ .gravity_y = 0.5 });
@@ -96,7 +96,7 @@ pub fn theming() void {
         defer dvui.themeSet(&prev_theme);
         dvui.themeSet(&custom_theme);
 
-        var vbox = dvui.box(@src(), .vertical, .{ .background = true, .padding = .all(10), .corner_radius = .all(10) });
+        var vbox = dvui.box(@src(), .{}, .{ .background = true, .padding = .all(10), .corner_radius = .all(10) });
         defer vbox.deinit();
 
         if (paned.collapsed() and dvui.button(@src(), "To Editor", .{}, .{ .gravity_x = 1 })) {
@@ -104,7 +104,7 @@ pub fn theming() void {
         }
 
         {
-            var hbox = dvui.box(@src(), .horizontal, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();
 
             _ = dvui.button(@src(), "Accent", .{}, dvui.themeGet().accent());
@@ -140,7 +140,7 @@ const ThemeEditingPage = enum {
 fn colors(theme: *dvui.Theme) bool {
     var changed = false;
 
-    const hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .margin = .{ .y = 5 } });
+    const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .margin = .{ .y = 5 } });
     defer hbox.deinit();
 
     const active_color = dvui.dataGetPtrDefault(null, hbox.data().id, "Color", Options.ColorsFromTheme, .accent);
@@ -204,7 +204,7 @@ fn colors(theme: *dvui.Theme) bool {
 fn fonts(theme: *dvui.Theme) bool {
     var changed = false;
 
-    const hbox = dvui.box(@src(), .horizontal, .{});
+    const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
     defer hbox.deinit();
 
     const active_font = dvui.dataGetPtrDefault(null, hbox.data().id, "Fonts", Options.FontStyle, .body);
@@ -238,7 +238,7 @@ fn fonts(theme: *dvui.Theme) bool {
         inline else => |f| &@field(theme, "font_" ++ @tagName(f)),
     };
 
-    var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+    var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
     defer vbox.deinit();
 
     if (dvui.sliderEntry(@src(), "Size: {d:0}", .{ .min = 4, .max = 100, .interval = 1, .value = &edited_font.size }, .{})) {
@@ -285,7 +285,7 @@ const Styles = enum {
 fn styles(theme: *dvui.Theme) bool {
     var changed = false;
 
-    const hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .margin = .{ .y = 5 } });
+    const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .margin = .{ .y = 5 } });
     defer hbox.deinit();
 
     const active_style = dvui.dataGetPtrDefault(null, hbox.data().id, "Style", Styles, .accent);
@@ -343,7 +343,7 @@ fn styles(theme: *dvui.Theme) bool {
         }
     }
 
-    var vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .margin = .all(5) });
+    var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .margin = .all(5) });
     defer vbox.deinit();
 
     var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
@@ -433,7 +433,7 @@ test "DOCIMG theming" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             theming();
             return .ok;

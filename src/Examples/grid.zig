@@ -12,11 +12,11 @@ pub fn gridStyling() void {
         const Banding = enum { none, rows, cols };
     };
 
-    var outer_hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+    var outer_hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
     defer outer_hbox.deinit();
 
     {
-        var outer_vbox = dvui.box(@src(), .vertical, .{
+        var outer_vbox = dvui.box(@src(), .{}, .{
             .min_size_content = grid_panel_size,
             .max_size_content = .size(grid_panel_size),
             .expand = .vertical,
@@ -33,13 +33,13 @@ pub fn gridStyling() void {
             var fbox = dvui.flexbox(@src(), .{ .justify_content = .start }, .{});
             defer fbox.deinit();
             {
-                var vbox = dvui.box(@src(), .vertical, .{ .expand = .horizontal });
+                var vbox = dvui.box(@src(), .{}, .{ .expand = .horizontal });
                 defer vbox.deinit();
                 _ = dvui.checkbox(@src(), &top, "Top", .{});
                 _ = dvui.checkbox(@src(), &left, "Left", .{});
             }
             {
-                var vbox = dvui.box(@src(), .vertical, .{ .expand = .horizontal });
+                var vbox = dvui.box(@src(), .{}, .{ .expand = .horizontal });
                 defer vbox.deinit();
                 _ = dvui.checkbox(@src(), &right, "Right", .{});
                 _ = dvui.checkbox(@src(), &bottom, "Bottom", .{});
@@ -68,7 +68,7 @@ pub fn gridStyling() void {
         }
         if (dvui.expander(@src(), "Other", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
             {
-                var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+                var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
                 defer hbox.deinit();
                 dvui.labelNoFmt(@src(), "Margin:", .{}, .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
                 const result = dvui.textEntryNumber(@src(), f32, .{ .min = 0, .max = 10, .value = &local.margin, .show_min_max = true }, .{});
@@ -78,7 +78,7 @@ pub fn gridStyling() void {
                 }
             }
             {
-                var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+                var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
                 defer hbox.deinit();
                 dvui.labelNoFmt(@src(), "Padding:", .{}, .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
                 const result = dvui.textEntryNumber(@src(), f32, .{ .min = 0, .max = 10, .value = &local.padding, .show_min_max = true }, .{});
@@ -452,7 +452,7 @@ pub fn gridLayouts() void {
         }
     }
     {
-        var outer_vbox = dvui.box(@src(), .vertical, .{
+        var outer_vbox = dvui.box(@src(), .{}, .{
             .expand = .horizontal,
             .border = Rect.all(1),
         });
@@ -538,7 +538,7 @@ pub fn gridVirtualScrolling() void {
         local.generated_primes = true;
     }
 
-    var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+    var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
     defer vbox.deinit();
     var grid = dvui.grid(@src(), .numCols(2), .{
         .scroll_opts = .{ .scroll_info = &local.scroll_info },
@@ -743,10 +743,10 @@ pub fn gridSelection() void {
             };
         }
     };
-    var outer_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+    var outer_vbox = dvui.box(@src(), .{}, .{ .expand = .both });
     defer outer_vbox.deinit();
     {
-        var top_controls = dvui.box(@src(), .horizontal, .{ .gravity_y = 0 });
+        var top_controls = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_y = 0 });
         defer top_controls.deinit();
         dvui.labelNoFmt(@src(), "Filter (contains): ", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
         var text = dvui.textEntry(@src(), .{}, .{ .expand = .horizontal });
@@ -759,10 +759,10 @@ pub fn gridSelection() void {
         defer text.deinit();
     }
     {
-        var vbox = dvui.box(@src(), .vertical, .{ .gravity_y = 1.0 });
+        var vbox = dvui.box(@src(), .{}, .{ .gravity_y = 1.0 });
         defer vbox.deinit();
         if (dvui.expander(@src(), "Options", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
-            var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
             defer hbox.deinit();
             var selected = local.selection_mode == .multi_select;
             if (dvui.checkbox(@src(), &selected, "Multi-Select", .{ .margin = dvui.Rect.all(6) })) {
@@ -1025,7 +1025,7 @@ pub fn gridNavigation() void {
         }
     };
 
-    var main_box = dvui.box(@src(), .horizontal, .{ .expand = .both, .color_fill = .fill_window, .background = true, .border = dvui.Rect.all(1) });
+    var main_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .color_fill = .fill_window, .background = true, .border = dvui.Rect.all(1) });
     defer main_box.deinit();
     if (dvui.firstFrame(main_box.data().id)) {
         local.initialized = false;
@@ -1035,13 +1035,13 @@ pub fn gridNavigation() void {
         };
     }
     {
-        var vbox = dvui.box(@src(), .vertical, .{ .expand = .vertical, .border = dvui.Rect.all(1) });
+        var vbox = dvui.box(@src(), .{}, .{ .expand = .vertical, .border = dvui.Rect.all(1) });
         defer vbox.deinit();
         {
-            var bottom_panel = dvui.box(@src(), .vertical, .{ .gravity_y = 1.0 });
+            var bottom_panel = dvui.box(@src(), .{}, .{ .gravity_y = 1.0 });
             defer bottom_panel.deinit();
             {
-                var hbox = dvui.box(@src(), .horizontal, .{});
+                var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
                 defer hbox.deinit();
                 {
                     dvui.labelNoFmt(@src(), "X Axis:", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
@@ -1079,7 +1079,7 @@ pub fn gridNavigation() void {
             }
         }
         {
-            var top_panel = dvui.box(@src(), .horizontal, .{ .gravity_y = 0 });
+            var top_panel = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_y = 0 });
             defer top_panel.deinit();
             dvui.labelNoFmt(@src(), "Plot Title:", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
             var text = dvui.textEntry(@src(), .{}, .{ .tab_index = 1, .expand = .horizontal });
@@ -1120,7 +1120,7 @@ pub fn gridNavigation() void {
                     defer cell_num.col_num += 1;
                     var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
                     defer cell.deinit();
-                    var cell_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+                    var cell_vbox = dvui.box(@src(), .{}, .{ .expand = .both });
                     defer cell_vbox.deinit();
 
                     _ = dvui.textEntryNumber(@src(), f64, .{ .value = x, .min = 0, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .gravity_y = 0 }));
@@ -1139,7 +1139,7 @@ pub fn gridNavigation() void {
                     defer cell_num.col_num += 1;
                     var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
                     defer cell.deinit();
-                    var cell_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+                    var cell_vbox = dvui.box(@src(), .{}, .{ .expand = .both });
                     defer cell_vbox.deinit();
 
                     _ = dvui.textEntryNumber(@src(), f64, .{ .value = y1, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .color_text = .red }));
@@ -1159,7 +1159,7 @@ pub fn gridNavigation() void {
                     defer cell_num.col_num += 1;
                     var cell = grid.bodyCell(@src(), cell_num, style.cellOptions(cell_num));
                     defer cell.deinit();
-                    var cell_vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+                    var cell_vbox = dvui.box(@src(), .{}, .{ .expand = .both });
                     defer cell_vbox.deinit();
 
                     _ = dvui.textEntryNumber(@src(), f64, .{ .value = y2, .min = -100, .max = 100, .show_min_max = true }, style.options(focus_cell).override(.{ .color_text = .blue }));
@@ -1216,7 +1216,7 @@ pub fn gridNavigation() void {
         }
     }
     {
-        var vbox = dvui.box(@src(), .vertical, .{ .expand = .both, .border = dvui.Rect.all(1) });
+        var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .border = dvui.Rect.all(1) });
         defer vbox.deinit();
         var x_axis: dvui.PlotWidget.Axis = .{ .name = local.x_axis_title, .min = 0, .max = 100 };
         var y_axis: dvui.PlotWidget.Axis = .{

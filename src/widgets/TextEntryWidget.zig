@@ -162,7 +162,7 @@ pub fn install(self: *TextEntryWidget) void {
     if (self.textLayout.touchEditing()) |floating_widget| {
         defer floating_widget.deinit();
 
-        var hbox = dvui.box(@src(), .horizontal, .{
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
             .corner_radius = dvui.ButtonWidget.defaults.corner_radiusGet(),
             .background = true,
             .border = dvui.Rect.all(1),
