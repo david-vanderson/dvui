@@ -160,7 +160,7 @@ const BasicTypes = struct {
 
 var test_buf: [20]u8 = @splat('z');
 var testStruct: TestStruct = .{};
-var opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5) };
+var dvui_opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5) };
 var first_change: bool = true;
 
 var basic_types_var: BasicTypes = .{};
@@ -190,17 +190,15 @@ fn gui_frame() void {
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
-
-        wholeStruct(@src(), "basic_types_const", &basic_types_const, 0);
+        const ooo: dvui.se.StructOptions(BasicTypes) = .initDefaults();
+        wholeStruct(@src(), "basic_types_const", &basic_types_const, 0, .{ooo});
     }
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
-        const oooo: StructOptions(BasicTypes) = .{};
-        std.debug.print("{}\n", .{oooo});
-        wholeStruct(@src(), "basic_types_var", &basic_types_var, 0);
+        //wholeStruct(@src(), "basic_types_var", &basic_types_var, 0, oooo);
 
         //sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);
         //dvui.se.intFieldWidget2(@src(), "int1", &testStruct.int1, .{}, &al);
@@ -236,39 +234,9 @@ fn gui_frame() void {
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
 
-        wholeStruct(@src(), "opts", &opts, 1);
+        //wholeStruct(@src(), "opts", &opts, 1);
         //        wholeStruct(@src(), "test_struct", &testStruct, 1);
     }
-}
-
-pub fn StructOptions(T: type) type {
-    const struct_fields = std.meta.fields(T);
-    var result_fields: [struct_fields.len]std.builtin.Type.StructField = undefined;
-
-    for (struct_fields, 0..) |field, i| {
-        result_fields[i] = .{
-            .name = field.name,
-            .type = dvui.se.FieldOptions,
-            .default_value_ptr = &(@as(dvui.se.FieldOptions, dvui.se.FieldOptions{})), // TODO: Support NumberFieldOptions as well.
-            .is_comptime = false,
-            .alignment = @alignOf(dvui.se.FieldOptions),
-        };
-    }
-
-    return @Type(.{ .@"struct" = .{
-        .layout = .auto,
-        .fields = &result_fields,
-        .decls = &.{},
-        .is_tuple = false,
-    } });
-    //        .@"enum" = .{
-    //            .tag_type = u8,
-    //            .fields = &[_]std.builtin.Type.EnumField{
-    //                .{ .name = name, .value = 0 },
-    //            },
-    //            .decls = &.{},
-    //            .is_exhaustive = true,
-    //        },
 }
 
 // Note there is also StructField.default value. But .{} should be fine?
@@ -290,7 +258,16 @@ pub fn defaultValue(T: type) ?T {
     };
 }
 
-pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container: anytype, comptime depth: usize) void {
+pub fn fieldOptions(T: type, options: anytype, field: dvui.se.StructOptions(T).StructOptionsT.Key) dvui.se.FieldOptions {
+    for (options) |opt| {
+        if (opt.StructT == T) {
+            return opt.options.get(field);
+        }
+    }
+    return dvui.se.StructOptions(T).defaultFieldOption(@FieldType(T, @tagName(field)));
+}
+
+pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container: anytype, comptime depth: usize, options: anytype) void {
     _ = name;
     var vbox = dvui.box(src, .vertical, .{ .expand = .both });
     defer vbox.deinit();
@@ -298,69 +275,83 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
     var al = dvui.Alignment.init(@src(), 0);
     defer al.deinit();
 
-    inline for (std.meta.fields(@TypeOf(container.*)), 0..) |field, i| {
-        comptime if (std.mem.eql(u8, field.name, "max_size_content")) continue; // TODO: Needs to 1) Have exclusions and 2) Be able to specify defaults.
-        comptime if (std.mem.eql(u8, field.name, "font")) continue;
+    // TODO: This is where the field names and field enums meet. Need to sort this out somehow...
+    const opts: dvui.se.StructOptions(@TypeOf(container.*)) = opts: {
+        inline for (options) |opt| {
+            if (@TypeOf(opt).StructT == @TypeOf(container.*)) {
+                break :opts opt;
+            }
+        }
+        break :opts dvui.se.StructOptions(@TypeOf(container.*));
+    };
+    inline for (opts.options.values, 0..) |field_option, i| {
+        const key = comptime @TypeOf(opts.options).Indexer.keyForIndex(i); // TODO There must be a way to iterate both? One is just the enum fields?
+        // But how to guarantee ordering?
+
+        //    }
+        //    inline for (std.meta.fields(@TypeOf(container.*)), 0..) |field, i| {
+        //        comptime if (std.mem.eql(u8, field.name, "max_size_content")) continue; // TODO: Needs to 1) Have exclusions and 2) Be able to specify defaults.
+        //        comptime if (std.mem.eql(u8, field.name, "font")) continue;
 
         //@compileLog(field.name, field.type);
         var box = dvui.box(src, .vertical, .{ .id_extra = i });
         defer box.deinit();
-        switch (@typeInfo(field.type)) {
-            .int, .float, .@"enum", .bool => processWidget(@src(), field.name, &@field(container, field.name), &al),
+        switch (@typeInfo(@TypeOf(@field(container, @tagName(key))))) {
+            .int, .float, .@"enum", .bool => processWidget(@src(), @tagName(key), &@field(container, @tagName(key)), &al, field_option),
             inline .@"struct" => {
                 if (depth > 0) {
-                    if (dvui.expander(@src(), field.name, .{}, .{ .expand = .horizontal })) {
-                        wholeStruct(@src(), field.name, &@field(container, field.name), depth - 1);
+                    if (dvui.expander(@src(), @tagName(key), .{}, .{ .expand = .horizontal })) {
+                        wholeStruct(@src(), @tagName(key), &@field(container, @tagName(key)), depth - 1, options);
                     }
                 }
             },
             inline .optional => |opt| {
-                if (dvui.se.optionalFieldWidget2(@src(), field.name, &@field(container, field.name), .{}, &al)) |hbox| {
+                if (dvui.se.optionalFieldWidget2(@src(), @tagName(key), &@field(container, @tagName(key)), .{}, &al)) |hbox| {
                     defer hbox.deinit();
-                    if (@field(container, field.name) == null) {
-                        @field(container, field.name) = defaultValue(opt.child); // If there is no default value, it will remain null.
+                    if (@field(container, @tagName(key)) == null) {
+                        @field(container, @tagName(key)) = defaultValue(opt.child); // If there is no default value, it will remain null.
                     }
-                    if (@field(container, field.name) != null) {
+                    if (@field(container, @tagName(key)) != null) {
                         switch (@typeInfo(opt.child)) {
                             inline .@"struct" => {
                                 if (depth > 0) {
-                                    if (dvui.expander(@src(), field.name, .{}, .{ .expand = .horizontal })) {
-                                        wholeStruct(@src(), field.name, &@field(container, field.name).?, depth - 1);
+                                    if (dvui.expander(@src(), @tagName(key), .{}, .{ .expand = .horizontal })) {
+                                        wholeStruct(@src(), @tagName(key), &@field(container, @tagName(key)).?, depth - 1, options);
                                     }
                                 }
                             },
-                            else => processWidget(@src(), field.name, &@field(container, field.name).?, &al),
+                            else => processWidget(@src(), @tagName(key), &@field(container, @tagName(key)).?, &al, field_option),
                         }
                     }
                 } else {
-                    @field(container, field.name) = null;
-                    dvui.label(@src(), "{s} is null", .{field.name}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
+                    @field(container, @tagName(key)) = null;
+                    dvui.label(@src(), "{s} is null", .{@tagName(key)}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
                 }
             },
             inline .pointer => |ptr| {
                 if (ptr.size == .slice and ptr.child == u8) {
-                    processWidget(src, field.name, &@field(container, field.name), &al);
+                    processWidget(src, @tagName(key), &@field(container, @tagName(key)), &al, field_option);
                 } else if (ptr.size == .slice) {
-                    sliceFieldWidget2(src, field.name, @field(container, field.name), &al);
+                    sliceFieldWidget2(src, @tagName(key), @field(container, @tagName(key)), &al);
                 } else if (ptr.size == .one) {
-                    dvui.label(@src(), "{s} is a single item pointer", .{field.name}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
+                    dvui.label(@src(), "{s} is a single item pointer", .{@tagName(key)}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
                     switch (@typeInfo(ptr.child)) {
                         .@"struct" => {
-                            if (dvui.expander(@src(), field.name, .{}, .{ .expand = .horizontal })) {
-                                wholeStruct(@src(), field.name, &@field(container, field.name), depth - 1);
+                            if (dvui.expander(@src(), @tagName(key), .{}, .{ .expand = .horizontal })) {
+                                wholeStruct(@src(), @tagName(key), &@field(container, @tagName(key)), depth - 1, options);
                             }
                         },
-                        else => processWidget(src, field.name, @field(container, field.name), &al),
+                        else => processWidget(src, @tagName(key), @field(container, @tagName(key)), &al, field_option),
                     }
                 } else if (ptr.size == .c or ptr.size == .many) {
                     @compileError("structEntry does not support *C or Many pointers");
                 } else {
                     switch (@typeInfo(ptr.child)) {
-                        inline .int, .float, .@"enum" => processWidget(@src(), field.name, @field(container, field.name), &al),
+                        inline .int, .float, .@"enum" => processWidget(@src(), @tagName(key), @field(container, @tagName(key)), &al, field_option),
                         inline .@"struct" => {
                             if (depth > 0) {
-                                if (dvui.expander(@src(), field.name, .{}, .{ .expand = .horizontal })) {
-                                    wholeStruct(@src(), field.name, &@field(container, field.name), depth - 1);
+                                if (dvui.expander(@src(), @tagName(key), .{}, .{ .expand = .horizontal })) {
+                                    wholeStruct(@src(), @tagName(key), &@field(container, @tagName(key)), depth - 1, options);
                                 }
                             }
                         },
@@ -373,15 +364,21 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
     }
 }
 
-pub fn processWidget(src: std.builtin.SourceLocation, comptime field_name: []const u8, field: anytype, alignment: *dvui.Alignment) void {
+pub fn processWidget(
+    src: std.builtin.SourceLocation,
+    comptime field_name: []const u8,
+    field: anytype,
+    alignment: *dvui.Alignment,
+    options: dvui.se.FieldOptions,
+) void {
     switch (@typeInfo(@TypeOf(field.*))) {
-        inline .int => dvui.se.numberFieldWidget2(src, field_name, field, .{}, alignment),
-        inline .float => dvui.se.numberFieldWidget2(src, field_name, field, .{}, alignment),
-        inline .@"enum" => dvui.se.enumFieldWidget2(src, field_name, field, .{}, alignment),
-        inline .bool => dvui.se.boolFieldWidget2(src, field_name, field, .{}, alignment),
+        inline .int => dvui.se.numberFieldWidget2(src, field_name, field, options.number, alignment),
+        inline .float => dvui.se.numberFieldWidget2(src, field_name, field, options.number, alignment),
+        inline .@"enum" => dvui.se.enumFieldWidget2(src, field_name, field, options.standard, alignment),
+        inline .bool => dvui.se.boolFieldWidget2(src, field_name, field, options.standard, alignment),
         inline .pointer => |ptr| {
             if (ptr.size == .slice and ptr.child == u8) {
-                dvui.se.textFieldWidget2(src, field_name, field, .{}, alignment);
+                dvui.se.textFieldWidget2(src, field_name, field, options.standard, alignment);
             }
         },
         inline .@"union" => {}, // BIG TODO!
