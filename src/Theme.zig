@@ -52,36 +52,8 @@ font_title_2: Font,
 font_title_3: Font,
 font_title_4: Font,
 
-/// used for highlighting menu/dropdown items
-style_accent: ColorStyles,
-
-/// used for buttons to perform dangerous actions
-style_err: ColorStyles,
-
 /// if true, all strings in `Theme` will be freed in `deinit`
 allocated_strings: bool = false,
-
-pub const ColorStyles = struct {
-    color_accent: ?Options.ColorOrName = null,
-    color_text: ?Options.ColorOrName = null,
-    color_text_press: ?Options.ColorOrName = null,
-    color_fill: ?Options.ColorOrName = null,
-    color_fill_hover: ?Options.ColorOrName = null,
-    color_fill_press: ?Options.ColorOrName = null,
-    color_border: ?Options.ColorOrName = null,
-
-    pub fn asOptions(self: ColorStyles) Options {
-        return .{
-            .color_accent = self.color_accent,
-            .color_text = self.color_text,
-            .color_text_press = self.color_text_press,
-            .color_fill = self.color_fill,
-            .color_fill_hover = self.color_fill_hover,
-            .color_fill_press = self.color_fill_press,
-            .color_border = self.color_border,
-        };
-    }
-};
 
 pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
     if (self.allocated_strings) {
@@ -107,12 +79,10 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
 
 /// Gets the accent style `Options`
 pub fn accent(self: *const Theme) Options {
-    return self.style_accent.asOptions();
-}
-
-/// Gets the error style `Options`
-pub fn err(self: *const Theme) Options {
-    return self.style_err.asOptions();
+    return .{
+        .color_fill = .{ .color = self.color_accent },
+        .color_text = .white,
+    };
 }
 
 /// To pick between the built in themes, pass `&Theme.builtins` as the `themes` argument
@@ -201,7 +171,9 @@ pub const QuickTheme = struct {
     font_name_title: []const u8,
 
     // used for focus
-    color_focus: []const u8 = "#638465",
+    color_accent: []const u8 = "#638465",
+
+    color_err: []const u8 = "#cc241d",
 
     // text/foreground color
     color_text: []const u8 = "#82a29f",
@@ -242,8 +214,8 @@ pub const QuickTheme = struct {
     /// will be used directly which is good for embedded/static slices.
     pub fn toTheme(self: @This(), gpa: ?std.mem.Allocator) (std.mem.Allocator.Error || Color.FromHexError)!Theme {
         @setEvalBranchQuota(1600);
-        const color_accent = try Color.tryFromHex(self.color_focus);
-        const color_err = try Color.tryFromHex("#ffaaaa");
+        const color_accent = try Color.tryFromHex(self.color_accent);
+        const color_err = try Color.tryFromHex(self.color_err);
         const color_text = try Color.tryFromHex(self.color_text);
         const color_text_press = try Color.tryFromHex(self.color_text_press);
         const color_fill = try Color.tryFromHex(self.color_fill_text);
@@ -302,24 +274,6 @@ pub const QuickTheme = struct {
             .font_title_4 = .{
                 .size = @round(self.font_size * 1.15),
                 .id = .fromName(self.font_name_title),
-            },
-            .style_accent = .{
-                .color_accent = .{ .color = Color.average(color_accent, color_accent) },
-                .color_text = .{ .color = Color.average(color_accent, color_text) },
-                .color_text_press = .{ .color = Color.average(color_accent, color_text_press) },
-                .color_fill = .{ .color = Color.average(color_accent, color_fill) },
-                .color_fill_hover = .{ .color = Color.average(color_accent, color_fill_hover) },
-                .color_fill_press = .{ .color = Color.average(color_accent, color_fill_press) },
-                .color_border = .{ .color = Color.average(color_accent, color_border) },
-            },
-            .style_err = .{
-                .color_accent = .{ .color = Color.average(color_accent, color_accent) },
-                .color_text = .{ .color = Color.average(color_err, color_text) },
-                .color_text_press = .{ .color = Color.average(color_err, color_text_press) },
-                .color_fill = .{ .color = Color.average(color_err, color_fill) },
-                .color_fill_hover = .{ .color = Color.average(color_err, color_fill_hover) },
-                .color_fill_press = .{ .color = Color.average(color_err, color_fill_press) },
-                .color_border = .{ .color = Color.average(color_err, color_border) },
             },
             .allocated_strings = gpa != null,
         };

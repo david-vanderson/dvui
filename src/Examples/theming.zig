@@ -87,7 +87,6 @@ pub fn theming() void {
         switch (active_page.*) {
             .Colors => _ = colors(&custom_theme),
             .Fonts => _ = fonts(&custom_theme),
-            .Styles => _ = styles(&custom_theme),
         }
     }
 
@@ -108,7 +107,13 @@ pub fn theming() void {
             defer hbox.deinit();
 
             _ = dvui.button(@src(), "Accent", .{}, dvui.themeGet().accent());
-            _ = dvui.button(@src(), "Error", .{}, dvui.themeGet().err());
+            _ = dvui.button(@src(), "Error", .{}, .{
+                .color_fill = .{ .color = dvui.themeGet().color_err },
+                .color_fill_hover = .{ .color = dvui.themeGet().color_err.lighten(if (dvui.themeGet().dark) 8 else -8) },
+                .color_fill_press = .{ .color = dvui.themeGet().color_err.lighten(if (dvui.themeGet().dark) 16 else -16) },
+                .color_text = .white,
+                .color_text_press = .white,
+            });
             _ = dvui.button(@src(), "Window", .{}, .{ .color_fill = .fill_window });
             _ = dvui.button(@src(), "Content", .{}, .{ .color_fill = .fill });
             _ = dvui.button(@src(), "Control", .{}, .{});
@@ -134,7 +139,6 @@ pub fn theming() void {
 const ThemeEditingPage = enum {
     Colors,
     Fonts,
-    Styles,
 };
 
 fn colors(theme: *dvui.Theme) bool {
@@ -273,152 +277,6 @@ fn fonts(theme: *dvui.Theme) bool {
     dd.deinit();
 
     dvui.label(@src(), "Preview {s}\nwith multiple lines", .{@tagName(active_font.*)}, .{ .font = edited_font.* });
-
-    return changed;
-}
-
-const Styles = enum {
-    accent,
-    err,
-};
-
-fn styles(theme: *dvui.Theme) bool {
-    var changed = false;
-
-    const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .margin = .{ .y = 5 } });
-    defer hbox.deinit();
-
-    const active_style = dvui.dataGetPtrDefault(null, hbox.data().id, "Style", Styles, .accent);
-    const style: *dvui.Theme.ColorStyles = switch (active_style.*) {
-        inline else => |s| &@field(theme, "style_" ++ @tagName(s)),
-    };
-
-    const active_color = dvui.dataGetPtrDefault(null, hbox.data().id, "Color", Options.ColorAsk, .accent);
-
-    {
-        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
-        tabs.install();
-        defer tabs.deinit();
-
-        inline for (comptime std.meta.tags(Options.ColorAsk), 0..) |color_ask, i| {
-            const tab = tabs.addTab(active_color.* == color_ask, .{
-                .expand = .horizontal,
-                .padding = .all(2),
-                .id_extra = i,
-            });
-            defer tab.deinit();
-
-            if (tab.clicked()) {
-                active_color.* = color_ask;
-            }
-
-            var label_opts = tab.data().options.strip();
-            if (dvui.captured(tab.data().id)) {
-                label_opts.color_text = .{ .name = .text_press };
-            }
-
-            const field = "color_" ++ @tagName(color_ask);
-            const color: Options.ColorOrName = if (@field(style, field)) |color| color else switch (color_ask) {
-                .accent => .{ .name = .accent },
-                .text => .{ .name = .text },
-                .text_press => .{ .name = .text_press },
-                .fill => .{ .name = .fill },
-                .fill_hover => .{ .name = .fill_hover },
-                .fill_press => .{ .name = .fill_press },
-                .border => .{ .name = .border },
-            };
-
-            const color_indicator = dvui.overlay(@src(), .{
-                .expand = .ratio,
-                .min_size_content = .all(10),
-                .corner_radius = .all(100),
-                .border = .all(1),
-                .background = true,
-                .color_fill = .fromColor(color.resolve()),
-            });
-            // Used to o
-            const color_width = color_indicator.data().rectScale().r.w;
-            color_indicator.deinit();
-            dvui.labelNoFmt(@src(), @tagName(color_ask), .{}, .{ .margin = .{ .x = color_width } });
-        }
-    }
-
-    var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .margin = .all(5) });
-    defer vbox.deinit();
-
-    var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-    tabs.install();
-    defer tabs.deinit();
-
-    inline for (comptime std.meta.tags(Styles), 0..) |style_choice, i| {
-        const tab = tabs.addTab(active_style.* == style_choice, .{
-            .expand = .horizontal,
-            .padding = .all(2),
-            .id_extra = i,
-        });
-        defer tab.deinit();
-
-        if (tab.clicked()) {
-            active_style.* = style_choice;
-        }
-
-        var label_opts = tab.data().options.strip();
-        if (dvui.captured(tab.data().id)) {
-            label_opts.color_text = .{ .name = .text_press };
-        }
-        dvui.labelNoFmt(@src(), @tagName(style_choice), .{}, .{});
-    }
-
-    const field: ?*Options.ColorOrName = switch (active_color.*) {
-        inline else => |c| if (@field(style, "color_" ++ @tagName(c))) |*ptr| ptr else null,
-    };
-    const rgba_color: Options.ColorOrName = if (field) |ptr| ptr.* else switch (active_color.*) {
-        .accent => .{ .name = .accent },
-        .text => .{ .name = .text },
-        .text_press => .{ .name = .text_press },
-        .fill => .{ .name = .fill },
-        .fill_hover => .{ .name = .fill_hover },
-        .fill_press => .{ .name = .fill_press },
-        .border => .{ .name = .border },
-    };
-
-    var hsv = dvui.Color.HSV.fromColor(rgba_color.resolve());
-    if (dvui.colorPicker(@src(), .{ .hsv = &hsv, .dir = .horizontal }, .{})) {
-        changed = true;
-        if (field) |ptr| {
-            ptr.* = .fromColor(hsv.toColor());
-        } else switch (active_color.*) {
-            inline else => |c| @field(style, "color_" ++ @tagName(c)) = .fromColor(hsv.toColor()),
-        }
-    }
-
-    {
-        const colors_from_theme = std.meta.tags(Options.ColorsFromTheme);
-        const current_color: ?Options.ColorsFromTheme = if (field) |ptr| switch (ptr.*) {
-            .name => |n| n,
-            .color => null,
-        } else null;
-        var dd = dvui.DropdownWidget.init(@src(), .{
-            .label = if (current_color) |c| @tagName(c) else "custom",
-            .selected_index = if (current_color) |c| std.mem.indexOfScalar(Options.ColorsFromTheme, colors_from_theme, c) else null,
-        }, .{
-            .min_size_content = .{ .w = 110 },
-        });
-        dd.install();
-        defer dd.deinit();
-        if (dd.dropped()) {
-            for (colors_from_theme) |color| {
-                if (dd.addChoiceLabel(@tagName(color))) {
-                    changed = true;
-                    if (field) |ptr| {
-                        ptr.* = .{ .name = color };
-                    } else switch (active_color.*) {
-                        inline else => |c| @field(style, "color_" ++ @tagName(c)) = .{ .name = color },
-                    }
-                }
-            }
-        }
-    }
 
     return changed;
 }

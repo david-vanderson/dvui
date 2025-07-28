@@ -9,7 +9,14 @@ pub fn styling() void {
         defer hbox.deinit();
 
         _ = dvui.button(@src(), "Accent", .{}, dvui.themeGet().accent());
-        _ = dvui.button(@src(), "Error", .{}, dvui.themeGet().err());
+        _ = dvui.button(@src(), "Error", .{}, .{
+            .color_fill = .{ .color = dvui.themeGet().color_err },
+            .color_fill_hover = .{ .color = dvui.themeGet().color_err.lighten(if (dvui.themeGet().dark) 8 else -8) },
+            .color_fill_press = .{ .color = dvui.themeGet().color_err.lighten(if (dvui.themeGet().dark) 16 else -16) },
+            .color_text = .white,
+            .color_text_press = .white,
+        });
+
         _ = dvui.button(@src(), "Window", .{}, .{ .color_fill = .fill_window });
         _ = dvui.button(@src(), "Content", .{}, .{ .color_fill = .fill });
         _ = dvui.button(@src(), "Control", .{}, .{});
