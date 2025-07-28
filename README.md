@@ -302,4 +302,6 @@ if (theme_dark) {
 ```
 The theme's color_accent is also used to show keyboard focus.
 
+The default theme will attempt to follow the system dark or light mode, or it can be set in the `Window` init options or by setting the `Window.theme` field directly. See the app and standalone examples for how to set the default theme. 
+
 See [implementation details](readme-implementation.md) for more information.
