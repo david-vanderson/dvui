@@ -49,7 +49,13 @@ pub fn main() !void {
     _ = Backend.c.SDL_EnableScreenSaver();
 
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
+    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{
+        // you can set the default theme here in the init options
+        .theme = switch (backend.preferredColorScheme() orelse .light) {
+            .light => dvui.Theme.builtin.adwaita_light,
+            .dark => dvui.Theme.builtin.adwaita_dark,
+        },
+    });
     defer win.deinit();
 
     var interrupted = false;
