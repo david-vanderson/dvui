@@ -160,7 +160,7 @@ const BasicTypes = struct {
 
 var test_buf: [20]u8 = @splat('z');
 var testStruct: TestStruct = .{};
-var dvui_opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5) };
+var dvui_opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5), .name = "abcdef" };
 var first_change: bool = true;
 
 var basic_types_var: BasicTypes = .{};
@@ -242,12 +242,15 @@ fn gui_frame() void {
 
         const font_opts: dvui.se.StructOptions(dvui.Font) = .initDefaults(.{ .size = 10, .name = "Nope" });
         //  const font_opts: dvui.se.StructOptions(dvui.Font) = .initDefaults(null);
-
-        wholeStruct(@src(), "dvui.Options", &dvui_opts, 1, .{ max_size_opts, font_opts });
+        var options_options: dvui.se.StructOptions(dvui.Options) = .initDefaults(.{});
+        options_options.options.put(.name, .{ .text = .{ .buffer = &name_buf } });
+        wholeStruct(@src(), "dvui.Options", &dvui_opts, 1, .{ options_options, max_size_opts, font_opts });
         //wholeStruct(@src(), "opts", &opts, 1);
         //        wholeStruct(@src(), "test_struct", &testStruct, 1);
     }
 }
+
+var name_buf: [50]u8 = undefined;
 
 // Note there is also StructField.default value. But .{} should be fine?
 pub fn defaultValue(T: type, options: anytype) ?T {
@@ -405,7 +408,7 @@ pub fn processWidget(
         inline .bool => dvui.se.boolFieldWidget2(src, field_name, field, options.standard, alignment),
         inline .pointer => |ptr| {
             if (ptr.size == .slice and ptr.child == u8) {
-                dvui.se.textFieldWidget2(src, field_name, field, options.number, alignment); // TODO: This should be options.text or similar?
+                dvui.se.textFieldWidget2(src, field_name, field, options.text, alignment); // TODO: This should be options.text or similar?
             }
         },
         inline .@"union" => {}, // BIG TODO!

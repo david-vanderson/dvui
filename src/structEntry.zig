@@ -3,37 +3,11 @@ const dvui = @import("dvui.zig");
 
 const border = dvui.Rect.all(1);
 
-/// Create an enum with a single member named `name`
-//fn BareEnum(comptime name: [:0]const u8) type {
-//    return @Type(.{
-//        .@"enum" = .{
-//            .tag_type = u8,
-//            .fields = &[_]std.builtin.Type.EnumField{
-//                .{ .name = name, .value = 0 },
-//            },
-//            .decls = &.{},
-//            .is_exhaustive = true,
-//        },
-//    });
-//}
-//
-///// Convert a string into a bare enum.
-//fn bareEnumFromString(comptime name: [:0]const u8) BareEnum(name) {
-//    return std.enums.values(BareEnum(name))[0];
-//}
-//
-//===============================================
-//=============BASIC FIELD WIDGETS===============
-//===============================================
-
-// The field widgets in this section display actual
-// inputs to the user for base types like ints
-// and floats.
-
 pub const FieldOptions = union(enum) {
     const DisplayMode = enum { none, read_only, read_write, read_create };
     standard: StandardFieldOptions,
     number: NumberFieldOptions,
+    text: TextFieldOptions,
 };
 
 pub const StandardFieldOptions = struct {
@@ -94,7 +68,12 @@ pub fn StructOptions(T: type) type {
         pub fn defaultFieldOption(FieldType: type) FieldOptions {
             return switch (@typeInfo(FieldType)) {
                 .int, .float => .{ .number = .{} },
-                .pointer => |ptr| defaultFieldOption(ptr.child),
+                .pointer => |ptr| if (ptr.size == .slice and ptr.child == u8)
+                    .{
+                        .text = .{ .display = if (ptr.is_const) .read_only else .read_write },
+                    }
+                else
+                    defaultFieldOption(ptr.child),
                 .optional => |opt| defaultFieldOption(opt.child),
                 else => .{ .standard = .{} },
             };
@@ -358,50 +337,80 @@ pub fn boolFieldWidget2(
 }
 
 // TODO: Handle allocations if required.
+pub const TextFieldOptions = struct {
+    display: FieldOptions.DisplayMode = .read_write,
+
+    label: ?[]const u8 = null,
+    // TODO: So is this where the user provides their edit buffer?
+    buffer: ?[]u8 = null,
+};
+
 pub fn textFieldWidget2(
     src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_ptr: anytype,
-    opt: NumberFieldOptions, // TODO: Becuase it is a U8, currently it looks like a number.
+    opt: TextFieldOptions,
     alignment: *dvui.Alignment,
 ) void {
+    //const T = @TypeOf(field_ptr.*);
     if (opt.display == .none) return;
-    const T = @TypeOf(field_ptr.*);
+    //    const buffer = buffer: switch (opt.display) {
+    //        .none => return,
+    //        .read_only => break :buffer field_ptr.*,
+    //        .read_write => {
+    //            if (opt.buffer) |buf| {
+    //                break :buffer buf;
+    //            } else if (@typeInfo(@TypeOf(field_ptr.*)).pointer.is_const) {
+    //                dvui.log.debug("Must supply a buffer to TextOptions to allow editing of const fields. Field name is {s}", .{field_name});
+    //                return;
+    //            } else {
+    //                break :buffer field_ptr.*;
+    //            }
+    //        },
+    //        .read_create => unreachable, // TODO: Is this even required? What does it do?
+    //    };
+
     // TODO: Type checking! Split out read-only vs read-write.
     var box = dvui.box(src, .horizontal, .{});
     defer box.deinit();
 
     dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{});
 
-    const ProvidedPointerTreatment = enum {
-        mutate_value_and_realloc,
-        mutate_value_in_place_only,
-        display_only,
-        copy_value_and_alloc_new,
-    };
-
-    comptime var treatment: ProvidedPointerTreatment = .display_only;
-    if (@typeInfo(T).pointer.is_const) {
-        treatment = .display_only;
-    } else if (@typeInfo(T).pointer.child == []const u8) {
-        treatment = .display_only;
-    } else {
-        treatment = .mutate_value_in_place_only;
+    // TODO: This needs to be 2-way
+    if (opt.buffer) |buf| {
+        if (buf.ptr != field_ptr.*.ptr) { // If it is a const pointer, this will alias, so need to check. sigh.
+            @memcpy(buf[0..field_ptr.*.len], field_ptr.*);
+        }
     }
+    switch (opt.display) {
+        .read_write => {
+            const buffer: []u8 = buffer: {
+                if (opt.buffer) |buf| {
+                    break :buffer buf;
+                } else if (@typeInfo(@TypeOf(field_ptr.*)).pointer.is_const) {
+                    dvui.log.debug("Must supply a buffer to TextOptions to allow editing of const fields. Field name is {s}", .{field_name});
+                    return;
+                } else {
+                    break :buffer field_ptr.*;
+                }
+            };
 
-    switch (treatment) {
-        .mutate_value_in_place_only => {
             var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
 
-            const text_box = dvui.textEntry(@src(), .{ .text = .{ .buffer = field_ptr.* } }, .{});
+            const text_box = dvui.textEntry(@src(), .{ .text = .{ .buffer = buffer } }, .{});
             defer text_box.deinit();
+            if (text_box.text_changed and opt.buffer != null) {
+                field_ptr.* = buffer;
+            }
         },
-        .display_only => {
+        .read_only => {
             dvui.label(@src(), " : {s}", .{field_ptr.*}, .{});
         },
-        else => @compileError("Nope"),
+        .none => {}, // TODO: ???
+        .read_create => {}, // TODO: ??
+        //else => @compileError("Nope"),
     }
 }
 
