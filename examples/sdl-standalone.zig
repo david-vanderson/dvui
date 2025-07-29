@@ -199,7 +199,7 @@ fn gui_frame() void {
         defer al.deinit();
         var ooo: dvui.se.StructOptions(BasicTypes) = .init(.{ .u8 = .{ .number = .{ .display = .none } } });
         ooo.options.put(.u8, .{ .number = .{ .display = .none } });
-        ooo.options.put(.i8, .{ .number = .{ .min = 0, .max = 5, .widget_type = .slider } });
+        ooo.options.put(.i8, .{ .number = .{ .min = -5, .max = 5, .widget_type = .slider } });
         wholeStruct(@src(), "basic_types_var", &basic_types_var, 0, .{ooo});
 
         //sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);
@@ -236,10 +236,12 @@ fn gui_frame() void {
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
         var max_size_opts: dvui.se.StructOptions(dvui.Options.MaxSize) = .initDefaults(.{ .h = 100, .w = 100 });
-        max_size_opts.options.put(.w, .{ .number = .{ .min = 0, .max = dvui.max_float_safe } });
-        max_size_opts.options.put(.h, .{ .number = .{ .min = 0, .max = dvui.max_float_safe } });
+        //var max_size_opts: dvui.se.StructOptions(dvui.Options.MaxSize) = .initDefaults(null);
+        max_size_opts.options.put(.w, .{ .number = .{ .min = -2, .max = dvui.max_float_safe } });
+        max_size_opts.options.put(.h, .{ .number = .{ .min = -2, .max = dvui.max_float_safe } });
 
         const font_opts: dvui.se.StructOptions(dvui.Font) = .initDefaults(.{ .size = 10, .name = "Nope" });
+        //  const font_opts: dvui.se.StructOptions(dvui.Font) = .initDefaults(null);
 
         wholeStruct(@src(), "dvui.Options", &dvui_opts, 1, .{ max_size_opts, font_opts });
         //wholeStruct(@src(), "opts", &opts, 1);
@@ -266,7 +268,7 @@ pub fn defaultValue(T: type, options: anytype) ?T {
             }
             if (!default_found) {
                 //          @compileLog("NO MATCH FOR ", T);
-
+                // TODO: This will just return null now and do a runtime debug message.
                 inline for (si.fields) |field| {
                     if (field.defaultValue() == null) {
                         @compileError(std.fmt.comptimePrint("field {s} for struct {s} does not support default initialization", .{ field.name, @typeName(T) }));
@@ -403,7 +405,7 @@ pub fn processWidget(
         inline .bool => dvui.se.boolFieldWidget2(src, field_name, field, options.standard, alignment),
         inline .pointer => |ptr| {
             if (ptr.size == .slice and ptr.child == u8) {
-                dvui.se.textFieldWidget2(src, field_name, field, options.standard, alignment);
+                dvui.se.textFieldWidget2(src, field_name, field, options.number, alignment); // TODO: This should be options.text or similar?
             }
         },
         inline .@"union" => {}, // BIG TODO!

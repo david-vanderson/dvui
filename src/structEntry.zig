@@ -67,7 +67,7 @@ pub fn StructOptions(T: type) type {
             return self;
         }
 
-        pub fn initDefaults(comptime default_value: ?T) Self {
+        pub fn initDefaults(default_value: ?T) Self {
             comptime var defaults: StructOptionsT = .{};
             inline for (0..defaults.values.len) |i| {
                 defaults.values[i] = comptime defaultFieldOption(@FieldType(T, @tagName(StructOptionsT.Indexer.keyForIndex(i))));
@@ -94,6 +94,8 @@ pub fn StructOptions(T: type) type {
         pub fn defaultFieldOption(FieldType: type) FieldOptions {
             return switch (@typeInfo(FieldType)) {
                 .int, .float => .{ .number = .{} },
+                .pointer => |ptr| defaultFieldOption(ptr.child),
+                .optional => |opt| defaultFieldOption(opt.child),
                 else => .{ .standard = .{} },
             };
         }
@@ -360,7 +362,7 @@ pub fn textFieldWidget2(
     src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_ptr: anytype,
-    opt: StandardFieldOptions,
+    opt: NumberFieldOptions, // TODO: Becuase it is a U8, currently it looks like a number.
     alignment: *dvui.Alignment,
 ) void {
     if (opt.display == .none) return;
