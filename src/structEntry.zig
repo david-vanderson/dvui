@@ -48,6 +48,7 @@ pub fn StructOptions(T: type) type {
         const Self = @This();
         pub const StructT = T;
         options: StructOptionsT, // use .init or .default
+        default_value: ?T = null,
 
         /// Optionally provide overrides for some fields.
         /// Used as .init(&. { . { .a = . { .min_vslue = 10}}})
@@ -56,7 +57,7 @@ pub fn StructOptions(T: type) type {
             ?StructOptionsT.Value,
             @as(?StructOptionsT.Value, null),
         )) Self {
-            var self = initDefaults();
+            var self = initDefaults(null);
             inline for (0..self.options.values.len) |i| {
                 const key = comptime StructOptionsT.Indexer.keyForIndex(i);
                 if (@field(options, @tagName(key))) |*v| {
@@ -66,12 +67,12 @@ pub fn StructOptions(T: type) type {
             return self;
         }
 
-        pub fn initDefaults() Self {
+        pub fn initDefaults(comptime default_value: ?T) Self {
             comptime var defaults: StructOptionsT = .{};
             inline for (0..defaults.values.len) |i| {
                 defaults.values[i] = comptime defaultFieldOption(@FieldType(T, @tagName(StructOptionsT.Indexer.keyForIndex(i))));
             }
-            return .{ .options = defaults };
+            return .{ .options = defaults, .default_value = default_value };
         }
 
         //pub fn override(self: *Self, options: std.enums.EnumFieldStruct(
@@ -359,7 +360,7 @@ pub fn textFieldWidget2(
     src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_ptr: anytype,
-    comptime opt: StandardFieldOptions,
+    opt: StandardFieldOptions,
     alignment: *dvui.Alignment,
 ) void {
     if (opt.display == .none) return;
@@ -406,7 +407,7 @@ pub fn textFieldWidgetBuf(
     src: std.builtin.SourceLocation,
     comptime field_name: []const u8,
     field_ptr: anytype,
-    comptime opt: StandardFieldOptions,
+    opt: StandardFieldOptions,
     buffer: []u8,
     alignment: *dvui.Alignment,
 ) []u8 {
@@ -796,7 +797,13 @@ pub const SliceFieldOptions = struct {
     disabled: bool = false,
 };
 
-pub fn sliceFieldWidget2(src: std.builtin.SourceLocation, container: anytype, comptime field_name: []const u8, comptime opts: StandardFieldOptions, alignment: *dvui.Alignment) void {
+pub fn sliceFieldWidget2(
+    src: std.builtin.SourceLocation,
+    container: anytype,
+    comptime field_name: []const u8,
+    opts: StandardFieldOptions,
+    alignment: *dvui.Alignment,
+) void {
     _ = opts; // TODO:
     var box = dvui.box(src, .vertical, .{});
     defer box.deinit();

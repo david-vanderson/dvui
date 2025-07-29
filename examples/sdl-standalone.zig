@@ -235,29 +235,49 @@ fn gui_frame() void {
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
+        var max_size_opts: dvui.se.StructOptions(dvui.Options.MaxSize) = .initDefaults(.{ .h = 100, .w = 100 });
+        max_size_opts.options.put(.w, .{ .number = .{ .min = 0, .max = dvui.max_float_safe } });
+        max_size_opts.options.put(.h, .{ .number = .{ .min = 0, .max = dvui.max_float_safe } });
 
+        const font_opts: dvui.se.StructOptions(dvui.Font) = .initDefaults(.{ .size = 10, .name = "Nope" });
+
+        wholeStruct(@src(), "dvui.Options", &dvui_opts, 1, .{ max_size_opts, font_opts });
         //wholeStruct(@src(), "opts", &opts, 1);
         //        wholeStruct(@src(), "test_struct", &testStruct, 1);
     }
 }
 
 // Note there is also StructField.default value. But .{} should be fine?
-pub fn defaultValue(T: type) ?T {
-    return switch (@typeInfo(T)) {
-        inline .bool => false,
-        inline .int => 0,
-        inline .float => 0.0,
+pub fn defaultValue(T: type, options: anytype) ?T {
+    //@compileLog("DEFAULT VALUE");
+    //@compileLog("Default Value", T, options);
+    switch (@typeInfo(T)) {
+        inline .bool => return false,
+        inline .int => return 0,
+        inline .float => return 0.0,
         inline .@"struct" => |si| {
-            inline for (si.fields) |field| {
-                if (field.defaultValue() == null) { // I suppose we should use StructField.defaultValue() here?
-                    @compileError(std.fmt.comptimePrint("field {s} for struct {s} does not support default initialization", .{ @typeName(T), field.name }));
+            comptime var default_found = false;
+            inline for (options) |opt| {
+                //          @compileLog(T, @TypeOf(opt).StructT);
+                if (@TypeOf(opt).StructT == T) { //} and opt.default_value != null) {
+                    default_found = true;
+                    return opt.default_value;
+                }
+            }
+            if (!default_found) {
+                //          @compileLog("NO MATCH FOR ", T);
+
+                inline for (si.fields) |field| {
+                    if (field.defaultValue() == null) {
+                        @compileError(std.fmt.comptimePrint("field {s} for struct {s} does not support default initialization", .{ field.name, @typeName(T) }));
+                    }
                 }
             }
             return .{};
         },
-        inline .@"enum" => |e| @enumFromInt(e.fields[0].value),
-        inline else => null,
-    };
+        inline .@"enum" => |e| return @enumFromInt(e.fields[0].value),
+        inline else => return null,
+    }
 }
 
 pub fn fieldOptions(T: type, options: anytype, field: dvui.se.StructOptions(T).StructOptionsT.Key) dvui.se.FieldOptions {
@@ -287,7 +307,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                 break :opts opt;
             }
         }
-        break :opts .initDefaults();
+        break :opts .initDefaults(null);
     };
     inline for (opts.options.values, 0..) |field_option, i| {
         const key = comptime @TypeOf(opts.options).Indexer.keyForIndex(i); // TODO There must be a way to iterate both? One is just the enum fields?
@@ -314,7 +334,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                 if (dvui.se.optionalFieldWidget2(@src(), @tagName(key), &@field(container, @tagName(key)), .{}, &al)) |hbox| {
                     defer hbox.deinit();
                     if (@field(container, @tagName(key)) == null) {
-                        @field(container, @tagName(key)) = defaultValue(opt.child); // If there is no default value, it will remain null.
+                        @field(container, @tagName(key)) = defaultValue(opt.child, options); // If there is no default value, it will remain null.
                     }
                     if (@field(container, @tagName(key)) != null) {
                         switch (@typeInfo(opt.child)) {
