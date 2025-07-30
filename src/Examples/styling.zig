@@ -8,17 +8,10 @@ pub fn styling() void {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
-        _ = dvui.button(@src(), "Accent", .{}, dvui.themeGet().accent());
-        _ = dvui.button(@src(), "Error", .{}, .{
-            .color_fill = .{ .color = dvui.themeGet().color_err },
-            .color_fill_hover = .{ .color = dvui.themeGet().color_err.lighten(if (dvui.themeGet().dark) 8 else -8) },
-            .color_fill_press = .{ .color = dvui.themeGet().color_err.lighten(if (dvui.themeGet().dark) 16 else -16) },
-            .color_text = .white,
-            .color_text_press = .white,
-        });
-
-        _ = dvui.button(@src(), "Window", .{}, .{ .color_fill = .fill_window });
-        _ = dvui.button(@src(), "Content", .{}, .{ .color_fill = .fill });
+        _ = dvui.button(@src(), "Accent", .{}, .{ .style = .accent });
+        _ = dvui.button(@src(), "Error", .{}, .{ .style = .err });
+        _ = dvui.button(@src(), "Window", .{}, .{ .style = .window });
+        _ = dvui.button(@src(), "Content", .{}, .{ .style = .content });
         _ = dvui.button(@src(), "Control", .{}, .{});
     }
 
@@ -59,7 +52,7 @@ pub fn styling() void {
             var vbox = dvui.box(@src(), .{}, .{});
             defer vbox.deinit();
 
-            var backbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .min_size_content = .{ .h = 40 }, .expand = .horizontal, .background = true, .color_fill = .{ .color = backbox_color } });
+            var backbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .min_size_content = .{ .h = 40 }, .expand = .horizontal, .background = true, .color_fill = backbox_color });
             backbox.deinit();
 
             if (dvui.sliderEntry(@src(), "A: {d:0.2}", .{ .value = &hsv_color.a, .min = 0, .max = 1, .interval = 0.01 }, .{ .min_size_content = .{}, .expand = .horizontal })) {
@@ -102,7 +95,7 @@ pub fn styling() void {
         // We are using two boxes here so the box shadow can have different corner_radius values.
 
         {
-            var vbox = dvui.box(@src(), .{}, .{ .margin = dvui.Rect.all(30), .min_size_content = .{ .w = 200, .h = 100 }, .corner_radius = dvui.Rect.all(5), .background = true, .border = if (border.*) dvui.Rect.all(1) else null, .box_shadow = .{ .color = .fromColor(backbox_color), .corner_radius = dvui.Rect.all(radius.*), .shrink = shrink.*, .offset = offset.*, .fade = fade.*, .alpha = alpha.* } });
+            var vbox = dvui.box(@src(), .{}, .{ .margin = dvui.Rect.all(30), .min_size_content = .{ .w = 200, .h = 100 }, .corner_radius = dvui.Rect.all(5), .background = true, .border = if (border.*) dvui.Rect.all(1) else null, .box_shadow = .{ .color = backbox_color, .corner_radius = dvui.Rect.all(radius.*), .shrink = shrink.*, .offset = offset.*, .fade = fade.*, .alpha = alpha.* } });
             defer vbox.deinit();
             dvui.label(@src(), "Box shadows", .{}, .{ .gravity_x = 0.5 });
             _ = dvui.checkbox(@src(), border, "border", .{});

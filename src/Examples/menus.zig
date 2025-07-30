@@ -167,7 +167,7 @@ pub fn menus() void {
 
                     var label_opts = tab.data().options.strip();
                     if (dvui.captured(tab.data().id)) {
-                        label_opts.color_text = .text_press;
+                        label_opts.color_text = (dvui.Options{}).color(.text_press);
                     }
 
                     dvui.labelNoFmt(@src(), tabname, .{}, label_opts);
@@ -185,7 +185,7 @@ pub fn menus() void {
                 .horizontal => border.y = 0,
                 .vertical => border.x = 0,
             }
-            var vbox3 = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window, .border = border });
+            var vbox3 = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window, .border = border });
             defer vbox3.deinit();
 
             dvui.label(@src(), "This is tab {d}", .{active_tab.*}, .{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 });
@@ -316,7 +316,7 @@ pub fn focus() void {
 
             if (e.evt == .mouse and e.evt.mouse.action == .position) {
                 hbox.data().options.background = true;
-                hbox.data().options.color_fill = .fill_hover;
+                hbox.data().options.color_fill = (dvui.Options{}).color(.fill_hover);
             }
         }
         hbox.drawBackground();
@@ -339,7 +339,7 @@ test "DOCIMG menus" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             menus();
             return .ok;

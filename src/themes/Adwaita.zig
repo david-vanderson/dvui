@@ -38,16 +38,33 @@ pub const light = light: {
         .font_title_3 = .{ .size = 20, .id = .VeraBd },
         .font_title_4 = .{ .size = 18, .id = .VeraBd },
 
-        .color_accent = accent_hsl.color(),
-        .color_err = err_hsl.color(),
-        .color_text = Color.black,
-        .color_text_press = Color.black,
-        .color_fill = Color.white,
-        .color_fill_window = .{ .r = 0xf0, .g = 0xf0, .b = 0xf0 },
-        .color_fill_control = .{ .r = 0xe0, .g = 0xe0, .b = 0xe0 },
-        .color_fill_hover = (Color.HSLuv{ .s = 0, .l = 82 }).color(),
-        .color_fill_press = (Color.HSLuv{ .s = 0, .l = 72 }).color(),
-        .color_border = (Color.HSLuv{ .s = 0, .l = 63 }).color(),
+        .focus = accent_hsl.color(),
+        .fill = Color.white,
+        .fill_window = .{ .r = 0xf0, .g = 0xf0, .b = 0xf0 },
+        .text = Color.black,
+        .border = (Color.HSLuv{ .s = 0, .l = 63 }).color(),
+
+        .control = .{
+            .fill = .{ .r = 0xe0, .g = 0xe0, .b = 0xe0 },
+            .fill_hover = (Color.HSLuv{ .s = 0, .l = 82 }).color(),
+            .fill_press = (Color.HSLuv{ .s = 0, .l = 72 }).color(),
+        },
+
+        .accent = .{
+            .fill = light_accent_fill,
+            .fill_hover = light_accent_fill_hover,
+            .fill_press = light_accent_accent,
+            .text = Color.white,
+            .border = light_accent_border,
+        },
+
+        .err = .{
+            .fill = light_err_fill,
+            .fill_hover = light_err_fill_hover,
+            .fill_press = light_err_accent,
+            .text = Color.white,
+            .border = light_err_border,
+        },
     };
 };
 
@@ -81,15 +98,32 @@ pub const dark = dark: {
         .font_title_3 = .{ .size = 20, .id = .VeraBd },
         .font_title_4 = .{ .size = 18, .id = .VeraBd },
 
-        .color_accent = accent_hsl.color(),
-        .color_err = dark_err,
-        .color_text = Color.white,
-        .color_text_press = Color.white,
-        .color_fill = dark_fill,
-        .color_fill_window = .{ .r = 0x2b, .g = 0x2b, .b = 0x2b },
-        .color_fill_control = .{ .r = 0x40, .g = 0x40, .b = 0x40 },
-        .color_fill_hover = dark_fill_hsl.lighten(21).color(),
-        .color_fill_press = dark_fill_hsl.lighten(30).color(),
-        .color_border = dark_fill_hsl.lighten(39).color(),
+        .focus = accent_hsl.color(),
+        .fill = dark_fill,
+        .fill_window = .{ .r = 0x2b, .g = 0x2b, .b = 0x2b },
+        .text = Color.white,
+        .border = dark_fill_hsl.lighten(39).color(),
+
+        .control = .{
+            .fill = .{ .r = 0x40, .g = 0x40, .b = 0x40 },
+            .fill_hover = dark_fill_hsl.lighten(21).color(),
+            .fill_press = dark_fill_hsl.lighten(30).color(),
+        },
+
+        .accent = .{
+            .fill = accent,
+            .fill_hover = dark_accent_fill_hover,
+            .fill_press = dark_accent_accent,
+            .text = Color.white,
+            .border = dark_accent_border,
+        },
+
+        .err = .{
+            .fill = dark_err,
+            .fill_hover = dark_err_fill_hover,
+            .fill_press = dark_err_fill_press,
+            .text = Color.white,
+            .border = dark_err_border,
+        },
     };
 };

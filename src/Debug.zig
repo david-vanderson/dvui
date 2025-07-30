@@ -135,10 +135,11 @@ pub fn show(self: *Debug) void {
         var corner_box = dvui.box(@src(), .{}, .{ .gravity_x = 1, .margin = .all(8) });
         defer corner_box.deinit();
 
-        var color: ?Options.ColorOrName = null;
+        var color: ?dvui.Color = null;
         if (self.widget_id == .zero) {
             // blend text and control colors
-            color = .{ .color = .average(dvui.themeGet().color_text, dvui.themeGet().color_fill_control) };
+            const opts: Options = .{};
+            color = .average(opts.color(.text), opts.color(.fill));
         }
 
         if (dvui.button(@src(), "Edit Options", .{}, .{ .gravity_x = 1, .color_text = color })) {
@@ -300,9 +301,10 @@ pub fn show(self: *Debug) void {
 
                 if (button.clicked()) self.widget_id = id;
 
+                const opts: Options = .{};
                 const stack = dvui.box(@src(), .{}, .{
                     .expand = .both,
-                    .color_fill = if (button.pressed()) .fill_press else null,
+                    .color_fill = if (button.pressed()) opts.color(.fill_press) else null,
                 });
                 defer stack.deinit();
 
@@ -738,7 +740,7 @@ fn layoutPage(self: *Options, id: dvui.WidgetId) bool {
     return changed;
 }
 
-fn stylePage(self: *Options, id: dvui.WidgetId) bool {
+fn stylePage(self: *Options, _: dvui.WidgetId) bool {
     var changed = false;
 
     var row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
@@ -777,112 +779,112 @@ fn stylePage(self: *Options, id: dvui.WidgetId) bool {
     row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .margin = .{ .y = 5 } });
     defer row.deinit();
 
-    const active_color = dvui.dataGetPtrDefault(null, id, "Color", Options.ColorAsk, .accent);
+    //const active_color = dvui.dataGetPtrDefault(null, id, "Color", Options.ColorAsk, .accent);
 
-    {
-        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
-        tabs.install();
-        defer tabs.deinit();
+    //{
+    //    var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
+    //    tabs.install();
+    //    defer tabs.deinit();
 
-        const colors = comptime std.meta.tags(Options.ColorAsk);
-        inline for (colors, 0..) |color_ask, i| {
-            const tab = tabs.addTab(active_color.* == color_ask, .{
-                .expand = .horizontal,
-                .padding = .all(2),
-                .id_extra = i,
-            });
-            defer tab.deinit();
+    //    const colors = comptime std.meta.tags(Options.ColorAsk);
+    //    inline for (colors, 0..) |color_ask, i| {
+    //        const tab = tabs.addTab(active_color.* == color_ask, .{
+    //            .expand = .horizontal,
+    //            .padding = .all(2),
+    //            .id_extra = i,
+    //        });
+    //        defer tab.deinit();
 
-            if (tab.clicked()) {
-                active_color.* = color_ask;
-            }
+    //        if (tab.clicked()) {
+    //            active_color.* = color_ask;
+    //        }
 
-            var label_opts = tab.data().options.strip();
-            if (dvui.captured(tab.data().id)) {
-                label_opts.color_text = .{ .name = .text_press };
-            }
+    //        var label_opts = tab.data().options.strip();
+    //        if (dvui.captured(tab.data().id)) {
+    //            label_opts.color_text = label_opts.color(.text_press);
+    //        }
 
-            const field = "color_" ++ @tagName(color_ask);
-            const color: Options.ColorOrName = if (@field(self, field)) |color| color else switch (color_ask) {
-                .accent => .{ .name = .accent },
-                .text => .{ .name = .text },
-                .text_press => .{ .name = .text_press },
-                .fill => .{ .name = .fill },
-                .fill_hover => .{ .name = .fill_hover },
-                .fill_press => .{ .name = .fill_press },
-                .border => .{ .name = .border },
-            };
+    //        const field = "color_" ++ @tagName(color_ask);
+    //        const color: Options.ColorOrName = if (@field(self, field)) |color| color else switch (color_ask) {
+    //            .accent => .{ .name = .accent },
+    //            .text => .{ .name = .text },
+    //            .text_press => .{ .name = .text_press },
+    //            .fill => .{ .name = .fill },
+    //            .fill_hover => .{ .name = .fill_hover },
+    //            .fill_press => .{ .name = .fill_press },
+    //            .border => .{ .name = .border },
+    //        };
 
-            const color_indicator = dvui.overlay(@src(), .{
-                .expand = .ratio,
-                .min_size_content = .all(10),
-                .corner_radius = .all(100),
-                .border = .all(1),
-                .background = true,
-                .color_fill = .fromColor(color.resolve()),
-            });
-            // Used to o
-            const color_width = color_indicator.data().rectScale().r.w;
-            color_indicator.deinit();
-            dvui.labelNoFmt(@src(), @tagName(color_ask), .{}, .{ .margin = .{ .x = color_width } });
-        }
-    }
+    //        const color_indicator = dvui.overlay(@src(), .{
+    //            .expand = .ratio,
+    //            .min_size_content = .all(10),
+    //            .corner_radius = .all(100),
+    //            .border = .all(1),
+    //            .background = true,
+    //            .color_fill = .fromColor(color.resolve()),
+    //        });
+    //        // Used to o
+    //        const color_width = color_indicator.data().rectScale().r.w;
+    //        color_indicator.deinit();
+    //        dvui.labelNoFmt(@src(), @tagName(color_ask), .{}, .{ .margin = .{ .x = color_width } });
+    //    }
+    //}
 
-    {
-        var col = dvui.box(@src(), .{}, .{ .expand = .both, .margin = .all(5) });
-        defer col.deinit();
+    //{
+    //    var col = dvui.box(@src(), .{}, .{ .expand = .both, .margin = .all(5) });
+    //    defer col.deinit();
 
-        const field: ?*Options.ColorOrName = switch (active_color.*) {
-            inline else => |c| if (@field(self, "color_" ++ @tagName(c))) |*ptr| ptr else null,
-        };
-        const rgba_color: Options.ColorOrName = if (field) |ptr| ptr.* else switch (active_color.*) {
-            .accent => .{ .name = .accent },
-            .text => .{ .name = .text },
-            .text_press => .{ .name = .text_press },
-            .fill => .{ .name = .fill },
-            .fill_hover => .{ .name = .fill_hover },
-            .fill_press => .{ .name = .fill_press },
-            .border => .{ .name = .border },
-        };
+    //    const field: ?*Options.ColorOrName = switch (active_color.*) {
+    //        inline else => |c| if (@field(self, "color_" ++ @tagName(c))) |*ptr| ptr else null,
+    //    };
+    //    const rgba_color: Options.ColorOrName = if (field) |ptr| ptr.* else switch (active_color.*) {
+    //        .accent => .{ .name = .accent },
+    //        .text => .{ .name = .text },
+    //        .text_press => .{ .name = .text_press },
+    //        .fill => .{ .name = .fill },
+    //        .fill_hover => .{ .name = .fill_hover },
+    //        .fill_press => .{ .name = .fill_press },
+    //        .border => .{ .name = .border },
+    //    };
 
-        var hsv = dvui.Color.HSV.fromColor(rgba_color.resolve());
-        if (dvui.colorPicker(@src(), .{ .hsv = &hsv, .dir = .horizontal }, .{})) {
-            changed = true;
-            if (field) |ptr| {
-                ptr.* = .fromColor(hsv.toColor());
-            } else switch (active_color.*) {
-                inline else => |c| @field(self, "color_" ++ @tagName(c)) = .fromColor(hsv.toColor()),
-            }
-        }
+    //    var hsv = dvui.Color.HSV.fromColor(rgba_color.resolve());
+    //    if (dvui.colorPicker(@src(), .{ .hsv = &hsv, .dir = .horizontal }, .{})) {
+    //        changed = true;
+    //        if (field) |ptr| {
+    //            ptr.* = .fromColor(hsv.toColor());
+    //        } else switch (active_color.*) {
+    //            inline else => |c| @field(self, "color_" ++ @tagName(c)) = .fromColor(hsv.toColor()),
+    //        }
+    //    }
 
-        {
-            const colors = std.meta.tags(Options.ColorsFromTheme);
-            const current_color: ?Options.ColorsFromTheme = if (field) |ptr| switch (ptr.*) {
-                .name => |n| n,
-                .color => null,
-            } else null;
-            var dd = dvui.DropdownWidget.init(@src(), .{
-                .label = if (current_color) |c| @tagName(c) else "custom",
-                .selected_index = if (current_color) |c| std.mem.indexOfScalar(Options.ColorsFromTheme, colors, c) else null,
-            }, .{
-                .min_size_content = .{ .w = 110 },
-            });
-            dd.install();
-            defer dd.deinit();
-            if (dd.dropped()) {
-                for (colors) |color| {
-                    if (dd.addChoiceLabel(@tagName(color))) {
-                        changed = true;
-                        if (field) |ptr| {
-                            ptr.* = .{ .name = color };
-                        } else switch (active_color.*) {
-                            inline else => |c| @field(self, "color_" ++ @tagName(c)) = .{ .name = color },
-                        }
-                    }
-                }
-            }
-        }
-    }
+    //    {
+    //        const colors = std.meta.tags(Options.ColorsFromTheme);
+    //        const current_color: ?Options.ColorsFromTheme = if (field) |ptr| switch (ptr.*) {
+    //            .name => |n| n,
+    //            .color => null,
+    //        } else null;
+    //        var dd = dvui.DropdownWidget.init(@src(), .{
+    //            .label = if (current_color) |c| @tagName(c) else "custom",
+    //            .selected_index = if (current_color) |c| std.mem.indexOfScalar(Options.ColorsFromTheme, colors, c) else null,
+    //        }, .{
+    //            .min_size_content = .{ .w = 110 },
+    //        });
+    //        dd.install();
+    //        defer dd.deinit();
+    //        if (dd.dropped()) {
+    //            for (colors) |color| {
+    //                if (dd.addChoiceLabel(@tagName(color))) {
+    //                    changed = true;
+    //                    if (field) |ptr| {
+    //                        ptr.* = .{ .name = color };
+    //                    } else switch (active_color.*) {
+    //                        inline else => |c| @field(self, "color_" ++ @tagName(c)) = .{ .name = color },
+    //                    }
+    //                }
+    //            }
+    //        }
+    //    }
+    //}
 
     return changed;
 }

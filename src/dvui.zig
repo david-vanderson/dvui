@@ -1619,7 +1619,7 @@ pub const Path = struct {
 
         var options = opts;
         if (options.color == null) {
-            options.color = dvui.themeGet().color_fill;
+            options.color = dvui.themeGet().fill;
         }
 
         const cw = currentWindow();
@@ -3955,7 +3955,7 @@ pub fn dialogDisplay(id: WidgetId) !void {
     }
 
     // Now add the scroll area which will get the remaining space
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
     var tl = dvui.textLayout(@src(), .{}, .{ .background = false, .gravity_x = 0.5 });
     tl.addText(message, .{});
     tl.deinit();
@@ -4868,7 +4868,6 @@ pub fn gridHeading(
         .expand = .horizontal,
         .gravity_x = 0.5,
         .gravity_y = 0.5,
-        .color_fill = .{ .name = .fill_control },
         .background = true,
     };
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
@@ -4938,7 +4937,6 @@ pub fn gridHeadingCheckbox(
         .background = true,
         .expand = .both,
         .margin = ButtonWidget.defaults.marginGet(),
-        .color_fill = .fill_control,
         .gravity_x = 0.5,
         .gravity_y = 0.5,
     };
@@ -5023,7 +5021,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
     const defaults: Options = .{
         .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
-        .color_fill = .{ .name = .border },
+        .color_fill = dvui.themeGet().border,
         .min_size_content = .{ .w = 1, .h = 1 },
     };
 
@@ -5123,7 +5121,7 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, ini
     }
 
     if (mi.show_active) {
-        labelopts = labelopts.override(themeGet().accent());
+        labelopts.style = .accent;
     }
 
     labelNoFmt(@src(), label_str, .{}, labelopts);
@@ -5146,7 +5144,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
     }
 
     if (mi.show_active) {
-        iconopts = iconopts.override(themeGet().accent());
+        iconopts.style = .accent;
     }
 
     icon(@src(), name, tvg_bytes, .{}, iconopts);
@@ -5551,7 +5549,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
     const click = bw.clicked();
     var options = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
-    if (bw.pressed()) options = options.override(.{ .color_text = .{ .color = opts.color(.text_press) } });
+    if (bw.pressed()) options = options.override(.{ .color_text = opts.color(.text_press) });
 
     // this child widget:
     // - has bw as parent
@@ -5603,7 +5601,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
     // process events (mouse and keyboard)
     bw.processEvents();
     var options = opts.strip().override(.{ .gravity_y = 0.5 });
-    if (bw.pressed()) options = options.override(.{ .color_text = .{ .color = opts.color(.text_press) } });
+    if (bw.pressed()) options = options.override(.{ .color_text = opts.color(.text_press) });
 
     // draw background/border
     bw.drawBackground();
@@ -5625,7 +5623,6 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
 pub var slider_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 20, .h = 20 },
-    .color_fill = .{ .name = .fill_control },
     .name = "Slider",
 };
 
@@ -5767,7 +5764,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         options.color(.fill_hover)
     else
         options.color(.fill);
-    var knob = BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = .{ .color = fill_color } });
+    var knob = BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = fill_color });
     knob.install();
     knob.drawBackground();
     if (b.data().id == focusedWidgetId()) {
@@ -5786,7 +5783,6 @@ pub var slider_entry_defaults: Options = .{
     .margin = Rect.all(4),
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(2),
-    .color_fill = .{ .name = .fill_control },
     .background = true,
     // min size calculated from font
     .name = "SliderEntry",
@@ -6177,7 +6173,6 @@ pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, 
 pub var progress_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 10, .h = 10 },
-    .color_fill = .{ .name = .fill_control },
 };
 
 pub const Progress_InitOptions = struct {
@@ -6267,7 +6262,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
-        rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent });
+        rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -6279,7 +6274,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
     var options = opts;
     if (checked) {
-        options = opts.override(themeGet().accent());
+        options.style = .accent;
         rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
     } else {
         rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
@@ -6354,7 +6349,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
-        r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent });
+        r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -6366,7 +6361,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
 
     var options = opts;
     if (active) {
-        options = opts.override(themeGet().accent());
+        options.style = .accent;
         r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(.fill), .fade = 1.0 });
     } else {
         r.insetAll(rs.s).fill(cornerRad, .{ .color = opts.color(fill), .fade = 1.0 });
@@ -6532,7 +6527,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().color_err, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
 
     // display min/max
@@ -6546,7 +6541,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         } else if (init_opts.max != null) {
             minmax_text = std.fmt.bufPrint(&minmax_buffer, "(max: {d})", .{init_opts.max.?}) catch unreachable;
         }
-        te.textLayout.addText(minmax_text, .{ .color_text = .{ .name = .fill_hover } });
+        te.textLayout.addText(minmax_text, .{ .color_text = opts.color(.fill_hover) });
     }
 
     te.deinit();
@@ -6657,7 +6652,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().color_err, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
 
     te.deinit();
@@ -6900,7 +6895,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
 
             v.pos.x = leftx;
             v.pos.y = y + gi.topBearing * target_fraction;
-            v.col = .fromColor(if (sel_in) themeGet().color_fill else opts.color);
+            v.col = .fromColor(if (sel_in) themeGet().fill else opts.color);
             v.uv = gi.uv;
             builder.appendVertex(v);
 
@@ -6950,7 +6945,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
                 .x = sel_end_x,
                 .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
             })
-            .fill(.{}, .{ .color = themeGet().color_accent, .fade = 0 });
+            .fill(.{}, .{ .color = themeGet().focus, .fade = 0 });
     }
 
     try renderTriangles(builder.build_unowned(), texture_atlas);

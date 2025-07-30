@@ -67,7 +67,7 @@ pub fn layout() void {
                     .{
                         .min_size_content = Static.size,
                         .background = Static.background,
-                        .color_fill = .{ .color = dvui.themeGet().color_text },
+                        .color_fill = dvui.themeGet().text,
                         .border = if (Static.border) Rect.all(1) else null,
                     },
                 ));

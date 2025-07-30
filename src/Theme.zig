@@ -16,31 +16,28 @@ dark: bool,
 alpha: f32 = 1.0,
 
 /// used for focus highlighting
-color_accent: Color,
+focus: Color,
 
-color_err: Color,
-
-/// text/foreground color
-color_text: Color,
-
-/// text/foreground color when widget is pressed
-color_text_press: Color,
-
-/// background color for displaying lots of text
-color_fill: Color,
+/// background color for content displaying lots of text
+fill: Color,
 
 /// background color for containers that have other widgets inside
-color_fill_window: Color,
+fill_window: Color,
 
-/// background color for controls like buttons
-color_fill_control: Color,
+/// text/foreground color for normal content
+text: Color,
 
-/// background color while hovering over controls like buttons
-color_fill_hover: Color,
-/// background color while pressing down on controls like buttons
-color_fill_press: Color,
+/// border color
+border: Color,
 
-color_border: Color,
+/// colors for normal controls like buttons, falls back to theme basics
+control: ColorStyle,
+
+/// colors for highlighting menu/dropdown items, falls back to control
+accent: ColorStyle,
+
+/// colors for buttons to perform dangerous actions, falls back to control
+err: ColorStyle,
 
 font_body: Font,
 font_heading: Font,
@@ -54,6 +51,18 @@ font_title_4: Font,
 
 /// if true, all strings in `Theme` will be freed in `deinit`
 allocated_strings: bool = false,
+
+/// Colors for controls (like buttons), if null fall back to theme colors and
+/// automatically adjust fill for hover/press.
+pub const ColorStyle = struct {
+    fill: ?Color = null,
+    fill_hover: ?Color = null,
+    fill_press: ?Color = null,
+    text: ?Color = null,
+    text_hover: ?Color = null,
+    text_press: ?Color = null,
+    border: ?Color = null,
+};
 
 pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
     if (self.allocated_strings) {
@@ -75,14 +84,6 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
     ret.font_title_4.size += delta;
 
     return ret;
-}
-
-/// Gets the accent style `Options`
-pub fn accent(self: *const Theme) Options {
-    return .{
-        .color_fill = .{ .color = self.color_accent },
-        .color_text = .white,
-    };
 }
 
 /// To pick between the built in themes, pass `&Theme.builtins` as the `themes` argument
@@ -130,10 +131,10 @@ pub fn picker(src: std.builtin.SourceLocation, themes: []const Theme, opts: Opti
 pub const builtin = struct {
     pub const adwaita_light = @import("themes/Adwaita.zig").light;
     pub const adwaita_dark = @import("themes/Adwaita.zig").dark;
-    pub const dracula = QuickTheme.builtin.dracula.toTheme(null) catch unreachable;
-    pub const gruvbox = QuickTheme.builtin.gruvbox.toTheme(null) catch unreachable;
-    pub const jungle = QuickTheme.builtin.jungle.toTheme(null) catch unreachable;
-    pub const opendyslexic = QuickTheme.builtin.opendyslexic.toTheme(null) catch unreachable;
+    //pub const dracula = QuickTheme.builtin.dracula.toTheme(null) catch unreachable;
+    //pub const gruvbox = QuickTheme.builtin.gruvbox.toTheme(null) catch unreachable;
+    //pub const jungle = QuickTheme.builtin.jungle.toTheme(null) catch unreachable;
+    //pub const opendyslexic = QuickTheme.builtin.opendyslexic.toTheme(null) catch unreachable;
 };
 
 /// A comptime array of all the builtin themes sorted alphabetically
@@ -171,9 +172,7 @@ pub const QuickTheme = struct {
     font_name_title: []const u8,
 
     // used for focus
-    color_accent: []const u8 = "#638465",
-
-    color_err: []const u8 = "#cc241d",
+    color_focus: []const u8 = "#638465",
 
     // text/foreground color
     color_text: []const u8 = "#82a29f",
@@ -214,8 +213,8 @@ pub const QuickTheme = struct {
     /// will be used directly which is good for embedded/static slices.
     pub fn toTheme(self: @This(), gpa: ?std.mem.Allocator) (std.mem.Allocator.Error || Color.FromHexError)!Theme {
         @setEvalBranchQuota(1600);
-        const color_accent = try Color.tryFromHex(self.color_accent);
-        const color_err = try Color.tryFromHex(self.color_err);
+        const color_accent = try Color.tryFromHex(self.color_focus);
+        const color_err = try Color.tryFromHex("#ffaaaa");
         const color_text = try Color.tryFromHex(self.color_text);
         const color_text_press = try Color.tryFromHex(self.color_text_press);
         const color_fill = try Color.tryFromHex(self.color_fill_text);
@@ -274,6 +273,24 @@ pub const QuickTheme = struct {
             .font_title_4 = .{
                 .size = @round(self.font_size * 1.15),
                 .id = .fromName(self.font_name_title),
+            },
+            .style_accent = .{
+                .color_accent = .{ .color = Color.average(color_accent, color_accent) },
+                .color_text = .{ .color = Color.average(color_accent, color_text) },
+                .color_text_press = .{ .color = Color.average(color_accent, color_text_press) },
+                .color_fill = .{ .color = Color.average(color_accent, color_fill) },
+                .color_fill_hover = .{ .color = Color.average(color_accent, color_fill_hover) },
+                .color_fill_press = .{ .color = Color.average(color_accent, color_fill_press) },
+                .color_border = .{ .color = Color.average(color_accent, color_border) },
+            },
+            .style_err = .{
+                .color_accent = .{ .color = Color.average(color_accent, color_accent) },
+                .color_text = .{ .color = Color.average(color_err, color_text) },
+                .color_text_press = .{ .color = Color.average(color_err, color_text_press) },
+                .color_fill = .{ .color = Color.average(color_err, color_fill) },
+                .color_fill_hover = .{ .color = Color.average(color_err, color_fill_hover) },
+                .color_fill_press = .{ .color = Color.average(color_err, color_fill_press) },
+                .color_border = .{ .color = Color.average(color_err, color_border) },
             },
             .allocated_strings = gpa != null,
         };

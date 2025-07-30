@@ -242,7 +242,7 @@ pub const Branch = struct {
 
                     if (self.target_rs != null) {
                         rs.r.h = 2.0;
-                        rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent, .fade = 1.0 });
+                        rs.r.fill(.{}, .{ .color = dvui.themeGet().focus, .fade = 1.0 });
                     }
                 }
             }
@@ -274,7 +274,7 @@ pub const Branch = struct {
             var rs = self.wd.rectScale();
             self.target_rs = rs;
             rs.r.h = 2.0;
-            rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent, .fade = 1.0 });
+            rs.r.fill(.{}, .{ .color = dvui.themeGet().focus, .fade = 1.0 });
         }
 
         self.tree.branch_size = self.button.wd.rect.size();

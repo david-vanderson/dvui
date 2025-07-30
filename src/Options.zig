@@ -46,13 +46,11 @@ gravity_y: ?f32 = null,
 tab_index: ?u16 = null,
 
 // used to override widget and theme defaults
-color_accent: ?ColorOrName = null,
-color_text: ?ColorOrName = null,
-color_text_press: ?ColorOrName = null,
-color_fill: ?ColorOrName = null,
-color_fill_hover: ?ColorOrName = null,
-color_fill_press: ?ColorOrName = null,
-color_border: ?ColorOrName = null,
+style: ?Style = null,
+color_accent: ?Color = null,
+color_text: ?Color = null,
+color_fill: ?Color = null,
+color_border: ?Color = null,
 
 // use to override font_style
 font: ?Font = null,
@@ -90,6 +88,15 @@ font_style: ?FontStyle = null,
 
 /// Render a box shadow in `WidgetData.borderAndBackground`.
 box_shadow: ?BoxShadow = null,
+
+/// Controls which colors we source from `Theme`.
+pub const Style = enum {
+    content,
+    window,
+    control,
+    accent,
+    err,
+};
 
 pub const Expand = enum {
     none,
@@ -155,7 +162,7 @@ pub const MaxSize = struct {
 
 pub const BoxShadow = struct {
     /// Color of shadow
-    color: ColorOrName = .black,
+    color: Color = .black,
 
     // x topleft, y topright, w botright, h botleft
     // if null uses Options.corner_radius
@@ -174,81 +181,11 @@ pub const BoxShadow = struct {
     alpha: f32 = 0.5,
 };
 
-// All the colors you can get from a Theme
-pub const ColorsFromTheme = enum {
-    accent,
-    err,
-    text,
-    text_press,
-    fill,
-    fill_window,
-    fill_control,
-    fill_hover,
-    fill_press,
-    border,
-};
-
-// Either specify the color directly or name a color from the Theme
-pub const ColorOrName = union(enum) {
-    color: Color,
-    name: ColorsFromTheme,
-
-    pub const accent = ColorOrName{ .name = .accent };
-    pub const err = ColorOrName{ .name = .err };
-    pub const text = ColorOrName{ .name = .text };
-    pub const text_press = ColorOrName{ .name = .text_press };
-    pub const fill = ColorOrName{ .name = .fill };
-    pub const fill_window = ColorOrName{ .name = .fill_window };
-    pub const fill_control = ColorOrName{ .name = .fill_control };
-    pub const fill_hover = ColorOrName{ .name = .fill_hover };
-    pub const fill_press = ColorOrName{ .name = .fill_press };
-    pub const border = ColorOrName{ .name = .border };
-
-    // duplicated names from Color
-    pub const white: ColorOrName = .fromColor(.white);
-    pub const silver: ColorOrName = .fromColor(.silver);
-    pub const gray: ColorOrName = .fromColor(.gray);
-    pub const black: ColorOrName = .fromColor(.black);
-    pub const red: ColorOrName = .fromColor(.red);
-    pub const maroon: ColorOrName = .fromColor(.maroon);
-    pub const yellow: ColorOrName = .fromColor(.yellow);
-    pub const olive: ColorOrName = .fromColor(.olive);
-    pub const lime: ColorOrName = .fromColor(.lime);
-    pub const green: ColorOrName = .fromColor(.green);
-    pub const aqua: ColorOrName = .fromColor(.aqua);
-    pub const teal: ColorOrName = .fromColor(.teal);
-    pub const blue: ColorOrName = .fromColor(.blue);
-    pub const navy: ColorOrName = .fromColor(.navy);
-    pub const fuchsia: ColorOrName = .fromColor(.fuchsia);
-    pub const purple: ColorOrName = .fromColor(.purple);
-    pub const cyan = aqua;
-    pub const magenta = fuchsia;
-    pub const darl_cyan = teal;
-    pub const dark_magenta = purple;
-    pub const transparent: ColorOrName = .fromColor(.transparent);
-
-    pub fn fromColor(col: Color) @This() {
-        return .{ .color = col };
-    }
-
-    pub fn fromHex(hex_color: []const u8) @This() {
-        return fromColor(Color.fromHex(hex_color));
-    }
-
-    pub fn resolve(self: ColorOrName) Color {
-        const col = switch (self) {
-            .color => |col| col,
-            .name => |from_theme| Color.fromTheme(from_theme),
-        };
-
-        return col.opacity(dvui.themeGet().alpha);
-    }
-};
-
-// All the colors you can ask Options for
+/// All the colors you can ask Options for
 pub const ColorAsk = enum {
     accent,
     text,
+    text_hover,
     text_press,
     fill,
     fill_hover,
@@ -256,18 +193,86 @@ pub const ColorAsk = enum {
     border,
 };
 
+/// Get a color from this Options or fallback to theme colors.
 pub fn color(self: *const Options, ask: ColorAsk) Color {
-    const color_or_name: ColorOrName = switch (ask) {
-        .accent => self.color_accent orelse .{ .name = .accent },
-        .text => self.color_text orelse .{ .name = .text },
-        .text_press => self.color_text_press orelse .{ .name = .text_press },
-        .fill => self.color_fill orelse .{ .name = .fill },
-        .fill_hover => self.color_fill_hover orelse .{ .name = .fill_hover },
-        .fill_press => self.color_fill_press orelse .{ .name = .fill_press },
-        .border => self.color_border orelse .{ .name = .border },
+    const col = blk: switch (ask) {
+        .accent => self.color_accent orelse dvui.themeGet().focus,
+        .border => self.color_border orelse switch (self.style orelse .control) {
+            .content => dvui.themeGet().border,
+            .window => dvui.themeGet().border,
+            .control => dvui.themeGet().control.border orelse dvui.themeGet().border,
+            .accent => dvui.themeGet().accent.border orelse dvui.themeGet().control.border orelse dvui.themeGet().border,
+            .err => dvui.themeGet().err.border orelse dvui.themeGet().control.border orelse dvui.themeGet().border,
+        },
+        .fill => self.color_fill orelse switch (self.style orelse .control) {
+            .content => dvui.themeGet().fill,
+            .window => dvui.themeGet().fill_window,
+            .control => dvui.themeGet().control.fill orelse dvui.themeGet().fill,
+            .accent => dvui.themeGet().accent.fill orelse dvui.themeGet().control.fill orelse dvui.themeGet().fill,
+            .err => dvui.themeGet().err.fill orelse dvui.themeGet().control.fill orelse dvui.themeGet().fill,
+        },
+        .text => self.color_text orelse switch (self.style orelse .control) {
+            .content => dvui.themeGet().text,
+            .window => dvui.themeGet().text,
+            .control => dvui.themeGet().control.text orelse dvui.themeGet().text,
+            .accent => dvui.themeGet().accent.text orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
+            .err => dvui.themeGet().err.text orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
+        },
+        .text_hover => self.color_text orelse switch (self.style orelse .control) {
+            .content => dvui.themeGet().text,
+            .window => dvui.themeGet().text,
+            .control => dvui.themeGet().control.text_hover orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
+            .accent => dvui.themeGet().accent.text_hover orelse dvui.themeGet().accent.text orelse dvui.themeGet().control.text_hover orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
+            .err => dvui.themeGet().err.text_hover orelse dvui.themeGet().err.text orelse dvui.themeGet().control.text_hover orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
+        },
+        .text_press => self.color_text orelse switch (self.style orelse .control) {
+            .content => dvui.themeGet().text,
+            .window => dvui.themeGet().text,
+            .control => dvui.themeGet().control.text_press orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
+            .accent => dvui.themeGet().accent.text_press orelse dvui.themeGet().accent.text orelse dvui.themeGet().control.text_press orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
+            .err => dvui.themeGet().err.text_press orelse dvui.themeGet().err.text orelse dvui.themeGet().control.text_press orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
+        },
+        .fill_hover => {
+            const base_fill = if (self.color_fill) |cf| {
+                break :blk cf;
+            } else switch (self.style orelse @as(Style, .control)) {
+                .content => dvui.themeGet().fill,
+                .window => dvui.themeGet().fill_window,
+                .control => if (dvui.themeGet().control.fill_hover) |fh| {
+                    break :blk fh;
+                } else dvui.themeGet().control.fill orelse dvui.themeGet().fill,
+                .accent => if (dvui.themeGet().accent.fill_hover orelse dvui.themeGet().control.fill_hover) |fh| {
+                    break :blk fh;
+                } else dvui.themeGet().accent.fill orelse dvui.themeGet().control.fill orelse dvui.themeGet().fill,
+                .err => if (dvui.themeGet().err.fill_hover orelse dvui.themeGet().control.fill_hover) |fh| {
+                    break :blk fh;
+                } else dvui.themeGet().err.fill orelse dvui.themeGet().control.fill orelse dvui.themeGet().fill,
+            };
+
+            break :blk base_fill.lighten(if (dvui.themeGet().dark) 8 else -8);
+        },
+        .fill_press => {
+            const base_fill = if (self.color_fill) |cf| {
+                break :blk cf;
+            } else switch (self.style orelse .control) {
+                .content => dvui.themeGet().fill,
+                .window => dvui.themeGet().fill_window,
+                .control => if (dvui.themeGet().control.fill_press) |fp| {
+                    break :blk fp;
+                } else dvui.themeGet().control.fill orelse dvui.themeGet().fill,
+                .accent => if (dvui.themeGet().accent.fill_press orelse dvui.themeGet().control.fill_press) |fp| {
+                    break :blk fp;
+                } else dvui.themeGet().accent.fill orelse dvui.themeGet().control.fill orelse dvui.themeGet().fill,
+                .err => if (dvui.themeGet().err.fill_press orelse dvui.themeGet().control.fill_press) |fp| {
+                    break :blk fp;
+                } else dvui.themeGet().err.fill orelse dvui.themeGet().control.fill orelse dvui.themeGet().fill,
+            };
+
+            break :blk base_fill.lighten(if (dvui.themeGet().dark) 16 else -16);
+        },
     };
 
-    return color_or_name.resolve();
+    return col.opacity(dvui.themeGet().alpha);
 }
 
 pub fn fontGet(self: *const Options) Font {
@@ -384,12 +389,10 @@ pub fn strip(self: *const Options) Options {
         .box_shadow = null,
 
         // keep the rest
+        .style = self.style,
         .color_accent = self.color_accent,
         .color_text = self.color_text,
-        .color_text_press = self.color_text_press,
         .color_fill = self.color_fill,
-        .color_fill_hover = self.color_fill_hover,
-        .color_fill_press = self.color_fill_press,
         .color_border = self.color_border,
 
         .font = self.font,
@@ -444,12 +447,10 @@ pub fn hash(self: *const Options) u64 {
     hasher.update(asBytes(&self.rotationGet()));
     hasher.update(asBytes(&self.background));
 
+    hasher.update(asBytes(&self.style));
     hasher.update(asBytes(&self.color_accent));
     hasher.update(asBytes(&self.color_text));
-    hasher.update(asBytes(&self.color_text_press));
     hasher.update(asBytes(&self.color_fill));
-    hasher.update(asBytes(&self.color_fill_hover));
-    hasher.update(asBytes(&self.color_fill_press));
     hasher.update(asBytes(&self.color_border));
 
     hasher.update(asBytes(&self.font_style));

@@ -198,7 +198,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
             la2.spacer(@src(), 0);
 
             const normalOptions: dvui.Options = .{ .margin = dvui.TextEntryWidget.defaults.marginGet().plus(.all(1)) };
-            const errOptions: dvui.Options = .{ .color_border = .err, .border = dvui.Rect.all(2) };
+            const errOptions: dvui.Options = .{ .color_border = dvui.themeGet().err.fill orelse .red, .border = dvui.Rect.all(2) };
 
             const name_error = dvui.dataGetPtrDefault(null, hbox2.data().id, "_name_error", bool, false);
             var te_name = dvui.textEntry(@src(), .{}, if (name_error.*) errOptions else normalOptions);
