@@ -1585,7 +1585,7 @@ pub const Path = struct {
         // owned by and will be freed by the Path.Builder
         try std.testing.expectEqual(4, path.points.len);
 
-        var triangles = try path.fillConvexTriangles(std.testing.allocator, .{});
+        var triangles = try path.fillConvexTriangles(std.testing.allocator, .{ .color = Color.white });
         defer triangles.deinit(std.testing.allocator);
         try std.testing.expectApproxEqRel(10, triangles.bounds.x, 0.05);
         try std.testing.expectApproxEqRel(20, triangles.bounds.y, 0.05);

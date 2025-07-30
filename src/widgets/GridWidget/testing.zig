@@ -412,7 +412,7 @@ test "heading only" {
             var grid = dvui.grid(@src(), .numCols(10), .{}, .{});
             defer grid.deinit();
             for (0..10) |col| {
-                var cell = grid.headerCell(@src(), col, .{ .color_fill = .fill_control, .background = true, .border = dvui.Rect.all(1) });
+                var cell = grid.headerCell(@src(), col, .{ .background = true, .border = dvui.Rect.all(1) });
                 defer cell.deinit();
                 dvui.label(@src(), "Col {}", .{col}, .{});
             }
