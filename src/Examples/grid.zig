@@ -139,7 +139,7 @@ pub fn gridStyling() void {
                 .padding = Rect.all(local.padding),
                 .background = row_background,
                 // Only set the alternate fill colour if actually banding.
-                .color_fill = if (local.banding != .none) (dvui.Options{}).color(.fill_press) else null,
+                .color_fill = if (local.banding != .none) dvui.themeGet().color(.control, .fill_press) else null,
             },
         };
 
@@ -332,7 +332,7 @@ pub fn gridLayouts() void {
             .padding = TextLayoutWidget.defaults.padding,
         },
         .alt_cell_opts = .{
-            .color_fill = (dvui.Options{}).color(.fill_press),
+            .color_fill = dvui.themeGet().color(.control, .fill_press),
             .background = true,
         },
     };
@@ -566,7 +566,7 @@ pub fn gridVirtualScrolling() void {
     var highlight_hovered: CellStyle.HoveredRow = .{
         .cell_opts = .{
             .background = true,
-            .color_fill_hover = (dvui.Options{}).color(.fill_hover),
+            .color_fill_hover = dvui.themeGet().color(.control, .fill_hover),
             .size = .{ .w = col_width },
         },
     };

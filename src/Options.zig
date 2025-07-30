@@ -184,27 +184,6 @@ pub const ColorAsk = enum {
     border,
 };
 
-fn colorGet(self: *const Options, style: Theme.Style, ask: ColorAsk) Color {
-    const cs: Theme.ColorStyle = switch (style) {
-        .control => dvui.themeGet().control,
-        .content => dvui.themeGet().content,
-        .window => dvui.themeGet().window,
-        .accent => dvui.themeGet().accent,
-        .err => dvui.themeGet().err,
-    };
-
-    return switch (ask) {
-        .accent => cs.accent orelse if (style != .control) self.colorGet(cs.fallback, ask) else Color.navy,
-        .border => cs.border orelse if (style != .control) self.colorGet(cs.fallback, ask) else Color.gray,
-        .fill => cs.fill orelse if (style != .control) self.colorGet(cs.fallback, ask) else if (dvui.themeGet().dark) Color.black else Color.white,
-        .fill_hover => cs.fill_hover orelse self.colorGet(style, .fill).lighten(if (dvui.themeGet().dark) 8 else -8),
-        .fill_press => cs.fill_press orelse self.colorGet(style, .fill).lighten(if (dvui.themeGet().dark) 16 else -16),
-        .text => cs.text orelse if (style != .control) self.colorGet(cs.fallback, ask) else if (dvui.themeGet().dark) Color.white else Color.black,
-        .text_hover => cs.text_hover orelse self.colorGet(style, .text),
-        .text_press => cs.text_press orelse self.colorGet(style, .text),
-    };
-}
-
 /// Get a color from this Options or fallback to theme colors.
 pub fn color(self: *const Options, ask: ColorAsk) Color {
     const col = switch (ask) {
@@ -216,7 +195,7 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
         .text => self.color_text,
         .text_hover => self.color_text,
         .text_press => self.color_text,
-    } orelse self.colorGet(self.style orelse .control, ask);
+    } orelse dvui.themeGet().color(self.style orelse .control, ask);
 
     return col.opacity(dvui.themeGet().alpha);
 }

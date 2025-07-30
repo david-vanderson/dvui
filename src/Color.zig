@@ -3,7 +3,6 @@ const hsluv = @import("hsluv.zig");
 
 const Color = @This();
 const dvui = @import("dvui.zig");
-const ColorsFromTheme = dvui.Options.ColorsFromTheme;
 
 const tvg = @import("svg2tvg");
 
