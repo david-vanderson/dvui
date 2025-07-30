@@ -261,7 +261,6 @@ var name_buf: [50]u8 = undefined;
 // NO that doesn't work it needs the struct options in case it is creating a struct. So we need the struct options and the individual field option.
 
 pub fn defaultValue(T: type, field_option: dvui.se.FieldOptions, struct_options: anytype) ?T { // TODO: Field is not anytype
-    // TODO: Thius needs to be better.
     if (T == []u8 or T == []const u8) {
         if (field_option.text.buffer) |buf| {
             return buf;
@@ -274,7 +273,6 @@ pub fn defaultValue(T: type, field_option: dvui.se.FieldOptions, struct_options:
         inline .@"struct" => |si| {
             comptime var default_found = false;
             inline for (struct_options) |opt| {
-                //          @compileLog(T, @TypeOf(opt).StructT);
                 if (@TypeOf(opt).StructT == T) { //} and opt.default_value != null) {
                     default_found = true;
                     return opt.default_value;
@@ -331,7 +329,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
         //    }
         //    inline for (std.meta.fields(@TypeOf(container.*)), 0..) |field, i| {
         //        comptime if (std.mem.eql(u8, field.name, "max_size_content")) continue; // TODO: Needs to 1) Have exclusions and 2) Be able to specify defaults.
-        //        comptime if (std.mem.eql(u8, field.name, "font")) continue;
+        comptime if (std.mem.eql(u8, @tagName(key), "font")) {};
 
         //@compileLog(field.name, field.type);
         var box = dvui.box(src, .vertical, .{ .id_extra = i });
