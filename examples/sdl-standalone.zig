@@ -244,7 +244,9 @@ fn gui_frame() void {
         //  const font_opts: dvui.se.StructOptions(dvui.Font) = .initDefaults(null);
         var options_options: dvui.se.StructOptions(dvui.Options) = .initDefaults(.{});
         options_options.options.put(.name, .{ .text = .{ .buffer = &name_buf } });
-        wholeStruct(@src(), "dvui.Options", &dvui_opts, 1, .{ options_options, max_size_opts, font_opts });
+
+        const color_options: dvui.se.StructOptions(dvui.Color) = .initDefaults(.{});
+        wholeStruct(@src(), "dvui.Options", &dvui_opts, 1, .{ options_options, max_size_opts, font_opts, color_options });
         //wholeStruct(@src(), "opts", &opts, 1);
         //        wholeStruct(@src(), "test_struct", &testStruct, 1);
     }
@@ -253,16 +255,25 @@ fn gui_frame() void {
 var name_buf: [50]u8 = undefined;
 
 // Note there is also StructField.default value. But .{} should be fine?
-pub fn defaultValue(T: type, options: anytype) ?T {
-    //@compileLog("DEFAULT VALUE");
-    //@compileLog("Default Value", T, options);
+// OK Options should already be the options for this struct by this point. So we just lookup the name of the field in the options if we need to
+// and return a default value if required.
+
+// NO that doesn't work it needs the struct options in case it is creating a struct. So we need the struct options and the individual field option.
+
+pub fn defaultValue(T: type, field_option: dvui.se.FieldOptions, struct_options: anytype) ?T { // TODO: Field is not anytype
+    // TODO: Thius needs to be better.
+    if (T == []u8 or T == []const u8) {
+        if (field_option.text.buffer) |buf| {
+            return buf;
+        }
+    }
     switch (@typeInfo(T)) {
         inline .bool => return false,
         inline .int => return 0,
         inline .float => return 0.0,
         inline .@"struct" => |si| {
             comptime var default_found = false;
-            inline for (options) |opt| {
+            inline for (struct_options) |opt| {
                 //          @compileLog(T, @TypeOf(opt).StructT);
                 if (@TypeOf(opt).StructT == T) { //} and opt.default_value != null) {
                     default_found = true;
@@ -270,7 +281,6 @@ pub fn defaultValue(T: type, options: anytype) ?T {
                 }
             }
             if (!default_found) {
-                //          @compileLog("NO MATCH FOR ", T);
                 // TODO: This will just return null now and do a runtime debug message.
                 inline for (si.fields) |field| {
                     if (field.defaultValue() == null) {
@@ -339,7 +349,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                 if (dvui.se.optionalFieldWidget2(@src(), @tagName(key), &@field(container, @tagName(key)), .{}, &al)) |hbox| {
                     defer hbox.deinit();
                     if (@field(container, @tagName(key)) == null) {
-                        @field(container, @tagName(key)) = defaultValue(opt.child, options); // If there is no default value, it will remain null.
+                        @field(container, @tagName(key)) = defaultValue(opt.child, field_option, options); // If there is no default value, it will remain null.
                     }
                     if (@field(container, @tagName(key)) != null) {
                         switch (@typeInfo(opt.child)) {

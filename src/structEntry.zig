@@ -582,7 +582,7 @@ pub fn optionalFieldWidget2(
     comptime opts: OptionalFieldOptions,
     alignment: *dvui.Alignment,
 ) ?*dvui.BoxWidget {
-    _ = alignment;
+    //_ = alignment;
     const box = dvui.box(src, .vertical, .{});
 
     var checkbox_state: bool = field_ptr.* != null;
@@ -596,6 +596,9 @@ pub fn optionalFieldWidget2(
     if (checkbox_state) {
         var hbox = dvui.box(@src(), .horizontal, .{ .expand = .both });
         defer hbox.deinit();
+        // not working
+        // alignment.record(box.data().id, hbox.data());
+
         var line = dvui.box(@src(), .vertical, .{
             .border = border,
             .expand = .vertical,
