@@ -66,7 +66,7 @@ pub const ColorStyle = struct {
     text_press: ?Color = null,
     border: ?Color = null,
     accent: ?Color = null,
-    fallback: Style = .control,
+    fallback: Style = .content,
 };
 
 pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
@@ -106,8 +106,8 @@ pub fn color(self: *const Theme, style: Style, ask: Options.ColorAsk) Color {
         .accent => cs.accent orelse if (style != cs.fallback) self.color(cs.fallback, ask) else Color.navy,
         .border => cs.border orelse if (style != cs.fallback) self.color(cs.fallback, ask) else Color.gray,
         .fill => cs.fill orelse if (style != cs.fallback) self.color(cs.fallback, ask) else if (self.dark) Color.black else Color.white,
-        .fill_hover => cs.fill_hover orelse self.color(style, .fill).lighten(if (self.dark) 8 else -8),
-        .fill_press => cs.fill_press orelse self.color(style, .fill).lighten(if (self.dark) 16 else -16),
+        .fill_hover => cs.fill_hover orelse self.color(style, .fill).lighten(if (self.dark) 10 else -10),
+        .fill_press => cs.fill_press orelse self.color(style, .fill).lighten(if (self.dark) 20 else -20),
         .text => cs.text orelse if (style != cs.fallback) self.color(cs.fallback, ask) else if (self.dark) Color.white else Color.black,
         .text_hover => cs.text_hover orelse self.color(style, .text),
         .text_press => cs.text_press orelse self.color(style, .text),

@@ -22,6 +22,7 @@ pub var defaults: Options = .{
     .padding = Rect.all(6),
     .background = true,
     .name = "Dropdown",
+    .style = .control,
 };
 
 pub const InitOptions = struct {

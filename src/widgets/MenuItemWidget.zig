@@ -15,6 +15,7 @@ pub var defaults: Options = .{
     .name = "MenuItem",
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
+    .style = .control,
 };
 
 pub const InitOptions = struct {

@@ -5620,6 +5620,7 @@ pub var slider_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 20, .h = 20 },
     .name = "Slider",
+    .style = .control,
 };
 
 // returns true if fraction (0-1) was changed
@@ -5782,6 +5783,7 @@ pub var slider_entry_defaults: Options = .{
     .background = true,
     // min size calculated from font
     .name = "SliderEntry",
+    .style = .control,
 };
 
 pub const SliderEntryInitOptions = struct {
@@ -6169,6 +6171,7 @@ pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, 
 pub var progress_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 10, .h = 10 },
+    .style = .control,
 };
 
 pub const Progress_InitOptions = struct {
