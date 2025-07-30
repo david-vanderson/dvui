@@ -5017,7 +5017,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
     const defaults: Options = .{
         .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
-        .color_fill = (dvui.Options{}).color(.border),
+        .color_fill = dvui.themeGet().color(.control, .border),
         .min_size_content = .{ .w = 1, .h = 1 },
     };
 

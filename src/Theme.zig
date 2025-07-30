@@ -91,6 +91,29 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
     return ret;
 }
 
+/// Get the resolved color for a style. May resolve to a fallback color from
+/// another style
+pub fn color(self: *const Theme, style: Style, ask: Options.ColorAsk) Color {
+    const cs: ColorStyle = switch (style) {
+        .control => self.control,
+        .content => self.content,
+        .window => self.window,
+        .accent => self.accent,
+        .err => self.err,
+    };
+
+    return switch (ask) {
+        .accent => cs.accent orelse if (style != cs.fallback) self.color(cs.fallback, ask) else Color.navy,
+        .border => cs.border orelse if (style != cs.fallback) self.color(cs.fallback, ask) else Color.gray,
+        .fill => cs.fill orelse if (style != cs.fallback) self.color(cs.fallback, ask) else if (self.dark) Color.black else Color.white,
+        .fill_hover => cs.fill_hover orelse self.color(style, .fill).lighten(if (self.dark) 8 else -8),
+        .fill_press => cs.fill_press orelse self.color(style, .fill).lighten(if (self.dark) 16 else -16),
+        .text => cs.text orelse if (style != cs.fallback) self.color(cs.fallback, ask) else if (self.dark) Color.white else Color.black,
+        .text_hover => cs.text_hover orelse self.color(style, .text),
+        .text_press => cs.text_press orelse self.color(style, .text),
+    };
+}
+
 /// To pick between the built in themes, pass `&Theme.builtins` as the `themes` argument
 ///
 /// Sets the theme on the current `dvui.Window` upon selection

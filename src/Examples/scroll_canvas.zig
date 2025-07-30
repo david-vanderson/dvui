@@ -53,12 +53,12 @@ pub fn scrollCanvas() void {
     dvui.Path.stroke(.{ .points = &.{
         dataRectScale.pointToPhysical(.{ .x = -10 }),
         dataRectScale.pointToPhysical(.{ .x = 10 }),
-    } }, .{ .thickness = 1, .color = (dvui.Options{}).color(.text) });
+    } }, .{ .thickness = 1, .color = dvui.themeGet().color(.control, .text) });
 
     dvui.Path.stroke(.{ .points = &.{
         dataRectScale.pointToPhysical(.{ .y = -10 }),
         dataRectScale.pointToPhysical(.{ .y = 10 }),
-    } }, .{ .thickness = 1, .color = (dvui.Options{}).color(.text) });
+    } }, .{ .thickness = 1, .color = dvui.themeGet().color(.control, .text) });
 
     // keep record of bounding box
     var mbbox: ?Rect.Physical = null;
@@ -390,7 +390,7 @@ test "DOCIMG scrollCanvas" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             scrollCanvas();
             return .ok;
