@@ -6362,7 +6362,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     var options = opts;
     if (active) {
         options.style = .accent;
-        r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(.fill), .fade = 1.0 });
+        r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
     } else {
         r.insetAll(rs.s).fill(cornerRad, .{ .color = opts.color(fill), .fade = 1.0 });
     }
