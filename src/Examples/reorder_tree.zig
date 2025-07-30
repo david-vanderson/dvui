@@ -677,7 +677,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
                     .file => {
                         const icon = dvui.entypo.text_document;
                         const icon_color = color;
-                        const text_color = dvui.themeGet().color_text;
+                        const text_color = (dvui.Options{}).color(.text);
 
                         _ = dvui.icon(
                             @src(),
@@ -694,7 +694,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
                             "{s}",
                             .{entry.name},
                             .{
-                                .color_text = .{ .color = text_color },
+                                .color_text = text_color,
                                 .padding = padding,
                             },
                         );
@@ -720,7 +720,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
                             },
                         );
                         dvui.label(@src(), "{s}", .{folder_name}, .{
-                            .color_text = .{ .color = dvui.themeGet().color_text },
+                            .color_text = (dvui.Options{}).color(.text),
                             .padding = padding,
                         });
                         _ = dvui.icon(
@@ -737,7 +737,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
 
                         var expander_opts_override = dvui.Options{
                             .margin = .{ .x = 14 },
-                            .color_border = .{ .color = color },
+                            .color_border = color,
                             .expand = .horizontal,
                         };
 
@@ -785,7 +785,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
 
     const folder_name = std.fs.path.basename(root_directory);
     dvui.label(@src(), "{s}", .{folder_name}, .{
-        .color_text = .{ .color = dvui.themeGet().color_text },
+        .color_text = (dvui.Options{}).color(.text),
         .padding = dvui.Rect.all(10),
     });
     dvui.icon(
@@ -801,14 +801,14 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
     );
 
     if (root_branch.expander(@src(), .{ .indent = 14.0 }, .{
-        .color_fill = .fill_window,
-        .color_border = .{ .color = tree_palette[0] },
+        .color_fill = (dvui.Options{ .style = .window }).color(.fill),
+        .color_border = tree_palette[0],
         .expand = .horizontal,
         .corner_radius = root_branch.button.wd.options.corner_radius,
         .background = true,
         .border = .{ .x = 1 },
         .box_shadow = .{
-            .color = .{ .color = .black },
+            .color = .black,
             .offset = .{ .x = -5, .y = 5 },
             .shrink = 5,
             .fade = 10,

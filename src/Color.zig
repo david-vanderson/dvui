@@ -571,24 +571,6 @@ test tryFromHex {
     try std.testing.expectEqual(FromHexError.InvalidHexStringLength, Color.tryFromHex("#12"));
 }
 
-/// Get a Color from the active Theme
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn fromTheme(theme_color: ColorsFromTheme) @This() {
-    return switch (theme_color) {
-        .accent => dvui.themeGet().color_accent,
-        .text => dvui.themeGet().color_text,
-        .text_press => dvui.themeGet().color_text_press,
-        .fill => dvui.themeGet().color_fill,
-        .fill_hover => dvui.themeGet().color_fill_hover,
-        .fill_press => dvui.themeGet().color_fill_press,
-        .border => dvui.themeGet().color_border,
-        .err => dvui.themeGet().color_err,
-        .fill_window => dvui.themeGet().color_fill_window,
-        .fill_control => dvui.themeGet().color_fill_control,
-    };
-}
-
 test {
     @import("std").testing.refAllDecls(@This());
 }
