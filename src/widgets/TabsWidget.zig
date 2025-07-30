@@ -83,7 +83,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
     self.tab_index += 1;
 
     if (selected) {
-        tab_defaults.color_fill = dvui.themeGet().fill_window;
+        tab_defaults.style = .window;
         tab_defaults.font_style = .heading;
         tab_defaults.border = switch (self.init_options.dir) {
             .horizontal => .{ .x = 1, .y = 1, .w = 1 },

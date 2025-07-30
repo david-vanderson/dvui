@@ -60,7 +60,7 @@ pub fn layoutText() void {
         const start = "\nNotice that the text in this box is wrapping around the stuff in the corners.\n\n";
         tl.addText(start, .{ .font_style = .title_4 });
 
-        const col = dvui.Color.average(dvui.themeGet().text, dvui.themeGet().fill);
+        const col = dvui.Color.average(tl.data().options.color(.text), tl.data().options.color(.fill));
         tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = col, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
 
         tl.format("This line uses zig format strings: {d}\n\n", .{12345}, .{});

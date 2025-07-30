@@ -734,7 +734,7 @@ pub const HeaderResizeWidget = struct {
     offset: Point = .{},
 
     pub fn init(src: std.builtin.SourceLocation, dir: Direction, init_options: InitOptions, opts: Options) HeaderResizeWidget {
-        var widget_opts = HeaderResizeWidget.defaults.override(.{ .color_fill = dvui.themeGet().border }).override(opts);
+        var widget_opts = HeaderResizeWidget.defaults.override(.{ .color_fill = (dvui.Options{}).color(.border) }).override(opts);
         widget_opts.expand = switch (dir) {
             .horizontal => .horizontal,
             .vertical => .vertical,

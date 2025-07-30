@@ -1598,10 +1598,11 @@ pub const Path = struct {
     }
 
     pub const FillConvexOptions = struct {
+        color: Color,
+
         /// Size (physical pixels) of fade to transparent centered on the edge.
         /// If >1, then starts a half-pixel inside and the rest outside.
         fade: f32 = 0.0,
-        color: ?Color = null,
         center: ?Point.Physical = null,
     };
 
@@ -1617,11 +1618,6 @@ pub const Path = struct {
             return;
         }
 
-        var options = opts;
-        if (options.color == null) {
-            options.color = dvui.themeGet().fill;
-        }
-
         const cw = currentWindow();
 
         if (!cw.render_target.rendering) {
@@ -1629,7 +1625,7 @@ pub const Path = struct {
                 logError(@src(), err, "Could not reallocate path for render command", .{});
                 return;
             };
-            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = new_path, .opts = options } } };
+            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = new_path, .opts = opts } } };
 
             var sw = cw.subwindowCurrent();
             sw.render_cmds.append(cw.arena(), cmd) catch |err| {
@@ -1638,7 +1634,7 @@ pub const Path = struct {
             return;
         }
 
-        var triangles = path.fillConvexTriangles(cw.lifo(), options) catch |err| {
+        var triangles = path.fillConvexTriangles(cw.lifo(), opts) catch |err| {
             logError(@src(), err, "Could get triangles for path", .{});
             return;
         };
@@ -1672,7 +1668,7 @@ pub const Path = struct {
         var builder = try Triangles.Builder.init(allocator, vtx_count, idx_count);
         errdefer comptime unreachable; // No errors from this point on
 
-        const col: Color.PMA = if (opts.color) |color| .fromColor(color) else .cast(.white);
+        const col: Color.PMA = .fromColor(opts.color);
 
         var i: usize = 0;
         while (i < path.points.len) : (i += 1) {
@@ -5021,7 +5017,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
     const defaults: Options = .{
         .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
-        .color_fill = dvui.themeGet().border,
+        .color_fill = (dvui.Options{}).color(.border),
         .min_size_content = .{ .w = 1, .h = 1 },
     };
 
@@ -6332,7 +6328,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     const rs = s.borderRectScale();
 
     if (bw.data().visible()) {
-        radioCircle(active, bw.focused(), rs, bw.pressed(), bw.hovered(), options);
+        radioCircle(active or bw.clicked(), bw.focused(), rs, bw.pressed(), bw.hovered(), options);
     }
 
     if (label_str) |str| {
@@ -6744,6 +6740,7 @@ pub const renderTextOptions = struct {
     background_color: ?Color = null,
     sel_start: ?usize = null,
     sel_end: ?usize = null,
+    sel_color: ?Color = null,
     debug: bool = false,
 };
 
@@ -6895,7 +6892,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
 
             v.pos.x = leftx;
             v.pos.y = y + gi.topBearing * target_fraction;
-            v.col = .fromColor(if (sel_in) themeGet().fill else opts.color);
+            v.col = .fromColor(opts.color);
             v.uv = gi.uv;
             builder.appendVertex(v);
 
@@ -6945,7 +6942,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
                 .x = sel_end_x,
                 .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
             })
-            .fill(.{}, .{ .color = themeGet().focus, .fade = 0 });
+            .fill(.{}, .{ .color = opts.sel_color orelse themeGet().focus, .fade = 0 });
     }
 
     try renderTriangles(builder.build_unowned(), texture_atlas);

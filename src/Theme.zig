@@ -7,6 +7,15 @@ const Options = dvui.Options;
 
 const Theme = @This();
 
+/// enum used in Options to pick a ColorStyle from Theme
+pub const Style = enum {
+    content,
+    window,
+    control,
+    accent,
+    err,
+};
+
 name: []const u8,
 
 /// widgets can use this if they need to adjust colors
@@ -18,25 +27,19 @@ alpha: f32 = 1.0,
 /// used for focus highlighting
 focus: Color,
 
-/// background color for content displaying lots of text
-fill: Color,
-
-/// background color for containers that have other widgets inside
-fill_window: Color,
-
-/// text/foreground color for normal content
-text: Color,
-
-/// border color
-border: Color,
-
-/// colors for normal controls like buttons, falls back to theme basics
+/// colors for normal controls like buttons, this is the default style
 control: ColorStyle,
 
-/// colors for highlighting menu/dropdown items, falls back to control
+/// colors for content spaces like textLayout
+content: ColorStyle,
+
+/// colors for windows/boxes that contain controls
+window: ColorStyle,
+
+/// colors for highlighting menu/dropdown items
 accent: ColorStyle,
 
-/// colors for buttons to perform dangerous actions, falls back to control
+/// colors for buttons to perform dangerous actions
 err: ColorStyle,
 
 font_body: Font,
@@ -62,6 +65,8 @@ pub const ColorStyle = struct {
     text_hover: ?Color = null,
     text_press: ?Color = null,
     border: ?Color = null,
+    accent: ?Color = null,
+    fallback: Style = .control,
 };
 
 pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
