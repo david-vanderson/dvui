@@ -19,6 +19,7 @@ pub var defaults: Options = .{
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
     .background = true,
+    .style = .control,
 };
 
 pub const InitOptions = struct {

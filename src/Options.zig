@@ -195,7 +195,7 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
         .text => self.color_text,
         .text_hover => self.color_text,
         .text_press => self.color_text,
-    } orelse dvui.themeGet().color(self.style orelse .control, ask);
+    } orelse dvui.themeGet().color(self.style orelse .content, ask);
 
     return col.opacity(dvui.themeGet().alpha);
 }

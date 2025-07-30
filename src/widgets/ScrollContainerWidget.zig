@@ -31,7 +31,6 @@ pub var defaults: Options = .{
     // overrides these
     .background = true,
     .min_size_content = .{ .w = 5, .h = 5 },
-    .style = .window,
 };
 
 pub const InitOptions = struct {
