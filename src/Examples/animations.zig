@@ -173,7 +173,7 @@ pub fn animations() void {
 
     if (dvui.expander(@src(), "Spinner", .{}, .{ .expand = .horizontal })) {
         dvui.labelNoFmt(@src(), "Spinner maxes out frame rate", .{}, .{});
-        dvui.spinner(@src(), .{ .color_text = .{ .color = .{ .r = 100, .g = 200, .b = 100 } } });
+        dvui.spinner(@src(), .{ .color_text = .{ .r = 100, .g = 200, .b = 100 } });
     }
 
     if (dvui.expander(@src(), "Clock", .{}, .{ .expand = .horizontal })) {

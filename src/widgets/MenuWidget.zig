@@ -54,7 +54,7 @@ fn menuSet(m: ?*MenuWidget) ?*MenuWidget {
 
 pub var defaults: Options = .{
     .name = "Menu",
-    .color_fill = .{ .name = .fill_window },
+    .style = .window,
 };
 
 pub const InitOptions = struct {

@@ -26,6 +26,7 @@ pub var defaults: Options = .{
     .name = "TextLayout",
     .padding = Rect.all(6),
     .background = true,
+    .style = .content,
 };
 
 pub const InitOptions = struct {
@@ -268,6 +269,8 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
         }
     }
 
+    const control_opts: Options = .{};
+
     const rs = self.data().contentRectScale();
 
     self.data().borderAndBackground(.{});
@@ -346,7 +349,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 path.addPoint(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
                 path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control });
+                path.build().fillConvex(.{ .color = control_opts.color(.fill) });
                 path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.data().options.color(.border), .closed = true });
             }
 
@@ -416,7 +419,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 path.addPoint(.{ .x = fcrs.r.x, .y = fcrs.r.y });
                 path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control });
+                path.build().fillConvex(.{ .color = control_opts.color(.fill) });
                 path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.data().options.color(.border), .closed = true });
             }
 
@@ -1211,7 +1214,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 .rs = rs,
                 .color = options.color(.text),
                 // TODO: Should this take `options.background` into account?
-                .background_color = if (options.color_fill) |fill| fill.resolve() else null,
+                .background_color = options.color_fill,
                 .sel_start = self.selection.start -| self.bytes_seen,
                 .sel_end = self.selection.end -| self.bytes_seen,
             }) catch |err| {

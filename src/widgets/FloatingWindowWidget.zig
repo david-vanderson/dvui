@@ -19,7 +19,7 @@ pub var defaults: Options = .{
     .margin = Rect.all(2),
     .border = Rect.all(1),
     .background = true,
-    .color_fill = .{ .name = .fill_window },
+    .style = .window,
 };
 
 pub const InitOptions = struct {

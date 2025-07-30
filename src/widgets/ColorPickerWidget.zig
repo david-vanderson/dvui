@@ -162,7 +162,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
         .background = true,
         .border = .all(1),
         .corner_radius = .all(100),
-        .color_fill = .fromColor(hsv.toColor()),
+        .color_fill = hsv.toColor(),
     });
     indicator.install();
     indicator.drawBackground();
@@ -306,7 +306,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
         .background = true,
         .border = .all(1),
         .corner_radius = .all(100),
-        .color_fill = .fromColor((Color.HSV{ .h = hue.* }).toColor()),
+        .color_fill = (Color.HSV{ .h = hue.* }).toColor(),
     });
     knob.install();
     knob.drawBackground();

@@ -78,7 +78,7 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
                 .{},
                 .{
                     .min_size_content = .{ .h = settings.icon_size },
-                    .color_text = .{ .color = settings.icon_rgb },
+                    .color_text = settings.icon_rgb,
                 },
             )) {
                 dvui.clipboardTextSet(text);

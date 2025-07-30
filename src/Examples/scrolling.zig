@@ -96,7 +96,7 @@ pub fn scrolling() void {
 
             for (Data.msg_start..Data.msg_end + 1) |i| {
                 {
-                    var tl = dvui.textLayout(@src(), .{}, .{ .id_extra = i, .color_fill = .fill_window });
+                    var tl = dvui.textLayout(@src(), .{}, .{ .id_extra = i, .style = .window });
                     defer tl.deinit();
 
                     tl.format("Message {d}", .{i}, .{});
@@ -106,7 +106,7 @@ pub fn scrolling() void {
                     }
                 }
 
-                var tl2 = dvui.textLayout(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0, .color_fill = .fill_window });
+                var tl2 = dvui.textLayout(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0, .style = .window });
                 tl2.format("Reply {d}", .{i}, .{});
                 tl2.deinit();
             }
@@ -229,7 +229,7 @@ test "DOCIMG scrolling" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             scrolling();
             return .ok;

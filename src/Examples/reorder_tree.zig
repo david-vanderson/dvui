@@ -98,7 +98,7 @@ pub fn reorderListsSimple(lay: reorderLayout) void {
         }
 
         // actual content of the list entry
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .fill_window });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .style = .window });
         defer hbox.deinit();
 
         dvui.label(@src(), "{s}", .{s}, .{});
@@ -162,7 +162,7 @@ pub fn reorderListsAdvanced() void {
     if (g.strings_len == g.strings.len) {
         dvui.label(@src(), "List Full", .{}, .{ .gravity_x = 1.0 });
     } else {
-        var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0, .border = dvui.Rect.all(1), .margin = dvui.Rect.all(4), .background = true, .color_fill = .fill_window });
+        var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0, .border = dvui.Rect.all(1), .margin = dvui.Rect.all(4), .background = true, .style = .window });
         defer hbox2.deinit();
 
         dvui.label(@src(), "Drag to add : {d}", .{g.strings_len}, .{});
@@ -229,7 +229,7 @@ pub fn reorderListsAdvanced() void {
         }
 
         // actual content of the list entry
-        var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .fill_window });
+        var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .style = .window });
         defer hbox2.deinit();
 
         dvui.label(@src(), "{s}", .{s}, .{});
@@ -280,7 +280,7 @@ pub fn reorderTree() void {
             .border = .{ .x = 1 },
             .corner_radius = dvui.Rect.all(4),
             .box_shadow = .{
-                .color = .{ .color = .black },
+                .color = .black,
                 .offset = .{ .x = -5, .y = 5 },
                 .shrink = 5,
                 .fade = 10,
@@ -517,7 +517,7 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
 
             var expander_opts_override = dvui.Options{
                 .margin = .{ .x = 14 },
-                .color_border = .{ .color = color },
+                .color_border = color,
                 .background = if (expander_options.border != null) true else false,
                 .expand = .horizontal,
             };

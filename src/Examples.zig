@@ -134,7 +134,7 @@ pub fn demo() void {
 
         inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
-            var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = .size(dvui.Size.all(120)), .margin = Rect.all(5), .color_fill = .fill, .tag = "demo_button_" ++ @tagName(e) });
+            var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = .size(dvui.Size.all(120)), .margin = Rect.all(5), .color_fill = dvui.themeGet().fill, .tag = "demo_button_" ++ @tagName(e) });
             bw.install();
             bw.processEvents();
             bw.drawBackground();
@@ -149,7 +149,7 @@ pub fn demo() void {
                 defer box.deinit();
 
                 var options: dvui.Options = .{ .gravity_x = 0.5, .gravity_y = 1.0 };
-                if (dvui.captured(bw.data().id)) options = options.override(.{ .color_text = .{ .color = options.color(.text_press) } });
+                if (dvui.captured(bw.data().id)) options = options.override(.{ .color_text = options.color(.text_press) });
 
                 dvui.label(@src(), "{s}", .{e.name()}, options);
 

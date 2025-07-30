@@ -17,7 +17,6 @@ drop_height: f32 = 0,
 drop_adjust: f32 = 0,
 
 pub var defaults: Options = .{
-    .color_fill = .{ .name = .fill_control },
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
@@ -71,6 +70,7 @@ pub fn install(self: *DropdownWidget) void {
 
     if (self.init_options.label) |ll| {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
+        defer hbox.deinit();
 
         var lw = LabelWidget.initNoFmt(@src(), ll, .{}, self.options.strip().override(.{ .gravity_y = 0.5 }));
         lw.install();
@@ -84,8 +84,6 @@ pub fn install(self: *DropdownWidget) void {
             .{},
             self.options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }),
         );
-
-        hbox.deinit();
     }
 }
 
@@ -181,7 +179,7 @@ pub fn addChoiceLabel(self: *DropdownWidget, label_text: []const u8) bool {
 
     var opts = self.options.strip();
     if (mi.show_active) {
-        opts = opts.override(dvui.themeGet().accent());
+        opts.style = .accent;
     }
 
     dvui.labelNoFmt(@src(), label_text, .{}, opts);
