@@ -39,15 +39,22 @@ pub const light = light: {
         .font_title_4 = .{ .size = 18, .id = .VeraBd },
 
         .focus = accent_hsl.color(),
-        .fill = Color.white,
-        .fill_window = .{ .r = 0xf0, .g = 0xf0, .b = 0xf0 },
-        .text = Color.black,
-        .border = (Color.HSLuv{ .s = 0, .l = 63 }).color(),
 
         .control = .{
+            .text = Color.black,
             .fill = .{ .r = 0xe0, .g = 0xe0, .b = 0xe0 },
             .fill_hover = (Color.HSLuv{ .s = 0, .l = 82 }).color(),
             .fill_press = (Color.HSLuv{ .s = 0, .l = 72 }).color(),
+            .border = (Color.HSLuv{ .s = 0, .l = 63 }).color(),
+            .accent = (Color{ .r = 0x91, .g = 0xbc, .b = 0xf0 }).opacity(0.8),
+        },
+
+        .content = .{
+            .fill = Color.white,
+        },
+
+        .window = .{
+            .fill = .{ .r = 0xf0, .g = 0xf0, .b = 0xf0 },
         },
 
         .accent = .{
@@ -99,15 +106,22 @@ pub const dark = dark: {
         .font_title_4 = .{ .size = 18, .id = .VeraBd },
 
         .focus = accent_hsl.color(),
-        .fill = dark_fill,
-        .fill_window = .{ .r = 0x2b, .g = 0x2b, .b = 0x2b },
-        .text = Color.white,
-        .border = dark_fill_hsl.lighten(39).color(),
 
         .control = .{
+            .text = Color.white,
+            .border = dark_fill_hsl.lighten(39).color(),
             .fill = .{ .r = 0x40, .g = 0x40, .b = 0x40 },
             .fill_hover = dark_fill_hsl.lighten(21).color(),
             .fill_press = dark_fill_hsl.lighten(30).color(),
+            .accent = (Color{ .r = 0x32, .g = 0x60, .b = 0x98 }).opacity(0.8),
+        },
+
+        .content = .{
+            .fill = dark_fill,
+        },
+
+        .window = .{
+            .fill = .{ .r = 0x2b, .g = 0x2b, .b = 0x2b },
         },
 
         .accent = .{

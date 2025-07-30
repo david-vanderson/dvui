@@ -183,7 +183,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
     const b = self.options.borderGet();
     if (b.nonZero()) {
         const uniform: bool = (b.x == b.y and b.x == b.w and b.x == b.h);
-        if (!bg and uniform) {
+        if (uniform) {
             // draw border as stroked path
             const r = self.borderRect().inset(b.scale(0.5, Rect));
             const rs = self.rectScale().rectToRectScale(r.offsetNeg(self.rect));

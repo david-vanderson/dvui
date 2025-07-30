@@ -46,7 +46,7 @@ gravity_y: ?f32 = null,
 tab_index: ?u16 = null,
 
 // used to override widget and theme defaults
-style: ?Style = null,
+style: ?Theme.Style = null,
 color_accent: ?Color = null,
 color_text: ?Color = null,
 color_fill: ?Color = null,
@@ -88,15 +88,6 @@ font_style: ?FontStyle = null,
 
 /// Render a box shadow in `WidgetData.borderAndBackground`.
 box_shadow: ?BoxShadow = null,
-
-/// Controls which colors we source from `Theme`.
-pub const Style = enum {
-    content,
-    window,
-    control,
-    accent,
-    err,
-};
 
 pub const Expand = enum {
     none,
@@ -193,84 +184,39 @@ pub const ColorAsk = enum {
     border,
 };
 
+fn colorGet(self: *const Options, style: Theme.Style, ask: ColorAsk) Color {
+    const cs: Theme.ColorStyle = switch (style) {
+        .control => dvui.themeGet().control,
+        .content => dvui.themeGet().content,
+        .window => dvui.themeGet().window,
+        .accent => dvui.themeGet().accent,
+        .err => dvui.themeGet().err,
+    };
+
+    return switch (ask) {
+        .accent => cs.accent orelse if (style != .control) self.colorGet(cs.fallback, ask) else Color.navy,
+        .border => cs.border orelse if (style != .control) self.colorGet(cs.fallback, ask) else Color.gray,
+        .fill => cs.fill orelse if (style != .control) self.colorGet(cs.fallback, ask) else if (dvui.themeGet().dark) Color.black else Color.white,
+        .fill_hover => cs.fill_hover orelse self.colorGet(style, .fill).lighten(if (dvui.themeGet().dark) 8 else -8),
+        .fill_press => cs.fill_press orelse self.colorGet(style, .fill).lighten(if (dvui.themeGet().dark) 16 else -16),
+        .text => cs.text orelse if (style != .control) self.colorGet(cs.fallback, ask) else if (dvui.themeGet().dark) Color.white else Color.black,
+        .text_hover => cs.text_hover orelse self.colorGet(style, .text),
+        .text_press => cs.text_press orelse self.colorGet(style, .text),
+    };
+}
+
 /// Get a color from this Options or fallback to theme colors.
 pub fn color(self: *const Options, ask: ColorAsk) Color {
-    const col = blk: switch (ask) {
-        .accent => self.color_accent orelse dvui.themeGet().focus,
-        .border => self.color_border orelse switch (self.style orelse .control) {
-            .content => dvui.themeGet().border,
-            .window => dvui.themeGet().border,
-            .control => dvui.themeGet().control.border orelse dvui.themeGet().border,
-            .accent => dvui.themeGet().accent.border orelse dvui.themeGet().control.border orelse dvui.themeGet().border,
-            .err => dvui.themeGet().err.border orelse dvui.themeGet().control.border orelse dvui.themeGet().border,
-        },
-        .fill => self.color_fill orelse switch (self.style orelse .control) {
-            .content => dvui.themeGet().fill,
-            .window => dvui.themeGet().fill_window,
-            .control => dvui.themeGet().control.fill orelse dvui.themeGet().fill,
-            .accent => dvui.themeGet().accent.fill orelse dvui.themeGet().control.fill orelse dvui.themeGet().fill,
-            .err => dvui.themeGet().err.fill orelse dvui.themeGet().control.fill orelse dvui.themeGet().fill,
-        },
-        .text => self.color_text orelse switch (self.style orelse .control) {
-            .content => dvui.themeGet().text,
-            .window => dvui.themeGet().text,
-            .control => dvui.themeGet().control.text orelse dvui.themeGet().text,
-            .accent => dvui.themeGet().accent.text orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
-            .err => dvui.themeGet().err.text orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
-        },
-        .text_hover => self.color_text orelse switch (self.style orelse .control) {
-            .content => dvui.themeGet().text,
-            .window => dvui.themeGet().text,
-            .control => dvui.themeGet().control.text_hover orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
-            .accent => dvui.themeGet().accent.text_hover orelse dvui.themeGet().accent.text orelse dvui.themeGet().control.text_hover orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
-            .err => dvui.themeGet().err.text_hover orelse dvui.themeGet().err.text orelse dvui.themeGet().control.text_hover orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
-        },
-        .text_press => self.color_text orelse switch (self.style orelse .control) {
-            .content => dvui.themeGet().text,
-            .window => dvui.themeGet().text,
-            .control => dvui.themeGet().control.text_press orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
-            .accent => dvui.themeGet().accent.text_press orelse dvui.themeGet().accent.text orelse dvui.themeGet().control.text_press orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
-            .err => dvui.themeGet().err.text_press orelse dvui.themeGet().err.text orelse dvui.themeGet().control.text_press orelse dvui.themeGet().control.text orelse dvui.themeGet().text,
-        },
-        .fill_hover => {
-            const base_fill = if (self.color_fill) |cf| {
-                break :blk cf;
-            } else switch (self.style orelse @as(Style, .control)) {
-                .content => dvui.themeGet().fill,
-                .window => dvui.themeGet().fill_window,
-                .control => if (dvui.themeGet().control.fill_hover) |fh| {
-                    break :blk fh;
-                } else dvui.themeGet().control.fill orelse dvui.themeGet().fill,
-                .accent => if (dvui.themeGet().accent.fill_hover orelse dvui.themeGet().control.fill_hover) |fh| {
-                    break :blk fh;
-                } else dvui.themeGet().accent.fill orelse dvui.themeGet().control.fill orelse dvui.themeGet().fill,
-                .err => if (dvui.themeGet().err.fill_hover orelse dvui.themeGet().control.fill_hover) |fh| {
-                    break :blk fh;
-                } else dvui.themeGet().err.fill orelse dvui.themeGet().control.fill orelse dvui.themeGet().fill,
-            };
-
-            break :blk base_fill.lighten(if (dvui.themeGet().dark) 8 else -8);
-        },
-        .fill_press => {
-            const base_fill = if (self.color_fill) |cf| {
-                break :blk cf;
-            } else switch (self.style orelse .control) {
-                .content => dvui.themeGet().fill,
-                .window => dvui.themeGet().fill_window,
-                .control => if (dvui.themeGet().control.fill_press) |fp| {
-                    break :blk fp;
-                } else dvui.themeGet().control.fill orelse dvui.themeGet().fill,
-                .accent => if (dvui.themeGet().accent.fill_press orelse dvui.themeGet().control.fill_press) |fp| {
-                    break :blk fp;
-                } else dvui.themeGet().accent.fill orelse dvui.themeGet().control.fill orelse dvui.themeGet().fill,
-                .err => if (dvui.themeGet().err.fill_press orelse dvui.themeGet().control.fill_press) |fp| {
-                    break :blk fp;
-                } else dvui.themeGet().err.fill orelse dvui.themeGet().control.fill orelse dvui.themeGet().fill,
-            };
-
-            break :blk base_fill.lighten(if (dvui.themeGet().dark) 16 else -16);
-        },
-    };
+    const col = switch (ask) {
+        .accent => self.color_accent,
+        .border => self.color_border,
+        .fill => self.color_fill,
+        .fill_hover => self.color_fill,
+        .fill_press => self.color_fill,
+        .text => self.color_text,
+        .text_hover => self.color_text,
+        .text_press => self.color_text,
+    } orelse self.colorGet(self.style orelse .control, ask);
 
     return col.opacity(dvui.themeGet().alpha);
 }

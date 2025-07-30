@@ -127,7 +127,7 @@ pub fn styling() void {
             defer path.deinit();
             path.addRect(rs.r, dvui.Rect.Physical.all(5));
 
-            var triangles = path.build().fillConvexTriangles(dvui.currentWindow().lifo(), .{ .center = rs.r.center() }) catch dvui.Triangles.empty;
+            var triangles = path.build().fillConvexTriangles(dvui.currentWindow().lifo(), .{ .color = dvui.Color.magenta, .center = rs.r.center() }) catch dvui.Triangles.empty;
             defer triangles.deinit(dvui.currentWindow().lifo());
 
             const ca0 = backbox_color;
