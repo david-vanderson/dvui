@@ -8,7 +8,7 @@ pub fn styling() void {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
-        _ = dvui.button(@src(), "Accent", .{}, .{ .style = .accent });
+        _ = dvui.button(@src(), "Higtlight", .{}, .{ .style = .highlight });
         _ = dvui.button(@src(), "Error", .{}, .{ .style = .err });
         _ = dvui.button(@src(), "Window", .{}, .{ .style = .window });
         _ = dvui.button(@src(), "Content", .{}, .{ .style = .content });
@@ -127,7 +127,7 @@ pub fn styling() void {
             defer path.deinit();
             path.addRect(rs.r, dvui.Rect.Physical.all(5));
 
-            var triangles = path.build().fillConvexTriangles(dvui.currentWindow().lifo(), .{ .color = dvui.Color.magenta, .center = rs.r.center() }) catch dvui.Triangles.empty;
+            var triangles = path.build().fillConvexTriangles(dvui.currentWindow().lifo(), .{ .color = .white, .center = rs.r.center() }) catch dvui.Triangles.empty;
             defer triangles.deinit(dvui.currentWindow().lifo());
 
             const ca0 = backbox_color;

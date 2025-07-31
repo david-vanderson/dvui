@@ -40,24 +40,22 @@ pub const light = light: {
 
         .focus = accent,
 
+        .fill = Color.white,
+        .text = Color.black,
+        .border = (Color.HSLuv{ .s = 0, .l = 63 }).color(),
+        .accent = accent,
+
         .control = .{
             .fill = .{ .r = 0xe0, .g = 0xe0, .b = 0xe0 },
             .fill_hover = (Color.HSLuv{ .s = 0, .l = 82 }).color(),
             .fill_press = (Color.HSLuv{ .s = 0, .l = 72 }).color(),
         },
 
-        .content = .{
-            .fill = Color.white,
-            .text = Color.black,
-            .border = (Color.HSLuv{ .s = 0, .l = 63 }).color(),
-            .accent = accent,
-        },
-
         .window = .{
             .fill = .{ .r = 0xf0, .g = 0xf0, .b = 0xf0 },
         },
 
-        .accent = .{
+        .highlight = .{
             .fill = light_accent_fill,
             .fill_hover = light_accent_fill_hover,
             .fill_press = light_accent_accent,
@@ -106,6 +104,10 @@ pub const dark = dark: {
         .font_title_4 = .{ .size = 18, .id = .VeraBd },
 
         .focus = accent,
+        .text = Color.white,
+        .fill = dark_fill,
+        .border = dark_fill_hsl.lighten(39).color(),
+        .accent = accent,
 
         .control = .{
             .fill = .{ .r = 0x40, .g = 0x40, .b = 0x40 },
@@ -113,18 +115,11 @@ pub const dark = dark: {
             .fill_press = dark_fill_hsl.lighten(30).color(),
         },
 
-        .content = .{
-            .text = Color.white,
-            .fill = dark_fill,
-            .border = dark_fill_hsl.lighten(39).color(),
-            .accent = accent,
-        },
-
         .window = .{
             .fill = .{ .r = 0x2b, .g = 0x2b, .b = 0x2b },
         },
 
-        .accent = .{
+        .highlight = .{
             .fill = accent,
             .fill_hover = dark_accent_fill_hover,
             .fill_press = dark_accent_accent,
