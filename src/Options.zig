@@ -185,8 +185,10 @@ pub const ColorAsk = enum {
 };
 
 /// Get a color from this Options or fallback to theme colors.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn color(self: *const Options, ask: ColorAsk) Color {
-    const col = switch (ask) {
+    return switch (ask) {
         .accent => self.color_accent,
         .border => self.color_border,
         .fill => self.color_fill,
@@ -196,8 +198,6 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
         .text_hover => self.color_text,
         .text_press => self.color_text,
     } orelse dvui.themeGet().color(self.style orelse .content, ask);
-
-    return col.opacity(dvui.themeGet().alpha);
 }
 
 pub fn fontGet(self: *const Options) Font {

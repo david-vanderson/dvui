@@ -1260,8 +1260,11 @@ pub const IconRenderOptions = struct {
 /// that run later in the frame.
 pub const RenderCommand = struct {
     clip: Rect.Physical,
+    alpha: f32,
     snap: bool,
-    cmd: union(enum) {
+    cmd: Command,
+
+    pub const Command = union(enum) {
         text: renderTextOptions,
         texture: struct {
             tex: Texture,
@@ -1280,7 +1283,7 @@ pub const RenderCommand = struct {
             tri: Triangles,
             tex: ?Texture,
         },
-    },
+    };
 };
 
 /// Id of the currently focused subwindow.  Used by `FloatingMenuWidget` to
@@ -1625,22 +1628,20 @@ pub const Path = struct {
                 logError(@src(), err, "Could not reallocate path for render command", .{});
                 return;
             };
-            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = new_path, .opts = opts } } };
-
-            var sw = cw.subwindowCurrent();
-            sw.render_cmds.append(cw.arena(), cmd) catch |err| {
-                logError(@src(), err, "Could not append to render_cmds_after", .{});
-            };
+            cw.addRenderCommand(.{ .pathFillConvex = .{ .path = new_path, .opts = opts } }, false);
             return;
         }
 
-        var triangles = path.fillConvexTriangles(cw.lifo(), opts) catch |err| {
+        var options = opts;
+        options.color = options.color.opacity(cw.alpha);
+
+        var triangles = path.fillConvexTriangles(cw.lifo(), options) catch |err| {
             logError(@src(), err, "Could get triangles for path", .{});
             return;
         };
         defer triangles.deinit(cw.lifo());
         renderTriangles(triangles, null) catch |err| {
-            logError(@src(), err, "Could not draw path, opts: {any}", .{opts});
+            logError(@src(), err, "Could not draw path, opts: {any}", .{options});
             return;
         };
     }
@@ -1782,19 +1783,7 @@ pub const Path = struct {
                 logError(@src(), err, "Could not reallocate path for render command", .{});
                 return;
             };
-            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = new_path, .opts = opts } } };
-
-            var sw = cw.subwindowCurrent();
-            if (opts.after) {
-                sw.render_cmds_after.append(cw.arena(), cmd) catch |err| {
-                    logError(@src(), err, "Could not append to render_cmds_after", .{});
-                };
-            } else {
-                sw.render_cmds.append(cw.arena(), cmd) catch |err| {
-                    logError(@src(), err, "Could not append to render_cmds_after", .{});
-                };
-            }
-
+            cw.addRenderCommand(.{ .pathStroke = .{ .path = new_path, .opts = opts } }, opts.after);
             return;
         }
 
@@ -2199,6 +2188,12 @@ pub const Triangles = struct {
     }
 };
 
+/// Rendered `Triangles` taking in to account the current clip rect
+/// and deferred rendering through render targets.
+///
+/// Expect that `Window.alpha` has already been applied.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError!void {
     if (triangles.vertexes.len == 0) {
         return;
@@ -2212,10 +2207,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
 
     if (!cw.render_target.rendering) {
         const tri_copy = try triangles.dupe(cw.arena());
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .triangles = .{ .tri = tri_copy, .tex = tex } } };
-
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cw.arena(), cmd);
+        cw.addRenderCommand(.{ .triangles = .{ .tri = tri_copy, .tex = tex } }, false);
         return;
     }
 
@@ -2572,7 +2564,7 @@ pub fn clipGet() Rect.Physical {
 /// Intersect the given physical rect with the current clipping rect and set
 /// as the new clipping rect.
 ///
-/// Returns the previous clipping rect, use clipSet to restore it.
+/// Returns the previous clipping rect, use `clipSet` to restore it.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn clip(new: Rect.Physical) Rect.Physical {
@@ -2587,6 +2579,28 @@ pub fn clip(new: Rect.Physical) Rect.Physical {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn clipSet(r: Rect.Physical) void {
     currentWindow().clipRect = r;
+}
+
+/// Multiplies the current alpha value with the passed in multiplier.
+/// If `mult` is 0 then it will be completely transparent, 0.5 would be
+/// half of the current alpha and so on.
+///
+/// Returns the previous alpha value, use `alphaSet` to restore it.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn alpha(mult: f32) f32 {
+    const cw = currentWindow();
+    const ret = cw.alpha;
+    alphaSet(cw.alpha * mult);
+    return ret;
+}
+
+/// Set the current alpha value [0-1] where 1 is fully opaque.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn alphaSet(a: f32) void {
+    const cw = currentWindow();
+    cw.alpha = std.math.clamp(a, 0, 1);
 }
 
 /// Set snap_to_pixels setting.  If true:
@@ -6765,10 +6779,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     if (!cw.render_target.rendering) {
         var opts_copy = opts;
         opts_copy.text = try cw.arena().dupe(u8, utf8_text);
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
-
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cw.arena(), cmd);
+        cw.addRenderCommand(.{ .text = opts_copy }, false);
         return;
     }
 
@@ -6800,6 +6811,8 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     // Over allocate the internal buffers assuming each byte is a character
     var builder = try Triangles.Builder.init(cw.lifo(), 4 * utf8_text.len, 6 * utf8_text.len);
     defer builder.deinit(cw.lifo());
+
+    const col: Color.PMA = .fromColor(opts.color.opacity(cw.alpha));
 
     const x_start: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
     var x = x_start;
@@ -6895,7 +6908,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
 
             v.pos.x = leftx;
             v.pos.y = y + gi.topBearing * target_fraction;
-            v.col = .fromColor(opts.color);
+            v.col = col;
             v.uv = gi.uv;
             builder.appendVertex(v);
 
@@ -7070,6 +7083,7 @@ pub const RenderTextureOptions = struct {
     fade: f32 = 0.0,
 };
 
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Backend.GenericError!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
@@ -7077,10 +7091,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
     var cw = currentWindow();
 
     if (!cw.render_target.rendering) {
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .opts = opts } } };
-
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cw.arena(), cmd);
+        cw.addRenderCommand(.{ .texture = .{ .tex = tex, .rs = rs, .opts = opts } }, false);
         return;
     }
 
@@ -7089,7 +7100,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
 
     path.addRect(rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
 
-    var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod, .fade = opts.fade });
+    var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod.opacity(cw.alpha), .fade = opts.fade });
     defer triangles.deinit(cw.lifo());
 
     triangles.uvFromRectuv(rs.r, opts.uv);
@@ -7106,6 +7117,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
     try renderTriangles(triangles, tex);
 }
 
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions, icon_opts: IconRenderOptions) Backend.GenericError!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
@@ -7132,6 +7144,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     try renderTexture(texture, rs, opts);
 }
 
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderImage(source: ImageSource, rs: RectScale, opts: RenderTextureOptions) (Backend.TextureError || StbImageError)!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;

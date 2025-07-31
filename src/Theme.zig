@@ -21,9 +21,6 @@ name: []const u8,
 /// widgets can use this if they need to adjust colors
 dark: bool,
 
-/// alpha value to apply to all colors and rendering
-alpha: f32 = 1.0,
-
 /// used for focus highlighting
 focus: Color,
 
