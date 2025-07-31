@@ -40,10 +40,9 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
         }
 
         if (dvui.animationGet(hbox.data().id, "enter_pressed")) |a| {
-            const prev_alpha = dvui.themeGet().alpha;
-            dvui.themeGet().alpha *= a.value();
+            const prev_alpha = dvui.alpha(a.value());
+            defer dvui.alphaSet(prev_alpha);
             dvui.label(@src(), "Enter!", .{}, .{ .gravity_y = 0.5 });
-            dvui.themeGet().alpha = prev_alpha;
         }
     }
 
@@ -437,10 +436,9 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
                 }
 
                 if (dvui.animationGet(hbox.data().id, "value_changed")) |a| {
-                    const prev_alpha = dvui.themeGet().alpha;
-                    dvui.themeGet().alpha *= a.value();
+                    const prev_alpha = dvui.alpha(a.value());
+                    defer dvui.alphaSet(prev_alpha);
                     dvui.label(@src(), "Changed!", .{}, .{ .gravity_y = 0.5 });
-                    dvui.themeGet().alpha = prev_alpha;
                 }
             }
         }
