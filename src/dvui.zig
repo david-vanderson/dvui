@@ -5131,7 +5131,7 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, ini
     }
 
     if (mi.show_active) {
-        labelopts.style = .accent;
+        labelopts.style = .highlight;
     }
 
     labelNoFmt(@src(), label_str, .{}, labelopts);
@@ -5154,7 +5154,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
     }
 
     if (mi.show_active) {
-        iconopts.style = .accent;
+        iconopts.style = .highlight;
     }
 
     icon(@src(), name, tvg_bytes, .{}, iconopts);
@@ -6287,7 +6287,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
     var options = opts;
     if (checked) {
-        options.style = .accent;
+        options.style = .highlight;
         rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
     } else {
         rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
@@ -6374,7 +6374,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
 
     var options = opts;
     if (active) {
-        options.style = .accent;
+        options.style = .highlight;
         r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
     } else {
         r.insetAll(rs.s).fill(cornerRad, .{ .color = opts.color(fill), .fade = 1.0 });

@@ -191,10 +191,8 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
     return switch (ask) {
         .accent => self.color_accent,
         .border => self.color_border,
-        .fill => self.color_fill,
-        .fill_hover => if (self.color_fill) |col| dvui.themeGet().adjustColorForState(col, .hover) else null,
-        .fill_press => if (self.color_fill) |col| dvui.themeGet().adjustColorForState(col, .press) else null,
-        .text_hover, .text_press, .text => self.color_text,
+        .fill, .fill_hover, .fill_press => if (self.color_fill) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
+        .text, .text_hover, .text_press => if (self.color_text) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
     } orelse dvui.themeGet().color(self.style orelse .content, ask);
 }
 

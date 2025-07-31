@@ -180,7 +180,7 @@ pub fn addChoiceLabel(self: *DropdownWidget, label_text: []const u8) bool {
 
     var opts = self.options.strip();
     if (mi.show_active) {
-        opts.style = .accent;
+        opts.style = .highlight;
     }
 
     dvui.labelNoFmt(@src(), label_text, .{}, opts);
