@@ -270,6 +270,20 @@ pub fn rotationGet(self: *const Options) f32 {
     return self.rotation orelse 0.0;
 }
 
+/// Keeps only the fonts, colors and style
+pub fn stylesOnly(self: *const Options) Options {
+    return .{
+        .style = self.style,
+        .color_accent = self.color_accent,
+        .color_text = self.color_text,
+        .color_fill = self.color_fill,
+        .color_border = self.color_border,
+
+        .font = self.font,
+        .font_style = self.font_style,
+    };
+}
+
 // Used in compound widgets to strip out the styling that should only apply
 // to the outermost container widget.  For example, with a button
 // (container with label) the container uses:

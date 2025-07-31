@@ -201,7 +201,7 @@ pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
         }
     }
 
-    self.drop_mi = MenuItemWidget.init(@src(), .{}, .{ .id_extra = self.drop_mi_index, .expand = .horizontal });
+    self.drop_mi = MenuItemWidget.init(@src(), .{}, self.options.stylesOnly().override(.{ .id_extra = self.drop_mi_index, .expand = .horizontal }));
     self.drop_mi_id = self.drop_mi.data().id;
     self.drop_mi.install();
     self.drop_mi.processEvents();
