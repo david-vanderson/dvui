@@ -512,36 +512,36 @@ pub fn textFieldWidgetBuf(
 //    unionFieldWidget(field_name, @TypeOf(@field(container, field_name)), &@field(container, field_name), opts, null, alignment);
 //}
 //
-//pub fn unionFieldWidget(
-//    comptime name: []const u8,
-//    comptime T: type,
-//    exclude: anytype,
-//    result: *T,
-//    opt: UnionFieldOptions(T, exclude),
-//    comptime alloc: bool,
-//    allocator: ?std.mem.Allocator,
+//pub fn unionFieldWidget2(
+//    src: std.builtin.SourceLocation,
+//    comptime field_name: []const u8,
+//    field_ptr: anytype,
+//    opt: StandardFieldOptions,
 //    alignment: *dvui.Alignment,
-//) void {
-//    var box = dvui.box(@src(), .vertical, .{});
+//) *dvui.BoxWidget {
+//    const T = @TypeOf(field_ptr.*);
+//    if (opt.display == .none) return;
+//
+//    var box = dvui.box(src, .vertical, .{});
 //    defer box.deinit();
 //
 //    const FieldEnum = std.meta.FieldEnum(T);
 //
 //    const entries = std.meta.fieldNames(T);
-//    var choice: usize = @intFromEnum(std.meta.activeTag(result.*));
+//    var choice: usize = @intFromEnum(std.meta.activeTag(field_ptr.*));
 //
 //    {
 //        var hbox = dvui.box(@src(), .vertical, .{});
 //        defer hbox.deinit();
-//        const label = opt.label_override orelse name;
+//        const label = opt.label_override orelse field_name;
 //        if (label.len != 0) {
 //            dvui.label(@src(), "{s}", .{label}, .{
 //                .border = border,
 //                .background = true,
 //            });
 //        }
-//        inline for (entries, 0..) |field_name, i| {
-//            if (dvui.radio(@src(), choice == i, field_name, .{ .id_extra = i })) {
+//        inline for (entries, 0..) |entry, i| {
+//            if (dvui.radio(@src(), choice == i, entry, .{ .id_extra = i })) {
 //                choice = i;
 //            }
 //        }
@@ -549,10 +549,10 @@ pub fn textFieldWidgetBuf(
 //
 //    inline for (@typeInfo(T).@"union".fields, 0..) |field, i| {
 //        if (choice == i) {
-//            if (std.meta.activeTag(result.*) != @as(FieldEnum, @enumFromInt(i))) {
-//                result.* = @unionInit(T, field.name, undefined);
+//            if (std.meta.activeTag(field_ptr.*) != @as(FieldEnum, @enumFromInt(i))) {
+//                field_ptr.* = @unionInit(T, field_name, undefined);
 //            }
-//            const field_result: *field.type = &@field(result.*, field.name);
+//            const field_result: *field.type = &@field(field_ptr.*, field_name);
 //
 //            var hbox = dvui.box(@src(), .horizontal, .{ .expand = .both });
 //            defer hbox.deinit();
@@ -563,13 +563,11 @@ pub fn textFieldWidgetBuf(
 //                .margin = .{ .w = 10, .x = 10 },
 //            });
 //            line.deinit();
-//
-//            fieldWidget(field.name, field.type, exclude, @ptrCast(field_result), @field(opt.fields, field.name), alloc, allocator, alignment);
 //        }
 //    }
 //}
-//
-////=======Optional Field Widget and Options=======
+
+//=======Optional Field Widget and Options=======
 pub const OptionalFieldOptions = struct {
     disabled: bool = false,
     label_override: ?[]const u8 = null,
