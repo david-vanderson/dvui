@@ -103,12 +103,20 @@ pub fn color(self: *const Theme, style: Style, ask: Options.ColorAsk) Color {
         .accent => cs.accent orelse if (style != cs.fallback) self.color(cs.fallback, ask) else Color.navy,
         .border => cs.border orelse if (style != cs.fallback) self.color(cs.fallback, ask) else Color.gray,
         .fill => cs.fill orelse if (style != cs.fallback) self.color(cs.fallback, ask) else if (self.dark) Color.black else Color.white,
-        .fill_hover => cs.fill_hover orelse self.color(style, .fill).lighten(if (self.dark) 10 else -10),
-        .fill_press => cs.fill_press orelse self.color(style, .fill).lighten(if (self.dark) 20 else -20),
+        .fill_hover => cs.fill_hover orelse self.adjustColorForState(self.color(style, .fill), .hover),
+        .fill_press => cs.fill_press orelse self.adjustColorForState(self.color(style, .fill), .press),
         .text => cs.text orelse if (style != cs.fallback) self.color(cs.fallback, ask) else if (self.dark) Color.white else Color.black,
         .text_hover => cs.text_hover orelse self.color(style, .text),
         .text_press => cs.text_press orelse self.color(style, .text),
     };
+}
+
+pub fn adjustColorForState(self: *const Theme, col: Color, state: enum { hover, press, none }) Color {
+    return col.lighten(switch (state) {
+        .hover => if (self.dark) 10 else -10,
+        .press => if (self.dark) 20 else -20,
+        .none => 0,
+    });
 }
 
 /// To pick between the built in themes, pass `&Theme.builtins` as the `themes` argument
