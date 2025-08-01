@@ -156,7 +156,7 @@ pub fn install(self: *TextEntryWidget) void {
 
     if (self.len == 0) {
         if (self.init_opts.placeholder) |placeholder| {
-            self.textLayout.addText(placeholder, .{ .color_text = self.textLayout.data().options.color(.text).opacity(0.75) });
+            self.textLayout.addText(placeholder, .{ .color_text = self.textLayout.data().options.color(.text).opacity(0.65) });
         }
     }
 
