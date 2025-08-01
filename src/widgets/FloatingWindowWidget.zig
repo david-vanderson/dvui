@@ -275,11 +275,11 @@ pub fn drawBackground(self: *FloatingWindowWidget) void {
 }
 
 fn dragPart(me: Event.Mouse, rs: RectScale) DragPart {
-    const corner_size: f32 = if (me.button.touch()) 30 else 15;
-    const top = (me.p.y < rs.r.y + corner_size * rs.s);
-    const bottom = (me.p.y > rs.r.y + rs.r.h - corner_size * rs.s);
-    const left = (me.p.x < rs.r.x + corner_size * rs.s);
-    const right = (me.p.x > rs.r.x + rs.r.w - corner_size * rs.s);
+    const corner_size: f32 = rs.s * @as(f32, if (me.button.touch()) 30 else 15);
+    const top = (me.p.y < rs.r.y + corner_size);
+    const bottom = (me.p.y > rs.r.y + rs.r.h - corner_size);
+    const left = (me.p.x < rs.r.x + corner_size);
+    const right = (me.p.x > rs.r.x + rs.r.w - corner_size);
 
     if (bottom and right) return .bottom_right;
 
@@ -289,15 +289,15 @@ fn dragPart(me: Event.Mouse, rs: RectScale) DragPart {
 
     if (top and right) return .top_right;
 
-    const side_size: f32 = if (me.button.touch()) 16 else 8;
+    const side_size: f32 = rs.s * @as(f32, if (me.button.touch()) 16 else 4);
 
-    if (me.p.y > rs.r.y + rs.r.h - side_size * rs.s) return .bottom;
+    if (me.p.y > rs.r.y + rs.r.h - side_size) return .bottom;
 
-    if (me.p.y < rs.r.y + side_size * rs.s) return .top;
+    if (me.p.y < rs.r.y + side_size) return .top;
 
-    if (me.p.x < rs.r.x + side_size * rs.s) return .left;
+    if (me.p.x < rs.r.x + side_size) return .left;
 
-    if (me.p.x > rs.r.x + rs.r.w - side_size * rs.s) return .right;
+    if (me.p.x > rs.r.x + rs.r.w - side_size) return .right;
 
     return .middle;
 }
@@ -552,6 +552,7 @@ pub fn deinit(self: *FloatingWindowWidget) void {
     }
 
     if (self.init_options.process_events_in_deinit) {
+        dvui.clipSet(dvui.windowRectPixels());
         self.processEventsAfter();
     }
 
