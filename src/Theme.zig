@@ -191,7 +191,7 @@ pub fn picker(src: std.builtin.SourceLocation, themes: []const Theme, opts: Opti
 pub const builtin = struct {
     pub const adwaita_light = @import("themes/Adwaita.zig").light;
     pub const adwaita_dark = @import("themes/Adwaita.zig").dark;
-    //pub const dracula = QuickTheme.builtin.dracula.toTheme(null) catch unreachable;
+    pub const dracula = QuickTheme.builtin.dracula.toTheme(null) catch unreachable;
     //pub const gruvbox = QuickTheme.builtin.gruvbox.toTheme(null) catch unreachable;
     //pub const jungle = QuickTheme.builtin.jungle.toTheme(null) catch unreachable;
     //pub const opendyslexic = QuickTheme.builtin.opendyslexic.toTheme(null) catch unreachable;
@@ -231,28 +231,43 @@ pub const QuickTheme = struct {
     font_name_caption: []const u8,
     font_name_title: []const u8,
 
-    // used for focus
-    color_focus: []const u8 = "#638465",
+    // Will fallback to the `accent` color if not defined
+    focus: ?[]const u8 = null,
 
     // text/foreground color
-    color_text: []const u8 = "#82a29f",
-
+    text: []const u8,
+    text_hover: ?[]const u8 = null,
     // text/foreground color when widget is pressed
-    color_text_press: []const u8 = "#971f81",
+    text_press: ?[]const u8 = null,
 
-    // background color for displaying lots of text
-    color_fill_text: []const u8 = "#2c3332",
+    // background color
+    fill: []const u8,
+    fill_hover: ?[]const u8 = null,
+    // fill/background color when widget is pressed
+    fill_press: ?[]const u8 = null,
 
-    // background color for containers that have other widgets inside
-    color_fill_container: []const u8 = "#2b3a3a",
+    border: []const u8,
+    accent: []const u8,
 
-    // background color for controls like buttons
-    color_fill_control: []const u8 = "#2c3334",
+    control: QuickColorStyle,
+    window: QuickColorStyle,
+    /// If this is null, highlight will be created by averaging the accent color and all the content colors
+    highlight: ?QuickColorStyle = null,
+    /// If this is null, highlight will be created by averaging `err_base` and all the content colors
+    err: ?QuickColorStyle = null,
 
-    color_fill_hover: []const u8 = "#333e57",
-    color_fill_press: []const u8 = "#3b6357",
+    const err_base = Color.fromHex("#ffaaaa");
 
-    color_border: []const u8 = "#60827d",
+    pub const QuickColorStyle = struct {
+        fill: ?[]const u8 = null,
+        fill_hover: ?[]const u8 = null,
+        fill_press: ?[]const u8 = null,
+        text: ?[]const u8 = null,
+        text_hover: ?[]const u8 = null,
+        text_press: ?[]const u8 = null,
+        border: ?[]const u8 = null,
+        accent: ?[]const u8 = null,
+    };
 
     /// Parses a json object with the fields of `QuickTheme`,
     /// allocating copies of all the string data
@@ -272,32 +287,52 @@ pub const QuickTheme = struct {
     /// by that allocator and freed in `Theme.deinit`. Else the names
     /// will be used directly which is good for embedded/static slices.
     pub fn toTheme(self: @This(), gpa: ?std.mem.Allocator) (std.mem.Allocator.Error || Color.FromHexError)!Theme {
-        @setEvalBranchQuota(1600);
-        const color_accent = try Color.tryFromHex(self.color_focus);
-        const color_err = try Color.tryFromHex("#ffaaaa");
-        const color_text = try Color.tryFromHex(self.color_text);
-        const color_text_press = try Color.tryFromHex(self.color_text_press);
-        const color_fill = try Color.tryFromHex(self.color_fill_text);
-        const color_fill_window = try Color.tryFromHex(self.color_fill_container);
-        const color_fill_control = try Color.tryFromHex(self.color_fill_control);
-        const color_fill_hover = try Color.tryFromHex(self.color_fill_hover);
-        const color_fill_press = try Color.tryFromHex(self.color_fill_press);
-        const color_border = try Color.tryFromHex(self.color_border);
+        @setEvalBranchQuota(5000); // Needs to handle worst case of all optionals being non-null
+        const text: Color = try .tryFromHex(self.text);
+        const text_hover: ?Color = if (self.text_hover) |hex| try .tryFromHex(hex) else null;
+        const text_press: ?Color = if (self.text_press) |hex| try .tryFromHex(hex) else null;
+        const fill: Color = try .tryFromHex(self.fill);
+        const fill_hover: ?Color = if (self.fill_hover) |hex| try .tryFromHex(hex) else null;
+        const fill_press: ?Color = if (self.fill_press) |hex| try .tryFromHex(hex) else null;
+        const border: Color = try .tryFromHex(self.border);
+        const accent: Color = try .tryFromHex(self.accent);
 
         return Theme{
             .name = if (gpa) |alloc| try alloc.dupe(u8, self.name) else self.name,
-            .dark = color_text.brightness() > color_fill.brightness(),
-            .alpha = 1.0,
-            .color_accent = color_accent,
-            .color_err = color_err,
-            .color_text = color_text,
-            .color_text_press = color_text_press,
-            .color_fill = color_fill,
-            .color_fill_window = color_fill_window,
-            .color_fill_control = color_fill_control,
-            .color_fill_hover = color_fill_hover,
-            .color_fill_press = color_fill_press,
-            .color_border = color_border,
+            .dark = text.brightness() > fill.brightness(),
+
+            .focus = if (self.focus) |hex| try Color.tryFromHex(hex) else accent,
+
+            .text = text,
+            .text_hover = text_hover,
+            .text_press = text_press,
+            .fill = fill,
+            .fill_hover = fill_hover,
+            .fill_press = fill_press,
+            .border = border,
+            .accent = accent,
+
+            .control = try parseStyle(self.control),
+            .window = try parseStyle(self.window),
+            .highlight = if (self.highlight) |s| try parseStyle(s) else .{
+                .text = .average(accent, text),
+                .text_hover = if (text_hover) |col| .average(accent, col) else null,
+                .text_press = if (text_press) |col| .average(accent, col) else null,
+                .fill = .average(accent, fill),
+                .fill_hover = if (fill_hover) |col| .average(accent, col) else null,
+                .fill_press = if (fill_press) |col| .average(accent, col) else null,
+                .border = .average(accent, border),
+            },
+            .err = if (self.err) |s| try parseStyle(s) else .{
+                .text = .average(err_base, text),
+                .text_hover = if (text_hover) |col| .average(err_base, col) else null,
+                .text_press = if (text_press) |col| .average(err_base, col) else null,
+                .fill = .average(err_base, fill),
+                .fill_hover = if (fill_hover) |col| .average(err_base, col) else null,
+                .fill_press = if (fill_press) |col| .average(err_base, col) else null,
+                .border = .average(err_base, border),
+            },
+
             .font_body = .{
                 .size = @round(self.font_size),
                 .id = .fromName(self.font_name_body),
@@ -334,25 +369,21 @@ pub const QuickTheme = struct {
                 .size = @round(self.font_size * 1.15),
                 .id = .fromName(self.font_name_title),
             },
-            .style_accent = .{
-                .color_accent = .{ .color = Color.average(color_accent, color_accent) },
-                .color_text = .{ .color = Color.average(color_accent, color_text) },
-                .color_text_press = .{ .color = Color.average(color_accent, color_text_press) },
-                .color_fill = .{ .color = Color.average(color_accent, color_fill) },
-                .color_fill_hover = .{ .color = Color.average(color_accent, color_fill_hover) },
-                .color_fill_press = .{ .color = Color.average(color_accent, color_fill_press) },
-                .color_border = .{ .color = Color.average(color_accent, color_border) },
-            },
-            .style_err = .{
-                .color_accent = .{ .color = Color.average(color_accent, color_accent) },
-                .color_text = .{ .color = Color.average(color_err, color_text) },
-                .color_text_press = .{ .color = Color.average(color_err, color_text_press) },
-                .color_fill = .{ .color = Color.average(color_err, color_fill) },
-                .color_fill_hover = .{ .color = Color.average(color_err, color_fill_hover) },
-                .color_fill_press = .{ .color = Color.average(color_err, color_fill_press) },
-                .color_border = .{ .color = Color.average(color_err, color_border) },
-            },
+
             .allocated_strings = gpa != null,
+        };
+    }
+
+    fn parseStyle(style: QuickColorStyle) Color.FromHexError!ColorStyle {
+        return .{
+            .fill = if (style.fill) |hex| try .tryFromHex(hex) else null,
+            .fill_hover = if (style.fill_hover) |hex| try .tryFromHex(hex) else null,
+            .fill_press = if (style.fill_press) |hex| try .tryFromHex(hex) else null,
+            .text = if (style.text) |hex| try .tryFromHex(hex) else null,
+            .text_hover = if (style.text_hover) |hex| try .tryFromHex(hex) else null,
+            .text_press = if (style.text_press) |hex| try .tryFromHex(hex) else null,
+            .border = if (style.border) |hex| try .tryFromHex(hex) else null,
+            .accent = if (style.accent) |hex| try .tryFromHex(hex) else null,
         };
     }
 };
