@@ -41,14 +41,14 @@ pub const light = light: {
         .focus = accent,
 
         .fill = Color.white,
+        .fill_hover = (Color.HSLuv{ .s = 0, .l = 82 }).color(),
+        .fill_press = (Color.HSLuv{ .s = 0, .l = 72 }).color(),
         .text = Color.black,
         .border = (Color.HSLuv{ .s = 0, .l = 63 }).color(),
         .accent = .{ .r = 0x91, .g = 0xbc, .b = 0xf0 },
 
         .control = .{
             .fill = .{ .r = 0xe0, .g = 0xe0, .b = 0xe0 },
-            .fill_hover = (Color.HSLuv{ .s = 0, .l = 82 }).color(),
-            .fill_press = (Color.HSLuv{ .s = 0, .l = 72 }).color(),
         },
 
         .window = .{
@@ -104,15 +104,16 @@ pub const dark = dark: {
         .font_title_4 = .{ .size = 18, .id = .VeraBd },
 
         .focus = accent,
+
         .text = Color.white,
+        .fill_hover = dark_fill_hsl.lighten(21).color(),
+        .fill_press = dark_fill_hsl.lighten(30).color(),
         .fill = dark_fill,
         .border = dark_fill_hsl.lighten(39).color(),
         .accent = .{ .r = 0x32, .g = 0x60, .b = 0x98 },
 
         .control = .{
             .fill = .{ .r = 0x40, .g = 0x40, .b = 0x40 },
-            .fill_hover = dark_fill_hsl.lighten(21).color(),
-            .fill_press = dark_fill_hsl.lighten(30).color(),
         },
 
         .window = .{
