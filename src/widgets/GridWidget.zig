@@ -46,6 +46,7 @@ pub var defaults: Options = .{
     .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
     // Small padding to separate first column from left edge of the grid
     .padding = .{ .x = 5 },
+    .style = .content,
 };
 
 pub var scrollbar_padding_defaults: Size = .{ .h = 10, .w = 10 };
@@ -314,6 +315,7 @@ pub fn install(self: *GridWidget) void {
         .{
             .name = "GridWidgetScrollArea",
             .expand = .both,
+            .background = false,
         },
     );
     self.scroll.installScrollBars();
@@ -640,6 +642,7 @@ fn bodyScrollContainerCreate(self: *GridWidget) void {
         }, .{
             .name = "GridWidgetBodyScroll",
             .expand = .both,
+            .background = false,
         });
         self.bscroll.?.install();
         self.bscroll.?.processEvents();

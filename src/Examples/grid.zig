@@ -97,7 +97,6 @@ pub fn gridStyling() void {
             .resize_rows = local.resize_rows,
         }, .{
             .expand = .both,
-            .background = true,
             .border = Rect.all(1),
         });
         defer grid.deinit();
