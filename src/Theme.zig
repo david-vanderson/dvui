@@ -24,6 +24,11 @@ dark: bool,
 /// used for focus highlighting
 focus: Color,
 
+/// colors for content like textLayout
+/// * these are what Style .content use
+/// * fill/text usually have the highest contrast
+/// * accent used for textLayout selection
+/// * also fallbacks for null Colors in ColorStyles
 fill: Color,
 fill_hover: ?Color = null,
 fill_press: ?Color = null,
@@ -33,7 +38,7 @@ text_press: ?Color = null,
 border: Color,
 accent: Color,
 
-/// colors for normal controls like buttons, this is the default style
+/// colors for normal controls like buttons
 control: ColorStyle,
 
 /// colors for windows/boxes that contain controls
@@ -104,15 +109,15 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
 ///
 pub fn color(self: *const Theme, style: Style, ask: Options.ColorAsk) Color {
     const cs: ColorStyle = switch (style) {
-        .content => return ask: switch (ask) {
+        .content => return sw: switch (ask) {
             .accent => self.accent,
             .border => self.border,
             .fill => self.adjustColorForState(self.fill, ask),
-            .fill_hover => self.fill_hover orelse continue :ask .fill,
-            .fill_press => self.fill_press orelse continue :ask .fill,
+            .fill_hover => self.fill_hover orelse continue :sw .fill,
+            .fill_press => self.fill_press orelse continue :sw .fill,
             .text => self.adjustColorForState(self.text, ask),
-            .text_hover => self.text_hover orelse continue :ask .text,
-            .text_press => self.text_press orelse continue :ask .text,
+            .text_hover => self.text_hover orelse continue :sw .text,
+            .text_press => self.text_press orelse continue :sw .text,
         },
         .control => self.control,
         .window => self.window,
@@ -120,15 +125,15 @@ pub fn color(self: *const Theme, style: Style, ask: Options.ColorAsk) Color {
         .err => self.err,
     };
 
-    return ask: switch (ask) {
+    return sw: switch (ask) {
         .accent => cs.accent orelse self.color(cs.fallback, ask),
         .border => cs.border orelse self.color(cs.fallback, ask),
         .fill => if (cs.fill) |col| self.adjustColorForState(col, ask) else self.color(cs.fallback, ask),
-        .fill_hover => cs.fill_hover orelse continue :ask .fill,
-        .fill_press => cs.fill_press orelse continue :ask .fill,
+        .fill_hover => cs.fill_hover orelse continue :sw .fill,
+        .fill_press => cs.fill_press orelse continue :sw .fill,
         .text => if (cs.text) |col| self.adjustColorForState(col, ask) else self.color(cs.fallback, ask),
-        .text_hover => cs.text_hover orelse continue :ask .text,
-        .text_press => cs.text_press orelse continue :ask .text,
+        .text_hover => cs.text_hover orelse continue :sw .text,
+        .text_press => cs.text_press orelse continue :sw .text,
     };
 }
 
