@@ -49,6 +49,8 @@ pub const light = light: {
 
         .control = .{
             .fill = .{ .r = 0xe0, .g = 0xe0, .b = 0xe0 },
+            .fill_hover = (Color.HSLuv{ .s = 0, .l = 82 }).color(),
+            .fill_press = (Color.HSLuv{ .s = 0, .l = 72 }).color(),
         },
 
         .window = .{
@@ -114,6 +116,8 @@ pub const dark = dark: {
 
         .control = .{
             .fill = .{ .r = 0x40, .g = 0x40, .b = 0x40 },
+            .fill_hover = dark_fill_hsl.lighten(21).color(),
+            .fill_press = dark_fill_hsl.lighten(30).color(),
         },
 
         .window = .{
