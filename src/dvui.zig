@@ -1636,7 +1636,7 @@ pub const Path = struct {
         options.color = options.color.opacity(cw.alpha);
 
         var triangles = path.fillConvexTriangles(cw.lifo(), options) catch |err| {
-            logError(@src(), err, "Could get triangles for path", .{});
+            logError(@src(), err, "Could not get triangles for path", .{});
             return;
         };
         defer triangles.deinit(cw.lifo());
@@ -1648,8 +1648,8 @@ pub const Path = struct {
 
     /// Generates triangles to fill path (must be convex).
     ///
-    /// Vertexes will have unset uv and color is alpha multiplied white fading to
-    /// transparent at the edge if fade is > 0.
+    /// Vertexes will have unset uv and color is alpha multiplied opts.color
+    /// fading to transparent at the edge if fade is > 0.
     pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillConvexOptions) std.mem.Allocator.Error!Triangles {
         if (path.points.len < 3) {
             return .empty;
@@ -1787,8 +1787,11 @@ pub const Path = struct {
             return;
         }
 
-        var triangles = path.strokeTriangles(cw.lifo(), opts) catch |err| {
-            logError(@src(), err, "Could get triangles for path", .{});
+        var options = opts;
+        options.color = options.color.opacity(cw.alpha);
+
+        var triangles = path.strokeTriangles(cw.lifo(), options) catch |err| {
+            logError(@src(), err, "Could not get triangles for path", .{});
             return;
         };
         defer triangles.deinit(cw.lifo());
@@ -1800,8 +1803,8 @@ pub const Path = struct {
 
     /// Generates triangles to stroke path.
     ///
-    /// Vertexes will have unset uv and color is alpha multiplied white fading to
-    /// transparent at the edge.
+    /// Vertexes will have unset uv and color is alpha multiplied opts.color
+    /// fading to transparent at the edge.
     pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOptions) std.mem.Allocator.Error!Triangles {
         if (dvui.clipGet().empty()) {
             return .empty;
