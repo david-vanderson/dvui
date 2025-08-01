@@ -1261,12 +1261,16 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
                 try dvui.renderTexture(t.tex, t.rs, t.opts);
             },
             .pathFillConvex => |pf| {
-                var triangles = try pf.path.fillConvexTriangles(self.lifo(), pf.opts);
+                var options = pf.opts;
+                options.color = options.color.opacity(self.alpha);
+                var triangles = try pf.path.fillConvexTriangles(self.lifo(), options);
                 defer triangles.deinit(self.lifo());
                 try dvui.renderTriangles(triangles, null);
             },
             .pathStroke => |ps| {
-                var triangles = try ps.path.strokeTriangles(self.lifo(), ps.opts);
+                var options = ps.opts;
+                options.color = options.color.opacity(self.alpha);
+                var triangles = try ps.path.strokeTriangles(self.lifo(), options);
                 defer triangles.deinit(self.lifo());
                 try dvui.renderTriangles(triangles, null);
             },
