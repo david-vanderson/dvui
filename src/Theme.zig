@@ -44,7 +44,10 @@ control: ColorStyle,
 /// colors for windows/boxes that contain controls
 window: ColorStyle,
 
-/// colors for highlighting menu/dropdown items
+/// colors for highlighting:
+/// * menu/dropdown items
+/// * checkboxes
+/// * radio buttons
 highlight: ColorStyle,
 
 /// colors for buttons to perform dangerous actions
@@ -74,9 +77,6 @@ pub const ColorStyle = struct {
     text_press: ?Color = null,
     border: ?Color = null,
     accent: ?Color = null,
-    /// It's important that all fallback values eventually reach `content`,
-    /// otherwise it would get stuck in an infinite loop
-    fallback: Style = .content,
 };
 
 pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
@@ -101,8 +101,7 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
     return ret;
 }
 
-/// Get the resolved color for a style. May resolve to a fallback color from
-/// another style.
+/// Get the resolved color for a style.  If null fallback to theme base.
 ///
 /// If a color with a state (like `fill_hover`) is `null`, then the `fill` color
 /// will be used and adjusted by `Theme.adjustColorForState`.
@@ -126,24 +125,23 @@ pub fn color(self: *const Theme, style: Style, ask: Options.ColorAsk) Color {
     };
 
     return sw: switch (ask) {
-        .accent => cs.accent orelse self.color(cs.fallback, ask),
-        .border => cs.border orelse self.color(cs.fallback, ask),
-        .fill => if (cs.fill) |col| self.adjustColorForState(col, ask) else self.color(cs.fallback, ask),
+        .accent => cs.accent orelse self.color(.content, ask),
+        .border => cs.border orelse self.color(.content, ask),
+        .fill => if (cs.fill) |col| self.adjustColorForState(col, ask) else self.color(.content, ask),
         .fill_hover => cs.fill_hover orelse continue :sw .fill,
         .fill_press => cs.fill_press orelse continue :sw .fill,
-        .text => if (cs.text) |col| self.adjustColorForState(col, ask) else self.color(cs.fallback, ask),
+        .text => if (cs.text) |col| self.adjustColorForState(col, ask) else self.color(.content, ask),
         .text_hover => cs.text_hover orelse continue :sw .text,
         .text_press => cs.text_press orelse continue :sw .text,
     };
 }
 
-/// If the asked for color has a state like `..._hover` the color will be
-/// lightened/darkened (based on the `dark` field). Otherwise the original
-/// color is returned
+/// Adjust col (sourced from .fill) for .fill_hover and .fill_press by
+/// lightening/darkening (based on the `dark` field).
 pub fn adjustColorForState(self: *const Theme, col: Color, ask: Options.ColorAsk) Color {
     return col.lighten(switch (ask) {
-        .fill_hover, .text_hover => if (self.dark) 10 else -10,
-        .fill_press, .text_press => if (self.dark) 20 else -20,
+        .fill_hover => if (self.dark) 10 else -10,
+        .fill_press => if (self.dark) 20 else -20,
         else => return col,
     });
 }
@@ -178,7 +176,7 @@ pub fn picker(src: std.builtin.SourceLocation, themes: []const Theme, opts: Opti
     if (dd.dropped()) {
         for (themes) |theme| {
             if (dd.addChoiceLabel(theme.name)) {
-                dvui.themeSet(&theme);
+                dvui.themeSet(theme);
                 picked = true;
                 break;
             }

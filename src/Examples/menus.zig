@@ -316,7 +316,7 @@ pub fn focus() void {
 
             if (e.evt == .mouse and e.evt.mouse.action == .position) {
                 hbox.data().options.background = true;
-                hbox.data().options.color_fill = (dvui.Options{}).color(.fill_hover);
+                hbox.data().options.color_fill = dvui.themeGet().color(.content, .fill_hover);
             }
         }
         hbox.drawBackground();

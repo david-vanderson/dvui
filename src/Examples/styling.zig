@@ -8,7 +8,7 @@ pub fn styling() void {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
-        _ = dvui.button(@src(), "Higtlight", .{}, .{ .style = .highlight });
+        _ = dvui.button(@src(), "Highlight", .{}, .{ .style = .highlight });
         _ = dvui.button(@src(), "Error", .{}, .{ .style = .err });
         _ = dvui.button(@src(), "Window", .{}, .{ .style = .window });
         _ = dvui.button(@src(), "Content", .{}, .{ .style = .content });

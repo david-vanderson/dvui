@@ -22,7 +22,7 @@ pub fn scrollCanvas() void {
     tl.format("Scale {d}", .{scale.*}, .{});
     tl.deinit();
 
-    var scrollArea = dvui.scrollArea(@src(), .{ .scroll_info = scroll_info }, .{ .min_size_content = .{ .w = 300, .h = 300 } });
+    var scrollArea = dvui.scrollArea(@src(), .{ .scroll_info = scroll_info }, .{ .style = .content, .min_size_content = .{ .w = 300, .h = 300 } });
     var scrollContainer = &scrollArea.scroll.?;
 
     // can use this to convert between viewport/virtual_size and screen coords

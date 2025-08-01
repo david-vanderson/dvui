@@ -258,18 +258,18 @@ pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []
     log.err("{s}:{d}:{d}: {s} got {s}: " ++ fmt ++ error_trace_fmt ++ stack_trace_fmt, combined_args);
 }
 
-/// Get a pointer to the active theme.
+/// Get the active theme.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn themeGet() *Theme {
-    return &currentWindow().theme;
+pub fn themeGet() Theme {
+    return currentWindow().theme;
 }
 
-/// Set the active theme (copies into internal storage).
+/// Set the active theme.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn themeSet(theme: *const Theme) void {
-    currentWindow().theme = theme.*;
+pub fn themeSet(theme: Theme) void {
+    currentWindow().theme = theme;
 }
 
 /// Toggle showing the debug window (run during `Window.end`).
@@ -5034,7 +5034,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
     const defaults: Options = .{
         .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
-        .color_fill = dvui.themeGet().color(.control, .border),
+        .color_fill = dvui.themeGet().border,
         .min_size_content = .{ .w = 1, .h = 1 },
     };
 

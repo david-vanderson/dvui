@@ -87,8 +87,9 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
                     rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill_hover), .fade = 1.0 });
                 }
             } else {
+                const col = dvui.themeGet().color(.highlight, .fill);
                 const rs = self.data().backgroundRectScale();
-                rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.accent), .fade = 1.0 });
+                rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = col, .fade = 1.0 });
             }
         } else if ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) or self.highlight) {
             const rs = self.data().backgroundRectScale();
