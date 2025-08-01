@@ -1217,7 +1217,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 .background_color = options.color_fill,
                 .sel_start = self.selection.start -| self.bytes_seen,
                 .sel_end = self.selection.end -| self.bytes_seen,
-                .sel_color = options.color(.accent),
+                .sel_color = options.color(.accent).opacity(0.75),
             }) catch |err| {
                 dvui.logError(@src(), err, "Failed to render text: {s}", .{rtxt});
             };
