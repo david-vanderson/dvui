@@ -4680,7 +4680,6 @@ pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions
     ret.* = PanedWidget.init(src, init_opts, opts);
     ret.install();
     ret.processEvents();
-    ret.draw();
     return ret;
 }
 
