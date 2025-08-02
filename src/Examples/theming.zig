@@ -18,117 +18,117 @@ pub fn theming() void {
     const paned = dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = 400 }, .{ .expand = .both });
     defer paned.deinit();
 
-    if (paned.showFirst()) {
-        const vbox = dvui.box(@src(), .{}, .{ .expand = .both, .margin = .{ .y = 10 } });
-        defer vbox.deinit();
+    //if (paned.showFirst()) {
+    //    const vbox = dvui.box(@src(), .{}, .{ .expand = .both, .margin = .{ .y = 10 } });
+    //    defer vbox.deinit();
 
-        {
-            const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-            defer hbox.deinit();
-            if (paned.collapsed() and dvui.button(@src(), "To Preview", .{}, .{ .gravity_x = 1 })) {
-                paned.animateSplit(0);
-            }
-            if (dvui.button(@src(), "Use custom theme", .{}, .{})) {
-                dvui.themeSet(&custom_theme);
-            }
+    //    {
+    //        const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+    //        defer hbox.deinit();
+    //        if (paned.collapsed() and dvui.button(@src(), "To Preview", .{}, .{ .gravity_x = 1 })) {
+    //            paned.animateSplit(0);
+    //        }
+    //        if (dvui.button(@src(), "Use custom theme", .{}, .{})) {
+    //            dvui.themeSet(&custom_theme);
+    //        }
 
-            var theme_reset_dropdown = dvui.DropdownWidget.init(@src(), .{ .label = "Reset" }, .{});
-            theme_reset_dropdown.install();
-            if (theme_reset_dropdown.dropped()) {
-                for (.{modified_adwaita_theme} ++ dvui.Theme.builtins) |builtin_theme| {
-                    if (theme_reset_dropdown.addChoiceLabel(builtin_theme.name)) {
-                        custom_theme = builtin_theme;
-                        const len = @min(custom_theme_name_buffer.len, builtin_theme.name.len);
-                        @memcpy(custom_theme_name_buffer[0..len], builtin_theme.name[0..len]);
-                        @memset(custom_theme_name_buffer[len..], 0);
-                    }
-                }
-            }
-            theme_reset_dropdown.deinit();
-        }
+    //        var theme_reset_dropdown = dvui.DropdownWidget.init(@src(), .{ .label = "Reset" }, .{});
+    //        theme_reset_dropdown.install();
+    //        if (theme_reset_dropdown.dropped()) {
+    //            for (.{modified_adwaita_theme} ++ dvui.Theme.builtins) |builtin_theme| {
+    //                if (theme_reset_dropdown.addChoiceLabel(builtin_theme.name)) {
+    //                    custom_theme = builtin_theme;
+    //                    const len = @min(custom_theme_name_buffer.len, builtin_theme.name.len);
+    //                    @memcpy(custom_theme_name_buffer[0..len], builtin_theme.name[0..len]);
+    //                    @memset(custom_theme_name_buffer[len..], 0);
+    //                }
+    //            }
+    //        }
+    //        theme_reset_dropdown.deinit();
+    //    }
 
-        {
-            const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-            defer hbox.deinit();
+    //    {
+    //        const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+    //        defer hbox.deinit();
 
-            dvui.labelNoFmt(@src(), "Name:", .{}, .{ .gravity_y = 0.5 });
-            const text_entry = dvui.textEntry(@src(), .{
-                .text = .{ .buffer = &custom_theme_name_buffer },
-            }, .{});
-            defer text_entry.deinit();
-            if (text_entry.text_changed) {
-                custom_theme.name = text_entry.getText();
-            }
-        }
+    //        dvui.labelNoFmt(@src(), "Name:", .{}, .{ .gravity_y = 0.5 });
+    //        const text_entry = dvui.textEntry(@src(), .{
+    //            .text = .{ .buffer = &custom_theme_name_buffer },
+    //        }, .{});
+    //        defer text_entry.deinit();
+    //        if (text_entry.text_changed) {
+    //            custom_theme.name = text_entry.getText();
+    //        }
+    //    }
 
-        const active_page = dvui.dataGetPtrDefault(null, vbox.data().id, "Page", ThemeEditingPage, .Colors);
-        {
-            var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-            tabs.install();
-            defer tabs.deinit();
-            inline for (std.meta.tags(ThemeEditingPage), 0..) |page, i| {
-                var tab = tabs.addTab(active_page.* == page, .{
-                    .expand = .horizontal,
-                    .padding = .all(2),
-                    .id_extra = i,
-                });
-                defer tab.deinit();
-                if (tab.clicked()) {
-                    active_page.* = page;
-                }
-                var label_opts = tab.data().options.strip();
-                if (dvui.captured(tab.data().id)) {
-                    label_opts.color_text = .{ .name = .text_press };
-                }
-                dvui.labelNoFmt(@src(), @tagName(page), .{}, .{});
-            }
-        }
+    //    const active_page = dvui.dataGetPtrDefault(null, vbox.data().id, "Page", ThemeEditingPage, .Colors);
+    //    {
+    //        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+    //        tabs.install();
+    //        defer tabs.deinit();
+    //        inline for (std.meta.tags(ThemeEditingPage), 0..) |page, i| {
+    //            var tab = tabs.addTab(active_page.* == page, .{
+    //                .expand = .horizontal,
+    //                .padding = .all(2),
+    //                .id_extra = i,
+    //            });
+    //            defer tab.deinit();
+    //            if (tab.clicked()) {
+    //                active_page.* = page;
+    //            }
+    //            var label_opts = tab.data().options.strip();
+    //            if (dvui.captured(tab.data().id)) {
+    //                label_opts.color_text = .{ .name = .text_press };
+    //            }
+    //            dvui.labelNoFmt(@src(), @tagName(page), .{}, .{});
+    //        }
+    //    }
 
-        switch (active_page.*) {
-            .Colors => _ = colors(&custom_theme),
-            .Fonts => _ = fonts(&custom_theme),
-            .Styles => _ = styles(&custom_theme),
-        }
-    }
+    //    switch (active_page.*) {
+    //        .Colors => _ = colors(&custom_theme),
+    //        .Fonts => _ = fonts(&custom_theme),
+    //        .Styles => _ = styles(&custom_theme),
+    //    }
+    //}
 
-    if (paned.showSecond()) {
-        const prev_theme = dvui.themeGet().*;
-        defer dvui.themeSet(&prev_theme);
-        dvui.themeSet(&custom_theme);
+    //if (paned.showSecond()) {
+    //    const prev_theme = dvui.themeGet().*;
+    //    defer dvui.themeSet(&prev_theme);
+    //    dvui.themeSet(&custom_theme);
 
-        var vbox = dvui.box(@src(), .{}, .{ .background = true, .padding = .all(10), .corner_radius = .all(10) });
-        defer vbox.deinit();
+    //    var vbox = dvui.box(@src(), .{}, .{ .background = true, .padding = .all(10), .corner_radius = .all(10) });
+    //    defer vbox.deinit();
 
-        if (paned.collapsed() and dvui.button(@src(), "To Editor", .{}, .{ .gravity_x = 1 })) {
-            paned.animateSplit(1);
-        }
+    //    if (paned.collapsed() and dvui.button(@src(), "To Editor", .{}, .{ .gravity_x = 1 })) {
+    //        paned.animateSplit(1);
+    //    }
 
-        {
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-            defer hbox.deinit();
+    //    {
+    //        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+    //        defer hbox.deinit();
 
-            _ = dvui.button(@src(), "Accent", .{}, dvui.themeGet().accent());
-            _ = dvui.button(@src(), "Error", .{}, dvui.themeGet().err());
-            _ = dvui.button(@src(), "Window", .{}, .{ .color_fill = .fill_window });
-            _ = dvui.button(@src(), "Content", .{}, .{ .color_fill = .fill });
-            _ = dvui.button(@src(), "Control", .{}, .{});
-        }
+    //        _ = dvui.button(@src(), "Accent", .{}, dvui.themeGet().accent());
+    //        _ = dvui.button(@src(), "Error", .{}, dvui.themeGet().err());
+    //        _ = dvui.button(@src(), "Window", .{}, .{ .color_fill = .fill_window });
+    //        _ = dvui.button(@src(), "Content", .{}, .{ .color_fill = .fill });
+    //        _ = dvui.button(@src(), "Control", .{}, .{});
+    //    }
 
-        inline for (@typeInfo(Options.FontStyle).@"enum".fields, 0..) |font_style, i| {
-            dvui.labelNoFmt(@src(), font_style.name, .{}, .{ .font = @field(custom_theme, "font_" ++ font_style.name), .id_extra = i });
-        }
+    //    inline for (@typeInfo(Options.FontStyle).@"enum".fields, 0..) |font_style, i| {
+    //        dvui.labelNoFmt(@src(), font_style.name, .{}, .{ .font = @field(custom_theme, "font_" ++ font_style.name), .id_extra = i });
+    //    }
 
-        const tl = dvui.textLayout(@src(), .{}, .{ .border = .all(1), .background = true });
-        tl.addText(
-            \\Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur semper consequat sapien, eu tempus neque cursus quis. Vestibulum tincidunt ex ac mi aliquet, non molestie tellus pharetra. Donec egestas nisi vel varius condimentum. Aenean id sagittis purus. Curabitur ultrices, nulla vel facilisis fermentum, risus dolor finibus mauris, consequat tincidunt eros mauris id orci.
-        , .{});
+    //    const tl = dvui.textLayout(@src(), .{}, .{ .border = .all(1), .background = true });
+    //    tl.addText(
+    //        \\Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur semper consequat sapien, eu tempus neque cursus quis. Vestibulum tincidunt ex ac mi aliquet, non molestie tellus pharetra. Donec egestas nisi vel varius condimentum. Aenean id sagittis purus. Curabitur ultrices, nulla vel facilisis fermentum, risus dolor finibus mauris, consequat tincidunt eros mauris id orci.
+    //    , .{});
 
-        tl.addTextTooltip(@src(),
-            \\Vestibulum aliquam malesuada nibh, quis dignissim elit sollicitudin ac. Donec bibendum tortor nec odio suscipit, non laoreet nulla viverra. Ut dignissim cursus sodales. Sed vel neque sollicitudin, pretium urna non, efficitur felis. Integer in sapien cursus, ullamcorper leo sed, pharetra ex. Donec porta sollicitudin arcu id malesuada. Sed sollicitudin iaculis elit quis convallis. Duis ac risus ac erat molestie finibus. Nunc eget posuere augue. Nulla ut metus enim. Curabitur quis erat vitae diam volutpat lacinia et non metus. Suspendisse vel ullamcorper nulla, eu tristique sem.
-        , "Praesent gravida felis sed ipsum placerat", .{});
+    //    tl.addTextTooltip(@src(),
+    //        \\Vestibulum aliquam malesuada nibh, quis dignissim elit sollicitudin ac. Donec bibendum tortor nec odio suscipit, non laoreet nulla viverra. Ut dignissim cursus sodales. Sed vel neque sollicitudin, pretium urna non, efficitur felis. Integer in sapien cursus, ullamcorper leo sed, pharetra ex. Donec porta sollicitudin arcu id malesuada. Sed sollicitudin iaculis elit quis convallis. Duis ac risus ac erat molestie finibus. Nunc eget posuere augue. Nulla ut metus enim. Curabitur quis erat vitae diam volutpat lacinia et non metus. Suspendisse vel ullamcorper nulla, eu tristique sem.
+    //    , "Praesent gravida felis sed ipsum placerat", .{});
 
-        tl.deinit();
-    }
+    //    tl.deinit();
+    //}
 }
 
 const ThemeEditingPage = enum {
@@ -433,7 +433,7 @@ test "DOCIMG theming" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             theming();
             return .ok;

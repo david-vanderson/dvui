@@ -5,13 +5,23 @@
     .font_name_heading = "Aleo",
     .font_name_caption = "Aleo",
     .font_name_title = "AleoBd",
-    .color_focus = "#fe8019",  
-    .color_text = "#ebdbb2",   
-    .color_text_press = "#1d2021", 
-    .color_fill_text = "#7c6f64", 
-    .color_fill_container = "#665c54", 
-    .color_fill_control = "#7c6f64", 
-    .color_fill_hover = "#83a598", 
-    .color_fill_press = "#fe8019", 
-    .color_border = "#83a598",
+
+    .focus = "#fe8019",
+    .border = "#83a598",
+    .text = "#ebdbb2",
+    .fill = "#7c6f64",
+
+    .control = .{
+        .fill = "#7c6f64",
+        .fill_hover = "#83a598",
+        .fill_press = "#fe8019",
+        .text_press = "#1d2021",
+    },
+    .window = .{
+        .fill = "#665c54",
+    },
+    .highlight = .{
+        .fill = "#fe8019",
+        .text = "#1d2021",
+    },
 }

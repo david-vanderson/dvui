@@ -38,6 +38,8 @@ scroll_to_focused: bool = false,
 text_input_rect: ?Rect.Natural = null,
 
 snap_to_pixels: bool = true,
+/// The alpha value for all rendering. All colors alpha values will be
+/// multiplied by this value.
 alpha: f32 = 1.0,
 
 /// Uses `arena` allocator
@@ -1214,19 +1216,43 @@ pub fn textInputRequested(self: *const Self) ?Rect.Natural {
     return self.text_input_rect;
 }
 
+pub fn addRenderCommand(self: *Self, cmd: dvui.RenderCommand.Command, after: bool) void {
+    var sw = self.subwindowCurrent();
+    const render_cmd: dvui.RenderCommand = .{
+        .clip = self.clipRect,
+        .alpha = self.alpha,
+        .snap = self.snap_to_pixels,
+        .cmd = cmd,
+    };
+    if (after) {
+        sw.render_cmds_after.append(self.arena(), render_cmd) catch |err| {
+            dvui.logError(@src(), err, "Could not append to render_cmds_after", .{});
+        };
+    } else {
+        sw.render_cmds.append(self.arena(), render_cmd) catch |err| {
+            dvui.logError(@src(), err, "Could not append to render_cmds", .{});
+        };
+    }
+}
+
 pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
-    const oldsnap = dvui.snapToPixels();
-    defer _ = dvui.snapToPixelsSet(oldsnap);
+    const old_snap = self.snap_to_pixels;
+    defer self.snap_to_pixels = old_snap;
 
-    const oldclip = dvui.clipGet();
-    defer dvui.clipSet(oldclip);
+    const old_alpha = self.alpha;
+    defer self.alpha = old_alpha;
 
-    const old_rendering = dvui.renderingSet(true);
-    defer _ = dvui.renderingSet(old_rendering);
+    const old_clip = self.clipRect;
+    defer self.clipRect = old_clip;
+
+    const old_rendering = self.render_target.rendering;
+    self.render_target.rendering = true;
+    defer self.render_target.rendering = old_rendering;
 
     for (queue) |*drc| {
-        _ = dvui.snapToPixelsSet(drc.snap);
-        dvui.clipSet(drc.clip);
+        self.snap_to_pixels = drc.snap;
+        self.clipRect = drc.clip;
+        self.alpha = drc.alpha;
         switch (drc.cmd) {
             .text => |t| {
                 try dvui.renderText(t);
@@ -1235,12 +1261,16 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
                 try dvui.renderTexture(t.tex, t.rs, t.opts);
             },
             .pathFillConvex => |pf| {
-                var triangles = try pf.path.fillConvexTriangles(self.lifo(), pf.opts);
+                var options = pf.opts;
+                options.color = options.color.opacity(self.alpha);
+                var triangles = try pf.path.fillConvexTriangles(self.lifo(), options);
                 defer triangles.deinit(self.lifo());
                 try dvui.renderTriangles(triangles, null);
             },
             .pathStroke => |ps| {
-                var triangles = try ps.path.strokeTriangles(self.lifo(), ps.opts);
+                var options = ps.opts;
+                options.color = options.color.opacity(self.alpha);
+                var triangles = try ps.path.strokeTriangles(self.lifo(), options);
                 defer triangles.deinit(self.lifo());
                 try dvui.renderTriangles(triangles, null);
             },

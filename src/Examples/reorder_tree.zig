@@ -98,7 +98,7 @@ pub fn reorderListsSimple(lay: reorderLayout) void {
         }
 
         // actual content of the list entry
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .fill_window });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .style = .window });
         defer hbox.deinit();
 
         dvui.label(@src(), "{s}", .{s}, .{});
@@ -162,7 +162,7 @@ pub fn reorderListsAdvanced() void {
     if (g.strings_len == g.strings.len) {
         dvui.label(@src(), "List Full", .{}, .{ .gravity_x = 1.0 });
     } else {
-        var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0, .border = dvui.Rect.all(1), .margin = dvui.Rect.all(4), .background = true, .color_fill = .fill_window });
+        var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0, .border = dvui.Rect.all(1), .margin = dvui.Rect.all(4), .background = true, .style = .window });
         defer hbox2.deinit();
 
         dvui.label(@src(), "Drag to add : {d}", .{g.strings_len}, .{});
@@ -229,7 +229,7 @@ pub fn reorderListsAdvanced() void {
         }
 
         // actual content of the list entry
-        var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .fill_window });
+        var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .style = .window });
         defer hbox2.deinit();
 
         dvui.label(@src(), "{s}", .{s}, .{});
@@ -280,7 +280,7 @@ pub fn reorderTree() void {
             .border = .{ .x = 1 },
             .corner_radius = dvui.Rect.all(4),
             .box_shadow = .{
-                .color = .{ .color = .black },
+                .color = .black,
                 .offset = .{ .x = -5, .y = 5 },
                 .shrink = 5,
                 .fade = 10,
@@ -517,7 +517,7 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
 
             var expander_opts_override = dvui.Options{
                 .margin = .{ .x = 14 },
-                .color_border = .{ .color = color },
+                .color_border = color,
                 .background = if (expander_options.border != null) true else false,
                 .expand = .horizontal,
             };
@@ -677,7 +677,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
                     .file => {
                         const icon = dvui.entypo.text_document;
                         const icon_color = color;
-                        const text_color = dvui.themeGet().color_text;
+                        const text_color = dvui.themeGet().color(.control, .text);
 
                         _ = dvui.icon(
                             @src(),
@@ -694,7 +694,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
                             "{s}",
                             .{entry.name},
                             .{
-                                .color_text = .{ .color = text_color },
+                                .color_text = text_color,
                                 .padding = padding,
                             },
                         );
@@ -720,7 +720,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
                             },
                         );
                         dvui.label(@src(), "{s}", .{folder_name}, .{
-                            .color_text = .{ .color = dvui.themeGet().color_text },
+                            .color_text = dvui.themeGet().color(.control, .text),
                             .padding = padding,
                         });
                         _ = dvui.icon(
@@ -737,7 +737,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
 
                         var expander_opts_override = dvui.Options{
                             .margin = .{ .x = 14 },
-                            .color_border = .{ .color = color },
+                            .color_border = color,
                             .expand = .horizontal,
                         };
 
@@ -785,7 +785,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
 
     const folder_name = std.fs.path.basename(root_directory);
     dvui.label(@src(), "{s}", .{folder_name}, .{
-        .color_text = .{ .color = dvui.themeGet().color_text },
+        .color_text = dvui.themeGet().color(.control, .text),
         .padding = dvui.Rect.all(10),
     });
     dvui.icon(
@@ -801,14 +801,14 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
     );
 
     if (root_branch.expander(@src(), .{ .indent = 14.0 }, .{
-        .color_fill = .fill_window,
-        .color_border = .{ .color = tree_palette[0] },
+        .color_fill = dvui.themeGet().color(.window, .fill),
+        .color_border = tree_palette[0],
         .expand = .horizontal,
         .corner_radius = root_branch.button.wd.options.corner_radius,
         .background = true,
         .border = .{ .x = 1 },
         .box_shadow = .{
-            .color = .{ .color = .black },
+            .color = .black,
             .offset = .{ .x = -5, .y = 5 },
             .shrink = 5,
             .fade = 10,
