@@ -192,9 +192,14 @@ pub const builtin = struct {
     pub const adwaita_light = @import("themes/Adwaita.zig").light;
     pub const adwaita_dark = @import("themes/Adwaita.zig").dark;
     pub const dracula = QuickTheme.builtin.dracula.toTheme(null) catch unreachable;
-    //pub const gruvbox = QuickTheme.builtin.gruvbox.toTheme(null) catch unreachable;
-    //pub const jungle = QuickTheme.builtin.jungle.toTheme(null) catch unreachable;
-    //pub const opendyslexic = QuickTheme.builtin.opendyslexic.toTheme(null) catch unreachable;
+    pub const gruvbox = QuickTheme.builtin.gruvbox.toTheme(null) catch unreachable;
+    pub const jungle = QuickTheme.builtin.jungle.toTheme(null) catch unreachable;
+    pub const opendyslexic = QuickTheme.builtin.opendyslexic.toTheme(null) catch unreachable;
+
+    test {
+        // Ensures all builting themes are valid
+        std.testing.refAllDecls(@This());
+    }
 };
 
 /// A comptime array of all the builtin themes sorted alphabetically
@@ -216,10 +221,17 @@ pub const builtins = blk: {
 
 pub const QuickTheme = struct {
     pub const builtin = struct {
+        pub const adwaita_light: QuickTheme = @import("themes/adwaita_light.zon");
+        pub const adwaita_dark: QuickTheme = @import("themes/adwaita_dark.zon");
         pub const dracula: QuickTheme = @import("themes/dracula.zon");
         pub const gruvbox: QuickTheme = @import("themes/gruvbox.zon");
         pub const jungle: QuickTheme = @import("themes/jungle.zon");
         pub const opendyslexic: QuickTheme = @import("themes/opendyslexic.zon");
+
+        test {
+            // Ensures all the .zon files are valid `QuickTheme` types
+            std.testing.refAllDecls(@This());
+        }
     };
 
     name: []const u8,
@@ -231,8 +243,7 @@ pub const QuickTheme = struct {
     font_name_caption: []const u8,
     font_name_title: []const u8,
 
-    // Will fallback to the `accent` color if not defined
-    focus: ?[]const u8 = null,
+    focus: []const u8,
 
     // text/foreground color
     text: []const u8,
@@ -247,16 +258,14 @@ pub const QuickTheme = struct {
     fill_press: ?[]const u8 = null,
 
     border: []const u8,
-    accent: []const u8,
+    // Will fallback to the `focus` color if not defined
+    accent: ?[]const u8 = null,
 
     control: QuickColorStyle,
     window: QuickColorStyle,
-    /// If this is null, highlight will be created by averaging the accent color and all the content colors
-    highlight: ?QuickColorStyle = null,
-    /// If this is null, highlight will be created by averaging `err_base` and all the content colors
+    highlight: QuickColorStyle,
+    /// If this is null, highlight will be created by averaging `red` and all the content colors
     err: ?QuickColorStyle = null,
-
-    const err_base = Color.fromHex("#ffaaaa");
 
     pub const QuickColorStyle = struct {
         fill: ?[]const u8 = null,
@@ -295,13 +304,13 @@ pub const QuickTheme = struct {
         const fill_hover: ?Color = if (self.fill_hover) |hex| try .tryFromHex(hex) else null;
         const fill_press: ?Color = if (self.fill_press) |hex| try .tryFromHex(hex) else null;
         const border: Color = try .tryFromHex(self.border);
-        const accent: Color = try .tryFromHex(self.accent);
+        const focus: Color = try .tryFromHex(self.focus);
 
         return Theme{
             .name = if (gpa) |alloc| try alloc.dupe(u8, self.name) else self.name,
             .dark = text.brightness() > fill.brightness(),
 
-            .focus = if (self.focus) |hex| try Color.tryFromHex(hex) else accent,
+            .focus = focus,
 
             .text = text,
             .text_hover = text_hover,
@@ -310,27 +319,19 @@ pub const QuickTheme = struct {
             .fill_hover = fill_hover,
             .fill_press = fill_press,
             .border = border,
-            .accent = accent,
+            .accent = if (self.accent) |hex| try Color.tryFromHex(hex) else focus,
 
             .control = try parseStyle(self.control),
             .window = try parseStyle(self.window),
-            .highlight = if (self.highlight) |s| try parseStyle(s) else .{
-                .text = .average(accent, text),
-                .text_hover = if (text_hover) |col| .average(accent, col) else null,
-                .text_press = if (text_press) |col| .average(accent, col) else null,
-                .fill = .average(accent, fill),
-                .fill_hover = if (fill_hover) |col| .average(accent, col) else null,
-                .fill_press = if (fill_press) |col| .average(accent, col) else null,
-                .border = .average(accent, border),
-            },
+            .highlight = try parseStyle(self.highlight),
             .err = if (self.err) |s| try parseStyle(s) else .{
-                .text = .average(err_base, text),
-                .text_hover = if (text_hover) |col| .average(err_base, col) else null,
-                .text_press = if (text_press) |col| .average(err_base, col) else null,
-                .fill = .average(err_base, fill),
-                .fill_hover = if (fill_hover) |col| .average(err_base, col) else null,
-                .fill_press = if (fill_press) |col| .average(err_base, col) else null,
-                .border = .average(err_base, border),
+                .text = .average(.red, text),
+                .text_hover = if (text_hover) |col| .average(.red, col) else null,
+                .text_press = if (text_press) |col| .average(.red, col) else null,
+                .fill = .average(.red, fill),
+                .fill_hover = if (fill_hover) |col| .average(.red, col) else null,
+                .fill_press = if (fill_press) |col| .average(.red, col) else null,
+                .border = .average(.red, border),
             },
 
             .font_body = .{
