@@ -328,7 +328,7 @@ pub fn dropdownAdvanced() void {
             var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
             defer hbox2.deinit();
 
-            var opts: Options = if (mi.show_active) .{ .style = .highlight } else .{};
+            const opts: Options = mi.colors();
 
             dvui.icon(
                 @src(),
@@ -355,7 +355,7 @@ pub fn dropdownAdvanced() void {
             var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
             defer vbox.deinit();
 
-            var opts: Options = if (mi.show_active) .{ .style = .highlight } else .{};
+            const opts: Options = mi.colors();
 
             _ = dvui.image(@src(), .{ .source = .{ .imageFile = .{ .bytes = zig_favicon, .name = "zig favicon" } } }, opts.override(.{ .gravity_x = 0.5 }));
             dvui.labelNoFmt(@src(), "image above text", .{}, opts.override(.{ .gravity_x = 0.5, .padding = .{} }));

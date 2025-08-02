@@ -64,10 +64,10 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 pub fn install(self: *DropdownWidget) void {
     self.menu.install();
 
-    self.menuItem = MenuItemWidget.init(@src(), .{ .submenu = true }, wrapInner(self.options));
+    self.menuItem = MenuItemWidget.init(@src(), .{ .submenu = true, .focus_as_outline = true }, wrapInner(self.options));
     self.menuItem.install();
     self.menuItem.processEvents();
-    self.menuItem.drawBackground(.{ .focus_as_outline = true });
+    self.menuItem.drawBackground();
 
     if (self.init_options.label) |ll| {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
@@ -178,12 +178,7 @@ pub fn addChoiceLabel(self: *DropdownWidget, label_text: []const u8) bool {
     var mi = self.addChoice();
     defer mi.deinit();
 
-    var opts = self.options.strip();
-    if (mi.show_active) {
-        opts = opts.override(.{ .style = .highlight });
-    }
-
-    dvui.labelNoFmt(@src(), label_text, .{}, opts);
+    dvui.labelNoFmt(@src(), label_text, .{}, self.options.strip().override(mi.colors()));
 
     if (mi.activeRect()) |_| {
         self.close();
@@ -205,7 +200,7 @@ pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
     self.drop_mi_id = self.drop_mi.data().id;
     self.drop_mi.install();
     self.drop_mi.processEvents();
-    self.drop_mi.drawBackground(.{});
+    self.drop_mi.drawBackground();
 
     if (self.drop_first_frame) {
         if (self.init_options.selected_index) |si| {
