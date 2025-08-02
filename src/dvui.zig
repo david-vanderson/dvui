@@ -6467,16 +6467,18 @@ pub fn TextEntryNumberResult(comptime T: type) type {
 
 pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryNumberInitOptions(T), opts: Options) TextEntryNumberResult(T) {
     const base_filter = "1234567890";
-    const filter = switch (@typeInfo(T)) {
+    const type_id: u8, const filter = switch (@typeInfo(T)) {
         .int => |int| switch (int.signedness) {
-            .signed => base_filter ++ "+-",
-            .unsigned => base_filter ++ "+",
+            .signed => .{ 0, base_filter ++ "+-" },
+            .unsigned => .{ 1, base_filter ++ "+" },
         },
-        .float => base_filter ++ "+-.e",
+        .float => .{ 2, base_filter ++ "+-.e" },
         else => unreachable,
     };
 
-    const id = dvui.parentGet().extendId(src, opts.idExtra());
+    // type_id is needed so that the id changes with the type for `data...` functions
+    // https://github.com/david-vanderson/dvui/issues/502
+    const id: WidgetId = @enumFromInt(dvui.hashIdKey(dvui.parentGet().extendId(src, opts.idExtra()), &.{type_id}));
 
     const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 32);
 
