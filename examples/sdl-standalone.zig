@@ -403,9 +403,8 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                 }
             },
             inline .@"union" => {
-                                if (depth > 0) {
-                                    wholeStruct(@src(), @tagName(key), &@field(container, @tagName(key)).?, depth - 1, options);
-                                }
+                
+                                    wholeStruct(@src(), @tagName(key), &@field(container, @tagName(key)).?, depth, options);
 
                 //if (dvui.se.optionalFieldWidget2(@src(), @tagName(key), &@field(container, @tagName(key)), .{}, &al)) |hbox| {
 //                    defer hbox.deinit();
