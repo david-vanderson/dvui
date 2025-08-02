@@ -6,11 +6,10 @@
     .font_name_caption = "Pixelify",
     .font_name_title = "Pixelify",
 
+    .focus = "#ff79c6",
+    .border = "#6272a4",
     .text = "#f8f8f2",
     .fill = "#282a36",
-
-    .accent = "#ff79c6",
-    .border = "#6272a4",
 
     .control = .{
         .fill = "#44475a",
@@ -20,5 +19,9 @@
     },
     .window = .{
         .fill = "#282a36",
+    },
+    .highlight = .{
+        .fill = "#ff79c6",
+        .text = "#21222c",
     },
 }
