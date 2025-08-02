@@ -59,15 +59,15 @@ pub var defaults: Options = .{
 
 pub const InitOptions = struct {
     dir: enums.Direction,
-    parentSubwindowId: ?dvui.WidgetId = null,
+    parentSubwindowId: ?dvui.Id = null,
 };
 
 wd: WidgetData,
 
 init_opts: InitOptions,
-winId: dvui.WidgetId,
+winId: dvui.Id,
 parentMenu: ?*MenuWidget = null,
-last_focus: dvui.WidgetId,
+last_focus: dvui.Id,
 /// SAFETY: Set in `install`
 box: BoxWidget = undefined,
 
@@ -155,7 +155,7 @@ pub fn data(self: *MenuWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *MenuWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *MenuWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }

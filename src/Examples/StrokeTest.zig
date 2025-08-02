@@ -59,7 +59,7 @@ pub fn data(self: *Self) *dvui.WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *Self, id: dvui.WidgetId, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {
+pub fn rectFor(self: *Self, id: dvui.Id, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }

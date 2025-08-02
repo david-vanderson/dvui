@@ -59,7 +59,7 @@ pub fn data(self: *FlexBoxWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *FlexBoxWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *FlexBoxWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     _ = e;
     _ = g;

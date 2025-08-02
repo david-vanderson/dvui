@@ -19,17 +19,17 @@ previous_window: ?*Window = null,
 subwindows: std.ArrayListUnmanaged(Subwindow) = .empty,
 
 /// id of the subwindow widgets are being added to
-subwindow_currentId: WidgetId = .zero,
+subwindow_currentId: Id = .zero,
 
 /// natural rect of the last subwindow, dialogs use this
 /// to center themselves
 subwindow_currentRect: Rect.Natural = .{},
 
 /// id of the subwindow that has focus
-focused_subwindowId: WidgetId = .zero,
+focused_subwindowId: Id = .zero,
 
-last_focused_id_this_frame: WidgetId = .zero,
-last_registered_id_this_frame: WidgetId = .zero,
+last_focused_id_this_frame: Id = .zero,
+last_registered_id_this_frame: Id = .zero,
 scroll_to_focused: bool = false,
 
 /// natural rect telling the backend where our text input box is:
@@ -83,7 +83,7 @@ clipRect: dvui.Rect.Physical = .{},
 theme: Theme,
 
 /// Uses `gpa` allocator
-min_sizes: dvui.TrackingAutoHashMap(WidgetId, Size, .put_only) = .empty,
+min_sizes: dvui.TrackingAutoHashMap(Id, Size, .put_only) = .empty,
 /// Uses `gpa` allocator
 tags: dvui.TrackingAutoHashMap([]const u8, dvui.TagData, .put_only) = .empty,
 data_mutex: std.Thread.Mutex = .{},
@@ -137,17 +137,17 @@ end_rendering_done: bool = false,
 debug: @import("Debug.zig") = .{},
 
 pub const Subwindow = struct {
-    id: WidgetId,
+    id: Id,
     rect: Rect,
     rect_pixels: dvui.Rect.Physical,
-    focused_widgetId: ?WidgetId = null,
+    focused_widgetId: ?Id = null,
     /// Uses `arena` allocator
     render_cmds: std.ArrayListUnmanaged(dvui.RenderCommand) = .empty,
     /// Uses `arena` allocator
     render_cmds_after: std.ArrayListUnmanaged(dvui.RenderCommand) = .empty,
     used: bool = true,
     modal: bool = false,
-    stay_above_parent_window: ?WidgetId = null,
+    stay_above_parent_window: ?Id = null,
 };
 
 const SavedData = struct {
@@ -189,7 +189,7 @@ pub fn init(
     backend_ctx: dvui.Backend,
     init_opts: InitOptions,
 ) !Self {
-    const hashval = dvui.hashSrc(null, src, init_opts.id_extra);
+    const hashval = dvui.Id.hashSrc(null, src, init_opts.id_extra);
 
     var self = Self{
         .gpa = gpa,
@@ -450,7 +450,7 @@ pub fn arena(self: *Self) std.mem.Allocator {
 }
 
 /// called from gui thread
-pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?WidgetId) void {
+pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?Id) void {
     if (self.debug.logRefresh(null)) {
         log.debug("{s}:{d} refresh {?x}", .{ src.file, src.line, id });
     }
@@ -458,14 +458,14 @@ pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?WidgetId
 }
 
 /// called from any thread
-pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?WidgetId) void {
+pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?Id) void {
     if (self.debug.logRefresh(null)) {
         log.debug("{s}:{d} refreshBackend {?x}", .{ src.file, src.line, id });
     }
     self.backend.refresh();
 }
 
-pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?WidgetId, event_num: ?u16) void {
+pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?Id, event_num: ?u16) void {
     const winId = subwindow_id orelse self.subwindow_currentId;
     if (self.focused_subwindowId != winId) {
         self.focused_subwindowId = winId;
@@ -482,7 +482,7 @@ pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?WidgetId, event_num: ?
 }
 
 // Only for keyboard events
-pub fn focusEventsInternal(self: *Self, event_num: u16, windowId: ?WidgetId, widgetId: ?WidgetId) void {
+pub fn focusEventsInternal(self: *Self, event_num: u16, windowId: ?Id, widgetId: ?Id) void {
     var evts = self.events.items;
     var k: usize = 0;
     while (k < evts.len) : (k += 1) {
@@ -500,7 +500,7 @@ pub fn focusEventsInternal(self: *Self, event_num: u16, windowId: ?WidgetId, wid
 }
 
 // Only for mouse/touch events
-pub fn captureEventsInternal(self: *Self, event_num: u16, widgetId: ?WidgetId) void {
+pub fn captureEventsInternal(self: *Self, event_num: u16, widgetId: ?Id) void {
     var evts = self.events.items;
     var k: usize = 0;
     while (k < evts.len) : (k += 1) {
@@ -1143,7 +1143,7 @@ fn positionMouseEventRemove(self: *Self) void {
     }
 }
 
-pub fn windowFor(self: *const Self, p: Point.Physical) WidgetId {
+pub fn windowFor(self: *const Self, p: Point.Physical) Id {
     var i = self.subwindows.items.len;
     while (i > 0) : (i -= 1) {
         const sw = &self.subwindows.items[i - 1];
@@ -1252,7 +1252,7 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
 }
 
 /// data is copied into internal storage
-pub fn dataSetAdvanced(self: *Self, id: WidgetId, key: []const u8, data_in: anytype, comptime copy_slice: bool, num_copies: usize) void {
+pub fn dataSetAdvanced(self: *Self, id: Id, key: []const u8, data_in: anytype, comptime copy_slice: bool, num_copies: usize) void {
     const hash: u64 = dvui.hashIdKey(id, key);
 
     const dt = @typeInfo(@TypeOf(data_in));
@@ -1323,7 +1323,7 @@ pub fn dataSetAdvanced(self: *Self, id: WidgetId, key: []const u8, data_in: anyt
 }
 
 /// returns the backing byte slice if we have one
-pub fn dataGetInternal(self: *Self, id: WidgetId, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
+pub fn dataGetInternal(self: *Self, id: Id, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
     const hash: u64 = dvui.hashIdKey(id, key);
 
     self.data_mutex.lock();
@@ -1341,7 +1341,7 @@ pub fn dataGetInternal(self: *Self, id: WidgetId, key: []const u8, comptime T: t
     }
 }
 
-pub fn dataRemove(self: *Self, id: WidgetId, key: []const u8) void {
+pub fn dataRemove(self: *Self, id: Id, key: []const u8) void {
     const hash: u64 = dvui.hashIdKey(id, key);
 
     self.data_mutex.lock();
@@ -1364,7 +1364,7 @@ pub fn dataRemove(self: *Self, id: WidgetId, key: []const u8) void {
 ///
 ///  If calling from a non-GUI thread, do any dataSet() calls before unlocking the
 ///  mutex to ensure that data is available before the dialog is displayed.
-pub fn dialogAdd(self: *Self, id: WidgetId, display: dvui.DialogDisplayFn) *std.Thread.Mutex {
+pub fn dialogAdd(self: *Self, id: Id, display: dvui.DialogDisplayFn) *std.Thread.Mutex {
     self.dialog_mutex.lock();
 
     for (self.dialogs.items) |*d| {
@@ -1382,7 +1382,7 @@ pub fn dialogAdd(self: *Self, id: WidgetId, display: dvui.DialogDisplayFn) *std.
 }
 
 /// Only called from gui thread.
-pub fn dialogRemove(self: *Self, id: WidgetId) void {
+pub fn dialogRemove(self: *Self, id: Id) void {
     self.dialog_mutex.lock();
     defer self.dialog_mutex.unlock();
 
@@ -1424,7 +1424,7 @@ fn dialogsShow(self: *Self) void {
     }
 }
 
-pub fn timer(self: *Self, id: WidgetId, micros: i32) void {
+pub fn timer(self: *Self, id: Id, micros: i32) void {
     // when start_time is in the future, we won't spam frames, so this will
     // cause a single frame and then expire
     const a = Animation{ .start_time = micros, .end_time = micros };
@@ -1434,7 +1434,7 @@ pub fn timer(self: *Self, id: WidgetId, micros: i32) void {
     };
 }
 
-pub fn timerRemove(self: *Self, id: WidgetId) void {
+pub fn timerRemove(self: *Self, id: Id) void {
     const h = dvui.hashIdKey(id, "_timer");
     _ = self.animations.remove(h);
 }
@@ -1444,7 +1444,7 @@ pub fn timerRemove(self: *Self, id: WidgetId) void {
 /// calling from a non-GUI thread, do any `dvui.dataSet` calls before unlocking
 /// the mutex to ensure that data is available before the dialog is
 /// displayed.
-pub fn toastAdd(self: *Self, id: WidgetId, subwindow_id: ?WidgetId, display: dvui.DialogDisplayFn, timeout: ?i32) *std.Thread.Mutex {
+pub fn toastAdd(self: *Self, id: Id, subwindow_id: ?Id, display: dvui.DialogDisplayFn, timeout: ?i32) *std.Thread.Mutex {
     self.dialog_mutex.lock();
 
     for (self.toasts.items) |*t| {
@@ -1468,7 +1468,7 @@ pub fn toastAdd(self: *Self, id: WidgetId, subwindow_id: ?WidgetId, display: dvu
     return &self.dialog_mutex;
 }
 
-pub fn toastRemove(self: *Self, id: WidgetId) void {
+pub fn toastRemove(self: *Self, id: Id) void {
     self.dialog_mutex.lock();
     defer self.dialog_mutex.unlock();
 
@@ -1683,7 +1683,7 @@ pub fn data(self: *const Self) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *Self, id: WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *Self, id: Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     return self.layout.rectFor(self.data().rect, id, min_size, e, g);
 }
 
@@ -1709,7 +1709,7 @@ const Point = dvui.Point;
 const Event = dvui.Event;
 const WidgetData = dvui.WidgetData;
 const Widget = dvui.Widget;
-const WidgetId = dvui.WidgetId;
+const Id = dvui.Id;
 
 const Animation = dvui.Animation;
 const Theme = dvui.Theme;

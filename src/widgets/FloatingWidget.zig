@@ -19,7 +19,7 @@ pub var defaults: Options = .{
 prev_rendering: bool = undefined,
 wd: WidgetData,
 /// SAFETY: Set by `install`
-prev_windowId: dvui.WidgetId = undefined,
+prev_windowId: dvui.Id = undefined,
 /// SAFETY: Set by `install`
 prevClip: Rect.Physical = undefined,
 scale_val: f32,
@@ -87,7 +87,7 @@ pub fn data(self: *FloatingWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *FloatingWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *FloatingWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
