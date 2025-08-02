@@ -96,7 +96,6 @@ pub fn register(self: *WidgetData) void {
         hasher.update(std.mem.asBytes(&self.init_options));
         hasher.update(std.mem.asBytes(&self.options.hash()));
         hasher.update(std.mem.asBytes(&self.rectScale()));
-        hasher.update(std.mem.asBytes(&self.visible()));
         hasher.update(std.mem.asBytes(&(self.id == focused_widget_id)));
     }
 
