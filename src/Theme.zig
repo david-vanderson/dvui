@@ -27,7 +27,6 @@ focus: Color,
 /// colors for content like textLayout
 /// * these are what Style .content use
 /// * fill/text usually have the highest contrast
-/// * accent used for textLayout selection
 /// * also fallbacks for null Colors in ColorStyles
 fill: Color,
 fill_hover: ?Color = null,
@@ -36,7 +35,6 @@ text: Color,
 text_hover: ?Color = null,
 text_press: ?Color = null,
 border: Color,
-accent: Color,
 
 /// colors for normal controls like buttons
 control: ColorStyle,
@@ -48,6 +46,7 @@ window: ColorStyle,
 /// * menu/dropdown items
 /// * checkboxes
 /// * radio buttons
+/// * text selection (uses .fill)
 highlight: ColorStyle,
 
 /// colors for buttons to perform dangerous actions
@@ -76,7 +75,6 @@ pub const ColorStyle = struct {
     text_hover: ?Color = null,
     text_press: ?Color = null,
     border: ?Color = null,
-    accent: ?Color = null,
 };
 
 pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
@@ -109,7 +107,6 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
 pub fn color(self: *const Theme, style: Style, ask: Options.ColorAsk) Color {
     const cs: ColorStyle = switch (style) {
         .content => return sw: switch (ask) {
-            .accent => self.accent,
             .border => self.border,
             .fill => self.adjustColorForState(self.fill, ask),
             .fill_hover => self.fill_hover orelse continue :sw .fill,
@@ -125,7 +122,6 @@ pub fn color(self: *const Theme, style: Style, ask: Options.ColorAsk) Color {
     };
 
     return sw: switch (ask) {
-        .accent => cs.accent orelse self.color(.content, ask),
         .border => cs.border orelse self.color(.content, ask),
         .fill => if (cs.fill) |col| self.adjustColorForState(col, ask) else self.color(.content, ask),
         .fill_hover => cs.fill_hover orelse continue :sw .fill,
@@ -258,8 +254,6 @@ pub const QuickTheme = struct {
     fill_press: ?[]const u8 = null,
 
     border: []const u8,
-    // Will fallback to the `focus` color if not defined
-    accent: ?[]const u8 = null,
 
     control: QuickColorStyle,
     window: QuickColorStyle,
@@ -275,7 +269,6 @@ pub const QuickTheme = struct {
         text_hover: ?[]const u8 = null,
         text_press: ?[]const u8 = null,
         border: ?[]const u8 = null,
-        accent: ?[]const u8 = null,
     };
 
     /// Parses a json object with the fields of `QuickTheme`,
@@ -319,7 +312,6 @@ pub const QuickTheme = struct {
             .fill_hover = fill_hover,
             .fill_press = fill_press,
             .border = border,
-            .accent = if (self.accent) |hex| try Color.tryFromHex(hex) else focus,
 
             .control = try parseStyle(self.control),
             .window = try parseStyle(self.window),
@@ -384,7 +376,6 @@ pub const QuickTheme = struct {
             .text_hover = if (style.text_hover) |hex| try .tryFromHex(hex) else null,
             .text_press = if (style.text_press) |hex| try .tryFromHex(hex) else null,
             .border = if (style.border) |hex| try .tryFromHex(hex) else null,
-            .accent = if (style.accent) |hex| try .tryFromHex(hex) else null,
         };
     }
 };

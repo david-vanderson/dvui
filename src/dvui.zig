@@ -5639,7 +5639,9 @@ pub var slider_defaults: Options = .{
     .style = .control,
 };
 
-// returns true if fraction (0-1) was changed
+/// returns true if fraction (0-1) was changed
+///
+/// `Options.color_accent` overrides the color of the left side of the slider
 pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *f32, opts: Options) bool {
     std.debug.assert(fraction.* >= 0);
     std.debug.assert(fraction.* <= 1);
@@ -5749,7 +5751,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.accent), .fade = 1.0 });
+        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = opts.color_accent orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
     }
 
     switch (dir) {
@@ -6195,6 +6197,7 @@ pub const Progress_InitOptions = struct {
     percent: f32,
 };
 
+/// `Options.color_accent` overrides the color of the left side of the progress bar
 pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions, opts: Options) void {
     const options = progress_defaults.override(opts);
 
@@ -6219,7 +6222,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.accent), .fade = 1.0 });
+    part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = opts.color_accent orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
 }
 
 pub var checkbox_defaults: Options = .{
@@ -7341,6 +7344,7 @@ pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, 
     return ret;
 }
 
+/// `Options.color_accent` overrides the color of the plot line
 pub fn plotXY(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, thick: f32, xs: []const f64, ys: []const f64, opts: Options) void {
     const defaults: Options = .{ .padding = .{} };
     var p = dvui.plot(src, plot_opts, defaults.override(opts));
@@ -7350,7 +7354,7 @@ pub fn plotXY(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions
         s1.point(x, y);
     }
 
-    s1.stroke(thick, opts.color(.accent));
+    s1.stroke(thick, opts.color_accent orelse dvui.themeGet().color(.highlight, .fill));
 
     s1.deinit();
     p.deinit();

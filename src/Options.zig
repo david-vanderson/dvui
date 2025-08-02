@@ -47,6 +47,8 @@ tab_index: ?u16 = null,
 
 // used to override widget and theme defaults
 style: ?Theme.Style = null,
+/// Used by some widgets to override an accent color,
+/// usually sourced from `Theme.highlight.fill`
 color_accent: ?Color = null,
 color_text: ?Color = null,
 color_fill: ?Color = null,
@@ -174,7 +176,6 @@ pub const BoxShadow = struct {
 
 /// All the colors you can ask Options for
 pub const ColorAsk = enum {
-    accent,
     text,
     text_hover,
     text_press,
@@ -189,7 +190,6 @@ pub const ColorAsk = enum {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn color(self: *const Options, ask: ColorAsk) Color {
     return switch (ask) {
-        .accent => self.color_accent,
         .border => self.color_border,
         .fill, .fill_hover, .fill_press => if (self.color_fill) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
         .text, .text_hover, .text_press => if (self.color_text) |col| dvui.themeGet().adjustColorForState(col, ask) else null,

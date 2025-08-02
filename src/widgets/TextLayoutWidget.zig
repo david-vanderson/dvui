@@ -440,18 +440,22 @@ pub fn format(self: *TextLayoutWidget, comptime fmt: []const u8, args: anytype, 
     self.addText(l, opts);
 }
 
+/// `Options.color_accent` overrides the background for selected text
 pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) void {
     _ = self.addTextEx(text, .none, opts);
 }
 
+/// `Options.color_accent` overrides the background for selected text
 pub fn addTextClick(self: *TextLayoutWidget, text: []const u8, opts: Options) bool {
     return self.addTextEx(text, .click, opts);
 }
 
+/// `Options.color_accent` overrides the background for selected text
 pub fn addTextHover(self: *TextLayoutWidget, text: []const u8, opts: Options) bool {
     return self.addTextEx(text, .hover, opts);
 }
 
+/// `Options.color_accent` overrides the background for selected text
 pub fn addTextTooltip(self: *TextLayoutWidget, src: std.builtin.SourceLocation, text: []const u8, tooltip: []const u8, opts: Options) void {
     var tt: dvui.FloatingTooltipWidget = .init(src, .{
         .active_rect = .{},
@@ -966,6 +970,7 @@ const AddTextExAction = enum {
     hover,
 };
 
+/// `Options.color_accent` overrides the background for selected text
 fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction, opts: Options) bool {
     var ret = false;
 
@@ -1217,7 +1222,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 .background_color = options.color_fill,
                 .sel_start = self.selection.start -| self.bytes_seen,
                 .sel_end = self.selection.end -| self.bytes_seen,
-                .sel_color = options.color(.accent).opacity(0.75),
+                .sel_color = (opts.color_accent orelse dvui.themeGet().color(.highlight, .fill)).opacity(0.75),
             }) catch |err| {
                 dvui.logError(@src(), err, "Failed to render text: {s}", .{rtxt});
             };
