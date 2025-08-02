@@ -325,7 +325,7 @@ const tree_palette = &[_]dvui.Color{
     .{ .r = 0x4b, .g = 0x5b, .b = 0xab, .a = 0xff },
 };
 
-fn exampleRemoveTreeEntry(directory: []const u8, entries: *MutableTreeEntry.Children, old_directory: []const u8, uniqueId: dvui.WidgetId) void {
+fn exampleRemoveTreeEntry(directory: []const u8, entries: *MutableTreeEntry.Children, old_directory: []const u8, uniqueId: dvui.Id) void {
     for (entries.items, 0..) |*e, i| {
         const alloc = dvui.currentWindow().lifo();
         const abs_path = std.fs.path.join(alloc, &.{ directory, e.name }) catch "";
@@ -341,7 +341,7 @@ fn exampleRemoveTreeEntry(directory: []const u8, entries: *MutableTreeEntry.Chil
     }
 }
 
-fn examplePlaceTreeEntry(directory: []const u8, entries: *MutableTreeEntry.Children, new_directory: []const u8, uniqueId: dvui.WidgetId) void {
+fn examplePlaceTreeEntry(directory: []const u8, entries: *MutableTreeEntry.Children, new_directory: []const u8, uniqueId: dvui.Id) void {
     if (std.mem.containsAtLeast(u8, new_directory, 1, directory)) {
         if (dvui.dataGetPtr(null, uniqueId, "removed_entry", MutableTreeEntry)) |removed_entry| {
             const alloc = dvui.currentWindow().lifo();
@@ -452,7 +452,7 @@ const example_file_structure: []const ConstTreeEntry = &[_]ConstTreeEntry{
     },
 };
 
-fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.Children, entries: *MutableTreeEntry.Children, tree: *dvui.TreeWidget, uniqueId: dvui.WidgetId, color_id: *usize, branch_options: dvui.Options, expander_options: dvui.Options) !void {
+fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.Children, entries: *MutableTreeEntry.Children, tree: *dvui.TreeWidget, uniqueId: dvui.Id, color_id: *usize, branch_options: dvui.Options, expander_options: dvui.Options) !void {
     var id_extra: usize = 0;
     for (entries.items) |*entry| {
         id_extra += 1;
@@ -555,7 +555,7 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
 /// This is needed because we want to automatically deallocate when we are done
 fn keepExampleFileTreeDataAlive(const_file_tree: []const ConstTreeEntry) void {
     for (const_file_tree) |const_entry| {
-        const id: dvui.WidgetId = @enumFromInt(dvui.hashIdKey(@enumFromInt(@intFromPtr(const_file_tree.ptr)), const_entry.name));
+        const id: dvui.Id = @enumFromInt(dvui.hashIdKey(@enumFromInt(@intFromPtr(const_file_tree.ptr)), const_entry.name));
         const child_slice = dvui.dataGetSlice(null, id, "child_slice", []MutableTreeEntry) orelse @panic("File tree slice did not exist");
         std.mem.doNotOptimizeAway(child_slice);
         if (const_entry.children.len > 0) {
@@ -566,7 +566,7 @@ fn keepExampleFileTreeDataAlive(const_file_tree: []const ConstTreeEntry) void {
 
 fn exampleFileTreeSetup(const_file_tree: []const ConstTreeEntry, mutable_file_tree: *MutableTreeEntry.Children) void {
     for (const_file_tree) |const_entry| {
-        const id: dvui.WidgetId = @enumFromInt(dvui.hashIdKey(@enumFromInt(@intFromPtr(const_file_tree.ptr)), const_entry.name));
+        const id: dvui.Id = @enumFromInt(dvui.hashIdKey(@enumFromInt(@intFromPtr(const_file_tree.ptr)), const_entry.name));
         // Allocate a data slice with the max amount of children possible which will be kept alive later.
         dvui.dataSetSliceCopies(null, id, "child_slice", &[1]MutableTreeEntry{undefined}, example_file_structure_max_children);
         var mutable_entry = MutableTreeEntry{
@@ -621,9 +621,9 @@ pub fn fileTree(src: std.builtin.SourceLocation, root_directory: []const u8, tre
     recurseFiles(root_directory, tree, uniqueId, branch_options, expander_options) catch std.debug.panic("Failed to recurse files", .{});
 }
 
-fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, uniqueId: dvui.WidgetId, branch_options: dvui.Options, expander_options: dvui.Options) !void {
+fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, uniqueId: dvui.Id, branch_options: dvui.Options, expander_options: dvui.Options) !void {
     const recursor = struct {
-        fn search(directory: []const u8, tree: *dvui.TreeWidget, uid: dvui.WidgetId, color_id: *usize, branch_opts: dvui.Options, expander_opts: dvui.Options) !void {
+        fn search(directory: []const u8, tree: *dvui.TreeWidget, uid: dvui.Id, color_id: *usize, branch_opts: dvui.Options, expander_opts: dvui.Options) !void {
             var dir = std.fs.cwd().openDir(directory, .{ .access_sub_paths = true, .iterate = true }) catch return;
             defer dir.close();
 

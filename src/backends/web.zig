@@ -736,28 +736,28 @@ pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) void {
     }
 }
 
-pub fn openFilePicker(id: dvui.WidgetId, accept: ?[]const u8, multiple: bool) void {
+pub fn openFilePicker(id: dvui.Id, accept: ?[]const u8, multiple: bool) void {
     const accept_final = accept orelse "";
     wasm.wasm_open_file_picker(id.asU64(), accept_final.ptr, accept_final.len, multiple);
 }
 
-pub fn getFileName(id: dvui.WidgetId, file_index: usize) ?[:0]const u8 {
+pub fn getFileName(id: dvui.Id, file_index: usize) ?[:0]const u8 {
     const ptr = wasm.wasm_get_file_name(id.asU64(), file_index);
     if (@intFromPtr(ptr) <= 0) return null;
     return std.mem.sliceTo(ptr, 0);
 }
 
-pub fn getFileSize(id: dvui.WidgetId, file_index: usize) ?usize {
+pub fn getFileSize(id: dvui.Id, file_index: usize) ?usize {
     const size: isize = wasm.wasm_get_file_size(id.asU64(), file_index);
     if (size <= 0) return null;
     return @intCast(size);
 }
 
-pub fn readFileData(id: dvui.WidgetId, file_index: usize, data: [*]u8) void {
+pub fn readFileData(id: dvui.Id, file_index: usize, data: [*]u8) void {
     wasm.wasm_read_file_data(id.asU64(), file_index, data);
 }
 
-pub fn getNumberOfFilesAvailable(id: dvui.WidgetId) usize {
+pub fn getNumberOfFilesAvailable(id: dvui.Id) usize {
     return wasm.wasm_get_number_of_files_available(id.asU64());
 }
 

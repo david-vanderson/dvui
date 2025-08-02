@@ -21,7 +21,7 @@ wd: WidgetData,
 init_options: InitOptions,
 
 prev_menu_root: ?dvui.MenuWidget.Root = null,
-winId: dvui.WidgetId,
+winId: dvui.Id,
 focused: bool = false,
 activePt: Point.Natural = .{},
 
@@ -79,7 +79,7 @@ pub fn data(self: *ContextWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *ContextWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *ContextWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     dvui.log.debug("{s}:{d} ContextWidget should not have normal child widgets, only menu stuff", .{ self.data().src.file, self.data().src.line });
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);

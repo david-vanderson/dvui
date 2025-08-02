@@ -7,7 +7,7 @@ var text_entry_multiline_buf: []u8 = &.{};
 var text_entry_multiline_break = false;
 
 /// ![image](Examples-text_entry.png)
-pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) void {
+pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
     var left_alignment = dvui.Alignment.init(@src(), 0);
     defer left_alignment.deinit();
 

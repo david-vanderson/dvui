@@ -224,7 +224,7 @@ pub fn data(self: *PanedWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *PanedWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) dvui.Rect {
+pub fn rectFor(self: *PanedWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) dvui.Rect {
     _ = id;
     var r = self.data().contentRect().justSize();
     var margin = self.handle_thick / 2 + self.init_opts.handle_margin;

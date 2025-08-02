@@ -6,7 +6,7 @@
 const std = @import("std");
 const dvui = @import("dvui.zig");
 const WidgetData = dvui.WidgetData;
-const WidgetId = dvui.WidgetId;
+const Id = dvui.Id;
 const Rect = dvui.Rect;
 
 pub const SelectAllState = enum {
@@ -113,7 +113,7 @@ pub const MultiSelectMouse = struct {
 /// Helper for select all support via the "select_all" keyboard binding.
 pub const SelectAllKeyboard = struct {
     selection_changed: bool = false,
-    last_focused_in_frame: WidgetId = .zero,
+    last_focused_in_frame: Id = .zero,
 
     /// reset() should be called immediately before the first "selectable" is created.
     /// If using with a GridWidget, call reset before the first body cell is created.

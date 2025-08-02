@@ -10,8 +10,8 @@ handled: bool = false,
 
 /// For key events these represents focus. For mouse events widgetId represents
 /// capture, windowId unused.
-target_windowId: ?dvui.WidgetId = null,
-target_widgetId: ?dvui.WidgetId = null,
+target_windowId: ?dvui.Id = null,
+target_widgetId: ?dvui.Id = null,
 
 // num increments within a frame, used in focusRemainingEvents
 num: u16 = 0,
@@ -119,7 +119,7 @@ pub const Mouse = struct {
     mod: enums.Mod,
 
     p: dvui.Point.Physical,
-    floating_win: dvui.WidgetId,
+    floating_win: dvui.Id,
 };
 
 test {
