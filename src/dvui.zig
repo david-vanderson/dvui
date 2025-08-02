@@ -6467,18 +6467,18 @@ pub fn TextEntryNumberResult(comptime T: type) type {
 
 pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryNumberInitOptions(T), opts: Options) TextEntryNumberResult(T) {
     const base_filter = "1234567890";
-    const type_id: u8, const filter = switch (@typeInfo(T)) {
+    const filter = switch (@typeInfo(T)) {
         .int => |int| switch (int.signedness) {
-            .signed => .{ 0, base_filter ++ "+-" },
-            .unsigned => .{ 1, base_filter ++ "+" },
+            .signed => base_filter ++ "+-",
+            .unsigned => base_filter ++ "+",
         },
-        .float => .{ 2, base_filter ++ "+-.e" },
+        .float => base_filter ++ "+-.e",
         else => unreachable,
     };
 
-    // type_id is needed so that the id changes with the type for `data...` functions
+    // @typeName is needed so that the id changes with the type for `data...` functions
     // https://github.com/david-vanderson/dvui/issues/502
-    const id: WidgetId = @enumFromInt(dvui.hashIdKey(dvui.parentGet().extendId(src, opts.idExtra()), &.{type_id}));
+    const id: WidgetId = @enumFromInt(dvui.hashIdKey(dvui.parentGet().extendId(src, opts.idExtra()), @typeName(T)));
 
     const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 32);
 
@@ -6553,6 +6553,38 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     te.deinit();
 
     return result;
+}
+
+test "textEntryNumber type swap issue #502" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
+    defer t.deinit();
+
+    const Temp = struct {
+        const Types = enum { u8, u16, i16, f32, f16 };
+        var cur_type: Types = .u8;
+        fn frame() !dvui.App.Result {
+            switch (cur_type) {
+                inline else => |comp_t| {
+                    const T = switch (comp_t) {
+                        .u8 => u8,
+                        .u16 => u16,
+                        .i16 => i16,
+                        .f32 => f32,
+                        .f16 => f16,
+                    };
+                    var val: T = 0;
+                    _ = dvui.textEntryNumber(@src(), T, .{ .value = &val }, .{});
+                },
+            }
+            return .ok;
+        }
+    };
+
+    try dvui.testing.settle(Temp.frame);
+    for (std.meta.tags(Temp.Types)) |type_tag| {
+        Temp.cur_type = type_tag;
+        _ = try dvui.testing.step(Temp.frame);
+    }
 }
 
 pub const TextEntryColorInitOptions = struct {
