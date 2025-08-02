@@ -255,6 +255,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             }
 
             linkBackend(dvui_sdl, sdl_mod);
+            addExample("sdl2-align", b.path("examples/sdl-align.zig"), dvui_sdl, true, dvui_opts);
             addExample("sdl2-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, true, dvui_opts);
             addExample("sdl2-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, true, dvui_opts);
             addExample("sdl2-app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);

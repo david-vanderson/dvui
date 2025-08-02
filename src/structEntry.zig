@@ -579,7 +579,7 @@ pub fn optionalFieldWidget2(
     field_ptr: anytype,
     comptime opts: OptionalFieldOptions,
     alignment: *dvui.Alignment,
-) ?*dvui.BoxWidget {
+) ?*dvui.BoxWidget { // TODO: Return bool?
     _ = alignment;
     const box = dvui.box(src, .vertical, .{});
 
@@ -591,20 +591,20 @@ pub fn optionalFieldWidget2(
         _ = dvui.checkbox(@src(), &checkbox_state, null, .{});
     }
 
-    if (checkbox_state) {
-        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .both });
-        defer hbox.deinit();
-        // not working
-        // alignment.record(box.data().id, hbox.data());
-
-        var line = dvui.box(@src(), .vertical, .{
-            .border = border,
-            .expand = .vertical,
-            .background = true,
-            .margin = .{ .w = 10, .x = 10 },
-        });
-        line.deinit();
-    }
+    //    if (checkbox_state) {
+    //        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .both });
+    //        defer hbox.deinit();
+    //        // not working
+    //        // alignment.record(box.data().id, hbox.data());
+    //
+    //        var line = dvui.box(@src(), .vertical, .{
+    //            .border = border,
+    //            .expand = .vertical,
+    //            .background = true,
+    //            .margin = .{ .w = 10, .x = 10 },
+    //        });
+    //        line.deinit();
+    //    }
     if (checkbox_state) {
         return box;
     } else {

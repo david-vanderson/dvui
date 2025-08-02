@@ -91,6 +91,12 @@ pub fn main() !void {
     }
 }
 
+fn makeLevel(src: std.builtin.SourceLocation, al: *dvui.Alignment) *dvui.BoxWidget {
+    al.spacer();
+    const box = dvui.box(src, .vertical, .{ .border = .{ .x = 1 } });
+    return box;
+}
+
 // both dvui and SDL drawing
 fn gui_frame() void {
     //dvui.currentWindow().debug_window_show = true;
@@ -109,42 +115,32 @@ fn gui_frame() void {
     }
     var vbox = dvui.box(@src(), .vertical, .{ .color_fill = .fill_window, .background = true, .expand = .both });
     defer vbox.deinit();
-    var al2 = dvui.Alignment.init(@src(), 0);
-    defer al2.deinit();
-    var al = dvui.Alignment.init(@src(), 0);
-    defer al.deinit();
+
     {
-        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
-        defer hbox.deinit();
-        dvui.labelNoFmt(@src(), "Sm", .{}, .{});
-        al.spacer(@src(), 0);
-        var hb2 = dvui.box(@src(), .horizontal, .{});
-        defer hb2.deinit();
-        _ = dvui.button(@src(), "Medium", .{}, .{});
-        al2.spacer(@src(), 0);
-        dvui.labelNoFmt(@src(), "Large...................", .{}, .{});
-    }
-    {
-        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
-        defer hbox.deinit();
-        dvui.labelNoFmt(@src(), "Medium", .{}, .{});
-        al.spacer(@src(), 0);
-        var hb2 = dvui.box(@src(), .horizontal, .{});
-        defer hb2.deinit();
-        _ = dvui.button(@src(), "Large...................", .{}, .{});
-        al2.spacer(@src(), 0);
-        dvui.labelNoFmt(@src(), "Sm", .{}, .{});
-    }
-    {
-        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
-        defer hbox.deinit();
-        dvui.labelNoFmt(@src(), "Large...................", .{}, .{});
-        al.spacer(@src(), 0);
-        var hb2 = dvui.box(@src(), .horizontal, .{});
-        defer hb2.deinit();
-        _ = dvui.button(@src(), "Sm", .{}, .{});
-        al2.spacer(@src(), 0);
-        dvui.labelNoFmt(@src(), "Medium", .{}, .{});
+        if (dvui.expander(@src(), "Struct 1", .{ .default_expanded = true }, .{})) {
+            var hbox = dvui.box(@src(), .vertical, .{
+                .expand = .vertical,
+                .border = .{ .x = 1 },
+                .background = true,
+                .margin = .{ .w = 12, .x = 12 },
+            });
+            defer hbox.deinit();
+            dvui.labelNoFmt(@src(), "Testing", .{}, .{});
+            dvui.labelNoFmt(@src(), "Testing", .{}, .{});
+            dvui.labelNoFmt(@src(), "Testing", .{}, .{});
+            if (dvui.expander(@src(), "Struct 2", .{ .default_expanded = true }, .{})) {
+                var hbox2 = dvui.box(@src(), .vertical, .{
+                    .expand = .vertical,
+                    .border = .{ .x = 1 },
+                    .background = true,
+                    .margin = .{ .w = 12, .x = 12 },
+                });
+                defer hbox2.deinit();
+                dvui.labelNoFmt(@src(), "Testing2", .{}, .{});
+                dvui.labelNoFmt(@src(), "Testing2", .{}, .{});
+                dvui.labelNoFmt(@src(), "Testing2", .{}, .{});
+            }
+        }
     }
 }
 
