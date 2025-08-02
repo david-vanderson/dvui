@@ -5172,7 +5172,7 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
     ret.* = MenuItemWidget.init(src, init_opts, opts);
     ret.install();
     ret.processEvents();
-    ret.drawBackground(.{});
+    ret.drawBackground();
     return ret;
 }
 
@@ -5560,16 +5560,16 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
 
     // use pressed text color if desired
     const click = bw.clicked();
-    var options = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
-
-    if (bw.pressed()) options = options.override(.{ .color_text = opts.color(.text_press) });
 
     // this child widget:
     // - has bw as parent
     // - gets a rectangle from bw
     // - draws itself
     // - reports its min size to bw
-    labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, options);
+    labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, opts.strip()
+        // override with the button colors to update the press and hover colors correctly
+        .override(bw.colors())
+        .override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
 
     // draw focus
     bw.drawFocus();
@@ -5595,7 +5595,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
         name,
         tvg_bytes,
         icon_opts,
-        opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text }),
+        opts.strip().override(bw.colors()).override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text }),
     );
 
     const click = bw.clicked();
@@ -5613,16 +5613,15 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
 
     // process events (mouse and keyboard)
     bw.processEvents();
-    var options = opts.strip().override(.{ .gravity_y = 0.5 });
-    if (bw.pressed()) options = options.override(.{ .color_text = opts.color(.text_press) });
+    const options = opts.strip().override(bw.colors()).override(.{ .gravity_y = 0.5 });
 
     // draw background/border
     bw.drawBackground();
     {
         var outer_hbox = box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer outer_hbox.deinit();
-        icon(@src(), label_str, tvg_bytes, .{}, opts.strip().override(.{ .gravity_x = 1.0, .color_text = opts.color_text }));
-        labelEx(@src(), "{s}", .{label_str}, .{ .align_x = 0.5 }, opts.strip().override(.{ .expand = .both }));
+        icon(@src(), label_str, tvg_bytes, .{}, options.strip().override(.{ .gravity_x = 1.0, .color_text = opts.color_text }));
+        labelEx(@src(), "{s}", .{label_str}, .{ .align_x = 0.5 }, options.strip().override(.{ .expand = .both }));
     }
 
     const click = bw.clicked();

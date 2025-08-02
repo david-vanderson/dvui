@@ -102,7 +102,7 @@ pub fn addChoice(self: *SuggestionWidget) *MenuItemWidget {
             self.drop_mi.?.highlight = true;
         }
     }
-    self.drop_mi.?.drawBackground(.{});
+    self.drop_mi.?.drawBackground();
 
     self.drop_mi_index += 1;
 
