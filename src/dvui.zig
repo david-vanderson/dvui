@@ -197,9 +197,13 @@ pub const Id = enum(u64) {
     }
 
     pub fn asU64(self: Id) u64 {
-        return @intCast(@intFromEnum(self));
+        return @intFromEnum(self);
     }
 
+    /// ALWAYS prefer using `asU64` unless a `usize` is required as it could
+    /// loose precision and uniqueness on non-64bit platforms (like wasm32).
+    ///
+    /// Using an `Id` as `Options.id_extra` would be a valid use of this function
     pub fn asUsize(self: Id) usize {
         // usize might be u32 (like on wasm32)
         return @truncate(@intFromEnum(self));
