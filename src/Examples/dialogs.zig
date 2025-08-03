@@ -2,7 +2,7 @@ var progress_mutex = std.Thread.Mutex{};
 var progress_val: f32 = 0.0;
 
 /// ![image](Examples-dialogs.png)
-pub fn dialogs(demo_win_id: dvui.WidgetId) void {
+pub fn dialogs(demo_win_id: dvui.Id) void {
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
@@ -24,7 +24,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) void {
         }
 
         const dialogsFollowup = struct {
-            fn callafter(id: dvui.WidgetId, response: enums.DialogResponse) !void {
+            fn callafter(id: dvui.Id, response: enums.DialogResponse) !void {
                 _ = id;
                 var buf: [100]u8 = undefined;
                 const text = std.fmt.bufPrint(&buf, "You clicked \"{s}\" in the previous dialog", .{@tagName(response)}) catch unreachable;
@@ -221,7 +221,7 @@ fn background_dialog(win: *dvui.Window, delay_ns: u64) void {
     dvui.dialog(@src(), .{}, .{ .window = win, .modal = false, .title = "Background Dialog", .message = "This non modal dialog was added from a non-GUI thread." });
 }
 
-fn background_toast(win: *dvui.Window, delay_ns: u64, subwindow_id: ?dvui.WidgetId) void {
+fn background_toast(win: *dvui.Window, delay_ns: u64, subwindow_id: ?dvui.Id) void {
     std.time.sleep(delay_ns);
     dvui.refresh(win, @src(), null);
     dvui.toast(@src(), .{ .window = win, .subwindow_id = subwindow_id, .message = "Toast came from a non-GUI thread" });

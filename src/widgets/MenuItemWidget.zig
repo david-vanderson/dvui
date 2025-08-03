@@ -138,7 +138,7 @@ pub fn data(self: *const MenuItemWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *MenuItemWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *MenuItemWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
@@ -279,7 +279,7 @@ test "menuItem click sets last_focused_id_this_frame" {
     defer t.deinit();
 
     const fns = struct {
-        var last_focused_id_set: ?dvui.WidgetId = null;
+        var last_focused_id_set: ?dvui.Id = null;
 
         fn frame() !dvui.App.Result {
             var m = dvui.menu(@src(), .vertical, .{ .padding = .all(10), .tag = "menu" });

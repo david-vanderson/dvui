@@ -31,7 +31,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     var self = CacheWidget{
         .wd = wd,
         .init_opts = init_opts,
-        .hash = dvui.hashIdKey(wd.id, "_tex"),
+        .hash = wd.id.update("_tex").asU64(),
         .tex_uv = dvui.dataGet(null, wd.id, "_tex_uv", Size) orelse .{},
         .refresh_prev_value = dvui.currentWindow().extra_frames_needed,
     };
@@ -139,7 +139,7 @@ pub fn data(self: *CacheWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *CacheWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *CacheWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
