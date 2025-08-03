@@ -158,6 +158,15 @@ const BasicTypes = struct {
     anyerror: anyerror = error.DefaultError, // Initialized to a specific error
 };
 
+const S1 = struct {
+    a: usize = 42,
+};
+
+const U1 = union(enum) {
+    a: S1,
+    b: enum { one, two, three },
+};
+
 var test_buf: [20]u8 = @splat('z');
 var testStruct: TestStruct = .{};
 var dvui_opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5), .name = "abcdef" };
@@ -165,6 +174,9 @@ var first_change: bool = true;
 
 var basic_types_var: BasicTypes = .{};
 const basic_types_const: BasicTypes = .{};
+
+const Union1 = struct { u: U1 = .{ .a = .{} } };
+var union1: Union1 = .{};
 
 // both dvui and SDL drawing
 fn gui_frame() void {
@@ -197,10 +209,13 @@ fn gui_frame() void {
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
-        var ooo: dvui.se.StructOptions(BasicTypes) = .init(.{ .u8 = .{ .number = .{ .display = .none } } });
-        ooo.options.put(.u8, .{ .number = .{ .display = .none } });
-        ooo.options.put(.i8, .{ .number = .{ .min = -5, .max = 5, .widget_type = .slider } });
-        wholeStruct(@src(), "basic_types_var", &basic_types_var, 0, .{ooo});
+        const uo: dvui.se.StructOptions(U1) = .initDefaults(.{ .a = .{} });
+        wholeStruct(@src(), "U1", &union1, 1, .{uo});
+
+        //var ooo: dvui.se.StructOptions(BasicTypes) = .init(.{ .u8 = .{ .number = .{ .display = .none } } });
+        //ooo.options.put(.u8, .{ .number = .{ .display = .none } });
+        //ooo.options.put(.i8, .{ .number = .{ .min = -5, .max = 5, .widget_type = .slider } });
+        //wholeStruct(@src(), "basic_types_var", &basic_types_var, 0, .{ooo});
 
         //sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);
         //dvui.se.intFieldWidget2(@src(), "int1", &testStruct.int1, .{}, &al);
@@ -230,7 +245,7 @@ fn gui_frame() void {
         //wholeStruct(@src(), &opts, 1);
         //_ = dvui.separator(@src(), .{ .expand = .horizontal });
     }
-    {
+    if (false) {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
@@ -343,6 +358,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
     };
     inline for (opts.options.values, 0..) |field_option, i| {
         const key = comptime @TypeOf(opts.options).Indexer.keyForIndex(i); // TODO There must be a way to iterate both? One is just the enum fields?
+        std.debug.print("processing: {s}\n", .{@tagName(key)});
 
         //@compileLog(field.name, field.type);
         var box = dvui.box(src, .vertical, .{ .id_extra = i });
@@ -403,7 +419,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                 }
             },
             inline .@"union" => |_| {
-                const UnionT = @TypeOf(@field(container, @tagName(key)));
+                //const UnionT = @TypeOf(@field(container, @tagName(key))); // TODO:
                 const current_choice = std.meta.activeTag(@field(container, @tagName(key)));
                 const new_choice = dvui.se.unionFieldWidget2(@src(), @tagName(key), &@field(container, @tagName(key)), field_option, &al);
                 if (current_choice != new_choice) {
@@ -412,14 +428,14 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                     //                        @field(container, @tagName(key)).* = @unionInit(UnionT, @tagName(new_choice), defaultValue(@FieldType(UnionT, @tagName(new_choice))));
                     //                    }
                 }
-                switch (@typeInfo(UnionT)) {
-                    inline .int, .float, .@"enum" => processWidget(@src(), @tagName(key), @field(container, @tagName(key)), &al, field_option),
-                    inline .@"struct", .@"union" => {
-                        switch (@field(container, @tagName(key))) {
-                            inline else => |active| wholeStruct(@src(), @tagName(new_choice), &active, depth, options),
+                switch (@field(container, @tagName(key))) {
+                    inline else => |active| {
+                        switch (@typeInfo(@TypeOf(active))) {
+                            inline .int, .float, .@"enum" => processWidget(@src(), @tagName(key), &@field(container, @tagName(key)), &al, field_option),
+                            inline .@"struct", .@"union" => wholeStruct(@src(), @tagName(new_choice), &active, depth, options),
+                            else => {}, // TODO: Compile error
                         }
                     },
-                    else => {},
                 }
             },
             else => {},
