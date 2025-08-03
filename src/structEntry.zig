@@ -542,8 +542,8 @@ pub fn unionFieldWidget2(
         }
         inline for (entries, 0..) |entry, i| {
             // TODO: Make this select the real choice
-            if (dvui.radio(@src(), i == 0, entry.name, .{ .id_extra = i })) {
-                choice = @enumFromInt(0); // TODO: Reflect actual choice.
+            if (dvui.radio(@src(), choice == std.meta.stringToEnum(@TypeOf(choice), entry.name), entry.name, .{ .id_extra = i })) {
+                choice = std.meta.stringToEnum(@TypeOf(choice), entry.name).?;
             }
         }
     }

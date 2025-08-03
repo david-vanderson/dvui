@@ -164,7 +164,8 @@ const S1 = struct {
 
 const U1 = union(enum) {
     a: S1,
-    b: enum { one, two, three },
+    //b: enum { one, two, three },
+    b: f32,
 };
 
 var test_buf: [20]u8 = @splat('z');
@@ -210,6 +211,7 @@ fn gui_frame() void {
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
         const uo: dvui.se.StructOptions(U1) = .initDefaults(.{ .a = .{} });
+        std.debug.print("{}\n", .{uo.options});
         wholeStruct(@src(), "U1", &union1, 1, .{uo});
 
         //var ooo: dvui.se.StructOptions(BasicTypes) = .init(.{ .u8 = .{ .number = .{ .display = .none } } });
@@ -358,7 +360,6 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
     };
     inline for (opts.options.values, 0..) |field_option, i| {
         const key = comptime @TypeOf(opts.options).Indexer.keyForIndex(i); // TODO There must be a way to iterate both? One is just the enum fields?
-        std.debug.print("processing: {s}\n", .{@tagName(key)});
 
         //@compileLog(field.name, field.type);
         var box = dvui.box(src, .vertical, .{ .id_extra = i });
@@ -419,19 +420,27 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                 }
             },
             inline .@"union" => |_| {
-                //const UnionT = @TypeOf(@field(container, @tagName(key))); // TODO:
+                const UnionT = @TypeOf(@field(container, @tagName(key))); // TODO:
                 const current_choice = std.meta.activeTag(@field(container, @tagName(key)));
                 const new_choice = dvui.se.unionFieldWidget2(@src(), @tagName(key), &@field(container, @tagName(key)), field_option, &al);
                 if (current_choice != new_choice) {
-                    //                    switch (new_choice) {
-                    //                        const UnionT = typeOf(@field(container, @tagName(key)));
-                    //                        @field(container, @tagName(key)).* = @unionInit(UnionT, @tagName(new_choice), defaultValue(@FieldType(UnionT, @tagName(new_choice))));
-                    //                    }
+                    switch (new_choice) {
+                        //                        const UnionT = typeOf(@field(container, @tagName(key)));
+                        inline else => |choice| @field(container, @tagName(key)) = @unionInit(
+                            UnionT,
+                            @tagName(choice),
+                            defaultValue(
+                                @FieldType(UnionT, @tagName(choice)),
+                                field_option,
+                                options,
+                            ) orelse undefined,
+                        ),
+                    }
                 }
                 switch (@field(container, @tagName(key))) {
                     inline else => |active| {
                         switch (@typeInfo(@TypeOf(active))) {
-                            inline .int, .float, .@"enum" => processWidget(@src(), @tagName(key), &@field(container, @tagName(key)), &al, field_option),
+                            inline .int, .float, .@"enum" => processWidget(@src(), @tagName(key), &active, &al, field_option),
                             inline .@"struct", .@"union" => wholeStruct(@src(), @tagName(new_choice), &active, depth, options),
                             else => {}, // TODO: Compile error
                         }
