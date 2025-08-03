@@ -319,9 +319,12 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
 }
 
 pub fn getHueSelectorTexture(dir: dvui.enums.Direction) dvui.Backend.TextureError!dvui.Texture {
-    const hue_texture_id = dvui.hashIdKey(@enumFromInt(@as(u64, @intFromEnum(dir))), "hue_selector_texture");
+    var h = dvui.fnv.init();
+    h.update("hue");
+    h.update(std.mem.asBytes(&dir));
+    const id = h.final();
     const cw = dvui.currentWindow();
-    const res = try cw.texture_cache.getOrPut(cw.gpa, hue_texture_id);
+    const res = try cw.texture_cache.getOrPut(cw.gpa, id);
     if (!res.found_existing) {
         const width: u32, const height: u32 = switch (dir) {
             .horizontal => .{ hue_selector_colors.len, 1 },
@@ -333,9 +336,12 @@ pub fn getHueSelectorTexture(dir: dvui.enums.Direction) dvui.Backend.TextureErro
 }
 
 pub fn getValueSaturationTexture(hue: f32) dvui.Backend.TextureError!dvui.Texture {
-    const hue_texture_id = dvui.hashIdKey(@enumFromInt(@as(u64, @intFromFloat(hue * 10000))), "value_saturation_texture");
+    var h = dvui.fnv.init();
+    h.update("value");
+    h.update(std.mem.asBytes(&(hue * 10000)));
+    const id = h.final();
     const cw = dvui.currentWindow();
-    const res = try cw.texture_cache.getOrPut(cw.gpa, hue_texture_id);
+    const res = try cw.texture_cache.getOrPut(cw.gpa, id);
     if (!res.found_existing) {
         var pixels: [4]Color.PMA = .{ .white, .cast(Color.HSV.toColor(.{ .h = hue })), .black, .black };
         // set top right corner to the max value of that hue

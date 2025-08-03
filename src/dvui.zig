@@ -163,6 +163,39 @@ pub const Id = enum(u64) {
     undef = 0xAAAAAAAAAAAAAAAA,
     _,
 
+    /// Make a unique id from `src` and `id_extra`, possibly starting with start
+    /// (usually a parent widget id).  This is how the initial parent widget id is
+    /// created, and also toasts and dialogs from other threads.
+    ///
+    /// See `Widget.extendId` which calls this with the widget id as start.
+    ///
+    /// ```zig
+    /// dvui.parentGet().extendId(@src(), id_extra)
+    /// ```
+    /// is how new widgets get their id, and can be used to make a unique id without
+    /// making a widget.
+    pub fn extendId(start: ?Id, src: std.builtin.SourceLocation, id_extra: usize) Id {
+        var hash = fnv.init();
+        if (start) |s| {
+            hash.value = s.asU64();
+        }
+        hash.update(std.mem.asBytes(&src.module.ptr));
+        hash.update(std.mem.asBytes(&src.file.ptr));
+        hash.update(std.mem.asBytes(&src.line));
+        hash.update(std.mem.asBytes(&src.column));
+        hash.update(std.mem.asBytes(&id_extra));
+        return @enumFromInt(hash.final());
+    }
+
+    /// Make a new id by combining id with some data, commonly a string key like `"_value"`.
+    /// This is how dvui tracks things in `dataGet`/`dataSet`, `animation`, and `timer`.
+    pub fn update(id: Id, input: []const u8) Id {
+        var h = fnv.init();
+        h.value = id.asU64();
+        h.update(input);
+        return @enumFromInt(h.final());
+    }
+
     pub fn asU64(self: Id) u64 {
         return @intCast(@intFromEnum(self));
     }
@@ -2856,38 +2889,10 @@ pub fn minSize(id: Id, min_size: Size) Size {
     return size;
 }
 
-/// Make a unique id from `src` and `id_extra`, possibly starting with start
-/// (usually a parent widget id).  This is how the initial parent widget id is
-/// created, and also toasts and dialogs from other threads.
-///
-/// See `Widget.extendId` which calls this with the widget id as start.
-///
-/// ```zig
-/// dvui.parentGet().extendId(@src(), id_extra)
-/// ```
-/// is how new widgets get their id, and can be used to make a unique id without
-/// making a widget.
-pub fn hashSrc(start: ?Id, src: std.builtin.SourceLocation, id_extra: usize) Id {
-    var hash = fnv.init();
-    if (start) |s| {
-        hash.value = s.asU64();
-    }
-    hash.update(std.mem.asBytes(&src.module.ptr));
-    hash.update(std.mem.asBytes(&src.file.ptr));
-    hash.update(std.mem.asBytes(&src.line));
-    hash.update(std.mem.asBytes(&src.column));
-    hash.update(std.mem.asBytes(&id_extra));
-    return @enumFromInt(hash.final());
-}
-
-/// Make a new id by combining id with the contents of key.  This is how dvui
-/// tracks things in `dataGet`/`dataSet`, `animation`, and `timer`.
-pub fn hashIdKey(id: Id, key: []const u8) u64 {
-    var h = fnv.init();
-    h.value = id.asU64();
-    h.update(key);
-    return h.final();
-}
+/// DEPRECATED: See `dvui.Id.extendId`
+pub const hashSrc = void;
+/// DEPRECATED: See `dvui.Id.update`
+pub const hashIdKey = void;
 
 /// Set key/value pair for given id.
 ///
@@ -3452,7 +3457,7 @@ pub const Animation = struct {
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn animation(id: Id, key: []const u8, a: Animation) void {
     var cw = currentWindow();
-    const h = hashIdKey(id, key);
+    const h = id.update(key);
     cw.animations.put(cw.gpa, h, a) catch |err| switch (err) {
         error.OutOfMemory => {
             log.err("animation got {!} for id {x} key {s}\n", .{ err, id, key });
@@ -3464,7 +3469,7 @@ pub fn animation(id: Id, key: []const u8, a: Animation) void {
 ///
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn animationGet(id: Id, key: []const u8) ?Animation {
-    const h = hashIdKey(id, key);
+    const h = id.update(key);
     return currentWindow().animations.get(h);
 }
 
@@ -3791,7 +3796,7 @@ pub const IdMutex = struct {
 pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplayFn) IdMutex {
     if (win) |w| {
         // we are being called from non gui thread
-        const id = Id.hashSrc(null, src, id_extra);
+        const id = Id.extendId(null, src, id_extra);
         const mutex = w.dialogAdd(id, display);
         refresh(win, @src(), id); // will wake up gui thread
         return .{ .id = id, .mutex = mutex };
@@ -4268,7 +4273,7 @@ pub const Toast = struct {
 pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?Id, display: DialogDisplayFn, timeout: ?i32) IdMutex {
     if (win) |w| {
         // we are being called from non gui thread
-        const id = Id.hashSrc(null, src, id_extra);
+        const id = Id.extendId(null, src, id_extra);
         const mutex = w.toastAdd(id, subwindow_id, display, timeout);
         refresh(win, @src(), id);
         return .{ .id = id, .mutex = mutex };
@@ -6479,7 +6484,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     // @typeName is needed so that the id changes with the type for `data...` functions
     // https://github.com/david-vanderson/dvui/issues/502
-    const id: Id = @enumFromInt(dvui.hashIdKey(dvui.parentGet().extendId(src, opts.idExtra()), @typeName(T)));
+    const id = dvui.parentGet().extendId(src, opts.idExtra()).update(@typeName(T));
 
     const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 32);
 

@@ -72,8 +72,9 @@ pub fn data(self: Widget) *WidgetData {
     return self.vtable.data(self.ptr).validate();
 }
 
+/// Calls `dvui.Id.extendId` on the this widgets id
 pub fn extendId(self: Widget, src: std.builtin.SourceLocation, id_extra: usize) dvui.Id {
-    return dvui.hashSrc(self.data().id, src, id_extra);
+    return self.data().id.extendId(src, id_extra);
 }
 
 pub fn rectFor(self: Widget, id: Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
