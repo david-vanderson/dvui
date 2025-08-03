@@ -1,6 +1,6 @@
 pub const SuggestionWidget = @This();
 
-id: dvui.WidgetId,
+id: dvui.Id,
 /// Is for the floating menu widget that might open
 options: Options,
 init_options: InitOptions,
@@ -19,7 +19,7 @@ pub var defaults: Options = .{
 
 pub const InitOptions = struct {
     rs: RectScale,
-    text_entry_id: dvui.WidgetId,
+    text_entry_id: dvui.Id,
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) SuggestionWidget {

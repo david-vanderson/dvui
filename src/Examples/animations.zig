@@ -287,7 +287,7 @@ pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_fl
 }
 
 const AnimatingDialog = struct {
-    pub fn dialogDisplay(id: dvui.WidgetId) !void {
+    pub fn dialogDisplay(id: dvui.Id) !void {
         const modal = dvui.dataGet(null, id, "_modal", bool) orelse unreachable;
         const title = dvui.dataGetSlice(null, id, "_title", []u8) orelse unreachable;
         const message = dvui.dataGetSlice(null, id, "_message", []u8) orelse unreachable;
@@ -364,7 +364,7 @@ const AnimatingDialog = struct {
         }
     }
 
-    pub fn after(id: dvui.WidgetId, response: enums.DialogResponse) !void {
+    pub fn after(id: dvui.Id, response: enums.DialogResponse) !void {
         _ = id;
         std.log.debug("You clicked \"{s}\"", .{@tagName(response)});
     }
