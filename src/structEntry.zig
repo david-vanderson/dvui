@@ -512,60 +512,43 @@ pub fn textFieldWidgetBuf(
 //    unionFieldWidget(field_name, @TypeOf(@field(container, field_name)), &@field(container, field_name), opts, null, alignment);
 //}
 //
-//pub fn unionFieldWidget2(
-//    src: std.builtin.SourceLocation,
-//    comptime field_name: []const u8,
-//    field_ptr: anytype,
-//    opt: StandardFieldOptions,
-//    alignment: *dvui.Alignment,
-//) *dvui.BoxWidget {
-//    const T = @TypeOf(field_ptr.*);
-//    if (opt.display == .none) return;
-//
-//    var box = dvui.box(src, .vertical, .{});
-//    defer box.deinit();
-//
-//    const FieldEnum = std.meta.FieldEnum(T);
-//
-//    const entries = std.meta.fieldNames(T);
-//    var choice: usize = @intFromEnum(std.meta.activeTag(field_ptr.*));
-//
-//    {
-//        var hbox = dvui.box(@src(), .vertical, .{});
-//        defer hbox.deinit();
-//        const label = opt.label_override orelse field_name;
-//        if (label.len != 0) {
-//            dvui.label(@src(), "{s}", .{label}, .{
-//                .border = border,
-//                .background = true,
-//            });
-//        }
-//        inline for (entries, 0..) |entry, i| {
-//            if (dvui.radio(@src(), choice == i, entry, .{ .id_extra = i })) {
-//                choice = i;
-//            }
-//        }
-//    }
-//
-//    inline for (@typeInfo(T).@"union".fields, 0..) |field, i| {
-//        if (choice == i) {
-//            if (std.meta.activeTag(field_ptr.*) != @as(FieldEnum, @enumFromInt(i))) {
-//                field_ptr.* = @unionInit(T, field_name, undefined);
-//            }
-//            const field_result: *field.type = &@field(field_ptr.*, field_name);
-//
-//            var hbox = dvui.box(@src(), .horizontal, .{ .expand = .both });
-//            defer hbox.deinit();
-//            var line = dvui.box(@src(), .vertical, .{
-//                .border = border,
-//                .expand = .vertical,
-//                .background = true,
-//                .margin = .{ .w = 10, .x = 10 },
-//            });
-//            line.deinit();
-//        }
-//    }
-//}
+pub fn unionFieldWidget2(
+    src: std.builtin.SourceLocation,
+    comptime field_name: []const u8,
+    field_ptr: anytype,
+    opt: FieldOptions,
+    alignment: *dvui.Alignment,
+) @typeInfo(@TypeOf(field_ptr.*)).@"union".tag_type.? {
+    _ = alignment;
+    _ = opt;
+    const T = @TypeOf(field_ptr.*);
+    //if (opt.display == .none) return; // TODO: Do we need union field options?
+
+    var box = dvui.box(src, .vertical, .{});
+    defer box.deinit();
+
+    const entries = std.meta.fields(T);
+    var choice = std.meta.activeTag(field_ptr.*);
+    {
+        var hbox = dvui.box(@src(), .vertical, .{});
+        defer hbox.deinit();
+        //const label = opt.label_override orelse field_name; // TODO:
+        const label = field_name;
+        if (label.len != 0) {
+            dvui.label(@src(), "{s}", .{label}, .{
+                .border = border,
+                .background = true,
+            });
+        }
+        inline for (entries, 0..) |entry, i| {
+            // TODO: Make this select the real choice
+            if (dvui.radio(@src(), i == 0, entry.name, .{ .id_extra = i })) {
+                choice = @enumFromInt(0); // TODO: Reflect actual choice.
+            }
+        }
+    }
+    return choice;
+}
 
 //=======Optional Field Widget and Options=======
 pub const OptionalFieldOptions = struct {

@@ -402,31 +402,26 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                     }
                 }
             },
-            inline .@"union" => {
-                
-                                    wholeStruct(@src(), @tagName(key), &@field(container, @tagName(key)).?, depth, options);
-
-                //if (dvui.se.optionalFieldWidget2(@src(), @tagName(key), &@field(container, @tagName(key)), .{}, &al)) |hbox| {
-//                    defer hbox.deinit();
-                    if (@field(container, @tagName(key)) == null) {
-                        @field(container, @tagName(key)) = defaultValue(opt.child, field_option, options); // If there is no default value, it will remain null.
-                    }
-                    if (@field(container, @tagName(key)) != null) {
-                        switch (@typeInfo(opt.child)) {
-                            inline .@"struct" => {
-                                if (depth > 0) {
-                                    wholeStruct(@src(), @tagName(key), &@field(container, @tagName(key)).?, depth - 1, options);
-                                }
-                            },
-                            else => processWidget(@src(), @tagName(key), &@field(container, @tagName(key)).?, &al, field_option),
+            inline .@"union" => |_| {
+                const UnionT = @TypeOf(@field(container, @tagName(key)));
+                const current_choice = std.meta.activeTag(@field(container, @tagName(key)));
+                const new_choice = dvui.se.unionFieldWidget2(@src(), @tagName(key), &@field(container, @tagName(key)), field_option, &al);
+                if (current_choice != new_choice) {
+                    //                    switch (new_choice) {
+                    //                        const UnionT = typeOf(@field(container, @tagName(key)));
+                    //                        @field(container, @tagName(key)).* = @unionInit(UnionT, @tagName(new_choice), defaultValue(@FieldType(UnionT, @tagName(new_choice))));
+                    //                    }
+                }
+                switch (@typeInfo(UnionT)) {
+                    inline .int, .float, .@"enum" => processWidget(@src(), @tagName(key), @field(container, @tagName(key)), &al, field_option),
+                    inline .@"struct", .@"union" => {
+                        switch (@field(container, @tagName(key))) {
+                            inline else => |active| wholeStruct(@src(), @tagName(new_choice), &active, depth, options),
                         }
-                    }
-                } else {
-                    @field(container, @tagName(key)) = null;
-                    dvui.label(@src(), "{s} is null", .{@tagName(key)}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
-  //              }
+                    },
+                    else => {},
+                }
             },
-
             else => {},
         }
     }
