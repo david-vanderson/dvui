@@ -88,11 +88,11 @@ min_sizes: dvui.TrackingAutoHashMap(Id, Size, .put_only) = .empty,
 tags: dvui.TrackingAutoHashMap([]const u8, dvui.TagData, .put_only) = .empty,
 data_mutex: std.Thread.Mutex = .{},
 /// Uses `gpa` allocator
-datas: dvui.TrackingAutoHashMap(u64, SavedData, .get_and_put) = .empty,
+datas: dvui.TrackingAutoHashMap(Id, SavedData, .get_and_put) = .empty,
 /// Uses `arena` allocator
 datas_trash: std.ArrayListUnmanaged(SavedData) = .empty,
 /// Uses `gpa` allocator
-animations: dvui.TrackingAutoHashMap(u64, Animation, .get_and_put) = .empty,
+animations: dvui.TrackingAutoHashMap(Id, Animation, .get_and_put) = .empty,
 /// Uses `gpa` allocator
 tab_index_prev: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
@@ -189,7 +189,7 @@ pub fn init(
     backend_ctx: dvui.Backend,
     init_opts: InitOptions,
 ) !Self {
-    const hashval = dvui.Id.hashSrc(null, src, init_opts.id_extra);
+    const hashval = dvui.Id.extendId(null, src, init_opts.id_extra);
 
     var self = Self{
         .gpa = gpa,
@@ -1253,7 +1253,7 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
 
 /// data is copied into internal storage
 pub fn dataSetAdvanced(self: *Self, id: Id, key: []const u8, data_in: anytype, comptime copy_slice: bool, num_copies: usize) void {
-    const hash: u64 = dvui.hashIdKey(id, key);
+    const hash = id.update(key);
 
     const dt = @typeInfo(@TypeOf(data_in));
     const dt_type_str = @typeName(@TypeOf(data_in));
@@ -1324,7 +1324,7 @@ pub fn dataSetAdvanced(self: *Self, id: Id, key: []const u8, data_in: anytype, c
 
 /// returns the backing byte slice if we have one
 pub fn dataGetInternal(self: *Self, id: Id, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
-    const hash: u64 = dvui.hashIdKey(id, key);
+    const hash = id.update(key);
 
     self.data_mutex.lock();
     defer self.data_mutex.unlock();
@@ -1342,7 +1342,7 @@ pub fn dataGetInternal(self: *Self, id: Id, key: []const u8, comptime T: type, s
 }
 
 pub fn dataRemove(self: *Self, id: Id, key: []const u8) void {
-    const hash: u64 = dvui.hashIdKey(id, key);
+    const hash = id.update(key);
 
     self.data_mutex.lock();
     defer self.data_mutex.unlock();
@@ -1428,14 +1428,14 @@ pub fn timer(self: *Self, id: Id, micros: i32) void {
     // when start_time is in the future, we won't spam frames, so this will
     // cause a single frame and then expire
     const a = Animation{ .start_time = micros, .end_time = micros };
-    const h = dvui.hashIdKey(id, "_timer");
+    const h = id.update("_timer");
     self.animations.put(self.gpa, h, a) catch |err| {
         dvui.logError(@src(), err, "Could not add timer for {x}", .{id});
     };
 }
 
 pub fn timerRemove(self: *Self, id: Id) void {
-    const h = dvui.hashIdKey(id, "_timer");
+    const h = id.update("_timer");
     _ = self.animations.remove(h);
 }
 
