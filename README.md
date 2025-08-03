@@ -57,6 +57,7 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 * [Static site generator GUI](https://github.com/nhanb/webmaker2000)
 * [File explorer for Altair 8800 disk images](https://github.com/phatchman/altair_tools)
 * [Kanji flashcard app](https://codeberg.org/tensorush/origa)
+* [Azem - WIP micro-mouse simulator / maze solver](https://github.com/thuvasooriya/azem) - [Demo](https://www.thuvasooriya.me/azem/)
 
 ## Features
 
