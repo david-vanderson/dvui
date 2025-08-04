@@ -211,15 +211,20 @@ fn gui_frame() void {
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
         var uo: dvui.se.StructOptions(U1) = .initDefaults(.{ .a = .{} });
-        const so: dvui.se.StructOptions(Union1) = .initDefaults(.{});
-        var itr = uo.options.iterator();
+        std.debug.print("UO = {?}\n", .{uo.options});
+        std.debug.print("{?}\n", .{@TypeOf(uo.options).Indexer.keyForIndex(1)});
+        std.debug.print("{?}\n", .{uo.options.getAssertContains(@TypeOf(uo.options).Indexer.keyForIndex(1))});
 
-        std.debug.print("OPTIONS: {d}\n", .{uo.options.count()});
-        while (itr.next()) |opt| {
-            std.debug.print("{s} = {}", .{ @tagName(opt.key), opt.value });
+        if (true) {
+            const so: dvui.se.StructOptions(Union1) = .initDefaults(.{});
+            var itr = uo.options.iterator();
+
+            std.debug.print("OPTIONS: {d}\n", .{uo.options.count()});
+            while (itr.next()) |opt| {
+                std.debug.print("{s} = {}", .{ @tagName(opt.key), opt.value });
+            }
+            wholeStruct(@src(), "U1", &union1, 1, .{ uo, so });
         }
-        wholeStruct(@src(), "U1", &union1, 1, .{ uo, so });
-
         //var ooo: dvui.se.StructOptions(BasicTypes) = .init(.{ .u8 = .{ .number = .{ .display = .none } } });
         //ooo.options.put(.u8, .{ .number = .{ .display = .none } });
         //ooo.options.put(.i8, .{ .number = .{ .min = -5, .max = 5, .widget_type = .slider } });
@@ -453,12 +458,16 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                         switch (@typeInfo(@TypeOf(active))) {
                             inline .int, .float, .@"enum" => |_| {
                                 inline for (options) |uopts| {
-                                    std.debug.print("Searching for opts for {s} vs {s}\n", .{ @typeName(@TypeOf(active)), @typeName(@TypeOf(uopts).StructT) });
-                                    //@compileLog(@TypeOf(uopts).StructT, @TypeOf(container.*));
-                                    if (@TypeOf(uopts).StructT == @TypeOf(@field(container, @tagName(key)))) {
-                                        //@compileLog("Found", @tagName(key));
-                                        std.debug.print("found opts for {s}\n", .{@tagName(key)});
-                                        processWidget(@src(), @tagName(key), &active, &al, uopts.options.get(std.meta.stringToEnum(@TypeOf(uopts.options).Key, @tagName(std.meta.activeTag(@field(container, @tagName(key))))).?).?);
+                                    switch (std.meta.activeTag(@field(container, @tagName(key)))) {
+                                        inline else => |active_tag| {
+                                            std.debug.print("Searching for opts for {s} vs {s}\n", .{ @typeName(@TypeOf(active)), @tagName(active_tag) });
+                                            //@compileLog(@TypeOf(uopts).StructT, @TypeOf(container.*));
+                                            if (@TypeOf(uopts).StructT == @TypeOf(@field(container, @tagName(key)))) {
+                                                //@compileLog("Found", @tagName(key));
+                                                std.debug.print("found opts for {s} - {s} - {s}\n", .{ @typeName(@TypeOf(uopts).StructT), @tagName(key), @tagName(active_tag) });
+                                                processWidget(@src(), @tagName(active_tag), &active, &al, uopts.options.get(active_tag).?);
+                                            }
+                                        },
                                     }
                                 }
                             },
