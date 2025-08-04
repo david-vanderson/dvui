@@ -41,10 +41,14 @@ pub fn StructOptions(T: type) type {
             return self;
         }
 
+        // TODO: So maybe the union is passing the field options for 'a', when it should be passing for 'b'??
+        // ???
         pub fn initDefaults(default_value: ?T) Self {
             comptime var defaults: StructOptionsT = .{};
             inline for (0..defaults.values.len) |i| {
-                defaults.values[i] = comptime defaultFieldOption(@FieldType(T, @tagName(StructOptionsT.Indexer.keyForIndex(i))));
+                const field_name = comptime @tagName(StructOptionsT.Indexer.keyForIndex(i));
+                defaults.values[i] = comptime defaultFieldOption(@FieldType(T, field_name));
+                //@compileLog(T, field_name, defaults.values[i]);
             }
             return .{ .options = defaults, .default_value = default_value };
         }

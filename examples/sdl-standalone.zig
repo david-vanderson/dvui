@@ -210,9 +210,15 @@ fn gui_frame() void {
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
-        const uo: dvui.se.StructOptions(U1) = .initDefaults(.{ .a = .{} });
-        std.debug.print("{}\n", .{uo.options});
-        wholeStruct(@src(), "U1", &union1, 1, .{uo});
+        var uo: dvui.se.StructOptions(U1) = .initDefaults(.{ .a = .{} });
+        const so: dvui.se.StructOptions(Union1) = .initDefaults(.{});
+        var itr = uo.options.iterator();
+
+        std.debug.print("OPTIONS: {d}\n", .{uo.options.count()});
+        while (itr.next()) |opt| {
+            std.debug.print("{s} = {}", .{ @tagName(opt.key), opt.value });
+        }
+        wholeStruct(@src(), "U1", &union1, 1, .{ uo, so });
 
         //var ooo: dvui.se.StructOptions(BasicTypes) = .init(.{ .u8 = .{ .number = .{ .display = .none } } });
         //ooo.options.put(.u8, .{ .number = .{ .display = .none } });
@@ -356,12 +362,12 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                 break :opts opt;
             }
         }
-        break :opts .initDefaults(null);
+        break :opts .initDefaults(null); // TODO: What to do? Why does it show the
     };
     inline for (opts.options.values, 0..) |field_option, i| {
         const key = comptime @TypeOf(opts.options).Indexer.keyForIndex(i); // TODO There must be a way to iterate both? One is just the enum fields?
 
-        //@compileLog(field.name, field.type);
+        //@compileLog(key, field_option);
         var box = dvui.box(src, .vertical, .{ .id_extra = i });
         defer box.deinit();
         switch (@typeInfo(@TypeOf(@field(container, @tagName(key))))) {
@@ -426,21 +432,36 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                 if (current_choice != new_choice) {
                     switch (new_choice) {
                         //                        const UnionT = typeOf(@field(container, @tagName(key)));
-                        inline else => |choice| @field(container, @tagName(key)) = @unionInit(
-                            UnionT,
-                            @tagName(choice),
-                            defaultValue(
-                                @FieldType(UnionT, @tagName(choice)),
-                                field_option,
-                                options,
-                            ) orelse undefined,
-                        ),
+                        inline else => |choice| {
+                            std.debug.print("bnew choice = {}\n", .{choice});
+
+                            @field(container, @tagName(key)) = @unionInit(
+                                UnionT,
+                                @tagName(choice),
+                                defaultValue(
+                                    @FieldType(UnionT, @tagName(choice)),
+                                    field_option,
+                                    options,
+                                ) orelse undefined,
+                            );
+                        },
                     }
                 }
+                // DO Basic issue seems to be here that we have the variable 'U'. And we don
                 switch (@field(container, @tagName(key))) {
                     inline else => |active| {
                         switch (@typeInfo(@TypeOf(active))) {
-                            inline .int, .float, .@"enum" => processWidget(@src(), @tagName(key), &active, &al, field_option),
+                            inline .int, .float, .@"enum" => |_| {
+                                inline for (options) |uopts| {
+                                    std.debug.print("Searching for opts for {s} vs {s}\n", .{ @typeName(@TypeOf(active)), @typeName(@TypeOf(uopts).StructT) });
+                                    //@compileLog(@TypeOf(uopts).StructT, @TypeOf(container.*));
+                                    if (@TypeOf(uopts).StructT == @TypeOf(@field(container, @tagName(key)))) {
+                                        //@compileLog("Found", @tagName(key));
+                                        std.debug.print("found opts for {s}\n", .{@tagName(key)});
+                                        processWidget(@src(), @tagName(key), &active, &al, uopts.options.get(std.meta.stringToEnum(@TypeOf(uopts.options).Key, @tagName(std.meta.activeTag(@field(container, @tagName(key))))).?).?);
+                                    }
+                                }
+                            },
                             inline .@"struct", .@"union" => wholeStruct(@src(), @tagName(new_choice), &active, depth, options),
                             else => {}, // TODO: Compile error
                         }
@@ -454,11 +475,12 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
 
 pub fn processWidget(
     src: std.builtin.SourceLocation,
-    comptime field_name: []const u8,
+    field_name: []const u8,
     field: anytype,
     alignment: *dvui.Alignment,
     options: dvui.se.FieldOptions,
 ) void {
+    std.debug.print("processWidget: {s} = {}\n", .{ field_name, options });
     switch (@typeInfo(@TypeOf(field.*))) {
         inline .int => dvui.se.numberFieldWidget2(src, field_name, field, options.number, alignment),
         inline .float => dvui.se.numberFieldWidget2(src, field_name, field, options.number, alignment),
@@ -469,7 +491,7 @@ pub fn processWidget(
                 dvui.se.textFieldWidget2(src, field_name, field, options.text, alignment); // TODO: This should be options.text or similar?
             }
         },
-        inline .@"union" => {}, // BIG TODO!
+        //inline .@"union" => {}, // BIG TODO!
         else => @compileError(std.fmt.comptimePrint("Type {s} for field {s} not yet supported\n", .{ @typeName(@TypeOf(field.*)), field_name })),
     }
 }
