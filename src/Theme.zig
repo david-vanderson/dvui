@@ -34,6 +34,8 @@ fill_press: ?Color = null,
 text: Color,
 text_hover: ?Color = null,
 text_press: ?Color = null,
+/// Used for selecting/highlighting text
+text_select: ?Color = null,
 border: Color,
 
 /// colors for normal controls like buttons
