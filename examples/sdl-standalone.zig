@@ -258,7 +258,7 @@ fn gui_frame() void {
         //wholeStruct(@src(), &opts, 1);
         //_ = dvui.separator(@src(), .{ .expand = .horizontal });
     }
-    if (false) {
+    if (true) {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
@@ -343,8 +343,19 @@ pub fn fieldOptions(T: type, options: anytype, field: dvui.se.StructOptions(T).S
     return dvui.se.StructOptions(T).defaultFieldOption(@FieldType(T, @tagName(field)));
 }
 
+pub fn findMatchingStructOption(T: type, struct_options: anytype) ?dvui.se.StructOptions(T) {
+    inline for (struct_options) |struct_option| {
+        if (@TypeOf(struct_option).StructT == T) {
+            return struct_option;
+        }
+    }
+    return null;
+}
+
 pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container: anytype, comptime depth: usize, options: anytype) void {
     if (!dvui.expander(@src(), name, .{ .default_expanded = true }, .{})) return;
+
+    const ContainerT = @TypeOf(container.*);
 
     var vbox = dvui.box(src, .vertical, .{
         .expand = .vertical,
@@ -358,28 +369,23 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
     defer al.deinit();
 
     // TODO: This is where the field names and field enums meet. Need to sort this out somehow...
-    const opts: dvui.se.StructOptions(@TypeOf(container.*)) = opts: {
-        inline for (options) |opt| {
-            //@compileLog(@TypeOf(opt).StructT, @TypeOf(container.*));
+    // TODO: Should we step though options to find fields, or fields to find options.
+    // TODO: Options to find fields is more flexible as you can remove the option.
+    const opts: dvui.se.StructOptions(ContainerT) = findMatchingStructOption(ContainerT, options) orelse .initDefaults(null);
 
-            if (@TypeOf(opt).StructT == @TypeOf(container.*)) {
-                //@compileLog("equal");
-                break :opts opt;
-            }
-        }
-        break :opts .initDefaults(null); // TODO: What to do? Why does it show the
-    };
+    // TODO: User iterator here innstead, so that fields can be left out of the options.
     inline for (opts.options.values, 0..) |field_option, i| {
         const key = comptime @TypeOf(opts.options).Indexer.keyForIndex(i); // TODO There must be a way to iterate both? One is just the enum fields?
-
+        const FieldT = @TypeOf(@field(container, @tagName(key)));
+        const field = &@field(container, @tagName(key)); // TODO: User ptr instead?
         //@compileLog(key, field_option);
         var box = dvui.box(src, .vertical, .{ .id_extra = i });
         defer box.deinit();
-        switch (@typeInfo(@TypeOf(@field(container, @tagName(key))))) {
-            .int, .float, .@"enum", .bool => processWidget(@src(), @tagName(key), &@field(container, @tagName(key)), &al, field_option),
+        switch (@typeInfo(FieldT)) {
+            .int, .float, .@"enum", .bool => processWidget(@src(), @tagName(key), &field, &al, field_option),
             inline .@"struct" => {
                 if (depth > 0) {
-                    wholeStruct(@src(), @tagName(key), &@field(container, @tagName(key)), depth - 1, options);
+                    wholeStruct(@src(), @tagName(key), &field, depth - 1, options);
                 }
             },
             inline .optional => |opt| {
@@ -395,6 +401,18 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                                     wholeStruct(@src(), @tagName(key), &@field(container, @tagName(key)).?, depth - 1, options);
                                 }
                             },
+                            inline .@"union" => {
+                                const active_tag = std.meta.activeTag(@field(container, @tagName(key)).?);
+                                switch (active_tag) {
+                                    inline else => |tag| {
+                                        if (depth > 0) {
+                                            // TODO: This needs the full union logic. Need to refactor this whole thing.
+                                            wholeStruct(@src(), @tagName(tag), &@field(@field(container, @tagName(key)).?, @tagName(tag)), depth - 1, options);
+                                        }
+                                    },
+                                }
+                            },
+
                             else => processWidget(@src(), @tagName(key), &@field(container, @tagName(key)).?, &al, field_option),
                         }
                     }
@@ -411,7 +429,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                 } else if (ptr.size == .one) {
                     dvui.label(@src(), "{s} is a single item pointer", .{@tagName(key)}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
                     switch (@typeInfo(ptr.child)) {
-                        .@"struct" => {
+                        .@"struct", .@"union" => {
                             wholeStruct(@src(), @tagName(key), &@field(container, @tagName(key)), depth - 1, options);
                         },
                         else => processWidget(src, @tagName(key), @field(container, @tagName(key)), &al, field_option),
@@ -421,7 +439,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                 } else {
                     switch (@typeInfo(ptr.child)) {
                         inline .int, .float, .@"enum" => processWidget(@src(), @tagName(key), @field(container, @tagName(key)), &al, field_option),
-                        inline .@"struct" => {
+                        inline .@"struct", .@"union" => {
                             if (depth > 0) {
                                 wholeStruct(@src(), @tagName(key), &@field(container, @tagName(key)), depth - 1, options);
                             }
@@ -431,7 +449,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                 }
             },
             inline .@"union" => |_| {
-                const UnionT = @TypeOf(@field(container, @tagName(key))); // TODO:
+                const UnionT = FieldT; // TODO:
                 const current_choice = std.meta.activeTag(@field(container, @tagName(key)));
                 const new_choice = dvui.se.unionFieldWidget2(@src(), @tagName(key), &@field(container, @tagName(key)), field_option, &al);
                 if (current_choice != new_choice) {
@@ -462,7 +480,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                                         inline else => |active_tag| {
                                             std.debug.print("Searching for opts for {s} vs {s}\n", .{ @typeName(@TypeOf(active)), @tagName(active_tag) });
                                             //@compileLog(@TypeOf(uopts).StructT, @TypeOf(container.*));
-                                            if (@TypeOf(uopts).StructT == @TypeOf(@field(container, @tagName(key)))) {
+                                            if (@TypeOf(uopts).StructT == FieldT) {
                                                 //@compileLog("Found", @tagName(key));
                                                 std.debug.print("found opts for {s} - {s} - {s}\n", .{ @typeName(@TypeOf(uopts).StructT), @tagName(key), @tagName(active_tag) });
                                                 processWidget(@src(), @tagName(active_tag), &active, &al, uopts.options.get(active_tag).?);
@@ -484,7 +502,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
 
 pub fn processWidget(
     src: std.builtin.SourceLocation,
-    field_name: []const u8,
+    comptime field_name: []const u8,
     field: anytype,
     alignment: *dvui.Alignment,
     options: dvui.se.FieldOptions,
@@ -500,7 +518,7 @@ pub fn processWidget(
                 dvui.se.textFieldWidget2(src, field_name, field, options.text, alignment); // TODO: This should be options.text or similar?
             }
         },
-        //inline .@"union" => {}, // BIG TODO!
+        inline .@"union" => {}, // BIG TODO!
         else => @compileError(std.fmt.comptimePrint("Type {s} for field {s} not yet supported\n", .{ @typeName(@TypeOf(field.*)), field_name })),
     }
 }
