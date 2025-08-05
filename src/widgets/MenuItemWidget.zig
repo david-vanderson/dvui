@@ -215,9 +215,12 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     self.mouse_over = true;
 
                     if (dvui.draggingName("_mi_mouse_down") or
-                        // If we have a submenu and there is an active submenu, allow for hovering
-                        // no move focus to a sibling submenu
-                        (self.init_opts.submenu and dvui.MenuWidget.current().?.has_child_popup))
+                        // If we are not the root menu, there is a menu open so hovering should
+                        // move focus and potentially open submenus
+                        !dvui.MenuWidget.current().?.isRootMenu() or
+                        // ...but if the root menu has an active item, allow for hovering to move
+                        // focus within the menu, opening any sibling submenus in the process
+                        dvui.MenuWidget.current().?.has_active_item)
                     {
                         // we shouldn't have gotten this event if the motion
                         // was towards a submenu (caught in MenuWidget)
