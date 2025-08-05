@@ -162,10 +162,13 @@ const S1 = struct {
     a: usize = 42,
 };
 
+const Enum = enum { x, y, z };
+
 const U1 = union(enum) {
     a: S1,
     //b: enum { one, two, three },
     b: f32,
+    c: Enum,
 };
 
 var test_buf: [20]u8 = @splat('z');
@@ -258,7 +261,7 @@ fn gui_frame() void {
         //wholeStruct(@src(), &opts, 1);
         //_ = dvui.separator(@src(), .{ .expand = .horizontal });
     }
-    if (true) {
+    if (false) {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
@@ -352,6 +355,40 @@ pub fn findMatchingStructOption(T: type, struct_options: anytype) ?dvui.se.Struc
     return null;
 }
 
+pub fn processField(
+    ContainerT: type,
+    container: *ContainerT,
+    field: dvui.se.StructOptions(ContainerT).StructOptionsT.Key,
+    field_value_ptr: *@FieldType(ContainerT, @tagName(field)),
+    field_option: dvui.se.StructOptions(ContainerT).StructOptionsT.Value,
+    options: anytype,
+    comptime depth: usize,
+    al: *dvui.Alignment,
+) void {
+    switch (@typeInfo(@TypeOf(field_value_ptr.*))) {
+        inline .@"struct" => {
+            if (depth > 0) {
+                wholeStruct(@src(), @tagName(field), field_value_ptr, depth - 1, options);
+            }
+        },
+        inline .@"union" => {
+            const active_tag = if (std.meta.activeTag(@field(container, @tagName(field)))) |active|
+                active
+            else
+                @compileError(std.fmt.comptimePrint("Error processing field {s} for struct {s}: Only tagged unions are supported", .{ @tagName(field), @typeName(ContainerT) }));
+            switch (active_tag) {
+                inline else => |tag| {
+                    if (depth > 0) {
+                        // TODO: This needs the full union logic. Need to refactor this whole thing.
+                        wholeStruct(@src(), @tagName(tag), field_value_ptr, depth - 1, options);
+                    }
+                },
+            }
+        },
+        else => processWidget(@src(), @tagName(field), field_value_ptr, al, field_option),
+    }
+}
+
 pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container: anytype, comptime depth: usize, options: anytype) void {
     if (!dvui.expander(@src(), name, .{ .default_expanded = true }, .{})) return;
 
@@ -377,17 +414,18 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
     inline for (opts.options.values, 0..) |field_option, i| {
         const key = comptime @TypeOf(opts.options).Indexer.keyForIndex(i); // TODO There must be a way to iterate both? One is just the enum fields?
         const FieldT = @TypeOf(@field(container, @tagName(key)));
-        const field = &@field(container, @tagName(key)); // TODO: User ptr instead?
+        var field = @field(container, @tagName(key)); // TODO: User ptr instead?
         //@compileLog(key, field_option);
         var box = dvui.box(src, .vertical, .{ .id_extra = i });
         defer box.deinit();
         switch (@typeInfo(FieldT)) {
-            .int, .float, .@"enum", .bool => processWidget(@src(), @tagName(key), &field, &al, field_option),
-            inline .@"struct" => {
-                if (depth > 0) {
-                    wholeStruct(@src(), @tagName(key), &field, depth - 1, options);
-                }
-            },
+            .int,
+            .float,
+            .@"enum",
+            .bool,
+            .@"struct",
+            // TODO:
+            => processField(ContainerT, @constCast(container), key, &field, field_option, options, depth, &al),
             inline .optional => |opt| {
                 if (dvui.se.optionalFieldWidget2(@src(), @tagName(key), &@field(container, @tagName(key)), .{}, &al)) |hbox| {
                     defer hbox.deinit();
@@ -395,26 +433,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                         @field(container, @tagName(key)) = defaultValue(opt.child, field_option, options); // If there is no default value, it will remain null.
                     }
                     if (@field(container, @tagName(key)) != null) {
-                        switch (@typeInfo(opt.child)) {
-                            inline .@"struct" => {
-                                if (depth > 0) {
-                                    wholeStruct(@src(), @tagName(key), &@field(container, @tagName(key)).?, depth - 1, options);
-                                }
-                            },
-                            inline .@"union" => {
-                                const active_tag = std.meta.activeTag(@field(container, @tagName(key)).?);
-                                switch (active_tag) {
-                                    inline else => |tag| {
-                                        if (depth > 0) {
-                                            // TODO: This needs the full union logic. Need to refactor this whole thing.
-                                            wholeStruct(@src(), @tagName(tag), &@field(@field(container, @tagName(key)).?, @tagName(tag)), depth - 1, options);
-                                        }
-                                    },
-                                }
-                            },
-
-                            else => processWidget(@src(), @tagName(key), &@field(container, @tagName(key)).?, &al, field_option),
-                        }
+                        processField(ContainerT, container, key, &field.?, field_option, options, depth, &al);
                     }
                 } else {
                     @field(container, @tagName(key)) = null;

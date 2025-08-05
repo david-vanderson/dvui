@@ -17,8 +17,8 @@ pub const StandardFieldOptions = struct {
 };
 
 pub fn StructOptions(T: type) type {
-    const StructOptionsT = std.EnumMap(std.meta.FieldEnum(T), FieldOptions);
     return struct {
+        pub const StructOptionsT = std.EnumMap(std.meta.FieldEnum(T), FieldOptions);
         const Self = @This();
         pub const StructT = T;
         options: StructOptionsT, // use .init or .default
