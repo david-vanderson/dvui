@@ -73,6 +73,7 @@ box: BoxWidget = undefined,
 
 // whether submenus should be open
 submenus_activated: bool = false,
+has_child_popup: bool = false,
 
 // whether submenus in a child menu should default to open (for mouse interactions, not for keyboard)
 submenus_in_child: bool = false,
@@ -100,6 +101,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         self.submenus_activated = pm.submenus_in_child;
     }
 
+    if (dvui.dataGet(null, self.wd.id, "_has_popup", bool)) |has_popup| self.has_child_popup = has_popup;
     if (dvui.dataGet(null, self.wd.id, "_mouse_mode", bool)) |mouse_mode| self.mouse_mode = mouse_mode;
 
     return self;
@@ -272,6 +274,7 @@ pub fn deinit(self: *MenuWidget) void {
     self.box.deinit();
     dvui.dataSet(null, self.data().id, "_mouse_mode", self.mouse_mode);
     dvui.dataSet(null, self.data().id, "_sub_act", self.submenus_activated);
+    dvui.dataSet(null, self.data().id, "_has_popup", self.child_popup_rect != null);
     if (self.child_popup_rect) |r| {
         dvui.dataSet(null, self.data().id, "_child_popup", r);
     }

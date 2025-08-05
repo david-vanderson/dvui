@@ -214,7 +214,11 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     dvui.MenuWidget.current().?.mouse_mode = true;
                     self.mouse_over = true;
 
-                    if (dvui.draggingName("_mi_mouse_down")) {
+                    if (dvui.draggingName("_mi_mouse_down") or
+                        // If we have a submenu and there is an active submenu, allow for hovering
+                        // no move focus to a sibling submenu
+                        (self.init_opts.submenu and dvui.MenuWidget.current().?.has_child_popup))
+                    {
                         // we shouldn't have gotten this event if the motion
                         // was towards a submenu (caught in MenuWidget)
                         dvui.focusSubwindow(null, null); // focuses the window we are in
