@@ -202,11 +202,6 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                         // Toggle the submenu closed
                         menu().?.submenus_activated = false;
                         menu().?.submenus_in_child = false;
-                        // Need to reset focus so that hovering doesn't reopen the submenu
-                        // TODO: Should we retain the tab/focus order here? Focusing the menu
-                        //       doesn't fix taborder and focusing the item allows it to open
-                        //       immidietly again on hover.
-                        dvui.focusWidget(null, null, e.num);
                         dvui.refresh(null, @src(), self.data().id);
                     }
                 } else if (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) {
