@@ -49,14 +49,7 @@ pub const InitOptions = struct {
     /// fits its children within the min/max split specified
     ///
     /// Only works for vertical panes
-    autofit_first: ?struct {
-        /// The minimum split percentage [0-1] for the first side
-        min_split: f32 = 0,
-        /// The maximum split percentage [0-1] for the first side
-        max_split: f32 = 1,
-        /// The minimum size that the first pane requires
-        min_size: f32 = 0,
-    } = null,
+    autofit_first: ?AutoFitOptions = null,
 
     /// Whether to call draw in deinit if not called before.
     draw_in_deinit: bool = true,
@@ -74,7 +67,17 @@ collapsed_state: bool,
 collapsing: bool,
 active_side: enum { none, first, second } = .none,
 layout: dvui.BasicLayout = .{},
+should_autofit: bool = false,
 drawn: bool = false,
+
+pub const AutoFitOptions = struct {
+    /// The minimum split percentage [0-1] for the first side
+    min_split: f32 = 0,
+    /// The maximum split percentage [0-1] for the first side
+    max_split: f32 = 1,
+    /// The minimum size that the first pane requires
+    min_size: f32 = 0,
+};
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) PanedWidget {
     const defaults = Options{ .name = "Paned" };
@@ -91,6 +94,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
         .init_opts = init_options,
         .collapsing = dvui.dataGet(null, wd.id, "_collapsing", bool) orelse false,
         .collapsed_state = dvui.dataGet(null, wd.id, "_collapsed", bool) orelse (our_size < init_options.collapsed_size),
+        .should_autofit = dvui.firstFrame(wd.id),
 
         // might be changed in processEvents
         .handle_thick = init_options.handle_size,
@@ -101,12 +105,13 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
         },
     };
 
-    if (!dvui.firstFrame(self.data().id)) {
-        // We will not autofit after the first frame
-        self.init_opts.autofit_first = null;
-    } else if (self.init_opts.autofit_first) |_| {
+    if (self.init_opts.autofit_first != null and self.should_autofit) {
         // Make the first side take the full space to begin with
         self.split_ratio.* = 1.0;
+
+        if (self.init_opts.direction != .vertical) {
+            dvui.log.warn("{s}:{d}: .autofit_first only works on vertical panes", .{ src.file, src.line });
+        }
     }
 
     if (self.collapsing) {
@@ -233,17 +238,9 @@ pub fn showFirst(self: *PanedWidget) bool {
 }
 
 pub fn showSecond(self: *PanedWidget) bool {
-    if (self.init_opts.autofit_first) |autofit| {
-        if (self.init_opts.direction == .vertical) {
-            const full_size = @max(1, self.data().contentRect().h - self.handle_size() * 2);
-            const size_of_first = @max(autofit.min_size, self.layout.min_size_children.h);
-            self.split_ratio.* = std.math.clamp(
-                size_of_first / full_size,
-                autofit.min_split,
-                autofit.max_split,
-            );
-        } else {
-            dvui.log.warn("{s}:{d}: .autofit only works on vertical panes", .{ self.data().src.file, self.data().src.line });
+    if (self.should_autofit) {
+        if (self.init_opts.autofit_first) |autofit| {
+            self.split_ratio.* = self.getFirstFittedRatio(autofit);
         }
     }
 
@@ -269,13 +266,34 @@ pub fn data(self: *PanedWidget) *WidgetData {
     return self.wd.validate();
 }
 
-fn handle_size(self: *const PanedWidget) f32 {
+/// Resets the autofit of the first pane
+///
+/// Must be called before `showFirst`
+pub fn autoFit(self: *PanedWidget) void {
+    self.should_autofit = true;
+}
+
+/// Calculates the split ratio to fit the first pane to the size of its children.
+///
+/// Must be called after all the children on `showFirst` have been called
+/// and before `showSecond` is called
+pub fn getFirstFittedRatio(self: *PanedWidget, autofit: AutoFitOptions) f32 {
+    const full_size = @max(1, self.data().contentRect().h - self.handleSize() * 2);
+    const size_of_first = @max(autofit.min_size, self.layout.min_size_children.h);
+    return std.math.clamp(
+        size_of_first / full_size,
+        autofit.min_split,
+        autofit.max_split,
+    );
+}
+
+pub fn handleSize(self: *const PanedWidget) f32 {
     return self.handle_thick / 2 + self.init_opts.handle_margin;
 }
 
 pub fn rectFor(self: *PanedWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) dvui.Rect {
     var r = self.data().contentRect().justSize();
-    var margin = self.handle_size();
+    var margin = self.handleSize();
     const space = switch (self.init_opts.direction) {
         .horizontal => r.w,
         .vertical => r.h,
