@@ -201,9 +201,6 @@ pub fn demo() void {
     }
 
     if (paned.showSecond()) {
-        var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
-        defer vbox.deinit();
-
         {
             var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();

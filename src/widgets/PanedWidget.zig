@@ -59,7 +59,8 @@ split_ratio: *f32,
 prevClip: Rect.Physical = undefined,
 collapsed_state: bool,
 collapsing: bool,
-first_side: bool = true,
+active_side: enum { none, first, second } = .none,
+layout: dvui.BasicLayout = .{},
 drawn: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) PanedWidget {
@@ -202,14 +203,23 @@ pub fn collapsed(self: *PanedWidget) bool {
 pub fn showFirst(self: *PanedWidget) bool {
     const ret = self.split_ratio.* > 0;
 
-    // If we don't show the first side, then record that for rectFor
-    if (!ret) self.first_side = false;
+    if (ret) {
+        self.active_side = .first;
+        self.layout = .{};
+    } else self.active_side = .none;
 
     return ret;
 }
 
 pub fn showSecond(self: *PanedWidget) bool {
-    return self.split_ratio.* < 1.0;
+    const ret = self.split_ratio.* < 1.0;
+
+    if (ret) {
+        self.active_side = .second;
+        self.layout = .{};
+    } else self.active_side = .none;
+
+    return ret;
 }
 
 pub fn animateSplit(self: *PanedWidget, end_val: f32) void {
@@ -225,7 +235,6 @@ pub fn data(self: *PanedWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *PanedWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) dvui.Rect {
-    _ = id;
     var r = self.data().contentRect().justSize();
     var margin = self.handle_thick / 2 + self.init_opts.handle_margin;
     const space = switch (self.init_opts.direction) {
@@ -236,56 +245,49 @@ pub fn rectFor(self: *PanedWidget, id: dvui.Id, min_size: Size, e: Options.Expan
     margin = @min(margin, space * self.split_ratio.*);
     margin = @min(margin, space - (space * self.split_ratio.*));
 
-    if (self.first_side) {
-        self.first_side = false;
-        if (self.collapsed()) {
+    switch (self.active_side) {
+        .none => {
+            dvui.log.err("{s}:{d}: Paned widget {x} cannot add child widget {x} outside a first/second side", .{ self.data().src.file, self.data().src.line, self.data().id, id });
+            // Highlight the widget in red
+            dvui.currentWindow().debug.widget_id = id;
+            // Place within the entire content rect just so that the widget shows up on screen
+            // (probably covered by the panes, but the red outline will show)
+        },
+        .first => if (self.collapsed()) {
             if (self.split_ratio.* == 0.0) {
                 r.w = 0;
                 r.h = 0;
-            } else {
-                switch (self.init_opts.direction) {
-                    .horizontal => r.x -= (r.w - (r.w * self.split_ratio.*)),
-                    .vertical => r.y -= (r.h - (r.h * self.split_ratio.*)),
-                }
+            } else switch (self.init_opts.direction) {
+                .horizontal => r.x -= (r.w - (r.w * self.split_ratio.*)),
+                .vertical => r.y -= (r.h - (r.h * self.split_ratio.*)),
             }
-        } else {
-            switch (self.init_opts.direction) {
-                .horizontal => r.w = @max(0, r.w * self.split_ratio.* - margin),
-                .vertical => r.h = @max(0, r.h * self.split_ratio.* - margin),
-            }
-        }
-        return dvui.placeIn(r, min_size, e, g);
-    } else {
-        if (self.collapsed()) {
+        } else switch (self.init_opts.direction) {
+            .horizontal => r.w = @max(0, r.w * self.split_ratio.* - margin),
+            .vertical => r.h = @max(0, r.h * self.split_ratio.* - margin),
+        },
+        .second => if (self.collapsed()) {
             if (self.split_ratio.* == 1.0) {
                 r.w = 0;
                 r.h = 0;
-            } else {
-                switch (self.init_opts.direction) {
-                    .horizontal => {
-                        r.x = r.w * self.split_ratio.*;
-                    },
-                    .vertical => {
-                        r.y = r.h * self.split_ratio.*;
-                    },
-                }
+            } else switch (self.init_opts.direction) {
+                .horizontal => r.x = r.w * self.split_ratio.*,
+                .vertical => r.y = r.h * self.split_ratio.*,
             }
-        } else {
-            switch (self.init_opts.direction) {
-                .horizontal => {
-                    const first = r.w * self.split_ratio.*;
-                    r.w = @max(0, r.w - first - margin);
-                    r.x += first + margin;
-                },
-                .vertical => {
-                    const first = r.h * self.split_ratio.*;
-                    r.h = @max(0, r.h - first - margin);
-                    r.y += first + margin;
-                },
-            }
-        }
-        return dvui.placeIn(r, min_size, e, g);
+        } else switch (self.init_opts.direction) {
+            .horizontal => {
+                const first = r.w * self.split_ratio.*;
+                r.w = @max(0, r.w - first - margin);
+                r.x += first + margin;
+            },
+            .vertical => {
+                const first = r.h * self.split_ratio.*;
+                r.h = @max(0, r.h - first - margin);
+                r.y += first + margin;
+            },
+        },
     }
+
+    return self.layout.rectFor(r, id, min_size, e, g);
 }
 
 pub fn screenRectScale(self: *PanedWidget, rect: Rect) RectScale {
@@ -293,7 +295,8 @@ pub fn screenRectScale(self: *PanedWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *PanedWidget, s: dvui.Size) void {
-    self.data().minSizeMax(self.data().options.padSize(s));
+    const ms = self.layout.minSizeForChild(s);
+    self.data().minSizeMax(self.data().options.padSize(ms));
 }
 
 pub fn processEvent(self: *PanedWidget, e: *Event) void {
@@ -356,7 +359,6 @@ pub fn deinit(self: *PanedWidget) void {
     dvui.clipSet(self.prevClip);
     dvui.dataSet(null, self.data().id, "_collapsing", self.collapsing);
     dvui.dataSet(null, self.data().id, "_collapsed", self.collapsed_state);
-    dvui.dataSet(null, self.data().id, "_split_ratio", self.split_ratio.*);
     self.data().minSizeSetAndRefresh();
     self.data().minSizeReportToParent();
     dvui.parentReset(self.data().id, self.data().parent);
