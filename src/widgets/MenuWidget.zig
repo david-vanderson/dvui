@@ -294,7 +294,7 @@ pub fn deinit(self: *MenuWidget) void {
     self.box.deinit();
     dvui.dataSet(null, self.data().id, "_mouse_mode", self.mouse_mode);
     dvui.dataSet(null, self.data().id, "_sub_act", self.submenus_activated);
-    dvui.dataSet(null, self.data().id, "_has_active_item", self.child_popup_rect != null or dvui.lastFocusedIdInFrameSince(self.last_focus) != null);
+    dvui.dataSet(null, self.data().id, "_has_active_item", self.child_popup_rect != null);
     if (self.child_popup_rect) |r| {
         dvui.dataSet(null, self.data().id, "_child_popup", r);
     }
