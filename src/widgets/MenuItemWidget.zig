@@ -107,6 +107,8 @@ pub fn matchEvent(self: *MenuItemWidget, e: *Event) bool {
 }
 
 pub fn processEvents(self: *MenuItemWidget) void {
+    // keep this flag alive for the .mouse.release event
+    _ = dvui.dataGet(null, self.data().id, "_just_opened", void);
     const evts = dvui.events();
     for (evts) |*e| {
         if (!self.matchEvent(e))
@@ -172,6 +174,11 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 // This is how dropdowns are triggered.
                 e.handle(@src(), self.data());
                 if (self.init_opts.submenu) {
+                    if (!menu().?.submenus_activated) {
+                        // We will open so we set some data to remember that
+                        // this press open the submenu
+                        dvui.dataSet(null, self.data().id, "_just_opened", {});
+                    }
                     menu().?.submenus_activated = true;
                     menu().?.submenus_in_child = true;
                 }
@@ -190,10 +197,26 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
             } else if (me.action == .release) {
                 menu().?.mouse_mode = true;
                 e.handle(@src(), self.data());
-                if (!self.init_opts.submenu and (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow())) {
+                if (self.init_opts.submenu) {
+                    // Only the root menu is toggleable, all other submenus work on hover
+                    if (menu().?.isRootMenu() and dvui.dataGet(null, self.data().id, "_just_opened", void) == null) {
+                        // Toggle the submenu closed
+                        menu().?.submenus_activated = false;
+                        menu().?.submenus_in_child = false;
+                        // Need to reset focus so that hovering doesn't reopen the submenu
+                        // TODO: Should we retain the tab/focus order here? Focusing the menu
+                        //       doesn't fix taborder and focusing the item allows it to open
+                        //       immidietly again on hover.
+                        dvui.focusWidget(null, null, e.num);
+                        dvui.refresh(null, @src(), self.data().id);
+                    }
+                } else if (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) {
                     self.activated = true;
                     dvui.refresh(null, @src(), self.data().id);
                 }
+                // clear out the flag for the next press event
+                dvui.dataRemove(null, self.data().id, "_just_opened");
+
                 if (dvui.captured(self.data().id)) {
                     // should only happen with touch
                     dvui.captureMouse(null, e.num);
