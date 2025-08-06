@@ -292,6 +292,7 @@ pub fn layout() void {
 
     dvui.label(@src(), "Auto-Fit Panes", .{}, .{});
     {
+        const should_fit = dvui.button(@src(), "Fit first pane", .{}, .{});
         var paned = dvui.paned(@src(), .{
             .direction = .vertical,
             .handle_margin = 4,
@@ -300,6 +301,9 @@ pub fn layout() void {
         }, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 250 } });
         defer paned.deinit();
 
+        if (should_fit) {
+            paned.autoFit();
+        }
         if (paned.showFirst()) {
             var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .border = .all(1) });
             defer vbox.deinit();
