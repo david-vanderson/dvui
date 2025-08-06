@@ -226,16 +226,22 @@ pub fn processEventsAfter(self: *MenuWidget) void {
                             self.mouse_mode = false;
                             if (self.init_opts.dir == .vertical) {
                                 e.handle(@src(), self.data());
-                                // TODO: don't do this if focus would move outside the menu
                                 dvui.tabIndexPrev(e.num);
+                                if (dvui.focusedWidgetId() == null) {
+                                    // We stepped past the last item, cycle around
+                                    dvui.tabIndexPrev(e.num);
+                                }
                             }
                         },
                         .down => {
                             self.mouse_mode = false;
                             if (self.init_opts.dir == .vertical) {
                                 e.handle(@src(), self.data());
-                                // TODO: don't do this if focus would move outside the menu
                                 dvui.tabIndexNext(e.num);
+                                if (dvui.focusedWidgetId() == null) {
+                                    // We stepped past the last item, cycle around
+                                    dvui.tabIndexNext(e.num);
+                                }
                             }
                         },
                         .left => {
@@ -250,16 +256,22 @@ pub fn processEventsAfter(self: *MenuWidget) void {
                                 }
                             } else {
                                 e.handle(@src(), self.data());
-                                // TODO: don't do this if focus would move outside the menu
                                 dvui.tabIndexPrev(e.num);
+                                if (dvui.focusedWidgetId() == null) {
+                                    // We stepped past the last item, cycle around
+                                    dvui.tabIndexPrev(e.num);
+                                }
                             }
                         },
                         .right => {
                             self.mouse_mode = false;
                             if (self.init_opts.dir == .horizontal) {
                                 e.handle(@src(), self.data());
-                                // TODO: don't do this if focus would move outside the menu
                                 dvui.tabIndexNext(e.num);
+                                if (dvui.focusedWidgetId() == null) {
+                                    // We stepped past the last item, cycle around
+                                    dvui.tabIndexNext(e.num);
+                                }
                             }
                         },
                         else => {},
