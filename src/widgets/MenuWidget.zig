@@ -133,6 +133,7 @@ pub fn close(self: *MenuWidget) void {
 
 pub fn close_chain(self: *MenuWidget, reason: CloseReason) void {
     self.submenus_activated = false;
+    self.has_active_item = false;
     // close all submenus in the chain
     if (self.parentMenu) |pm| {
         pm.close_chain(reason);
@@ -294,7 +295,7 @@ pub fn deinit(self: *MenuWidget) void {
     self.box.deinit();
     dvui.dataSet(null, self.data().id, "_mouse_mode", self.mouse_mode);
     dvui.dataSet(null, self.data().id, "_sub_act", self.submenus_activated);
-    dvui.dataSet(null, self.data().id, "_has_active_item", self.child_popup_rect != null);
+    dvui.dataSet(null, self.data().id, "_has_active_item", self.child_popup_rect != null or (self.has_active_item and dvui.lastFocusedIdInFrameSince(self.last_focus) != null));
     if (self.child_popup_rect) |r| {
         dvui.dataSet(null, self.data().id, "_child_popup", r);
     }
