@@ -210,6 +210,10 @@ pub fn processEventsAfter(self: *MenuWidget) void {
 
     const evts = dvui.events();
     for (evts) |*e| {
+        if (e.evt == .mouse and e.evt.mouse.action == .release) {
+            // The mouse button was released so clear out the opened flag
+            dvui.dataRemove(null, self.data().id, "_mi_submenu_opened");
+        }
         if (!dvui.eventMatch(e, .{ .id = self.data().id, .focus_id = focus_id, .r = self.data().borderRectScale().r }))
             continue;
 

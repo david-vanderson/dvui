@@ -108,7 +108,8 @@ pub fn matchEvent(self: *MenuItemWidget, e: *Event) bool {
 
 pub fn processEvents(self: *MenuItemWidget) void {
     // keep this flag alive for the .mouse.release event
-    _ = dvui.dataGet(null, self.data().id, "_just_opened", void);
+    // NOTE: This gets clear on release in `MenuWidget.processEventsAfter`
+    _ = dvui.dataGet(null, menu().?.data().id, "_mi_submenu_opened", void);
     const evts = dvui.events();
     for (evts) |*e| {
         if (!self.matchEvent(e))
@@ -174,11 +175,9 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 // This is how dropdowns are triggered.
                 e.handle(@src(), self.data());
                 if (self.init_opts.submenu) {
-                    if (!menu().?.submenus_activated) {
-                        // We will open so we set some data to remember that
-                        // this press open the submenu
-                        dvui.dataSet(null, self.data().id, "_just_opened", {});
-                    }
+                    // We will open so we set some data to remember that
+                    // this press opened the submenu
+                    dvui.dataSet(null, menu().?.data().id, "_mi_submenu_opened", {});
                     menu().?.submenus_activated = true;
                     menu().?.submenus_in_child = true;
                 }
@@ -199,7 +198,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 e.handle(@src(), self.data());
                 if (self.init_opts.submenu) {
                     // Only the root menu is toggleable, all other submenus work on hover
-                    if (menu().?.isRootMenu() and dvui.dataGet(null, self.data().id, "_just_opened", void) == null) {
+                    if (menu().?.isRootMenu() and dvui.dataGet(null, menu().?.data().id, "_mi_submenu_opened", void) == null) {
                         // Toggle the submenu closed
                         menu().?.submenus_activated = false;
                         menu().?.submenus_in_child = false;
@@ -215,7 +214,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     dvui.refresh(null, @src(), self.data().id);
                 }
                 // clear out the flag for the next press event
-                dvui.dataRemove(null, self.data().id, "_just_opened");
+                // dvui.dataRemove(null, menu().?.data().id, "_mi_submenu_opened");
 
                 if (dvui.captured(self.data().id)) {
                     // should only happen with touch
