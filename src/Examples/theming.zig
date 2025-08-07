@@ -203,6 +203,21 @@ fn fonts(theme: *Theme) bool {
     return changed;
 }
 
+// The order of these fields determine the order of the tabs in the editor
+const ColorNames = enum {
+    fill,
+    fill_hover,
+    fill_press,
+    text,
+    text_hover,
+    text_press,
+    /// Only for `content`
+    text_select,
+    border,
+    /// Not part of `Theme.ColorStyle`
+    focus,
+};
+
 fn styles(theme: *Theme) bool {
     var changed = false;
 
@@ -214,7 +229,7 @@ fn styles(theme: *Theme) bool {
 
     var style: *Theme.ColorStyle = undefined;
 
-    const active_color = dvui.dataGetPtrDefault(null, first_box.data().id, "Color", Options.ColorAsk, .fill);
+    const active_color = dvui.dataGetPtrDefault(null, first_box.data().id, "Color", ColorNames, .fill);
 
     const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
     defer hbox.deinit();
@@ -255,8 +270,10 @@ fn styles(theme: *Theme) bool {
             inline else => |s| &@field(theme, @tagName(s)),
         };
 
-        inline for (comptime std.meta.tags(Options.ColorAsk), 0..) |color_ask, i| {
-            const selected = active_color.* == color_ask;
+        for (std.meta.tags(ColorNames), 0..) |color_name, i| {
+            if (color_name == .text_select and active_style.* != .content) continue;
+
+            const selected = active_color.* == color_name;
             const tab = tabs.addTab(selected, .{
                 .expand = .horizontal,
                 .padding = .all(2),
@@ -264,10 +281,14 @@ fn styles(theme: *Theme) bool {
             });
             defer tab.deinit();
             if (tab.clicked()) {
-                active_color.* = color_ask;
+                active_color.* = color_name;
             }
 
-            const color: ?Color = @field(style, @tagName(color_ask));
+            const color: ?Color = switch (color_name) {
+                .text_select => theme.text_select,
+                .focus => theme.focus,
+                inline else => |name| @field(style, @tagName(name)),
+            };
             if ((style_changed and selected) or tab.clicked()) {
                 hsv_color = Color.HSV.fromColor(color orelse .white);
             }
@@ -284,22 +305,28 @@ fn styles(theme: *Theme) bool {
                 .background = true,
                 .color_fill = color,
             });
-            dvui.labelNoFmt(@src(), @tagName(color_ask), .{}, tab.colors().override(.{ .margin = .{ .x = wd.rect.w }, .gravity_y = 0.5 }));
+            dvui.labelNoFmt(@src(), @tagName(color_name), .{}, tab.colors().override(.{ .margin = .{ .x = wd.rect.w }, .gravity_y = 0.5 }));
         }
     }
 
     var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .both, .margin = .all(5) });
     defer vbox.deinit();
 
-    const field_ptr: *?Color = switch (active_color.*) {
-        inline else => |c| &@field(style, @tagName(c)),
+    const color: ?Color = switch (active_color.*) {
+        .text_select => theme.text_select,
+        .focus => theme.focus,
+        inline else => |c| @field(style, @tagName(c)),
     };
     if (dvui.firstFrame(vbox.data().id)) {
-        hsv_color = Color.HSV.fromColor(field_ptr.* orelse dvui.themeGet().color(active_style.*, active_color.*));
+        hsv_color = Color.HSV.fromColor(color orelse .white);
     }
     if (dvui.colorPicker(@src(), .{ .hsv = &hsv_color, .dir = .vertical }, .{})) {
         changed = true;
-        field_ptr.* = hsv_color.toColor();
+        switch (active_color.*) {
+            .text_select => theme.text_select = hsv_color.toColor(),
+            .focus => theme.focus = hsv_color.toColor(),
+            inline else => |c| @field(style, @tagName(c)) = hsv_color.toColor(),
+        }
     }
 
     {
@@ -307,31 +334,44 @@ fn styles(theme: *Theme) bool {
         dd.install();
         defer dd.deinit();
         if (dd.dropped()) {
-            if (dd.addChoiceLabel("Set to null")) switch (active_color.*) {
-                inline else => |c| @field(style, @tagName(c)) = null,
-            };
+            // Only show this if the color is optional
+            if (active_color.* != .focus and
+                (active_style.* == .content and (active_color.* != .fill and active_color.* != .text and active_color.* != .border)) and
+                dd.addChoiceLabel("Set to null"))
+            {
+                switch (active_color.*) {
+                    .focus => unreachable,
+                    .text_select => theme.text_select = null,
+                    inline else => |c| @field(style, @tagName(c)) = null,
+                }
+            }
 
             for (std.meta.tags(Options.ColorAsk)) |color_ask| {
                 if (dd.addChoiceLabel(@tagName(color_ask))) {
                     changed = true;
                     const col = dvui.themeGet().color(active_style.*, color_ask);
                     hsv_color = Color.HSV.fromColor(col);
-                    field_ptr.* = col;
+                    switch (active_color.*) {
+                        .text_select => theme.text_select = col,
+                        .focus => theme.focus = col,
+                        inline else => |c| @field(style, @tagName(c)) = col,
+                    }
                 }
             }
         }
     }
 
     // Reapply the content colors
-    if (active_style.* == .content) {
-        inline for (@typeInfo(Theme.ColorStyle).@"struct".fields) |field| {
-            if (@FieldType(Theme, field.name) == ?Color) {
+    if (active_style.* == .content and changed) {
+        switch (active_color.*) {
+            .focus, .text_select => {},
+            inline else => |name| if (@FieldType(Theme, @tagName(name)) == ?Color) {
                 // Optional fields can get assigned directly
-                @field(theme, field.name) = @field(style, field.name);
-            } else if (@field(style, field.name)) |col| {
+                @field(theme, @tagName(name)) = @field(style, @tagName(name));
+            } else if (@field(style, @tagName(name))) |col| {
                 // Non optionals only get set if the style color is not null
-                @field(theme, field.name) = col;
-            }
+                @field(theme, @tagName(name)) = col;
+            },
         }
     }
 
