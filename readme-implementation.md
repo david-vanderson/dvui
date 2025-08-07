@@ -140,7 +140,7 @@ If `Options.rect` is set, the widget is directly specifying its position and siz
 `subwindow` is the term dvui uses for floating windows/dialogs/popups/etc.  They are dvui widgets and are not detachable or moveable outside the OS window.
 
 ### Widget IDs
-Each widget gets a `WidgetId` (fancy u64) by combining:
+Each widget gets an `Id` (fancy u64) by combining:
 - parent's id (see https://github.com/david-vanderson/dvui/blob/main/README.md#parent-child-and-nesting )
 - @src() passed to widget
 - `.id_extra` field of Options passed to widget (defaults to 0)

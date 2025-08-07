@@ -52,8 +52,8 @@ prev_rendering: bool = undefined,
 wd: WidgetData,
 /// options is for our embedded ScrollAreaWidget
 options: Options,
-prev_windowId: dvui.WidgetId = .zero,
-prev_last_focus: dvui.WidgetId = undefined,
+prev_windowId: dvui.Id = .zero,
+prev_last_focus: dvui.Id = undefined,
 parent_popup: ?*FloatingMenuWidget = null,
 have_popup_child: bool = false,
 init_options: InitOptions,
@@ -190,7 +190,7 @@ pub fn data(self: *FloatingMenuWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *FloatingMenuWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *FloatingMenuWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }

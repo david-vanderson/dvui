@@ -243,7 +243,7 @@ pub fn focus() void {
 
             if (dvui.button(@src(), "Focus Next textEntry", .{}, .{})) {
                 // grab id from previous frame
-                if (dvui.dataGet(null, uniqueId, "next_text_entry_id", dvui.WidgetId)) |id| {
+                if (dvui.dataGet(null, uniqueId, "next_text_entry_id", dvui.Id)) |id| {
                     dvui.focusWidget(id, null, null);
                 }
             }

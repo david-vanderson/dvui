@@ -263,11 +263,11 @@ pub fn layout() void {
     }
     dvui.label(@src(), "Collapsible Pane with Draggable Sash", .{}, .{});
     {
-        var paned = dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = paned_collapsed_width }, .{ .expand = .horizontal, .background = false, .min_size_content = .{ .h = 130 } });
+        var paned = dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = paned_collapsed_width, .handle_margin = 4 }, .{ .expand = .horizontal, .background = false, .min_size_content = .{ .h = 130 } });
         defer paned.deinit();
 
         if (paned.showFirst()) {
-            var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true });
+            var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .border = .all(1) });
             defer vbox.deinit();
 
             dvui.label(@src(), "Left Side", .{}, .{});
@@ -279,7 +279,7 @@ pub fn layout() void {
         }
 
         if (paned.showSecond()) {
-            var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true });
+            var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .border = .all(1) });
             defer vbox.deinit();
 
             dvui.label(@src(), "Right Side", .{}, .{});
@@ -288,8 +288,37 @@ pub fn layout() void {
             }
         }
     }
-
     _ = dvui.sliderEntry(@src(), "collapse under {d:0.0}", .{ .value = &paned_collapsed_width, .min = 100, .max = 600, .interval = 10 }, .{});
+
+    dvui.label(@src(), "Auto-Fit Panes", .{}, .{});
+    {
+        const should_fit = dvui.button(@src(), "Fit first pane", .{}, .{});
+        var paned = dvui.paned(@src(), .{
+            .direction = .vertical,
+            .handle_margin = 4,
+            .collapsed_size = 0,
+            .autofit_first = .{ .min_split = 0.2, .max_split = 0.8, .min_size = 50 },
+        }, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 250 } });
+        defer paned.deinit();
+
+        if (should_fit) {
+            paned.autoFit();
+        }
+        if (paned.showFirst()) {
+            var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .border = .all(1) });
+            defer vbox.deinit();
+
+            dvui.label(@src(), "Top Side\nWith multiple lines of content\nWhere the first pane fits the content", .{}, .{});
+            _ = dvui.button(@src(), "With this button right above the split", .{}, .{});
+        }
+
+        if (paned.showSecond()) {
+            var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .border = .all(1) });
+            defer vbox.deinit();
+
+            dvui.label(@src(), "Bottom Side", .{}, .{});
+        }
+    }
 }
 
 test {

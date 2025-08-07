@@ -3,7 +3,7 @@ options_editor_open: bool = false,
 options_override_list_open: bool = false,
 
 /// 0 means no widget is selected
-widget_id: dvui.WidgetId = .zero,
+widget_id: dvui.Id = .zero,
 target: DebugTarget = .none,
 
 /// All functions using the parent are invalid
@@ -12,10 +12,10 @@ target_wd: ?dvui.WidgetData = null,
 /// Uses `gpa` allocator
 ///
 /// The name slice is also duplicated by the `gpa` allocator
-under_mouse_stack: std.ArrayListUnmanaged(struct { id: dvui.WidgetId, name: []const u8 }) = .empty,
+under_mouse_stack: std.ArrayListUnmanaged(struct { id: dvui.Id, name: []const u8 }) = .empty,
 
 /// Uses `gpa` allocator
-options_override: std.AutoHashMapUnmanaged(dvui.WidgetId, struct { Options, std.builtin.SourceLocation }) = .empty,
+options_override: std.AutoHashMapUnmanaged(dvui.Id, struct { Options, std.builtin.SourceLocation }) = .empty,
 
 toggle_mutex: std.Thread.Mutex = .{},
 log_refresh: bool = false,
@@ -260,7 +260,7 @@ pub fn show(self: *Debug) void {
 
         var it = self.options_override.iterator();
         var i: usize = 0;
-        var remove_override_id: ?dvui.WidgetId = null;
+        var remove_override_id: ?dvui.Id = null;
         while (it.next()) |entry| : (i += 1) {
             const id = entry.key_ptr.*;
             const options, const src = entry.value_ptr.*;
@@ -390,7 +390,7 @@ pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
     return changed;
 }
 
-fn copyOptionsToClipboard(src: std.builtin.SourceLocation, id: dvui.WidgetId, options: Options) void {
+fn copyOptionsToClipboard(src: std.builtin.SourceLocation, id: dvui.Id, options: Options) void {
     dvui.log.debug("Copied Options struct for {s}:{d}", .{ src.file, src.line });
     dvui.toast(@src(), .{ .message = "Options copied to clipboard" });
 
@@ -403,7 +403,7 @@ fn copyOptionsToClipboard(src: std.builtin.SourceLocation, id: dvui.WidgetId, op
     dvui.clipboardTextSet(out.items);
 }
 
-fn layoutPage(self: *Options, id: dvui.WidgetId) bool {
+fn layoutPage(self: *Options, id: dvui.Id) bool {
     var changed = false;
 
     const corner_radius_was_null = self.corner_radius == null;
@@ -740,7 +740,7 @@ fn layoutPage(self: *Options, id: dvui.WidgetId) bool {
     return changed;
 }
 
-fn stylePage(self: *Options, id: dvui.WidgetId) bool {
+fn stylePage(self: *Options, id: dvui.Id) bool {
     var changed = false;
 
     var row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });

@@ -18,19 +18,16 @@ pub fn theming() void {
     const paned = dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = 400 }, .{ .expand = .both });
     defer paned.deinit();
 
-    //if (paned.showFirst()) {
-    //    const vbox = dvui.box(@src(), .{}, .{ .expand = .both, .margin = .{ .y = 10 } });
-    //    defer vbox.deinit();
-
-    //    {
-    //        const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-    //        defer hbox.deinit();
-    //        if (paned.collapsed() and dvui.button(@src(), "To Preview", .{}, .{ .gravity_x = 1 })) {
-    //            paned.animateSplit(0);
-    //        }
-    //        if (dvui.button(@src(), "Use custom theme", .{}, .{})) {
-    //            dvui.themeSet(&custom_theme);
-    //        }
+    if (paned.showFirst()) {
+        {
+            const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            if (paned.collapsed() and dvui.button(@src(), "To Preview", .{}, .{ .gravity_x = 1 })) {
+                paned.animateSplit(0);
+            }
+            if (dvui.button(@src(), "Use custom theme", .{}, .{})) {
+                dvui.themeSet(&custom_theme);
+            }
 
     //        var theme_reset_dropdown = dvui.DropdownWidget.init(@src(), .{ .label = "Reset" }, .{});
     //        theme_reset_dropdown.install();
@@ -61,28 +58,28 @@ pub fn theming() void {
     //        }
     //    }
 
-    //    const active_page = dvui.dataGetPtrDefault(null, vbox.data().id, "Page", ThemeEditingPage, .Colors);
-    //    {
-    //        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-    //        tabs.install();
-    //        defer tabs.deinit();
-    //        inline for (std.meta.tags(ThemeEditingPage), 0..) |page, i| {
-    //            var tab = tabs.addTab(active_page.* == page, .{
-    //                .expand = .horizontal,
-    //                .padding = .all(2),
-    //                .id_extra = i,
-    //            });
-    //            defer tab.deinit();
-    //            if (tab.clicked()) {
-    //                active_page.* = page;
-    //            }
-    //            var label_opts = tab.data().options.strip();
-    //            if (dvui.captured(tab.data().id)) {
-    //                label_opts.color_text = .{ .name = .text_press };
-    //            }
-    //            dvui.labelNoFmt(@src(), @tagName(page), .{}, .{});
-    //        }
-    //    }
+        const active_page = dvui.dataGetPtrDefault(null, paned.data().id, "Page", ThemeEditingPage, .Colors);
+        {
+            var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            tabs.install();
+            defer tabs.deinit();
+            inline for (std.meta.tags(ThemeEditingPage), 0..) |page, i| {
+                var tab = tabs.addTab(active_page.* == page, .{
+                    .expand = .horizontal,
+                    .padding = .all(2),
+                    .id_extra = i,
+                });
+                defer tab.deinit();
+                if (tab.clicked()) {
+                    active_page.* = page;
+                }
+                var label_opts = tab.data().options.strip();
+                if (dvui.captured(tab.data().id)) {
+                    label_opts.color_text = .{ .name = .text_press };
+                }
+                dvui.labelNoFmt(@src(), @tagName(page), .{}, .{});
+            }
+        }
 
     //    switch (active_page.*) {
     //        .Colors => _ = colors(&custom_theme),

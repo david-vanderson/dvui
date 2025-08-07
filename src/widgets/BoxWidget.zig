@@ -42,7 +42,7 @@ packed_children: f32 = 0,
 total_weight: f32 = 0,
 child_rect: Rect = Rect{},
 child_positioned: bool = false,
-child_id: if (builtin.mode == .Debug) dvui.WidgetId else void,
+child_id: if (builtin.mode == .Debug) dvui.Id else void,
 ratio_extra: f32 = 0,
 ran_off: bool = false,
 pixels_per_w: f32 = 0,
@@ -106,7 +106,7 @@ pub fn data(self: *BoxWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *BoxWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *BoxWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     if (builtin.mode == .Debug) {
         if (self.child_id != .zero) {
             dvui.logError(@src(), error.BadOrder, "rectFor called before previous widget called minSizeForChild", .{});

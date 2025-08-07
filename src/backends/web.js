@@ -1,4 +1,4 @@
-/**@typedef {BigInt} WidgetId */
+/**@typedef {BigInt} Id */
 
 /**
  * @param {number} ms Number of milliseconds to sleep
@@ -205,7 +205,7 @@ class Dvui {
 
     // Used for file uploads. Only valid for one frame
     filesCacheModified = false;
-    /** @type {Map<WidgetId, FileList>} */
+    /** @type {Map<Id, FileList>} */
     filesCache = new Map();
 
     //let par = document.createElement("p");
@@ -924,6 +924,15 @@ class Dvui {
         if (!canvas) {
             alert("Could not find canvas element.");
             return;
+        }
+
+        if (!canvas.style.width || !canvas.style.height) {
+            // Needed so that the canvas element can scale and report its size correctly.
+            // Absolute and relative length are both valid. Setting both to 100% is
+            // probably what you want.
+            console.error(
+                "Canvas element does not have defined width and height inline styles",
+            );
         }
 
         this.gl = canvas.getContext("webgl2", { alpha: true });
