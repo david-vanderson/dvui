@@ -162,7 +162,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
         .background = true,
         .border = .all(1),
         .corner_radius = .all(100),
-        .color_fill = .fromColor(hsv.toColor()),
+        .color_fill = hsv.toColor(),
     });
     indicator.install();
     indicator.drawBackground();
@@ -306,7 +306,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
         .background = true,
         .border = .all(1),
         .corner_radius = .all(100),
-        .color_fill = .fromColor((Color.HSV{ .h = hue.* }).toColor()),
+        .color_fill = (Color.HSV{ .h = hue.* }).toColor(),
     });
     knob.install();
     knob.drawBackground();
@@ -368,7 +368,7 @@ test "DOCIMG ColorPickerWidget" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
 
             var hsv: dvui.Color.HSV = .{ .h = 120, .s = 0.8, .v = 0.9 };

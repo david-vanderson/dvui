@@ -62,7 +62,7 @@ pub fn draw(self: *IconWidget) void {
     } else if (self.data().options.color_text) |ct| {
         // user is customizing icon rasterization, only colormod if they passed
         // a text color
-        texOpts.colormod = ct.resolve();
+        texOpts.colormod = ct;
     }
 
     dvui.renderIcon(

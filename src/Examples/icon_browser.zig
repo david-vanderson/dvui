@@ -78,7 +78,7 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
                 .{},
                 .{
                     .min_size_content = .{ .h = settings.icon_size },
-                    .color_text = .{ .color = settings.icon_rgb },
+                    .color_text = settings.icon_rgb,
                 },
             )) {
                 dvui.clipboardTextSet(text);
@@ -109,7 +109,7 @@ test "DOCIMG iconBrowser" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             var show_flag: bool = true;
             iconBrowser(@src(), &show_flag, "entypo", dvui.entypo);
