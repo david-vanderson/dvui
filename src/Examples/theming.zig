@@ -19,9 +19,6 @@ pub fn theming() void {
     defer paned.deinit();
 
     if (paned.showFirst()) {
-        const vbox = dvui.box(@src(), .{}, .{ .expand = .both, .margin = .{ .y = 10 } });
-        defer vbox.deinit();
-
         {
             const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
             defer hbox.deinit();
@@ -61,7 +58,7 @@ pub fn theming() void {
             }
         }
 
-        const active_page = dvui.dataGetPtrDefault(null, vbox.data().id, "Page", ThemeEditingPage, .Colors);
+        const active_page = dvui.dataGetPtrDefault(null, paned.data().id, "Page", ThemeEditingPage, .Colors);
         {
             var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
             tabs.install();

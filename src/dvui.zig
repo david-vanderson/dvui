@@ -7434,15 +7434,15 @@ pub const BasicLayout = struct {
                 if (e.isVertical()) {
                     self.seen_expanded = true;
                 }
-                r.y = self.pos;
-                r.h = @max(0, r.h - r.y);
+                r.y += self.pos;
+                r.h = @max(0, r.h - self.pos);
             },
             .horizontal => {
                 if (e.isHorizontal()) {
                     self.seen_expanded = true;
                 }
-                r.x = self.pos;
-                r.w = @max(0, r.w - r.x);
+                r.x += self.pos;
+                r.w = @max(0, r.w - self.pos);
             },
         }
 
