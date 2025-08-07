@@ -11,7 +11,7 @@ drop: ?FloatingMenuWidget = null,
 drop_first_frame: bool = false,
 /// SAFETY: Will always be set by `addChoice` before use
 drop_mi: MenuItemWidget = undefined,
-drop_mi_id: ?dvui.WidgetId = null,
+drop_mi_id: ?dvui.Id = null,
 drop_mi_index: usize = 0,
 drop_height: f32 = 0,
 drop_adjust: f32 = 0,

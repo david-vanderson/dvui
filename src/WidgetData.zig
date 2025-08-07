@@ -7,7 +7,7 @@ const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
 const Widget = dvui.Widget;
-const WidgetId = dvui.WidgetId;
+const Id = dvui.Id;
 const WidgetData = @This();
 
 pub const InitOptions = struct {
@@ -15,7 +15,7 @@ pub const InitOptions = struct {
     subwindow: bool = false,
 };
 
-id: WidgetId,
+id: Id,
 parent: Widget,
 init_options: InitOptions,
 rect: Rect,
@@ -319,7 +319,7 @@ pub fn minSizeReportToParent(self: *const WidgetData) void {
 }
 
 pub fn validate(self: *const WidgetData) *WidgetData {
-    std.debug.assert(self.id != WidgetId.undef); // Indicates a use after deinit() error.
+    std.debug.assert(self.id != Id.undef); // Indicates a use after deinit() error.
     return @constCast(self);
 }
 

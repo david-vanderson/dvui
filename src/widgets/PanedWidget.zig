@@ -40,6 +40,19 @@ pub const InitOptions = struct {
         /// closer than this (logical).
         distance_max: f32 = 20,
     } = null,
+
+    /// Logical pixels of space added on each side of the sash handle when
+    /// split is not 0 or 1.
+    handle_margin: f32 = 0,
+
+    /// Used so that the split_ratio will be set dynamically so that the first side
+    /// fits its children within the min/max split specified
+    ///
+    /// Only works for vertical panes
+    autofit_first: ?AutoFitOptions = null,
+
+    /// Whether to call draw in deinit if not called before.
+    draw_in_deinit: bool = true,
 };
 
 wd: WidgetData,
@@ -52,7 +65,19 @@ split_ratio: *f32,
 prevClip: Rect.Physical = undefined,
 collapsed_state: bool,
 collapsing: bool,
-first_side: bool = true,
+active_side: enum { none, first, second } = .none,
+layout: dvui.BasicLayout = .{},
+should_autofit: bool = false,
+drawn: bool = false,
+
+pub const AutoFitOptions = struct {
+    /// The minimum split percentage [0-1] for the first side
+    min_split: f32 = 0,
+    /// The maximum split percentage [0-1] for the first side
+    max_split: f32 = 1,
+    /// The minimum size that the first pane requires
+    min_size: f32 = 0,
+};
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) PanedWidget {
     const defaults = Options{ .name = "Paned" };
@@ -69,6 +94,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
         .init_opts = init_options,
         .collapsing = dvui.dataGet(null, wd.id, "_collapsing", bool) orelse false,
         .collapsed_state = dvui.dataGet(null, wd.id, "_collapsed", bool) orelse (our_size < init_options.collapsed_size),
+        .should_autofit = dvui.firstFrame(wd.id),
 
         // might be changed in processEvents
         .handle_thick = init_options.handle_size,
@@ -78,6 +104,15 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
             break :blk dvui.dataGetPtrDefault(null, wd.id, "_split_ratio", f32, default);
         },
     };
+
+    if (self.init_opts.autofit_first != null and self.should_autofit) {
+        // Make the first side take the full space to begin with
+        self.split_ratio.* = 1.0;
+
+        if (self.init_opts.direction != .vertical) {
+            dvui.log.warn("{s}:{d}: .autofit_first only works on vertical panes", .{ src.file, src.line });
+        }
+    }
 
     if (self.collapsing) {
         self.collapsed_state = false;
@@ -144,6 +179,8 @@ pub fn processEvents(self: *PanedWidget) void {
 }
 
 pub fn draw(self: *PanedWidget) void {
+    if (self.drawn) return;
+    self.drawn = true;
     if (self.collapsed()) return;
 
     if (dvui.captured(self.data().id)) {
@@ -160,7 +197,7 @@ pub fn draw(self: *PanedWidget) void {
             len_ratio *= 1.0 - std.math.clamp((self.mouse_dist - self.handle_thick) / hd.distance_max, 0.0, 1.0);
         }
     } else {
-        if (self.mouse_dist > self.handle_thick + 3) return;
+        if (self.mouse_dist > self.handle_thick / 2) return;
     }
 
     const rs = self.data().contentRectScale();
@@ -192,14 +229,29 @@ pub fn collapsed(self: *PanedWidget) bool {
 pub fn showFirst(self: *PanedWidget) bool {
     const ret = self.split_ratio.* > 0;
 
-    // If we don't show the first side, then record that for rectFor
-    if (!ret) self.first_side = false;
+    if (ret) {
+        self.active_side = .first;
+        self.layout = .{};
+    } else self.active_side = .none;
 
     return ret;
 }
 
 pub fn showSecond(self: *PanedWidget) bool {
-    return self.split_ratio.* < 1.0;
+    if (self.should_autofit) {
+        if (self.init_opts.autofit_first) |autofit| {
+            self.split_ratio.* = self.getFirstFittedRatio(autofit);
+        }
+    }
+
+    const ret = self.split_ratio.* < 1.0;
+
+    if (ret) {
+        self.active_side = .second;
+        self.layout = .{};
+    } else self.active_side = .none;
+
+    return ret;
 }
 
 pub fn animateSplit(self: *PanedWidget, end_val: f32) void {
@@ -214,59 +266,85 @@ pub fn data(self: *PanedWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *PanedWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) dvui.Rect {
-    _ = id;
+/// Resets the autofit of the first pane
+///
+/// Must be called before `showFirst`
+pub fn autoFit(self: *PanedWidget) void {
+    self.should_autofit = true;
+}
+
+/// Calculates the split ratio to fit the first pane to the size of its children.
+///
+/// Must be called after all the children on `showFirst` have been called
+/// and before `showSecond` is called
+pub fn getFirstFittedRatio(self: *PanedWidget, autofit: AutoFitOptions) f32 {
+    const full_size = @max(1, self.data().contentRect().h - self.handleSize() * 2);
+    const size_of_first = @max(autofit.min_size, self.layout.min_size_children.h);
+    return std.math.clamp(
+        size_of_first / full_size,
+        autofit.min_split,
+        autofit.max_split,
+    );
+}
+
+pub fn handleSize(self: *const PanedWidget) f32 {
+    return self.handle_thick / 2 + self.init_opts.handle_margin;
+}
+
+pub fn rectFor(self: *PanedWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) dvui.Rect {
     var r = self.data().contentRect().justSize();
-    if (self.first_side) {
-        self.first_side = false;
-        if (self.collapsed()) {
+    var margin = self.handleSize();
+    const space = switch (self.init_opts.direction) {
+        .horizontal => r.w,
+        .vertical => r.h,
+    };
+
+    margin = @min(margin, space * self.split_ratio.*);
+    margin = @min(margin, space - (space * self.split_ratio.*));
+
+    switch (self.active_side) {
+        .none => {
+            dvui.log.err("{s}:{d}: Paned widget {x} cannot add child widget {x} outside a first/second side", .{ self.data().src.file, self.data().src.line, self.data().id, id });
+            // Highlight the widget in red
+            dvui.currentWindow().debug.widget_id = id;
+            // Place within the entire content rect just so that the widget shows up on screen
+            // (probably covered by the panes, but the red outline will show)
+        },
+        .first => if (self.collapsed()) {
             if (self.split_ratio.* == 0.0) {
                 r.w = 0;
                 r.h = 0;
-            } else {
-                switch (self.init_opts.direction) {
-                    .horizontal => r.x -= (r.w - (r.w * self.split_ratio.*)),
-                    .vertical => r.y -= (r.h - (r.h * self.split_ratio.*)),
-                }
+            } else switch (self.init_opts.direction) {
+                .horizontal => r.x -= (r.w - (r.w * self.split_ratio.*)),
+                .vertical => r.y -= (r.h - (r.h * self.split_ratio.*)),
             }
-        } else {
-            switch (self.init_opts.direction) {
-                .horizontal => r.w = @max(0, r.w * self.split_ratio.* - self.handle_thick / 2),
-                .vertical => r.h = @max(0, r.h * self.split_ratio.* - self.handle_thick / 2),
-            }
-        }
-        return dvui.placeIn(r, min_size, e, g);
-    } else {
-        if (self.collapsed()) {
+        } else switch (self.init_opts.direction) {
+            .horizontal => r.w = @max(0, r.w * self.split_ratio.* - margin),
+            .vertical => r.h = @max(0, r.h * self.split_ratio.* - margin),
+        },
+        .second => if (self.collapsed()) {
             if (self.split_ratio.* == 1.0) {
                 r.w = 0;
                 r.h = 0;
-            } else {
-                switch (self.init_opts.direction) {
-                    .horizontal => {
-                        r.x = r.w * self.split_ratio.*;
-                    },
-                    .vertical => {
-                        r.y = r.h * self.split_ratio.*;
-                    },
-                }
+            } else switch (self.init_opts.direction) {
+                .horizontal => r.x = r.w * self.split_ratio.*,
+                .vertical => r.y = r.h * self.split_ratio.*,
             }
-        } else {
-            switch (self.init_opts.direction) {
-                .horizontal => {
-                    const first = @max(0, r.w * self.split_ratio.* - self.handle_thick / 2);
-                    r.w = @max(0, r.w - first - self.handle_thick);
-                    r.x += first + self.handle_thick;
-                },
-                .vertical => {
-                    const first = @max(0, r.h * self.split_ratio.* - self.handle_thick / 2);
-                    r.h = @max(0, r.h - first - self.handle_thick);
-                    r.y += first + self.handle_thick;
-                },
-            }
-        }
-        return dvui.placeIn(r, min_size, e, g);
+        } else switch (self.init_opts.direction) {
+            .horizontal => {
+                const first = r.w * self.split_ratio.*;
+                r.w = @max(0, r.w - first - margin);
+                r.x += first + margin;
+            },
+            .vertical => {
+                const first = r.h * self.split_ratio.*;
+                r.h = @max(0, r.h - first - margin);
+                r.y += first + margin;
+            },
+        },
     }
+
+    return self.layout.rectFor(r, id, min_size, e, g);
 }
 
 pub fn screenRectScale(self: *PanedWidget, rect: Rect) RectScale {
@@ -274,7 +352,8 @@ pub fn screenRectScale(self: *PanedWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *PanedWidget, s: dvui.Size) void {
-    self.data().minSizeMax(self.data().options.padSize(s));
+    const ms = self.layout.minSizeForChild(s);
+    self.data().minSizeMax(self.data().options.padSize(ms));
 }
 
 pub fn processEvent(self: *PanedWidget, e: *Event) void {
@@ -294,6 +373,8 @@ pub fn processEvent(self: *PanedWidget, e: *Event) void {
             const mouse_dist_outside = @max(0, self.mouse_dist - hd.handle_size_max / 2);
             self.handle_thick = std.math.clamp(hd.handle_size_max - mouse_dist_outside / 2, self.init_opts.handle_size, hd.handle_size_max);
         }
+
+        if (self.collapsed()) return;
 
         if (dvui.captured(self.data().id) or self.mouse_dist <= @max(self.handle_thick / 2, 2)) {
             if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
@@ -330,11 +411,11 @@ pub fn processEvent(self: *PanedWidget, e: *Event) void {
 }
 
 pub fn deinit(self: *PanedWidget) void {
+    if (self.init_opts.draw_in_deinit) self.draw();
     defer dvui.widgetFree(self);
     dvui.clipSet(self.prevClip);
     dvui.dataSet(null, self.data().id, "_collapsing", self.collapsing);
     dvui.dataSet(null, self.data().id, "_collapsed", self.collapsed_state);
-    dvui.dataSet(null, self.data().id, "_split_ratio", self.split_ratio.*);
     self.data().minSizeSetAndRefresh();
     self.data().minSizeReportToParent();
     dvui.parentReset(self.data().id, self.data().parent);

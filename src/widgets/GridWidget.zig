@@ -30,7 +30,7 @@ const Cursor = dvui.enums.Cursor;
 const MaxSize = Options.MaxSize;
 const ScrollInfo = dvui.ScrollInfo;
 const WidgetData = dvui.WidgetData;
-const WidgetId = dvui.WidgetId;
+const Id = dvui.Id;
 const Event = dvui.Event;
 const BoxWidget = dvui.BoxWidget;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
@@ -956,7 +956,7 @@ pub const KeyboardNavigation = struct {
     cursor: Cell = .{ .col_num = 0, .row_num = 0 },
 
     /// Internal use.
-    last_focused_widget: WidgetId = .zero,
+    last_focused_widget: Id = .zero,
 
     /// Call this once per frame before the grid body cells are created.
     pub fn processEvents(self: *KeyboardNavigation, grid: *GridWidget) void {

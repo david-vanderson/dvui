@@ -32,7 +32,7 @@ pub const InitOpts = struct {
     vertical_bar: ScrollInfo.ScrollBarMode = .auto,
     horizontal: ?ScrollInfo.ScrollMode = null, // .none is default
     horizontal_bar: ScrollInfo.ScrollBarMode = .auto,
-    focus_id: ?dvui.WidgetId = null, // clicking on a scrollbar will focus this id, or the scroll container if null
+    focus_id: ?dvui.Id = null, // clicking on a scrollbar will focus this id, or the scroll container if null
     frame_viewport: ?dvui.Point = null,
     lock_visible: bool = false,
     process_events_after: bool = true,
@@ -94,7 +94,7 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
     self.hbox.install();
     self.hbox.drawBackground();
 
-    const focus_target = self.init_opts.focus_id orelse dvui.dataGet(null, self.hbox.data().id, "_scroll_id", dvui.WidgetId);
+    const focus_target = self.init_opts.focus_id orelse dvui.dataGet(null, self.hbox.data().id, "_scroll_id", dvui.Id);
 
     const crect = self.hbox.data().contentRect();
 
