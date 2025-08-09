@@ -15,11 +15,13 @@ pub var defaults: Options = .{
     .name = "MenuItem",
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
+    .style = .control,
 };
 
 pub const InitOptions = struct {
     submenu: bool = false,
     highlight_only: bool = false,
+    focus_as_outline: bool = false,
 };
 
 wd: WidgetData,
@@ -50,7 +52,7 @@ pub fn install(self: *MenuItemWidget) void {
     dvui.parentSet(self.widget());
 }
 
-pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bool = false }) void {
+pub fn drawBackground(self: *MenuItemWidget) void {
     var focused: bool = false;
     if (self.data().id == dvui.focusedWidgetId()) {
         focused = true;
@@ -78,25 +80,36 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
     self.focused_last_frame = focused;
 
     if (self.data().visible()) {
+        const cols = self.colors();
+        const rs = self.data().backgroundRectScale();
+        const cr = self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical);
         if (self.show_active) {
-            if (opts.focus_as_outline) {
+            if (self.init_opts.focus_as_outline) {
                 self.data().focusBorder();
                 if (self.highlight) {
-                    const rs = self.data().backgroundRectScale();
-                    rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill_hover), .fade = 1.0 });
+                    rs.r.fill(cr, .{ .color = cols.color(.fill), .fade = 1.0 });
                 }
             } else {
-                const rs = self.data().backgroundRectScale();
-                rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.accent), .fade = 1.0 });
+                rs.r.fill(cr, .{ .color = cols.color(.fill), .fade = 1.0 });
             }
         } else if ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) or self.highlight) {
-            const rs = self.data().backgroundRectScale();
-            rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill_hover), .fade = 1.0 });
+            rs.r.fill(cr, .{ .color = cols.color(.fill), .fade = 1.0 });
         } else if (self.data().options.backgroundGet()) {
-            const rs = self.data().backgroundRectScale();
-            rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill), .fade = 1.0 });
+            rs.r.fill(cr, .{ .color = cols.color(.fill), .fade = 1.0 });
         }
     }
+}
+
+/// Returns an `Options` struct with color/style overrides for the hover and press state
+pub fn colors(self: *MenuItemWidget) Options {
+    var opts: Options = .{ .style = self.data().options.style };
+    if (self.show_active and !self.init_opts.focus_as_outline) {
+        opts.style = .highlight;
+    } else if (self.highlight or (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow())) {
+        opts.color_fill = self.data().options.color(.fill_hover);
+        opts.color_text = self.data().options.color(.text_hover);
+    }
+    return opts;
 }
 
 pub fn matchEvent(self: *MenuItemWidget, e: *Event) bool {

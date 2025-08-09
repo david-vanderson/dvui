@@ -17,12 +17,12 @@ drop_height: f32 = 0,
 drop_adjust: f32 = 0,
 
 pub var defaults: Options = .{
-    .color_fill = .{ .name = .fill_control },
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
     .background = true,
     .name = "Dropdown",
+    .style = .control,
 };
 
 pub const InitOptions = struct {
@@ -64,13 +64,14 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 pub fn install(self: *DropdownWidget) void {
     self.menu.install();
 
-    self.menuItem = MenuItemWidget.init(@src(), .{ .submenu = true }, wrapInner(self.options));
+    self.menuItem = MenuItemWidget.init(@src(), .{ .submenu = true, .focus_as_outline = true }, wrapInner(self.options));
     self.menuItem.install();
     self.menuItem.processEvents();
-    self.menuItem.drawBackground(.{ .focus_as_outline = true });
+    self.menuItem.drawBackground();
 
     if (self.init_options.label) |ll| {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
+        defer hbox.deinit();
 
         var lw = LabelWidget.initNoFmt(@src(), ll, .{}, self.options.strip().override(.{ .gravity_y = 0.5 }));
         lw.install();
@@ -84,8 +85,6 @@ pub fn install(self: *DropdownWidget) void {
             .{},
             self.options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }),
         );
-
-        hbox.deinit();
     }
 }
 
@@ -179,12 +178,7 @@ pub fn addChoiceLabel(self: *DropdownWidget, label_text: []const u8) bool {
     var mi = self.addChoice();
     defer mi.deinit();
 
-    var opts = self.options.strip();
-    if (mi.show_active) {
-        opts = opts.override(dvui.themeGet().accent());
-    }
-
-    dvui.labelNoFmt(@src(), label_text, .{}, opts);
+    dvui.labelNoFmt(@src(), label_text, .{}, self.options.strip().override(mi.colors()));
 
     if (mi.activeRect()) |_| {
         self.close();
@@ -202,11 +196,11 @@ pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
         }
     }
 
-    self.drop_mi = MenuItemWidget.init(@src(), .{}, .{ .id_extra = self.drop_mi_index, .expand = .horizontal });
+    self.drop_mi = MenuItemWidget.init(@src(), .{}, self.options.stylesOnly().override(.{ .id_extra = self.drop_mi_index, .expand = .horizontal }));
     self.drop_mi_id = self.drop_mi.data().id;
     self.drop_mi.install();
     self.drop_mi.processEvents();
-    self.drop_mi.drawBackground(.{});
+    self.drop_mi.drawBackground();
 
     if (self.drop_first_frame) {
         if (self.init_options.selected_index) |si| {

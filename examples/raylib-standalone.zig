@@ -121,7 +121,7 @@ fn dvui_frame() bool {
         }
     }
 
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
 
     var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });

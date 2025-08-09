@@ -7,40 +7,52 @@ const Options = dvui.Options;
 
 const Theme = @This();
 
+/// enum used in Options to pick a ColorStyle from Theme
+pub const Style = enum {
+    content,
+    window,
+    control,
+    highlight,
+    err,
+};
+
 name: []const u8,
 
 /// widgets can use this if they need to adjust colors
 dark: bool,
 
-/// alpha value to apply to all colors and rendering
-alpha: f32 = 1.0,
-
 /// used for focus highlighting
-color_accent: Color,
+focus: Color,
 
-color_err: Color,
+/// colors for content like textLayout
+/// * these are what Style .content use
+/// * fill/text usually have the highest contrast
+/// * also fallbacks for null Colors in ColorStyles
+fill: Color,
+fill_hover: ?Color = null,
+fill_press: ?Color = null,
+text: Color,
+text_hover: ?Color = null,
+text_press: ?Color = null,
+/// Used for selecting/highlighting text
+text_select: ?Color = null,
+border: Color,
 
-/// text/foreground color
-color_text: Color,
+/// colors for normal controls like buttons
+control: ColorStyle,
 
-/// text/foreground color when widget is pressed
-color_text_press: Color,
+/// colors for windows/boxes that contain controls
+window: ColorStyle,
 
-/// background color for displaying lots of text
-color_fill: Color,
+/// colors for highlighting:
+/// * menu/dropdown items
+/// * checkboxes
+/// * radio buttons
+/// * text selection (uses .fill)
+highlight: ColorStyle,
 
-/// background color for containers that have other widgets inside
-color_fill_window: Color,
-
-/// background color for controls like buttons
-color_fill_control: Color,
-
-/// background color while hovering over controls like buttons
-color_fill_hover: Color,
-/// background color while pressing down on controls like buttons
-color_fill_press: Color,
-
-color_border: Color,
+/// colors for buttons to perform dangerous actions
+err: ColorStyle,
 
 font_body: Font,
 font_heading: Font,
@@ -52,35 +64,19 @@ font_title_2: Font,
 font_title_3: Font,
 font_title_4: Font,
 
-/// used for highlighting menu/dropdown items
-style_accent: ColorStyles,
-
-/// used for buttons to perform dangerous actions
-style_err: ColorStyles,
-
 /// if true, all strings in `Theme` will be freed in `deinit`
 allocated_strings: bool = false,
 
-pub const ColorStyles = struct {
-    color_accent: ?Options.ColorOrName = null,
-    color_text: ?Options.ColorOrName = null,
-    color_text_press: ?Options.ColorOrName = null,
-    color_fill: ?Options.ColorOrName = null,
-    color_fill_hover: ?Options.ColorOrName = null,
-    color_fill_press: ?Options.ColorOrName = null,
-    color_border: ?Options.ColorOrName = null,
-
-    pub fn asOptions(self: ColorStyles) Options {
-        return .{
-            .color_accent = self.color_accent,
-            .color_text = self.color_text,
-            .color_text_press = self.color_text_press,
-            .color_fill = self.color_fill,
-            .color_fill_hover = self.color_fill_hover,
-            .color_fill_press = self.color_fill_press,
-            .color_border = self.color_border,
-        };
-    }
+/// Colors for controls (like buttons), if null fall back to theme colors and
+/// automatically adjust fill for hover/press.
+pub const ColorStyle = struct {
+    fill: ?Color = null,
+    fill_hover: ?Color = null,
+    fill_press: ?Color = null,
+    text: ?Color = null,
+    text_hover: ?Color = null,
+    text_press: ?Color = null,
+    border: ?Color = null,
 };
 
 pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
@@ -105,14 +101,47 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
     return ret;
 }
 
-/// Gets the accent style `Options`
-pub fn accent(self: *const Theme) Options {
-    return self.style_accent.asOptions();
+/// Get the resolved color for a style.  If null fallback to theme base.
+///
+/// If a color with a state (like `fill_hover`) is `null`, then the `fill` color
+/// will be used and adjusted by `Theme.adjustColorForState`.
+///
+pub fn color(self: *const Theme, style: Style, ask: Options.ColorAsk) Color {
+    const cs: ColorStyle = switch (style) {
+        .content => return sw: switch (ask) {
+            .border => self.border,
+            .fill => self.adjustColorForState(self.fill, ask),
+            .fill_hover => self.fill_hover orelse continue :sw .fill,
+            .fill_press => self.fill_press orelse continue :sw .fill,
+            .text => self.adjustColorForState(self.text, ask),
+            .text_hover => self.text_hover orelse continue :sw .text,
+            .text_press => self.text_press orelse continue :sw .text,
+        },
+        .control => self.control,
+        .window => self.window,
+        .highlight => self.highlight,
+        .err => self.err,
+    };
+
+    return sw: switch (ask) {
+        .border => cs.border orelse self.color(.content, ask),
+        .fill => if (cs.fill) |col| self.adjustColorForState(col, ask) else self.color(.content, ask),
+        .fill_hover => cs.fill_hover orelse continue :sw .fill,
+        .fill_press => cs.fill_press orelse continue :sw .fill,
+        .text => if (cs.text) |col| self.adjustColorForState(col, ask) else self.color(.content, ask),
+        .text_hover => cs.text_hover orelse continue :sw .text,
+        .text_press => cs.text_press orelse continue :sw .text,
+    };
 }
 
-/// Gets the error style `Options`
-pub fn err(self: *const Theme) Options {
-    return self.style_err.asOptions();
+/// Adjust col (sourced from .fill) for .fill_hover and .fill_press by
+/// lightening/darkening (based on the `dark` field).
+pub fn adjustColorForState(self: *const Theme, col: Color, ask: Options.ColorAsk) Color {
+    return col.lighten(switch (ask) {
+        .fill_hover => if (self.dark) 10 else -10,
+        .fill_press => if (self.dark) 20 else -20,
+        else => return col,
+    });
 }
 
 /// To pick between the built in themes, pass `&Theme.builtins` as the `themes` argument
@@ -145,7 +174,7 @@ pub fn picker(src: std.builtin.SourceLocation, themes: []const Theme, opts: Opti
     if (dd.dropped()) {
         for (themes) |theme| {
             if (dd.addChoiceLabel(theme.name)) {
-                dvui.themeSet(&theme);
+                dvui.themeSet(theme);
                 picked = true;
                 break;
             }
@@ -164,6 +193,11 @@ pub const builtin = struct {
     pub const gruvbox = QuickTheme.builtin.gruvbox.toTheme(null) catch unreachable;
     pub const jungle = QuickTheme.builtin.jungle.toTheme(null) catch unreachable;
     pub const opendyslexic = QuickTheme.builtin.opendyslexic.toTheme(null) catch unreachable;
+
+    test {
+        // Ensures all builting themes are valid
+        std.testing.refAllDecls(@This());
+    }
 };
 
 /// A comptime array of all the builtin themes sorted alphabetically
@@ -185,10 +219,17 @@ pub const builtins = blk: {
 
 pub const QuickTheme = struct {
     pub const builtin = struct {
+        pub const adwaita_light: QuickTheme = @import("themes/adwaita_light.zon");
+        pub const adwaita_dark: QuickTheme = @import("themes/adwaita_dark.zon");
         pub const dracula: QuickTheme = @import("themes/dracula.zon");
         pub const gruvbox: QuickTheme = @import("themes/gruvbox.zon");
         pub const jungle: QuickTheme = @import("themes/jungle.zon");
         pub const opendyslexic: QuickTheme = @import("themes/opendyslexic.zon");
+
+        test {
+            // Ensures all the .zon files are valid `QuickTheme` types
+            std.testing.refAllDecls(@This());
+        }
     };
 
     name: []const u8,
@@ -200,28 +241,37 @@ pub const QuickTheme = struct {
     font_name_caption: []const u8,
     font_name_title: []const u8,
 
-    // used for focus
-    color_focus: []const u8 = "#638465",
+    focus: []const u8,
 
     // text/foreground color
-    color_text: []const u8 = "#82a29f",
-
+    text: []const u8,
+    text_hover: ?[]const u8 = null,
     // text/foreground color when widget is pressed
-    color_text_press: []const u8 = "#971f81",
+    text_press: ?[]const u8 = null,
 
-    // background color for displaying lots of text
-    color_fill_text: []const u8 = "#2c3332",
+    // background color
+    fill: []const u8,
+    fill_hover: ?[]const u8 = null,
+    // fill/background color when widget is pressed
+    fill_press: ?[]const u8 = null,
 
-    // background color for containers that have other widgets inside
-    color_fill_container: []const u8 = "#2b3a3a",
+    border: []const u8,
 
-    // background color for controls like buttons
-    color_fill_control: []const u8 = "#2c3334",
+    control: QuickColorStyle,
+    window: QuickColorStyle,
+    highlight: QuickColorStyle,
+    /// If this is null, highlight will be created by averaging `red` and all the content colors
+    err: ?QuickColorStyle = null,
 
-    color_fill_hover: []const u8 = "#333e57",
-    color_fill_press: []const u8 = "#3b6357",
-
-    color_border: []const u8 = "#60827d",
+    pub const QuickColorStyle = struct {
+        fill: ?[]const u8 = null,
+        fill_hover: ?[]const u8 = null,
+        fill_press: ?[]const u8 = null,
+        text: ?[]const u8 = null,
+        text_hover: ?[]const u8 = null,
+        text_press: ?[]const u8 = null,
+        border: ?[]const u8 = null,
+    };
 
     /// Parses a json object with the fields of `QuickTheme`,
     /// allocating copies of all the string data
@@ -241,32 +291,43 @@ pub const QuickTheme = struct {
     /// by that allocator and freed in `Theme.deinit`. Else the names
     /// will be used directly which is good for embedded/static slices.
     pub fn toTheme(self: @This(), gpa: ?std.mem.Allocator) (std.mem.Allocator.Error || Color.FromHexError)!Theme {
-        @setEvalBranchQuota(1600);
-        const color_accent = try Color.tryFromHex(self.color_focus);
-        const color_err = try Color.tryFromHex("#ffaaaa");
-        const color_text = try Color.tryFromHex(self.color_text);
-        const color_text_press = try Color.tryFromHex(self.color_text_press);
-        const color_fill = try Color.tryFromHex(self.color_fill_text);
-        const color_fill_window = try Color.tryFromHex(self.color_fill_container);
-        const color_fill_control = try Color.tryFromHex(self.color_fill_control);
-        const color_fill_hover = try Color.tryFromHex(self.color_fill_hover);
-        const color_fill_press = try Color.tryFromHex(self.color_fill_press);
-        const color_border = try Color.tryFromHex(self.color_border);
+        @setEvalBranchQuota(5000); // Needs to handle worst case of all optionals being non-null
+        const text: Color = try .tryFromHex(self.text);
+        const text_hover: ?Color = if (self.text_hover) |hex| try .tryFromHex(hex) else null;
+        const text_press: ?Color = if (self.text_press) |hex| try .tryFromHex(hex) else null;
+        const fill: Color = try .tryFromHex(self.fill);
+        const fill_hover: ?Color = if (self.fill_hover) |hex| try .tryFromHex(hex) else null;
+        const fill_press: ?Color = if (self.fill_press) |hex| try .tryFromHex(hex) else null;
+        const border: Color = try .tryFromHex(self.border);
+        const focus: Color = try .tryFromHex(self.focus);
 
         return Theme{
             .name = if (gpa) |alloc| try alloc.dupe(u8, self.name) else self.name,
-            .dark = color_text.brightness() > color_fill.brightness(),
-            .alpha = 1.0,
-            .color_accent = color_accent,
-            .color_err = color_err,
-            .color_text = color_text,
-            .color_text_press = color_text_press,
-            .color_fill = color_fill,
-            .color_fill_window = color_fill_window,
-            .color_fill_control = color_fill_control,
-            .color_fill_hover = color_fill_hover,
-            .color_fill_press = color_fill_press,
-            .color_border = color_border,
+            .dark = text.brightness() > fill.brightness(),
+
+            .focus = focus,
+
+            .text = text,
+            .text_hover = text_hover,
+            .text_press = text_press,
+            .fill = fill,
+            .fill_hover = fill_hover,
+            .fill_press = fill_press,
+            .border = border,
+
+            .control = try parseStyle(self.control),
+            .window = try parseStyle(self.window),
+            .highlight = try parseStyle(self.highlight),
+            .err = if (self.err) |s| try parseStyle(s) else .{
+                .text = .average(.red, text),
+                .text_hover = if (text_hover) |col| .average(.red, col) else null,
+                .text_press = if (text_press) |col| .average(.red, col) else null,
+                .fill = .average(.red, fill),
+                .fill_hover = if (fill_hover) |col| .average(.red, col) else null,
+                .fill_press = if (fill_press) |col| .average(.red, col) else null,
+                .border = .average(.red, border),
+            },
+
             .font_body = .{
                 .size = @round(self.font_size),
                 .id = .fromName(self.font_name_body),
@@ -303,25 +364,20 @@ pub const QuickTheme = struct {
                 .size = @round(self.font_size * 1.15),
                 .id = .fromName(self.font_name_title),
             },
-            .style_accent = .{
-                .color_accent = .{ .color = Color.average(color_accent, color_accent) },
-                .color_text = .{ .color = Color.average(color_accent, color_text) },
-                .color_text_press = .{ .color = Color.average(color_accent, color_text_press) },
-                .color_fill = .{ .color = Color.average(color_accent, color_fill) },
-                .color_fill_hover = .{ .color = Color.average(color_accent, color_fill_hover) },
-                .color_fill_press = .{ .color = Color.average(color_accent, color_fill_press) },
-                .color_border = .{ .color = Color.average(color_accent, color_border) },
-            },
-            .style_err = .{
-                .color_accent = .{ .color = Color.average(color_accent, color_accent) },
-                .color_text = .{ .color = Color.average(color_err, color_text) },
-                .color_text_press = .{ .color = Color.average(color_err, color_text_press) },
-                .color_fill = .{ .color = Color.average(color_err, color_fill) },
-                .color_fill_hover = .{ .color = Color.average(color_err, color_fill_hover) },
-                .color_fill_press = .{ .color = Color.average(color_err, color_fill_press) },
-                .color_border = .{ .color = Color.average(color_err, color_border) },
-            },
+
             .allocated_strings = gpa != null,
+        };
+    }
+
+    fn parseStyle(style: QuickColorStyle) Color.FromHexError!ColorStyle {
+        return .{
+            .fill = if (style.fill) |hex| try .tryFromHex(hex) else null,
+            .fill_hover = if (style.fill_hover) |hex| try .tryFromHex(hex) else null,
+            .fill_press = if (style.fill_press) |hex| try .tryFromHex(hex) else null,
+            .text = if (style.text) |hex| try .tryFromHex(hex) else null,
+            .text_hover = if (style.text_hover) |hex| try .tryFromHex(hex) else null,
+            .text_press = if (style.text_press) |hex| try .tryFromHex(hex) else null,
+            .border = if (style.border) |hex| try .tryFromHex(hex) else null,
         };
     }
 };

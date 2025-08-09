@@ -40,10 +40,9 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
         }
 
         if (dvui.animationGet(hbox.data().id, "enter_pressed")) |a| {
-            const prev_alpha = dvui.themeGet().alpha;
-            dvui.themeGet().alpha *= a.value();
+            const prev_alpha = dvui.alpha(a.value());
+            defer dvui.alphaSet(prev_alpha);
             dvui.label(@src(), "Enter!", .{}, .{ .gravity_y = 0.5 });
-            dvui.themeGet().alpha = prev_alpha;
         }
     }
 
@@ -198,7 +197,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
             la2.spacer(@src(), 0);
 
             const normalOptions: dvui.Options = .{ .margin = dvui.TextEntryWidget.defaults.marginGet().plus(.all(1)) };
-            const errOptions: dvui.Options = .{ .color_border = .err, .border = dvui.Rect.all(2) };
+            const errOptions: dvui.Options = .{ .color_border = dvui.themeGet().err.fill orelse .red, .border = dvui.Rect.all(2) };
 
             const name_error = dvui.dataGetPtrDefault(null, hbox2.data().id, "_name_error", bool, false);
             var te_name = dvui.textEntry(@src(), .{}, if (name_error.*) errOptions else normalOptions);
@@ -437,10 +436,9 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
                 }
 
                 if (dvui.animationGet(hbox.data().id, "value_changed")) |a| {
-                    const prev_alpha = dvui.themeGet().alpha;
-                    dvui.themeGet().alpha *= a.value();
+                    const prev_alpha = dvui.alpha(a.value());
+                    defer dvui.alphaSet(prev_alpha);
                     dvui.label(@src(), "Changed!", .{}, .{ .gravity_y = 0.5 });
-                    dvui.themeGet().alpha = prev_alpha;
                 }
             }
         }
@@ -492,7 +490,7 @@ test "DOCIMG text_entry" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             textEntryWidgets(box.data().id);
             return .ok;

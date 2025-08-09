@@ -21,7 +21,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Options = dvui.Options;
-const ColorOrName = Options.ColorOrName;
+const Color = dvui.Color;
 const Rect = dvui.Rect;
 const Size = dvui.Size;
 const Point = dvui.Point;
@@ -46,6 +46,7 @@ pub var defaults: Options = .{
     .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
     // Small padding to separate first column from left edge of the grid
     .padding = .{ .x = 5 },
+    .style = .content,
 };
 
 pub var scrollbar_padding_defaults: Size = .{ .h = 10, .w = 10 };
@@ -85,9 +86,9 @@ pub const CellOptions = struct {
     border: ?Rect = null,
     padding: ?Rect = null,
     background: ?bool = null,
-    color_fill: ?ColorOrName = null,
-    color_fill_hover: ?ColorOrName = null,
-    color_border: ?ColorOrName = null,
+    color_fill: ?Color = null,
+    color_fill_hover: ?Color = null,
+    color_border: ?Color = null,
 
     pub fn height(self: *const CellOptions) f32 {
         return if (self.size) |size| size.h else 0;
@@ -105,7 +106,6 @@ pub const CellOptions = struct {
             .padding = self.padding,
             .background = self.background,
             .color_fill = self.color_fill,
-            .color_fill_hover = self.color_fill_hover,
             .color_border = self.color_border,
         };
     }
@@ -315,6 +315,7 @@ pub fn install(self: *GridWidget) void {
         .{
             .name = "GridWidgetScrollArea",
             .expand = .both,
+            .background = false,
         },
     );
     self.scroll.installScrollBars();
@@ -641,6 +642,7 @@ fn bodyScrollContainerCreate(self: *GridWidget) void {
         }, .{
             .name = "GridWidgetBodyScroll",
             .expand = .both,
+            .background = false,
         });
         self.bscroll.?.install();
         self.bscroll.?.processEvents();
@@ -723,7 +725,6 @@ pub const HeaderResizeWidget = struct {
     const defaults: Options = .{
         .name = "GridHeaderResize",
         .background = true, // TODO: remove this when border and background are no longer coupled
-        .color_fill = .{ .name = .border },
         .min_size_content = .{ .w = 1, .h = 1 },
     };
 
@@ -736,7 +737,7 @@ pub const HeaderResizeWidget = struct {
     offset: Point = .{},
 
     pub fn init(src: std.builtin.SourceLocation, dir: Direction, init_options: InitOptions, opts: Options) HeaderResizeWidget {
-        var widget_opts = HeaderResizeWidget.defaults.override(opts);
+        var widget_opts = HeaderResizeWidget.defaults.override(.{ .color_fill = opts.color(.border) }).override(opts);
         widget_opts.expand = switch (dir) {
             .horizontal => .horizontal,
             .vertical => .vertical,

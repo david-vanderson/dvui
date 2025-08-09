@@ -296,18 +296,18 @@ pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []
     log.err("{s}:{d}:{d}: {s} got {s}: " ++ fmt ++ error_trace_fmt ++ stack_trace_fmt, combined_args);
 }
 
-/// Get a pointer to the active theme.
+/// Get the active theme.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn themeGet() *Theme {
-    return &currentWindow().theme;
+pub fn themeGet() Theme {
+    return currentWindow().theme;
 }
 
-/// Set the active theme (copies into internal storage).
+/// Set the active theme.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn themeSet(theme: *const Theme) void {
-    currentWindow().theme = theme.*;
+pub fn themeSet(theme: Theme) void {
+    currentWindow().theme = theme;
 }
 
 /// Toggle showing the debug window (run during `Window.end`).
@@ -1298,8 +1298,11 @@ pub const IconRenderOptions = struct {
 /// that run later in the frame.
 pub const RenderCommand = struct {
     clip: Rect.Physical,
+    alpha: f32,
     snap: bool,
-    cmd: union(enum) {
+    cmd: Command,
+
+    pub const Command = union(enum) {
         text: renderTextOptions,
         texture: struct {
             tex: Texture,
@@ -1318,7 +1321,7 @@ pub const RenderCommand = struct {
             tri: Triangles,
             tex: ?Texture,
         },
-    },
+    };
 };
 
 /// Id of the currently focused subwindow.  Used by `FloatingMenuWidget` to
@@ -1623,7 +1626,7 @@ pub const Path = struct {
         // owned by and will be freed by the Path.Builder
         try std.testing.expectEqual(4, path.points.len);
 
-        var triangles = try path.fillConvexTriangles(std.testing.allocator, .{});
+        var triangles = try path.fillConvexTriangles(std.testing.allocator, .{ .color = Color.white });
         defer triangles.deinit(std.testing.allocator);
         try std.testing.expectApproxEqRel(10, triangles.bounds.x, 0.05);
         try std.testing.expectApproxEqRel(20, triangles.bounds.y, 0.05);
@@ -1636,10 +1639,11 @@ pub const Path = struct {
     }
 
     pub const FillConvexOptions = struct {
+        color: Color,
+
         /// Size (physical pixels) of fade to transparent centered on the edge.
         /// If >1, then starts a half-pixel inside and the rest outside.
         fade: f32 = 0.0,
-        color: ?Color = null,
         center: ?Point.Physical = null,
     };
 
@@ -1655,11 +1659,6 @@ pub const Path = struct {
             return;
         }
 
-        var options = opts;
-        if (options.color == null) {
-            options.color = dvui.themeGet().color_fill;
-        }
-
         const cw = currentWindow();
 
         if (!cw.render_target.rendering) {
@@ -1667,30 +1666,28 @@ pub const Path = struct {
                 logError(@src(), err, "Could not reallocate path for render command", .{});
                 return;
             };
-            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = new_path, .opts = options } } };
-
-            var sw = cw.subwindowCurrent();
-            sw.render_cmds.append(cw.arena(), cmd) catch |err| {
-                logError(@src(), err, "Could not append to render_cmds_after", .{});
-            };
+            cw.addRenderCommand(.{ .pathFillConvex = .{ .path = new_path, .opts = opts } }, false);
             return;
         }
 
+        var options = opts;
+        options.color = options.color.opacity(cw.alpha);
+
         var triangles = path.fillConvexTriangles(cw.lifo(), options) catch |err| {
-            logError(@src(), err, "Could get triangles for path", .{});
+            logError(@src(), err, "Could not get triangles for path", .{});
             return;
         };
         defer triangles.deinit(cw.lifo());
         renderTriangles(triangles, null) catch |err| {
-            logError(@src(), err, "Could not draw path, opts: {any}", .{opts});
+            logError(@src(), err, "Could not draw path, opts: {any}", .{options});
             return;
         };
     }
 
     /// Generates triangles to fill path (must be convex).
     ///
-    /// Vertexes will have unset uv and color is alpha multiplied white fading to
-    /// transparent at the edge if fade is > 0.
+    /// Vertexes will have unset uv and color is alpha multiplied opts.color
+    /// fading to transparent at the edge if fade is > 0.
     pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillConvexOptions) std.mem.Allocator.Error!Triangles {
         if (path.points.len < 3) {
             return .empty;
@@ -1710,7 +1707,7 @@ pub const Path = struct {
         var builder = try Triangles.Builder.init(allocator, vtx_count, idx_count);
         errdefer comptime unreachable; // No errors from this point on
 
-        const col: Color.PMA = if (opts.color) |color| .fromColor(color) else .cast(.white);
+        const col: Color.PMA = .fromColor(opts.color);
 
         var i: usize = 0;
         while (i < path.points.len) : (i += 1) {
@@ -1824,24 +1821,15 @@ pub const Path = struct {
                 logError(@src(), err, "Could not reallocate path for render command", .{});
                 return;
             };
-            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = new_path, .opts = opts } } };
-
-            var sw = cw.subwindowCurrent();
-            if (opts.after) {
-                sw.render_cmds_after.append(cw.arena(), cmd) catch |err| {
-                    logError(@src(), err, "Could not append to render_cmds_after", .{});
-                };
-            } else {
-                sw.render_cmds.append(cw.arena(), cmd) catch |err| {
-                    logError(@src(), err, "Could not append to render_cmds_after", .{});
-                };
-            }
-
+            cw.addRenderCommand(.{ .pathStroke = .{ .path = new_path, .opts = opts } }, opts.after);
             return;
         }
 
-        var triangles = path.strokeTriangles(cw.lifo(), opts) catch |err| {
-            logError(@src(), err, "Could get triangles for path", .{});
+        var options = opts;
+        options.color = options.color.opacity(cw.alpha);
+
+        var triangles = path.strokeTriangles(cw.lifo(), options) catch |err| {
+            logError(@src(), err, "Could not get triangles for path", .{});
             return;
         };
         defer triangles.deinit(cw.lifo());
@@ -1853,8 +1841,8 @@ pub const Path = struct {
 
     /// Generates triangles to stroke path.
     ///
-    /// Vertexes will have unset uv and color is alpha multiplied white fading to
-    /// transparent at the edge.
+    /// Vertexes will have unset uv and color is alpha multiplied opts.color
+    /// fading to transparent at the edge.
     pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOptions) std.mem.Allocator.Error!Triangles {
         if (dvui.clipGet().empty()) {
             return .empty;
@@ -2241,6 +2229,12 @@ pub const Triangles = struct {
     }
 };
 
+/// Rendered `Triangles` taking in to account the current clip rect
+/// and deferred rendering through render targets.
+///
+/// Expect that `Window.alpha` has already been applied.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError!void {
     if (triangles.vertexes.len == 0) {
         return;
@@ -2254,10 +2248,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
 
     if (!cw.render_target.rendering) {
         const tri_copy = try triangles.dupe(cw.arena());
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .triangles = .{ .tri = tri_copy, .tex = tex } } };
-
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cw.arena(), cmd);
+        cw.addRenderCommand(.{ .triangles = .{ .tri = tri_copy, .tex = tex } }, false);
         return;
     }
 
@@ -2614,7 +2605,7 @@ pub fn clipGet() Rect.Physical {
 /// Intersect the given physical rect with the current clipping rect and set
 /// as the new clipping rect.
 ///
-/// Returns the previous clipping rect, use clipSet to restore it.
+/// Returns the previous clipping rect, use `clipSet` to restore it.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn clip(new: Rect.Physical) Rect.Physical {
@@ -2629,6 +2620,28 @@ pub fn clip(new: Rect.Physical) Rect.Physical {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn clipSet(r: Rect.Physical) void {
     currentWindow().clipRect = r;
+}
+
+/// Multiplies the current alpha value with the passed in multiplier.
+/// If `mult` is 0 then it will be completely transparent, 0.5 would be
+/// half of the current alpha and so on.
+///
+/// Returns the previous alpha value, use `alphaSet` to restore it.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn alpha(mult: f32) f32 {
+    const cw = currentWindow();
+    const ret = cw.alpha;
+    alphaSet(cw.alpha * mult);
+    return ret;
+}
+
+/// Set the current alpha value [0-1] where 1 is fully opaque.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn alphaSet(a: f32) void {
+    const cw = currentWindow();
+    cw.alpha = std.math.clamp(a, 0, 1);
 }
 
 /// Set snap_to_pixels setting.  If true:
@@ -3965,7 +3978,7 @@ pub fn dialogDisplay(id: Id) !void {
     }
 
     // Now add the scroll area which will get the remaining space
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
     var tl = dvui.textLayout(@src(), .{}, .{ .background = false, .gravity_x = 0.5 });
     tl.addText(message, .{});
     tl.deinit();
@@ -4877,7 +4890,6 @@ pub fn gridHeading(
         .expand = .horizontal,
         .gravity_x = 0.5,
         .gravity_y = 0.5,
-        .color_fill = .{ .name = .fill_control },
         .background = true,
     };
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
@@ -4947,7 +4959,6 @@ pub fn gridHeadingCheckbox(
         .background = true,
         .expand = .both,
         .margin = ButtonWidget.defaults.marginGet(),
-        .color_fill = .fill_control,
         .gravity_x = 0.5,
         .gravity_y = 0.5,
     };
@@ -5032,7 +5043,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
     const defaults: Options = .{
         .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
-        .color_fill = .{ .name = .border },
+        .color_fill = dvui.themeGet().border,
         .min_size_content = .{ .w = 1, .h = 1 },
     };
 
@@ -5132,7 +5143,7 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, ini
     }
 
     if (mi.show_active) {
-        labelopts = labelopts.override(themeGet().accent());
+        labelopts.style = .highlight;
     }
 
     labelNoFmt(@src(), label_str, .{}, labelopts);
@@ -5155,7 +5166,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
     }
 
     if (mi.show_active) {
-        iconopts = iconopts.override(themeGet().accent());
+        iconopts.style = .highlight;
     }
 
     icon(@src(), name, tvg_bytes, .{}, iconopts);
@@ -5170,7 +5181,7 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
     ret.* = MenuItemWidget.init(src, init_opts, opts);
     ret.install();
     ret.processEvents();
-    ret.drawBackground(.{});
+    ret.drawBackground();
     return ret;
 }
 
@@ -5558,16 +5569,16 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
 
     // use pressed text color if desired
     const click = bw.clicked();
-    var options = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
-
-    if (bw.pressed()) options = options.override(.{ .color_text = .{ .color = opts.color(.text_press) } });
 
     // this child widget:
     // - has bw as parent
     // - gets a rectangle from bw
     // - draws itself
     // - reports its min size to bw
-    labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, options);
+    labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, opts.strip()
+        // override with the button colors to update the press and hover colors correctly
+        .override(bw.colors())
+        .override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
 
     // draw focus
     bw.drawFocus();
@@ -5593,7 +5604,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
         name,
         tvg_bytes,
         icon_opts,
-        opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text }),
+        opts.strip().override(bw.colors()).override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text }),
     );
 
     const click = bw.clicked();
@@ -5611,16 +5622,15 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
 
     // process events (mouse and keyboard)
     bw.processEvents();
-    var options = opts.strip().override(.{ .gravity_y = 0.5 });
-    if (bw.pressed()) options = options.override(.{ .color_text = .{ .color = opts.color(.text_press) } });
+    const options = opts.strip().override(bw.colors()).override(.{ .gravity_y = 0.5 });
 
     // draw background/border
     bw.drawBackground();
     {
         var outer_hbox = box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer outer_hbox.deinit();
-        icon(@src(), label_str, tvg_bytes, .{}, opts.strip().override(.{ .gravity_x = 1.0, .color_text = opts.color_text }));
-        labelEx(@src(), "{s}", .{label_str}, .{ .align_x = 0.5 }, opts.strip().override(.{ .expand = .both }));
+        icon(@src(), label_str, tvg_bytes, .{}, options.strip().override(.{ .gravity_x = 1.0, .color_text = opts.color_text }));
+        labelEx(@src(), "{s}", .{label_str}, .{ .align_x = 0.5 }, options.strip().override(.{ .expand = .both }));
     }
 
     const click = bw.clicked();
@@ -5634,11 +5644,13 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
 pub var slider_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 20, .h = 20 },
-    .color_fill = .{ .name = .fill_control },
     .name = "Slider",
+    .style = .control,
 };
 
-// returns true if fraction (0-1) was changed
+/// returns true if fraction (0-1) was changed
+///
+/// `Options.color_accent` overrides the color of the left side of the slider
 pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *f32, opts: Options) bool {
     std.debug.assert(fraction.* >= 0);
     std.debug.assert(fraction.* <= 1);
@@ -5748,7 +5760,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.accent), .fade = 1.0 });
+        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = opts.color_accent orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
     }
 
     switch (dir) {
@@ -5776,7 +5788,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         options.color(.fill_hover)
     else
         options.color(.fill);
-    var knob = BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = .{ .color = fill_color } });
+    var knob = BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = fill_color });
     knob.install();
     knob.drawBackground();
     if (b.data().id == focusedWidgetId()) {
@@ -5795,10 +5807,10 @@ pub var slider_entry_defaults: Options = .{
     .margin = Rect.all(4),
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(2),
-    .color_fill = .{ .name = .fill_control },
     .background = true,
     // min size calculated from font
     .name = "SliderEntry",
+    .style = .control,
 };
 
 pub const SliderEntryInitOptions = struct {
@@ -6186,7 +6198,7 @@ pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, 
 pub var progress_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 10, .h = 10 },
-    .color_fill = .{ .name = .fill_control },
+    .style = .control,
 };
 
 pub const Progress_InitOptions = struct {
@@ -6194,6 +6206,7 @@ pub const Progress_InitOptions = struct {
     percent: f32,
 };
 
+/// `Options.color_accent` overrides the color of the left side of the progress bar
 pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions, opts: Options) void {
     const options = progress_defaults.override(opts);
 
@@ -6218,7 +6231,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.accent), .fade = 1.0 });
+    part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = opts.color_accent orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
 }
 
 pub var checkbox_defaults: Options = .{
@@ -6276,7 +6289,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
-        rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent });
+        rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -6288,7 +6301,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
     var options = opts;
     if (checked) {
-        options = opts.override(themeGet().accent());
+        options.style = .highlight;
         rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
     } else {
         rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
@@ -6346,7 +6359,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     const rs = s.borderRectScale();
 
     if (bw.data().visible()) {
-        radioCircle(active, bw.focused(), rs, bw.pressed(), bw.hovered(), options);
+        radioCircle(active or bw.clicked(), bw.focused(), rs, bw.pressed(), bw.hovered(), options);
     }
 
     if (label_str) |str| {
@@ -6363,7 +6376,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
-        r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent });
+        r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -6375,8 +6388,8 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
 
     var options = opts;
     if (active) {
-        options = opts.override(themeGet().accent());
-        r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(.fill), .fade = 1.0 });
+        options.style = .highlight;
+        r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
     } else {
         r.insetAll(rs.s).fill(cornerRad, .{ .color = opts.color(fill), .fade = 1.0 });
     }
@@ -6543,7 +6556,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().color_err, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
 
     // display min/max
@@ -6557,7 +6570,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         } else if (init_opts.max != null) {
             minmax_text = std.fmt.bufPrint(&minmax_buffer, "(max: {d})", .{init_opts.max.?}) catch unreachable;
         }
-        te.textLayout.addText(minmax_text, .{ .color_text = .{ .name = .fill_hover } });
+        te.textLayout.addText(minmax_text, .{ .color_text = opts.color(.fill_hover) });
     }
 
     te.deinit();
@@ -6700,7 +6713,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().color_err, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
 
     te.deinit();
@@ -6792,6 +6805,7 @@ pub const renderTextOptions = struct {
     background_color: ?Color = null,
     sel_start: ?usize = null,
     sel_end: ?usize = null,
+    sel_color: ?Color = null,
     debug: bool = false,
 };
 
@@ -6813,10 +6827,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     if (!cw.render_target.rendering) {
         var opts_copy = opts;
         opts_copy.text = try cw.arena().dupe(u8, utf8_text);
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
-
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cw.arena(), cmd);
+        cw.addRenderCommand(.{ .text = opts_copy }, false);
         return;
     }
 
@@ -6848,6 +6859,8 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     // Over allocate the internal buffers assuming each byte is a character
     var builder = try Triangles.Builder.init(cw.lifo(), 4 * utf8_text.len, 6 * utf8_text.len);
     defer builder.deinit(cw.lifo());
+
+    const col: Color.PMA = .fromColor(opts.color.opacity(cw.alpha));
 
     const x_start: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
     var x = x_start;
@@ -6943,7 +6956,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
 
             v.pos.x = leftx;
             v.pos.y = y + gi.topBearing * target_fraction;
-            v.col = .fromColor(if (sel_in) themeGet().color_fill else opts.color);
+            v.col = col;
             v.uv = gi.uv;
             builder.appendVertex(v);
 
@@ -6993,7 +7006,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
                 .x = sel_end_x,
                 .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
             })
-            .fill(.{}, .{ .color = themeGet().color_accent, .fade = 0 });
+            .fill(.{}, .{ .color = opts.sel_color orelse themeGet().focus, .fade = 0 });
     }
 
     try renderTriangles(builder.build_unowned(), texture_atlas);
@@ -7118,6 +7131,7 @@ pub const RenderTextureOptions = struct {
     fade: f32 = 0.0,
 };
 
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Backend.GenericError!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
@@ -7125,10 +7139,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
     var cw = currentWindow();
 
     if (!cw.render_target.rendering) {
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .opts = opts } } };
-
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cw.arena(), cmd);
+        cw.addRenderCommand(.{ .texture = .{ .tex = tex, .rs = rs, .opts = opts } }, false);
         return;
     }
 
@@ -7137,7 +7148,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
 
     path.addRect(rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
 
-    var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod, .fade = opts.fade });
+    var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod.opacity(cw.alpha), .fade = opts.fade });
     defer triangles.deinit(cw.lifo());
 
     triangles.uvFromRectuv(rs.r, opts.uv);
@@ -7154,6 +7165,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
     try renderTriangles(triangles, tex);
 }
 
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions, icon_opts: IconRenderOptions) Backend.GenericError!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
@@ -7180,6 +7192,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     try renderTexture(texture, rs, opts);
 }
 
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderImage(source: ImageSource, rs: RectScale, opts: RenderTextureOptions) (Backend.TextureError || StbImageError)!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
@@ -7374,6 +7387,7 @@ pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, 
     return ret;
 }
 
+/// `Options.color_accent` overrides the color of the plot line
 pub fn plotXY(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, thick: f32, xs: []const f64, ys: []const f64, opts: Options) void {
     const defaults: Options = .{ .padding = .{} };
     var p = dvui.plot(src, plot_opts, defaults.override(opts));
@@ -7383,7 +7397,7 @@ pub fn plotXY(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions
         s1.point(x, y);
     }
 
-    s1.stroke(thick, opts.color(.accent));
+    s1.stroke(thick, opts.color_accent orelse dvui.themeGet().color(.highlight, .fill));
 
     s1.deinit();
     p.deinit();

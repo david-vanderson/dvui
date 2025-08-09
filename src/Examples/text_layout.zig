@@ -32,7 +32,7 @@ pub fn layoutText() void {
         }
         cbox.deinit();
 
-        cbox = dvui.box(@src(), .{}, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .fill_window, .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
+        cbox = dvui.box(@src(), .{}, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .style = .window, .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
         dvui.icon(@src(), "aircraft", entypo.aircraft, .{}, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 });
         dvui.label(@src(), "Caption Heading", .{}, .{ .font_style = .caption_heading, .gravity_x = 0.5 });
         var tl_caption = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
@@ -51,7 +51,7 @@ pub fn layoutText() void {
         const lorem2 = " Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\n";
         tl.addText(lorem, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
 
-        if (tl.addTextClick("This text is a link that is part of the text layout and goes to the dvui home page.", .{ .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } }, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) })) {
+        if (tl.addTextClick("This text is a link that is part of the text layout and goes to the dvui home page.", .{ .color_text = .{ .r = 0x35, .g = 0x84, .b = 0xe4 }, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) })) {
             _ = dvui.openURL("https://david-vanderson.github.io/");
         }
 
@@ -60,8 +60,8 @@ pub fn layoutText() void {
         const start = "\nNotice that the text in this box is wrapping around the stuff in the corners.\n\n";
         tl.addText(start, .{ .font_style = .title_4 });
 
-        const col = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill);
-        tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = .{ .color = col }, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
+        const col = dvui.Color.average(tl.data().options.color(.text), tl.data().options.color(.fill));
+        tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = col, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
 
         tl.format("This line uses zig format strings: {d}\n\n", .{12345}, .{});
 
@@ -72,10 +72,10 @@ pub fn layoutText() void {
         tl.addText("Title-4 ", .{ .font_style = .title_4 });
         tl.addText("Heading\n", .{ .font_style = .heading });
 
-        tl.addText("Here ", .{ .font_style = .title, .color_text = .{ .color = .{ .r = 100, .b = 100 } } });
-        tl.addText("is some ", .{ .font_style = .title_2, .color_text = .{ .color = .{ .b = 100, .g = 100 } }, .color_fill = .green });
-        tl.addText("ugly text ", .{ .font_style = .title_1, .color_text = .{ .color = .{ .r = 100, .g = 100 } }, .color_fill = .teal });
-        tl.addText("that shows styling.", .{ .font_style = .caption, .color_text = .{ .color = .{ .r = 100, .g = 50, .b = 50 } } });
+        tl.addText("Here ", .{ .font_style = .title, .color_text = .{ .r = 100, .b = 100 } });
+        tl.addText("is some ", .{ .font_style = .title_2, .color_text = .{ .b = 100, .g = 100 }, .color_fill = .green });
+        tl.addText("ugly text ", .{ .font_style = .title_1, .color_text = .{ .r = 100, .g = 100 }, .color_fill = .teal });
+        tl.addText("that shows styling.", .{ .font_style = .caption, .color_text = .{ .r = 100, .g = 50, .b = 50 } });
     }
 }
 
@@ -89,7 +89,7 @@ test "DOCIMG text_layout" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             layoutText();
             return .ok;

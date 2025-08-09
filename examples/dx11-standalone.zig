@@ -142,7 +142,7 @@ fn gui_frame() !void {
         }
     }
 
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
     defer scroll.deinit();
 
     var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });

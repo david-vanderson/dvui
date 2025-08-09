@@ -47,7 +47,7 @@ pub fn layout() void {
                 _ = dvui.checkbox(@src(), &Static.border, "Border", .{});
             }
 
-            var opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
+            var opts: Options = .{ .style = .content, .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
             if (Static.shrink) {
                 opts.max_size_content = .size(opts.min_size_contentGet());
             }
@@ -67,7 +67,7 @@ pub fn layout() void {
                     .{
                         .min_size_content = Static.size,
                         .background = Static.background,
-                        .color_fill = .{ .color = dvui.themeGet().color_text },
+                        .color_fill = options.color(.text),
                         .border = if (Static.border) Rect.all(1) else null,
                     },
                 ));
@@ -179,7 +179,7 @@ pub fn layout() void {
 
     dvui.label(@src(), "Boxes", .{}, .{});
     {
-        const opts: Options = .{ .expand = .both, .border = Rect.all(1), .background = true };
+        const opts: Options = .{ .expand = .both, .border = Rect.all(1), .background = true, .style = .content };
 
         const breakpoint: f32 = 400;
         const equal = dvui.parentGet().data().contentRect().w > breakpoint;
@@ -331,7 +331,7 @@ test "DOCIMG layout" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             layout();
             return .ok;

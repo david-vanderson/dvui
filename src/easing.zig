@@ -223,7 +223,7 @@ test "DOCIMG easing plots" {
                 const y = easing(@floatCast(x));
                 line.point(x, y);
             }
-            line.stroke(1, plot.box.data().options.color(.accent));
+            line.stroke(1, dvui.themeGet().color(.highlight, .fill));
             return .ok;
         }
     };
