@@ -7,11 +7,21 @@
         {
             "type": "lldb-dap",
             "request": "launch",
+            "name": "Launch DAP",
+            "program": "${workspaceRoot}\\zig-out\\bin\\sdl2-standalone.exe",
+            "args": [],
+            "env": [],
+            "cwd": "${workspaceRoot}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Launch",
             "program": "${workspaceRoot}\\zig-out\\bin\\sdl2-standalone.exe",
             "args": [],
             "env": [],
             "cwd": "${workspaceRoot}"
         },
+
     ]
 }

@@ -206,32 +206,25 @@ fn gui_frame() void {
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
-        //wholeStruct(@src(), "basic_types_const", &basic_types_const, 0, .{});
+        wholeStruct(@src(), "basic_types_const", &basic_types_const, 0, .{});
     }
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
-        var uo: dvui.se.StructOptions(U1) = .initDefaults(.{ .a = .{} });
-        std.debug.print("UO = {?}\n", .{uo.options});
-        std.debug.print("{?}\n", .{@TypeOf(uo.options).Indexer.keyForIndex(1)});
-        std.debug.print("{?}\n", .{uo.options.getAssertContains(@TypeOf(uo.options).Indexer.keyForIndex(1))});
+        const uo: dvui.se.StructOptions(U1) = .initDefaults(.{ .a = .{} });
 
         if (true) {
             const so: dvui.se.StructOptions(Union1) = .initDefaults(.{});
-            var itr = uo.options.iterator();
-
-            std.debug.print("OPTIONS: {d}\n", .{uo.options.count()});
-            while (itr.next()) |opt| {
-                std.debug.print("{s} = {}", .{ @tagName(opt.key), opt.value });
-            }
+            //var itr = uo.options.iterator();
+            //
+            ////            std.debug.print("OPTIONS: {d}\n", .{uo.options.count()});
+            ////            while (itr.next()) |opt| {
+            //                std.debug.print("{s} = {}", .{ @tagName(opt.key), opt.value });
+            //            }
             wholeStruct(@src(), "U1", &union1, 1, .{ uo, so });
         }
-        //var ooo: dvui.se.StructOptions(BasicTypes) = .init(.{ .u8 = .{ .number = .{ .display = .none } } });
-        //ooo.options.put(.u8, .{ .number = .{ .display = .none } });
-        //ooo.options.put(.i8, .{ .number = .{ .min = -5, .max = 5, .widget_type = .slider } });
-        //wholeStruct(@src(), "basic_types_var", &basic_types_var, 0, .{ooo});
 
         //sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);
         //dvui.se.intFieldWidget2(@src(), "int1", &testStruct.int1, .{}, &al);
@@ -266,6 +259,7 @@ fn gui_frame() void {
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
+
         var max_size_opts: dvui.se.StructOptions(dvui.Options.MaxSize) = .initDefaults(.{ .h = 100, .w = 100 });
         //var max_size_opts: dvui.se.StructOptions(dvui.Options.MaxSize) = .initDefaults(null);
         max_size_opts.options.put(.w, .{ .number = .{ .min = -2, .max = dvui.max_float_safe } });
@@ -355,10 +349,13 @@ pub fn findMatchingStructOption(T: type, struct_options: anytype) ?dvui.se.Struc
     return null;
 }
 
+// TODO: This is really a pointert to a container type, not a container type. Required because the pointer might be const,
+// and the constness is not reflected by the underlying type.
 pub fn processField(
     ContainerT: type,
-    container: *ContainerT,
-    field: dvui.se.StructOptions(ContainerT).StructOptionsT.Key,
+    ContainerPtrT: type,
+    container: ContainerPtrT,
+    comptime field: dvui.se.StructOptions(ContainerT).StructOptionsT.Key,
     field_value_ptr: *@FieldType(ContainerT, @tagName(field)),
     field_option: dvui.se.StructOptions(ContainerT).StructOptionsT.Value,
     options: anytype,
@@ -393,6 +390,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
     if (!dvui.expander(@src(), name, .{ .default_expanded = true }, .{})) return;
 
     const ContainerT = @TypeOf(container.*);
+    const ContainerPtrT = @TypeOf(container);
 
     var vbox = dvui.box(src, .vertical, .{
         .expand = .vertical,
@@ -425,7 +423,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
             .bool,
             .@"struct",
             // TODO:
-            => processField(ContainerT, @constCast(container), key, &field, field_option, options, depth, &al),
+            => processField(ContainerT, ContainerPtrT, container, key, &field, field_option, options, depth, &al),
             inline .optional => |opt| {
                 if (dvui.se.optionalFieldWidget2(@src(), @tagName(key), &@field(container, @tagName(key)), .{}, &al)) |hbox| {
                     defer hbox.deinit();
@@ -433,7 +431,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                         @field(container, @tagName(key)) = defaultValue(opt.child, field_option, options); // If there is no default value, it will remain null.
                     }
                     if (@field(container, @tagName(key)) != null) {
-                        processField(ContainerT, container, key, &field.?, field_option, options, depth, &al);
+                        processField(ContainerT, ContainerPtrT, container, key, &field.?, field_option, options, depth, &al);
                     }
                 } else {
                     @field(container, @tagName(key)) = null;
@@ -447,24 +445,11 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                     sliceFieldWidget2(src, @tagName(key), @field(container, @tagName(key)), &al);
                 } else if (ptr.size == .one) {
                     dvui.label(@src(), "{s} is a single item pointer", .{@tagName(key)}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
-                    switch (@typeInfo(ptr.child)) {
-                        .@"struct", .@"union" => {
-                            wholeStruct(@src(), @tagName(key), &@field(container, @tagName(key)), depth - 1, options);
-                        },
-                        else => processWidget(src, @tagName(key), @field(container, @tagName(key)), &al, field_option),
-                    }
+                    processField(ptr.child, key, &field, field_option, options, depth, &al);
                 } else if (ptr.size == .c or ptr.size == .many) {
                     @compileError("structEntry does not support *C or Many pointers");
                 } else {
-                    switch (@typeInfo(ptr.child)) {
-                        inline .int, .float, .@"enum" => processWidget(@src(), @tagName(key), @field(container, @tagName(key)), &al, field_option),
-                        inline .@"struct", .@"union" => {
-                            if (depth > 0) {
-                                wholeStruct(@src(), @tagName(key), &@field(container, @tagName(key)), depth - 1, options);
-                            }
-                        },
-                        else => {},
-                    }
+                    processField(ContainerT, ContainerPtrT, container, key, &field, field_option, options, depth, &al);
                 }
             },
             inline .@"union" => |_| {
@@ -491,8 +476,8 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                 }
                 // DO Basic issue seems to be here that we have the variable 'U'. And we don
                 switch (@field(container, @tagName(key))) {
-                    inline else => |active| {
-                        switch (@typeInfo(@TypeOf(active))) {
+                    inline else => |*active| {
+                        switch (@typeInfo(@TypeOf(active.*))) {
                             inline .int, .float, .@"enum" => |_| {
                                 inline for (options) |uopts| {
                                     switch (std.meta.activeTag(@field(container, @tagName(key)))) {
@@ -502,13 +487,13 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                                             if (@TypeOf(uopts).StructT == FieldT) {
                                                 //@compileLog("Found", @tagName(key));
                                                 std.debug.print("found opts for {s} - {s} - {s}\n", .{ @typeName(@TypeOf(uopts).StructT), @tagName(key), @tagName(active_tag) });
-                                                processWidget(@src(), @tagName(active_tag), &active, &al, uopts.options.get(active_tag).?);
+                                                processWidget(@src(), @tagName(active_tag), active, &al, uopts.options.get(active_tag).?);
                                             }
                                         },
                                     }
                                 }
                             },
-                            inline .@"struct", .@"union" => wholeStruct(@src(), @tagName(new_choice), &active, depth, options),
+                            inline .@"struct", .@"union" => wholeStruct(@src(), @tagName(new_choice), active, depth, options),
                             else => {}, // TODO: Compile error
                         }
                     },
