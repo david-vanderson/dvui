@@ -319,7 +319,7 @@ pub fn defaultValue(T: type, field_option: dvui.se.FieldOptions, struct_options:
                 //@compileLog(@TypeOf(opt).StructT, T);
                 if (@TypeOf(opt).StructT == T) { //} and opt.default_value != null) {
                     //@compileLog("found");
-                    std.debug.print("returning: {?any}\n", .{opt.default_value});
+                    //                    std.debug.print("returning: {?any}\n", .{opt.default_value});
                     return opt.default_value;
                 }
             }
@@ -356,12 +356,16 @@ pub fn processField(
     ContainerPtrT: type,
     container: ContainerPtrT,
     comptime field: dvui.se.StructOptions(ContainerT).StructOptionsT.Key,
-    field_value_ptr: *@FieldType(ContainerT, @tagName(field)),
     field_option: dvui.se.StructOptions(ContainerT).StructOptionsT.Value,
     options: anytype,
     comptime depth: usize,
     al: *dvui.Alignment,
 ) void {
+    const field_value_ptr = switch (@typeInfo(@TypeOf(@field(container, @tagName(field))))) {
+        .optional => &@field(container, @tagName(field)).?,
+        else => &@field(container, @tagName(field)),
+    };
+
     switch (@typeInfo(@TypeOf(field_value_ptr.*))) {
         inline .@"struct" => {
             if (depth > 0) {
@@ -412,7 +416,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
     inline for (opts.options.values, 0..) |field_option, i| {
         const key = comptime @TypeOf(opts.options).Indexer.keyForIndex(i); // TODO There must be a way to iterate both? One is just the enum fields?
         const FieldT = @TypeOf(@field(container, @tagName(key)));
-        var field = @field(container, @tagName(key)); // TODO: User ptr instead?
+        //        var field = @field(container, @tagName(key)); // TODO: User ptr instead?
         //@compileLog(key, field_option);
         var box = dvui.box(src, .vertical, .{ .id_extra = i });
         defer box.deinit();
@@ -423,7 +427,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
             .bool,
             .@"struct",
             // TODO:
-            => processField(ContainerT, ContainerPtrT, container, key, &field, field_option, options, depth, &al),
+            => processField(ContainerT, ContainerPtrT, container, key, field_option, options, depth, &al),
             inline .optional => |opt| {
                 if (dvui.se.optionalFieldWidget2(@src(), @tagName(key), &@field(container, @tagName(key)), .{}, &al)) |hbox| {
                     defer hbox.deinit();
@@ -431,7 +435,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                         @field(container, @tagName(key)) = defaultValue(opt.child, field_option, options); // If there is no default value, it will remain null.
                     }
                     if (@field(container, @tagName(key)) != null) {
-                        processField(ContainerT, ContainerPtrT, container, key, &field.?, field_option, options, depth, &al);
+                        processField(ContainerT, ContainerPtrT, container, key, field_option, options, depth, &al);
                     }
                 } else {
                     @field(container, @tagName(key)) = null;
@@ -445,11 +449,11 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                     sliceFieldWidget2(src, @tagName(key), @field(container, @tagName(key)), &al);
                 } else if (ptr.size == .one) {
                     dvui.label(@src(), "{s} is a single item pointer", .{@tagName(key)}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
-                    processField(ptr.child, key, &field, field_option, options, depth, &al);
+                    processField(ptr.child, key, field_option, options, depth, &al);
                 } else if (ptr.size == .c or ptr.size == .many) {
                     @compileError("structEntry does not support *C or Many pointers");
                 } else {
-                    processField(ContainerT, ContainerPtrT, container, key, &field, field_option, options, depth, &al);
+                    processField(ContainerT, ContainerPtrT, container, key, field_option, options, depth, &al);
                 }
             },
             inline .@"union" => |_| {
@@ -460,7 +464,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                     switch (new_choice) {
                         //                        const UnionT = typeOf(@field(container, @tagName(key)));
                         inline else => |choice| {
-                            std.debug.print("bnew choice = {}\n", .{choice});
+                            //                            std.debug.print("bnew choice = {}\n", .{choice});
 
                             @field(container, @tagName(key)) = @unionInit(
                                 UnionT,
@@ -482,11 +486,11 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                                 inline for (options) |uopts| {
                                     switch (std.meta.activeTag(@field(container, @tagName(key)))) {
                                         inline else => |active_tag| {
-                                            std.debug.print("Searching for opts for {s} vs {s}\n", .{ @typeName(@TypeOf(active)), @tagName(active_tag) });
+                                            //                                            std.debug.print("Searching for opts for {s} vs {s}\n", .{ @typeName(@TypeOf(active)), @tagName(active_tag) });
                                             //@compileLog(@TypeOf(uopts).StructT, @TypeOf(container.*));
                                             if (@TypeOf(uopts).StructT == FieldT) {
                                                 //@compileLog("Found", @tagName(key));
-                                                std.debug.print("found opts for {s} - {s} - {s}\n", .{ @typeName(@TypeOf(uopts).StructT), @tagName(key), @tagName(active_tag) });
+                                                //                                                std.debug.print("found opts for {s} - {s} - {s}\n", .{ @typeName(@TypeOf(uopts).StructT), @tagName(key), @tagName(active_tag) });
                                                 processWidget(@src(), @tagName(active_tag), active, &al, uopts.options.get(active_tag).?);
                                             }
                                         },
@@ -511,7 +515,7 @@ pub fn processWidget(
     alignment: *dvui.Alignment,
     options: dvui.se.FieldOptions,
 ) void {
-    std.debug.print("processWidget: {s} = {}\n", .{ field_name, options });
+    //    std.debug.print("processWidget: {s} = {}\n", .{ field_name, options });
     switch (@typeInfo(@TypeOf(field.*))) {
         inline .int => dvui.se.numberFieldWidget2(src, field_name, field, options.number, alignment),
         inline .float => dvui.se.numberFieldWidget2(src, field_name, field, options.number, alignment),
