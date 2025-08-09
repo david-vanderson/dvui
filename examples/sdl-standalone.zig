@@ -478,27 +478,23 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                         },
                     }
                 }
-                // DO Basic issue seems to be here that we have the variable 'U'. And we don
+                // TODO: Probably needs ot handle pointers as well? i.e. the union contains pointer fields?
                 switch (@field(container, @tagName(key))) {
-                    inline else => |*active| {
-                        switch (@typeInfo(@TypeOf(active.*))) {
-                            inline .int, .float, .@"enum" => |_| {
-                                inline for (options) |uopts| {
-                                    switch (std.meta.activeTag(@field(container, @tagName(key)))) {
+                    inline else => |*active, tag| {
+                        // The below handles the case where the union members are not containers.
+                        // In that case, the options for the field need to be found and passed to processWidget.
+                        if (findMatchingStructOption(FieldT, options)) |union_options| {
+                            switch (@typeInfo(@TypeOf(active.*))) {
+                                inline .int, .float, .@"enum" => |_| {
+                                    switch (tag) {
                                         inline else => |active_tag| {
-                                            //                                            std.debug.print("Searching for opts for {s} vs {s}\n", .{ @typeName(@TypeOf(active)), @tagName(active_tag) });
-                                            //@compileLog(@TypeOf(uopts).StructT, @TypeOf(container.*));
-                                            if (@TypeOf(uopts).StructT == FieldT) {
-                                                //@compileLog("Found", @tagName(key));
-                                                //                                                std.debug.print("found opts for {s} - {s} - {s}\n", .{ @typeName(@TypeOf(uopts).StructT), @tagName(key), @tagName(active_tag) });
-                                                processWidget(@src(), @tagName(active_tag), active, &al, uopts.options.get(active_tag).?);
-                                            }
+                                            processWidget(@src(), @tagName(active_tag), active, &al, union_options.options.get(active_tag).?);
                                         },
                                     }
-                                }
-                            },
-                            inline .@"struct", .@"union" => wholeStruct(@src(), @tagName(new_choice), active, depth, options),
-                            else => {}, // TODO: Compile error
+                                },
+                                inline .@"struct", .@"union" => wholeStruct(@src(), @tagName(new_choice), active, depth, options),
+                                else => @compileError("TODO"), //{}, // TODO: Compile error
+                            }
                         }
                     },
                 }
