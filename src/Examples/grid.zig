@@ -97,7 +97,6 @@ pub fn gridStyling() void {
             .resize_rows = local.resize_rows,
         }, .{
             .expand = .both,
-            .background = true,
             .border = Rect.all(1),
         });
         defer grid.deinit();
@@ -139,7 +138,7 @@ pub fn gridStyling() void {
                 .padding = Rect.all(local.padding),
                 .background = row_background,
                 // Only set the alternate fill colour if actually banding.
-                .color_fill = if (local.banding != .none) .fill_press else null,
+                .color_fill = if (local.banding != .none) dvui.themeGet().color(.control, .fill_press) else null,
             },
         };
 
@@ -245,11 +244,11 @@ pub fn gridLayouts() void {
                     .expand = .horizontal,
                     .gravity_x = 0.5,
                     .color_text = switch (all_cars[row_num].condition) {
-                        .New => .{ .color = dvui.Color.fromHex("#4bbfc3") },
-                        .Excellent => .{ .color = dvui.Color.fromHex("#6ca96c") },
-                        .Good => .{ .color = dvui.Color.fromHex("#a3b76b") },
-                        .Fair => .{ .color = dvui.Color.fromHex("#d3b95f") },
-                        .Poor => .{ .color = dvui.Color.fromHex("#c96b6b") },
+                        .New => dvui.Color.fromHex("#4bbfc3"),
+                        .Excellent => dvui.Color.fromHex("#6ca96c"),
+                        .Good => dvui.Color.fromHex("#a3b76b"),
+                        .Fair => dvui.Color.fromHex("#d3b95f"),
+                        .Poor => dvui.Color.fromHex("#c96b6b"),
                     },
                 };
             }
@@ -332,7 +331,7 @@ pub fn gridLayouts() void {
             .padding = TextLayoutWidget.defaults.padding,
         },
         .alt_cell_opts = .{
-            .color_fill = .{ .name = .fill_press },
+            .color_fill = dvui.themeGet().color(.control, .fill_press),
             .background = true,
         },
     };
@@ -566,7 +565,7 @@ pub fn gridVirtualScrolling() void {
     var highlight_hovered: CellStyle.HoveredRow = .{
         .cell_opts = .{
             .background = true,
-            .color_fill_hover = .fill_hover,
+            .color_fill_hover = dvui.themeGet().color(.control, .fill_hover),
             .size = .{ .w = col_width },
         },
     };
@@ -678,7 +677,7 @@ pub fn gridSelection() void {
         var select_all_state: dvui.selection.SelectAllState = .select_none;
         var selection_info: dvui.selection.SelectionInfo = .{};
         var selections: std.StaticBitSet(directory_examples.len) = .initEmpty();
-        var highlight_style: CellStyle.HoveredRow = .{ .cell_opts = .{ .color_fill_hover = .fill_hover, .background = true } };
+        var highlight_style: CellStyle.HoveredRow = .{ .cell_opts = .{ .color_fill_hover = .gray, .background = true } };
 
         pub fn isFiltered(entry: *const DirEntry) bool {
             if (filename_filter.len > 0) {
@@ -1025,7 +1024,7 @@ pub fn gridNavigation() void {
         }
     };
 
-    var main_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .color_fill = .fill_window, .background = true, .border = dvui.Rect.all(1) });
+    var main_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .style = .window, .background = true, .border = dvui.Rect.all(1) });
     defer main_box.deinit();
     if (dvui.firstFrame(main_box.data().id)) {
         local.initialized = false;

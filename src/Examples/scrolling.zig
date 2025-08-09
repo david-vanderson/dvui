@@ -91,12 +91,12 @@ pub fn scrolling() void {
 
             dvui.label(@src(), "{d:0>4.2}% visible, offset {d} frac {d:0>4.2}", .{ Data.scroll_info.visibleFraction(.vertical) * 100.0, Data.scroll_info.viewport.y, Data.scroll_info.offsetFraction(.vertical) }, .{});
 
-            var scroll = dvui.scrollArea(@src(), .{ .scroll_info = &Data.scroll_info, .lock_visible = scroll_lock_visible }, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 } });
+            var scroll = dvui.scrollArea(@src(), .{ .scroll_info = &Data.scroll_info, .lock_visible = scroll_lock_visible }, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 }, .style = .content });
             defer scroll.deinit();
 
             for (Data.msg_start..Data.msg_end + 1) |i| {
                 {
-                    var tl = dvui.textLayout(@src(), .{}, .{ .id_extra = i, .color_fill = .fill_window });
+                    var tl = dvui.textLayout(@src(), .{}, .{ .id_extra = i, .style = .window });
                     defer tl.deinit();
 
                     tl.format("Message {d}", .{i}, .{});
@@ -106,7 +106,7 @@ pub fn scrolling() void {
                     }
                 }
 
-                var tl2 = dvui.textLayout(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0, .color_fill = .fill_window });
+                var tl2 = dvui.textLayout(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0, .style = .window });
                 tl2.format("Reply {d}", .{i}, .{});
                 tl2.deinit();
             }
@@ -148,7 +148,7 @@ pub fn scrolling() void {
             _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
 
             {
-                var top_area = dvui.scrollArea(@src(), .{ .scroll_info = siTop, .frame_viewport = .{ .x = fv.x }, .horizontal_bar = .hide, .process_events_after = false }, .{ .expand = .both });
+                var top_area = dvui.scrollArea(@src(), .{ .scroll_info = siTop, .frame_viewport = .{ .x = fv.x }, .horizontal_bar = .hide, .process_events_after = false }, .{ .expand = .both, .style = .content });
                 defer top_area.deinit();
                 {
                     // inside top area
@@ -168,7 +168,7 @@ pub fn scrolling() void {
             var hbox3 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
             defer hbox3.deinit();
 
-            var side_area = dvui.scrollArea(@src(), .{ .scroll_info = siLeft, .frame_viewport = .{ .y = fv.y }, .vertical_bar = .hide, .process_events_after = false }, .{ .min_size_content = .{ .w = left_side_width, .h = 200 }, .expand = .vertical });
+            var side_area = dvui.scrollArea(@src(), .{ .scroll_info = siLeft, .frame_viewport = .{ .y = fv.y }, .vertical_bar = .hide, .process_events_after = false }, .{ .style = .content, .min_size_content = .{ .w = left_side_width, .h = 200 }, .expand = .vertical });
             {
                 // inside side area
                 var sidebox = dvui.box(@src(), .{}, .{});
@@ -183,7 +183,7 @@ pub fn scrolling() void {
             _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
 
             {
-                var scontainer = dvui.ScrollContainerWidget.init(@src(), siMain, .{ .scroll_area = &main_area, .frame_viewport = fv, .event_rect = main_area.data().borderRectScale().r }, .{ .expand = .both });
+                var scontainer = dvui.ScrollContainerWidget.init(@src(), siMain, .{ .scroll_area = &main_area, .frame_viewport = fv, .event_rect = main_area.data().borderRectScale().r }, .{ .style = .content, .expand = .both });
                 scontainer.install();
                 defer scontainer.deinit();
                 scontainer.processEvents();
@@ -229,7 +229,7 @@ test "DOCIMG scrolling" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             scrolling();
             return .ok;

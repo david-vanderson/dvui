@@ -3,7 +3,6 @@ const hsluv = @import("hsluv.zig");
 
 const Color = @This();
 const dvui = @import("dvui.zig");
-const ColorsFromTheme = dvui.Options.ColorsFromTheme;
 
 const tvg = @import("svg2tvg");
 
@@ -12,7 +11,6 @@ g: u8 = 0xff,
 b: u8 = 0xff,
 a: u8 = 0xff,
 
-// These color names are duplicated in Options.ColorOrName
 // Basic web colors
 // https://en.wikipedia.org/wiki/Web_colors#Basic_colors
 pub const white = Color{ .r = 0xFF, .g = 0xFF, .b = 0xFF };
@@ -52,6 +50,11 @@ pub fn brightness(self: @This()) f32 {
 
 pub fn toRGBA(self: @This()) [4]u8 {
     return .{ self.r, self.g, self.b, self.a };
+}
+
+/// Lighten color by converting to HSLuv, lightening, and back.
+pub fn lighten(self: Color, deltal: f32) Color {
+    return HSLuv.fromColor(self).lighten(deltal).color();
 }
 
 /// https://en.wikipedia.org/wiki/HSL_and_HSV#HSV_to_RGB
@@ -565,24 +568,6 @@ test tryFromHex {
     try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }, Color.tryFromHex("#A1A2A3A4"));
     try std.testing.expectEqual(FromHexError.InvalidCharacter, Color.tryFromHex("XXX"));
     try std.testing.expectEqual(FromHexError.InvalidHexStringLength, Color.tryFromHex("#12"));
-}
-
-/// Get a Color from the active Theme
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn fromTheme(theme_color: ColorsFromTheme) @This() {
-    return switch (theme_color) {
-        .accent => dvui.themeGet().color_accent,
-        .text => dvui.themeGet().color_text,
-        .text_press => dvui.themeGet().color_text_press,
-        .fill => dvui.themeGet().color_fill,
-        .fill_hover => dvui.themeGet().color_fill_hover,
-        .fill_press => dvui.themeGet().color_fill_press,
-        .border => dvui.themeGet().color_border,
-        .err => dvui.themeGet().color_err,
-        .fill_window => dvui.themeGet().color_fill_window,
-        .fill_control => dvui.themeGet().color_fill_control,
-    };
 }
 
 test {

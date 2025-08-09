@@ -23,6 +23,7 @@ pub var defaults: Options = .{
     .padding = Rect.all(6),
     .background = true,
     .min_size_content = .{ .w = 20, .h = 20 },
+    .style = .content,
 };
 
 pub const InitOptions = struct {

@@ -12,7 +12,7 @@ pub fn scrollCanvas() void {
     const drag_box_window = dvui.dataGetPtrDefault(null, vbox.data().id, "drag_box_window", usize, 0);
     const drag_box_content = dvui.dataGetPtrDefault(null, vbox.data().id, "drag_box_content", usize, 0);
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .color_fill = .fill_window });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .style = .window });
     tl.addText("Click-drag to pan\n", .{});
     tl.addText("Ctrl-wheel to zoom\n", .{});
     tl.addText("Drag blue cubes from box to box\n\n", .{});
@@ -22,7 +22,7 @@ pub fn scrollCanvas() void {
     tl.format("Scale {d}", .{scale.*}, .{});
     tl.deinit();
 
-    var scrollArea = dvui.scrollArea(@src(), .{ .scroll_info = scroll_info }, .{ .min_size_content = .{ .w = 300, .h = 300 } });
+    var scrollArea = dvui.scrollArea(@src(), .{ .scroll_info = scroll_info }, .{ .style = .content, .min_size_content = .{ .w = 300, .h = 300 } });
     var scrollContainer = &scrollArea.scroll.?;
 
     // can use this to convert between viewport/virtual_size and screen coords
@@ -53,12 +53,12 @@ pub fn scrollCanvas() void {
     dvui.Path.stroke(.{ .points = &.{
         dataRectScale.pointToPhysical(.{ .x = -10 }),
         dataRectScale.pointToPhysical(.{ .x = 10 }),
-    } }, .{ .thickness = 1, .color = dvui.themeGet().color_text });
+    } }, .{ .thickness = 1, .color = dvui.themeGet().color(.control, .text) });
 
     dvui.Path.stroke(.{ .points = &.{
         dataRectScale.pointToPhysical(.{ .y = -10 }),
         dataRectScale.pointToPhysical(.{ .y = 10 }),
-    } }, .{ .thickness = 1, .color = dvui.themeGet().color_text });
+    } }, .{ .thickness = 1, .color = dvui.themeGet().color(.control, .text) });
 
     // keep record of bounding box
     var mbbox: ?Rect.Physical = null;
@@ -72,7 +72,7 @@ pub fn scrollCanvas() void {
             .rect = dvui.Rect{ .x = b.x, .y = b.y },
             .padding = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
             .background = true,
-            .color_fill = .fill_window,
+            .style = .window,
             .border = .{ .h = 1, .w = 1, .x = 1, .y = 1 },
             .corner_radius = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
             .color_border = if (dragging_box and i != drag_box_window.*) .lime else null,
@@ -143,7 +143,7 @@ pub fn scrollCanvas() void {
         }
 
         {
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = dvui.Rect.all(4), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4), .background = true, .color_fill = .fill_window });
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = dvui.Rect.all(4), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4), .background = true, .style = .window });
             defer hbox.deinit();
 
             for (evts) |*e| {
@@ -159,7 +159,7 @@ pub fn scrollCanvas() void {
                     _ = dvui.spacer(@src(), .{ .min_size_content = .width(5), .id_extra = k });
                 }
                 const col = if (dragging_this) dvui.Color.lime.opacity(0.5) else dvui.Color.blue;
-                var dbox = dvui.box(@src(), .{}, .{ .id_extra = k, .min_size_content = .{ .w = 20, .h = 20 }, .background = true, .color_fill = .{ .color = col } });
+                var dbox = dvui.box(@src(), .{}, .{ .id_extra = k, .min_size_content = .{ .w = 20, .h = 20 }, .background = true, .color_fill = col });
                 defer dbox.deinit();
 
                 for (evts) |*e| {
@@ -390,7 +390,7 @@ test "DOCIMG scrollCanvas" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             scrollCanvas();
             return .ok;
