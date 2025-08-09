@@ -19,7 +19,6 @@
             "name": "Launch",
             "program": "${workspaceRoot}\\zig-out\\bin\\sdl2-standalone.exe",
             "args": [],
-            "env": [],
             "cwd": "${workspaceRoot}"
         },
 

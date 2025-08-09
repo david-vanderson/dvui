@@ -169,6 +169,7 @@ const U1 = union(enum) {
     //b: enum { one, two, three },
     b: f32,
     c: Enum,
+    d: ?S1,
 };
 
 var test_buf: [20]u8 = @splat('z');
@@ -390,6 +391,34 @@ pub fn processField(
     }
 }
 
+pub fn processOptional(
+    ContainerT: type,
+    ContainerPtrT: type,
+    container: ContainerPtrT,
+    comptime field_name: []const u8,
+    field_option: dvui.se.StructOptions(ContainerT).StructOptionsT.Value,
+    options: anytype,
+    comptime depth: usize,
+    al: *dvui.Alignment,
+) void {
+    // TODO: Can ismplify as it will always be an optional.
+    const optional = @typeInfo(@TypeOf(@field(container, field_name))).optional;
+    if (dvui.se.optionalFieldWidget2(@src(), field_name, &@field(container, field_name), .{}, al)) |hbox| {
+        defer hbox.deinit();
+        if (@field(container, field_name) == null) {
+            @field(container, field_name) = defaultValue(optional.child, field_option, options); // If there is no default value, it will remain null.
+        }
+        if (@field(container, field_name) != null) {
+            // TODO: Yukk!!
+            const field_key = comptime std.meta.stringToEnum(dvui.se.StructOptions(ContainerT).StructOptionsT.Key, field_name); // TODO: Hanlde nulls at least
+            processField(ContainerT, ContainerPtrT, container, field_key.?, field_option, options, depth, al);
+        }
+    } else {
+        @field(container, field_name) = null;
+        dvui.label(@src(), "{s} is null", .{field_name}, .{}); // .{ .id_extra = i }); // TODO: Make this nicer formatting.
+    }
+}
+
 pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container: anytype, comptime depth: usize, options: anytype) void {
     if (!dvui.expander(@src(), name, .{ .default_expanded = true }, .{})) return;
 
@@ -428,19 +457,20 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
             .@"struct",
             // TODO:
             => processField(ContainerT, ContainerPtrT, container, key, field_option, options, depth, &al),
-            inline .optional => |opt| {
-                if (dvui.se.optionalFieldWidget2(@src(), @tagName(key), &@field(container, @tagName(key)), .{}, &al)) |hbox| {
-                    defer hbox.deinit();
-                    if (@field(container, @tagName(key)) == null) {
-                        @field(container, @tagName(key)) = defaultValue(opt.child, field_option, options); // If there is no default value, it will remain null.
-                    }
-                    if (@field(container, @tagName(key)) != null) {
-                        processField(ContainerT, ContainerPtrT, container, key, field_option, options, depth, &al);
-                    }
-                } else {
-                    @field(container, @tagName(key)) = null;
-                    dvui.label(@src(), "{s} is null", .{@tagName(key)}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
-                }
+            inline .optional => {
+                processOptional(ContainerT, ContainerPtrT, container, key, field_option, options, depth, &al);
+                //                if (dvui.se.optionalFieldWidget2(@src(), @tagName(key), &@field(container, @tagName(key)), .{}, &al)) |hbox| {
+                //                    defer hbox.deinit();
+                //                    if (@field(container, @tagName(key)) == null) {
+                //                        @field(container, @tagName(key)) = defaultValue(opt.child, field_option, options); // If there is no default value, it will remain null.
+                //                    }
+                //                    if (@field(container, @tagName(key)) != null) {
+                //                        processField(ContainerT, ContainerPtrT, container, key, field_option, options, depth, &al);
+                //                    }
+                //                } else {
+                //                    @field(container, @tagName(key)) = null;
+                //                    dvui.label(@src(), "{s} is null", .{@tagName(key)}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
+                //                }
             },
             inline .pointer => |ptr| {
                 if (ptr.size == .slice and ptr.child == u8) {
@@ -484,16 +514,21 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                         // The below handles the case where the union members are not containers.
                         // In that case, the options for the field need to be found and passed to processWidget.
                         if (findMatchingStructOption(FieldT, options)) |union_options| {
-                            switch (@typeInfo(@TypeOf(active.*))) {
-                                inline .int, .float, .@"enum" => |_| {
-                                    switch (tag) {
-                                        inline else => |active_tag| {
-                                            processWidget(@src(), @tagName(active_tag), active, &al, union_options.options.get(active_tag).?);
+                            switch (tag) {
+                                inline else => |active_tag| {
+                                    switch (@typeInfo(@TypeOf(active.*))) {
+                                        inline .int, .float, .@"enum" => |_| {
+                                            if (union_options.options.get(active_tag)) |active_field_option| {
+                                                processWidget(@src(), @tagName(active_tag), active, &al, active_field_option);
+                                            } else {
+                                                dvui.log.debug("No field options found for field {s} in union {s}. Field will not be displayed.", .{ @typeName(FieldT), @tagName(active_tag) });
+                                            }
                                         },
+                                        inline .@"struct", .@"union" => wholeStruct(@src(), @tagName(new_choice), active, depth, options),
+                                        inline .optional => |_| processOptional(UnionT, *UnionT, &@field(container, @tagName(key)), @tagName(active_tag), field_option, options, depth, &al),
+                                        else => |typ| @compileError(std.fmt.comptimePrint("Not implemented for type {s}", .{@tagName(typ)})),
                                     }
                                 },
-                                inline .@"struct", .@"union" => wholeStruct(@src(), @tagName(new_choice), active, depth, options),
-                                else => @compileError("TODO"), //{}, // TODO: Compile error
                             }
                         }
                     },
