@@ -19,6 +19,18 @@
 //!
 const builtin = @import("builtin");
 const std = @import("std");
+/// Using this in application code will hinder ZLS from referencing the correct backend.
+/// To avoid this import the backend directly from the applications build.zig
+///
+/// ```zig
+/// // build.zig
+/// mod.addImport("dvui", dvui_dep.module("dvui_sdl3"));
+/// mod.addImport("backend", dvui_dep.module("sdl3"));
+///
+/// // src/main.zig
+/// const dvui = @import("dvui");
+/// const Backend = @import("backend");
+/// ```
 pub const backend = @import("backend");
 const tvg = @import("svg2tvg");
 
