@@ -148,7 +148,7 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
         self.vbar = ScrollBarWidget.init(@src(), .{
             .scroll_info = self.si,
             .focus_id = focus_target,
-        }, .{ .gravity_x = if (overlay) 0.999 else 1.0, .expand = .vertical });
+        }, self.hbox.data().options.stylesOnly().override(.{ .gravity_x = if (overlay) 0.999 else 1.0, .expand = .vertical }));
         self.vbar.?.install();
         if (overlay) {
             self.vbar_grab = self.vbar.?.grab();
@@ -164,7 +164,7 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
 
     if (do_hbar) {
         const overlay = self.init_opts.horizontal_bar == .auto_overlay;
-        self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, .{ .expand = .horizontal, .gravity_y = if (overlay) 0.999 else 1.0 });
+        self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, self.hbox.data().options.stylesOnly().override(.{ .expand = .horizontal, .gravity_y = if (overlay) 0.999 else 1.0 }));
         self.hbar.?.install();
         if (overlay) {
             self.hbar_grab = self.hbar.?.grab();
