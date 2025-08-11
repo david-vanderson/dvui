@@ -59,7 +59,7 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
         focused = true;
     }
 
-    if (focused and menu().?.mouse_over and !self.mouse_over) {
+    if (focused and menu().?.mouse_over and !self.mouse_over and (menu().?.submenus_activated or menu().?.floating())) {
         // our menu got a mouse over but we didn't even though we were focused
         focused = false;
         dvui.focusWidget(null, null, null);
@@ -107,9 +107,6 @@ pub fn matchEvent(self: *MenuItemWidget, e: *Event) bool {
 }
 
 pub fn processEvents(self: *MenuItemWidget) void {
-    // keep this flag alive for the .mouse.release event
-    // NOTE: This gets clear on release in `MenuWidget.processEventsAfter`
-    _ = dvui.dataGet(null, menu().?.data().id, "_mi_submenu_opened", void);
     const evts = dvui.events();
     for (evts) |*e| {
         if (!self.matchEvent(e))
@@ -175,9 +172,11 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 // This is how dropdowns are triggered.
                 e.handle(@src(), self.data());
                 if (self.init_opts.submenu) {
-                    // We will open so we set some data to remember that
-                    // this press opened the submenu
-                    dvui.dataSet(null, menu().?.data().id, "_mi_submenu_opened", {});
+                    dvui.dataRemove(null, menu().?.data().id, "_submenus_activating");
+                    if (!menu().?.floating() and !menu().?.submenus_activated) {
+                        // If not floating, then we are toggling focus-on-hover, set a bit
+                        dvui.dataSet(null, menu().?.data().id, "_submenus_activating", {});
+                    }
                     menu().?.submenus_activated = true;
                     menu().?.submenus_in_child = true;
                 }
@@ -187,18 +186,13 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     // cause scroll to capture
                     dvui.captureMouse(self.data(), e.num);
                     dvui.dragPreStart(me.p, .{});
-                } else {
-                    // this is how we track if the click originated on a menu
-                    // item, so while this is happening we'll focus menu items
-                    // under the mouse
-                    dvui.dragStart(me.p, .{ .name = "_mi_mouse_down" });
                 }
             } else if (me.action == .release) {
                 menu().?.mouse_mode = true;
                 e.handle(@src(), self.data());
                 if (self.init_opts.submenu) {
-                    // Only the root menu is toggleable, all other submenus work on hover
-                    if (menu().?.isRootMenu() and dvui.dataGet(null, menu().?.data().id, "_mi_submenu_opened", void) == null) {
+                    // Only non floating menus can toggle focus-on-hover
+                    if (!menu().?.floating() and dvui.dataGet(null, menu().?.data().id, "_submenus_activating", void) == null) {
                         // Toggle the submenu closed
                         menu().?.submenus_activated = false;
                         menu().?.submenus_in_child = false;
@@ -208,8 +202,6 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     self.activated = true;
                     dvui.refresh(null, @src(), self.data().id);
                 }
-                // clear out the flag for the next press event
-                // dvui.dataRemove(null, menu().?.data().id, "_mi_submenu_opened");
 
                 if (dvui.captured(self.data().id)) {
                     // should only happen with touch
@@ -234,14 +226,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     menu().?.mouse_mode = true;
                     self.mouse_over = true;
 
-                    if (dvui.draggingName("_mi_mouse_down") or
-                        // If we are not the root menu, there is a menu open so hovering should
-                        // move focus and potentially open submenus
-                        !menu().?.isRootMenu() or
-                        // ...but if the root menu has an active item, allow for hovering to move
-                        // focus within the menu, opening any sibling submenus in the process
-                        menu().?.has_active_item)
-                    {
+                    if (menu().?.submenus_activated or menu().?.floating()) {
                         // we shouldn't have gotten this event if the motion
                         // was towards a submenu (caught in MenuWidget)
                         dvui.focusSubwindow(null, null); // focuses the window we are in

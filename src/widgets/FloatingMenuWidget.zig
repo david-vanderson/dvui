@@ -25,12 +25,16 @@ pub const FloatingMenuAvoid = enum {
 
 // this lets us maintain a chain of all the nested FloatingMenuWidgets without
 // forcing the user to manually do it
-var popup_current: ?*FloatingMenuWidget = null;
+var current: ?*FloatingMenuWidget = null;
 
-fn popupSet(p: ?*FloatingMenuWidget) ?*FloatingMenuWidget {
-    const ret = popup_current;
-    popup_current = p;
+fn currentSet(p: ?*FloatingMenuWidget) ?*FloatingMenuWidget {
+    const ret = current;
+    current = p;
     return ret;
+}
+
+pub fn currentGet() ?*FloatingMenuWidget {
+    return current;
 }
 
 pub var defaults: Options = .{
@@ -54,7 +58,7 @@ wd: WidgetData,
 options: Options,
 prev_windowId: dvui.Id = .zero,
 prev_last_focus: dvui.Id = undefined,
-parent_popup: ?*FloatingMenuWidget = null,
+parent_fmw: ?*FloatingMenuWidget = null,
 have_popup_child: bool = false,
 init_options: InitOptions,
 /// SAFETY: Set by `install`
@@ -105,7 +109,7 @@ pub fn install(self: *FloatingMenuWidget) void {
     dvui.parentSet(self.widget());
 
     self.prev_windowId = dvui.subwindowCurrentSet(self.data().id, null).id;
-    self.parent_popup = popupSet(self);
+    self.parent_fmw = currentSet(self);
     // prevents parents from processing key events if focus is inside the floating window:w
     self.prev_last_focus = dvui.lastFocusedIdInFrame();
 
@@ -219,7 +223,7 @@ pub fn chainFocused(self: *FloatingMenuWidget, self_call: bool) bool {
         ret = true;
     }
 
-    if (self.parent_popup) |pp| {
+    if (self.parent_fmw) |pp| {
         // we had a parent popup, is that focused
         if (pp.chainFocused(false)) {
             ret = true;
@@ -283,7 +287,7 @@ pub fn deinit(self: *FloatingMenuWidget) void {
 
     // outside normal layout, don't call minSizeForChild or self.data().minSizeReportToParent();
 
-    _ = popupSet(self.parent_popup);
+    _ = currentSet(self.parent_fmw);
     dvui.parentReset(self.data().id, self.data().parent);
     dvui.currentWindow().last_focused_id_this_frame = self.prev_last_focus;
     _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
