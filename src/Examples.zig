@@ -214,9 +214,12 @@ pub fn demo() void {
 
         var scroll: ?*dvui.ScrollAreaWidget = null;
         if (demo_active != .grid) {
-            scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false, .padding = Rect.all(4) });
+            scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
         }
         defer if (scroll) |s| s.deinit();
+
+        var vbox = dvui.box(@src(), .{}, .{ .padding = dvui.Rect.all(4) });
+        defer vbox.deinit();
 
         switch (demo_active) {
             .basic_widgets => basicWidgets(),
