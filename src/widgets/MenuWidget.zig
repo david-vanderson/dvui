@@ -73,7 +73,6 @@ box: BoxWidget = undefined,
 
 // whether submenus should be open
 submenus_activated: bool = false,
-has_active_item: bool = false,
 
 // whether submenus in a child menu should default to open (for mouse interactions, not for keyboard)
 submenus_in_child: bool = false,
@@ -101,7 +100,9 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         self.submenus_activated = pm.submenus_in_child;
     }
 
-    if (dvui.dataGet(null, self.wd.id, "_has_active_item", bool)) |has_active_item| self.has_active_item = has_active_item;
+    // keep this alive if it was set in MenuItemWidget
+    _ = dvui.dataGet(null, self.wd.id, "_submenus_activating", void);
+
     if (dvui.dataGet(null, self.wd.id, "_mouse_mode", bool)) |mouse_mode| self.mouse_mode = mouse_mode;
 
     return self;
@@ -132,8 +133,8 @@ pub fn close(self: *MenuWidget) void {
 }
 
 pub fn close_chain(self: *MenuWidget, reason: CloseReason) void {
+    dvui.dataRemove(null, self.data().id, "_submenus_activating");
     self.submenus_activated = false;
-    self.has_active_item = false;
     // close all submenus in the chain
     if (self.parentMenu) |pm| {
         pm.close_chain(reason);
@@ -150,8 +151,8 @@ pub fn close_chain(self: *MenuWidget, reason: CloseReason) void {
     }
 }
 
-pub fn isRootMenu(self: *MenuWidget) bool {
-    return self.parentMenu == null;
+pub fn floating(_: *MenuWidget) bool {
+    return dvui.FloatingMenuWidget.currentGet() != null;
 }
 
 pub fn widget(self: *MenuWidget) Widget {
@@ -179,7 +180,7 @@ pub fn processEvent(self: *MenuWidget, e: *Event) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .position) {
-                if (dvui.mouseTotalMotion().nonZero() and dvui.draggingName("_mi_mouse_down")) {
+                if (dvui.mouseTotalMotion().nonZero()) {
                     self.mouse_mode = true;
                     if (dvui.dataGet(null, self.data().id, "_child_popup", Rect.Physical)) |r| {
                         const center = Point.Physical{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
@@ -211,10 +212,6 @@ pub fn processEventsAfter(self: *MenuWidget) void {
 
     const evts = dvui.events();
     for (evts) |*e| {
-        if (e.evt == .mouse and e.evt.mouse.action == .release) {
-            // The mouse button was released so clear out the opened flag
-            dvui.dataRemove(null, self.data().id, "_mi_submenu_opened");
-        }
         if (!dvui.eventMatch(e, .{ .id = self.data().id, .focus_id = focus_id, .r = self.data().borderRectScale().r }))
             continue;
 
@@ -295,7 +292,6 @@ pub fn deinit(self: *MenuWidget) void {
     self.box.deinit();
     dvui.dataSet(null, self.data().id, "_mouse_mode", self.mouse_mode);
     dvui.dataSet(null, self.data().id, "_sub_act", self.submenus_activated);
-    dvui.dataSet(null, self.data().id, "_has_active_item", self.child_popup_rect != null or (self.has_active_item and dvui.lastFocusedIdInFrameSince(self.last_focus) != null));
     if (self.child_popup_rect) |r| {
         dvui.dataSet(null, self.data().id, "_child_popup", r);
     }
