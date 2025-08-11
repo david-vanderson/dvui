@@ -29,6 +29,7 @@ subwindow_currentRect: Rect.Natural = .{},
 focused_subwindowId: Id = .zero,
 
 last_focused_id_this_frame: Id = .zero,
+last_focused_id_in_subwindow: Id = .zero,
 last_registered_id_this_frame: Id = .zero,
 scroll_to_focused: bool = false,
 

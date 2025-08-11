@@ -1407,6 +1407,7 @@ pub fn focusWidget(id: ?Id, subwindow_id: ?Id, event_num: ?u16) void {
 
                     if (cw.last_registered_id_this_frame == wid) {
                         cw.last_focused_id_this_frame = wid;
+                        cw.last_focused_id_in_subwindow = wid;
                     } else {
                         // walk parent chain
                         var wd = cw.data().parent.data();
@@ -1414,6 +1415,7 @@ pub fn focusWidget(id: ?Id, subwindow_id: ?Id, event_num: ?u16) void {
                         while (true) : (wd = wd.parent.data()) {
                             if (wd.id == wid) {
                                 cw.last_focused_id_this_frame = wid;
+                                cw.last_focused_id_in_subwindow = wid;
                                 break;
                             }
 
@@ -1482,6 +1484,13 @@ pub fn lastFocusedIdInFrameSince(prev: Id) ?Id {
     } else {
         return null;
     }
+}
+
+/// Last widget id we saw in the current subwindow that was focused.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn lastFocusedIdInSubwindow() Id {
+    return currentWindow().last_focused_id_in_subwindow;
 }
 
 /// Set cursor the app should use if not already set this frame.

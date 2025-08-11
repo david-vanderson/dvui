@@ -36,6 +36,12 @@ mouse_over: bool = false,
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) MenuItemWidget {
     const options = defaults.override(opts);
     const wd = WidgetData.init(src, .{}, options);
+
+    if (dvui.focusedWidgetIdInCurrentSubwindow() == null and menu().?.floating()) {
+        // if nothing is focused in this floating menu, then focus the first item we see
+        dvui.focusWidget(wd.id, null, null);
+    }
+
     return .{
         .wd = wd,
         .init_opts = init_opts,
@@ -178,7 +184,6 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                         dvui.dataSet(null, menu().?.data().id, "_submenus_activating", {});
                     }
                     menu().?.submenus_activated = true;
-                    menu().?.submenus_in_child = true;
                 }
 
                 if (me.button.touch()) {
@@ -195,7 +200,6 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     if (!menu().?.floating() and dvui.dataGet(null, menu().?.data().id, "_submenus_activating", void) == null) {
                         // Toggle the submenu closed
                         menu().?.submenus_activated = false;
-                        menu().?.submenus_in_child = false;
                         dvui.refresh(null, @src(), self.data().id);
                     }
                 } else if (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) {
@@ -226,15 +230,14 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     menu().?.mouse_mode = true;
                     self.mouse_over = true;
 
-                    if (menu().?.submenus_activated or menu().?.floating()) {
+                    if (menu().?.has_focused_child or menu().?.submenus_activated or menu().?.floating()) {
                         // we shouldn't have gotten this event if the motion
                         // was towards a submenu (caught in MenuWidget)
                         dvui.focusSubwindow(null, null); // focuses the window we are in
                         dvui.focusWidget(self.data().id, null, null);
 
-                        if (self.init_opts.submenu) {
+                        if (self.init_opts.submenu and menu().?.floating()) {
                             menu().?.submenus_activated = true;
-                            menu().?.submenus_in_child = true;
                         }
                     }
                 }

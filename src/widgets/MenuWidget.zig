@@ -60,6 +60,7 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     dir: enums.Direction,
     parentSubwindowId: ?dvui.Id = null,
+    close_without_focused_child: bool = true,
 };
 
 wd: WidgetData,
@@ -68,14 +69,14 @@ init_opts: InitOptions,
 winId: dvui.Id,
 parentMenu: ?*MenuWidget = null,
 last_focus: dvui.Id,
+last_focus_in_subwindow: dvui.Id,
 /// SAFETY: Set in `install`
 box: BoxWidget = undefined,
 
 // whether submenus should be open
 submenus_activated: bool = false,
+has_focused_child: bool = false,
 
-// whether submenus in a child menu should default to open (for mouse interactions, not for keyboard)
-submenus_in_child: bool = false,
 mouse_over: bool = false,
 
 // if we have a child popup menu, save it's rect for next frame
@@ -92,12 +93,16 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         .init_opts = init_opts,
         .winId = dvui.subwindowCurrentId(),
         .last_focus = dvui.lastFocusedIdInFrame(),
+        .last_focus_in_subwindow = dvui.lastFocusedIdInSubwindow(),
     };
 
     if (dvui.dataGet(null, self.wd.id, "_sub_act", bool)) |a| {
         self.submenus_activated = a;
-    } else if (current()) |pm| {
-        self.submenus_activated = pm.submenus_in_child;
+    }
+
+    self.has_focused_child = dvui.dataGet(null, self.wd.id, "_has_focused_child", bool) orelse false;
+    if (self.init_opts.close_without_focused_child and !self.has_focused_child) {
+        self.submenus_activated = false;
     }
 
     // keep this alive if it was set in MenuItemWidget
@@ -292,6 +297,7 @@ pub fn deinit(self: *MenuWidget) void {
     self.box.deinit();
     dvui.dataSet(null, self.data().id, "_mouse_mode", self.mouse_mode);
     dvui.dataSet(null, self.data().id, "_sub_act", self.submenus_activated);
+    dvui.dataSet(null, self.data().id, "_has_focused_child", self.last_focus_in_subwindow != dvui.lastFocusedIdInSubwindow());
     if (self.child_popup_rect) |r| {
         dvui.dataSet(null, self.data().id, "_child_popup", r);
     }
