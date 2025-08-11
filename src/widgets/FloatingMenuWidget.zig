@@ -108,9 +108,8 @@ pub fn install(self: *FloatingMenuWidget) void {
 
     dvui.parentSet(self.widget());
 
-    self.prev_windowId = dvui.subwindowCurrentSet(self.data().id, null).id;
     self.parent_fmw = currentSet(self);
-    // prevents parents from processing key events if focus is inside the floating window:w
+    // prevents parents from processing key events if focus is inside the floating window
     self.prev_last_focus = dvui.lastFocusedIdInFrame();
 
     const avoid: dvui.PlaceOnScreenAvoid = switch (self.init_options.avoid) {
@@ -127,7 +126,11 @@ pub fn install(self: *FloatingMenuWidget) void {
         self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, .cast(self.data().rect)));
     } else {
         self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, .cast(self.data().rect)));
-        dvui.focusSubwindow(self.data().id, null);
+
+        // first frame, focus unless we are in a menu being driven by the mouse
+        if (dvui.MenuWidget.current() == null or !dvui.MenuWidget.current().?.mouse_mode) {
+            dvui.focusSubwindow(self.data().id, null);
+        }
 
         // need a second frame to fit contents (FocusWindow calls refresh but
         // here for clarity)
@@ -138,6 +141,7 @@ pub fn install(self: *FloatingMenuWidget) void {
 
     const rs = self.data().rectScale();
 
+    self.prev_windowId = dvui.subwindowCurrentSet(self.data().id, null).id;
     dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, null);
     dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
 
@@ -175,11 +179,6 @@ pub fn install(self: *FloatingMenuWidget) void {
 
     self.menu = MenuWidget.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowId }, self.options.strip().override(.{ .expand = .horizontal }));
     self.menu.install();
-
-    // if no widget in this popup has focus, make the menu have focus to handle keyboard events
-    if (dvui.focusedWidgetIdInCurrentSubwindow() == null) {
-        dvui.focusWidget(self.menu.data().id, null, null);
-    }
 }
 
 pub fn close(self: *FloatingMenuWidget) void {
@@ -263,6 +262,12 @@ pub fn deinit(self: *FloatingMenuWidget) void {
                 dvui.tabIndexPrev(e.num);
             }
         }
+    }
+
+    // if no widget in this popup has focus, make the menu have focus to handle keyboard events
+    // - this only happens if no menu items are there, the first grabs focus if nothing has focus
+    if (dvui.focusedWidgetIdInCurrentSubwindow() == null) {
+        dvui.focusWidget(self.menu.data().id, null, null);
     }
 
     if (!self.have_popup_child and !self.chainFocused(true)) {
