@@ -124,13 +124,15 @@ pub fn install(self: *FloatingMenuWidget) void {
         const ms = dvui.minSize(self.data().id, self.options.min_sizeGet());
         self.data().rect = self.data().rect.toSize(ms);
         self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, .cast(self.data().rect)));
+        if (dvui.dataGet(null, self.data().id, "_check_focus", void) != null) {
+            dvui.dataRemove(null, self.data().id, "_check_focus");
+            if (dvui.MenuWidget.current() == null or !dvui.MenuWidget.current().?.mouse_mode or self.data().rectScale().r.contains(dvui.currentWindow().mouse_pt)) {
+                dvui.focusSubwindow(self.data().id, null);
+            }
+        }
     } else {
         self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, .cast(self.data().rect)));
-
-        // first frame, focus unless we are in a menu being driven by the mouse
-        if (dvui.MenuWidget.current() == null or !dvui.MenuWidget.current().?.mouse_mode) {
-            dvui.focusSubwindow(self.data().id, null);
-        }
+        dvui.dataSet(null, self.data().id, "_check_focus", {});
 
         // need a second frame to fit contents (FocusWindow calls refresh but
         // here for clarity)

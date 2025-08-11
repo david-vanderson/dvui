@@ -984,6 +984,7 @@ pub fn begin(
     self.cursor_requested = null;
     self.text_input_rect = null;
     self.last_focused_id_this_frame = .zero;
+    self.last_focused_id_in_subwindow = .zero;
 
     self.debug.reset(self.gpa);
 
