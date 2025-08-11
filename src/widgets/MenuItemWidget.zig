@@ -9,6 +9,9 @@ const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
 
+/// The parent menu of this item
+const menu = dvui.MenuWidget.current;
+
 const MenuItemWidget = @This();
 
 pub var defaults: Options = .{
@@ -35,6 +38,12 @@ mouse_over: bool = false,
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) MenuItemWidget {
     const options = defaults.override(opts);
     const wd = WidgetData.init(src, .{}, options);
+
+    if (dvui.focusedWidgetIdInCurrentSubwindow() == null and menu().?.floating()) {
+        // if nothing is focused in this floating menu, then focus the first item we see
+        dvui.focusWidget(wd.id, null, null);
+    }
+
     return .{
         .wd = wd,
         .init_opts = init_opts,
@@ -58,14 +67,14 @@ pub fn drawBackground(self: *MenuItemWidget) void {
         focused = true;
     }
 
-    if (focused and dvui.MenuWidget.current().?.mouse_over and !self.mouse_over) {
+    if (focused and menu().?.mouse_over and !self.mouse_over and (menu().?.submenus_activated or menu().?.floating())) {
         // our menu got a mouse over but we didn't even though we were focused
         focused = false;
         dvui.focusWidget(null, null, null);
     }
 
     if (focused or ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) and self.highlight)) {
-        if (!self.init_opts.submenu or !dvui.MenuWidget.current().?.submenus_activated) {
+        if (!self.init_opts.submenu or !menu().?.submenus_activated) {
             if (!self.init_opts.highlight_only) {
                 self.show_active = true;
             }
@@ -129,7 +138,7 @@ pub fn processEvents(self: *MenuItemWidget) void {
 pub fn activeRect(self: *const MenuItemWidget) ?Rect.Natural {
     var act = false;
     if (self.init_opts.submenu) {
-        if (dvui.MenuWidget.current().?.submenus_activated and (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow())) {
+        if (menu().?.submenus_activated and (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow())) {
             act = true;
         }
     } else if (self.activated) {
@@ -168,7 +177,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .focus) {
-                dvui.MenuWidget.current().?.mouse_mode = true;
+                menu().?.mouse_mode = true;
                 e.handle(@src(), self.data());
                 self.mouse_over = true;
                 dvui.focusWidget(self.data().id, null, e.num);
@@ -182,8 +191,12 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 // This is how dropdowns are triggered.
                 e.handle(@src(), self.data());
                 if (self.init_opts.submenu) {
-                    dvui.MenuWidget.current().?.submenus_activated = true;
-                    dvui.MenuWidget.current().?.submenus_in_child = true;
+                    dvui.dataRemove(null, menu().?.data().id, "_submenus_activating");
+                    if (!menu().?.floating() and !menu().?.submenus_activated) {
+                        // If not floating, then we are toggling focus-on-hover, set a bit
+                        dvui.dataSet(null, menu().?.data().id, "_submenus_activating", {});
+                    }
+                    menu().?.submenus_activated = true;
                 }
 
                 if (me.button.touch()) {
@@ -191,19 +204,22 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     // cause scroll to capture
                     dvui.captureMouse(self.data(), e.num);
                     dvui.dragPreStart(me.p, .{});
-                } else {
-                    // this is how we track if the click originated on a menu
-                    // item, so while this is happening we'll focus menu items
-                    // under the mouse
-                    dvui.dragStart(me.p, .{ .name = "_mi_mouse_down" });
                 }
             } else if (me.action == .release) {
-                dvui.MenuWidget.current().?.mouse_mode = true;
+                menu().?.mouse_mode = true;
                 e.handle(@src(), self.data());
-                if (!self.init_opts.submenu and (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow())) {
+                if (self.init_opts.submenu) {
+                    // Only non floating menus can toggle focus-on-hover
+                    if (!menu().?.floating() and dvui.dataGet(null, menu().?.data().id, "_submenus_activating", void) == null) {
+                        // Toggle the submenu closed
+                        menu().?.submenus_activated = false;
+                        dvui.refresh(null, @src(), self.data().id);
+                    }
+                } else if (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) {
                     self.activated = true;
                     dvui.refresh(null, @src(), self.data().id);
                 }
+
                 if (dvui.captured(self.data().id)) {
                     // should only happen with touch
                     dvui.captureMouse(null, e.num);
@@ -224,23 +240,22 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 // focus the menu item under the mouse even if it's not
                 // moving then it breaks keyboard navigation.
                 if (dvui.mouseTotalMotion().nonZero()) {
-                    dvui.MenuWidget.current().?.mouse_mode = true;
+                    menu().?.mouse_mode = true;
                     self.mouse_over = true;
 
-                    if (dvui.draggingName("_mi_mouse_down")) {
+                    if (menu().?.has_focused_child or menu().?.submenus_activated or menu().?.floating()) {
                         // we shouldn't have gotten this event if the motion
                         // was towards a submenu (caught in MenuWidget)
                         dvui.focusSubwindow(null, null); // focuses the window we are in
                         dvui.focusWidget(self.data().id, null, null);
 
-                        if (self.init_opts.submenu) {
-                            dvui.MenuWidget.current().?.submenus_activated = true;
-                            dvui.MenuWidget.current().?.submenus_in_child = true;
+                        if (self.init_opts.submenu and menu().?.floating()) {
+                            menu().?.submenus_activated = true;
                         }
                     }
                 }
 
-                if (dvui.MenuWidget.current().?.mouse_mode) {
+                if (menu().?.mouse_mode) {
                     dvui.cursorSet(.arrow);
                     self.highlight = true;
                 }
@@ -248,25 +263,25 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
         },
         .key => |ke| {
             if (ke.action == .down and ke.matchBind("activate")) {
-                dvui.MenuWidget.current().?.mouse_mode = false;
+                menu().?.mouse_mode = false;
                 e.handle(@src(), self.data());
                 if (self.init_opts.submenu) {
-                    dvui.MenuWidget.current().?.submenus_activated = true;
+                    menu().?.submenus_activated = true;
                 } else {
                     self.activated = true;
                     dvui.refresh(null, @src(), self.data().id);
                 }
             } else if (ke.code == .right and ke.action == .down) {
-                if (self.init_opts.submenu and dvui.MenuWidget.current().?.init_opts.dir == .vertical) {
-                    dvui.MenuWidget.current().?.mouse_mode = false;
+                if (self.init_opts.submenu and menu().?.init_opts.dir == .vertical) {
+                    menu().?.mouse_mode = false;
                     e.handle(@src(), self.data());
-                    dvui.MenuWidget.current().?.submenus_activated = true;
+                    menu().?.submenus_activated = true;
                 }
             } else if (ke.code == .down and ke.action == .down) {
-                if (self.init_opts.submenu and dvui.MenuWidget.current().?.init_opts.dir == .horizontal) {
-                    dvui.MenuWidget.current().?.mouse_mode = false;
+                if (self.init_opts.submenu and menu().?.init_opts.dir == .horizontal) {
+                    menu().?.mouse_mode = false;
                     e.handle(@src(), self.data());
-                    dvui.MenuWidget.current().?.submenus_activated = true;
+                    menu().?.submenus_activated = true;
                 }
             }
         },
