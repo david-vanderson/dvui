@@ -1621,7 +1621,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         var i = self.subwindows.items.len;
         while (i > 0) : (i -= 1) {
             const sw = self.subwindows.items[i - 1];
-            if (sw.used) {
+            if (sw.used and sw.stay_above_parent_window == null) {
                 //std.debug.print("focused subwindow lost, focusing {d}\n", .{i - 1});
                 dvui.focusSubwindow(sw.id, null);
                 break;
