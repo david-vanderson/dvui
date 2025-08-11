@@ -92,6 +92,10 @@ pub fn register(self: *WidgetData) void {
         }
     }
 
+    if (self.id == dvui.focusedWidgetIdInCurrentSubwindow()) {
+        cw.last_focused_id_in_subwindow = self.id;
+    }
+
     if (dvui.testing.widget_hasher) |*hasher| {
         hasher.update(std.mem.asBytes(&self.init_options));
         hasher.update(std.mem.asBytes(&self.options.hash()));

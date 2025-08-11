@@ -25,12 +25,16 @@ pub const FloatingMenuAvoid = enum {
 
 // this lets us maintain a chain of all the nested FloatingMenuWidgets without
 // forcing the user to manually do it
-var popup_current: ?*FloatingMenuWidget = null;
+var current: ?*FloatingMenuWidget = null;
 
-fn popupSet(p: ?*FloatingMenuWidget) ?*FloatingMenuWidget {
-    const ret = popup_current;
-    popup_current = p;
+fn currentSet(p: ?*FloatingMenuWidget) ?*FloatingMenuWidget {
+    const ret = current;
+    current = p;
     return ret;
+}
+
+pub fn currentGet() ?*FloatingMenuWidget {
+    return current;
 }
 
 pub var defaults: Options = .{
@@ -54,7 +58,7 @@ wd: WidgetData,
 options: Options,
 prev_windowId: dvui.Id = .zero,
 prev_last_focus: dvui.Id = undefined,
-parent_popup: ?*FloatingMenuWidget = null,
+parent_fmw: ?*FloatingMenuWidget = null,
 have_popup_child: bool = false,
 init_options: InitOptions,
 /// SAFETY: Set by `install`
@@ -104,9 +108,8 @@ pub fn install(self: *FloatingMenuWidget) void {
 
     dvui.parentSet(self.widget());
 
-    self.prev_windowId = dvui.subwindowCurrentSet(self.data().id, null).id;
-    self.parent_popup = popupSet(self);
-    // prevents parents from processing key events if focus is inside the floating window:w
+    self.parent_fmw = currentSet(self);
+    // prevents parents from processing key events if focus is inside the floating window
     self.prev_last_focus = dvui.lastFocusedIdInFrame();
 
     const avoid: dvui.PlaceOnScreenAvoid = switch (self.init_options.avoid) {
@@ -121,9 +124,15 @@ pub fn install(self: *FloatingMenuWidget) void {
         const ms = dvui.minSize(self.data().id, self.options.min_sizeGet());
         self.data().rect = self.data().rect.toSize(ms);
         self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, .cast(self.data().rect)));
+        if (dvui.dataGet(null, self.data().id, "_check_focus", void) != null) {
+            dvui.dataRemove(null, self.data().id, "_check_focus");
+            if (dvui.MenuWidget.current() == null or !dvui.MenuWidget.current().?.mouse_mode or self.data().rectScale().r.contains(dvui.currentWindow().mouse_pt)) {
+                dvui.focusSubwindow(self.data().id, null);
+            }
+        }
     } else {
         self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, .cast(self.data().rect)));
-        dvui.focusSubwindow(self.data().id, null);
+        dvui.dataSet(null, self.data().id, "_check_focus", {});
 
         // need a second frame to fit contents (FocusWindow calls refresh but
         // here for clarity)
@@ -134,6 +143,7 @@ pub fn install(self: *FloatingMenuWidget) void {
 
     const rs = self.data().rectScale();
 
+    self.prev_windowId = dvui.subwindowCurrentSet(self.data().id, null).id;
     dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, null);
     dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
 
@@ -171,11 +181,6 @@ pub fn install(self: *FloatingMenuWidget) void {
 
     self.menu = MenuWidget.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowId }, self.options.strip().override(.{ .expand = .horizontal }));
     self.menu.install();
-
-    // if no widget in this popup has focus, make the menu have focus to handle keyboard events
-    if (dvui.focusedWidgetIdInCurrentSubwindow() == null) {
-        dvui.focusWidget(self.menu.data().id, null, null);
-    }
 }
 
 pub fn close(self: *FloatingMenuWidget) void {
@@ -219,7 +224,7 @@ pub fn chainFocused(self: *FloatingMenuWidget, self_call: bool) bool {
         ret = true;
     }
 
-    if (self.parent_popup) |pp| {
+    if (self.parent_fmw) |pp| {
         // we had a parent popup, is that focused
         if (pp.chainFocused(false)) {
             ret = true;
@@ -261,6 +266,12 @@ pub fn deinit(self: *FloatingMenuWidget) void {
         }
     }
 
+    // if no widget in this popup has focus, make the menu have focus to handle keyboard events
+    // - this only happens if no menu items are there, the first grabs focus if nothing has focus
+    if (dvui.focusedWidgetIdInCurrentSubwindow() == null) {
+        dvui.focusWidget(self.menu.data().id, null, null);
+    }
+
     if (!self.have_popup_child and !self.chainFocused(true)) {
         // if a popup chain is open and the user focuses a different window
         // (not the parent of the popups), then we want to close the popups
@@ -283,7 +294,7 @@ pub fn deinit(self: *FloatingMenuWidget) void {
 
     // outside normal layout, don't call minSizeForChild or self.data().minSizeReportToParent();
 
-    _ = popupSet(self.parent_popup);
+    _ = currentSet(self.parent_fmw);
     dvui.parentReset(self.data().id, self.data().parent);
     dvui.currentWindow().last_focused_id_this_frame = self.prev_last_focus;
     _ = dvui.subwindowCurrentSet(self.prev_windowId, null);

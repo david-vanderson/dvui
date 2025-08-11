@@ -60,6 +60,7 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     dir: enums.Direction,
     parentSubwindowId: ?dvui.Id = null,
+    close_without_focused_child: bool = true,
 };
 
 wd: WidgetData,
@@ -68,14 +69,14 @@ init_opts: InitOptions,
 winId: dvui.Id,
 parentMenu: ?*MenuWidget = null,
 last_focus: dvui.Id,
+last_focus_in_subwindow: dvui.Id,
 /// SAFETY: Set in `install`
 box: BoxWidget = undefined,
 
 // whether submenus should be open
 submenus_activated: bool = false,
+has_focused_child: bool = false,
 
-// whether submenus in a child menu should default to open (for mouse interactions, not for keyboard)
-submenus_in_child: bool = false,
 mouse_over: bool = false,
 
 // if we have a child popup menu, save it's rect for next frame
@@ -92,13 +93,20 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         .init_opts = init_opts,
         .winId = dvui.subwindowCurrentId(),
         .last_focus = dvui.lastFocusedIdInFrame(),
+        .last_focus_in_subwindow = dvui.lastFocusedIdInSubwindow(),
     };
 
     if (dvui.dataGet(null, self.wd.id, "_sub_act", bool)) |a| {
         self.submenus_activated = a;
-    } else if (current()) |pm| {
-        self.submenus_activated = pm.submenus_in_child;
     }
+
+    self.has_focused_child = dvui.dataGet(null, self.wd.id, "_has_focused_child", bool) orelse false;
+    if (self.init_opts.close_without_focused_child and !self.has_focused_child) {
+        self.submenus_activated = false;
+    }
+
+    // keep this alive if it was set in MenuItemWidget
+    _ = dvui.dataGet(null, self.wd.id, "_submenus_activating", void);
 
     if (dvui.dataGet(null, self.wd.id, "_mouse_mode", bool)) |mouse_mode| self.mouse_mode = mouse_mode;
 
@@ -130,6 +138,7 @@ pub fn close(self: *MenuWidget) void {
 }
 
 pub fn close_chain(self: *MenuWidget, reason: CloseReason) void {
+    dvui.dataRemove(null, self.data().id, "_submenus_activating");
     self.submenus_activated = false;
     // close all submenus in the chain
     if (self.parentMenu) |pm| {
@@ -145,6 +154,10 @@ pub fn close_chain(self: *MenuWidget, reason: CloseReason) void {
             dvui.focusSubwindow(self.init_opts.parentSubwindowId, null);
         }
     }
+}
+
+pub fn floating(_: *MenuWidget) bool {
+    return dvui.FloatingMenuWidget.currentGet() != null;
 }
 
 pub fn widget(self: *MenuWidget) Widget {
@@ -172,7 +185,7 @@ pub fn processEvent(self: *MenuWidget, e: *Event) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .position) {
-                if (dvui.mouseTotalMotion().nonZero() and dvui.draggingName("_mi_mouse_down")) {
+                if (dvui.mouseTotalMotion().nonZero()) {
                     self.mouse_mode = true;
                     if (dvui.dataGet(null, self.data().id, "_child_popup", Rect.Physical)) |r| {
                         const center = Point.Physical{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
@@ -220,16 +233,22 @@ pub fn processEventsAfter(self: *MenuWidget) void {
                             self.mouse_mode = false;
                             if (self.init_opts.dir == .vertical) {
                                 e.handle(@src(), self.data());
-                                // TODO: don't do this if focus would move outside the menu
                                 dvui.tabIndexPrev(e.num);
+                                if (dvui.focusedWidgetId() == null) {
+                                    // We stepped past the last item, cycle around
+                                    dvui.tabIndexPrev(e.num);
+                                }
                             }
                         },
                         .down => {
                             self.mouse_mode = false;
                             if (self.init_opts.dir == .vertical) {
                                 e.handle(@src(), self.data());
-                                // TODO: don't do this if focus would move outside the menu
                                 dvui.tabIndexNext(e.num);
+                                if (dvui.focusedWidgetId() == null) {
+                                    // We stepped past the last item, cycle around
+                                    dvui.tabIndexNext(e.num);
+                                }
                             }
                         },
                         .left => {
@@ -244,16 +263,22 @@ pub fn processEventsAfter(self: *MenuWidget) void {
                                 }
                             } else {
                                 e.handle(@src(), self.data());
-                                // TODO: don't do this if focus would move outside the menu
                                 dvui.tabIndexPrev(e.num);
+                                if (dvui.focusedWidgetId() == null) {
+                                    // We stepped past the last item, cycle around
+                                    dvui.tabIndexPrev(e.num);
+                                }
                             }
                         },
                         .right => {
                             self.mouse_mode = false;
                             if (self.init_opts.dir == .horizontal) {
                                 e.handle(@src(), self.data());
-                                // TODO: don't do this if focus would move outside the menu
                                 dvui.tabIndexNext(e.num);
+                                if (dvui.focusedWidgetId() == null) {
+                                    // We stepped past the last item, cycle around
+                                    dvui.tabIndexNext(e.num);
+                                }
                             }
                         },
                         else => {},
@@ -272,6 +297,7 @@ pub fn deinit(self: *MenuWidget) void {
     self.box.deinit();
     dvui.dataSet(null, self.data().id, "_mouse_mode", self.mouse_mode);
     dvui.dataSet(null, self.data().id, "_sub_act", self.submenus_activated);
+    dvui.dataSet(null, self.data().id, "_has_focused_child", self.last_focus_in_subwindow != dvui.lastFocusedIdInSubwindow());
     if (self.child_popup_rect) |r| {
         dvui.dataSet(null, self.data().id, "_child_popup", r);
     }

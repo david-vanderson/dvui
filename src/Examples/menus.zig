@@ -61,6 +61,7 @@ pub fn menus() void {
                 _ = dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
                 _ = dvui.menuItemLabel(@src(), "Dummy Super Long", .{}, .{ .expand = .horizontal });
             }
+            if (dvui.menuItemLabel(@src(), "Log", .{}, .{ .expand = .horizontal })) |_| {}
         }
 
         dvui.labelNoFmt(@src(), "Right click for a context menu", .{}, .{ .gravity_x = 1.0 });
