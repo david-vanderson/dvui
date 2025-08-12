@@ -391,7 +391,9 @@ pub const PMAImage = struct {
     pma: []PMA,
     width: u32,
     height: u32,
-    pub fn fromImageFile(dbg_name: []const u8, image_bytes: []const u8) dvui.StbImageError!PMAImage {
+
+    /// the returned []PMA inside PMAImage is allocated with alloc
+    pub fn fromImageFile(dbg_name: []const u8, alloc: std.mem.Allocator, image_bytes: []const u8) !PMAImage {
         var w: c_int = undefined;
         var h: c_int = undefined;
         var channels_in_file: c_int = undefined;
@@ -401,15 +403,20 @@ pub const PMAImage = struct {
             return dvui.StbImageError.stbImageError;
         }
         defer dvui.c.stbi_image_free(data);
+
+        const size: usize = @intCast(w * h * 4);
+        const pixels = try alloc.alloc(u8, size);
+        @memcpy(pixels, data[0..size]);
+
         return PMAImage{
-            .pma = PMA.sliceFromRGBA(data[0..@intCast(w * h * @sizeOf(Color.PMA))]),
+            .pma = PMA.sliceFromRGBA(pixels),
             .width = @intCast(w),
             .height = @intCast(h),
         };
     }
 
-    /// the returned []PMA inside PMAImage must be freed with alloc
-    /// the render_alloc ist used for temporary allocations in the render process
+    /// the returned []PMA inside PMAImage is allocated with alloc
+    /// the render_alloc is used for temporary allocations in the render process
     pub fn fromTvgFile(dbg_name: []const u8, alloc: std.mem.Allocator, render_alloc: std.mem.Allocator, tvg_bytes: []const u8, height: u32, icon_opts: dvui.IconRenderOptions) !PMAImage {
         const ImageAdapter = struct {
             pixels: []u8,
