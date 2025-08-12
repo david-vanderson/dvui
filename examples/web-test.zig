@@ -107,7 +107,7 @@ fn update() !i32 {
     WebBackend.back.setCursor(WebBackend.win.cursorRequested());
     WebBackend.back.textInputRect(WebBackend.win.textInputRequested());
 
-    const wait_event_micros = WebBackend.win.waitTime(end_micros, null);
+    const wait_event_micros = WebBackend.win.waitTime(end_micros);
     return @intCast(@divTrunc(wait_event_micros, 1000));
 }
 

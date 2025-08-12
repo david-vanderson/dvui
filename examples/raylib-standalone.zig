@@ -82,7 +82,7 @@ pub fn main() !void {
         backend.setCursor(win.cursorRequested());
 
         // waitTime and beginWait combine to achieve variable framerates
-        const wait_event_micros = win.waitTime(end_micros, null);
+        const wait_event_micros = win.waitTime(end_micros);
         backend.EndDrawingWaitEventTimeout(wait_event_micros);
 
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)

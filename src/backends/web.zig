@@ -895,7 +895,7 @@ fn update() !i32 {
         .close => return -1,
     }
 
-    const wait_event_micros = win.waitTime(end_micros, null);
+    const wait_event_micros = win.waitTime(end_micros);
     return @intCast(@divTrunc(wait_event_micros, 1000));
 }
 
