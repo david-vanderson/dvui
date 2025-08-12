@@ -1157,7 +1157,8 @@ pub const Texture = struct {
     pub fn updateImageSource(self: *Texture, src: ImageSource) !void {
         switch (src) {
             .imageFile => |f| {
-                const img = try Color.PMAImage.fromImageFile(f.name, f.bytes);
+                const img = try Color.PMAImage.fromImageFile(f.name, currentWindow().arena(), f.bytes);
+                defer currentWindow().arena().free(img.pma);
                 try textureUpdate(self, img.pma, f.interpolation);
             },
             .pixels => |px| {
@@ -1192,7 +1193,8 @@ pub const Texture = struct {
     }
 
     pub fn fromImageFile(name: []const u8, image_bytes: []const u8, interpolation: enums.TextureInterpolation) (Backend.TextureError || StbImageError)!Texture {
-        const img = Color.PMAImage.fromImageFile(name, image_bytes) catch return StbImageError.stbImageError;
+        const img = Color.PMAImage.fromImageFile(name, currentWindow().arena(), image_bytes) catch return StbImageError.stbImageError;
+        defer currentWindow().arena().free(img.pma);
         return try textureCreate(img.pma, img.width, img.height, interpolation);
     }
 
