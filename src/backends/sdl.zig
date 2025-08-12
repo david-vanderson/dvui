@@ -1379,7 +1379,7 @@ pub fn main() !u8 {
 
         if (res != .ok) break :main_loop;
 
-        const wait_event_micros = win.waitTime(end_micros, null);
+        const wait_event_micros = win.waitTime(end_micros);
         interrupted = try back.waitEventTimeout(wait_event_micros);
     }
 
@@ -1540,7 +1540,7 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
 
     if (res != .ok) return c.SDL_APP_SUCCESS;
 
-    const wait_event_micros = appState.win.waitTime(end_micros, null);
+    const wait_event_micros = appState.win.waitTime(end_micros);
 
     //std.debug.print("waitEventTimeout {d} {} resize {}\n", .{wait_event_micros, gno_wait, ghave_resize});
 

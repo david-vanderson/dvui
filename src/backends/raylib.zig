@@ -963,7 +963,7 @@ pub fn main() !void {
         b.setCursor(win.cursorRequested());
 
         // waitTime and beginWait combine to achieve variable framerates
-        const wait_event_micros = win.waitTime(end_micros, null);
+        const wait_event_micros = win.waitTime(end_micros);
         b.EndDrawingWaitEventTimeout(wait_event_micros);
 
         if (res != .ok) break :main_loop;

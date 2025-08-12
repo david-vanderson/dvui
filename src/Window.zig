@@ -75,6 +75,9 @@ loop_target_slop: i32 = 1000, // 1ms frame overhead seems a good place to start
 loop_target_slop_frames: i32 = 0,
 frame_times: [30]u32 = [_]u32{0} ** 30,
 
+/// Debugging aid, only used in waitTime(), null means no max
+max_fps: ?f32 = null,
+
 secs_since_last_frame: f32 = 0,
 extra_frames_needed: u8 = 0,
 clipRect: dvui.Rect.Physical = .{},
@@ -860,18 +863,21 @@ pub fn beginWait(self: *Self, interrupted: bool) i128 {
     return new_time;
 }
 
-/// Takes output of `Window.end` and optionally a max fps.  Returns microseconds
-/// the app should wait (with event interruption) before running the render loop again.
+/// Takes output of `Window.end`.  Returns microseconds the app should wait
+/// (with event interruption) before running the render loop again.
+///
+/// If `Window.max_fps` is not null, will sleep to keep the framerate under
+/// that (usually set in the Debug window).
 ///
 /// Pass return value to backend.waitEventTimeout().
 /// Cooperates with `Window.beginWait` to estimate how much time is being spent
 /// outside the render loop and account for that.
-pub fn waitTime(self: *Self, end_micros: ?u32, maxFPS: ?f32) u32 {
+pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
     // end_micros is the naive value we want to be between last begin and next begin
 
     // minimum time to wait to hit max fps target
     var min_micros: u32 = 0;
-    if (maxFPS) |mfps| {
+    if (self.max_fps) |mfps| {
         min_micros = @as(u32, @intFromFloat(1_000_000.0 / mfps));
     }
 

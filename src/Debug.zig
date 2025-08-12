@@ -322,6 +322,22 @@ pub fn show(self: *Debug) void {
         _ = self.logRefresh(log_refresh);
     }
 
+    var custom_label: ?[]const u8 = null;
+    var max_fps: f32 = 60;
+    if (dvui.currentWindow().max_fps) |mfps| {
+        max_fps = mfps;
+    } else {
+        custom_label = "max fps: unlimited";
+    }
+
+    if (dvui.sliderEntry(@src(), "max fps: {d:0.0}", .{ .value = &max_fps, .min = 1, .max = 60, .interval = 1, .label = custom_label }, .{ .min_size_content = .width(200) })) {
+        if (max_fps >= 60) {
+            dvui.currentWindow().max_fps = null;
+        } else {
+            dvui.currentWindow().max_fps = max_fps;
+        }
+    }
+
     var log_events = self.logEvents(null);
     if (dvui.checkbox(@src(), &log_events, "Event Logging", .{})) {
         _ = self.logEvents(log_events);
