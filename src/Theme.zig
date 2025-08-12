@@ -24,31 +24,40 @@ dark: bool,
 /// used for focus highlighting
 focus: Color,
 
-/// colors for content like textLayout
-/// * these are what Style .content use
-/// * fill/text usually have the highest contrast
-/// * also fallbacks for null Colors in ColorStyles
-fill: Color,
-fill_hover: ?Color = null,
-fill_press: ?Color = null,
-text: Color,
-text_hover: ?Color = null,
-text_press: ?Color = null,
-/// Used for selecting/highlighting text
+/// color used to show selected text.  textLayout composites this color partially opaque under selected text.
 text_select: ?Color = null,
+
+/// fill for .content Style, fallback for any Style without fill.  Example is background of textLayout and textEntry.
+fill: Color,
+
+/// fill when hovered for .content Style.  Example is hovering checkbox.  If null, dvui creates one by adjusting fill (see `adjustColorForState`.
+fill_hover: ?Color = null,
+
+/// fill when pressed for .content Style.  Example is pressing checkbox.  If null, dvui creates one by adjusting fill (see `adjustColorForState`.
+fill_press: ?Color = null,
+
+/// text color for .content Style, fallback for any Style without text.  Example is text in a textLayout or textEntry.  Also used as general foreground color like a checkmark or icon color.
+text: Color,
+
+/// text when hovered for .content Style.  Currently unused in dvui widgets.  If null, uses text.
+text_hover: ?Color = null,
+
+/// text when pressed for .content Style.  Currently unused in dvui widgets (but text_press in .control Style is).  If null, uses text.
+text_press: ?Color = null,
+
+/// border for .content Style, fallback for any Style without border.
 border: Color,
 
 /// colors for normal controls like buttons
 control: ColorStyle,
 
-/// colors for windows/boxes that contain controls
+/// colors for windows/boxes that contain controls like scrollArea and floatingWindow
 window: ColorStyle,
 
 /// colors for highlighting:
 /// * menu/dropdown items
 /// * checkboxes
 /// * radio buttons
-/// * text selection (uses .fill)
 highlight: ColorStyle,
 
 /// colors for buttons to perform dangerous actions
