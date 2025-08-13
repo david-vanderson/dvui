@@ -70,7 +70,7 @@ pub fn drawBackground(self: *MenuItemWidget) void {
     if (focused and menu().?.mouse_over and !self.mouse_over and (menu().?.submenus_activated or menu().?.floating())) {
         // our menu got a mouse over but we didn't even though we were focused
         focused = false;
-        dvui.focusWidget(null, null, null);
+        dvui.focusWidget(menu().?.data().id, null, null);
     }
 
     if (focused or ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) and self.highlight)) {

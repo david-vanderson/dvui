@@ -36,7 +36,7 @@ pub fn menus() void {
             var m = dvui.menu(@src(), .horizontal, .{});
             defer m.deinit();
 
-            if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
+            if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
                 var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
                 defer fw.deinit();
 
@@ -54,14 +54,15 @@ pub fn menus() void {
                 }
             }
 
-            if (dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
+            if (dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{})) |r| {
                 var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
                 defer fw.deinit();
                 _ = dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
                 _ = dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
                 _ = dvui.menuItemLabel(@src(), "Dummy Super Long", .{}, .{ .expand = .horizontal });
             }
-            if (dvui.menuItemLabel(@src(), "Log", .{}, .{ .expand = .horizontal })) |_| {}
+
+            if (dvui.menuItemLabel(@src(), "Log", .{}, .{ .margin = .{ .x = 10, .w = 10 } })) |_| {}
         }
 
         dvui.labelNoFmt(@src(), "Right click for a context menu", .{}, .{ .gravity_x = 1.0 });
