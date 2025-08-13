@@ -64,7 +64,10 @@ pub fn frame() !dvui.App.Result {
     scaler.deinit();
 
     {
-        var m = dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal });
+        defer hbox.deinit();
+
+        var m = dvui.menu(@src(), .horizontal, .{});
         defer m.deinit();
 
         if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .tag = "first-focusable" })) |r| {
