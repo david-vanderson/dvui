@@ -187,7 +187,7 @@ pub fn processEvent(self: *MenuWidget, e: *Event) void {
             if (me.action == .position) {
                 if (dvui.mouseTotalMotion().nonZero()) {
                     self.mouse_mode = true;
-                    if (dvui.dataGet(null, self.data().id, "_child_popup", Rect.Physical)) |r| {
+                    if (dvui.dataGet(null, self.data().id, "_child_popup", ?Rect.Physical) orelse null) |r| {
                         const center = Point.Physical{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
                         const cw = dvui.currentWindow();
                         const to_center = center.diff(cw.mouse_pt_prev);
@@ -298,9 +298,8 @@ pub fn deinit(self: *MenuWidget) void {
     dvui.dataSet(null, self.data().id, "_mouse_mode", self.mouse_mode);
     dvui.dataSet(null, self.data().id, "_sub_act", self.submenus_activated);
     dvui.dataSet(null, self.data().id, "_has_focused_child", self.last_focus_in_subwindow != dvui.lastFocusedIdInSubwindow());
-    if (self.child_popup_rect) |r| {
-        dvui.dataSet(null, self.data().id, "_child_popup", r);
-    }
+    // always overwrite with value from this frame to prevent saving stale value
+    dvui.dataSet(null, self.data().id, "_child_popup", self.child_popup_rect);
     self.data().minSizeSetAndRefresh();
     self.data().minSizeReportToParent();
     _ = menuSet(self.parentMenu);
