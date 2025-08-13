@@ -75,6 +75,7 @@ box: BoxWidget = undefined,
 
 // whether submenus should be open
 submenus_activated: bool = false,
+// includes menu itself
 has_focused_child: bool = false,
 
 mouse_over: bool = false,
