@@ -49,6 +49,14 @@ pub fn menus() void {
                     Examples.show_dialog = true;
                 }
 
+                if (dvui.menuItemLabel(@src(), "Focus Tab 3", .{}, .{ .expand = .horizontal }) != null) {
+                    fw.close();
+                    if (dvui.dataGet(null, vbox.data().id, "tab3_id", dvui.Id)) |wid| {
+                        const subwindowId = dvui.dataGet(null, vbox.data().id, "tab3_subwindow_id", dvui.Id) orelse unreachable;
+                        dvui.focusWidget(wid, subwindowId, null);
+                    }
+                }
+
                 if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
                     fw.close();
                 }
@@ -159,6 +167,10 @@ pub fn menus() void {
                     // directly put whatever in the tab
                     var tab = tabs.addTab(active_tab.* == i, .{});
                     defer tab.deinit();
+
+                    // store widget id and subwindow id for later focusing
+                    dvui.dataSet(null, vbox.data().id, "tab3_id", tab.data().id);
+                    dvui.dataSet(null, vbox.data().id, "tab3_subwindow_id", dvui.subwindowCurrentId());
 
                     var tab_box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
                     defer tab_box.deinit();
