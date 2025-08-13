@@ -16,6 +16,7 @@ pub var defaults: Options = .{
 
 pub const InitOptions = struct {
     dir: dvui.enums.Direction = .horizontal,
+    draw_focus : bool = true,
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TabsWidget {
@@ -108,7 +109,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
     self.tab_button.processEvents();
     self.tab_button.drawBackground();
 
-    if (self.tab_button.focused() and self.tab_button.data().visible()) {
+    if (self.tab_button.focused() and self.tab_button.data().visible() and self.init_options.draw_focus) {
         const rs = self.tab_button.data().borderRectScale();
         const r = rs.r;
         const cr = self.tab_button.data().options.corner_radiusGet();
