@@ -1402,6 +1402,10 @@ pub fn raiseSubwindow(subwindow_id: Id) void {
 
 /// Focus a widget in the given subwindow (if null, the current subwindow).
 ///
+/// To focus a widget in a different subwindow (like from a menu), you must
+/// have both the widget id and the subwindow id that widget is in.  See
+/// `subwindowCurrentId()`.
+///
 /// If you are doing this in response to an `Event`, you can pass that `Event`'s
 /// num to change the focus of any further `Event`s in the list.
 ///
