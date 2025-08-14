@@ -10,6 +10,7 @@
     .border = "#83a598",
     .text = "#ebdbb2",
     .fill = "#7c6f64",
+    .fill_press = "#fe8019",
 
     .control = .{
         .fill = "#7c6f64",
@@ -21,7 +22,9 @@
         .fill = "#665c54",
     },
     .highlight = .{
-        .fill = "#fe8019",
-        .text = "#1d2021",
+        .fill = "#bd773e",
+        .fill_press = "#fe8019",
+        .text = "#f4ad65",
+        .text_press = "#1d2021",
     },
 }

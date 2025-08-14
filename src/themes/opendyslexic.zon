@@ -21,6 +21,7 @@
         .fill = "#f0f0f0",
     },
     .highlight = .{
-        .fill = "#3584e4",
+        .fill = "#9ac1f1",
+        .text = "#1a4272",
     },
 }
