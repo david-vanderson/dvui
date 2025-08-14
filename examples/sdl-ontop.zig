@@ -1,6 +1,6 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const SDLBackend = dvui.backend;
+const SDLBackend = @import("sdl-backend");
 comptime {
     std.debug.assert(@hasDecl(SDLBackend, "SDLBackend"));
 }

@@ -1,6 +1,6 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const Backend = dvui.backend;
+const Backend = @import("dx11-backend");
 
 const win32 = @import("win32").everything;
 
