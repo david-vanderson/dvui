@@ -21,7 +21,10 @@
         .fill = "#2b3a3a",
     },
     .highlight = .{
-        .fill = "#638465",
-        .text = "#2c3332",
+        .fill = "#475b4b",
+        .fill_hover = "#4b695e",
+        .fill_press = "#4f735e",
+        .text = "#729382",
+        .text_press = "#7d9973",
     },
 }
