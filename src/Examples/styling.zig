@@ -35,7 +35,7 @@ pub fn styling() void {
         _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corner_radius = Rect.all(2) }));
         _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corner_radius = Rect.all(7) }));
         _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corner_radius = Rect.all(100) }));
-        _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corner_radius = .{ .x = 0, .y = 2, .w = 7, .h = 100 } }));
+        _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corner_radius = .rect(0, 2, 7, 100) }));
     }
 
     dvui.label(@src(), "directly set colors", .{}, .{});
