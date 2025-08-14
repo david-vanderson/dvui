@@ -818,12 +818,16 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
     const platform = platform_ptr[0..platform_len];
     log.debug("platform: {s}", .{platform});
     const mac = if (std.mem.indexOf(u8, platform, "Mac") != null) true else false;
+    const windows = if (std.mem.indexOf(u8, platform, "Win32") != null) true else false;
 
     back = WebBackend.init() catch {
         return 1;
     };
 
     var win_opts = init_opts.window_init_options;
+    if (win_opts.button_order == null) {
+        win_opts.button_order = if (windows) .ok_cancel else .cancel_ok;
+    }
     if (win_opts.keybinds == null) {
         win_opts.keybinds = if (mac) .mac else .windows;
     }

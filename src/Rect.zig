@@ -191,6 +191,13 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             try std.fmt.format(writer, "{s}{{ {d} {d} {d} {d} }}", .{ type_name, self.x, self.y, self.w, self.h });
         }
 
+        /// True if the rect intersects the current clipping rectangle.
+        ///
+        /// Only valid between dvui.Window.begin() and end().
+        pub fn visible(self: Rect.Physical) bool {
+            return !dvui.clipGet().intersect(self).empty();
+        }
+
         /// Stroke (outline) a rounded rect.
         ///
         /// radius values:

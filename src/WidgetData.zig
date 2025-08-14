@@ -165,7 +165,7 @@ pub fn register(self: *WidgetData) void {
 }
 
 pub fn visible(self: *const WidgetData) bool {
-    return !dvui.clipGet().intersect(self.borderRectScale().r).empty();
+    return self.borderRectScale().r.visible();
 }
 
 pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?Color = null }) void {

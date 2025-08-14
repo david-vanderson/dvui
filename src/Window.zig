@@ -88,6 +88,9 @@ clipRect: dvui.Rect.Physical = .{},
 /// See `dvui.themeSet`
 theme: Theme,
 
+/// Used by `dvui.dialog` for button order of Ok and Cancel.
+button_order: dvui.enums.DialogButtonOrder = .cancel_ok,
+
 /// Uses `gpa` allocator
 min_sizes: dvui.TrackingAutoHashMap(Id, Size, .put_only) = .empty,
 /// Uses `gpa` allocator
@@ -187,6 +190,8 @@ pub const InitOptions = struct {
         windows,
         mac,
     } = null,
+
+    button_order: ?dvui.enums.DialogButtonOrder = null,
 };
 
 pub fn init(
@@ -223,6 +228,11 @@ pub fn init(
     };
 
     try self.initEvents();
+
+    self.button_order = init_opts.button_order orelse switch (builtin.os.tag) {
+        .windows => .ok_cancel,
+        else => .cancel_ok,
+    };
 
     const kb = init_opts.keybinds orelse blk: {
         if (builtin.os.tag.isDarwin()) {
