@@ -135,9 +135,9 @@ fn gui_frame() !void {
                 m.close();
             }
 
-            if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
-                return false;
-            }
+            //if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
+                //return false;
+            //}
         }
 
         if (dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{})) |r| {
