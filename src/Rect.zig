@@ -55,7 +55,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             return .{ .x = v, .y = v, .w = v, .h = v };
         }
 
-        pub fn customRect(x: f32, y: f32, w: f32, h: f32) Self {
+        pub fn getRect(x: f32, y: f32, w: f32, h: f32) Self {
             return .{ .x = x, .y = y, .w = w, .h = h };
         }
 
