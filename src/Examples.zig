@@ -268,7 +268,7 @@ pub fn dialogDirect() void {
     dvui.label(@src(), "Asking a Question", .{}, .{ .font_style = .title_4, .gravity_x = 0.5 });
     dvui.label(@src(), "This dialog is directly called by user code.", .{}, .{ .gravity_x = 0.5 });
 
-    if (dvui.button(@src(), "Toggle extra stuff and fit window", .{}, .{})) {
+    if (dvui.button(@src(), "Toggle extra stuff and fit window", .{}, .{ .tab_index = 1 })) {
         data.extra_stuff = !data.extra_stuff;
         dialog_win.autoSize();
     }
@@ -286,16 +286,16 @@ pub fn dialogDirect() void {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0 });
         defer hbox.deinit();
 
-        const gravx: f32 = switch (dvui.currentWindow().button_order) {
-            .cancel_ok => 1.0,
-            .ok_cancel => 0.0,
+        const gravx: f32, const tindex: u16 = switch (dvui.currentWindow().button_order) {
+            .cancel_ok => .{ 1.0, 4 },
+            .ok_cancel => .{ 0.0, 2 },
         };
 
-        if (dvui.button(@src(), "Yes", .{}, .{ .gravity_x = gravx })) {
+        if (dvui.button(@src(), "Yes", .{}, .{ .gravity_x = gravx, .tab_index = tindex })) {
             dialog_win.close(); // can close the dialog this way
         }
 
-        if (dvui.button(@src(), "No", .{}, .{})) {
+        if (dvui.button(@src(), "No", .{}, .{ .tab_index = 3 })) {
             show_dialog = false; // can close by not running this code anymore
         }
     }
