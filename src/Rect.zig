@@ -35,8 +35,8 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             .physical => dvui.Size.Physical,
         };
 
-        pub fn cast(rect: anytype) Self {
-            return .{ .x = rect.x, .y = rect.y, .w = rect.w, .h = rect.h };
+        pub fn cast(r: anytype) Self {
+            return .{ .x = r.x, .y = r.y, .w = r.w, .h = r.h };
         }
 
         pub fn equals(self: *const Self, r: Self) bool {
@@ -53,6 +53,10 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
 
         pub fn all(v: f32) Self {
             return .{ .x = v, .y = v, .w = v, .h = v };
+        }
+
+        pub fn rect(x: f32, y: f32, w: f32, h: f32) Self {
+            return .{ .x = x, .y = y, .w = w, .h = h };
         }
 
         pub fn fromPoint(p: PointType) Self {
@@ -247,8 +251,8 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         }
 
         test scale {
-            const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
-            const res = rect.scale(0.5, Rect);
+            const r = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
+            const res = r.scale(0.5, Rect);
             try std.testing.expectEqualDeep(Rect{ .x = 25, .y = 25, .w = 75, .h = 75 }, res);
         }
 
@@ -260,13 +264,13 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             const frame = struct {
                 fn frame() !dvui.App.Result {
                     // NOTE: Should be kept up to date with the doctest
-                    const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
-                    const res = rect.scale(0.5, Rect);
+                    const r = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
+                    const res = r.scale(0.5, Rect);
                     try std.testing.expectEqualDeep(Rect{ .x = 25, .y = 25, .w = 75, .h = 75 }, res);
 
                     var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .background = true, .style = .window, .expand = .both });
                     defer box.deinit();
-                    Rect.Physical.cast(rect).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
+                    Rect.Physical.cast(r).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
                     Rect.Physical.cast(res).stroke(.{}, .{ .thickness = 1, .color = .red, .closed = true });
                     return .ok;
                 }
@@ -276,8 +280,8 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         }
 
         test offset {
-            const rect = Rect{ .x = 50, .y = 50, .w = 100, .h = 100 };
-            const res = rect.offset(.{ .x = 50, .y = 50 }); // width and height does nothing
+            const r = Rect{ .x = 50, .y = 50, .w = 100, .h = 100 };
+            const res = r.offset(.{ .x = 50, .y = 50 }); // width and height does nothing
             try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 100, .h = 100 }, res);
         }
 
@@ -289,13 +293,13 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             const frame = struct {
                 fn frame() !dvui.App.Result {
                     // NOTE: Should be kept up to date with the doctest
-                    const rect = Rect{ .x = 50, .y = 50, .w = 100, .h = 100 };
-                    const res = rect.offset(.{ .x = 50, .y = 50 }); // width and height does nothing
+                    const r = Rect{ .x = 50, .y = 50, .w = 100, .h = 100 };
+                    const res = r.offset(.{ .x = 50, .y = 50 }); // width and height does nothing
                     try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 100, .h = 100 }, res);
 
                     var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .background = true, .style = .window, .expand = .both });
                     defer box.deinit();
-                    Rect.Physical.cast(rect).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
+                    Rect.Physical.cast(r).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
                     Rect.Physical.cast(res).stroke(.{}, .{ .thickness = 1, .color = .red, .closed = true });
                     return .ok;
                 }
@@ -305,14 +309,14 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         }
 
         test offsetNeg {
-            const rect = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
-            const res = rect.offsetNeg(.{ .x = 50, .y = 50 }); // width and height does nothing
+            const r = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
+            const res = r.offsetNeg(.{ .x = 50, .y = 50 }); // width and height does nothing
             try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 100, .h = 100 }, res);
         }
 
         test offsetNegPoint {
-            const rect = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
-            const res = rect.offsetNegPoint(.{ .x = 50, .y = 50 });
+            const r = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
+            const res = r.offsetNegPoint(.{ .x = 50, .y = 50 });
             try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 100, .h = 100 }, res);
         }
 
@@ -324,13 +328,13 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             const frame = struct {
                 fn frame() !dvui.App.Result {
                     // NOTE: Should be kept up to date with the doctest
-                    const rect = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
-                    const res = rect.offsetNegPoint(.{ .x = 50, .y = 50 });
+                    const r = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
+                    const res = r.offsetNegPoint(.{ .x = 50, .y = 50 });
                     try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 100, .h = 100 }, res);
 
                     var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .background = true, .style = .window, .expand = .both });
                     defer box.deinit();
-                    Rect.Physical.cast(rect).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
+                    Rect.Physical.cast(r).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
                     Rect.Physical.cast(res).stroke(.{}, .{ .thickness = 1, .color = .red, .closed = true });
                     return .ok;
                 }
@@ -408,8 +412,8 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         }
 
         test inset {
-            const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
-            const res = rect.inset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
+            const r = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
+            const res = r.inset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
             try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 75, .h = 75 }, res);
         }
         test "DOCIMG inset" {
@@ -420,13 +424,13 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             const frame = struct {
                 fn frame() !dvui.App.Result {
                     // NOTE: Should be kept up to date with the doctest
-                    const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
-                    const res = rect.inset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
+                    const r = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
+                    const res = r.inset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
                     try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 75, .h = 75 }, res);
 
                     var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .background = true, .style = .window, .expand = .both });
                     defer box.deinit();
-                    Rect.Physical.cast(rect).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
+                    Rect.Physical.cast(r).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
                     Rect.Physical.cast(res).stroke(.{}, .{ .thickness = 1, .color = .red, .closed = true });
                     return .ok;
                 }
@@ -436,14 +440,14 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         }
 
         test insetAll {
-            const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
-            const res = rect.insetAll(50);
+            const r = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
+            const res = r.insetAll(50);
             try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 50, .h = 50 }, res);
         }
 
         test outset {
-            const rect = Rect{ .x = 100, .y = 100, .w = 50, .h = 50 };
-            const res = rect.outset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
+            const r = Rect{ .x = 100, .y = 100, .w = 50, .h = 50 };
+            const res = r.outset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
             try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 125, .h = 125 }, res);
         }
         test "DOCIMG outset" {
@@ -454,13 +458,13 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             const frame = struct {
                 fn frame() !dvui.App.Result {
                     // NOTE: Should be kept up to date with the doctest
-                    const rect = Rect{ .x = 100, .y = 100, .w = 50, .h = 50 };
-                    const res = rect.outset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
+                    const r = Rect{ .x = 100, .y = 100, .w = 50, .h = 50 };
+                    const res = r.outset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
                     try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 125, .h = 125 }, res);
 
                     var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .background = true, .style = .window, .expand = .both });
                     defer box.deinit();
-                    Rect.Physical.cast(rect).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
+                    Rect.Physical.cast(r).stroke(.{}, .{ .thickness = 1, .color = .gray, .closed = true });
                     Rect.Physical.cast(res).stroke(.{}, .{ .thickness = 1, .color = .red, .closed = true });
                     return .ok;
                 }
@@ -470,8 +474,8 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         }
 
         test outsetAll {
-            const rect = Rect{ .x = 100, .y = 100, .w = 50, .h = 50 };
-            const res = rect.outsetAll(50);
+            const r = Rect{ .x = 100, .y = 100, .w = 50, .h = 50 };
+            const res = r.outsetAll(50);
             try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 150, .h = 150 }, res);
         }
     };
