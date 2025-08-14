@@ -286,7 +286,12 @@ pub fn dialogDirect() void {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0 });
         defer hbox.deinit();
 
-        if (dvui.button(@src(), "Yes", .{}, .{})) {
+        const gravx: f32 = switch (dvui.currentWindow().button_order) {
+            .cancel_ok => 1.0,
+            .ok_cancel => 0.0,
+        };
+
+        if (dvui.button(@src(), "Yes", .{}, .{ .gravity_x = gravx })) {
             dialog_win.close(); // can close the dialog this way
         }
 
