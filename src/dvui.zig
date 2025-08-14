@@ -3975,11 +3975,11 @@ pub fn dialogDisplay(id: Id) !void {
 
         if (cancel_label) |cl| {
             var cancel_data: WidgetData = undefined;
-            const gravx: f32 = switch (currentWindow().button_order) {
-                .cancel_ok => 0.0,
-                .ok_cancel => 1.0,
+            const gravx: f32, const tindex: u16 = switch (currentWindow().button_order) {
+                .cancel_ok => .{ 0.0, 1 },
+                .ok_cancel => .{ 1.0, 3 },
             };
-            if (dvui.button(@src(), cl, .{}, .{ .tab_index = 2, .data_out = &cancel_data, .gravity_x = gravx })) {
+            if (dvui.button(@src(), cl, .{}, .{ .tab_index = tindex, .data_out = &cancel_data, .gravity_x = gravx })) {
                 dvui.dialogRemove(id);
                 if (callafter) |ca| {
                     ca(id, .cancel) catch |err| {
@@ -3994,7 +3994,7 @@ pub fn dialogDisplay(id: Id) !void {
         }
 
         var ok_data: WidgetData = undefined;
-        if (dvui.button(@src(), ok_label, .{}, .{ .tab_index = 1, .data_out = &ok_data })) {
+        if (dvui.button(@src(), ok_label, .{}, .{ .tab_index = 2, .data_out = &ok_data })) {
             dvui.dialogRemove(id);
             if (callafter) |ca| {
                 ca(id, .ok) catch |err| {
