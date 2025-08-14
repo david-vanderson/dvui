@@ -1,6 +1,6 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const WebBackend = dvui.backend;
+const WebBackend = @import("web-backend");
 comptime {
     std.debug.assert(@hasDecl(WebBackend, "WebBackend"));
 }
