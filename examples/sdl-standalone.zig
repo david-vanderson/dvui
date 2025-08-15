@@ -350,23 +350,29 @@ pub fn findMatchingStructOption(T: type, struct_options: anytype) ?dvui.se.Struc
     return null;
 }
 
+/// Return the type of a field in a container.
+/// This preserves const, unlike @FieldType.
+pub fn FieldPtrType(container: anytype, field_name: []const u8) type {
+    switch (@typeInfo(@TypeOf(@field(container, field_name)))) {
+        .optional => &@field(container, field_name).?,
+        else => &@field(container, field_name),
+    }
+}
+
 // TODO: This is really a pointert to a container type, not a container type. Required because the pointer might be const,
 // and the constness is not reflected by the underlying type.
 pub fn processField(
     ContainerT: type,
     ContainerPtrT: type,
+    FieldPtrT: type, // Required to preserve const.
     container: ContainerPtrT,
     comptime field: dvui.se.StructOptions(ContainerT).StructOptionsT.Key,
+    field_value_ptr: FieldPtrT,
     field_option: dvui.se.StructOptions(ContainerT).StructOptionsT.Value,
     options: anytype,
     comptime depth: usize,
     al: *dvui.Alignment,
 ) void {
-    const field_value_ptr = switch (@typeInfo(@TypeOf(@field(container, @tagName(field))))) {
-        .optional => &@field(container, @tagName(field)).?,
-        else => &@field(container, @tagName(field)),
-    };
-
     switch (@typeInfo(@TypeOf(field_value_ptr.*))) {
         inline .@"struct" => {
             if (depth > 0) {
@@ -387,6 +393,9 @@ pub fn processField(
             //                    }
             //                },
             // }
+        },
+        .pointer => |_| {
+            processPointer(ContainerT, ContainerPtrT, container, @tagName(field), field_option, options, depth, al);
         },
         else => processWidget(@src(), @tagName(field), field_value_ptr, al, field_option),
     }
@@ -411,8 +420,8 @@ pub fn processOptional(
         }
         if (@field(container, field_name) != null) {
             // TODO: Yukk!!
-            const field_key = comptime std.meta.stringToEnum(dvui.se.StructOptions(ContainerT).StructOptionsT.Key, field_name); // TODO: Hanlde nulls at least
-            processField(ContainerT, ContainerPtrT, container, field_key.?, field_option, options, depth, al);
+            const field_key = comptime std.meta.stringToEnum(dvui.se.StructOptions(ContainerT).StructOptionsT.Key, field_name).?; // TODO: Hanlde nulls at least
+            processField(ContainerT, ContainerPtrT, @TypeOf(&@field(container, @tagName(field_key)).?), container, field_key, &@field(container, @tagName(field_key)).?, field_option, options, depth, al);
         }
     } else {
         @field(container, field_name) = null;
@@ -432,17 +441,20 @@ pub fn processUnion(
     comptime depth: usize,
     al: *dvui.Alignment,
 ) void {
-    const UnionT = switch (@typeInfo(@TypeOf(@field(container, field_name)))) {
+    const type_info = @typeInfo(@TypeOf(@field(container, field_name)));
+
+    // Find out the type of the union and get a pointer to the union field.
+    const UnionT = switch (type_info) {
         .optional => @TypeOf(@field(container, field_name).?),
         .pointer => @TypeOf(@field(container, field_name).*),
         else => @TypeOf(@field(container, field_name)),
     };
-    // TODO: Use field_ptr more. Make the return of field_ptr and type generic.
-    const field_ptr = switch (@typeInfo(@TypeOf(@field(container, field_name)))) {
+    const field_ptr = switch (type_info) {
         .optional => &@field(container, field_name).?,
         .pointer => @field(container, field_name),
         else => &@field(container, field_name),
     };
+
     const current_choice = std.meta.activeTag(field_ptr.*);
     const new_choice = dvui.se.unionFieldWidget2(@src(), field_name, field_ptr, field_option, al);
     if (current_choice != new_choice) {
@@ -487,6 +499,43 @@ pub fn processUnion(
     }
 }
 
+pub fn processPointer(
+    ContainerT: type,
+    ContainerPtrT: type,
+    container: ContainerPtrT,
+    comptime field_name: []const u8,
+    field_option: dvui.se.StructOptions(ContainerT).StructOptionsT.Value,
+    options: anytype,
+    comptime depth: usize,
+    al: *dvui.Alignment,
+) void {
+    const field_ptr = switch (@typeInfo(@FieldType(ContainerT, field_name))) {
+        .optional => &@field(container, field_name).?,
+        else => @field(container, field_name),
+    };
+    const ptr = switch (@typeInfo(@FieldType(ContainerT, field_name))) {
+        .optional => |opt| @typeInfo(opt.child).pointer,
+        .pointer => |ptr| ptr,
+        else => @compileError("Must be a pointer"),
+    };
+
+    const field_key = comptime std.meta.stringToEnum(dvui.se.StructOptions(ContainerT).StructOptionsT.Key, field_name).?; // TODO: Hanlde nulls at least
+
+    if (ptr.size == .slice and ptr.child == u8) {
+        processWidget(@src(), field_name, &@field(container, field_name), al, field_option);
+    } else if (ptr.size == .slice) {
+        sliceFieldWidget2(@src(), field_name, @field(container, field_name), al);
+    } else if (ptr.size == .one) {
+        dvui.label(@src(), "{s} is a single item pointer", .{field_name}, .{}); // .{ .id_extra = i }); // TODO: Make this nicer formatting.
+        //        processField(ptr.child, @TypeOf(field_ptr), field_ptr, field_key, field_option, options, depth, al);
+        processField(ContainerT, ContainerPtrT, @TypeOf(&@field(container, @tagName(field_key))), container, field_key, &@field(container, @tagName(field_key)), field_option, options, depth, al);
+    } else if (ptr.size == .c or ptr.size == .many) {
+        @compileError("structEntry does not support *C or Many pointers");
+    } else {
+        processField(ContainerT, ContainerPtrT, @TypeOf(&@field(container, @tagName(field_key))), field_ptr, field_key, &@field(container, @tagName(field_key)), field_option, options, depth, al);
+    }
+}
+
 pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container: anytype, comptime depth: usize, options: anytype) void {
     if (!dvui.expander(@src(), name, .{ .default_expanded = true }, .{})) return;
 
@@ -524,69 +573,27 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
             .bool,
             .@"struct",
             // TODO:
-            => processField(ContainerT, ContainerPtrT, container, key, field_option, options, depth, &al),
+            => processField(ContainerT, ContainerPtrT, @TypeOf(&@field(container, @tagName(key))), container, key, &@field(container, @tagName(key)), field_option, options, depth, &al),
             inline .optional => {
                 processOptional(ContainerT, ContainerPtrT, container, @tagName(key), field_option, options, depth, &al);
             },
-            inline .pointer => |ptr| {
-                if (ptr.size == .slice and ptr.child == u8) {
-                    processWidget(src, @tagName(key), &@field(container, @tagName(key)), &al, field_option);
-                } else if (ptr.size == .slice) {
-                    sliceFieldWidget2(src, @tagName(key), @field(container, @tagName(key)), &al);
-                } else if (ptr.size == .one) {
-                    dvui.label(@src(), "{s} is a single item pointer", .{@tagName(key)}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
-                    processField(ptr.child, key, field_option, options, depth, &al);
-                } else if (ptr.size == .c or ptr.size == .many) {
-                    @compileError("structEntry does not support *C or Many pointers");
-                } else {
-                    processField(ContainerT, ContainerPtrT, container, key, field_option, options, depth, &al);
-                }
+            inline .pointer => |_| {
+                processPointer(ContainerT, ContainerPtrT, container, @tagName(key), field_option, options, depth, &al);
+                //                if (ptr.size == .slice and ptr.child == u8) {
+                //                    processWidget(src, @tagName(key), &@field(container, @tagName(key)), &al, field_option);
+                //                } else if (ptr.size == .slice) {
+                //                    sliceFieldWidget2(src, @tagName(key), @field(container, @tagName(key)), &al);
+                //                } else if (ptr.size == .one) {
+                //                    dvui.label(@src(), "{s} is a single item pointer", .{@tagName(key)}, .{ .id_extra = i }); // TODO: Make this nicer formatting.
+                //                    processField(ptr.child, key, field_option, options, depth, &al);
+                //                } else if (ptr.size == .c or ptr.size == .many) {
+                //                    @compileError("structEntry does not support *C or Many pointers");
+                //                } else {
+                //                    processField(ContainerT, ContainerPtrT, container, key, field_option, options, depth, &al);
+                //                }
             },
             inline .@"union" => |_| {
                 processUnion(ContainerT, ContainerPtrT, container, @tagName(key), field_option, options, depth, &al);
-                //                const UnionT = FieldT; // TODO:
-                //                const current_choice = std.meta.activeTag(@field(container, @tagName(key)));
-                //                const new_choice = dvui.se.unionFieldWidget2(@src(), @tagName(key), &@field(container, @tagName(key)), field_option, &al);
-                //                if (current_choice != new_choice) {
-                //                    switch (new_choice) {
-                //                        inline else => |choice| {
-                //                            @field(container, @tagName(key)) = @unionInit(
-                //                                UnionT,
-                //                                @tagName(choice),
-                //                                defaultValue(
-                //                                    @FieldType(UnionT, @tagName(choice)),
-                //                                    field_option,
-                //                                    options,
-                //                                ) orelse undefined,
-                //                            );
-                //                        },
-                //                    }
-                //                }
-                //                // TODO: Probably needs ot handle pointers as well? i.e. the union contains pointer fields?
-                //                switch (@field(container, @tagName(key))) {
-                //                    inline else => |*active, tag| {
-                //                        // The below handles the case where the union members are not containers.
-                //                        // In that case, the options for the field need to be found and passed to processWidget.
-                //                        if (findMatchingStructOption(FieldT, options)) |union_options| {
-                //                            switch (tag) {
-                //                                inline else => |active_tag| {
-                //                                    switch (@typeInfo(@TypeOf(active.*))) {
-                //                                        inline .int, .float, .@"enum" => |_| {
-                //                                            if (union_options.options.get(active_tag)) |active_field_option| {
-                //                                                processWidget(@src(), @tagName(active_tag), active, &al, active_field_option);
-                //                                            } else {
-                //                                                dvui.log.debug("No field options found for field {s} in union {s}. Field will not be displayed.", .{ @typeName(FieldT), @tagName(active_tag) });
-                //                                            }
-                //                                        },
-                //                                        inline .@"struct", .@"union" => wholeStruct(@src(), @tagName(new_choice), active, depth, options),
-                //                                        inline .optional => |_| processOptional(UnionT, *UnionT, &@field(container, @tagName(key)), @tagName(active_tag), field_option, options, depth, &al),
-                //                                        else => |typ| @compileError(std.fmt.comptimePrint("Not implemented for type {s}", .{@tagName(typ)})),
-                //                                    }
-                //                                },
-                //                            }
-                //                        }
-                //                    },
-                //                }
             },
             else => {},
         }
@@ -609,9 +616,11 @@ pub fn processWidget(
         inline .pointer => |ptr| {
             if (ptr.size == .slice and ptr.child == u8) {
                 dvui.se.textFieldWidget2(src, field_name, field, options.text, alignment); // TODO: This should be options.text or similar?
+            } else {
+                @compileError(std.fmt.comptimePrint("Type {s} for field {s} not yet supported\n", .{ @typeName(@TypeOf(field.*)), field_name }));
             }
         },
-        inline .@"union" => {}, // BIG TODO!
+        //inline .@"union" => {}, // BIG TODO!
         else => @compileError(std.fmt.comptimePrint("Type {s} for field {s} not yet supported\n", .{ @typeName(@TypeOf(field.*)), field_name })),
     }
 }
