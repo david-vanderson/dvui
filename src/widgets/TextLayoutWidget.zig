@@ -336,7 +336,6 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                         dvui.scrollDrag(.{
                             .mouse_pt = e.evt.mouse.p,
                             .screen_rect = self.data().rectScale().r,
-                            .capture_id = self.data().id,
                         });
                     }
                 }
@@ -406,7 +405,6 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                         dvui.scrollDrag(.{
                             .mouse_pt = e.evt.mouse.p,
                             .screen_rect = self.data().rectScale().r,
-                            .capture_id = self.data().id,
                         });
                     }
                 }
@@ -1646,7 +1644,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                         dvui.scrollDrag(.{
                             .mouse_pt = me.p,
                             .screen_rect = self.data().rectScale().r,
-                            .capture_id = self.data().id,
                         });
                     } else {
                         // user intended to scroll with a finger swipe

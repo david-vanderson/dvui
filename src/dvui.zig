@@ -3624,10 +3624,6 @@ pub const ScrollDragOptions = struct {
     // rect in screen coords of the widget doing the drag (scrolling will stop
     // if it wouldn't show more of this rect)
     screen_rect: dvui.Rect.Physical,
-
-    // id of the widget that has mouse capture during the drag (needed to
-    // inject synthetic motion events into the next frame to keep scrolling)
-    capture_id: dvui.Id,
 };
 
 /// Bubbled from inside a scrollarea to ensure scrolling while dragging
