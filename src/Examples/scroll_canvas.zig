@@ -74,7 +74,7 @@ pub fn scrollCanvas() void {
         var fwd: dvui.WidgetData = undefined;
 
         const mouse_point = dvui.currentWindow().mouse_pt.toNatural().diff(.{ .x = 10, .y = 10 });
-        var fw = dvui.FloatingWidget.init(@src(), .{ .mouse_events = false }, .{ .rect = Rect.fromPoint(.cast(mouse_point)), .min_size_content = .all(20), .background = true, .color_fill = dvui.Color.teal.opacity(0.5), .data_out = &fwd });
+        var fw = dvui.FloatingWidget.init(@src(), .{ .mouse_events = false }, .{ .rect = Rect.fromPoint(.cast(mouse_point)), .min_size_content = .all(20), .background = true, .color_fill = dvui.themeGet().focus.opacity(0.5), .data_out = &fwd });
         fw.install();
         fw.deinit();
 
@@ -105,8 +105,8 @@ pub fn scrollCanvas() void {
             .style = .window,
             .border = .{ .h = 1, .w = 1, .x = 1, .y = 1 },
             .corner_radius = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
-            .color_border = if (dragging_box) .teal else null,
-            .box_shadow = .{ .color = if (dragging_box) .teal else .black },
+            .color_border = if (dragging_box) dvui.themeGet().focus else null,
+            .box_shadow = .{},
         });
 
         const boxRect = dragBox.data().rectScale().r;
@@ -261,7 +261,7 @@ pub fn scrollCanvas() void {
                         dvui.cursorSet(.crosshair);
                         // the drag is hovered above us, draw to indicate that
                         const rs = dragBox.data().contentRectScale();
-                        rs.r.fill(dragBox.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = dvui.Color.teal.opacity(0.2) });
+                        rs.r.fill(dragBox.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = dvui.themeGet().focus.opacity(0.2) });
                     }
                 },
                 else => {},
