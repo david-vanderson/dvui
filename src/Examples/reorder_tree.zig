@@ -44,10 +44,48 @@ pub fn reorderLists() void {
     }
 
     if (dvui.expander(@src(), "Tree", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
-        var vbox = dvui.box(@src(), .{}, .{ .margin = .{ .x = 10 }, .expand = .both });
-        defer vbox.deinit();
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = .{ .x = 10 }, .expand = .both });
+        defer hbox.deinit();
 
-        reorderTree();
+        // This is used as a key to lookup information that would normally be stored by the application.
+        const uniqId = dvui.parentGet().extendId(@src(), 0);
+
+        reorderTree(uniqId);
+
+        {
+            var vbox = dvui.box(@src(), .{}, .{ .gravity_x = 1.0 });
+            defer vbox.deinit();
+
+            var label_opts: dvui.Options = .{ .padding = .all(20), .margin = .all(20), .border = .all(1) };
+
+            if (dvui.draggingName("tree_drag")) {
+                label_opts.background = true;
+                label_opts.color_fill = dvui.themeGet().color(.content, .fill_hover);
+
+                for (dvui.events()) |*e| {
+                    if (!dvui.eventMatch(e, .{ .id = vbox.data().id, .r = vbox.data().borderRectScale().r, .dragging_name = "tree_drag" })) continue;
+
+                    if (e.evt == .mouse and e.evt.mouse.action == .position) {
+                        label_opts.color_fill = dvui.themeGet().color(.content, .fill_press);
+                    }
+
+                    if (e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
+                        e.handle(@src(), vbox.data());
+                        dvui.dragEnd();
+                        dvui.refresh(null, @src(), vbox.data().id);
+                        if (dvui.dataGetSlice(null, uniqId, "removed_path", []u8)) |removed_path| {
+                            dvui.dataSetSlice(null, vbox.data().id, "last_dropped", removed_path);
+                        }
+                    }
+                }
+            }
+
+            dvui.label(@src(), "Drag Tree\nEntry Here", .{}, label_opts);
+
+            if (dvui.dataGetSlice(null, vbox.data().id, "last_dropped", []u8)) |ld| {
+                dvui.label(@src(), "Last Dropped\n{s}", .{ld}, .{});
+            }
+        }
     }
 }
 
@@ -262,11 +300,13 @@ pub fn reorderListsAdvanced() void {
     g.reorder(removed_idx, insert_before_idx);
 }
 
-pub fn reorderTree() void {
+pub fn reorderTree(uniqueId: dvui.Id) void {
     exampleFileTree(
         @src(),
+        uniqueId,
         .{
             .enable_reordering = true,
+            .dragging_name = "tree_drag",
         },
         .{
             .background = true,
@@ -585,9 +625,7 @@ fn exampleFileTreeSetup(const_file_tree: []const ConstTreeEntry, mutable_file_tr
     }
 }
 
-pub fn exampleFileTree(src: std.builtin.SourceLocation, tree_init_options: dvui.TreeWidget.InitOptions, tree_options: dvui.Options, branch_options: dvui.Options, expander_options: dvui.Options) !void {
-    const uniqueId = dvui.parentGet().extendId(@src(), 0);
-
+pub fn exampleFileTree(src: std.builtin.SourceLocation, uniqueId: dvui.Id, tree_init_options: dvui.TreeWidget.InitOptions, tree_options: dvui.Options, branch_options: dvui.Options, expander_options: dvui.Options) !void {
     var tree = dvui.TreeWidget.tree(src, tree_init_options, tree_options);
     defer tree.deinit();
 
