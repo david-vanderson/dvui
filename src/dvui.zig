@@ -3311,6 +3311,17 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
         return false;
     }
 
+    if (opts.dragging_name != null) {
+        const cw = currentWindow();
+        if (cw.drag_state != .dragging or (cw.drag_state == .dragging and cw.drag_name == null)) {
+            // asked for cross-widget drag but none is happening
+            if (builtin.mode == .Debug and opts.debug) {
+                log.debug("eventMatch {} dragging name ({?s}) given but no named drag happening", .{ e, opts.dragging_name });
+            }
+            return false;
+        }
+    }
+
     switch (e.evt) {
         .key, .text => {
             if (e.target_windowId) |wid| {
