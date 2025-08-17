@@ -101,7 +101,6 @@ pub fn processEvent(self: *ReorderWidget, e: *dvui.Event) void {
                     dvui.scrollDrag(.{
                         .mouse_pt = me.p,
                         .screen_rect = self.data().rectScale().r,
-                        .capture_id = self.data().id,
                     });
                 }
             },

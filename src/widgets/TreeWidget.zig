@@ -102,7 +102,6 @@ pub fn processEvent(self: *TreeWidget, e: *dvui.Event) void {
                     dvui.scrollDrag(.{
                         .mouse_pt = me.p,
                         .screen_rect = self.wd.rectScale().r,
-                        .capture_id = self.wd.id,
                     });
                 }
             },

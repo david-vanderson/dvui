@@ -134,7 +134,6 @@ pub fn dropped(self: *DropdownWidget) bool {
                         dvui.scrollDrag(.{
                             .mouse_pt = e.evt.mouse.p,
                             .screen_rect = drop.menu.data().rectScale().r,
-                            .capture_id = drop.wd.id,
                         });
                     } else if (e.evt.mouse.action == .position) {
                         dvui.currentWindow().inject_motion_event = true;

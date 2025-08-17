@@ -224,7 +224,6 @@ pub fn scrollCanvas() void {
                                 dvui.scrollDrag(.{
                                     .mouse_pt = e.evt.mouse.p,
                                     .screen_rect = dragBox.data().rectScale().r,
-                                    .capture_id = dragBox.data().id,
                                 });
                             }
                         }
