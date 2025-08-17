@@ -1620,13 +1620,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     if (self.debug.logEvents(null)) {
         for (evts) |*e| {
             if (e.handled) continue;
-            var action: []const u8 = "";
-            switch (e.evt) {
-                .mouse => action = @tagName(e.evt.mouse.action),
-                .key => action = @tagName(e.evt.key.action),
-                else => {},
-            }
-            log.debug("Unhandled {s} {s} event (num {d})", .{ @tagName(e.evt), action, e.num });
+            log.debug("Unhandled {}", .{e});
         }
     }
 
