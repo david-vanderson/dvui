@@ -66,7 +66,7 @@ drag_state: enum {
 } = .none,
 drag_pt: Point.Physical = .{},
 drag_offset: Point.Physical = .{},
-drag_name: []const u8 = "",
+drag_name: ?[]const u8 = null,
 
 frame_time_ns: i128 = 0,
 loop_wait_target: ?i128 = null,
@@ -1590,10 +1590,11 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     for (evts) |*e| {
         if (self.drag_state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release) {
             if (self.debug.logEvents(null)) {
-                log.debug("clearing drag ({s}) for unhandled mouse release", .{self.drag_name});
+                log.debug("Clearing drag ({?s}) for unhandled mouse release", .{self.drag_name});
             }
             self.drag_state = .none;
-            self.drag_name = "";
+            self.drag_name = null;
+            dvui.refresh(null, @src(), null);
         }
 
         if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.rect_pixels, .cleanup = true }))

@@ -2397,7 +2397,7 @@ pub const DragStartOptions = struct {
     offset: Point.Physical = .{},
 
     /// Used for cross-widget dragging.  See `draggingName`.
-    name: []const u8 = "",
+    name: ?[]const u8 = null,
 };
 
 /// Prepare for a possible mouse drag.  This will detect a drag, and also a
@@ -2468,7 +2468,7 @@ pub fn dragging(p: Point.Physical, name: ?[]const u8) ?Point.Physical {
     const cw = currentWindow();
 
     if (name) |n| {
-        if (!std.mem.eql(u8, n, cw.drag_name)) return null;
+        if (!std.mem.eql(u8, n, cw.drag_name orelse "")) return null;
     }
 
     switch (cw.drag_state) {
@@ -2494,12 +2494,12 @@ pub fn dragging(p: Point.Physical, name: ?[]const u8) ?Point.Physical {
 
 /// True if `dragging` and `dragStart` (or `dragPreStart`) was given name.
 ///
-/// Useful for cross-widget drags.
+/// Use to know when a cross-widget drag is in progress.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn draggingName(name: []const u8) bool {
     const cw = currentWindow();
-    return cw.drag_state == .dragging and cw.drag_name.len > 0 and std.mem.eql(u8, name, cw.drag_name);
+    return cw.drag_state == .dragging and cw.drag_name != null and std.mem.eql(u8, name, cw.drag_name.?);
 }
 
 /// Stop any mouse drag.
@@ -2508,7 +2508,7 @@ pub fn draggingName(name: []const u8) bool {
 pub fn dragEnd() void {
     const cw = currentWindow();
     cw.drag_state = .none;
-    cw.drag_name = "";
+    cw.drag_name = null;
 }
 
 /// The difference between the final mouse position this frame and last frame.
@@ -3277,6 +3277,9 @@ pub const EventMatchOptions = struct {
     /// Physical pixel rect used to match pointer events.
     r: Rect.Physical,
 
+    /// During a drag, only match pointer events if this is the draggingName.
+    dragging_name: ?[]const u8 = null,
+
     /// true means match all focus-based events routed to the subwindow with
     /// id.  This is how subwindows catch things like tab if no widget in that
     /// subwindow has focus.
@@ -3342,6 +3345,15 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                     // someone else has capture
                     other_capture = true;
                 }
+            }
+
+            const cw = currentWindow();
+            if (cw.drag_state == .dragging and cw.drag_name != null and (opts.dragging_name == null or !std.mem.eql(u8, cw.drag_name.?, opts.dragging_name.?))) {
+                // a cross-widget drag is happening that we don't know about
+                if (builtin.mode == .Debug and opts.debug) {
+                    log.debug("eventMatch {} dragging name ({?s}) didn't match given ({?s})", .{ e, cw.drag_name, opts.dragging_name });
+                }
+                return false;
             }
 
             if (me.floating_win != subwindowCurrentId()) {
