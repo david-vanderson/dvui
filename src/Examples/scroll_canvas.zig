@@ -63,8 +63,38 @@ pub fn scrollCanvas() void {
     // keep record of bounding box
     var mbbox: ?Rect.Physical = null;
 
-    const dragging_box = dvui.draggingName("box_transfer");
     const evts = dvui.events();
+
+    const dragging_box = dvui.draggingName("box_transfer");
+    if (dragging_box) {
+        // draw a half-opaque box to show we are dragging
+        // put it in a floating widget so it draws above stuff we do later
+        // turn off mouse events so mouse release goes to what is under it
+
+        var fwd: dvui.WidgetData = undefined;
+
+        const mouse_point = dvui.currentWindow().mouse_pt.toNatural().diff(.{ .x = 10, .y = 10 });
+        var fw = dvui.FloatingWidget.init(@src(), .{ .mouse_events = false }, .{ .rect = Rect.fromPoint(.cast(mouse_point)), .min_size_content = .all(20), .background = true, .color_fill = dvui.Color.teal.opacity(0.5), .data_out = &fwd });
+        fw.install();
+        fw.deinit();
+
+        // We want to get mouse motion events during the drag as if we had
+        // capture.  So don't call eventMatch, we are only going to passively
+        // observe mouse motion.
+        for (evts) |*e| {
+            switch (e.evt) {
+                .mouse => |me| {
+                    if (me.action == .motion) {
+                        dvui.scrollDrag(.{
+                            .mouse_pt = me.p,
+                            .screen_rect = fwd.borderRectScale().r,
+                        });
+                    }
+                },
+                else => {},
+            }
+        }
+    }
 
     for (boxes, 0..) |*b, i| {
         var dragBox = dvui.box(@src(), .{}, .{
@@ -75,8 +105,8 @@ pub fn scrollCanvas() void {
             .style = .window,
             .border = .{ .h = 1, .w = 1, .x = 1, .y = 1 },
             .corner_radius = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
-            .color_border = if (dragging_box and i != drag_box_window.*) .lime else null,
-            .box_shadow = .{ .color = if (dragging_box and i != drag_box_window.*) .lime else .black },
+            .color_border = if (dragging_box) .teal else null,
+            .box_shadow = .{ .color = if (dragging_box) .teal else .black },
         });
 
         const boxRect = dragBox.data().rectScale().r;
@@ -84,34 +114,6 @@ pub fn scrollCanvas() void {
             mbbox = bb.unionWith(boxRect);
         } else {
             mbbox = boxRect;
-        }
-
-        // if user is dragging a box, we want first crack at events
-        if (dragging_box) {
-            for (evts) |*e| {
-                if (!dvui.eventMatchSimple(e, dragBox.data())) {
-                    continue;
-                }
-
-                switch (e.evt) {
-                    .mouse => |me| {
-                        if (me.action == .release and me.button.pointer()) {
-                            e.handle(@src(), dragBox.data());
-                            dvui.dragEnd();
-                            dvui.refresh(null, @src(), dragBox.data().id);
-
-                            if (drag_box_window.* != i) {
-                                // move box to new home
-                                box_contents[drag_box_window.*] -= 1;
-                                box_contents[1 - drag_box_window.*] += 1;
-                            }
-                        } else if (me.action == .position) {
-                            dvui.cursorSet(.crosshair);
-                        }
-                    },
-                    else => {},
-                }
-            }
         }
 
         dvui.label(@src(), "Box {d} {d:0>3.0}x{d:0>3.0}", .{ i, b.x, b.y }, .{});
@@ -170,12 +172,19 @@ pub fn scrollCanvas() void {
                     switch (e.evt) {
                         .mouse => |me| {
                             if (me.action == .press and me.button.pointer()) {
-                                e.handle(@src(), dragBox.data());
+                                e.handle(@src(), dbox.data());
                                 dvui.captureMouse(dbox.data(), e.num);
                                 dvui.dragPreStart(me.p, .{ .name = "box_transfer" });
+                            } else if (me.action == .release and me.button.pointer()) {
+                                if (dvui.captured(dbox.data().id)) {
+                                    // mouse up before drag started
+                                    e.handle(@src(), dbox.data());
+                                    dvui.captureMouse(null, e.num);
+                                    dvui.dragEnd();
+                                }
                             } else if (me.action == .motion) {
                                 if (dvui.captured(dbox.data().id)) {
-                                    e.handle(@src(), dragBox.data());
+                                    e.handle(@src(), dbox.data());
                                     if (dvui.dragging(me.p, null)) |_| {
                                         // started the drag
                                         drag_box_window.* = i;
@@ -185,9 +194,7 @@ pub fn scrollCanvas() void {
                                     }
                                 }
                             } else if (me.action == .position) {
-                                if (!dragging_box) {
-                                    dvui.cursorSet(.hand);
-                                }
+                                dvui.cursorSet(.hand);
                             }
                         },
                         else => {},
@@ -198,8 +205,7 @@ pub fn scrollCanvas() void {
 
         // process events to drag the box around
         for (evts) |*e| {
-            if (!dragBox.matchEvent(e))
-                continue;
+            if (!dragBox.matchEvent(e)) continue;
 
             switch (e.evt) {
                 .mouse => |me| {
@@ -233,6 +239,37 @@ pub fn scrollCanvas() void {
             }
         }
 
+        // Check if a drag is over or dropped on this box
+        if (dragging_box) {
+            for (evts) |*e| {
+                if (!dvui.eventMatch(e, .{ .id = dragBox.data().id, .r = dragBox.data().borderRectScale().r, .dragging_name = "box_transfer" })) {
+                    continue;
+                }
+
+                switch (e.evt) {
+                    .mouse => |me| {
+                        if (me.action == .release and me.button.pointer()) {
+                            e.handle(@src(), dragBox.data());
+                            dvui.dragEnd();
+                            dvui.refresh(null, @src(), dragBox.data().id);
+
+                            if (drag_box_window.* != i) {
+                                // move box to new home
+                                box_contents[drag_box_window.*] -= 1;
+                                box_contents[1 - drag_box_window.*] += 1;
+                            }
+                        } else if (me.action == .position) {
+                            dvui.cursorSet(.crosshair);
+                            // the drag is hovered above us, draw to indicate that
+                            const rs = dragBox.data().contentRectScale();
+                            rs.r.fill(dragBox.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = dvui.Color.teal.opacity(0.2) });
+                        }
+                    },
+                    else => {},
+                }
+            }
+        }
+
         dragBox.deinit();
     }
 
@@ -258,7 +295,7 @@ pub fn scrollCanvas() void {
                         dvui.dragEnd();
                     }
                 } else if (me.action == .motion) {
-                    if (me.button.touch() and dragging_box) {
+                    if (me.button.touch()) {
                         // eat touch motion events so they don't scroll
                         e.handle(@src(), scrollContainer.data());
                     }
@@ -353,26 +390,6 @@ pub fn scrollCanvas() void {
         if (bbox.w != scroll_info.virtual_size.w) {
             scroll_info.virtual_size.w = bbox.w;
             dvui.refresh(null, @src(), scrollContainerId);
-        }
-    }
-
-    // Now we are after all widgets that deal with drag name "box_transfer".
-    // Any mouse release during a drag here means the user released the mouse
-    // outside any target widget.
-    if (dragging_box) {
-        var done = false;
-        for (evts) |*e| {
-            if (!e.handled and e.evt == .mouse and e.evt.mouse.action == .release) {
-                done = true;
-                dvui.dragEnd();
-                dvui.refresh(null, @src(), null);
-            }
-        }
-
-        if (!done) {
-            // still dragging, draw a half-opaque box to show we are dragging
-            const dr = Rect.Physical.fromPoint(dvui.currentWindow().mouse_pt.diff(.{ .x = 10, .y = 10 })).toSize(.all(20));
-            dr.fill(.{}, .{ .color = dvui.Color.lime.opacity(0.5), .fade = 1.0 });
         }
     }
 
