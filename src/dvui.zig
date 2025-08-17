@@ -2303,7 +2303,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
 /// tagged with.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn subwindowAdd(id: Id, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?Id) void {
+pub fn subwindowAdd(id: Id, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?Id, mouse_events: bool) void {
     const cw = currentWindow();
     for (cw.subwindows.items) |*sw| {
         if (id == sw.id) {
@@ -2313,6 +2313,7 @@ pub fn subwindowAdd(id: Id, rect: Rect, rect_pixels: Rect.Physical, modal: bool,
             sw.rect_pixels = rect_pixels;
             sw.modal = modal;
             sw.stay_above_parent_window = stay_above_parent_window;
+            sw.mouse_events = mouse_events;
 
             if (sw.render_cmds.items.len > 0 or sw.render_cmds_after.items.len > 0) {
                 log.warn("subwindowAdd {x} is clearing some drawing commands (did you try to draw between subwindowCurrentSet and subwindowAdd?)\n", .{id});
@@ -2331,6 +2332,7 @@ pub fn subwindowAdd(id: Id, rect: Rect, rect_pixels: Rect.Physical, modal: bool,
         .rect_pixels = rect_pixels,
         .modal = modal,
         .stay_above_parent_window = stay_above_parent_window,
+        .mouse_events = mouse_events,
     };
     if (stay_above_parent_window) |subwin_id| {
         // it wants to be above subwin_id

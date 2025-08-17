@@ -157,6 +157,7 @@ pub const Subwindow = struct {
     used: bool = true,
     modal: bool = false,
     stay_above_parent_window: ?Id = null,
+    mouse_events: bool = true,
 };
 
 const SavedData = struct {
@@ -1075,7 +1076,7 @@ pub fn begin(
 
     //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.data().rect.w, self.data().rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
-    dvui.subwindowAdd(self.data().id, self.data().rect, self.rect_pixels, false, null);
+    dvui.subwindowAdd(self.data().id, self.data().rect, self.rect_pixels, false, null, true);
 
     _ = dvui.subwindowCurrentSet(self.data().id, .cast(self.data().rect));
 
@@ -1167,7 +1168,7 @@ pub fn windowFor(self: *const Self, p: Point.Physical) Id {
     var i = self.subwindows.items.len;
     while (i > 0) : (i -= 1) {
         const sw = &self.subwindows.items[i - 1];
-        if (sw.modal or sw.rect_pixels.contains(p)) {
+        if (sw.mouse_events and (sw.modal or sw.rect_pixels.contains(p))) {
             return sw.id;
         }
     }

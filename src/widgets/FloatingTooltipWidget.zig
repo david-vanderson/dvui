@@ -184,7 +184,7 @@ pub fn install(self: *FloatingTooltipWidget) void {
 
     const rs = self.data().rectScale();
 
-    dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, self.prev_windowId);
+    dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, self.prev_windowId, true);
     dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
 
     // first clip to the whole window to break out of whatever clipping we
