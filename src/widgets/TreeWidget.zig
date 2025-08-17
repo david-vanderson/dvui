@@ -211,6 +211,7 @@ pub const Branch = struct {
 
                 self.floating_widget = dvui.FloatingWidget.init(
                     @src(),
+                    .{ .mouse_events = false },
                     .{ .rect = Rect.fromPoint(.cast(topleft.toNatural())), .min_size_content = self.tree.branch_size },
                 );
                 self.floating_widget.?.install();
