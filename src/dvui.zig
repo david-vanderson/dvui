@@ -3281,6 +3281,10 @@ pub const EventMatchOptions = struct {
     /// id.  This is how subwindows catch things like tab if no widget in that
     /// subwindow has focus.
     cleanup: bool = false,
+
+    /// (Only in Debug) If true, `eventMatch` will log a reason when returning
+    /// false.  Useful to understand why you aren't matching some event.
+    debug: if (builtin.mode == .Debug) bool else void = if (builtin.mode == .Debug) false else undefined,
 };
 
 /// Should e be processed by a widget with the given id and screen rect?
@@ -3295,7 +3299,12 @@ pub const EventMatchOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
-    if (e.handled) return false;
+    if (e.handled) {
+        if (builtin.mode == .Debug and opts.debug) {
+            log.debug("eventMatch {} already handled", .{e});
+        }
+        return false;
+    }
 
     switch (e.evt) {
         .key, .text => {
@@ -3306,11 +3315,17 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                     // processed (maybe the focus widget never showed up)
                     if (wid != opts.id) {
                         // not the focused window
+                        if (builtin.mode == .Debug and opts.debug) {
+                            log.debug("eventMatch {} (cleanup) focus not to this window", .{e});
+                        }
                         return false;
                     }
                 } else {
                     if (e.target_widgetId != opts.id and (opts.focus_id == null or opts.focus_id.? != e.target_widgetId)) {
                         // not the focused widget
+                        if (builtin.mode == .Debug and opts.debug) {
+                            log.debug("eventMatch {} focus not to this widget", .{e});
+                        }
                         return false;
                     }
                 }
@@ -3331,11 +3346,17 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
 
             if (me.floating_win != subwindowCurrentId()) {
                 // floating window is above us
+                if (builtin.mode == .Debug and opts.debug) {
+                    log.debug("eventMatch {} floating window above", .{e});
+                }
                 return false;
             }
 
             if (!opts.r.contains(me.p)) {
                 // mouse not in our rect
+                if (builtin.mode == .Debug and opts.debug) {
+                    log.debug("eventMatch {} not in rect", .{e});
+                }
                 return false;
             }
 
@@ -3344,6 +3365,9 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
 
                 // prevents widgets that are scrolled off a
                 // scroll area from processing events
+                if (builtin.mode == .Debug and opts.debug) {
+                    log.debug("eventMatch {} not in clip", .{e});
+                }
                 return false;
             }
 
@@ -3359,6 +3383,9 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                     }
                 }
 
+                if (builtin.mode == .Debug and opts.debug) {
+                    log.debug("eventMatch {} captured by other widget", .{e});
+                }
                 return false;
             }
         },
