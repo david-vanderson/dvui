@@ -3482,10 +3482,9 @@ pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
                         }
                     }
                 } else if (me.action == .position) {
-                    // TODO: Should this mark this event as handled? If the click_rect
-                    //       is above another widget with hover effects or click behaviour,
-                    //       we don't want that widget to highlight as if the next click
-                    //       would apply to it.
+                    // Usually you don't want to mark .position events as
+                    // handled, so that multiple widgets can all do hover
+                    // highlighting.
 
                     // a single .position mouse event is at the end of each
                     // frame, so this means the mouse ended above us
