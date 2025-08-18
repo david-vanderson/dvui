@@ -2398,7 +2398,7 @@ pub const DragStartOptions = struct {
     /// locate where to move the point of interest.
     offset: Point.Physical = .{},
 
-    /// Used for cross-widget dragging.  See `draggingName`.
+    /// Used for cross-widget dragging.  See `dragName`.
     name: ?[]const u8 = null,
 };
 
@@ -2499,7 +2499,7 @@ pub fn dragging(p: Point.Physical, name: ?[]const u8) ?Point.Physical {
 /// Use to know when a cross-widget drag is in progress.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn draggingName(name: []const u8) bool {
+pub fn dragName(name: []const u8) bool {
     const cw = currentWindow();
     return cw.drag_state == .dragging and cw.drag_name != null and std.mem.eql(u8, name, cw.drag_name.?);
 }
@@ -3279,8 +3279,8 @@ pub const EventMatchOptions = struct {
     /// Physical pixel rect used to match pointer events.
     r: Rect.Physical,
 
-    /// During a drag, only match pointer events if this is the draggingName.
-    dragging_name: ?[]const u8 = null,
+    /// During a drag, only match pointer events if this is the dragName.
+    drag_name: ?[]const u8 = null,
 
     /// true means match all focus-based events routed to the subwindow with
     /// id.  This is how subwindows catch things like tab if no widget in that
@@ -3311,12 +3311,12 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
         return false;
     }
 
-    if (opts.dragging_name != null) {
+    if (opts.drag_name != null) {
         const cw = currentWindow();
         if (cw.drag_state != .dragging or (cw.drag_state == .dragging and cw.drag_name == null)) {
             // asked for cross-widget drag but none is happening
             if (builtin.mode == .Debug and opts.debug) {
-                log.debug("eventMatch {} dragging name ({?s}) given but no named drag happening", .{ e, opts.dragging_name });
+                log.debug("eventMatch {} drag_name ({?s}) given but no named drag happening", .{ e, opts.drag_name });
             }
             return false;
         }
@@ -3361,10 +3361,10 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             }
 
             const cw = currentWindow();
-            if (cw.drag_state == .dragging and cw.drag_name != null and (opts.dragging_name == null or !std.mem.eql(u8, cw.drag_name.?, opts.dragging_name.?))) {
+            if (cw.drag_state == .dragging and cw.drag_name != null and (opts.drag_name == null or !std.mem.eql(u8, cw.drag_name.?, opts.drag_name.?))) {
                 // a cross-widget drag is happening that we don't know about
                 if (builtin.mode == .Debug and opts.debug) {
-                    log.debug("eventMatch {} dragging name ({?s}) didn't match given ({?s})", .{ e, cw.drag_name, opts.dragging_name });
+                    log.debug("eventMatch {} drag_name ({?s}) given but current drag is ({?s})", .{ e, opts.drag_name, cw.drag_name });
                 }
                 return false;
             }

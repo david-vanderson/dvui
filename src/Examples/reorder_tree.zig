@@ -58,12 +58,12 @@ pub fn reorderLists() void {
 
             var label_opts: dvui.Options = .{ .padding = .all(20), .margin = .all(20), .border = .all(1) };
 
-            if (dvui.draggingName("tree_drag")) {
+            if (dvui.dragName("tree_drag")) {
                 label_opts.background = true;
                 label_opts.color_fill = dvui.themeGet().color(.content, .fill_hover);
 
                 for (dvui.events()) |*e| {
-                    if (!dvui.eventMatch(e, .{ .id = vbox.data().id, .r = vbox.data().borderRectScale().r, .dragging_name = "tree_drag" })) continue;
+                    if (!dvui.eventMatch(e, .{ .id = vbox.data().id, .r = vbox.data().borderRectScale().r, .drag_name = "tree_drag" })) continue;
 
                     if (e.evt == .mouse and e.evt.mouse.action == .position) {
                         label_opts.color_fill = dvui.themeGet().color(.content, .fill_press);
@@ -306,7 +306,7 @@ pub fn reorderTree(uniqueId: dvui.Id) void {
         uniqueId,
         .{
             .enable_reordering = true,
-            .dragging_name = "tree_drag",
+            .drag_name = "tree_drag",
         },
         .{
             .background = true,

@@ -65,7 +65,7 @@ pub fn scrollCanvas() void {
 
     const evts = dvui.events();
 
-    const dragging_box = dvui.draggingName("box_transfer");
+    const dragging_box = dvui.dragName("box_transfer");
     if (dragging_box) {
         // draw a half-opaque box to show we are dragging
         // put it in a floating widget so it draws above stuff we do later
@@ -241,7 +241,7 @@ pub fn scrollCanvas() void {
 
         // Check if a drag is over or dropped on this box
         for (evts) |*e| {
-            if (!dvui.eventMatch(e, .{ .id = dragBox.data().id, .r = dragBox.data().borderRectScale().r, .dragging_name = "box_transfer" })) {
+            if (!dvui.eventMatch(e, .{ .id = dragBox.data().id, .r = dragBox.data().borderRectScale().r, .drag_name = "box_transfer" })) {
                 continue;
             }
 
