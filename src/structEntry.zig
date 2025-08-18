@@ -613,7 +613,7 @@ pub fn sliceFieldWidget(
     var removed_idx: ?usize = null;
     var insert_before_idx: ?usize = null;
 
-    var reorder = dvui.reorder(@src(), .{
+    var reorder = dvui.reorder(@src(), .{}, .{
         .min_size_content = .{ .w = 120 },
         .background = true,
         .border = dvui.Rect.all(1),
@@ -668,8 +668,11 @@ pub fn sliceFieldWidget(
         insert_before_idx = result.*.len; // entry was dropped into the final slot
     }
 
-    // returns true if the slice was reordered
-    _ = dvui.ReorderWidget.reorderSlice(Child, result.*, removed_idx, insert_before_idx);
+    if (insert_before_idx) |ibi| {
+        if (removed_idx) |ri| {
+            dvui.ReorderWidget.reorderSlice(Child, result.*, ri, ibi);
+        }
+    }
 
     //if (alloc) {
     switch (treatment) {

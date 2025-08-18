@@ -4914,9 +4914,9 @@ pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions
     return ret;
 }
 
-pub fn reorder(src: std.builtin.SourceLocation, opts: Options) *ReorderWidget {
+pub fn reorder(src: std.builtin.SourceLocation, init_opts: ReorderWidget.InitOptions, opts: Options) *ReorderWidget {
     var ret = widgetAlloc(ReorderWidget);
-    ret.* = ReorderWidget.init(src, opts);
+    ret.* = ReorderWidget.init(src, init_opts, opts);
     ret.install();
     ret.processEvents();
     return ret;

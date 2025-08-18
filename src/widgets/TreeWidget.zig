@@ -166,8 +166,7 @@ pub fn dragStart(self: *TreeWidget, branch_id: usize, p: dvui.Point.Physical) vo
     self.drag_point = p;
     dvui.captureMouse(self.data(), 0);
     if (self.init_options.drag_name) |dn| {
-        // have to call dragStart because dragPreStart was called inside Button
-        // which didn't have the dragging name
+        // have to call dragStart to set the drag name
         dvui.dragStart(p, .{ .name = dn });
         dvui.captureMouse(null, 0);
     }
