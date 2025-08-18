@@ -21,8 +21,8 @@ init_options: InitOptions = undefined,
 pub const InitOptions = struct {
     enable_reordering: bool = true,
 
-    /// If not null, drags give up mouse capture and set this dragging name
-    dragging_name: ?[]const u8 = null,
+    /// If not null, drags give up mouse capture and set this drag name
+    drag_name: ?[]const u8 = null,
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TreeWidget {
@@ -33,8 +33,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     self.id_branch = dvui.dataGet(null, self.wd.id, "_id_branch", usize) orelse null;
     self.drag_point = dvui.dataGet(null, self.wd.id, "_drag_point", dvui.Point.Physical) orelse null;
     self.branch_size = dvui.dataGet(null, self.wd.id, "_branch_size", dvui.Size) orelse dvui.Size{};
-    if (init_opts.dragging_name) |dn| {
-        if (self.drag_point != null and !dvui.draggingName(dn)) {
+    if (init_opts.drag_name) |dn| {
+        if (self.drag_point != null and !dvui.dragName(dn)) {
             self.drag_ending = true;
         }
     }
@@ -82,7 +82,7 @@ pub fn minSizeForChild(self: *TreeWidget, s: Size) void {
 }
 
 pub fn matchEvent(self: *TreeWidget, event: *dvui.Event) bool {
-    if (dvui.captured(self.wd.id) or (self.init_options.dragging_name != null and dvui.draggingName(self.init_options.dragging_name.?))) {
+    if (dvui.captured(self.wd.id) or (self.init_options.drag_name != null and dvui.dragName(self.init_options.drag_name.?))) {
         // passively listen to mouse motion
         for (dvui.events()) |*e| {
             if (e.evt == .mouse and e.evt.mouse.action == .motion) {
@@ -96,9 +96,9 @@ pub fn matchEvent(self: *TreeWidget, event: *dvui.Event) bool {
         }
     }
 
-    if (self.init_options.dragging_name) |dn| {
-        if (dvui.draggingName(dn)) {
-            return dvui.eventMatch(event, .{ .id = self.wd.id, .r = self.data().borderRectScale().r, .dragging_name = dn });
+    if (self.init_options.drag_name) |dn| {
+        if (dvui.dragName(dn)) {
+            return dvui.eventMatch(event, .{ .id = self.wd.id, .r = self.data().borderRectScale().r, .drag_name = dn });
         }
     }
 
@@ -116,7 +116,7 @@ pub fn processEvents(self: *TreeWidget) void {
 }
 
 pub fn processEvent(self: *TreeWidget, e: *dvui.Event) void {
-    if (dvui.captured(self.wd.id) or (self.init_options.dragging_name != null and dvui.draggingName(self.init_options.dragging_name.?))) {
+    if (dvui.captured(self.wd.id) or (self.init_options.drag_name != null and dvui.dragName(self.init_options.drag_name.?))) {
         switch (e.evt) {
             .mouse => |me| {
                 if ((me.action == .press or me.action == .release) and me.button.pointer()) {
@@ -124,7 +124,6 @@ pub fn processEvent(self: *TreeWidget, e: *dvui.Event) void {
                     self.drag_ending = true;
                     dvui.captureMouse(null, e.num);
                     dvui.dragEnd();
-                    dvui.refresh(null, @src(), self.wd.id);
                 }
             },
             else => {},
@@ -166,7 +165,7 @@ pub fn dragStart(self: *TreeWidget, branch_id: usize, p: dvui.Point.Physical) vo
     self.id_branch = branch_id;
     self.drag_point = p;
     dvui.captureMouse(self.data(), 0);
-    if (self.init_options.dragging_name) |dn| {
+    if (self.init_options.drag_name) |dn| {
         // have to call dragStart because dragPreStart was called inside Button
         // which didn't have the dragging name
         dvui.dragStart(p, .{ .name = dn });
