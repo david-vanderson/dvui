@@ -256,7 +256,7 @@ fn gui_frame() void {
         //wholeStruct(@src(), &opts, 1);
         //_ = dvui.separator(@src(), .{ .expand = .horizontal });
     }
-    if (false) {
+    if (true) {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
@@ -267,13 +267,14 @@ fn gui_frame() void {
         max_size_opts.options.put(.w, .{ .number = .{ .min = -2, .max = dvui.max_float_safe } });
         max_size_opts.options.put(.h, .{ .number = .{ .min = -2, .max = dvui.max_float_safe } });
 
-        //const font_opts: dvui.se.StructOptions(dvui.Font) = .initDefaults(.{ .size = 10, .name = "Nope" });
-        //  const font_opts: dvui.se.StructOptions(dvui.Font) = .initDefaults(null);
-        //var options_options: dvui.se.StructOptions(dvui.Options) = .initDefaults(.{});
-        //options_options.options.put(.name, .{ .text = .{ .buffer = &name_buf } });
+        const font_opts: dvui.se.StructOptions(dvui.Font) = .initDefaults(.{ .size = 10, .name = "Nope" });
+        // const font_opts: dvui.se.StructOptions(dvui.Font) = .initDefaults(null);
+        var options_options: dvui.se.StructOptions(dvui.Options) = .initDefaults(.{});
+        options_options.options.put(.name, .{ .text = .{ .buffer = &name_buf } });
 
-        //const color_options: dvui.se.StructOptions(dvui.Color) = .initDefaults(.{});
-        //const con_options = dvui.se.StructOptions(dvui.Options.ColorOrName).initDefaults(.{ .color = .{} });
+        const color_options: dvui.se.StructOptions(dvui.Color) = .initDefaults(.{});
+        const con_options = dvui.se.StructOptions(dvui.Options.ColorOrName).initDefaults(.{ .color = .{} });
+        dvui.se.displayStruct("dvui.Options", &dvui_opts, 1, .{ .standard = .{} }, .{ options_options, max_size_opts, font_opts, color_options, con_options }, &al);
         // wholeStruct(@src(), "dvui.Options", &dvui_opts, 1, .{ options_options, max_size_opts, font_opts, color_options, con_options });
         //wholeStruct(@src(), "opts", &opts, 1);
         //        wholeStruct(@src(), "test_struct", &testStruct, 1);

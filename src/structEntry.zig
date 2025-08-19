@@ -91,6 +91,9 @@ pub fn StructOptions(T: type) type {
     };
 }
 
+/// Controls how number field are displayed.
+/// Note that min and max are stored as f64, which can represent
+/// all integer values up to an i53/u53.
 pub const NumberFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
     label: ?[]const u8 = null,
@@ -490,9 +493,9 @@ pub const OptionalFieldOptions = struct {
 
 pub fn optionalFieldWidget(
     comptime src: std.builtin.SourceLocation,
-    comptime field_name: []const u8,
+    field_name: []const u8,
     field_ptr: anytype,
-    comptime opts: OptionalFieldOptions,
+    opts: FieldOptions,
     alignment: *dvui.Alignment,
 ) bool { // TODO: Return bool?
     _ = alignment;
@@ -500,9 +503,12 @@ pub fn optionalFieldWidget(
     defer box.deinit();
     var checkbox_state: bool = field_ptr.* != null;
     {
+        const display_name = switch (opts) {
+            inline else => |opt| opt.label orelse field_name,
+        };
         var hbox = dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
-        dvui.label(@src(), "{s}?", .{opts.label_override orelse field_name}, .{});
+        dvui.label(@src(), "{s}?", .{display_name}, .{});
         _ = dvui.checkbox(@src(), &checkbox_state, null, .{});
     }
 
@@ -1149,8 +1155,21 @@ pub fn displayOptional(field_name: []const u8, field_value_ptr: anytype, comptim
     const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
     const is_null = if (field_value_ptr.* == null) "null" else "not null";
     std.debug.print("{s} is {s} ({s})\n", .{ field_name, is_null, writeable });
-    if (field_value_ptr.*) |*val| {
-        displayField(field_name, val, depth, field_option, options, al);
+    const optional = @typeInfo(@TypeOf(field_value_ptr.*)).optional;
+
+    if (dvui.se.optionalFieldWidget(@src(), field_name, field_value_ptr, field_option, al)) {
+        if (field_value_ptr.* == null) {
+            field_value_ptr.* = defaultValue(optional.child, field_option, options); // If there is no default value, it will remain null.
+        }
+        if (field_value_ptr.*) |*val| {
+            displayField(field_name, val, depth, field_option, options, al);
+        }
+    } else {
+        field_value_ptr.* = null;
+    }
+
+    if (field_value_ptr.* == null) {
+        dvui.label(@src(), "{s} is null", .{field_name}, .{}); // .{ .id_extra = i }); // TODO: Make this nicer formatting.
     }
 }
 
