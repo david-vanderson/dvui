@@ -173,6 +173,7 @@ pub fn deinit(self: *ReorderWidget) void {
 pub fn dragStart(self: *ReorderWidget, reorder_id: usize, p: dvui.Point.Physical, event_num: u16) void {
     self.id_reorderable = reorder_id;
     self.drag_point = p;
+    self.found_slot = true;
     dvui.captureMouse(self.data(), event_num);
     if (self.init_opts.drag_name) |dn| {
         // set drag_name to start cross-widget drag
