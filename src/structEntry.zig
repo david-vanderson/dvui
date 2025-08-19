@@ -300,6 +300,8 @@ pub const TextFieldOptions = struct {
     buffer: ?[]u8 = null,
 };
 
+/// Supports display and editing of []u8 slices and arrays.
+/// Hmm. this needs to just handle slices I think. The array thingo can pass a slice to the array if needed.
 pub fn textFieldWidget(
     src: std.builtin.SourceLocation,
     field_name: []const u8,
@@ -341,8 +343,10 @@ pub fn textFieldWidget(
 
             const text_box = dvui.textEntry(@src(), .{ .text = .{ .buffer = buffer } }, .{});
             defer text_box.deinit();
-            if (text_box.text_changed and opt.buffer != null) {
-                field_ptr.* = buffer;
+            if (!@typeInfo(@TypeOf(field_ptr)).pointer.is_const) {
+                if (text_box.text_changed and opt.buffer != null) {
+                    field_ptr.* = buffer;
+                }
             }
         },
         .read_only => {
@@ -957,6 +961,10 @@ pub fn displayEnum(field_name: []const u8, field_value_ptr: anytype, field_optio
 pub fn displayString(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
     std.debug.print("{s} = {s} ({s})\n", .{ field_name, field_value_ptr.*, writeable });
+    if (field_option != .text) {
+        dvui.log.debug("StructUI: Field {s} has FieldOption type {s} but needs {s}. Field will not be displayed\n", .{ field_name, @tagName(field_option), @tagName(FieldOptions.text) });
+        return;
+    }
     textFieldWidget(@src(), field_name, field_value_ptr, field_option.text, al);
 }
 
@@ -972,8 +980,8 @@ pub fn displayArray(field_name: []const u8, field_value_ptr: anytype, comptime d
     // TODO: Create the indenting box here.
     std.debug.print("{s} = ({s})\n", .{ field_name, writeable });
 
-    for (field_value_ptr.*, 0..) |*val, i| {
-        displayField(field_name, field_value_ptr, depth, field_option.standard, options, al);
+    for (field_value_ptr, 0..) |*val, i| {
+        displayField(field_name, field_value_ptr, depth, field_option, options, al);
         std.debug.print("{s}{d} = {any}\n", .{ indent, i, val });
     }
 }
@@ -987,8 +995,9 @@ pub fn findMatchingStructOption(T: type, struct_options: anytype) ?dvui.se.Struc
     return null;
 }
 
-pub fn displayStruct(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: StandardFieldOptions, options: anytype, al: *dvui.Alignment) void {
-    if (field_option.display == .none) return;
+pub fn displayStruct(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: FieldOptions, options: anytype, al: *dvui.Alignment) void {
+    // TODO: assert the field option must be standard? But then why not just require a standard field option??
+    if (field_option.standard.display == .none) return;
 
     const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
     const indent = " " ** (4 * depth);
@@ -1030,21 +1039,29 @@ pub fn displayField(
         .int, .float => displayNumber(field_name, field_value_ptr, field_option, al),
         .bool => displayBool(field_name, field_value_ptr, field_option, al),
         .@"enum" => displayEnum(field_name, field_value_ptr, field_option, al),
-        .array => displayArray(field_name, field_value_ptr, field_option, options, al),
+        .array => |arr| {
+            // Array of u8 is only displayed as text if it has a text field option.
+            if (arr.child == u8 and field_option == .text) {
+                const slice: []u8 = &field_value_ptr.*;
+                displayString(field_name, &slice, field_option, al);
+            } else {
+                displayArray(field_name, field_value_ptr, depth, field_option, options, al);
+            }
+        },
         .pointer => |ptr| {
             if (ptr.size == .slice and ptr.child == u8) {
-                displayString(field_name, field_value_ptr, field_option.text, options, al);
+                displayString(field_name, field_value_ptr, field_option, al);
             } else {
-                displayPointer(field_name, field_value_ptr, depth, field_option.standard, options, al);
+                displayPointer(field_name, field_value_ptr, depth, field_option, options, al);
             }
         },
         .optional => {
-            displayOptional(field_name, field_value_ptr, depth, field_option.standard, options, al);
+            displayOptional(field_name, field_value_ptr, depth, field_option, options, al);
         },
-        .@"union" => displayUnion(field_name, field_value_ptr, depth, field_option.standard, options, al),
+        .@"union" => displayUnion(field_name, field_value_ptr, depth, field_option, options, al),
         .@"struct" => {
             if (depth > 0)
-                displayStruct(field_name, field_value_ptr, depth - 1, field_option.standard, options, al);
+                displayStruct(field_name, field_value_ptr, depth - 1, field_option, options, al);
         },
         .type,
         .void,
@@ -1065,7 +1082,7 @@ pub fn displayField(
     }
 }
 
-pub fn displayUnion(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: StandardFieldOptions, options: anytype, al: *dvui.Alignment) void {
+pub fn displayUnion(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: FieldOptions, options: anytype, al: *dvui.Alignment) void {
     const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
     switch (field_value_ptr.*) {
         inline else => |*active, active_tag| {
@@ -1075,7 +1092,7 @@ pub fn displayUnion(field_name: []const u8, field_value_ptr: anytype, comptime d
     }
 }
 
-pub fn displayOptional(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: StandardFieldOptions, options: anytype, al: *dvui.Alignment) void {
+pub fn displayOptional(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: FieldOptions, options: anytype, al: *dvui.Alignment) void {
     const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
     const is_null = if (field_value_ptr.* == null) "null" else "not null";
     std.debug.print("{s} is {s} ({s})\n", .{ field_name, is_null, writeable });
@@ -1084,13 +1101,13 @@ pub fn displayOptional(field_name: []const u8, field_value_ptr: anytype, comptim
     }
 }
 
-pub fn displayPointer(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: StandardFieldOptions, options: anytype, al: *dvui.Alignment) void {
+pub fn displayPointer(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: FieldOptions, options: anytype, al: *dvui.Alignment) void {
     const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
     std.debug.print("{s} ptr ({s})\n", .{ field_name, writeable });
     const ptr = @typeInfo(@TypeOf(field_value_ptr.*)).pointer;
     if (ptr.size == .one) {
         switch (@typeInfo(ptr.child)) {
-            .@"fn" => {},
+            .@"fn" => {}, // TODO: There are more things here as well? Or does display field take care of this now?
             else => displayField(field_name, field_value_ptr.*, depth, field_option, options, al),
         }
     } else if (ptr.size == .slice) {
