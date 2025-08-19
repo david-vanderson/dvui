@@ -128,15 +128,15 @@ pub const NumberFieldOptions = struct {
         };
     }
 
-    fn toNormalizedPercent(self: *const NumberFieldOptions, input_num: anytype, min: @TypeOf(input_num), max: @TypeOf(input_num)) f32 {
-        const input: f64 = cast(f64, input_num);
-        const range = cast(f64, max - min);
+    //fn toNormalizedPercent(self: *const NumberFieldOptions, input_num: anytype, min: @TypeOf(input_num), max: @TypeOf(input_num)) f32 {
+    //    const input: f64 = cast(f64, input_num);
+    //    const range: f64 = cast(f64, max - min);
+    //
+    //    const progress = input - self.minValue(@TypeOf(input_num));
+    //    return @as(f32, @floatCast(progress / range));
+    //}
 
-        const progress = input - self.minValue();
-        return @as(f32, @floatCast(progress / range));
-    }
-
-    fn normalizedPercentToNum(normalized_percent: f32, comptime T: type, min: T, max: T) T {
+    pub fn normalizedPercentToNum(_: *const NumberFieldOptions, normalized_percent: f32, comptime T: type, min: T, max: T) T {
         if (@typeInfo(T) != .int and @typeInfo(T) != .float) @compileError("T is not a number type");
         std.debug.assert(normalized_percent >= 0);
         std.debug.assert(normalized_percent <= 1);
@@ -150,24 +150,23 @@ pub const NumberFieldOptions = struct {
         return result;
     }
 
-    // TODO: Move this to the NumberOptions?
-    //    fn toNormalizedPercent(input_num: anytype, min: @TypeOf(input_num), max: @TypeOf(input_num)) f32 {
-    //        const input, const range, const min_f = switch (@typeInfo(@TypeOf(input_num))) {
-    //            .int => .{
-    //                @as(f32, @floatFromInt(if (input_num < min) min else input_num)),
-    //                @as(f32, @floatFromInt(max - min)),
-    //                @as(f32, @floatFromInt(min)),
-    //            },
-    //            .float => .{
-    //                input_num,
-    //                max - min,
-    //                min,
-    //            },
-    //            else => unreachable,
-    //        };
-    //        const progress = input - min_f;
-    //        return @as(f32, @floatCast(progress / range));
-    //    }
+    pub fn toNormalizedPercent(_: *const NumberFieldOptions, input_num: anytype, min: @TypeOf(input_num), max: @TypeOf(input_num)) f32 {
+        const input, const range, const min_f = switch (@typeInfo(@TypeOf(input_num))) {
+            .int => .{
+                @as(f32, @floatFromInt(if (input_num < min) min else input_num)),
+                @as(f32, @floatFromInt(max - min)),
+                @as(f32, @floatFromInt(min)),
+            },
+            .float => .{
+                input_num,
+                max - min,
+                min,
+            },
+            else => unreachable,
+        };
+        const progress = input - min_f;
+        return @as(f32, @floatCast(progress / range));
+    }
 };
 
 pub fn numberFieldWidget(

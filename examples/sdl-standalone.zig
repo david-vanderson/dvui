@@ -216,7 +216,7 @@ fn gui_frame() void {
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
 
-        //dvui.se.displayStruct("basic_types_var", &basic_types_var, 0, .{}, .{}, &al);
+        dvui.se.displayStruct("basic_types_var", &basic_types_var, 0, .{}, .{}, &al);
 
         //const uo: dvui.se.StructOptions(U1) = .initDefaults(.{ .a = .{} });
 
