@@ -15,6 +15,13 @@ pub var defaults: Options = .{
     .name = "Floating",
 };
 
+pub const InitOptions = struct {
+    /// Whether mouse events can match this.  Set to false if this is a drag
+    /// image (so the mouse release will match the window under this).
+    mouse_events: bool = true,
+};
+
+init_opts: InitOptions,
 /// SAFETY: Set by `install`
 prev_rendering: bool = undefined,
 wd: WidgetData,
@@ -35,7 +42,7 @@ scaler: dvui.ScaleWidget = undefined,
 ///
 /// Use FloatingWindowWidget for a floating window that the user can change
 /// size, move around, and adjust stacking.
-pub fn init(src: std.builtin.SourceLocation, opts_in: Options) FloatingWidget {
+pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Options) FloatingWidget {
     const scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale();
     var opts = opts_in;
     if (opts.min_size_content) |msc| {
@@ -44,6 +51,7 @@ pub fn init(src: std.builtin.SourceLocation, opts_in: Options) FloatingWidget {
     return .{
         // get scale from parent
         .scale_val = scale_val,
+        .init_opts = init_opts,
         .wd = WidgetData.init(src, .{ .subwindow = true }, defaults.override(opts).override(.{
             // passing options.rect will stop WidgetData.init from calling
             // rectFor/minSizeForChild which is important because we are outside
@@ -63,7 +71,7 @@ pub fn install(self: *FloatingWidget) void {
 
     const rs = self.data().rectScale();
 
-    dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, self.prev_windowId);
+    dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, self.prev_windowId, self.init_opts.mouse_events);
     dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
 
     // first break out of whatever clipping we were in
