@@ -82,6 +82,7 @@ pub fn StructOptions(T: type) type {
                 else
                     defaultFieldOption(ptr.child),
                 .optional => |opt| defaultFieldOption(opt.child),
+                .array => |arr| defaultFieldOption(arr.child),
                 else => .{ .standard = .{} },
             };
         }
@@ -946,9 +947,23 @@ pub fn ArrayFieldOptions(comptime T: type, exclude: anytype) type {
 //============PUBLIC API FUNCTIONS===============
 //===============================================
 
+pub fn validFieldOptionsType(field_name: []const u8, field_option: FieldOptions, required_tag: @typeInfo(FieldOptions).@"union".tag_type.?) bool {
+    if (field_option != required_tag) {
+        dvui.log.debug("StructUI: Field {s} has FieldOption type {s} but needs {s}. Field will not be displayed\n", .{
+            field_name,
+            @tagName(field_option),
+            @tagName(required_tag),
+        });
+        return false;
+    }
+    return true;
+}
+
 pub fn displayNumber(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
     std.debug.print("{s} = {d} ({s})\n", .{ field_name, field_value_ptr.*, writeable });
+    if (!validFieldOptionsType(field_name, field_option, .number)) return;
+
     numberFieldWidget(@src(), field_name, field_value_ptr, field_option.number, al);
 }
 
@@ -961,10 +976,8 @@ pub fn displayEnum(field_name: []const u8, field_value_ptr: anytype, field_optio
 pub fn displayString(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
     std.debug.print("{s} = {s} ({s})\n", .{ field_name, field_value_ptr.*, writeable });
-    if (field_option != .text) {
-        dvui.log.debug("StructUI: Field {s} has FieldOption type {s} but needs {s}. Field will not be displayed\n", .{ field_name, @tagName(field_option), @tagName(FieldOptions.text) });
-        return;
-    }
+    if (!validFieldOptionsType(field_name, field_option, .text)) return;
+
     textFieldWidget(@src(), field_name, field_value_ptr, field_option.text, al);
 }
 
@@ -979,10 +992,25 @@ pub fn displayArray(field_name: []const u8, field_value_ptr: anytype, comptime d
     const indent = " " ** 4;
     // TODO: Create the indenting box here.
     std.debug.print("{s} = ({s})\n", .{ field_name, writeable });
+    if (dvui.expander(@src(), field_name, .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+        var vbox = dvui.box(@src(), .vertical, .{
+            .expand = .vertical,
+            .border = .{ .x = 1 },
+            .background = true,
+            .margin = .{ .w = 12, .x = 12 },
+        });
+        defer vbox.deinit();
 
-    for (field_value_ptr, 0..) |*val, i| {
-        displayField(field_name, field_value_ptr, depth, field_option, options, al);
-        std.debug.print("{s}{d} = {any}\n", .{ indent, i, val });
+        for (field_value_ptr, 0..) |*val, i| {
+            // TODO: Aligmmnent
+            var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .id_extra = i });
+            defer hbox.deinit();
+
+            var field_name_buf: [20]u8 = undefined; // 20 chars = u64
+            const field_name_str = std.fmt.bufPrint(&field_name_buf, "{d}", .{i}) catch "#";
+            displayField(field_name_str, val, depth, field_option, options, al);
+            std.debug.print("{s}{d} = {any}\n", .{ indent, i, val });
+        }
     }
 }
 

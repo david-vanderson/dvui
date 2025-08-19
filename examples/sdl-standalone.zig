@@ -118,8 +118,8 @@ const TestStruct = struct {
     union4: TestUnion = .{ .c2 = .{ .value2 = 44 } },
     slice5: []const u8 = "ABCDEF",
     slice7: []u8 = &test_buf,
-    //arr_ptr9: *[20]u8 = &test_buf,
-    //array8: [13]u8 = @splat('y'),
+    arr_ptr9: *[20]u8 = &test_buf,
+    array8: [13]u8 = @splat('y'),
     slice_opt10: ?[]u8 = &test_buf,
     struct_ptr_11: *C1 = &c1, // TODO: FIX
 };
