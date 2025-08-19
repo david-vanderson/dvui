@@ -55,7 +55,7 @@ fn dragging(self: *ReorderWidget) bool {
 }
 
 pub fn needFinalSlot(self: *ReorderWidget) bool {
-    if (self.dragging() and !self.data().borderRectScale().r.intersect(dvui.dragRect()).empty()) {
+    if (self.dragging() and self.data().borderRectScale().r.contains(dvui.currentWindow().mouse_pt)) {
         return !self.found_slot;
     }
 
@@ -129,7 +129,7 @@ pub fn processEvent(self: *ReorderWidget, e: *dvui.Event) void {
 
             // detect a drag end that is over us
             // if nobody catches it, dvui.Window will end the drag on an unhandled mouse up
-            if (self.dragging() and !self.data().borderRectScale().r.intersect(dvui.dragRect()).empty()) {
+            if (self.dragging() and self.data().borderRectScale().r.contains(dvui.currentWindow().mouse_pt)) {
                 if (me.action == .release and me.button.pointer()) {
                     e.handle(@src(), self.data());
                     self.drag_ending = true;
@@ -298,7 +298,7 @@ pub const Reorderable = struct {
                 }
                 const rs = self.data().rectScale();
 
-                if (!self.reorder.found_slot and !rs.r.intersect(dvui.dragRect()).empty()) {
+                if (!self.reorder.found_slot and rs.r.contains(dvui.currentWindow().mouse_pt)) {
                     // user is dragging something over this rect
                     self.target_rs = rs;
                     self.reorder.found_slot = true;
