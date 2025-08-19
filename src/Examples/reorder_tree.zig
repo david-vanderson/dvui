@@ -178,10 +178,8 @@ pub fn reorderListsSimple(lay: reorderLayout, cross_drag: bool) void {
 
         if (reorderable.removed()) {
             removed_idx = i; // this entry is being dragged
-            dvui.log.debug("simple removed {d}", .{i});
         } else if (reorderable.insertBefore()) {
             insert_before_idx = i; // this entry was dropped onto
-            dvui.log.debug("simple insertBefore {d}", .{i});
         }
 
         // actual content of the list entry
