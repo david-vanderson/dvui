@@ -67,6 +67,7 @@ drag_state: enum {
 drag_pt: Point.Physical = .{},
 drag_offset: Point.Physical = .{},
 drag_name: ?[]const u8 = null,
+drag_size: Size.Physical = .{},
 
 frame_time_ns: i128 = 0,
 loop_wait_target: ?i128 = null,

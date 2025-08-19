@@ -246,7 +246,7 @@ pub fn reorderListsAdvanced(cross_drag: bool) void {
 
         dvui.label(@src(), "Drag to add : {d}", .{g.strings_len}, .{});
 
-        if (dvui.ReorderWidget.draggable(@src(), .{ .top_left = hbox2.data().rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+        if (dvui.ReorderWidget.draggable(@src(), .{ .rect = hbox2.data().rectScale().r }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
             // add to list, but will be removed if not dropped onto a list slot
             g.strings[g.strings_len] = g.strings_template[g.strings_len];
             added_idx = g.strings_len;
@@ -317,7 +317,7 @@ pub fn reorderListsAdvanced(cross_drag: bool) void {
 
         dvui.label(@src(), "{s}", .{s}, .{});
 
-        if (dvui.ReorderWidget.draggable(@src(), .{ .top_left = reorderable.data().rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+        if (dvui.ReorderWidget.draggable(@src(), .{ .rect = reorderable.data().rectScale().r }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
             // marking all events for capture, this will only be a problem if some
             // mouse events (in the same frame) came before this drag, and would
             // have interacted with a widget that hasn't run yet

@@ -33,11 +33,12 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         .drag_point = dvui.dataGet(null, wd.id, "_drag_point", dvui.Point.Physical),
         .reorderable_size = dvui.dataGet(null, wd.id, "_reorderable_size", dvui.Size) orelse .{},
     };
-    if (init_opts.drag_name) |dn| {
-        if (self.drag_point != null and !dvui.dragName(dn)) {
-            self.drag_ending = true;
-        }
+
+    if (self.drag_point != null and dvui.currentWindow().drag_state != .dragging) {
+        self.drag_ending = true;
+        dvui.captureMouse(null, 0);
     }
+
     return self;
 }
 
@@ -48,9 +49,14 @@ pub fn install(self: *ReorderWidget) void {
     dvui.parentSet(self.widget());
 }
 
+// this means we should watch for a drop, not that we started it
+fn dragging(self: *ReorderWidget) bool {
+    return self.drag_ending or dvui.captured(self.wd.id) or dvui.dragName(self.init_opts.drag_name);
+}
+
 pub fn needFinalSlot(self: *ReorderWidget) bool {
-    if (self.drag_ending or dvui.captured(self.wd.id) or (self.init_opts.drag_name != null and dvui.dragName(self.init_opts.drag_name.?))) {
-        return !self.found_slot and self.data().borderRectScale().r.contains(dvui.currentWindow().mouse_pt);
+    if (self.dragging() and !self.data().borderRectScale().r.intersect(dvui.dragRect()).empty()) {
+        return !self.found_slot;
     }
 
     return false;
@@ -91,29 +97,11 @@ pub fn minSizeForChild(self: *ReorderWidget, s: Size) void {
 }
 
 pub fn matchEvent(self: *ReorderWidget, event: *dvui.Event) bool {
-    if (dvui.captured(self.wd.id) or (self.init_opts.drag_name != null and dvui.dragName(self.init_opts.drag_name.?))) {
-        // passively listen to mouse motion
-        for (dvui.events()) |*e| {
-            if (e.evt == .mouse and e.evt.mouse.action == .motion) {
-                if (self.drag_point != null) {
-                    self.drag_point = e.evt.mouse.p;
-
-                    dvui.scrollDrag(.{
-                        .mouse_pt = e.evt.mouse.p,
-                        .screen_rect = self.wd.rectScale().r,
-                    });
-                }
-            }
-        }
+    if (dvui.captured(self.wd.id) or dvui.dragName(self.init_opts.drag_name)) {
+        return true;
     }
 
-    if (self.init_opts.drag_name) |dn| {
-        if (dvui.dragName(dn)) {
-            return dvui.eventMatch(event, .{ .id = self.wd.id, .r = self.data().borderRectScale().r, .drag_name = dn });
-        }
-    }
-
-    return dvui.eventMatchSimple(event, self.data());
+    return dvui.eventMatch(event, .{ .id = self.wd.id, .r = self.data().borderRectScale().r, .drag_name = self.init_opts.drag_name });
 }
 
 pub fn processEvents(self: *ReorderWidget) void {
@@ -129,12 +117,25 @@ pub fn processEvents(self: *ReorderWidget) void {
 pub fn processEvent(self: *ReorderWidget, e: *dvui.Event) void {
     switch (e.evt) {
         .mouse => |me| {
-            if (me.action == .release and me.button.pointer()) {
-                e.handle(@src(), self.data());
-                dvui.log.debug("drag ending", .{});
-                self.drag_ending = true;
-                dvui.captureMouse(null, e.num);
-                dvui.dragEnd();
+            // if we are the drag source, passively listen to all mouse events
+            if (self.drag_point != null and me.action == .motion) {
+                self.drag_point = e.evt.mouse.p;
+
+                dvui.scrollDrag(.{
+                    .mouse_pt = e.evt.mouse.p,
+                    .screen_rect = self.wd.rectScale().r,
+                });
+            }
+
+            // detect a drag end that is over us
+            // if nobody catches it, dvui.Window will end the drag on an unhandled mouse up
+            if (self.dragging() and !self.data().borderRectScale().r.intersect(dvui.dragRect()).empty()) {
+                if (me.action == .release and me.button.pointer()) {
+                    e.handle(@src(), self.data());
+                    self.drag_ending = true;
+                    dvui.captureMouse(null, e.num);
+                    dvui.dragEnd();
+                }
             }
         },
         else => {},
@@ -174,15 +175,15 @@ pub fn dragStart(self: *ReorderWidget, reorder_id: usize, p: dvui.Point.Physical
     self.drag_point = p;
     dvui.captureMouse(self.data(), event_num);
     if (self.init_opts.drag_name) |dn| {
-        // have to call dragStart to set the drag name
-        dvui.dragStart(p, .{ .name = dn });
+        // set drag_name to start cross-widget drag
+        dvui.currentWindow().drag_name = dn;
         dvui.captureMouse(null, 0);
     }
 }
 
 pub const draggableInitOptions = struct {
     tvg_bytes: ?[]const u8 = null,
-    top_left: ?dvui.Point.Physical = null,
+    rect: ?dvui.Rect.Physical = null,
     reorderable: ?*Reorderable = null,
 };
 
@@ -199,9 +200,9 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
                 if (me.action == .press and me.button.pointer()) {
                     e.handle(@src(), iw.data());
                     dvui.captureMouse(iw.data(), e.num);
-                    const reo_top_left: ?dvui.Point.Physical = if (init_opts.reorderable) |reo| reo.data().rectScale().r.topLeft() else null;
-                    const top_left: ?dvui.Point.Physical = init_opts.top_left orelse reo_top_left;
-                    dvui.dragPreStart(me.p, .{ .offset = (top_left orelse iw.data().rectScale().r.topLeft()).diff(me.p) });
+                    const reo_rect: ?dvui.Rect.Physical = if (init_opts.reorderable) |reo| reo.data().rectScale().r else null;
+                    const rect: dvui.Rect.Physical = init_opts.rect orelse reo_rect orelse iw.data().rectScale().r;
+                    dvui.dragPreStart(me.p, .{ .offset = rect.topLeft().diff(me.p), .size = rect.size() });
                 } else if (me.action == .motion) {
                     if (dvui.captured(iw.data().id)) {
                         e.handle(@src(), iw.data());
@@ -295,10 +296,9 @@ pub const Reorderable = struct {
                     self.wd = WidgetData.init(self.data().src, .{}, self.options);
                 }
                 const rs = self.data().rectScale();
-                const dragRect = Rect.Physical.fromPoint(topleft).toSize(self.reorder.reorderable_size.scale(rs.s, Size.Physical));
 
-                if (!self.reorder.found_slot and !rs.r.intersect(dragRect).empty()) {
-                    // user is dragging a reorderable over this rect
+                if (!self.reorder.found_slot and !rs.r.intersect(dvui.dragRect()).empty()) {
+                    // user is dragging something over this rect
                     self.target_rs = rs;
                     self.reorder.found_slot = true;
 
