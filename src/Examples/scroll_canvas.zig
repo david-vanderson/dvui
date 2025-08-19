@@ -240,31 +240,33 @@ pub fn scrollCanvas() void {
         }
 
         // Check if a drag is over or dropped on this box
-        for (evts) |*e| {
-            if (!dvui.eventMatch(e, .{ .id = dragBox.data().id, .r = dragBox.data().borderRectScale().r, .drag_name = "box_transfer" })) {
-                continue;
-            }
+        if (dragging_box) {
+            for (evts) |*e| {
+                if (!dvui.eventMatch(e, .{ .id = dragBox.data().id, .r = dragBox.data().borderRectScale().r, .drag_name = "box_transfer" })) {
+                    continue;
+                }
 
-            switch (e.evt) {
-                .mouse => |me| {
-                    if (me.action == .release and me.button.pointer()) {
-                        e.handle(@src(), dragBox.data());
-                        dvui.dragEnd();
-                        dvui.refresh(null, @src(), dragBox.data().id);
+                switch (e.evt) {
+                    .mouse => |me| {
+                        if (me.action == .release and me.button.pointer()) {
+                            e.handle(@src(), dragBox.data());
+                            dvui.dragEnd();
+                            dvui.refresh(null, @src(), dragBox.data().id);
 
-                        if (drag_box_window.* != i) {
-                            // move box to new home
-                            box_contents[drag_box_window.*] -= 1;
-                            box_contents[1 - drag_box_window.*] += 1;
+                            if (drag_box_window.* != i) {
+                                // move box to new home
+                                box_contents[drag_box_window.*] -= 1;
+                                box_contents[1 - drag_box_window.*] += 1;
+                            }
+                        } else if (me.action == .position) {
+                            dvui.cursorSet(.crosshair);
+                            // the drag is hovered above us, draw to indicate that
+                            const rs = dragBox.data().contentRectScale();
+                            rs.r.fill(dragBox.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = dvui.themeGet().focus.opacity(0.2) });
                         }
-                    } else if (me.action == .position) {
-                        dvui.cursorSet(.crosshair);
-                        // the drag is hovered above us, draw to indicate that
-                        const rs = dragBox.data().contentRectScale();
-                        rs.r.fill(dragBox.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = dvui.themeGet().focus.opacity(0.2) });
-                    }
-                },
-                else => {},
+                    },
+                    else => {},
+                }
             }
         }
 

@@ -2398,6 +2398,10 @@ pub const DragStartOptions = struct {
     /// locate where to move the point of interest.
     offset: Point.Physical = .{},
 
+    /// Size of the item being dragged.  offset plus this makes a screen rect
+    /// saying where the dragged item is relative to the mouse.
+    size: Size.Physical = .{},
+
     /// Used for cross-widget dragging.  See `dragName`.
     name: ?[]const u8 = null,
 };
@@ -2424,6 +2428,7 @@ pub fn dragPreStart(p: Point.Physical, options: DragStartOptions) void {
     cw.drag_state = .prestart;
     cw.drag_pt = p;
     cw.drag_offset = options.offset;
+    cw.drag_size = options.size;
     cw.cursor_dragging = options.cursor;
     cw.drag_name = options.name;
 }
@@ -2445,16 +2450,27 @@ pub fn dragStart(p: Point.Physical, options: DragStartOptions) void {
     cw.drag_state = .dragging;
     cw.drag_pt = p;
     cw.drag_offset = options.offset;
+    cw.drag_size = options.size;
     cw.cursor_dragging = options.cursor;
     cw.drag_name = options.name;
 }
 
-/// Get offset previously given to `dragPreStart` or `dragStart`.  See those.
+/// Get offset previously given to `dragPreStart` or `dragStart`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn dragOffset() Point.Physical {
     const cw = currentWindow();
     return cw.drag_offset;
+}
+
+/// Get rect from mouse position using offset and size previously given to
+/// `dragPreStart` or `dragStart`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn dragRect() Rect.Physical {
+    const cw = currentWindow();
+    const topleft = cw.mouse_pt.plus(cw.drag_offset);
+    return Rect.Physical.fromPoint(topleft).toSize(cw.drag_size);
 }
 
 /// If a mouse drag is happening, return the pixel difference to p from the
@@ -2494,14 +2510,18 @@ pub fn dragging(p: Point.Physical, name: ?[]const u8) ?Point.Physical {
     }
 }
 
-/// True if `dragging` and `dragStart` (or `dragPreStart`) was given name.
+/// True if `dragging` and `dragStart` (or `dragPreStart`) was the given name.
 ///
 /// Use to know when a cross-widget drag is in progress.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dragName(name: []const u8) bool {
-    const cw = currentWindow();
-    return cw.drag_state == .dragging and cw.drag_name != null and std.mem.eql(u8, name, cw.drag_name.?);
+pub fn dragName(name: ?[]const u8) bool {
+    if (name) |n| {
+        const cw = currentWindow();
+        return cw.drag_state == .dragging and cw.drag_name != null and std.mem.eql(u8, n, cw.drag_name.?);
+    } else {
+        return false;
+    }
 }
 
 /// Stop any mouse drag.
@@ -3309,17 +3329,6 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             log.debug("eventMatch {} already handled", .{e});
         }
         return false;
-    }
-
-    if (opts.drag_name != null) {
-        const cw = currentWindow();
-        if (cw.drag_state != .dragging or (cw.drag_state == .dragging and cw.drag_name == null)) {
-            // asked for cross-widget drag but none is happening
-            if (builtin.mode == .Debug and opts.debug) {
-                log.debug("eventMatch {} drag_name ({?s}) given but no named drag happening", .{ e, opts.drag_name });
-            }
-            return false;
-        }
     }
 
     switch (e.evt) {
