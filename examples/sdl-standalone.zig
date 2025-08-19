@@ -53,7 +53,7 @@ pub fn main() !void {
     defer win.deinit();
 
     var interrupted = false;
-
+    try doMain();
     main_loop: while (true) {
 
         // beginWait coordinates with waitTime below to run frames only when needed
@@ -207,26 +207,30 @@ fn gui_frame() void {
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
-        wholeStruct(@src(), "basic_types_const", &basic_types_const, 0, .{});
+        //wholeStruct(@src(), "basic_types_const", &basic_types_const, 0, .{});
+        dvui.se.displayStruct("basic_types_const", &basic_types_const, 0, .{}, .{}, &al);
     }
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
-        const uo: dvui.se.StructOptions(U1) = .initDefaults(.{ .a = .{} });
 
-        if (true) {
-            const so: dvui.se.StructOptions(Union1) = .initDefaults(.{});
-            //var itr = uo.options.iterator();
-            //
-            ////            std.debug.print("OPTIONS: {d}\n", .{uo.options.count()});
-            ////            while (itr.next()) |opt| {
-            //                std.debug.print("{s} = {}", .{ @tagName(opt.key), opt.value });
-            //            }
-            wholeStruct(@src(), "U1", &union1, 1, .{ uo, so });
-        }
+        //dvui.se.displayStruct("basic_types_var", &basic_types_var, 0, .{}, .{}, &al);
 
+        //const uo: dvui.se.StructOptions(U1) = .initDefaults(.{ .a = .{} });
+
+        //        if (false) {
+        //            const so: dvui.se.StructOptions(Union1) = .initDefaults(.{});
+        //            //var itr = uo.options.iterator();
+        //            //
+        //            ////            std.debug.print("OPTIONS: {d}\n", .{uo.options.count()});
+        //            ////            while (itr.next()) |opt| {
+        //            //                std.debug.print("{s} = {}", .{ @tagName(opt.key), opt.value });
+        //            //            }
+        //            wholeStruct(@src(), "U1", &union1, 1, .{ uo, so });
+        //        }
+        //
         //sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);
         //dvui.se.intFieldWidget2(@src(), "int1", &testStruct.int1, .{}, &al);
         //dvui.se.intFieldWidget2(@src(), "uint2", &testStruct.uint2, .{}, &al);
@@ -255,7 +259,7 @@ fn gui_frame() void {
         //wholeStruct(@src(), &opts, 1);
         //_ = dvui.separator(@src(), .{ .expand = .horizontal });
     }
-    if (true) {
+    if (false) {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
@@ -266,14 +270,14 @@ fn gui_frame() void {
         max_size_opts.options.put(.w, .{ .number = .{ .min = -2, .max = dvui.max_float_safe } });
         max_size_opts.options.put(.h, .{ .number = .{ .min = -2, .max = dvui.max_float_safe } });
 
-        const font_opts: dvui.se.StructOptions(dvui.Font) = .initDefaults(.{ .size = 10, .name = "Nope" });
+        //const font_opts: dvui.se.StructOptions(dvui.Font) = .initDefaults(.{ .size = 10, .name = "Nope" });
         //  const font_opts: dvui.se.StructOptions(dvui.Font) = .initDefaults(null);
-        var options_options: dvui.se.StructOptions(dvui.Options) = .initDefaults(.{});
-        options_options.options.put(.name, .{ .text = .{ .buffer = &name_buf } });
+        //var options_options: dvui.se.StructOptions(dvui.Options) = .initDefaults(.{});
+        //options_options.options.put(.name, .{ .text = .{ .buffer = &name_buf } });
 
-        const color_options: dvui.se.StructOptions(dvui.Color) = .initDefaults(.{});
-        const con_options = dvui.se.StructOptions(dvui.Options.ColorOrName).initDefaults(.{ .color = .{} });
-        wholeStruct(@src(), "dvui.Options", &dvui_opts, 1, .{ options_options, max_size_opts, font_opts, color_options, con_options });
+        //const color_options: dvui.se.StructOptions(dvui.Color) = .initDefaults(.{});
+        //const con_options = dvui.se.StructOptions(dvui.Options.ColorOrName).initDefaults(.{ .color = .{} });
+        // wholeStruct(@src(), "dvui.Options", &dvui_opts, 1, .{ options_options, max_size_opts, font_opts, color_options, con_options });
         //wholeStruct(@src(), "opts", &opts, 1);
         //        wholeStruct(@src(), "test_struct", &testStruct, 1);
     }
@@ -352,12 +356,12 @@ pub fn findMatchingStructOption(T: type, struct_options: anytype) ?dvui.se.Struc
 
 /// Return the type of a field in a container.
 /// This preserves const, unlike @FieldType.
-pub fn FieldPtrType(container: anytype, field_name: []const u8) type {
-    switch (@typeInfo(@TypeOf(@field(container, field_name)))) {
-        .optional => &@field(container, field_name).?,
-        else => &@field(container, field_name),
-    }
-}
+//pub fn FieldPtrType(container: anytype, field_name: []const u8) type {
+//    switch (@typeInfo(@TypeOf(@field(container, field_name)))) {
+//        .optional => &@field(container, field_name).?,
+//        else => &@field(container, field_name),
+//    }
+//}
 
 // TODO: This is really a pointert to a container type, not a container type. Required because the pointer might be const,
 // and the constness is not reflected by the underlying type.
@@ -373,6 +377,7 @@ pub fn processField(
     comptime depth: usize,
     al: *dvui.Alignment,
 ) void {
+    //std.debug.print("PF\n", .{});
     switch (@typeInfo(@TypeOf(field_value_ptr.*))) {
         inline .@"struct" => {
             if (depth > 0) {
@@ -395,7 +400,13 @@ pub fn processField(
             // }
         },
         .pointer => |_| {
-            processPointer(ContainerT, ContainerPtrT, container, @tagName(field), field_option, options, depth, al);
+            processPointer(ContainerT, ContainerPtrT, FieldPtrT, container, @tagName(field), field_value_ptr, field_option, options, depth, al);
+        },
+        .optional => {
+            //std.debug.print("PO for {s}\n", .{@tagName(field)});
+            processField(ContainerT, ContainerPtrT, @TypeOf(&field_value_ptr.*.?), container, field, &field_value_ptr.*.?, field_option, options, depth, al);
+            //processWidget(@src(), @tagName(field), &field_value_ptr.*.?, al, field_option);
+            //        processOptional(ContainerT, ContainerPtrT, container, @tagName(field), field_option, options, depth, al);
         },
         else => processWidget(@src(), @tagName(field), field_value_ptr, al, field_option),
     }
@@ -412,6 +423,9 @@ pub fn processOptional(
     al: *dvui.Alignment,
 ) void {
     // TODO: Can ismplify as it will always be an optional.
+    //std.debug.print("PO {s}n", .{@FieldType(ContainerPtrT, field_name)});
+    //const opt_info = @typeInfo(@FieldType(ContainerPtrT, field_name)).optional;
+
     const optional = @typeInfo(@TypeOf(@field(container, field_name))).optional;
     if (dvui.se.optionalFieldWidget2(@src(), field_name, &@field(container, field_name), .{}, al)) |hbox| {
         defer hbox.deinit();
@@ -421,6 +435,7 @@ pub fn processOptional(
         if (@field(container, field_name) != null) {
             // TODO: Yukk!!
             const field_key = comptime std.meta.stringToEnum(dvui.se.StructOptions(ContainerT).StructOptionsT.Key, field_name).?; // TODO: Hanlde nulls at least
+            //std.debug.print("PF for {s}\n", .{field_name});
             processField(ContainerT, ContainerPtrT, @TypeOf(&@field(container, @tagName(field_key)).?), container, field_key, &@field(container, @tagName(field_key)).?, field_option, options, depth, al);
         }
     } else {
@@ -502,18 +517,21 @@ pub fn processUnion(
 pub fn processPointer(
     ContainerT: type,
     ContainerPtrT: type,
+    FieldPtrT: type,
     container: ContainerPtrT,
     comptime field_name: []const u8,
+    field_ptr: FieldPtrT,
     field_option: dvui.se.StructOptions(ContainerT).StructOptionsT.Value,
     options: anytype,
     comptime depth: usize,
     al: *dvui.Alignment,
 ) void {
-    const field_ptr = switch (@typeInfo(@FieldType(ContainerT, field_name))) {
-        .optional => &@field(container, field_name).?,
-        else => @field(container, field_name),
-    };
-    const ptr = switch (@typeInfo(@FieldType(ContainerT, field_name))) {
+    //    const field_ptr = switch (@typeInfo(@FieldType(ContainerT, field_name))) {
+    //        .optional => &@field(container, field_name).?,
+    //        else => @field(container, field_name),
+    //    };
+    // TODO: Optional shouldn't be rquired here anymore.
+    const ptr = switch (@typeInfo(@TypeOf(field_ptr.*))) {
         .optional => |opt| @typeInfo(opt.child).pointer,
         .pointer => |ptr| ptr,
         else => @compileError("Must be a pointer"),
@@ -522,7 +540,8 @@ pub fn processPointer(
     const field_key = comptime std.meta.stringToEnum(dvui.se.StructOptions(ContainerT).StructOptionsT.Key, field_name).?; // TODO: Hanlde nulls at least
 
     if (ptr.size == .slice and ptr.child == u8) {
-        processWidget(@src(), field_name, &@field(container, field_name), al, field_option);
+        processField(ContainerT, ContainerPtrT, @TypeOf(&@field(container, @tagName(field_key))), container, field_key, &@field(container, @tagName(field_key)), field_option, options, depth, al);
+        //        processWidget(@src(), field_name, &@field(container, field_name), al, field_option);
     } else if (ptr.size == .slice) {
         sliceFieldWidget2(@src(), field_name, @field(container, field_name), al);
     } else if (ptr.size == .one) {
@@ -562,6 +581,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
     inline for (opts.options.values, 0..) |field_option, i| {
         const key = comptime @TypeOf(opts.options).Indexer.keyForIndex(i); // TODO There must be a way to iterate both? One is just the enum fields?
         const FieldT = @TypeOf(@field(container, @tagName(key))); // Note can't use @FieldType as it can't tell us if the field is const.
+        const FieldPtrT = @TypeOf(&@field(container, @tagName(key)));
         //        var field = @field(container, @tagName(key)); // TODO: User ptr instead?
         //@compileLog(key, field_option);
         var box = dvui.box(src, .vertical, .{ .id_extra = i });
@@ -578,7 +598,7 @@ pub fn wholeStruct(src: std.builtin.SourceLocation, name: []const u8, container:
                 processOptional(ContainerT, ContainerPtrT, container, @tagName(key), field_option, options, depth, &al);
             },
             inline .pointer => |_| {
-                processPointer(ContainerT, ContainerPtrT, container, @tagName(key), field_option, options, depth, &al);
+                processPointer(ContainerT, ContainerPtrT, FieldPtrT, container, @tagName(key), &@field(container, @tagName(key)), field_option, options, depth, &al);
                 //                if (ptr.size == .slice and ptr.child == u8) {
                 //                    processWidget(src, @tagName(key), &@field(container, @tagName(key)), &al, field_option);
                 //                } else if (ptr.size == .slice) {
@@ -609,13 +629,13 @@ pub fn processWidget(
 ) void {
     //    std.debug.print("processWidget: {s} = {}\n", .{ field_name, options });
     switch (@typeInfo(@TypeOf(field.*))) {
-        inline .int => dvui.se.numberFieldWidget2(src, field_name, field, options.number, alignment),
-        inline .float => dvui.se.numberFieldWidget2(src, field_name, field, options.number, alignment),
-        inline .@"enum" => dvui.se.enumFieldWidget2(src, field_name, field, options.standard, alignment),
-        inline .bool => dvui.se.boolFieldWidget2(src, field_name, field, options.standard, alignment),
+        inline .int => dvui.se.numberFieldWidget(src, field_name, field, options.number, alignment),
+        inline .float => dvui.se.numberFieldWidget(src, field_name, field, options.number, alignment),
+        inline .@"enum" => dvui.se.enumFieldWidget(src, field_name, field, options.standard, alignment),
+        inline .bool => dvui.se.boolFieldWidget(src, field_name, field, options.standard, alignment),
         inline .pointer => |ptr| {
             if (ptr.size == .slice and ptr.child == u8) {
-                dvui.se.textFieldWidget2(src, field_name, field, options.text, alignment); // TODO: This should be options.text or similar?
+                dvui.se.textFieldWidget(src, field_name, field, options.text, alignment); // TODO: This should be options.text or similar?
             } else {
                 @compileError(std.fmt.comptimePrint("Type {s} for field {s} not yet supported\n", .{ @typeName(@TypeOf(field.*)), field_name }));
             }
@@ -624,7 +644,6 @@ pub fn processWidget(
         else => @compileError(std.fmt.comptimePrint("Type {s} for field {s} not yet supported\n", .{ @typeName(@TypeOf(field.*)), field_name })),
     }
 }
-
 //const SliceFieldWidget = struct {
 //    action: enum { none, add, remove },
 //    insert_before_idx: ?usize,
@@ -688,4 +707,183 @@ pub fn sliceFieldWidget2(
     }
 
     vbox.deinit();
+}
+
+pub fn displayNumber(writer: anytype, field_name: []const u8, field_value_ptr: anytype) !void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    try writer.print("{s} = {d} ({s})\n", .{ field_name, field_value_ptr.*, writeable });
+}
+
+pub fn displayEnum(writer: anytype, field_name: []const u8, field_value_ptr: anytype) !void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    try writer.print("{s} = {s} ({s})\n", .{ field_name, @tagName(field_value_ptr.*), writeable });
+}
+
+pub fn displayString(writer: anytype, field_name: []const u8, field_value_ptr: anytype) !void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    try writer.print("{s} = {s} ({s})\n", .{ field_name, field_value_ptr.*, writeable });
+}
+
+pub fn displayBool(writer: anytype, field_name: []const u8, field_value_ptr: anytype) !void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    try writer.print("{s} = {} ({s})\n", .{ field_name, field_value_ptr.*, writeable });
+}
+
+pub fn displayArray(writer: anytype, field_name: []const u8, field_value_ptr: anytype) !void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    const indent = " " ** 4;
+    try writer.print("{s} = ({s})\n", .{ field_name, writeable });
+
+    for (field_value_ptr.*, 0..) |val, i| {
+        try writer.print("{s}{d} = {any}\n", .{ indent, i, val });
+    }
+}
+
+pub fn displayStruct(writer: anytype, field_name: []const u8, field_value_ptr: anytype, comptime depth: usize) !void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    const indent = " " ** (4 * depth);
+    try writer.print("{s}{s} = ({s})\n", .{ indent, field_name, writeable });
+    inline for (std.meta.fields(@TypeOf(field_value_ptr.*))) |struct_field| {
+        std.debug.assert(@TypeOf(struct_field) == std.builtin.Type.StructField);
+        try displayField(writer, struct_field.name, &@field(field_value_ptr, struct_field.name), depth);
+    }
+}
+
+pub fn displayField(writer: anytype, field_name: []const u8, field_value_ptr: anytype, comptime depth: usize) !void {
+    const indent = " " ** (4 * depth);
+    try writer.writeAll(indent);
+    switch (@typeInfo(@TypeOf(field_value_ptr.*))) {
+        .int, .float => try displayNumber(writer, field_name, field_value_ptr),
+        .bool => try displayBool(writer, field_name, field_value_ptr),
+        .@"enum" => try displayEnum(writer, field_name, field_value_ptr),
+        .array => try displayArray(writer, field_name, field_value_ptr),
+        .pointer => |ptr| {
+            if (ptr.size == .slice and ptr.child == u8) {
+                try displayString(writer, field_name, field_value_ptr);
+            } else {
+                try displayPointer(writer, field_name, field_value_ptr, depth);
+                //@compileError(std.fmt.comptimePrint("Not yet for: {s}", .{@typeName(@TypeOf(field_value_ptr.*))}));
+            }
+        },
+        .optional => {
+            try displayOptional(writer, field_name, field_value_ptr, depth);
+        },
+        .@"union" => try displayUnion(writer, field_name, field_value_ptr, depth),
+        .@"struct" => {
+            if (depth > 0)
+                try displayStruct(writer, field_name, field_value_ptr, depth - 1);
+        },
+        else => @compileError(std.fmt.comptimePrint("Not yet for: {s}", .{@typeName(@TypeOf(field_value_ptr.*))})),
+    }
+}
+
+pub fn displayUnion(writer: anytype, field_name: []const u8, field_value_ptr: anytype, comptime depth: usize) !void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    switch (field_value_ptr.*) {
+        inline else => |*active, active_tag| {
+            try writer.print("{s} = {s} ({s})\n", .{ field_name, @tagName(active_tag), writeable });
+            try displayField(writer, @tagName(active_tag), active, depth);
+        },
+    }
+}
+
+pub fn displayOptional(writer: anytype, field_name: []const u8, field_value_ptr: anytype, comptime depth: usize) !void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    const is_null = if (field_value_ptr.* == null) "null" else "not null";
+    try writer.print("{s} is {s} ({s})\n", .{ field_name, is_null, writeable });
+    if (field_value_ptr.*) |*val| {
+        try displayField(writer, field_name, val, depth);
+    }
+}
+
+pub fn displayPointer(writer: anytype, field_name: []const u8, field_value_ptr: anytype, comptime depth: usize) !void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    try writer.print("{s} ptr ({s})\n", .{ field_name, writeable });
+    const ptr = @typeInfo(@TypeOf(field_value_ptr.*)).pointer;
+    if (ptr.size == .one) {
+        switch (@typeInfo(ptr.child)) {
+            .@"fn" => {},
+            else => try displayField(writer, field_name, field_value_ptr.*, depth),
+        }
+    } else if (ptr.size == .slice) {
+        try displayArray(writer, field_name, field_value_ptr);
+    } else {
+        @compileError(std.fmt.comptimePrint("C-style and many item pointers not supported for {s}\n", .{@typeName(@TypeOf(field_value_ptr.*))}));
+    }
+}
+
+var str2: [6]u8 = [_]u8{ 's', 't', 'r', 'i', 'n', 'g' };
+
+pub fn voidFunc() void {
+    return;
+}
+
+pub fn doMain() !void {
+    //const stdout_file = ;
+    var bw = std.io.bufferedWriter(std.io.getStdOut().writer());
+    const stdout = bw.writer();
+    //var num: f32 = 42;
+    //const num2: usize = 69;
+    //  const E = enum { one, two, three };
+    //  //const e: E = .one;
+    //  //var ee: E = .two;
+    //  const str = "string";
+    //
+    //  const SS1 = struct {
+    //      usize: usize = 32,
+    //      @"enum": E = .three,
+    //      str1: []const u8 = str,
+    //      str2: []u8 = &str2,
+    //      opt_usize: ?usize = 99,
+    //  };
+    //
+    //  const UU1 = union(enum) {
+    //      union_struct: SS1,
+    //      union_enum: E,
+    //      union_str: []u8,
+    //      union_num: usize,
+    //  };
+    //
+    //const S2 = struct {
+    //    name: []const u8 = "12345",
+    //    opt_union: ?UU1 = .{ .union_num = 1 },
+    //    opt_ptr_union: ?*UU1,
+    //    opt_ptr_null: ?*UU1 = null,
+    //    s1_ptr: *SS1,
+    //    opt_enum: ?E = null,
+    //    func: *const fn () void,
+    //};
+
+    //    try displayNumber(stdout, "number 1", &num);
+    //    try displayNumber(stdout, "number 2", &num2);
+    //
+    //    try displayEnum(stdout, "e", &e);
+    //    try displayEnum(stdout, "ee", &ee);
+    //
+    //    try displayString(stdout, "str", &str);
+    //    try displayString(stdout, "str2", &str2);
+    //
+    //    try displayArray(stdout, "str", &str);
+    //    try displayArray(stdout, "str2", &str2);
+    //
+    //    const s1: S1 = .{};
+    //var s2: SS1 = .{};
+    //
+    //    try displayStruct(stdout, "s1", &s1, 0);
+    //    try displayStruct(stdout, "s2", &s2, 0);
+    //
+    //var un1: UU1 = .{ .union_struct = .{} };
+    //    const un2: U1 = .{ .union_enum = .one };
+    //    const un3: U1 = .{ .union_str = &str2 };
+    //    const un4: U1 = .{ .union_num = 88 };
+    //try displayUnion(stdout, "un1", &un1, 0);
+    //    try displayUnion(stdout, "un2", &un2, 0);
+    //    try displayUnion(stdout, "un3", &un3, 0);
+    //    try displayUnion(stdout, "un4", &un4, 0);
+
+    //const ss2: S2 = .{ .s1_ptr = &s2, .opt_ptr_union = &un1, .func = voidFunc };
+    //try displayStruct(stdout, "ss2", &ss2, 1);
+    var options: dvui.Options = .{ .color_fill = .fill_window, .border = dvui.Rect.all(5), .font = .{ .name = "help", .line_height_factor = 2, .size = 16 } };
+    try displayStruct(stdout, "options", &options, 1);
+    try bw.flush(); // Don't forget to flush!
 }

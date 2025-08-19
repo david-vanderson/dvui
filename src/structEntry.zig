@@ -135,20 +135,42 @@ pub const NumberFieldOptions = struct {
         const progress = input - self.minValue();
         return @as(f32, @floatCast(progress / range));
     }
+
+    fn normalizedPercentToNum(normalized_percent: f32, comptime T: type, min: T, max: T) T {
+        if (@typeInfo(T) != .int and @typeInfo(T) != .float) @compileError("T is not a number type");
+        std.debug.assert(normalized_percent >= 0);
+        std.debug.assert(normalized_percent <= 1);
+        const range = max - min;
+
+        const result: T = switch (@typeInfo(T)) {
+            .int => @intFromFloat(@as(f32, @floatFromInt(min)) + @as(f32, @floatFromInt(range)) * normalized_percent),
+            .float => @as(T, min + range * @as(T, @floatCast(normalized_percent))),
+            else => unreachable,
+        };
+        return result;
+    }
+
+    // TODO: Move this to the NumberOptions?
+    //    fn toNormalizedPercent(input_num: anytype, min: @TypeOf(input_num), max: @TypeOf(input_num)) f32 {
+    //        const input, const range, const min_f = switch (@typeInfo(@TypeOf(input_num))) {
+    //            .int => .{
+    //                @as(f32, @floatFromInt(if (input_num < min) min else input_num)),
+    //                @as(f32, @floatFromInt(max - min)),
+    //                @as(f32, @floatFromInt(min)),
+    //            },
+    //            .float => .{
+    //                input_num,
+    //                max - min,
+    //                min,
+    //            },
+    //            else => unreachable,
+    //        };
+    //        const progress = input - min_f;
+    //        return @as(f32, @floatCast(progress / range));
+    //    }
 };
 
-//pub fn IntFieldOptions(comptime T: type) type {
-//    return struct {
-//        widget_type: enum { number_entry, slider } = .number_entry,
-//        min: T = std.math.minInt(T),
-//        max: T = std.math.maxInt(T),
-//        dvui_opts: dvui.Options = .{},
-//        disabled: bool = false,
-//        label_override: ?[]const u8 = null,
-//    };
-//}
-
-pub fn numberFieldWidget2(
+pub fn numberFieldWidget(
     src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_ptr: anytype,
@@ -194,93 +216,20 @@ pub fn numberFieldWidget2(
             dvui.label(@src(), "{s}", .{field_name}, .{});
 
             if (!read_only) {
-                var percent = toNormalizedPercent(field_ptr.*, opt.minValue(T), opt.maxValue(T));
+                var percent = opt.toNormalizedPercent(field_ptr.*, opt.minValue(T), opt.maxValue(T));
                 _ = dvui.slider(@src(), .horizontal, &percent, .{
                     .expand = .horizontal,
                     .min_size_content = .{ .w = 100, .h = 20 },
                 });
                 // TODO: min and max can now be null. they need to get better defaults earlier.
-                field_ptr.* = normalizedPercentToNum(percent, T, opt.minValue(T), opt.maxValue(T));
+                field_ptr.* = opt.normalizedPercentToNum(percent, T, opt.minValue(T), opt.maxValue(T));
             }
             dvui.label(@src(), "{}", .{field_ptr.*}, .{});
         },
     }
 }
 
-// TODO: Move this to the NumberOptions?
-fn normalizedPercentToNum(normalized_percent: f32, comptime T: type, min: T, max: T) T {
-    if (@typeInfo(T) != .int and @typeInfo(T) != .float) @compileError("T is not a number type");
-    std.debug.assert(normalized_percent >= 0);
-    std.debug.assert(normalized_percent <= 1);
-    const range = max - min;
-
-    const result: T = switch (@typeInfo(T)) {
-        .int => @intFromFloat(@as(f32, @floatFromInt(min)) + @as(f32, @floatFromInt(range)) * normalized_percent),
-        .float => @as(T, min + range * @as(T, @floatCast(normalized_percent))),
-        else => unreachable,
-    };
-    return result;
-}
-
-// TODO: Move this to the NumberOptions?
-fn toNormalizedPercent(input_num: anytype, min: @TypeOf(input_num), max: @TypeOf(input_num)) f32 {
-    const input, const range, const min_f = switch (@typeInfo(@TypeOf(input_num))) {
-        .int => .{
-            @as(f32, @floatFromInt(if (input_num < min) min else input_num)),
-            @as(f32, @floatFromInt(max - min)),
-            @as(f32, @floatFromInt(min)),
-        },
-        .float => .{
-            input_num,
-            max - min,
-            min,
-        },
-        else => unreachable,
-    };
-    const progress = input - min_f;
-    return @as(f32, @floatCast(progress / range));
-}
-
-//pub fn FloatFieldOptions(comptime T: type) type {
-//    return struct {
-//        min: ?T = null, // you could also use floatMin/floatMax here, but that
-//        max: ?T = null, // would cause issues rendering min and max numbers
-//        dvui_opts: dvui.Options = .{},
-//        disabled: bool = false,
-//        label_override: ?[]const u8 = null,
-//    };
-//}
-//
-//pub fn floatFieldWidget2(
-//    src: std.builtin.SourceLocation,
-//    field_name: []const u8,
-//    field_ptr: anytype,
-//    opt: FloatFieldOptions(@TypeOf(field_ptr.*)),
-//    alignment: *dvui.Alignment,
-//) void {
-//    if (opt.disabled) return;
-//    const T = @TypeOf(field_ptr.*);
-//    const read_only = @typeInfo(@TypeOf(field_ptr)).pointer.is_const;
-//
-//    var box = dvui.box(src, .horizontal, .{});
-//    defer box.deinit();
-//
-//    dvui.label(@src(), "{s}", .{opt.label_override orelse field_name}, .{});
-//
-//    var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
-//    defer hbox_aligned.deinit();
-//    alignment.record(box.data().id, hbox_aligned.data());
-//
-//    if (!read_only) {
-//        const maybe_num = dvui.textEntryNumber(@src(), T, .{ .min = opt.min, .max = opt.max }, opt.dvui_opts);
-//        if (maybe_num.value == .Valid) {
-//            field_ptr.* = maybe_num.value.Valid;
-//        }
-//    }
-//    dvui.label(@src(), "{d}", .{field_ptr.*}, .{});
-//}
-
-pub fn enumFieldWidget2(
+pub fn enumFieldWidget(
     src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_ptr: anytype,
@@ -311,7 +260,7 @@ pub fn enumFieldWidget2(
     }
 }
 
-pub fn boolFieldWidget2(
+pub fn boolFieldWidget(
     src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_ptr: anytype,
@@ -352,30 +301,14 @@ pub const TextFieldOptions = struct {
     buffer: ?[]u8 = null,
 };
 
-pub fn textFieldWidget2(
+pub fn textFieldWidget(
     src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_ptr: anytype,
     opt: TextFieldOptions,
     alignment: *dvui.Alignment,
 ) void {
-    //const T = @TypeOf(field_ptr.*);
     if (opt.display == .none) return;
-    //    const buffer = buffer: switch (opt.display) {
-    //        .none => return,
-    //        .read_only => break :buffer field_ptr.*,
-    //        .read_write => {
-    //            if (opt.buffer) |buf| {
-    //                break :buffer buf;
-    //            } else if (@typeInfo(@TypeOf(field_ptr.*)).pointer.is_const) {
-    //                dvui.log.debug("Must supply a buffer to TextOptions to allow editing of const fields. Field name is {s}", .{field_name});
-    //                return;
-    //            } else {
-    //                break :buffer field_ptr.*;
-    //            }
-    //        },
-    //        .read_create => unreachable, // TODO: Is this even required? What does it do?
-    //    };
 
     // TODO: Type checking! Split out read-only vs read-write.
     var box = dvui.box(src, .horizontal, .{});
@@ -389,6 +322,7 @@ pub fn textFieldWidget2(
             @memcpy(buf[0..field_ptr.*.len], field_ptr.*);
         }
     }
+    // TODO: Read-only needs to check 1) If the pointer is read-only and 2) if the buffer is read-only.
     switch (opt.display) {
         .read_write => {
             const buffer: []u8 = buffer: {
@@ -504,22 +438,7 @@ pub fn textFieldWidgetBuf(
 // which contain other widgets (such as optional fields
 // or unions)
 
-//=======Optional Field Widget and Options=======
-//pub fn UnionFieldOptions(comptime T: type, exclude: anytype) type {
-//    return struct {
-//        fields: NamespaceFieldOptions(T, exclude) = .{},
-//        disabled: bool = false,
-//        label_override: ?[]const u8 = null,
-//    };
-//}
-//
-//pub fn unionFieldWidget2(src: std.builtin.SourceLocation, container: anytype, comptime field_name: []const u8, comptime opts: FloatFieldOptions(@TypeOf(@field(container, field_name))), alignment: *dvui.Alignment) void {
-//    var box = dvui.box(src, .vertical, .{});
-//    defer box.deinit();
-//    unionFieldWidget(field_name, @TypeOf(@field(container, field_name)), &@field(container, field_name), opts, null, alignment);
-//}
-//
-pub fn unionFieldWidget2(
+pub fn unionFieldWidget(
     src: std.builtin.SourceLocation,
     comptime field_name: []const u8,
     field_ptr: anytype,
@@ -563,16 +482,16 @@ pub const OptionalFieldOptions = struct {
     label_override: ?[]const u8 = null,
 };
 
-pub fn optionalFieldWidget2(
+pub fn optionalFieldWidget(
     comptime src: std.builtin.SourceLocation,
     comptime field_name: []const u8,
     field_ptr: anytype,
     comptime opts: OptionalFieldOptions,
     alignment: *dvui.Alignment,
-) ?*dvui.BoxWidget { // TODO: Return bool?
+) bool { // TODO: Return bool?
     _ = alignment;
     const box = dvui.box(src, .vertical, .{});
-
+    defer box.deinit();
     var checkbox_state: bool = field_ptr.* != null;
     {
         var hbox = dvui.box(@src(), .horizontal, .{});
@@ -581,83 +500,8 @@ pub fn optionalFieldWidget2(
         _ = dvui.checkbox(@src(), &checkbox_state, null, .{});
     }
 
-    //    if (checkbox_state) {
-    //        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .both });
-    //        defer hbox.deinit();
-    //        // not working
-    //        // alignment.record(box.data().id, hbox.data());
-    //
-    //        var line = dvui.box(@src(), .vertical, .{
-    //            .border = border,
-    //            .expand = .vertical,
-    //            .background = true,
-    //            .margin = .{ .w = 10, .x = 10 },
-    //        });
-    //        line.deinit();
-    //    }
-    if (checkbox_state) {
-        return box;
-    } else {
-        box.deinit();
-        return null;
-    }
+    return checkbox_state;
 }
-
-pub fn optionalFieldWidget(
-    comptime name: []const u8,
-    comptime T: type,
-    comptime exclude: anytype,
-    result: *T,
-    opt: OptionalFieldOptions(T, exclude),
-    comptime alloc: bool,
-    allocator: ?std.mem.Allocator,
-    alignment: *dvui.Alignment,
-) void {
-    if (opt.display == .none) return;
-    var box = dvui.box(@src(), .vertical, .{});
-    defer box.deinit();
-
-    const Child = @typeInfo(T).optional.child;
-
-    const checkbox_state = dvui.dataGetPtrDefault(null, box.widget().data().id, "checked", bool, false);
-    {
-        var hbox = dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-        dvui.label(@src(), "{s}?", .{opt.label orelse name}, .{});
-        _ = dvui.checkbox(@src(), checkbox_state, null, .{});
-    }
-
-    if (checkbox_state.*) {
-        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .both });
-        defer hbox.deinit();
-        var line = dvui.box(@src(), .vertical, .{
-            .border = border,
-            .expand = .vertical,
-            .background = true,
-            .margin = .{ .w = 10, .x = 10 },
-        });
-        line.deinit();
-
-        // If it's a container, follow the container until correct depth.
-        fieldWidget("", Child, exclude, @ptrCast(result), opt.child, alloc, allocator, alignment);
-    } else {
-        result.* = null;
-    }
-}
-
-//pub fn PointerFieldOptions(comptime T: type, exclude: anytype) type {
-//    const info = @typeInfo(T).pointer;
-//
-//    if (info.size == .slice and info.child == u8) {
-//        return TextFieldOptions;
-//    } else if (info.size == .slice) {
-//        return SliceFieldOptions(T, exclude);
-//    } else if (info.size == .one) {
-//        return SinglePointerFieldOptions(T, exclude);
-//    } else if (info.size == .c or info.size == .many) {
-//        @compileError("Many item pointers disallowed");
-//    }
-//}
 
 // TODO: This needs to change somehow.
 //pub fn pointerFieldWidget2(src: std.builtin.SourceLocation, container: anytype, comptime field_name: []const u8, comptime opts: FloatFieldOptions(@TypeOf(@field(container, field_name))), alignment: *dvui.Alignment) void {
@@ -766,186 +610,186 @@ pub fn ArrayFieldOptions(comptime T: type, exclude: anytype) type {
     };
 }
 
-pub fn arrayFieldWidget2(src: std.builtin.SourceLocation, container: anytype, comptime field_name: []const u8, comptime opts: StandardFieldOptions, alignment: *dvui.Alignment) void {
-    _ = opts; // TODO
-    var box = dvui.box(src, .vertical, .{});
-    defer box.deinit();
-    arrayFieldWidget(field_name, @TypeOf(@field(container, field_name)), &@field(container, field_name), .{}, false, null, alignment);
-}
+// TODO: Fix
+//pub fn arrayFieldWidget2(src: std.builtin.SourceLocation, container: anytype, comptime field_name: []const u8, comptime opts: StandardFieldOptions, alignment: *dvui.Alignment) void {
+//    _ = opts; // TODO
+//    var box = dvui.box(src, .vertical, .{});
+//    defer box.deinit();
+//    arrayFieldWidget(field_name, @TypeOf(@field(container, field_name)), &@field(container, field_name), .{}, false, null, alignment);
+//}
 
-pub fn arrayFieldWidget(
-    comptime name: []const u8,
-    comptime T: type,
-    comptime exclude: anytype,
-    result: *T,
-    opt: ArrayFieldOptions(T, exclude),
-    comptime alloc: bool,
-    allocator: ?std.mem.Allocator,
-    alignment: *dvui.Alignment,
-) void {
-    const SliceType = []@typeInfo(T).array.child;
-    var slice_result: SliceType = &(result.*);
-    const slice_opts = SliceFieldOptions(SliceType, exclude){
-        .child = opt.child,
-        .label_override = opt.label,
-        .disabled = opt.disabled,
-    };
-    sliceFieldWidget(name, SliceType, exclude, &slice_result, slice_opts, alloc, allocator, alignment);
-}
+//pub fn arrayFieldWidget(
+//    comptime name: []const u8,
+//    comptime T: type,
+//    comptime exclude: anytype,
+//    result: *T,
+//    opt: ArrayFieldOptions(T, exclude),
+//    comptime alloc: bool,
+//    allocator: ?std.mem.Allocator,
+//    alignment: *dvui.Alignment,
+//) void {
+//    const SliceType = []@typeInfo(T).array.child;
+//    var slice_result: SliceType = &(result.*);
+//    const slice_opts = SliceFieldOptions(SliceType, exclude){
+//        .child = opt.child,
+//        .label_override = opt.label,
+//        .disabled = opt.disabled,
+//    };
+//    sliceFieldWidget(name, SliceType, exclude, &slice_result, slice_opts, alloc, allocator, alignment);
+//}
 
 //=======Single Item pointer and options=======
-pub const SliceFieldOptions = struct {
-    label_override: ?[]const u8 = null,
-    disabled: bool = false,
-};
-
-pub fn sliceFieldWidget2(
-    src: std.builtin.SourceLocation,
-    container: anytype,
-    comptime field_name: []const u8,
-    opts: StandardFieldOptions,
-    alignment: *dvui.Alignment,
-) void {
-    _ = opts; // TODO:
-    var box = dvui.box(src, .vertical, .{});
-    defer box.deinit();
-    sliceFieldWidget(field_name, @TypeOf(@field(container, field_name)), &@field(container, field_name), .{}, false, null, alignment);
-}
-
-pub fn sliceFieldWidget(
-    comptime name: []const u8,
-    comptime T: type,
-    comptime exclude: anytype,
-    result: *T,
-    opt: SliceFieldOptions(T, exclude),
-    comptime alloc: bool,
-    allocator: ?std.mem.Allocator,
-    alignment: *dvui.Alignment,
-) void {
-    if (@typeInfo(T).pointer.size != .slice) @compileError("must be called with slice");
-
-    const Child = @typeInfo(T).pointer.child;
-
-    const ProvidedPointerTreatment = enum {
-        mutate_value_and_realloc,
-        mutate_value_in_place_only,
-        display_only,
-        copy_value_and_alloc_new,
-    };
-
-    comptime var treatment: ProvidedPointerTreatment = .display_only;
-    comptime if (alloc == false) {
-        if (@typeInfo(T).pointer.is_const) {
-            treatment = .display_only;
-        } else {
-            treatment = .mutate_value_in_place_only;
-        }
-    } else if (alloc == true) {
-        if (@typeInfo(T).pointer.is_const) {
-            treatment = .copy_value_and_alloc_new;
-        } else {
-            treatment = .mutate_value_and_realloc;
-        }
-    };
-
-    var removed_idx: ?usize = null;
-    var insert_before_idx: ?usize = null;
-
-    var reorder = dvui.reorder(@src(), .{
-        .min_size_content = .{ .w = 120 },
-        .background = true,
-        .border = dvui.Rect.all(1),
-        .padding = dvui.Rect.all(4),
-    });
-
-    var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
-    dvui.label(@src(), "{s}", .{opt.label orelse name}, .{});
-
-    for (result.*, 0..) |_, i| {
-        var reorderable = reorder.reorderable(@src(), .{}, .{
-            .id_extra = i,
-            .expand = .horizontal,
-        });
-        defer reorderable.deinit();
-
-        if (reorderable.removed()) {
-            removed_idx = i; // this entry is being dragged
-        } else if (reorderable.insertBefore()) {
-            insert_before_idx = i; // this entry was dropped onto
-        }
-
-        var hbox = dvui.box(@src(), .horizontal, .{
-            .expand = .both,
-            .border = dvui.Rect.all(1),
-            .background = true,
-            .color_fill = .{ .name = .fill_window },
-        });
-        defer hbox.deinit();
-
-        switch (treatment) {
-            .mutate_value_in_place_only, .mutate_value_and_realloc => {
-                _ = dvui.ReorderWidget.draggable(@src(), .{ .reorderable = reorderable }, .{
-                    .expand = .vertical,
-                    .min_size_content = dvui.Size.all(22),
-                    .gravity_y = 0.5,
-                });
-            },
-            .display_only => {
-                //TODO
-            },
-            .copy_value_and_alloc_new => {
-                //TODO
-            },
-        }
-
-        fieldWidget("name", Child, exclude, @alignCast(@ptrCast(&(result.*[i]))), opt.child, alloc, allocator, alignment);
-    }
-
-    // show a final slot that allows dropping an entry at the end of the list
-    if (reorder.finalSlot()) {
-        insert_before_idx = result.*.len; // entry was dropped into the final slot
-    }
-
-    // returns true if the slice was reordered
-    _ = dvui.ReorderWidget.reorderSlice(Child, result.*, removed_idx, insert_before_idx);
-
-    //if (alloc) {
-    switch (treatment) {
-        .mutate_value_and_realloc => {
-            const new_item: *Child = dvui.dataGetPtrDefault(null, reorder.data().id, "new_item", Child, undefined);
-
-            _ = dvui.spacer(@src(), .{ .min_size_content = .height(4) });
-
-            var hbox = dvui.box(@src(), .horizontal, .{
-                .expand = .both,
-                .border = dvui.Rect.all(1),
-                .background = true,
-                .color_fill = .{ .name = .fill_window },
-            });
-            defer hbox.deinit();
-
-            if (dvui.button(@src(), "Add New", .{}, .{})) {
-                //TODO realloc here with allocator parameter
-            }
-
-            fieldWidget(@typeName(T), Child, exclude, @ptrCast(new_item), opt.child, alloc, allocator, alignment);
-        },
-        .copy_value_and_alloc_new => {
-            //TODO
-        },
-        .display_only => {
-            //TODO
-        },
-        .mutate_value_in_place_only => {
-            //TODO
-        },
-    }
-
-    vbox.deinit();
-
-    reorder.deinit();
-}
-
+//`pub const SliceFieldOptions = struct {
+//    label_override: ?[]const u8 = null,
+//    disabled: bool = false,
+//};
+//
+//pub fn sliceFieldWidget2(
+//    src: std.builtin.SourceLocation,
+//    container: anytype,
+//    comptime field_name: []const u8,
+//    opts: StandardFieldOptions,
+//    alignment: *dvui.Alignment,
+//) void {
+//    _ = opts; // TODO:
+//    var box = dvui.box(src, .vertical, .{});
+//    defer box.deinit();
+//    sliceFieldWidget(field_name, @TypeOf(@field(container, field_name)), &@field(container, field_name), .{}, false, null, alignment);
+//}
+//
+//pub fn sliceFieldWidget(
+//    comptime name: []const u8,
+//    comptime T: type,
+//    comptime exclude: anytype,
+//    result: *T,
+//    opt: SliceFieldOptions(T, exclude),
+//    comptime alloc: bool,
+//    allocator: ?std.mem.Allocator,
+//    alignment: *dvui.Alignment,
+//) void {
+//    if (@typeInfo(T).pointer.size != .slice) @compileError("must be called with slice");
+//
+//    const Child = @typeInfo(T).pointer.child;
+//
+//    const ProvidedPointerTreatment = enum {
+//        mutate_value_and_realloc,
+//        mutate_value_in_place_only,
+//        display_only,
+//        copy_value_and_alloc_new,
+//    };
+//
+//    comptime var treatment: ProvidedPointerTreatment = .display_only;
+//    comptime if (alloc == false) {
+//        if (@typeInfo(T).pointer.is_const) {
+//            treatment = .display_only;
+//        } else {
+//            treatment = .mutate_value_in_place_only;
+//        }
+//    } else if (alloc == true) {
+//        if (@typeInfo(T).pointer.is_const) {
+//            treatment = .copy_value_and_alloc_new;
+//        } else {
+//            treatment = .mutate_value_and_realloc;
+//        }
+//    };
+//
+//    var removed_idx: ?usize = null;
+//    var insert_before_idx: ?usize = null;
+//
+//    var reorder = dvui.reorder(@src(), .{
+//        .min_size_content = .{ .w = 120 },
+//        .background = true,
+//        .border = dvui.Rect.all(1),
+//        .padding = dvui.Rect.all(4),
+//    });
+//
+//    var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+//    dvui.label(@src(), "{s}", .{opt.label orelse name}, .{});
+//
+//    for (result.*, 0..) |_, i| {
+//        var reorderable = reorder.reorderable(@src(), .{}, .{
+//            .id_extra = i,
+//            .expand = .horizontal,
+//        });
+//        defer reorderable.deinit();
+//
+//        if (reorderable.removed()) {
+//            removed_idx = i; // this entry is being dragged
+//        } else if (reorderable.insertBefore()) {
+//            insert_before_idx = i; // this entry was dropped onto
+//        }
+//
+//        var hbox = dvui.box(@src(), .horizontal, .{
+//            .expand = .both,
+//            .border = dvui.Rect.all(1),
+//            .background = true,
+//            .color_fill = .{ .name = .fill_window },
+//        });
+//        defer hbox.deinit();
+//
+//        switch (treatment) {
+//            .mutate_value_in_place_only, .mutate_value_and_realloc => {
+//                _ = dvui.ReorderWidget.draggable(@src(), .{ .reorderable = reorderable }, .{
+//                    .expand = .vertical,
+//                    .min_size_content = dvui.Size.all(22),
+//                    .gravity_y = 0.5,
+//                });
+//            },
+//            .display_only => {
+//                //TODO
+//            },
+//            .copy_value_and_alloc_new => {
+//                //TODO
+//            },
+//        }
+//
+//        fieldWidget("name", Child, exclude, @alignCast(@ptrCast(&(result.*[i]))), opt.child, alloc, allocator, alignment);
+//    }
+//
+//    // show a final slot that allows dropping an entry at the end of the list
+//    if (reorder.finalSlot()) {
+//        insert_before_idx = result.*.len; // entry was dropped into the final slot
+//    }
+//
+//    // returns true if the slice was reordered
+//    _ = dvui.ReorderWidget.reorderSlice(Child, result.*, removed_idx, insert_before_idx);
+//
+//    //if (alloc) {
+//    switch (treatment) {
+//        .mutate_value_and_realloc => {
+//            const new_item: *Child = dvui.dataGetPtrDefault(null, reorder.data().id, "new_item", Child, undefined);
+//
+//            _ = dvui.spacer(@src(), .{ .min_size_content = .height(4) });
+//
+//            var hbox = dvui.box(@src(), .horizontal, .{
+//                .expand = .both,
+//                .border = dvui.Rect.all(1),
+//                .background = true,
+//                .color_fill = .{ .name = .fill_window },
+//            });
+//            defer hbox.deinit();
+//
+//            if (dvui.button(@src(), "Add New", .{}, .{})) {
+//                //TODO realloc here with allocator parameter
+//            }
+//
+//            fieldWidget(@typeName(T), Child, exclude, @ptrCast(new_item), opt.child, alloc, allocator, alignment);
+//        },
+//        .copy_value_and_alloc_new => {
+//            //TODO
+//        },
+//        .display_only => {
+//            //TODO
+//        },
+//        .mutate_value_in_place_only => {
+//            //TODO
+//        },
+//    }
+//
+//    vbox.deinit();
+//
+//    reorder.deinit();
+//}
 //==========Struct Field Widget and Options
 //pub fn StructFieldOptions(comptime T: type, exclude: anytype) type {
 //    return struct {
@@ -1071,165 +915,192 @@ pub fn sliceFieldWidget(
 //    } });
 //}
 
-pub fn fieldWidget(
-    comptime name: []const u8,
-    comptime T: type,
-    comptime exclude: anytype,
-    result: *T,
-    options: StandardFieldOptions(T, exclude),
-    comptime alloc: bool,
-    allocator: ?std.mem.Allocator,
-    alignment: *dvui.Alignment,
-) void {
-    switch (@typeInfo(T)) {
-        //.int => intFieldWidget(name, T, result, options, alignment),
-        //.float => floatFieldWidget(name, T, result, options, alignment),
-        //.bool => boolFieldWidget(name, result, options, alignment),
-        //        .@"enum" => enumFieldWidget(name, T, result, options, alignment),
-        // .pointer => pointerFieldWidget(name, T, exclude, result, options, alloc, allocator, alignment),
-        .optional => optionalFieldWidget(name, T, result, options, alloc, allocator, alignment),
-        //        .@"union" => unionFieldWidget(name, T, exclude, result, options, alloc, allocator, alignment),
-        //        .@"struct" => structFieldWidget(name, T, exclude, result, options, alloc, allocator),
-        .array => arrayFieldWidget(name, T, exclude, result, options, alloc, allocator, alignment),
-        else => @compileError("Invalid type: " ++ @typeName(T)),
-    }
-}
+//pub fn fieldWidget(
+//    comptime name: []const u8,
+//    comptime T: type,
+//    comptime exclude: anytype,
+//    result: *T,
+//    options: StandardFieldOptions(T, exclude),
+//    comptime alloc: bool,
+//    allocator: ?std.mem.Allocator,
+//    alignment: *dvui.Alignment,
+//) void {
+//    switch (@typeInfo(T)) {
+//        //.int => intFieldWidget(name, T, result, options, alignment),
+//        //.float => floatFieldWidget(name, T, result, options, alignment),
+//        //.bool => boolFieldWidget(name, result, options, alignment),
+//        //        .@"enum" => enumFieldWidget(name, T, result, options, alignment),
+//        // .pointer => pointerFieldWidget(name, T, exclude, result, options, alloc, allocator, alignment),
+//        .optional => optionalFieldWidget(name, T, result, options, alloc, allocator, alignment),
+//        //        .@"union" => unionFieldWidget(name, T, exclude, result, options, alloc, allocator, alignment),
+//        //        .@"struct" => structFieldWidget(name, T, exclude, result, options, alloc, allocator),
+//        .array => arrayFieldWidget(name, T, exclude, result, options, alloc, allocator, alignment),
+//        else => @compileError("Invalid type: " ++ @typeName(T)),
+//    }
+//}
 
 //===============================================
 //============PUBLIC API FUNCTIONS===============
 //===============================================
 
-fn isExcluded(field_name: []const u8, exclusions: anytype) bool {
-    for (exclusions) |excluded_name| {
-        if (std.mem.eql(u8, field_name, @tagName(excluded_name))) {
-            return true;
-        }
-    }
-    return false;
+pub fn displayNumber(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    std.debug.print("{s} = {d} ({s})\n", .{ field_name, field_value_ptr.*, writeable });
+    numberFieldWidget(@src(), field_name, field_value_ptr, field_option.number, al);
 }
 
-//pub fn structEntry(
-//    comptime src: std.builtin.SourceLocation,
-//    comptime T: type,
-//    comptime exclude: anytype,
-//    result: *T,
-//    opts: dvui.Options,
-//) void {
-//    var box = dvui.box(src, .vertical, opts);
-//    defer box.deinit();
-//    structFieldWidget("", T, exclude, result, .{}, false, null);
-//}
-//
-//pub fn structEntryEx(
-//    comptime src: std.builtin.SourceLocation,
-//    comptime name: []const u8,
-//    comptime T: type,
-//    comptime exclude: anytype,
-//    result: *T,
-//    field_options: StructFieldOptions(T, exclude),
-//) void {
-//    var box = dvui.box(src, .vertical, .{ .expand = .both });
-//    defer box.deinit();
-//    structFieldWidget(name, T, exclude, result, field_options, false, null);
-//}
-//
-//pub fn structEntryAlloc(
-//    comptime src: std.builtin.SourceLocation,
-//    allocator: std.mem.Allocator,
-//    comptime T: type,
-//    comptime exclude: anytype,
-//    result: *T,
-//    opts: dvui.Options,
-//) void {
-//    var box = dvui.box(src, .vertical, opts);
-//    defer box.deinit();
-//    structFieldWidget("", T, exclude, result, .{}, true, allocator);
-//}
-//
-//pub fn structEntryExAlloc(
-//    comptime src: std.builtin.SourceLocation,
-//    allocator: std.mem.Allocator,
-//    comptime name: []const u8,
-//    comptime T: type,
-//    comptime exclude: anytype,
-//    result: *T,
-//    field_options: StructFieldOptions(T),
-//) void {
-//    var box = dvui.box(src, .vertical, .{ .expand = .both });
-//    defer box.deinit();
-//    structFieldWidget(name, T, exclude, result, field_options, true, allocator);
-//}
-//
-////===============================================
-////=============DEEP COPY FUNCTIONS===============
-////===============================================
+pub fn displayEnum(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    std.debug.print("{s} = {s} ({s})\n", .{ field_name, @tagName(field_value_ptr.*), writeable });
+    enumFieldWidget(@src(), field_name, field_value_ptr, field_option.standard, al);
+}
 
-// For usage with structEntryAlloc
-// Currently untested
+pub fn displayString(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    std.debug.print("{s} = {s} ({s})\n", .{ field_name, field_value_ptr.*, writeable });
+    textFieldWidget(@src(), field_name, field_value_ptr, field_option.text, al);
+}
 
-//============Alloc result type========
-//pub fn getOwnedCopy(a: std.mem.Allocator, value: anytype) !Parsed(@TypeOf(value)) {
-//    var arena = std.heap.ArenaAllocator.init(a);
-//
-//    //perform deep copy
-//    const copied = try deepCopyStruct(arena.allocator(), value);
-//
-//    return .{ .value = copied, .arena = arena };
-//}
-//
-//pub fn getOwnedCopyLeaky(a: std.mem.Allocator, value: anytype) !@TypeOf(value) {
-//
-//    //perform deep copy
-//    return try deepCopyStruct(a, value);
-//}
-//
-////==========Deep Copy Function==========
-//pub fn Parsed(comptime T: type) type {
-//    return struct {
-//        arena: std.heap.ArenaAllocator,
-//        value: T,
-//
-//        pub fn deinit(self: @This()) void {
-//            self.arena.deinit();
-//        }
-//    };
-//}
-//
-//pub fn deepCopyStruct(allocator: std.mem.Allocator, value: anytype) !@TypeOf(value) {
-//    const T = @TypeOf(value);
-//    var result: T = undefined;
-//
-//    inline for (@typeInfo(T).@"struct".fields) |field| {
-//        const info = @typeInfo(field.type);
-//        if (info == .pointer) {
-//            switch (info.size) {
-//                .slice => {
-//                    @field(result, field.name) = try allocator.dupe(info.child, @field(value, field.name));
-//                    if (@typeInfo(info.child) == .@"struct") {
-//                        for (@field(result, field.name), 0..) |*val, i| {
-//                            val.* = try deepCopyStruct(allocator, @field(value, field.name)[i]);
-//                        }
-//                    }
-//                },
-//                .one => {
-//                    @field(result, field.name) = try allocator.create(info.child);
-//                    if (@typeInfo(info.child) == .@"struct") {
-//                        @field(result, field.name).* = try deepCopyStruct(allocator, @field(value, field.name));
-//                    } else {
-//                        @field(result, field.name).* = @field(value, field.name);
-//                    }
-//                },
-//                else => @compileError("Cannot copy *C and Many pointers"),
-//            }
-//        } else if (info == .@"struct") {
-//            @field(result, field.name) = try deepCopyStruct(allocator, @field(value, field.name));
-//        } else {
-//            @field(result, field.name) = @field(value, field.name);
-//        }
-//    }
-//    return result;
-//}
-//
+pub fn displayBool(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    std.debug.print("{s} = {} ({s})\n", .{ field_name, field_value_ptr.*, writeable });
+    boolFieldWidget(@src(), field_name, field_value_ptr, field_option.standard, al);
+}
+
+pub fn displayArray(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: FieldOptions, options: anytype, al: *dvui.Alignment) void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    const indent = " " ** 4;
+    // TODO: Create the indenting box here.
+    std.debug.print("{s} = ({s})\n", .{ field_name, writeable });
+
+    for (field_value_ptr.*, 0..) |*val, i| {
+        displayField(field_name, field_value_ptr, depth, field_option.standard, options, al);
+        std.debug.print("{s}{d} = {any}\n", .{ indent, i, val });
+    }
+}
+
+pub fn findMatchingStructOption(T: type, struct_options: anytype) ?dvui.se.StructOptions(T) {
+    inline for (struct_options) |struct_option| {
+        if (@TypeOf(struct_option).StructT == T) {
+            return struct_option;
+        }
+    }
+    return null;
+}
+
+pub fn displayStruct(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: StandardFieldOptions, options: anytype, al: *dvui.Alignment) void {
+    if (field_option.display == .none) return;
+
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    const indent = " " ** (4 * depth);
+    std.debug.print("{s}{s} = ({s})\n", .{ indent, field_name, writeable });
+    const StructT = @TypeOf(field_value_ptr.*);
+
+    const struct_options: StructOptions(StructT) = findMatchingStructOption(StructT, options) orelse .initDefaults(null);
+
+    if (dvui.expander(@src(), field_name, .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+        var vbox = dvui.box(@src(), .vertical, .{
+            .expand = .vertical,
+            .border = .{ .x = 1 },
+            .background = true,
+            .margin = .{ .w = 12, .x = 12 },
+        });
+        defer vbox.deinit();
+
+        inline for (struct_options.options.values, 0..) |sub_field_option, field_num| {
+            var box = dvui.box(@src(), .vertical, .{ .id_extra = field_num });
+            defer box.deinit();
+
+            const field = comptime @TypeOf(struct_options.options).Indexer.keyForIndex(field_num);
+            displayField(@tagName(field), &@field(field_value_ptr, @tagName(field)), depth, sub_field_option, options, al);
+        }
+    }
+}
+
+pub fn displayField(
+    field_name: []const u8,
+    field_value_ptr: anytype,
+    comptime depth: usize,
+    field_option: FieldOptions,
+    options: anytype,
+    al: *dvui.Alignment,
+) void {
+    const indent = " " ** (4 * depth);
+    std.debug.print("{s}", .{indent});
+    switch (@typeInfo(@TypeOf(field_value_ptr.*))) {
+        .int, .float => displayNumber(field_name, field_value_ptr, field_option, al),
+        .bool => displayBool(field_name, field_value_ptr, field_option, al),
+        .@"enum" => displayEnum(field_name, field_value_ptr, field_option, al),
+        .array => displayArray(field_name, field_value_ptr, field_option, options, al),
+        .pointer => |ptr| {
+            if (ptr.size == .slice and ptr.child == u8) {
+                displayString(field_name, field_value_ptr, field_option.text, options, al);
+            } else {
+                displayPointer(field_name, field_value_ptr, depth, field_option.standard, options, al);
+            }
+        },
+        .optional => {
+            displayOptional(field_name, field_value_ptr, depth, field_option.standard, options, al);
+        },
+        .@"union" => displayUnion(field_name, field_value_ptr, depth, field_option.standard, options, al),
+        .@"struct" => {
+            if (depth > 0)
+                displayStruct(field_name, field_value_ptr, depth - 1, field_option.standard, options, al);
+        },
+        .type,
+        .void,
+        .noreturn,
+        .comptime_int,
+        .comptime_float,
+        .undefined,
+        .null,
+        .error_union,
+        .error_set,
+        .@"fn",
+        .@"opaque",
+        .frame,
+        .@"anyframe",
+        .vector,
+        .enum_literal,
+        => {}, // These types are currently not displayed
+    }
+}
+
+pub fn displayUnion(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: StandardFieldOptions, options: anytype, al: *dvui.Alignment) void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    switch (field_value_ptr.*) {
+        inline else => |*active, active_tag| {
+            std.debug.print("{s} = {s} ({s})\n", .{ field_name, @tagName(active_tag), writeable });
+            displayField(@tagName(active_tag), active, depth, field_option, options, al);
+        },
+    }
+}
+
+pub fn displayOptional(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: StandardFieldOptions, options: anytype, al: *dvui.Alignment) void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    const is_null = if (field_value_ptr.* == null) "null" else "not null";
+    std.debug.print("{s} is {s} ({s})\n", .{ field_name, is_null, writeable });
+    if (field_value_ptr.*) |*val| {
+        displayField(field_name, val, depth, field_option, options, al);
+    }
+}
+
+pub fn displayPointer(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: StandardFieldOptions, options: anytype, al: *dvui.Alignment) void {
+    const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+    std.debug.print("{s} ptr ({s})\n", .{ field_name, writeable });
+    const ptr = @typeInfo(@TypeOf(field_value_ptr.*)).pointer;
+    if (ptr.size == .one) {
+        switch (@typeInfo(ptr.child)) {
+            .@"fn" => {},
+            else => displayField(field_name, field_value_ptr.*, depth, field_option, options, al),
+        }
+    } else if (ptr.size == .slice) {
+        // TODO: Thjis will need to take depth righty? It could be an array of structs?
+        displayArray(field_name, field_value_ptr, field_option, options, al);
+    } else {
+        @compileError(std.fmt.comptimePrint("C-style and many item pointers not supported for {s}\n", .{@typeName(@TypeOf(field_value_ptr.*))}));
+    }
+}
 
 test {
     @import("std").testing.refAllDecls(@This());
