@@ -168,7 +168,7 @@ const Enum = enum { x, y, z };
 
 const U1 = union(enum) {
     a: S1,
-    //b: enum { one, two, three },
+    b2: enum { one, two, three },
     b: f32,
     c: Enum,
     d: ?S1,
@@ -211,7 +211,7 @@ fn gui_frame() void {
         defer al.deinit();
         //wholeStruct(@src(), "basic_types_const", &basic_types_const, 0, .{});
         //        dvui.se.displayStruct("basic_types_const", &basic_types_const, 0, .{ .standard = .{} }, .{}, &al);
-        dvui.se.displayArray("array_of_struct", &array_of_struct, 1, .{ .standard = .{} }, .{}, &al);
+        //dvui.se.displayArray("array_of_struct", &array_of_struct, 1, .{ .standard = .{} }, .{}, &al);
     }
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
@@ -223,9 +223,9 @@ fn gui_frame() void {
         //var ts: TestStruct = .{};
         //dvui.se.displayStruct("test_struct", &ts, 0, .{ .standard = .{} }, .{}, &al);
 
-        //        const uo: dvui.se.StructOptions(U1) = .initDefaults(.{ .a = .{} });
-        //        const so: dvui.se.StructOptions(Union1) = .initDefaults(.{});
-        //        dvui.se.displayStruct("U1", &union1, 1, .{ .standard = .{} }, .{ uo, so }, &al);
+        const uo: dvui.se.StructOptions(U1) = .initDefaults(.{ .a = .{} });
+        const so: dvui.se.StructOptions(Union1) = .initDefaults(.{});
+        dvui.se.displayStruct("U1", &union1, 1, .{ .standard = .{} }, .{ uo, so }, &al);
         //        }
         //
         //sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);

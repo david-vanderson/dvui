@@ -73,7 +73,7 @@ pub fn StructOptions(T: type) type {
         //}
 
         pub fn defaultFieldOption(FieldType: type) FieldOptions {
-            return switch (@typeInfo(FieldType)) {
+            const result: FieldOptions = switch (@typeInfo(FieldType)) {
                 .int, .float => .{ .number = .{} },
                 .pointer => |ptr| if (ptr.size == .slice and ptr.child == u8)
                     .{
@@ -85,6 +85,8 @@ pub fn StructOptions(T: type) type {
                 .array => |arr| defaultFieldOption(arr.child),
                 else => .{ .standard = .{} },
             };
+            //@compileLog(FieldType, result);
+            return result;
         }
     };
 }
@@ -444,7 +446,7 @@ pub fn textFieldWidgetBuf(
 
 pub fn unionFieldWidget(
     src: std.builtin.SourceLocation,
-    comptime field_name: []const u8,
+    field_name: []const u8,
     field_ptr: anytype,
     opt: FieldOptions,
     alignment: *dvui.Alignment,
@@ -1112,10 +1114,33 @@ pub fn displayField(
 
 pub fn displayUnion(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: FieldOptions, options: anytype, al: *dvui.Alignment) void {
     const writeable = if (@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) "RO" else "RW";
+
+    const current_choice = std.meta.activeTag(field_value_ptr.*);
+    const new_choice = dvui.se.unionFieldWidget(@src(), field_name, field_value_ptr, field_option, al);
+    const UnionT = @TypeOf(field_value_ptr.*);
+    if (current_choice != new_choice) {
+        switch (new_choice) {
+            inline else => |choice| {
+                field_value_ptr.* = @unionInit(
+                    UnionT,
+                    @tagName(choice),
+                    defaultValue(
+                        @FieldType(UnionT, @tagName(choice)),
+                        field_option,
+                        options,
+                    ) orelse undefined,
+                );
+            },
+        }
+    }
     switch (field_value_ptr.*) {
         inline else => |*active, active_tag| {
             std.debug.print("{s} = {s} ({s})\n", .{ field_name, @tagName(active_tag), writeable });
-            displayField(@tagName(active_tag), active, depth, field_option, options, al);
+            const struct_options: StructOptions(UnionT) = findMatchingStructOption(UnionT, options) orelse .initDefaults(null);
+            // Will only display if an option exists for this field.
+            if (struct_options.options.get(active_tag)) |union_field_option| {
+                displayField(@tagName(active_tag), active, depth, union_field_option, options, al);
+            }
         },
     }
 }
@@ -1143,6 +1168,52 @@ pub fn displayPointer(field_name: []const u8, field_value_ptr: anytype, comptime
         displayArray(field_name, field_value_ptr, field_option, options, al);
     } else {
         @compileError(std.fmt.comptimePrint("C-style and many item pointers not supported for {s}\n", .{@typeName(@TypeOf(field_value_ptr.*))}));
+    }
+}
+
+/// Supply a default value for a field
+pub fn defaultValue(T: type, field_option: dvui.se.FieldOptions, struct_options: anytype) ?T { // TODO: Field is not anytype
+    if (T == []u8 or T == []const u8) {
+        if (field_option.text.buffer) |buf| {
+            return buf;
+        }
+    }
+    switch (@typeInfo(T)) {
+        inline .bool => return false,
+        inline .int => return 0,
+        inline .float => return 0.0,
+        inline .@"struct" => |si| {
+            comptime var default_found = false;
+            inline for (struct_options) |opt| {
+                if (@TypeOf(opt).StructT == T) { //} and opt.default_value != null) {
+                    default_found = true;
+                    return opt.default_value;
+                }
+            }
+            if (!default_found) {
+                // TODO: This will just return null now and do a runtime debug message.
+                inline for (si.fields) |field| {
+                    if (field.defaultValue() == null) {
+                        @compileError(std.fmt.comptimePrint("field {s} for struct {s} does not support default initialization", .{ field.name, @typeName(T) }));
+                    }
+                }
+            }
+            return .{};
+        },
+        inline .@"union" => |_| {
+            inline for (struct_options) |opt| {
+                //@compileLog(@TypeOf(opt).StructT, T);
+                if (@TypeOf(opt).StructT == T) { //} and opt.default_value != null) {
+                    //@compileLog("found");
+                    //                    std.debug.print("returning: {?any}\n", .{opt.default_value});
+                    return opt.default_value;
+                }
+            }
+            return null;
+        },
+
+        inline .@"enum" => |e| return @enumFromInt(e.fields[0].value),
+        inline else => return null,
     }
 }
 
