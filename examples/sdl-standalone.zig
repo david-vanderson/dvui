@@ -124,11 +124,7 @@ const TestStruct = struct {
     struct_ptr_11: *C1 = &c1, // TODO: FIX
 };
 
-const StringStruct = struct {
-    array_of_u8: [6]u8 = .{ 's', 't', 'r', 'i', 'n', 'g' },
-    slice_of_const: []const u8 = "string",
-    slice_of_var: []u8,
-};
+var array_of_struct: [3]TestStruct = .{ .{}, .{}, .{} };
 
 // All possible runtime basic types.
 const BasicTypes = struct {
@@ -214,7 +210,8 @@ fn gui_frame() void {
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
         //wholeStruct(@src(), "basic_types_const", &basic_types_const, 0, .{});
-        dvui.se.displayStruct("basic_types_const", &basic_types_const, 0, .{ .standard = .{} }, .{}, &al);
+        //        dvui.se.displayStruct("basic_types_const", &basic_types_const, 0, .{ .standard = .{} }, .{}, &al);
+        dvui.se.displayArray("array_of_struct", &array_of_struct, 1, .{ .standard = .{} }, .{}, &al);
     }
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
@@ -223,8 +220,8 @@ fn gui_frame() void {
         defer al.deinit();
 
         //dvui.se.displayStruct("basic_types_var", &basic_types_var, 0, .{}, .{}, &al);
-        var ts: TestStruct = .{};
-        dvui.se.displayStruct("test_struct", &ts, 0, .{ .standard = .{} }, .{}, &al);
+        //var ts: TestStruct = .{};
+        //dvui.se.displayStruct("test_struct", &ts, 0, .{ .standard = .{} }, .{}, &al);
 
         //        const uo: dvui.se.StructOptions(U1) = .initDefaults(.{ .a = .{} });
         //        const so: dvui.se.StructOptions(Union1) = .initDefaults(.{});
