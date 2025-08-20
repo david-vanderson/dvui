@@ -122,6 +122,12 @@ const TestStruct = struct {
     slice_opt10: ?[]u8 = &test_buf,
     struct_ptr_11: *C1 = &c1, // TODO: FIX
     struct_slice: []TestStruct = &array_of_struct,
+
+    pub const structui_options: dvui.se.StructOptions(TestStruct) = .init(.{
+        .int1 = .{ .number = .{ .min = 5, .max = 50, .widget_type = .slider } },
+        .slice7 = .{ .text = .{ .display = .read_only } },
+        .uint2 = .{ .number = .{ .display = .none } },
+    });
 };
 
 var array_of_struct: [3]TestStruct = .{ .{}, .{}, .{} };
@@ -214,8 +220,8 @@ fn gui_frame() void {
         //wholeStruct(@src(), "basic_types_const", &basic_types_const, 0, .{});
         //        dvui.se.displayStruct("basic_types_const", &basic_types_const, 0, .{ .standard = .{} }, .{}, &al);
         //dvui.se.displayArray("array_of_struct", &array_of_struct, 1, .{ .standard = .{} }, .{}, &al);
-        dvui.se.displayStruct("test_struct", &ts, 1, .{ .standard = .{} }, .{}, &al);
-        std.debug.print("final union val = {}\n", .{ts.union4});
+
+        dvui.se.displayStruct("test_struct", &ts, 1, .{ .standard = .{} }, .{TestStruct.structui_options}, &al);
     }
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });

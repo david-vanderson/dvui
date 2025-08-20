@@ -8,6 +8,10 @@ const border = dvui.Rect.all(1);
 // e.g. b: []u16, This should get a NumberFieldOption rather than a standard one, so we know how to display the values.
 // Check this is actually happening as expected.
 
+// Gives types as part of error messages.
+// Issue with field option buffer being applied to types and not fields as the
+// buffer could be shared between different types and there is no way around that?
+
 /// Field options control whether and how fields are displayed.
 /// Field can be hidden in two ways:
 /// 1) Setting display = .none,
@@ -21,6 +25,8 @@ pub const FieldOptions = union(enum) {
     standard: StandardFieldOptions,
     number: NumberFieldOptions,
     text: TextFieldOptions,
+
+    pub const standard_options: FieldOptions = .{ .standard = .{} };
 };
 
 /// Standard field options control the display mode and
@@ -45,12 +51,15 @@ pub fn StructOptions(T: type) type {
 
         /// Optionally provide overrides for some fields.
         /// Used as .init(&. { . { .a = . { .min_vslue = 10}}})
-        pub fn init(options: std.enums.EnumFieldStruct(
-            StructOptionsT.Key,
-            ?StructOptionsT.Value,
-            @as(?StructOptionsT.Value, null),
-        )) Self {
-            var self = initDefaults(null);
+        pub fn init(
+            options: std.enums.EnumFieldStruct(
+                StructOptionsT.Key,
+                ?StructOptionsT.Value,
+                @as(?StructOptionsT.Value, null),
+            ),
+            comptime default_value: ?T,
+        ) Self {
+            var self = initDefaults(default_value);
             inline for (0..self.options.values.len) |i| {
                 const key = comptime StructOptionsT.Indexer.keyForIndex(i);
                 if (@field(options, @tagName(key))) |*v| {
@@ -73,21 +82,19 @@ pub fn StructOptions(T: type) type {
             return .{ .options = defaults, .default_value = default_value };
         }
 
-        //pub fn override(self: *Self, options: std.enums.EnumFieldStruct(
-        //    StructOptionsT.Key,
-        //    ?StructOptionsT.Value,
-        //    @as(?StructOptionsT.Value, null),
-        //)) void {
-        //    self.doOverride(StructOptionsT.Key, options);
-        //}
-        //
-        //fn doOverride(self: *Self, comptime KeyType: type, options: anytype) void {
-        //    inline for (std.enums.values(KeyType)) |key| {
-        //        if (@field(options, @tagName(key))) {
-        //            self.options.put(key, @field(options, @tagName(key)));
-        //        }
-        //    }
-        //}
+        // override default options
+        pub fn override(self: *Self, options: std.enums.EnumFieldStruct(
+            StructOptionsT.Key,
+            ?StructOptionsT.Value,
+            @as(?StructOptionsT.Value, null),
+        )) void {
+            inline for (0..self.options.values.len) |i| {
+                const key = comptime StructOptionsT.Indexer.keyForIndex(i);
+                if (@field(options, @tagName(key))) |*v| {
+                    self.options.values[i] = v.*;
+                }
+            }
+        }
 
         /// Return a default value for a field if not default field has been supplied through
         /// StructOptions.

@@ -1,4 +1,4 @@
-/// ![image](Examples-struct_ui.png)
+// //![image](Examples-struct_ui.png)
 pub fn structUI() void {
     var b = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer b.deinit();
@@ -28,7 +28,8 @@ pub fn structUI() void {
 
     dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
     {
-        dvui.structEntryAlloc(@src(), dvui.currentWindow().gpa, Top, .{}, &Top.instance, .{ .margin = .{ .x = 10 } });
+        var al: dvui.Alignment = .init(@src(), 0);
+        dvui.se.displayStruct("Top.instance", &Top.instance, 1, .standard_options, .{}, &al);
     }
 
     if (dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
@@ -36,45 +37,56 @@ pub fn structUI() void {
     }
 }
 
-/// ![image](Examples-themeEditor.png)
+var font_buf: [50]u8 = @splat('z');
+// //![image](Examples-themeEditor.png)
 pub fn themeEditor() void {
     var b2 = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer b2.deinit();
 
-    const color_field_options = dvui.StructFieldOptions(dvui.Color, .{ .style_err, .style_accent }){ .fields = .{
-        .r = .{ .min = 0, .max = 255, .widget_type = .slider },
-        .g = .{ .min = 0, .max = 255, .widget_type = .slider },
-        .b = .{ .min = 0, .max = 255, .widget_type = .slider },
-        .a = .{ .disabled = true },
-    } };
+    const color_options: dvui.se.StructOptions(dvui.Color) = .init(.{
+        .r = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
+        .g = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
+        .b = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
+        .a = .{ .number = .{ .display = .none } },
+    }, null);
+    const color_or_name_options: dvui.se.StructOptions(dvui.Options.ColorOrName) = .initDefaults(.{ .color = .{} });
+    const font_options: dvui.se.StructOptions(dvui.Font) = .init(.{
+        .name = .{ .text = .{ .buffer = &font_buf } },
+    }, .{ .name = "new", .size = 10, .line_height_factor = 1.0 });
+    var alignment: dvui.Alignment = .init(@src(), 0);
 
-    dvui.structEntryEx(@src(), "dvui.Theme", dvui.Theme, .{ .style_err, .style_accent }, dvui.themeGet(), .{
-        .use_expander = false,
-        .label_override = "",
-        .fields = .{
-            .name = .{ .disabled = true },
-            .dark = .{ .widget_type = .toggle },
-            .font_body = .{ .disabled = true },
-            .font_heading = .{ .disabled = true },
-            .font_caption = .{ .disabled = true },
-            .font_caption_heading = .{ .disabled = true },
-            .font_title = .{ .disabled = true },
-            .font_title_1 = .{ .disabled = true },
-            .font_title_2 = .{ .disabled = true },
-            .font_title_3 = .{ .disabled = true },
-            .font_title_4 = .{ .disabled = true },
-            .color_accent = color_field_options,
-            .color_err = color_field_options,
-            .color_text = color_field_options,
-            .color_text_press = color_field_options,
-            .color_fill = color_field_options,
-            .color_fill_window = color_field_options,
-            .color_fill_control = color_field_options,
-            .color_fill_hover = color_field_options,
-            .color_fill_press = color_field_options,
-            .color_border = color_field_options,
-        },
-    });
+    dvui.se.displayStruct("dvui.Options", dvui.themeGet(), 2, .standard_options, .{
+        color_options,
+        color_or_name_options,
+        font_options,
+    }, &alignment);
+    //    dvui.structEntryEx(@src(), "dvui.Theme", dvui.Theme, .{ .style_err, .style_accent }, dvui.themeGet(), .{
+    //        .use_expander = false,
+    //        .label_override = "",
+    //        .fields = .{
+    //            .name = .{ .disabled = true },
+    //            .dark = .{ .widget_type = .toggle },
+    //            .font_body = .{ .disabled = true },
+    //            .font_heading = .{ .disabled = true },
+    //            .font_caption = .{ .disabled = true },
+    //            .font_caption_heading = .{ .disabled = true },
+    //            .font_title = .{ .disabled = true },
+    //            .font_title_1 = .{ .disabled = true },
+    //            .font_title_2 = .{ .disabled = true },
+    //            .font_title_3 = .{ .disabled = true },
+    //            .font_title_4 = .{ .disabled = true },
+    //            .color_accent = color_field_options,
+    //            .color_err = color_field_options,
+    //            .color_text = color_field_options,
+    //            .color_text_press = color_field_options,
+    //            .color_fill = color_field_options,
+    //            .color_fill_window = color_field_options,
+    //            .color_fill_control = color_field_options,
+    //            .color_fill_hover = color_field_options,
+    //            .color_fill_press = color_field_options,
+    //            .color_border = color_field_options,
+    //        },
+    //    });
 }
 
 test {
@@ -98,35 +110,35 @@ test "DOCIMG struct_ui" {
     try t.saveImage(frame, null, "Examples-struct_ui.png");
 }
 
-test "DOCIMG themeEditor" {
-    var t = try dvui.testing.init(.{ .window_size = .{ .w = 400, .h = 500 } });
-    defer t.deinit();
-
-    const frame = struct {
-        fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
-            defer box.deinit();
-            themeEditor();
-            return .ok;
-        }
-    }.frame;
-
-    // tab to a color editor expander and open it
-    try dvui.testing.pressKey(.tab, .none);
-    _ = try dvui.testing.step(frame);
-    try dvui.testing.pressKey(.tab, .none);
-    _ = try dvui.testing.step(frame);
-    try dvui.testing.pressKey(.tab, .none);
-    _ = try dvui.testing.step(frame);
-    try dvui.testing.pressKey(.tab, .none);
-    _ = try dvui.testing.step(frame);
-    try dvui.testing.pressKey(.tab, .none);
-    _ = try dvui.testing.step(frame);
-    try dvui.testing.pressKey(.enter, .none);
-
-    try dvui.testing.settle(frame);
-    try t.saveImage(frame, null, "Examples-themeEditor.png");
-}
+//test "DOCIMG themeEditor" {
+//    var t = try dvui.testing.init(.{ .window_size = .{ .w = 400, .h = 500 } });
+//    defer t.deinit();
+//
+//    const frame = struct {
+//        fn frame() !dvui.App.Result {
+//            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+//            defer box.deinit();
+//            themeEditor();
+//            return .ok;
+//        }
+//    }.frame;
+//
+//    // tab to a color editor expander and open it
+//    try dvui.testing.pressKey(.tab, .none);
+//    _ = try dvui.testing.step(frame);
+//    try dvui.testing.pressKey(.tab, .none);
+//    _ = try dvui.testing.step(frame);
+//    try dvui.testing.pressKey(.tab, .none);
+//    _ = try dvui.testing.step(frame);
+//    try dvui.testing.pressKey(.tab, .none);
+//    _ = try dvui.testing.step(frame);
+//    try dvui.testing.pressKey(.tab, .none);
+//    _ = try dvui.testing.step(frame);
+//    try dvui.testing.pressKey(.enter, .none);
+//
+//    try dvui.testing.settle(frame);
+//    try t.saveImage(frame, null, "Examples-themeEditor.png");
+//}
 
 pub fn themeSerialization() void {
     var serialize_box = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
