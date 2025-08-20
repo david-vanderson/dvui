@@ -7,6 +7,8 @@ const border = dvui.Rect.all(1);
 // children.
 // e.g. b: []u16, This should get a NumberFieldOption rather than a standard one, so we know how to display the values.
 // Check this is actually happening as expected.
+// Can't currently control display order or omit options. Maybe the normal init shouldn't do a default init first
+// and then need to check which fields are set with values, which I beleive is possible with the EnumArray.
 
 // Gives types as part of error messages.
 // Issue with field option buffer being applied to types and not fields as the

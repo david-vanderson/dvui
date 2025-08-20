@@ -1,4 +1,4 @@
-// //![image](Examples-struct_ui.png)
+///![image](Examples-struct_ui.png)
 pub fn structUI() void {
     var b = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer b.deinit();
@@ -19,7 +19,7 @@ pub fn structUI() void {
         a_bool: bool = false,
         a_ptr: *TopChild = undefined,
         a_struct: TopChild = .{ .a_dir = .vertical },
-        a_str: []const u8 = &[_]u8{0} ** 20,
+        a_str: []const u8 = &[_]u8{'$'} ** 20,
         a_slice: []TopChild = undefined,
         an_array: [4]u8 = .{ 1, 2, 3, 4 },
 
@@ -38,7 +38,8 @@ pub fn structUI() void {
 }
 
 var font_buf: [50]u8 = @splat('z');
-// //![image](Examples-themeEditor.png)
+
+///![image](Examples-themeEditor.png)
 pub fn themeEditor() void {
     var b2 = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer b2.deinit();
@@ -50,43 +51,18 @@ pub fn themeEditor() void {
         .a = .{ .number = .{ .display = .none } },
     }, null);
     const color_or_name_options: dvui.se.StructOptions(dvui.Options.ColorOrName) = .initDefaults(.{ .color = .{} });
-    const font_options: dvui.se.StructOptions(dvui.Font) = .init(.{
-        .name = .{ .text = .{ .buffer = &font_buf } },
-    }, .{ .name = "new", .size = 10, .line_height_factor = 1.0 });
+    // TODO: Becuase there are multiple fonts, each needs it's own text buffer, but we don't currently
+    // have a good way to supplty that. Hmm. Maybe we do need a callback?
+    //const font_options: dvui.se.StructOptions(dvui.Font) = .init(.{
+    //    .name = .{ .text = .{ .buffer = &font_buf } },
+    //}, .{ .name = "new", .size = 10, .line_height_factor = 1.0 });
     var alignment: dvui.Alignment = .init(@src(), 0);
 
     dvui.se.displayStruct("dvui.Options", dvui.themeGet(), 2, .standard_options, .{
         color_options,
         color_or_name_options,
-        font_options,
+        //font_options,
     }, &alignment);
-    //    dvui.structEntryEx(@src(), "dvui.Theme", dvui.Theme, .{ .style_err, .style_accent }, dvui.themeGet(), .{
-    //        .use_expander = false,
-    //        .label_override = "",
-    //        .fields = .{
-    //            .name = .{ .disabled = true },
-    //            .dark = .{ .widget_type = .toggle },
-    //            .font_body = .{ .disabled = true },
-    //            .font_heading = .{ .disabled = true },
-    //            .font_caption = .{ .disabled = true },
-    //            .font_caption_heading = .{ .disabled = true },
-    //            .font_title = .{ .disabled = true },
-    //            .font_title_1 = .{ .disabled = true },
-    //            .font_title_2 = .{ .disabled = true },
-    //            .font_title_3 = .{ .disabled = true },
-    //            .font_title_4 = .{ .disabled = true },
-    //            .color_accent = color_field_options,
-    //            .color_err = color_field_options,
-    //            .color_text = color_field_options,
-    //            .color_text_press = color_field_options,
-    //            .color_fill = color_field_options,
-    //            .color_fill_window = color_field_options,
-    //            .color_fill_control = color_field_options,
-    //            .color_fill_hover = color_field_options,
-    //            .color_fill_press = color_field_options,
-    //            .color_border = color_field_options,
-    //        },
-    //    });
 }
 
 test {
