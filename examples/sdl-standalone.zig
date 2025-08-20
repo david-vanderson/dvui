@@ -133,7 +133,7 @@ const TestStruct = struct {
         .int1 = .{ .number = .{ .min = 5, .max = 50, .widget_type = .slider } },
         .slice7 = .{ .text = .{ .display = .read_only } },
         .uint2 = .{ .number = .{ .display = .none } },
-    });
+    }, null);
 };
 
 var array_of_struct: [3]TestStruct = .{ .{}, .{}, .{} };
@@ -218,7 +218,7 @@ fn gui_frame() void {
             }
         }
     }
-    var hbox = dvui.box(@src(), .horizontal, .{ .color_fill = .fill_window, .background = true });
+    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .color_fill = dvui.themeGet().window.fill, .background = true });
     defer hbox.deinit();
 
     {

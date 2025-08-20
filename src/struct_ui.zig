@@ -3,6 +3,8 @@ const dvui = @import("dvui.zig");
 
 const border = dvui.Rect.all(1);
 
+// TODO: Log an error, or disable checkbox if optional doesn't have a default.
+
 // TODO: For pointers and arrays, work out whether FieldOptions are applying to the pointer or the
 // children.
 // e.g. b: []u16, This should get a NumberFieldOption rather than a standard one, so we know how to display the values.
