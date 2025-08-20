@@ -84,7 +84,6 @@ pub fn StructOptions(T: type) type {
                     const key = StructOptionsT.Indexer.keyForIndex(i);
                     const field_name = @tagName(key);
                     defaults.put(key, defaultFieldOption(@FieldType(T, field_name)));
-                    //@compileLog(T, field_name, defaults.values[i]);
                 }
             }
             return .{ .options = defaults, .default_value = default_value };
@@ -558,6 +557,7 @@ pub fn displayNumber(field_name: []const u8, field_value_ptr: anytype, field_opt
 }
 
 pub fn displayEnum(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+    validateFieldPtrType(.@"enum:", "displayEnum", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .standard)) return;
     enumFieldWidget(@src(), field_name, field_value_ptr, field_option.standard, al);
 }
@@ -568,6 +568,7 @@ pub fn displayString(field_name: []const u8, field_value_ptr: anytype, field_opt
 }
 
 pub fn displayBool(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+    validateFieldPtrType(.bool, "displayBool", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .standard)) return;
     boolFieldWidget(@src(), field_name, field_value_ptr, field_option.standard, al);
 }
@@ -618,6 +619,7 @@ pub fn displaySlice(field_name: []const u8, field_value_ptr: anytype, comptime d
 }
 
 pub fn displayUnion(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: FieldOptions, options: anytype, al: *dvui.Alignment) void {
+    validateFieldPtrType(.@"union", "displayUnion", @TypeOf(field_value_ptr));
     const current_choice = std.meta.activeTag(field_value_ptr.*);
     var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{
         .expand = .vertical,
@@ -664,6 +666,7 @@ pub fn displayUnion(field_name: []const u8, field_value_ptr: anytype, comptime d
 }
 
 pub fn displayOptional(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: FieldOptions, options: anytype, al: *dvui.Alignment) void {
+    validateFieldPtrType(.optional, "displayOptional", @TypeOf(field_value_ptr));
     const optional = @typeInfo(@TypeOf(field_value_ptr.*)).optional;
 
     if (optionalFieldWidget(@src(), field_name, field_value_ptr, field_option, al)) {
@@ -683,6 +686,8 @@ pub fn displayOptional(field_name: []const u8, field_value_ptr: anytype, comptim
 }
 
 pub fn displayPointer(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: FieldOptions, options: anytype, al: *dvui.Alignment) void {
+    validateFieldPtrType(.pointer, "displayPointer", @TypeOf(field_value_ptr));
+
     const ptr = @typeInfo(@TypeOf(field_value_ptr.*)).pointer;
     if (ptr.size == .one) {
         displayField(field_name, field_value_ptr.*, depth, field_option, options, al);
@@ -694,6 +699,7 @@ pub fn displayPointer(field_name: []const u8, field_value_ptr: anytype, comptime
 }
 
 pub fn displayStruct(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: FieldOptions, options: anytype, al: *dvui.Alignment) void {
+    validateFieldPtrType(.@"struct", "displayStruct", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .standard)) return;
     if (field_option.standard.display == .none) return;
 
@@ -772,6 +778,27 @@ pub fn validFieldOptionsType(field_name: []const u8, field_option: FieldOptions,
         return false;
     }
     return true;
+}
+
+pub fn validateFieldPtrType(comptime required_type: std.builtin.TypeId, comptime caller: []const u8, comptime ptr_type: type) void {
+    const type_info = @typeInfo(ptr_type);
+    switch (type_info) {
+        .pointer => |ptr| {
+            switch (ptr.size) {
+                .one => {
+                    if (@typeInfo(ptr.child) == required_type) {
+                        return;
+                    }
+                },
+                else => {}, // Fallthrough
+            }
+        },
+        else => {}, // Fallthrough
+    }
+    @compileError(std.fmt.comptimePrint(
+        "{s} requires a pointer to a {s}, but received a {s} for {s}.",
+        .{ caller, @tagName(required_type), @tagName(type_info), @typeName(ptr_type) },
+    ));
 }
 
 test {
