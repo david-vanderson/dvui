@@ -44,6 +44,10 @@ pub const StandardFieldOptions = struct {
 /// the struct must be created. e.g. from setting an optional.
 // TODO: The initialization with overrides doesn't work. pls fix.
 pub fn StructOptions(T: type) type {
+    switch (@typeInfo(T)) {
+        .@"struct", .@"union" => {},
+        else => @compileError(std.fmt.comptimePrint("StructUI: StructOptions(T) requires Struct or Union, but received a {s}.", .{@typeName(T)})),
+    }
     return struct {
         pub const StructOptionsT = std.EnumMap(std.meta.FieldEnum(T), FieldOptions);
         const Self = @This();
@@ -236,12 +240,12 @@ pub fn numberFieldWidget(
 
     switch (opt.widget_type) {
         .number_entry => {
-            var box = dvui.box(src, .horizontal, .{});
+            var box = dvui.box(src, .{ .dir = .horizontal }, .{});
             defer box.deinit();
 
             dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{});
 
-            var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
+            var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
 
@@ -258,7 +262,7 @@ pub fn numberFieldWidget(
             dvui.label(@src(), "{}", .{field_ptr.*}, .{});
         },
         .slider => {
-            var box = dvui.box(src, .horizontal, .{});
+            var box = dvui.box(src, .{ .dir = .horizontal }, .{});
             defer box.deinit();
 
             dvui.label(@src(), "{s}", .{field_name}, .{});
@@ -292,21 +296,23 @@ pub fn enumFieldWidget(
 
     const read_only = @typeInfo(@TypeOf(field_ptr)).pointer.is_const;
 
-    var box = dvui.box(src, .horizontal, .{});
+    var box = dvui.box(src, .{ .dir = .horizontal }, .{});
     defer box.deinit();
 
     dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{});
-    var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
+    var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
     defer hbox_aligned.deinit();
     alignment.record(box.data().id, hbox_aligned.data());
 
     if (read_only) {
         dvui.label(@src(), "{s}", .{@tagName(field_ptr.*)}, .{});
     } else {
-        const entries = std.meta.fieldNames(T);
-        var choice: usize = @intFromEnum(field_ptr.*);
+        const choices = std.meta.FieldEnum(T);
+        const entries = std.meta.fieldNames(choices);
+        var choice: usize = @intFromEnum(std.meta.stringToEnum(std.meta.FieldEnum(T), @tagName(field_ptr.*)).?);
         _ = dvui.dropdown(@src(), entries, &choice, .{});
-        field_ptr.* = @enumFromInt(choice);
+
+        field_ptr.* = std.meta.stringToEnum(T, @tagName(@as(std.meta.FieldEnum(T), @enumFromInt(choice)))).?;
     }
 }
 
@@ -324,11 +330,11 @@ pub fn boolFieldWidget(
 
     const read_only = @typeInfo(@TypeOf(field_ptr)).pointer.is_const;
 
-    var box = dvui.box(src, .horizontal, .{});
+    var box = dvui.box(src, .{ .dir = .horizontal }, .{});
     defer box.deinit();
 
     dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{});
-    var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
+    var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
     defer hbox_aligned.deinit();
     alignment.record(box.data().id, hbox_aligned.data());
 
@@ -367,7 +373,7 @@ pub fn textFieldWidget(
         @compileError(std.fmt.comptimePrint("{s} must be an array or slice of u8 or const u8, but is a {s}\n", .{ field_name, @typeName(T) }));
     }
 
-    var box = dvui.box(src, .horizontal, .{});
+    var box = dvui.box(src, .{ .dir = .horizontal }, .{});
     defer box.deinit();
 
     dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{});
@@ -392,7 +398,7 @@ pub fn textFieldWidget(
                 }
             };
 
-            var hbox_aligned = dvui.box(@src(), .horizontal, .{ .margin = alignment.margin(box.data().id) });
+            var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
 
@@ -437,7 +443,7 @@ pub fn unionFieldWidget(
         @compileError(std.fmt.comptimePrint("{s} must be a tagged union field, but is a {s}\n", .{ field_name, @typeName(T) }));
     }
 
-    var box = dvui.box(src, .vertical, .{});
+    var box = dvui.box(src, .{ .dir = .vertical }, .{});
     defer box.deinit();
 
     const entries = std.meta.fields(T);
@@ -472,14 +478,14 @@ pub fn optionalFieldWidget(
         @compileError(std.fmt.comptimePrint("{s} must be an optional field, but is a {s}\n", .{ field_name, @typeName(T) }));
     }
 
-    const box = dvui.box(src, .vertical, .{});
+    const box = dvui.box(src, .{ .dir = .vertical }, .{});
     defer box.deinit();
     var checkbox_state: bool = field_ptr.* != null;
     {
         const display_name = switch (opts) {
             inline else => |opt| opt.label orelse field_name,
         };
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
         dvui.label(@src(), "{s}?", .{display_name}, .{});
         _ = dvui.checkbox(@src(), &checkbox_state, null, .{});
@@ -566,7 +572,7 @@ pub fn displayBool(field_name: []const u8, field_value_ptr: anytype, field_optio
 
 pub fn displayArray(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: FieldOptions, options: anytype, al: *dvui.Alignment) void {
     if (dvui.expander(@src(), field_name, .{ .default_expanded = true }, .{ .expand = .horizontal })) {
-        var vbox = dvui.box(@src(), .vertical, .{
+        var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{
             .expand = .vertical,
             .border = .{ .x = 1 },
             .background = true,
@@ -576,7 +582,7 @@ pub fn displayArray(field_name: []const u8, field_value_ptr: anytype, comptime d
 
         for (field_value_ptr, 0..) |*val, i| {
             // TODO: Aligmmnent
-            var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .id_extra = i });
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = i });
             defer hbox.deinit();
 
             var field_name_buf: [20]u8 = undefined; // 20 chars = u64
@@ -588,7 +594,7 @@ pub fn displayArray(field_name: []const u8, field_value_ptr: anytype, comptime d
 
 pub fn displaySlice(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: FieldOptions, options: anytype, al: *dvui.Alignment) void {
     if (dvui.expander(@src(), field_name, .{ .default_expanded = true }, .{ .expand = .horizontal })) {
-        var vbox = dvui.box(@src(), .vertical, .{
+        var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{
             .expand = .vertical,
             .border = .{ .x = 1 },
             .background = true,
@@ -599,7 +605,7 @@ pub fn displaySlice(field_name: []const u8, field_value_ptr: anytype, comptime d
         for (field_value_ptr.*, 0..) |*val, i| {
             // TODO: Aligmmnent
 
-            var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .id_extra = i });
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = i });
             defer hbox.deinit();
 
             var field_name_buf: [20]u8 = undefined; // 20 chars = u64
@@ -611,7 +617,7 @@ pub fn displaySlice(field_name: []const u8, field_value_ptr: anytype, comptime d
 
 pub fn displayUnion(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: FieldOptions, options: anytype, al: *dvui.Alignment) void {
     const current_choice = std.meta.activeTag(field_value_ptr.*);
-    var vbox = dvui.box(@src(), .vertical, .{
+    var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{
         .expand = .vertical,
         .border = .{ .x = 1 },
         .background = true,
@@ -644,7 +650,7 @@ pub fn displayUnion(field_name: []const u8, field_value_ptr: anytype, comptime d
     switch (field_value_ptr.*) {
         inline else => |*active, active_tag| {
             // Create the hbox so each tag gets a unique @src() to prevent accidentally sharing widgets between tags.
-            const hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .id_extra = @intFromEnum(active_tag) });
+            const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = @intFromEnum(active_tag) });
             defer hbox.deinit();
             const struct_options: StructOptions(UnionT) = findMatchingStructOption(UnionT, options) orelse .initDefaults(null);
             // Will only display if an option exists for this field.
@@ -693,7 +699,7 @@ pub fn displayStruct(field_name: []const u8, field_value_ptr: anytype, comptime 
     const struct_options: StructOptions(StructT) = findMatchingStructOption(StructT, options) orelse .initDefaults(null);
 
     if (dvui.expander(@src(), field_name, .{ .default_expanded = true }, .{ .expand = .horizontal })) {
-        var vbox = dvui.box(@src(), .vertical, .{
+        var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{
             .expand = .vertical,
             .border = .{ .x = 1 },
             .background = true,
@@ -702,7 +708,7 @@ pub fn displayStruct(field_name: []const u8, field_value_ptr: anytype, comptime 
         defer vbox.deinit();
 
         inline for (struct_options.options.values, 0..) |sub_field_option, field_num| {
-            var box = dvui.box(@src(), .vertical, .{ .id_extra = field_num });
+            var box = dvui.box(@src(), .{ .dir = .vertical }, .{ .id_extra = field_num });
             defer box.deinit();
 
             const field = comptime @TypeOf(struct_options.options).Indexer.keyForIndex(field_num);
