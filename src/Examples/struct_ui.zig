@@ -29,7 +29,7 @@ pub fn structUI() void {
     dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
     {
         var al: dvui.Alignment = .init(@src(), 0);
-        dvui.se.displayStruct("Top.instance", &Top.instance, 1, .standard_options, .{}, &al);
+        dvui.struct_ui.displayStruct("Top.instance", &Top.instance, 1, .standard_options, .{}, &al);
     }
 
     if (dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
@@ -44,22 +44,22 @@ pub fn themeEditor() void {
     var b2 = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer b2.deinit();
 
-    const color_options: dvui.se.StructOptions(dvui.Color) = .init(.{
+    const color_options: dvui.struct_ui.StructOptions(dvui.Color) = .init(.{
         .r = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
         .g = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
         .b = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
         .a = .{ .number = .{ .display = .none } },
     }, .{ .r = 0, .g = 0, .b = 0, .a = 255 });
     // TODO: ColorOrName is no longer used. I think this comes from Theme now? Check
-    //const color_or_name_options: dvui.se.StructOptions(dvui.Options.ColorOrName) = .initDefaults(.{ .color = .{} });
+    //const color_or_name_options: dvui.struct_ui.StructOptions(dvui.Options.ColorOrName) = .initDefaults(.{ .color = .{} });
     // TODO: Becuase there are multiple fonts, each needs it's own text buffer, but we don't currently
     // have a good way to supplty that. Hmm. Maybe we do need a callback?
-    //const font_options: dvui.se.StructOptions(dvui.Font) = .init(.{
+    //const font_options: dvui.struct_ui.StructOptions(dvui.Font) = .init(.{
     //    .name = .{ .text = .{ .buffer = &font_buf } },
     //}, .{ .name = "new", .size = 10, .line_height_factor = 1.0 });
     var alignment: dvui.Alignment = .init(@src(), 0);
     const theme: *dvui.Theme = &dvui.currentWindow().theme; // Want a pointer to the actual theme, not a copy.
-    dvui.se.displayStruct("dvui.Options", theme, 2, .standard_options, .{
+    dvui.struct_ui.displayStruct("dvui.Options", theme, 2, .standard_options, .{
         color_options,
         //color_or_name_options,
         //font_options,

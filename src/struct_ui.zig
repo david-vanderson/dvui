@@ -625,7 +625,7 @@ pub fn displayUnion(field_name: []const u8, field_value_ptr: anytype, comptime d
     });
     defer vbox.deinit();
 
-    const new_choice = dvui.se.unionFieldWidget(@src(), field_name, field_value_ptr, field_option, al);
+    const new_choice = unionFieldWidget(@src(), field_name, field_value_ptr, field_option, al);
     const UnionT = @TypeOf(field_value_ptr.*);
     if (current_choice != new_choice) {
         switch (new_choice) {
@@ -664,7 +664,7 @@ pub fn displayUnion(field_name: []const u8, field_value_ptr: anytype, comptime d
 pub fn displayOptional(field_name: []const u8, field_value_ptr: anytype, comptime depth: usize, field_option: FieldOptions, options: anytype, al: *dvui.Alignment) void {
     const optional = @typeInfo(@TypeOf(field_value_ptr.*)).optional;
 
-    if (dvui.se.optionalFieldWidget(@src(), field_name, field_value_ptr, field_option, al)) {
+    if (optionalFieldWidget(@src(), field_name, field_value_ptr, field_option, al)) {
         if (field_value_ptr.* == null) {
             field_value_ptr.* = defaultValue(optional.child, field_option, options); // If there is no default value, it will remain null.
         }
@@ -718,7 +718,7 @@ pub fn displayStruct(field_name: []const u8, field_value_ptr: anytype, comptime 
 }
 
 /// Supply a default value for a field from supplied from either default field initialization values or from struct_options
-pub fn defaultValue(T: type, field_option: dvui.se.FieldOptions, struct_options: anytype) ?T { // TODO: Field is not anytype
+pub fn defaultValue(T: type, field_option: FieldOptions, struct_options: anytype) ?T { // TODO: Field is not anytype
     if (T == []u8 or T == []const u8) {
         if (field_option.text.buffer) |buf| {
             return buf;
@@ -777,7 +777,7 @@ test {
 }
 
 /// Returns the option from the passed in options tuple for type T.
-pub fn findMatchingStructOption(T: type, struct_options: anytype) ?dvui.se.StructOptions(T) {
+pub fn findMatchingStructOption(T: type, struct_options: anytype) ?StructOptions(T) {
     inline for (struct_options) |struct_option| {
         if (@TypeOf(struct_option).StructT == T) {
             return struct_option;
