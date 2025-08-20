@@ -121,6 +121,7 @@ const TestStruct = struct {
     array8: [13]u8 = @splat('y'),
     slice_opt10: ?[]u8 = &test_buf,
     struct_ptr_11: *C1 = &c1, // TODO: FIX
+    struct_slice: []TestStruct = &array_of_struct,
 };
 
 var array_of_struct: [3]TestStruct = .{ .{}, .{}, .{} };
@@ -181,8 +182,10 @@ var first_change: bool = true;
 var basic_types_var: BasicTypes = .{};
 const basic_types_const: BasicTypes = .{};
 
-const Union1 = struct { u: U1 = .{ .a = .{} } };
-var union1: Union1 = .{};
+const StructOfUnion1 = struct { u: U1 = .{ .a = .{} } };
+var struct_of_union1: StructOfUnion1 = .{};
+
+var ts: TestStruct = .{};
 
 // both dvui and SDL drawing
 fn gui_frame() void {
@@ -211,6 +214,8 @@ fn gui_frame() void {
         //wholeStruct(@src(), "basic_types_const", &basic_types_const, 0, .{});
         //        dvui.se.displayStruct("basic_types_const", &basic_types_const, 0, .{ .standard = .{} }, .{}, &al);
         //dvui.se.displayArray("array_of_struct", &array_of_struct, 1, .{ .standard = .{} }, .{}, &al);
+        dvui.se.displayStruct("test_struct", &ts, 1, .{ .standard = .{} }, .{}, &al);
+        std.debug.print("final union val = {}\n", .{ts.union4});
     }
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
@@ -222,9 +227,9 @@ fn gui_frame() void {
         //var ts: TestStruct = .{};
         //dvui.se.displayStruct("test_struct", &ts, 0, .{ .standard = .{} }, .{}, &al);
 
-        const uo: dvui.se.StructOptions(U1) = .initDefaults(.{ .a = .{} });
-        const so: dvui.se.StructOptions(Union1) = .initDefaults(.{});
-        dvui.se.displayStruct("U1", &union1, 1, .{ .standard = .{} }, .{ uo, so }, &al);
+        //        const uo: dvui.se.StructOptions(U1) = .initDefaults(.{ .a = .{} });
+        //        const so: dvui.se.StructOptions(StructOfUnion1) = .initDefaults(.{});
+        //        dvui.se.displayStruct("struct_of_union1", &struct_of_union1, 1, .{ .standard = .{} }, .{ uo, so }, &al);
         //        }
         //
         //sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);
@@ -255,7 +260,7 @@ fn gui_frame() void {
         //wholeStruct(@src(), &opts, 1);
         //_ = dvui.separator(@src(), .{ .expand = .horizontal });
     }
-    if (true) {
+    if (false) {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
