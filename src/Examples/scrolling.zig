@@ -7,7 +7,7 @@ pub fn scrolling() void {
     };
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer hbox.deinit();
         const Data = dvui.dataGetPtrDefault(null, hbox.data().id, "data", Data1, .{});
 
@@ -16,7 +16,7 @@ pub fn scrolling() void {
         var scroll_lock_visible = false;
 
         {
-            var vbox = dvui.box(@src(), .vertical, .{ .expand = .vertical });
+            var vbox = dvui.box(@src(), .{}, .{ .expand = .vertical });
             defer vbox.deinit();
 
             dvui.label(@src(), "{d} total widgets", .{2 * (Data.msg_end - Data.msg_start)}, .{});
@@ -26,7 +26,7 @@ pub fn scrolling() void {
             }
 
             {
-                var h2 = dvui.box(@src(), .horizontal, .{});
+                var h2 = dvui.box(@src(), .{ .dir = .horizontal }, .{});
                 defer h2.deinit();
                 if (dvui.button(@src(), "Add Above", .{}, .{})) {
                     Data.msg_start -|= 10;
@@ -65,7 +65,7 @@ pub fn scrolling() void {
             _ = dvui.spacer(@src(), .{ .expand = .vertical });
 
             {
-                var h2 = dvui.box(@src(), .horizontal, .{});
+                var h2 = dvui.box(@src(), .{ .dir = .horizontal }, .{});
                 defer h2.deinit();
                 if (dvui.button(@src(), "Add Below", .{}, .{})) {
                     Data.msg_end += 10;
@@ -86,17 +86,17 @@ pub fn scrolling() void {
             }
         }
         {
-            var vbox = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .max_size_content = .height(300) });
+            var vbox = dvui.box(@src(), .{}, .{ .expand = .horizontal, .max_size_content = .height(300) });
             defer vbox.deinit();
 
             dvui.label(@src(), "{d:0>4.2}% visible, offset {d} frac {d:0>4.2}", .{ Data.scroll_info.visibleFraction(.vertical) * 100.0, Data.scroll_info.viewport.y, Data.scroll_info.offsetFraction(.vertical) }, .{});
 
-            var scroll = dvui.scrollArea(@src(), .{ .scroll_info = &Data.scroll_info, .lock_visible = scroll_lock_visible }, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 } });
+            var scroll = dvui.scrollArea(@src(), .{ .scroll_info = &Data.scroll_info, .lock_visible = scroll_lock_visible }, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 }, .style = .content });
             defer scroll.deinit();
 
             for (Data.msg_start..Data.msg_end + 1) |i| {
                 {
-                    var tl = dvui.textLayout(@src(), .{}, .{ .id_extra = i, .color_fill = .fill_window });
+                    var tl = dvui.textLayout(@src(), .{}, .{ .id_extra = i, .style = .window });
                     defer tl.deinit();
 
                     tl.format("Message {d}", .{i}, .{});
@@ -106,7 +106,7 @@ pub fn scrolling() void {
                     }
                 }
 
-                var tl2 = dvui.textLayout(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0, .color_fill = .fill_window });
+                var tl2 = dvui.textLayout(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0, .style = .window });
                 tl2.format("Reply {d}", .{i}, .{});
                 tl2.deinit();
             }
@@ -122,7 +122,7 @@ pub fn scrolling() void {
     _ = dvui.separator(@src(), .{ .expand = .horizontal });
     _ = dvui.spacer(@src(), .{ .min_size_content = .all(12) });
 
-    var box2 = dvui.box(@src(), .vertical, .{ .expand = .horizontal });
+    var box2 = dvui.box(@src(), .{}, .{ .expand = .horizontal });
     defer box2.deinit();
 
     const siTop = dvui.dataGetPtrDefault(null, box2.data().id, "siTop", ScrollInfo, .{ .horizontal = .auto });
@@ -138,21 +138,21 @@ pub fn scrolling() void {
         main_area.installScrollBars();
 
         {
-            var hboxTop = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+            var hboxTop = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
             defer hboxTop.deinit();
 
-            var lbox = dvui.box(@src(), .vertical, .{ .min_size_content = .width(left_side_width) });
+            var lbox = dvui.box(@src(), .{}, .{ .min_size_content = .width(left_side_width) });
             dvui.label(@src(), "Linked\nScrolling", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
             lbox.deinit();
 
             _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
 
             {
-                var top_area = dvui.scrollArea(@src(), .{ .scroll_info = siTop, .frame_viewport = .{ .x = fv.x }, .horizontal_bar = .hide, .process_events_after = false }, .{ .expand = .both });
+                var top_area = dvui.scrollArea(@src(), .{ .scroll_info = siTop, .frame_viewport = .{ .x = fv.x }, .horizontal_bar = .hide, .process_events_after = false }, .{ .expand = .both, .style = .content });
                 defer top_area.deinit();
                 {
                     // inside top area
-                    var topbox = dvui.box(@src(), .horizontal, .{});
+                    var topbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
                     defer topbox.deinit();
 
                     for (0..20) |i| {
@@ -165,13 +165,13 @@ pub fn scrolling() void {
         _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
 
         {
-            var hbox3 = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+            var hbox3 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
             defer hbox3.deinit();
 
-            var side_area = dvui.scrollArea(@src(), .{ .scroll_info = siLeft, .frame_viewport = .{ .y = fv.y }, .vertical_bar = .hide, .process_events_after = false }, .{ .min_size_content = .{ .w = left_side_width, .h = 200 }, .expand = .vertical });
+            var side_area = dvui.scrollArea(@src(), .{ .scroll_info = siLeft, .frame_viewport = .{ .y = fv.y }, .vertical_bar = .hide, .process_events_after = false }, .{ .style = .content, .min_size_content = .{ .w = left_side_width, .h = 200 }, .expand = .vertical });
             {
                 // inside side area
-                var sidebox = dvui.box(@src(), .vertical, .{});
+                var sidebox = dvui.box(@src(), .{}, .{});
                 defer sidebox.deinit();
 
                 for (0..20) |i| {
@@ -183,7 +183,7 @@ pub fn scrolling() void {
             _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
 
             {
-                var scontainer = dvui.ScrollContainerWidget.init(@src(), siMain, .{ .scroll_area = &main_area, .frame_viewport = fv, .event_rect = main_area.data().borderRectScale().r }, .{ .expand = .both });
+                var scontainer = dvui.ScrollContainerWidget.init(@src(), siMain, .{ .scroll_area = &main_area, .frame_viewport = fv, .event_rect = main_area.data().borderRectScale().r }, .{ .style = .content, .expand = .both });
                 scontainer.install();
                 defer scontainer.deinit();
                 scontainer.processEvents();
@@ -191,10 +191,10 @@ pub fn scrolling() void {
 
                 {
                     // inside main area
-                    var mainbox = dvui.box(@src(), .vertical, .{});
+                    var mainbox = dvui.box(@src(), .{}, .{});
                     defer mainbox.deinit();
                     {
-                        var mainbox2 = dvui.box(@src(), .horizontal, .{});
+                        var mainbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{});
                         defer mainbox2.deinit();
                         for (0..20) |i| {
                             dvui.label(@src(), "label {d}", .{i}, .{ .id_extra = i });
@@ -229,7 +229,7 @@ test "DOCIMG scrolling" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             scrolling();
             return .ok;

@@ -23,6 +23,7 @@ pub var defaults: Options = .{
     .padding = Rect.all(6),
     .background = true,
     .min_size_content = .{ .w = 20, .h = 20 },
+    .style = .content,
 };
 
 pub const InitOptions = struct {
@@ -143,10 +144,10 @@ pub fn install(self: *PlotWidget) void {
         }
     }
 
-    var hbox1 = dvui.box(@src(), .horizontal, .{ .expand = .both });
+    var hbox1 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
 
     // y axis
-    var yaxis = dvui.box(@src(), .horizontal, .{ .expand = .vertical, .min_size_content = .{ .w = tick_width } });
+    var yaxis = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .vertical, .min_size_content = .{ .w = tick_width } });
     var yaxis_rect = yaxis.data().rect;
     if (self.y_axis.name) |yname| {
         if (yname.len > 0) {
@@ -160,7 +161,7 @@ pub fn install(self: *PlotWidget) void {
     //xaxis_padding.deinit();
 
     // data area
-    var data_box = dvui.box(@src(), .horizontal, .{ .expand = .both });
+    var data_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
 
     // mouse hover
     if (self.init_options.mouse_hover) {
@@ -194,7 +195,7 @@ pub fn install(self: *PlotWidget) void {
 
     hbox1.deinit();
 
-    var hbox2 = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+    var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
 
     // bottom left corner under y axis
     _ = dvui.spacer(@src(), .{ .min_size_content = .width(yaxis_rect.w), .expand = .vertical });
@@ -207,7 +208,7 @@ pub fn install(self: *PlotWidget) void {
     }
 
     // x axis
-    var xaxis = dvui.box(@src(), .vertical, .{ .gravity_y = 1.0, .expand = .horizontal, .min_size_content = .{ .h = x_tick_height } });
+    var xaxis = dvui.box(@src(), .{}, .{ .gravity_y = 1.0, .expand = .horizontal, .min_size_content = .{ .h = x_tick_height } });
     if (self.x_axis.name) |xname| {
         if (xname.len > 0) {
             dvui.label(@src(), "{s}", .{xname}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });

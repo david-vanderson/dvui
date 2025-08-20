@@ -260,7 +260,7 @@ export fn arena_u8(len: usize) [*c]u8 {
 
 export fn new_font(ptr: [*c]u8, len: usize) void {
     if (win_ok) {
-        win.font_bytes.put(win.gpa, "Noto", dvui.FontBytesEntry{ .ttf_bytes = ptr[0..len], .allocator = gpa }) catch unreachable;
+        win.font_bytes.put(win.gpa, .Noto, dvui.FontBytesEntry{ .name = @tagName(dvui.Font.FontId.Noto), .ttf_bytes = ptr[0..len], .allocator = gpa }) catch unreachable;
     }
 }
 
@@ -736,28 +736,28 @@ pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) void {
     }
 }
 
-pub fn openFilePicker(id: dvui.WidgetId, accept: ?[]const u8, multiple: bool) void {
+pub fn openFilePicker(id: dvui.Id, accept: ?[]const u8, multiple: bool) void {
     const accept_final = accept orelse "";
     wasm.wasm_open_file_picker(id.asU64(), accept_final.ptr, accept_final.len, multiple);
 }
 
-pub fn getFileName(id: dvui.WidgetId, file_index: usize) ?[:0]const u8 {
+pub fn getFileName(id: dvui.Id, file_index: usize) ?[:0]const u8 {
     const ptr = wasm.wasm_get_file_name(id.asU64(), file_index);
     if (@intFromPtr(ptr) <= 0) return null;
     return std.mem.sliceTo(ptr, 0);
 }
 
-pub fn getFileSize(id: dvui.WidgetId, file_index: usize) ?usize {
+pub fn getFileSize(id: dvui.Id, file_index: usize) ?usize {
     const size: isize = wasm.wasm_get_file_size(id.asU64(), file_index);
     if (size <= 0) return null;
     return @intCast(size);
 }
 
-pub fn readFileData(id: dvui.WidgetId, file_index: usize, data: [*]u8) void {
+pub fn readFileData(id: dvui.Id, file_index: usize, data: [*]u8) void {
     wasm.wasm_read_file_data(id.asU64(), file_index, data);
 }
 
-pub fn getNumberOfFilesAvailable(id: dvui.WidgetId) usize {
+pub fn getNumberOfFilesAvailable(id: dvui.Id) usize {
     return wasm.wasm_get_number_of_files_available(id.asU64());
 }
 
@@ -810,20 +810,28 @@ pub var back: WebBackend = undefined;
 
 fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
     const app = dvui.App.get() orelse return 404;
-    const init_opts = app.config.get();
     // TODO: Allow web backend to set title of browser tab via init_opts
     // TODO: Respect min size (maybe max size?) via css on the canvas element
     // TODO: Use the icon to set the browser tab icon (if possible considering size requirements)
-    _ = init_opts;
+    const init_opts = app.config.get();
 
     const platform = platform_ptr[0..platform_len];
     log.debug("platform: {s}", .{platform});
     const mac = if (std.mem.indexOf(u8, platform, "Mac") != null) true else false;
+    const windows = if (std.mem.indexOf(u8, platform, "Win32") != null) true else false;
 
     back = WebBackend.init() catch {
         return 1;
     };
-    win = dvui.Window.init(@src(), gpa, back.backend(), .{ .keybinds = if (mac) .mac else .windows }) catch {
+
+    var win_opts = init_opts.window_init_options;
+    if (win_opts.button_order == null) {
+        win_opts.button_order = if (windows) .ok_cancel else .cancel_ok;
+    }
+    if (win_opts.keybinds == null) {
+        win_opts.keybinds = if (mac) .mac else .windows;
+    }
+    win = dvui.Window.init(@src(), gpa, back.backend(), win_opts) catch {
         return 2;
     };
 
@@ -891,7 +899,7 @@ fn update() !i32 {
         .close => return -1,
     }
 
-    const wait_event_micros = win.waitTime(end_micros, null);
+    const wait_event_micros = win.waitTime(end_micros);
     return @intCast(@divTrunc(wait_event_micros, 1000));
 }
 

@@ -922,7 +922,7 @@ pub fn main() !void {
     b.log_events = true;
 
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, b.backend(), .{});
+    var win = try dvui.Window.init(@src(), gpa, b.backend(), init_opts.window_init_options);
     defer win.deinit();
 
     if (app.initFn) |initFn| {
@@ -963,7 +963,7 @@ pub fn main() !void {
         b.setCursor(win.cursorRequested());
 
         // waitTime and beginWait combine to achieve variable framerates
-        const wait_event_micros = win.waitTime(end_micros, null);
+        const wait_event_micros = win.waitTime(end_micros);
         b.EndDrawingWaitEventTimeout(wait_event_micros);
 
         if (res != .ok) break :main_loop;

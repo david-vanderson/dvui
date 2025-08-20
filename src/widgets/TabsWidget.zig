@@ -16,6 +16,7 @@ pub var defaults: Options = .{
 
 pub const InitOptions = struct {
     dir: dvui.enums.Direction = .horizontal,
+    draw_focus : bool = true,
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TabsWidget {
@@ -47,7 +48,7 @@ pub fn install(self: *TabsWidget) void {
                 r.w -= 1.0;
                 r.y = @floor(r.y) - 0.5;
             }
-            dvui.Path.stroke(.{ .points = &.{ r.bottomLeft(), r.bottomRight() } }, .{ .thickness = 1, .color = dvui.themeGet().color_border });
+            dvui.Path.stroke(.{ .points = &.{ r.bottomLeft(), r.bottomRight() } }, .{ .thickness = 1, .color = self.scroll.data().options.color(.border) });
         },
         .vertical => {
             if (dvui.currentWindow().snap_to_pixels) {
@@ -55,7 +56,7 @@ pub fn install(self: *TabsWidget) void {
                 r.h -= 1.0;
                 r.x = @floor(r.x) - 0.5;
             }
-            dvui.Path.stroke(.{ .points = &.{ r.topRight(), r.bottomRight() } }, .{ .thickness = 1, .color = dvui.themeGet().color_border });
+            dvui.Path.stroke(.{ .points = &.{ r.topRight(), r.bottomRight() } }, .{ .thickness = 1, .color = self.scroll.data().options.color(.border) });
         },
     }
 }
@@ -66,7 +67,7 @@ pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8) bool {
 
     var label_opts = tab.data().options.strip();
     if (dvui.captured(tab.data().id)) {
-        label_opts.color_text = .{ .name = .text_press };
+        label_opts.color_text = label_opts.color(.text_press);
     }
 
     dvui.labelNoFmt(@src(), text, .{}, label_opts);
@@ -83,14 +84,13 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
     self.tab_index += 1;
 
     if (selected) {
+        tab_defaults.style = .window;
         tab_defaults.font_style = .heading;
-        tab_defaults.color_fill = .{ .name = .fill_window };
         tab_defaults.border = switch (self.init_options.dir) {
             .horizontal => .{ .x = 1, .y = 1, .w = 1 },
             .vertical => .{ .x = 1, .y = 1, .h = 1 },
         };
     } else {
-        tab_defaults.color_fill = .{ .name = .fill_control };
         switch (self.init_options.dir) {
             .horizontal => tab_defaults.margin.?.h = 1,
             .vertical => tab_defaults.margin.?.w = 1,
@@ -109,7 +109,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
     self.tab_button.processEvents();
     self.tab_button.drawBackground();
 
-    if (self.tab_button.focused() and self.tab_button.data().visible()) {
+    if (self.tab_button.focused() and self.tab_button.data().visible() and self.init_options.draw_focus) {
         const rs = self.tab_button.data().borderRectScale();
         const r = rs.r;
         const cr = self.tab_button.data().options.corner_radiusGet();
@@ -129,7 +129,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
 
                 path.addPoint(r.bottomLeft());
 
-                path.build().stroke(.{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent, .after = true });
+                path.build().stroke(.{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus, .after = true });
             },
             .vertical => {
                 var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
@@ -145,7 +145,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
 
                 path.addPoint(r.bottomRight());
 
-                path.build().stroke(.{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent, .after = true });
+                path.build().stroke(.{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus, .after = true });
             },
         }
     }

@@ -140,7 +140,7 @@ If `Options.rect` is set, the widget is directly specifying its position and siz
 `subwindow` is the term dvui uses for floating windows/dialogs/popups/etc.  They are dvui widgets and are not detachable or moveable outside the OS window.
 
 ### Widget IDs
-Each widget gets a `WidgetId` (fancy u64) by combining:
+Each widget gets an `Id` (fancy u64) by combining:
 - parent's id (see https://github.com/david-vanderson/dvui/blob/main/README.md#parent-child-and-nesting )
 - @src() passed to widget
 - `.id_extra` field of Options passed to widget (defaults to 0)
@@ -155,7 +155,7 @@ Examples
 ```zig
 // caller is responsible for passing src and .id_extra if needed
 fn my_wrapper(src: std.builtin.SourceLocation, opts: Options) void {
-    var wrapper_box = dvui.box(src, .horizontal, opts);
+    var wrapper_box = dvui.box(src, .{ .dir = .horizontal }, opts);
     defer wrapper_box.deinit();
 
     // label is a child of wrapper_box, so can just call @src() here
@@ -164,13 +164,13 @@ fn my_wrapper(src: std.builtin.SourceLocation, opts: Options) void {
 
 pub fn frame() void {
     // normally we pass @src() and that is good enough
-    var vbox = dvui.box(@src(), .vertical, .{});
+    var vbox = dvui.box(@src(), .{}, .{});
     defer vbox.deinit();
 
     for (0..3) |i| {
         // this will be called multiple times with the same parent and
         // @src(), so pass .id_extra here to keep the IDs unique
-        var hbox = dvui.box(@src(), .horizontal, .{ .id_extra = i });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .id_extra = i });
 
         // label is a child of hbox, so can just call @src() here
         dvui.label(@src(), "Label {d}", .{i}, .{});

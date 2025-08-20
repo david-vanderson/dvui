@@ -1,9 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
-const Backend = dvui.backend;
+const SDLBackend = @import("sdl-backend");
 comptime {
-    std.debug.assert(@hasDecl(Backend, "SDLBackend"));
+    std.debug.assert(@hasDecl(SDLBackend, "SDLBackend"));
 }
 
 const window_icon_png = @embedFile("zig-favicon.png");
@@ -16,7 +16,7 @@ const show_demo = true;
 var scale_val: f32 = 1.0;
 
 var show_dialog_outside_frame: bool = false;
-var g_backend: ?Backend = null;
+var g_backend: ?SDLBackend = null;
 var g_win: ?*dvui.Window = null;
 
 /// This example shows how to use the dvui for a normal application:
@@ -28,14 +28,14 @@ pub fn main() !void {
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         dvui.Backend.Common.windowsAttachConsole() catch {};
     }
-    std.log.info("SDL version: {}", .{Backend.getSDLVersion()});
+    std.log.info("SDL version: {}", .{SDLBackend.getSDLVersion()});
 
     dvui.Examples.show_demo_window = show_demo;
 
     defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
 
     // init SDL backend (creates and owns OS window)
-    var backend = try Backend.initWindow(.{
+    var backend = try SDLBackend.initWindow(.{
         .allocator = gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
@@ -46,10 +46,16 @@ pub fn main() !void {
     g_backend = backend;
     defer backend.deinit();
 
-    _ = Backend.c.SDL_EnableScreenSaver();
+    _ = SDLBackend.c.SDL_EnableScreenSaver();
 
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
+    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{
+        // you can set the default theme here in the init options
+        .theme = switch (backend.preferredColorScheme() orelse .light) {
+            .light => dvui.Theme.builtin.adwaita_light,
+            .dark => dvui.Theme.builtin.adwaita_dark,
+        },
+    });
     defer win.deinit();
 
     var interrupted = false;
@@ -67,8 +73,8 @@ pub fn main() !void {
 
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 255);
-        _ = Backend.c.SDL_RenderClear(backend.renderer);
+        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 255);
+        _ = SDLBackend.c.SDL_RenderClear(backend.renderer);
 
         const keep_running = true;
         gui_frame();
@@ -86,7 +92,7 @@ pub fn main() !void {
         try backend.renderPresent();
 
         // waitTime and beginWait combine to achieve variable framerates
-        const wait_event_micros = win.waitTime(end_micros, null);
+        const wait_event_micros = win.waitTime(end_micros);
         interrupted = try backend.waitEventTimeout(wait_event_micros);
     }
     if (!first_change) {
@@ -197,10 +203,13 @@ var ts: TestStruct = .{};
 fn gui_frame() void {
     //dvui.currentWindow().debug_window_show = true;
     {
-        var m = dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal });
+        defer hbox.deinit();
+
+        var m = dvui.menu(@src(), .horizontal, .{});
         defer m.deinit();
 
-        if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .expand = .none })) |r| {
+        if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
             var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
 

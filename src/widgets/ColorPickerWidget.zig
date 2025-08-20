@@ -32,7 +32,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *ColorPickerWidget) void {
-    self.box = dvui.box(self.src, self.init_opts.dir, self.opts);
+    self.box = dvui.box(self.src, .{ .dir = self.init_opts.dir }, self.opts);
 
     if (valueSaturationBox(@src(), self.init_opts.hsv, .{})) {
         self.color_changed = true;
@@ -60,7 +60,7 @@ pub const value_saturation_box_defaults = Options{
 pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts: Options) bool {
     const options = value_saturation_box_defaults.override(opts);
 
-    var b = dvui.box(src, .horizontal, options);
+    var b = dvui.box(src, .{ .dir = .horizontal }, options);
     defer b.deinit();
 
     dvui.tabIndexSet(b.data().id, options.tab_index);
@@ -162,7 +162,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
         .background = true,
         .border = .all(1),
         .corner_radius = .all(100),
-        .color_fill = .fromColor(hsv.toColor()),
+        .color_fill = hsv.toColor(),
     });
     indicator.install();
     indicator.drawBackground();
@@ -190,7 +190,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
 
     const options = hue_slider_defaults.override(opts);
 
-    var b = dvui.box(src, dir, options);
+    var b = dvui.box(src, .{ .dir = dir }, options);
     defer b.deinit();
 
     dvui.tabIndexSet(b.data().id, options.tab_index);
@@ -306,7 +306,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
         .background = true,
         .border = .all(1),
         .corner_radius = .all(100),
-        .color_fill = .fromColor((Color.HSV{ .h = hue.* }).toColor()),
+        .color_fill = (Color.HSV{ .h = hue.* }).toColor(),
     });
     knob.install();
     knob.drawBackground();
@@ -319,9 +319,12 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
 }
 
 pub fn getHueSelectorTexture(dir: dvui.enums.Direction) dvui.Backend.TextureError!dvui.Texture {
-    const hue_texture_id = dvui.hashIdKey(@enumFromInt(@as(u64, @intFromEnum(dir))), "hue_selector_texture");
+    var h = dvui.fnv.init();
+    h.update("hue");
+    h.update(std.mem.asBytes(&dir));
+    const id = h.final();
     const cw = dvui.currentWindow();
-    const res = try cw.texture_cache.getOrPut(cw.gpa, hue_texture_id);
+    const res = try cw.texture_cache.getOrPut(cw.gpa, id);
     if (!res.found_existing) {
         const width: u32, const height: u32 = switch (dir) {
             .horizontal => .{ hue_selector_colors.len, 1 },
@@ -333,9 +336,12 @@ pub fn getHueSelectorTexture(dir: dvui.enums.Direction) dvui.Backend.TextureErro
 }
 
 pub fn getValueSaturationTexture(hue: f32) dvui.Backend.TextureError!dvui.Texture {
-    const hue_texture_id = dvui.hashIdKey(@enumFromInt(@as(u64, @intFromFloat(hue * 10000))), "value_saturation_texture");
+    var h = dvui.fnv.init();
+    h.update("value");
+    h.update(std.mem.asBytes(&(hue * 10000)));
+    const id = h.final();
     const cw = dvui.currentWindow();
-    const res = try cw.texture_cache.getOrPut(cw.gpa, hue_texture_id);
+    const res = try cw.texture_cache.getOrPut(cw.gpa, id);
     if (!res.found_existing) {
         var pixels: [4]Color.PMA = .{ .white, .cast(Color.HSV.toColor(.{ .h = hue })), .black, .black };
         // set top right corner to the max value of that hue
@@ -362,7 +368,7 @@ test "DOCIMG ColorPickerWidget" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
 
             var hsv: dvui.Color.HSV = .{ .h = 120, .s = 0.8, .v = 0.9 };

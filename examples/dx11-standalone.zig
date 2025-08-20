@@ -1,6 +1,6 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const Backend = dvui.backend;
+const Backend = @import("dx11-backend");
 const win32 = Backend.win32;
 
 const window_icon_png = @embedFile("zig-favicon.png");
@@ -51,6 +51,15 @@ pub fn main() !void {
         .vsync = vsync,
         .title = "DVUI DX11 Standalone Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
+        .dvui_window_init_options = .{
+            // you can set the default theme here in the init options
+            // PS: we need to pass undefined as the backend pointer because we haven't created the
+            //     backend yet. The pointer is unused for color scheme in the dx11 backend
+            .theme = switch (Backend.preferredColorScheme(undefined) orelse .light) {
+                .light => dvui.Theme.builtin.adwaita_light,
+                .dark => dvui.Theme.builtin.adwaita_dark,
+            },
+        },
     });
     defer first_backend.deinit();
 
@@ -112,19 +121,26 @@ pub fn main() !void {
 
 fn gui_frame() !void {
     {
-        var m = dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal });
+        defer hbox.deinit();
+
+        var m = dvui.menu(@src(), .horizontal, .{});
         defer m.deinit();
 
-        if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .expand = .none })) |r| {
+        if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
             var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
 
-            if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{}) != null) {
+            if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
                 m.close();
             }
+
+            //if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
+                //return false;
+            //}
         }
 
-        if (dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{ .expand = .none })) |r| {
+        if (dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{})) |r| {
             var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
             _ = dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
@@ -133,7 +149,7 @@ fn gui_frame() !void {
         }
     }
 
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
     defer scroll.deinit();
 
     var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
@@ -175,7 +191,7 @@ fn gui_frame() !void {
     {
         dvui.labelNoFmt(@src(), "These are drawn directly by the backend, not going through DVUI.", .{}, .{ .margin = .{ .x = 4 } });
 
-        var box = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
+        var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
         defer box.deinit();
 
         // Here is some arbitrary drawing that doesn't have to go through DVUI.

@@ -22,6 +22,7 @@ pub var defaults: Options = .{
     .border = Rect.all(1),
     .padding = Rect.all(6),
     .background = true,
+    .style = .content,
     // min_size_content/max_size_content is calculated in init()
 };
 
@@ -155,14 +156,14 @@ pub fn install(self: *TextEntryWidget) void {
 
     if (self.len == 0) {
         if (self.init_opts.placeholder) |placeholder| {
-            self.textLayout.addText(placeholder, .{ .color_text = .fromColor(self.textLayout.data().options.color(.text).opacity(0.75)) });
+            self.textLayout.addText(placeholder, .{ .color_text = self.textLayout.data().options.color(.text).opacity(0.65) });
         }
     }
 
     if (self.textLayout.touchEditing()) |floating_widget| {
         defer floating_widget.deinit();
 
-        var hbox = dvui.box(@src(), .horizontal, .{
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
             .corner_radius = dvui.ButtonWidget.defaults.corner_radiusGet(),
             .background = true,
             .border = dvui.Rect.all(1),
@@ -327,7 +328,7 @@ pub fn drawCursor(self: *TextEntryWidget) void {
 
         var crect = self.textLayout.cursor_rect.plus(.{ .x = -1 });
         crect.w = 2;
-        self.textLayout.screenRectScale(crect).r.fill(.{}, .{ .color = self.data().options.color(.accent), .fade = 1.0 });
+        self.textLayout.screenRectScale(crect).r.fill(.{}, .{ .color = dvui.themeGet().focus, .fade = 1.0 });
     }
 }
 
@@ -339,7 +340,7 @@ pub fn data(self: *TextEntryWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *TextEntryWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *TextEntryWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }

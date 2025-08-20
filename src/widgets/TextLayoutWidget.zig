@@ -26,6 +26,7 @@ pub var defaults: Options = .{
     .name = "TextLayout",
     .padding = Rect.all(6),
     .background = true,
+    .style = .content,
 };
 
 pub const InitOptions = struct {
@@ -268,6 +269,8 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
         }
     }
 
+    const control_opts: Options = .{};
+
     const rs = self.data().contentRectScale();
 
     self.data().borderAndBackground(.{});
@@ -346,7 +349,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 path.addPoint(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
                 path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control });
+                path.build().fillConvex(.{ .color = control_opts.color(.fill) });
                 path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.data().options.color(.border), .closed = true });
             }
 
@@ -416,7 +419,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 path.addPoint(.{ .x = fcrs.r.x, .y = fcrs.r.y });
                 path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                path.build().fillConvex(.{ .color = dvui.themeGet().color_fill_control });
+                path.build().fillConvex(.{ .color = control_opts.color(.fill) });
                 path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.data().options.color(.border), .closed = true });
             }
 
@@ -437,18 +440,22 @@ pub fn format(self: *TextLayoutWidget, comptime fmt: []const u8, args: anytype, 
     self.addText(l, opts);
 }
 
+/// `Options.color_accent` overrides the background for selected text
 pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) void {
     _ = self.addTextEx(text, .none, opts);
 }
 
+/// `Options.color_accent` overrides the background for selected text
 pub fn addTextClick(self: *TextLayoutWidget, text: []const u8, opts: Options) bool {
     return self.addTextEx(text, .click, opts);
 }
 
+/// `Options.color_accent` overrides the background for selected text
 pub fn addTextHover(self: *TextLayoutWidget, text: []const u8, opts: Options) bool {
     return self.addTextEx(text, .hover, opts);
 }
 
+/// `Options.color_accent` overrides the background for selected text
 pub fn addTextTooltip(self: *TextLayoutWidget, src: std.builtin.SourceLocation, text: []const u8, tooltip: []const u8, opts: Options) void {
     var tt: dvui.FloatingTooltipWidget = .init(src, .{
         .active_rect = .{},
@@ -963,6 +970,7 @@ const AddTextExAction = enum {
     hover,
 };
 
+/// `Options.color_accent` overrides the background for selected text
 fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction, opts: Options) bool {
     var ret = false;
 
@@ -1211,9 +1219,10 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 .rs = rs,
                 .color = options.color(.text),
                 // TODO: Should this take `options.background` into account?
-                .background_color = if (options.color_fill) |fill| fill.resolve() else null,
+                .background_color = options.color_fill,
                 .sel_start = self.selection.start -| self.bytes_seen,
                 .sel_end = self.selection.end -| self.bytes_seen,
+                .sel_color = (opts.color_accent orelse (dvui.themeGet().text_select orelse dvui.themeGet().color(.highlight, .fill))).opacity(0.75),
             }) catch |err| {
                 dvui.logError(@src(), err, "Failed to render text: {s}", .{rtxt});
             };
@@ -1434,7 +1443,7 @@ pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
 }
 
 pub fn touchEditingMenu(self: *TextLayoutWidget) void {
-    var hbox = dvui.box(@src(), .horizontal, .{
+    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
         .corner_radius = dvui.ButtonWidget.defaults.corner_radiusGet(),
         .background = true,
         .border = dvui.Rect.all(1),
@@ -1472,7 +1481,7 @@ pub fn data(self: *TextLayoutWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *TextLayoutWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *TextLayoutWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
 
     // For corner widgets, they might want to be closer to the border than the

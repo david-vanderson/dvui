@@ -31,6 +31,7 @@ pub var defaults: Options = .{
     // overrides these
     .background = true,
     .min_size_content = .{ .w = 5, .h = 5 },
+    .style = .window,
 };
 
 pub const InitOptions = struct {
@@ -44,7 +45,7 @@ pub const InitOptions = struct {
 wd: WidgetData,
 si: *ScrollInfo,
 init_opts: InitOptions,
-last_focus: dvui.WidgetId,
+last_focus: dvui.Id,
 parentScroll: ?*ScrollContainerWidget = null,
 
 // si.viewport.x/y might be updated in the middle of a frame, this prevents
@@ -56,10 +57,10 @@ prevClip: Rect.Physical = .{},
 nextVirtualSize: Size = Size{},
 seen_expanded_child: bool = false,
 
-first_visible_id: dvui.WidgetId = .zero,
+first_visible_id: dvui.Id = .zero,
 first_visible_offset: Point = Point{}, // offset of top left of first visible widget from viewport
 
-inject_capture_id: ?dvui.WidgetId = null,
+inject_capture_id: ?dvui.Id = null,
 seen_scroll_drag: bool = false,
 
 finger_down: bool = false,
@@ -112,7 +113,7 @@ pub fn install(self: *ScrollContainerWidget) void {
     self.frame_viewport = self.init_opts.frame_viewport orelse self.si.viewport.topLeft();
     if (self.init_opts.lock_visible) {
         // we don't want to see anything until we find first_visible_id
-        self.first_visible_id = dvui.dataGet(null, self.data().id, "_fv_id", dvui.WidgetId) orelse .zero;
+        self.first_visible_id = dvui.dataGet(null, self.data().id, "_fv_id", dvui.Id) orelse .zero;
         self.first_visible_offset = dvui.dataGet(null, self.data().id, "_fv_offset", Point) orelse .{};
         self.frame_viewport = .{ .x = -10000, .y = -10000 };
     }
@@ -231,7 +232,7 @@ pub fn data(self: *ScrollContainerWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *ScrollContainerWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     // todo: do horizontal properly
     if (self.seen_expanded_child) {
         // Having one expanded child makes sense - could be taking the rest of

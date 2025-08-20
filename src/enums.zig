@@ -5,6 +5,11 @@ const enums_backend = @import("enums_backend.zig");
 
 pub const Backend = enums_backend.Backend;
 
+pub const DialogButtonOrder = enum {
+    cancel_ok,
+    ok_cancel,
+};
+
 pub const Units = enum {
     /// None is the logical units. It's used for relative placements
     /// and other non-pixel use cases

@@ -60,7 +60,7 @@ pub fn data(self: *ReorderWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *ReorderWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *ReorderWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
@@ -267,7 +267,7 @@ pub const Reorderable = struct {
                     self.reorder.found_slot = true;
 
                     if (self.init_options.draw_target) {
-                        rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent, .fade = 1.0 });
+                        rs.r.fill(.{}, .{ .color = dvui.themeGet().focus, .fade = 1.0 });
                     }
 
                     if (self.init_options.reinstall and !self.init_options.last_slot) {
@@ -342,7 +342,7 @@ pub const Reorderable = struct {
         return self.wd.validate();
     }
 
-    pub fn rectFor(self: *Reorderable, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    pub fn rectFor(self: *Reorderable, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         _ = id;
         return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
     }

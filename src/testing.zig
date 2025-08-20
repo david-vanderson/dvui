@@ -285,9 +285,9 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     };
     defer file.close();
 
-    var hash_buf: [@sizeOf(HashInt) * 2]u8 = undefined;
+    var hash_buf: [@sizeOf(HashInt) * 2]u8 = @splat(0);
     _ = try file.readAll(&hash_buf);
-    const prev_hash = try std.fmt.parseUnsigned(HashInt, &hash_buf, 16);
+    const prev_hash = try std.fmt.parseUnsigned(HashInt, std.mem.sliceTo(&hash_buf, 0), 16);
 
     if (prev_hash != hash) {
         if (should_write_snapshots()) {

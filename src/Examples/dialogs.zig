@@ -2,9 +2,9 @@ var progress_mutex = std.Thread.Mutex{};
 var progress_val: f32 = 0.0;
 
 /// ![image](Examples-dialogs.png)
-pub fn dialogs(demo_win_id: dvui.WidgetId) void {
+pub fn dialogs(demo_win_id: dvui.Id) void {
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
         if (dvui.button(@src(), "Direct Dialog", .{}, .{})) {
             Examples.show_dialog = true;
@@ -16,7 +16,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         if (dvui.button(@src(), "Non modal", .{}, .{})) {
@@ -24,7 +24,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) void {
         }
 
         const dialogsFollowup = struct {
-            fn callafter(id: dvui.WidgetId, response: enums.DialogResponse) !void {
+            fn callafter(id: dvui.Id, response: enums.DialogResponse) !void {
                 _ = id;
                 var buf: [100]u8 = undefined;
                 const text = std.fmt.bufPrint(&buf, "You clicked \"{s}\" in the previous dialog", .{@tagName(response)}) catch unreachable;
@@ -38,7 +38,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         if (dvui.button(@src(), "Toast 1", .{}, .{})) {
@@ -59,7 +59,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) void {
     }
 
     {
-        var vbox = dvui.box(@src(), .vertical, .{.min_size_content = .{.w = 250, .h = 80}, .border = .all(1)});
+        var vbox = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 250, .h = 80 }, .border = .all(1) });
         defer vbox.deinit();
 
         if (dvui.button(@src(), "Toast In Box", .{}, .{})) {
@@ -71,7 +71,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) void {
 
     dvui.label(@src(), "\nDialogs and toasts from other threads", .{}, .{});
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         if (dvui.button(@src(), "Dialog after 1 second", .{}, .{})) {
@@ -100,7 +100,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer hbox.deinit();
 
         if (dvui.button(@src(), "Show Progress from another Thread", .{}, .{})) {
@@ -123,7 +123,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) void {
 
     dvui.label(@src(), "\nNative Dialogs", .{}, .{});
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         const single_file_id = hbox.widget().extendId(@src(), 0);
@@ -183,7 +183,7 @@ pub fn dialogs(demo_win_id: dvui.WidgetId) void {
         }
     }
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         if (dvui.button(@src(), "Open Folder", .{}, .{})) {
@@ -221,7 +221,7 @@ fn background_dialog(win: *dvui.Window, delay_ns: u64) void {
     dvui.dialog(@src(), .{}, .{ .window = win, .modal = false, .title = "Background Dialog", .message = "This non modal dialog was added from a non-GUI thread." });
 }
 
-fn background_toast(win: *dvui.Window, delay_ns: u64, subwindow_id: ?dvui.WidgetId) void {
+fn background_toast(win: *dvui.Window, delay_ns: u64, subwindow_id: ?dvui.Id) void {
     std.time.sleep(delay_ns);
     dvui.refresh(win, @src(), null);
     dvui.toast(@src(), .{ .window = win, .subwindow_id = subwindow_id, .message = "Toast came from a non-GUI thread" });
@@ -249,7 +249,7 @@ test "DOCIMG dialogs" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             dialogs(box.data().id);
             return .ok;

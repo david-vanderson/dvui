@@ -137,7 +137,7 @@ pub fn data(self: *ScaleWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *ScaleWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *ScaleWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     const s = if (self.scale.* > 0)
         1.0 / self.scale.*
     else

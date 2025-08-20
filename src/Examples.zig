@@ -14,6 +14,7 @@ pub const demoKind = enum {
     calculator,
     text_entry,
     styling,
+    theming,
     layout,
     text_layout,
     plots,
@@ -33,6 +34,7 @@ pub const demoKind = enum {
             .calculator => "Calculator",
             .text_entry => "Text Entry",
             .styling => "Styling",
+            .theming => "Theming",
             .layout => "Layout",
             .text_layout => "Text Layout",
             .plots => "Plots",
@@ -54,6 +56,7 @@ pub const demoKind = enum {
             .calculator => .{ .scale = 0.45, .offset = .{} },
             .text_entry => .{ .scale = 0.45, .offset = .{} },
             .styling => .{ .scale = 0.45, .offset = .{} },
+            .theming => .{ .scale = 0.35, .offset = .{} },
             .layout => .{ .scale = 0.45, .offset = .{ .x = -50 } },
             .text_layout => .{ .scale = 0.45, .offset = .{} },
             .plots => .{ .scale = 0.45, .offset = .{} },
@@ -100,18 +103,18 @@ pub fn demo() void {
     //    paned.split_ratio = 0;
     //}
     if (paned.showFirst()) {
-        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .content });
         defer scroll.deinit();
 
         var invalidate: bool = false;
         {
-            var hbox = dvui.box(@src(), .horizontal, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();
             if (dvui.button(@src(), "Debug Window", .{}, .{})) {
                 dvui.toggleDebugWindow();
             }
 
-            if (dvui.Theme.picker(@src(), .{})) {
+            if (dvui.Theme.picker(@src(), &dvui.Theme.builtins, .{})) {
                 invalidate = true;
             }
 
@@ -126,12 +129,12 @@ pub fn demo() void {
             }
         }
 
-        var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .background = true, .min_size_content = .width(width), .corner_radius = .{ .w = 5, .h = 5 } });
+        var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .min_size_content = .width(width), .corner_radius = .{ .w = 5, .h = 5 } });
         defer fbox.deinit();
 
         inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
-            var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = .size(dvui.Size.all(120)), .margin = Rect.all(5), .color_fill = .fill, .tag = "demo_button_" ++ @tagName(e) });
+            var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = .size(dvui.Size.all(120)), .margin = Rect.all(5), .style = .content, .tag = "demo_button_" ++ @tagName(e) });
             bw.install();
             bw.processEvents();
             bw.drawBackground();
@@ -142,11 +145,11 @@ pub fn demo() void {
                 cache = dvui.cache(@src(), .{ .invalidate = invalidate }, .{ .expand = .both });
             }
             if (!use_cache or cache.uncached()) {
-                const box = dvui.box(@src(), .vertical, .{ .expand = .both });
+                const box = dvui.box(@src(), .{}, .{ .expand = .both });
                 defer box.deinit();
 
                 var options: dvui.Options = .{ .gravity_x = 0.5, .gravity_y = 1.0 };
-                if (dvui.captured(bw.data().id)) options = options.override(.{ .color_text = .{ .color = options.color(.text_press) } });
+                if (dvui.captured(bw.data().id)) options = options.override(.{ .color_text = options.color(.text_press) });
 
                 dvui.label(@src(), "{s}", .{e.name()}, options);
 
@@ -157,7 +160,7 @@ pub fn demo() void {
                 const oldclip = dvui.clip(demo_scaler.data().contentRectScale().r);
                 defer dvui.clipSet(oldclip);
 
-                const box2 = dvui.box(@src(), .vertical, .{ .rect = dvui.Rect.fromPoint(e.scaleOffset().offset).toSize(.{ .w = 400, .h = 1000 }) });
+                const box2 = dvui.box(@src(), .{}, .{ .rect = dvui.Rect.fromPoint(e.scaleOffset().offset).toSize(.{ .w = 400, .h = 1000 }) });
                 defer box2.deinit();
 
                 switch (e) {
@@ -165,6 +168,7 @@ pub fn demo() void {
                     .calculator => calculator(),
                     .text_entry => textEntryWidgets(float.data().id),
                     .styling => styling(),
+                    .theming => theming(),
                     .layout => layout(),
                     .text_layout => layoutText(),
                     .plots => plots(),
@@ -197,11 +201,8 @@ pub fn demo() void {
     }
 
     if (paned.showSecond()) {
-        var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
-        defer vbox.deinit();
-
         {
-            var hbox = dvui.box(@src(), .horizontal, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();
 
             if (paned.collapsed() and dvui.button(@src(), "Back to Demos", .{}, .{ .min_size_content = .{ .h = 30 }, .tag = "dvui_demo_window_back" })) {
@@ -213,15 +214,19 @@ pub fn demo() void {
 
         var scroll: ?*dvui.ScrollAreaWidget = null;
         if (demo_active != .grid) {
-            scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false, .padding = Rect.all(4) });
+            scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
         }
         defer if (scroll) |s| s.deinit();
+
+        var vbox = dvui.box(@src(), .{}, .{ .padding = dvui.Rect.all(4) });
+        defer vbox.deinit();
 
         switch (demo_active) {
             .basic_widgets => basicWidgets(),
             .calculator => calculator(),
             .text_entry => textEntryWidgets(float.data().id),
             .styling => styling(),
+            .theming => theming(),
             .layout => layout(),
             .text_layout => layoutText(),
             .plots => plots(),
@@ -263,7 +268,7 @@ pub fn dialogDirect() void {
     dvui.label(@src(), "Asking a Question", .{}, .{ .font_style = .title_4, .gravity_x = 0.5 });
     dvui.label(@src(), "This dialog is directly called by user code.", .{}, .{ .gravity_x = 0.5 });
 
-    if (dvui.button(@src(), "Toggle extra stuff and fit window", .{}, .{})) {
+    if (dvui.button(@src(), "Toggle extra stuff and fit window", .{}, .{ .tab_index = 1 })) {
         data.extra_stuff = !data.extra_stuff;
         dialog_win.autoSize();
     }
@@ -278,14 +283,19 @@ pub fn dialogDirect() void {
 
     {
         _ = dvui.spacer(@src(), .{ .expand = .vertical });
-        var hbox = dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0 });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0 });
         defer hbox.deinit();
 
-        if (dvui.button(@src(), "Yes", .{}, .{})) {
+        const gravx: f32, const tindex: u16 = switch (dvui.currentWindow().button_order) {
+            .cancel_ok => .{ 1.0, 4 },
+            .ok_cancel => .{ 0.0, 2 },
+        };
+
+        if (dvui.button(@src(), "Yes", .{}, .{ .gravity_x = gravx, .tab_index = tindex })) {
             dialog_win.close(); // can close the dialog this way
         }
 
-        if (dvui.button(@src(), "No", .{}, .{})) {
+        if (dvui.button(@src(), "No", .{}, .{ .tab_index = 3 })) {
             show_dialog = false; // can close by not running this code anymore
         }
     }
@@ -299,7 +309,7 @@ pub fn show_stroke_test_window() void {
     dvui.label(@src(), "Stroke Test", .{}, .{});
     _ = dvui.checkbox(@src(), &StrokeTest.stroke_test_closed, "Closed", .{});
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Endcap Style", .{}, .{});
@@ -348,7 +358,7 @@ pub fn grids() void {
         }
     };
 
-    var tbox = dvui.box(@src(), .vertical, .{ .border = Rect.all(1), .expand = .both });
+    var tbox = dvui.box(@src(), .{}, .{ .border = Rect.all(1), .expand = .both });
     defer tbox.deinit();
     {
         var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
@@ -421,6 +431,7 @@ const basicWidgets = @import("Examples/basic_widgets.zig").basicWidgets;
 const calculator = @import("Examples/calculator.zig").calculator;
 const textEntryWidgets = @import("Examples/text_entry.zig").textEntryWidgets;
 const styling = @import("Examples/styling.zig").styling;
+const theming = @import("Examples/theming.zig").theming;
 const layout = @import("Examples/layout.zig").layout;
 const layoutText = @import("Examples/text_layout.zig").layoutText;
 const plots = @import("Examples/plots.zig").plots;

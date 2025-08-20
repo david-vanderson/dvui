@@ -1,6 +1,6 @@
 ///![image](Examples-struct_ui.png)
 pub fn structUI() void {
-    var b = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer b.deinit();
 
     const Top = struct {
@@ -32,16 +32,18 @@ pub fn structUI() void {
         dvui.se.displayStruct("Top.instance", &Top.instance, 1, .standard_options, .{}, &al);
     }
 
-    if (dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
-        themeEditor();
-    }
+    //if (dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
+    //    themeEditor();
+    //}
 }
+
+var font_buf: [50]u8 = @splat('z');
 
 var font_buf: [50]u8 = @splat('z');
 
 ///![image](Examples-themeEditor.png)
 pub fn themeEditor() void {
-    var b2 = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    var b2 = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer b2.deinit();
 
     const color_options: dvui.se.StructOptions(dvui.Color) = .init(.{
@@ -75,7 +77,7 @@ test "DOCIMG struct_ui" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             structUI();
             return .ok;
@@ -117,7 +119,7 @@ test "DOCIMG struct_ui" {
 //}
 
 pub fn themeSerialization() void {
-    var serialize_box = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    var serialize_box = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer serialize_box.deinit();
 
     dvui.labelNoFmt(@src(), "TODO: demonstrate loading a quicktheme here", .{}, .{});

@@ -7,7 +7,7 @@ const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
 const Widget = dvui.Widget;
-const WidgetId = dvui.WidgetId;
+const Id = dvui.Id;
 const WidgetData = @This();
 
 pub const InitOptions = struct {
@@ -15,7 +15,7 @@ pub const InitOptions = struct {
     subwindow: bool = false,
 };
 
-id: WidgetId,
+id: Id,
 parent: Widget,
 init_options: InitOptions,
 rect: Rect,
@@ -92,11 +92,14 @@ pub fn register(self: *WidgetData) void {
         }
     }
 
+    if (self.id == dvui.focusedWidgetIdInCurrentSubwindow()) {
+        cw.last_focused_id_in_subwindow = self.id;
+    }
+
     if (dvui.testing.widget_hasher) |*hasher| {
         hasher.update(std.mem.asBytes(&self.init_options));
         hasher.update(std.mem.asBytes(&self.options.hash()));
         hasher.update(std.mem.asBytes(&self.rectScale()));
-        hasher.update(std.mem.asBytes(&self.visible()));
         hasher.update(std.mem.asBytes(&(self.id == focused_widget_id)));
     }
 
@@ -154,7 +157,7 @@ pub fn register(self: *WidgetData) void {
                 outline_rect.y = @ceil(outline_rect.y) - 0.5;
             }
 
-            outline_rect.stroke(.{}, .{ .thickness = 1 * rs.s, .color = dvui.themeGet().color_err, .after = true });
+            outline_rect.stroke(.{}, .{ .thickness = 1 * rs.s, .color = .red, .after = true });
 
             dvui.clipSet(clipr);
         }
@@ -162,7 +165,7 @@ pub fn register(self: *WidgetData) void {
 }
 
 pub fn visible(self: *const WidgetData) bool {
-    return !dvui.clipGet().intersect(self.borderRectScale().r).empty();
+    return self.borderRectScale().r.visible();
 }
 
 pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?Color = null }) void {
@@ -176,14 +179,14 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
 
         const prect = rs.r.insetAll(rs.s * bs.shrink).offsetPoint(bs.offset.scale(rs.s, dvui.Point.Physical));
 
-        prect.fill(radius.scale(rs.s, Rect.Physical), .{ .color = bs.color.resolve().opacity(bs.alpha), .fade = rs.s * bs.fade });
+        prect.fill(radius.scale(rs.s, Rect.Physical), .{ .color = bs.color.opacity(bs.alpha), .fade = rs.s * bs.fade });
     }
 
     var bg = self.options.backgroundGet();
     const b = self.options.borderGet();
     if (b.nonZero()) {
         const uniform: bool = (b.x == b.y and b.x == b.w and b.x == b.h);
-        if (!bg and uniform) {
+        if (uniform) {
             // draw border as stroked path
             const r = self.borderRect().inset(b.scale(0.5, Rect));
             const rs = self.rectScale().rectToRectScale(r.offsetNeg(self.rect));
@@ -215,7 +218,7 @@ pub fn focusBorder(self: *const WidgetData) void {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;
 
-        rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = thick, .color = dvui.themeGet().color_accent, .after = true });
+        rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = thick, .color = dvui.themeGet().focus, .after = true });
     }
 }
 
@@ -320,7 +323,7 @@ pub fn minSizeReportToParent(self: *const WidgetData) void {
 }
 
 pub fn validate(self: *const WidgetData) *WidgetData {
-    std.debug.assert(self.id != WidgetId.undef); // Indicates a use after deinit() error.
+    std.debug.assert(self.id != Id.undef); // Indicates a use after deinit() error.
     return @constCast(self);
 }
 

@@ -21,13 +21,13 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     scroll_info: *ScrollInfo,
     direction: enums.Direction = .vertical,
-    focus_id: ?dvui.WidgetId = null,
+    focus_id: ?dvui.Id = null,
 };
 
 wd: WidgetData,
 grabRect: Rect = Rect{},
 si: *ScrollInfo,
-focus_id: ?dvui.WidgetId = null,
+focus_id: ?dvui.Id = null,
 dir: enums.Direction,
 highlight: bool = false,
 

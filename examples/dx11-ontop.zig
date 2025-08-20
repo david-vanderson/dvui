@@ -1,6 +1,6 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const Backend = dvui.backend;
+const Backend = @import("dx11-backend");
 
 const win32 = @import("win32").everything;
 
@@ -219,7 +219,7 @@ fn dvui_floating_stuff() void {
 
     float.dragAreaSet(dvui.windowHeader("Floating Window", "", null));
 
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
     defer scroll.deinit();
 
     var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });

@@ -19,6 +19,18 @@
 //!
 const builtin = @import("builtin");
 const std = @import("std");
+/// Using this in application code will hinder ZLS from referencing the correct backend.
+/// To avoid this import the backend directly from the applications build.zig
+///
+/// ```zig
+/// // build.zig
+/// mod.addImport("dvui", dvui_dep.module("dvui_sdl3"));
+/// mod.addImport("backend", dvui_dep.module("sdl3"));
+///
+/// // src/main.zig
+/// const dvui = @import("dvui");
+/// const Backend = @import("backend");
+/// ```
 pub const backend = @import("backend");
 const tvg = @import("svg2tvg");
 
@@ -156,22 +168,60 @@ pub const FontError = error{fontError};
 pub const log = std.log.scoped(.dvui);
 const dvui = @This();
 
-pub const WidgetId = enum(u64) {
+/// A generic id created by hashing `std.builting.SourceLocation`'s (from `@src()`)
+pub const Id = enum(u64) {
     zero = 0,
-    // This may not work in future and is illegal behaviour / arch specfic to compare to undefined.
+    // This may not work in future and is illegal behaviour / arch specific to compare to undefined.
     undef = 0xAAAAAAAAAAAAAAAA,
     _,
 
-    pub fn asU64(self: WidgetId) u64 {
-        return @intCast(@intFromEnum(self));
+    /// Make a unique id from `src` and `id_extra`, possibly starting with start
+    /// (usually a parent widget id).  This is how the initial parent widget id is
+    /// created, and also toasts and dialogs from other threads.
+    ///
+    /// See `Widget.extendId` which calls this with the widget id as start.
+    ///
+    /// ```zig
+    /// dvui.parentGet().extendId(@src(), id_extra)
+    /// ```
+    /// is how new widgets get their id, and can be used to make a unique id without
+    /// making a widget.
+    pub fn extendId(start: ?Id, src: std.builtin.SourceLocation, id_extra: usize) Id {
+        var hash = fnv.init();
+        if (start) |s| {
+            hash.value = s.asU64();
+        }
+        hash.update(std.mem.asBytes(&src.module.ptr));
+        hash.update(std.mem.asBytes(&src.file.ptr));
+        hash.update(std.mem.asBytes(&src.line));
+        hash.update(std.mem.asBytes(&src.column));
+        hash.update(std.mem.asBytes(&id_extra));
+        return @enumFromInt(hash.final());
     }
 
-    pub fn asUsize(self: WidgetId) usize {
+    /// Make a new id by combining id with some data, commonly a string key like `"_value"`.
+    /// This is how dvui tracks things in `dataGet`/`dataSet`, `animation`, and `timer`.
+    pub fn update(id: Id, input: []const u8) Id {
+        var h = fnv.init();
+        h.value = id.asU64();
+        h.update(input);
+        return @enumFromInt(h.final());
+    }
+
+    pub fn asU64(self: Id) u64 {
+        return @intFromEnum(self);
+    }
+
+    /// ALWAYS prefer using `asU64` unless a `usize` is required as it could
+    /// loose precision and uniqueness on non-64bit platforms (like wasm32).
+    ///
+    /// Using an `Id` as `Options.id_extra` would be a valid use of this function
+    pub fn asUsize(self: Id) usize {
         // usize might be u32 (like on wasm32)
         return @truncate(@intFromEnum(self));
     }
 
-    pub fn format(self: *const WidgetId, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+    pub fn format(self: *const Id, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
         try std.fmt.format(writer, "{" ++ fmt ++ "}", .{self.asU64()});
     }
 };
@@ -258,18 +308,18 @@ pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []
     log.err("{s}:{d}:{d}: {s} got {s}: " ++ fmt ++ error_trace_fmt ++ stack_trace_fmt, combined_args);
 }
 
-/// Get a pointer to the active theme.
+/// Get the active theme.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn themeGet() *Theme {
-    return &currentWindow().theme;
+pub fn themeGet() Theme {
+    return currentWindow().theme;
 }
 
-/// Set the active theme (copies into internal storage).
+/// Set the active theme.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn themeSet(theme: *const Theme) void {
-    currentWindow().theme = theme.*;
+pub fn themeSet(theme: Theme) void {
+    currentWindow().theme = theme;
 }
 
 /// Toggle showing the debug window (run during `Window.end`).
@@ -281,7 +331,7 @@ pub fn toggleDebugWindow() void {
 }
 
 pub const TagData = struct {
-    id: WidgetId,
+    id: Id,
     rect: Rect.Physical,
     visible: bool,
 };
@@ -320,7 +370,7 @@ pub fn tagGet(name: []const u8) ?TagData {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub const Alignment = struct {
-    id: WidgetId,
+    id: Id,
     scale: f32,
     max: ?f32,
     next: f32,
@@ -344,7 +394,7 @@ pub const Alignment = struct {
     }
 
     /// Get the margin needed to align this id's left edge.
-    pub fn margin(self: *Alignment, id: WidgetId) Rect {
+    pub fn margin(self: *Alignment, id: Id) Rect {
         if (self.max) |m| {
             if (dvui.dataGet(null, id, "_align", f32)) |a| {
                 return .{ .x = @max(0, (m - a) / self.scale) };
@@ -355,7 +405,7 @@ pub const Alignment = struct {
     }
 
     /// Record where this widget ended up so we can align it next frame.
-    pub fn record(self: *Alignment, id: WidgetId, wd: *WidgetData) void {
+    pub fn record(self: *Alignment, id: Id, wd: *WidgetData) void {
         const x = wd.rectScale().r.x;
         dvui.dataSet(null, id, "_align", x);
         self.next = @max(self.next, x);
@@ -496,6 +546,7 @@ pub fn frameTimeNS() i128 {
 /// The bytes of a truetype font file and whether to free it.
 pub const FontBytesEntry = struct {
     ttf_bytes: []const u8,
+    name: []const u8,
 
     /// If not null, this will be used to free ttf_bytes.
     allocator: ?std.mem.Allocator,
@@ -505,7 +556,7 @@ pub const FontBytesEntry = struct {
 ///
 /// ttf_bytes are the bytes of the ttf file
 ///
-/// If ttf_bytes_allocator is not null, it will be used to free ttf_bytes in
+/// If ttf_bytes_allocator is not null, it will be used to free `ttf_bytes` AND `name` in
 /// `Window.deinit`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
@@ -513,8 +564,13 @@ pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?st
     var cw = currentWindow();
 
     // Test if we can successfully open this font
-    _ = try fontCacheInit(ttf_bytes, .{ .name = name, .size = 14 });
-    try cw.font_bytes.put(cw.gpa, name, FontBytesEntry{ .ttf_bytes = ttf_bytes, .allocator = ttf_bytes_allocator });
+    const id = Font.FontId.fromName(name);
+    _ = try fontCacheInit(ttf_bytes, .{ .id = id, .size = 14 }, name);
+    try cw.font_bytes.put(cw.gpa, id, FontBytesEntry{
+        .name = name,
+        .ttf_bytes = ttf_bytes,
+        .allocator = ttf_bytes_allocator,
+    });
 }
 
 const GlyphInfo = struct {
@@ -528,6 +584,8 @@ const GlyphInfo = struct {
 
 pub const FontCacheEntry = struct {
     face: if (useFreeType) c.FT_Face else c.stbtt_fontinfo,
+    // This name should come from `Window.font_bytes` and lives as long as it does
+    name: []const u8,
     scaleFactor: f32,
     height: f32,
     ascent: f32,
@@ -806,14 +864,14 @@ pub const FontCacheEntry = struct {
 
     /// If a codepoint is missing in the font it gets the glyph for
     /// `std.unicode.replacement_character`
-    pub fn glyphInfoGetOrReplacement(self: *FontCacheEntry, codepoint: u32, font_name: []const u8) std.mem.Allocator.Error!GlyphInfo {
-        return self.glyphInfoGet(codepoint, font_name) catch |err| switch (err) {
-            FontError.fontError => self.glyphInfoGet(std.unicode.replacement_character, font_name) catch unreachable,
+    pub fn glyphInfoGetOrReplacement(self: *FontCacheEntry, codepoint: u32) std.mem.Allocator.Error!GlyphInfo {
+        return self.glyphInfoGet(codepoint) catch |err| switch (err) {
+            FontError.fontError => self.glyphInfoGet(std.unicode.replacement_character) catch unreachable,
             else => |e| e,
         };
     }
 
-    pub fn glyphInfoGet(self: *FontCacheEntry, codepoint: u32, font_name: []const u8) (std.mem.Allocator.Error || FontError)!GlyphInfo {
+    pub fn glyphInfoGet(self: *FontCacheEntry, codepoint: u32) (std.mem.Allocator.Error || FontError)!GlyphInfo {
         if (self.glyph_info.get(codepoint)) |gi| {
             return gi;
         }
@@ -822,7 +880,7 @@ pub const FontCacheEntry = struct {
 
         if (useFreeType) {
             FontCacheEntry.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(LoadFlags{ .render = false })))) catch |err| {
-                log.warn("glyphInfoGet freetype error {!} font {s} codepoint {d}\n", .{ err, font_name, codepoint });
+                log.warn("glyphInfoGet freetype error {!} font {s} codepoint {d}\n", .{ err, self.name, codepoint });
                 return FontError.fontError;
             };
 
@@ -880,7 +938,6 @@ pub const FontCacheEntry = struct {
     /// size on invalid utf8
     pub fn textSizeRaw(
         fce: *FontCacheEntry,
-        font_name: []const u8,
         text: []const u8,
         max_width: ?f32,
         end_idx: ?*usize,
@@ -903,7 +960,7 @@ pub const FontCacheEntry = struct {
         var last_codepoint: u32 = 0;
         var last_glyph_index: u32 = 0;
         while (utf8.nextCodepoint()) |codepoint| {
-            const gi = try fce.glyphInfoGetOrReplacement(@as(u32, @intCast(codepoint)), font_name);
+            const gi = try fce.glyphInfoGetOrReplacement(codepoint);
 
             // kerning
             if (last_codepoint != 0) {
@@ -912,7 +969,7 @@ pub const FontCacheEntry = struct {
                     const glyph_index: u32 = c.FT_Get_Char_Index(fce.face, codepoint);
                     var kern: c.FT_Vector = undefined;
                     FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
-                        log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, font_name, last_codepoint, codepoint });
+                        log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
                         // Set fallback kern and continue to the best of out ability
                         kern.x = 0;
                         kern.y = 0;
@@ -987,19 +1044,19 @@ pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*FontCacheEntry {
     const fontHash = font.hash();
     if (cw.font_cache.getPtr(fontHash)) |fce| return fce;
 
-    const ttf_bytes = if (cw.font_bytes.get(font.name)) |fbe|
-        fbe.ttf_bytes
+    const ttf_bytes, const name = if (cw.font_bytes.get(font.id)) |fbe|
+        .{ fbe.ttf_bytes, fbe.name }
     else blk: {
-        log.warn("Font \"{s}\" not in dvui database, using default", .{font.name});
-        break :blk Font.default_ttf_bytes;
+        log.warn("Font {} not in dvui database, using default", .{font.id});
+        break :blk .{ Font.default_ttf_bytes, @tagName(Font.default_font_id) };
     };
     //log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
 
-    const entry = fontCacheInit(ttf_bytes, font) catch {
-        if (std.mem.eql(u8, font.name, Font.default_font_name)) {
+    const entry = fontCacheInit(ttf_bytes, font, name) catch {
+        if (font.id == Font.default_font_id) {
             @panic("Default font could not be loaded");
         }
-        return fontCacheGet(font.switchFontName(Font.default_font_name));
+        return fontCacheGet(font.switchFont(Font.default_font_id));
     };
 
     //log.debug("- size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
@@ -1009,7 +1066,7 @@ pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*FontCacheEntry {
 }
 
 // Load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
-pub fn fontCacheInit(ttf_bytes: []const u8, font: Font) FontError!FontCacheEntry {
+pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontError!FontCacheEntry {
     const min_pixel_size = 1;
 
     if (useFreeType) {
@@ -1019,7 +1076,7 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font) FontError!FontCacheEntry
         args.memory_base = ttf_bytes.ptr;
         args.memory_size = @as(u31, @intCast(ttf_bytes.len));
         FontCacheEntry.intToError(c.FT_Open_Face(ft2lib, &args, 0, &face)) catch |err| {
-            log.warn("fontCacheInit freetype error {!} trying to FT_Open_Face font {s}\n", .{ err, font.name });
+            log.warn("fontCacheInit freetype error {!} trying to FT_Open_Face font {s}\n", .{ err, name });
             return FontError.fontError;
         };
 
@@ -1029,7 +1086,7 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font) FontError!FontCacheEntry
 
         while (true) : (pixel_size -= 1) {
             FontCacheEntry.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
-                log.warn("fontCacheInit freetype error {!} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, font.name });
+                log.warn("fontCacheInit freetype error {!} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, name });
                 return FontError.fontError;
             };
 
@@ -1043,6 +1100,7 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font) FontError!FontCacheEntry
             if (height <= font.size or pixel_size == min_pixel_size) {
                 return FontCacheEntry{
                     .face = face,
+                    .name = name,
                     .scaleFactor = 1.0, // not used with freetype
                     .height = @ceil(height),
                     .ascent = @floor(ascent),
@@ -1053,12 +1111,12 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font) FontError!FontCacheEntry
     } else {
         const offset = c.stbtt_GetFontOffsetForIndex(ttf_bytes.ptr, 0);
         if (offset < 0) {
-            log.warn("fontCacheInit stbtt error when calling stbtt_GetFontOffsetForIndex font {s}\n", .{font.name});
+            log.warn("fontCacheInit stbtt error when calling stbtt_GetFontOffsetForIndex font {s}\n", .{name});
             return FontError.fontError;
         }
         var face: c.stbtt_fontinfo = undefined;
         if (c.stbtt_InitFont(&face, ttf_bytes.ptr, offset) != 1) {
-            log.warn("fontCacheInit stbtt error when calling stbtt_InitFont font {s}\n", .{font.name});
+            log.warn("fontCacheInit stbtt error when calling stbtt_InitFont font {s}\n", .{name});
             return FontError.fontError;
         }
         const SF: f32 = c.stbtt_ScaleForPixelHeight(&face, @max(min_pixel_size, @floor(font.size)));
@@ -1074,6 +1132,7 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font) FontError!FontCacheEntry
 
         return FontCacheEntry{
             .face = face,
+            .name = name,
             .scaleFactor = SF,
             .height = @ceil(height),
             .ascent = @floor(ascent),
@@ -1099,7 +1158,8 @@ pub const Texture = struct {
     pub fn updateImageSource(self: *Texture, src: ImageSource) !void {
         switch (src) {
             .imageFile => |f| {
-                const img = try Color.PMAImage.fromImageFile(f.name, f.bytes);
+                const img = try Color.PMAImage.fromImageFile(f.name, currentWindow().arena(), f.bytes);
+                defer currentWindow().arena().free(img.pma);
                 try textureUpdate(self, img.pma, f.interpolation);
             },
             .pixels => |px| {
@@ -1134,7 +1194,8 @@ pub const Texture = struct {
     }
 
     pub fn fromImageFile(name: []const u8, image_bytes: []const u8, interpolation: enums.TextureInterpolation) (Backend.TextureError || StbImageError)!Texture {
-        const img = Color.PMAImage.fromImageFile(name, image_bytes) catch return StbImageError.stbImageError;
+        const img = Color.PMAImage.fromImageFile(name, currentWindow().arena(), image_bytes) catch return StbImageError.stbImageError;
+        defer currentWindow().arena().free(img.pma);
         return try textureCreate(img.pma, img.width, img.height, interpolation);
     }
 
@@ -1252,8 +1313,11 @@ pub const IconRenderOptions = struct {
 /// that run later in the frame.
 pub const RenderCommand = struct {
     clip: Rect.Physical,
+    alpha: f32,
     snap: bool,
-    cmd: union(enum) {
+    cmd: Command,
+
+    pub const Command = union(enum) {
         text: renderTextOptions,
         texture: struct {
             tex: Texture,
@@ -1272,14 +1336,14 @@ pub const RenderCommand = struct {
             tri: Triangles,
             tex: ?Texture,
         },
-    },
+    };
 };
 
 /// Id of the currently focused subwindow.  Used by `FloatingMenuWidget` to
 /// detect when to stop showing.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn focusedSubwindowId() WidgetId {
+pub fn focusedSubwindowId() Id {
     const cw = currentWindow();
     const sw = cw.subwindowFocused();
     return sw.id;
@@ -1291,7 +1355,7 @@ pub fn focusedSubwindowId() WidgetId {
 /// "num" to change the focus of any further `Event`s in the list.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn focusSubwindow(subwindow_id: ?WidgetId, event_num: ?u16) void {
+pub fn focusSubwindow(subwindow_id: ?Id, event_num: ?u16) void {
     currentWindow().focusSubwindowInternal(subwindow_id, event_num);
 }
 
@@ -1300,7 +1364,7 @@ pub fn focusSubwindow(subwindow_id: ?WidgetId, event_num: ?u16) void {
 /// Any subwindows directly above it with "stay_above_parent_window" set will also be moved to stay above it.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn raiseSubwindow(subwindow_id: WidgetId) void {
+pub fn raiseSubwindow(subwindow_id: Id) void {
     const cw = currentWindow();
     // don't check against subwindows[0] - that's that main window
     var items = cw.subwindows.items[1..];
@@ -1339,11 +1403,15 @@ pub fn raiseSubwindow(subwindow_id: WidgetId) void {
 
 /// Focus a widget in the given subwindow (if null, the current subwindow).
 ///
+/// To focus a widget in a different subwindow (like from a menu), you must
+/// have both the widget id and the subwindow id that widget is in.  See
+/// `subwindowCurrentId()`.
+///
 /// If you are doing this in response to an `Event`, you can pass that `Event`'s
 /// num to change the focus of any further `Event`s in the list.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void {
+pub fn focusWidget(id: ?Id, subwindow_id: ?Id, event_num: ?u16) void {
     const cw = currentWindow();
     cw.scroll_to_focused = false;
     const swid = subwindow_id orelse subwindowCurrentId();
@@ -1361,6 +1429,7 @@ pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void
 
                     if (cw.last_registered_id_this_frame == wid) {
                         cw.last_focused_id_this_frame = wid;
+                        cw.last_focused_id_in_subwindow = wid;
                     } else {
                         // walk parent chain
                         var wd = cw.data().parent.data();
@@ -1368,6 +1437,7 @@ pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void
                         while (true) : (wd = wd.parent.data()) {
                             if (wd.id == wid) {
                                 cw.last_focused_id_this_frame = wid;
+                                cw.last_focused_id_in_subwindow = wid;
                                 break;
                             }
 
@@ -1387,7 +1457,7 @@ pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void
 /// Id of the focused widget (if any) in the focused subwindow.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn focusedWidgetId() ?WidgetId {
+pub fn focusedWidgetId() ?Id {
     const cw = currentWindow();
     for (cw.subwindows.items) |*sw| {
         if (cw.focused_subwindowId == sw.id) {
@@ -1401,7 +1471,7 @@ pub fn focusedWidgetId() ?WidgetId {
 /// Id of the focused widget (if any) in the current subwindow.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn focusedWidgetIdInCurrentSubwindow() ?WidgetId {
+pub fn focusedWidgetIdInCurrentSubwindow() ?Id {
     const cw = currentWindow();
     const sw = cw.subwindowCurrent();
     return sw.focused_widgetId;
@@ -1413,7 +1483,7 @@ pub fn focusedWidgetIdInCurrentSubwindow() ?WidgetId {
 /// between the two calls.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn lastFocusedIdInFrame() WidgetId {
+pub fn lastFocusedIdInFrame() Id {
     return currentWindow().last_focused_id_this_frame;
 }
 
@@ -1429,13 +1499,20 @@ pub fn lastFocusedIdInFrame() WidgetId {
 /// events the focused widget got but didn't handle.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn lastFocusedIdInFrameSince(prev: WidgetId) ?WidgetId {
+pub fn lastFocusedIdInFrameSince(prev: Id) ?Id {
     const last_focused_id = lastFocusedIdInFrame();
     if (prev != last_focused_id) {
         return last_focused_id;
     } else {
         return null;
     }
+}
+
+/// Last widget id we saw in the current subwindow that was focused.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn lastFocusedIdInSubwindow() Id {
+    return currentWindow().last_focused_id_in_subwindow;
 }
 
 /// Set cursor the app should use if not already set this frame.
@@ -1542,23 +1619,18 @@ pub const Path = struct {
             }
 
             // how close our points will be to the perfect circle
-            const err = 0.1;
+            const err = 0.5;
 
             // angle that has err error between circle and segments
             const theta = math.acos(radius / (radius + err));
 
-            // make sure we never have less than 4 segments
-            // so a full circle can't be less than a diamond
-            const num_segments = @max(@ceil((start - end) / theta), 4.0);
-
-            const step = (start - end) / num_segments;
-
-            const num = @as(u32, @intFromFloat(num_segments));
             var a: f32 = start;
-            var i: u32 = 0;
-            while (i < num) : (i += 1) {
+            path.addPoint(.{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
+
+            while (a - end > theta) {
+                // move to next fixed theta, this prevents shimmering on things like a spinner
+                a = @floor((a - 0.001) / theta) * theta;
                 path.addPoint(.{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
-                a -= step;
             }
 
             if (!skip_end) {
@@ -1582,7 +1654,7 @@ pub const Path = struct {
         // owned by and will be freed by the Path.Builder
         try std.testing.expectEqual(4, path.points.len);
 
-        var triangles = try path.fillConvexTriangles(std.testing.allocator, .{});
+        var triangles = try path.fillConvexTriangles(std.testing.allocator, .{ .color = Color.white });
         defer triangles.deinit(std.testing.allocator);
         try std.testing.expectApproxEqRel(10, triangles.bounds.x, 0.05);
         try std.testing.expectApproxEqRel(20, triangles.bounds.y, 0.05);
@@ -1595,10 +1667,11 @@ pub const Path = struct {
     }
 
     pub const FillConvexOptions = struct {
+        color: Color,
+
         /// Size (physical pixels) of fade to transparent centered on the edge.
         /// If >1, then starts a half-pixel inside and the rest outside.
         fade: f32 = 0.0,
-        color: ?Color = null,
         center: ?Point.Physical = null,
     };
 
@@ -1614,11 +1687,6 @@ pub const Path = struct {
             return;
         }
 
-        var options = opts;
-        if (options.color == null) {
-            options.color = dvui.themeGet().color_fill;
-        }
-
         const cw = currentWindow();
 
         if (!cw.render_target.rendering) {
@@ -1626,30 +1694,28 @@ pub const Path = struct {
                 logError(@src(), err, "Could not reallocate path for render command", .{});
                 return;
             };
-            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = new_path, .opts = options } } };
-
-            var sw = cw.subwindowCurrent();
-            sw.render_cmds.append(cw.arena(), cmd) catch |err| {
-                logError(@src(), err, "Could not append to render_cmds_after", .{});
-            };
+            cw.addRenderCommand(.{ .pathFillConvex = .{ .path = new_path, .opts = opts } }, false);
             return;
         }
 
+        var options = opts;
+        options.color = options.color.opacity(cw.alpha);
+
         var triangles = path.fillConvexTriangles(cw.lifo(), options) catch |err| {
-            logError(@src(), err, "Could get triangles for path", .{});
+            logError(@src(), err, "Could not get triangles for path", .{});
             return;
         };
         defer triangles.deinit(cw.lifo());
         renderTriangles(triangles, null) catch |err| {
-            logError(@src(), err, "Could not draw path, opts: {any}", .{opts});
+            logError(@src(), err, "Could not draw path, opts: {any}", .{options});
             return;
         };
     }
 
     /// Generates triangles to fill path (must be convex).
     ///
-    /// Vertexes will have unset uv and color is alpha multiplied white fading to
-    /// transparent at the edge if fade is > 0.
+    /// Vertexes will have unset uv and color is alpha multiplied opts.color
+    /// fading to transparent at the edge if fade is > 0.
     pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillConvexOptions) std.mem.Allocator.Error!Triangles {
         if (path.points.len < 3) {
             return .empty;
@@ -1669,7 +1735,7 @@ pub const Path = struct {
         var builder = try Triangles.Builder.init(allocator, vtx_count, idx_count);
         errdefer comptime unreachable; // No errors from this point on
 
-        const col: Color.PMA = if (opts.color) |color| .fromColor(color) else .cast(.white);
+        const col: Color.PMA = .fromColor(opts.color);
 
         var i: usize = 0;
         while (i < path.points.len) : (i += 1) {
@@ -1783,24 +1849,15 @@ pub const Path = struct {
                 logError(@src(), err, "Could not reallocate path for render command", .{});
                 return;
             };
-            const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = new_path, .opts = opts } } };
-
-            var sw = cw.subwindowCurrent();
-            if (opts.after) {
-                sw.render_cmds_after.append(cw.arena(), cmd) catch |err| {
-                    logError(@src(), err, "Could not append to render_cmds_after", .{});
-                };
-            } else {
-                sw.render_cmds.append(cw.arena(), cmd) catch |err| {
-                    logError(@src(), err, "Could not append to render_cmds_after", .{});
-                };
-            }
-
+            cw.addRenderCommand(.{ .pathStroke = .{ .path = new_path, .opts = opts } }, opts.after);
             return;
         }
 
-        var triangles = path.strokeTriangles(cw.lifo(), opts) catch |err| {
-            logError(@src(), err, "Could get triangles for path", .{});
+        var options = opts;
+        options.color = options.color.opacity(cw.alpha);
+
+        var triangles = path.strokeTriangles(cw.lifo(), options) catch |err| {
+            logError(@src(), err, "Could not get triangles for path", .{});
             return;
         };
         defer triangles.deinit(cw.lifo());
@@ -1812,8 +1869,8 @@ pub const Path = struct {
 
     /// Generates triangles to stroke path.
     ///
-    /// Vertexes will have unset uv and color is alpha multiplied white fading to
-    /// transparent at the edge.
+    /// Vertexes will have unset uv and color is alpha multiplied opts.color
+    /// fading to transparent at the edge.
     pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOptions) std.mem.Allocator.Error!Triangles {
         if (dvui.clipGet().empty()) {
             return .empty;
@@ -2200,6 +2257,12 @@ pub const Triangles = struct {
     }
 };
 
+/// Rendered `Triangles` taking in to account the current clip rect
+/// and deferred rendering through render targets.
+///
+/// Expect that `Window.alpha` has already been applied.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError!void {
     if (triangles.vertexes.len == 0) {
         return;
@@ -2213,10 +2276,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
 
     if (!cw.render_target.rendering) {
         const tri_copy = try triangles.dupe(cw.arena());
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .triangles = .{ .tri = tri_copy, .tex = tex } } };
-
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cw.arena(), cmd);
+        cw.addRenderCommand(.{ .triangles = .{ .tri = tri_copy, .tex = tex } }, false);
         return;
     }
 
@@ -2244,7 +2304,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
 /// tagged with.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?WidgetId) void {
+pub fn subwindowAdd(id: Id, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?Id) void {
     const cw = currentWindow();
     for (cw.subwindows.items) |*sw| {
         if (id == sw.id) {
@@ -2302,7 +2362,7 @@ pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal:
 }
 
 pub const subwindowCurrentSetReturn = struct {
-    id: WidgetId,
+    id: Id,
     rect: Rect.Natural,
 };
 
@@ -2310,7 +2370,7 @@ pub const subwindowCurrentSetReturn = struct {
 /// subwindow (the subwindow that widgets run now will be in).
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn subwindowCurrentSet(id: WidgetId, rect: ?Rect.Natural) subwindowCurrentSetReturn {
+pub fn subwindowCurrentSet(id: Id, rect: ?Rect.Natural) subwindowCurrentSetReturn {
     const cw = currentWindow();
     const ret: subwindowCurrentSetReturn = .{ .id = cw.subwindow_currentId, .rect = cw.subwindow_currentRect };
     cw.subwindow_currentId = id;
@@ -2323,7 +2383,7 @@ pub fn subwindowCurrentSet(id: WidgetId, rect: ?Rect.Natural) subwindowCurrentSe
 /// Id of current subwindow (the one widgets run now will be in).
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn subwindowCurrentId() WidgetId {
+pub fn subwindowCurrentId() Id {
     const cw = currentWindow();
     return cw.subwindow_currentId;
 }
@@ -2464,11 +2524,11 @@ pub fn mouseTotalMotion() Point.Physical {
 /// Used to track which widget holds mouse capture.
 pub const CaptureMouse = struct {
     /// widget ID
-    id: WidgetId,
+    id: Id,
     /// physical pixels (aka capture zone)
     rect: Rect.Physical,
     /// subwindow id the widget with capture is in
-    subwindow_id: WidgetId,
+    subwindow_id: Id,
 };
 
 /// Capture the mouse for this widget's data.
@@ -2549,7 +2609,7 @@ pub fn captureMouseMaintain(cm: CaptureMouse) void {
 /// Test if the passed widget ID currently has mouse capture.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn captured(id: WidgetId) bool {
+pub fn captured(id: Id) bool {
     if (captureMouseGet()) |cm| {
         return id == cm.id;
     }
@@ -2573,7 +2633,7 @@ pub fn clipGet() Rect.Physical {
 /// Intersect the given physical rect with the current clipping rect and set
 /// as the new clipping rect.
 ///
-/// Returns the previous clipping rect, use clipSet to restore it.
+/// Returns the previous clipping rect, use `clipSet` to restore it.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn clip(new: Rect.Physical) Rect.Physical {
@@ -2588,6 +2648,28 @@ pub fn clip(new: Rect.Physical) Rect.Physical {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn clipSet(r: Rect.Physical) void {
     currentWindow().clipRect = r;
+}
+
+/// Multiplies the current alpha value with the passed in multiplier.
+/// If `mult` is 0 then it will be completely transparent, 0.5 would be
+/// half of the current alpha and so on.
+///
+/// Returns the previous alpha value, use `alphaSet` to restore it.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn alpha(mult: f32) f32 {
+    const cw = currentWindow();
+    const ret = cw.alpha;
+    alphaSet(cw.alpha * mult);
+    return ret;
+}
+
+/// Set the current alpha value [0-1] where 1 is fully opaque.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn alphaSet(a: f32) void {
+    const cw = currentWindow();
+    cw.alpha = std.math.clamp(a, 0, 1);
 }
 
 /// Set snap_to_pixels setting.  If true:
@@ -2627,7 +2709,7 @@ pub fn snapToPixels() bool {
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the Window you want to refresh.  In that case dvui will
 /// go through the backend because the gui thread might be waiting.
-pub fn refresh(win: ?*Window, src: std.builtin.SourceLocation, id: ?WidgetId) void {
+pub fn refresh(win: ?*Window, src: std.builtin.SourceLocation, id: ?Id) void {
     if (win) |w| {
         // we are being called from non gui thread, the gui thread might be
         // sleeping, so need to trigger a wakeup via the backend
@@ -2734,7 +2816,7 @@ pub fn parentSet(w: Widget) void {
 /// a widget's `.deinit()` was accidentally not called.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn parentReset(id: WidgetId, w: Widget) void {
+pub fn parentReset(id: Id, w: Widget) void {
     const cw = currentWindow();
     const actual_current = cw.data().parent.data().id;
     if (id != actual_current) {
@@ -2819,7 +2901,7 @@ pub fn windowNaturalScale() f32 {
 /// firstFrame will return true the next frame we see it.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn firstFrame(id: WidgetId) bool {
+pub fn firstFrame(id: Id) bool {
     return minSizeGet(id) == null;
 }
 
@@ -2830,7 +2912,7 @@ pub fn firstFrame(id: WidgetId) bool {
 /// size provided by the user code.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn minSizeGet(id: WidgetId) ?Size {
+pub fn minSizeGet(id: Id) ?Size {
     return currentWindow().min_sizes.get(id);
 }
 
@@ -2839,7 +2921,7 @@ pub fn minSizeGet(id: WidgetId) ?Size {
 /// See `minSizeGet` to get only the min size from last frame.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn minSize(id: WidgetId, min_size: Size) Size {
+pub fn minSize(id: Id, min_size: Size) Size {
     var size = min_size;
 
     // Need to take the max of both given and previous.  ScrollArea could be
@@ -2852,38 +2934,10 @@ pub fn minSize(id: WidgetId, min_size: Size) Size {
     return size;
 }
 
-/// Make a unique id from `src` and `id_extra`, possibly starting with start
-/// (usually a parent widget id).  This is how the initial parent widget id is
-/// created, and also toasts and dialogs from other threads.
-///
-/// See `Widget.extendId` which calls this with the widget id as start.
-///
-/// ```zig
-/// dvui.parentGet().extendId(@src(), id_extra)
-/// ```
-/// is how new widgets get their id, and can be used to make a unique id without
-/// making a widget.
-pub fn hashSrc(start: ?WidgetId, src: std.builtin.SourceLocation, id_extra: usize) WidgetId {
-    var hash = fnv.init();
-    if (start) |s| {
-        hash.value = s.asU64();
-    }
-    hash.update(std.mem.asBytes(&src.module.ptr));
-    hash.update(std.mem.asBytes(&src.file.ptr));
-    hash.update(std.mem.asBytes(&src.line));
-    hash.update(std.mem.asBytes(&src.column));
-    hash.update(std.mem.asBytes(&id_extra));
-    return @enumFromInt(hash.final());
-}
-
-/// Make a new id by combining id with the contents of key.  This is how dvui
-/// tracks things in `dataGet`/`dataSet`, `animation`, and `timer`.
-pub fn hashIdKey(id: WidgetId, key: []const u8) u64 {
-    var h = fnv.init();
-    h.value = id.asU64();
-    h.update(key);
-    return h.final();
-}
+/// DEPRECATED: See `dvui.Id.extendId`
+pub const hashSrc = void;
+/// DEPRECATED: See `dvui.Id.update`
+pub const hashIdKey = void;
 
 /// Set key/value pair for given id.
 ///
@@ -2898,7 +2952,7 @@ pub fn hashIdKey(id: WidgetId, key: []const u8) u64 {
 /// that pointer would be modified.
 ///
 /// If you want to store the contents of a slice, use `dataSetSlice`.
-pub fn dataSet(win: ?*Window, id: WidgetId, key: []const u8, data: anytype) void {
+pub fn dataSet(win: ?*Window, id: Id, key: []const u8, data: anytype) void {
     dataSetAdvanced(win, id, key, data, false, 1);
 }
 
@@ -2914,14 +2968,14 @@ pub fn dataSet(win: ?*Window, id: WidgetId, key: []const u8, data: anytype) void
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the data to.
-pub fn dataSetSlice(win: ?*Window, id: WidgetId, key: []const u8, data: anytype) void {
+pub fn dataSetSlice(win: ?*Window, id: Id, key: []const u8, data: anytype) void {
     dataSetSliceCopies(win, id, key, data, 1);
 }
 
 /// Same as `dataSetSlice`, but will copy data `num_copies` times all concatenated
 /// into a single slice.  Useful to get dvui to allocate a specific number of
 /// entries that you want to fill in after.
-pub fn dataSetSliceCopies(win: ?*Window, id: WidgetId, key: []const u8, data: anytype, num_copies: usize) void {
+pub fn dataSetSliceCopies(win: ?*Window, id: Id, key: []const u8, data: anytype, num_copies: usize) void {
     const dt = @typeInfo(@TypeOf(data));
     if (dt == .pointer and dt.pointer.size == .slice) {
         if (dt.pointer.sentinel()) |s| {
@@ -2953,7 +3007,7 @@ pub fn dataSetSliceCopies(win: ?*Window, id: WidgetId, key: []const u8, data: an
 /// If `copy_slice` is true, data must be a slice or pointer to array, and the
 /// contents are copied into internal storage. If false, only the slice itself
 /// (ptr and len) and stored.
-pub fn dataSetAdvanced(win: ?*Window, id: WidgetId, key: []const u8, data: anytype, comptime copy_slice: bool, num_copies: usize) void {
+pub fn dataSetAdvanced(win: ?*Window, id: Id, key: []const u8, data: anytype, comptime copy_slice: bool, num_copies: usize) void {
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
         w.dataSetAdvanced(id, key, data, copy_slice, num_copies);
@@ -2976,7 +3030,7 @@ pub fn dataSetAdvanced(win: ?*Window, id: WidgetId, key: []const u8, data: anyty
 /// If you want a pointer to the stored data, use `dataGetPtr`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGet(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type) ?T {
+pub fn dataGet(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
     if (dataGetInternal(win, id, key, T, false)) |bytes| {
         return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
     } else {
@@ -2994,7 +3048,7 @@ pub fn dataGet(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type) ?
 /// If you want a pointer to the stored data, use `dataGetPtrDefault`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGetDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type, default: T) T {
+pub fn dataGetDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: T) T {
     if (dataGetInternal(win, id, key, T, false)) |bytes| {
         return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
     } else {
@@ -3019,7 +3073,7 @@ pub fn dataGetDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: 
 /// The pointer will always be valid until the next call to `Window.end`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGetPtrDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type, default: T) *T {
+pub fn dataGetPtrDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: T) *T {
     if (dataGetPtr(win, id, key, T)) |ptr| {
         return ptr;
     } else {
@@ -3042,7 +3096,7 @@ pub fn dataGetPtrDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime 
 /// The pointer will always be valid until the next call to `Window.end`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGetPtr(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type) ?*T {
+pub fn dataGetPtr(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?*T {
     if (dataGetInternal(win, id, key, T, false)) |bytes| {
         return @as(*T, @alignCast(@ptrCast(bytes.ptr)));
     } else {
@@ -3065,7 +3119,7 @@ pub fn dataGetPtr(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type
 /// id/key combination.
 ///
 /// The slice will always be valid until the next call to `Window.end`.
-pub fn dataGetSlice(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type) ?T {
+pub fn dataGetSlice(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
     const dt = @typeInfo(T);
     if (dt != .pointer or dt.pointer.size != .slice) {
         @compileError("dataGetSlice needs a slice, given " ++ @typeName(T));
@@ -3097,7 +3151,7 @@ pub fn dataGetSlice(win: ?*Window, id: WidgetId, key: []const u8, comptime T: ty
 /// id/key combination.
 ///
 /// The slice will always be valid until the next call to `Window.end`.
-pub fn dataGetSliceDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
+pub fn dataGetSliceDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
     return dataGetSlice(win, id, key, T) orelse blk: {
         dataSetSlice(win, id, key, default);
         break :blk dataGetSlice(win, id, key, T).?;
@@ -3105,7 +3159,7 @@ pub fn dataGetSliceDefault(win: ?*Window, id: WidgetId, key: []const u8, comptim
 }
 
 // returns the backing slice of bytes if we have it
-pub fn dataGetInternal(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
+pub fn dataGetInternal(win: ?*Window, id: Id, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
         return w.dataGetInternal(id, key, T, slice);
@@ -3125,7 +3179,7 @@ pub fn dataGetInternal(win: ?*Window, id: WidgetId, key: []const u8, comptime T:
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the dialog to.
-pub fn dataRemove(win: ?*Window, id: WidgetId, key: []const u8) void {
+pub fn dataRemove(win: ?*Window, id: Id, key: []const u8) void {
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
         return w.dataRemove(id, key);
@@ -3215,11 +3269,11 @@ pub fn eventMatchSimple(e: *Event, wd: *WidgetData) bool {
 /// Data for matching events to widgets.  See `eventMatch`.
 pub const EventMatchOptions = struct {
     /// Id of widget, used for keyboard focus and mouse capture.
-    id: WidgetId,
+    id: Id,
 
     /// Additional Id for keyboard focus, use to match children with
     /// `lastFocusedIdInFrame()`.
-    focus_id: ?WidgetId = null,
+    focus_id: ?Id = null,
 
     /// Physical pixel rect used to match pointer events.
     r: Rect.Physical,
@@ -3446,9 +3500,9 @@ pub const Animation = struct {
 /// Add animation a to key associated with id.  See `Animation`.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn animation(id: WidgetId, key: []const u8, a: Animation) void {
+pub fn animation(id: Id, key: []const u8, a: Animation) void {
     var cw = currentWindow();
-    const h = hashIdKey(id, key);
+    const h = id.update(key);
     cw.animations.put(cw.gpa, h, a) catch |err| switch (err) {
         error.OutOfMemory => {
             log.err("animation got {!} for id {x} key {s}\n", .{ err, id, key });
@@ -3459,8 +3513,8 @@ pub fn animation(id: WidgetId, key: []const u8, a: Animation) void {
 /// Retrieve an animation previously added with `animation`.  See `Animation`.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn animationGet(id: WidgetId, key: []const u8) ?Animation {
-    const h = hashIdKey(id, key);
+pub fn animationGet(id: Id, key: []const u8) ?Animation {
+    const h = id.update(key);
     return currentWindow().animations.get(h);
 }
 
@@ -3468,7 +3522,7 @@ pub fn animationGet(id: WidgetId, key: []const u8) ?Animation {
 /// has passed.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn timer(id: WidgetId, micros: i32) void {
+pub fn timer(id: Id, micros: i32) void {
     currentWindow().timer(id, micros);
 }
 
@@ -3477,7 +3531,7 @@ pub fn timer(id: WidgetId, micros: i32) void {
 /// frame is past the timer expiration.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn timerGet(id: WidgetId) ?i32 {
+pub fn timerGet(id: Id) ?i32 {
     if (animationGet(id, "_timer")) |a| {
         return a.end_time;
     } else {
@@ -3488,7 +3542,7 @@ pub fn timerGet(id: WidgetId) ?i32 {
 /// Return true on the first frame after a timer has expired.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn timerDone(id: WidgetId) bool {
+pub fn timerDone(id: Id) bool {
     if (timerGet(id)) |end_time| {
         if (end_time <= 0) {
             return true;
@@ -3502,7 +3556,7 @@ pub fn timerDone(id: WidgetId) bool {
 /// events (see Clock example in `Examples.animations`).
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn timerDoneOrNone(id: WidgetId) bool {
+pub fn timerDoneOrNone(id: Id) bool {
     return timerDone(id) or (timerGet(id) == null);
 }
 
@@ -3533,7 +3587,7 @@ pub const ScrollDragOptions = struct {
 
     // id of the widget that has mouse capture during the drag (needed to
     // inject synthetic motion events into the next frame to keep scrolling)
-    capture_id: dvui.WidgetId,
+    capture_id: dvui.Id,
 };
 
 /// Bubbled from inside a scrollarea to ensure scrolling while dragging
@@ -3547,8 +3601,8 @@ pub fn scrollDrag(scroll_drag: ScrollDragOptions) void {
 }
 
 pub const TabIndex = struct {
-    windowId: WidgetId,
-    widgetId: WidgetId,
+    windowId: Id,
+    widgetId: Id,
     tabIndex: u16,
 };
 
@@ -3562,7 +3616,7 @@ pub const TabIndex = struct {
 /// null widgets are visited in order of calling `tabIndexSet`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn tabIndexSet(widget_id: WidgetId, tab_index: ?u16) void {
+pub fn tabIndexSet(widget_id: Id, tab_index: ?u16) void {
     if (tab_index != null and tab_index.? == 0)
         return;
 
@@ -3595,7 +3649,7 @@ pub fn tabIndexNext(event_num: ?u16) void {
     // find the first widget with a tabindex greater than oldtab
     // or the first widget with lowest tabindex if oldtab is null
     var newtab: u16 = math.maxInt(u16);
-    var newId: ?WidgetId = null;
+    var newId: ?Id = null;
     var foundFocus = false;
 
     for (cw.tab_index_prev.items) |ti| {
@@ -3641,7 +3695,7 @@ pub fn tabIndexPrev(event_num: ?u16) void {
     // find the last widget with a tabindex less than oldtab
     // or the last widget with highest tabindex if oldtab is null
     var newtab: u16 = 1;
-    var newId: ?WidgetId = null;
+    var newId: ?Id = null;
     var foundFocus = false;
 
     for (cw.tab_index_prev.items) |ti| {
@@ -3761,16 +3815,16 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
     return ret;
 }
 
-pub const DialogDisplayFn = *const fn (WidgetId) anyerror!void;
-pub const DialogCallAfterFn = *const fn (WidgetId, enums.DialogResponse) anyerror!void;
+pub const DialogDisplayFn = *const fn (Id) anyerror!void;
+pub const DialogCallAfterFn = *const fn (Id, enums.DialogResponse) anyerror!void;
 
 pub const Dialog = struct {
-    id: WidgetId,
+    id: Id,
     display: DialogDisplayFn,
 };
 
 pub const IdMutex = struct {
-    id: WidgetId,
+    id: Id,
     mutex: *std.Thread.Mutex,
 };
 
@@ -3787,7 +3841,7 @@ pub const IdMutex = struct {
 pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplayFn) IdMutex {
     if (win) |w| {
         // we are being called from non gui thread
-        const id = hashSrc(null, src, id_extra);
+        const id = Id.extendId(null, src, id_extra);
         const mutex = w.dialogAdd(id, display);
         refresh(win, @src(), id); // will wake up gui thread
         return .{ .id = id, .mutex = mutex };
@@ -3805,7 +3859,7 @@ pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize
 }
 
 /// Only called from gui thread.
-pub fn dialogRemove(id: WidgetId) void {
+pub fn dialogRemove(id: Id) void {
     const cw = currentWindow();
     cw.dialogRemove(id);
     refresh(null, @src(), id);
@@ -3866,7 +3920,7 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
     id_mutex.mutex.unlock();
 }
 
-pub fn dialogDisplay(id: WidgetId) !void {
+pub fn dialogDisplay(id: Id) !void {
     const modal = dvui.dataGet(null, id, "_modal", bool) orelse {
         log.err("dialogDisplay lost data for dialog {x}\n", .{id});
         dvui.dialogRemove(id);
@@ -3917,12 +3971,16 @@ pub fn dialogDisplay(id: WidgetId) !void {
 
     {
         // Add the buttons at the bottom first, so that they are guaranteed to be shown
-        var hbox = dvui.box(@src(), .horizontal, .{ .gravity_x = 0.5, .gravity_y = 1.0 });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 0.5, .gravity_y = 1.0 });
         defer hbox.deinit();
 
         if (cancel_label) |cl| {
             var cancel_data: WidgetData = undefined;
-            if (dvui.button(@src(), cl, .{}, .{ .tab_index = 2, .data_out = &cancel_data })) {
+            const gravx: f32, const tindex: u16 = switch (currentWindow().button_order) {
+                .cancel_ok => .{ 0.0, 1 },
+                .ok_cancel => .{ 1.0, 3 },
+            };
+            if (dvui.button(@src(), cl, .{}, .{ .tab_index = tindex, .data_out = &cancel_data, .gravity_x = gravx })) {
                 dvui.dialogRemove(id);
                 if (callafter) |ca| {
                     ca(id, .cancel) catch |err| {
@@ -3937,7 +3995,7 @@ pub fn dialogDisplay(id: WidgetId) !void {
         }
 
         var ok_data: WidgetData = undefined;
-        if (dvui.button(@src(), ok_label, .{}, .{ .tab_index = 1, .data_out = &ok_data })) {
+        if (dvui.button(@src(), ok_label, .{}, .{ .tab_index = 2, .data_out = &ok_data })) {
             dvui.dialogRemove(id);
             if (callafter) |ca| {
                 ca(id, .ok) catch |err| {
@@ -3952,7 +4010,7 @@ pub fn dialogDisplay(id: WidgetId) !void {
     }
 
     // Now add the scroll area which will get the remaining space
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
     var tl = dvui.textLayout(@src(), .{}, .{ .background = false, .gravity_x = 0.5 });
     tl.addText(message, .{});
     tl.deinit();
@@ -3967,7 +4025,7 @@ pub const DialogWasmFileOptions = struct {
 };
 
 const WasmFile = struct {
-    id: WidgetId,
+    id: Id,
     index: usize,
     /// The size of the data in bytes
     size: usize,
@@ -3985,7 +4043,7 @@ const WasmFile = struct {
 /// Opens a file picker WITHOUT blocking. The file can be accessed by calling `wasmFileUploaded` with the same id
 ///
 /// This function does nothing in non-wasm builds
-pub fn dialogWasmFileOpen(id: WidgetId, opts: DialogWasmFileOptions) void {
+pub fn dialogWasmFileOpen(id: Id, opts: DialogWasmFileOptions) void {
     if (!wasm) return;
     dvui.backend.openFilePicker(id, opts.accept, false);
 }
@@ -3993,7 +4051,7 @@ pub fn dialogWasmFileOpen(id: WidgetId, opts: DialogWasmFileOptions) void {
 /// Will only return a non-null value for a single frame
 ///
 /// This function does nothing in non-wasm builds
-pub fn wasmFileUploaded(id: WidgetId) ?WasmFile {
+pub fn wasmFileUploaded(id: Id) ?WasmFile {
     if (!wasm) return null;
     const num_files = dvui.backend.getNumberOfFilesAvailable(id);
     if (num_files == 0) return null;
@@ -4017,7 +4075,7 @@ pub fn wasmFileUploaded(id: WidgetId) ?WasmFile {
 /// Opens a file picker WITHOUT blocking. The files can be accessed by calling `wasmFileUploadedMultiple` with the same id
 ///
 /// This function does nothing in non-wasm builds
-pub fn dialogWasmFileOpenMultiple(id: WidgetId, opts: DialogWasmFileOptions) void {
+pub fn dialogWasmFileOpenMultiple(id: Id, opts: DialogWasmFileOptions) void {
     if (!wasm) return;
     dvui.backend.openFilePicker(id, opts.accept, true);
 }
@@ -4025,7 +4083,7 @@ pub fn dialogWasmFileOpenMultiple(id: WidgetId, opts: DialogWasmFileOptions) voi
 /// Will only return a non-null value for a single frame
 ///
 /// This function does nothing in non-wasm builds
-pub fn wasmFileUploadedMultiple(id: WidgetId) ?[]WasmFile {
+pub fn wasmFileUploadedMultiple(id: Id) ?[]WasmFile {
     if (!wasm) return null;
     const num_files = dvui.backend.getNumberOfFilesAvailable(id);
     if (num_files == 0) return null;
@@ -4242,8 +4300,8 @@ pub fn dialogNativeFolderSelect(alloc: std.mem.Allocator, opts: DialogNativeFold
 }
 
 pub const Toast = struct {
-    id: WidgetId,
-    subwindow_id: ?WidgetId,
+    id: Id,
+    subwindow_id: ?Id,
     display: DialogDisplayFn,
 };
 
@@ -4261,10 +4319,10 @@ pub const Toast = struct {
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the Window you want to add the toast to.
-pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?WidgetId, display: DialogDisplayFn, timeout: ?i32) IdMutex {
+pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?Id, display: DialogDisplayFn, timeout: ?i32) IdMutex {
     if (win) |w| {
         // we are being called from non gui thread
-        const id = hashSrc(null, src, id_extra);
+        const id = Id.extendId(null, src, id_extra);
         const mutex = w.toastAdd(id, subwindow_id, display, timeout);
         refresh(win, @src(), id);
         return .{ .id = id, .mutex = mutex };
@@ -4284,7 +4342,7 @@ pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize,
 /// Remove a previously added toast.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn toastRemove(id: WidgetId) void {
+pub fn toastRemove(id: Id) void {
     const cw = currentWindow();
     cw.toastRemove(id);
     refresh(null, @src(), id);
@@ -4293,7 +4351,7 @@ pub fn toastRemove(id: WidgetId) void {
 /// Returns toasts that were previously added with non-null subwindow_id.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn toastsFor(subwindow_id: ?WidgetId) ?ToastIterator {
+pub fn toastsFor(subwindow_id: ?Id) ?ToastIterator {
     const cw = dvui.currentWindow();
     cw.dialog_mutex.lock();
     defer cw.dialog_mutex.unlock();
@@ -4310,11 +4368,11 @@ pub fn toastsFor(subwindow_id: ?WidgetId) ?ToastIterator {
 pub const ToastIterator = struct {
     const Self = @This();
     cw: *Window,
-    subwindow_id: ?WidgetId,
+    subwindow_id: ?Id,
     i: usize,
-    last_id: ?WidgetId = null,
+    last_id: ?Id = null,
 
-    pub fn init(win: *Window, subwindow_id: ?WidgetId, i: usize) Self {
+    pub fn init(win: *Window, subwindow_id: ?Id, i: usize) Self {
         return Self{ .cw = win, .subwindow_id = subwindow_id, .i = i };
     }
 
@@ -4347,7 +4405,7 @@ pub const ToastIterator = struct {
 pub const ToastOptions = struct {
     id_extra: usize = 0,
     window: ?*Window = null,
-    subwindow_id: ?WidgetId = null,
+    subwindow_id: ?Id = null,
     timeout: ?i32 = 5_000_000,
     message: []const u8,
     displayFn: DialogDisplayFn = toastDisplay,
@@ -4369,7 +4427,7 @@ pub fn toast(src: std.builtin.SourceLocation, opts: ToastOptions) void {
     id_mutex.mutex.unlock();
 }
 
-pub fn toastDisplay(id: WidgetId) !void {
+pub fn toastDisplay(id: Id) !void {
     const message = dvui.dataGetSlice(null, id, "_message", []u8) orelse {
         log.err("toastDisplay lost data for toast {x}\n", .{id});
         return;
@@ -4398,7 +4456,7 @@ pub fn toastDisplay(id: WidgetId) !void {
 /// Toasts are shown in rect centered horizontally and 70% down vertically.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn toastsShow(id: ?WidgetId, rect: Rect.Natural) void {
+pub fn toastsShow(id: ?Id, rect: Rect.Natural) void {
     var ti = dvui.toastsFor(id);
     if (ti) |*it| {
         var toast_win = dvui.FloatingWindowWidget.init(@src(), .{ .stay_above_parent_window = id != null, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
@@ -4409,7 +4467,7 @@ pub fn toastsShow(id: ?WidgetId, rect: Rect.Natural) void {
         toast_win.drawBackground();
         toast_win.autoSize(); // affects next frame
 
-        var vbox = dvui.box(@src(), .vertical, .{});
+        var vbox = dvui.box(@src(), .{}, .{});
         defer vbox.deinit();
 
         while (it.next()) |t| {
@@ -4677,7 +4735,6 @@ pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions
     ret.* = PanedWidget.init(src, init_opts, opts);
     ret.install();
     ret.processEvents();
-    ret.draw();
     return ret;
 }
 
@@ -4778,25 +4835,14 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) *OverlayWidget {
 /// Extra space is allocated evenly to all packed children expanded in dir
 /// direction.
 ///
-/// See `boxEqual` and `flexbox`.
+/// If init_opts.equal_space is true, all packed children get equal space.
+///
+/// See `flexbox`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) *BoxWidget {
+pub fn box(src: std.builtin.SourceLocation, init_opts: BoxWidget.InitOptions, opts: Options) *BoxWidget {
     var ret = widgetAlloc(BoxWidget);
-    ret.* = BoxWidget.init(src, .{ .dir = dir }, opts);
-    ret.install();
-    ret.drawBackground();
-    return ret;
-}
-
-/// Same as `box` but all packed children receive equal space.
-///
-/// See `box` and `flexbox`.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) *BoxWidget {
-    var ret = widgetAlloc(BoxWidget);
-    ret.* = BoxWidget.init(src, .{ .dir = dir, .equal_space = true }, opts);
+    ret.* = BoxWidget.init(src, init_opts, opts);
     ret.install();
     ret.drawBackground();
     return ret;
@@ -4804,7 +4850,7 @@ pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Opt
 
 /// Box laying out children horizontally, making new rows as needed.
 ///
-/// See `box` and `boxEqual`.
+/// See `box`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) *FlexBoxWidget {
@@ -4876,7 +4922,6 @@ pub fn gridHeading(
         .expand = .horizontal,
         .gravity_x = 0.5,
         .gravity_y = 0.5,
-        .color_fill = .{ .name = .fill_control },
         .background = true,
     };
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
@@ -4946,7 +4991,6 @@ pub fn gridHeadingCheckbox(
         .background = true,
         .expand = .both,
         .margin = ButtonWidget.defaults.marginGet(),
-        .color_fill = .fill_control,
         .gravity_x = 0.5,
         .gravity_y = 0.5,
     };
@@ -4967,7 +5011,7 @@ pub fn gridHeadingCheckbox(
     {
         _ = dvui.separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
 
-        var hbox = dvui.box(@src(), .horizontal, header_options);
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, header_options);
         defer hbox.deinit();
 
         is_clicked = dvui.checkbox(@src(), &selected, null, checkbox_opts);
@@ -5031,7 +5075,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
     const defaults: Options = .{
         .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
-        .color_fill = .{ .name = .border },
+        .color_fill = dvui.themeGet().border,
         .min_size_content = .{ .w = 1, .h = 1 },
     };
 
@@ -5131,7 +5175,7 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, ini
     }
 
     if (mi.show_active) {
-        labelopts = labelopts.override(themeGet().accent());
+        labelopts.style = .highlight;
     }
 
     labelNoFmt(@src(), label_str, .{}, labelopts);
@@ -5154,7 +5198,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
     }
 
     if (mi.show_active) {
-        iconopts = iconopts.override(themeGet().accent());
+        iconopts.style = .highlight;
     }
 
     icon(@src(), name, tvg_bytes, .{}, iconopts);
@@ -5169,7 +5213,7 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
     ret.* = MenuItemWidget.init(src, init_opts, opts);
     ret.install();
     ret.processEvents();
-    ret.drawBackground(.{});
+    ret.drawBackground();
     return ret;
 }
 
@@ -5557,16 +5601,16 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
 
     // use pressed text color if desired
     const click = bw.clicked();
-    var options = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
-
-    if (bw.pressed()) options = options.override(.{ .color_text = .{ .color = opts.color(.text_press) } });
 
     // this child widget:
     // - has bw as parent
     // - gets a rectangle from bw
     // - draws itself
     // - reports its min size to bw
-    labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, options);
+    labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, opts.strip()
+        // override with the button colors to update the press and hover colors correctly
+        .override(bw.colors())
+        .override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
 
     // draw focus
     bw.drawFocus();
@@ -5592,7 +5636,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
         name,
         tvg_bytes,
         icon_opts,
-        opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text }),
+        opts.strip().override(bw.colors()).override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text }),
     );
 
     const click = bw.clicked();
@@ -5610,16 +5654,15 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
 
     // process events (mouse and keyboard)
     bw.processEvents();
-    var options = opts.strip().override(.{ .gravity_y = 0.5 });
-    if (bw.pressed()) options = options.override(.{ .color_text = .{ .color = opts.color(.text_press) } });
+    const options = opts.strip().override(bw.colors()).override(.{ .gravity_y = 0.5 });
 
     // draw background/border
     bw.drawBackground();
     {
-        var outer_hbox = box(src, .horizontal, .{ .expand = .horizontal });
+        var outer_hbox = box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer outer_hbox.deinit();
-        icon(@src(), label_str, tvg_bytes, .{}, opts.strip().override(.{ .gravity_x = 1.0, .color_text = opts.color_text }));
-        labelEx(@src(), "{s}", .{label_str}, .{ .align_x = 0.5 }, opts.strip().override(.{ .expand = .both }));
+        icon(@src(), label_str, tvg_bytes, .{}, options.strip().override(.{ .gravity_x = 1.0, .color_text = opts.color_text }));
+        labelEx(@src(), "{s}", .{label_str}, .{ .align_x = 0.5 }, options.strip().override(.{ .expand = .both }));
     }
 
     const click = bw.clicked();
@@ -5633,18 +5676,20 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
 pub var slider_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 20, .h = 20 },
-    .color_fill = .{ .name = .fill_control },
     .name = "Slider",
+    .style = .control,
 };
 
-// returns true if fraction (0-1) was changed
+/// returns true if fraction (0-1) was changed
+///
+/// `Options.color_accent` overrides the color of the left side of the slider
 pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *f32, opts: Options) bool {
     std.debug.assert(fraction.* >= 0);
     std.debug.assert(fraction.* <= 1);
 
     const options = slider_defaults.override(opts);
 
-    var b = box(src, dir, options);
+    var b = box(src, .{ .dir = dir }, options);
     defer b.deinit();
 
     tabIndexSet(b.data().id, options.tab_index);
@@ -5747,7 +5792,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.accent), .fade = 1.0 });
+        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = opts.color_accent orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
     }
 
     switch (dir) {
@@ -5775,7 +5820,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         options.color(.fill_hover)
     else
         options.color(.fill);
-    var knob = BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = .{ .color = fill_color } });
+    var knob = BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = fill_color });
     knob.install();
     knob.drawBackground();
     if (b.data().id == focusedWidgetId()) {
@@ -5794,10 +5839,10 @@ pub var slider_entry_defaults: Options = .{
     .margin = Rect.all(4),
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(2),
-    .color_fill = .{ .name = .fill_control },
     .background = true,
     // min size calculated from font
     .name = "SliderEntry",
+    .style = .control,
 };
 
 pub const SliderEntryInitOptions = struct {
@@ -6185,7 +6230,7 @@ pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, 
 pub var progress_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 10, .h = 10 },
-    .color_fill = .{ .name = .fill_control },
+    .style = .control,
 };
 
 pub const Progress_InitOptions = struct {
@@ -6193,10 +6238,11 @@ pub const Progress_InitOptions = struct {
     percent: f32,
 };
 
+/// `Options.color_accent` overrides the color of the left side of the progress bar
 pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions, opts: Options) void {
     const options = progress_defaults.override(opts);
 
-    var b = box(src, init_opts.dir, options);
+    var b = box(src, .{ .dir = init_opts.dir }, options);
     defer b.deinit();
 
     const rs = b.data().contentRectScale();
@@ -6217,7 +6263,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.accent), .fade = 1.0 });
+    part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = opts.color_accent orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
 }
 
 pub var checkbox_defaults: Options = .{
@@ -6250,7 +6296,7 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
         }
     }
 
-    var b = box(@src(), .horizontal, options.strip().override(.{ .expand = .both }));
+    var b = box(@src(), .{ .dir = .horizontal }, options.strip().override(.{ .expand = .both }));
     defer b.deinit();
 
     const check_size = options.fontGet().textHeight();
@@ -6275,7 +6321,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
-        rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent });
+        rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -6287,7 +6333,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
     var options = opts;
     if (checked) {
-        options = opts.override(themeGet().accent());
+        options.style = .highlight;
         rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
     } else {
         rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
@@ -6336,7 +6382,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
         ret = true;
     }
 
-    var b = box(@src(), .horizontal, options.strip().override(.{ .expand = .both }));
+    var b = box(@src(), .{ .dir = .horizontal }, options.strip().override(.{ .expand = .both }));
     defer b.deinit();
 
     const radio_size = options.fontGet().textHeight();
@@ -6345,7 +6391,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     const rs = s.borderRectScale();
 
     if (bw.data().visible()) {
-        radioCircle(active, bw.focused(), rs, bw.pressed(), bw.hovered(), options);
+        radioCircle(active or bw.clicked(), bw.focused(), rs, bw.pressed(), bw.hovered(), options);
     }
 
     if (label_str) |str| {
@@ -6362,7 +6408,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
-        r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent });
+        r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -6374,8 +6420,8 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
 
     var options = opts;
     if (active) {
-        options = opts.override(themeGet().accent());
-        r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(.fill), .fade = 1.0 });
+        options.style = .highlight;
+        r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
     } else {
         r.insetAll(rs.s).fill(cornerRad, .{ .color = opts.color(fill), .fade = 1.0 });
     }
@@ -6485,7 +6531,9 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         else => unreachable,
     };
 
-    const id = dvui.parentGet().extendId(src, opts.idExtra());
+    // @typeName is needed so that the id changes with the type for `data...` functions
+    // https://github.com/david-vanderson/dvui/issues/502
+    const id = dvui.parentGet().extendId(src, opts.idExtra()).update(@typeName(T));
 
     const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 32);
 
@@ -6540,7 +6588,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().color_err, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
 
     // display min/max
@@ -6554,12 +6602,44 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         } else if (init_opts.max != null) {
             minmax_text = std.fmt.bufPrint(&minmax_buffer, "(max: {d})", .{init_opts.max.?}) catch unreachable;
         }
-        te.textLayout.addText(minmax_text, .{ .color_text = .{ .name = .fill_hover } });
+        te.textLayout.addText(minmax_text, .{ .color_text = opts.color(.fill_hover) });
     }
 
     te.deinit();
 
     return result;
+}
+
+test "textEntryNumber type swap issue #502" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
+    defer t.deinit();
+
+    const Temp = struct {
+        const Types = enum { u8, u16, i16, f32, f16 };
+        var cur_type: Types = .u8;
+        fn frame() !dvui.App.Result {
+            switch (cur_type) {
+                inline else => |comp_t| {
+                    const T = switch (comp_t) {
+                        .u8 => u8,
+                        .u16 => u16,
+                        .i16 => i16,
+                        .f32 => f32,
+                        .f16 => f16,
+                    };
+                    var val: T = 0;
+                    _ = dvui.textEntryNumber(@src(), T, .{ .value = &val }, .{});
+                },
+            }
+            return .ok;
+        }
+    };
+
+    try dvui.testing.settle(Temp.frame);
+    for (std.meta.tags(Temp.Types)) |type_tag| {
+        Temp.cur_type = type_tag;
+        _ = try dvui.testing.step(Temp.frame);
+    }
 }
 
 pub const TextEntryColorInitOptions = struct {
@@ -6665,7 +6745,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().color_err, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
 
     te.deinit();
@@ -6693,7 +6773,7 @@ pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOp
     var changed = picker.color_changed;
     var rgb = init_opts.hsv.toColor();
 
-    var side_box = dvui.box(@src(), .vertical, .{});
+    var side_box = dvui.box(@src(), .{}, .{});
     defer side_box.deinit();
 
     const slider_expand = Options.Expand.fromDirection(.horizontal);
@@ -6757,6 +6837,7 @@ pub const renderTextOptions = struct {
     background_color: ?Color = null,
     sel_start: ?usize = null,
     sel_end: ?usize = null,
+    sel_color: ?Color = null,
     debug: bool = false,
 };
 
@@ -6778,10 +6859,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     if (!cw.render_target.rendering) {
         var opts_copy = opts;
         opts_copy.text = try cw.arena().dupe(u8, utf8_text);
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
-
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cw.arena(), cmd);
+        cw.addRenderCommand(.{ .text = opts_copy }, false);
         return;
     }
 
@@ -6797,14 +6875,14 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     // make sure the cache has all the glyphs we need
     var utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
     while (utf8it.nextCodepoint()) |codepoint| {
-        _ = try fce.glyphInfoGetOrReplacement(@as(u32, @intCast(codepoint)), opts.font.name);
+        _ = try fce.glyphInfoGetOrReplacement(codepoint);
     }
 
     // Generate new texture atlas if needed to update glyph uv coords
     const texture_atlas = fce.getTextureAtlas() catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
-            log.err("Could not get texture atlas for font {s}, text area marked in magenta, to display '{s}'", .{ opts.font.name, opts.text });
+            log.err("Could not get texture atlas for font {}, text area marked in magenta, to display '{s}'", .{ opts.font.id, opts.text });
             opts.rs.r.fill(.{}, .{ .color = .magenta });
             return;
         },
@@ -6813,6 +6891,8 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     // Over allocate the internal buffers assuming each byte is a character
     var builder = try Triangles.Builder.init(cw.lifo(), 4 * utf8_text.len, 6 * utf8_text.len);
     defer builder.deinit(cw.lifo());
+
+    const col: Color.PMA = .fromColor(opts.color.opacity(cw.alpha));
 
     const x_start: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
     var x = x_start;
@@ -6841,7 +6921,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     var last_codepoint: u32 = 0;
     var last_glyph_index: u32 = 0;
     while (utf8it.nextCodepoint()) |codepoint| {
-        const gi = try fce.glyphInfoGetOrReplacement(@as(u32, @intCast(codepoint)), opts.font.name);
+        const gi = try fce.glyphInfoGetOrReplacement(codepoint);
 
         // kerning
         if (last_codepoint != 0) {
@@ -6850,7 +6930,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
                 const glyph_index: u32 = c.FT_Get_Char_Index(fce.face, codepoint);
                 var kern: c.FT_Vector = undefined;
                 FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
-                    log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, opts.font.name, last_codepoint, codepoint });
+                    log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
                     // Set fallback kern and continue to the best of out ability
                     kern.x = 0;
                     kern.y = 0;
@@ -6908,7 +6988,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
 
             v.pos.x = leftx;
             v.pos.y = y + gi.topBearing * target_fraction;
-            v.col = .fromColor(if (sel_in) themeGet().color_fill else opts.color);
+            v.col = col;
             v.uv = gi.uv;
             builder.appendVertex(v);
 
@@ -6958,7 +7038,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
                 .x = sel_end_x,
                 .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
             })
-            .fill(.{}, .{ .color = themeGet().color_accent, .fade = 0 });
+            .fill(.{}, .{ .color = opts.sel_color orelse themeGet().focus, .fade = 0 });
     }
 
     try renderTriangles(builder.build_unowned(), texture_atlas);
@@ -7083,6 +7163,7 @@ pub const RenderTextureOptions = struct {
     fade: f32 = 0.0,
 };
 
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Backend.GenericError!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
@@ -7090,10 +7171,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
     var cw = currentWindow();
 
     if (!cw.render_target.rendering) {
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .opts = opts } } };
-
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cw.arena(), cmd);
+        cw.addRenderCommand(.{ .texture = .{ .tex = tex, .rs = rs, .opts = opts } }, false);
         return;
     }
 
@@ -7102,7 +7180,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
 
     path.addRect(rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
 
-    var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod, .fade = opts.fade });
+    var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod.opacity(cw.alpha), .fade = opts.fade });
     defer triangles.deinit(cw.lifo());
 
     triangles.uvFromRectuv(rs.r, opts.uv);
@@ -7119,6 +7197,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
     try renderTriangles(triangles, tex);
 }
 
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions, icon_opts: IconRenderOptions) Backend.GenericError!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
@@ -7145,6 +7224,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     try renderTexture(texture, rs, opts);
 }
 
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderImage(source: ImageSource, rs: RectScale, opts: RenderTextureOptions) (Backend.TextureError || StbImageError)!void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
@@ -7339,6 +7419,7 @@ pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, 
     return ret;
 }
 
+/// `Options.color_accent` overrides the color of the plot line
 pub fn plotXY(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, thick: f32, xs: []const f64, ys: []const f64, opts: Options) void {
     const defaults: Options = .{ .padding = .{} };
     var p = dvui.plot(src, plot_opts, defaults.override(opts));
@@ -7348,7 +7429,7 @@ pub fn plotXY(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions
         s1.point(x, y);
     }
 
-    s1.stroke(thick, opts.color(.accent));
+    s1.stroke(thick, opts.color_accent orelse dvui.themeGet().color(.highlight, .fill));
 
     s1.deinit();
     p.deinit();
@@ -7366,7 +7447,7 @@ pub const BasicLayout = struct {
     seen_expanded: bool = false,
     min_size_children: Size = .{},
 
-    pub fn rectFor(self: *BasicLayout, contentRect: Rect, id: WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    pub fn rectFor(self: *BasicLayout, contentRect: Rect, id: Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         if (self.seen_expanded) {
             // A single vertically expanded child can take the rest of the
             // space, but it should be the last (usually only) child.
@@ -7399,15 +7480,15 @@ pub const BasicLayout = struct {
                 if (e.isVertical()) {
                     self.seen_expanded = true;
                 }
-                r.y = self.pos;
-                r.h = @max(0, r.h - r.y);
+                r.y += self.pos;
+                r.h = @max(0, r.h - self.pos);
             },
             .horizontal => {
                 if (e.isHorizontal()) {
                     self.seen_expanded = true;
                 }
-                r.x = self.pos;
-                r.w = @max(0, r.w - r.x);
+                r.x += self.pos;
+                r.w = @max(0, r.w - self.pos);
             },
         }
 

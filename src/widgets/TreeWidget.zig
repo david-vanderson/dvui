@@ -60,7 +60,7 @@ pub fn data(self: *TreeWidget) *WidgetData {
     return &self.wd;
 }
 
-pub fn rectFor(self: *TreeWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *TreeWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
 }
@@ -242,7 +242,7 @@ pub const Branch = struct {
 
                     if (self.target_rs != null) {
                         rs.r.h = 2.0;
-                        rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent, .fade = 1.0 });
+                        rs.r.fill(.{}, .{ .color = dvui.themeGet().focus, .fade = 1.0 });
                     }
                 }
             }
@@ -274,7 +274,7 @@ pub const Branch = struct {
             var rs = self.wd.rectScale();
             self.target_rs = rs;
             rs.r.h = 2.0;
-            rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent, .fade = 1.0 });
+            rs.r.fill(.{}, .{ .color = dvui.themeGet().focus, .fade = 1.0 });
         }
 
         self.tree.branch_size = self.button.wd.rect.size();
@@ -378,7 +378,7 @@ pub const Branch = struct {
         return &self.wd;
     }
 
-    pub fn rectFor(self: *Branch, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    pub fn rectFor(self: *Branch, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         _ = id;
         return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
     }

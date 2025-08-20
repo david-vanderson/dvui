@@ -23,7 +23,7 @@ var dropdown_val: usize = 1;
 /// ![image](Examples-basic_widgets.png)
 pub fn basicWidgets() void {
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Label", .{}, .{ .gravity_y = 0.5 });
@@ -38,14 +38,15 @@ pub fn basicWidgets() void {
         dvui.tooltip(@src(), .{ .active_rect = ttout.borderRectScale().r }, "Here's a tooltip", .{}, .{});
 
         {
-            var vbox = dvui.box(@src(), .vertical, .{});
+            var vbox = dvui.box(@src(), .{}, .{});
             defer vbox.deinit();
 
             {
-                var color: ?dvui.Options.ColorOrName = null;
+                const control_opts: dvui.Options = .{};
+                var color: ?dvui.Color = null;
                 if (checkbox_gray) {
                     // blend text and control colors
-                    color = .{ .color = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill_control) };
+                    color = dvui.Color.average(control_opts.color(.text), control_opts.color(.fill));
                 }
                 var bw = dvui.ButtonWidget.init(@src(), .{}, .{
                     .color_text = color,
@@ -61,7 +62,7 @@ pub fn basicWidgets() void {
 
                 const opts = bw.data().options.strip().override(.{ .gravity_y = 0.5 });
 
-                var bbox = dvui.box(@src(), .horizontal, opts);
+                var bbox = dvui.box(@src(), .{ .dir = .horizontal }, opts);
                 defer bbox.deinit();
 
                 dvui.icon(
@@ -79,7 +80,7 @@ pub fn basicWidgets() void {
                 }
             }
             {
-                var hbox_inner = dvui.box(@src(), .horizontal, .{});
+                var hbox_inner = dvui.box(@src(), .{ .dir = .horizontal }, .{});
                 defer hbox_inner.deinit();
                 _ = dvui.checkbox(@src(), &checkbox_gray, "Gray", .{});
                 _ = dvui.checkbox(@src(), &checkbox_enabled, "Enabled", .{});
@@ -88,16 +89,16 @@ pub fn basicWidgets() void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Link:", .{}, .{ .gravity_y = 0.5 });
 
-        if (dvui.labelClick(@src(), "https://david-vanderson.github.io/", .{}, .{}, .{ .gravity_y = 0.5, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
+        if (dvui.labelClick(@src(), "https://david-vanderson.github.io/", .{}, .{}, .{ .gravity_y = 0.5, .color_text = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } })) {
             _ = dvui.openURL("https://david-vanderson.github.io/");
         }
 
-        if (dvui.labelClick(@src(), "docs", .{}, .{}, .{ .gravity_y = 0.5, .margin = .{ .x = 10 }, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
+        if (dvui.labelClick(@src(), "docs", .{}, .{}, .{ .gravity_y = 0.5, .margin = .{ .x = 10 }, .color_text = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } })) {
             _ = dvui.openURL("https://david-vanderson.github.io/docs");
         }
     }
@@ -105,7 +106,7 @@ pub fn basicWidgets() void {
     _ = dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Text Entry", .{}, .{ .gravity_y = 0.5 });
@@ -120,7 +121,7 @@ pub fn basicWidgets() void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         const entries = [_][]const u8{ "First", "Second", "Third is a really long one that doesn't fit" };
@@ -131,7 +132,7 @@ pub fn basicWidgets() void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
         defer hbox.deinit();
 
         dvui.label(@src(), "Sliders", .{}, .{ .gravity_y = 0.5 });
@@ -141,7 +142,7 @@ pub fn basicWidgets() void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
@@ -161,7 +162,7 @@ pub fn basicWidgets() void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{ .padding = .{ .x = 10 } });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .padding = .{ .x = 10 } });
         defer hbox.deinit();
 
         _ = dvui.checkbox(@src(), &slider_entry_min, "Min", .{});
@@ -174,7 +175,7 @@ pub fn basicWidgets() void {
     _ = dvui.spacer(@src(), .{ .min_size_content = .height(4) });
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Raster Images", .{}, .{ .gravity_y = 0.5 });
@@ -189,7 +190,7 @@ pub fn basicWidgets() void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Svg Images", .{}, .{ .gravity_y = 0.5 });
@@ -207,7 +208,7 @@ pub fn basicWidgets() void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Icons", .{}, .{ .gravity_y = 0.5 });
@@ -223,7 +224,7 @@ pub fn basicWidgets() void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Resize Rotate Icons/Images", .{}, .{ .gravity_y = 0.5 });
@@ -279,13 +280,20 @@ pub fn dropdownAdvanced() void {
         var choice: ?usize = null;
     };
 
+    const oldt = dvui.themeGet();
+    var t = oldt;
+    t.highlight.fill = dvui.Color.purple;
+    t.highlight.text = dvui.Color.red;
+    dvui.themeSet(t);
+    defer dvui.themeSet(oldt);
+
     var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = g.choice }, .{ .min_size_content = .{ .w = 100 } });
     dd.install();
     defer dd.deinit();
 
     // Here's what is shown when the dropdown is not dropped
     {
-        var hbox2 = dvui.box(@src(), .horizontal, .{ .expand = .both });
+        var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
         dvui.icon(
             @src(),
             "air",
@@ -317,10 +325,10 @@ pub fn dropdownAdvanced() void {
             var mi = dd.addChoice();
             defer mi.deinit();
 
-            var hbox2 = dvui.box(@src(), .horizontal, .{ .expand = .both });
+            var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
             defer hbox2.deinit();
 
-            var opts: Options = if (mi.show_active) dvui.themeGet().accent() else .{};
+            const opts: Options = mi.colors();
 
             dvui.icon(
                 @src(),
@@ -344,10 +352,10 @@ pub fn dropdownAdvanced() void {
             var mi = dd.addChoice();
             defer mi.deinit();
 
-            var vbox = dvui.box(@src(), .vertical, .{ .expand = .both });
+            var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
             defer vbox.deinit();
 
-            var opts: Options = if (mi.show_active) dvui.themeGet().accent() else .{};
+            const opts: Options = mi.colors();
 
             _ = dvui.image(@src(), .{ .source = .{ .imageFile = .{ .bytes = zig_favicon, .name = "zig favicon" } } }, opts.override(.{ .gravity_x = 0.5 }));
             dvui.labelNoFmt(@src(), "image above text", .{}, opts.override(.{ .gravity_x = 0.5, .padding = .{} }));
@@ -370,7 +378,7 @@ test "DOCIMG basic_widgets" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             basicWidgets();
             return .ok;

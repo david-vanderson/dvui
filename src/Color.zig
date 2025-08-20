@@ -3,7 +3,6 @@ const hsluv = @import("hsluv.zig");
 
 const Color = @This();
 const dvui = @import("dvui.zig");
-const ColorsFromTheme = dvui.Options.ColorsFromTheme;
 
 const tvg = @import("svg2tvg");
 
@@ -12,7 +11,6 @@ g: u8 = 0xff,
 b: u8 = 0xff,
 a: u8 = 0xff,
 
-// These color names are duplicated in Options.ColorOrName
 // Basic web colors
 // https://en.wikipedia.org/wiki/Web_colors#Basic_colors
 pub const white = Color{ .r = 0xFF, .g = 0xFF, .b = 0xFF };
@@ -52,6 +50,11 @@ pub fn brightness(self: @This()) f32 {
 
 pub fn toRGBA(self: @This()) [4]u8 {
     return .{ self.r, self.g, self.b, self.a };
+}
+
+/// Lighten color by converting to HSLuv, lightening, and back.
+pub fn lighten(self: Color, deltal: f32) Color {
+    return HSLuv.fromColor(self).lighten(deltal).color();
 }
 
 /// https://en.wikipedia.org/wiki/HSL_and_HSV#HSV_to_RGB
@@ -388,7 +391,9 @@ pub const PMAImage = struct {
     pma: []PMA,
     width: u32,
     height: u32,
-    pub fn fromImageFile(dbg_name: []const u8, image_bytes: []const u8) dvui.StbImageError!PMAImage {
+
+    /// the returned []PMA inside PMAImage is allocated with alloc
+    pub fn fromImageFile(dbg_name: []const u8, alloc: std.mem.Allocator, image_bytes: []const u8) !PMAImage {
         var w: c_int = undefined;
         var h: c_int = undefined;
         var channels_in_file: c_int = undefined;
@@ -398,15 +403,20 @@ pub const PMAImage = struct {
             return dvui.StbImageError.stbImageError;
         }
         defer dvui.c.stbi_image_free(data);
+
+        const size: usize = @intCast(w * h * 4);
+        const pixels = try alloc.alloc(u8, size);
+        @memcpy(pixels, data[0..size]);
+
         return PMAImage{
-            .pma = PMA.sliceFromRGBA(data[0..@intCast(w * h * @sizeOf(Color.PMA))]),
+            .pma = PMA.sliceFromRGBA(pixels),
             .width = @intCast(w),
             .height = @intCast(h),
         };
     }
 
-    /// the returned []PMA inside PMAImage must be freed with alloc
-    /// the render_alloc ist used for temporary allocations in the render process
+    /// the returned []PMA inside PMAImage is allocated with alloc
+    /// the render_alloc is used for temporary allocations in the render process
     pub fn fromTvgFile(dbg_name: []const u8, alloc: std.mem.Allocator, render_alloc: std.mem.Allocator, tvg_bytes: []const u8, height: u32, icon_opts: dvui.IconRenderOptions) !PMAImage {
         const ImageAdapter = struct {
             pixels: []u8,
@@ -565,24 +575,6 @@ test tryFromHex {
     try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }, Color.tryFromHex("#A1A2A3A4"));
     try std.testing.expectEqual(FromHexError.InvalidCharacter, Color.tryFromHex("XXX"));
     try std.testing.expectEqual(FromHexError.InvalidHexStringLength, Color.tryFromHex("#12"));
-}
-
-/// Get a Color from the active Theme
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn fromTheme(theme_color: ColorsFromTheme) @This() {
-    return switch (theme_color) {
-        .accent => dvui.themeGet().color_accent,
-        .text => dvui.themeGet().color_text,
-        .text_press => dvui.themeGet().color_text_press,
-        .fill => dvui.themeGet().color_fill,
-        .fill_hover => dvui.themeGet().color_fill_hover,
-        .fill_press => dvui.themeGet().color_fill_press,
-        .border => dvui.themeGet().color_border,
-        .err => dvui.themeGet().color_err,
-        .fill_window => dvui.themeGet().color_fill_window,
-        .fill_control => dvui.themeGet().color_fill_control,
-    };
 }
 
 test {

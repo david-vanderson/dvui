@@ -7,14 +7,14 @@ var reset_on_digit: bool = false;
 
 /// ![image](Examples-calculator.png)
 pub fn calculator() void {
-    var vbox = dvui.box(@src(), .vertical, .{});
+    var vbox = dvui.box(@src(), .{}, .{});
     defer vbox.deinit();
 
     const loop_labels = [_]u8{ 'C', 'N', '%', '/', '7', '8', '9', 'x', '4', '5', '6', '-', '1', '2', '3', '+', '0', '.', '=' };
     dvui.label(@src(), "{d}", .{if (calculand) |val| round(val) else round(calculation)}, .{ .gravity_x = 1.0 });
 
     for (0..5) |row_i| {
-        var b = dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 110 }, .id_extra = row_i });
+        var b = dvui.box(@src(), .{ .dir = .horizontal }, .{ .min_size_content = .{ .w = 110 }, .id_extra = row_i });
         defer b.deinit();
 
         for (row_i * 4..(row_i + 1) * 4) |i| {
@@ -132,7 +132,7 @@ test "DOCIMG calculator" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             calculator();
             return .ok;

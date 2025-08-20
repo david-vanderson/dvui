@@ -19,17 +19,18 @@ previous_window: ?*Window = null,
 subwindows: std.ArrayListUnmanaged(Subwindow) = .empty,
 
 /// id of the subwindow widgets are being added to
-subwindow_currentId: WidgetId = .zero,
+subwindow_currentId: Id = .zero,
 
 /// natural rect of the last subwindow, dialogs use this
 /// to center themselves
 subwindow_currentRect: Rect.Natural = .{},
 
 /// id of the subwindow that has focus
-focused_subwindowId: WidgetId = .zero,
+focused_subwindowId: Id = .zero,
 
-last_focused_id_this_frame: WidgetId = .zero,
-last_registered_id_this_frame: WidgetId = .zero,
+last_focused_id_this_frame: Id = .zero,
+last_focused_id_in_subwindow: Id = .zero,
+last_registered_id_this_frame: Id = .zero,
 scroll_to_focused: bool = false,
 
 /// natural rect telling the backend where our text input box is:
@@ -38,6 +39,8 @@ scroll_to_focused: bool = false,
 text_input_rect: ?Rect.Natural = null,
 
 snap_to_pixels: bool = true,
+/// The alpha value for all rendering. All colors alpha values will be
+/// multiplied by this value.
 alpha: f32 = 1.0,
 
 /// Uses `arena` allocator
@@ -72,23 +75,33 @@ loop_target_slop: i32 = 1000, // 1ms frame overhead seems a good place to start
 loop_target_slop_frames: i32 = 0,
 frame_times: [30]u32 = [_]u32{0} ** 30,
 
+/// Debugging aid, only used in waitTime(), null means no max
+max_fps: ?f32 = null,
+
 secs_since_last_frame: f32 = 0,
 extra_frames_needed: u8 = 0,
 clipRect: dvui.Rect.Physical = .{},
 
+/// The currently active theme where colors and fonts will be sourced.
+/// This field is intended to be assigned to directly.
+///
+/// See `dvui.themeSet`
 theme: Theme,
 
+/// Used by `dvui.dialog` for button order of Ok and Cancel.
+button_order: dvui.enums.DialogButtonOrder = .cancel_ok,
+
 /// Uses `gpa` allocator
-min_sizes: dvui.TrackingAutoHashMap(WidgetId, Size, .put_only) = .empty,
+min_sizes: dvui.TrackingAutoHashMap(Id, Size, .put_only) = .empty,
 /// Uses `gpa` allocator
 tags: dvui.TrackingAutoHashMap([]const u8, dvui.TagData, .put_only) = .empty,
 data_mutex: std.Thread.Mutex = .{},
 /// Uses `gpa` allocator
-datas: dvui.TrackingAutoHashMap(u64, SavedData, .get_and_put) = .empty,
+datas: dvui.TrackingAutoHashMap(Id, SavedData, .get_and_put) = .empty,
 /// Uses `arena` allocator
 datas_trash: std.ArrayListUnmanaged(SavedData) = .empty,
 /// Uses `gpa` allocator
-animations: dvui.TrackingAutoHashMap(u64, Animation, .get_and_put) = .empty,
+animations: dvui.TrackingAutoHashMap(Id, Animation, .get_and_put) = .empty,
 /// Uses `gpa` allocator
 tab_index_prev: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
@@ -96,7 +109,7 @@ tab_index: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
 font_cache: dvui.TrackingAutoHashMap(u64, dvui.FontCacheEntry, .get_and_put) = .empty,
 /// Uses `gpa` allocator
-font_bytes: std.StringHashMapUnmanaged(dvui.FontBytesEntry) = .empty,
+font_bytes: std.AutoHashMapUnmanaged(dvui.Font.FontId, dvui.FontBytesEntry) = .empty,
 /// Uses `gpa` allocator
 texture_cache: dvui.TrackingAutoHashMap(dvui.Texture.CacheKey, dvui.Texture, .get_and_put) = .empty,
 /// Uses `arena` allocator
@@ -108,8 +121,6 @@ dialogs: std.ArrayListUnmanaged(Dialog) = .empty,
 toasts: std.ArrayListUnmanaged(Toast) = .empty,
 /// Uses `gpa` allocator
 keybinds: std.StringHashMapUnmanaged(dvui.enums.Keybind) = .empty,
-/// Uses `gpa` allocator
-themes: std.StringArrayHashMapUnmanaged(Theme) = .empty,
 
 cursor_requested: ?dvui.enums.Cursor = null,
 cursor_dragging: ?dvui.enums.Cursor = null,
@@ -135,17 +146,17 @@ end_rendering_done: bool = false,
 debug: @import("Debug.zig") = .{},
 
 pub const Subwindow = struct {
-    id: WidgetId,
+    id: Id,
     rect: Rect,
     rect_pixels: dvui.Rect.Physical,
-    focused_widgetId: ?WidgetId = null,
+    focused_widgetId: ?Id = null,
     /// Uses `arena` allocator
     render_cmds: std.ArrayListUnmanaged(dvui.RenderCommand) = .empty,
     /// Uses `arena` allocator
     render_cmds_after: std.ArrayListUnmanaged(dvui.RenderCommand) = .empty,
     used: bool = true,
     modal: bool = false,
-    stay_above_parent_window: ?WidgetId = null,
+    stay_above_parent_window: ?Id = null,
 };
 
 const SavedData = struct {
@@ -169,7 +180,7 @@ const SavedData = struct {
 pub const InitOptions = struct {
     id_extra: usize = 0,
     arena: ?std.heap.ArenaAllocator = null,
-    theme: ?*Theme = null,
+    theme: ?Theme = null,
     /// `null` indicated that the OS will choose it's preferred theme
     ///
     /// Does nothing if the `theme` option is populated
@@ -179,6 +190,8 @@ pub const InitOptions = struct {
         windows,
         mac,
     } = null,
+
+    button_order: ?dvui.enums.DialogButtonOrder = null,
 };
 
 pub fn init(
@@ -187,7 +200,7 @@ pub fn init(
     backend_ctx: dvui.Backend,
     init_opts: InitOptions,
 ) !Self {
-    const hashval = dvui.hashSrc(null, src, init_opts.id_extra);
+    const hashval = dvui.Id.extendId(null, src, init_opts.id_extra);
 
     var self = Self{
         .gpa = gpa,
@@ -208,27 +221,18 @@ pub fn init(
         },
         .backend = backend_ctx,
         .font_bytes = try dvui.Font.initTTFBytesDatabase(gpa),
-        .theme = if (init_opts.theme) |t| t.* else switch (init_opts.color_scheme orelse backend_ctx.preferredColorScheme() orelse .light) {
+        .theme = if (init_opts.theme) |t| t else switch (init_opts.color_scheme orelse backend_ctx.preferredColorScheme() orelse .light) {
             .light => Theme.builtin.adwaita_light,
             .dark => Theme.builtin.adwaita_dark,
         },
     };
 
-    inline for (@typeInfo(Theme.builtin).@"struct".decls) |decl| {
-        const theme = @field(Theme.builtin, decl.name);
-        try self.themes.putNoClobber(self.gpa, theme.name, theme);
-    }
-
-    // Sort themes alphabetically
-    const Context = struct {
-        hashmap: *std.StringArrayHashMapUnmanaged(Theme),
-        pub fn lessThan(ctx: @This(), lhs: usize, rhs: usize) bool {
-            return std.ascii.orderIgnoreCase(ctx.hashmap.values()[lhs].name, ctx.hashmap.values()[rhs].name) == .lt;
-        }
-    };
-    self.themes.sort(Context{ .hashmap = &self.themes });
-
     try self.initEvents();
+
+    self.button_order = init_opts.button_order orelse switch (builtin.os.tag) {
+        .windows => .ok_cancel,
+        else => .cancel_ok,
+    };
 
     const kb = init_opts.keybinds orelse blk: {
         if (builtin.os.tag.isDarwin()) {
@@ -427,12 +431,6 @@ pub fn deinit(self: *Self) void {
     }
     self.font_bytes.deinit(self.gpa);
 
-    {
-        for (self.themes.values()) |*theme| {
-            theme.deinit(self.gpa);
-        }
-    }
-    self.themes.deinit(self.gpa);
     self.* = undefined;
 }
 
@@ -468,7 +466,7 @@ pub fn arena(self: *Self) std.mem.Allocator {
 }
 
 /// called from gui thread
-pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?WidgetId) void {
+pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?Id) void {
     if (self.debug.logRefresh(null)) {
         log.debug("{s}:{d} refresh {?x}", .{ src.file, src.line, id });
     }
@@ -476,14 +474,14 @@ pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?WidgetId
 }
 
 /// called from any thread
-pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?WidgetId) void {
+pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?Id) void {
     if (self.debug.logRefresh(null)) {
         log.debug("{s}:{d} refreshBackend {?x}", .{ src.file, src.line, id });
     }
     self.backend.refresh();
 }
 
-pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?WidgetId, event_num: ?u16) void {
+pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?Id, event_num: ?u16) void {
     const winId = subwindow_id orelse self.subwindow_currentId;
     if (self.focused_subwindowId != winId) {
         self.focused_subwindowId = winId;
@@ -500,7 +498,7 @@ pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?WidgetId, event_num: ?
 }
 
 // Only for keyboard events
-pub fn focusEventsInternal(self: *Self, event_num: u16, windowId: ?WidgetId, widgetId: ?WidgetId) void {
+pub fn focusEventsInternal(self: *Self, event_num: u16, windowId: ?Id, widgetId: ?Id) void {
     var evts = self.events.items;
     var k: usize = 0;
     while (k < evts.len) : (k += 1) {
@@ -518,7 +516,7 @@ pub fn focusEventsInternal(self: *Self, event_num: u16, windowId: ?WidgetId, wid
 }
 
 // Only for mouse/touch events
-pub fn captureEventsInternal(self: *Self, event_num: u16, widgetId: ?WidgetId) void {
+pub fn captureEventsInternal(self: *Self, event_num: u16, widgetId: ?Id) void {
     var evts = self.events.items;
     var k: usize = 0;
     while (k < evts.len) : (k += 1) {
@@ -875,18 +873,21 @@ pub fn beginWait(self: *Self, interrupted: bool) i128 {
     return new_time;
 }
 
-/// Takes output of `Window.end` and optionally a max fps.  Returns microseconds
-/// the app should wait (with event interruption) before running the render loop again.
+/// Takes output of `Window.end`.  Returns microseconds the app should wait
+/// (with event interruption) before running the render loop again.
+///
+/// If `Window.max_fps` is not null, will sleep to keep the framerate under
+/// that (usually set in the Debug window).
 ///
 /// Pass return value to backend.waitEventTimeout().
 /// Cooperates with `Window.beginWait` to estimate how much time is being spent
 /// outside the render loop and account for that.
-pub fn waitTime(self: *Self, end_micros: ?u32, maxFPS: ?f32) u32 {
+pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
     // end_micros is the naive value we want to be between last begin and next begin
 
     // minimum time to wait to hit max fps target
     var min_micros: u32 = 0;
-    if (maxFPS) |mfps| {
+    if (self.max_fps) |mfps| {
         min_micros = @as(u32, @intFromFloat(1_000_000.0 / mfps));
     }
 
@@ -1001,6 +1002,7 @@ pub fn begin(
     self.cursor_requested = null;
     self.text_input_rect = null;
     self.last_focused_id_this_frame = .zero;
+    self.last_focused_id_in_subwindow = .zero;
 
     self.debug.reset(self.gpa);
 
@@ -1161,7 +1163,7 @@ fn positionMouseEventRemove(self: *Self) void {
     }
 }
 
-pub fn windowFor(self: *const Self, p: Point.Physical) WidgetId {
+pub fn windowFor(self: *const Self, p: Point.Physical) Id {
     var i = self.subwindows.items.len;
     while (i > 0) : (i -= 1) {
         const sw = &self.subwindows.items[i - 1];
@@ -1232,19 +1234,43 @@ pub fn textInputRequested(self: *const Self) ?Rect.Natural {
     return self.text_input_rect;
 }
 
+pub fn addRenderCommand(self: *Self, cmd: dvui.RenderCommand.Command, after: bool) void {
+    var sw = self.subwindowCurrent();
+    const render_cmd: dvui.RenderCommand = .{
+        .clip = self.clipRect,
+        .alpha = self.alpha,
+        .snap = self.snap_to_pixels,
+        .cmd = cmd,
+    };
+    if (after) {
+        sw.render_cmds_after.append(self.arena(), render_cmd) catch |err| {
+            dvui.logError(@src(), err, "Could not append to render_cmds_after", .{});
+        };
+    } else {
+        sw.render_cmds.append(self.arena(), render_cmd) catch |err| {
+            dvui.logError(@src(), err, "Could not append to render_cmds", .{});
+        };
+    }
+}
+
 pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
-    const oldsnap = dvui.snapToPixels();
-    defer _ = dvui.snapToPixelsSet(oldsnap);
+    const old_snap = self.snap_to_pixels;
+    defer self.snap_to_pixels = old_snap;
 
-    const oldclip = dvui.clipGet();
-    defer dvui.clipSet(oldclip);
+    const old_alpha = self.alpha;
+    defer self.alpha = old_alpha;
 
-    const old_rendering = dvui.renderingSet(true);
-    defer _ = dvui.renderingSet(old_rendering);
+    const old_clip = self.clipRect;
+    defer self.clipRect = old_clip;
+
+    const old_rendering = self.render_target.rendering;
+    self.render_target.rendering = true;
+    defer self.render_target.rendering = old_rendering;
 
     for (queue) |*drc| {
-        _ = dvui.snapToPixelsSet(drc.snap);
-        dvui.clipSet(drc.clip);
+        self.snap_to_pixels = drc.snap;
+        self.clipRect = drc.clip;
+        self.alpha = drc.alpha;
         switch (drc.cmd) {
             .text => |t| {
                 try dvui.renderText(t);
@@ -1253,12 +1279,16 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
                 try dvui.renderTexture(t.tex, t.rs, t.opts);
             },
             .pathFillConvex => |pf| {
-                var triangles = try pf.path.fillConvexTriangles(self.lifo(), pf.opts);
+                var options = pf.opts;
+                options.color = options.color.opacity(self.alpha);
+                var triangles = try pf.path.fillConvexTriangles(self.lifo(), options);
                 defer triangles.deinit(self.lifo());
                 try dvui.renderTriangles(triangles, null);
             },
             .pathStroke => |ps| {
-                var triangles = try ps.path.strokeTriangles(self.lifo(), ps.opts);
+                var options = ps.opts;
+                options.color = options.color.opacity(self.alpha);
+                var triangles = try ps.path.strokeTriangles(self.lifo(), options);
                 defer triangles.deinit(self.lifo());
                 try dvui.renderTriangles(triangles, null);
             },
@@ -1270,8 +1300,8 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
 }
 
 /// data is copied into internal storage
-pub fn dataSetAdvanced(self: *Self, id: WidgetId, key: []const u8, data_in: anytype, comptime copy_slice: bool, num_copies: usize) void {
-    const hash: u64 = dvui.hashIdKey(id, key);
+pub fn dataSetAdvanced(self: *Self, id: Id, key: []const u8, data_in: anytype, comptime copy_slice: bool, num_copies: usize) void {
+    const hash = id.update(key);
 
     const dt = @typeInfo(@TypeOf(data_in));
     const dt_type_str = @typeName(@TypeOf(data_in));
@@ -1341,8 +1371,8 @@ pub fn dataSetAdvanced(self: *Self, id: WidgetId, key: []const u8, data_in: anyt
 }
 
 /// returns the backing byte slice if we have one
-pub fn dataGetInternal(self: *Self, id: WidgetId, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
-    const hash: u64 = dvui.hashIdKey(id, key);
+pub fn dataGetInternal(self: *Self, id: Id, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
+    const hash = id.update(key);
 
     self.data_mutex.lock();
     defer self.data_mutex.unlock();
@@ -1359,8 +1389,8 @@ pub fn dataGetInternal(self: *Self, id: WidgetId, key: []const u8, comptime T: t
     }
 }
 
-pub fn dataRemove(self: *Self, id: WidgetId, key: []const u8) void {
-    const hash: u64 = dvui.hashIdKey(id, key);
+pub fn dataRemove(self: *Self, id: Id, key: []const u8) void {
+    const hash = id.update(key);
 
     self.data_mutex.lock();
     defer self.data_mutex.unlock();
@@ -1382,7 +1412,7 @@ pub fn dataRemove(self: *Self, id: WidgetId, key: []const u8) void {
 ///
 ///  If calling from a non-GUI thread, do any dataSet() calls before unlocking the
 ///  mutex to ensure that data is available before the dialog is displayed.
-pub fn dialogAdd(self: *Self, id: WidgetId, display: dvui.DialogDisplayFn) *std.Thread.Mutex {
+pub fn dialogAdd(self: *Self, id: Id, display: dvui.DialogDisplayFn) *std.Thread.Mutex {
     self.dialog_mutex.lock();
 
     for (self.dialogs.items) |*d| {
@@ -1400,7 +1430,7 @@ pub fn dialogAdd(self: *Self, id: WidgetId, display: dvui.DialogDisplayFn) *std.
 }
 
 /// Only called from gui thread.
-pub fn dialogRemove(self: *Self, id: WidgetId) void {
+pub fn dialogRemove(self: *Self, id: Id) void {
     self.dialog_mutex.lock();
     defer self.dialog_mutex.unlock();
 
@@ -1442,18 +1472,18 @@ fn dialogsShow(self: *Self) void {
     }
 }
 
-pub fn timer(self: *Self, id: WidgetId, micros: i32) void {
+pub fn timer(self: *Self, id: Id, micros: i32) void {
     // when start_time is in the future, we won't spam frames, so this will
     // cause a single frame and then expire
     const a = Animation{ .start_time = micros, .end_time = micros };
-    const h = dvui.hashIdKey(id, "_timer");
+    const h = id.update("_timer");
     self.animations.put(self.gpa, h, a) catch |err| {
         dvui.logError(@src(), err, "Could not add timer for {x}", .{id});
     };
 }
 
-pub fn timerRemove(self: *Self, id: WidgetId) void {
-    const h = dvui.hashIdKey(id, "_timer");
+pub fn timerRemove(self: *Self, id: Id) void {
+    const h = id.update("_timer");
     _ = self.animations.remove(h);
 }
 
@@ -1462,7 +1492,7 @@ pub fn timerRemove(self: *Self, id: WidgetId) void {
 /// calling from a non-GUI thread, do any `dvui.dataSet` calls before unlocking
 /// the mutex to ensure that data is available before the dialog is
 /// displayed.
-pub fn toastAdd(self: *Self, id: WidgetId, subwindow_id: ?WidgetId, display: dvui.DialogDisplayFn, timeout: ?i32) *std.Thread.Mutex {
+pub fn toastAdd(self: *Self, id: Id, subwindow_id: ?Id, display: dvui.DialogDisplayFn, timeout: ?i32) *std.Thread.Mutex {
     self.dialog_mutex.lock();
 
     for (self.toasts.items) |*t| {
@@ -1486,7 +1516,7 @@ pub fn toastAdd(self: *Self, id: WidgetId, subwindow_id: ?WidgetId, display: dvu
     return &self.dialog_mutex;
 }
 
-pub fn toastRemove(self: *Self, id: WidgetId) void {
+pub fn toastRemove(self: *Self, id: Id) void {
     self.dialog_mutex.lock();
     defer self.dialog_mutex.unlock();
 
@@ -1607,7 +1637,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         var i = self.subwindows.items.len;
         while (i > 0) : (i -= 1) {
             const sw = self.subwindows.items[i - 1];
-            if (sw.used) {
+            if (sw.used and sw.stay_above_parent_window == null) {
                 //std.debug.print("focused subwindow lost, focusing {d}\n", .{i - 1});
                 dvui.focusSubwindow(sw.id, null);
                 break;
@@ -1701,7 +1731,7 @@ pub fn data(self: *const Self) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *Self, id: WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *Self, id: Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     return self.layout.rectFor(self.data().rect, id, min_size, e, g);
 }
 
@@ -1727,7 +1757,7 @@ const Point = dvui.Point;
 const Event = dvui.Event;
 const WidgetData = dvui.WidgetData;
 const Widget = dvui.Widget;
-const WidgetId = dvui.WidgetId;
+const Id = dvui.Id;
 
 const Animation = dvui.Animation;
 const Theme = dvui.Theme;

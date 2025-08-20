@@ -178,7 +178,12 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             }
 
             linkBackend(dvui_testing, testing_mod);
-            addExample("testing-app", b.path("examples/app.zig"), dvui_testing, test_dvui_and_app, dvui_opts);
+            const example_opts: ExampleOptions = .{
+                .dvui_mod = dvui_testing,
+                .backend_name = "testing-backend",
+                .backend_mod = testing_mod,
+            };
+            addExample("testing-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .sdl2 => {
             const sdl_mod = b.addModule("sdl2", .{
@@ -255,10 +260,14 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             }
 
             linkBackend(dvui_sdl, sdl_mod);
-            addExample("sdl2-align", b.path("examples/sdl-align.zig"), dvui_sdl, true, dvui_opts);
-            addExample("sdl2-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, true, dvui_opts);
-            addExample("sdl2-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, true, dvui_opts);
-            addExample("sdl2-app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
+            const example_opts: ExampleOptions = .{
+                .dvui_mod = dvui_sdl,
+                .backend_name = "sdl-backend",
+                .backend_mod = sdl_mod,
+            };
+            addExample("sdl2-standalone", b.path("examples/sdl-standalone.zig"), true, example_opts, dvui_opts);
+            addExample("sdl2-ontop", b.path("examples/sdl-ontop.zig"), true, example_opts, dvui_opts);
+            addExample("sdl2-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .sdl3 => {
             const sdl_mod = b.addModule("sdl3", .{
@@ -300,9 +309,14 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             }
 
             linkBackend(dvui_sdl, sdl_mod);
-            addExample("sdl3-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, true, dvui_opts);
-            addExample("sdl3-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, true, dvui_opts);
-            addExample("sdl3-app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
+            const example_opts: ExampleOptions = .{
+                .dvui_mod = dvui_sdl,
+                .backend_name = "sdl-backend",
+                .backend_mod = sdl_mod,
+            };
+            addExample("sdl3-standalone", b.path("examples/sdl-standalone.zig"), true, example_opts, dvui_opts);
+            addExample("sdl3-ontop", b.path("examples/sdl-ontop.zig"), true, example_opts, dvui_opts);
+            addExample("sdl3-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .raylib => {
             const linux_display_backend: LinuxDisplayBackend = b.option(LinuxDisplayBackend, "linux_display_backend", "If using raylib, which linux display?") orelse blk: {
@@ -373,9 +387,14 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             }
 
             linkBackend(dvui_raylib, raylib_mod);
-            addExample("raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib, true, dvui_opts_raylib);
-            addExample("raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib, true, dvui_opts_raylib);
-            addExample("raylib-app", b.path("examples/app.zig"), dvui_raylib, test_dvui_and_app, dvui_opts_raylib);
+            const example_opts: ExampleOptions = .{
+                .dvui_mod = dvui_raylib,
+                .backend_name = "raylib-backend",
+                .backend_mod = raylib_mod,
+            };
+            addExample("raylib-standalone", b.path("examples/raylib-standalone.zig"), true, example_opts, dvui_opts_raylib);
+            addExample("raylib-ontop", b.path("examples/raylib-ontop.zig"), true, example_opts, dvui_opts_raylib);
+            addExample("raylib-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts_raylib);
         },
         .dx11 => {
             if (target.result.os.tag == .windows) {
@@ -399,9 +418,14 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 }
 
                 linkBackend(dvui_dx11, dx11_mod);
-                addExample("dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11, true, dvui_opts);
-                addExample("dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11, true, dvui_opts);
-                addExample("dx11-app", b.path("examples/app.zig"), dvui_dx11, test_dvui_and_app, dvui_opts);
+                const example_opts: ExampleOptions = .{
+                    .dvui_mod = dvui_dx11,
+                    .backend_name = "dx11-backend",
+                    .backend_mod = dx11_mod,
+                };
+                addExample("dx11-standalone", b.path("examples/dx11-standalone.zig"), true, example_opts, dvui_opts);
+                addExample("dx11-ontop", b.path("examples/dx11-ontop.zig"), true, example_opts, dvui_opts);
+                addExample("dx11-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
             }
         },
         .web => {
@@ -455,8 +479,13 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
 
                 const dvui_web_wasm = addDvuiModule("dvui_web_wasm", wasm_dvui_opts);
                 linkBackend(dvui_web_wasm, web_mod_wasm);
-                addWebExample("web-test", b.path("examples/web-test.zig"), dvui_web_wasm, wasm_dvui_opts);
-                addWebExample("web-app", b.path("examples/app.zig"), dvui_web_wasm, wasm_dvui_opts);
+                const example_opts: ExampleOptions = .{
+                    .dvui_mod = dvui_web_wasm,
+                    .backend_name = "web-backend",
+                    .backend_mod = web_mod_wasm,
+                };
+                addWebExample("web-test", b.path("examples/web-test.zig"), example_opts, wasm_dvui_opts);
+                addWebExample("web-app", b.path("examples/app.zig"), example_opts, wasm_dvui_opts);
             }
         },
     }
@@ -557,11 +586,17 @@ fn addDvuiModule(
     return dvui_mod;
 }
 
+const ExampleOptions = struct {
+    dvui_mod: *std.Build.Module,
+    backend_name: []const u8,
+    backend_mod: *std.Build.Module,
+};
+
 fn addExample(
     comptime name: []const u8,
     file: std.Build.LazyPath,
-    dvui_mod: *std.Build.Module,
     add_tests: bool,
+    example_opts: ExampleOptions,
     opts: DvuiModuleOptions,
 ) void {
     const b = opts.b;
@@ -571,7 +606,8 @@ fn addExample(
         .target = opts.target,
         .optimize = opts.optimize,
     });
-    mod.addImport("dvui", dvui_mod);
+    mod.addImport("dvui", example_opts.dvui_mod);
+    mod.addImport(example_opts.backend_name, example_opts.backend_mod);
 
     const exe = b.addExecutable(.{ .name = name, .root_module = mod, .use_lld = opts.use_lld });
     if (opts.check_step) |step| {
@@ -610,7 +646,7 @@ fn addExample(
 fn addWebExample(
     comptime name: []const u8,
     file: std.Build.LazyPath,
-    dvui_mod: *std.Build.Module,
+    example_opts: ExampleOptions,
     opts: DvuiModuleOptions,
 ) void {
     const b = opts.b;
@@ -625,11 +661,13 @@ fn addWebExample(
     };
     const web_test = b.addExecutable(exeOptions);
     web_test.entry = .disabled;
-    web_test.root_module.addImport("dvui", dvui_mod);
+    web_test.root_module.addImport("dvui", example_opts.dvui_mod);
+    web_test.root_module.addImport(example_opts.backend_name, example_opts.backend_mod);
 
     const web_test_check = b.addExecutable(exeOptions);
     web_test_check.entry = .disabled;
-    web_test_check.root_module.addImport("dvui", dvui_mod);
+    web_test_check.root_module.addImport("dvui", example_opts.dvui_mod);
+    web_test_check.root_module.addImport(example_opts.backend_name, example_opts.backend_mod);
     if (opts.check_step) |step| step.dependOn(&web_test_check.step);
 
     const install_dir: std.Build.InstallDir = .{ .custom = "bin/" ++ name };

@@ -1,12 +1,12 @@
 pub const SuggestionWidget = @This();
 
-id: dvui.WidgetId,
+id: dvui.Id,
 /// Is for the floating menu widget that might open
 options: Options,
 init_options: InitOptions,
 
 /// SAFETY: Set in `install`
-menu: *MenuWidget = undefined,
+menu: MenuWidget = undefined,
 drop: ?*FloatingMenuWidget = null,
 drop_mi: ?MenuItemWidget = null,
 drop_mi_index: usize = 0,
@@ -19,7 +19,7 @@ pub var defaults: Options = .{
 
 pub const InitOptions = struct {
     rs: RectScale,
-    text_entry_id: dvui.WidgetId,
+    text_entry_id: dvui.Id,
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) SuggestionWidget {
@@ -33,7 +33,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *SuggestionWidget) void {
-    self.menu = dvui.menu(@src(), .horizontal, .{ .rect = .{}, .id_extra = self.options.idExtra() });
+    self.menu = dvui.MenuWidget.init(@src(), .{ .dir = .horizontal, .close_without_focused_child = false }, .{ .rect = .{}, .id_extra = self.options.idExtra() });
+    self.menu.install();
 }
 
 // Use this to see if dropped will return true without installing the
@@ -102,7 +103,7 @@ pub fn addChoice(self: *SuggestionWidget) *MenuItemWidget {
             self.drop_mi.?.highlight = true;
         }
     }
-    self.drop_mi.?.drawBackground(.{});
+    self.drop_mi.?.drawBackground();
 
     self.drop_mi_index += 1;
 

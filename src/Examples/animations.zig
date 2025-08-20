@@ -35,11 +35,11 @@ pub fn animations() void {
     };
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         {
-            var hbox2 = dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200 } });
+            var hbox2 = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 200 } });
             defer hbox2.deinit();
 
             var button_wiggle = ButtonWidget.init(@src(), .{}, .{ .gravity_x = 0.5 });
@@ -90,7 +90,7 @@ pub fn animations() void {
 
     if (dvui.expander(@src(), "Easings", .{}, .{ .expand = .horizontal })) {
         {
-            var hbox = dvui.box(@src(), .horizontal, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();
 
             dvui.labelNoFmt(@src(), "Animate", .{}, .{ .gravity_y = 0.5 });
@@ -131,7 +131,7 @@ pub fn animations() void {
             var start = false;
             var end = false;
             {
-                var hbox = dvui.box(@src(), .horizontal, .{});
+                var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
                 defer hbox.deinit();
 
                 if (dvui.button(@src(), "start", .{}, .{})) {
@@ -173,7 +173,7 @@ pub fn animations() void {
 
     if (dvui.expander(@src(), "Spinner", .{}, .{ .expand = .horizontal })) {
         dvui.labelNoFmt(@src(), "Spinner maxes out frame rate", .{}, .{});
-        dvui.spinner(@src(), .{ .color_text = .{ .color = .{ .r = 100, .g = 200, .b = 100 } } });
+        dvui.spinner(@src(), .{ .color_text = .{ .r = 100, .g = 200, .b = 100 } });
     }
 
     if (dvui.expander(@src(), "Clock", .{}, .{ .expand = .horizontal })) {
@@ -205,7 +205,7 @@ pub fn animations() void {
     }
 
     if (dvui.expander(@src(), "Texture Frames", .{}, .{ .expand = .horizontal })) {
-        var box = dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
+        var box = dvui.box(@src(), .{}, .{ .margin = .{ .x = 10 } });
         defer box.deinit();
 
         const pixels = dvui.dataGetPtrDefault(null, box.data().id, "pixels", [4]dvui.Color.PMA, .{ .yellow, .cyan, .red, .magenta });
@@ -231,14 +231,14 @@ pub fn animations() void {
         };
 
         {
-            var hbox = dvui.box(@src(), .horizontal, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();
             dvui.label(@src(), "frame: {d}", .{frame}, .{});
             _ = dvui.checkbox(@src(), &global.round_corners, "Round Corners", .{});
             //dvui.label(@src(), "num textures: {d}", .{dvui.backend.num_textures}, .{});
         }
 
-        var frame_box = dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 50, .h = 50 } });
+        var frame_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .min_size_content = .{ .w = 50, .h = 50 } });
         defer frame_box.deinit();
 
         _ = dvui.image(@src(), .{ .source = image_source }, .{ .expand = .both, .corner_radius = if (global.round_corners) dvui.Rect.all(10) else .{} });
@@ -287,7 +287,7 @@ pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_fl
 }
 
 const AnimatingDialog = struct {
-    pub fn dialogDisplay(id: dvui.WidgetId) !void {
+    pub fn dialogDisplay(id: dvui.Id) !void {
         const modal = dvui.dataGet(null, id, "_modal", bool) orelse unreachable;
         const title = dvui.dataGetSlice(null, id, "_title", []u8) orelse unreachable;
         const message = dvui.dataGetSlice(null, id, "_message", []u8) orelse unreachable;
@@ -364,7 +364,7 @@ const AnimatingDialog = struct {
         }
     }
 
-    pub fn after(id: dvui.WidgetId, response: enums.DialogResponse) !void {
+    pub fn after(id: dvui.Id, response: enums.DialogResponse) !void {
         _ = id;
         std.log.debug("You clicked \"{s}\"", .{@tagName(response)});
     }
@@ -380,7 +380,7 @@ test "DOCIMG animations" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             animations();
             return .ok;

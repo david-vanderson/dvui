@@ -15,11 +15,11 @@ const ButtonWidget = @This();
 
 pub var defaults: Options = .{
     .name = "Button",
-    .color_fill = .{ .name = .fill_control },
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
     .background = true,
+    .style = .control,
 };
 
 pub const InitOptions = struct {
@@ -55,20 +55,26 @@ pub fn processEvents(self: *ButtonWidget) void {
 }
 
 pub fn drawBackground(self: *ButtonWidget) void {
-    var fill_color: ?Color = null;
-    if (dvui.captured(self.data().id)) {
-        fill_color = self.data().options.color(.fill_press);
-    } else if (self.hover) {
-        fill_color = self.data().options.color(.fill_hover);
-    }
-
-    self.data().borderAndBackground(.{ .fill_color = fill_color });
+    self.data().borderAndBackground(.{ .fill_color = self.colors().color_fill });
 }
 
 pub fn drawFocus(self: *ButtonWidget) void {
     if (self.init_options.draw_focus and self.focused()) {
         self.data().focusBorder();
     }
+}
+
+/// Returns an `Options` struct with color/style overrides for the hover and press state
+pub fn colors(self: *ButtonWidget) Options {
+    var opts: Options = .{ .style = self.data().options.style };
+    if (dvui.captured(self.data().id)) {
+        opts.color_fill = self.data().options.color(.fill_press);
+        opts.color_text = self.data().options.color(.text_press);
+    } else if (self.hover) {
+        opts.color_fill = self.data().options.color(.fill_hover);
+        opts.color_text = self.data().options.color(.text_hover);
+    }
+    return opts;
 }
 
 pub fn focused(self: *ButtonWidget) bool {
@@ -95,7 +101,7 @@ pub fn data(self: *ButtonWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *ButtonWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *ButtonWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }

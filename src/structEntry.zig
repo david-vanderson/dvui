@@ -443,7 +443,7 @@ pub fn unionFieldWidget(
     const entries = std.meta.fields(T);
     var choice = std.meta.activeTag(field_ptr.*);
     {
-        var hbox = dvui.box(@src(), .vertical, .{});
+        var hbox = dvui.box(@src(), .{}, .{});
         defer hbox.deinit();
         //const label = opt.label_override orelse field_name; // TODO:
         const label = field_name;

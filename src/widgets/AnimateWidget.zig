@@ -50,9 +50,7 @@ pub fn install(self: *AnimateWidget) void {
     if (self.val) |v| {
         switch (self.init_opts.kind) {
             .alpha => {
-                self.prev_alpha = dvui.themeGet().alpha;
-                // alpha crashed if v is not between 0 and 1, which some easing functions may output
-                dvui.themeGet().alpha *= std.math.clamp(v, 0, 1);
+                self.prev_alpha = dvui.alpha(v);
             },
             .vertical => {
                 if (dvui.minSizeGet(self.data().id)) |ms| {
@@ -116,7 +114,7 @@ pub fn data(self: *AnimateWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *AnimateWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *AnimateWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
@@ -134,7 +132,7 @@ pub fn deinit(self: *AnimateWidget) void {
     if (self.val) |v| {
         switch (self.init_opts.kind) {
             .alpha => {
-                dvui.themeGet().alpha = self.prev_alpha;
+                dvui.alphaSet(self.prev_alpha);
             },
             .vertical => {
                 // Negative height messes with layout

@@ -1,6 +1,6 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const WebBackend = dvui.backend;
+const WebBackend = @import("web-backend");
 comptime {
     std.debug.assert(@hasDecl(WebBackend, "WebBackend"));
 }
@@ -107,7 +107,7 @@ fn update() !i32 {
     WebBackend.back.setCursor(WebBackend.win.cursorRequested());
     WebBackend.back.textInputRect(WebBackend.win.textInputRequested());
 
-    const wait_event_micros = WebBackend.win.waitTime(end_micros, null);
+    const wait_event_micros = WebBackend.win.waitTime(end_micros);
     return @intCast(@divTrunc(wait_event_micros, 1000));
 }
 
@@ -137,7 +137,7 @@ fn dvui_frame() !void {
         }
     }
 
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
 
     var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });

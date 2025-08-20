@@ -22,6 +22,7 @@ pub var defaults: Options = .{
     // window header), and the bottom is against something curved (bottom
     // of a window)
     .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
+    .style = .window,
 };
 
 pub const InitOpts = struct {
@@ -31,7 +32,7 @@ pub const InitOpts = struct {
     vertical_bar: ScrollInfo.ScrollBarMode = .auto,
     horizontal: ?ScrollInfo.ScrollMode = null, // .none is default
     horizontal_bar: ScrollInfo.ScrollBarMode = .auto,
-    focus_id: ?dvui.WidgetId = null, // clicking on a scrollbar will focus this id, or the scroll container if null
+    focus_id: ?dvui.Id = null, // clicking on a scrollbar will focus this id, or the scroll container if null
     frame_viewport: ?dvui.Point = null,
     lock_visible: bool = false,
     process_events_after: bool = true,
@@ -93,7 +94,7 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
     self.hbox.install();
     self.hbox.drawBackground();
 
-    const focus_target = self.init_opts.focus_id orelse dvui.dataGet(null, self.hbox.data().id, "_scroll_id", dvui.WidgetId);
+    const focus_target = self.init_opts.focus_id orelse dvui.dataGet(null, self.hbox.data().id, "_scroll_id", dvui.Id);
 
     const crect = self.hbox.data().contentRect();
 
@@ -147,7 +148,7 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
         self.vbar = ScrollBarWidget.init(@src(), .{
             .scroll_info = self.si,
             .focus_id = focus_target,
-        }, .{ .gravity_x = if (overlay) 0.999 else 1.0, .expand = .vertical });
+        }, self.hbox.data().options.stylesOnly().override(.{ .gravity_x = if (overlay) 0.999 else 1.0, .expand = .vertical }));
         self.vbar.?.install();
         if (overlay) {
             self.vbar_grab = self.vbar.?.grab();
@@ -163,7 +164,7 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
 
     if (do_hbar) {
         const overlay = self.init_opts.horizontal_bar == .auto_overlay;
-        self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, .{ .expand = .horizontal, .gravity_y = if (overlay) 0.999 else 1.0 });
+        self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, self.hbox.data().options.stylesOnly().override(.{ .expand = .horizontal, .gravity_y = if (overlay) 0.999 else 1.0 }));
         self.hbar.?.install();
         if (overlay) {
             self.hbar_grab = self.hbar.?.grab();

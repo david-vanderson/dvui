@@ -5,18 +5,18 @@ var backbox_color: dvui.Color = .black;
 /// ![image](Examples-styling.png)
 pub fn styling() void {
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
-        _ = dvui.button(@src(), "Accent", .{}, dvui.themeGet().accent());
-        _ = dvui.button(@src(), "Error", .{}, dvui.themeGet().err());
-        _ = dvui.button(@src(), "Window", .{}, .{ .color_fill = .fill_window });
-        _ = dvui.button(@src(), "Content", .{}, .{ .color_fill = .fill });
+        _ = dvui.button(@src(), "Highlight", .{}, .{ .style = .highlight });
+        _ = dvui.button(@src(), "Error", .{}, .{ .style = .err });
+        _ = dvui.button(@src(), "Window", .{}, .{ .style = .window });
+        _ = dvui.button(@src(), "Content", .{}, .{ .style = .content });
         _ = dvui.button(@src(), "Control", .{}, .{});
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 9 } });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .min_size_content = .{ .h = 9 } });
         defer hbox.deinit();
 
         dvui.label(@src(), "separators", .{}, .{ .gravity_y = 0.5 });
@@ -26,7 +26,7 @@ pub fn styling() void {
 
     dvui.label(@src(), "corner radius", .{}, .{});
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
@@ -35,7 +35,7 @@ pub fn styling() void {
         _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corner_radius = Rect.all(2) }));
         _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corner_radius = Rect.all(7) }));
         _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corner_radius = Rect.all(100) }));
-        _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corner_radius = .{ .x = 0, .y = 2, .w = 7, .h = 100 } }));
+        _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corner_radius = .rect(0, 2, 7, 100) }));
     }
 
     dvui.label(@src(), "directly set colors", .{}, .{});
@@ -49,10 +49,10 @@ pub fn styling() void {
         }
 
         {
-            var vbox = dvui.box(@src(), .vertical, .{});
+            var vbox = dvui.box(@src(), .{}, .{});
             defer vbox.deinit();
 
-            var backbox = dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .h = 40 }, .expand = .horizontal, .background = true, .color_fill = .{ .color = backbox_color } });
+            var backbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .min_size_content = .{ .h = 40 }, .expand = .horizontal, .background = true, .color_fill = backbox_color });
             backbox.deinit();
 
             if (dvui.sliderEntry(@src(), "A: {d:0.2}", .{ .value = &hsv_color.a, .min = 0, .max = 1, .interval = 0.01 }, .{ .min_size_content = .{}, .expand = .horizontal })) {
@@ -67,7 +67,7 @@ pub fn styling() void {
             }
         }
         {
-            var vbox = dvui.box(@src(), .vertical, .{});
+            var vbox = dvui.box(@src(), .{}, .{});
             defer vbox.deinit();
 
             if (rgbSliders(@src(), &backbox_color, .{})) {
@@ -82,7 +82,7 @@ pub fn styling() void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         const border = dvui.dataGetPtrDefault(null, hbox.data().id, "border", bool, true);
@@ -95,7 +95,7 @@ pub fn styling() void {
         // We are using two boxes here so the box shadow can have different corner_radius values.
 
         {
-            var vbox = dvui.box(@src(), .vertical, .{ .margin = dvui.Rect.all(30), .min_size_content = .{ .w = 200, .h = 100 }, .corner_radius = dvui.Rect.all(5), .background = true, .border = if (border.*) dvui.Rect.all(1) else null, .box_shadow = .{ .color = .fromColor(backbox_color), .corner_radius = dvui.Rect.all(radius.*), .shrink = shrink.*, .offset = offset.*, .fade = fade.*, .alpha = alpha.* } });
+            var vbox = dvui.box(@src(), .{}, .{ .margin = dvui.Rect.all(30), .min_size_content = .{ .w = 200, .h = 100 }, .corner_radius = dvui.Rect.all(5), .background = true, .border = if (border.*) dvui.Rect.all(1) else null, .box_shadow = .{ .color = backbox_color, .corner_radius = dvui.Rect.all(radius.*), .shrink = shrink.*, .offset = offset.*, .fade = fade.*, .alpha = alpha.* } });
             defer vbox.deinit();
             dvui.label(@src(), "Box shadows", .{}, .{ .gravity_x = 0.5 });
             _ = dvui.checkbox(@src(), border, "border", .{});
@@ -107,19 +107,19 @@ pub fn styling() void {
             _ = dvui.sliderEntry(@src(), "alpha: {d:0.2}", .{ .value = alpha, .min = 0, .max = 1, .interval = 0.01 }, .{ .gravity_x = 0.5 });
         }
         {
-            var vbox2 = dvui.box(@src(), .vertical, .{ .margin = .{ .y = 30 } });
+            var vbox2 = dvui.box(@src(), .{}, .{ .margin = .{ .y = 30 } });
             defer vbox2.deinit();
 
             const gradient = dvui.dataGetPtrDefault(null, vbox2.data().id, "gradient", usize, 0);
 
             {
-                var gbox = dvui.box(@src(), .horizontal, .{});
+                var gbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
                 defer gbox.deinit();
                 dvui.label(@src(), "Gradient", .{}, .{ .gravity_y = 0.5 });
                 _ = dvui.dropdown(@src(), &.{ "flat", "horizontal", "vertical", "radial" }, gradient, .{});
             }
 
-            var drawBox = dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200, .h = 100 } });
+            var drawBox = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 200, .h = 100 } });
             defer drawBox.deinit();
             const rs = drawBox.data().contentRectScale();
 
@@ -127,7 +127,7 @@ pub fn styling() void {
             defer path.deinit();
             path.addRect(rs.r, dvui.Rect.Physical.all(5));
 
-            var triangles = path.build().fillConvexTriangles(dvui.currentWindow().lifo(), .{ .center = rs.r.center() }) catch dvui.Triangles.empty;
+            var triangles = path.build().fillConvexTriangles(dvui.currentWindow().lifo(), .{ .color = .white, .center = rs.r.center() }) catch dvui.Triangles.empty;
             defer triangles.deinit(dvui.currentWindow().lifo());
 
             const ca0 = backbox_color;
@@ -165,7 +165,7 @@ pub fn styling() void {
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a Color
 pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) bool {
-    var hbox = dvui.boxEqual(src, .horizontal, opts);
+    var hbox = dvui.box(src, .{ .dir = .horizontal, .equal_space = true }, opts);
     defer hbox.deinit();
 
     var red: f32 = @floatFromInt(color.r);
@@ -192,7 +192,7 @@ pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Opt
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a HSLuv Color
 pub fn hsluvSliders(src: std.builtin.SourceLocation, hsluv: *dvui.Color.HSLuv, opts: Options) bool {
-    var hbox = dvui.boxEqual(src, .horizontal, opts);
+    var hbox = dvui.box(src, .{ .dir = .horizontal, .equal_space = true }, opts);
     defer hbox.deinit();
 
     var changed = false;
@@ -219,7 +219,7 @@ test "DOCIMG styling" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             styling();
             return .ok;

@@ -1,6 +1,6 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const RaylibBackend = dvui.backend;
+const RaylibBackend = @import("raylib-backend");
 comptime {
     std.debug.assert(@hasDecl(RaylibBackend, "RaylibBackend"));
 }
@@ -40,7 +40,13 @@ pub fn main() !void {
     backend.log_events = true;
 
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
+    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{
+        // you can set the default theme here in the init options
+        .theme = switch (backend.preferredColorScheme() orelse .light) {
+            .light => dvui.Theme.builtin.adwaita_light,
+            .dark => dvui.Theme.builtin.adwaita_dark,
+        },
+    });
     defer win.deinit();
 
     main_loop: while (true) {
@@ -76,7 +82,7 @@ pub fn main() !void {
         backend.setCursor(win.cursorRequested());
 
         // waitTime and beginWait combine to achieve variable framerates
-        const wait_event_micros = win.waitTime(end_micros, null);
+        const wait_event_micros = win.waitTime(end_micros);
         backend.EndDrawingWaitEventTimeout(wait_event_micros);
 
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
@@ -90,10 +96,13 @@ pub fn main() !void {
 // return true to keep running
 fn dvui_frame() bool {
     {
-        var m = dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal });
+        defer hbox.deinit();
+
+        var m = dvui.menu(@src(), .horizontal, .{});
         defer m.deinit();
 
-        if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .expand = .none })) |r| {
+        if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
             var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
 
@@ -106,7 +115,7 @@ fn dvui_frame() bool {
             }
         }
 
-        if (dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{ .expand = .none })) |r| {
+        if (dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{})) |r| {
             var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
             _ = dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
@@ -115,7 +124,7 @@ fn dvui_frame() bool {
         }
     }
 
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
 
     var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
@@ -163,7 +172,7 @@ fn dvui_frame() bool {
         defer scaler.deinit();
 
         {
-            var hbox = dvui.box(@src(), .horizontal, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();
 
             if (dvui.button(@src(), "Zoom In", .{}, .{})) {
@@ -177,7 +186,7 @@ fn dvui_frame() bool {
 
         dvui.labelNoFmt(@src(), "Below is drawn directly by the backend, not going through DVUI.", .{}, .{ .margin = .{ .x = 4 } });
 
-        var box = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
+        var box = dvui.box(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
         defer box.deinit();
 
         // Here is some arbitrary drawing that doesn't have to go through DVUI.

@@ -66,7 +66,7 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
 
         if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + settings.row_height) >= visibleRect.y) {
             const r = Rect{ .x = 0, .y = cursor, .w = 0, .h = settings.row_height };
-            var iconbox = dvui.box(@src(), .horizontal, .{ .id_extra = i, .expand = .horizontal, .rect = r });
+            var iconbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .id_extra = i, .expand = .horizontal, .rect = r });
 
             var buf: [100]u8 = undefined;
             const text = std.fmt.bufPrint(&buf, icon_decl_name ++ ".{s}", .{name}) catch "<Too much text>";
@@ -78,7 +78,7 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
                 .{},
                 .{
                     .min_size_content = .{ .h = settings.icon_size },
-                    .color_text = .{ .color = settings.icon_rgb },
+                    .color_text = settings.icon_rgb,
                 },
             )) {
                 dvui.clipboardTextSet(text);
@@ -109,7 +109,7 @@ test "DOCIMG iconBrowser" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             var show_flag: bool = true;
             iconBrowser(@src(), &show_flag, "entypo", dvui.entypo);

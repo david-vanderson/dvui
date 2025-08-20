@@ -1,7 +1,7 @@
 /// ![image](Examples-plots.png)
 pub fn plots() void {
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Simple", .{}, .{});
@@ -12,14 +12,14 @@ pub fn plots() void {
     }
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Color and Thick", .{}, .{});
 
         const xs: []const f64 = &.{ 0, 1, 2, 3, 4, 5 };
         const ys: []const f64 = &.{ 9, 5, 6, 2, 4, 0 };
-        dvui.plotXY(@src(), .{}, 2, xs, ys, .{ .color_accent = .{ .color = dvui.themeGet().color_err } });
+        dvui.plotXY(@src(), .{}, 2, xs, ys, .{ .color_accent = dvui.themeGet().err.fill orelse .red });
     }
 
     var save: bool = false;
@@ -27,7 +27,7 @@ pub fn plots() void {
         save = true;
     }
 
-    var vbox = dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 300, .h = 100 }, .expand = .ratio });
+    var vbox = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 100 }, .expand = .ratio });
     defer vbox.deinit();
 
     var pic: ?dvui.Picture = null;
@@ -68,7 +68,7 @@ pub fn plots() void {
             const fval: f64 = @sin(2.0 * std.math.pi * @as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(points)) * freq);
             s1.point(@as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(points)), fval);
         }
-        s1.stroke(1, dvui.themeGet().color_accent);
+        s1.stroke(1, dvui.themeGet().focus);
     }
 
     if (pic) |*p| {
@@ -115,7 +115,7 @@ test "DOCIMG plots" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             plots();
             return .ok;

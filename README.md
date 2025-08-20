@@ -55,8 +55,9 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 * [FIDO2/ Passkey compatible authenticator implementation for Linux](https://github.com/r4gus/keypass)
 * [QEMU frontend](https://github.com/AnErrupTion/ZigEmu)
 * [Static site generator GUI](https://github.com/nhanb/webmaker2000)
-* [File explorer for Altair 8800 disk images](https://github.com/phatchman/altair_tools) - use the experimental branch.
+* [File explorer for Altair 8800 disk images](https://github.com/phatchman/altair_tools)
 * [Kanji flashcard app](https://codeberg.org/tensorush/origa)
+* [Azem - WIP micro-mouse simulator / maze solver](https://github.com/thuvasooriya/azem) - [Demo](https://www.thuvasooriya.me/azem/)
 
 ## Features
 
@@ -149,7 +150,7 @@ For an intro to immediate mode guis, see: https://github.com/ocornut/imgui/wiki#
 ```zig
 // Let's wrap the sliderEntry widget so we have 3 that represent a Color
 pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) void {
-    var hbox = dvui.box(src, .horizontal, opts);
+    var hbox = dvui.box(src, .{ .dir = .horizontal }, opts);
     defer hbox.deinit();
 
     var red: f32 = @floatFromInt(color.r);
@@ -216,7 +217,7 @@ The estimate is visible in the demo window Animations > Clock > "Estimate of fra
 The easiest way to use widgets is through the high-level functions that create and install them:
 ```zig
 {
-    var box = dvui.box(@src(), .vertical, .{.expand = .both});
+    var box = dvui.box(@src(), .{}, .{.expand = .both});
     defer box.deinit();
 
     // widgets run here will be children of box
@@ -227,7 +228,7 @@ These functions allocate memory for the widget onto an internal arena allocator 
 Instead you can allocate the widget on the stack using the lower-level functions:
 ```zig
 {
-    var box = BoxWidget.init(@src(), .vertical, false, .{.expand = .both});
+    var box = BoxWidget.init(@src(), .{}, .{.expand = .both});
     // box now has an id, can look up animations/timers
 
     box.install();
@@ -295,12 +296,13 @@ dvui.ButtonWidget.defaults.background = false;
 Themes can be changed between frames or even within a frame.  The theme controls the fonts and colors referenced by font_style and named colors.
 ```zig
 if (theme_dark) {
-    win.theme = win.themes.get("Adwaita Dark").?;
-}
-else {
-    win.theme = win.themes.get("Adwaita Light").?;
+    win.theme = dvui.Theme.builtin.adwaita_dark;
+} else {
+    win.theme = dvui.Theme.builtin.adwaita_light;
 }
 ```
 The theme's color_accent is also used to show keyboard focus.
+
+The default theme will attempt to follow the system dark or light mode, or it can be set in the `Window` init options or by setting the `Window.theme` field directly. See the app and standalone examples for how to set the default theme. 
 
 See [implementation details](readme-implementation.md) for more information.

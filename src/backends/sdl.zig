@@ -1339,7 +1339,7 @@ pub fn main() !u8 {
     }
 
     //// init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, back.backend(), .{});
+    var win = try dvui.Window.init(@src(), gpa, back.backend(), init_opts.window_init_options);
     defer win.deinit();
 
     if (app.initFn) |initFn| {
@@ -1379,7 +1379,7 @@ pub fn main() !u8 {
 
         if (res != .ok) break :main_loop;
 
-        const wait_event_micros = win.waitTime(end_micros, null);
+        const wait_event_micros = win.waitTime(end_micros);
         interrupted = try back.waitEventTimeout(wait_event_micros);
     }
 
@@ -1436,7 +1436,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
     }
 
     //// init dvui Window (maps onto a single OS window)
-    appState.win = dvui.Window.init(@src(), gpa, appState.back.backend(), .{}) catch |err| {
+    appState.win = dvui.Window.init(@src(), gpa, appState.back.backend(), app.config.options.window_init_options) catch |err| {
         log.err("dvui.Window.init failed: {!}", .{err});
         return c.SDL_APP_FAILURE;
     };
@@ -1540,7 +1540,7 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
 
     if (res != .ok) return c.SDL_APP_SUCCESS;
 
-    const wait_event_micros = appState.win.waitTime(end_micros, null);
+    const wait_event_micros = appState.win.waitTime(end_micros);
 
     //std.debug.print("waitEventTimeout {d} {} resize {}\n", .{wait_event_micros, gno_wait, ghave_resize});
 

@@ -1,6 +1,6 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const RaylibBackend = dvui.backend;
+const RaylibBackend = @import("raylib-backend");
 comptime {
     std.debug.assert(@hasDecl(RaylibBackend, "RaylibBackend"));
 }
@@ -58,10 +58,10 @@ pub fn main() !void {
         }
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        ray.ClearBackground(RaylibBackend.dvuiColorToRaylib(dvui.themeGet().color_fill_window));
+        ray.ClearBackground(RaylibBackend.dvuiColorToRaylib(dvui.Color.black));
 
         {
-            var b = dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+            var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
             defer b.deinit();
 
             if (ray.GuiIsLocked()) {
@@ -111,11 +111,11 @@ fn colorPicker(result: *dvui.Color) void {
     const color_hex = result.toHexString();
 
     {
-        var hbox = dvui.box(@src(), .horizontal, .{});
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.labelNoFmt(@src(), &color_hex, .{}, .{
-            .color_text = .{ .color = result.* },
+            .color_text = result.*,
             .gravity_y = 0.5,
         });
 
@@ -134,7 +134,7 @@ fn dvuiStuff() void {
 
     float.dragAreaSet(dvui.windowHeader("Floating Window", "", null));
 
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
 
     var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });

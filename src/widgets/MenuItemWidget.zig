@@ -9,17 +9,22 @@ const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
 
+/// The parent menu of this item
+const menu = dvui.MenuWidget.current;
+
 const MenuItemWidget = @This();
 
 pub var defaults: Options = .{
     .name = "MenuItem",
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
+    .style = .control,
 };
 
 pub const InitOptions = struct {
     submenu: bool = false,
     highlight_only: bool = false,
+    focus_as_outline: bool = false,
 };
 
 wd: WidgetData,
@@ -33,6 +38,7 @@ mouse_over: bool = false,
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) MenuItemWidget {
     const options = defaults.override(opts);
     const wd = WidgetData.init(src, .{}, options);
+
     return .{
         .wd = wd,
         .init_opts = init_opts,
@@ -50,20 +56,20 @@ pub fn install(self: *MenuItemWidget) void {
     dvui.parentSet(self.widget());
 }
 
-pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bool = false }) void {
+pub fn drawBackground(self: *MenuItemWidget) void {
     var focused: bool = false;
     if (self.data().id == dvui.focusedWidgetId()) {
         focused = true;
     }
 
-    if (focused and dvui.MenuWidget.current().?.mouse_over and !self.mouse_over) {
+    if (focused and menu().?.mouse_over and !self.mouse_over and (menu().?.submenus_activated or menu().?.floating())) {
         // our menu got a mouse over but we didn't even though we were focused
         focused = false;
-        dvui.focusWidget(null, null, null);
+        dvui.focusWidget(menu().?.data().id, null, null);
     }
 
     if (focused or ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) and self.highlight)) {
-        if (!self.init_opts.submenu or !dvui.MenuWidget.current().?.submenus_activated) {
+        if (!self.init_opts.submenu or !menu().?.submenus_activated) {
             if (!self.init_opts.highlight_only) {
                 self.show_active = true;
             }
@@ -78,25 +84,36 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
     self.focused_last_frame = focused;
 
     if (self.data().visible()) {
+        const cols = self.colors();
+        const rs = self.data().backgroundRectScale();
+        const cr = self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical);
         if (self.show_active) {
-            if (opts.focus_as_outline) {
+            if (self.init_opts.focus_as_outline) {
                 self.data().focusBorder();
                 if (self.highlight) {
-                    const rs = self.data().backgroundRectScale();
-                    rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill_hover), .fade = 1.0 });
+                    rs.r.fill(cr, .{ .color = cols.color(.fill), .fade = 1.0 });
                 }
             } else {
-                const rs = self.data().backgroundRectScale();
-                rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.accent), .fade = 1.0 });
+                rs.r.fill(cr, .{ .color = cols.color(.fill), .fade = 1.0 });
             }
         } else if ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) or self.highlight) {
-            const rs = self.data().backgroundRectScale();
-            rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill_hover), .fade = 1.0 });
+            rs.r.fill(cr, .{ .color = cols.color(.fill), .fade = 1.0 });
         } else if (self.data().options.backgroundGet()) {
-            const rs = self.data().backgroundRectScale();
-            rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.data().options.color(.fill), .fade = 1.0 });
+            rs.r.fill(cr, .{ .color = cols.color(.fill), .fade = 1.0 });
         }
     }
+}
+
+/// Returns an `Options` struct with color/style overrides for the hover and press state
+pub fn colors(self: *MenuItemWidget) Options {
+    var opts: Options = .{ .style = self.data().options.style };
+    if (self.show_active and !self.init_opts.focus_as_outline) {
+        opts.style = .highlight;
+    } else if (self.highlight or (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow())) {
+        opts.color_fill = self.data().options.color(.fill_hover);
+        opts.color_text = self.data().options.color(.text_hover);
+    }
+    return opts;
 }
 
 pub fn matchEvent(self: *MenuItemWidget, e: *Event) bool {
@@ -116,7 +133,7 @@ pub fn processEvents(self: *MenuItemWidget) void {
 pub fn activeRect(self: *const MenuItemWidget) ?Rect.Natural {
     var act = false;
     if (self.init_opts.submenu) {
-        if (dvui.MenuWidget.current().?.submenus_activated and (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow())) {
+        if (menu().?.submenus_activated and (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow())) {
             act = true;
         }
     } else if (self.activated) {
@@ -138,7 +155,7 @@ pub fn data(self: *const MenuItemWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *MenuItemWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *MenuItemWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
@@ -155,7 +172,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .focus) {
-                dvui.MenuWidget.current().?.mouse_mode = true;
+                menu().?.mouse_mode = true;
                 e.handle(@src(), self.data());
                 self.mouse_over = true;
                 dvui.focusWidget(self.data().id, null, e.num);
@@ -169,8 +186,12 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 // This is how dropdowns are triggered.
                 e.handle(@src(), self.data());
                 if (self.init_opts.submenu) {
-                    dvui.MenuWidget.current().?.submenus_activated = true;
-                    dvui.MenuWidget.current().?.submenus_in_child = true;
+                    dvui.dataRemove(null, menu().?.data().id, "_submenus_activating");
+                    if (!menu().?.floating() and !menu().?.submenus_activated) {
+                        // If not floating, then we are toggling focus-on-hover, set a bit
+                        dvui.dataSet(null, menu().?.data().id, "_submenus_activating", {});
+                    }
+                    menu().?.submenus_activated = true;
                 }
 
                 if (me.button.touch()) {
@@ -178,19 +199,22 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     // cause scroll to capture
                     dvui.captureMouse(self.data(), e.num);
                     dvui.dragPreStart(me.p, .{});
-                } else {
-                    // this is how we track if the click originated on a menu
-                    // item, so while this is happening we'll focus menu items
-                    // under the mouse
-                    dvui.dragStart(me.p, .{ .name = "_mi_mouse_down" });
                 }
             } else if (me.action == .release) {
-                dvui.MenuWidget.current().?.mouse_mode = true;
+                menu().?.mouse_mode = true;
                 e.handle(@src(), self.data());
-                if (!self.init_opts.submenu and (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow())) {
+                if (self.init_opts.submenu) {
+                    // Only non floating menus can toggle focus-on-hover
+                    if (!menu().?.floating() and dvui.dataGet(null, menu().?.data().id, "_submenus_activating", void) == null) {
+                        // Toggle the submenu closed
+                        menu().?.submenus_activated = false;
+                        dvui.refresh(null, @src(), self.data().id);
+                    }
+                } else if (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) {
                     self.activated = true;
                     dvui.refresh(null, @src(), self.data().id);
                 }
+
                 if (dvui.captured(self.data().id)) {
                     // should only happen with touch
                     dvui.captureMouse(null, e.num);
@@ -211,23 +235,22 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 // focus the menu item under the mouse even if it's not
                 // moving then it breaks keyboard navigation.
                 if (dvui.mouseTotalMotion().nonZero()) {
-                    dvui.MenuWidget.current().?.mouse_mode = true;
+                    menu().?.mouse_mode = true;
                     self.mouse_over = true;
 
-                    if (dvui.draggingName("_mi_mouse_down")) {
+                    if (menu().?.has_focused_child or menu().?.submenus_activated or menu().?.floating()) {
                         // we shouldn't have gotten this event if the motion
                         // was towards a submenu (caught in MenuWidget)
                         dvui.focusSubwindow(null, null); // focuses the window we are in
                         dvui.focusWidget(self.data().id, null, null);
 
-                        if (self.init_opts.submenu) {
-                            dvui.MenuWidget.current().?.submenus_activated = true;
-                            dvui.MenuWidget.current().?.submenus_in_child = true;
+                        if (self.init_opts.submenu and menu().?.floating()) {
+                            menu().?.submenus_activated = true;
                         }
                     }
                 }
 
-                if (dvui.MenuWidget.current().?.mouse_mode) {
+                if (menu().?.mouse_mode) {
                     dvui.cursorSet(.arrow);
                     self.highlight = true;
                 }
@@ -235,25 +258,25 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
         },
         .key => |ke| {
             if (ke.action == .down and ke.matchBind("activate")) {
-                dvui.MenuWidget.current().?.mouse_mode = false;
+                menu().?.mouse_mode = false;
                 e.handle(@src(), self.data());
                 if (self.init_opts.submenu) {
-                    dvui.MenuWidget.current().?.submenus_activated = true;
+                    menu().?.submenus_activated = true;
                 } else {
                     self.activated = true;
                     dvui.refresh(null, @src(), self.data().id);
                 }
             } else if (ke.code == .right and ke.action == .down) {
-                if (self.init_opts.submenu and dvui.MenuWidget.current().?.init_opts.dir == .vertical) {
-                    dvui.MenuWidget.current().?.mouse_mode = false;
+                if (self.init_opts.submenu and menu().?.init_opts.dir == .vertical) {
+                    menu().?.mouse_mode = false;
                     e.handle(@src(), self.data());
-                    dvui.MenuWidget.current().?.submenus_activated = true;
+                    menu().?.submenus_activated = true;
                 }
             } else if (ke.code == .down and ke.action == .down) {
-                if (self.init_opts.submenu and dvui.MenuWidget.current().?.init_opts.dir == .horizontal) {
-                    dvui.MenuWidget.current().?.mouse_mode = false;
+                if (self.init_opts.submenu and menu().?.init_opts.dir == .horizontal) {
+                    menu().?.mouse_mode = false;
                     e.handle(@src(), self.data());
-                    dvui.MenuWidget.current().?.submenus_activated = true;
+                    menu().?.submenus_activated = true;
                 }
             }
         },
@@ -279,7 +302,7 @@ test "menuItem click sets last_focused_id_this_frame" {
     defer t.deinit();
 
     const fns = struct {
-        var last_focused_id_set: ?dvui.WidgetId = null;
+        var last_focused_id_set: ?dvui.Id = null;
 
         fn frame() !dvui.App.Result {
             var m = dvui.menu(@src(), .vertical, .{ .padding = .all(10), .tag = "menu" });
