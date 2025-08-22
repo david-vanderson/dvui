@@ -267,6 +267,7 @@ pub fn numberFieldWidget(
     field_name: []const u8,
     field_ptr: anytype,
     opt: NumberFieldOptions,
+    adapter: anytype,
     alignment: *dvui.Alignment,
 ) void {
     if (opt.display == .none) return;
@@ -274,8 +275,12 @@ pub fn numberFieldWidget(
         // TODO: Consider making this an error instead of an assert? minValue(T) and maxValue(T) already return 0 if min/max are null.
         std.debug.assert(opt.min != null and opt.max != null); // min and max are required for sliders
     }
-
     const T = @TypeOf(field_ptr.*);
+    switch (@typeInfo(T)) {
+        .int, .float => {},
+        else => @compileError(std.fmt.comptimePrint("field_ptr must point to a numeric field, but is a {s}", .{@typeName(T)})),
+    }
+
     const read_only = @typeInfo(@TypeOf(field_ptr)).pointer.is_const;
 
     switch (@typeInfo(T)) {
@@ -295,13 +300,16 @@ pub fn numberFieldWidget(
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
 
-            if (!read_only) {
+            if (comptime !read_only) {
                 const maybe_num = dvui.textEntryNumber(@src(), T, .{
                     .min = opt.minValue(T),
                     .max = opt.maxValue(T),
                     .value = field_ptr,
                 }, .{});
                 if (maybe_num.value == .Valid) {
+                    //@compileLog(read_only, T, @TypeOf(field_ptr.*), @TypeOf(maybe_num.value.Valid));
+                    //_ = adapter;
+                    adapter.setValue(field_ptr, maybe_num.value.Valid);
                     field_ptr.* = maybe_num.value.Valid;
                 }
             }
@@ -402,7 +410,6 @@ pub const TextFieldOptions = struct {
 
     label: ?[]const u8 = null,
     allocator: ?std.mem.Allocator = null, // Allocator must be supplied for editable strings.
-    //    buffer: ?[]u8 = null,
 };
 
 /// Display slices and/or arrays of u8 and const u8.
@@ -579,9 +586,8 @@ pub fn displayField(
 }
 
 pub fn displayNumber(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, adapter: anytype, al: *dvui.Alignment) void {
-    _ = adapter;
     if (!validFieldOptionsType(field_name, field_option, .number)) return;
-    numberFieldWidget(@src(), field_name, field_value_ptr, field_option.number, al);
+    numberFieldWidget(@src(), field_name, field_value_ptr, field_option.number, adapter, al);
 }
 
 pub fn displayEnum(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, adapter: anytype, al: *dvui.Alignment) void {
@@ -617,6 +623,7 @@ pub fn displayArray(
     adapter: anytype,
     al: *dvui.Alignment,
 ) void {
+    _ = adapter;
     if (dvui.expander(@src(), field_name, .{ .default_expanded = true }, .{ .expand = .horizontal })) {
         var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{
             .expand = .vertical,
@@ -626,6 +633,9 @@ pub fn displayArray(
         });
         defer vbox.deinit();
 
+        // Use the passthrough adapter to display the elements. In future allow user to supply the
+        // adapter for display of array elements.
+        var passthrough: PassthroughAdapter(@TypeOf(field_value_ptr.*[0])) = .{};
         for (field_value_ptr, 0..) |*val, i| {
             // TODO: Aligmmnent
             var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = i });
@@ -633,7 +643,7 @@ pub fn displayArray(
 
             var field_name_buf: [20]u8 = undefined; // 20 chars = u64
             const field_name_str = std.fmt.bufPrint(&field_name_buf, "{d}", .{i}) catch "#";
-            displayField(field_name_str, val, depth, field_option, options, adapter, al);
+            displayField(field_name_str, val, depth, field_option, options, &passthrough, al);
         }
     }
 }
@@ -647,6 +657,7 @@ pub fn displaySlice(
     adapter: anytype,
     al: *dvui.Alignment,
 ) void {
+    _ = adapter;
     if (dvui.expander(@src(), field_name, .{ .default_expanded = true }, .{ .expand = .horizontal })) {
         var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{
             .expand = .vertical,
@@ -656,6 +667,8 @@ pub fn displaySlice(
         });
         defer vbox.deinit();
 
+        // TODO: In future allow user ot pass their own adapter for displaying slice elements.
+        const passthrough: PassthroughAdapter(@TypeOf(field_value_ptr.*[0])) = .{};
         for (field_value_ptr.*, 0..) |*val, i| {
             // TODO: Aligmmnent
 
@@ -664,7 +677,7 @@ pub fn displaySlice(
 
             var field_name_buf: [20]u8 = undefined; // 20 chars = u64
             const field_name_str = std.fmt.bufPrint(&field_name_buf, "{d}", .{i}) catch "#";
-            displayField(field_name_str, val, depth, field_option, options, adapter, al);
+            displayField(field_name_str, val, depth, field_option, options, passthrough, al);
         }
     }
 }
