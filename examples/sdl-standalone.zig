@@ -98,6 +98,7 @@ pub fn main() !void {
     if (!first_change) {
         gpa.free(testStruct.slice5);
     }
+    struct_adapters.slice_static.deinit();
 }
 
 const C1 = struct {
@@ -186,6 +187,20 @@ const U1 = union(enum) {
     d: ?S1,
 };
 
+const str_global_static = "9876543210";
+var str_global_var1: [10]u8 = .{ 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j' };
+var str_global_var2: [10]u8 = .{ 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j' };
+
+const StringTest = struct {
+    array_variable: [10]u8 = .{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
+    slice_static: []const u8 = str_global_static,
+    slice_variable: []u8,
+};
+
+//const const_string_test: StringTest = .{};
+var var_string_test1: StringTest = .{ .slice_variable = &str_global_var1 };
+var var_string_test2: StringTest = .{ .slice_variable = &str_global_var2 };
+
 var test_buf: [20]u8 = @splat('z');
 var testStruct: TestStruct = .{};
 var dvui_opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5), .name = "abcdef" };
@@ -198,6 +213,12 @@ const StructOfUnion1 = struct { u: U1 = .{ .a = .{} } };
 var struct_of_union1: StructOfUnion1 = .{};
 
 var ts: TestStruct = .{};
+
+var struct_adapters: struct {
+    slice_static: dvui.struct_ui.StaticStringAdapter = .init(gpa),
+} = .{};
+
+const struct_options: dvui.struct_ui.StructOptions(StringTest) = .init(.{ .slice_static = .{ .text = .{ .display = .read_write } } }, null);
 
 // both dvui and SDL drawing
 fn gui_frame() void {
@@ -229,14 +250,21 @@ fn gui_frame() void {
         //wholeStruct(@src(), "basic_types_const", &basic_types_const, 0, .{});
         //        dvui.struct_ui.displayStruct("basic_types_const", &basic_types_const, 0, .{ .standard = .{} }, .{}, &al);
         //dvui.struct_ui.displayArray("array_of_struct", &array_of_struct, 1, .{ .standard = .{} }, .{}, &al);
-
-        dvui.struct_ui.displayStruct("test_struct", &ts, 1, .{ .standard = .{} }, .{TestStruct.structui_options}, &al);
+        //        dvui.struct_ui.displayStruct("test_struct", &ts, 1, .{ .standard = .{} }, .{TestStruct.structui_options}, &al);
+        //std.debug.print("PRE1: {s} - {x}\n", .{ var_string_test1.slice_variable, &var_string_test1.slice_variable.ptr });
+        //        defer struct_adapters.slice_static.deinit();
+        dvui.struct_ui.displayStruct("var_string_test1", &var_string_test1, 1, .{ .standard = .{} }, .{struct_options}, &struct_adapters, &al);
+        //std.debug.print("POS1: {s} - {x}\n", .{ var_string_test1.slice_variable, &var_string_test1.slice_variable.ptr });
     }
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
+
+        //std.debug.print("PRE2: {s} - {x}\n", .{ var_string_test2.slice_variable, &var_string_test2.slice_variable });
+        dvui.struct_ui.displayStruct("var_string_test2", &var_string_test2, 1, .{ .standard = .{} }, .{}, {}, &al);
+        //std.debug.print("POS2: {s} - {x}\n", .{ var_string_test2.slice_variable, &var_string_test2.slice_variable });
 
         //dvui.struct_ui.displayStruct("basic_types_var", &basic_types_var, 0, .{}, .{}, &al);
         //var ts: TestStruct = .{};
