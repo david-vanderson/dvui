@@ -19,10 +19,31 @@ const dvui = @import("dvui.zig");
 /// 1) Setting display = .none,
 /// 2) Omitting the FieldOption from the StructOptions passed to displayStruct.
 ///
-///
-pub fn PassthroughAdapter(T: type) type {
+pub fn StructAdapters(Struct: type, adapters: anytype) type {
     return struct {
-        pub fn setValue(_: @This(), field_value_ptr: *T, value: T) void {
+        const StructT = Struct;
+
+        adapters: @Type(.{ .@"struct" = .{
+            .fields = std.meta.fields(adapters),
+            .layout = .auto,
+            .is_tuple = false,
+            .decls = &.{},
+        } }),
+
+        pub fn deinit() void {
+            for (std.meta.fields(adapters)) |field| {
+                const adapter = &@field(@TypeOf(adapters), field.name);
+                if (@hasDecl(@TypeOf(adapter), "deinit")) {
+                    adapter.deinit();
+                }
+            }
+        }
+    };
+}
+
+pub fn PassthroughAdapter(FieldT: type) type {
+    return struct {
+        pub fn setValue(_: @This(), field_value_ptr: *FieldT, value: FieldT) void {
             field_value_ptr.* = value;
         }
     };
@@ -817,29 +838,33 @@ pub fn displayStruct(
             var box = dvui.box(@src(), .{ .dir = .vertical }, .{ .id_extra = field_num });
             defer box.deinit();
             const field = comptime @TypeOf(struct_options.options).Indexer.keyForIndex(field_num);
-            //            std.debug.print("Looing for adapter for {s}\n", .{@tagName(field)});
-            if (@TypeOf(adapters) != void and @hasField(@TypeOf(adapters.*), @tagName(field))) {
-                //  std.debug.print("found adapter for {s}\n", .{@tagName(field)});
-                displayField(
-                    @tagName(field),
-                    &@field(field_value_ptr, @tagName(field)),
-                    depth,
-                    sub_field_option,
-                    options,
-                    &@field(adapters, @tagName(field)),
-                    al,
-                );
-            } else {
-                displayField(
-                    @tagName(field),
-                    &@field(field_value_ptr, @tagName(field)),
-                    depth,
-                    sub_field_option,
-                    options,
-                    &PassthroughAdapter(@TypeOf(@field(field_value_ptr, @tagName(field)))){},
-                    al,
-                );
+            var adapter = findMatchingFieldAdapter(StructT, @tagName(field), adapters);
+            if (@TypeOf(adapter) == void) {
+                adapter = PassthroughAdapter{};
             }
+            //            std.debug.print("Looing for adapter for {s}\n", .{@tagName(field)});
+            //if (@TypeOf(adapters) != void and @hasField(@TypeOf(adapters.*), @tagName(field))) {
+            //    //  std.debug.print("found adapter for {s}\n", .{@tagName(field)});
+            displayField(
+                @tagName(field),
+                &@field(field_value_ptr, @tagName(field)),
+                depth,
+                sub_field_option,
+                options,
+                adapter,
+                al,
+            );
+            //} else {
+            //    displayField(
+            //        @tagName(field),
+            //        &@field(field_value_ptr, @tagName(field)),
+            //        depth,
+            //        sub_field_option,
+            //        options,
+            //        &PassthroughAdapter(@TypeOf(@field(field_value_ptr, @tagName(field)))){},
+            //        al,
+            //    );
+            //}
         }
     }
 }
@@ -932,4 +957,27 @@ pub fn findMatchingStructOption(T: type, struct_options: anytype) ?StructOptions
         }
     }
     return null;
+}
+
+pub fn FieldAdapterType(StructT: type, field_name: []const u8, adapters: anytype) type {
+    if (@TypeOf(adapters) == void) return; // TODO: This isn't right
+    inline for (adapters) |adapter| {
+        if (@TypeOf(adapter).StructT == StructT) {
+            if (@hasField(@TypeOf(adapter), field_name)) {
+                return @TypeOf(&@field(adapter, field_name));
+            }
+        }
+    }
+    return PassthroughAdapter(@FieldType(StructT, field_name));
+}
+
+pub fn findMatchingFieldAdapter(StructT: type, comptime field_name: []const u8, adapters: anytype) FieldAdapterType(StructT, field_name, adapters) {
+    inline for (adapters) |adapter| {
+        if (@TypeOf(adapter).StructT == StructT) {
+            if (@hasField(@TypeOf(adapter), field_name)) {
+                return &@field(adapters, field_name);
+            }
+        }
+    }
+    return .{};
 }
