@@ -39,6 +39,7 @@ pub const wasm = if (!builtin.is_test) struct {
 
     pub extern "dvui" fn wasm_now() f64;
     pub extern "dvui" fn wasm_sleep(ms: u32) void;
+    pub extern "dvui" fn wasm_refresh() void;
 
     pub extern "dvui" fn wasm_pixel_width() f32;
     pub extern "dvui" fn wasm_pixel_height() f32;
@@ -712,7 +713,13 @@ pub fn cursorShow(_: *WebBackend, value: ?bool) bool {
     return wasm.wasm_cursor_show(if (value) |val| @intFromBool(val) else -1);
 }
 
-pub fn refresh(_: *WebBackend) void {}
+/// This can be used to request a new frame directly.
+///
+/// If you need to request a frame from the JavaScript side, use
+/// `dvui_instance.requestRender()`
+pub fn refresh(_: *WebBackend) void {
+    wasm.wasm_refresh();
+}
 
 pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) void {
     if (cursor != self.cursor_last) {
