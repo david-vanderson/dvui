@@ -239,7 +239,13 @@ fn gui_frame() void {
     {
         const local = struct {
             const struct_options: dvui.struct_ui.StructOptions(StringTest) = .init(.{ .slice_static = .{ .text = .{ .display = .read_write } } }, null);
-            const adapters: dvui.struct_ui.StructAdapters(StringTest, struct { slice_static: dvui.struct_ui.StaticStringAdapter }) = .{ .adapters = .{ .slice_static = .init(gpa) } };
+            var adapters: dvui.struct_ui.StructAdapters(StringTest, struct { slice_static: dvui.struct_ui.StaticStringAdapter }) = .{
+                .adapters = .{
+                    .slice_static = .init(gpa, "this is a tag"),
+                    .array_variable = .{},
+                    .slice_variable = .{},
+                },
+            };
         };
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
@@ -257,7 +263,7 @@ fn gui_frame() void {
             1,
             .{ .standard = .{} },
             .{local.struct_options},
-            .{local.adapters},
+            .{&local.adapters},
             &al,
         );
         //std.debug.print("POS1: {s} - {x}\n", .{ var_string_test1.slice_variable, &var_string_test1.slice_variable.ptr });
