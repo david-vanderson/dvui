@@ -97,10 +97,6 @@ pub fn minSizeForChild(self: *ReorderWidget, s: Size) void {
 }
 
 pub fn matchEvent(self: *ReorderWidget, event: *dvui.Event) bool {
-    if (dvui.captured(self.wd.id) or dvui.dragName(self.init_opts.drag_name)) {
-        return true;
-    }
-
     return dvui.eventMatch(event, .{ .id = self.wd.id, .r = self.data().borderRectScale().r, .drag_name = self.init_opts.drag_name });
 }
 
