@@ -10,22 +10,36 @@ const WidgetData = dvui.WidgetData;
 
 const ReorderWidget = @This();
 
+pub const InitOptions = struct {
+    /// If not null, drags give up mouse capture and set this drag name
+    drag_name: ?[]const u8 = null,
+};
+
 wd: WidgetData,
+init_opts: InitOptions,
 id_reorderable: ?usize = null, // matches Reorderable.reorder_id
-drag_point: ?dvui.Point.Physical = null,
+drag_point: ?dvui.Point.Physical = null, // non null if we started the drag
 drag_ending: bool = false,
 reorderable_size: Size = .{},
 found_slot: bool = false,
 
-pub fn init(src: std.builtin.SourceLocation, opts: Options) ReorderWidget {
+pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ReorderWidget {
     const defaults = Options{ .name = "Reorder" };
     const wd = WidgetData.init(src, .{}, defaults.override(opts));
-    return .{
+    var self: ReorderWidget = .{
         .wd = wd,
+        .init_opts = init_opts,
         .id_reorderable = dvui.dataGet(null, wd.id, "_id_reorderable", usize),
         .drag_point = dvui.dataGet(null, wd.id, "_drag_point", dvui.Point.Physical),
         .reorderable_size = dvui.dataGet(null, wd.id, "_reorderable_size", dvui.Size) orelse .{},
     };
+
+    if (self.drag_point != null and dvui.currentWindow().drag_state != .dragging) {
+        self.drag_ending = true;
+        dvui.captureMouse(null, 0);
+    }
+
+    return self;
 }
 
 pub fn install(self: *ReorderWidget) void {
@@ -35,8 +49,17 @@ pub fn install(self: *ReorderWidget) void {
     dvui.parentSet(self.widget());
 }
 
+// this means we should watch for a drop, not that we started it
+fn dragging(self: *ReorderWidget) bool {
+    return self.drag_ending or dvui.captured(self.wd.id) or dvui.dragName(self.init_opts.drag_name);
+}
+
 pub fn needFinalSlot(self: *ReorderWidget) bool {
-    return self.drag_point != null and !self.found_slot;
+    if (self.dragging() and self.data().borderRectScale().r.contains(dvui.currentWindow().mouse_pt)) {
+        return !self.found_slot;
+    }
+
+    return false;
 }
 
 pub fn finalSlot(self: *ReorderWidget) bool {
@@ -73,8 +96,8 @@ pub fn minSizeForChild(self: *ReorderWidget, s: Size) void {
     self.data().minSizeMax(self.data().options.padSize(s));
 }
 
-pub fn matchEvent(self: *ReorderWidget, e: *dvui.Event) bool {
-    return dvui.eventMatchSimple(e, self.data());
+pub fn matchEvent(self: *ReorderWidget, event: *dvui.Event) bool {
+    return dvui.eventMatch(event, .{ .id = self.wd.id, .r = self.data().borderRectScale().r, .drag_name = self.init_opts.drag_name });
 }
 
 pub fn processEvents(self: *ReorderWidget) void {
@@ -88,25 +111,30 @@ pub fn processEvents(self: *ReorderWidget) void {
 }
 
 pub fn processEvent(self: *ReorderWidget, e: *dvui.Event) void {
-    if (dvui.captured(self.data().id)) {
-        switch (e.evt) {
-            .mouse => |me| {
-                if ((me.action == .press or me.action == .release) and me.button.pointer()) {
+    switch (e.evt) {
+        .mouse => |me| {
+            // if we are the drag source, update where the mouse is and possibly scroll
+            if (self.drag_point != null and me.action == .motion) {
+                self.drag_point = e.evt.mouse.p;
+
+                dvui.scrollDrag(.{
+                    .mouse_pt = e.evt.mouse.p,
+                    .screen_rect = self.wd.rectScale().r,
+                });
+            }
+
+            // detect a drag end that is over us
+            // if nobody catches it, dvui.Window will end the drag on an unhandled mouse up
+            if (self.dragging() and self.data().borderRectScale().r.contains(dvui.currentWindow().mouse_pt)) {
+                if (me.action == .release and me.button.pointer()) {
+                    e.handle(@src(), self.data());
                     self.drag_ending = true;
                     dvui.captureMouse(null, e.num);
                     dvui.dragEnd();
-                    dvui.refresh(null, @src(), self.data().id);
-                } else if (me.action == .motion) {
-                    self.drag_point = me.p;
-                    dvui.scrollDrag(.{
-                        .mouse_pt = me.p,
-                        .screen_rect = self.data().rectScale().r,
-                        .capture_id = self.data().id,
-                    });
                 }
-            },
-            else => {},
-        }
+            }
+        },
+        else => {},
     }
 }
 
@@ -115,6 +143,7 @@ pub fn deinit(self: *ReorderWidget) void {
     if (self.drag_ending) {
         self.id_reorderable = null;
         self.drag_point = null;
+        dvui.refresh(null, @src(), self.data().id);
     }
 
     if (self.id_reorderable) |idr| {
@@ -142,11 +171,16 @@ pub fn dragStart(self: *ReorderWidget, reorder_id: usize, p: dvui.Point.Physical
     self.drag_point = p;
     self.found_slot = true;
     dvui.captureMouse(self.data(), event_num);
+    if (self.init_opts.drag_name) |dn| {
+        // set drag_name to start cross-widget drag
+        dvui.currentWindow().drag_name = dn;
+        dvui.captureMouse(null, 0);
+    }
 }
 
 pub const draggableInitOptions = struct {
     tvg_bytes: ?[]const u8 = null,
-    top_left: ?dvui.Point.Physical = null,
+    rect: ?dvui.Rect.Physical = null,
     reorderable: ?*Reorderable = null,
 };
 
@@ -163,9 +197,9 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
                 if (me.action == .press and me.button.pointer()) {
                     e.handle(@src(), iw.data());
                     dvui.captureMouse(iw.data(), e.num);
-                    const reo_top_left: ?dvui.Point.Physical = if (init_opts.reorderable) |reo| reo.data().rectScale().r.topLeft() else null;
-                    const top_left: ?dvui.Point.Physical = init_opts.top_left orelse reo_top_left;
-                    dvui.dragPreStart(me.p, .{ .offset = (top_left orelse iw.data().rectScale().r.topLeft()).diff(me.p) });
+                    const reo_rect: ?dvui.Rect.Physical = if (init_opts.reorderable) |reo| reo.data().rectScale().r else null;
+                    const rect: dvui.Rect.Physical = init_opts.rect orelse reo_rect orelse iw.data().rectScale().r;
+                    dvui.dragPreStart(me.p, .{ .offset = rect.topLeft().diff(me.p), .size = rect.size() });
                 } else if (me.action == .motion) {
                     if (dvui.captured(iw.data().id)) {
                         e.handle(@src(), iw.data());
@@ -214,13 +248,13 @@ pub const Reorderable = struct {
 
     wd: WidgetData,
     reorder: *ReorderWidget,
-    init_options: InitOptions,
+    init_options: Reorderable.InitOptions,
     options: Options,
     installed: bool = false,
     floating_widget: ?dvui.FloatingWidget = null,
     target_rs: ?dvui.RectScale = null,
 
-    pub fn init(src: std.builtin.SourceLocation, reorder: *ReorderWidget, init_opts: InitOptions, opts: Options) Reorderable {
+    pub fn init(src: std.builtin.SourceLocation, reorder: *ReorderWidget, init_opts: Reorderable.InitOptions, opts: Options) Reorderable {
         const defaults = Options{ .name = "Reorderable" };
         const options = defaults.override(opts);
         return .{
@@ -243,14 +277,14 @@ pub const Reorderable = struct {
 
     pub fn install(self: *Reorderable) void {
         self.installed = true;
-        if (self.reorder.drag_point) |dp| {
-            const topleft = dp.plus(dvui.dragOffset());
-            if (self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.data().id.asUsize())) {
+        if (self.reorder.drag_ending or dvui.captured(self.reorder.data().id) or (self.reorder.init_opts.drag_name != null and dvui.dragName(self.reorder.init_opts.drag_name.?))) {
+            const topleft = dvui.currentWindow().mouse_pt.plus(dvui.dragOffset());
+            if (self.reorder.drag_point != null and self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.data().id.asUsize())) {
                 // we are being dragged - put in floating widget
                 self.data().register();
                 dvui.parentSet(self.widget());
 
-                self.floating_widget = dvui.FloatingWidget.init(@src(), .{ .rect = Rect.fromPoint(.cast(topleft.toNatural())), .min_size_content = self.reorder.reorderable_size });
+                self.floating_widget = dvui.FloatingWidget.init(@src(), .{ .mouse_events = false }, .{ .rect = Rect.fromPoint(.cast(topleft.toNatural())), .min_size_content = self.reorder.reorderable_size });
                 self.floating_widget.?.install();
             } else {
                 if (self.init_options.last_slot) {
@@ -259,10 +293,9 @@ pub const Reorderable = struct {
                     self.wd = WidgetData.init(self.data().src, .{}, self.options);
                 }
                 const rs = self.data().rectScale();
-                const dragRect = Rect.Physical.fromPoint(topleft).toSize(self.reorder.reorderable_size.scale(rs.s, Size.Physical));
 
-                if (!self.reorder.found_slot and !rs.r.intersect(dragRect).empty()) {
-                    // user is dragging a reorderable over this rect
+                if (!self.reorder.found_slot and rs.r.contains(dvui.currentWindow().mouse_pt)) {
+                    // user is dragging something over this rect
                     self.target_rs = rs;
                     self.reorder.found_slot = true;
 
@@ -294,8 +327,7 @@ pub const Reorderable = struct {
     }
 
     pub fn removed(self: *Reorderable) bool {
-        // if drag_ending is true, id_reorderable is non-null
-        if (self.reorder.drag_ending and self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.data().id.asUsize())) {
+        if (self.reorder.drag_ending and self.reorder.drag_point != null and self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.data().id.asUsize())) {
             return true;
         }
 
@@ -370,30 +402,24 @@ pub const Reorderable = struct {
     }
 };
 
-pub fn reorderSlice(comptime T: type, slice: []T, removed_idx: ?usize, insert_before_idx: ?usize) bool {
-    if (removed_idx) |ri| {
-        if (insert_before_idx) |ibi| {
-            // save this index
-            const removed = slice[ri];
-            if (ri < ibi) {
-                // moving down, shift others up
-                for (ri..ibi - 1) |i| {
-                    slice[i] = slice[i + 1];
-                }
-                slice[ibi - 1] = removed;
-            } else {
-                // moving up, shift others down
-                for (ibi..ri, 0..) |_, i| {
-                    slice[ri - i] = slice[ri - i - 1];
-                }
-                slice[ibi] = removed;
-            }
+pub fn reorderSlice(comptime T: type, slice: []T, removed_idx: usize, insert_before_idx: usize) void {
+    const ri = removed_idx;
+    const ibi = insert_before_idx;
 
-            return true;
+    const removed = slice[ri];
+    if (ri < ibi) {
+        // moving down, shift others up
+        for (ri..ibi - 1) |i| {
+            slice[i] = slice[i + 1];
         }
+        slice[ibi - 1] = removed;
+    } else {
+        // moving up, shift others down
+        for (ibi..ri, 0..) |_, i| {
+            slice[ri - i] = slice[ri - i - 1];
+        }
+        slice[ibi] = removed;
     }
-
-    return false;
 }
 
 test {

@@ -255,7 +255,7 @@ pub fn install(self: *FloatingWindowWidget) void {
 
 pub fn drawBackground(self: *FloatingWindowWidget) void {
     const rs = self.data().rectScale();
-    dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent_window) self.prev_windowInfo.id else null);
+    dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent_window) self.prev_windowInfo.id else null, true);
     dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
 
     if (self.init_options.modal and !dvui.firstFrame(self.data().id)) {

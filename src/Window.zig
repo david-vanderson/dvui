@@ -66,7 +66,8 @@ drag_state: enum {
 } = .none,
 drag_pt: Point.Physical = .{},
 drag_offset: Point.Physical = .{},
-drag_name: []const u8 = "",
+drag_name: ?[]const u8 = null,
+drag_size: Size.Physical = .{},
 
 frame_time_ns: i128 = 0,
 loop_wait_target: ?i128 = null,
@@ -157,6 +158,7 @@ pub const Subwindow = struct {
     used: bool = true,
     modal: bool = false,
     stay_above_parent_window: ?Id = null,
+    mouse_events: bool = true,
 };
 
 const SavedData = struct {
@@ -1075,7 +1077,7 @@ pub fn begin(
 
     //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.data().rect.w, self.data().rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
-    dvui.subwindowAdd(self.data().id, self.data().rect, self.rect_pixels, false, null);
+    dvui.subwindowAdd(self.data().id, self.data().rect, self.rect_pixels, false, null, true);
 
     _ = dvui.subwindowCurrentSet(self.data().id, .cast(self.data().rect));
 
@@ -1167,7 +1169,7 @@ pub fn windowFor(self: *const Self, p: Point.Physical) Id {
     var i = self.subwindows.items.len;
     while (i > 0) : (i -= 1) {
         const sw = &self.subwindows.items[i - 1];
-        if (sw.modal or sw.rect_pixels.contains(p)) {
+        if (sw.mouse_events and (sw.modal or sw.rect_pixels.contains(p))) {
             return sw.id;
         }
     }
@@ -1590,10 +1592,11 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     for (evts) |*e| {
         if (self.drag_state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release) {
             if (self.debug.logEvents(null)) {
-                log.debug("clearing drag ({s}) for unhandled mouse release", .{self.drag_name});
+                log.debug("Clearing drag ({?s}) for unhandled mouse release", .{self.drag_name});
             }
             self.drag_state = .none;
-            self.drag_name = "";
+            self.drag_name = null;
+            dvui.refresh(null, @src(), null);
         }
 
         if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.rect_pixels, .cleanup = true }))
@@ -1620,13 +1623,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     if (self.debug.logEvents(null)) {
         for (evts) |*e| {
             if (e.handled) continue;
-            var action: []const u8 = "";
-            switch (e.evt) {
-                .mouse => action = @tagName(e.evt.mouse.action),
-                .key => action = @tagName(e.evt.key.action),
-                else => {},
-            }
-            log.debug("Unhandled {s} {s} event (num {d})", .{ @tagName(e.evt), action, e.num });
+            log.debug("Unhandled {}", .{e});
         }
     }
 

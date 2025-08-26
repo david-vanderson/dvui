@@ -21,6 +21,15 @@ evt: union(enum) {
     text: Text,
 },
 
+pub fn format(self: *const Event, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+    try std.fmt.format(writer, "Event({d}){{{s} ", .{ self.num, @tagName(self.evt) });
+    switch (self.evt) {
+        .mouse => |me| try std.fmt.format(writer, "{s}}}", .{@tagName(me.action)}),
+        .key => |ke| try std.fmt.format(writer, "{s}}}", .{@tagName(ke.action)}),
+        .text => try std.fmt.format(writer, "}}", .{}),
+    }
+}
+
 /// Mark the event as handled
 ///
 /// In general, the `dvui.WidgetData` passed here should be the same one that
@@ -28,13 +37,7 @@ evt: union(enum) {
 /// This makes it possible to see which widget handled the event.
 pub fn handle(self: *Event, src: std.builtin.SourceLocation, wd: *const dvui.WidgetData) void {
     if (dvui.currentWindow().debug.logEvents(null)) {
-        var action: []const u8 = "";
-        switch (self.evt) {
-            .mouse => action = @tagName(self.evt.mouse.action),
-            .key => action = @tagName(self.evt.key.action),
-            else => {},
-        }
-        dvui.log.debug("{s}:{d} {s} {s} event (num {d}) handled by {s} ({x})", .{ src.file, src.line, @tagName(self.evt), action, self.num, wd.options.name orelse "???", wd.id });
+        dvui.log.debug("{s}:{d} {} handled by {s} ({x})", .{ src.file, src.line, self, wd.options.name orelse "???", wd.id });
     }
     self.handled = true;
 }

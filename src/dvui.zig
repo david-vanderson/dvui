@@ -2303,7 +2303,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
 /// tagged with.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn subwindowAdd(id: Id, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?Id) void {
+pub fn subwindowAdd(id: Id, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?Id, mouse_events: bool) void {
     const cw = currentWindow();
     for (cw.subwindows.items) |*sw| {
         if (id == sw.id) {
@@ -2313,6 +2313,7 @@ pub fn subwindowAdd(id: Id, rect: Rect, rect_pixels: Rect.Physical, modal: bool,
             sw.rect_pixels = rect_pixels;
             sw.modal = modal;
             sw.stay_above_parent_window = stay_above_parent_window;
+            sw.mouse_events = mouse_events;
 
             if (sw.render_cmds.items.len > 0 or sw.render_cmds_after.items.len > 0) {
                 log.warn("subwindowAdd {x} is clearing some drawing commands (did you try to draw between subwindowCurrentSet and subwindowAdd?)\n", .{id});
@@ -2331,6 +2332,7 @@ pub fn subwindowAdd(id: Id, rect: Rect, rect_pixels: Rect.Physical, modal: bool,
         .rect_pixels = rect_pixels,
         .modal = modal,
         .stay_above_parent_window = stay_above_parent_window,
+        .mouse_events = mouse_events,
     };
     if (stay_above_parent_window) |subwin_id| {
         // it wants to be above subwin_id
@@ -2396,8 +2398,12 @@ pub const DragStartOptions = struct {
     /// locate where to move the point of interest.
     offset: Point.Physical = .{},
 
-    /// Used for cross-widget dragging.  See `draggingName`.
-    name: []const u8 = "",
+    /// Size of the item being dragged.  offset plus this makes a screen rect
+    /// saying where the dragged item is relative to the mouse.
+    size: Size.Physical = .{},
+
+    /// Used for cross-widget dragging.  See `dragName`.
+    name: ?[]const u8 = null,
 };
 
 /// Prepare for a possible mouse drag.  This will detect a drag, and also a
@@ -2422,6 +2428,7 @@ pub fn dragPreStart(p: Point.Physical, options: DragStartOptions) void {
     cw.drag_state = .prestart;
     cw.drag_pt = p;
     cw.drag_offset = options.offset;
+    cw.drag_size = options.size;
     cw.cursor_dragging = options.cursor;
     cw.drag_name = options.name;
 }
@@ -2443,16 +2450,27 @@ pub fn dragStart(p: Point.Physical, options: DragStartOptions) void {
     cw.drag_state = .dragging;
     cw.drag_pt = p;
     cw.drag_offset = options.offset;
+    cw.drag_size = options.size;
     cw.cursor_dragging = options.cursor;
     cw.drag_name = options.name;
 }
 
-/// Get offset previously given to `dragPreStart` or `dragStart`.  See those.
+/// Get offset previously given to `dragPreStart` or `dragStart`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn dragOffset() Point.Physical {
     const cw = currentWindow();
     return cw.drag_offset;
+}
+
+/// Get rect from mouse position using offset and size previously given to
+/// `dragPreStart` or `dragStart`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn dragRect() Rect.Physical {
+    const cw = currentWindow();
+    const topleft = cw.mouse_pt.plus(cw.drag_offset);
+    return Rect.Physical.fromPoint(topleft).toSize(cw.drag_size);
 }
 
 /// If a mouse drag is happening, return the pixel difference to p from the
@@ -2468,7 +2486,7 @@ pub fn dragging(p: Point.Physical, name: ?[]const u8) ?Point.Physical {
     const cw = currentWindow();
 
     if (name) |n| {
-        if (!std.mem.eql(u8, n, cw.drag_name)) return null;
+        if (!std.mem.eql(u8, n, cw.drag_name orelse "")) return null;
     }
 
     switch (cw.drag_state) {
@@ -2492,14 +2510,18 @@ pub fn dragging(p: Point.Physical, name: ?[]const u8) ?Point.Physical {
     }
 }
 
-/// True if `dragging` and `dragStart` (or `dragPreStart`) was given name.
+/// True if `dragging` and `dragStart` (or `dragPreStart`) was the given name.
 ///
-/// Useful for cross-widget drags.
+/// Use to know when a cross-widget drag is in progress.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn draggingName(name: []const u8) bool {
-    const cw = currentWindow();
-    return cw.drag_state == .dragging and cw.drag_name.len > 0 and std.mem.eql(u8, name, cw.drag_name);
+pub fn dragName(name: ?[]const u8) bool {
+    if (name) |n| {
+        const cw = currentWindow();
+        return cw.drag_state == .dragging and cw.drag_name != null and std.mem.eql(u8, n, cw.drag_name.?);
+    } else {
+        return false;
+    }
 }
 
 /// Stop any mouse drag.
@@ -2508,7 +2530,7 @@ pub fn draggingName(name: []const u8) bool {
 pub fn dragEnd() void {
     const cw = currentWindow();
     cw.drag_state = .none;
-    cw.drag_name = "";
+    cw.drag_name = null;
 }
 
 /// The difference between the final mouse position this frame and last frame.
@@ -3277,10 +3299,17 @@ pub const EventMatchOptions = struct {
     /// Physical pixel rect used to match pointer events.
     r: Rect.Physical,
 
+    /// During a drag, only match pointer events if this is the dragName.
+    drag_name: ?[]const u8 = null,
+
     /// true means match all focus-based events routed to the subwindow with
     /// id.  This is how subwindows catch things like tab if no widget in that
     /// subwindow has focus.
     cleanup: bool = false,
+
+    /// (Only in Debug) If true, `eventMatch` will log a reason when returning
+    /// false.  Useful to understand why you aren't matching some event.
+    debug: if (builtin.mode == .Debug) bool else void = if (builtin.mode == .Debug) false else undefined,
 };
 
 /// Should e be processed by a widget with the given id and screen rect?
@@ -3295,7 +3324,12 @@ pub const EventMatchOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
-    if (e.handled) return false;
+    if (e.handled) {
+        if (builtin.mode == .Debug and opts.debug) {
+            log.debug("eventMatch {} already handled", .{e});
+        }
+        return false;
+    }
 
     switch (e.evt) {
         .key, .text => {
@@ -3306,11 +3340,17 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                     // processed (maybe the focus widget never showed up)
                     if (wid != opts.id) {
                         // not the focused window
+                        if (builtin.mode == .Debug and opts.debug) {
+                            log.debug("eventMatch {} (cleanup) focus not to this window", .{e});
+                        }
                         return false;
                     }
                 } else {
                     if (e.target_widgetId != opts.id and (opts.focus_id == null or opts.focus_id.? != e.target_widgetId)) {
                         // not the focused widget
+                        if (builtin.mode == .Debug and opts.debug) {
+                            log.debug("eventMatch {} focus not to this widget", .{e});
+                        }
                         return false;
                     }
                 }
@@ -3329,13 +3369,28 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                 }
             }
 
+            const cw = currentWindow();
+            if (cw.drag_state == .dragging and cw.drag_name != null and (opts.drag_name == null or !std.mem.eql(u8, cw.drag_name.?, opts.drag_name.?))) {
+                // a cross-widget drag is happening that we don't know about
+                if (builtin.mode == .Debug and opts.debug) {
+                    log.debug("eventMatch {} drag_name ({?s}) given but current drag is ({?s})", .{ e, opts.drag_name, cw.drag_name });
+                }
+                return false;
+            }
+
             if (me.floating_win != subwindowCurrentId()) {
                 // floating window is above us
+                if (builtin.mode == .Debug and opts.debug) {
+                    log.debug("eventMatch {} floating window above", .{e});
+                }
                 return false;
             }
 
             if (!opts.r.contains(me.p)) {
                 // mouse not in our rect
+                if (builtin.mode == .Debug and opts.debug) {
+                    log.debug("eventMatch {} not in rect", .{e});
+                }
                 return false;
             }
 
@@ -3344,6 +3399,9 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
 
                 // prevents widgets that are scrolled off a
                 // scroll area from processing events
+                if (builtin.mode == .Debug and opts.debug) {
+                    log.debug("eventMatch {} not in clip", .{e});
+                }
                 return false;
             }
 
@@ -3359,6 +3417,9 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                     }
                 }
 
+                if (builtin.mode == .Debug and opts.debug) {
+                    log.debug("eventMatch {} captured by other widget", .{e});
+                }
                 return false;
             }
         },
@@ -3430,10 +3491,9 @@ pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
                         }
                     }
                 } else if (me.action == .position) {
-                    // TODO: Should this mark this event as handled? If the click_rect
-                    //       is above another widget with hover effects or click behaviour,
-                    //       we don't want that widget to highlight as if the next click
-                    //       would apply to it.
+                    // Usually you don't want to mark .position events as
+                    // handled, so that multiple widgets can all do hover
+                    // highlighting.
 
                     // a single .position mouse event is at the end of each
                     // frame, so this means the mouse ended above us
@@ -3583,10 +3643,6 @@ pub const ScrollDragOptions = struct {
     // rect in screen coords of the widget doing the drag (scrolling will stop
     // if it wouldn't show more of this rect)
     screen_rect: dvui.Rect.Physical,
-
-    // id of the widget that has mouse capture during the drag (needed to
-    // inject synthetic motion events into the next frame to keep scrolling)
-    capture_id: dvui.Id,
 };
 
 /// Bubbled from inside a scrollarea to ensure scrolling while dragging
@@ -4867,9 +4923,9 @@ pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions
     return ret;
 }
 
-pub fn reorder(src: std.builtin.SourceLocation, opts: Options) *ReorderWidget {
+pub fn reorder(src: std.builtin.SourceLocation, init_opts: ReorderWidget.InitOptions, opts: Options) *ReorderWidget {
     var ret = widgetAlloc(ReorderWidget);
-    ret.* = ReorderWidget.init(src, opts);
+    ret.* = ReorderWidget.init(src, init_opts, opts);
     ret.install();
     ret.processEvents();
     return ret;
