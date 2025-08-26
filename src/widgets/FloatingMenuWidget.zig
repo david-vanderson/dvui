@@ -144,7 +144,7 @@ pub fn install(self: *FloatingMenuWidget) void {
     const rs = self.data().rectScale();
 
     self.prev_windowId = dvui.subwindowCurrentSet(self.data().id, null).id;
-    dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, null);
+    dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, null, true);
     dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
 
     // first break out of whatever clip we were in (so box shadows work, since

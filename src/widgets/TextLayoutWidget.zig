@@ -303,7 +303,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             rect.w = size;
             rect.h = size;
 
-            var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
+            var fc = dvui.FloatingWidget.init(@src(), .{}, .{ .rect = rect });
             fc.install();
 
             var offset: Point.Physical = dvui.dataGet(null, fc.data().id, "_offset", Point.Physical) orelse .{};
@@ -336,7 +336,6 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                         dvui.scrollDrag(.{
                             .mouse_pt = e.evt.mouse.p,
                             .screen_rect = self.data().rectScale().r,
-                            .capture_id = self.data().id,
                         });
                     }
                 }
@@ -373,7 +372,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             rect.w = size;
             rect.h = size;
 
-            var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
+            var fc = dvui.FloatingWidget.init(@src(), .{}, .{ .rect = rect });
             fc.install();
 
             var offset: Point.Physical = dvui.dataGet(null, fc.data().id, "_offset", Point.Physical) orelse .{};
@@ -406,7 +405,6 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                         dvui.scrollDrag(.{
                             .mouse_pt = e.evt.mouse.p,
                             .screen_rect = self.data().rectScale().r,
-                            .capture_id = self.data().id,
                         });
                     }
                 }
@@ -1418,7 +1416,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
 pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
     if (self.touch_editing and self.te_show_context_menu and self.focus_at_start and self.data().visible()) {
-        self.te_floating = dvui.FloatingWidget.init(@src(), .{});
+        self.te_floating = dvui.FloatingWidget.init(@src(), .{}, .{});
 
         const r = dvui.windowRectScale().rectFromPhysical(dvui.clipGet());
         if (dvui.minSizeGet(self.te_floating.data().id)) |_| {
@@ -1646,7 +1644,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                         dvui.scrollDrag(.{
                             .mouse_pt = me.p,
                             .screen_rect = self.data().rectScale().r,
-                            .capture_id = self.data().id,
                         });
                     } else {
                         // user intended to scroll with a finger swipe

@@ -4,9 +4,52 @@ const reorderLayout = enum {
     flex,
 };
 
+const g_simple = struct {
+    var dir_entry: usize = 0;
+    var strings = [6][]const u8{ "zero", "one", "two", "three", "four", "five" };
+};
+
+const g_advanced = struct {
+    var strings_template = [6][]const u8{ "A zero", "A one", "A two", "A three", "A four", "A five" };
+    var strings = [6][]const u8{ "A zero", "A one", "A two", "A three", "", "" };
+    var strings_len: usize = 4;
+
+    pub fn reorder(removed_idx: ?usize, insert_before_idx: ?usize) void {
+        if (removed_idx) |ri| {
+            if (insert_before_idx) |ibi| {
+                // save this index
+                const removed = strings[ri];
+                if (ri < ibi) {
+                    // moving down, shift others up
+                    for (ri..ibi - 1) |i| {
+                        strings[i] = strings[i + 1];
+                    }
+                    strings[ibi - 1] = removed;
+                } else {
+                    // moving up, shift others down
+                    for (ibi..ri, 0..) |_, i| {
+                        strings[ri - i] = strings[ri - i - 1];
+                    }
+                    strings[ibi] = removed;
+                }
+            } else {
+                // just removing, shift others up
+                for (ri..strings_len - 1) |i| {
+                    strings[i] = strings[i + 1];
+                }
+                strings_len -= 1;
+            }
+        }
+    }
+};
+
+var g_cross_drag_from: ?enum { simple, advanced } = null;
+var g_cross_drag_item: ?usize = null;
+
 pub fn reorderLists() void {
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
     const layo = dvui.dataGetPtrDefault(null, uniqueId, "reorderLayout", reorderLayout, .horizontal);
+    const cross_drag = dvui.dataGetPtrDefault(null, uniqueId, "cross_drag", bool, false);
 
     if (dvui.expander(@src(), "Simple", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
         var vbox = dvui.box(@src(), .{}, .{ .margin = .{ .x = 10 } });
@@ -32,31 +75,67 @@ pub fn reorderLists() void {
             dvui.label(@src(), "to reorder.", .{}, .{});
         }
 
-        reorderListsSimple(layo.*);
+        reorderListsSimple(layo.*, cross_drag.*);
     }
 
-    if (dvui.expander(@src(), "Advanced", .{}, .{ .expand = .horizontal })) {
-        var vbox = dvui.box(@src(), .{}, .{ .margin = .{ .x = 10 } });
+    if (dvui.expander(@src(), "Advanced", .{}, .{ .expand = .horizontal, .min_size_content = .width(500) })) {
+        var vbox = dvui.box(@src(), .{}, .{ .margin = .{ .x = 10 }, .expand = .horizontal });
         defer vbox.deinit();
 
+        _ = dvui.checkbox(@src(), cross_drag, "Allow drags between simple/advanced", .{});
+
         dvui.label(@src(), "Drag off list to remove.", .{}, .{});
-        reorderListsAdvanced();
+        reorderListsAdvanced(cross_drag.*);
     }
 
     if (dvui.expander(@src(), "Tree", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
-        var vbox = dvui.box(@src(), .{}, .{ .margin = .{ .x = 10 }, .expand = .both });
-        defer vbox.deinit();
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = .{ .x = 10 }, .expand = .both });
+        defer hbox.deinit();
 
-        reorderTree();
+        // This is used as a key to lookup information that would normally be stored by the application.
+        const uniqId = dvui.parentGet().extendId(@src(), 0);
+
+        reorderTree(uniqId);
+
+        {
+            var vbox = dvui.box(@src(), .{}, .{ .gravity_x = 1.0 });
+            defer vbox.deinit();
+
+            var label_opts: dvui.Options = .{ .padding = .all(20), .margin = .all(20), .border = .all(1) };
+
+            if (dvui.dragName("tree_drag")) {
+                label_opts.background = true;
+                label_opts.color_fill = dvui.themeGet().color(.content, .fill_hover);
+
+                for (dvui.events()) |*e| {
+                    if (!dvui.eventMatch(e, .{ .id = vbox.data().id, .r = vbox.data().borderRectScale().r, .drag_name = "tree_drag" })) continue;
+
+                    if (e.evt == .mouse and e.evt.mouse.action == .position) {
+                        label_opts.color_fill = dvui.themeGet().color(.content, .fill_press);
+                    }
+
+                    if (e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
+                        e.handle(@src(), vbox.data());
+                        dvui.dragEnd();
+                        dvui.refresh(null, @src(), vbox.data().id);
+                        if (dvui.dataGetSlice(null, uniqId, "removed_path", []u8)) |removed_path| {
+                            dvui.dataSetSlice(null, vbox.data().id, "last_dropped", removed_path);
+                        }
+                    }
+                }
+            }
+
+            dvui.label(@src(), "Drag Tree\nEntry Here", .{}, label_opts);
+
+            if (dvui.dataGetSlice(null, vbox.data().id, "last_dropped", []u8)) |ld| {
+                dvui.label(@src(), "Last Dropped\n{s}", .{ld}, .{});
+            }
+        }
     }
 }
 
-pub fn reorderListsSimple(lay: reorderLayout) void {
-    const g = struct {
-        var dir_entry: usize = 0;
-        var strings = [6][]const u8{ "zero", "one", "two", "three", "four", "five" };
-    };
-
+pub fn reorderListsSimple(lay: reorderLayout, cross_drag: bool) void {
+    const g = g_simple;
     var removed_idx: ?usize = null;
     var insert_before_idx: ?usize = null;
 
@@ -69,7 +148,7 @@ pub fn reorderListsSimple(lay: reorderLayout) void {
     }
 
     // reorder widget must wrap entire list
-    var reorder = dvui.reorder(@src(), .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
+    var reorder = dvui.reorder(@src(), .{ .drag_name = if (cross_drag) "demo-reorder-cross-drag" else null }, .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
     defer reorder.deinit();
 
     // this box determines layout of list - could be any layout widget
@@ -90,6 +169,12 @@ pub fn reorderListsSimple(lay: reorderLayout) void {
         // make a reorderable for each entry in the list
         var reorderable = reorder.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal, .min_size_content = dvui.Options.sizeM(8, 1) });
         defer reorderable.deinit();
+
+        if (reorderable.floating()) {
+            // happens every frame something is being dragged from this list
+            g_cross_drag_item = i;
+            g_cross_drag_from = .simple;
+        }
 
         if (reorderable.removed()) {
             removed_idx = i; // this entry is being dragged
@@ -113,66 +198,63 @@ pub fn reorderListsSimple(lay: reorderLayout) void {
         insert_before_idx = g.strings.len; // entry was dropped into the final slot
     }
 
-    // returns true if the slice was reordered
-    _ = dvui.ReorderWidget.reorderSlice([]const u8, &g.strings, removed_idx, insert_before_idx);
+    if (insert_before_idx) |ibi| {
+        if (removed_idx) |ri| {
+            // item was dragged and dropped onto same list
+            dvui.ReorderWidget.reorderSlice([]const u8, &g.strings, ri, ibi);
+            g_cross_drag_item = null;
+            g_cross_drag_from = null;
+            removed_idx = null; // prevent removing below
+        } else {
+            // item dropped from a different list
+        }
+    }
+
+    if (removed_idx) |_| {
+        if (g_cross_drag_item) |_| {
+            // item was dragged from here and dropped somewhere else (maybe
+            // nowhere), if somewhere else they already got it
+            g_cross_drag_item = null;
+            g_cross_drag_from = null;
+            // this simple list example doesn't support removing items
+        }
+    }
 }
 
-pub fn reorderListsAdvanced() void {
-    const g = struct {
-        var strings_template = [6][]const u8{ "zero", "one", "two", "three", "four", "five" };
-        var strings = [6][]const u8{ "zero", "one", "two", "three", "", "" };
-        var strings_len: usize = 4;
-
-        pub fn reorder(removed_idx: ?usize, insert_before_idx: ?usize) void {
-            if (removed_idx) |ri| {
-                if (insert_before_idx) |ibi| {
-                    // save this index
-                    const removed = strings[ri];
-                    if (ri < ibi) {
-                        // moving down, shift others up
-                        for (ri..ibi - 1) |i| {
-                            strings[i] = strings[i + 1];
-                        }
-                        strings[ibi - 1] = removed;
-                    } else {
-                        // moving up, shift others down
-                        for (ibi..ri, 0..) |_, i| {
-                            strings[ri - i] = strings[ri - i - 1];
-                        }
-                        strings[ibi] = removed;
-                    }
-                } else {
-                    // just removing, shift others up
-                    for (ri..strings_len - 1) |i| {
-                        strings[i] = strings[i + 1];
-                    }
-                    strings_len -= 1;
-                }
-            }
-        }
-    };
-
-    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+pub fn reorderListsAdvanced(cross_drag: bool) void {
+    const g = g_advanced;
+    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
     defer hbox.deinit();
 
     // template you can drag to add to list
     var added_idx: ?usize = null;
     var added_idx_p: ?dvui.Point.Physical = null;
 
-    if (g.strings_len == g.strings.len) {
-        dvui.label(@src(), "List Full", .{}, .{ .gravity_x = 1.0 });
-    } else {
-        var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0, .border = dvui.Rect.all(1), .margin = dvui.Rect.all(4), .background = true, .style = .window });
-        defer hbox2.deinit();
+    {
+        var vbox = dvui.box(@src(), .{}, .{ .gravity_x = 1.0 });
+        defer vbox.deinit();
 
-        dvui.label(@src(), "Drag to add : {d}", .{g.strings_len}, .{});
+        {
+            var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .border = dvui.Rect.all(1), .margin = dvui.Rect.all(4), .background = true, .style = .window });
+            defer hbox2.deinit();
 
-        if (dvui.ReorderWidget.draggable(@src(), .{ .top_left = hbox2.data().rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
-            // add to list, but will be removed if not dropped onto a list slot
-            g.strings[g.strings_len] = g.strings_template[g.strings_len];
-            added_idx = g.strings_len;
-            added_idx_p = p;
-            g.strings_len += 1;
+            if (g.strings_len == g.strings.len) {
+                dvui.label(@src(), "List Full", .{}, .{});
+            } else {
+                dvui.label(@src(), "Drag to add : {d}", .{g.strings_len}, .{});
+
+                if (dvui.ReorderWidget.draggable(@src(), .{ .rect = hbox2.data().rectScale().r }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+                    // add to list, but will be removed if not dropped onto a list slot
+                    g.strings[g.strings_len] = g.strings_template[g.strings_len];
+                    added_idx = g.strings_len;
+                    added_idx_p = p;
+                    g.strings_len += 1;
+                }
+            }
+        }
+
+        if (g_cross_drag_item) |cdi| {
+            dvui.label(@src(), "Dragging {d}\nfrom {s}", .{ cdi, @tagName(g_cross_drag_from.?) }, .{});
         }
     }
 
@@ -180,7 +262,7 @@ pub fn reorderListsAdvanced() void {
     var insert_before_idx: ?usize = null;
 
     // reorder widget must wrap entire list
-    var reorder = dvui.reorder(@src(), .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
+    var reorder = dvui.reorder(@src(), .{ .drag_name = if (cross_drag) "demo-reorder-cross-drag" else null }, .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
     defer reorder.deinit();
 
     // determines layout of list
@@ -201,7 +283,11 @@ pub fn reorderListsAdvanced() void {
         var reorderable = dvui.Reorderable.init(@src(), reorder, .{ .reorder_id = i, .draw_target = false, .reinstall = false }, .{ .id_extra = i, .expand = .horizontal });
         defer reorderable.deinit();
 
-        if (!reorderable.floating()) {
+        if (reorderable.floating()) {
+            // happens every frame something is being dragged from this list
+            g_cross_drag_item = i;
+            g_cross_drag_from = .advanced;
+        } else {
             if (seen_non_floating) {
                 // we've had a non floating one already, and we are non floating, so add a separator
                 _ = dvui.separator(@src(), .{ .id_extra = i, .expand = .horizontal, .margin = dvui.Rect.all(6) });
@@ -213,9 +299,9 @@ pub fn reorderListsAdvanced() void {
         reorderable.install();
 
         if (reorderable.removed()) {
-            removed_idx = i;
+            removed_idx = i; // this entry is being dragged
         } else if (reorderable.insertBefore()) {
-            insert_before_idx = i;
+            insert_before_idx = i; // this entry was dropped onto
         }
 
         if (reorderable.targetRectScale()) |rs| {
@@ -234,7 +320,7 @@ pub fn reorderListsAdvanced() void {
 
         dvui.label(@src(), "{s}", .{s}, .{});
 
-        if (dvui.ReorderWidget.draggable(@src(), .{ .top_left = reorderable.data().rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+        if (dvui.ReorderWidget.draggable(@src(), .{ .rect = reorderable.data().rectScale().r }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
             // marking all events for capture, this will only be a problem if some
             // mouse events (in the same frame) came before this drag, and would
             // have interacted with a widget that hasn't run yet
@@ -250,7 +336,7 @@ pub fn reorderListsAdvanced() void {
         defer reorderable.deinit();
 
         if (reorderable.insertBefore()) {
-            insert_before_idx = g.strings_len;
+            insert_before_idx = g.strings_len; // last slot dropped onto
         }
 
         if (reorderable.targetRectScale()) |rs| {
@@ -259,14 +345,43 @@ pub fn reorderListsAdvanced() void {
         }
     }
 
-    g.reorder(removed_idx, insert_before_idx);
+    if (insert_before_idx) |ibi| {
+        if (removed_idx) |ri| {
+            // item was dragged and dropped onto same list
+            g.reorder(ri, ibi);
+            g_cross_drag_item = null;
+            g_cross_drag_from = null;
+            removed_idx = null; // prevent removing below
+        } else {
+            // item dropped from a different list
+            // g_cross_drag_item/from will be nulled when the other list gets removed()
+            if (g.strings_len == g.strings.len) {
+                // we are full, do nothing
+            } else {
+                // add to end and then reorder
+                g.strings[g.strings_len] = g_simple.strings[g_cross_drag_item.?];
+                g.strings_len += 1;
+                g.reorder(g.strings_len - 1, ibi);
+            }
+        }
+    }
+
+    if (removed_idx) |ri| {
+        // item was dragged from here and dropped somewhere else (maybe
+        // nowhere), if somewhere else they already got it
+        g.reorder(ri, null);
+        g_cross_drag_item = null;
+        g_cross_drag_from = null;
+    }
 }
 
-pub fn reorderTree() void {
+pub fn reorderTree(uniqueId: dvui.Id) void {
     exampleFileTree(
         @src(),
+        uniqueId,
         .{
             .enable_reordering = true,
+            .drag_name = "tree_drag",
         },
         .{
             .background = true,
@@ -585,9 +700,7 @@ fn exampleFileTreeSetup(const_file_tree: []const ConstTreeEntry, mutable_file_tr
     }
 }
 
-pub fn exampleFileTree(src: std.builtin.SourceLocation, tree_init_options: dvui.TreeWidget.InitOptions, tree_options: dvui.Options, branch_options: dvui.Options, expander_options: dvui.Options) !void {
-    const uniqueId = dvui.parentGet().extendId(@src(), 0);
-
+pub fn exampleFileTree(src: std.builtin.SourceLocation, uniqueId: dvui.Id, tree_init_options: dvui.TreeWidget.InitOptions, tree_options: dvui.Options, branch_options: dvui.Options, expander_options: dvui.Options) !void {
     var tree = dvui.TreeWidget.tree(src, tree_init_options, tree_options);
     defer tree.deinit();
 

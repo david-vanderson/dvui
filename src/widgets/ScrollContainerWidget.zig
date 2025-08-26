@@ -60,7 +60,6 @@ seen_expanded_child: bool = false,
 first_visible_id: dvui.Id = .zero,
 first_visible_offset: Point = Point{}, // offset of top left of first visible widget from viewport
 
-inject_capture_id: ?dvui.Id = null,
 seen_scroll_drag: bool = false,
 
 finger_down: bool = false,
@@ -368,7 +367,7 @@ pub fn processScrollDrag(
 
         // if we are scrolling, then we need a motion event next
         // frame so that the child widget can adjust selection
-        self.inject_capture_id = sd.capture_id;
+        dvui.currentWindow().inject_motion_event = true;
     }
 
     self.seen_scroll_drag = true;
@@ -600,17 +599,6 @@ pub fn deinit(self: *ScrollContainerWidget) void {
     dvui.dataSet(null, self.data().id, "_fv_id", self.first_visible_id);
     dvui.dataSet(null, self.data().id, "_fv_offset", self.first_visible_offset);
     dvui.dataSet(null, self.data().id, "_finger_down", self.finger_down);
-
-    if (self.inject_capture_id) |ci| {
-        // Only do this if the widget that called the scrollDrag still has
-        // mouse capture at this point.  Mouse could have moved, called
-        // scrollDrag, then released - in that case we don't want to inject a
-        // motion event next frame.
-        if (dvui.captured(ci)) {
-            // inject a mouse motion event into next frame
-            dvui.currentWindow().inject_motion_event = true;
-        }
-    }
 
     const padded = self.data().options.padSize(self.nextVirtualSize);
     switch (self.si.horizontal) {
