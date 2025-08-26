@@ -83,6 +83,7 @@ pub const wasm = if (!builtin.is_test) struct {
         return undefined;
     }
     pub fn wasm_sleep(_: u32) void {}
+    pub fn wasm_refresh() void {}
 
     pub fn wasm_pixel_width() f32 {
         return undefined;
