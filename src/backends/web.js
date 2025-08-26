@@ -309,6 +309,9 @@ class Dvui {
             wasm_sleep: (ms) => {
                 dvui_sleep(ms);
             },
+            wasm_refresh: () => {
+                this.requestRender();
+            },
             wasm_pixel_width: () => {
                 return this.gl.drawingBufferWidth;
             },
