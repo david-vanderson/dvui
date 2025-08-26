@@ -78,8 +78,8 @@ pub fn reorderLists() void {
         reorderListsSimple(layo.*, cross_drag.*);
     }
 
-    if (dvui.expander(@src(), "Advanced", .{}, .{ .expand = .horizontal })) {
-        var vbox = dvui.box(@src(), .{}, .{ .margin = .{ .x = 10 }, .expand = .horizontal, .min_size_content = .width(500) });
+    if (dvui.expander(@src(), "Advanced", .{}, .{ .expand = .horizontal, .min_size_content = .width(500) })) {
+        var vbox = dvui.box(@src(), .{}, .{ .margin = .{ .x = 10 }, .expand = .horizontal });
         defer vbox.deinit();
 
         _ = dvui.checkbox(@src(), cross_drag, "Allow drags between simple/advanced", .{});
@@ -196,29 +196,27 @@ pub fn reorderListsSimple(lay: reorderLayout, cross_drag: bool) void {
     // show a final slot that allows dropping an entry at the end of the list
     if (reorder.finalSlot()) {
         insert_before_idx = g.strings.len; // entry was dropped into the final slot
-        dvui.log.debug("simple insertBefore last slot {d}", .{insert_before_idx.?});
     }
 
     if (insert_before_idx) |ibi| {
         if (removed_idx) |ri| {
             // item was dragged and dropped onto same list
-            dvui.log.debug("simple same list", .{});
             dvui.ReorderWidget.reorderSlice([]const u8, &g.strings, ri, ibi);
             g_cross_drag_item = null;
             g_cross_drag_from = null;
             removed_idx = null; // prevent removing below
         } else {
             // item dropped from a different list
-            dvui.log.debug("simple drop {d}, no action", .{ibi});
         }
     }
 
     if (removed_idx) |_| {
         if (g_cross_drag_item) |_| {
-            // do nothing
-            dvui.log.debug("simple list removed, no action", .{});
+            // item was dragged from here and dropped somewhere else (maybe
+            // nowhere), if somewhere else they already got it
             g_cross_drag_item = null;
             g_cross_drag_from = null;
+            // this simple list example doesn't support removing items
         }
     }
 }
@@ -228,28 +226,35 @@ pub fn reorderListsAdvanced(cross_drag: bool) void {
     var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
     defer hbox.deinit();
 
-    if (g_cross_drag_item) |cdi| {
-        dvui.label(@src(), "Dragging {d}\nfrom {s}", .{ cdi, @tagName(g_cross_drag_from.?) }, .{ .gravity_x = 1.0 });
-    }
-
     // template you can drag to add to list
     var added_idx: ?usize = null;
     var added_idx_p: ?dvui.Point.Physical = null;
 
-    if (g.strings_len == g.strings.len) {
-        dvui.label(@src(), "List Full", .{}, .{ .gravity_x = 0.5 });
-    } else {
-        var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 0.5, .border = dvui.Rect.all(1), .margin = dvui.Rect.all(4), .background = true, .style = .window });
-        defer hbox2.deinit();
+    {
+        var vbox = dvui.box(@src(), .{}, .{ .gravity_x = 1.0 });
+        defer vbox.deinit();
 
-        dvui.label(@src(), "Drag to add : {d}", .{g.strings_len}, .{});
+        {
+            var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .border = dvui.Rect.all(1), .margin = dvui.Rect.all(4), .background = true, .style = .window });
+            defer hbox2.deinit();
 
-        if (dvui.ReorderWidget.draggable(@src(), .{ .rect = hbox2.data().rectScale().r }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
-            // add to list, but will be removed if not dropped onto a list slot
-            g.strings[g.strings_len] = g.strings_template[g.strings_len];
-            added_idx = g.strings_len;
-            added_idx_p = p;
-            g.strings_len += 1;
+            if (g.strings_len == g.strings.len) {
+                dvui.label(@src(), "List Full", .{}, .{});
+            } else {
+                dvui.label(@src(), "Drag to add : {d}", .{g.strings_len}, .{});
+
+                if (dvui.ReorderWidget.draggable(@src(), .{ .rect = hbox2.data().rectScale().r }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+                    // add to list, but will be removed if not dropped onto a list slot
+                    g.strings[g.strings_len] = g.strings_template[g.strings_len];
+                    added_idx = g.strings_len;
+                    added_idx_p = p;
+                    g.strings_len += 1;
+                }
+            }
+        }
+
+        if (g_cross_drag_item) |cdi| {
+            dvui.label(@src(), "Dragging {d}\nfrom {s}", .{ cdi, @tagName(g_cross_drag_from.?) }, .{});
         }
     }
 
@@ -294,9 +299,9 @@ pub fn reorderListsAdvanced(cross_drag: bool) void {
         reorderable.install();
 
         if (reorderable.removed()) {
-            removed_idx = i;
+            removed_idx = i; // this entry is being dragged
         } else if (reorderable.insertBefore()) {
-            insert_before_idx = i;
+            insert_before_idx = i; // this entry was dropped onto
         }
 
         if (reorderable.targetRectScale()) |rs| {
@@ -331,8 +336,7 @@ pub fn reorderListsAdvanced(cross_drag: bool) void {
         defer reorderable.deinit();
 
         if (reorderable.insertBefore()) {
-            insert_before_idx = g.strings_len;
-            dvui.log.debug("advanced insertBefore last slot {d}", .{insert_before_idx.?});
+            insert_before_idx = g.strings_len; // last slot dropped onto
         }
 
         if (reorderable.targetRectScale()) |rs| {
@@ -344,29 +348,27 @@ pub fn reorderListsAdvanced(cross_drag: bool) void {
     if (insert_before_idx) |ibi| {
         if (removed_idx) |ri| {
             // item was dragged and dropped onto same list
-            dvui.log.debug("advanced same list", .{});
             g.reorder(ri, ibi);
             g_cross_drag_item = null;
             g_cross_drag_from = null;
             removed_idx = null; // prevent removing below
         } else {
             // item dropped from a different list
-            dvui.log.debug("advanced drop {d}", .{ibi});
+            // g_cross_drag_item/from will be nulled when the other list gets removed()
             if (g.strings_len == g.strings.len) {
-                dvui.log.debug("advanced drop full", .{});
+                // we are full, do nothing
             } else {
                 // add to end and then reorder
                 g.strings[g.strings_len] = g_simple.strings[g_cross_drag_item.?];
                 g.strings_len += 1;
                 g.reorder(g.strings_len - 1, ibi);
-                // g_cross_drag_item/from will be nulled when the other list gets removed()
             }
         }
     }
 
     if (removed_idx) |ri| {
-        // do nothing
-        dvui.log.debug("advanced list removed", .{});
+        // item was dragged from here and dropped somewhere else (maybe
+        // nowhere), if somewhere else they already got it
         g.reorder(ri, null);
         g_cross_drag_item = null;
         g_cross_drag_from = null;

@@ -113,7 +113,7 @@ pub fn processEvents(self: *ReorderWidget) void {
 pub fn processEvent(self: *ReorderWidget, e: *dvui.Event) void {
     switch (e.evt) {
         .mouse => |me| {
-            // if we are the drag source, passively listen to all mouse events
+            // if we are the drag source, update where the mouse is and possibly scroll
             if (self.drag_point != null and me.action == .motion) {
                 self.drag_point = e.evt.mouse.p;
 
