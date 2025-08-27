@@ -11,8 +11,8 @@ const dvui = @import("dvui.zig");
 // and then need to check which fields are set with values, which I beleive is possible with the EnumArray.
 
 // Gives types as part of error messages.
-// Issue with field option buffer being applied to types and not fields as the
 // buffer could be shared between different types and there is no way around that?
+// END OF TODO
 
 /// Field options control whether and how fields are displayed.
 /// Field can be hidden in two ways:
@@ -43,7 +43,7 @@ pub const StandardFieldOptions = struct {
 pub fn StructOptions(Struct: type) type {
     switch (@typeInfo(Struct)) {
         .@"struct", .@"union" => {},
-        else => @compileError(std.fmt.comptimePrint("StructUI: StructOptions(T) requires Struct or Union, but received a {s}.", .{@typeName(Struct)})),
+        else => @compileError(std.fmt.comptimePrint("struct_ui: StructOptions(T) requires Struct or Union, but received a {s}.", .{@typeName(Struct)})),
     }
     return struct {
         pub const StructOptionsT = std.EnumMap(std.meta.FieldEnum(StructT), FieldOptions);
@@ -548,6 +548,7 @@ pub fn displayString(field_name: []const u8, field_value_ptr: anytype, field_opt
     textFieldWidget(@src(), field_name, field_value_ptr, field_option.text, al);
 }
 
+// TODO: Reinstate this to give the user a way to display string fields and supply their own buffer.
 //pub fn displayStringBuffer(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) bool {
 //    if (!validFieldOptionsType(field_name, field_option, .text)) return;
 //    textFieldWidget(@src(), field_name, field_value_ptr, field_option.text, al);
@@ -650,7 +651,7 @@ pub fn displayUnion(
                     field_value_ptr.* = @unionInit(UnionT, @tagName(choice), default);
                 } else {
                     dvui.log.debug(
-                        "StructUI: Union field {s}.{s} cannot be selected as no default value is provided. Field will not be selected.",
+                        "struct_ui: Union field {s}.{s} cannot be selected as no default value is provided. Field will not be selected.",
                         .{ field_name, @tagName(choice) },
                     );
                     return;
@@ -771,13 +772,12 @@ pub fn defaultValue(T: type, field_option: FieldOptions, struct_options: anytype
         inline .@"struct" => |si| {
             comptime var default_found = false;
             inline for (struct_options) |opt| {
-                if (@TypeOf(opt).StructT == T) { //} and opt.default_value != null) {
+                if (@TypeOf(opt).StructT == T) {
                     default_found = true;
                     return opt.default_value;
                 }
             }
             if (!default_found) {
-                // TODO: This will just return null now and do a runtime debug message.
                 inline for (si.fields) |field| {
                     if (field.defaultValue() == null) {
                         @compileError(std.fmt.comptimePrint("field {s} for struct {s} does not support default initialization", .{ field.name, @typeName(T) }));
@@ -802,7 +802,7 @@ pub fn defaultValue(T: type, field_option: FieldOptions, struct_options: anytype
 
 pub fn validFieldOptionsType(field_name: []const u8, field_option: FieldOptions, required_tag: @typeInfo(FieldOptions).@"union".tag_type.?) bool {
     if (field_option != required_tag) {
-        dvui.log.debug("StructUI: Field {s} has FieldOption type {s} but needs {s}. Field will not be displayed\n", .{
+        dvui.log.debug("struct_ui: Field {s} has FieldOption type {s} but needs {s}. Field will not be displayed\n", .{
             field_name,
             @tagName(field_option),
             @tagName(required_tag),
@@ -833,10 +833,6 @@ pub fn validateFieldPtrType(comptime required_type: std.builtin.TypeId, comptime
     ));
 }
 
-test {
-    @import("std").testing.refAllDecls(@This());
-}
-
 /// Returns the option from the passed in options tuple for type T.
 pub fn findMatchingStructOption(T: type, struct_options: anytype) ?StructOptions(T) {
     inline for (struct_options) |struct_option| {
@@ -845,4 +841,8 @@ pub fn findMatchingStructOption(T: type, struct_options: anytype) ?StructOptions
         }
     }
     return null;
+}
+
+test {
+    @import("std").testing.refAllDecls(@This());
 }
