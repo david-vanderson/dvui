@@ -95,10 +95,7 @@ pub fn main() !void {
         const wait_event_micros = win.waitTime(end_micros);
         interrupted = try backend.waitEventTimeout(wait_event_micros);
     }
-    if (!first_change) {
-        gpa.free(testStruct.slice5);
-    }
-    //struct_adapters.slice_static.deinit();
+    local.adapters.deinit();
 }
 
 const C1 = struct {
@@ -214,6 +211,17 @@ var struct_of_union1: StructOfUnion1 = .{};
 
 var ts: TestStruct = .{};
 
+const local = struct {
+    const struct_options: dvui.struct_ui.StructOptions(StringTest) = .init(.{ .slice_static = .{ .text = .{ .display = .read_write } } }, null);
+    var adapters: dvui.struct_ui.StructAdapters(StringTest, struct { slice_static: dvui.struct_ui.StaticStringAdapter }) = .{
+        .adapters = .{
+            .slice_static = .init(gpa, "this is a tag"),
+            .array_variable = .{},
+            .slice_variable = .{},
+        },
+    };
+};
+
 // both dvui and SDL drawing
 fn gui_frame() void {
     //dvui.currentWindow().debug_window_show = true;
@@ -237,26 +245,10 @@ fn gui_frame() void {
     defer hbox.deinit();
 
     {
-        const local = struct {
-            const struct_options: dvui.struct_ui.StructOptions(StringTest) = .init(.{ .slice_static = .{ .text = .{ .display = .read_write } } }, null);
-            var adapters: dvui.struct_ui.StructAdapters(StringTest, struct { slice_static: dvui.struct_ui.StaticStringAdapter }) = .{
-                .adapters = .{
-                    .slice_static = .init(gpa, "this is a tag"),
-                    .array_variable = .{},
-                    .slice_variable = .{},
-                },
-            };
-        };
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
-        //wholeStruct(@src(), "basic_types_const", &basic_types_const, 0, .{});
-        //        dvui.struct_ui.displayStruct("basic_types_const", &basic_types_const, 0, .{ .standard = .{} }, .{}, &al);
-        //dvui.struct_ui.displayArray("array_of_struct", &array_of_struct, 1, .{ .standard = .{} }, .{}, &al);
-        //        dvui.struct_ui.displayStruct("test_struct", &ts, 1, .{ .standard = .{} }, .{TestStruct.structui_options}, &al);
-        //std.debug.print("PRE1: {s} - {x}\n", .{ var_string_test1.slice_variable, &var_string_test1.slice_variable.ptr });
-        //        defer struct_adapters.slice_static.deinit();
         dvui.struct_ui.displayStruct(
             "var_string_test1",
             &var_string_test1,
@@ -266,7 +258,6 @@ fn gui_frame() void {
             .{&local.adapters},
             &al,
         );
-        //std.debug.print("POS1: {s} - {x}\n", .{ var_string_test1.slice_variable, &var_string_test1.slice_variable.ptr });
     }
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
@@ -274,70 +265,30 @@ fn gui_frame() void {
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
 
-        //std.debug.print("PRE2: {s} - {x}\n", .{ var_string_test2.slice_variable, &var_string_test2.slice_variable });
-        //dvui.struct_ui.displayStruct("var_string_test2", &var_string_test2, 1, .{ .standard = .{} }, .{}, {}, &al);
-        //std.debug.print("POS2: {s} - {x}\n", .{ var_string_test2.slice_variable, &var_string_test2.slice_variable });
-
-        //dvui.struct_ui.displayStruct("basic_types_var", &basic_types_var, 0, .{}, .{}, &al);
-        //var ts: TestStruct = .{};
-        //dvui.struct_ui.displayStruct("test_struct", &ts, 0, .{ .standard = .{} }, .{}, &al);
-
-        //        const uo: dvui.struct_ui.StructOptions(U1) = .initDefaults(.{ .a = .{} });
-        //        const so: dvui.struct_ui.StructOptions(StructOfUnion1) = .initDefaults(.{});
-        //        dvui.struct_ui.displayStruct("struct_of_union1", &struct_of_union1, 1, .{ .standard = .{} }, .{ uo, so }, &al);
-        //        }
-        //
-        //sliceFieldWidget2(@src(), "slice7", &testStruct.slice7, .{}, &al);
-        //dvui.struct_ui.intFieldWidget2(@src(), "int1", &testStruct.int1, .{}, &al);
-        //dvui.struct_ui.intFieldWidget2(@src(), "uint2", &testStruct.uint2, .{}, &al);
-        //var buf = gpa.alloc(u8, 50) catch return;
-        //buf = dvui.struct_ui.textFieldWidgetBuf(@src(), "slice5", &testStruct.slice5, .{}, buf, &al);
-        //if (!first_change) {
-        //    gpa.free(buf);
-        //} else {
-        //    first_change = false;
-        //}
-        //processWidget(@src(), "slice7", &testStruct.slice7, &al);
-        //if (dvui.struct_ui.optionalFieldWidget2(@src(), "slice_opt10", &testStruct.slice_opt10, .{}, &al)) |optional_box| {
-        //    defer optional_box.deinit();
-        //    testStruct.slice_opt10 = testStruct.slice7;
-        //    processWidget(@src(), "", &testStruct.slice_opt10.?, &al);
-        //} else {
-        //    testStruct.slice_opt10 = null;
-        //}
-
-        //std.debug.print("slice 5 = {s}\n", .{testStruct.slice5});
-        //_ = dvui.separator(@src(), .{ .expand = .horizontal });
-        //wholeStruct(@src(), &testStruct, 0);
-        //_ = dvui.separator(@src(), .{ .expand = .horizontal });
-        //wholeStruct(@src(), &testStruct, 1);
-        //_ = dvui.separator(@src(), .{ .expand = .horizontal });
-        //wholeStruct(@src(), &opts, 1);
-        //_ = dvui.separator(@src(), .{ .expand = .horizontal });
+        dvui.struct_ui.displayStruct("test_struct", &ts, 0, .{ .standard = .{} }, .{}, .{}, &al);
     }
-    if (false) {
-        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
-        defer scroll.deinit();
-        var al = dvui.Alignment.init(@src(), 0);
-        defer al.deinit();
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+    defer scroll.deinit();
+    var al = dvui.Alignment.init(@src(), 0);
+    defer al.deinit();
 
-        var max_size_opts: dvui.struct_ui.StructOptions(dvui.Options.MaxSize) = .initDefaults(.{ .h = 100, .w = 100 });
-        //var max_size_opts: dvui.struct_ui.StructOptions(dvui.Options.MaxSize) = .initDefaults(null);
-        max_size_opts.options.put(.w, .{ .number = .{ .min = -2, .max = dvui.max_float_safe } });
-        max_size_opts.options.put(.h, .{ .number = .{ .min = -2, .max = dvui.max_float_safe } });
+    var max_size_opts: dvui.struct_ui.StructOptions(dvui.Options.MaxSize) = .initDefaults(.{ .h = 100, .w = 100 });
+    max_size_opts.options.put(.w, .{ .number = .{ .min = -2, .max = dvui.max_float_safe } });
+    max_size_opts.options.put(.h, .{ .number = .{ .min = -2, .max = dvui.max_float_safe } });
 
-        const font_opts: dvui.struct_ui.StructOptions(dvui.Font) = .initDefaults(.{ .size = 10, .name = "Nope" });
-        // const font_opts: dvui.struct_ui.StructOptions(dvui.Font) = .initDefaults(null);
-        var options_options: dvui.struct_ui.StructOptions(dvui.Options) = .initDefaults(.{});
-        options_options.options.put(.name, .{ .text = .{ .buffer = &name_buf } });
+    const font_opts: dvui.struct_ui.StructOptions(dvui.Font) = .initDefaults(.{ .size = 10, .id = .Vera });
+    const options_options: dvui.struct_ui.StructOptions(dvui.Options) = .initDefaults(.{});
 
-        const color_options: dvui.struct_ui.StructOptions(dvui.Color) = .initDefaults(.{});
-        const con_options = dvui.struct_ui.StructOptions(dvui.Options.ColorOrName).initDefaults(.{ .color = .{} });
-        dvui.struct_ui.displayStruct("dvui.Options", &dvui_opts, 1, .{ .standard = .{} }, .{ options_options, max_size_opts, font_opts, color_options, con_options }, &al);
-        // wholeStruct(@src(), "dvui.Options", &dvui_opts, 1, .{ options_options, max_size_opts, font_opts, color_options, con_options });
-        //wholeStruct(@src(), "opts", &opts, 1);
-        //        wholeStruct(@src(), "test_struct", &testStruct, 1);
-    }
+    const color_options: dvui.struct_ui.StructOptions(dvui.Color) = .initDefaults(.{});
+    dvui.struct_ui.displayStruct(
+        "dvui.Options",
+        &dvui_opts,
+        1,
+        .{ .standard = .{} },
+        .{ options_options, max_size_opts, font_opts, color_options },
+        .{},
+        &al,
+    );
 }
 
 var name_buf: [50]u8 = undefined;

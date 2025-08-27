@@ -61,10 +61,11 @@ pub fn StructAdapters(Struct: type, AdapterT: type) type {
         } }),
 
         pub fn deinit(self: *@This()) void {
-            for (std.meta.fields(self.adapters)) |field| {
-                const adapter = &@field(@TypeOf(self.adapters), field.name);
-                if (@hasDecl(@TypeOf(adapter), "deinit")) {
-                    adapter.deinit();
+            inline for (std.meta.fields(AdapterT)) |field| {
+                const adapter_ptr = &@field(self.adapters, field.name);
+
+                if (std.meta.hasFn(@TypeOf(adapter_ptr.*), "deinit")) {
+                    adapter_ptr.deinit();
                 }
             }
         }
@@ -95,21 +96,9 @@ pub const StaticStringAdapter = struct {
     }
 
     pub fn setValue(self: *StaticStringAdapter, field_value_ptr: *[]const u8, str: []const u8) void {
-        std.debug.print("SSA: Setvalue() - self = {x} field_value_ptr = {x}\n", .{ &self, field_value_ptr });
-        std.debug.print("SSA: value = {s}\n", .{field_value_ptr.*});
         if (self.alloc_str) |alloc_str| {
-            std.debug.print("free\n", .{});
-
             self.allocator.free(alloc_str);
         }
-
-        std.debug.print("alloc\n", .{});
-        std.debug.print("alloc_str = {?s}\n", .{self.alloc_str});
-        _ = self.allocator.alloc(u8, 10) catch {};
-        std.debug.print("allocator = {}\n", .{self.allocator});
-        std.debug.print("str = {s}\n", .{str});
-        //self.alloc_str = "abcd";
-        std.debug.print("tag = {?s}\n", .{self.tag});
 
         self.alloc_str = self.allocator.alloc(u8, str.len) catch {
             self.alloc_str = null;
@@ -117,15 +106,14 @@ pub const StaticStringAdapter = struct {
             // TODO: Log error
             return;
         };
-        std.debug.print("pmc\n", .{});
         @memcpy(@constCast(self.alloc_str.?), str);
-        std.debug.print("ppmc\n", .{});
 
         field_value_ptr.* = self.alloc_str.?;
         std.debug.print("SETVALUE = {s} : {s}\n", .{ str, self.alloc_str.? });
     }
 
     pub fn deinit(self: *StaticStringAdapter) void {
+        std.debug.print("deinit\n", .{});
         if (self.alloc_str) |alloc_str| {
             self.allocator.free(alloc_str);
             self.alloc_str = null;
@@ -606,7 +594,6 @@ pub fn displayField(
     adapter: anytype, // Must implement setValue method.
     al: *dvui.Alignment,
 ) void {
-    std.debug.print("DisplayField for {s} - Adapter = {s}\n", .{ field_name, @typeName(@TypeOf(adapter)) });
     switch (@typeInfo(@TypeOf(field_value_ptr.*))) {
         .int, .float => displayNumber(field_name, field_value_ptr, field_option, adapter, al),
         .bool => displayBool(field_name, field_value_ptr, field_option, adapter, al),
@@ -661,7 +648,7 @@ pub fn displayNumber(field_name: []const u8, field_value_ptr: anytype, field_opt
 
 pub fn displayEnum(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, adapter: anytype, al: *dvui.Alignment) void {
     _ = adapter;
-    validateFieldPtrType(.@"enum:", "displayEnum", @TypeOf(field_value_ptr));
+    validateFieldPtrType(.@"enum", "displayEnum", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .standard)) return;
     enumFieldWidget(@src(), field_name, field_value_ptr, field_option.standard, al);
 }
@@ -704,7 +691,7 @@ pub fn displayArray(
 
         // Use the passthrough adapter to display the elements. In future allow user to supply the
         // adapter for display of array elements.
-        var passthrough: PassthroughAdapter(@TypeOf(field_value_ptr.*[0])) = .{};
+        const passthrough: PassthroughAdapter(@TypeOf(field_value_ptr.*[0])) = .{};
         for (field_value_ptr, 0..) |*val, i| {
             // TODO: Aligmmnent
             var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = i });
@@ -799,9 +786,12 @@ pub fn displayUnion(
             const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = @intFromEnum(active_tag) });
             defer hbox.deinit();
             const struct_options: StructOptions(UnionT) = findMatchingStructOption(UnionT, options) orelse .initDefaults(null);
+
             // Will only display if an option exists for this field.
             if (struct_options.options.get(active_tag)) |union_field_option| {
-                displayField(@tagName(active_tag), active, depth, union_field_option, options, al);
+                // TODO: Need to find the correct adapter. Using defaults for now
+                const union_adapter: StructAdapters(@TypeOf(active.*), struct {}) = .{ .adapters = .{} };
+                displayField(@tagName(active_tag), active, depth, union_field_option, options, .{&union_adapter}, al);
             }
         },
     }
@@ -825,7 +815,11 @@ pub fn displayOptional(
             field_value_ptr.* = defaultValue(optional.child, field_option, options); // If there is no default value, it will remain null.
         }
         if (field_value_ptr.*) |*val| {
-            displayField(field_name, val, depth, field_option, options, al);
+            // TODO: Can't use the passed in adapter as it will be for an optional.
+            // I suppose when creating the passthroug adapter, we should check for optionals and do it on the child type.
+            // Sigh this needs to do StructAdapter if it is a struct or union vs passthrough for others.
+            const optional_adapter: PassthroughAdapter(@TypeOf(field_value_ptr.*.?)) = comptime .{};
+            displayField(field_name, val, depth, field_option, options, &optional_adapter, al);
         }
     } else {
         field_value_ptr.* = null;
@@ -863,7 +857,7 @@ pub fn displayStruct(
     comptime depth: usize,
     field_option: FieldOptions,
     options: anytype,
-    comptime adapters: anytype,
+    adapters: anytype,
     al: *dvui.Alignment,
 ) void {
     validateFieldPtrType(.@"struct", "displayStruct", @TypeOf(field_value_ptr));
@@ -879,7 +873,7 @@ pub fn displayStruct(
                 break :blk adapter_ptr;
             }
         }
-        break :blk &StructAdapters(StructT, struct {}){};
+        break :blk &StructAdapters(StructT, struct {}){ .adapters = .{} };
     };
 
     if (dvui.expander(@src(), field_name, .{ .default_expanded = true }, .{ .expand = .horizontal })) {
@@ -1000,25 +994,25 @@ pub fn findMatchingStructOption(T: type, struct_options: anytype) ?StructOptions
 }
 
 // TODO: The adapters are mutable, so need to pass a pointer to them.
-pub fn FieldAdapterType(StructT: type, field_name: []const u8, adapters: anytype) type {
-    if (@TypeOf(adapters) == void) return; // TODO: This isn't right
-    inline for (adapters.*) |adapter| {
-        if (@TypeOf(adapter.*).StructT == StructT) {
-            if (@hasField(@TypeOf(adapter.adapters), field_name)) {
-                return @TypeOf(@field(adapter.adapters, field_name));
-            }
-        }
-    }
-    return PassthroughAdapter(@FieldType(StructT, field_name));
-}
-
-pub fn findMatchingFieldAdapter(StructT: type, comptime field_name: []const u8, comptime adapters: anytype) ?*FieldAdapterType(StructT, field_name, adapters) {
-    inline for (adapters.*) |adapter| {
-        if (@TypeOf(adapter.*).StructT == StructT) {
-            if (@hasField(@TypeOf(adapter.adapters), field_name)) {
-                return &@field(adapter.adapters, field_name); // TODO: FIX FIX
-            }
-        }
-    }
-    return null;
-}
+//pub fn FieldAdapterType(StructT: type, field_name: []const u8, adapters: anytype) type {
+//    if (@TypeOf(adapters) == void) return; // TODO: This isn't right
+//    inline for (adapters.*) |adapter| {
+//        if (@TypeOf(adapter.*).StructT == StructT) {
+//            if (@hasField(@TypeOf(adapter.adapters), field_name)) {
+//                return @TypeOf(@field(adapter.adapters, field_name));
+//            }
+//        }
+//    }
+//    return PassthroughAdapter(@FieldType(StructT, field_name));
+//}
+//
+//pub fn findMatchingFieldAdapter(StructT: type, comptime field_name: []const u8, comptime adapters: anytype) ?*FieldAdapterType(StructT, field_name, adapters) {
+//    inline for (adapters.*) |adapter| {
+//        if (@TypeOf(adapter.*).StructT == StructT) {
+//            if (@hasField(@TypeOf(adapter.adapters), field_name)) {
+//                return &@field(adapter.adapters, field_name); // TODO: FIX FIX
+//            }
+//        }
+//    }
+//    return null;
+//}
