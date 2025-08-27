@@ -94,12 +94,12 @@ pub const TextLayoutWidget = widgets.TextLayoutWidget;
 pub const TreeWidget = widgets.TreeWidget;
 pub const VirtualParentWidget = widgets.VirtualParentWidget;
 pub const GridWidget = widgets.GridWidget;
-const se = @import("structEntry.zig");
-pub const structEntry = se.structEntry;
-pub const structEntryEx = se.structEntryEx;
-pub const structEntryAlloc = se.structEntryAlloc;
-pub const structEntryExAlloc = se.structEntryExAlloc;
-pub const StructFieldOptions = se.StructFieldOptions;
+pub const struct_ui = @import("struct_ui.zig");
+//pub const structEntry = se.structEntry;
+//pub const structEntryEx = se.structEntryEx;
+//pub const structEntryAlloc = se.structEntryAlloc;
+//pub const structEntryExAlloc = se.structEntryExAlloc;
+//pub const StructFieldOptions = se.StructFieldOptions;
 
 pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
@@ -415,8 +415,9 @@ pub const Alignment = struct {
         dvui.dataSet(null, self.id, "_max_align", self.next);
         if (self.max) |m| {
             if (self.next != m) {
+                //std.debug.print("{}:{}\n", .{ self.next, m });
                 // something changed
-                refresh(null, @src(), self.id);
+                //                refresh(null, @src(), self.id);
             }
         }
         self.* = undefined;

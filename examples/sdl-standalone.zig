@@ -59,7 +59,6 @@ pub fn main() !void {
     defer win.deinit();
 
     var interrupted = false;
-
     main_loop: while (true) {
 
         // beginWait coordinates with waitTime below to run frames only when needed
@@ -77,7 +76,8 @@ pub fn main() !void {
         _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 255);
         _ = SDLBackend.c.SDL_RenderClear(backend.renderer);
 
-        const keep_running = gui_frame();
+        const keep_running = true;
+        gui_frame();
         if (!keep_running) break :main_loop;
 
         // marks end of dvui frame, don't call dvui functions after this
@@ -94,20 +94,129 @@ pub fn main() !void {
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);
         interrupted = try backend.waitEventTimeout(wait_event_micros);
-
-        // Example of how to show a dialog from another thread (outside of win.begin/win.end)
-        if (show_dialog_outside_frame) {
-            show_dialog_outside_frame = false;
-            dvui.dialog(@src(), .{}, .{ .window = &win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
-        }
     }
 }
 
-// both dvui and SDL drawing
-// return false if user wants to exit the app
-fn gui_frame() bool {
-    const backend = g_backend orelse return false;
+const C1 = struct {
+    value: usize = 0,
+};
 
+const C2 = struct {
+    value2: f32 = 0,
+};
+
+const TestUnion = union(enum) {
+    c1: C1,
+    c2: C2,
+};
+
+var c1: C1 = .{};
+
+const TestStruct = struct {
+    int1: i32 = 42,
+    oint1: ?i32 = 43,
+    uint2: usize = 38,
+    rect3: dvui.Rect = .all(2),
+    union4: TestUnion = .{ .c2 = .{ .value2 = 44 } },
+    slice5: []const u8 = "ABCDEF",
+    slice7: []u8 = &test_buf,
+    arr_ptr9: *[20]u8 = &test_buf,
+    array8: [13]u8 = @splat('y'),
+    slice_opt10: ?[]u8 = &test_buf,
+    struct_ptr_11: *C1 = &c1, // TODO: FIX
+    struct_slice: []TestStruct = &array_of_struct,
+
+    pub const structui_options: dvui.struct_ui.StructOptions(TestStruct) = .init(.{
+        .int1 = .{ .number = .{ .min = 5, .max = 50, .widget_type = .slider } },
+        .slice7 = .{ .text = .{ .display = .read_only } },
+        .uint2 = .{ .number = .{ .display = .none } },
+    }, null);
+};
+
+var array_of_struct: [3]TestStruct = .{ .{}, .{}, .{} };
+
+// All possible runtime basic types.
+const BasicTypes = struct {
+    var static_int: usize = 44;
+    i8: i8 = 1,
+    u8: u8 = 2,
+    i16: i16 = 3,
+    u16: u16 = 4,
+    i32: i32 = 5,
+    u32: u32 = 6,
+    i64: i64 = 7,
+    u64: u64 = 8,
+    i128: i128 = 9,
+    u128: u128 = 10,
+    isize: isize = 11,
+    usize: usize = 12,
+    c_char: c_char = 'b',
+    c_short: c_short = 13,
+    c_ushort: c_ushort = 14,
+    c_int: c_int = 15,
+    c_uint: c_uint = 16,
+    c_long: c_long = 17,
+    c_ulong: c_ulong = 18,
+    c_longlong: c_longlong = 19,
+    c_ulonglong: c_ulonglong = 20,
+    f16: f16 = 1.1,
+    f32: f32 = 2.2,
+    f64: f64 = 3.3,
+    f80: f80 = 4.4,
+    f128: f128 = 5.5,
+    bool: bool = true,
+    void: void = {}, // The only possible value for `void`
+    anyerror: anyerror = error.DefaultError, // Initialized to a specific error
+};
+
+const S1 = struct {
+    a: usize = 42,
+};
+
+const Enum = enum { x, y, z };
+
+const U1 = union(enum) {
+    a: S1,
+    b2: enum { one, two, three },
+    b: f32,
+    c: Enum,
+    d: ?S1,
+};
+
+const str_global_static = "9876543210";
+var str_global_var1: [10]u8 = .{ 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j' };
+var str_global_var2: [10]u8 = .{ 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j' };
+
+const StringTest = struct {
+    array_variable: [10]u8 = .{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
+    slice_static: []const u8 = str_global_static,
+    slice_variable: []u8,
+};
+
+//const const_string_test: StringTest = .{};
+var var_string_test1: StringTest = .{ .slice_variable = &str_global_var1 };
+var var_string_test2: StringTest = .{ .slice_variable = &str_global_var2 };
+
+var test_buf: [20]u8 = @splat('z');
+var testStruct: TestStruct = .{};
+var dvui_opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5), .name = "abcdef" };
+var first_change: bool = true;
+
+var basic_types_var: BasicTypes = .{};
+const basic_types_const: BasicTypes = .{};
+
+const StructOfUnion1 = struct { u: U1 = .{ .a = .{} } };
+var struct_of_union1: StructOfUnion1 = .{};
+
+var ts: TestStruct = .{};
+
+// both dvui and SDL drawing
+fn gui_frame() void {
+    const local = struct {
+        const struct_options: dvui.struct_ui.StructOptions(StringTest) = .init(.{ .slice_static = .{ .text = .{ .display = .read_write } } }, null);
+    };
+
+    //dvui.currentWindow().debug_window_show = true;
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal });
         defer hbox.deinit();
@@ -122,133 +231,54 @@ fn gui_frame() bool {
             if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
                 m.close();
             }
-
-            if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
-                return false;
-            }
-        }
-
-        if (dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{})) |r| {
-            var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
-            defer fw.deinit();
-            _ = dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
-            _ = dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
-            _ = dvui.menuItemLabel(@src(), "Dummy Super Long", .{}, .{ .expand = .horizontal });
         }
     }
-
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
-    defer scroll.deinit();
-
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
-    const lorem = "This example shows how to use dvui in a normal application.";
-    tl.addText(lorem, .{});
-    tl.deinit();
-
-    var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    tl2.addText(
-        \\DVUI
-        \\- paints the entire window
-        \\- can show floating windows and dialogs
-        \\- example menu at the top of the window
-        \\- rest of the window is a scroll area
-    , .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
-    tl2.addText("\n\n", .{});
-    if (vsync) {
-        tl2.addText("Framerate is capped by vsync.", .{});
-    } else {
-        tl2.addText("Framerate is uncapped.", .{});
-    }
-    tl2.addText("\n\n", .{});
-    tl2.addText("Cursor is always being set by dvui.", .{});
-    tl2.addText("\n\n", .{});
-    if (dvui.useFreeType) {
-        tl2.addText("Fonts are being rendered by FreeType 2.", .{});
-    } else {
-        tl2.addText("Fonts are being rendered by stb_truetype.", .{});
-    }
-    tl2.deinit();
-
-    const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
-    if (dvui.button(@src(), label, .{}, .{})) {
-        dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
-    }
-
-    if (dvui.button(@src(), "Debug Window", .{}, .{})) {
-        dvui.toggleDebugWindow();
-    }
+    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .color_fill = dvui.themeGet().window.fill, .background = true });
+    defer hbox.deinit();
 
     {
-        var scaler = dvui.scale(@src(), .{ .scale = &scale_val }, .{ .expand = .horizontal });
-        defer scaler.deinit();
-
-        {
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-            defer hbox.deinit();
-
-            if (dvui.button(@src(), "Zoom In", .{}, .{})) {
-                scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
-            }
-
-            if (dvui.button(@src(), "Zoom Out", .{}, .{})) {
-                scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
-            }
-        }
-
-        dvui.labelNoFmt(@src(), "Below is drawn directly by the backend, not going through DVUI.", .{}, .{ .margin = .{ .x = 4 } });
-
-        var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
-        defer box.deinit();
-
-        // Here is some arbitrary drawing that doesn't have to go through DVUI.
-        // It can be interleaved with DVUI drawing.
-        // NOTE: This only works in the main window (not floating subwindows
-        // like dialogs).
-
-        // get the screen rectangle for the box
-        const rs = box.data().contentRectScale();
-
-        // rs.r is the pixel rectangle, rs.s is the scale factor (like for
-        // hidpi screens or display scaling)
-        var rect: if (SDLBackend.sdl3) SDLBackend.c.SDL_FRect else SDLBackend.c.SDL_Rect = undefined;
-        if (SDLBackend.sdl3) rect = .{
-            .x = (rs.r.x + 4 * rs.s),
-            .y = (rs.r.y + 4 * rs.s),
-            .w = (20 * rs.s),
-            .h = (20 * rs.s),
-        } else rect = .{
-            .x = @intFromFloat(rs.r.x + 4 * rs.s),
-            .y = @intFromFloat(rs.r.y + 4 * rs.s),
-            .w = @intFromFloat(20 * rs.s),
-            .h = @intFromFloat(20 * rs.s),
-        };
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 0, 255);
-        _ = SDLBackend.c.SDL_RenderFillRect(backend.renderer, &rect);
-
-        rect.x += if (SDLBackend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 255, 0, 255);
-        _ = SDLBackend.c.SDL_RenderFillRect(backend.renderer, &rect);
-
-        rect.x += if (SDLBackend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 255, 255);
-        _ = SDLBackend.c.SDL_RenderFillRect(backend.renderer, &rect);
-
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 255, 255);
-
-        if (SDLBackend.sdl3)
-            _ = SDLBackend.c.SDL_RenderLine(backend.renderer, (rs.r.x + 4 * rs.s), (rs.r.y + 30 * rs.s), (rs.r.x + rs.r.w - 8 * rs.s), (rs.r.y + 30 * rs.s))
-        else
-            _ = SDLBackend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(rs.r.x + 4 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s), @intFromFloat(rs.r.x + rs.r.w - 8 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s));
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+        defer scroll.deinit();
+        var al = dvui.Alignment.init(@src(), 0);
+        defer al.deinit();
+        dvui.struct_ui.displayStruct(
+            "var_string_test1",
+            &var_string_test1,
+            1,
+            .{ .standard = .{} },
+            .{local.struct_options},
+            &al,
+        );
     }
+    {
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+        defer scroll.deinit();
+        var al = dvui.Alignment.init(@src(), 0);
+        defer al.deinit();
 
-    if (dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
-        show_dialog_outside_frame = true;
+        dvui.struct_ui.displayStruct("test_struct", &ts, 0, .{ .standard = .{} }, .{}, &al);
     }
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+    defer scroll.deinit();
+    var al = dvui.Alignment.init(@src(), 0);
+    defer al.deinit();
 
-    // look at demo() for examples of dvui widgets, shows in a floating window
-    dvui.Examples.demo();
+    var max_size_opts: dvui.struct_ui.StructOptions(dvui.Options.MaxSize) = .initDefaults(.{ .h = 100, .w = 100 });
+    max_size_opts.options.put(.w, .{ .number = .{ .min = -2, .max = dvui.max_float_safe } });
+    max_size_opts.options.put(.h, .{ .number = .{ .min = -2, .max = dvui.max_float_safe } });
 
-    return true;
+    const font_opts: dvui.struct_ui.StructOptions(dvui.Font) = .initDefaults(.{ .size = 10, .id = .Vera });
+    const options_options: dvui.struct_ui.StructOptions(dvui.Options) = .initDefaults(.{});
+
+    const color_options: dvui.struct_ui.StructOptions(dvui.Color) = .initDefaults(.{});
+    dvui.struct_ui.displayStruct(
+        "dvui.Options",
+        &dvui_opts,
+        1,
+        .{ .standard = .{} },
+        .{ options_options, max_size_opts, font_opts, color_options },
+        &al,
+    );
 }
+
+var name_buf: [50]u8 = undefined;
