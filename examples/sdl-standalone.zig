@@ -95,7 +95,6 @@ pub fn main() !void {
         const wait_event_micros = win.waitTime(end_micros);
         interrupted = try backend.waitEventTimeout(wait_event_micros);
     }
-    local.adapters.deinit();
 }
 
 const C1 = struct {
@@ -211,19 +210,12 @@ var struct_of_union1: StructOfUnion1 = .{};
 
 var ts: TestStruct = .{};
 
-const local = struct {
-    const struct_options: dvui.struct_ui.StructOptions(StringTest) = .init(.{ .slice_static = .{ .text = .{ .display = .read_write } } }, null);
-    var adapters: dvui.struct_ui.StructAdapters(StringTest, struct { slice_static: dvui.struct_ui.StaticStringAdapter }) = .{
-        .adapters = .{
-            .slice_static = .init(gpa, "this is a tag"),
-            .array_variable = .{},
-            .slice_variable = .{},
-        },
-    };
-};
-
 // both dvui and SDL drawing
 fn gui_frame() void {
+    const local = struct {
+        const struct_options: dvui.struct_ui.StructOptions(StringTest) = .init(.{ .slice_static = .{ .text = .{ .display = .read_write } } }, null);
+    };
+
     //dvui.currentWindow().debug_window_show = true;
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal });
@@ -255,7 +247,6 @@ fn gui_frame() void {
             1,
             .{ .standard = .{} },
             .{local.struct_options},
-            .{&local.adapters},
             &al,
         );
     }
@@ -265,7 +256,7 @@ fn gui_frame() void {
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
 
-        dvui.struct_ui.displayStruct("test_struct", &ts, 0, .{ .standard = .{} }, .{}, .{}, &al);
+        dvui.struct_ui.displayStruct("test_struct", &ts, 0, .{ .standard = .{} }, .{}, &al);
     }
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
@@ -286,7 +277,6 @@ fn gui_frame() void {
         1,
         .{ .standard = .{} },
         .{ options_options, max_size_opts, font_opts, color_options },
-        .{},
         &al,
     );
 }
