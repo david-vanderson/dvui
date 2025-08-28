@@ -242,16 +242,10 @@ pub fn numberFieldWidget(
     const T = @TypeOf(field_value_ptr.*);
     switch (@typeInfo(T)) {
         .int, .float => {},
-        else => @compileError(std.fmt.comptimePrint("field_value_ptr must point to a numeric field, but is a {s}", .{@typeName(T)})),
+        else => @compileError(std.fmt.comptimePrint("field_value_ptr be a pointer to a numeric field, but is a {s}", .{@typeName(T)})),
     }
 
     const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
-
-    switch (@typeInfo(T)) {
-        .int => {},
-        .float => {},
-        else => @compileError(std.fmt.comptimePrint("{s} must be a number type, but is a {s}", .{ field_name, @typeName(T) })),
-    }
 
     switch (opt.widget_type) {
         .number_entry => {
@@ -264,7 +258,7 @@ pub fn numberFieldWidget(
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
 
-            if (comptime !read_only) {
+            if (!read_only) {
                 const maybe_num = dvui.textEntryNumber(@src(), T, .{
                     .min = opt.minValue(T),
                     .max = opt.maxValue(T),
@@ -306,7 +300,7 @@ pub fn enumFieldWidget(
 
     const T = @TypeOf(field_value_ptr.*);
     if (@typeInfo(T) != .@"enum") {
-        @compileError(std.fmt.comptimePrint("Field {s} must be an enum, but is a {s}\n", .{ field_name, @typeName(T) }));
+        @compileError(std.fmt.comptimePrint("field_value_ptr must be a pointer to an enum, but is a {s}\n", .{@typeName(T)}));
     }
 
     const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
@@ -340,7 +334,7 @@ pub fn boolFieldWidget(
 ) void {
     const T = @TypeOf(field_value_ptr.*);
     if (T != bool)
-        @compileError(std.fmt.comptimePrint("{s} must be of type bool, but is {s}.", .{ field_name, @typeName(T) }));
+        @compileError(std.fmt.comptimePrint("field_value_ptr must be a pointer to bool, but is {s}.", .{@typeName(T)}));
     if (opt.display == .none) return;
 
     const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
@@ -384,6 +378,11 @@ pub fn textFieldWidget(
     if (opt.display == .none) return;
     var box = dvui.box(src, .{ .dir = .horizontal }, .{});
     defer box.deinit();
+    const T = @TypeOf(field_value_ptr.*);
+    if (T != []u8 and T != []const u8) {
+        @compileError(std.fmt.comptimePrint("field_value_ptr must be a pointer to []u8 or []const u8, but is {s}.", .{@typeName(T)}));
+    }
+    // TODO: Add some checking for const vs read-only
 
     dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{});
     switch (opt.display) {
@@ -421,22 +420,25 @@ pub fn unionFieldWidget(
     field_value_ptr: anytype,
     opt: FieldOptions,
 ) @typeInfo(@TypeOf(field_value_ptr.*)).@"union".tag_type.? {
-    switch (opt) {
-        inline else => |field_option| if (field_option.display == .none) {
-            return field_value_ptr.*;
-        },
+    _ = field_name;
+
+    if (opt.displayMode() == .none) {
+        return field_value_ptr.*;
     }
+
     const T = @TypeOf(field_value_ptr.*);
     const valid_type: bool = valid: switch (@typeInfo(T)) {
         .@"union" => |u| {
             if (u.tag_type != null) {
                 break :valid true;
+            } else {
+                break :valid false;
             }
         },
         else => break :valid false,
     };
     if (!valid_type) {
-        @compileError(std.fmt.comptimePrint("{s} must be a tagged union field, but is a {s}\n", .{ field_name, @typeName(T) }));
+        @compileError(std.fmt.comptimePrint("field_value_ptr must be a pointer to a tagged union, but is a {s}\n", .{@typeName(T)}));
     }
 
     var box = dvui.box(src, .{ .dir = .vertical }, .{});
@@ -465,7 +467,7 @@ pub fn optionalFieldWidget(
 ) bool {
     const T = @TypeOf(field_value_ptr.*);
     if (@typeInfo(T) != .optional) {
-        @compileError(std.fmt.comptimePrint("{s} must be an optional field, but is a {s}\n", .{ field_name, @typeName(T) }));
+        @compileError(std.fmt.comptimePrint("field_value_ptr must be a pointer to an optional field, but is a {s}\n", .{@typeName(T)}));
     }
     var choice: usize = if (field_value_ptr.* == null) 0 else 1; // 0 = Null, 1 = Not Null
 
@@ -539,12 +541,13 @@ pub fn displayField(
 }
 
 pub fn displayNumber(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+    validateFieldPtrType(&.{ .int, .float }, "displayEnum", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .number)) return;
     numberFieldWidget(@src(), field_name, field_value_ptr, field_option.number, al);
 }
 
 pub fn displayEnum(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
-    validateFieldPtrType(.@"enum", "displayEnum", @TypeOf(field_value_ptr));
+    validateFieldPtrType(&.{.@"enum"}, "displayEnum", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .standard)) return;
     enumFieldWidget(@src(), field_name, field_value_ptr, field_option.standard, al);
 }
@@ -561,7 +564,7 @@ pub fn displayString(field_name: []const u8, field_value_ptr: anytype, field_opt
 //}
 
 pub fn displayBool(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
-    validateFieldPtrType(.bool, "displayBool", @TypeOf(field_value_ptr));
+    validateFieldPtrType(&.{.bool}, "displayBool", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .standard)) return;
     boolFieldWidget(@src(), field_name, field_value_ptr, field_option.standard, al);
 }
@@ -647,7 +650,7 @@ pub fn displayUnion(
     options: anytype,
     al: *dvui.Alignment,
 ) void {
-    validateFieldPtrType(.@"union", "displayUnion", @TypeOf(field_value_ptr));
+    validateFieldPtrType(&.{.@"union"}, "displayUnion", @TypeOf(field_value_ptr));
     const current_choice = std.meta.activeTag(field_value_ptr.*);
     if (dvui.expander(
         @src(),
@@ -709,7 +712,7 @@ pub fn displayOptional(
     options: anytype,
     al: *dvui.Alignment,
 ) void {
-    validateFieldPtrType(.optional, "displayOptional", @TypeOf(field_value_ptr));
+    validateFieldPtrType(&.{.optional}, "displayOptional", @TypeOf(field_value_ptr));
     const optional = @typeInfo(@TypeOf(field_value_ptr.*)).optional;
 
     if (optionalFieldWidget(@src(), field_name, field_value_ptr, field_option, al)) {
@@ -735,7 +738,7 @@ pub fn displayPointer(
     options: anytype,
     al: *dvui.Alignment,
 ) void {
-    validateFieldPtrType(.pointer, "displayPointer", @TypeOf(field_value_ptr));
+    validateFieldPtrType(&.{.pointer}, "displayPointer", @TypeOf(field_value_ptr));
 
     const ptr = @typeInfo(@TypeOf(field_value_ptr.*)).pointer;
     if (ptr.size == .one) {
@@ -754,7 +757,7 @@ pub fn displayStruct(
     field_option: FieldOptions,
     options: anytype,
 ) void {
-    validateFieldPtrType(.@"struct", "displayStruct", @TypeOf(field_value_ptr));
+    validateFieldPtrType(&.{.@"struct"}, "displayStruct", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .standard)) return;
     if (field_option.standard.display == .none) return;
 
@@ -844,14 +847,16 @@ pub fn validFieldOptionsType(field_name: []const u8, field_option: FieldOptions,
     return true;
 }
 
-pub fn validateFieldPtrType(comptime required_type: std.builtin.TypeId, comptime caller: []const u8, comptime ptr_type: type) void {
+pub fn validateFieldPtrType(comptime required_types: []const std.builtin.TypeId, comptime caller: []const u8, comptime ptr_type: type) void {
     const type_info = @typeInfo(ptr_type);
     switch (type_info) {
         .pointer => |ptr| {
             switch (ptr.size) {
                 .one => {
-                    if (@typeInfo(ptr.child) == required_type) {
-                        return;
+                    inline for (required_types) |required_t| {
+                        if (@typeInfo(ptr.child) == required_t) {
+                            return;
+                        }
                     }
                 },
                 else => {}, // Fallthrough
@@ -860,8 +865,8 @@ pub fn validateFieldPtrType(comptime required_type: std.builtin.TypeId, comptime
         else => {}, // Fallthrough
     }
     @compileError(std.fmt.comptimePrint(
-        "{s} requires a pointer to a {s}, but received a {s} for {s}.",
-        .{ caller, @tagName(required_type), @tagName(type_info), @typeName(ptr_type) },
+        "{s} requires a pointer to a {any}, but received a {s} for {s}.",
+        .{ caller, required_types, @tagName(type_info), @typeName(ptr_type) },
     ));
 }
 
