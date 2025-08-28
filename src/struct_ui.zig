@@ -409,7 +409,7 @@ pub fn textFieldWidget(
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
 
-            dvui.label(@src(), " : {s}", .{field_value_ptr.*}, .{});
+            dvui.label(@src(), "{s}", .{field_value_ptr.*}, .{});
         },
         .none => unreachable, // Handled above.
     }
@@ -461,26 +461,25 @@ pub fn optionalFieldWidget(
     field_name: []const u8,
     field_value_ptr: anytype,
     opts: FieldOptions,
+    alignment: *dvui.Alignment,
 ) bool {
     const T = @TypeOf(field_value_ptr.*);
     if (@typeInfo(T) != .optional) {
         @compileError(std.fmt.comptimePrint("{s} must be an optional field, but is a {s}\n", .{ field_name, @typeName(T) }));
     }
+    var choice: usize = if (field_value_ptr.* == null) 0 else 1; // 0 = Null, 1 = Not Null
 
-    const box = dvui.box(src, .{ .dir = .vertical }, .{});
-    defer box.deinit();
-    var checkbox_state: bool = field_value_ptr.* != null;
+    var hbox = dvui.box(src, .{ .dir = .horizontal }, .{});
+    defer hbox.deinit();
+    dvui.label(@src(), "{s}?", .{opts.displayLabel(field_name)}, .{});
     {
-        const display_name = switch (opts) {
-            inline else => |opt| opt.label orelse field_name,
-        };
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-        defer hbox.deinit();
-        dvui.label(@src(), "{s}?", .{display_name}, .{});
-        _ = dvui.checkbox(@src(), &checkbox_state, null, .{});
-    }
+        var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        alignment.record(hbox.data().id, hbox_aligned.data());
 
-    return checkbox_state;
+        _ = dvui.dropdown(@src(), &.{ "Null", "Not Null" }, &choice, .{});
+    }
+    return choice == 1; // Not null
 }
 
 /// Display a field within a container.
@@ -713,19 +712,18 @@ pub fn displayOptional(
     validateFieldPtrType(.optional, "displayOptional", @TypeOf(field_value_ptr));
     const optional = @typeInfo(@TypeOf(field_value_ptr.*)).optional;
 
-    if (optionalFieldWidget(@src(), field_name, field_value_ptr, field_option)) {
+    if (optionalFieldWidget(@src(), field_name, field_value_ptr, field_option, al)) {
         if (field_value_ptr.* == null) {
             field_value_ptr.* = defaultValue(optional.child, field_option, options); // If there is no default value, it will remain null.
+
         }
         if (field_value_ptr.*) |*val| {
             displayField(field_name, val, depth, field_option, options, al);
+        } else {
+            dvui.log.debug("struct_ui: Optional field {s} cannot be selected as no default value is provided.", .{field_name});
         }
     } else {
         field_value_ptr.* = null;
-    }
-
-    if (field_value_ptr.* == null) {
-        dvui.label(@src(), "{s} is null", .{field_name}, .{});
     }
 }
 
