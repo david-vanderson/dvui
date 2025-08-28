@@ -247,7 +247,6 @@ fn gui_frame() void {
             1,
             .{ .standard = .{} },
             .{local.struct_options},
-            &al,
         );
     }
     {
@@ -256,12 +255,10 @@ fn gui_frame() void {
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
 
-        dvui.struct_ui.displayStruct("test_struct", &ts, 0, .{ .standard = .{} }, .{}, &al);
+        dvui.struct_ui.displayStruct("test_struct", &ts, 1, .{ .standard = .{} }, .{});
     }
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
-    var al = dvui.Alignment.init(@src(), 0);
-    defer al.deinit();
 
     var max_size_opts: dvui.struct_ui.StructOptions(dvui.Options.MaxSize) = .initDefaults(.{ .h = 100, .w = 100 });
     max_size_opts.options.put(.w, .{ .number = .{ .min = -2, .max = dvui.max_float_safe } });
@@ -277,7 +274,6 @@ fn gui_frame() void {
         1,
         .{ .standard = .{} },
         .{ options_options, max_size_opts, font_opts, color_options },
-        &al,
     );
 }
 

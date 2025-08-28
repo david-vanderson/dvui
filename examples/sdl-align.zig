@@ -86,14 +86,14 @@ pub fn main() !void {
         try backend.renderPresent();
 
         // waitTime and beginWait combine to achieve variable framerates
-        const wait_event_micros = win.waitTime(end_micros, null);
+        const wait_event_micros = win.waitTime(end_micros);
         interrupted = try backend.waitEventTimeout(wait_event_micros);
     }
 }
 
 fn makeLevel(src: std.builtin.SourceLocation, al: *dvui.Alignment) *dvui.BoxWidget {
     al.spacer();
-    const box = dvui.box(src, .vertical, .{ .border = .{ .x = 1 } });
+    const box = dvui.box(src, .{ .dir = .vertical }, .{ .border = .{ .x = 1 } });
     return box;
 }
 
@@ -113,35 +113,47 @@ fn gui_frame() void {
             }
         }
     }
-    var vbox = dvui.box(@src(), .vertical, .{ .color_fill = .fill_window, .background = true, .expand = .both });
+    var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{ .color_fill = dvui.themeGet().window.fill, .background = true, .expand = .both });
     defer vbox.deinit();
 
     {
+        var al1: dvui.Alignment = .init(@src(), 0);
+        defer al1.deinit();
         if (dvui.expander(@src(), "Struct 1", .{ .default_expanded = true }, .{})) {
-            var hbox = dvui.box(@src(), .vertical, .{
+            var hbox = dvui.box(@src(), .{ .dir = .vertical }, .{
                 .expand = .vertical,
                 .border = .{ .x = 1 },
                 .background = true,
                 .margin = .{ .w = 12, .x = 12 },
             });
             defer hbox.deinit();
-            dvui.labelNoFmt(@src(), "Testing", .{}, .{});
-            dvui.labelNoFmt(@src(), "Testing", .{}, .{});
-            dvui.labelNoFmt(@src(), "Testing", .{}, .{});
+            makeLabel(@src(), "short", "looooooooooooong", &al1);
+            makeLabel(@src(), "mediummmmmm", "short", &al1);
+            makeLabel(@src(), "looooooooooooong", "mediummmmmm", &al1);
+            var al2: dvui.Alignment = .init(@src(), 0);
+            defer al2.deinit();
             if (dvui.expander(@src(), "Struct 2", .{ .default_expanded = true }, .{})) {
-                var hbox2 = dvui.box(@src(), .vertical, .{
+                var hbox2 = dvui.box(@src(), .{ .dir = .vertical }, .{
                     .expand = .vertical,
                     .border = .{ .x = 1 },
                     .background = true,
                     .margin = .{ .w = 12, .x = 12 },
                 });
                 defer hbox2.deinit();
-                dvui.labelNoFmt(@src(), "Testing2", .{}, .{});
-                dvui.labelNoFmt(@src(), "Testing2", .{}, .{});
-                dvui.labelNoFmt(@src(), "Testing2", .{}, .{});
+                makeLabel(@src(), "short", "looooooooooooong", &al2);
+                makeLabel(@src(), "mediummmmmm", "short", &al2);
+                makeLabel(@src(), "looooooooooooong", "mediummmmmm", &al2);
             }
         }
     }
+}
+
+pub fn makeLabel(src: std.builtin.SourceLocation, label: []const u8, value: []const u8, al: *dvui.Alignment) void {
+    var hbox = dvui.box(src, .{ .dir = .horizontal }, .{});
+    defer hbox.deinit();
+    dvui.labelNoFmt(@src(), label, .{}, .{});
+    al.spacer(@src(), 0);
+    dvui.labelNoFmt(@src(), value, .{}, .{});
 }
 
 pub fn defaultValue(T: type) ?T {

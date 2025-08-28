@@ -27,6 +27,18 @@ pub const FieldOptions = union(enum) {
     text: TextFieldOptions,
 
     pub const standard_options: FieldOptions = .{ .standard = .{} };
+
+    pub fn displayMode(self: FieldOptions) DisplayMode {
+        return switch (self) {
+            inline else => |fo| fo.display,
+        };
+    }
+
+    pub fn displayLabel(self: FieldOptions, field_name: []const u8) []const u8 {
+        return switch (self) {
+            inline else => |fo| if (fo.label) |label| return label else field_name,
+        };
+    }
 };
 
 /// Standard field options control the display mode and
@@ -299,7 +311,7 @@ pub fn enumFieldWidget(
 
     const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
 
-    var box = dvui.box(src, .{ .dir = .horizontal }, .{});
+    var box = dvui.box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
     defer box.deinit();
 
     dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{});
@@ -393,6 +405,10 @@ pub fn textFieldWidget(
             }
         },
         .read_only => {
+            var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
+            defer hbox_aligned.deinit();
+            alignment.record(box.data().id, hbox_aligned.data());
+
             dvui.label(@src(), " : {s}", .{field_value_ptr.*}, .{});
         },
         .none => unreachable, // Handled above.
@@ -404,9 +420,7 @@ pub fn unionFieldWidget(
     field_name: []const u8,
     field_value_ptr: anytype,
     opt: FieldOptions,
-    alignment: *dvui.Alignment,
 ) @typeInfo(@TypeOf(field_value_ptr.*)).@"union".tag_type.? {
-    _ = alignment;
     switch (opt) {
         inline else => |field_option| if (field_option.display == .none) {
             return field_value_ptr.*;
@@ -433,11 +447,6 @@ pub fn unionFieldWidget(
     {
         var hbox = dvui.box(@src(), .{}, .{});
         defer hbox.deinit();
-        //const label = opt.label_override orelse field_name; // TODO:
-        const label = field_name;
-        if (label.len != 0) {
-            dvui.label(@src(), "{s}", .{label}, .{});
-        }
         inline for (entries, 0..) |entry, i| {
             if (dvui.radio(@src(), choice == std.meta.stringToEnum(@TypeOf(choice), entry.name), entry.name, .{ .id_extra = i })) {
                 choice = std.meta.stringToEnum(@TypeOf(choice), entry.name).?; // This should never fail.
@@ -452,9 +461,7 @@ pub fn optionalFieldWidget(
     field_name: []const u8,
     field_value_ptr: anytype,
     opts: FieldOptions,
-    alignment: *dvui.Alignment,
 ) bool {
-    _ = alignment; // TODO ?
     const T = @TypeOf(field_value_ptr.*);
     if (@typeInfo(T) != .optional) {
         @compileError(std.fmt.comptimePrint("{s} must be an optional field, but is a {s}\n", .{ field_name, @typeName(T) }));
@@ -511,7 +518,7 @@ pub fn displayField(
         .@"union" => displayUnion(field_name, field_value_ptr, depth, field_option, options, al),
         .@"struct" => {
             if (depth > 0)
-                displayStruct(field_name, field_value_ptr, depth - 1, field_option, options, al);
+                displayStruct(field_name, field_value_ptr, depth - 1, field_option, options);
         },
         .type,
         .void,
@@ -568,7 +575,13 @@ pub fn displayArray(
     options: anytype,
     al: *dvui.Alignment,
 ) void {
-    if (dvui.expander(@src(), field_name, .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+    _ = al;
+    if (dvui.expander(
+        @src(),
+        field_option.displayLabel(field_name),
+        .{ .default_expanded = true },
+        .{ .expand = .horizontal },
+    )) {
         var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{
             .expand = .vertical,
             .border = .{ .x = 1 },
@@ -576,7 +589,8 @@ pub fn displayArray(
             .margin = .{ .w = 12, .x = 12 },
         });
         defer vbox.deinit();
-
+        var alignment: dvui.Alignment = .init(@src(), depth);
+        defer alignment.deinit();
         for (field_value_ptr, 0..) |*val, i| {
             // TODO: Aligmmnent
             var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = i });
@@ -584,7 +598,7 @@ pub fn displayArray(
 
             var field_name_buf: [20]u8 = undefined; // 20 chars = u64
             const field_name_str = std.fmt.bufPrint(&field_name_buf, "{d}", .{i}) catch "#";
-            displayField(field_name_str, val, depth, field_option, options, al);
+            displayField(field_name_str, val, depth, field_option, options, &alignment);
         }
     }
 }
@@ -597,7 +611,13 @@ pub fn displaySlice(
     options: anytype,
     al: *dvui.Alignment,
 ) void {
-    if (dvui.expander(@src(), field_name, .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+    _ = al;
+    if (dvui.expander(
+        @src(),
+        field_option.displayLabel(field_name),
+        .{ .default_expanded = true },
+        .{ .expand = .horizontal },
+    )) {
         var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{
             .expand = .vertical,
             .border = .{ .x = 1 },
@@ -605,16 +625,17 @@ pub fn displaySlice(
             .margin = .{ .w = 12, .x = 12 },
         });
         defer vbox.deinit();
+        var alignment: dvui.Alignment = .init(@src(), depth);
+        defer alignment.deinit();
 
         for (field_value_ptr.*, 0..) |*val, i| {
-            // TODO: Aligmmnent
-
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = i });
-            defer hbox.deinit();
+            var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .id_extra = i, .margin = alignment.margin(vbox.data().id) });
+            defer hbox_aligned.deinit();
+            alignment.record(vbox.data().id, hbox_aligned.data());
 
             var field_name_buf: [20]u8 = undefined; // 20 chars = u64
             const field_name_str = std.fmt.bufPrint(&field_name_buf, "{d}", .{i}) catch "#";
-            displayField(field_name_str, val, depth, field_option, options, al);
+            displayField(field_name_str, val, depth, field_option, options, &alignment);
         }
     }
 }
@@ -629,48 +650,55 @@ pub fn displayUnion(
 ) void {
     validateFieldPtrType(.@"union", "displayUnion", @TypeOf(field_value_ptr));
     const current_choice = std.meta.activeTag(field_value_ptr.*);
-    var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{
-        .expand = .vertical,
-        .border = .{ .x = 1 },
-        .background = true,
-        .margin = .{ .w = 12, .x = 12 },
-    });
-    defer vbox.deinit();
+    if (dvui.expander(
+        @src(),
+        field_option.displayLabel(field_name),
+        .{ .default_expanded = true },
+        .{ .expand = .horizontal },
+    )) {
+        var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{
+            .expand = .vertical,
+            .border = .{ .x = 1 },
+            .background = true,
+            .margin = .{ .w = 12, .x = 12 },
+        });
+        defer vbox.deinit();
 
-    const new_choice = unionFieldWidget(@src(), field_name, field_value_ptr, field_option, al);
-    const UnionT = @TypeOf(field_value_ptr.*);
-    if (current_choice != new_choice) {
-        switch (new_choice) {
-            inline else => |choice| {
-                const default_value = defaultValue(
-                    @FieldType(UnionT, @tagName(choice)),
-                    field_option,
-                    options,
-                );
-                if (default_value) |default| {
-                    field_value_ptr.* = @unionInit(UnionT, @tagName(choice), default);
-                } else {
-                    dvui.log.debug(
-                        "struct_ui: Union field {s}.{s} cannot be selected as no default value is provided. Field will not be selected.",
-                        .{ field_name, @tagName(choice) },
+        const new_choice = unionFieldWidget(@src(), field_name, field_value_ptr, field_option);
+        const UnionT = @TypeOf(field_value_ptr.*);
+        if (current_choice != new_choice) {
+            switch (new_choice) {
+                inline else => |choice| {
+                    const default_value = defaultValue(
+                        @FieldType(UnionT, @tagName(choice)),
+                        field_option,
+                        options,
                     );
-                    return;
+                    if (default_value) |default| {
+                        field_value_ptr.* = @unionInit(UnionT, @tagName(choice), default);
+                    } else {
+                        dvui.log.debug(
+                            "struct_ui: Union field {s}.{s} cannot be selected as no default value is provided. Field will not be selected.",
+                            .{ field_name, @tagName(choice) },
+                        );
+                        return;
+                    }
+                },
+            }
+        }
+        switch (field_value_ptr.*) {
+            inline else => |*active, active_tag| {
+                // Create the hbox so each tag gets a unique @src() to prevent accidentally sharing widgets between tags.
+                const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = @intFromEnum(active_tag) });
+                defer hbox.deinit();
+                const struct_options: StructOptions(UnionT) = findMatchingStructOption(UnionT, options) orelse .initDefaults(null);
+
+                // Will only display if an option exists for this field.
+                if (struct_options.options.get(active_tag)) |union_field_option| {
+                    displayField(@tagName(active_tag), active, depth, union_field_option, options, al);
                 }
             },
         }
-    }
-    switch (field_value_ptr.*) {
-        inline else => |*active, active_tag| {
-            // Create the hbox so each tag gets a unique @src() to prevent accidentally sharing widgets between tags.
-            const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = @intFromEnum(active_tag) });
-            defer hbox.deinit();
-            const struct_options: StructOptions(UnionT) = findMatchingStructOption(UnionT, options) orelse .initDefaults(null);
-
-            // Will only display if an option exists for this field.
-            if (struct_options.options.get(active_tag)) |union_field_option| {
-                displayField(@tagName(active_tag), active, depth, union_field_option, options, al);
-            }
-        },
     }
 }
 
@@ -685,7 +713,7 @@ pub fn displayOptional(
     validateFieldPtrType(.optional, "displayOptional", @TypeOf(field_value_ptr));
     const optional = @typeInfo(@TypeOf(field_value_ptr.*)).optional;
 
-    if (optionalFieldWidget(@src(), field_name, field_value_ptr, field_option, al)) {
+    if (optionalFieldWidget(@src(), field_name, field_value_ptr, field_option)) {
         if (field_value_ptr.* == null) {
             field_value_ptr.* = defaultValue(optional.child, field_option, options); // If there is no default value, it will remain null.
         }
@@ -727,7 +755,6 @@ pub fn displayStruct(
     comptime depth: usize,
     field_option: FieldOptions,
     options: anytype,
-    al: *dvui.Alignment,
 ) void {
     validateFieldPtrType(.@"struct", "displayStruct", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .standard)) return;
@@ -736,7 +763,12 @@ pub fn displayStruct(
     const StructT = @TypeOf(field_value_ptr.*);
     const struct_options: StructOptions(StructT) = findMatchingStructOption(StructT, options) orelse .initDefaults(null);
 
-    if (dvui.expander(@src(), field_name, .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+    if (dvui.expander(
+        @src(),
+        field_option.displayLabel(field_name),
+        .{ .default_expanded = true },
+        .{ .expand = .horizontal },
+    )) {
         var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{
             .expand = .vertical,
             .border = .{ .x = 1 },
@@ -744,6 +776,8 @@ pub fn displayStruct(
             .margin = .{ .w = 12, .x = 12 },
         });
         defer vbox.deinit();
+        var alignment: dvui.Alignment = .init(@src(), depth);
+        defer alignment.deinit();
 
         inline for (struct_options.options.values, 0..) |sub_field_option, field_num| {
             var box = dvui.box(@src(), .{ .dir = .vertical }, .{ .id_extra = field_num });
@@ -756,7 +790,7 @@ pub fn displayStruct(
                 depth,
                 sub_field_option,
                 options,
-                al,
+                &alignment,
             );
         }
     }
