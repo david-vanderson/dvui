@@ -28,7 +28,7 @@ pub fn structUI() void {
 
     dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
     {
-        dvui.struct_ui.displayStruct("Top.instance", &Top.instance, 1, .default, .{});
+        dvui.structUI(@src(), "Top.instance", &Top.instance, 1, .{});
     }
 
     if (dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {

@@ -1,7 +1,7 @@
 const std = @import("std");
 const dvui = @import("dvui.zig");
 
-// TODO: Log an error, or disable checkbox if optional doesn't have a default.
+// TODO:
 // Can't currently control display order or omit options. Maybe the normal init shouldn't do a default init first
 // and then need to check which fields are set with values, which I beleive is possible with the EnumArray.
 
@@ -13,7 +13,7 @@ const dvui = @import("dvui.zig");
 /// Field can be hidden in two ways:
 /// 1) Setting display = .none,
 /// 2) Omitting the FieldOption from the StructOptions passed to displayStruct.
-///
+/// TODO: (2) is not currently possible
 pub const FieldOptions = union(enum) {
     /// Control if the field should be displayed and if it is editable.
     const DisplayMode = enum { none, read_only, read_write };
@@ -60,7 +60,9 @@ pub fn StructOptions(Struct: type) type {
         default_value: ?StructT = null,
 
         /// Optionally provide overrides for some fields.
-        /// Used as .init(&. { . { .a = . { .min_value = 10}}})
+        /// Used as .init(&. { a = . { .number = . { .min_value = 10, .max_value = 100}},
+        ///                    b = . { .text = .{} }},
+        ///               null);
         pub fn init(
             options: std.enums.EnumFieldStruct(
                 StructOptionsT.Key,
