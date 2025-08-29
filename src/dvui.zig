@@ -221,8 +221,8 @@ pub const Id = enum(u64) {
         return @truncate(@intFromEnum(self));
     }
 
-    pub fn format(self: *const Id, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-        try std.fmt.format(writer, "{" ++ fmt ++ "}", .{self.asU64()});
+    pub fn format(self: *const Id, writer: *std.Io.Writer) !void {
+        try writer.print("{x}", .{self.asU64()});
     }
 };
 
@@ -287,11 +287,11 @@ pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []
     if (!builtin.strip_debug_info) std.debug.captureStackTrace(@returnAddress(), &stack_trace);
 
     const error_trace_fmt, const err_trace_arg = if (err_trace_enabled)
-        .{ "\nError trace: {?}", @errorReturnTrace() }
+        .{ "\nError trace: {?f}", @errorReturnTrace() }
     else
         .{ "{s}", "" }; // Needed to keep the arg count the same
     const stack_trace_fmt, const trace_arg = if (stack_trace_enabled)
-        .{ "\nStack trace: {}", stack_trace }
+        .{ "\nStack trace: {f}", stack_trace }
     else
         .{ "{s}", "" }; // Needed to keep the arg count the sames
 
@@ -1046,7 +1046,7 @@ pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*FontCacheEntry {
     const ttf_bytes, const name = if (cw.font_bytes.get(font.id)) |fbe|
         .{ fbe.ttf_bytes, fbe.name }
     else blk: {
-        log.warn("Font {} not in dvui database, using default", .{font.id});
+        log.warn("Font {f} not in dvui database, using default", .{font.id});
         break :blk .{ Font.default_ttf_bytes, @tagName(Font.default_font_id) };
     };
     //log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
@@ -2352,12 +2352,12 @@ pub fn subwindowAdd(id: Id, rect: Rect, rect_pixels: Rect.Physical, modal: bool,
 
         // i points just past all subwindows that want to be on top of this subwin_id
         cw.subwindows.insert(cw.gpa, i, sw) catch |err| {
-            logError(@src(), err, "Could not insert {x} {} into subwindow list, events in this other other subwindwos might not work properly", .{ id, rect_pixels });
+            logError(@src(), err, "Could not insert {f} {f} into subwindow list, events in this or other subwindows might not work properly", .{ id, rect_pixels });
         };
     } else {
         // just put it on the top
         cw.subwindows.append(cw.gpa, sw) catch |err| {
-            logError(@src(), err, "Could not insert {x} {} into subwindow list, events in this other other subwindwos might not work properly", .{ id, rect_pixels });
+            logError(@src(), err, "Could not insert {f} {f} into subwindow list, events in this or other subwindows might not work properly", .{ id, rect_pixels });
         };
     }
 }
@@ -3326,7 +3326,7 @@ pub const EventMatchOptions = struct {
 pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     if (e.handled) {
         if (builtin.mode == .Debug and opts.debug) {
-            log.debug("eventMatch {} already handled", .{e});
+            log.debug("eventMatch {f} already handled", .{e});
         }
         return false;
     }
@@ -3341,7 +3341,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                     if (wid != opts.id) {
                         // not the focused window
                         if (builtin.mode == .Debug and opts.debug) {
-                            log.debug("eventMatch {} (cleanup) focus not to this window", .{e});
+                            log.debug("eventMatch {f} (cleanup) focus not to this window", .{e});
                         }
                         return false;
                     }
@@ -3349,7 +3349,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                     if (e.target_widgetId != opts.id and (opts.focus_id == null or opts.focus_id.? != e.target_widgetId)) {
                         // not the focused widget
                         if (builtin.mode == .Debug and opts.debug) {
-                            log.debug("eventMatch {} focus not to this widget", .{e});
+                            log.debug("eventMatch {f} focus not to this widget", .{e});
                         }
                         return false;
                     }
@@ -3373,7 +3373,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             if (cw.drag_state == .dragging and cw.drag_name != null and (opts.drag_name == null or !std.mem.eql(u8, cw.drag_name.?, opts.drag_name.?))) {
                 // a cross-widget drag is happening that we don't know about
                 if (builtin.mode == .Debug and opts.debug) {
-                    log.debug("eventMatch {} drag_name ({?s}) given but current drag is ({?s})", .{ e, opts.drag_name, cw.drag_name });
+                    log.debug("eventMatch {f} drag_name ({?s}) given but current drag is ({?s})", .{ e, opts.drag_name, cw.drag_name });
                 }
                 return false;
             }
@@ -3381,7 +3381,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             if (me.floating_win != subwindowCurrentId()) {
                 // floating window is above us
                 if (builtin.mode == .Debug and opts.debug) {
-                    log.debug("eventMatch {} floating window above", .{e});
+                    log.debug("eventMatch {f} floating window above", .{e});
                 }
                 return false;
             }
@@ -3389,7 +3389,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             if (!opts.r.contains(me.p)) {
                 // mouse not in our rect
                 if (builtin.mode == .Debug and opts.debug) {
-                    log.debug("eventMatch {} not in rect", .{e});
+                    log.debug("eventMatch {f} not in rect", .{e});
                 }
                 return false;
             }
@@ -3400,7 +3400,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                 // prevents widgets that are scrolled off a
                 // scroll area from processing events
                 if (builtin.mode == .Debug and opts.debug) {
-                    log.debug("eventMatch {} not in clip", .{e});
+                    log.debug("eventMatch {f} not in clip", .{e});
                 }
                 return false;
             }
@@ -3418,7 +3418,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                 }
 
                 if (builtin.mode == .Debug and opts.debug) {
-                    log.debug("eventMatch {} captured by other widget", .{e});
+                    log.debug("eventMatch {f} captured by other widget", .{e});
                 }
                 return false;
             }
@@ -6500,7 +6500,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
 /// ```
 pub fn toUtf8(allocator: std.mem.Allocator, text: []const u8) std.mem.Allocator.Error![]const u8 {
     if (std.unicode.utf8ValidateSlice(text)) return text;
-    return std.fmt.allocPrint(allocator, "{f}", std.unicode.fmtUtf8(text));
+    return std.fmt.allocPrint(allocator, "{s}", std.unicode.fmtUtf8(text));
 }
 
 test toUtf8 {
@@ -6931,7 +6931,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     const texture_atlas = fce.getTextureAtlas() catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
-            log.err("Could not get texture atlas for font {}, text area marked in magenta, to display '{s}'", .{ opts.font.id, opts.text });
+            log.err("Could not get texture atlas for font {f}, text area marked in magenta, to display '{s}'", .{ opts.font.id, opts.text });
             opts.rs.r.fill(.{}, .{ .color = .magenta });
             return;
         },

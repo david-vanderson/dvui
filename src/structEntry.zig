@@ -49,7 +49,7 @@ fn intFieldWidget(
             if (maybe_num.value == .Valid) {
                 result.* = maybe_num.value.Valid;
             }
-            dvui.label(@src(), "{}", .{result.*}, .{});
+            dvui.label(@src(), "{any}", .{result.*}, .{});
         },
         .slider => {
             var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
@@ -64,7 +64,7 @@ fn intFieldWidget(
                 .min_size_content = .{ .w = 100, .h = 20 },
             });
             result.* = normalizedPercentToInt(percent, T, opt.min, opt.max);
-            dvui.label(@src(), "{}", .{result.*}, .{});
+            dvui.label(@src(), "{any}", .{result.*}, .{});
         },
     }
 }

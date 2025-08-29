@@ -981,7 +981,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             const code = SDL_keysym_to_dvui(@intCast(sdl_key));
             const mod = SDL_keymod_to_dvui(if (sdl3) @intCast(event.key.mod) else event.key.keysym.mod);
             if (self.log_events) {
-                log.debug("event KEYDOWN {} {s} {} {}\n", .{ sdl_key, @tagName(code), mod, event.key.repeat });
+                log.debug("event KEYDOWN {any} {s} {any} {any}\n", .{ sdl_key, @tagName(code), mod, event.key.repeat });
             }
 
             return try win.addEventKey(.{
@@ -995,7 +995,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             const code = SDL_keysym_to_dvui(@intCast(sdl_key));
             const mod = SDL_keymod_to_dvui(if (sdl3) @intCast(event.key.mod) else event.key.keysym.mod);
             if (self.log_events) {
-                log.debug("event KEYUP {} {s} {}\n", .{ sdl_key, @tagName(code), mod });
+                log.debug("event KEYUP {any} {s} {any}\n", .{ sdl_key, @tagName(code), mod });
             }
 
             return try win.addEventKey(.{
@@ -1115,7 +1115,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
         },
         else => {
             if (self.log_events) {
-                log.debug("unhandled SDL event type {}\n", .{event.type});
+                log.debug("unhandled SDL event type {any}\n", .{event.type});
             }
             return false;
         },
@@ -1311,7 +1311,7 @@ pub fn main() !u8 {
         return @bitCast(@as(i8, @truncate(status)));
     }
 
-    log.info("version: {} no callbacks", .{getSDLVersion()});
+    log.info("version: {any} no callbacks", .{getSDLVersion()});
 
     const init_opts = app.config.get();
 
@@ -1408,7 +1408,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
 
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
-    log.info("version: {} callbacks", .{getSDLVersion()});
+    log.info("version: {s} callbacks", .{getSDLVersion()});
 
     const init_opts = app.config.get();
 

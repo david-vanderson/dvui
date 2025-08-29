@@ -347,7 +347,7 @@ pub fn init(
     //    self.snap_to_pixels = false;
     //}
 
-    log.info("window logical {} pixels {} natural scale {d} initial content scale {d} snap_to_pixels {}\n", .{ winSize, pxSize, pxSize.w / winSize.w, self.content_scale, self.snap_to_pixels });
+    log.info("window logical {f} pixels {f} natural scale {d} initial content scale {d} snap_to_pixels {any}\n", .{ winSize, pxSize, pxSize.w / winSize.w, self.content_scale, self.snap_to_pixels });
 
     errdefer self.deinit();
 
@@ -1338,7 +1338,7 @@ pub fn dataSetAdvanced(self: *Self, id: Id, key: []const u8, data_in: anytype, c
         if (builtin.mode == .Debug) {
             if (!std.mem.eql(u8, entry.value_ptr.type_str, @typeName(@TypeOf(data_in))) or entry.value_ptr.copy_slice != copy_slice) {
                 std.debug.panic(
-                    "dataSetAdvanced: stored type {s} (slice {}) doesn't match asked for type {s} (slice {})",
+                    "dataSetAdvanced: stored type {s} (slice {any}) doesn't match asked for type {s} (slice {any})",
                     .{ entry.value_ptr.type_str, entry.value_ptr.copy_slice, @typeName(@TypeOf(data_in)), copy_slice },
                 );
             }
@@ -1382,7 +1382,7 @@ pub fn dataGetInternal(self: *Self, id: Id, key: []const u8, comptime T: type, s
     if (self.datas.getPtr(hash)) |sd| {
         if (builtin.mode == .Debug) {
             if (!std.mem.eql(u8, sd.type_str, @typeName(T)) or sd.copy_slice != slice) {
-                std.debug.panic("dataGetInternal: stored type {s} (slice {}) doesn't match asked for type {s} (slice {})", .{ sd.type_str, sd.copy_slice, @typeName(T), slice });
+                std.debug.panic("dataGetInternal: stored type {s} (slice {any}) doesn't match asked for type {s} (slice {any})", .{ sd.type_str, sd.copy_slice, @typeName(T), slice });
             }
         }
         return sd.data;
@@ -1623,7 +1623,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     if (self.debug.logEvents(null)) {
         for (evts) |*e| {
             if (e.handled) continue;
-            log.debug("Unhandled {}", .{e});
+            log.debug("Unhandled {f}", .{e});
         }
     }
 
