@@ -6,23 +6,23 @@
     .paths = .{""},
     .dependencies = .{
         .sdl = .{
-            .url = "git+https://github.com/david-vanderson/SDL#7c01b8a263915dc1aa0067d7ff9089dbe047cef9",
-            .hash = "SDL-2.32.2-JToi31GUEgEEqcSkGTse-l1nCSkB30CRkWPAQ2moXSFp",
+            .url = "git+https://github.com/allyourcodebase/SDL#d29847ebcb6da34dec466a06163431982500a092",
+            .hash = "SDL-2.32.6-JToi38aTEgECY2mV9iUG7dNouCbarfJ1mkzjjm53gC80",
             .lazy = true,
         },
         .sdl3 = .{
-            .url = "git+https://github.com/foxnne/SDL#ff7f762fedc441a67acac57dec0d8a76436a6ad8",
-            .hash = "sdl-0.2.4+3.2.16-7uIn9HzgfgF6JCuiDYVTmYOAgAZwnVY8hGBlFcQgqJMX",
+            .url = "git+https://github.com/david-vanderson/SDL#81ea86c805f69edc32795c6c83f5be020335ca96",
+            .hash = "sdl-0.2.6+3.2.20-7uIn9CEjfwEuULkL_SE91eY6mMfM8KBoFolexyZHWr76",
             .lazy = true,
         },
         .freetype = .{
-            .url = "git+https://github.com/rohlem/freetype-update-zig#a50182dc5787a8d49dd1ad922699a1c8771aa34a",
-            .hash = "freetype-2.13.0-AAAAAI6NqAA4EbABl7qfk5qBFJQb2xjUIcP6SY7EBFvJ",
+            .url = "git+https://github.com/david-vanderson/freetype#827f12fbf46511c679d722dc55ac123c3c2684fa",
+            .hash = "freetype-2.13.0-alzUkfmNqAAjowVUPRfgA-1i6Rj-bvigTeTytje2oxJt",
             .lazy = true,
         },
         .raylib = .{
-            .url = "git+https://github.com/raysan5/raylib#688a81d3334c789493b24617778a334ac786f52e",
-            .hash = "raylib-5.5.0-whq8uFq2NATO2aMsuIJtFw9YBQyYfVbO-ln5TAvN0bWP",
+            .url = "git+https://github.com/raysan5/raylib#0e73e0ea640d969762bc961106df9538817595e4",
+            .hash = "raylib-5.5.0-whq8uLZNxwQbz-EkzfvEctRpeTg8Nk5WZKm6lJ-J8SQt",
             .lazy = true,
         },
         //used in the raylib-ontop example
@@ -39,8 +39,8 @@
         },
         // for rendering tvg icons
         .svg2tvg = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-svg2tvg#0ff7a68c3d3999d6273d9058ef206a58d49147d6",
-            .hash = "svg2tvg-0.0.0-HpMZuVl2BgAZMTmi-VfBOxDxauBRRSvx936sSzlU099q",
+            .url = "git+https://github.com/david-vanderson/zig-lib-svg2tvg#7a89a2a57644b10eacecb21dfec2d1b65717e823",
+            .hash = "svg2tvg-0.0.0-HpMZucx2BgBLCqB57GRMd-NTdaiBzuEwe8cnA0h9s99R",
         },
     },
 }
