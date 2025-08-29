@@ -138,7 +138,7 @@ pub fn init(options: InitOptions) !Self {
 
 pub fn deinit(self: *Self) void {
     _ = self.window.end(.{}) catch |err| {
-        std.debug.print("window.end() returned {!}\n", .{err});
+        std.debug.print("window.end() returned {any}\n", .{err});
     };
     self.window.deinit();
     self.backend.deinit();

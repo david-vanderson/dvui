@@ -269,7 +269,7 @@ export fn new_font(ptr: [*c]u8, len: usize) void {
 export fn add_event(which: u8, int1: u32, int2: u32, float1: f32, float2: f32) void {
     if (win_ok) {
         add_event_raw(&win, which, int1, int2, float1, float2) catch |err| {
-            log.err("add_event_raw returned {!}", .{err});
+            log.err("add_event_raw returned {any}", .{err});
         };
     }
 }
@@ -283,7 +283,7 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
     //    .float1 = float1,
     //    .float2 = float2,
     //}) catch |err| {
-    //    const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
+    //    const msg = std.fmt.allocPrint(gpa, "{any}", .{err}) catch "allocPrint OOM";
     //    wasm.wasm_panic(msg.ptr, msg.len);
     //};
     switch (which) {
@@ -847,17 +847,17 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 
     if (app.initFn) |initFn| {
         win.begin(win.frame_time_ns) catch |err| {
-            log.err("dvui.Window.begin failed: {!}", .{err});
+            log.err("dvui.Window.begin failed: {any}", .{err});
             return 3;
         };
 
         initFn(&win) catch |err| {
-            log.err("dvui.App.initFn failed: {!}", .{err});
+            log.err("dvui.App.initFn failed: {any}", .{err});
             return 4;
         };
 
         _ = win.end(.{}) catch |err| {
-            log.err("dvui.Window.end failed: {!}", .{err});
+            log.err("dvui.Window.end failed: {any}", .{err});
             return 5;
         };
     }
@@ -879,7 +879,7 @@ fn dvui_update() callconv(.c) i32 {
     return update() catch |err| {
         // The main loop is stopping, this is our last chance to deinit stuff
         dvui_deinit();
-        std.debug.panic("{!}", .{err});
+        std.debug.panic("{any}", .{err});
     };
 }
 

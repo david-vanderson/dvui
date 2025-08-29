@@ -356,7 +356,7 @@ pub fn init(
 
     if (dvui.useFreeType) {
         dvui.FontCacheEntry.intToError(c.FT_Init_FreeType(&dvui.ft2lib)) catch |err| {
-            dvui.log.err("freetype error {!} trying to init freetype library\n", .{err});
+            dvui.log.err("freetype error {any} trying to init freetype library\n", .{err});
             return error.freetypeError;
         };
     }
@@ -1466,7 +1466,7 @@ fn dialogsShow(self: *Self) void {
 
         if (dia) |d| {
             d.display(d.id) catch |err| {
-                log.warn("Dialog {x} got {!} from its display function", .{ d.id, err });
+                log.warn("Dialog {x} got {any} from its display function", .{ d.id, err });
             };
         } else {
             break;
