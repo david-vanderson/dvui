@@ -195,6 +195,7 @@ const StringTest = struct {
     slice_static: []const u8 = str_global_static,
     slice_variable: []u8,
     slice_ptr: *[]u8 = &strglob1,
+    opt_str: ?[]u8 = null,
 };
 
 //const const_string_test: StringTest = .{};
@@ -252,10 +253,10 @@ fn gui_frame() void {
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
-        var const_string_test = var_string_test1;
+        //const const_string_test = var_string_test1;
         dvui.struct_ui.displayStruct(
             "var_string_test1",
-            &const_string_test,
+            &var_string_test1,
             1,
             .{ .standard = .{} },
             .{local.struct_options},
@@ -266,8 +267,8 @@ fn gui_frame() void {
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
-        const tsc = ts;
-        dvui.struct_ui.displayStruct("test_struct", &tsc, 1, .{ .standard = .{} }, .{});
+        //const tsc = ts;
+        dvui.struct_ui.displayStruct("test_struct", &ts, 1, .{ .standard = .{} }, .{});
     }
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
@@ -280,10 +281,10 @@ fn gui_frame() void {
     const options_options: dvui.struct_ui.StructOptions(dvui.Options) = .initDefaults(.{});
 
     const color_options: dvui.struct_ui.StructOptions(dvui.Color) = .initDefaults(.{});
-    const const_opts = dvui_opts;
+    //const const_opts = dvui_opts;
     dvui.struct_ui.displayStruct(
         "dvui.Options",
-        &const_opts,
+        &dvui_opts,
         1,
         .default,
         .{ options_options, max_size_opts, font_opts, color_options },

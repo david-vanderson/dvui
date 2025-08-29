@@ -191,10 +191,12 @@ pub const NumberFieldOptions = struct {
     }
 
     /// For slider, convert slider percentage into a number betwen min and max.
-    pub fn normalizedPercentToNum(_: *const NumberFieldOptions, normalized_percent: f32, comptime T: type, min: T, max: T) T {
+    pub fn normalizedPercentToNum(self: *const NumberFieldOptions, comptime T: type, normalized_percent: f32) T {
         if (@typeInfo(T) != .int and @typeInfo(T) != .float) @compileError("T is not a number type");
-        std.debug.assert(normalized_percent >= 0);
-        std.debug.assert(normalized_percent <= 1);
+        std.debug.assert(normalized_percent >= 0 and normalized_percent <= 1);
+
+        const min = self.minValue(T);
+        const max = self.maxValue(T);
         const range = max - min;
 
         const result: T = switch (@typeInfo(T)) {
@@ -206,7 +208,11 @@ pub const NumberFieldOptions = struct {
     }
 
     /// For slider, convert number to a slider percentage
-    pub fn toNormalizedPercent(_: *const NumberFieldOptions, input_num: anytype, min: @TypeOf(input_num), max: @TypeOf(input_num)) f32 {
+    pub fn toNormalizedPercent(self: *const NumberFieldOptions, T: type, input_num: anytype) f32 {
+        if (@typeInfo(T) != .int and @typeInfo(T) != .float) @compileError("T is not a number type");
+
+        const min = self.minValue(T);
+        const max = self.maxValue(T);
         const input, const range, const min_f = switch (@typeInfo(@TypeOf(input_num))) {
             .int => .{
                 @as(f32, @floatFromInt(if (input_num < min) min else input_num)),
@@ -268,12 +274,12 @@ pub fn numberFieldWidget(
 
             dvui.label(@src(), "{s}", .{field_name}, .{});
             if (!read_only) {
-                var percent = opt.toNormalizedPercent(field_value_ptr.*, opt.minValue(T), opt.maxValue(T));
+                var percent = opt.toNormalizedPercent(T, field_value_ptr.*);
                 _ = dvui.slider(@src(), .horizontal, &percent, .{
                     .expand = .horizontal,
                     .min_size_content = .{ .w = 100, .h = 20 },
                 });
-                field_value_ptr.* = opt.normalizedPercentToNum(percent, T, opt.minValue(T), opt.maxValue(T));
+                field_value_ptr.* = opt.normalizedPercentToNum(T, percent);
             }
             dvui.label(@src(), "{d}", .{field_value_ptr.*}, .{});
         },
@@ -344,9 +350,7 @@ pub fn boolFieldWidget(
     }
 }
 
-/// Display a text field.
-/// The optional buffer should be supplied to enable editing on read-only strings, or
-/// any time the original struct field should not be used to store new data.
+/// Ooptions for displaying a text field.
 pub const TextFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
 
@@ -354,6 +358,9 @@ pub const TextFieldOptions = struct {
 };
 
 /// Display slices and/or arrays of u8 and const u8.
+/// If a slice, the slice will be assigned to point to the internal heap allocated
+/// string of the text widget. If the struct has a lifetime greater than the text entry widget's window
+/// then the struct's strings should be duplicated before the windows is disposed.
 pub fn textFieldWidget(
     src: std.builtin.SourceLocation,
     field_name: []const u8,
@@ -368,9 +375,9 @@ pub fn textFieldWidget(
     defer box.deinit();
 
     var read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.display == .read_only;
-    @compileLog(@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const, @TypeOf(field_value_ptr), @typeInfo(@TypeOf(field_value_ptr)).pointer);
     if (opt.display == .read_write and read_only) {
-        // Note all string arrays are treated as read-only, even if they are var.
+        // Note all string arrays are currently treated as read-only, even if they are var.
+        // It would be possible to support in-place editing, preferrably by implementing a new display option.
         dvui.log.debug("struct_ui: field {s} display option is set to read_write for read_only string or an array. Displaying as read_only.", .{field_name});
         read_only = true;
     }
@@ -401,7 +408,7 @@ pub fn textFieldWidget(
 }
 
 /// Returns the enum type associated with a tagged union
-/// Validates that FieldPtrType points to a tagged union.
+/// validates that FieldPtrType points to a tagged union.
 pub fn UnionTagType(FieldPtrType: type) type {
     validateFieldPtrType(&.{.@"union"}, "unionFieldWidget", FieldPtrType);
     const type_info = @typeInfo(@typeInfo(FieldPtrType).pointer.child);
@@ -482,6 +489,8 @@ pub fn optionalFieldWidget(
 }
 
 /// Display a field within a container.
+/// displayField can be used when iterating throgh a list of fields of varying types.
+/// it will call the correct display fucntion based on the type of the field.
 pub fn displayField(
     field_name: []const u8,
     field_value_ptr: anytype,
@@ -539,6 +548,7 @@ pub fn displayField(
     }
 }
 
+/// Display numberic fields, ints and floats.
 pub fn displayNumber(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrType(&.{ .int, .float }, "displayEnum", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .number)) return;
@@ -551,6 +561,8 @@ pub fn displayEnum(field_name: []const u8, field_value_ptr: anytype, field_optio
     enumFieldWidget(@src(), field_name, field_value_ptr, field_option.standard, al);
 }
 
+/// display []u8, []const u8 and arrays of u8 and const u8.
+/// Arrays are currently always displayed as read only.
 pub fn displayString(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrTypeString("displayString", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .text)) return;
@@ -644,6 +656,10 @@ pub fn displaySlice(
     }
 }
 
+/// Display a union.
+/// If the union has Struct or Union members, then StructOptions should be provided
+/// for those members with default values. These default values will be ussed to populate
+/// the active union value when the user changes selections.
 pub fn displayUnion(
     field_name: []const u8,
     field_value_ptr: anytype,
@@ -716,6 +732,14 @@ pub fn displayUnion(
     }
 }
 
+/// Display an optional
+///
+/// If the optional is a union or struct, StructOptions should be provided for those
+/// types. They will be used as default values for when the user creates a new optional value.
+/// Basic types are assigned default value sdepending on their type.
+/// It is recommended that users handle optional pointers manually using optionalFieldWidget directly,
+/// rather than using this function.
+/// Otherwise all pointers for a type will point to a single default value.
 pub fn displayOptional(
     field_name: []const u8,
     field_value_ptr: anytype,
@@ -734,7 +758,6 @@ pub fn displayOptional(
         if (!read_only) {
             if (field_value_ptr.* == null) {
                 field_value_ptr.* = defaultValue(optional.child, field_option, options); // If there is no default value, it will remain null.
-
             }
         }
         if (field_value_ptr.*) |*val| {
@@ -817,9 +840,13 @@ pub fn displayStruct(
     }
 }
 
-/// Supply a default value for a field from either default field initialization values or from struct_options
+/// Create a default value for a field from either default field initialization values or from struct_options
 pub fn defaultValue(T: type, field_option: FieldOptions, struct_options: anytype) ?T {
     _ = field_option; // TODO: Remove
+    // default string values
+    if (T == []u8 or T == []const u8) {
+        return "";
+    }
     switch (@typeInfo(T)) {
         inline .bool => return false,
         inline .int => return 0,
