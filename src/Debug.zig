@@ -171,13 +171,13 @@ pub fn show(self: *Debug) void {
         tl.format(
             \\{x} {s}
             \\
-            \\{}
-            \\min {}
-            \\{}
+            \\{f}
+            \\min {f}
+            \\{any}
             \\scale {d}
-            \\padding {}
-            \\border {}
-            \\margin {}
+            \\padding {f}
+            \\border {f}
+            \\margin {f}
             \\
             \\{s}:{d}
             \\id_extra {?d}
