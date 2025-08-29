@@ -553,7 +553,7 @@ pub fn nanoTime(_: *SDLBackend) i128 {
 }
 
 pub fn sleep(_: *SDLBackend, ns: u64) void {
-    std.time.sleep(ns);
+    std.Thread.sleep(ns);
 }
 
 pub fn clipboardText(self: *SDLBackend) ![]const u8 {

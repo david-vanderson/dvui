@@ -410,7 +410,7 @@ fn copyOptionsToClipboard(src: std.builtin.SourceLocation, id: dvui.Id, options:
     dvui.log.debug("Copied Options struct for {s}:{d}", .{ src.file, src.line });
     dvui.toast(@src(), .{ .message = "Options copied to clipboard" });
 
-    var out = std.ArrayList(u8).init(dvui.currentWindow().lifo());
+    var out = std.array_list.Managed(u8).init(dvui.currentWindow().lifo());
     defer out.deinit();
     var writer = out.writer();
     writeTypeAsCode(writer.any(), options) catch |err| {

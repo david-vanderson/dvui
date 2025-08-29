@@ -1353,7 +1353,7 @@ pub fn dataSetAdvanced(self: *Self, id: Id, key: []const u8, data_in: anytype, c
     if (!entry.found_existing or should_trash) {
         entry.value_ptr.* = .{
             .alignment = alignment,
-            .data = self.gpa.allocWithOptions(u8, bytes.len * num_copies, alignment, null) catch |err| switch (err) {
+            .data = self.gpa.allocWithOptions(u8, bytes.len * num_copies, .fromByteUnits(alignment), null) catch |err| switch (err) {
                 error.OutOfMemory => {
                     dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
                     return;
