@@ -323,7 +323,7 @@ const AnimatingDialog = struct {
                         return;
                     };
                     ca(id, response) catch |err| {
-                        std.log.debug("AnimationDialogs callafter got {!}", .{err});
+                        std.log.debug("AnimationDialogs callafter got {any}", .{err});
                     };
                 }
 

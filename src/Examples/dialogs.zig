@@ -77,7 +77,7 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
         if (dvui.button(@src(), "Dialog after 1 second", .{}, .{})) {
             if (!builtin.single_threaded) blk: {
                 const bg_thread = std.Thread.spawn(.{}, background_dialog, .{ dvui.currentWindow(), 1_000_000_000 }) catch |err| {
-                    dvui.log.debug("Failed to spawn background thread for delayed action, got {!}", .{err});
+                    dvui.log.debug("Failed to spawn background thread for delayed action, got {any}", .{err});
                     break :blk;
                 };
                 bg_thread.detach();
@@ -89,7 +89,7 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
         if (dvui.button(@src(), "Toast after 1 second", .{}, .{})) {
             if (!builtin.single_threaded) blk: {
                 const bg_thread = std.Thread.spawn(.{}, background_toast, .{ dvui.currentWindow(), 1_000_000_000, demo_win_id }) catch |err| {
-                    dvui.log.debug("Failed to spawn background thread for delayed action, got {!}", .{err});
+                    dvui.log.debug("Failed to spawn background thread for delayed action, got {any}", .{err});
                     break :blk;
                 };
                 bg_thread.detach();
@@ -109,7 +109,7 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
             progress_mutex.unlock();
             if (!builtin.single_threaded) blk: {
                 const bg_thread = std.Thread.spawn(.{}, background_progress, .{ dvui.currentWindow(), 2_000_000_000 }) catch |err| {
-                    dvui.log.debug("Failed to spawn background thread for delayed action, got {!}", .{err});
+                    dvui.log.debug("Failed to spawn background thread for delayed action, got {any}", .{err});
                     break :blk;
                 };
                 bg_thread.detach();
@@ -137,7 +137,7 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
                     .filters = &.{ "*.png", "*.jpg" },
                     .filter_description = "images",
                 }) catch |err| blk: {
-                    dvui.log.debug("Could not open file dialog, got {!}", .{err});
+                    dvui.log.debug("Could not open file dialog, got {any}", .{err});
                     break :blk null;
                 };
                 if (filename) |f| {
@@ -160,7 +160,7 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
                     .title = "dvui native file open multiple",
                     .filter_description = "images",
                 }) catch |err| blk: {
-                    dvui.log.debug("Could not open multi file dialog, got {!}", .{err});
+                    dvui.log.debug("Could not open multi file dialog, got {any}", .{err});
                     break :blk null;
                 };
                 if (filenames) |files| {
@@ -191,7 +191,7 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
                 dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
             } else {
                 const filename = dvui.dialogNativeFolderSelect(dvui.currentWindow().arena(), .{ .title = "dvui native folder select" }) catch |err| blk: {
-                    dvui.log.debug("Could not open folder select dialog, got {!}", .{err});
+                    dvui.log.debug("Could not open folder select dialog, got {any}", .{err});
                     break :blk null;
                 };
                 if (filename) |f| {
@@ -205,7 +205,7 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
                 dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Save File", .ok_label = "Ok", .message = "Not available on the web.  For file download, see \"Save Plot\" in the plots example." });
             } else {
                 const filename = dvui.dialogNativeFileSave(dvui.currentWindow().arena(), .{ .title = "dvui native file save" }) catch |err| blk: {
-                    dvui.log.debug("Could not open file save dialog, got {!}", .{err});
+                    dvui.log.debug("Could not open file save dialog, got {any}", .{err});
                     break :blk null;
                 };
                 if (filename) |f| {

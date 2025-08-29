@@ -90,14 +90,14 @@ pub fn plots() void {
                     defer arena.free(fname);
 
                     var file = std.fs.createFileAbsoluteZ(fname, .{}) catch |err| {
-                        dvui.log.debug("Failed to create file {s}, got {!}", .{ fname, err });
+                        dvui.log.debug("Failed to create file {s}, got {any}", .{ fname, err });
                         dvui.toast(@src(), .{ .message = "Failed to create file" });
                         break :blk;
                     };
                     defer file.close();
 
                     file.writeAll(png_slice) catch |err| {
-                        dvui.log.debug("Failed to write to file {s}, got {!}", .{ fname, err });
+                        dvui.log.debug("Failed to write to file {s}, got {any}", .{ fname, err });
                     };
                 }
             }

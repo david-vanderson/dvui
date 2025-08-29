@@ -352,12 +352,12 @@ pub fn tag(name: []const u8, data: TagData) void {
 
     //std.debug.print("tag dupe {s}\n", .{name});
     const name_copy = cw.gpa.dupe(u8, name) catch |err| {
-        dvui.log.err("tag() got {!} for name {s}\n", .{ err, name });
+        dvui.log.err("tag() got {any} for name {s}\n", .{ err, name });
         return;
     };
 
     cw.tags.put(cw.gpa, name_copy, data) catch |err| {
-        dvui.log.err("tag() \"{s}\" got {!} for id {x}\n", .{ name, err, data.id });
+        dvui.log.err("tag() \"{s}\" got {any} for id {x}\n", .{ name, err, data.id });
         cw.gpa.free(name_copy);
     };
 }
@@ -797,14 +797,14 @@ pub const FontCacheEntry = struct {
 
             if (useFreeType) blk: {
                 FontCacheEntry.intToError(c.FT_Load_Char(fce.face, codepoint, @as(i32, @bitCast(FontCacheEntry.LoadFlags{ .render = true })))) catch |err| {
-                    log.warn("renderText: freetype error {!} trying to FT_Load_Char codepoint {d}", .{ err, codepoint });
+                    log.warn("renderText: freetype error {any} trying to FT_Load_Char codepoint {d}", .{ err, codepoint });
                     break :blk; // will skip the failing glyph
                 };
 
                 // https://freetype.org/freetype2/docs/tutorial/step1.html#section-6
                 if (fce.face.*.glyph.*.format != c.FT_GLYPH_FORMAT_BITMAP) {
                     FontCacheEntry.intToError(c.FT_Render_Glyph(fce.face.*.glyph, c.FT_RENDER_MODE_NORMAL)) catch |err| {
-                        log.warn("renderText freetype error {!} trying to FT_Render_Glyph codepoint {d}", .{ err, codepoint });
+                        log.warn("renderText freetype error {any} trying to FT_Render_Glyph codepoint {d}", .{ err, codepoint });
                         break :blk; // will skip the failing glyph
                     };
                 }
@@ -879,7 +879,7 @@ pub const FontCacheEntry = struct {
 
         if (useFreeType) {
             FontCacheEntry.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(LoadFlags{ .render = false })))) catch |err| {
-                log.warn("glyphInfoGet freetype error {!} font {s} codepoint {d}\n", .{ err, self.name, codepoint });
+                log.warn("glyphInfoGet freetype error {any} font {s} codepoint {d}\n", .{ err, self.name, codepoint });
                 return FontError.fontError;
             };
 
@@ -968,7 +968,7 @@ pub const FontCacheEntry = struct {
                     const glyph_index: u32 = c.FT_Get_Char_Index(fce.face, codepoint);
                     var kern: c.FT_Vector = undefined;
                     FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
-                        log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
+                        log.warn("renderText freetype error {any} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
                         // Set fallback kern and continue to the best of out ability
                         kern.x = 0;
                         kern.y = 0;
@@ -1075,7 +1075,7 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontEr
         args.memory_base = ttf_bytes.ptr;
         args.memory_size = @as(u31, @intCast(ttf_bytes.len));
         FontCacheEntry.intToError(c.FT_Open_Face(ft2lib, &args, 0, &face)) catch |err| {
-            log.warn("fontCacheInit freetype error {!} trying to FT_Open_Face font {s}\n", .{ err, name });
+            log.warn("fontCacheInit freetype error {any} trying to FT_Open_Face font {s}\n", .{ err, name });
             return FontError.fontError;
         };
 
@@ -1085,7 +1085,7 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontEr
 
         while (true) : (pixel_size -= 1) {
             FontCacheEntry.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
-                log.warn("fontCacheInit freetype error {!} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, name });
+                log.warn("fontCacheInit freetype error {any} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, name });
                 return FontError.fontError;
             };
 
@@ -1276,7 +1276,7 @@ pub fn svgToTvg(allocator: std.mem.Allocator, svg_bytes: []const u8) (std.mem.Al
     return tvg.tvg_from_svg(allocator, svg_bytes, .{}) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
-            log.debug("svgToTvg returned {!}", .{err});
+            log.debug("svgToTvg returned {any}", .{err});
             return TvgError.tvgError;
         },
     };
@@ -1289,7 +1289,7 @@ pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) TvgError!
     if (height == 0) return 0.0;
     var stream = std.io.fixedBufferStream(tvg_bytes);
     var parser = tvg.tvg.parse(currentWindow().arena(), stream.reader()) catch |err| {
-        log.warn("iconWidth Tinyvg error {!} parsing icon {s}\n", .{ err, name });
+        log.warn("iconWidth Tinyvg error {any} parsing icon {s}\n", .{ err, name });
         return TvgError.tvgError;
     };
     defer parser.deinit();
@@ -3564,7 +3564,7 @@ pub fn animation(id: Id, key: []const u8, a: Animation) void {
     const h = id.update(key);
     cw.animations.put(cw.gpa, h, a) catch |err| switch (err) {
         error.OutOfMemory => {
-            log.err("animation got {!} for id {x} key {s}\n", .{ err, id, key });
+            log.err("animation got {any} for id {x} key {s}\n", .{ err, id, key });
         },
     };
 }
@@ -4018,7 +4018,7 @@ pub fn dialogDisplay(id: Id) !void {
         dvui.dialogRemove(id);
         if (callafter) |ca| {
             ca(id, .cancel) catch |err| {
-                log.debug("Dialog callafter for {x} returned {!}", .{ id, err });
+                log.debug("Dialog callafter for {x} returned {any}", .{ id, err });
             };
         }
         return;
@@ -4039,7 +4039,7 @@ pub fn dialogDisplay(id: Id) !void {
                 dvui.dialogRemove(id);
                 if (callafter) |ca| {
                     ca(id, .cancel) catch |err| {
-                        log.debug("Dialog callafter for {x} returned {!}", .{ id, err });
+                        log.debug("Dialog callafter for {x} returned {any}", .{ id, err });
                     };
                 }
                 return;
@@ -4054,7 +4054,7 @@ pub fn dialogDisplay(id: Id) !void {
             dvui.dialogRemove(id);
             if (callafter) |ca| {
                 ca(id, .ok) catch |err| {
-                    log.debug("Dialog callafter for {x} returned {!}", .{ id, err });
+                    log.debug("Dialog callafter for {x} returned {any}", .{ id, err });
                 };
             }
             return;
@@ -4144,7 +4144,7 @@ pub fn wasmFileUploadedMultiple(id: Id) ?[]WasmFile {
     if (num_files == 0) return null;
 
     const files = dvui.currentWindow().arena().alloc(WasmFile, num_files) catch |err| {
-        log.err("File upload skipped, failed to allocate space for file handles: {!}", .{err});
+        log.err("File upload skipped, failed to allocate space for file handles: {any}", .{err});
         return null;
     };
     for (0.., files) |i, *file| {
@@ -4527,7 +4527,7 @@ pub fn toastsShow(id: ?Id, rect: Rect.Natural) void {
 
         while (it.next()) |t| {
             t.display(t.id) catch |err| {
-                log.warn("Toast {x} got {!} from its display function", .{ t.id, err });
+                log.warn("Toast {x} got {any} from its display function", .{ t.id, err });
             };
         }
     }
@@ -6979,7 +6979,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
                 const glyph_index: u32 = c.FT_Get_Char_Index(fce.face, codepoint);
                 var kern: c.FT_Vector = undefined;
                 FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
-                    log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
+                    log.warn("renderText freetype error {any} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
                     // Set fallback kern and continue to the best of out ability
                     kern.x = 0;
                     kern.y = 0;
@@ -7167,7 +7167,7 @@ pub fn textureFromTarget(target: TextureTarget) Backend.TextureError!Texture {
 pub fn textureDestroyLater(texture: Texture) void {
     const cw = currentWindow();
     cw.texture_trash.append(cw.arena(), texture) catch |err| {
-        dvui.log.err("textureDestroyLater got {!}\n", .{err});
+        dvui.log.err("textureDestroyLater got {any}\n", .{err});
     };
 }
 

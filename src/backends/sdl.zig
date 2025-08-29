@@ -1425,7 +1425,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
         .icon = init_opts.icon,
         .hidden = init_opts.hidden,
     }) catch |err| {
-        log.err("initWindow failed: {!}", .{err});
+        log.err("initWindow failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
@@ -1437,23 +1437,23 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
 
     //// init dvui Window (maps onto a single OS window)
     appState.win = dvui.Window.init(@src(), gpa, appState.back.backend(), app.config.options.window_init_options) catch |err| {
-        log.err("dvui.Window.init failed: {!}", .{err});
+        log.err("dvui.Window.init failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
     if (app.initFn) |initFn| {
         appState.win.begin(appState.win.frame_time_ns) catch |err| {
-            log.err("dvui.Window.begin failed: {!}", .{err});
+            log.err("dvui.Window.begin failed: {any}", .{err});
             return c.SDL_APP_FAILURE;
         };
 
         initFn(&appState.win) catch |err| {
-            log.err("dvui.App.initFn failed: {!}", .{err});
+            log.err("dvui.App.initFn failed: {any}", .{err});
             return c.SDL_APP_FAILURE;
         };
 
         _ = appState.win.end(.{}) catch |err| {
-            log.err("dvui.Window.end failed: {!}", .{err});
+            log.err("dvui.Window.end failed: {any}", .{err});
             return c.SDL_APP_FAILURE;
         };
     }
@@ -1488,7 +1488,7 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
 
     const e = event.?.*;
     _ = appState.back.addEvent(&appState.win, e) catch |err| {
-        log.err("dvui.Window.addEvent failed: {!}", .{err});
+        log.err("dvui.Window.addEvent failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
@@ -1513,7 +1513,7 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
 
     // marks the beginning of a frame for dvui, can call dvui functions after this
     appState.win.begin(nstime) catch |err| {
-        log.err("dvui.Window.begin failed: {!}", .{err});
+        log.err("dvui.Window.begin failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
@@ -1524,12 +1524,12 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
 
     const app = dvui.App.get() orelse unreachable;
     const res = app.frameFn() catch |err| {
-        log.err("dvui.App.frameFn failed: {!}", .{err});
+        log.err("dvui.App.frameFn failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
     const end_micros = appState.win.end(.{}) catch |err| {
-        log.err("dvui.Window.end failed: {!}", .{err});
+        log.err("dvui.Window.end failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
