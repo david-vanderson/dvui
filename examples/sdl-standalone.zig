@@ -95,6 +95,7 @@ pub fn main() !void {
         const wait_event_micros = win.waitTime(end_micros);
         interrupted = try backend.waitEventTimeout(wait_event_micros);
     }
+    testCompileErrors();
 }
 
 const C1 = struct {
@@ -184,13 +185,16 @@ const U1 = union(enum) {
 };
 
 const str_global_static = "9876543210";
-var str_global_var1: [10]u8 = .{ 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j' };
-var str_global_var2: [10]u8 = .{ 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j' };
+var str_global_var1: [12]u8 = .{ 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l' };
+var str_global_var2: [12]u8 = .{ 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l' };
+
+var strglob1: []u8 = &str_global_var1;
 
 const StringTest = struct {
     array_variable: [10]u8 = .{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
     slice_static: []const u8 = str_global_static,
     slice_variable: []u8,
+    slice_ptr: *[]u8 = &strglob1,
 };
 
 //const const_string_test: StringTest = .{};
@@ -211,9 +215,16 @@ var struct_of_union1: StructOfUnion1 = .{};
 var ts: TestStruct = .{};
 
 // both dvui and SDL drawing
+var frame_count: usize = 0;
 fn gui_frame() void {
+    defer frame_count +%= 1;
+    //if (frame_count == 10) while (true) {};
     const local = struct {
-        const struct_options: dvui.struct_ui.StructOptions(StringTest) = .init(.{ .slice_static = .{ .text = .{ .display = .read_write } } }, null);
+        const struct_options: dvui.struct_ui.StructOptions(StringTest) = .init(.{
+            .slice_static = .{ .text = .{ .display = .read_write } },
+            //.array_variable = .{ .text = .{ .display = .read_only } },\
+            .slice_ptr = .{ .number = .{ .display = .read_write } },
+        }, null);
     };
 
     //dvui.currentWindow().debug_window_show = true;
@@ -241,9 +252,10 @@ fn gui_frame() void {
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
+        var const_string_test = var_string_test1;
         dvui.struct_ui.displayStruct(
             "var_string_test1",
-            &var_string_test1,
+            &const_string_test,
             1,
             .{ .standard = .{} },
             .{local.struct_options},
@@ -254,8 +266,8 @@ fn gui_frame() void {
         defer scroll.deinit();
         var al = dvui.Alignment.init(@src(), 0);
         defer al.deinit();
-
-        dvui.struct_ui.displayStruct("test_struct", &ts, 1, .{ .standard = .{} }, .{});
+        const tsc = ts;
+        dvui.struct_ui.displayStruct("test_struct", &tsc, 1, .{ .standard = .{} }, .{});
     }
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
@@ -268,13 +280,48 @@ fn gui_frame() void {
     const options_options: dvui.struct_ui.StructOptions(dvui.Options) = .initDefaults(.{});
 
     const color_options: dvui.struct_ui.StructOptions(dvui.Color) = .initDefaults(.{});
+    const const_opts = dvui_opts;
     dvui.struct_ui.displayStruct(
         "dvui.Options",
-        &dvui_opts,
+        &const_opts,
         1,
-        .{ .standard = .{} },
+        .default,
         .{ options_options, max_size_opts, font_opts, color_options },
     );
+}
+
+pub fn testCompileErrors() void {
+    //const sui = dvui.struct_ui;
+    var al: dvui.Alignment = .init(@src(), 0);
+    defer al.deinit();
+    //var test_enum: enum { one } = .one;
+    //sui.numberFieldWidget(@src(), "enum", &test_enum, .{}, &al);
+    //sui.displayNumber("enum", &test_enum, .{ .number = .{} }, &al);
+    //sui.textFieldWidget(@src(), "enum", &test_enum, .{}, &al);
+    //sui.displayString("enum", &test_enum, .{ .text = .{} }, &al);
+    //sui.unionFieldWidget(@src(), "enum", &test_enum, .{ .standard = .{} });
+    //    sui.displayUnion("enum", &test_enum, 1, .{ .standard = .{} }, .{}, &al);
+
+    //const UN = union {
+    //    a: i32,
+    //    b: u32,
+    //};
+    //const un: UN = .{ .a = 2 };
+    //sui.unionFieldWidget(@src(), "non-tagged", &un, .{ .standard = .{} });
+    //sui.displayUnion("non-tagged", &un, 1, .{ .standard = .{} }, .{}, &al);
+
+    //    sui.boolFieldWidget(@src(), "union", &un, .{}, &al);
+    //    sui.displayBool("union", &un, .{ .standard = .{} }, &al);
+
+    //    _ = sui.optionalFieldWidget(@src(), "union", &un, .{ .standard = .{} }, &al);
+    //    sui.displayOptional("union", &un, 1, .{ .standard = .{} }, .{}, &al);
+
+    //sui.displayArray("union", &un, 1, .{ .standard = .{} }, .{});
+    // TODO: Slices need validation implemented
+    //sui.displaySlice("union", &un, 1, .{ .standard = .{} }, .{});
+
+    //    sui.displayStruct("union", &un, 1, .standard_options, .{});
+    //    sui.displayUnion("struct", &basic_types_var, 1, .standard_options, .{}, &al);
 }
 
 var name_buf: [50]u8 = undefined;

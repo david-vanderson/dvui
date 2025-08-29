@@ -2,16 +2,11 @@ const std = @import("std");
 const dvui = @import("dvui.zig");
 
 // TODO: Log an error, or disable checkbox if optional doesn't have a default.
-
-// TODO: For pointers and arrays, work out whether FieldOptions are applying to the pointer or the
-// children.
-// e.g. b: []u16, This should get a NumberFieldOption rather than a standard one, so we know how to display the values.
-// Check this is actually happening as expected.
 // Can't currently control display order or omit options. Maybe the normal init shouldn't do a default init first
 // and then need to check which fields are set with values, which I beleive is possible with the EnumArray.
 
-// Gives types as part of error messages.
-// buffer could be shared between different types and there is no way around that?
+// Look at decreasing depth for unions as well. Currently it can show the union slector, but not fields beneath,
+// which I assume is depth related.
 // END OF TODO
 
 /// Field options control whether and how fields are displayed.
@@ -26,7 +21,7 @@ pub const FieldOptions = union(enum) {
     number: NumberFieldOptions,
     text: TextFieldOptions,
 
-    pub const standard_options: FieldOptions = .{ .standard = .{} };
+    pub const default: FieldOptions = .{ .standard = .{} };
 
     pub fn displayMode(self: FieldOptions) DisplayMode {
         return switch (self) {
@@ -84,6 +79,9 @@ pub fn StructOptions(Struct: type) type {
             return self;
         }
 
+        /// Inititialize struct options with default options.
+        /// Use `default_value` as the initializer if an struct needs to be created.
+        /// e.g. If the struct is a Union member, or is an Optional.
         pub fn initDefaults(comptime default_value: ?StructT) Self {
             comptime var defaults: StructOptionsT = .{};
             comptime {
@@ -118,6 +116,7 @@ pub fn StructOptions(Struct: type) type {
         pub fn defaultFieldOption(FieldType: type) FieldOptions {
             const result: FieldOptions = switch (@typeInfo(FieldType)) {
                 .int, .float => .{ .number = .{} },
+                // For arrays, pointers and optionals, options are set for the child type.
                 .pointer => |ptr| if (ptr.size == .slice and ptr.child == u8)
                     .{
                         .text = .{ .display = if (ptr.is_const) .read_only else .read_write },
@@ -234,17 +233,10 @@ pub fn numberFieldWidget(
     opt: NumberFieldOptions,
     alignment: *dvui.Alignment,
 ) void {
+    validateFieldPtrType(&.{ .float, .int }, "numberFieldWidget", @TypeOf(field_value_ptr));
     if (opt.display == .none) return;
-    if (opt.widget_type == .slider) {
-        // TODO: Consider making this an error instead of an assert? minValue(T) and maxValue(T) already return 0 if min/max are null.
-        std.debug.assert(opt.min != null and opt.max != null); // min and max are required for sliders
-    }
-    const T = @TypeOf(field_value_ptr.*);
-    switch (@typeInfo(T)) {
-        .int, .float => {},
-        else => @compileError(std.fmt.comptimePrint("field_value_ptr be a pointer to a numeric field, but is a {s}", .{@typeName(T)})),
-    }
 
+    const T = @TypeOf(field_value_ptr.*);
     const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
 
     switch (opt.widget_type) {
@@ -268,14 +260,13 @@ pub fn numberFieldWidget(
                     field_value_ptr.* = maybe_num.value.Valid;
                 }
             }
-            dvui.label(@src(), "{}", .{field_value_ptr.*}, .{});
+            dvui.label(@src(), "{d}", .{field_value_ptr.*}, .{});
         },
         .slider => {
             var box = dvui.box(src, .{ .dir = .horizontal }, .{});
             defer box.deinit();
 
             dvui.label(@src(), "{s}", .{field_name}, .{});
-
             if (!read_only) {
                 var percent = opt.toNormalizedPercent(field_value_ptr.*, opt.minValue(T), opt.maxValue(T));
                 _ = dvui.slider(@src(), .horizontal, &percent, .{
@@ -284,7 +275,7 @@ pub fn numberFieldWidget(
                 });
                 field_value_ptr.* = opt.normalizedPercentToNum(percent, T, opt.minValue(T), opt.maxValue(T));
             }
-            dvui.label(@src(), "{}", .{field_value_ptr.*}, .{});
+            dvui.label(@src(), "{d}", .{field_value_ptr.*}, .{});
         },
     }
 }
@@ -296,15 +287,13 @@ pub fn enumFieldWidget(
     opt: StandardFieldOptions,
     alignment: *dvui.Alignment,
 ) void {
+    validateFieldPtrType(&.{.@"enum"}, "enumFieldWidget", @TypeOf(field_value_ptr));
     if (opt.display == .none) return;
 
     const T = @TypeOf(field_value_ptr.*);
-    if (@typeInfo(T) != .@"enum") {
-        @compileError(std.fmt.comptimePrint("field_value_ptr must be a pointer to an enum, but is a {s}\n", .{@typeName(T)}));
-    }
-
     const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
 
+    // TODO: Look into if this box is realyl needed? Can we not use the parrent widget instead?
     var box = dvui.box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
     defer box.deinit();
 
@@ -332,9 +321,7 @@ pub fn boolFieldWidget(
     opt: StandardFieldOptions,
     alignment: *dvui.Alignment,
 ) void {
-    const T = @TypeOf(field_value_ptr.*);
-    if (T != bool)
-        @compileError(std.fmt.comptimePrint("field_value_ptr must be a pointer to bool, but is {s}.", .{@typeName(T)}));
+    validateFieldPtrType(&.{.bool}, "boolFieldWidget", @TypeOf(field_value_ptr));
     if (opt.display == .none) return;
 
     const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
@@ -375,71 +362,70 @@ pub fn textFieldWidget(
     opt: TextFieldOptions,
     alignment: *dvui.Alignment,
 ) void {
+    validateFieldPtrTypeString("textFieldWidget", @TypeOf(field_value_ptr));
     if (opt.display == .none) return;
+
     var box = dvui.box(src, .{ .dir = .horizontal }, .{});
     defer box.deinit();
-    const T = @TypeOf(field_value_ptr.*);
-    if (T != []u8 and T != []const u8) {
-        @compileError(std.fmt.comptimePrint("field_value_ptr must be a pointer to []u8 or []const u8, but is {s}.", .{@typeName(T)}));
+
+    var read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
+    if (opt.display == .read_write and read_only) {
+        // Note all string arrays are treated as read-only, even if they are var.
+        dvui.log.debug("struct_ui: field {s} display option is set to read_write for read_only string or an array. Displaying as read_only.", .{field_name});
+        read_only = true;
     }
-    // TODO: Add some checking for const vs read-only
 
     dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{});
-    switch (opt.display) {
-        .read_write => {
-            var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
-            defer hbox_aligned.deinit();
-            alignment.record(box.data().id, hbox_aligned.data());
+    if (!read_only) {
+        var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
+        defer hbox_aligned.deinit();
+        alignment.record(box.data().id, hbox_aligned.data());
 
-            const text_box = dvui.textEntry(@src(), .{}, .{});
-            defer text_box.deinit();
-            if (!text_box.text_changed and !std.mem.eql(u8, text_box.getText(), field_value_ptr.*)) {
-                //                std.debug.print("Setting: {s}\n", .{field_value_ptr.*}); // TODO: Remove
-                text_box.textSet(field_value_ptr.*, false);
+        const text_box = dvui.textEntry(@src(), .{}, .{});
+        defer text_box.deinit();
+        if (!text_box.text_changed and !std.mem.eql(u8, text_box.getText(), field_value_ptr.*)) {
+            text_box.textSet(field_value_ptr.*, false);
+        }
+        if (!@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) {
+            if (text_box.text_changed and !std.mem.eql(u8, text_box.getText(), field_value_ptr.*)) {
+                field_value_ptr.* = text_box.getText();
             }
-            if (!@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const) {
-                if (text_box.text_changed and !std.mem.eql(u8, text_box.getText(), field_value_ptr.*)) {
-                    field_value_ptr.* = text_box.getText();
-                }
-            }
-        },
-        .read_only => {
-            var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
-            defer hbox_aligned.deinit();
-            alignment.record(box.data().id, hbox_aligned.data());
+        }
+    } else {
+        var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
+        defer hbox_aligned.deinit();
+        alignment.record(box.data().id, hbox_aligned.data());
 
-            dvui.label(@src(), "{s}", .{field_value_ptr.*}, .{});
-        },
-        .none => unreachable, // Handled above.
+        dvui.label(@src(), "{s}", .{field_value_ptr.*}, .{});
     }
 }
 
+/// Returns the enum type associated with a tagged union
+pub fn UnionTagType(FieldPtrType: type) type {
+    validateFieldPtrType(&.{.@"union"}, "unionFieldWidget", FieldPtrType);
+    const type_info = @typeInfo(@typeInfo(FieldPtrType).pointer.child);
+    if (type_info.@"union".tag_type == null) {
+        @compileError("Only tagged unions are supported.");
+    }
+    return type_info.@"union".tag_type.?;
+}
+
+/// Allow the selection of the active union member.
+/// returns the tag of the active member.
 pub fn unionFieldWidget(
     src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_value_ptr: anytype,
     opt: FieldOptions,
-) @typeInfo(@TypeOf(field_value_ptr.*)).@"union".tag_type.? {
+) UnionTagType(@TypeOf(field_value_ptr)) {
     _ = field_name;
+    const T = @TypeOf(field_value_ptr.*);
+    if (@typeInfo(T).@"union".tag_type == null) {}
 
     if (opt.displayMode() == .none) {
         return field_value_ptr.*;
     }
-
-    const T = @TypeOf(field_value_ptr.*);
-    const valid_type: bool = valid: switch (@typeInfo(T)) {
-        .@"union" => |u| {
-            if (u.tag_type != null) {
-                break :valid true;
-            } else {
-                break :valid false;
-            }
-        },
-        else => break :valid false,
-    };
-    if (!valid_type) {
-        @compileError(std.fmt.comptimePrint("field_value_ptr must be a pointer to a tagged union, but is a {s}\n", .{@typeName(T)}));
-    }
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
 
     var box = dvui.box(src, .{ .dir = .vertical }, .{});
     defer box.deinit();
@@ -450,8 +436,11 @@ pub fn unionFieldWidget(
         var hbox = dvui.box(@src(), .{}, .{});
         defer hbox.deinit();
         inline for (entries, 0..) |entry, i| {
+            // TODO: Style the radio buttons when they are read-only
             if (dvui.radio(@src(), choice == std.meta.stringToEnum(@TypeOf(choice), entry.name), entry.name, .{ .id_extra = i })) {
-                choice = std.meta.stringToEnum(@TypeOf(choice), entry.name).?; // This should never fail.
+                if (!read_only) {
+                    choice = std.meta.stringToEnum(@TypeOf(choice), entry.name).?; // This should never fail.
+                }
             }
         }
     }
@@ -465,10 +454,10 @@ pub fn optionalFieldWidget(
     opts: FieldOptions,
     alignment: *dvui.Alignment,
 ) bool {
-    const T = @TypeOf(field_value_ptr.*);
-    if (@typeInfo(T) != .optional) {
-        @compileError(std.fmt.comptimePrint("field_value_ptr must be a pointer to an optional field, but is a {s}\n", .{@typeName(T)}));
-    }
+    validateFieldPtrType(&.{.optional}, "optionalFieldWidget", @TypeOf(field_value_ptr));
+
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
+
     var choice: usize = if (field_value_ptr.* == null) 0 else 1; // 0 = Null, 1 = Not Null
 
     var hbox = dvui.box(src, .{ .dir = .horizontal }, .{});
@@ -479,7 +468,11 @@ pub fn optionalFieldWidget(
         defer hbox_aligned.deinit();
         alignment.record(hbox.data().id, hbox_aligned.data());
 
-        _ = dvui.dropdown(@src(), &.{ "Null", "Not Null" }, &choice, .{});
+        if (!read_only) {
+            _ = dvui.dropdown(@src(), &.{ "Null", "Not Null" }, &choice, .{});
+        } else {
+            dvui.labelNoFmt(@src(), if (choice == 0) "Null" else "Not Null", .{}, .{});
+        }
     }
     return choice == 1; // Not null
 }
@@ -493,6 +486,8 @@ pub fn displayField(
     options: anytype,
     al: *dvui.Alignment,
 ) void {
+    if (field_option.displayMode() == .none) return;
+
     switch (@typeInfo(@TypeOf(field_value_ptr.*))) {
         .int, .float => displayNumber(field_name, field_value_ptr, field_option, al),
         .bool => displayBool(field_name, field_value_ptr, field_option, al),
@@ -500,10 +495,10 @@ pub fn displayField(
         .array => |arr| {
             // Array of u8 is only displayed as text if it has a text field option.
             if (arr.child == u8 and field_option == .text) {
-                const slice: []u8 = &field_value_ptr.*;
+                const slice: []const u8 = &field_value_ptr.*; // Arrays can only be shown as const strings.
                 displayString(field_name, &slice, field_option, al);
             } else {
-                displayArray(field_name, field_value_ptr, depth, field_option, options, al);
+                displayArray(field_name, field_value_ptr, depth, field_option, options);
             }
         },
         .pointer => |ptr| {
@@ -516,7 +511,7 @@ pub fn displayField(
         .optional => {
             displayOptional(field_name, field_value_ptr, depth, field_option, options, al);
         },
-        .@"union" => displayUnion(field_name, field_value_ptr, depth, field_option, options, al),
+        .@"union" => displayUnion(field_name, field_value_ptr, depth, field_option, options),
         .@"struct" => {
             if (depth > 0)
                 displayStruct(field_name, field_value_ptr, depth - 1, field_option, options);
@@ -553,6 +548,7 @@ pub fn displayEnum(field_name: []const u8, field_value_ptr: anytype, field_optio
 }
 
 pub fn displayString(field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+    validateFieldPtrTypeString("displayString", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .text)) return;
     textFieldWidget(@src(), field_name, field_value_ptr, field_option.text, al);
 }
@@ -575,9 +571,10 @@ pub fn displayArray(
     comptime depth: usize,
     field_option: FieldOptions,
     options: anytype,
-    al: *dvui.Alignment,
 ) void {
-    _ = al;
+    validateFieldPtrType(&.{.array}, "displayArray", @TypeOf(field_value_ptr));
+    if (field_option.displayMode() == .none) return;
+
     if (dvui.expander(
         @src(),
         field_option.displayLabel(field_name),
@@ -594,12 +591,11 @@ pub fn displayArray(
         var alignment: dvui.Alignment = .init(@src(), depth);
         defer alignment.deinit();
         for (field_value_ptr, 0..) |*val, i| {
-            // TODO: Aligmmnent
             var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = i });
             defer hbox.deinit();
 
-            var field_name_buf: [20]u8 = undefined; // 20 chars = u64
-            const field_name_str = std.fmt.bufPrint(&field_name_buf, "{d}", .{i}) catch "#";
+            var field_name_buf: [21]u8 = undefined; // 20 chars = u64 + ':'
+            const field_name_str = std.fmt.bufPrint(&field_name_buf, "{d}:", .{i}) catch "#";
             displayField(field_name_str, val, depth, field_option, options, &alignment);
         }
     }
@@ -611,9 +607,10 @@ pub fn displaySlice(
     comptime depth: usize,
     field_option: FieldOptions,
     options: anytype,
-    al: *dvui.Alignment,
 ) void {
-    _ = al;
+    validateFieldPtrTypeSlice("displaySlice", @TypeOf(field_value_ptr));
+    if (field_option.displayMode() == .none) return;
+
     if (dvui.expander(
         @src(),
         field_option.displayLabel(field_name),
@@ -631,12 +628,13 @@ pub fn displaySlice(
         defer alignment.deinit();
 
         for (field_value_ptr.*, 0..) |*val, i| {
-            var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .id_extra = i, .margin = alignment.margin(vbox.data().id) });
-            defer hbox_aligned.deinit();
-            alignment.record(vbox.data().id, hbox_aligned.data());
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
+                .id_extra = i,
+            });
+            defer hbox.deinit();
 
-            var field_name_buf: [20]u8 = undefined; // 20 chars = u64
-            const field_name_str = std.fmt.bufPrint(&field_name_buf, "{d}", .{i}) catch "#";
+            var field_name_buf: [21]u8 = undefined; // 20 chars = u64 + ':'
+            const field_name_str = std.fmt.bufPrint(&field_name_buf, "{d}:", .{i}) catch "#";
             displayField(field_name_str, val, depth, field_option, options, &alignment);
         }
     }
@@ -648,10 +646,16 @@ pub fn displayUnion(
     comptime depth: usize,
     field_option: FieldOptions,
     options: anytype,
-    al: *dvui.Alignment,
 ) void {
     validateFieldPtrType(&.{.@"union"}, "displayUnion", @TypeOf(field_value_ptr));
+    if (field_option.displayMode() == .none) return;
+
+    if (@typeInfo(@TypeOf(field_value_ptr.*)).@"union".tag_type == null) {
+        @compileError("Only tagged unions are supported.");
+    }
+    if (!validFieldOptionsType(field_name, field_option, .standard)) return;
     const current_choice = std.meta.activeTag(field_value_ptr.*);
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
     if (dvui.expander(
         @src(),
         field_option.displayLabel(field_name),
@@ -676,14 +680,16 @@ pub fn displayUnion(
                         field_option,
                         options,
                     );
-                    if (default_value) |default| {
-                        field_value_ptr.* = @unionInit(UnionT, @tagName(choice), default);
-                    } else {
-                        dvui.log.debug(
-                            "struct_ui: Union field {s}.{s} cannot be selected as no default value is provided. Field will not be selected.",
-                            .{ field_name, @tagName(choice) },
-                        );
-                        return;
+                    if (!read_only) {
+                        if (default_value) |default| {
+                            field_value_ptr.* = @unionInit(UnionT, @tagName(choice), default);
+                        } else {
+                            dvui.log.debug(
+                                "struct_ui: Union field {s}.{s} cannot be selected as no default value is provided. Field will not be selected.",
+                                .{ field_name, @tagName(choice) },
+                            );
+                            return;
+                        }
                     }
                 },
             }
@@ -694,10 +700,12 @@ pub fn displayUnion(
                 const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = @intFromEnum(active_tag) });
                 defer hbox.deinit();
                 const struct_options: StructOptions(UnionT) = findMatchingStructOption(UnionT, options) orelse .initDefaults(null);
+                var alignment: dvui.Alignment = .init(@src(), depth);
+                defer alignment.deinit();
 
                 // Will only display if an option exists for this field.
                 if (struct_options.options.get(active_tag)) |union_field_option| {
-                    displayField(@tagName(active_tag), active, depth, union_field_option, options, al);
+                    displayField(@tagName(active_tag), active, depth, union_field_option, options, &alignment);
                 }
             },
         }
@@ -713,19 +721,24 @@ pub fn displayOptional(
     al: *dvui.Alignment,
 ) void {
     validateFieldPtrType(&.{.optional}, "displayOptional", @TypeOf(field_value_ptr));
+    if (field_option.displayMode() == .none) return;
+
     const optional = @typeInfo(@TypeOf(field_value_ptr.*)).optional;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
 
     if (optionalFieldWidget(@src(), field_name, field_value_ptr, field_option, al)) {
-        if (field_value_ptr.* == null) {
-            field_value_ptr.* = defaultValue(optional.child, field_option, options); // If there is no default value, it will remain null.
+        if (!read_only) {
+            if (field_value_ptr.* == null) {
+                field_value_ptr.* = defaultValue(optional.child, field_option, options); // If there is no default value, it will remain null.
 
+            }
         }
         if (field_value_ptr.*) |*val| {
             displayField(field_name, val, depth, field_option, options, al);
         } else {
             dvui.log.debug("struct_ui: Optional field {s} cannot be selected as no default value is provided.", .{field_name});
         }
-    } else {
+    } else if (!read_only) {
         field_value_ptr.* = null;
     }
 }
@@ -739,12 +752,13 @@ pub fn displayPointer(
     al: *dvui.Alignment,
 ) void {
     validateFieldPtrType(&.{.pointer}, "displayPointer", @TypeOf(field_value_ptr));
+    if (field_option.displayMode() == .none) return;
 
     const ptr = @typeInfo(@TypeOf(field_value_ptr.*)).pointer;
     if (ptr.size == .one) {
         displayField(field_name, field_value_ptr.*, depth, field_option, options, al);
     } else if (ptr.size == .slice) {
-        displaySlice(field_name, &field_value_ptr.*, depth, field_option, options, al);
+        displaySlice(field_name, &field_value_ptr.*, depth, field_option, options);
     } else {
         @compileError(std.fmt.comptimePrint("C-style and many item pointers not supported for {s}.{s}\n", .{ @typeName(@TypeOf(field_value_ptr.*)), field_name }));
     }
@@ -763,6 +777,8 @@ pub fn displayStruct(
 
     const StructT = @TypeOf(field_value_ptr.*);
     const struct_options: StructOptions(StructT) = findMatchingStructOption(StructT, options) orelse .initDefaults(null);
+
+    if (field_option.displayMode() == .none) return;
 
     if (dvui.expander(
         @src(),
@@ -798,7 +814,7 @@ pub fn displayStruct(
 }
 
 /// Supply a default value for a field from supplied from either default field initialization values or from struct_options
-pub fn defaultValue(T: type, field_option: FieldOptions, struct_options: anytype) ?T { // TODO: Field is not anytype
+pub fn defaultValue(T: type, field_option: FieldOptions, struct_options: anytype) ?T {
     _ = field_option; // TODO: Remove
     switch (@typeInfo(T)) {
         inline .bool => return false,
@@ -859,14 +875,60 @@ pub fn validateFieldPtrType(comptime required_types: []const std.builtin.TypeId,
                         }
                     }
                 },
-                else => {}, // Fallthrough
+                else => {},
             }
         },
-        else => {}, // Fallthrough
+        else => {},
     }
     @compileError(std.fmt.comptimePrint(
-        "{s} requires a pointer to a {any}, but received a {s} for {s}.",
-        .{ caller, required_types, @tagName(type_info), @typeName(ptr_type) },
+        "{s} requires a pointer to a {s}, but received a {s} to a {s}.",
+        .{ caller, requiredTypesToString(required_types), @tagName(type_info), @typeName(ptr_type) },
+    ));
+}
+
+pub fn requiredTypesToString(comptime required_types: []const std.builtin.TypeId) []const u8 {
+    var result: [:0]const u8 = "";
+    inline for (required_types, 0..) |required_type, i| {
+        result = result ++ @tagName(required_type) ++ if (i < required_types.len - 1) " or " else "";
+    }
+    return result;
+}
+
+pub fn validateFieldPtrTypeSlice(comptime caller: []const u8, comptime ptr_type: type) void {
+    switch (@typeInfo(ptr_type)) {
+        .pointer => |p1| {
+            switch (@typeInfo(p1.child)) {
+                .pointer => |ptr| {
+                    if (ptr.size == .slice)
+                        return;
+                },
+                else => {},
+            }
+        },
+        else => {},
+    }
+    @compileError(std.fmt.comptimePrint(
+        "{s} requires a pointer to a slice, but received a {s}.",
+        .{ caller, @typeName(ptr_type) },
+    ));
+}
+
+pub fn validateFieldPtrTypeString(comptime caller: []const u8, comptime ptr_type: type) void {
+    switch (@typeInfo(ptr_type)) {
+        .pointer => |p| {
+            switch (@typeInfo(p.child)) {
+                .pointer => |ptr| {
+                    if (ptr.size == .slice and ptr.child == u8)
+                        return;
+                },
+                else => {},
+            }
+        },
+        else => {},
+    }
+    @compileError(std.fmt.comptimePrint(
+        "{s} requires a pointer to a []u8 or []const u8, but received a {s}.",
+        .{ caller, @typeName(ptr_type) },
     ));
 }
 

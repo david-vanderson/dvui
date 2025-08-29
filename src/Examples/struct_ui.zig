@@ -28,7 +28,7 @@ pub fn structUI() void {
 
     dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
     {
-        dvui.struct_ui.displayStruct("Top.instance", &Top.instance, 1, .standard_options, .{});
+        dvui.struct_ui.displayStruct("Top.instance", &Top.instance, 1, .default, .{});
     }
 
     if (dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
@@ -50,9 +50,13 @@ pub fn themeEditor() void {
         .a = .{ .number = .{ .display = .none } },
     }, .{ .r = 0, .g = 0, .b = 0, .a = 255 });
     const theme: *dvui.Theme = &dvui.currentWindow().theme; // Want a pointer to the actual theme, not a copy.
-    dvui.struct_ui.displayStruct("dvui.Options", theme, 2, .standard_options, .{
-        color_options,
-    });
+    dvui.struct_ui.displayStruct(
+        "Theme",
+        theme,
+        2,
+        .default,
+        .{color_options},
+    );
 }
 
 test {
