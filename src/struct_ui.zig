@@ -31,7 +31,7 @@ pub const FieldOptions = union(enum) {
 
     pub fn displayLabel(self: FieldOptions, field_name: []const u8) []const u8 {
         return switch (self) {
-            inline else => |fo| if (fo.label) |label| return label else field_name,
+            inline else => |fo| fo.label orelse field_name,
         };
     }
 };
@@ -50,7 +50,7 @@ pub const StandardFieldOptions = struct {
 pub fn StructOptions(Struct: type) type {
     switch (@typeInfo(Struct)) {
         .@"struct", .@"union" => {},
-        else => @compileError(std.fmt.comptimePrint("struct_ui: StructOptions(T) requires Struct or Union, but received a {s}.", .{@typeName(Struct)})),
+        else => @compileError(std.fmt.comptimePrint("StructOptions(T) requires Struct or Union, but received a {s}.", .{@typeName(Struct)})),
     }
     return struct {
         pub const StructOptionsT = std.EnumMap(std.meta.FieldEnum(StructT), FieldOptions);
@@ -237,7 +237,7 @@ pub fn numberFieldWidget(
     if (opt.display == .none) return;
 
     const T = @TypeOf(field_value_ptr.*);
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.display == .read_only;
 
     switch (opt.widget_type) {
         .number_entry => {
@@ -291,7 +291,7 @@ pub fn enumFieldWidget(
     if (opt.display == .none) return;
 
     const T = @TypeOf(field_value_ptr.*);
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.display == .read_only;
 
     // TODO: Look into if this box is realyl needed? Can we not use the parrent widget instead?
     var box = dvui.box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
@@ -324,7 +324,7 @@ pub fn boolFieldWidget(
     validateFieldPtrType(&.{.bool}, "boolFieldWidget", @TypeOf(field_value_ptr));
     if (opt.display == .none) return;
 
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.display == .read_only;
 
     var box = dvui.box(src, .{ .dir = .horizontal }, .{});
     defer box.deinit();
@@ -351,7 +351,6 @@ pub const TextFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
 
     label: ?[]const u8 = null,
-    allocator: ?std.mem.Allocator = null, // Allocator must be supplied for editable strings.
 };
 
 /// Display slices and/or arrays of u8 and const u8.
@@ -368,7 +367,8 @@ pub fn textFieldWidget(
     var box = dvui.box(src, .{ .dir = .horizontal }, .{});
     defer box.deinit();
 
-    var read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
+    var read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.display == .read_only;
+    @compileLog(@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const, @TypeOf(field_value_ptr), @typeInfo(@TypeOf(field_value_ptr)).pointer);
     if (opt.display == .read_write and read_only) {
         // Note all string arrays are treated as read-only, even if they are var.
         dvui.log.debug("struct_ui: field {s} display option is set to read_write for read_only string or an array. Displaying as read_only.", .{field_name});
@@ -401,6 +401,7 @@ pub fn textFieldWidget(
 }
 
 /// Returns the enum type associated with a tagged union
+/// Validates that FieldPtrType points to a tagged union.
 pub fn UnionTagType(FieldPtrType: type) type {
     validateFieldPtrType(&.{.@"union"}, "unionFieldWidget", FieldPtrType);
     const type_info = @typeInfo(@typeInfo(FieldPtrType).pointer.child);
@@ -425,7 +426,7 @@ pub fn unionFieldWidget(
     if (opt.displayMode() == .none) {
         return field_value_ptr.*;
     }
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.displayMode() == .read_only;
 
     var box = dvui.box(src, .{ .dir = .vertical }, .{});
     defer box.deinit();
@@ -435,11 +436,14 @@ pub fn unionFieldWidget(
     {
         var hbox = dvui.box(@src(), .{}, .{});
         defer hbox.deinit();
-        inline for (entries, 0..) |entry, i| {
-            // TODO: Style the radio buttons when they are read-only
-            if (dvui.radio(@src(), choice == std.meta.stringToEnum(@TypeOf(choice), entry.name), entry.name, .{ .id_extra = i })) {
-                if (!read_only) {
-                    choice = std.meta.stringToEnum(@TypeOf(choice), entry.name).?; // This should never fail.
+        if (read_only) {
+            _ = dvui.radio(@src(), true, @tagName(choice), .{});
+        } else {
+            inline for (entries, 0..) |entry, i| {
+                if (dvui.radio(@src(), choice == std.meta.stringToEnum(@TypeOf(choice), entry.name), entry.name, .{ .id_extra = i })) {
+                    if (!read_only) {
+                        choice = std.meta.stringToEnum(@TypeOf(choice), entry.name).?; // This should never fail.
+                    }
                 }
             }
         }
@@ -456,7 +460,7 @@ pub fn optionalFieldWidget(
 ) bool {
     validateFieldPtrType(&.{.optional}, "optionalFieldWidget", @TypeOf(field_value_ptr));
 
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opts.displayMode() == .read_only;
 
     var choice: usize = if (field_value_ptr.* == null) 0 else 1; // 0 = Null, 1 = Not Null
 
@@ -655,7 +659,7 @@ pub fn displayUnion(
     }
     if (!validFieldOptionsType(field_name, field_option, .standard)) return;
     const current_choice = std.meta.activeTag(field_value_ptr.*);
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
     if (dvui.expander(
         @src(),
         field_option.displayLabel(field_name),
@@ -724,7 +728,7 @@ pub fn displayOptional(
     if (field_option.displayMode() == .none) return;
 
     const optional = @typeInfo(@TypeOf(field_value_ptr.*)).optional;
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
 
     if (optionalFieldWidget(@src(), field_name, field_value_ptr, field_option, al)) {
         if (!read_only) {
@@ -813,7 +817,7 @@ pub fn displayStruct(
     }
 }
 
-/// Supply a default value for a field from supplied from either default field initialization values or from struct_options
+/// Supply a default value for a field from either default field initialization values or from struct_options
 pub fn defaultValue(T: type, field_option: FieldOptions, struct_options: anytype) ?T {
     _ = field_option; // TODO: Remove
     switch (@typeInfo(T)) {
@@ -837,7 +841,7 @@ pub fn defaultValue(T: type, field_option: FieldOptions, struct_options: anytype
             }
             return .{};
         },
-        inline .@"union" => |_| {
+        inline .@"union" => {
             inline for (struct_options) |opt| {
                 if (@TypeOf(opt).StructT == T) {
                     return opt.default_value;
