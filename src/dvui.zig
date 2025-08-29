@@ -1552,7 +1552,7 @@ pub const Path = struct {
     /// `Builder.deinit` should always be called as `Builder.build` does not give ownership
     /// of the memory
     pub const Builder = struct {
-        points: std.ArrayList(Point.Physical),
+        points: std.array_list.Managed(Point.Physical),
         oom_error_occurred: bool = false,
 
         pub fn init(allocator: std.mem.Allocator) Builder {
@@ -6500,13 +6500,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
 /// ```
 pub fn toUtf8(allocator: std.mem.Allocator, text: []const u8) std.mem.Allocator.Error![]const u8 {
     if (std.unicode.utf8ValidateSlice(text)) return text;
-    // Give some reasonable extra space for replacement bytes without the need to reallocate
-    const replacements_before_realloc = 100;
-    // We use array list directly to avoid `std.fmt.count` going over the string twice
-    var out = try std.ArrayList(u8).initCapacity(allocator, text.len + replacements_before_realloc);
-    const writer = out.writer();
-    try std.unicode.fmtUtf8(text).format(undefined, undefined, writer);
-    return out.toOwnedSlice();
+    return std.fmt.allocPrint(allocator, "{f}", std.unicode.fmtUtf8(text));
 }
 
 test toUtf8 {

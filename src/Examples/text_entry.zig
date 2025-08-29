@@ -265,7 +265,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
                             break :blk null;
                         };
                         if (file) |f| {
-                            bytes = f.reader().readAllAlloc(dvui.currentWindow().gpa, 30_000_000) catch null;
+                            bytes = f.deprecatedReader().readAllAlloc(dvui.currentWindow().gpa, 30_000_000) catch null;
                         }
                     }
 
