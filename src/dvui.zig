@@ -6500,7 +6500,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
 /// ```
 pub fn toUtf8(allocator: std.mem.Allocator, text: []const u8) std.mem.Allocator.Error![]const u8 {
     if (std.unicode.utf8ValidateSlice(text)) return text;
-    return std.fmt.allocPrint(allocator, "{s}", std.unicode.fmtUtf8(text));
+    return std.fmt.allocPrint(allocator, "{f}", .{std.unicode.fmtUtf8(text)});
 }
 
 test toUtf8 {
