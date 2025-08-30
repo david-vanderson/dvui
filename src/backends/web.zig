@@ -34,8 +34,8 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_about_webgl2() u8;
 
     pub extern "dvui" fn wasm_panic(ptr: [*]const u8, len: usize) void;
-    pub extern "dvui" fn wasm_log_write(ptr: [*]const u8, len: usize) void;
-    pub extern "dvui" fn wasm_log_flush() void;
+    pub extern "dvui" fn wasm_console_drain(ptr: [*]const u8, len: usize) void;
+    pub extern "dvui" fn wasm_console_flush(log_level: u8) void;
 
     pub extern "dvui" fn wasm_now() f64;
     pub extern "dvui" fn wasm_sleep(ms: u32) void;
@@ -77,7 +77,7 @@ pub const wasm = if (!builtin.is_test) struct {
 
     pub fn wasm_panic(_: [*]const u8, _: usize) void {}
     pub fn wasm_log_write(_: [*]const u8, _: usize) void {}
-    pub fn wasm_log_flush() void {}
+    pub fn wasm_console_flush(_: u8) void {}
 
     pub fn wasm_now() f64 {
         return undefined;
@@ -769,6 +769,113 @@ pub fn getNumberOfFilesAvailable(id: dvui.Id) usize {
     return wasm.wasm_get_number_of_files_available(id.asU64());
 }
 
+/// A `std.Io.Writer` wrapper for interacting with the JavaScript console.
+///
+/// The console writer will work with buffer size of 0, but it will force
+/// a call from Wasm to JavaScript on every write.
+///
+/// The drain function is infallible, meaning that using `catch unreachable`
+/// on the writer functions should be safe (unless the `std.Io.Writer`
+/// implementation can throw an error explicitly)
+///
+/// IMPORTANT: All instances of `Console` drain to the same buffer on the
+/// Javascript side! To avoid you message getting clobbered, always write
+/// everything in full at one time and call `flushAtLevel` immediately.
+pub const Console = struct {
+    writer: std.Io.Writer,
+
+    pub fn init(buffer: []u8) Console {
+        return .{ .writer = .{
+            .buffer = buffer,
+            .vtable = &.{
+                .drain = &Console.drain,
+            },
+        } };
+    }
+
+    pub fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
+        // Write out the internal buffer first
+        if (w.end != 0) {
+            wasm.wasm_console_drain(w.buffer.ptr, w.end);
+            w.end = 0;
+        }
+
+        // Write other data
+        const slice = data[0 .. data.len - 1];
+        var unused = w.unusedCapacitySlice();
+        for (slice) |buf| {
+            if (buf.len > w.buffer.len) {
+                // Write internal buffer first
+                wasm.wasm_console_drain(w.buffer.ptr, w.end);
+                w.end = 0;
+                unused = w.unusedCapacitySlice();
+                wasm.wasm_console_drain(buf.ptr, buf.len);
+            } else {
+                if (buf.len > unused.len) {
+                    wasm.wasm_console_drain(w.buffer.ptr, w.end);
+                    w.end = 0;
+                    unused = w.unusedCapacitySlice();
+                }
+                @memcpy(unused.ptr, buf);
+                w.end += buf.len;
+                unused = w.unusedCapacitySlice();
+            }
+        }
+        const final = data[data.len - 1];
+        switch (final.len) {
+            0 => {},
+            1 => {
+                var remaining = splat;
+                while (remaining > unused.len) {
+                    @memset(unused, final[0]);
+                    wasm.wasm_console_drain(unused.ptr, unused.len);
+                    remaining -= unused.len;
+                    w.end = 0;
+                    unused = w.unusedCapacitySlice();
+                } else {
+                    @memset(unused[0..remaining], final[0]);
+                    w.end += remaining;
+                    unused = w.unusedCapacitySlice();
+                }
+            },
+            else => if (final.len > w.buffer.len) {
+                // No point in buffering as we don't have enough buffer size
+                if (w.end != 0) {
+                    // Write out internal buffer first
+                    wasm.wasm_console_drain(w.buffer.ptr, w.end);
+                    w.end = 0;
+                }
+                for (0..splat) |_| wasm.wasm_console_drain(final.ptr, final.len);
+            } else for (0..splat) |_| {
+                if (final.len > unused.len) {
+                    // Drain if the data would not fit
+                    wasm.wasm_console_drain(unused.ptr, unused.len);
+                    w.end = 0;
+                    unused = w.unusedCapacitySlice();
+                }
+                @memcpy(unused.ptr, final);
+                w.end += final.len;
+                unused = w.unusedCapacitySlice();
+            },
+        }
+        return std.Io.Writer.countSplat(data, splat);
+    }
+
+    /// If `level` is `null`, the generic `console.log` will be used,
+    /// otherwise the approtiare `console.LEVEL` function will be used.
+    pub fn flushAtLevel(self: *Console, level: ?std.log.Level) void {
+        // Drain all data to the JavaScript side.
+        self.writer.flush() catch unreachable;
+        // Show the console message with the appropriate log level
+        wasm.wasm_console_flush(if (level) |l| switch (l) {
+            .err => 9,
+            .warn => 7,
+            .info => 5,
+            .debug => 3,
+        } else 1);
+    }
+};
+
 // dvui_app stuff
 comptime {
     if (dvui.App.get() != null) {
@@ -778,26 +885,20 @@ comptime {
     }
 }
 
+var wasm_log_console_buffer: [512]u8 = undefined;
+pub var js_console = Console.init(&wasm_log_console_buffer);
+
 pub fn logFn(
     comptime message_level: std.log.Level,
     comptime scope: @Type(.enum_literal),
     comptime format: []const u8,
     args: anytype,
 ) void {
-    const level_txt = switch (message_level) {
-        .err => "error",
-        .warn => "warning",
-        .info => "info",
-        .debug => "debug",
-    };
-    const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
-    const msg = level_txt ++ prefix2 ++ format ++ "\n";
-
-    const errbuf = "dvui log OOM";
-    const buf: []const u8 = std.fmt.allocPrint(gpa, msg, args) catch errbuf;
-    defer if (buf.ptr != errbuf.ptr) gpa.free(buf);
-    WebBackend.wasm.wasm_log_write(buf.ptr, buf.len);
-    WebBackend.wasm.wasm_log_flush();
+    if (scope != .default) {
+        js_console.writer.print("({s}): ", .{@tagName(scope)}) catch unreachable;
+    }
+    js_console.writer.print(format, args) catch unreachable;
+    js_console.flushAtLevel(message_level);
 }
 
 pub const panic = std.debug.FullPanic(struct {
