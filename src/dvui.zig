@@ -6506,9 +6506,25 @@ pub fn toUtf8(allocator: std.mem.Allocator, text: []const u8) std.mem.Allocator.
 test toUtf8 {
     const alloc = std.testing.allocator;
     const some_text = "This is some maybe utf8 text";
+    try std.testing.expect(std.unicode.utf8ValidateSlice(some_text));
+
     const utf8_text = try toUtf8(alloc, some_text);
     // Detect if the text needs to be freed by checking the
     defer if (utf8_text.ptr != some_text.ptr) alloc.free(utf8_text);
+
+    try std.testing.expect(some_text.ptr == utf8_text.ptr);
+    try std.testing.expect(std.unicode.utf8ValidateSlice(utf8_text));
+
+    // And with some invalid utf8:
+    const invalid_utf8 = "This \xFF is some\xFF invalid utf8\xFF";
+    try std.testing.expect(!std.unicode.utf8ValidateSlice(invalid_utf8));
+
+    const corrected_text = try toUtf8(alloc, invalid_utf8);
+    // Detect if the text needs to be freed by checking the
+    defer if (corrected_text.ptr != invalid_utf8.ptr) alloc.free(corrected_text);
+
+    try std.testing.expect(invalid_utf8.ptr != corrected_text.ptr);
+    try std.testing.expect(std.unicode.utf8ValidateSlice(corrected_text));
 }
 
 // pos is clamped to [0, text.len] then if it is in the middle of a multibyte
