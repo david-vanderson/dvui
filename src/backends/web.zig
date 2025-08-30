@@ -793,8 +793,9 @@ pub fn logFn(
     const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
     const msg = level_txt ++ prefix2 ++ format ++ "\n";
 
-    const buf = std.fmt.allocPrint(gpa, msg, args) catch "dvui log OOM";
-    defer gpa.free(buf);
+    const errbuf = "dvui log OOM";
+    const buf: []const u8 = std.fmt.allocPrint(gpa, msg, args) catch errbuf;
+    defer if (buf.ptr != errbuf.ptr) gpa.free(buf);
     WebBackend.wasm.wasm_log_write(buf.ptr, buf.len);
     WebBackend.wasm.wasm_log_flush();
 }
