@@ -464,7 +464,7 @@ pub const PMAImage = struct {
             .overwrite_fill = ow_fill,
             .disable_fill = disable_fill,
         }) catch |err| {
-            dvui.log.warn("iconTexture Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, dbg_name, height });
+            dvui.log.warn("iconTexture Tinyvg error {any} rendering icon {s} at height {d}\n", .{ err, dbg_name, height });
             return dvui.TvgError.tvgError;
         };
         return PMAImage{
@@ -509,9 +509,9 @@ test toHexString {
 /// - `RRGGBBAA`
 pub fn fromHex(hex_color: []const u8) Color {
     return tryFromHex(hex_color) catch |err| if (@inComptime()) {
-        @compileError(std.fmt.comptimePrint("Failed to parse hex color string: {!}", .{err}));
+        @compileError(std.fmt.comptimePrint("Failed to parse hex color string: {any}", .{err}));
     } else {
-        std.log.err("Failed to parse hex color string: {!}", .{err});
+        std.log.err("Failed to parse hex color string: {any}", .{err});
         return magenta;
     };
 }

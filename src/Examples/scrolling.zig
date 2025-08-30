@@ -82,7 +82,7 @@ pub fn scrolling() void {
             }
 
             if (dvui.button(@src(), "Scroll to Bottom", .{}, .{})) {
-                Data.scroll_info.scrollToOffset(.vertical, std.math.maxInt(usize));
+                Data.scroll_info.scrollToOffset(.vertical, std.math.floatMax(f32));
             }
         }
         {
@@ -114,7 +114,7 @@ pub fn scrolling() void {
 
         if (scroll_to_bottom_after) {
             // do this after scrollArea has given scroll_info the new size
-            Data.scroll_info.scrollToOffset(.vertical, std.math.maxInt(usize));
+            Data.scroll_info.scrollToOffset(.vertical, std.math.floatMax(f32));
         }
     }
 

@@ -87,7 +87,7 @@ pub fn debuggingErrors() void {
 
             var outer = dvui.currentWindow().keybinds.iterator();
             while (outer.next()) |okv| {
-                tl2.format("\n{s}\n    {}\n", .{ okv.key_ptr.*, okv.value_ptr }, .{});
+                tl2.format("\n{s}\n    {any}\n", .{ okv.key_ptr.*, okv.value_ptr }, .{});
             }
         }
 

@@ -303,11 +303,11 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
             null,
             null,
             win32.GetModuleHandleW(null),
-            @constCast(@ptrCast(&create_args)),
+            @ptrCast(@constCast(&create_args)),
         ) orelse switch (win32.GetLastError()) {
             win32.ERROR_CANNOT_FIND_WND_CLASS => switch (builtin.mode) {
                 .Debug => std.debug.panic(
-                    "did you forget to call RegisterClass? (class_name='{}')",
+                    "did you forget to call RegisterClass? (class_name='{f}')",
                     .{std.unicode.fmtUtf16Le(std.mem.span(options.registered_class))},
                 ),
                 else => unreachable,
@@ -425,7 +425,7 @@ fn lastErr(what: []const u8) !void {
 
 fn win32ToErr(err: win32.WIN32_ERROR, what: []const u8) !void {
     if (err == win32.NO_ERROR) return;
-    std.log.err("{s} failed, error={}", .{ what, err });
+    std.log.err("{s} failed, error={f}", .{ what, err });
     return dvui.Backend.GenericError.BackendError;
 }
 
@@ -965,7 +965,7 @@ pub fn nanoTime(_: Context) i128 {
 }
 
 pub fn sleep(_: Context, ns: u64) void {
-    std.time.sleep(ns);
+    std.Thread.sleep(ns);
 }
 
 pub fn clipboardText(self: Context) ![]const u8 {
@@ -1144,11 +1144,11 @@ pub fn wndProc(
     umsg: u32,
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
-) callconv(std.os.windows.WINAPI) win32.LRESULT {
+) callconv(.winapi) win32.LRESULT {
     switch (umsg) {
         win32.WM_CREATE => {
             const create_struct: *win32.CREATESTRUCTW = @ptrFromInt(@as(usize, @bitCast(lparam)));
-            const args: *CreateWindowArgs = @alignCast(@ptrCast(create_struct.lpCreateParams));
+            const args: *CreateWindowArgs = @ptrCast(@alignCast(create_struct.lpCreateParams));
             const dx_options = createDeviceD3D(hwnd) orelse {
                 args.err = error.D3dDeviceInitFailed;
                 return -1;
@@ -1311,7 +1311,7 @@ pub fn wndProc(
                     }) catch {};
                 }
             } else |err| {
-                log.err("invalid key found: {}", .{err});
+                log.err("invalid key found: {t}", .{err});
             }
             return switch (msg) {
                 win32.WM_SYSKEYDOWN, win32.WM_SYSKEYUP => win32.DefWindowProcW(hwnd, umsg, wparam, lparam),

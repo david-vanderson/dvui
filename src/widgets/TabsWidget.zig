@@ -16,7 +16,7 @@ pub var defaults: Options = .{
 
 pub const InitOptions = struct {
     dir: dvui.enums.Direction = .horizontal,
-    draw_focus : bool = true,
+    draw_focus: bool = true,
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TabsWidget {

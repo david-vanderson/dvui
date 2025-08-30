@@ -88,7 +88,7 @@ pub fn initNoFmtAllocator(src: std.builtin.SourceLocation, label_str: []const u8
 fn logAndHighlight(src: std.builtin.SourceLocation, opts: Options, err: anyerror) void {
     const newid = dvui.parentGet().extendId(src, opts.idExtra());
     dvui.currentWindow().debug.widget_id = newid;
-    dvui.log.err("{s}:{d} LabelWidget id {x} (highlighted in red) init() got {!}", .{ src.file, src.line, newid, err });
+    dvui.log.err("{s}:{d} LabelWidget id {x} (highlighted in red) init() got {any}", .{ src.file, src.line, newid, err });
 }
 
 pub fn data(self: *LabelWidget) *WidgetData {

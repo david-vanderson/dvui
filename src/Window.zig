@@ -347,7 +347,7 @@ pub fn init(
     //    self.snap_to_pixels = false;
     //}
 
-    log.info("window logical {} pixels {} natural scale {d} initial content scale {d} snap_to_pixels {}\n", .{ winSize, pxSize, pxSize.w / winSize.w, self.content_scale, self.snap_to_pixels });
+    log.info("window logical {f} pixels {f} natural scale {d} initial content scale {d} snap_to_pixels {any}\n", .{ winSize, pxSize, pxSize.w / winSize.w, self.content_scale, self.snap_to_pixels });
 
     errdefer self.deinit();
 
@@ -356,7 +356,7 @@ pub fn init(
 
     if (dvui.useFreeType) {
         dvui.FontCacheEntry.intToError(c.FT_Init_FreeType(&dvui.ft2lib)) catch |err| {
-            dvui.log.err("freetype error {!} trying to init freetype library\n", .{err});
+            dvui.log.err("freetype error {any} trying to init freetype library\n", .{err});
             return error.freetypeError;
         };
     }
@@ -1338,7 +1338,7 @@ pub fn dataSetAdvanced(self: *Self, id: Id, key: []const u8, data_in: anytype, c
         if (builtin.mode == .Debug) {
             if (!std.mem.eql(u8, entry.value_ptr.type_str, @typeName(@TypeOf(data_in))) or entry.value_ptr.copy_slice != copy_slice) {
                 std.debug.panic(
-                    "dataSetAdvanced: stored type {s} (slice {}) doesn't match asked for type {s} (slice {})",
+                    "dataSetAdvanced: stored type {s} (slice {any}) doesn't match asked for type {s} (slice {any})",
                     .{ entry.value_ptr.type_str, entry.value_ptr.copy_slice, @typeName(@TypeOf(data_in)), copy_slice },
                 );
             }
@@ -1353,7 +1353,7 @@ pub fn dataSetAdvanced(self: *Self, id: Id, key: []const u8, data_in: anytype, c
     if (!entry.found_existing or should_trash) {
         entry.value_ptr.* = .{
             .alignment = alignment,
-            .data = self.gpa.allocWithOptions(u8, bytes.len * num_copies, alignment, null) catch |err| switch (err) {
+            .data = self.gpa.allocWithOptions(u8, bytes.len * num_copies, .fromByteUnits(alignment), null) catch |err| switch (err) {
                 error.OutOfMemory => {
                     dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
                     return;
@@ -1382,7 +1382,7 @@ pub fn dataGetInternal(self: *Self, id: Id, key: []const u8, comptime T: type, s
     if (self.datas.getPtr(hash)) |sd| {
         if (builtin.mode == .Debug) {
             if (!std.mem.eql(u8, sd.type_str, @typeName(T)) or sd.copy_slice != slice) {
-                std.debug.panic("dataGetInternal: stored type {s} (slice {}) doesn't match asked for type {s} (slice {})", .{ sd.type_str, sd.copy_slice, @typeName(T), slice });
+                std.debug.panic("dataGetInternal: stored type {s} (slice {any}) doesn't match asked for type {s} (slice {any})", .{ sd.type_str, sd.copy_slice, @typeName(T), slice });
             }
         }
         return sd.data;
@@ -1466,7 +1466,7 @@ fn dialogsShow(self: *Self) void {
 
         if (dia) |d| {
             d.display(d.id) catch |err| {
-                log.warn("Dialog {x} got {!} from its display function", .{ d.id, err });
+                log.warn("Dialog {x} got {any} from its display function", .{ d.id, err });
             };
         } else {
             break;
@@ -1623,7 +1623,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     if (self.debug.logEvents(null)) {
         for (evts) |*e| {
             if (e.handled) continue;
-            log.debug("Unhandled {}", .{e});
+            log.debug("Unhandled {f}", .{e});
         }
     }
 
