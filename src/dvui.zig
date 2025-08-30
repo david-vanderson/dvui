@@ -95,6 +95,11 @@ pub const TreeWidget = widgets.TreeWidget;
 pub const VirtualParentWidget = widgets.VirtualParentWidget;
 pub const GridWidget = widgets.GridWidget;
 pub const struct_ui = @import("struct_ui.zig");
+//pub const structEntry = se.structEntry;
+//pub const structEntryEx = se.structEntryEx;
+//pub const structEntryAlloc = se.structEntryAlloc;
+//pub const structEntryExAlloc = se.structEntryExAlloc;
+//pub const StructFieldOptions = se.StructFieldOptions;
 
 pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
@@ -410,6 +415,7 @@ pub const Alignment = struct {
         dvui.dataSet(null, self.id, "_max_align", self.next);
         if (self.max) |m| {
             if (self.next != m) {
+                // something changed
                 refresh(null, @src(), self.id);
             }
         }
@@ -7576,10 +7582,11 @@ pub const BasicLayout = struct {
 /// Display a struct and allow the user to edit values
 /// Refer to struct_ui.zig for full API.
 /// Call StructOptions(T) to to create display options for the struct or use .{} for defaults.
-pub fn structUI(src: std.builtin.SourceLocation, field_name: []const u8, struct_ptr: anytype, comptime depth: usize, struct_options: anytype) void {
+pub fn structUI(src: std.builtin.SourceLocation, comptime field_name: []const u8, struct_ptr: anytype, comptime depth: usize, struct_options: anytype) void {
     var vbox = dvui.box(src, .{ .dir = .vertical }, .{ .expand = .horizontal });
     defer vbox.deinit();
-    struct_ui.displayStruct(field_name, struct_ptr, depth, .default, struct_options);
+    const struct_box = struct_ui.displayStruct(field_name, struct_ptr, depth, .default, struct_options, null);
+    if (struct_box) |b| b.deinit();
 }
 
 test {

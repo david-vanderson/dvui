@@ -28,7 +28,7 @@ pub fn structUI() void {
 
     dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
     {
-        dvui.structUI(@src(), "Top.instance", &Top.instance, 1, .{});
+        dvui.structUI(@src(), "Top.Instance", &Top.instance, 1, .{});
     }
 
     if (dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
@@ -47,16 +47,18 @@ pub fn themeEditor() void {
         .r = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
         .g = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
         .b = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
-        .a = .{ .number = .{ .display = .none } },
-    }, .{ .r = 0, .g = 0, .b = 0, .a = 255 });
+    }, .{ .r = 127, .g = 127, .b = 127, .a = 255 });
     const theme: *dvui.Theme = &dvui.currentWindow().theme; // Want a pointer to the actual theme, not a copy.
-    dvui.struct_ui.displayStruct(
+    if (dvui.struct_ui.displayStruct(
         "Theme",
         theme,
         2,
         .default,
         .{color_options},
-    );
+        null,
+    )) |box| {
+        box.deinit();
+    }
 }
 
 test {
