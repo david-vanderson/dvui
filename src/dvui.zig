@@ -94,12 +94,12 @@ pub const TextLayoutWidget = widgets.TextLayoutWidget;
 pub const TreeWidget = widgets.TreeWidget;
 pub const VirtualParentWidget = widgets.VirtualParentWidget;
 pub const GridWidget = widgets.GridWidget;
-const se = @import("structEntry.zig");
-pub const structEntry = se.structEntry;
-pub const structEntryEx = se.structEntryEx;
-pub const structEntryAlloc = se.structEntryAlloc;
-pub const structEntryExAlloc = se.structEntryExAlloc;
-pub const StructFieldOptions = se.StructFieldOptions;
+pub const struct_ui = @import("struct_ui.zig");
+//pub const structEntry = se.structEntry;
+//pub const structEntryEx = se.structEntryEx;
+//pub const structEntryAlloc = se.structEntryAlloc;
+//pub const structEntryExAlloc = se.structEntryExAlloc;
+//pub const StructFieldOptions = se.StructFieldOptions;
 
 pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
@@ -7578,6 +7578,23 @@ pub const BasicLayout = struct {
         return self.min_size_children;
     }
 };
+
+/// Display a struct and allow the user to edit values
+///
+/// Refer to struct_ui.zig for full API.
+/// Call StructOptions(T) to to create display options for the struct or use .{} for defaults.
+/// See struct_ui.displayStruct for more details.
+///
+/// IMPORTANT NOTE:
+/// Any modifyable string slice fields are assigned to the TextWidget's internal string buffer.
+/// If the lifetime of the struct will outlive the lifetime of the TextWidget's window, you must make sure to
+/// dupe any modified strings before the widnow is deinitialized.
+pub fn structUI(src: std.builtin.SourceLocation, comptime field_name: []const u8, struct_ptr: anytype, comptime depth: usize, struct_options: anytype) void {
+    var vbox = dvui.box(src, .{ .dir = .vertical }, .{ .expand = .horizontal });
+    defer vbox.deinit();
+    const struct_box = struct_ui.displayStruct(field_name, struct_ptr, depth, .default, struct_options, null);
+    if (struct_box) |b| b.deinit();
+}
 
 test {
     //std.debug.print("DVUI test\n", .{});

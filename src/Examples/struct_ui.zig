@@ -1,4 +1,4 @@
-/// ![image](Examples-struct_ui.png)
+///![image](Examples-struct_ui.png)
 pub fn structUI() void {
     var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer b.deinit();
@@ -19,7 +19,7 @@ pub fn structUI() void {
         a_bool: bool = false,
         a_ptr: *TopChild = undefined,
         a_struct: TopChild = .{ .a_dir = .vertical },
-        a_str: []const u8 = &[_]u8{0} ** 20,
+        a_str: []const u8 = &[_]u8{'$'} ** 20,
         a_slice: []TopChild = undefined,
         an_array: [4]u8 = .{ 1, 2, 3, 4 },
 
@@ -28,53 +28,37 @@ pub fn structUI() void {
 
     dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
     {
-        dvui.structEntryAlloc(@src(), dvui.currentWindow().gpa, Top, .{}, &Top.instance, .{ .margin = .{ .x = 10 } });
+        dvui.structUI(@src(), "Top.Instance", &Top.instance, 1, .{});
     }
 
-    //if (dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
-    //    themeEditor();
-    //}
+    if (dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
+        themeEditor();
+    }
 }
 
-/// ![image](Examples-themeEditor.png)
+var font_buf: [50]u8 = @splat('z');
+
+///![image](Examples-themeEditor.png)
 pub fn themeEditor() void {
     var b2 = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer b2.deinit();
 
-    //const color_field_options = dvui.StructFieldOptions(dvui.Color, .{ .style_err, .style_accent }){ .fields = .{
-    //    .r = .{ .min = 0, .max = 255, .widget_type = .slider },
-    //    .g = .{ .min = 0, .max = 255, .widget_type = .slider },
-    //    .b = .{ .min = 0, .max = 255, .widget_type = .slider },
-    //    .a = .{ .disabled = true },
-    //} };
-
-    //dvui.structEntryEx(@src(), "dvui.Theme", dvui.Theme, .{ .style_err, .style_accent }, dvui.themeGet(), .{
-    //    .use_expander = false,
-    //    .label_override = "",
-    //    .fields = .{
-    //        .name = .{ .disabled = true },
-    //        .dark = .{ .widget_type = .toggle },
-    //        .font_body = .{ .disabled = true },
-    //        .font_heading = .{ .disabled = true },
-    //        .font_caption = .{ .disabled = true },
-    //        .font_caption_heading = .{ .disabled = true },
-    //        .font_title = .{ .disabled = true },
-    //        .font_title_1 = .{ .disabled = true },
-    //        .font_title_2 = .{ .disabled = true },
-    //        .font_title_3 = .{ .disabled = true },
-    //        .font_title_4 = .{ .disabled = true },
-    //        .color_accent = color_field_options,
-    //        .color_err = color_field_options,
-    //        .color_text = color_field_options,
-    //        .color_text_press = color_field_options,
-    //        .color_fill = color_field_options,
-    //        .color_fill_window = color_field_options,
-    //        .color_fill_control = color_field_options,
-    //        .color_fill_hover = color_field_options,
-    //        .color_fill_press = color_field_options,
-    //        .color_border = color_field_options,
-    //    },
-    //});
+    const color_options: dvui.struct_ui.StructOptions(dvui.Color) = .init(.{
+        .r = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
+        .g = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
+        .b = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
+    }, .{ .r = 127, .g = 127, .b = 127, .a = 255 });
+    const theme: *dvui.Theme = &dvui.currentWindow().theme; // Want a pointer to the actual theme, not a copy.
+    if (dvui.struct_ui.displayStruct(
+        "Theme",
+        theme,
+        2,
+        .default,
+        .{color_options},
+        null,
+    )) |box| {
+        box.deinit();
+    }
 }
 
 test {
@@ -104,7 +88,7 @@ test "DOCIMG struct_ui" {
 //
 //    const frame = struct {
 //        fn frame() !dvui.App.Result {
-//            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+//            var box = dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
 //            defer box.deinit();
 //            themeEditor();
 //            return .ok;
