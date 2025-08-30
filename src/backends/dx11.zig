@@ -303,7 +303,7 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
             null,
             null,
             win32.GetModuleHandleW(null),
-            @constCast(@ptrCast(&create_args)),
+            @ptrCast(@constCast(&create_args)),
         ) orelse switch (win32.GetLastError()) {
             win32.ERROR_CANNOT_FIND_WND_CLASS => switch (builtin.mode) {
                 .Debug => std.debug.panic(
@@ -1148,7 +1148,7 @@ pub fn wndProc(
     switch (umsg) {
         win32.WM_CREATE => {
             const create_struct: *win32.CREATESTRUCTW = @ptrFromInt(@as(usize, @bitCast(lparam)));
-            const args: *CreateWindowArgs = @alignCast(@ptrCast(create_struct.lpCreateParams));
+            const args: *CreateWindowArgs = @ptrCast(@alignCast(create_struct.lpCreateParams));
             const dx_options = createDeviceD3D(hwnd) orelse {
                 args.err = error.D3dDeviceInitFailed;
                 return -1;

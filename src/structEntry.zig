@@ -660,7 +660,7 @@ pub fn sliceFieldWidget(
             },
         }
 
-        fieldWidget("name", Child, exclude, @alignCast(@ptrCast(&(result.*[i]))), opt.child, alloc, allocator, alignment);
+        fieldWidget("name", Child, exclude, @ptrCast(@alignCast(&(result.*[i]))), opt.child, alloc, allocator, alignment);
     }
 
     // show a final slot that allows dropping an entry at the end of the list
