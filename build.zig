@@ -510,7 +510,7 @@ const DvuiModuleOptions = struct {
     build_options: *std.Build.Step.Options,
 
     fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
-        const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters, .use_lld = self.use_lld });
+        const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters, .use_lld = self.use_lld, .use_llvm = true });
         self.b.installArtifact(tests); // Compile check on default install step
         if (self.check_step) |step| {
             step.dependOn(&tests.step);
@@ -518,7 +518,13 @@ const DvuiModuleOptions = struct {
     }
     fn addTests(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
         if (self.test_step) |step| {
-            const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters, .use_lld = self.use_lld });
+            const tests = self.b.addTest(.{
+                .root_module = mod,
+                .name = name,
+                .filters = self.test_filters,
+                .use_lld = self.use_lld,
+                .use_llvm = true,
+            });
             step.dependOn(&self.b.addRunArtifact(tests).step);
         }
     }
@@ -655,6 +661,7 @@ fn addWebExample(
 
     const exeOptions: std.Build.ExecutableOptions = .{
         .name = "web",
+        .use_llvm = true,
         .root_module = b.createModule(.{
             .root_source_file = file,
             .target = opts.target,

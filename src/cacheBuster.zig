@@ -19,7 +19,7 @@ pub fn main() !void {
         if (i == 0) continue;
 
         var file = try std.fs.cwd().openFile(arg, .{});
-        const contents = try file.reader().readAllAlloc(arena, 100 * 1024 * 1024);
+        const contents = try file.deprecatedReader().readAllAlloc(arena, 100 * 1024 * 1024);
         if (i == 1) {
             template_bytes = contents;
         } else {
@@ -34,8 +34,11 @@ pub fn main() !void {
     var pos: usize = 0;
     while (std.mem.indexOfPos(u8, template_bytes, pos, needle)) |idx| {
         pos = idx + needle.len;
-        _ = try std.fmt.bufPrint(template_bytes[idx..][0..needle.len], "{s}", .{std.fmt.fmtSliceHexLower(&hash)});
+        _ = try std.fmt.bufPrint(template_bytes[idx..][0..needle.len], "{x}", .{&hash});
     }
 
-    try std.io.getStdOut().writer().writeAll(template_bytes);
+    var buf: [1000]u8 = undefined;
+    var stdout = std.fs.File.stdout().writer(&buf);
+    try stdout.interface.print("{s}", .{template_bytes});
+    try stdout.interface.flush();
 }

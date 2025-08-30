@@ -41,5 +41,8 @@ pub fn main() !void {
     html_out = try std.mem.replaceOwned(u8, allocator, html_out, "B64_LOGO_DATA_TO_INSERT_HERE", b64_logo);
 
     // Output resulting html file for the build system to do it's magic.
-    try std.io.getStdOut().writer().writeAll(html_out);
+    var buf: [1000]u8 = undefined;
+    var stdout = std.fs.File.stdout().writer(&buf);
+    try stdout.interface.print("{s}", .{html_out});
+    try stdout.interface.flush();
 }
