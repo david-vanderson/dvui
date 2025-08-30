@@ -289,7 +289,7 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     };
     defer file.close();
 
-    const len = try file.read(&hash_buf);
+    const len = try file.readAll(&hash_buf);
     const prev_hash = try std.fmt.parseUnsigned(HashInt, hash_buf[0..len], 16);
 
     if (prev_hash != hash) {

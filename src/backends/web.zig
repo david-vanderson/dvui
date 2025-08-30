@@ -778,14 +778,6 @@ comptime {
     }
 }
 
-const WriteError = error{};
-const LogWriter = std.io.Writer(void, WriteError, writeLog);
-
-fn writeLog(_: void, msg: []const u8) WriteError!usize {
-    WebBackend.wasm.wasm_log_write(msg.ptr, msg.len);
-    return msg.len;
-}
-
 pub fn logFn(
     comptime message_level: std.log.Level,
     comptime scope: @Type(.enum_literal),
@@ -801,7 +793,9 @@ pub fn logFn(
     const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
     const msg = level_txt ++ prefix2 ++ format ++ "\n";
 
-    (LogWriter{ .context = {} }).print(msg, args) catch return;
+    const buf = std.fmt.allocPrint(gpa, msg, args) catch "dvui log OOM";
+    defer gpa.free(buf);
+    WebBackend.wasm.wasm_log_write(buf.ptr, buf.len);
     WebBackend.wasm.wasm_log_flush();
 }
 
