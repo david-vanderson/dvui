@@ -269,12 +269,16 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
 
     const HashInt = u64;
     const hash: HashInt = widget_hasher.?.final();
+    // used both for reading or writing the hash
+    var hash_buf: [@sizeOf(HashInt) * 2]u8 = undefined;
 
     const file = dir.openFile(filename, .{ .mode = .read_write }) catch |err| switch (err) {
         std.fs.File.OpenError.FileNotFound => {
             if (should_write_snapshots()) {
                 const file = try dir.createFile(filename, .{});
-                try file.writer().print("{X}", .{hash});
+                var writer = file.writer(&hash_buf);
+                try writer.interface.print("{X}", .{hash});
+                try writer.end();
                 std.debug.print("Snapshot: Created file \"{s}\"\n", .{filename});
                 return;
             }
@@ -285,14 +289,15 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     };
     defer file.close();
 
-    var hash_buf: [@sizeOf(HashInt) * 2]u8 = @splat(0);
-    _ = try file.readAll(&hash_buf);
-    const prev_hash = try std.fmt.parseUnsigned(HashInt, std.mem.sliceTo(&hash_buf, 0), 16);
+    const len = try file.read(&hash_buf);
+    const prev_hash = try std.fmt.parseUnsigned(HashInt, hash_buf[0..len], 16);
 
     if (prev_hash != hash) {
         if (should_write_snapshots()) {
-            try file.seekTo(0);
-            try file.writer().print("{X}", .{hash});
+            var writer = file.writer(&hash_buf);
+            try writer.seekTo(0);
+            try writer.interface.print("{X}", .{hash});
+            try writer.end();
             std.debug.print("Snapshot: Overwrote file \"{s}\"\n", .{filename});
             return;
         }
