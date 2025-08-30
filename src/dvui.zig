@@ -3053,7 +3053,7 @@ pub fn dataSetAdvanced(win: ?*Window, id: Id, key: []const u8, data: anytype, co
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGet(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
     if (dataGetInternal(win, id, key, T, false)) |bytes| {
-        return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
+        return @as(*T, @ptrCast(@alignCast(bytes.ptr))).*;
     } else {
         return null;
     }
@@ -3071,7 +3071,7 @@ pub fn dataGet(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: T) T {
     if (dataGetInternal(win, id, key, T, false)) |bytes| {
-        return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
+        return @as(*T, @ptrCast(@alignCast(bytes.ptr))).*;
     } else {
         dataSet(win, id, key, default);
         return default;
@@ -3119,7 +3119,7 @@ pub fn dataGetPtrDefault(win: ?*Window, id: Id, key: []const u8, comptime T: typ
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetPtr(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?*T {
     if (dataGetInternal(win, id, key, T, false)) |bytes| {
-        return @as(*T, @alignCast(@ptrCast(bytes.ptr)));
+        return @as(*T, @ptrCast(@alignCast(bytes.ptr)));
     } else {
         return null;
     }
@@ -3148,7 +3148,7 @@ pub fn dataGetSlice(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T
 
     if (dataGetInternal(win, id, key, T, true)) |bytes| {
         if (dt.pointer.sentinel()) |sentinel| {
-            return @as([:sentinel]align(@alignOf(dt.pointer.child)) dt.pointer.child, @alignCast(@ptrCast(std.mem.bytesAsSlice(dt.pointer.child, bytes[0 .. bytes.len - @sizeOf(dt.pointer.child)]))));
+            return @as([:sentinel]align(@alignOf(dt.pointer.child)) dt.pointer.child, @ptrCast(@alignCast(std.mem.bytesAsSlice(dt.pointer.child, bytes[0 .. bytes.len - @sizeOf(dt.pointer.child)]))));
         } else {
             return @as([]align(@alignOf(dt.pointer.child)) dt.pointer.child, @alignCast(std.mem.bytesAsSlice(dt.pointer.child, bytes)));
         }

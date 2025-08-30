@@ -793,7 +793,7 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
 
 pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8) !void {
     if (comptime sdl3) {
-        const tx: [*c]c.SDL_Texture = @alignCast(@ptrCast(texture.ptr));
+        const tx: [*c]c.SDL_Texture = @ptrCast(@alignCast(texture.ptr));
         if (!c.SDL_UpdateTexture(tx, null, pixels, @intCast(texture.width * 4))) return error.TextureUpdate;
     } else {
         return dvui.Backend.TextureError.NotImplemented;
@@ -869,7 +869,7 @@ pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_
     if (sdl3) {
         // null is the default target
         const orig_target = c.SDL_GetRenderTarget(self.renderer);
-        try toErr(c.SDL_SetRenderTarget(self.renderer, @alignCast(@ptrCast(texture.ptr))), "SDL_SetRenderTarget in textureReadTarget");
+        try toErr(c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(texture.ptr))), "SDL_SetRenderTarget in textureReadTarget");
         defer toErr(
             c.SDL_SetRenderTarget(self.renderer, orig_target),
             "SDL_SetRenderTarget in textureReadTarget",
@@ -1311,7 +1311,7 @@ pub fn main() !u8 {
         return @bitCast(@as(i8, @truncate(status)));
     }
 
-    log.info("version: {any} no callbacks", .{getSDLVersion()});
+    log.info("version: {f} no callbacks", .{getSDLVersion()});
 
     const init_opts = app.config.get();
 

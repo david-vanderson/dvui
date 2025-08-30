@@ -67,7 +67,7 @@ pub fn close(self: *ContextWidget) void {
 
 /// Used as a close callback for menus closing
 fn menu_root_close(ptr: *anyopaque, _: dvui.MenuWidget.CloseReason) void {
-    const self: *ContextWidget = @alignCast(@ptrCast(ptr));
+    const self: *ContextWidget = @ptrCast(@alignCast(ptr));
     self.close();
 }
 
