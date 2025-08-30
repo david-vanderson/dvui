@@ -7580,8 +7580,15 @@ pub const BasicLayout = struct {
 };
 
 /// Display a struct and allow the user to edit values
+///
 /// Refer to struct_ui.zig for full API.
 /// Call StructOptions(T) to to create display options for the struct or use .{} for defaults.
+/// See struct_ui.displayStruct for more details.
+///
+/// IMPORTANT NOTE:
+/// Any modifyable string slice fields are assigned to the TextWidget's internal string buffer.
+/// If the lifetime of the struct will outlive the lifetime of the TextWidget's window, you must make sure to
+/// dupe any modified strings before the widnow is deinitialized.
 pub fn structUI(src: std.builtin.SourceLocation, comptime field_name: []const u8, struct_ptr: anytype, comptime depth: usize, struct_options: anytype) void {
     var vbox = dvui.box(src, .{ .dir = .vertical }, .{ .expand = .horizontal });
     defer vbox.deinit();

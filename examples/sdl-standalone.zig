@@ -95,7 +95,7 @@ pub fn main() !void {
         const wait_event_micros = win.waitTime(end_micros);
         interrupted = try backend.waitEventTimeout(wait_event_micros);
     }
-    testCompileErrors();
+    dvui.struct_ui.testCompileErrors();
 }
 
 const C1 = struct {
@@ -130,7 +130,7 @@ const TestStruct = struct {
     struct_slice: []TestStruct = &array_of_struct,
     o_ptr: ?*usize = &ts_int,
 
-    pub const structui_options: dvui.struct_ui.StructOptions(TestStruct) = .init(.{
+    pub const structui_options: dvui.struct_ui.StructOptions(TestStruct) = .initWithDefaults(.{
         .int1 = .{ .number = .{ .min = 5, .max = 50, .widget_type = .slider } },
         .slice7 = .{ .text = .{ .display = .read_only } },
         .uint2 = .{ .number = .{ .display = .none } },
@@ -206,6 +206,7 @@ const StringTest = struct {
 var var_string_test1: StringTest = .{ .slice_variable = &str_global_var1 };
 var var_string_test2: StringTest = .{ .slice_variable = &str_global_var2 };
 
+var string_buf: [20]u8 = @splat(' ');
 var test_buf: [20]u8 = @splat('z');
 var testStruct: TestStruct = .{};
 var dvui_opts: dvui.Options = .{ .expand = .horizontal, .rect = dvui.Rect.all(5), .name = "abcdef" };
@@ -227,12 +228,11 @@ fn gui_frame() void {
     const local = struct {
         const struct_options: dvui.struct_ui.StructOptions(StringTest) = .init(.{
             .slice_static = .{ .text = .{ .display = .read_write } },
-            //.array_variable = .{ .text = .{ .display = .read_only } },\
+            .array_variable = .{ .text = .{ .display = .read_only } },
             .slice_ptr = .{ .number = .{ .display = .read_write } },
         }, null);
     };
 
-    //dvui.currentWindow().debug_window_show = true;
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal });
         defer hbox.deinit();
@@ -265,9 +265,10 @@ fn gui_frame() void {
                 1,
                 .{ .standard = .{} },
                 .{local.struct_options},
-                null,
+                &al,
             )) |box| {
-                box.deinit();
+                defer box.deinit();
+                dvui.struct_ui.displayStringBuf("slice_variable", &var_string_test1.slice_variable, .{ .text = .{} }, &al, &string_buf);
             }
         }
     }
