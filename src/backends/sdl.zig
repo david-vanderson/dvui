@@ -1408,7 +1408,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
 
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
-    log.info("version: {s} callbacks", .{getSDLVersion()});
+    log.info("version: {f} callbacks", .{getSDLVersion()});
 
     const init_opts = app.config.get();
 
