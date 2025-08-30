@@ -794,7 +794,7 @@ pub const Console = struct {
     }
 
     pub fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
-        // Write out the internal buffer first
+        // Drain out the internal buffer first
         if (w.end != 0) {
             wasm.wasm_console_drain(w.buffer.ptr, w.end);
             w.end = 0;
@@ -805,7 +805,7 @@ pub const Console = struct {
         var unused = w.unusedCapacitySlice();
         for (slice) |buf| {
             if (buf.len > w.buffer.len) {
-                // Write internal buffer first
+                // Drain out the internal buffer first
                 wasm.wasm_console_drain(w.buffer.ptr, w.end);
                 w.end = 0;
                 unused = w.unusedCapacitySlice();
@@ -828,8 +828,10 @@ pub const Console = struct {
                 var remaining = splat;
                 while (remaining > unused.len) {
                     @memset(unused, final[0]);
-                    wasm.wasm_console_drain(unused.ptr, unused.len);
                     remaining -= unused.len;
+                    // We will always have filled the entire buffer at this point,
+                    // so we drain all of it
+                    wasm.wasm_console_drain(w.buffer.ptr, w.buffer.len);
                     w.end = 0;
                     unused = w.unusedCapacitySlice();
                 } else {
@@ -849,7 +851,7 @@ pub const Console = struct {
             } else for (0..splat) |_| {
                 if (final.len > unused.len) {
                     // Drain if the data would not fit
-                    wasm.wasm_console_drain(unused.ptr, unused.len);
+                    wasm.wasm_console_drain(w.buffer.ptr, w.end);
                     w.end = 0;
                     unused = w.unusedCapacitySlice();
                 }
