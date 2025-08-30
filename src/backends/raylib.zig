@@ -174,7 +174,7 @@ pub fn nanoTime(self: *RaylibBackend) i128 {
 }
 
 pub fn sleep(_: *RaylibBackend, ns: u64) void {
-    std.time.sleep(ns);
+    std.Thread.sleep(ns);
 }
 
 pub fn pixelSize(_: *RaylibBackend) dvui.Size.Physical {
