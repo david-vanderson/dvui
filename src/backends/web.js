@@ -183,7 +183,7 @@ class Dvui {
     /** @type {WebAssembly.Instance} */
     instance;
     stopped = false;
-    log_string = "";
+    console_string = "";
     /** @type {HTMLInputElement} */
     hidden_input;
     /**
@@ -290,8 +290,8 @@ class Dvui {
                 console.error("PANIC:", msg);
                 alert(msg);
             },
-            wasm_log_write: (ptr, len) => {
-                this.log_string += utf8decoder.decode(
+            wasm_console_drain: (ptr, len) => {
+                this.console_string += utf8decoder.decode(
                     new Uint8Array(
                         this.instance.exports.memory.buffer,
                         ptr,
@@ -299,9 +299,25 @@ class Dvui {
                     ),
                 );
             },
-            wasm_log_flush: () => {
-                console.log(this.log_string);
-                this.log_string = "";
+            wasm_console_flush: (level) => {
+                switch (level) {
+                    case 9:
+                        console.error(this.console_string);
+                        break;
+                    case 7:
+                        console.warn(this.console_string);
+                        break;
+                    case 5:
+                        console.info(this.console_string);
+                        break;
+                    case 3:
+                        console.debug(this.console_string);
+                        break;
+                    default:
+                        console.log(this.console_string);
+                        break;
+                }
+                this.console_string = "";
             },
             wasm_now: () => {
                 return performance.now();
