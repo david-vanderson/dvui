@@ -28,7 +28,7 @@ const EventTemp = struct {
     float2: f32,
 };
 
-pub var event_temps = std.ArrayList(EventTemp).init(gpa);
+// pub var event_temps = std.ArrayList(EventTemp).init(gpa);
 
 pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_about_webgl2() u8;
@@ -140,7 +140,7 @@ pub const wasm = if (!builtin.is_test) struct {
 };
 
 export fn dvui_c_alloc(size: usize) ?*anyopaque {
-    const buffer = gpa.alignedAlloc(u8, 8, size + 8) catch {
+    const buffer = gpa.alignedAlloc(u8, .@"8", size + 8) catch {
         //log.debug("dvui_c_alloc {d} failed", .{size});
         return null;
     };
