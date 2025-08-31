@@ -5,25 +5,20 @@ comptime {
     std.debug.assert(@hasDecl(WebBackend, "WebBackend"));
 }
 
+var wasm_log_console_buffer: [512]u8 = undefined;
+pub var js_console = WebBackend.Console.init(&wasm_log_console_buffer);
+
 pub fn logFn(
     comptime message_level: std.log.Level,
     comptime scope: @Type(.enum_literal),
     comptime format: []const u8,
     args: anytype,
 ) void {
-    const level_txt = switch (message_level) {
-        .err => "error",
-        .warn => "warning",
-        .info => "info",
-        .debug => "debug",
-    };
-    const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
-    const msg = level_txt ++ prefix2 ++ format ++ "\n";
-
-    const buf = std.fmt.allocPrint(gpa, msg, args) catch "dvui log OOM";
-    defer gpa.free(buf);
-    WebBackend.wasm.wasm_log_write(buf.ptr, buf.len);
-    WebBackend.wasm.wasm_log_flush();
+    if (scope != .default) {
+        js_console.writer.print("({s}): ", .{@tagName(scope)}) catch unreachable;
+    }
+    js_console.writer.print(format, args) catch unreachable;
+    js_console.flushAtLevel(message_level);
 }
 
 pub const std_options: std.Options = .{
