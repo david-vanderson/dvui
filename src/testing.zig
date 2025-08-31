@@ -184,7 +184,7 @@ pub const SnapshotError = error{
 /// Captures the physical pixels in rect, or if null the entire OS window.
 ///
 /// The returned data is allocated by `Self.allocator` and should be freed by the caller.
-pub fn capturePng(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical) ![]const u8 {
+pub fn capturePng(frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, writer: *std.Io.Writer) !void {
     var picture = dvui.Picture.start(rect orelse dvui.windowRectPixels()) orelse {
         std.debug.print("Current backend does not support capturing images\n", .{});
         return error.Unsupported;
@@ -199,7 +199,7 @@ pub fn capturePng(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.P
     picture.stop();
 
     // texture will be destroyed in picture.deinit() so grab pixels now
-    const png_data = try picture.png(self.allocator);
+    try picture.png(writer);
 
     // draw texture and destroy
     picture.deinit();
@@ -208,8 +208,6 @@ pub fn capturePng(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.P
 
     _ = try cw.end(.{});
     try cw.begin(cw.frame_time_ns + 100 * std.time.ns_per_ms);
-
-    return png_data;
 }
 
 /// Runs exactly one frame, creating a hash of the state of that frame and compares to an earilier saved hash,
@@ -251,15 +249,19 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     defer widget_hasher = null;
 
     if (@import("build_options").snapshot_image_suffix) |image_suffix| {
-        const png_data = try self.capturePng(frame, null);
-        defer self.allocator.free(png_data);
         dir.makeDir("images") catch |err| switch (err) {
             error.PathAlreadyExists => {},
             else => return err,
         };
         const image_name = try std.fmt.allocPrint(self.allocator, "images/{s}-{s}.png", .{ filename, image_suffix });
         defer self.allocator.free(image_name);
-        try dir.writeFile(.{ .sub_path = image_name, .data = png_data, .flags = .{} });
+        var file = try dir.createFile(image_name, .{});
+        defer file.close();
+
+        var buf: [512]u8 = undefined;
+        var writer = file.writer(&buf);
+        try capturePng(frame, null, &writer.interface);
+        try writer.end();
         // Do not continue with checking hashes as it is not deterministic across content_scales because
         // fonts render in integer steps and scaling changes the step used and the size of the test
         return; // Do not skip test because other snapshots might run after this one
@@ -330,12 +332,14 @@ pub fn saveImage(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.Ph
         return;
     }
 
-    const png_data = try self.capturePng(frame, rect);
-    defer self.allocator.free(png_data);
-
     var dir = try std.fs.cwd().makeOpenPath(self.image_dir.?, .{});
     defer dir.close();
-    try dir.writeFile(.{ .data = png_data, .sub_path = filename });
+    const file = try dir.openFile(filename, .{});
+    defer file.close();
+    var buf: [512]u8 = undefined;
+    var writer = file.writer(&buf);
+    try capturePng(frame, rect, &writer.interface);
+    try writer.end();
 }
 
 /// Used internally for documentation generation
