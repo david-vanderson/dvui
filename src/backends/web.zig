@@ -771,9 +771,6 @@ pub fn getNumberOfFilesAvailable(id: dvui.Id) usize {
 
 /// A `std.Io.Writer` wrapper for interacting with the JavaScript console.
 ///
-/// The console writer will work with buffer size of 0, but it will force
-/// a call from Wasm to JavaScript on every write.
-///
 /// The drain function is infallible, meaning that using `catch unreachable`
 /// on the writer functions should be safe (unless the `std.Io.Writer`
 /// implementation can throw an error explicitly)
@@ -784,7 +781,12 @@ pub fn getNumberOfFilesAvailable(id: dvui.Id) usize {
 pub const Console = struct {
     writer: std.Io.Writer,
 
+    /// The minimum recommended buffer size.
+    pub const min_buffer_size: usize = 128;
+
+    /// Assserts that `buffer.len >= Console.min_buffer_size`
     pub fn init(buffer: []u8) Console {
+        std.debug.assert(buffer.len >= Console.min_buffer_size);
         return .{ .writer = .{
             .buffer = buffer,
             .vtable = &.{
