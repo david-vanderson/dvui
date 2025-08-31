@@ -76,7 +76,7 @@ pub const wasm = if (!builtin.is_test) struct {
     }
 
     pub fn wasm_panic(_: [*]const u8, _: usize) void {}
-    pub fn wasm_log_write(_: [*]const u8, _: usize) void {}
+    pub fn wasm_console_drain(_: [*]const u8, _: usize) void {}
     pub fn wasm_console_flush(_: u8) void {}
 
     pub fn wasm_now() f64 {
@@ -789,85 +789,75 @@ pub const Console = struct {
             .buffer = buffer,
             .vtable = &.{
                 .drain = &Console.drain,
+                .flush = &Console.flush,
             },
         } };
     }
 
+    /// A simple drain function that only writes what it can into the buffer
+    /// and only flushes it when the buffer is completely full. This should
+    /// give optimal buffering at the cost of more vtable calls as it does
+    /// not loop over all data slices in this function.
     pub fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
-        // Drain out the internal buffer first
-        if (w.end != 0) {
-            wasm.wasm_console_drain(w.buffer.ptr, w.end);
-            w.end = 0;
+        // If the unused slice gets filled up, we can return this value
+        // as it was the total amount of bytes available to fill
+        const unused_capacity = w.unusedCapacityLen();
+        var unused = w.unusedCapacitySlice();
+        if (unused.len == 0) {
+            try Console.flush(w);
+            return unused_capacity;
         }
 
-        // Write other data
         const slice = data[0 .. data.len - 1];
-        var unused = w.unusedCapacitySlice();
         for (slice) |buf| {
-            if (buf.len > w.buffer.len) {
-                // Drain out the internal buffer first
-                wasm.wasm_console_drain(w.buffer.ptr, w.end);
-                w.end = 0;
-                unused = w.unusedCapacitySlice();
-                wasm.wasm_console_drain(buf.ptr, buf.len);
-            } else {
-                if (buf.len > unused.len) {
-                    wasm.wasm_console_drain(w.buffer.ptr, w.end);
-                    w.end = 0;
-                    unused = w.unusedCapacitySlice();
-                }
-                @memcpy(unused.ptr, buf);
-                w.end += buf.len;
-                unused = w.unusedCapacitySlice();
+            const min_len = @min(unused.len, buf.len);
+            @memcpy(unused[0..min_len], buf[0..min_len]);
+            w.end += min_len;
+            unused = w.unusedCapacitySlice();
+            if (unused.len == 0) {
+                try Console.flush(w);
+                return unused_capacity;
             }
         }
+
         const final = data[data.len - 1];
         switch (final.len) {
             0 => {},
             1 => {
-                var remaining = splat;
-                while (remaining > unused.len) {
-                    @memset(unused, final[0]);
-                    remaining -= unused.len;
-                    // We will always have filled the entire buffer at this point,
-                    // so we drain all of it
-                    wasm.wasm_console_drain(w.buffer.ptr, w.buffer.len);
-                    w.end = 0;
-                    unused = w.unusedCapacitySlice();
-                } else {
-                    @memset(unused[0..remaining], final[0]);
-                    w.end += remaining;
-                    unused = w.unusedCapacitySlice();
+                const min_len = @min(unused.len, splat);
+                @memset(unused[0..min_len], final[0]);
+                w.end += min_len;
+                unused = w.unusedCapacitySlice();
+                if (unused.len == 0) {
+                    try Console.flush(w);
+                    return unused_capacity;
                 }
             },
-            else => if (final.len > w.buffer.len) {
-                // No point in buffering as we don't have enough buffer size
-                if (w.end != 0) {
-                    // Write out internal buffer first
-                    wasm.wasm_console_drain(w.buffer.ptr, w.end);
-                    w.end = 0;
-                }
-                for (0..splat) |_| wasm.wasm_console_drain(final.ptr, final.len);
-            } else for (0..splat) |_| {
-                if (final.len > unused.len) {
-                    // Drain if the data would not fit
-                    wasm.wasm_console_drain(w.buffer.ptr, w.end);
-                    w.end = 0;
-                    unused = w.unusedCapacitySlice();
-                }
-                @memcpy(unused.ptr, final);
-                w.end += final.len;
+            else => for (0..splat) |_| {
+                const min_len = @min(unused.len, final.len);
+                @memcpy(unused[0..min_len], final[0..min_len]);
+                w.end += min_len;
                 unused = w.unusedCapacitySlice();
+                if (unused.len == 0) {
+                    try Console.flush(w);
+                    return unused_capacity;
+                }
             },
         }
-        return std.Io.Writer.countSplat(data, splat);
+        return unused_capacity - w.unusedCapacityLen();
+    }
+
+    pub fn flush(w: *std.Io.Writer) std.Io.Writer.Error!void {
+        if (w.end == 0) return;
+        wasm.wasm_console_drain(w.buffer.ptr, w.end);
+        w.end = 0;
     }
 
     /// If `level` is `null`, the generic `console.log` will be used,
     /// otherwise the approtiare `console.LEVEL` function will be used.
     pub fn flushAtLevel(self: *Console, level: ?std.log.Level) void {
         // Drain all data to the JavaScript side.
-        self.writer.flush() catch unreachable;
+        Console.flush(&self.writer) catch unreachable;
         // Show the console message with the appropriate log level
         wasm.wasm_console_flush(if (level) |l| switch (l) {
             .err => 9,
