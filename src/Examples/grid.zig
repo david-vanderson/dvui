@@ -322,23 +322,70 @@ pub fn gridLayouts() void {
             .{ .model = "Mustang with a really long name", .make = "Ford", .year = 2020, .mileage = 24000, .condition = .Good, .description = "Makes you feel 20% cooler just sitting in it." },
         };
     };
-    const all_cars = local.all_cars[0..];
-
-    const panel_height = 250;
-    const banded: GridWidget.CellStyle.Banded = .{
-        .opts = .{
-            .margin = TextLayoutWidget.defaults.margin,
-            .padding = TextLayoutWidget.defaults.padding,
-        },
-        .alt_cell_opts = .{
-            .color_fill = dvui.themeGet().color(.control, .fill_press),
-            .background = true,
-        },
-    };
-    const banded_centered = banded.optionsOverride(.{ .gravity_x = 0.5, .expand = .horizontal });
-
-    const content_h = dvui.parentGet().data().contentRect().h - panel_height;
     {
+        var outer_vbox = dvui.box(@src(), .{}, .{
+            .expand = .horizontal,
+            .border = Rect.all(1),
+            .gravity_y = 1.0,
+        });
+        defer outer_vbox.deinit();
+
+        if (dvui.expander(@src(), "Layouts", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+            {
+                var fbox = dvui.flexbox(@src(), .{ .justify_content = .start }, .{});
+                defer fbox.deinit();
+
+                if (dvui.radio(@src(), local.layout_style == .proportional, "Proportional", .{})) {
+                    local.layout_style = .proportional;
+                }
+                if (dvui.radio(@src(), local.layout_style == .equal_spacing, "Equal spacing", .{})) {
+                    local.layout_style = .equal_spacing;
+                }
+                if (dvui.radio(@src(), local.layout_style == .fixed_width, "Fixed widths", .{})) {
+                    local.layout_style = .fixed_width;
+                }
+                if (dvui.radio(@src(), local.layout_style == .fit_window, "Fit window", .{})) {
+                    local.h_scroll = false;
+                    local.layout_style = .fit_window;
+                }
+                if (dvui.radio(@src(), local.layout_style == .user_resizable, "Resizable", .{})) {
+                    local.layout_style = .user_resizable;
+                    for (local.col_widths[1..]) |*w| {
+                        w.* = std.math.clamp(w.*, local.resize_min, local.resize_max);
+                    }
+                }
+            }
+            {
+                var fbox = dvui.flexbox(@src(), .{ .justify_content = .start }, .{});
+                defer fbox.deinit();
+
+                if (dvui.checkbox(@src(), &local.h_scroll, "Horizontal scrolling", .{})) {
+                    if (local.layout_style == .fit_window) {
+                        local.layout_style = .proportional;
+                    }
+                }
+
+                if (dvui.button(@src(), "Resize Rows", .{}, .{})) {
+                    local.resize_rows = true;
+                }
+            }
+        }
+    }
+
+    {
+        const all_cars = local.all_cars[0..];
+        const banded: GridWidget.CellStyle.Banded = .{
+            .opts = .{
+                .margin = TextLayoutWidget.defaults.margin,
+                .padding = TextLayoutWidget.defaults.padding,
+            },
+            .alt_cell_opts = .{
+                .color_fill = dvui.themeGet().color(.control, .fill_press),
+                .background = true,
+            },
+        };
+        const banded_centered = banded.optionsOverride(.{ .gravity_x = 0.5, .expand = .horizontal });
+
         const scroll_opts: ?dvui.ScrollAreaWidget.InitOpts = if (local.h_scroll)
             .{ .horizontal = .auto, .horizontal_bar = .show, .vertical = .auto, .vertical_bar = .show }
         else
@@ -351,8 +398,6 @@ pub fn gridLayouts() void {
             .expand = .both,
             .background = true,
             .border = Rect.all(2),
-            .min_size_content = .{ .h = content_h },
-            .max_size_content = .height(content_h),
         });
         defer grid.deinit();
         local.resize_rows = false;
@@ -450,54 +495,6 @@ pub fn gridLayouts() void {
             }
         }
     }
-    {
-        var outer_vbox = dvui.box(@src(), .{}, .{
-            .expand = .horizontal,
-            .border = Rect.all(1),
-        });
-        defer outer_vbox.deinit();
-
-        if (dvui.expander(@src(), "Layouts", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
-            {
-                var fbox = dvui.flexbox(@src(), .{ .justify_content = .start }, .{});
-                defer fbox.deinit();
-
-                if (dvui.radio(@src(), local.layout_style == .proportional, "Proportional", .{})) {
-                    local.layout_style = .proportional;
-                }
-                if (dvui.radio(@src(), local.layout_style == .equal_spacing, "Equal spacing", .{})) {
-                    local.layout_style = .equal_spacing;
-                }
-                if (dvui.radio(@src(), local.layout_style == .fixed_width, "Fixed widths", .{})) {
-                    local.layout_style = .fixed_width;
-                }
-                if (dvui.radio(@src(), local.layout_style == .fit_window, "Fit window", .{})) {
-                    local.h_scroll = false;
-                    local.layout_style = .fit_window;
-                }
-                if (dvui.radio(@src(), local.layout_style == .user_resizable, "Resizable", .{})) {
-                    local.layout_style = .user_resizable;
-                    for (local.col_widths[1..]) |*w| {
-                        w.* = std.math.clamp(w.*, local.resize_min, local.resize_max);
-                    }
-                }
-            }
-            {
-                var fbox = dvui.flexbox(@src(), .{ .justify_content = .start }, .{});
-                defer fbox.deinit();
-
-                if (dvui.checkbox(@src(), &local.h_scroll, "Horizontal scrolling", .{})) {
-                    if (local.layout_style == .fit_window) {
-                        local.layout_style = .proportional;
-                    }
-                }
-
-                if (dvui.button(@src(), "Resize Rows", .{}, .{})) {
-                    local.resize_rows = true;
-                }
-            }
-        }
-    }
 }
 
 pub fn gridVirtualScrolling() void {
@@ -537,8 +534,6 @@ pub fn gridVirtualScrolling() void {
         local.generated_primes = true;
     }
 
-    var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
-    defer vbox.deinit();
     var grid = dvui.grid(@src(), .numCols(2), .{
         .scroll_opts = .{ .scroll_info = &local.scroll_info },
         .resize_cols = local.resize_cols,
@@ -618,7 +613,7 @@ pub fn gridVariableRowHeights() void {
     // CellOptions and Options can be passed directly to bodyCell() and label() if preferred.
     const cell_style: GridWidget.CellStyle = .{
         .cell_opts = .{ .border = Rect.all(1) },
-        .opts = .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .both },
+        .opts = .{ .expand = .both },
     };
     for (1..10) |row_num| {
         const cell_num: GridWidget.Cell = .colRow(0, row_num);
@@ -630,7 +625,7 @@ pub fn gridVariableRowHeights() void {
             cell_style.cellOptions(cell_num).override(.{ .size = .{ .h = @floatFromInt(row_height), .w = 500 } }),
         );
         defer cell.deinit();
-        dvui.label(@src(), "h = {d}", .{row_height}, cell_style.options(cell_num));
+        dvui.labelEx(@src(), "h = {d}", .{row_height}, .{ .align_x = 0.5, .align_y = 0.5 }, cell_style.options(cell_num));
     }
 }
 
