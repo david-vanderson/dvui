@@ -218,7 +218,7 @@ pub fn demo() void {
         }
         defer if (scroll) |s| s.deinit();
 
-        var vbox = dvui.box(@src(), .{}, .{ .padding = dvui.Rect.all(4) });
+        var vbox = dvui.box(@src(), .{}, .{ .padding = dvui.Rect.all(4), .expand = .both });
         defer vbox.deinit();
 
         switch (demo_active) {
