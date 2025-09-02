@@ -55,7 +55,7 @@ fn windowProc(
     umsg: u32,
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
-) callconv(std.os.windows.WINAPI) win32.LRESULT {
+) callconv(.winapi) win32.LRESULT {
     switch (umsg) {
         win32.WM_KEYDOWN, win32.WM_SYSKEYDOWN => {
             switch (wparam) {

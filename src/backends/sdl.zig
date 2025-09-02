@@ -553,7 +553,7 @@ pub fn nanoTime(_: *SDLBackend) i128 {
 }
 
 pub fn sleep(_: *SDLBackend, ns: u64) void {
-    std.time.sleep(ns);
+    std.Thread.sleep(ns);
 }
 
 pub fn clipboardText(self: *SDLBackend) ![]const u8 {
@@ -793,7 +793,7 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
 
 pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8) !void {
     if (comptime sdl3) {
-        const tx: [*c]c.SDL_Texture = @alignCast(@ptrCast(texture.ptr));
+        const tx: [*c]c.SDL_Texture = @ptrCast(@alignCast(texture.ptr));
         if (!c.SDL_UpdateTexture(tx, null, pixels, @intCast(texture.width * 4))) return error.TextureUpdate;
     } else {
         return dvui.Backend.TextureError.NotImplemented;
@@ -869,7 +869,7 @@ pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_
     if (sdl3) {
         // null is the default target
         const orig_target = c.SDL_GetRenderTarget(self.renderer);
-        try toErr(c.SDL_SetRenderTarget(self.renderer, @alignCast(@ptrCast(texture.ptr))), "SDL_SetRenderTarget in textureReadTarget");
+        try toErr(c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(texture.ptr))), "SDL_SetRenderTarget in textureReadTarget");
         defer toErr(
             c.SDL_SetRenderTarget(self.renderer, orig_target),
             "SDL_SetRenderTarget in textureReadTarget",
@@ -981,7 +981,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             const code = SDL_keysym_to_dvui(@intCast(sdl_key));
             const mod = SDL_keymod_to_dvui(if (sdl3) @intCast(event.key.mod) else event.key.keysym.mod);
             if (self.log_events) {
-                log.debug("event KEYDOWN {} {s} {} {}\n", .{ sdl_key, @tagName(code), mod, event.key.repeat });
+                log.debug("event KEYDOWN {any} {s} {any} {any}\n", .{ sdl_key, @tagName(code), mod, event.key.repeat });
             }
 
             return try win.addEventKey(.{
@@ -995,7 +995,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             const code = SDL_keysym_to_dvui(@intCast(sdl_key));
             const mod = SDL_keymod_to_dvui(if (sdl3) @intCast(event.key.mod) else event.key.keysym.mod);
             if (self.log_events) {
-                log.debug("event KEYUP {} {s} {}\n", .{ sdl_key, @tagName(code), mod });
+                log.debug("event KEYUP {any} {s} {any}\n", .{ sdl_key, @tagName(code), mod });
             }
 
             return try win.addEventKey(.{
@@ -1115,7 +1115,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
         },
         else => {
             if (self.log_events) {
-                log.debug("unhandled SDL event type {}\n", .{event.type});
+                log.debug("unhandled SDL event type {any}\n", .{event.type});
             }
             return false;
         },
@@ -1311,7 +1311,7 @@ pub fn main() !u8 {
         return @bitCast(@as(i8, @truncate(status)));
     }
 
-    log.info("version: {} no callbacks", .{getSDLVersion()});
+    log.info("version: {f} no callbacks", .{getSDLVersion()});
 
     const init_opts = app.config.get();
 
@@ -1408,7 +1408,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
 
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
-    log.info("version: {} callbacks", .{getSDLVersion()});
+    log.info("version: {f} callbacks", .{getSDLVersion()});
 
     const init_opts = app.config.get();
 
@@ -1425,7 +1425,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
         .icon = init_opts.icon,
         .hidden = init_opts.hidden,
     }) catch |err| {
-        log.err("initWindow failed: {!}", .{err});
+        log.err("initWindow failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
@@ -1437,23 +1437,23 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
 
     //// init dvui Window (maps onto a single OS window)
     appState.win = dvui.Window.init(@src(), gpa, appState.back.backend(), app.config.options.window_init_options) catch |err| {
-        log.err("dvui.Window.init failed: {!}", .{err});
+        log.err("dvui.Window.init failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
     if (app.initFn) |initFn| {
         appState.win.begin(appState.win.frame_time_ns) catch |err| {
-            log.err("dvui.Window.begin failed: {!}", .{err});
+            log.err("dvui.Window.begin failed: {any}", .{err});
             return c.SDL_APP_FAILURE;
         };
 
         initFn(&appState.win) catch |err| {
-            log.err("dvui.App.initFn failed: {!}", .{err});
+            log.err("dvui.App.initFn failed: {any}", .{err});
             return c.SDL_APP_FAILURE;
         };
 
         _ = appState.win.end(.{}) catch |err| {
-            log.err("dvui.Window.end failed: {!}", .{err});
+            log.err("dvui.Window.end failed: {any}", .{err});
             return c.SDL_APP_FAILURE;
         };
     }
@@ -1488,7 +1488,7 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
 
     const e = event.?.*;
     _ = appState.back.addEvent(&appState.win, e) catch |err| {
-        log.err("dvui.Window.addEvent failed: {!}", .{err});
+        log.err("dvui.Window.addEvent failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
@@ -1513,7 +1513,7 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
 
     // marks the beginning of a frame for dvui, can call dvui functions after this
     appState.win.begin(nstime) catch |err| {
-        log.err("dvui.Window.begin failed: {!}", .{err});
+        log.err("dvui.Window.begin failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
@@ -1524,12 +1524,12 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
 
     const app = dvui.App.get() orelse unreachable;
     const res = app.frameFn() catch |err| {
-        log.err("dvui.App.frameFn failed: {!}", .{err});
+        log.err("dvui.App.frameFn failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
     const end_micros = appState.win.end(.{}) catch |err| {
-        log.err("dvui.Window.end failed: {!}", .{err});
+        log.err("dvui.Window.end failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
 

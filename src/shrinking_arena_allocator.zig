@@ -234,7 +234,7 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
                     .instruction_addresses = &addresses,
                 };
                 std.debug.captureStackTrace(ret_addr, &trace);
-                log.debug("Free from lifo arena failed. Somewhere between when this was allocated and this call to free there was another allocation that was not freed first. Stack trace: {}", .{trace});
+                log.debug("Free from lifo arena failed. Somewhere between when this was allocated and this call to free there was another allocation that was not freed first. Stack trace: {f}", .{trace});
             }
         }
 

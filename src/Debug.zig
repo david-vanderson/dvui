@@ -171,13 +171,13 @@ pub fn show(self: *Debug) void {
         tl.format(
             \\{x} {s}
             \\
-            \\{}
-            \\min {}
-            \\{}
+            \\{f}
+            \\min {f}
+            \\{any}
             \\scale {d}
-            \\padding {}
-            \\border {}
-            \\margin {}
+            \\padding {f}
+            \\border {f}
+            \\margin {f}
             \\
             \\{s}:{d}
             \\id_extra {?d}
@@ -410,13 +410,12 @@ fn copyOptionsToClipboard(src: std.builtin.SourceLocation, id: dvui.Id, options:
     dvui.log.debug("Copied Options struct for {s}:{d}", .{ src.file, src.line });
     dvui.toast(@src(), .{ .message = "Options copied to clipboard" });
 
-    var out = std.ArrayList(u8).init(dvui.currentWindow().lifo());
-    defer out.deinit();
-    var writer = out.writer();
-    writeTypeAsCode(writer.any(), options) catch |err| {
+    var aw = std.Io.Writer.Allocating.init(dvui.currentWindow().lifo());
+    defer aw.deinit();
+    aw.writer.print("{f}", .{asZigCode(options)}) catch |err| {
         dvui.logError(@src(), err, "Could not write Options struct for {x} {s}", .{ id, options.name orelse "???" });
     };
-    dvui.clipboardTextSet(out.items);
+    dvui.clipboardTextSet(aw.written());
 }
 
 fn layoutPage(self: *Options, id: dvui.Id) bool {
@@ -864,130 +863,134 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
 }
 
 /// Used to copy the code for any runtime type, used to copy
-/// modified `Options`.
-pub fn writeTypeAsCode(writer: std.io.AnyWriter, val: anytype) !void {
-    const T = @TypeOf(val);
-    switch (@typeInfo(T)) {
-        .optional => if (val) |v|
-            try writeTypeAsCode(writer, v)
-        else
-            try writer.writeAll("null"),
-        .null => try writer.writeAll("null"),
-        .@"enum", .enum_literal => try writer.print(".{s}", .{@tagName(val)}),
-        .float, .int, .comptime_float, .comptime_int => try writer.print("{d}", .{val}),
-        .bool => try writer.print("{any}", .{val}),
-        .pointer => |ptr| {
-            switch (ptr.size) {
-                .one => switch (@typeInfo(ptr.child)) {
-                    .array => try writeTypeAsCode(writer, val.*),
-                    else => @compileError("Cannot write single item pointer"),
-                },
-                .c, .many, .slice => if (ptr.child == u8)
-                    try writer.print("\"{s}\"", .{val})
+/// modified `Options`.s
+pub fn ZigCodeFormatter(comptime T: type) type {
+    return struct {
+        value: T,
+        pub fn format(self: @This(), writer: *std.Io.Writer) std.Io.Writer.Error!void {
+            switch (@typeInfo(T)) {
+                .optional => if (self.value) |v|
+                    try writer.print("{f}", .{asZigCode(v)})
                 else
-                    @compileError("Cannot write non string many item pointer"),
+                    try writer.writeAll("null"),
+                .null => try writer.writeAll("null"),
+                .@"enum" => try writer.print(".{t}", .{self.value}),
+                .float, .int, .comptime_float, .comptime_int => try writer.print("{d}", .{self.value}),
+                .bool => try writer.print("{s}", .{if (self.value) "true" else "false"}),
+                .pointer => |ptr| {
+                    switch (ptr.size) {
+                        .one => switch (@typeInfo(ptr.child)) {
+                            .array => try writer.print("{f}", .{asZigCode(self.value.*)}),
+                            else => @compileError("Cannot write single item pointer"),
+                        },
+                        .c, .many, .slice => if (ptr.child == u8)
+                            try writer.print("\"{s}\"", .{self.value})
+                        else
+                            @compileError("Cannot write non string many item pointer"),
+                    }
+                },
+                .array => |array| if (array.child == u8) {
+                    try writer.print("\"{s}\"", .{self.value});
+                } else {
+                    try writer.writeAll(".{ ");
+                    for (self.value) |v| {
+                        try writer.print("{f}", .{asZigCode(v)});
+                        try writer.writeAll(", ");
+                    }
+                    try writer.writeAll("}");
+                },
+                .@"struct" => |struct_info| {
+                    try writer.writeAll(".{ ");
+                    inline for (struct_info.fields) |field| blk: {
+                        const ti = @typeInfo(field.type);
+                        // Ignore single item pointers
+                        const ptr_info: ?std.builtin.Type.Pointer = switch (ti) {
+                            .pointer => |ptr| ptr,
+                            .optional => |opt| if (@typeInfo(opt.child) == .pointer)
+                                @typeInfo(opt.child).pointer
+                            else
+                                null,
+                            else => null,
+                        };
+                        if (ptr_info != null and ptr_info.?.size == .one and @typeInfo(ptr_info.?.child) != .array) {
+                            continue;
+                        }
+                        if (field.defaultValue() != null and ti == .optional and @field(self.value, field.name) == null) {
+                            break :blk;
+                        }
+                        try writer.print(".{s} = ", .{field.name});
+                        try writer.print("{f}", .{asZigCode(@field(self.value, field.name))});
+                        try writer.writeAll(", ");
+                    }
+                    try writer.writeAll("}");
+                },
+                .@"union" => switch (std.meta.activeTag(self.value)) {
+                    inline else => |tag| if (@FieldType(T, @tagName(tag)) == void) {
+                        try writer.print(".{s}", .{@tagName(tag)});
+                    } else {
+                        try writer.print(".{{ .{s} = ", .{@tagName(tag)});
+                        try writer.print("{f}", .{asZigCode(@field(self.value, @tagName(tag)))});
+                        try writer.writeAll(" }");
+                    },
+                },
+                else => @compileError("Unhandled field type: " ++ @typeName(T)),
             }
-        },
-        .array => |array| if (array.child == u8) {
-            try writer.print("\"{s}\"", .{val});
-        } else {
-            try writer.writeAll(".{ ");
-            for (val) |v| {
-                try writeTypeAsCode(writer, v);
-                try writer.writeAll(", ");
-            }
-            try writer.writeAll("}");
-        },
-        .@"struct" => {
-            try writer.writeAll(".{ ");
-            inline for (std.meta.fields(T)) |field| blk: {
-                const ti = @typeInfo(field.type);
-                // Ignore single item pointers
-                const ptr_info: ?std.builtin.Type.Pointer = switch (ti) {
-                    .pointer => |ptr| ptr,
-                    .optional => |opt| if (@typeInfo(opt.child) == .pointer)
-                        @typeInfo(opt.child).pointer
-                    else
-                        null,
-                    else => null,
-                };
-                if (ptr_info != null and ptr_info.?.size == .one and @typeInfo(ptr_info.?.child) != .array) {
-                    continue;
-                }
-                if (field.defaultValue() != null and ti == .optional and @field(val, field.name) == null) {
-                    break :blk;
-                }
-                try writer.print(".{s} = ", .{field.name});
-                try writeTypeAsCode(writer, @field(val, field.name));
-                try writer.writeAll(", ");
-            }
-            try writer.writeAll("}");
-        },
-        .@"union" => switch (std.meta.activeTag(val)) {
-            inline else => |tag| if (@FieldType(T, @tagName(tag)) == void) {
-                try writer.print(".{s}", .{@tagName(tag)});
-            } else {
-                try writer.print(".{{ .{s} = ", .{@tagName(tag)});
-                try writeTypeAsCode(writer, @field(val, @tagName(tag)));
-                try writer.writeAll(" }");
-            },
-        },
-        else => @compileError("Unhandled field type: " ++ @typeName(T)),
-    }
+        }
+    };
 }
 
-test writeTypeAsCode {
-    var out = std.ArrayList(u8).init(std.testing.allocator);
-    defer out.deinit();
-    const writer = out.writer().any();
+pub fn asZigCode(value: anytype) ZigCodeFormatter(@TypeOf(value)) {
+    return .{ .value = value };
+}
 
-    try writeTypeAsCode(writer, @as(f32, 12.34));
-    try std.testing.expectEqualStrings("12.34", out.items);
-    out.clearRetainingCapacity();
-    try writeTypeAsCode(writer, @as(f32, 12));
-    try std.testing.expectEqualStrings("12", out.items);
-    out.clearRetainingCapacity();
-    try writeTypeAsCode(writer, @as(u8, 43));
-    try std.testing.expectEqualStrings("43", out.items);
-    out.clearRetainingCapacity();
-    try writeTypeAsCode(writer, @as(i32, -5423));
-    try std.testing.expectEqualStrings("-5423", out.items);
-    out.clearRetainingCapacity();
+test asZigCode {
+    var writeBuffer: [256]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&writeBuffer);
 
-    try writeTypeAsCode(writer, true);
-    try std.testing.expectEqualStrings("true", out.items);
-    out.clearRetainingCapacity();
-    try writeTypeAsCode(writer, false);
-    try std.testing.expectEqualStrings("false", out.items);
-    out.clearRetainingCapacity();
+    try writer.print("{f}", .{asZigCode(@as(f32, 12.34))});
+    try std.testing.expectEqualStrings("12.34", writer.buffered());
+    _ = writer.consumeAll();
+    try writer.print("{f}", .{asZigCode(@as(f32, 12))});
+    try std.testing.expectEqualStrings("12", writer.buffered());
+    _ = writer.consumeAll();
+    try writer.print("{f}", .{asZigCode(@as(u8, 43))});
+    try std.testing.expectEqualStrings("43", writer.buffered());
+    _ = writer.consumeAll();
+    try writer.print("{f}", .{asZigCode(@as(i32, -5423))});
+    try std.testing.expectEqualStrings("-5423", writer.buffered());
+    _ = writer.consumeAll();
 
-    try writeTypeAsCode(writer, @as(?f32, null));
-    try std.testing.expectEqualStrings("null", out.items);
-    out.clearRetainingCapacity();
+    try writer.print("{f}", .{asZigCode(true)});
+    try std.testing.expectEqualStrings("true", writer.buffered());
+    _ = writer.consumeAll();
+    try writer.print("{f}", .{asZigCode(false)});
+    try std.testing.expectEqualStrings("false", writer.buffered());
+    _ = writer.consumeAll();
 
-    try writeTypeAsCode(writer, @as([]const u8, "testing"));
+    try writer.print("{f}", .{asZigCode(@as(?f32, null))});
+    try std.testing.expectEqualStrings("null", writer.buffered());
+    _ = writer.consumeAll();
+
+    try writer.print("{f}", .{asZigCode(@as([]const u8, "testing"))});
     try std.testing.expectEqualStrings(
         \\"testing"
-    , out.items);
-    out.clearRetainingCapacity();
-    try writeTypeAsCode(writer, @as(*const [7]u8, "testing"));
+    , writer.buffered());
+    _ = writer.consumeAll();
+    try writer.print("{f}", .{asZigCode(@as(*const [7]u8, "testing"))});
     try std.testing.expectEqualStrings(
         \\"testing"
-    , out.items);
-    out.clearRetainingCapacity();
+    , writer.buffered());
+    _ = writer.consumeAll();
 
-    try writeTypeAsCode(writer, @as([3]u32, .{ 12, 34, 56 }));
+    try writer.print("{f}", .{asZigCode(@as([3]u32, .{ 12, 34, 56 }))});
     try std.testing.expectEqualStrings(
         \\.{ 12, 34, 56, }
-    , out.items);
-    out.clearRetainingCapacity();
+    , writer.buffered());
+    _ = writer.consumeAll();
 
-    try writeTypeAsCode(writer, @as(enum { a, b }, .a));
-    try std.testing.expectEqualStrings(".a", out.items);
-    out.clearRetainingCapacity();
-    try writeTypeAsCode(writer, .literal);
-    try std.testing.expectEqualStrings(".literal", out.items);
-    out.clearRetainingCapacity();
+    try writer.print("{f}", .{asZigCode(@as(enum { a, b }, .a))});
+    try std.testing.expectEqualStrings(".a", writer.buffered());
+    _ = writer.consumeAll();
 
     const A = struct {
         a: bool,
@@ -995,17 +998,17 @@ test writeTypeAsCode {
         c: ?[]const u8 = null,
     };
 
-    try writeTypeAsCode(writer, A{ .a = true });
+    try writer.print("{f}", .{asZigCode(A{ .a = true })});
     try std.testing.expectEqualStrings(
         // Expect that `c` is not included as it defaults to `null`
         \\.{ .a = true, .b = 123, }
-    , out.items);
-    out.clearRetainingCapacity();
-    try writeTypeAsCode(writer, A{ .a = false, .c = "testing text" });
+    , writer.buffered());
+    _ = writer.consumeAll();
+    try writer.print("{f}", .{asZigCode(A{ .a = false, .c = "testing text" })});
     try std.testing.expectEqualStrings(
         \\.{ .a = false, .b = 123, .c = "testing text", }
-    , out.items);
-    out.clearRetainingCapacity();
+    , writer.buffered());
+    _ = writer.consumeAll();
 
     const B = union(enum) {
         a: u32,
@@ -1013,22 +1016,22 @@ test writeTypeAsCode {
         c,
     };
 
-    try writeTypeAsCode(writer, B{ .a = 123 });
+    try writer.print("{f}", .{asZigCode(B{ .a = 123 })});
     try std.testing.expectEqualStrings(
         \\.{ .a = 123 }
-    , out.items);
-    out.clearRetainingCapacity();
-    try writeTypeAsCode(writer, B{ .b = .{ .b = 0.001 } });
+    , writer.buffered());
+    _ = writer.consumeAll();
+    try writer.print("{f}", .{asZigCode(B{ .b = .{ .b = 0.001 } })});
     try std.testing.expectEqualStrings(
         \\.{ .b = .{ .b = 0.001, } }
-    , out.items);
-    out.clearRetainingCapacity();
-    try writeTypeAsCode(writer, B.c);
+    , writer.buffered());
+    _ = writer.consumeAll();
+    try writer.print("{f}", .{asZigCode(B.c)});
     try std.testing.expectEqualStrings(
         // the value type here is void, so it should use the shorthand
         \\.c
-    , out.items);
-    out.clearRetainingCapacity();
+    , writer.buffered());
+    _ = writer.consumeAll();
 }
 
 const Options = dvui.Options;
