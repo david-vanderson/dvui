@@ -75,31 +75,38 @@ pub fn plots() void {
         p.stop();
         defer p.deinit();
 
-        const arena = dvui.currentWindow().lifo();
+        if (dvui.wasm) blk: {
+            var writer = std.Io.Writer.Allocating.init(dvui.currentWindow().arena());
+            defer writer.deinit();
+            p.png(&writer.writer) catch |err| {
+                dvui.logError(@src(), err, "Failed to write plot png", .{});
+                break :blk;
+            };
+            // No need to call `writer.flush` because `Allocating` doesn't drain it's buffer anywhere
+            dvui.backend.downloadData("plot.png", writer.written()) catch |err| {
+                dvui.logError(@src(), err, "Could not download plot.png", .{});
+            };
+        } else {
+            const filename = dvui.dialogNativeFileSave(dvui.currentWindow().lifo(), .{ .path = "plot.png" }) catch null;
+            if (filename) |fname| blk: {
+                defer dvui.currentWindow().lifo().free(fname);
 
-        if (p.png(arena) catch null) |png_slice| {
-            defer arena.free(png_slice);
-
-            if (dvui.wasm) {
-                dvui.backend.downloadData("plot.png", png_slice) catch |err| {
-                    dvui.logError(@src(), err, "Could not download plot.png", .{});
+                var file = std.fs.createFileAbsoluteZ(fname, .{}) catch |err| {
+                    dvui.log.debug("Failed to create file {s}, got {any}", .{ fname, err });
+                    dvui.toast(@src(), .{ .message = "Failed to create file" });
+                    break :blk;
                 };
-            } else {
-                const filename = dvui.dialogNativeFileSave(arena, .{ .path = "plot.png" }) catch null;
-                if (filename) |fname| blk: {
-                    defer arena.free(fname);
+                defer file.close();
 
-                    var file = std.fs.createFileAbsoluteZ(fname, .{}) catch |err| {
-                        dvui.log.debug("Failed to create file {s}, got {any}", .{ fname, err });
-                        dvui.toast(@src(), .{ .message = "Failed to create file" });
-                        break :blk;
-                    };
-                    defer file.close();
-
-                    file.writeAll(png_slice) catch |err| {
-                        dvui.log.debug("Failed to write to file {s}, got {any}", .{ fname, err });
-                    };
-                }
+                var buffer: [256]u8 = undefined;
+                var writer = file.writer(&buffer);
+                p.png(&writer.interface) catch |err| {
+                    dvui.logError(@src(), err, "Failed to write plot png to file {s}", .{fname});
+                };
+                // End writing to file and potentially truncate any additional preexisting data
+                writer.end() catch |err| {
+                    dvui.logError(@src(), err, "Failed to end file write for {s}", .{fname});
+                };
             }
         }
     }
