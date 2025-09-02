@@ -4,15 +4,9 @@ const WebBackend = @import("web-backend");
 comptime {
     std.debug.assert(@hasDecl(WebBackend, "WebBackend"));
 }
-usingnamespace WebBackend.wasm;
 
-const WriteError = error{};
-const LogWriter = std.io.Writer(void, WriteError, writeLog);
-
-fn writeLog(_: void, msg: []const u8) WriteError!usize {
-    WebBackend.wasm.wasm_log_write(msg.ptr, msg.len);
-    return msg.len;
-}
+var wasm_log_console_buffer: [512]u8 = undefined;
+pub var js_console = WebBackend.Console.init(&wasm_log_console_buffer);
 
 pub fn logFn(
     comptime message_level: std.log.Level,
@@ -20,17 +14,11 @@ pub fn logFn(
     comptime format: []const u8,
     args: anytype,
 ) void {
-    const level_txt = switch (message_level) {
-        .err => "error",
-        .warn => "warning",
-        .info => "info",
-        .debug => "debug",
-    };
-    const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
-    const msg = level_txt ++ prefix2 ++ format ++ "\n";
-
-    (LogWriter{ .context = {} }).print(msg, args) catch return;
-    WebBackend.wasm.wasm_log_flush();
+    if (scope != .default) {
+        js_console.writer.print("({s}): ", .{@tagName(scope)}) catch unreachable;
+    }
+    js_console.writer.print(format, args) catch unreachable;
+    js_console.flushAtLevel(message_level);
 }
 
 pub const std_options: std.Options = .{
@@ -74,8 +62,8 @@ export fn dvui_deinit() void {
 // return -1 to quit
 export fn dvui_update() i32 {
     return update() catch |err| {
-        std.log.err("{!}", .{err});
-        const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
+        std.log.err("{any}", .{err});
+        const msg = std.fmt.allocPrint(gpa, "{any}", .{err}) catch "allocPrint OOM";
         WebBackend.wasm.wasm_panic(msg.ptr, msg.len);
         return -1;
     };

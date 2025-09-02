@@ -122,8 +122,10 @@ pub fn build(b: *std.Build) !void {
         // Use customized index.html
         const add_doc_logo = b.addExecutable(.{
             .name = "addDocLogo",
-            .root_source_file = b.path("docs/add_doc_logo.zig"),
-            .target = b.graph.host,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("docs/add_doc_logo.zig"),
+                .target = b.graph.host,
+            }),
         });
         const run_add_logo = b.addRunArtifact(add_doc_logo);
         run_add_logo.addFileArg(b.path("docs/index.html"));
@@ -508,7 +510,7 @@ const DvuiModuleOptions = struct {
     build_options: *std.Build.Step.Options,
 
     fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
-        const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters, .use_lld = self.use_lld });
+        const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters, .use_lld = self.use_lld, .use_llvm = true });
         self.b.installArtifact(tests); // Compile check on default install step
         if (self.check_step) |step| {
             step.dependOn(&tests.step);
@@ -516,7 +518,13 @@ const DvuiModuleOptions = struct {
     }
     fn addTests(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
         if (self.test_step) |step| {
-            const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters, .use_lld = self.use_lld });
+            const tests = self.b.addTest(.{
+                .root_module = mod,
+                .name = name,
+                .filters = self.test_filters,
+                .use_lld = self.use_lld,
+                .use_llvm = true,
+            });
             step.dependOn(&self.b.addRunArtifact(tests).step);
         }
     }
@@ -609,7 +617,7 @@ fn addExample(
     mod.addImport("dvui", example_opts.dvui_mod);
     mod.addImport(example_opts.backend_name, example_opts.backend_mod);
 
-    const exe = b.addExecutable(.{ .name = name, .root_module = mod, .use_lld = opts.use_lld });
+    const exe = b.addExecutable(.{ .name = name, .root_module = mod, .use_lld = opts.use_lld, .use_llvm = true });
     if (opts.check_step) |step| {
         step.dependOn(&exe.step);
     }
@@ -653,11 +661,14 @@ fn addWebExample(
 
     const exeOptions: std.Build.ExecutableOptions = .{
         .name = "web",
-        .root_source_file = file,
-        .target = opts.target,
-        .optimize = opts.optimize,
-        .link_libc = false,
-        .strip = if (opts.optimize == .ReleaseFast or opts.optimize == .ReleaseSmall) true else false,
+        .use_llvm = true,
+        .root_module = b.createModule(.{
+            .root_source_file = file,
+            .target = opts.target,
+            .optimize = opts.optimize,
+            .link_libc = false,
+            .strip = if (opts.optimize == .ReleaseFast or opts.optimize == .ReleaseSmall) true else false,
+        }),
     };
     const web_test = b.addExecutable(exeOptions);
     web_test.entry = .disabled;
@@ -678,8 +689,10 @@ fn addWebExample(
 
     const cb = b.addExecutable(.{
         .name = "cacheBuster",
-        .root_source_file = b.path("src/cacheBuster.zig"),
-        .target = b.graph.host,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/cacheBuster.zig"),
+            .target = b.graph.host,
+        }),
     });
     const cb_run = b.addRunArtifact(cb);
     cb_run.addFileArg(b.path("src/backends/index.html"));

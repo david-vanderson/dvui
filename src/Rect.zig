@@ -186,13 +186,13 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             return self.outset(Self.all(p));
         }
 
-        pub fn format(self: *const Self, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        pub fn format(self: *const Self, writer: *std.Io.Writer) !void {
             const type_name = switch (units) {
                 .none => "Rect",
                 .natural => "Rect.Natural",
                 .physical => "Rect.Physical",
             };
-            try std.fmt.format(writer, "{s}{{ {d} {d} {d} {d} }}", .{ type_name, self.x, self.y, self.w, self.h });
+            try writer.print("{s}{{ {d} {d} {d} {d} }}", .{ type_name, self.x, self.y, self.w, self.h });
         }
 
         /// True if the rect intersects the current clipping rectangle.

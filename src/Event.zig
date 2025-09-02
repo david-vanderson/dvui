@@ -21,12 +21,12 @@ evt: union(enum) {
     text: Text,
 },
 
-pub fn format(self: *const Event, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-    try std.fmt.format(writer, "Event({d}){{{s} ", .{ self.num, @tagName(self.evt) });
+pub fn format(self: *const Event, writer: *std.Io.Writer) !void {
+    try writer.print("Event({d}){{{s} ", .{ self.num, @tagName(self.evt) });
     switch (self.evt) {
-        .mouse => |me| try std.fmt.format(writer, "{s}}}", .{@tagName(me.action)}),
-        .key => |ke| try std.fmt.format(writer, "{s}}}", .{@tagName(ke.action)}),
-        .text => try std.fmt.format(writer, "}}", .{}),
+        .mouse => |me| try writer.print("{s}}}", .{@tagName(me.action)}),
+        .key => |ke| try writer.print("{s}}}", .{@tagName(ke.action)}),
+        .text => try writer.print("}}", .{}),
     }
 }
 
@@ -37,7 +37,7 @@ pub fn format(self: *const Event, comptime _: []const u8, _: std.fmt.FormatOptio
 /// This makes it possible to see which widget handled the event.
 pub fn handle(self: *Event, src: std.builtin.SourceLocation, wd: *const dvui.WidgetData) void {
     if (dvui.currentWindow().debug.logEvents(null)) {
-        dvui.log.debug("{s}:{d} {} handled by {s} ({x})", .{ src.file, src.line, self, wd.options.name orelse "???", wd.id });
+        dvui.log.debug("{s}:{d} {f} handled by {s} ({x})", .{ src.file, src.line, self, wd.options.name orelse "???", wd.id });
     }
     self.handled = true;
 }

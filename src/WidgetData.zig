@@ -302,7 +302,7 @@ pub fn minSizeSetAndRefresh(self: *WidgetData) void {
         // it, which is very annoying because you can't "defer try
         // widget.deinit()".  Also if we are having memory issues then we
         // have larger problems than here.
-        dvui.log.err("minSizeSetAndRefresh got {!} when trying to set min size of widget {x}\n", .{ err, self.id });
+        dvui.log.err("minSizeSetAndRefresh got {any} when trying to set min size of widget {x}\n", .{ err, self.id });
 
         break :blk null;
     };

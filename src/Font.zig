@@ -147,7 +147,7 @@ pub const FontId = enum(u64) {
         return @enumFromInt(dvui.fnv.hash(name));
     }
 
-    pub fn format(self: *const FontId, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+    pub fn format(self: *const FontId, writer: *std.Io.Writer) !void {
         const named_ids = std.meta.tags(FontId);
         for (named_ids) |named| {
             if (named == self.*) {

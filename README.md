@@ -2,7 +2,7 @@
 
 [Homepage](https://david-vanderson.github.io) A Zig GUI toolkit for whole applications or extra debugging windows in an existing application.
 
-Tested with [Zig](https://ziglang.org/) 0.14 (use tag v0.2.0 for zig 0.13)
+Tested with [Zig](https://ziglang.org/) 0.15.1 (use tag v0.3.0 for zig 0.14.1)
 
 How to run the built-in examples:
 

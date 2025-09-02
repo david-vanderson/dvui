@@ -28,14 +28,14 @@ const EventTemp = struct {
     float2: f32,
 };
 
-pub var event_temps = std.ArrayList(EventTemp).init(gpa);
+// pub var event_temps = std.ArrayList(EventTemp).init(gpa);
 
 pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_about_webgl2() u8;
 
     pub extern "dvui" fn wasm_panic(ptr: [*]const u8, len: usize) void;
-    pub extern "dvui" fn wasm_log_write(ptr: [*]const u8, len: usize) void;
-    pub extern "dvui" fn wasm_log_flush() void;
+    pub extern "dvui" fn wasm_console_drain(ptr: [*]const u8, len: usize) void;
+    pub extern "dvui" fn wasm_console_flush(log_level: u8) void;
 
     pub extern "dvui" fn wasm_now() f64;
     pub extern "dvui" fn wasm_sleep(ms: u32) void;
@@ -76,8 +76,8 @@ pub const wasm = if (!builtin.is_test) struct {
     }
 
     pub fn wasm_panic(_: [*]const u8, _: usize) void {}
-    pub fn wasm_log_write(_: [*]const u8, _: usize) void {}
-    pub fn wasm_log_flush() void {}
+    pub fn wasm_console_drain(_: [*]const u8, _: usize) void {}
+    pub fn wasm_console_flush(_: u8) void {}
 
     pub fn wasm_now() f64 {
         return undefined;
@@ -140,7 +140,7 @@ pub const wasm = if (!builtin.is_test) struct {
 };
 
 export fn dvui_c_alloc(size: usize) ?*anyopaque {
-    const buffer = gpa.alignedAlloc(u8, 8, size + 8) catch {
+    const buffer = gpa.alignedAlloc(u8, .@"8", size + 8) catch {
         //log.debug("dvui_c_alloc {d} failed", .{size});
         return null;
     };
@@ -150,7 +150,7 @@ export fn dvui_c_alloc(size: usize) ?*anyopaque {
 }
 
 pub export fn dvui_c_free(ptr: ?*anyopaque) void {
-    const buffer = @as([*]align(8) u8, @alignCast(@ptrCast(ptr orelse return))) - 8;
+    const buffer = @as([*]align(8) u8, @ptrCast(@alignCast(ptr orelse return))) - 8;
     const len = std.mem.readInt(u64, buffer[0..@sizeOf(u64)], builtin.cpu.arch.endian());
     //log.debug("dvui_c_free {?*} {d}", .{ ptr, len - 8 });
 
@@ -269,7 +269,7 @@ export fn new_font(ptr: [*c]u8, len: usize) void {
 export fn add_event(which: u8, int1: u32, int2: u32, float1: f32, float2: f32) void {
     if (win_ok) {
         add_event_raw(&win, which, int1, int2, float1, float2) catch |err| {
-            log.err("add_event_raw returned {!}", .{err});
+            log.err("add_event_raw returned {any}", .{err});
         };
     }
 }
@@ -283,7 +283,7 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
     //    .float1 = float1,
     //    .float2 = float2,
     //}) catch |err| {
-    //    const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
+    //    const msg = std.fmt.allocPrint(gpa, "{any}", .{err}) catch "allocPrint OOM";
     //    wasm.wasm_panic(msg.ptr, msg.len);
     //};
     switch (which) {
@@ -769,6 +769,107 @@ pub fn getNumberOfFilesAvailable(id: dvui.Id) usize {
     return wasm.wasm_get_number_of_files_available(id.asU64());
 }
 
+/// A `std.Io.Writer` wrapper for interacting with the JavaScript console.
+///
+/// The drain function is infallible, meaning that using `catch unreachable`
+/// on the writer functions should be safe (unless the `std.Io.Writer`
+/// implementation can throw an error explicitly)
+///
+/// IMPORTANT: All instances of `Console` drain to the same buffer on the
+/// Javascript side! To avoid you message getting clobbered, always write
+/// everything in full at one time and call `flushAtLevel` immediately.
+pub const Console = struct {
+    writer: std.Io.Writer,
+
+    /// The minimum recommended buffer size.
+    pub const min_buffer_size: usize = 128;
+
+    /// Assserts that `buffer.len >= Console.min_buffer_size`
+    pub fn init(buffer: []u8) Console {
+        std.debug.assert(buffer.len >= Console.min_buffer_size);
+        return .{ .writer = .{
+            .buffer = buffer,
+            .vtable = &.{
+                .drain = &Console.drain,
+                .flush = &Console.flush,
+            },
+        } };
+    }
+
+    /// A simple drain function that only writes what it can into the buffer
+    /// and only flushes it when the buffer is completely full. This should
+    /// give optimal buffering at the cost of more vtable calls as it does
+    /// not loop over all data slices in this function.
+    pub fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
+        // If the unused slice gets filled up, we can return this value
+        // as it was the total amount of bytes available to fill
+        const unused_capacity = w.unusedCapacityLen();
+        var unused = w.unusedCapacitySlice();
+        if (unused.len == 0) {
+            try Console.flush(w);
+            return unused_capacity;
+        }
+
+        const slice = data[0 .. data.len - 1];
+        for (slice) |buf| {
+            const min_len = @min(unused.len, buf.len);
+            @memcpy(unused[0..min_len], buf[0..min_len]);
+            w.end += min_len;
+            unused = w.unusedCapacitySlice();
+            if (unused.len == 0) {
+                try Console.flush(w);
+                return unused_capacity;
+            }
+        }
+
+        const final = data[data.len - 1];
+        switch (final.len) {
+            0 => {},
+            1 => {
+                const min_len = @min(unused.len, splat);
+                @memset(unused[0..min_len], final[0]);
+                w.end += min_len;
+                unused = w.unusedCapacitySlice();
+                if (unused.len == 0) {
+                    try Console.flush(w);
+                    return unused_capacity;
+                }
+            },
+            else => for (0..splat) |_| {
+                const min_len = @min(unused.len, final.len);
+                @memcpy(unused[0..min_len], final[0..min_len]);
+                w.end += min_len;
+                unused = w.unusedCapacitySlice();
+                if (unused.len == 0) {
+                    try Console.flush(w);
+                    return unused_capacity;
+                }
+            },
+        }
+        return unused_capacity - w.unusedCapacityLen();
+    }
+
+    pub fn flush(w: *std.Io.Writer) std.Io.Writer.Error!void {
+        if (w.end == 0) return;
+        wasm.wasm_console_drain(w.buffer.ptr, w.end);
+        w.end = 0;
+    }
+
+    /// If `level` is `null`, the generic `console.log` will be used,
+    /// otherwise the approtiare `console.LEVEL` function will be used.
+    pub fn flushAtLevel(self: *Console, level: ?std.log.Level) void {
+        // Drain all data to the JavaScript side.
+        Console.flush(&self.writer) catch unreachable;
+        // Show the console message with the appropriate log level
+        wasm.wasm_console_flush(if (level) |l| switch (l) {
+            .err => 9,
+            .warn => 7,
+            .info => 5,
+            .debug => 3,
+        } else 1);
+    }
+};
+
 // dvui_app stuff
 comptime {
     if (dvui.App.get() != null) {
@@ -778,13 +879,8 @@ comptime {
     }
 }
 
-const WriteError = error{};
-const LogWriter = std.io.Writer(void, WriteError, writeLog);
-
-fn writeLog(_: void, msg: []const u8) WriteError!usize {
-    WebBackend.wasm.wasm_log_write(msg.ptr, msg.len);
-    return msg.len;
-}
+var wasm_log_console_buffer: [512]u8 = undefined;
+pub var js_console = Console.init(&wasm_log_console_buffer);
 
 pub fn logFn(
     comptime message_level: std.log.Level,
@@ -792,17 +888,11 @@ pub fn logFn(
     comptime format: []const u8,
     args: anytype,
 ) void {
-    const level_txt = switch (message_level) {
-        .err => "error",
-        .warn => "warning",
-        .info => "info",
-        .debug => "debug",
-    };
-    const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
-    const msg = level_txt ++ prefix2 ++ format ++ "\n";
-
-    (LogWriter{ .context = {} }).print(msg, args) catch return;
-    WebBackend.wasm.wasm_log_flush();
+    if (scope != .default) {
+        js_console.writer.print("({s}): ", .{@tagName(scope)}) catch unreachable;
+    }
+    js_console.writer.print(format, args) catch unreachable;
+    js_console.flushAtLevel(message_level);
 }
 
 pub const panic = std.debug.FullPanic(struct {
@@ -847,17 +937,17 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 
     if (app.initFn) |initFn| {
         win.begin(win.frame_time_ns) catch |err| {
-            log.err("dvui.Window.begin failed: {!}", .{err});
+            log.err("dvui.Window.begin failed: {any}", .{err});
             return 3;
         };
 
         initFn(&win) catch |err| {
-            log.err("dvui.App.initFn failed: {!}", .{err});
+            log.err("dvui.App.initFn failed: {any}", .{err});
             return 4;
         };
 
         _ = win.end(.{}) catch |err| {
-            log.err("dvui.Window.end failed: {!}", .{err});
+            log.err("dvui.Window.end failed: {any}", .{err});
             return 5;
         };
     }
@@ -879,7 +969,7 @@ fn dvui_update() callconv(.c) i32 {
     return update() catch |err| {
         // The main loop is stopping, this is our last chance to deinit stuff
         dvui_deinit();
-        std.debug.panic("{!}", .{err});
+        std.debug.panic("{any}", .{err});
     };
 }
 

@@ -68,13 +68,13 @@ pub fn SizeType(comptime units: dvui.enums.Units) type {
             return sizeType{ .w = self.w * s, .h = self.h * s };
         }
 
-        pub fn format(self: *const Self, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        pub fn format(self: *const Self, writer: *std.Io.Writer) !void {
             const type_name = switch (units) {
                 .none => "Size",
                 .natural => "Size.Natural",
                 .physical => "Size.Physical",
             };
-            try std.fmt.format(writer, "{s}{{ {d} {d} }}", .{ type_name, self.w, self.h });
+            try writer.print("{s}{{ {d} {d} }}", .{ type_name, self.w, self.h });
         }
     };
 }

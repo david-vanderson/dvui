@@ -221,8 +221,8 @@ pub const Id = enum(u64) {
         return @truncate(@intFromEnum(self));
     }
 
-    pub fn format(self: *const Id, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-        try std.fmt.format(writer, "{" ++ fmt ++ "}", .{self.asU64()});
+    pub fn format(self: *const Id, writer: *std.Io.Writer) !void {
+        try writer.print("{x}", .{self.asU64()});
     }
 };
 
@@ -287,11 +287,11 @@ pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []
     if (!builtin.strip_debug_info) std.debug.captureStackTrace(@returnAddress(), &stack_trace);
 
     const error_trace_fmt, const err_trace_arg = if (err_trace_enabled)
-        .{ "\nError trace: {?}", @errorReturnTrace() }
+        .{ "\nError trace: {?f}", @errorReturnTrace() }
     else
         .{ "{s}", "" }; // Needed to keep the arg count the same
     const stack_trace_fmt, const trace_arg = if (stack_trace_enabled)
-        .{ "\nStack trace: {}", stack_trace }
+        .{ "\nStack trace: {f}", stack_trace }
     else
         .{ "{s}", "" }; // Needed to keep the arg count the sames
 
@@ -352,12 +352,12 @@ pub fn tag(name: []const u8, data: TagData) void {
 
     //std.debug.print("tag dupe {s}\n", .{name});
     const name_copy = cw.gpa.dupe(u8, name) catch |err| {
-        dvui.log.err("tag() got {!} for name {s}\n", .{ err, name });
+        dvui.log.err("tag() got {any} for name {s}\n", .{ err, name });
         return;
     };
 
     cw.tags.put(cw.gpa, name_copy, data) catch |err| {
-        dvui.log.err("tag() \"{s}\" got {!} for id {x}\n", .{ name, err, data.id });
+        dvui.log.err("tag() \"{s}\" got {any} for id {x}\n", .{ name, err, data.id });
         cw.gpa.free(name_copy);
     };
 }
@@ -797,14 +797,14 @@ pub const FontCacheEntry = struct {
 
             if (useFreeType) blk: {
                 FontCacheEntry.intToError(c.FT_Load_Char(fce.face, codepoint, @as(i32, @bitCast(FontCacheEntry.LoadFlags{ .render = true })))) catch |err| {
-                    log.warn("renderText: freetype error {!} trying to FT_Load_Char codepoint {d}", .{ err, codepoint });
+                    log.warn("renderText: freetype error {any} trying to FT_Load_Char codepoint {d}", .{ err, codepoint });
                     break :blk; // will skip the failing glyph
                 };
 
                 // https://freetype.org/freetype2/docs/tutorial/step1.html#section-6
                 if (fce.face.*.glyph.*.format != c.FT_GLYPH_FORMAT_BITMAP) {
                     FontCacheEntry.intToError(c.FT_Render_Glyph(fce.face.*.glyph, c.FT_RENDER_MODE_NORMAL)) catch |err| {
-                        log.warn("renderText freetype error {!} trying to FT_Render_Glyph codepoint {d}", .{ err, codepoint });
+                        log.warn("renderText freetype error {any} trying to FT_Render_Glyph codepoint {d}", .{ err, codepoint });
                         break :blk; // will skip the failing glyph
                     };
                 }
@@ -879,7 +879,7 @@ pub const FontCacheEntry = struct {
 
         if (useFreeType) {
             FontCacheEntry.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(LoadFlags{ .render = false })))) catch |err| {
-                log.warn("glyphInfoGet freetype error {!} font {s} codepoint {d}\n", .{ err, self.name, codepoint });
+                log.warn("glyphInfoGet freetype error {any} font {s} codepoint {d}\n", .{ err, self.name, codepoint });
                 return FontError.fontError;
             };
 
@@ -968,7 +968,7 @@ pub const FontCacheEntry = struct {
                     const glyph_index: u32 = c.FT_Get_Char_Index(fce.face, codepoint);
                     var kern: c.FT_Vector = undefined;
                     FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
-                        log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
+                        log.warn("renderText freetype error {any} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
                         // Set fallback kern and continue to the best of out ability
                         kern.x = 0;
                         kern.y = 0;
@@ -1046,7 +1046,7 @@ pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*FontCacheEntry {
     const ttf_bytes, const name = if (cw.font_bytes.get(font.id)) |fbe|
         .{ fbe.ttf_bytes, fbe.name }
     else blk: {
-        log.warn("Font {} not in dvui database, using default", .{font.id});
+        log.warn("Font {f} not in dvui database, using default", .{font.id});
         break :blk .{ Font.default_ttf_bytes, @tagName(Font.default_font_id) };
     };
     //log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
@@ -1075,7 +1075,7 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontEr
         args.memory_base = ttf_bytes.ptr;
         args.memory_size = @as(u31, @intCast(ttf_bytes.len));
         FontCacheEntry.intToError(c.FT_Open_Face(ft2lib, &args, 0, &face)) catch |err| {
-            log.warn("fontCacheInit freetype error {!} trying to FT_Open_Face font {s}\n", .{ err, name });
+            log.warn("fontCacheInit freetype error {any} trying to FT_Open_Face font {s}\n", .{ err, name });
             return FontError.fontError;
         };
 
@@ -1085,7 +1085,7 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontEr
 
         while (true) : (pixel_size -= 1) {
             FontCacheEntry.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
-                log.warn("fontCacheInit freetype error {!} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, name });
+                log.warn("fontCacheInit freetype error {any} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, name });
                 return FontError.fontError;
             };
 
@@ -1276,7 +1276,7 @@ pub fn svgToTvg(allocator: std.mem.Allocator, svg_bytes: []const u8) (std.mem.Al
     return tvg.tvg_from_svg(allocator, svg_bytes, .{}) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
-            log.debug("svgToTvg returned {!}", .{err});
+            log.debug("svgToTvg returned {any}", .{err});
             return TvgError.tvgError;
         },
     };
@@ -1289,7 +1289,7 @@ pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) TvgError!
     if (height == 0) return 0.0;
     var stream = std.io.fixedBufferStream(tvg_bytes);
     var parser = tvg.tvg.parse(currentWindow().arena(), stream.reader()) catch |err| {
-        log.warn("iconWidth Tinyvg error {!} parsing icon {s}\n", .{ err, name });
+        log.warn("iconWidth Tinyvg error {any} parsing icon {s}\n", .{ err, name });
         return TvgError.tvgError;
     };
     defer parser.deinit();
@@ -1552,7 +1552,7 @@ pub const Path = struct {
     /// `Builder.deinit` should always be called as `Builder.build` does not give ownership
     /// of the memory
     pub const Builder = struct {
-        points: std.ArrayList(Point.Physical),
+        points: std.array_list.Managed(Point.Physical),
         oom_error_occurred: bool = false,
 
         pub fn init(allocator: std.mem.Allocator) Builder {
@@ -2352,12 +2352,12 @@ pub fn subwindowAdd(id: Id, rect: Rect, rect_pixels: Rect.Physical, modal: bool,
 
         // i points just past all subwindows that want to be on top of this subwin_id
         cw.subwindows.insert(cw.gpa, i, sw) catch |err| {
-            logError(@src(), err, "Could not insert {x} {} into subwindow list, events in this other other subwindwos might not work properly", .{ id, rect_pixels });
+            logError(@src(), err, "Could not insert {f} {f} into subwindow list, events in this or other subwindows might not work properly", .{ id, rect_pixels });
         };
     } else {
         // just put it on the top
         cw.subwindows.append(cw.gpa, sw) catch |err| {
-            logError(@src(), err, "Could not insert {x} {} into subwindow list, events in this other other subwindwos might not work properly", .{ id, rect_pixels });
+            logError(@src(), err, "Could not insert {f} {f} into subwindow list, events in this or other subwindows might not work properly", .{ id, rect_pixels });
         };
     }
 }
@@ -3053,7 +3053,7 @@ pub fn dataSetAdvanced(win: ?*Window, id: Id, key: []const u8, data: anytype, co
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGet(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
     if (dataGetInternal(win, id, key, T, false)) |bytes| {
-        return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
+        return @as(*T, @ptrCast(@alignCast(bytes.ptr))).*;
     } else {
         return null;
     }
@@ -3071,7 +3071,7 @@ pub fn dataGet(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: T) T {
     if (dataGetInternal(win, id, key, T, false)) |bytes| {
-        return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
+        return @as(*T, @ptrCast(@alignCast(bytes.ptr))).*;
     } else {
         dataSet(win, id, key, default);
         return default;
@@ -3119,7 +3119,7 @@ pub fn dataGetPtrDefault(win: ?*Window, id: Id, key: []const u8, comptime T: typ
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetPtr(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?*T {
     if (dataGetInternal(win, id, key, T, false)) |bytes| {
-        return @as(*T, @alignCast(@ptrCast(bytes.ptr)));
+        return @as(*T, @ptrCast(@alignCast(bytes.ptr)));
     } else {
         return null;
     }
@@ -3148,7 +3148,7 @@ pub fn dataGetSlice(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T
 
     if (dataGetInternal(win, id, key, T, true)) |bytes| {
         if (dt.pointer.sentinel()) |sentinel| {
-            return @as([:sentinel]align(@alignOf(dt.pointer.child)) dt.pointer.child, @alignCast(@ptrCast(std.mem.bytesAsSlice(dt.pointer.child, bytes[0 .. bytes.len - @sizeOf(dt.pointer.child)]))));
+            return @as([:sentinel]align(@alignOf(dt.pointer.child)) dt.pointer.child, @ptrCast(@alignCast(std.mem.bytesAsSlice(dt.pointer.child, bytes[0 .. bytes.len - @sizeOf(dt.pointer.child)]))));
         } else {
             return @as([]align(@alignOf(dt.pointer.child)) dt.pointer.child, @alignCast(std.mem.bytesAsSlice(dt.pointer.child, bytes)));
         }
@@ -3326,7 +3326,7 @@ pub const EventMatchOptions = struct {
 pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     if (e.handled) {
         if (builtin.mode == .Debug and opts.debug) {
-            log.debug("eventMatch {} already handled", .{e});
+            log.debug("eventMatch {f} already handled", .{e});
         }
         return false;
     }
@@ -3341,7 +3341,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                     if (wid != opts.id) {
                         // not the focused window
                         if (builtin.mode == .Debug and opts.debug) {
-                            log.debug("eventMatch {} (cleanup) focus not to this window", .{e});
+                            log.debug("eventMatch {f} (cleanup) focus not to this window", .{e});
                         }
                         return false;
                     }
@@ -3349,7 +3349,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                     if (e.target_widgetId != opts.id and (opts.focus_id == null or opts.focus_id.? != e.target_widgetId)) {
                         // not the focused widget
                         if (builtin.mode == .Debug and opts.debug) {
-                            log.debug("eventMatch {} focus not to this widget", .{e});
+                            log.debug("eventMatch {f} focus not to this widget", .{e});
                         }
                         return false;
                     }
@@ -3373,7 +3373,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             if (cw.drag_state == .dragging and cw.drag_name != null and (opts.drag_name == null or !std.mem.eql(u8, cw.drag_name.?, opts.drag_name.?))) {
                 // a cross-widget drag is happening that we don't know about
                 if (builtin.mode == .Debug and opts.debug) {
-                    log.debug("eventMatch {} drag_name ({?s}) given but current drag is ({?s})", .{ e, opts.drag_name, cw.drag_name });
+                    log.debug("eventMatch {f} drag_name ({?s}) given but current drag is ({?s})", .{ e, opts.drag_name, cw.drag_name });
                 }
                 return false;
             }
@@ -3381,7 +3381,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             if (me.floating_win != subwindowCurrentId()) {
                 // floating window is above us
                 if (builtin.mode == .Debug and opts.debug) {
-                    log.debug("eventMatch {} floating window above", .{e});
+                    log.debug("eventMatch {f} floating window above", .{e});
                 }
                 return false;
             }
@@ -3389,7 +3389,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             if (!opts.r.contains(me.p)) {
                 // mouse not in our rect
                 if (builtin.mode == .Debug and opts.debug) {
-                    log.debug("eventMatch {} not in rect", .{e});
+                    log.debug("eventMatch {f} not in rect", .{e});
                 }
                 return false;
             }
@@ -3400,7 +3400,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                 // prevents widgets that are scrolled off a
                 // scroll area from processing events
                 if (builtin.mode == .Debug and opts.debug) {
-                    log.debug("eventMatch {} not in clip", .{e});
+                    log.debug("eventMatch {f} not in clip", .{e});
                 }
                 return false;
             }
@@ -3418,7 +3418,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                 }
 
                 if (builtin.mode == .Debug and opts.debug) {
-                    log.debug("eventMatch {} captured by other widget", .{e});
+                    log.debug("eventMatch {f} captured by other widget", .{e});
                 }
                 return false;
             }
@@ -3564,7 +3564,7 @@ pub fn animation(id: Id, key: []const u8, a: Animation) void {
     const h = id.update(key);
     cw.animations.put(cw.gpa, h, a) catch |err| switch (err) {
         error.OutOfMemory => {
-            log.err("animation got {!} for id {x} key {s}\n", .{ err, id, key });
+            log.err("animation got {any} for id {x} key {s}\n", .{ err, id, key });
         },
     };
 }
@@ -4018,7 +4018,7 @@ pub fn dialogDisplay(id: Id) !void {
         dvui.dialogRemove(id);
         if (callafter) |ca| {
             ca(id, .cancel) catch |err| {
-                log.debug("Dialog callafter for {x} returned {!}", .{ id, err });
+                log.debug("Dialog callafter for {x} returned {any}", .{ id, err });
             };
         }
         return;
@@ -4039,7 +4039,7 @@ pub fn dialogDisplay(id: Id) !void {
                 dvui.dialogRemove(id);
                 if (callafter) |ca| {
                     ca(id, .cancel) catch |err| {
-                        log.debug("Dialog callafter for {x} returned {!}", .{ id, err });
+                        log.debug("Dialog callafter for {x} returned {any}", .{ id, err });
                     };
                 }
                 return;
@@ -4054,7 +4054,7 @@ pub fn dialogDisplay(id: Id) !void {
             dvui.dialogRemove(id);
             if (callafter) |ca| {
                 ca(id, .ok) catch |err| {
-                    log.debug("Dialog callafter for {x} returned {!}", .{ id, err });
+                    log.debug("Dialog callafter for {x} returned {any}", .{ id, err });
                 };
             }
             return;
@@ -4144,7 +4144,7 @@ pub fn wasmFileUploadedMultiple(id: Id) ?[]WasmFile {
     if (num_files == 0) return null;
 
     const files = dvui.currentWindow().arena().alloc(WasmFile, num_files) catch |err| {
-        log.err("File upload skipped, failed to allocate space for file handles: {!}", .{err});
+        log.err("File upload skipped, failed to allocate space for file handles: {any}", .{err});
         return null;
     };
     for (0.., files) |i, *file| {
@@ -4527,7 +4527,7 @@ pub fn toastsShow(id: ?Id, rect: Rect.Natural) void {
 
         while (it.next()) |t| {
             t.display(t.id) catch |err| {
-                log.warn("Toast {x} got {!} from its display function", .{ t.id, err });
+                log.warn("Toast {x} got {any} from its display function", .{ t.id, err });
             };
         }
     }
@@ -6500,21 +6500,31 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
 /// ```
 pub fn toUtf8(allocator: std.mem.Allocator, text: []const u8) std.mem.Allocator.Error![]const u8 {
     if (std.unicode.utf8ValidateSlice(text)) return text;
-    // Give some reasonable extra space for replacement bytes without the need to reallocate
-    const replacements_before_realloc = 100;
-    // We use array list directly to avoid `std.fmt.count` going over the string twice
-    var out = try std.ArrayList(u8).initCapacity(allocator, text.len + replacements_before_realloc);
-    const writer = out.writer();
-    try std.unicode.fmtUtf8(text).format(undefined, undefined, writer);
-    return out.toOwnedSlice();
+    return std.fmt.allocPrint(allocator, "{f}", .{std.unicode.fmtUtf8(text)});
 }
 
 test toUtf8 {
     const alloc = std.testing.allocator;
     const some_text = "This is some maybe utf8 text";
+    try std.testing.expect(std.unicode.utf8ValidateSlice(some_text));
+
     const utf8_text = try toUtf8(alloc, some_text);
     // Detect if the text needs to be freed by checking the
     defer if (utf8_text.ptr != some_text.ptr) alloc.free(utf8_text);
+
+    try std.testing.expect(some_text.ptr == utf8_text.ptr);
+    try std.testing.expect(std.unicode.utf8ValidateSlice(utf8_text));
+
+    // And with some invalid utf8:
+    const invalid_utf8 = "This \xFF is some\xFF invalid utf8\xFF";
+    try std.testing.expect(!std.unicode.utf8ValidateSlice(invalid_utf8));
+
+    const corrected_text = try toUtf8(alloc, invalid_utf8);
+    // Detect if the text needs to be freed by checking the
+    defer if (corrected_text.ptr != invalid_utf8.ptr) alloc.free(corrected_text);
+
+    try std.testing.expect(invalid_utf8.ptr != corrected_text.ptr);
+    try std.testing.expect(std.unicode.utf8ValidateSlice(corrected_text));
 }
 
 // pos is clamped to [0, text.len] then if it is in the middle of a multibyte
@@ -6937,7 +6947,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     const texture_atlas = fce.getTextureAtlas() catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
-            log.err("Could not get texture atlas for font {}, text area marked in magenta, to display '{s}'", .{ opts.font.id, opts.text });
+            log.err("Could not get texture atlas for font {f}, text area marked in magenta, to display '{s}'", .{ opts.font.id, opts.text });
             opts.rs.r.fill(.{}, .{ .color = .magenta });
             return;
         },
@@ -6985,7 +6995,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
                 const glyph_index: u32 = c.FT_Get_Char_Index(fce.face, codepoint);
                 var kern: c.FT_Vector = undefined;
                 FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
-                    log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
+                    log.warn("renderText freetype error {any} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
                     // Set fallback kern and continue to the best of out ability
                     kern.x = 0;
                     kern.y = 0;
@@ -7173,7 +7183,7 @@ pub fn textureFromTarget(target: TextureTarget) Backend.TextureError!Texture {
 pub fn textureDestroyLater(texture: Texture) void {
     const cw = currentWindow();
     cw.texture_trash.append(cw.arena(), texture) catch |err| {
-        dvui.log.err("textureDestroyLater got {!}\n", .{err});
+        dvui.log.err("textureDestroyLater got {any}\n", .{err});
     };
 }
 
