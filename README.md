@@ -58,6 +58,7 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 * [File explorer for Altair 8800 disk images](https://github.com/phatchman/altair_tools)
 * [Kanji flashcard app](https://codeberg.org/tensorush/origa)
 * [Azem - WIP micro-mouse simulator / maze solver](https://github.com/thuvasooriya/azem) - [Demo](https://www.thuvasooriya.me/azem/)
+* [Pixi - Pixel art editor](https://github.com/foxnne/pixi)
 
 ## Features
 
