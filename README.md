@@ -1,19 +1,19 @@
 # DVUI - Immediate Zig GUI for Apps and Games
 
-[Homepage](https://david-vanderson.github.io) A Zig GUI toolkit for whole applications or extra debugging windows in an existing application.
+[Homepage](https://david-vanderson.github.io) A Zig GUI toolkit for whole applications or extra debugging windows in an existing application. [online demo](https://david-vanderson.github.io/demo)
 
 Tested with [Zig](https://ziglang.org/) 0.15.1 (use tag v0.3.0 for zig 0.14.1)
 
 How to run the built-in examples:
 
-- SDL2
-  - ```zig build sdl2-standalone```
-  - ```zig build sdl2-ontop```
-  - ```zig build sdl2-app```
 - SDL3
   - ```zig build sdl3-standalone```
   - ```zig build sdl3-ontop```  
   - ```zig build sdl3-app```
+- SDL2
+  - ```zig build sdl2-standalone```
+  - ```zig build sdl2-ontop```
+  - ```zig build sdl2-app```
 - Raylib
   - if you encounter error `No Wayland` also add flag `-Dlinux_display_backend=X11`
   - ```zig build raylib-standalone```
