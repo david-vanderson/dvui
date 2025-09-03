@@ -54,6 +54,7 @@ export fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) i32 {
 }
 
 export fn dvui_deinit() void {
+    defer dvui.struct_ui.deinit(gpa);
     WebBackend.win.deinit();
     WebBackend.back.deinit();
 }

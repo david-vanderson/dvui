@@ -31,8 +31,8 @@ pub const std_options: std.Options = .{
     .logFn = dvui.App.logFn,
 };
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
+// Use the allocator created by the backend.
+var gpa: ?std.mem.Allocator = null;
 
 var orig_content_scale: f32 = 1.0;
 
@@ -52,10 +52,17 @@ pub fn AppInit(win: *dvui.Window) !void {
 }
 
 // Run as app is shutting down before dvui.Window.deinit()
-pub fn AppDeinit() void {}
+pub fn AppDeinit() void {
+    if (gpa) |alloc| {
+        dvui.struct_ui.deinit(alloc);
+    }
+}
 
 // Run each frame to do normal UI
 pub fn AppFrame() !dvui.App.Result {
+    if (gpa == null) {
+        gpa = dvui.currentWindow().gpa;
+    }
     return frame();
 }
 
