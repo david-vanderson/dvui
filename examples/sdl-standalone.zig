@@ -33,6 +33,7 @@ pub fn main() !void {
     dvui.Examples.show_demo_window = show_demo;
 
     defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
+    defer dvui.struct_ui.deinit(gpa);
 
     // init SDL backend (creates and owns OS window)
     var backend = try SDLBackend.initWindow(.{

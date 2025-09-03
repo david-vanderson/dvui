@@ -20,6 +20,7 @@ pub fn main() !void {
     const gpa = gpa_instance.allocator();
 
     defer _ = gpa_instance.deinit();
+    defer dvui.struct_ui.deinit(gpa);
 
     // create OS window directly with raylib
     ray.SetConfigFlags(ray.FLAG_WINDOW_RESIZABLE);
