@@ -57,10 +57,7 @@ pub fn install(self: *MenuItemWidget) void {
 }
 
 pub fn drawBackground(self: *MenuItemWidget) void {
-    var focused: bool = false;
-    if (self.data().id == dvui.focusedWidgetId()) {
-        focused = true;
-    }
+    var focused: bool = self.data().id == dvui.focusedWidgetId();
 
     if (focused and menu().?.mouse_over and !self.mouse_over and (menu().?.submenus_activated or menu().?.floating())) {
         // our menu got a mouse over but we didn't even though we were focused
@@ -71,7 +68,11 @@ pub fn drawBackground(self: *MenuItemWidget) void {
     if (focused or ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) and self.highlight)) {
         if (!self.init_opts.submenu or !menu().?.submenus_activated) {
             if (!self.init_opts.highlight_only) {
-                self.show_active = true;
+                if (menu().?.mouse_mode and !menu().?.mouse_over) {
+                    // following mouse but it's outside the menu
+                } else {
+                    self.show_active = true;
+                }
             }
 
             if (!self.focused_last_frame) {
