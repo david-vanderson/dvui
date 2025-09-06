@@ -378,6 +378,7 @@ pub const Cursor = enum(u8) {
     arrow_all,
     bad,
     hand,
+    hidden,
 };
 
 pub const ColorScheme = enum { light, dark };

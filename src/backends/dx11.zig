@@ -21,6 +21,7 @@ pub const WindowState = struct {
 
     last_pixel_size: dvui.Size.Physical = .{ .w = 800, .h = 600 },
     last_window_size: dvui.Size.Natural = .{ .w = 800, .h = 600 },
+    cursor_last: dvui.enums.Cursor = .arrow,
 
     texture_interpolation: std.AutoHashMap(*anyopaque, dvui.enums.TextureInterpolation) = undefined,
 
@@ -1044,7 +1045,6 @@ pub fn openURL(self: Context, url: []const u8) !void {
 pub fn preferredColorScheme(_: Context) ?dvui.enums.ColorScheme {
     return dvui.Backend.Common.windowsGetPreferredColorScheme();
 }
-
 pub fn cursorShow(_: Context, value: ?bool) !bool {
     var info: win32.CURSORINFO = undefined;
     info.cbSize = @sizeOf(win32.CURSORINFO);
@@ -1066,8 +1066,20 @@ pub fn cursorShow(_: Context, value: ?bool) !bool {
 
 pub fn refresh(_: Context) void {}
 
-pub fn setCursor(self: Context, new_cursor: dvui.enums.Cursor) void {
-    const converted_cursor = switch (new_cursor) {
+pub fn setCursor(ctx: Context, cursor: dvui.enums.Cursor) void {
+    const self = stateFromHwnd(hwndFromContext(ctx));
+    if (cursor == self.cursor_last) return;
+    defer self.cursor_last = cursor;
+    const new_shown_state = if (cursor == .hidden) false else if (self.cursor_last == .hidden) true else null;
+    if (new_shown_state) |new_state| {
+        if (try self.cursorShow(new_state) == new_state) {
+            log.err("Cursor shown state was out of sync", .{});
+        }
+        // Return early if we are hiding
+        if (new_state == false) return;
+    }
+
+    const converted_cursor = switch (cursor) {
         .arrow => win32.IDC_ARROW,
         .ibeam => win32.IDC_IBEAM,
         .wait, .wait_arrow => win32.IDC_WAIT,
@@ -1079,15 +1091,16 @@ pub fn setCursor(self: Context, new_cursor: dvui.enums.Cursor) void {
         .arrow_all => win32.IDC_SIZEALL,
         .bad => win32.IDC_NO,
         .hand => win32.IDC_HAND,
+        .hidden => unreachable,
     };
 
-    if (win32.LoadCursorW(null, converted_cursor)) |cursor| {
+    if (win32.LoadCursorW(null, converted_cursor)) |hcursor| {
         // NOTE: We set the class cursor because using win32.setCursor requires handling win32.WN_SETCURSOR
         // and messes with the default resize cursors of the window.
         _ = win32.SetClassLongPtrW(
             hwndFromContext(self),
             win32.GCLP_HCURSOR, // change cursor
-            @intCast(@intFromPtr(cursor)),
+            @intCast(@intFromPtr(hcursor)),
         );
     }
 }

@@ -135,13 +135,6 @@ pub fn preferredColorScheme(self: Backend) ?dvui.enums.ColorScheme {
     return self.impl.preferredColorScheme();
 }
 
-/// Show/hide the cursor.
-///
-/// Returns the previous state of the cursor, `true` meaning shown
-pub fn cursorShow(self: Backend, value: ?bool) GenericError!bool {
-    return self.impl.cursorShow(value);
-}
-
 /// Called by `dvui.refresh` when it is called from a background
 /// thread.  Used to wake up the gui thread.  It only has effect if you
 /// are using `dvui.Window.waitTime` or some other method of waiting until
