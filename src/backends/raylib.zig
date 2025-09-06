@@ -438,26 +438,34 @@ pub fn openURL(self: *RaylibBackend, url: []const u8) !void {
 }
 
 pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
-    if (cursor != self.cursor_last) {
-        self.cursor_last = cursor;
-
-        const raylib_cursor = switch (cursor) {
-            .arrow => c.MOUSE_CURSOR_ARROW,
-            .ibeam => c.MOUSE_CURSOR_IBEAM,
-            .wait => c.MOUSE_CURSOR_DEFAULT, // raylib doesn't have this
-            .wait_arrow => c.MOUSE_CURSOR_DEFAULT, // raylib doesn't have this
-            .crosshair => c.MOUSE_CURSOR_CROSSHAIR,
-            .arrow_nw_se => c.MOUSE_CURSOR_RESIZE_NWSE,
-            .arrow_ne_sw => c.MOUSE_CURSOR_RESIZE_NESW,
-            .arrow_w_e => c.MOUSE_CURSOR_RESIZE_EW,
-            .arrow_n_s => c.MOUSE_CURSOR_RESIZE_NS,
-            .arrow_all => c.MOUSE_CURSOR_RESIZE_ALL,
-            .bad => c.MOUSE_CURSOR_NOT_ALLOWED,
-            .hand => c.MOUSE_CURSOR_POINTING_HAND,
-        };
-
-        c.SetMouseCursor(raylib_cursor);
+    if (cursor == self.cursor_last) return;
+    defer self.cursor_last = cursor;
+    const new_shown_state = if (cursor == .hidden) false else if (self.cursor_last == .hidden) true else null;
+    if (new_shown_state) |new_state| {
+        if (self.cursorShow(new_state) == new_state) {
+            log.err("Cursor shown state was out of sync", .{});
+        }
+        // Return early if we are hiding
+        if (new_state == false) return;
     }
+
+    const raylib_cursor = switch (cursor) {
+        .arrow => c.MOUSE_CURSOR_ARROW,
+        .ibeam => c.MOUSE_CURSOR_IBEAM,
+        .wait => c.MOUSE_CURSOR_DEFAULT, // raylib doesn't have this
+        .wait_arrow => c.MOUSE_CURSOR_DEFAULT, // raylib doesn't have this
+        .crosshair => c.MOUSE_CURSOR_CROSSHAIR,
+        .arrow_nw_se => c.MOUSE_CURSOR_RESIZE_NWSE,
+        .arrow_ne_sw => c.MOUSE_CURSOR_RESIZE_NESW,
+        .arrow_w_e => c.MOUSE_CURSOR_RESIZE_EW,
+        .arrow_n_s => c.MOUSE_CURSOR_RESIZE_NS,
+        .arrow_all => c.MOUSE_CURSOR_RESIZE_ALL,
+        .bad => c.MOUSE_CURSOR_NOT_ALLOWED,
+        .hand => c.MOUSE_CURSOR_POINTING_HAND,
+        .hidden => unreachable,
+    };
+
+    c.SetMouseCursor(raylib_cursor);
 }
 
 pub fn preferredColorScheme(_: *RaylibBackend) ?dvui.enums.ColorScheme {

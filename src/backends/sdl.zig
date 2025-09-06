@@ -441,39 +441,47 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !bool {
 }
 
 pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) !void {
-    if (cursor != self.cursor_last) {
-        self.cursor_last = cursor;
-
-        const enum_int = @intFromEnum(cursor);
-        const tried = self.cursor_backing_tried[enum_int];
-        if (!tried) {
-            self.cursor_backing_tried[enum_int] = true;
-            self.cursor_backing[enum_int] = switch (cursor) {
-                .arrow => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_DEFAULT else c.SDL_SYSTEM_CURSOR_ARROW),
-                .ibeam => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_TEXT else c.SDL_SYSTEM_CURSOR_IBEAM),
-                .wait => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_WAIT),
-                .wait_arrow => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_PROGRESS else c.SDL_SYSTEM_CURSOR_WAITARROW),
-                .crosshair => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_CROSSHAIR),
-                .arrow_nw_se => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_NWSE_RESIZE else c.SDL_SYSTEM_CURSOR_SIZENWSE),
-                .arrow_ne_sw => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_NESW_RESIZE else c.SDL_SYSTEM_CURSOR_SIZENESW),
-                .arrow_w_e => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_EW_RESIZE else c.SDL_SYSTEM_CURSOR_SIZEWE),
-                .arrow_n_s => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_NS_RESIZE else c.SDL_SYSTEM_CURSOR_SIZENS),
-                .arrow_all => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_MOVE else c.SDL_SYSTEM_CURSOR_SIZEALL),
-                .bad => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_NOT_ALLOWED else c.SDL_SYSTEM_CURSOR_NO),
-                .hand => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_POINTER else c.SDL_SYSTEM_CURSOR_HAND),
-            };
+    if (cursor == self.cursor_last) return;
+    defer self.cursor_last = cursor;
+    const new_shown_state = if (cursor == .hidden) false else if (self.cursor_last == .hidden) true else null;
+    if (new_shown_state) |new_state| {
+        if (try self.cursorShow(new_state) == new_state) {
+            log.err("Cursor shown state was out of sync", .{});
         }
+        // Return early if we are hiding
+        if (new_state == false) return;
+    }
 
-        if (self.cursor_backing[enum_int]) |cur| {
-            if (sdl3) {
-                try toErr(c.SDL_SetCursor(cur), "SDL_SetCursor in setCursor");
-            } else {
-                c.SDL_SetCursor(cur);
-            }
+    const enum_int = @intFromEnum(cursor);
+    const tried = self.cursor_backing_tried[enum_int];
+    if (!tried) {
+        self.cursor_backing_tried[enum_int] = true;
+        self.cursor_backing[enum_int] = switch (cursor) {
+            .arrow => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_DEFAULT else c.SDL_SYSTEM_CURSOR_ARROW),
+            .ibeam => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_TEXT else c.SDL_SYSTEM_CURSOR_IBEAM),
+            .wait => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_WAIT),
+            .wait_arrow => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_PROGRESS else c.SDL_SYSTEM_CURSOR_WAITARROW),
+            .crosshair => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_CROSSHAIR),
+            .arrow_nw_se => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_NWSE_RESIZE else c.SDL_SYSTEM_CURSOR_SIZENWSE),
+            .arrow_ne_sw => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_NESW_RESIZE else c.SDL_SYSTEM_CURSOR_SIZENESW),
+            .arrow_w_e => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_EW_RESIZE else c.SDL_SYSTEM_CURSOR_SIZEWE),
+            .arrow_n_s => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_NS_RESIZE else c.SDL_SYSTEM_CURSOR_SIZENS),
+            .arrow_all => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_MOVE else c.SDL_SYSTEM_CURSOR_SIZEALL),
+            .bad => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_NOT_ALLOWED else c.SDL_SYSTEM_CURSOR_NO),
+            .hand => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_POINTER else c.SDL_SYSTEM_CURSOR_HAND),
+            .hidden => unreachable,
+        };
+    }
+
+    if (self.cursor_backing[enum_int]) |cur| {
+        if (sdl3) {
+            try toErr(c.SDL_SetCursor(cur), "SDL_SetCursor in setCursor");
         } else {
-            log.err("setCursor \"{s}\" failed", .{@tagName(cursor)});
-            return logErr("SDL_CreateSystemCursor in setCursor");
+            c.SDL_SetCursor(cur);
         }
+    } else {
+        log.err("setCursor \"{s}\" failed", .{@tagName(cursor)});
+        return logErr("SDL_CreateSystemCursor in setCursor");
     }
 }
 
