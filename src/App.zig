@@ -59,7 +59,8 @@ pub const logFn: @FieldType(std.Options, "logFn") = if (@hasDecl(dvui.backend, "
 pub const AppConfig = union(enum) {
     options: StartOptions,
     /// Runs before anything else. Can be used to programmatically create the `StartOptions`
-    startFn: fn () StartOptions,
+    // FIXME: must be a pointer due to https://github.com/ziglang/zig/issues/25180, once that's fixed this can become a function body type again
+    startFn: *const fn () StartOptions,
 
     pub fn get(self: AppConfig) StartOptions {
         switch (self) {
