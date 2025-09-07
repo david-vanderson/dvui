@@ -55,12 +55,13 @@ pub fn minSizeForChild(self: *VirtualParentWidget, s: Size) void {
 }
 
 pub fn deinit(self: *VirtualParentWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.data().was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     if (self.child_rect_union) |u| {
         dvui.dataSet(null, self.data().id, "_rect", u);
     }
     dvui.parentReset(self.data().id, self.data().parent);
-    self.* = undefined;
 }
 
 test {

@@ -238,7 +238,9 @@ pub fn chainFocused(self: *FloatingMenuWidget, self_call: bool) bool {
 }
 
 pub fn deinit(self: *FloatingMenuWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.data().was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
 
     const evts = dvui.events();
     const rs = self.data().rectScale();
@@ -300,7 +302,6 @@ pub fn deinit(self: *FloatingMenuWidget) void {
     _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
     dvui.clipSet(self.prevClip);
     _ = dvui.renderingSet(self.prev_rendering);
-    self.* = undefined;
 }
 
 test {

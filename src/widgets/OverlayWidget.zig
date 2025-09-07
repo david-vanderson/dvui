@@ -49,11 +49,12 @@ pub fn minSizeForChild(self: *OverlayWidget, s: Size) void {
 }
 
 pub fn deinit(self: *OverlayWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.data().was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     self.data().minSizeSetAndRefresh();
     self.data().minSizeReportToParent();
     dvui.parentReset(self.data().id, self.data().parent);
-    self.* = undefined;
 }
 
 test {

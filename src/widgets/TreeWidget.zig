@@ -55,6 +55,7 @@ pub fn install(self: *TreeWidget) void {
 pub fn tree(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) *TreeWidget {
     var ret = dvui.widgetAlloc(TreeWidget);
     ret.* = TreeWidget.init(src, init_opts, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     ret.processEvents();
     return ret;
@@ -65,7 +66,7 @@ pub fn widget(self: *TreeWidget) Widget {
 }
 
 pub fn data(self: *TreeWidget) *WidgetData {
-    return &self.wd;
+    return self.wd.validate();
 }
 
 pub fn rectFor(self: *TreeWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -132,9 +133,12 @@ pub fn processEvent(self: *TreeWidget, e: *dvui.Event) void {
 }
 
 pub fn deinit(self: *TreeWidget) void {
+    const should_free = self.data().was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
+
     self.vbox.deinit();
 
-    defer dvui.widgetFree(self);
     if (self.drag_ending) {
         self.id_branch = null;
         self.drag_point = null;
@@ -158,7 +162,6 @@ pub fn deinit(self: *TreeWidget) void {
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);
-    self.* = undefined;
 }
 
 pub fn dragStart(self: *TreeWidget, branch_id: usize, p: dvui.Point.Physical) void {
@@ -176,6 +179,7 @@ pub fn branch(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: Bra
     const ret = dvui.widgetAlloc(Branch);
     ret.* = Branch.init(src, self, init_opts, opts);
     ret.install();
+    ret.data().was_allocated_on_widget_stack = true;
     return ret;
 }
 
@@ -397,7 +401,7 @@ pub const Branch = struct {
     }
 
     pub fn data(self: *Branch) *WidgetData {
-        return &self.wd;
+        return self.wd.validate();
     }
 
     pub fn rectFor(self: *Branch, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -414,6 +418,10 @@ pub const Branch = struct {
     }
 
     pub fn deinit(self: *Branch) void {
+        const should_free = self.data().was_allocated_on_widget_stack;
+        defer if (should_free) dvui.widgetFree(self);
+        defer self.* = undefined;
+
         if (self.can_expand) {
             if (self.expanded)
                 self.expander_vbox.deinit();
@@ -425,7 +433,6 @@ pub const Branch = struct {
         }
         self.vbox.deinit();
 
-        defer dvui.widgetFree(self);
         if (self.floating_widget) |*fw| {
             self.wd.minSizeMax(fw.wd.min_size);
             fw.deinit();
@@ -435,8 +442,6 @@ pub const Branch = struct {
         self.wd.minSizeReportToParent();
 
         dvui.parentReset(self.wd.id, self.wd.parent);
-
-        self.* = undefined;
     }
 };
 

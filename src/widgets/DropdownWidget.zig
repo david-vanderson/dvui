@@ -28,6 +28,7 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     label: ?[]const u8 = null,
     selected_index: ?usize = null,
+    was_allocated_on_widget_stack: bool = false,
 };
 
 pub fn wrapOuter(opts: Options) Options {
@@ -215,14 +216,15 @@ pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
 }
 
 pub fn deinit(self: *DropdownWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.init_options.was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     if (self.drop != null) {
         self.drop.?.deinit();
         self.drop = null;
     }
     self.menuItem.deinit();
     self.menu.deinit();
-    self.* = undefined;
 }
 
 const Options = dvui.Options;

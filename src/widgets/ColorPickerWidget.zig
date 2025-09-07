@@ -7,15 +7,14 @@
 
 pub const ColorPickerWidget = @This();
 
-src: std.builtin.SourceLocation,
-opts: dvui.Options,
 init_opts: InitOptions,
 color_changed: bool = false,
-box: *dvui.BoxWidget = undefined,
+box: dvui.BoxWidget = undefined,
 
 pub const InitOptions = struct {
     hsv: *Color.HSV,
     dir: dvui.enums.Direction = .horizontal,
+    was_allocated_on_widget_stack: bool = false,
 };
 
 pub var defaults = Options{
@@ -24,15 +23,15 @@ pub var defaults = Options{
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ColorPickerWidget {
     const self = ColorPickerWidget{
-        .src = src,
-        .opts = defaults.override(opts),
         .init_opts = init_opts,
+        .box = dvui.BoxWidget.init(src, .{ .dir = init_opts.dir }, defaults.override(opts)),
     };
     return self;
 }
 
 pub fn install(self: *ColorPickerWidget) void {
-    self.box = dvui.box(self.src, .{ .dir = self.init_opts.dir }, self.opts);
+    self.box.install();
+    self.box.drawBackground();
 
     if (valueSaturationBox(@src(), self.init_opts.hsv, .{})) {
         self.color_changed = true;
@@ -44,9 +43,10 @@ pub fn install(self: *ColorPickerWidget) void {
 }
 
 pub fn deinit(self: *ColorPickerWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.init_opts.was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     self.box.deinit();
-    self.* = undefined;
 }
 
 pub const value_saturation_box_defaults = Options{

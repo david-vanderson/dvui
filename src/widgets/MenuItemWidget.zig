@@ -286,12 +286,13 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
 }
 
 pub fn deinit(self: *MenuItemWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.data().was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     dvui.dataSet(null, self.data().id, "_focus_last", self.focused_last_frame);
     self.data().minSizeSetAndRefresh();
     self.data().minSizeReportToParent();
     dvui.parentReset(self.data().id, self.data().parent);
-    self.* = undefined;
 }
 
 test {
