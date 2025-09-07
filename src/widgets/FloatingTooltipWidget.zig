@@ -222,7 +222,9 @@ pub fn minSizeForChild(self: *FloatingTooltipWidget, s: Size) void {
 }
 
 pub fn deinit(self: *FloatingTooltipWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.data().was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     if (!self.installed) {
         return;
     }
@@ -251,7 +253,6 @@ pub fn deinit(self: *FloatingTooltipWidget) void {
     _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
     dvui.clipSet(self.prevClip);
     _ = dvui.renderingSet(self.prev_rendering);
-    self.* = undefined;
 }
 
 test {

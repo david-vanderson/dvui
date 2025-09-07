@@ -133,7 +133,9 @@ pub fn processEvent(self: *ContextWidget, e: *Event) void {
 }
 
 pub fn deinit(self: *ContextWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.data().was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     if (self.focused) {
         dvui.dataSet(null, self.data().id, "_activePt", self.activePt);
     }
@@ -144,7 +146,6 @@ pub fn deinit(self: *ContextWidget) void {
 
     _ = dvui.MenuWidget.Root.set(self.prev_menu_root);
     dvui.parentReset(self.data().id, self.data().parent);
-    self.* = undefined;
 }
 
 test {

@@ -864,7 +864,9 @@ pub fn getText(self: *const TextEntryWidget) []u8 {
 }
 
 pub fn deinit(self: *TextEntryWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.data().was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     const needed_binds = @divTrunc(self.len, realloc_bin_size) + 1;
     const current_bins = @divTrunc(self.text.len, realloc_bin_size);
     // dvui.log.debug("TextEntry {x} needs {d} bins, has {d}", .{ self.data().id, needed_binds, current_bins });
@@ -899,7 +901,6 @@ pub fn deinit(self: *TextEntryWidget) void {
     self.data().minSizeSetAndRefresh();
     self.data().minSizeReportToParent();
     dvui.parentReset(self.data().id, self.data().parent);
-    self.* = undefined;
 }
 
 test {

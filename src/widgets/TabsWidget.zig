@@ -17,6 +17,7 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     dir: dvui.enums.Direction = .horizontal,
     draw_focus: bool = true,
+    was_allocated_on_widget_stack: bool = false,
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TabsWidget {
@@ -154,10 +155,11 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
 }
 
 pub fn deinit(self: *TabsWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.init_options.was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     self.box.deinit();
     self.scroll.deinit();
-    self.* = undefined;
 }
 
 const Options = dvui.Options;

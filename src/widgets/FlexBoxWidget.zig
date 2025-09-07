@@ -109,13 +109,14 @@ pub fn minSizeForChild(self: *FlexBoxWidget, s: Size) void {
 }
 
 pub fn deinit(self: *FlexBoxWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.data().was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     dvui.dataSet(null, self.data().id, "_mrw", self.max_row_width);
     dvui.clipSet(self.prevClip);
     self.data().minSizeSetAndRefresh();
     self.data().minSizeReportToParent();
     dvui.parentReset(self.data().id, self.data().parent);
-    self.* = undefined;
 }
 
 test {

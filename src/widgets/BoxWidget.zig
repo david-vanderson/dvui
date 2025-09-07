@@ -251,7 +251,9 @@ pub fn minSizeForChild(self: *BoxWidget, s: Size) void {
 }
 
 pub fn deinit(self: *BoxWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.data().was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     const extra_space = (if (self.init_opts.dir == .horizontal) self.child_rect.w else self.child_rect.h) > 0.001;
     const ms: Size = if (self.init_opts.dir == .horizontal) .{
         .w = if (self.init_opts.equal_space)
@@ -297,7 +299,6 @@ pub fn deinit(self: *BoxWidget) void {
     dvui.dataSet(null, self.data().id, "_data", Data{ .packed_children = self.packed_children, .total_weight = self.total_weight, .min_space_taken = self.min_space_taken });
 
     dvui.parentReset(self.data().id, self.data().parent);
-    self.* = undefined;
 }
 
 test {
