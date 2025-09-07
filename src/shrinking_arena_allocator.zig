@@ -262,7 +262,7 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
 
                 if (has_never_free and !self.never_free.arena.allocator().rawResize(in_memory, alignment, new_len, ret_addr)) {
                     // reset the size in the normal arena, which should always succeed
-                    std.debug.assert(self.arena.allocator().rawResize(memory, alignment, memory.len, ret_addr));
+                    std.debug.assert(self.arena.allocator().rawResize(memory.ptr[0..new_len], alignment, memory.len, ret_addr));
                     // log.debug("A false negative resize/remap failure was introduced", .{});
                     self.never_free.failed_remap = true;
                     return false;
