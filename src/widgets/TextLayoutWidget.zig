@@ -1778,7 +1778,9 @@ pub fn copy(self: *TextLayoutWidget) void {
 }
 
 pub fn deinit(self: *TextLayoutWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.data().was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     if (!self.add_text_done) {
         self.addTextDone(.{});
     }
@@ -1834,7 +1836,6 @@ pub fn deinit(self: *TextLayoutWidget) void {
     self.data().minSizeSetAndRefresh();
     self.data().minSizeReportToParent();
     dvui.parentReset(self.data().id, self.data().parent);
-    self.* = undefined;
 }
 
 test {

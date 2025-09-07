@@ -241,6 +241,10 @@ pub fn currentWindow() *Window {
 /// Allocates space for a widget to the alloc stack, or the arena
 /// if the stack overflows.
 ///
+/// The caller is responsible for ensuring that the widget calls
+/// `dvui.widgetFree` in it's `deinit`. Usually this is done by
+/// setting `dvui.WidgetData.was_allocated_on_widget_stack` to true
+///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetAlloc(comptime T: type) *T {
     if (@import("build_options").zig_arena orelse false) {
@@ -248,7 +252,7 @@ pub fn widgetAlloc(comptime T: type) *T {
     }
 
     const cw = currentWindow();
-    const alloc = cw._widget_stack.allocator();
+    const alloc = cw._widget_stack.allocatorLIFO();
     const ptr = alloc.create(T) catch {
         log.debug("Widget stack overflowed, falling back to long term arena allocator", .{});
         return cw.arena().create(T) catch @panic("OOM");
@@ -267,13 +271,8 @@ pub fn widgetFree(ptr: anytype) void {
     if (@import("build_options").zig_arena orelse false) {
         return;
     }
-
     const ws = &currentWindow()._widget_stack;
-    // NOTE: We cannot use `allocatorLIFO` because of widgets that
-    //       store other widgets in their fields, which would cause
-    //       errors when attempting to free as they are not on the
-    //       top of the stack
-    ws.allocator().destroy(ptr);
+    ws.allocatorLIFO().destroy(ptr);
 }
 
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {
@@ -412,6 +411,7 @@ pub const Alignment = struct {
     }
 
     pub fn deinit(self: *Alignment) void {
+        defer self.* = undefined;
         dvui.dataSet(null, self.id, "_max_align", self.next);
         if (self.max) |m| {
             if (self.next != m) {
@@ -419,7 +419,6 @@ pub const Alignment = struct {
                 refresh(null, @src(), self.id);
             }
         }
-        self.* = undefined;
     }
 };
 
@@ -592,11 +591,11 @@ pub const FontCacheEntry = struct {
     texture_atlas_cache: ?Texture = null,
 
     pub fn deinit(self: *FontCacheEntry, win: *Window) void {
+        defer self.* = undefined;
         if (useFreeType) {
             _ = c.FT_Done_Face(self.face);
         }
         if (self.texture_atlas_cache) |tex| win.backend.textureDestroy(tex);
-        self.* = undefined;
     }
 
     pub const OpenFlags = packed struct(c_int) {
@@ -2103,10 +2102,10 @@ pub const Triangles = struct {
         }
 
         pub fn deinit(self: *Builder, allocator: std.mem.Allocator) void {
+            defer self.* = undefined;
             // NOTE: Should be in the opposite order to `init`
             self.indices.deinit(allocator);
             self.vertexes.deinit(allocator);
-            self.* = undefined;
         }
 
         /// Appends a vertex and updates the bounds
@@ -2166,9 +2165,9 @@ pub const Triangles = struct {
     }
 
     pub fn deinit(self: *Triangles, allocator: std.mem.Allocator) void {
+        defer self.* = undefined;
         allocator.free(self.indices);
         allocator.free(self.vertexes);
-        self.* = undefined;
     }
 
     /// Multiply `col` into vertex colors.
@@ -3785,6 +3784,7 @@ pub fn wantTextInput(r: Rect.Natural) void {
 pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) *FloatingMenuWidget {
     var ret = widgetAlloc(FloatingMenuWidget);
     ret.* = FloatingMenuWidget.init(src, init_opts, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     return ret;
 }
@@ -3797,6 +3797,7 @@ pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidg
 pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) *FloatingWindowWidget {
     var ret = widgetAlloc(FloatingWindowWidget);
     ret.* = FloatingWindowWidget.init(src, floating_opts, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     ret.processEventsBefore();
     ret.drawBackground();
@@ -4529,6 +4530,7 @@ pub fn toastsShow(id: ?Id, rect: Rect.Natural) void {
 pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) *AnimateWidget {
     var ret = widgetAlloc(AnimateWidget);
     ret.* = AnimateWidget.init(src, init_opts, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     return ret;
 }
@@ -4589,7 +4591,11 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
     const min_width = te.textLayout.data().backgroundRect().w;
 
     var sug = widgetAlloc(SuggestionWidget);
-    sug.* = dvui.SuggestionWidget.init(@src(), .{ .rs = te.data().borderRectScale(), .text_entry_id = te.data().id }, .{ .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
+    sug.* = dvui.SuggestionWidget.init(@src(), .{
+        .was_allocated_on_widget_stack = true,
+        .rs = te.data().borderRectScale(),
+        .text_entry_id = te.data().id,
+    }, .{ .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
     sug.install();
     if (open_sug) {
         sug.open();
@@ -4670,6 +4676,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
 pub const ComboBox = struct {
     te: *TextEntryWidget = undefined,
     sug: *SuggestionWidget = undefined,
+    was_allocated_on_widget_stack: bool = false,
 
     /// Returns index of entry if one was selected
     pub fn entries(self: *ComboBox, items: []const []const u8) ?usize {
@@ -4685,10 +4692,11 @@ pub const ComboBox = struct {
     }
 
     pub fn deinit(self: *ComboBox) void {
-        defer widgetFree(self);
+        const should_free = self.was_allocated_on_widget_stack;
+        defer if (should_free) dvui.widgetFree(self);
+        defer self.* = undefined;
         self.sug.deinit();
         self.te.deinit();
-        self.* = undefined;
     }
 };
 
@@ -4698,9 +4706,11 @@ pub const ComboBox = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) *ComboBox {
-    var combo = widgetAlloc(ComboBox);
+    const combo = widgetAlloc(ComboBox);
+    combo.was_allocated_on_widget_stack = true;
     combo.te = widgetAlloc(TextEntryWidget);
     combo.te.* = dvui.TextEntryWidget.init(src, init_opts, opts);
+    combo.te.data().was_allocated_on_widget_stack = true;
     combo.te.install();
 
     combo.sug = dvui.suggestion(combo.te, .{ .button = true, .open_on_focus = false, .open_on_text_change = false });
@@ -4776,6 +4786,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
 pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: Options) *PanedWidget {
     var ret = widgetAlloc(PanedWidget);
     ret.* = PanedWidget.init(src, init_opts, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     ret.processEvents();
     return ret;
@@ -4790,6 +4801,7 @@ pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions
 pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.InitOptions, opts: Options) *TextLayoutWidget {
     var ret = widgetAlloc(TextLayoutWidget);
     ret.* = TextLayoutWidget.init(src, init_opts, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install(.{});
 
     // can install corner widgets here
@@ -4818,6 +4830,7 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
 pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: Options) *ContextWidget {
     var ret = widgetAlloc(ContextWidget);
     ret.* = ContextWidget.init(src, init_opts, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     ret.processEvents();
     return ret;
@@ -4848,6 +4861,7 @@ pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget
 pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) *VirtualParentWidget {
     var ret = widgetAlloc(VirtualParentWidget);
     ret.* = VirtualParentWidget.init(src, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     return ret;
 }
@@ -4861,6 +4875,7 @@ pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) *VirtualPar
 pub fn overlay(src: std.builtin.SourceLocation, opts: Options) *OverlayWidget {
     var ret = widgetAlloc(OverlayWidget);
     ret.* = OverlayWidget.init(src, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     ret.drawBackground();
     return ret;
@@ -4886,6 +4901,7 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) *OverlayWidget {
 pub fn box(src: std.builtin.SourceLocation, init_opts: BoxWidget.InitOptions, opts: Options) *BoxWidget {
     var ret = widgetAlloc(BoxWidget);
     ret.* = BoxWidget.init(src, init_opts, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     ret.drawBackground();
     return ret;
@@ -4899,6 +4915,7 @@ pub fn box(src: std.builtin.SourceLocation, init_opts: BoxWidget.InitOptions, op
 pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) *FlexBoxWidget {
     var ret = widgetAlloc(FlexBoxWidget);
     ret.* = FlexBoxWidget.init(src, init_opts, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     ret.drawBackground();
     return ret;
@@ -4907,6 +4924,7 @@ pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOpt
 pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) *CacheWidget {
     var ret = widgetAlloc(CacheWidget);
     ret.* = CacheWidget.init(src, init_opts, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     return ret;
 }
@@ -4914,6 +4932,7 @@ pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions
 pub fn reorder(src: std.builtin.SourceLocation, init_opts: ReorderWidget.InitOptions, opts: Options) *ReorderWidget {
     var ret = widgetAlloc(ReorderWidget);
     ret.* = ReorderWidget.init(src, init_opts, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     ret.processEvents();
     return ret;
@@ -4922,6 +4941,7 @@ pub fn reorder(src: std.builtin.SourceLocation, init_opts: ReorderWidget.InitOpt
 pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) *ScrollAreaWidget {
     var ret = widgetAlloc(ScrollAreaWidget);
     ret.* = ScrollAreaWidget.init(src, init_opts, opts);
+    ret.init_opts.was_allocated_on_widget_stack = true;
     ret.install();
     return ret;
 }
@@ -4929,6 +4949,7 @@ pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.I
 pub fn grid(src: std.builtin.SourceLocation, cols: GridWidget.WidthsOrNum, init_opts: GridWidget.InitOpts, opts: Options) *GridWidget {
     const ret = widgetAlloc(GridWidget);
     ret.* = GridWidget.init(src, cols, init_opts, opts);
+    ret.init_opts.was_allocated_on_widget_stack = true;
     ret.install();
     return ret;
 }
@@ -5195,6 +5216,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
 pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) *ScaleWidget {
     var ret = widgetAlloc(ScaleWidget);
     ret.* = ScaleWidget.init(src, init_opts, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     ret.processEvents();
     return ret;
@@ -5203,6 +5225,7 @@ pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions
 pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) *MenuWidget {
     var ret = widgetAlloc(MenuWidget);
     ret.* = MenuWidget.init(src, .{ .dir = dir }, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     return ret;
 }
@@ -5254,6 +5277,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
 pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitOptions, opts: Options) *MenuItemWidget {
     var ret = widgetAlloc(MenuItemWidget);
     ret.* = MenuItemWidget.init(src, init_opts, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     ret.processEvents();
     ret.drawBackground();
@@ -6535,6 +6559,7 @@ pub fn findUtf8Start(text: []const u8, pos: usize) usize {
 pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) *TextEntryWidget {
     var ret = widgetAlloc(TextEntryWidget);
     ret.* = TextEntryWidget.init(src, init_opts, opts);
+    ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     // can install corner widgets here
     //_ = dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
@@ -7340,12 +7365,11 @@ pub const Picture = struct {
 
     /// Draw recorded texture and destroy it.
     pub fn deinit(self: *Picture) void {
-        widgetFree(self);
+        defer self.* = undefined;
         // Ignore errors as drawing is not critical to Pictures function
         const texture = dvui.textureFromTarget(self.texture) catch return; // destroys self.texture
         dvui.textureDestroyLater(texture);
         dvui.renderTexture(texture, .{ .r = self.r }, .{}) catch {};
-        self.* = undefined;
     }
 };
 
@@ -7515,6 +7539,7 @@ pub const PNGEncoder = struct {
 pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, opts: Options) *PlotWidget {
     var ret = widgetAlloc(PlotWidget);
     ret.* = PlotWidget.init(src, plot_opts, opts);
+    ret.init_options.was_allocated_on_widget_stack = true;
     ret.install();
     return ret;
 }

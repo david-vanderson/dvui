@@ -36,6 +36,8 @@ pub const InitOpts = struct {
     frame_viewport: ?dvui.Point = null,
     lock_visible: bool = false,
     process_events_after: bool = true,
+
+    was_allocated_on_widget_stack: bool = false,
 };
 
 hbox: BoxWidget,
@@ -185,7 +187,9 @@ pub fn setContainerRect(self: *ScrollAreaWidget, rect: dvui.Rect) void {
 }
 
 pub fn deinit(self: *ScrollAreaWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.init_opts.was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
 
     if (self.scroll) |*s| {
         dvui.dataSet(null, self.hbox.data().id, "_scroll_id", s.data().id);
@@ -201,7 +205,6 @@ pub fn deinit(self: *ScrollAreaWidget) void {
     dvui.dataSet(null, self.hbox.data().id, "_scroll_info", self.si.*);
 
     self.hbox.deinit();
-    self.* = undefined;
 }
 
 test {

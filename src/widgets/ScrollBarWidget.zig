@@ -187,10 +187,11 @@ pub fn grab(self: *ScrollBarWidget) Grab {
 }
 
 pub fn deinit(self: *ScrollBarWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.data().was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     self.data().minSizeSetAndRefresh();
     self.data().minSizeReportToParent();
-    self.* = undefined;
 }
 
 test {

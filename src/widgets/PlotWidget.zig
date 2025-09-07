@@ -32,6 +32,7 @@ pub const InitOptions = struct {
     y_axis: ?*Axis = null,
     border_thick: ?f32 = null,
     mouse_hover: bool = false,
+    was_allocated_on_widget_stack: bool = false,
 };
 
 pub const Axis = struct {
@@ -55,14 +56,14 @@ pub const Line = struct {
     path: dvui.Path.Builder,
 
     pub fn point(self: *Line, x: f64, y: f64) void {
-        const data: Data = .{ .x = x, .y = y };
-        self.plot.dataForRange(data);
-        const screen_p = self.plot.dataToScreen(data);
+        const data_point: Data = .{ .x = x, .y = y };
+        self.plot.dataForRange(data_point);
+        const screen_p = self.plot.dataToScreen(data_point);
         if (self.plot.mouse_point) |mp| {
             const dp = Point.Physical.diff(mp, screen_p);
             const dps = dp.toNatural();
             if (@abs(dps.x) <= 3 and @abs(dps.y) <= 3) {
-                self.plot.hover_data = data;
+                self.plot.hover_data = data_point;
             }
         }
         self.path.addPoint(screen_p);
@@ -73,9 +74,9 @@ pub const Line = struct {
     }
 
     pub fn deinit(self: *Line) void {
-        defer dvui.widgetFree(self);
+        // The Line "widget" intentionally doesn't call `dvui.widgetFree` as it should always be created by `PlotWidget.line`
+        defer self.* = undefined;
         self.path.deinit();
-        self.* = undefined;
     }
 };
 
@@ -86,20 +87,20 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     };
 }
 
-pub fn dataToScreen(self: *PlotWidget, data: Data) dvui.Point.Physical {
-    const xfrac = self.x_axis.fraction(data.x);
-    const yfrac = self.y_axis.fraction(data.y);
+pub fn dataToScreen(self: *PlotWidget, data_point: Data) dvui.Point.Physical {
+    const xfrac = self.x_axis.fraction(data_point.x);
+    const yfrac = self.y_axis.fraction(data_point.y);
     return .{
         .x = self.data_rs.r.x + xfrac * self.data_rs.r.w,
         .y = self.data_rs.r.y + (1.0 - yfrac) * self.data_rs.r.h,
     };
 }
 
-pub fn dataForRange(self: *PlotWidget, data: Data) void {
-    self.data_min.x = @min(self.data_min.x, data.x);
-    self.data_max.x = @max(self.data_max.x, data.x);
-    self.data_min.y = @min(self.data_min.y, data.y);
-    self.data_max.y = @max(self.data_max.y, data.y);
+pub fn dataForRange(self: *PlotWidget, data_point: Data) void {
+    self.data_min.x = @min(self.data_min.x, data_point.x);
+    self.data_max.x = @max(self.data_max.x, data_point.x);
+    self.data_min.y = @min(self.data_min.y, data_point.y);
+    self.data_max.y = @max(self.data_max.y, data_point.y);
 }
 
 pub fn install(self: *PlotWidget) void {
@@ -267,6 +268,7 @@ pub fn install(self: *PlotWidget) void {
 }
 
 pub fn line(self: *PlotWidget) Line {
+    // NOTE: Should not allocate Line as a stack widget. Line doesn't call `dvui.widgetFree`
     return .{
         .plot = self,
         .path = .init(dvui.currentWindow().lifo()),
@@ -274,7 +276,9 @@ pub fn line(self: *PlotWidget) Line {
 }
 
 pub fn deinit(self: *PlotWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.init_options.was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     dvui.clipSet(self.old_clip);
 
     // maybe we got no data
@@ -321,7 +325,6 @@ pub fn deinit(self: *PlotWidget) void {
     }
 
     self.box.deinit();
-    self.* = undefined;
 }
 
 const Options = dvui.Options;

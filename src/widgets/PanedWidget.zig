@@ -411,15 +411,16 @@ pub fn processEvent(self: *PanedWidget, e: *Event) void {
 }
 
 pub fn deinit(self: *PanedWidget) void {
+    const should_free = self.data().was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     if (self.init_opts.draw_in_deinit) self.draw();
-    defer dvui.widgetFree(self);
     dvui.clipSet(self.prevClip);
     dvui.dataSet(null, self.data().id, "_collapsing", self.collapsing);
     dvui.dataSet(null, self.data().id, "_collapsed", self.collapsed_state);
     self.data().minSizeSetAndRefresh();
     self.data().minSizeReportToParent();
     dvui.parentReset(self.data().id, self.data().parent);
-    self.* = undefined;
 }
 
 test {

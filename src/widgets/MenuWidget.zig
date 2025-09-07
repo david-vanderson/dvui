@@ -294,7 +294,9 @@ pub fn processEventsAfter(self: *MenuWidget) void {
 pub fn deinit(self: *MenuWidget) void {
     self.processEventsAfter();
 
-    defer dvui.widgetFree(self);
+    const should_free = self.data().was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     self.box.deinit();
     dvui.dataSet(null, self.data().id, "_mouse_mode", self.mouse_mode);
     dvui.dataSet(null, self.data().id, "_sub_act", self.submenus_activated);
@@ -305,7 +307,6 @@ pub fn deinit(self: *MenuWidget) void {
     self.data().minSizeReportToParent();
     _ = menuSet(self.parentMenu);
     dvui.parentReset(self.data().id, self.data().parent);
-    self.* = undefined;
 }
 
 test {

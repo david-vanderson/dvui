@@ -20,6 +20,7 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     rs: RectScale,
     text_entry_id: dvui.Id,
+    was_allocated_on_widget_stack: bool = false,
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) SuggestionWidget {
@@ -111,7 +112,9 @@ pub fn addChoice(self: *SuggestionWidget) *MenuItemWidget {
 }
 
 pub fn deinit(self: *SuggestionWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.init_options.was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     if (self.selected_index > (self.drop_mi_index -| 1)) {
         self.selected_index = self.drop_mi_index -| 1;
         dvui.refresh(null, @src(), self.id);
@@ -122,7 +125,6 @@ pub fn deinit(self: *SuggestionWidget) void {
         self.drop = null;
     }
     self.menu.deinit();
-    self.* = undefined;
 }
 
 const Options = dvui.Options;

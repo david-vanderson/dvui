@@ -109,7 +109,9 @@ pub fn minSizeForChild(self: *FloatingWidget, s: Size) void {
 }
 
 pub fn deinit(self: *FloatingWidget) void {
-    defer dvui.widgetFree(self);
+    const should_free = self.data().was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
+    defer self.* = undefined;
     self.scaler.deinit();
     self.data().minSizeSetAndRefresh();
 
@@ -119,7 +121,6 @@ pub fn deinit(self: *FloatingWidget) void {
     _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
     dvui.clipSet(self.prevClip);
     _ = dvui.renderingSet(self.prev_rendering);
-    self.* = undefined;
 }
 
 test {

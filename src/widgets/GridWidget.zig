@@ -146,6 +146,8 @@ pub const InitOpts = struct {
     // If var row heights is set to false, size.h is ignored.
     // When using var row heights row_nr must be populated sequentially for each column when creating bodyCells.
     row_height_variable: bool = false,
+
+    was_allocated_on_widget_stack: bool = false,
 };
 
 // TODO: Can I make that const?
@@ -322,8 +324,9 @@ pub fn install(self: *GridWidget) void {
 }
 
 pub fn deinit(self: *GridWidget) void {
+    const should_free = self.init_opts.was_allocated_on_widget_stack;
+    defer if (should_free) dvui.widgetFree(self);
     defer self.* = undefined;
-    defer dvui.widgetFree(self);
 
     // resizing if row heights changed or a resize was requested via init options.
     if (self.resizing) {
@@ -402,6 +405,7 @@ pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: u
     // Create the cell and install as parent.
     var cell = dvui.widgetAlloc(BoxWidget);
     cell.* = BoxWidget.init(src, .{ .dir = .horizontal }, cell_opts);
+    cell.data().was_allocated_on_widget_stack = true;
     cell.install();
     cell.drawBackground();
     const first_frame = dvui.firstFrame(cell.data().id);
@@ -474,6 +478,7 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, cell: Cell, 
 
     var cell_box = dvui.widgetAlloc(BoxWidget);
     cell_box.* = BoxWidget.init(src, .{ .dir = .horizontal }, cell_opts);
+    cell_box.data().was_allocated_on_widget_stack = true;
     cell_box.install();
     cell_box.drawBackground();
     const first_frame = dvui.firstFrame(cell_box.data().id);

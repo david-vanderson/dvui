@@ -23,6 +23,7 @@ min_size: Size,
 options: Options,
 src: std.builtin.SourceLocation,
 rect_scale: ?RectScale = null,
+was_allocated_on_widget_stack: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
     const parent = dvui.parentGet();
