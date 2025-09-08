@@ -46,6 +46,7 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
         arena: ArenaAllocator,
         peak_usage: usize = 0,
         current_usage: usize = 0,
+        last_freed_ptr: ?usize = null,
 
         never_free: if (has_never_free) NeverFree else void = undefined,
 
@@ -156,11 +157,8 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
             } else return false;
         }
 
-        /// Attempts to free the given memory and returns whether it
-        /// succeeded or not.
-        fn attemptFree(self: *Self, in_memory: []u8, alignment: Alignment, ret_addr: usize) bool {
-            const end_before = self.arena.state.end_index;
-
+        /// Attempts to free the given memory and returns an error it failed
+        fn attemptFree(self: *Self, in_memory: []u8, alignment: Alignment, ret_addr: usize) !void {
             const memory = if (has_never_free)
                 // If the ptr is not in the map, it's likely not allocated by us
                 if (self.never_free.map.get(in_memory.ptr)) |ptr| ptr[0..in_memory.len] else in_memory
@@ -170,27 +168,27 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
             else
                 in_memory;
 
+            // Extend the allocated length to the previous freed allocation
+            // to account for padding between allocations
+            const index_adjustment = if (self.last_freed_ptr) |ptr| ptr -| (@intFromPtr(memory.ptr) + memory.len) else 0;
+            if (self.arena.state.end_index > index_adjustment) {
+                self.arena.state.end_index -= index_adjustment;
+            }
+            errdefer if (self.arena.state.end_index > index_adjustment) {
+                self.arena.state.end_index += index_adjustment;
+            };
+
+            const end_before = self.arena.state.end_index;
+
             self.arena.allocator().rawFree(memory, alignment, ret_addr);
 
-            if (memory.len == 0) {
-                // The allocation had no bytes, so cannot fail freeing
-                return true;
-            }
-
-            if (!self.has_expanded()) {
-                // Attempt to free acounting for alignment padding of allocations after the current one
-                var align_diff: usize = 8;
-                while (self.arena.state.end_index == end_before and align_diff > 0) : (align_diff >>= 1) {
-                    var mem = memory;
-                    mem.len = std.mem.alignForward(usize, @intFromPtr(memory.ptr) + memory.len, align_diff) - @intFromPtr(memory.ptr);
-                    self.arena.allocator().rawFree(mem, alignment, ret_addr);
-                }
-            }
-            const succeeded = self.arena.state.end_index < end_before;
+            const succeeded = memory.len == 0 or self.arena.state.end_index < end_before;
             if (succeeded) {
                 self.current_usage -= memory.len;
+                self.last_freed_ptr = @intFromPtr(memory.ptr);
+            } else {
+                return error.Failed;
             }
-            return succeeded;
         }
 
         fn alloc(ctx: *anyopaque, len: usize, alignment: Alignment, ret_addr: usize) ?[*]u8 {
@@ -210,24 +208,26 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
 
             if (has_never_free) {
                 const never_free_buf = self.never_free.arena.allocator().rawAlloc(len, alignment, ret_addr) orelse return Allocator.Error.OutOfMemory;
-                errdefer self.never_free.arena.allocator().rawFree(buf[0..len], alignment, ret_addr);
+                errdefer self.never_free.arena.allocator().rawFree(never_free_buf[0..len], alignment, ret_addr);
 
                 try self.never_free.map.put(self.never_free.arena.child_allocator, never_free_buf, buf);
 
+                self.last_freed_ptr = null;
                 return never_free_buf;
             } else {
+                self.last_freed_ptr = null;
                 return buf;
             }
         }
 
         fn free(ctx: *anyopaque, memory: []u8, alignment: Alignment, ret_addr: usize) void {
             const self: *Self = @ptrCast(@alignCast(ctx));
-            _ = self.attemptFree(memory, alignment, ret_addr);
+            self.attemptFree(memory, alignment, ret_addr) catch {};
         }
 
         fn freeLIFO(ctx: *anyopaque, memory: []u8, alignment: Alignment, ret_addr: usize) void {
             const self: *Self = @ptrCast(@alignCast(ctx));
-            if (!self.attemptFree(memory, alignment, ret_addr) and !self.has_expanded()) {
+            self.attemptFree(memory, alignment, ret_addr) catch if (!self.has_expanded()) {
                 var addresses: [8]usize = undefined;
                 var trace = std.builtin.StackTrace{
                     .index = 0,
@@ -235,7 +235,7 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
                 };
                 std.debug.captureStackTrace(ret_addr, &trace);
                 log.debug("Free from lifo arena failed. Somewhere between when this was allocated and this call to free there was another allocation that was not freed first. Stack trace: {f}", .{trace});
-            }
+            };
         }
 
         fn remap(ctx: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
@@ -283,4 +283,40 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
 
 test {
     @import("std").testing.refAllDecls(@This());
+}
+
+test "alignment frees" {
+    var instance = ShrinkingArenaAllocator(.{}).init(std.testing.allocator);
+    defer instance.deinit();
+    const arena = instance.allocatorLIFO();
+
+    const byte = try arena.create(u8);
+    const int = try arena.create(u32);
+    arena.destroy(int);
+    const second_byte = try arena.create(u8);
+    arena.destroy(second_byte);
+    // There are padding bytes above the first byte
+    try std.testing.expect(@sizeOf(u8) < instance.arena.state.end_index);
+    arena.destroy(byte);
+    try std.testing.expectEqual(0, instance.current_usage);
+    try std.testing.expectEqual(0, instance.arena.state.end_index);
+}
+
+test "alignment frees multiple buffers" {
+    var instance = ShrinkingArenaAllocator(.{}).init(std.testing.allocator);
+    defer instance.deinit();
+    const arena = instance.allocatorLIFO();
+
+    const byte = try arena.create(u8);
+    const int = try arena.create(u32);
+    arena.destroy(int);
+    // Force second buffer to be allocated
+    const large = try arena.alloc(u8, 1000);
+    arena.free(large);
+    try std.testing.expect(instance.has_expanded());
+    const second_byte = try arena.create(u8);
+    arena.destroy(second_byte);
+    // This free should fail
+    arena.destroy(byte);
+    try std.testing.expectEqual(1, instance.current_usage);
 }
