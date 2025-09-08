@@ -4,22 +4,37 @@ git log --pretty=oneline --since="last month" | wc -l
 
 
 push docs and web-app
+update dvui-demo
+
 
 
 devlog
-- BoxWidget changes
+- BoxWidget layout
+- Theme cleanup
 
 
-bubbling rework
+anything we can do to make scrollTo work on the second frame?
+
+paned: make autofit work for horizontal
+
+why do active tabs have a faint line under them?
+- this is about snap to pixels, drag the demo window around to see
+
+suggestions don't close when you click off of them?
+- when moving down via keyboard for a frame two are highlighted (maybe just need a refresh?)
+
+add function to decode imageFile to raw bytes
+
+consolidate icon stuff into ImageSource?
 
 
-lifo stuff
-- separate arena for each alignment?
-- zig arena doesn't free if alignment caused a gap between items
-- zig arena also doesn't free across buffer_lists
+make event logging better (more details, including focus/capture)
 
-consolidate box and boxEqual
-- should vertical be default?
+check that tvg outputs premultiplied alpha
+
+
+smidge of bright background shows even on a side where the border is zero?
+
 
 file issue for size caching widget:
 - usecase is a box that you sometimes want to put something inside, but always take the same amount of space
@@ -79,17 +94,12 @@ change borderAndBackground to directly take all params instead of getting them f
 
 figure out what set of doc images we should have for now
 
-can we live-update the Options struct for widgets?
-
 see if Freetype can be compiled for wasm
 
 Backend.initWindow should have a fullscreen option for podcast
 podcast text selection is not showing the touch cut/copy/paste options
 
 switch stb_truetype for zig version
-
-should do tabIndexSet if the element has size, so even if it's scrolled off the screen we still go to it
-- when we do tabIndexNext/Prev it should focus that element and then also send a scroll_to message from that widget - how?
 
 scrollContainer:
 - doesn't do multiple widgets going horizontally
@@ -138,12 +148,6 @@ add cursors to examples (row of buttons or something one for each cursor)
 
 touch editing - when a paste or text insertion happens, toggle off the touch editing
 
-on hidpi display, selecting a bunch of text leaves small gaps noticeable in the selection background
-- only if the text is added char by char
-
-paned should have an "autopos" mode where when not collapsed it will use the expand of the children to determine split
-- this way you can have the split automatically be not 50/50
-
 need a button for sizing/rotation for icon and raster that works continuously while you hold it down
 - add option to Button where when in the down position it keeps refreshing
 
@@ -160,8 +164,6 @@ maybe builtin button should record multiple clicks?
 TextLayout support for large documents
 - need a function to say "we are skipping a bunch of bytes" (might be useful for code folding as well)
 - addTextDone needs to not always set cursor because there might be lots of text remaining that we aren't rendering
-
-add alpha to Options as well and multiply it by the theme alpha
 
 add backend function to allow screensaver
 
