@@ -5607,11 +5607,6 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) void {
     var rs = wd.parent.screenRectScale(placeIn(wd.contentRect(), size, .none, opts.gravityGet()));
     const color = opts.color(.text);
 
-    if (cw.snap_to_pixels) {
-        rs.r.x = @round(rs.r.x);
-        rs.r.y = @round(rs.r.y);
-    }
-
     it = cw.font_cache.iterator();
     while (it.next()) |kv| {
         const texture_atlas = kv.value_ptr.getTextureAtlas() catch continue;
@@ -7228,16 +7223,22 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) Ba
         return;
     }
 
+    var rect = rs.r;
+    if (cw.snap_to_pixels) {
+        rect.x = @round(rect.x);
+        rect.y = @round(rect.y);
+    }
+
     var path: Path.Builder = .init(dvui.currentWindow().lifo());
     defer path.deinit();
 
-    path.addRect(rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
+    path.addRect(rect, opts.corner_radius.scale(rs.s, Rect.Physical));
 
     var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod.opacity(cw.alpha), .fade = opts.fade });
     defer triangles.deinit(cw.lifo());
 
-    triangles.uvFromRectuv(rs.r, opts.uv);
-    triangles.rotate(rs.r.center(), opts.rotation);
+    triangles.uvFromRectuv(rect, opts.uv);
+    triangles.rotate(rect.center(), opts.rotation);
 
     if (opts.background_color) |bg_col| {
         var back_tri = try triangles.dupe(cw.lifo());
