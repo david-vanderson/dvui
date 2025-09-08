@@ -170,7 +170,10 @@ pub fn ShrinkingArenaAllocator(comptime opts: InitOptions) type {
 
             // Extend the allocated length to the previous freed allocation
             // to account for padding between allocations
-            const index_adjustment = if (self.last_freed_ptr) |ptr| ptr -| (@intFromPtr(memory.ptr) + memory.len) else 0;
+            const index_adjustment = if (self.last_freed_ptr) |ptr|
+                @min(ptr -| (@intFromPtr(memory.ptr) + memory.len), Alignment.@"32".toByteUnits())
+            else
+                0;
             if (self.arena.state.end_index > index_adjustment) {
                 self.arena.state.end_index -= index_adjustment;
             }
