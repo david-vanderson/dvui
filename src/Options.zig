@@ -193,7 +193,7 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
         .border => self.color_border,
         .fill, .fill_hover, .fill_press => if (self.color_fill) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
         .text, .text_hover, .text_press => if (self.color_text) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
-    } orelse dvui.themeGet().color(self.style orelse .content, ask);
+    } orelse dvui.themeGet().color(self.styleGet(), ask);
 }
 
 pub fn fontGet(self: *const Options) Font {
@@ -268,6 +268,10 @@ pub fn max_size_contentGet(self: *const Options) Size {
 
 pub fn rotationGet(self: *const Options) f32 {
     return self.rotation orelse 0.0;
+}
+
+pub fn styleGet(self: *const Options) Theme.Style {
+    return self.style orelse .content;
 }
 
 /// Keeps only the fonts, colors and style
@@ -380,22 +384,24 @@ pub fn hash(self: *const Options) u64 {
     hasher.update(asBytes(&self.gravityGet()));
     hasher.update(asBytes(&self.expandGet()));
     hasher.update(asBytes(&self.rotationGet()));
-    hasher.update(asBytes(&self.background));
+    hasher.update(asBytes(&self.backgroundGet()));
 
-    hasher.update(asBytes(&self.style));
-    hasher.update(asBytes(&self.color_accent));
-    hasher.update(asBytes(&self.color_text));
-    hasher.update(asBytes(&self.color_fill));
-    hasher.update(asBytes(&self.color_border));
+    hasher.update(asBytes(&self.styleGet()));
 
-    hasher.update(asBytes(&self.font_style));
+    if (self.color_accent) |col| hasher.update(asBytes(&col));
+    if (self.color_text) |col| hasher.update(asBytes(&col));
+    if (self.color_fill) |col| hasher.update(asBytes(&col));
+    if (self.color_border) |col| hasher.update(asBytes(&col));
+
+    const fontStyle: FontStyle = self.font_style orelse .body;
+    hasher.update(asBytes(&fontStyle));
     const font = self.fontGet();
     hasher.update(asBytes(&font.id));
     hasher.update(asBytes(&font.line_height_factor));
     hasher.update(asBytes(&font.size));
 
-    hasher.update(asBytes(&self.tab_index));
-    hasher.update(asBytes(&self.id_extra));
+    if (self.tab_index) |ti| hasher.update(asBytes(&ti));
+    hasher.update(asBytes(&self.idExtra()));
     if (self.tag) |tag| hasher.update(tag);
     if (self.name) |name| hasher.update(name);
 
