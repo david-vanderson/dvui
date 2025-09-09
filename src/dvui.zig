@@ -6542,7 +6542,7 @@ pub fn findUtf8Start(text: []const u8, pos: usize) usize {
 
     // find start of previous utf8 char
     var start = p -| 1;
-    while (start < p and text[start] & 0xc0 == 0x80) {
+    while (start > 0 and start < p and text[start] & 0xc0 == 0x80) {
         start -|= 1;
     }
 
