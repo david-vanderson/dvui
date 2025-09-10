@@ -380,18 +380,21 @@ pub fn processScrollTo(
     const rs = self.data().contentRectScale();
 
     if (self.si.vertical != .none) {
-        const ypx = @max(0.0, rs.r.y - st.screen_rect.y);
-        if (ypx > 0) {
-            self.si.viewport.y = self.si.viewport.y - (ypx / rs.s);
+        const ypx = rs.r.y - st.screen_rect.y; // how far to the top
+        const ypx2 = (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h); // to the bottom
+
+        const yup = @min(ypx, -ypx2);
+        if (yup > 0) {
+            self.si.viewport.y = self.si.viewport.y - (yup / rs.s);
             if (!st.over_scroll) {
                 self.si.scrollToOffset(.vertical, self.si.viewport.y);
             }
             dvui.refresh(null, @src(), self.data().id);
         }
 
-        const ypx2 = @max(0.0, (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h));
-        if (ypx2 > 0) {
-            self.si.viewport.y = self.si.viewport.y + (ypx2 / rs.s);
+        const ydown = @min(ypx2, -ypx);
+        if (ydown > 0) {
+            self.si.viewport.y = self.si.viewport.y + (ydown / rs.s);
             if (!st.over_scroll) {
                 self.si.scrollToOffset(.vertical, self.si.viewport.y);
             }
@@ -400,18 +403,21 @@ pub fn processScrollTo(
     }
 
     if (self.si.horizontal != .none) {
-        const xpx = @max(0.0, rs.r.x - st.screen_rect.x);
-        if (xpx > 0) {
-            self.si.viewport.x = self.si.viewport.x - (xpx / rs.s);
+        const xpx = rs.r.x - st.screen_rect.x; // how far left
+        const xpx2 = (st.screen_rect.x + st.screen_rect.w) - (rs.r.x + rs.r.w); // how far right
+
+        const xleft = @min(xpx, -xpx2);
+        if (xleft > 0) {
+            self.si.viewport.x = self.si.viewport.x - (xleft / rs.s);
             if (!st.over_scroll) {
                 self.si.scrollToOffset(.horizontal, self.si.viewport.x);
             }
             dvui.refresh(null, @src(), self.data().id);
         }
 
-        const xpx2 = @max(0.0, (st.screen_rect.x + st.screen_rect.w) - (rs.r.x + rs.r.w));
-        if (xpx2 > 0) {
-            self.si.viewport.x = self.si.viewport.x + (xpx2 / rs.s);
+        const xright = @min(xpx2, -xpx);
+        if (xright > 0) {
+            self.si.viewport.x = self.si.viewport.x + (xright / rs.s);
             if (!st.over_scroll) {
                 self.si.scrollToOffset(.horizontal, self.si.viewport.x);
             }
