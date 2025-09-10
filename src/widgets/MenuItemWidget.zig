@@ -68,7 +68,9 @@ pub fn drawBackground(self: *MenuItemWidget) void {
     if (focused or ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) and self.highlight)) {
         if (!self.init_opts.submenu or !menu().?.submenus_activated) {
             if (!self.init_opts.highlight_only) {
-                if (menu().?.mouse_mode and !menu().?.mouse_over) {
+                if (self.init_opts.focus_as_outline) {
+                    self.show_active = true;
+                } else if (menu().?.mouse_mode and !menu().?.mouse_over) {
                     // following mouse but it's outside the menu
                 } else {
                     self.show_active = true;
@@ -173,7 +175,6 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .focus) {
-                menu().?.mouse_mode = true;
                 e.handle(@src(), self.data());
                 self.mouse_over = true;
                 dvui.focusWidget(self.data().id, null, e.num);
@@ -202,7 +203,6 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     dvui.dragPreStart(me.p, .{});
                 }
             } else if (me.action == .release) {
-                menu().?.mouse_mode = true;
                 e.handle(@src(), self.data());
                 if (self.init_opts.submenu) {
                     // Only non floating menus can toggle focus-on-hover
@@ -236,7 +236,6 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 // focus the menu item under the mouse even if it's not
                 // moving then it breaks keyboard navigation.
                 if (dvui.mouseTotalMotion().nonZero()) {
-                    menu().?.mouse_mode = true;
                     self.mouse_over = true;
 
                     if (menu().?.has_focused_child or menu().?.submenus_activated or menu().?.floating()) {
@@ -259,7 +258,6 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
         },
         .key => |ke| {
             if (ke.action == .down and ke.matchBind("activate")) {
-                menu().?.mouse_mode = false;
                 e.handle(@src(), self.data());
                 if (self.init_opts.submenu) {
                     menu().?.submenus_activated = true;
@@ -269,13 +267,11 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 }
             } else if (ke.code == .right and ke.action == .down) {
                 if (self.init_opts.submenu and menu().?.init_opts.dir == .vertical) {
-                    menu().?.mouse_mode = false;
                     e.handle(@src(), self.data());
                     menu().?.submenus_activated = true;
                 }
             } else if (ke.code == .down and ke.action == .down) {
                 if (self.init_opts.submenu and menu().?.init_opts.dir == .horizontal) {
-                    menu().?.mouse_mode = false;
                     e.handle(@src(), self.data());
                     menu().?.submenus_activated = true;
                 }
