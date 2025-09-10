@@ -820,6 +820,13 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
 
     if (!e.handled) {
         self.textLayout.processEvent(e);
+
+        if (!e.handled and e.evt == .key) {
+            // Mark all key events as handled. This allows checking a
+            // keybind (like "d") after the textEntry, but where
+            // textEntry will get it first.
+            e.handle(@src(), self.data());
+        }
     }
 }
 
