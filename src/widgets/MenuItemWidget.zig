@@ -28,7 +28,6 @@ pub const InitOptions = struct {
 };
 
 wd: WidgetData,
-focused_last_frame: bool,
 highlight: bool = false,
 init_opts: InitOptions,
 activated: bool = false,
@@ -42,7 +41,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return .{
         .wd = wd,
         .init_opts = init_opts,
-        .focused_last_frame = dvui.dataGet(null, wd.id, "_focus_last", bool) orelse false,
     };
 }
 
@@ -76,15 +74,8 @@ pub fn drawBackground(self: *MenuItemWidget) void {
                     self.show_active = true;
                 }
             }
-
-            if (!self.focused_last_frame) {
-                // in case we are in a scrollable dropdown, scroll
-                dvui.scrollTo(.{ .screen_rect = self.data().borderRectScale().r });
-            }
         }
     }
-
-    self.focused_last_frame = focused;
 
     if (self.data().visible()) {
         const cols = self.colors();
@@ -285,7 +276,6 @@ pub fn deinit(self: *MenuItemWidget) void {
     const should_free = self.data().was_allocated_on_widget_stack;
     defer if (should_free) dvui.widgetFree(self);
     defer self.* = undefined;
-    dvui.dataSet(null, self.data().id, "_focus_last", self.focused_last_frame);
     self.data().minSizeSetAndRefresh();
     self.data().minSizeReportToParent();
     dvui.parentReset(self.data().id, self.data().parent);
