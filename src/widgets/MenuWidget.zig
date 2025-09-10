@@ -122,6 +122,12 @@ pub fn install(self: *MenuWidget) void {
 
     const evts = dvui.events();
     for (evts) |*e| {
+        if (e.evt == .key) {
+            self.mouse_mode = false;
+        } else if (e.evt == .mouse and e.evt.mouse.action != .position) {
+            self.mouse_mode = true;
+        }
+
         if (!dvui.eventMatchSimple(e, self.data()))
             continue;
 
@@ -187,7 +193,6 @@ pub fn processEvent(self: *MenuWidget, e: *Event) void {
         .mouse => |me| {
             if (me.action == .position) {
                 if (dvui.mouseTotalMotion().nonZero()) {
-                    self.mouse_mode = true;
                     if (dvui.dataGet(null, self.data().id, "_child_popup", ?Rect.Physical) orelse null) |r| {
                         const center = Point.Physical{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
                         const cw = dvui.currentWindow();
@@ -226,12 +231,10 @@ pub fn processEventsAfter(self: *MenuWidget) void {
                 if (ke.action == .down or ke.action == .repeat) {
                     switch (ke.code) {
                         .escape => {
-                            self.mouse_mode = false;
                             e.handle(@src(), self.data());
                             self.close();
                         },
                         .up => {
-                            self.mouse_mode = false;
                             if (self.init_opts.dir == .vertical) {
                                 e.handle(@src(), self.data());
                                 dvui.tabIndexPrev(e.num);
@@ -242,7 +245,6 @@ pub fn processEventsAfter(self: *MenuWidget) void {
                             }
                         },
                         .down => {
-                            self.mouse_mode = false;
                             if (self.init_opts.dir == .vertical) {
                                 e.handle(@src(), self.data());
                                 dvui.tabIndexNext(e.num);
@@ -253,7 +255,6 @@ pub fn processEventsAfter(self: *MenuWidget) void {
                             }
                         },
                         .left => {
-                            self.mouse_mode = false;
                             if (self.init_opts.dir == .vertical) {
                                 e.handle(@src(), self.data());
                                 if (self.parentMenu) |pm| {
@@ -272,7 +273,6 @@ pub fn processEventsAfter(self: *MenuWidget) void {
                             }
                         },
                         .right => {
-                            self.mouse_mode = false;
                             if (self.init_opts.dir == .horizontal) {
                                 e.handle(@src(), self.data());
                                 dvui.tabIndexNext(e.num);
