@@ -151,6 +151,10 @@ pub const MaxSize = struct {
     pub fn size(s: Size) MaxSize {
         return .{ .w = s.w, .h = s.h };
     }
+
+    pub fn all(v: f32) MaxSize {
+        return .{ .w = v, .h = v };
+    }
 };
 
 pub const BoxShadow = struct {
