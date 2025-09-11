@@ -7534,6 +7534,43 @@ pub const PNGEncoder = struct {
     }
 };
 
+pub const JPGEncoder = struct {
+    output: *std.Io.Writer,
+
+    /// Writes a JPG with a quality of 90%
+    pub fn write(output: *std.Io.Writer, pixels: []u8, width: u32, height: u32) !void {
+        writeWithQuality(output, pixels, width, height, 75);
+    }
+
+    /// Writes a JPG with a any quality between 0-100
+    pub fn writeWithQuality(output: *std.Io.Writer, pixels: []u8, width: u32, height: u32, quality: u7) !void {
+        var jpg_encoder = JPGEncoder{
+            .output = output,
+        };
+        const res = c.stbi_write_jpg_to_func(
+            &stbi_write_jpg_callback,
+            &jpg_encoder,
+            @intCast(width),
+            @intCast(height),
+            c.STBI_rgb_alpha,
+            pixels.ptr,
+            @intCast(quality),
+        );
+        if (res == 0) return StbImageError.stbImageError;
+    }
+
+    fn callback(self: *JPGEncoder, data_in: []const u8) !void {
+        try self.output.writeAll(data_in);
+    }
+
+    fn stbi_write_jpg_callback(ctx: ?*anyopaque, data_ptr: ?*anyopaque, len: c_int) callconv(.c) void {
+        const self: *JPGEncoder = @ptrCast(@alignCast(ctx.?));
+        const data: []const u8 = @as([*]const u8, @ptrCast(@alignCast(data_ptr.?)))[0..@intCast(len)];
+        // TODO: Maybe propagate writer error by storing it as a field?
+        self.callback(data) catch |err| logError(@src(), err, "Failed to write png data to output", .{});
+    }
+};
+
 pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, opts: Options) *PlotWidget {
     var ret = widgetAlloc(PlotWidget);
     ret.* = PlotWidget.init(src, plot_opts, opts);
