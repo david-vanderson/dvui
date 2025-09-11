@@ -7363,6 +7363,15 @@ pub const Picture = struct {
         try PNGEncoder.write(writer, pixels, self.texture.width, self.texture.height);
     }
 
+    /// Encode texture as jpg.  Call after `stop` before `deinit`.
+    pub fn jpg(self: *Picture, writer: *std.Io.Writer) !void {
+        const pma_pixels = try dvui.textureReadTarget(currentWindow().lifo(), self.texture);
+        const pixels = Color.PMA.sliceToRGBA(pma_pixels);
+        defer currentWindow().lifo().free(pixels);
+
+        try JPGEncoder.write(writer, pixels, self.texture.width, self.texture.height);
+    }
+
     /// Draw recorded texture and destroy it.
     pub fn deinit(self: *Picture) void {
         defer self.* = undefined;
