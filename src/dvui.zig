@@ -7482,9 +7482,7 @@ pub const PNGEncoder = struct {
     fn stbi_write_png_callback(ctx: ?*anyopaque, data_ptr: ?*anyopaque, len: c_int) callconv(.c) void {
         const self: *PNGEncoder = @ptrCast(@alignCast(ctx.?));
         const data: []const u8 = @as([*]const u8, @ptrCast(@alignCast(data_ptr.?)))[0..@intCast(len)];
-        for (data) |b| {
-            self.callback(&.{b}) catch |err| logError(@src(), err, "Failed to write png data to output", .{});
-        }
+        self.callback(data) catch |err| logError(@src(), err, "Failed to write png data to output", .{});
     }
 
     /// Calculate a PNG crc value.
