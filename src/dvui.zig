@@ -7401,7 +7401,7 @@ pub const PNGEncoder = struct {
 
     /// dvui will set the resolution of 72 dpi (2834.64 px/m) times `windowNaturalScale`
     pub fn write(output: *std.Io.Writer, pixels: []u8, width: u32, height: u32) !void {
-        try writeWithResolution(output, pixels, width, height, @intFromFloat(@round(windowNaturalScale() * 72.0 / 0.0254)));
+        return writeWithResolution(output, pixels, width, height, @intFromFloat(@round(windowNaturalScale() * 72.0 / 0.0254)));
     }
 
     /// `resolution == 0` => don't write the pHYs chunk
@@ -7539,7 +7539,7 @@ pub const JPGEncoder = struct {
 
     /// Writes a JPG with a quality of 90%
     pub fn write(output: *std.Io.Writer, pixels: []u8, width: u32, height: u32) !void {
-        writeWithQuality(output, pixels, width, height, 75);
+        return writeWithQuality(output, pixels, width, height, 90);
     }
 
     /// Writes a JPG with a any quality between 0-100
