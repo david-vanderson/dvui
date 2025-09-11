@@ -7409,6 +7409,8 @@ pub const PNGEncoder = struct {
     const pHYs_header_size = pHYs_len + 4; // includes "pHYs"
 
     /// dvui will set the resolution of 72 dpi (2834.64 px/m) times `windowNaturalScale`
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
     pub fn write(output: *std.Io.Writer, pixels: []u8, width: u32, height: u32) !void {
         return writeWithResolution(output, pixels, width, height, @intFromFloat(@round(windowNaturalScale() * 72.0 / 0.0254)));
     }
@@ -7545,20 +7547,59 @@ pub const PNGEncoder = struct {
 
 pub const JPGEncoder = struct {
     output: *std.Io.Writer,
+    density: u16,
 
-    /// Writes a JPG with a quality of 90%
-    pub fn write(output: *std.Io.Writer, pixels: []u8, width: u32, height: u32) !void {
-        return writeWithQuality(output, pixels, width, height, 90);
+    /// Bytes remaining to fill the buffer with the header
+    ///
+    /// Set to 0 to skip custom density header
+    bytes_remaining_of_jfif_app0_segment: u32 = jfif_app0_segment,
+
+    pub const min_buffer_size = jfif_app0_segment;
+    // https://en.wikipedia.org/wiki/JPEG_File_Interchange_Format#JFIF_APP0_marker_segment
+    // Assumes stbi jpg will always return image files starting with SOI (FF D8) followed by JFIF-APP0 (FF E0 ...)
+    /// The number of bytes from the start of a JFIF file to the end of the density values
+    const jfif_app0_segment = 2 + 2 + 5 + 2 + 1 + 2 + 2;
+
+    /// dvui will set the density of 72 dpi (2834.64 px/m) times `windowNaturalScale`
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn init(output: *std.Io.Writer) JPGEncoder {
+        return JPGEncoder.initDensity(output, @intFromFloat(@round(windowNaturalScale() * 72.0)));
     }
 
-    /// Writes a JPG with a any quality between 0-100
-    pub fn writeWithQuality(output: *std.Io.Writer, pixels: []u8, width: u32, height: u32, quality: u7) !void {
-        var jpg_encoder = JPGEncoder{
+    /// `density` is in pixels per inch (2.54 cm).
+    /// `density == 0` => don't write custom density
+    pub fn initDensity(output: *std.Io.Writer, density: u16) JPGEncoder {
+        std.debug.assert(output.buffer.len >= min_buffer_size);
+        var self = JPGEncoder{
             .output = output,
+            .density = density,
         };
+        if (density == 0) {
+            // We have no density to write
+            self.bytes_remaining_of_jfif_app0_segment = 0;
+        }
+        return self;
+    }
+
+    /// Writes a JPG with a quality of 90%
+    /// dvui will set the density of 72 dpi (2834.64 px/m) times `windowNaturalScale`
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn write(output: *std.Io.Writer, pixels: []u8, width: u32, height: u32) !void {
+        var self = JPGEncoder.init(output);
+        return self.writeWithQuality(pixels, width, height, 90);
+    }
+
+    /// Writes a JPG with a any quality between 0-100 and the density provided.
+    ///
+    /// `quality == 0` uses the stb_image default
+    /// `density` is in pixels per inch (2.54 cm).
+    /// `density == 0` => don't write custom density
+    pub fn writeWithQuality(self: *JPGEncoder, pixels: []u8, width: u32, height: u32, quality: u7) !void {
         const res = c.stbi_write_jpg_to_func(
             &stbi_write_jpg_callback,
-            &jpg_encoder,
+            self,
             @intCast(width),
             @intCast(height),
             c.STBI_rgb_alpha,
@@ -7569,7 +7610,25 @@ pub const JPGEncoder = struct {
     }
 
     fn callback(self: *JPGEncoder, data_in: []const u8) !void {
-        try self.output.writeAll(data_in);
+        if (self.bytes_remaining_of_jfif_app0_segment == 0) {
+            try self.output.writeAll(data_in);
+        } else if (data_in.len < self.bytes_remaining_of_jfif_app0_segment) {
+            self.bytes_remaining_of_jfif_app0_segment -= @intCast(data_in.len);
+            try self.output.writeAll(data_in);
+        } else {
+            // Write header up until density into the buffer
+            try self.output.writeAll(data_in[0..self.bytes_remaining_of_jfif_app0_segment]);
+
+            // Replace density
+            self.output.undo(@sizeOf(u8) + 2 * @sizeOf(u16));
+            try self.output.writeByte(0x01); // 0x01 => Pixels per inch density unit
+            try self.output.writeInt(u16, self.density, .little); // Xdensity
+            try self.output.writeInt(u16, self.density, .little); // Ydensity
+
+            // Write the rest of the data
+            try self.output.writeAll(data_in[self.bytes_remaining_of_jfif_app0_segment..]);
+            self.bytes_remaining_of_jfif_app0_segment = 0;
+        }
     }
 
     fn stbi_write_jpg_callback(ctx: ?*anyopaque, data_ptr: ?*anyopaque, len: c_int) callconv(.c) void {
