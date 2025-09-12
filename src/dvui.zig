@@ -588,6 +588,7 @@ pub const FontCacheEntry = struct {
     height: f32,
     ascent: f32,
     glyph_info: std.AutoHashMap(u32, GlyphInfo),
+    glyph_info_ascii: [127]GlyphInfo,
     texture_atlas_cache: ?Texture = null,
 
     pub fn deinit(self: *FontCacheEntry, win: *Window) void {
@@ -745,19 +746,23 @@ pub const FontCacheEntry = struct {
         // number of extra pixels to add on each side of each glyph
         const pad = 1;
 
-        const row_glyphs = @as(u32, @intFromFloat(@ceil(@sqrt(@as(f32, @floatFromInt(fce.glyph_info.count()))))));
+        const total = fce.glyph_info_ascii.len + fce.glyph_info.count();
+        const row_glyphs = @as(u32, @intFromFloat(@ceil(@sqrt(@as(f32, @floatFromInt(total))))));
 
         var size = Size{};
         {
-            var it = fce.glyph_info.valueIterator();
             var i: u32 = 0;
             var rowlen: f32 = 0;
-            while (it.next()) |gi| {
+            var it = fce.glyph_info.valueIterator();
+
+            while (i < total) {
                 if (i % row_glyphs == 0) {
                     size.w = @max(size.w, rowlen);
                     size.h += fce.height + 2 * pad;
                     rowlen = 0;
                 }
+
+                const gi = if (i < fce.glyph_info_ascii.len) &fce.glyph_info_ascii[i] else it.next().?;
 
                 rowlen += gi.w + 2 * pad;
 
@@ -787,12 +792,14 @@ pub const FontCacheEntry = struct {
         var y: i32 = pad;
         var it = fce.glyph_info.iterator();
         var i: u32 = 0;
-        while (it.next()) |e| {
-            var gi = e.value_ptr;
+        while (i < total) {
+            var gi, const codepoint = if (i < fce.glyph_info_ascii.len) .{ &fce.glyph_info_ascii[i], i } else blk: {
+                const e = it.next().?;
+                break :blk .{ e.value_ptr, e.key_ptr.* };
+            };
+
             gi.uv[0] = @as(f32, @floatFromInt(x + pad)) / size.w;
             gi.uv[1] = @as(f32, @floatFromInt(y + pad)) / size.h;
-
-            const codepoint = @as(u32, @intCast(e.key_ptr.*));
 
             if (useFreeType) blk: {
                 FontCacheEntry.intToError(c.FT_Load_Char(fce.face, codepoint, @as(i32, @bitCast(FontCacheEntry.LoadFlags{ .render = true })))) catch |err| {
@@ -870,10 +877,22 @@ pub const FontCacheEntry = struct {
     }
 
     pub fn glyphInfoGet(self: *FontCacheEntry, codepoint: u32) (std.mem.Allocator.Error || FontError)!GlyphInfo {
-        if (self.glyph_info.get(codepoint)) |gi| {
-            return gi;
-        }
+        if (codepoint < self.glyph_info_ascii.len)
+            return self.glyph_info_ascii[codepoint];
 
+        if (self.glyph_info.get(codepoint)) |gi| return gi;
+
+        const gi = try self.glyphInfoGenerate(codepoint);
+
+        // new glyph, need to regen texture atlas on next render
+        //std.debug.print("new glyph {}\n", .{codepoint});
+        self.invalidateTextureAtlas();
+
+        try self.glyph_info.put(codepoint, gi);
+        return gi;
+    }
+
+    pub fn glyphInfoGenerate(self: *FontCacheEntry, codepoint: u32) FontError!GlyphInfo {
         var gi: GlyphInfo = undefined;
 
         if (useFreeType) {
@@ -922,11 +941,6 @@ pub const FontCacheEntry = struct {
 
         //std.debug.print("codepoint {d} advance {d} leftBearing {d} topBearing {d} w {d} h {d}\n", .{ codepoint, gi.advance, gi.leftBearing, gi.topBearing, gi.w, gi.h });
 
-        // new glyph, need to regen texture atlas on next render
-        //std.debug.print("new glyph {}\n", .{codepoint});
-        self.invalidateTextureAtlas();
-
-        try self.glyph_info.put(codepoint, gi);
         return gi;
     }
 
@@ -954,11 +968,16 @@ pub const FontCacheEntry = struct {
         var ei: usize = 0;
         var nearest_break: bool = false;
 
-        var utf8 = std.unicode.Utf8View.initUnchecked(text).iterator();
         var last_codepoint: u32 = 0;
         var last_glyph_index: u32 = 0;
-        while (utf8.nextCodepoint()) |codepoint| {
+
+        var i: usize = 0;
+        while (i < text.len) {
+            const cplen = std.unicode.utf8ByteSequenceLength(text[i]) catch unreachable;
+            const codepoint = std.unicode.utf8Decode(text[i..][0..cplen]) catch unreachable;
             const gi = try fce.glyphInfoGetOrReplacement(codepoint);
+
+            i += cplen;
 
             // kerning
             if (last_codepoint != 0) {
@@ -985,6 +1004,7 @@ pub const FontCacheEntry = struct {
                     x += kern_x;
                 }
             }
+
             last_codepoint = codepoint;
 
             minx = @min(minx, x + gi.leftBearing);
@@ -1015,7 +1035,7 @@ pub const FontCacheEntry = struct {
             }
 
             // record that we processed this codepoint
-            ei += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+            ei += cplen;
 
             // update space taken by glyph
             tw = maxx - minx;
@@ -1096,14 +1116,21 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontEr
             //std.debug.print("height {d} -> pixel_size {d}\n", .{ height, pixel_size });
 
             if (height <= font.size or pixel_size == min_pixel_size) {
-                return FontCacheEntry{
+                var ret = FontCacheEntry{
                     .face = face,
                     .name = name,
                     .scaleFactor = 1.0, // not used with freetype
                     .height = @ceil(height),
                     .ascent = @floor(ascent),
                     .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(currentWindow().gpa),
+                    .glyph_info_ascii = undefined,
                 };
+
+                for (0..ret.glyph_info_ascii.len) |i| {
+                    ret.glyph_info_ascii[i] = try ret.glyphInfoGenerate(@intCast(i));
+                }
+
+                return ret;
             }
         }
     } else {
