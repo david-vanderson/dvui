@@ -60,7 +60,7 @@ pub fn textSize(self: Font, text: []const u8) Size {
         }
 
         var end_idx: usize = undefined;
-        const s = self.textSizeEx(text[end..], null, &end_idx, .before);
+        const s = self.textSizeEx(text[end..], .{ .end_idx = &end_idx, .end_metric = .before });
         line_height_adj = s.h * (self.line_height_factor - 1.0);
         ret.h += s.h;
         ret.w = @max(ret.w, s.w);
@@ -76,8 +76,16 @@ pub const EndMetric = enum {
     nearest, // end_idx stops at start of character closest to max_width
 };
 
+pub const TextSizeOptions = struct {
+    max_width: ?f32 = null,
+    end_idx: ?*usize = null,
+    end_metric: EndMetric,
+    kern_in: ?[]u32 = null,
+    kern_out: ?[]u32 = null,
+};
+
 /// textSizeEx always stops at a newline, use textSize to get multiline sizes
-pub fn textSizeEx(self: Font, text: []const u8, max_width: ?f32, end_idx: ?*usize, end_metric: EndMetric) Size {
+pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     // ask for a font that matches the natural display pixels so we get a more
     // accurate size
 
@@ -91,13 +99,13 @@ pub fn textSizeEx(self: Font, text: []const u8, max_width: ?f32, end_idx: ?*usiz
     // this must be synced with dvui.renderText()
     const target_fraction = if (dvui.currentWindow().snap_to_pixels) 1.0 / ss else self.size / fce.height;
 
-    var max_width_sized: ?f32 = null;
-    if (max_width) |mwidth| {
+    var options = opts;
+    if (opts.max_width) |mwidth| {
         // convert max_width into font units
-        max_width_sized = mwidth / target_fraction;
+        options.max_width = mwidth / target_fraction;
     }
 
-    var s = fce.textSizeRaw(text, max_width_sized, end_idx, end_metric) catch return .{ .w = 10, .h = 10 };
+    var s = fce.textSizeRaw(text, options) catch return .{ .w = 10, .h = 10 };
 
     // do this check after calling textSizeRaw so that end_idx is set
     if (ask_size == 0.0) return Size{};

@@ -485,7 +485,7 @@ fn findPoint(p: Point, r: Rect, bytes_seen: usize, txt: []const u8, options: Opt
         // found it - p is in this rect
         const how_far = p.x - r.x;
         var pt_end: usize = undefined;
-        _ = options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
+        _ = options.fontGet().textSizeEx(txt, .{ .max_width = how_far, .end_idx = &pt_end, .end_metric = .nearest });
         return .{ .byte = bytes_seen + pt_end, .affinity = if (pt_end == txt.len) .before else .after };
     }
 
@@ -997,6 +997,8 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
         }
     }
 
+    var kern_buf: [10]u32 = @splat(0);
+
     text_loop: while (txt.len > 0) {
         var linestart: f32 = 0;
 
@@ -1035,7 +1037,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
         var end: usize = undefined;
 
         // get slice of text that fits within width or ends with newline
-        var s = options.fontGet().textSizeEx(txt, if (self.break_lines) width else null, &end, .before);
+        var s = options.fontGet().textSizeEx(txt, .{ .max_width = if (self.break_lines) width else null, .end_idx = &end, .end_metric = .before, .kern_out = &kern_buf });
 
         // ensure we always get at least 1 codepoint so we make progress
         if (end == 0) {
@@ -1058,7 +1060,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 const spaceIdx = std.mem.lastIndexOfLinear(u8, txt[0 .. end + 1], " ");
                 if (spaceIdx) |si| {
                     end = si + 1;
-                    s = options.fontGet().textSize(txt[0..end]);
+                    s = options.fontGet().textSizeEx(txt[0..end], .{ .end_metric = .before, .kern_in = &kern_buf });
                     break :blk; // this part will fit
                 }
 
@@ -1138,7 +1140,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                         // point is in this text
                         const how_far = p.x - rs.x;
                         var pt_end: usize = undefined;
-                        _ = options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
+                        _ = options.fontGet().textSizeEx(txt, .{ .max_width = how_far, .end_idx = &pt_end, .end_metric = .nearest });
                         sel_bytes[i] = self.bytes_seen + pt_end;
                         self.sel_pts[i] = null;
                     } else {
@@ -1196,7 +1198,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
         }
 
         { // Scope here is for deallocating rtxt before handling copying to clipboard on the arena
-            const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, self.data().contentRect().h - self.insert_pt.y) });
+            const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = @min(s.h, self.data().contentRect().h - self.insert_pt.y) });
             //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
             var rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
 
@@ -1221,6 +1223,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 .sel_start = self.selection.start -| self.bytes_seen,
                 .sel_end = self.selection.end -| self.bytes_seen,
                 .sel_color = (opts.color_accent orelse (dvui.themeGet().text_select orelse dvui.themeGet().color(.highlight, .fill))).opacity(0.75),
+                .kern_in = &kern_buf,
             }) catch |err| {
                 dvui.logError(@src(), err, "Failed to render text: {s}", .{rtxt});
             };
