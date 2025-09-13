@@ -22,16 +22,23 @@ pub fn plots() void {
         dvui.plotXY(@src(), .{}, 2, xs, ys, .{ .color_accent = dvui.themeGet().err.fill orelse .red });
     }
 
-    var save: bool = false;
-    if (dvui.button(@src(), "Save Plot", .{}, .{ .gravity_x = 1.0 })) {
-        save = true;
+    var save: ?enum { png, jpg } = null;
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+        if (dvui.button(@src(), "Save png", .{}, .{ .gravity_x = 1.0 })) {
+            save = .png;
+        }
+        if (dvui.button(@src(), "Save jpg", .{}, .{ .gravity_x = 1.0 })) {
+            save = .jpg;
+        }
     }
 
     var vbox = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 100 }, .expand = .ratio });
     defer vbox.deinit();
 
     var pic: ?dvui.Picture = null;
-    if (save) {
+    if (save != null) {
         pic = dvui.Picture.start(vbox.data().contentRectScale().r);
     }
 
@@ -72,27 +79,36 @@ pub fn plots() void {
     }
 
     if (pic) |*p| {
+        // `save` is not null because `pic` is not null
         p.stop();
         defer p.deinit();
+
+        const filename: []const u8 = switch (save.?) {
+            .png => "plot.png",
+            .jpg => "plot.jpg",
+        };
 
         if (dvui.wasm) blk: {
             var writer = std.Io.Writer.Allocating.init(dvui.currentWindow().arena());
             defer writer.deinit();
-            p.png(&writer.writer) catch |err| {
-                dvui.logError(@src(), err, "Failed to write plot png", .{});
+            (switch (save.?) {
+                .png => p.png(&writer.writer),
+                .jpg => p.jpg(&writer.writer),
+            }) catch |err| {
+                dvui.logError(@src(), err, "Failed to write plot {t} image", .{save.?});
                 break :blk;
             };
             // No need to call `writer.flush` because `Allocating` doesn't drain it's buffer anywhere
-            dvui.backend.downloadData("plot.png", writer.written()) catch |err| {
-                dvui.logError(@src(), err, "Could not download plot.png", .{});
+            dvui.backend.downloadData(filename, writer.written()) catch |err| {
+                dvui.logError(@src(), err, "Could not download {s}", .{filename});
             };
         } else {
-            const filename = dvui.dialogNativeFileSave(dvui.currentWindow().lifo(), .{ .path = "plot.png" }) catch null;
-            if (filename) |fname| blk: {
-                defer dvui.currentWindow().lifo().free(fname);
+            const maybe_path = dvui.dialogNativeFileSave(dvui.currentWindow().lifo(), .{ .path = filename }) catch null;
+            if (maybe_path) |path| blk: {
+                defer dvui.currentWindow().lifo().free(path);
 
-                var file = std.fs.createFileAbsoluteZ(fname, .{}) catch |err| {
-                    dvui.log.debug("Failed to create file {s}, got {any}", .{ fname, err });
+                var file = std.fs.createFileAbsoluteZ(path, .{}) catch |err| {
+                    dvui.log.debug("Failed to create file {s}, got {any}", .{ path, err });
                     dvui.toast(@src(), .{ .message = "Failed to create file" });
                     break :blk;
                 };
@@ -100,12 +116,16 @@ pub fn plots() void {
 
                 var buffer: [256]u8 = undefined;
                 var writer = file.writer(&buffer);
-                p.png(&writer.interface) catch |err| {
-                    dvui.logError(@src(), err, "Failed to write plot png to file {s}", .{fname});
+
+                (switch (save.?) {
+                    .png => p.png(&writer.interface),
+                    .jpg => p.jpg(&writer.interface),
+                }) catch |err| {
+                    dvui.logError(@src(), err, "Failed to write plot {t} to file {s}", .{ save.?, path });
                 };
                 // End writing to file and potentially truncate any additional preexisting data
                 writer.end() catch |err| {
-                    dvui.logError(@src(), err, "Failed to end file write for {s}", .{fname});
+                    dvui.logError(@src(), err, "Failed to end file write for {s}", .{path});
                 };
             }
         }
