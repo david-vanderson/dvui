@@ -293,7 +293,7 @@ pub fn numberFieldWidget(
                     .min = opt.minValue(T),
                     .max = opt.maxValue(T),
                     .value = field_value_ptr,
-                    .show_min_max = true,
+                    .show_min_max = opt.min != null and opt.max != null,
                 }, .{});
                 if (maybe_num.value == .Valid) {
                     field_value_ptr.* = maybe_num.value.Valid;
