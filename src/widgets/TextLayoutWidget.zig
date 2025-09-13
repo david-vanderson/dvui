@@ -997,8 +997,6 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
         }
     }
 
-    var kern_buf: [10]u32 = @splat(0);
-
     text_loop: while (txt.len > 0) {
         var linestart: f32 = 0;
 
@@ -1035,6 +1033,8 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
         }
 
         var end: usize = undefined;
+
+        var kern_buf: [10]u32 = @splat(0);
 
         // get slice of text that fits within width or ends with newline
         var s = options.fontGet().textSizeEx(txt, .{ .max_width = if (self.break_lines) width else null, .end_idx = &end, .end_metric = .before, .kern_out = &kern_buf });
