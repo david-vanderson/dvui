@@ -44,7 +44,7 @@ pub const demoKind = enum {
             .scroll_canvas => "Scroll Canvas",
             .dialogs => "Dialogs / Toasts",
             .animations => "Animations",
-            .struct_ui => "Struct UI\n(Experimental)",
+            .struct_ui => "Struct UI",
             .debugging => "Debugging",
             .grid => "Grid",
         };

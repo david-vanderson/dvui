@@ -432,7 +432,7 @@ pub fn deinit(self: *Self) void {
         }
     }
     self.font_bytes.deinit(self.gpa);
-
+    dvui.struct_ui.deinit(self.gpa);
     self.* = undefined;
 }
 
