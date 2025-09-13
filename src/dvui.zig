@@ -114,6 +114,8 @@ pub const useFreeType = !wasm;
 /// The amount of physical pixels to scroll per "tick" of the scroll wheel
 pub var scroll_speed: f32 = 20;
 
+pub var kerning: bool = true;
+
 /// Used as a default maximum in various places:
 /// * Options.max_size_content
 /// * Font.textSizeEx max_width
@@ -581,6 +583,7 @@ const GlyphInfo = struct {
 };
 
 pub const FontCacheEntry = struct {
+    const ascii_size = 127;
     face: if (useFreeType) c.FT_Face else c.stbtt_fontinfo,
     // This name should come from `Window.font_bytes` and lives as long as it does
     name: []const u8,
@@ -588,6 +591,7 @@ pub const FontCacheEntry = struct {
     height: f32,
     ascent: f32,
     glyph_info: std.AutoHashMap(u32, GlyphInfo),
+    glyph_info_ascii: [ascii_size]GlyphInfo,
     texture_atlas_cache: ?Texture = null,
 
     pub fn deinit(self: *FontCacheEntry, win: *Window) void {
@@ -745,19 +749,23 @@ pub const FontCacheEntry = struct {
         // number of extra pixels to add on each side of each glyph
         const pad = 1;
 
-        const row_glyphs = @as(u32, @intFromFloat(@ceil(@sqrt(@as(f32, @floatFromInt(fce.glyph_info.count()))))));
+        const total = fce.glyph_info_ascii.len + fce.glyph_info.count();
+        const row_glyphs = @as(u32, @intFromFloat(@ceil(@sqrt(@as(f32, @floatFromInt(total))))));
 
         var size = Size{};
         {
-            var it = fce.glyph_info.valueIterator();
             var i: u32 = 0;
             var rowlen: f32 = 0;
-            while (it.next()) |gi| {
+            var it = fce.glyph_info.valueIterator();
+
+            while (i < total) {
                 if (i % row_glyphs == 0) {
                     size.w = @max(size.w, rowlen);
                     size.h += fce.height + 2 * pad;
                     rowlen = 0;
                 }
+
+                const gi = if (i < fce.glyph_info_ascii.len) &fce.glyph_info_ascii[i] else it.next().?;
 
                 rowlen += gi.w + 2 * pad;
 
@@ -787,12 +795,14 @@ pub const FontCacheEntry = struct {
         var y: i32 = pad;
         var it = fce.glyph_info.iterator();
         var i: u32 = 0;
-        while (it.next()) |e| {
-            var gi = e.value_ptr;
+        while (i < total) {
+            var gi, const codepoint = if (i < fce.glyph_info_ascii.len) .{ &fce.glyph_info_ascii[i], i } else blk: {
+                const e = it.next().?;
+                break :blk .{ e.value_ptr, e.key_ptr.* };
+            };
+
             gi.uv[0] = @as(f32, @floatFromInt(x + pad)) / size.w;
             gi.uv[1] = @as(f32, @floatFromInt(y + pad)) / size.h;
-
-            const codepoint = @as(u32, @intCast(e.key_ptr.*));
 
             if (useFreeType) blk: {
                 FontCacheEntry.intToError(c.FT_Load_Char(fce.face, codepoint, @as(i32, @bitCast(FontCacheEntry.LoadFlags{ .render = true })))) catch |err| {
@@ -870,10 +880,22 @@ pub const FontCacheEntry = struct {
     }
 
     pub fn glyphInfoGet(self: *FontCacheEntry, codepoint: u32) (std.mem.Allocator.Error || FontError)!GlyphInfo {
-        if (self.glyph_info.get(codepoint)) |gi| {
-            return gi;
-        }
+        if (codepoint < self.glyph_info_ascii.len)
+            return self.glyph_info_ascii[codepoint];
 
+        if (self.glyph_info.get(codepoint)) |gi| return gi;
+
+        const gi = try self.glyphInfoGenerate(codepoint);
+
+        // new glyph, need to regen texture atlas on next render
+        //std.debug.print("new glyph {}\n", .{codepoint});
+        self.invalidateTextureAtlas();
+
+        try self.glyph_info.put(codepoint, gi);
+        return gi;
+    }
+
+    pub fn glyphInfoGenerate(self: *FontCacheEntry, codepoint: u32) FontError!GlyphInfo {
         var gi: GlyphInfo = undefined;
 
         if (useFreeType) {
@@ -922,12 +944,27 @@ pub const FontCacheEntry = struct {
 
         //std.debug.print("codepoint {d} advance {d} leftBearing {d} topBearing {d} w {d} h {d}\n", .{ codepoint, gi.advance, gi.leftBearing, gi.topBearing, gi.w, gi.h });
 
-        // new glyph, need to regen texture atlas on next render
-        //std.debug.print("new glyph {}\n", .{codepoint});
-        self.invalidateTextureAtlas();
-
-        try self.glyph_info.put(codepoint, gi);
         return gi;
+    }
+
+    pub fn kern(fce: *FontCacheEntry, codepoint1: u32, codepoint2: u32) f32 {
+        if (!kerning) return 0;
+
+        if (useFreeType) {
+            const index1 = c.FT_Get_Char_Index(fce.face, codepoint1);
+            const index2 = c.FT_Get_Char_Index(fce.face, codepoint2);
+            var k: c.FT_Vector = undefined;
+            FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, index1, index2, c.FT_KERNING_DEFAULT, &k)) catch |err| {
+                log.warn("renderText freetype error {any} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, codepoint1, codepoint2 });
+                k.x = 0;
+                k.y = 0;
+            };
+
+            return @as(f32, @floatFromInt(k.x)) / 64.0;
+        } else {
+            const kern_adv: c_int = c.stbtt_GetCodepointKernAdvance(&fce.face, @as(c_int, @intCast(codepoint1)), @as(c_int, @intCast(codepoint2)));
+            return fce.scaleFactor * @as(f32, @floatFromInt(kern_adv));
+        }
     }
 
     /// Doesn't scale the font or max_width, always stops at newlines
@@ -937,11 +974,9 @@ pub const FontCacheEntry = struct {
     pub fn textSizeRaw(
         fce: *FontCacheEntry,
         text: []const u8,
-        max_width: ?f32,
-        end_idx: ?*usize,
-        end_metric: Font.EndMetric,
+        opts: Font.TextSizeOptions,
     ) std.mem.Allocator.Error!Size {
-        const mwidth = max_width orelse max_float_safe;
+        const mwidth = opts.max_width orelse max_float_safe;
 
         var x: f32 = 0;
         var minx: f32 = 0;
@@ -954,37 +989,46 @@ pub const FontCacheEntry = struct {
         var ei: usize = 0;
         var nearest_break: bool = false;
 
-        var utf8 = std.unicode.Utf8View.initUnchecked(text).iterator();
         var last_codepoint: u32 = 0;
-        var last_glyph_index: u32 = 0;
-        while (utf8.nextCodepoint()) |codepoint| {
+        var next_kern_idx: u32 = 0;
+        var next_kern_byte: u32 = 0;
+        if (opts.kern_in) |ki| {
+            next_kern_byte = ki[next_kern_idx];
+            next_kern_idx += 1;
+        }
+
+        var i: usize = 0;
+        while (i < text.len) {
+            const cplen = std.unicode.utf8ByteSequenceLength(text[i]) catch unreachable;
+            const codepoint = std.unicode.utf8Decode(text[i..][0..cplen]) catch unreachable;
             const gi = try fce.glyphInfoGetOrReplacement(codepoint);
 
             // kerning
-            if (last_codepoint != 0) {
-                if (useFreeType) {
-                    if (last_glyph_index == 0) last_glyph_index = c.FT_Get_Char_Index(fce.face, last_codepoint);
-                    const glyph_index: u32 = c.FT_Get_Char_Index(fce.face, codepoint);
-                    var kern: c.FT_Vector = undefined;
-                    FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
-                        log.warn("renderText freetype error {any} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
-                        // Set fallback kern and continue to the best of out ability
-                        kern.x = 0;
-                        kern.y = 0;
-                        // return FontError.fontError;
-                    };
-                    last_glyph_index = glyph_index;
+            if (last_codepoint != 0 and i >= next_kern_byte) {
+                const kk = fce.kern(last_codepoint, codepoint);
+                x += kk;
 
-                    const kern_x: f32 = @as(f32, @floatFromInt(kern.x)) / 64.0;
+                if (opts.kern_in) |ki| {
+                    if (next_kern_idx < ki.len) {
+                        next_kern_byte = ki[next_kern_idx];
+                        next_kern_idx += 1;
+                    }
+                }
 
-                    x += kern_x;
-                } else {
-                    const kern_adv: c_int = c.stbtt_GetCodepointKernAdvance(&fce.face, @as(c_int, @intCast(last_codepoint)), @as(c_int, @intCast(codepoint)));
-                    const kern_x = fce.scaleFactor * @as(f32, @floatFromInt(kern_adv));
-
-                    x += kern_x;
+                if (kk != 0) {
+                    if (opts.kern_out) |ko| {
+                        // fill in first 0
+                        for (ko) |*k| {
+                            if (k.* == 0) {
+                                k.* = @intCast(i);
+                                break;
+                            }
+                        }
+                    }
                 }
             }
+
+            i += cplen;
             last_codepoint = codepoint;
 
             minx = @min(minx, x + gi.leftBearing);
@@ -996,12 +1040,12 @@ pub const FontCacheEntry = struct {
 
             if (codepoint == '\n') {
                 // newlines always terminate, and don't use any space
-                ei += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+                ei += 1;
                 break;
             }
 
             if ((maxx - minx) > mwidth) {
-                switch (end_metric) {
+                switch (opts.end_metric) {
                     .before => break, // went too far
                     .nearest => {
                         if ((maxx - minx) - mwidth >= mwidth - tw) {
@@ -1015,7 +1059,7 @@ pub const FontCacheEntry = struct {
             }
 
             // record that we processed this codepoint
-            ei += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+            ei += cplen;
 
             // update space taken by glyph
             tw = maxx - minx;
@@ -1027,8 +1071,18 @@ pub const FontCacheEntry = struct {
 
         // TODO: xstart and ystart
 
-        if (end_idx) |endout| {
+        if (opts.end_idx) |endout| {
             endout.* = ei;
+        }
+
+        if (opts.kern_out) |ko| {
+            // fill in first 0
+            for (ko) |*k| {
+                if (k.* == 0) {
+                    k.* = @intCast(i);
+                    break;
+                }
+            }
         }
 
         //std.debug.print("textSizeRaw size {d} for \"{s}\" {d}x{d} {d}\n", .{ self.size, text, tw, th, ei });
@@ -1096,14 +1150,21 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontEr
             //std.debug.print("height {d} -> pixel_size {d}\n", .{ height, pixel_size });
 
             if (height <= font.size or pixel_size == min_pixel_size) {
-                return FontCacheEntry{
+                var ret = FontCacheEntry{
                     .face = face,
                     .name = name,
                     .scaleFactor = 1.0, // not used with freetype
                     .height = @ceil(height),
                     .ascent = @floor(ascent),
                     .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(currentWindow().gpa),
+                    .glyph_info_ascii = undefined,
                 };
+
+                for (0..ret.glyph_info_ascii.len) |i| {
+                    ret.glyph_info_ascii[i] = try ret.glyphInfoGenerate(@intCast(i));
+                }
+
+                return ret;
             }
         }
     } else {
@@ -1128,14 +1189,21 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontEr
         const f2_linegap = SF * @as(f32, @floatFromInt(face2_linegap));
         const height = ascent - f2_descent + f2_linegap;
 
-        return FontCacheEntry{
+        var ret = FontCacheEntry{
             .face = face,
             .name = name,
             .scaleFactor = SF,
             .height = @ceil(height),
             .ascent = @floor(ascent),
             .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(currentWindow().gpa),
+            .glyph_info_ascii = undefined,
         };
+
+        for (0..ret.glyph_info_ascii.len) |i| {
+            ret.glyph_info_ascii[i] = try ret.glyphInfoGenerate(@intCast(i));
+        }
+
+        return ret;
     }
 }
 
@@ -6912,6 +6980,7 @@ pub const renderTextOptions = struct {
     sel_end: ?usize = null,
     sel_color: ?Color = null,
     debug: bool = false,
+    kern_in: ?[]u32 = null,
 };
 
 /// Only renders a single line of text
@@ -6946,9 +7015,12 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     const target_fraction = if (cw.snap_to_pixels) 1.0 else target_size / fce.height;
 
     // make sure the cache has all the glyphs we need
-    var utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
-    while (utf8it.nextCodepoint()) |codepoint| {
-        _ = try fce.glyphInfoGetOrReplacement(codepoint);
+    if (opts.kern_in == null) {
+        // if kern_in is given, assume we already did this when measuring the text
+        var utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
+        while (utf8it.nextCodepoint()) |codepoint| {
+            _ = try fce.glyphInfoGetOrReplacement(codepoint);
+        }
     }
 
     // Generate new texture atlas if needed to update glyph uv coords
@@ -6990,37 +7062,35 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     const atlas_size: Size = .{ .w = @floatFromInt(texture_atlas.width), .h = @floatFromInt(texture_atlas.height) };
 
     var bytes_seen: usize = 0;
-    utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
     var last_codepoint: u32 = 0;
-    var last_glyph_index: u32 = 0;
-    while (utf8it.nextCodepoint()) |codepoint| {
+
+    var next_kern_idx: u32 = 0;
+    var next_kern_byte: u32 = 0;
+    if (opts.kern_in) |ki| {
+        next_kern_byte = ki[next_kern_idx];
+        next_kern_idx += 1;
+    }
+
+    var i: usize = 0;
+    while (i < opts.text.len) {
+        const cplen = std.unicode.utf8ByteSequenceLength(opts.text[i]) catch unreachable;
+        const codepoint = std.unicode.utf8Decode(opts.text[i..][0..cplen]) catch unreachable;
         const gi = try fce.glyphInfoGetOrReplacement(codepoint);
 
         // kerning
-        if (last_codepoint != 0) {
-            if (useFreeType) {
-                if (last_glyph_index == 0) last_glyph_index = c.FT_Get_Char_Index(fce.face, last_codepoint);
-                const glyph_index: u32 = c.FT_Get_Char_Index(fce.face, codepoint);
-                var kern: c.FT_Vector = undefined;
-                FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
-                    log.warn("renderText freetype error {any} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
-                    // Set fallback kern and continue to the best of out ability
-                    kern.x = 0;
-                    kern.y = 0;
-                    // return FontError.fontError;
-                };
-                last_glyph_index = glyph_index;
+        if (last_codepoint != 0 and i >= next_kern_byte) {
+            const kk = fce.kern(last_codepoint, codepoint);
+            x += kk;
 
-                const kern_x: f32 = @as(f32, @floatFromInt(kern.x)) / 64.0;
-
-                x += kern_x;
-            } else {
-                const kern_adv: c_int = c.stbtt_GetCodepointKernAdvance(&fce.face, @as(c_int, @intCast(last_codepoint)), @as(c_int, @intCast(codepoint)));
-                const kern_x = fce.scaleFactor * @as(f32, @floatFromInt(kern_adv));
-
-                x += kern_x;
+            if (opts.kern_in) |ki| {
+                if (next_kern_idx < ki.len) {
+                    next_kern_byte = ki[next_kern_idx];
+                    next_kern_idx += 1;
+                }
             }
         }
+
+        i += cplen;
         last_codepoint = codepoint;
 
         if (x + gi.leftBearing * target_fraction < x_start) {
