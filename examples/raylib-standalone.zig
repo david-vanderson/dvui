@@ -26,7 +26,6 @@ pub fn main() !void {
         dvui.Backend.Common.windowsAttachConsole() catch {};
     }
     defer _ = gpa_instance.deinit();
-    defer dvui.struct_ui.deinit(gpa);
 
     // init Raylib backend (creates OS window)
     // initWindow() means the backend calls CloseWindow for you in deinit()

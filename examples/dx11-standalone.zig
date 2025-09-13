@@ -33,7 +33,6 @@ pub fn main() !void {
         dvui.Backend.Common.windowsAttachConsole() catch {};
     }
     defer _ = gpa_instance.deinit();
-    defer dvui.struct_ui.deinit(gpa);
 
     Backend.RegisterClass(window_class, .{}) catch win32.panicWin32(
         "RegisterClass",
@@ -137,7 +136,7 @@ fn gui_frame() !void {
             }
 
             //if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
-            //return false;
+                //return false;
             //}
         }
 
