@@ -12,15 +12,17 @@ const TestUnion = union(enum) {
 };
 
 const TestStruct = struct {
+    const AnEnum = enum { one, two, three, four, five };
+
     var string_buf: [20]u8 = @splat('0');
     var ts_int: usize = 66;
-
     var c1: C1 = .{};
     var array_of_struct: [3]TestStruct = .{ .{}, .{}, .{} };
 
     int: i32 = 42,
     uint: usize = 38,
     opt_int: ?i32 = 43,
+    @"enum": AnEnum = .two,
     rect3: dvui.Rect = .all(2),
     union_auto: TestUnion = .{ .c2 = .{ .value2 = 42 } },
     union_manual: TestUnion = .{ .c1 = .{ .value1 = 21 } },
@@ -50,18 +52,23 @@ pub fn structUI() void {
     var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer b.deinit();
 
-    dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
+    if (dvui.expander(@src(), "Show UI elements for all fields of a struct:", .{ .default_expanded = true }, .{})) {
+        var b2 = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b2.deinit();
 
-    // Simple display of struct with no options.
-    dvui.structUI(@src(), "rect", &rect, 0, .{});
-
+        // Simple display of struct with no options.
+        dvui.structUI(@src(), "rect", &rect, 0, .{});
+    }
     // Customized, complex struct display
     //
     // displayStruct will return a *BoxWidget if the struct is being displayed.
     // The displayXXX and fieldWidgetXXX functions can be used to customize the display of the struct, including the addition of
     // user input widgets, such as buttons.
-    dvui.label(@src(), "Customize display and editing of struct fields:", .{}, .{});
-    {
+    //dvui.label(@src(), "Customize display and editing of struct fields:", .{}, .{});
+    if (dvui.expander(@src(), "Customize display and editing of struct fields:", .{}, .{})) {
+        var b2 = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b2.deinit();
+
         var alignment: dvui.Alignment = .init(@src(), 0);
         defer alignment.deinit();
         if (dvui.struct_ui.displayStruct(@src(), "test_struct", &test_instance, 1, .{ .standard = .{} }, .{TestStruct.structui_options}, &alignment)) |box| {
@@ -98,29 +105,37 @@ pub fn structUI() void {
         }
     }
 
-    dvui.label(@src(), "String Handling:", .{}, .{});
     // demonstrate handling strings with dynamic allocation or using buffers.
-    const read_only_options: dvui.struct_ui.StructOptions(StringStruct) = .init(.{
-        .static_str = .{ .text = .{ .display = .read_only } },
-        .var_str = .{ .text = .{ .display = .read_only } },
-        .raw_buffer = .{ .text = .{ .display = .read_only } },
-    }, .{});
-    dvui.structUI(@src(), "dynamic_strings", &StringDemo.ss_1, 0, .{read_only_options});
-    if (dvui.button(@src(), "Edit", .{}, .{})) {
-        StringDemo.editing_dynamic = true;
-    }
-    dvui.structUI(@src(), "buffered_strings", &StringDemo.ss_2, 0, .{read_only_options});
-    if (dvui.button(@src(), "Edit", .{}, .{})) {
-        StringDemo.editing_buffer = true;
-    }
-    if (StringDemo.editing_dynamic) {
-        editStringStuctDynamic("dynamic", &StringDemo.ss_1);
-    } else if (StringDemo.editing_buffer) {
-        editStringStructBuffered("buffer", &StringDemo.ss_2);
-    }
-    dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
+    if (dvui.expander(@src(), "String Handling:", .{}, .{})) {
+        var b2 = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b2.deinit();
 
-    if (dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
+        const buffered_read_only_options: dvui.struct_ui.StructOptions(StringStruct) = .init(.{
+            .static_str = .{ .text = .{ .display = .read_only } },
+            .var_str = .{ .text = .{ .display = .read_only } },
+            .raw_buffer = .{ .text = .{ .display = .read_only } },
+        }, .{});
+        const dynamic_read_only_options: dvui.struct_ui.StructOptions(StringStruct) = .init(.{
+            .static_str = .{ .text = .{ .display = .read_only } },
+            .var_str = .{ .text = .{ .display = .read_only } },
+        }, .{});
+        dvui.structUI(@src(), "dynamic_strings", &StringDemo.ss_1, 0, .{dynamic_read_only_options});
+        if (dvui.button(@src(), "Edit", .{}, .{})) {
+            StringDemo.editing_dynamic = true;
+        }
+        dvui.structUI(@src(), "buffered_strings", &StringDemo.ss_2, 0, .{buffered_read_only_options});
+        if (dvui.button(@src(), "Edit", .{}, .{})) {
+            StringDemo.editing_buffer = true;
+        }
+        if (StringDemo.editing_dynamic) {
+            editStringStuctDynamic("dynamic", &StringDemo.ss_1);
+        } else if (StringDemo.editing_buffer) {
+            editStringStructBuffered("buffer", &StringDemo.ss_2);
+        }
+    }
+    //dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
+
+    if (dvui.expander(@src(), "Theme Editor:", .{}, .{ .expand = .horizontal })) {
         themeEditor();
     }
 }
@@ -149,7 +164,11 @@ pub fn editStringStuctDynamic(comptime field_name: []const u8, ss: *StringStruct
     win.autoSize();
     win.dragAreaSet(dvui.windowHeader("String Handling", "", &StringDemo.editing_dynamic));
 
-    const options: dvui.struct_ui.StructOptions(StringStruct) = .initWithDefaults(.{ .static_str = .{ .text = .{ .display = .read_write } } }, null);
+    // An alternative way to prevent fields from being displayed. initWithDefaults, then removed the unwanted fields.
+    var options: dvui.struct_ui.StructOptions(StringStruct) = .initWithDefaults(.{
+        .static_str = .{ .text = .{ .display = .read_write } },
+    }, null);
+    options.field_options.remove(.raw_buffer);
     dvui.structUI(@src(), field_name, ss, 0, .{options});
 }
 

@@ -25,7 +25,6 @@ pub fn main() !void {
         dvui.Backend.Common.windowsAttachConsole() catch {};
     }
     dvui.Examples.show_demo_window = show_demo;
-    defer dvui.struct_ui.deinit(gpa);
 
     // app_init is a stand-in for what your application is already doing to set things up
     try app_init();

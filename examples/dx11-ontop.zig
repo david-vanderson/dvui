@@ -15,7 +15,6 @@ var backend_attached = false;
 
 pub fn main() !void {
     defer _ = gpa_instance.deinit();
-    defer dvui.struct_ui.deinit(gpa);
     const wnd = createWindow();
 
     const options = createDeviceD3D(wnd) orelse return error.CreateDeviceFailed;

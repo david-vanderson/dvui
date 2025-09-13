@@ -1,9 +1,12 @@
 //! A group of functions for displaying and editing values in structs
 //!
-//! displayStruct() is the usualy starting point for displaying a struct.
-//! The depth paramter controls how many levels of nested structs will be displated.
-//! string_map holds any heap-allocated memory which holds the contents of modified strings
-//! the struct_ui.deinit() functioin should be called prior to exit to free any allocated strings.
+//! The main structs and functions are:
+//! fn displayStruct() which can be used to recursively display and/or edit all values in a struct.
+//! union FieldOptions are used to control how each field is displayed or edited.
+//! fn StructOptions(T) generates a set of FieldOptions for a struct.
+//!
+//! string_map holds any heap-allocated memory created when strings are modified.
+//! These are automatically cleaned up during Window.deinit().
 
 // By default struct_ui will use the gpa passed to the dvui window.
 // If you want to use a different allocator, you can set it here.
@@ -46,8 +49,8 @@ pub const FieldOptions = union(enum) {
     }
 };
 
-/// Standard field options control the display mode and
-/// provide an alternative label.
+/// Standard field options allow control of the display mode and
+/// option to provide an alternative label.
 /// All FieldOption types must support the display and label fields.
 pub const StandardFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
@@ -60,7 +63,7 @@ pub const StandardFieldOptions = struct {
 /// An optional default value can be provided to init, and used whenever
 /// the struct or union must be created. e.g. from setting an optional to Not Null.
 ///
-/// Field options can be overriden after creation directly through the
+/// Field options can be overridden after creation directly through the
 /// field_options member. Use .remove() and/or .put().
 pub fn StructOptions(Struct: type) type {
     switch (@typeInfo(Struct)) {
@@ -104,7 +107,7 @@ pub fn StructOptions(Struct: type) type {
             };
         }
 
-        /// Inititialize struct options with default options for all fields.
+        /// Initialize struct options with default options for all fields.
         /// Overrides for these defaults are specified in options.
         ///
         /// options: field options for all the fields to be displayed.
@@ -219,7 +222,7 @@ pub const NumberFieldOptions = struct {
         };
     }
 
-    /// For slider, convert slider percentage into a number betwen min and max.
+    /// For slider, convert slider percentage into a number between min and max.
     pub fn normalizedPercentToNum(self: *const NumberFieldOptions, comptime T: type, normalized_percent: f32) T {
         if (@typeInfo(T) != .int and @typeInfo(T) != .float) @compileError("T is not a number type");
         std.debug.assert(normalized_percent >= 0 and normalized_percent <= 1);
@@ -290,6 +293,7 @@ pub fn numberFieldWidget(
                     .min = opt.minValue(T),
                     .max = opt.maxValue(T),
                     .value = field_value_ptr,
+                    .show_min_max = true,
                 }, .{});
                 if (maybe_num.value == .Valid) {
                     field_value_ptr.* = maybe_num.value.Valid;
@@ -332,7 +336,6 @@ pub fn enumFieldWidget(
     const T = @TypeOf(field_value_ptr.*);
     const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.display == .read_only;
 
-    // TODO: Look into if this box is realyl needed? Can we not use the parrent widget instead?
     var box = dvui.box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
     defer box.deinit();
 
@@ -383,13 +386,13 @@ pub fn boolFieldWidget(
     }
 }
 
-/// Ooptions for displaying a text field.
+/// Options for displaying a text field.
 pub const TextFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
     label: ?[]const u8 = null,
 
-    /// Set to true if the string is heap allocated an should be
-    /// freed before a new srting is allocated.
+    /// Set to true if the string is heap allocated and should be
+    /// freed before a new string is allocated.
     heap_allocated: bool = false,
 };
 
@@ -402,7 +405,6 @@ const StringBackingType = union(enum) {
 /// Display slices and/or arrays of u8 and const u8.
 /// If a slice, the slice will be assigned to a duplicated copy of the
 /// text widget's buffer.
-/// Make sure to call strut_ui.deinit() to clean up any allocated strings.
 pub fn textFieldWidget(
     comptime src: std.builtin.SourceLocation,
     field_name: []const u8,
@@ -426,13 +428,13 @@ pub fn textFieldWidget(
 
     if (opt.display == .read_write and read_only) {
         // Note all string arrays are currently treated as read-only, even if they are var.
-        // It would be possible to support in-place editing, preferrably by implementing a new display option.
+        // It would be possible to support in-place editing, preferably by implementing a new display option.
         dvui.log.debug("struct_ui: field {s} display option is set to read_write for read_only string or an array. Displaying as read_only.", .{field_name});
         read_only = true;
     } else if (opt.display == .read_write and sentinel_terminated) {
         // Sentinel terminated strings cannot be edited.
         // Would require keeping 2 string maps, for sentinel vs non-sentinel strings.
-        dvui.log.debug("struct_ui: field {s} display option is set to read_write for read_only string or an array. Displaying as read_only.", .{field_name});
+        dvui.log.debug("struct_ui: field {s} display option is set to read_write for sentinel terminated string or an array. Displaying as read_only.", .{field_name});
         read_only = true;
     }
 
@@ -518,7 +520,7 @@ pub fn unionFieldWidget(
 
     // This loop is being used, rather than @intFromEnum etc as there is no guarantee that
     // the enum int values are the same as the field order. i.e. custom enums can be used as tags.
-    // There should be a better way to do this than converting to string? But UnionField doen't store tha tag.
+    // There should be a better way to do this than converting to string? But UnionField doesn't store the tag.
     const choice_names: []const []const u8, var active_choice_num: usize = blk: {
         var choice_names: [entries.len][]const u8 = undefined;
         var active_choice_num: usize = 0;
@@ -538,9 +540,7 @@ pub fn unionFieldWidget(
             dvui.labelNoFmt(@src(), @tagName(active_tag), .{}, .{});
         } else {
             if (dvui.dropdown(@src(), choice_names, &active_choice_num, .{})) {
-                if (!read_only) {
-                    active_tag = std.meta.stringToEnum(@TypeOf(active_tag), choice_names[active_choice_num]).?; // This should never fail.
-                }
+                active_tag = std.meta.stringToEnum(@TypeOf(active_tag), choice_names[active_choice_num]).?; // This should never fail.
             }
         }
     }
@@ -578,8 +578,8 @@ pub fn optionalFieldWidget(
 }
 
 /// Display a field within a container.
-/// displayField can be used when iterating throgh a list of fields of varying types.
-/// it will call the correct display fucntion based on the type of the field.
+/// displayField can be used when iterating through a list of fields of varying types.
+/// it will call the correct display function based on the type of the field.
 pub fn displayField(
     comptime src: std.builtin.SourceLocation,
     comptime field_name: []const u8,
@@ -651,7 +651,7 @@ pub fn displayField(
     }
 }
 
-/// Display numberic fields, ints and floats.
+/// Display numeric fields, ints and floats.
 pub fn displayNumber(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrType(field_name, &.{ .int, .float }, "displayEnum", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .number)) return;
@@ -666,8 +666,7 @@ pub fn displayEnum(comptime src: std.builtin.SourceLocation, comptime field_name
 
 /// Display []u8, []const u8 and arrays of u8 and const u8.
 /// Arrays are always treated as read-only. In future this could be enhanced to support in-place editing.
-/// NOTE: When strings are modified, they are assigned to a duplicated version of the text widget's buffer.
-/// Make sure to call struct_ui.deinit() to free up any allocated strings.
+/// When strings are modified, they are assigned to a duplicated version of the text widget's buffer.
 pub fn displayString(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrTypeString(field_name, "displayString", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .text)) return;
@@ -750,8 +749,8 @@ pub fn displaySlice(
 /// Display a union.
 ///
 /// If the union has Struct or Union members, then StructOptions(T) should be provided
-/// for those members with an appropraite default_value.
-/// These default values will be ussed to populate the active union value when the user changes selections.
+/// for those members with an appropriate default_value.
+/// These default values will be used to populate the active union value when the user changes selections.
 pub fn displayUnion(
     comptime src: std.builtin.SourceLocation,
     comptime field_name: []const u8,
@@ -893,7 +892,7 @@ fn canDisplayPtr(ptr: std.builtin.Type.Pointer) bool {
 /// (which must be deinit()-ed), otherwise returns null.
 //
 /// field_name: The name of the field holding the struct.
-/// field_valure_ptr: A pointer to the struct
+/// field_value_ptr: A pointer to the struct
 /// depth: How many nested levels of structs to display. A depth of 0 will only display this struct's fields.
 /// options: A tuple of StructOptions(T) of .{} to use default options.
 /// al: If adding your own, pass in an alignment to be shared between the struct display and your own widgets,
@@ -902,8 +901,9 @@ fn canDisplayPtr(ptr: std.builtin.Type.Pointer) bool {
 /// The returned BoxWidget be used to add custom display fields or additional widgets to the struct's display.
 ///
 /// NOTE:
-/// Any modified text fields are dynamically allocated.
-/// Make sure to call struct_ui.deinit() to free any allocated strings.
+/// Any modified text fields are dynamically allocated. These are cleaned up during Window.deinit()
+/// If a string should not be automatically cleaned up (i.e will be cleaned up by a struct's deinit() method),
+/// removed the string from struct_ui.string map prior to the Window.deinit() being called.
 ///
 /// The displayStringBuf() function can be used as an alternative to display strings with a user-supplied buffer.
 pub fn displayStruct(
@@ -1118,7 +1118,7 @@ pub fn findMatchingStructOption(T: type, struct_options: anytype) ?StructOptions
     return null;
 }
 
-/// Stores all strings ever allocated by struct_ui.
+/// Stores all strings currently allocated by struct_ui.
 /// K: a pointer to the string field.
 /// V: The string slice.
 pub var string_map: std.AutoArrayHashMapUnmanaged(*const []const u8, []const u8) = .empty;
