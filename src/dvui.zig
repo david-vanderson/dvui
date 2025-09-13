@@ -114,6 +114,8 @@ pub const useFreeType = !wasm;
 /// The amount of physical pixels to scroll per "tick" of the scroll wheel
 pub var scroll_speed: f32 = 20;
 
+pub var kerning: bool = true;
+
 /// Used as a default maximum in various places:
 /// * Options.max_size_content
 /// * Font.textSizeEx max_width
@@ -944,6 +946,26 @@ pub const FontCacheEntry = struct {
         return gi;
     }
 
+    pub fn kern(fce: *FontCacheEntry, codepoint1: u32, codepoint2: u32) f32 {
+        if (!kerning) return 0;
+
+        if (useFreeType) {
+            const index1 = c.FT_Get_Char_Index(fce.face, codepoint1);
+            const index2 = c.FT_Get_Char_Index(fce.face, codepoint2);
+            var k: c.FT_Vector = undefined;
+            FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, index1, index2, c.FT_KERNING_DEFAULT, &k)) catch |err| {
+                log.warn("renderText freetype error {any} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, codepoint1, codepoint2 });
+                k.x = 0;
+                k.y = 0;
+            };
+
+            return @as(f32, @floatFromInt(k.x)) / 64.0;
+        } else {
+            const kern_adv: c_int = c.stbtt_GetCodepointKernAdvance(&fce.face, @as(c_int, @intCast(codepoint1)), @as(c_int, @intCast(codepoint2)));
+            return fce.scaleFactor * @as(f32, @floatFromInt(kern_adv));
+        }
+    }
+
     /// Doesn't scale the font or max_width, always stops at newlines
     ///
     /// Assumes the text is valid utf8. Will exit early with non-full
@@ -969,7 +991,6 @@ pub const FontCacheEntry = struct {
         var nearest_break: bool = false;
 
         var last_codepoint: u32 = 0;
-        var last_glyph_index: u32 = 0;
 
         var i: usize = 0;
         while (i < text.len) {
@@ -981,28 +1002,7 @@ pub const FontCacheEntry = struct {
 
             // kerning
             if (last_codepoint != 0) {
-                if (useFreeType) {
-                    if (last_glyph_index == 0) last_glyph_index = c.FT_Get_Char_Index(fce.face, last_codepoint);
-                    const glyph_index: u32 = c.FT_Get_Char_Index(fce.face, codepoint);
-                    var kern: c.FT_Vector = undefined;
-                    FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
-                        log.warn("renderText freetype error {any} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
-                        // Set fallback kern and continue to the best of out ability
-                        kern.x = 0;
-                        kern.y = 0;
-                        // return FontError.fontError;
-                    };
-                    last_glyph_index = glyph_index;
-
-                    const kern_x: f32 = @as(f32, @floatFromInt(kern.x)) / 64.0;
-
-                    x += kern_x;
-                } else {
-                    const kern_adv: c_int = c.stbtt_GetCodepointKernAdvance(&fce.face, @as(c_int, @intCast(last_codepoint)), @as(c_int, @intCast(codepoint)));
-                    const kern_x = fce.scaleFactor * @as(f32, @floatFromInt(kern_adv));
-
-                    x += kern_x;
-                }
+                x += fce.kern(last_codepoint, codepoint);
             }
 
             last_codepoint = codepoint;
@@ -7019,34 +7019,12 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     var bytes_seen: usize = 0;
     utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
     var last_codepoint: u32 = 0;
-    var last_glyph_index: u32 = 0;
     while (utf8it.nextCodepoint()) |codepoint| {
         const gi = try fce.glyphInfoGetOrReplacement(codepoint);
 
         // kerning
         if (last_codepoint != 0) {
-            if (useFreeType) {
-                if (last_glyph_index == 0) last_glyph_index = c.FT_Get_Char_Index(fce.face, last_codepoint);
-                const glyph_index: u32 = c.FT_Get_Char_Index(fce.face, codepoint);
-                var kern: c.FT_Vector = undefined;
-                FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
-                    log.warn("renderText freetype error {any} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, last_codepoint, codepoint });
-                    // Set fallback kern and continue to the best of out ability
-                    kern.x = 0;
-                    kern.y = 0;
-                    // return FontError.fontError;
-                };
-                last_glyph_index = glyph_index;
-
-                const kern_x: f32 = @as(f32, @floatFromInt(kern.x)) / 64.0;
-
-                x += kern_x;
-            } else {
-                const kern_adv: c_int = c.stbtt_GetCodepointKernAdvance(&fce.face, @as(c_int, @intCast(last_codepoint)), @as(c_int, @intCast(codepoint)));
-                const kern_x = fce.scaleFactor * @as(f32, @floatFromInt(kern_adv));
-
-                x += kern_x;
-            }
+            x += fce.kern(last_codepoint, codepoint);
         }
         last_codepoint = codepoint;
 
