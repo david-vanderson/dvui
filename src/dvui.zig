@@ -583,6 +583,7 @@ const GlyphInfo = struct {
 };
 
 pub const FontCacheEntry = struct {
+    const ascii_size = 127;
     face: if (useFreeType) c.FT_Face else c.stbtt_fontinfo,
     // This name should come from `Window.font_bytes` and lives as long as it does
     name: []const u8,
@@ -590,7 +591,7 @@ pub const FontCacheEntry = struct {
     height: f32,
     ascent: f32,
     glyph_info: std.AutoHashMap(u32, GlyphInfo),
-    glyph_info_ascii: [127]GlyphInfo,
+    glyph_info_ascii: [ascii_size]GlyphInfo,
     texture_atlas_cache: ?Texture = null,
 
     pub fn deinit(self: *FontCacheEntry, win: *Window) void {
@@ -973,11 +974,9 @@ pub const FontCacheEntry = struct {
     pub fn textSizeRaw(
         fce: *FontCacheEntry,
         text: []const u8,
-        max_width: ?f32,
-        end_idx: ?*usize,
-        end_metric: Font.EndMetric,
+        opts: Font.TextSizeOptions,
     ) std.mem.Allocator.Error!Size {
-        const mwidth = max_width orelse max_float_safe;
+        const mwidth = opts.max_width orelse max_float_safe;
 
         var x: f32 = 0;
         var minx: f32 = 0;
@@ -991,6 +990,12 @@ pub const FontCacheEntry = struct {
         var nearest_break: bool = false;
 
         var last_codepoint: u32 = 0;
+        var next_kern_idx: u32 = 0;
+        var next_kern_byte: u32 = 0;
+        if (opts.kern_in) |ki| {
+            next_kern_byte = ki[next_kern_idx];
+            next_kern_idx += 1;
+        }
 
         var i: usize = 0;
         while (i < text.len) {
@@ -998,13 +1003,32 @@ pub const FontCacheEntry = struct {
             const codepoint = std.unicode.utf8Decode(text[i..][0..cplen]) catch unreachable;
             const gi = try fce.glyphInfoGetOrReplacement(codepoint);
 
-            i += cplen;
-
             // kerning
-            if (last_codepoint != 0) {
-                x += fce.kern(last_codepoint, codepoint);
+            if (last_codepoint != 0 and i >= next_kern_byte) {
+                const kk = fce.kern(last_codepoint, codepoint);
+                x += kk;
+
+                if (opts.kern_in) |ki| {
+                    if (next_kern_idx < ki.len) {
+                        next_kern_byte = ki[next_kern_idx];
+                        next_kern_idx += 1;
+                    }
+                }
+
+                if (kk != 0) {
+                    if (opts.kern_out) |ko| {
+                        // fill in first 0
+                        for (ko) |*k| {
+                            if (k.* == 0) {
+                                k.* = @intCast(i);
+                                break;
+                            }
+                        }
+                    }
+                }
             }
 
+            i += cplen;
             last_codepoint = codepoint;
 
             minx = @min(minx, x + gi.leftBearing);
@@ -1016,12 +1040,12 @@ pub const FontCacheEntry = struct {
 
             if (codepoint == '\n') {
                 // newlines always terminate, and don't use any space
-                ei += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+                ei += 1;
                 break;
             }
 
             if ((maxx - minx) > mwidth) {
-                switch (end_metric) {
+                switch (opts.end_metric) {
                     .before => break, // went too far
                     .nearest => {
                         if ((maxx - minx) - mwidth >= mwidth - tw) {
@@ -1047,8 +1071,18 @@ pub const FontCacheEntry = struct {
 
         // TODO: xstart and ystart
 
-        if (end_idx) |endout| {
+        if (opts.end_idx) |endout| {
             endout.* = ei;
+        }
+
+        if (opts.kern_out) |ko| {
+            // fill in first 0
+            for (ko) |*k| {
+                if (k.* == 0) {
+                    k.* = @intCast(i);
+                    break;
+                }
+            }
         }
 
         //std.debug.print("textSizeRaw size {d} for \"{s}\" {d}x{d} {d}\n", .{ self.size, text, tw, th, ei });
@@ -6939,6 +6973,7 @@ pub const renderTextOptions = struct {
     sel_end: ?usize = null,
     sel_color: ?Color = null,
     debug: bool = false,
+    kern_in: ?[]u32 = null,
 };
 
 /// Only renders a single line of text
@@ -6973,9 +7008,12 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     const target_fraction = if (cw.snap_to_pixels) 1.0 else target_size / fce.height;
 
     // make sure the cache has all the glyphs we need
-    var utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
-    while (utf8it.nextCodepoint()) |codepoint| {
-        _ = try fce.glyphInfoGetOrReplacement(codepoint);
+    if (opts.kern_in == null) {
+        // if kern_in is given, assume we already did this when measuring the text
+        var utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
+        while (utf8it.nextCodepoint()) |codepoint| {
+            _ = try fce.glyphInfoGetOrReplacement(codepoint);
+        }
     }
 
     // Generate new texture atlas if needed to update glyph uv coords
@@ -7017,15 +7055,35 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     const atlas_size: Size = .{ .w = @floatFromInt(texture_atlas.width), .h = @floatFromInt(texture_atlas.height) };
 
     var bytes_seen: usize = 0;
-    utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
     var last_codepoint: u32 = 0;
-    while (utf8it.nextCodepoint()) |codepoint| {
+
+    var next_kern_idx: u32 = 0;
+    var next_kern_byte: u32 = 0;
+    if (opts.kern_in) |ki| {
+        next_kern_byte = ki[next_kern_idx];
+        next_kern_idx += 1;
+    }
+
+    var i: usize = 0;
+    while (i < opts.text.len) {
+        const cplen = std.unicode.utf8ByteSequenceLength(opts.text[i]) catch unreachable;
+        const codepoint = std.unicode.utf8Decode(opts.text[i..][0..cplen]) catch unreachable;
         const gi = try fce.glyphInfoGetOrReplacement(codepoint);
 
         // kerning
-        if (last_codepoint != 0) {
-            x += fce.kern(last_codepoint, codepoint);
+        if (last_codepoint != 0 and i >= next_kern_byte) {
+            const kk = fce.kern(last_codepoint, codepoint);
+            x += kk;
+
+            if (opts.kern_in) |ki| {
+                if (next_kern_idx < ki.len) {
+                    next_kern_byte = ki[next_kern_idx];
+                    next_kern_idx += 1;
+                }
+            }
         }
+
+        i += cplen;
         last_codepoint = codepoint;
 
         if (x + gi.leftBearing * target_fraction < x_start) {
