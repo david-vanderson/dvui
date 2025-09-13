@@ -1196,7 +1196,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
         }
 
         { // Scope here is for deallocating rtxt before handling copying to clipboard on the arena
-            const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, self.data().contentRect().h - self.insert_pt.y) });
+            const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = @min(s.h, self.data().contentRect().h - self.insert_pt.y) });
             //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
             var rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
 
