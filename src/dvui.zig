@@ -1189,14 +1189,21 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontEr
         const f2_linegap = SF * @as(f32, @floatFromInt(face2_linegap));
         const height = ascent - f2_descent + f2_linegap;
 
-        return FontCacheEntry{
+        var ret = FontCacheEntry{
             .face = face,
             .name = name,
             .scaleFactor = SF,
             .height = @ceil(height),
             .ascent = @floor(ascent),
             .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(currentWindow().gpa),
+            .glyph_info_ascii = undefined,
         };
+
+        for (0..ret.glyph_info_ascii.len) |i| {
+            ret.glyph_info_ascii[i] = try ret.glyphInfoGenerate(@intCast(i));
+        }
+
+        return ret;
     }
 }
 
