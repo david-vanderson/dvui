@@ -7552,13 +7552,18 @@ pub const JPGEncoder = struct {
     /// Bytes remaining to fill the buffer with the header
     ///
     /// Set to 0 to skip custom density header
-    bytes_remaining_of_jfif_app0_segment: u32 = jfif_app0_segment,
+    bytes_remaining_of_jfif_app0_segment: u32 = start_of_jfif_file,
 
-    pub const min_buffer_size = jfif_app0_segment;
+    pub const min_buffer_size = start_of_jfif_file;
     // https://en.wikipedia.org/wiki/JPEG_File_Interchange_Format#JFIF_APP0_marker_segment
     // Assumes stbi jpg will always return image files starting with SOI (FF D8) followed by JFIF-APP0 (FF E0 ...)
     /// The number of bytes from the start of a JFIF file to the end of the density values
-    const jfif_app0_segment = 2 + 2 + 5 + 2 + 1 + 2 + 2;
+    const start_of_jfif_file = 2 // SOI marker
+        + 2 // APP0 marker
+        + 2 // length
+        + 5 // "JFIF\0" identified
+        + 2 // version
+        + (1 + 2 + 2); // density unit and x/y values
 
     /// dvui will set the density of 72 dpi (2834.64 px/m) times `windowNaturalScale`
     ///
@@ -7622,8 +7627,8 @@ pub const JPGEncoder = struct {
             // Replace density
             self.output.undo(@sizeOf(u8) + 2 * @sizeOf(u16));
             try self.output.writeByte(0x01); // 0x01 => Pixels per inch density unit
-            try self.output.writeInt(u16, self.density, .little); // Xdensity
-            try self.output.writeInt(u16, self.density, .little); // Ydensity
+            try self.output.writeInt(u16, self.density, .big); // Xdensity
+            try self.output.writeInt(u16, self.density, .big); // Ydensity
 
             // Write the rest of the data
             try self.output.writeAll(data_in[self.bytes_remaining_of_jfif_app0_segment..]);
