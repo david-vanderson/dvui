@@ -95,12 +95,6 @@ pub const TreeWidget = widgets.TreeWidget;
 pub const VirtualParentWidget = widgets.VirtualParentWidget;
 pub const GridWidget = widgets.GridWidget;
 pub const struct_ui = @import("struct_ui.zig");
-//pub const structEntry = se.structEntry;
-//pub const structEntryEx = se.structEntryEx;
-//pub const structEntryAlloc = se.structEntryAlloc;
-//pub const structEntryExAlloc = se.structEntryExAlloc;
-//pub const StructFieldOptions = se.StructFieldOptions;
-
 pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
 pub const testing = @import("testing.zig");
