@@ -1121,7 +1121,7 @@ pub fn findMatchingStructOption(T: type, struct_options: anytype) ?StructOptions
 /// Stores all strings currently allocated by struct_ui.
 /// K: a pointer to the string field.
 /// V: The string slice.
-pub var string_map: std.AutoArrayHashMapUnmanaged(*const []const u8, []const u8) = .empty;
+pub var string_map: std.AutoHashMapUnmanaged(*const []const u8, []const u8) = .empty;
 
 /// Returns a 'gpa' backing type with required allocator.
 pub fn stringBackingAllocator() StringBackingType {
