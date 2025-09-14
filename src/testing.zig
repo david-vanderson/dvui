@@ -334,7 +334,7 @@ pub fn saveImage(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.Ph
 
     var dir = try std.fs.cwd().makeOpenPath(self.image_dir.?, .{});
     defer dir.close();
-    const file = try dir.openFile(filename, .{});
+    const file = try dir.createFile(filename, .{});
     defer file.close();
     var buf: [512]u8 = undefined;
     var writer = file.writer(&buf);
