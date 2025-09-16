@@ -361,7 +361,7 @@ pub const Branch = struct {
 
         if (self.expanded) {
             if (self.init_options.animate)
-                self.anim = dvui.animate(@src(), .{ .duration = 250_000, .easing = dvui.easing.outBack, .kind = .vertical }, .{});
+                self.anim = dvui.animate(@src(), .{ .duration = 500_000, .easing = dvui.easing.outBack, .kind = .vertical }, .{});
 
             self.expander_vbox = dvui.BoxWidget.init(src, .{ .dir = .vertical }, defaults.override(opts));
             self.expander_vbox.install();
