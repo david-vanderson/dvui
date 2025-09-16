@@ -978,24 +978,25 @@ fn cursorSeen(self: *TextLayoutWidget) void {
 }
 
 pub const ByteHeight = struct {
-    pub const dist: f32 = 200.0; // record height/byte every this many logical pixels
+    pub const dist: f32 = 200.0; // record byte/height every this many logical pixels
 
-    /// byte just before insert_pt.y that height (usually a newline, could be the last byte seen)
+    /// byte just after a newline (or after the last byte)
     byte: usize,
-    /// height from top of text layout content top
+
+    /// height from top of text layout content rect
     height: f32,
 };
 
-///
-pub fn visibleBytes(self: *TextLayoutWidget) ?struct { start: usize, end: usize } {
+/// Assumes text is the same from last frame, and returns only the byte range
+/// needed for display (or copy).
+pub fn bytesNeeded(self: *TextLayoutWidget) ?struct { start: usize, end: usize } {
     // FIXME
     // if breaking lines, width must be the same from last frame
     // invalidate must not have been called
     if (self.byte_heights.len == 0) return null;
 
-    // search through list of height/byte from last frame
-    // - height is the height after that byte
-    // find height above visible and below visible
+    // FIXME
+    // need to also expand to include copy_sel if set
 
     // intersect our content rect with the clipping rect
     const clip_logical = self.data().contentRectScale().rectFromPhysical(dvui.clipGet());
