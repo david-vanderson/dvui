@@ -192,8 +192,10 @@ pub const Branch = struct {
         // if non-null, must be unique among reorderables in a single reorder
         branch_id: ?usize = null,
 
-        // if true, branch expander will have a dropdown animation
-        animate: bool = true,
+        // If animation duration is greater than 0, the expander will animate accordingly
+        animation_duration: i32 = 400_000,
+
+        animation_easing: *const dvui.easing.EasingFn = dvui.easing.outBack,
     };
 
     wd: WidgetData = undefined,
@@ -360,8 +362,8 @@ pub const Branch = struct {
         };
 
         if (self.expanded) {
-            if (self.init_options.animate)
-                self.anim = dvui.animate(@src(), .{ .duration = 500_000, .easing = dvui.easing.outBack, .kind = .vertical }, .{});
+            if (self.init_options.animation_duration > 0)
+                self.anim = dvui.animate(@src(), .{ .duration = self.init_options.animation_duration, .easing = self.init_options.animation_easing, .kind = .vertical }, .{});
 
             self.expander_vbox = dvui.BoxWidget.init(src, .{ .dir = .vertical }, defaults.override(opts));
             self.expander_vbox.install();
