@@ -79,7 +79,8 @@ pub const EndMetric = enum {
 pub const TextSizeOptions = struct {
     max_width: ?f32 = null,
     end_idx: ?*usize = null,
-    end_metric: EndMetric,
+    end_metric: EndMetric = .before,
+    kerning: ?bool = null,
     kern_in: ?[]u32 = null,
     kern_out: ?[]u32 = null,
 };

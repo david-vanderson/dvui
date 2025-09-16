@@ -108,8 +108,6 @@ pub const useFreeType = !wasm;
 /// The amount of physical pixels to scroll per "tick" of the scroll wheel
 pub var scroll_speed: f32 = 20;
 
-pub var kerning: bool = true;
-
 /// Used as a default maximum in various places:
 /// * Options.max_size_content
 /// * Font.textSizeEx max_width
@@ -942,8 +940,6 @@ pub const FontCacheEntry = struct {
     }
 
     pub fn kern(fce: *FontCacheEntry, codepoint1: u32, codepoint2: u32) f32 {
-        if (!kerning) return 0;
-
         if (useFreeType) {
             const index1 = c.FT_Get_Char_Index(fce.face, codepoint1);
             const index2 = c.FT_Get_Char_Index(fce.face, codepoint2);
@@ -983,6 +979,7 @@ pub const FontCacheEntry = struct {
         var ei: usize = 0;
         var nearest_break: bool = false;
 
+        const kerning: bool = opts.kerning orelse currentWindow().kerning;
         var last_codepoint: u32 = 0;
         var next_kern_idx: u32 = 0;
         var next_kern_byte: u32 = 0;
@@ -997,8 +994,7 @@ pub const FontCacheEntry = struct {
             const codepoint = std.unicode.utf8Decode(text[i..][0..cplen]) catch unreachable;
             const gi = try fce.glyphInfoGetOrReplacement(codepoint);
 
-            // kerning
-            if (last_codepoint != 0 and i >= next_kern_byte) {
+            if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
                 const kk = fce.kern(last_codepoint, codepoint);
                 x += kk;
 
@@ -1375,6 +1371,7 @@ pub const RenderCommand = struct {
     clip: Rect.Physical,
     alpha: f32,
     snap: bool,
+    kerning: bool,
     cmd: Command,
 
     pub const Command = union(enum) {
@@ -2762,6 +2759,20 @@ pub fn snapToPixelsSet(snap: bool) bool {
 pub fn snapToPixels() bool {
     const cw = currentWindow();
     return cw.snap_to_pixels;
+}
+
+/// Set kerning setting.  If true:
+/// * textSize includes kerning by default
+/// * renderText include kerning by default
+///
+/// Returns the previous setting.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn kerningSet(kern: bool) bool {
+    const cw = currentWindow();
+    const old = cw.kerning;
+    cw.kerning = kern;
+    return old;
 }
 
 /// Requests another frame to be shown.
@@ -6974,6 +6985,7 @@ pub const renderTextOptions = struct {
     sel_end: ?usize = null,
     sel_color: ?Color = null,
     debug: bool = false,
+    kerning: ?bool = null,
     kern_in: ?[]u32 = null,
 };
 
@@ -7059,6 +7071,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     var bytes_seen: usize = 0;
     var last_codepoint: u32 = 0;
 
+    const kerning: bool = opts.kerning orelse cw.kerning;
     var next_kern_idx: u32 = 0;
     var next_kern_byte: u32 = 0;
     if (opts.kern_in) |ki| {
@@ -7072,8 +7085,7 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
         const codepoint = std.unicode.utf8Decode(opts.text[i..][0..cplen]) catch unreachable;
         const gi = try fce.glyphInfoGetOrReplacement(codepoint);
 
-        // kerning
-        if (last_codepoint != 0 and i >= next_kern_byte) {
+        if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
             const kk = fce.kern(last_codepoint, codepoint);
             x += kk;
 

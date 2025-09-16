@@ -38,6 +38,9 @@ pub const InitOptions = struct {
     // Whether to enter touch editing mode on a touch-release (no drag) if we
     // were not focused before the touch.
     touch_edit_just_focused: bool = true,
+
+    // If non null, overrides `Window.kerning` setting.
+    kerning: ?bool = null,
 };
 
 pub const Selection = struct {
@@ -108,6 +111,7 @@ corners_last_seen: ?u8 = null,
 insert_pt: Point = Point{},
 current_line_height: f32 = 0.0,
 prevClip: Rect.Physical = .{},
+kerning: ?bool,
 break_lines: bool,
 current_line_width: f32 = 0.0, // width of lines if break_lines was false
 touch_edit_just_focused: bool,
@@ -213,6 +217,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         .wd = WidgetData.init(src, .{}, options),
         .selection_in = init_opts.selection,
         .break_lines = init_opts.break_lines,
+        .kerning = init_opts.kerning,
         .touch_edit_just_focused = init_opts.touch_edit_just_focused,
     };
     if (dvui.dataGet(null, self.wd.id, "_touch_editing", bool)) |val| self.touch_editing = val;
@@ -475,7 +480,7 @@ pub fn addTextTooltip(self: *TextLayoutWidget, src: std.builtin.SourceLocation, 
 
 // Helper to addTextEx
 // - returns byte position if p is before or within r
-fn findPoint(p: Point, r: Rect, bytes_seen: usize, txt: []const u8, options: Options) ?struct { byte: usize, affinity: Selection.Affinity = .after } {
+fn findPoint(self: *TextLayoutWidget, p: Point, r: Rect, bytes_seen: usize, txt: []const u8, options: Options) ?struct { byte: usize, affinity: Selection.Affinity = .after } {
     if (p.y < r.y or (p.y < (r.y + r.h) and p.x < r.x)) {
         // found it - p is before this rect
         return .{ .byte = bytes_seen };
@@ -485,7 +490,7 @@ fn findPoint(p: Point, r: Rect, bytes_seen: usize, txt: []const u8, options: Opt
         // found it - p is in this rect
         const how_far = p.x - r.x;
         var pt_end: usize = undefined;
-        _ = options.fontGet().textSizeEx(txt, .{ .max_width = how_far, .end_idx = &pt_end, .end_metric = .nearest });
+        _ = options.fontGet().textSizeEx(txt, .{ .kerning = self.kerning, .max_width = how_far, .end_idx = &pt_end, .end_metric = .nearest });
         return .{ .byte = bytes_seen + pt_end, .affinity = if (pt_end == txt.len) .before else .after };
     }
 
@@ -511,7 +516,7 @@ fn selMovePre(self: *TextLayoutWidget, txt: []const u8, end: usize, text_rect: R
         .none => {},
         .mouse => |*m| {
             if (m.down_pt) |p| {
-                if (findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
+                if (self.findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
                     m.byte = ba.byte;
                     self.selection.moveCursor(ba.byte, false);
                     self.selection.affinity = ba.affinity;
@@ -521,7 +526,7 @@ fn selMovePre(self: *TextLayoutWidget, txt: []const u8, end: usize, text_rect: R
                     self.selection.moveCursor(self.bytes_seen + end, false);
                 }
             } else if (m.drag_pt) |p| {
-                if (findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
+                if (self.findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
                     self.selection.cursor = ba.byte;
                     self.selection.start = @min(m.byte.?, ba.byte);
                     self.selection.end = @max(m.byte.?, ba.byte);
@@ -538,7 +543,7 @@ fn selMovePre(self: *TextLayoutWidget, txt: []const u8, end: usize, text_rect: R
         },
         .expand_pt => |*ep| {
             if (ep.pt) |p| {
-                if (findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
+                if (self.findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
                     self.selection.moveCursor(ba.byte, false);
                     self.selection.affinity = ba.affinity;
                     ep.pt = null;
@@ -556,7 +561,7 @@ fn selMovePre(self: *TextLayoutWidget, txt: []const u8, end: usize, text_rect: R
         .char_left_right => {},
         .cursor_updown => |*cud| {
             if (cud.pt) |p| {
-                if (findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
+                if (self.findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
                     self.selection.moveCursor(ba.byte, cud.select);
                     self.selection.affinity = ba.affinity;
                     cud.pt = null;
@@ -1037,12 +1042,12 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
         var kern_buf: [10]u32 = @splat(0);
 
         // get slice of text that fits within width or ends with newline
-        var s = options.fontGet().textSizeEx(txt, .{ .max_width = if (self.break_lines) width else null, .end_idx = &end, .end_metric = .before, .kern_out = &kern_buf });
+        var s = options.fontGet().textSizeEx(txt, .{ .kerning = self.kerning, .max_width = if (self.break_lines) width else null, .end_idx = &end, .kern_out = &kern_buf });
 
         // ensure we always get at least 1 codepoint so we make progress
         if (end == 0) {
             end = std.unicode.utf8ByteSequenceLength(txt[0]) catch 1;
-            s = options.fontGet().textSize(txt[0..end]);
+            s = options.fontGet().textSizeEx(txt[0..end], .{ .kerning = self.kerning });
         }
 
         const newline = (txt[end - 1] == '\n');
@@ -1060,7 +1065,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 const spaceIdx = std.mem.lastIndexOfLinear(u8, txt[0 .. end + 1], " ");
                 if (spaceIdx) |si| {
                     end = si + 1;
-                    s = options.fontGet().textSizeEx(txt[0..end], .{ .end_metric = .before, .kern_in = &kern_buf });
+                    s = options.fontGet().textSizeEx(txt[0..end], .{ .kerning = self.kerning, .kern_in = &kern_buf });
                     break :blk; // this part will fit
                 }
 
@@ -1140,7 +1145,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                         // point is in this text
                         const how_far = p.x - rs.x;
                         var pt_end: usize = undefined;
-                        _ = options.fontGet().textSizeEx(txt, .{ .max_width = how_far, .end_idx = &pt_end, .end_metric = .nearest });
+                        _ = options.fontGet().textSizeEx(txt, .{ .kerning = self.kerning, .max_width = how_far, .end_idx = &pt_end, .end_metric = .nearest });
                         sel_bytes[i] = self.bytes_seen + pt_end;
                         self.sel_pts[i] = null;
                     } else {
@@ -1223,6 +1228,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 .sel_start = self.selection.start -| self.bytes_seen,
                 .sel_end = self.selection.end -| self.bytes_seen,
                 .sel_color = (opts.color_accent orelse (dvui.themeGet().text_select orelse dvui.themeGet().color(.highlight, .fill))).opacity(0.75),
+                .kerning = self.kerning,
                 .kern_in = &kern_buf,
             }) catch |err| {
                 dvui.logError(@src(), err, "Failed to render text: {s}", .{rtxt});
