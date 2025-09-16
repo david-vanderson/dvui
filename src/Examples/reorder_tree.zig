@@ -46,6 +46,10 @@ const g_advanced = struct {
 var g_cross_drag_from: ?enum { simple, advanced } = null;
 var g_cross_drag_item: ?usize = null;
 
+var reorder_tree_buffer: [2048]u8 = undefined;
+var reorder_tree_fba = std.heap.FixedBufferAllocator.init(&reorder_tree_buffer);
+var reorder_tree_open_branches = std.AutoHashMap(dvui.Id, void).init(reorder_tree_fba.allocator());
+
 pub fn reorderLists() void {
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
     const layo = dvui.dataGetPtrDefault(null, uniqueId, "reorderLayout", reorderLayout, .horizontal);
@@ -578,7 +582,15 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
             .expand = .horizontal,
         };
 
-        const branch = tree.branch(@src(), .{ .expanded = false }, branch_opts_override.override(branch_options));
+        // Check our branch id, which is updated from our entry name making it a stable ID
+        // If our branch exists in our tracking map, we know it's expanded
+        var expanded = false;
+        const branch_id = tree.data().id.update(entry.name);
+        if (reorder_tree_open_branches.contains(branch_id)) {
+            expanded = true;
+        }
+
+        const branch = tree.branch(@src(), .{ .expanded = expanded }, branch_opts_override.override(branch_options));
         defer branch.deinit();
 
         const alloc = dvui.currentWindow().lifo();
@@ -638,6 +650,11 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
             };
 
             if (branch.expander(@src(), .{ .indent = 14 }, expander_opts_override.override(expander_options))) {
+                // The expander is open, so we need to add the branch to our tracking map
+                reorder_tree_open_branches.put(branch_id, {}) catch {
+                    dvui.log.debug("Failed to track branch state!", .{});
+                };
+
                 exampleFileTreeSearch(
                     abs_path,
                     base_entries,
@@ -648,6 +665,9 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
                     branch_options,
                     expander_options,
                 ) catch std.debug.panic("Failed to recurse files", .{});
+            } else {
+                // Here, the expander is not open, so we need to removed the branch from tracking map
+                _ = reorder_tree_open_branches.remove(branch_id);
             }
 
             color_id.* = color_id.* + 1;
