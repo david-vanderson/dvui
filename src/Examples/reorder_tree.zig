@@ -46,6 +46,8 @@ const g_advanced = struct {
 var g_cross_drag_from: ?enum { simple, advanced } = null;
 var g_cross_drag_item: ?usize = null;
 
+// These allocations are only necessary for the tree example to have persistent state of open branches
+// when a parent branch is closed or the tree is not processed.
 var reorder_tree_buffer: [2048]u8 = undefined;
 var reorder_tree_fba = std.heap.FixedBufferAllocator.init(&reorder_tree_buffer);
 var reorder_tree_open_branches = std.AutoHashMap(dvui.Id, void).init(reorder_tree_fba.allocator());
