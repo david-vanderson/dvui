@@ -39,6 +39,7 @@ scroll_to_focused: bool = false,
 text_input_rect: ?Rect.Natural = null,
 
 snap_to_pixels: bool = true,
+kerning: bool = true,
 /// The alpha value for all rendering. All colors alpha values will be
 /// multiplied by this value.
 alpha: f32 = 1.0,
@@ -1242,6 +1243,7 @@ pub fn addRenderCommand(self: *Self, cmd: dvui.RenderCommand.Command, after: boo
         .clip = self.clipRect,
         .alpha = self.alpha,
         .snap = self.snap_to_pixels,
+        .kerning = self.kerning,
         .cmd = cmd,
     };
     if (after) {
@@ -1259,6 +1261,9 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
     const old_snap = self.snap_to_pixels;
     defer self.snap_to_pixels = old_snap;
 
+    const old_kern = self.kerning;
+    defer self.kerning = old_kern;
+
     const old_alpha = self.alpha;
     defer self.alpha = old_alpha;
 
@@ -1271,6 +1276,7 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
 
     for (queue) |*drc| {
         self.snap_to_pixels = drc.snap;
+        self.kerning = drc.kerning;
         self.clipRect = drc.clip;
         self.alpha = drc.alpha;
         switch (drc.cmd) {

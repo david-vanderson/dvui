@@ -52,6 +52,7 @@ pub const InitOptions = struct {
     placeholder: ?[]const u8 = null,
 
     break_lines: bool = false,
+    kerning: ?bool = null,
     scroll_vertical: ?bool = null, // default is value of multiline
     scroll_vertical_bar: ?ScrollInfo.ScrollBarMode = null, // default .auto
     scroll_horizontal: ?bool = null, // default true
@@ -150,7 +151,7 @@ pub fn install(self: *TextEntryWidget) void {
 
     self.scrollClip = dvui.clipGet();
 
-    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .touch_edit_just_focused = false }, self.data().options.strip().override(.{ .expand = .both, .padding = self.padding }));
+    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .kerning = self.init_opts.kerning, .touch_edit_just_focused = false }, self.data().options.strip().override(.{ .expand = .both, .padding = self.padding }));
     self.textLayout.install(.{ .focused = self.data().id == dvui.focusedWidgetId(), .show_touch_draggables = (self.len > 0) });
     self.textClip = dvui.clipGet();
 
