@@ -191,6 +191,11 @@ pub const Branch = struct {
         // if null, uses widget id
         // if non-null, must be unique among reorderables in a single reorder
         branch_id: ?usize = null,
+
+        // If animation duration is greater than 0, the expander will animate accordingly
+        animation_duration: i32 = 400_000,
+
+        animation_easing: *const dvui.easing.EasingFn = dvui.easing.outBack,
     };
 
     wd: WidgetData = undefined,
@@ -206,6 +211,7 @@ pub const Branch = struct {
     target_rs: ?dvui.RectScale = null,
     expanded: bool = false,
     can_expand: bool = false,
+    anim: ?*dvui.AnimateWidget = null,
 
     pub fn init(src: std.builtin.SourceLocation, reorder: *TreeWidget, init_opts: Branch.InitOptions, opts: Options) Branch {
         var self = Branch{};
@@ -356,6 +362,9 @@ pub const Branch = struct {
         };
 
         if (self.expanded) {
+            if (self.init_options.animation_duration > 0)
+                self.anim = dvui.animate(@src(), .{ .duration = self.init_options.animation_duration, .easing = self.init_options.animation_easing, .kind = .vertical }, .{});
+
             self.expander_vbox = dvui.BoxWidget.init(src, .{ .dir = .vertical }, defaults.override(opts));
             self.expander_vbox.install();
             self.expander_vbox.drawBackground();
@@ -423,8 +432,12 @@ pub const Branch = struct {
         defer self.* = undefined;
 
         if (self.can_expand) {
-            if (self.expanded)
+            if (self.expanded) {
                 self.expander_vbox.deinit();
+                if (self.anim) |a| {
+                    a.deinit();
+                }
+            }
 
             dvui.dataSet(null, self.wd.id, "_expanded", self.expanded);
         } else {
