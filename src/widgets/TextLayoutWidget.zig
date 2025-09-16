@@ -211,6 +211,11 @@ focus_at_start: bool = false,
 /// SAFETY: Set in `touchEditing`
 te_floating: FloatingWidget = undefined,
 
+byte_height_ready: ?ByteHeight = null,
+byte_heights: []ByteHeight = undefined, // from last frame
+byte_heights_new: std.ArrayList(ByteHeight) = .empty, // creating this frame
+byte_height_after_idx: ?usize = null,
+
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextLayoutWidget {
     const options = defaults.override(opts);
     var self = TextLayoutWidget{
@@ -228,6 +233,11 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     if (dvui.dataGet(null, self.wd.id, "_sel_start_r", Rect)) |val| self.sel_start_r = val;
     if (dvui.dataGet(null, self.wd.id, "_sel_end_r", Rect)) |val| self.sel_end_r = val;
     if (dvui.dataGet(null, self.wd.id, "_click_num", u8)) |val| self.click_num = val;
+    if (dvui.dataGetSlice(null, self.wd.id, "_byte_heights", []ByteHeight)) |bh| {
+        self.byte_heights = bh;
+    } else {
+        self.byte_heights = &[0]ByteHeight{};
+    }
 
     if (dvui.dataGet(null, self.wd.id, "_scroll_to_cursor", bool) orelse false) {
         dvui.dataRemove(null, self.wd.id, "_scroll_to_cursor");
@@ -967,6 +977,80 @@ fn cursorSeen(self: *TextLayoutWidget) void {
     }
 }
 
+pub const ByteHeight = struct {
+    pub const dist: f32 = 200.0; // record height/byte every this many logical pixels
+
+    /// byte just before insert_pt.y that height (usually a newline, could be the last byte seen)
+    byte: usize,
+    /// height from top of text layout content top
+    height: f32,
+};
+
+///
+pub fn visibleBytes(self: *TextLayoutWidget) ?struct { start: usize, end: usize } {
+    // FIXME
+    // if breaking lines, width must be the same from last frame
+    // invalidate must not have been called
+    if (self.byte_heights.len == 0) return null;
+
+    // search through list of height/byte from last frame
+    // - height is the height after that byte
+    // find height above visible and below visible
+
+    // intersect our content rect with the clipping rect
+    const clip_logical = self.data().contentRectScale().rectFromPhysical(dvui.clipGet());
+    const vr = self.data().contentRect().intersect(clip_logical);
+
+    var start_byte: usize = 0;
+    var end_byte: usize = self.byte_heights[self.byte_heights.len - 1].byte;
+
+    // binary search for the start
+    const predicateFn = struct {
+        fn predicateFn(height: f32, item: ByteHeight) bool {
+            return item.height <= height;
+        }
+    }.predicateFn;
+
+    const first_past_height = std.sort.partitionPoint(ByteHeight, self.byte_heights, vr.y, predicateFn);
+    if (first_past_height > 0) {
+        // starting not at the top
+        const startBH = self.byte_heights[first_past_height - 1];
+        start_byte = startBH.byte;
+
+        self.insert_pt.y = startBH.height;
+        self.bytes_seen = start_byte;
+
+        if (!self.cursor_seen and (self.selection.cursor < self.bytes_seen)) {
+            self.cursor_rect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = 10 };
+            self.scroll_to_cursor = false;
+            self.cursorSeen();
+        }
+
+        // set min height just to make sure it happens
+        const start_size = self.data().options.padSize(.{ .h = self.insert_pt.y });
+        self.data().min_size.h = @max(self.data().min_size.h, start_size.h);
+
+        // copy all the ByteHeights we skipped
+        self.byte_heights_new.appendSlice(dvui.currentWindow().arena(), self.byte_heights[0..first_past_height]) catch {};
+    }
+
+    // linear scan for the end
+    for (self.byte_heights[first_past_height..], first_past_height..) |bh, i| {
+        if (bh.height >= (vr.y + vr.h)) {
+            //std.debug.print("found end {d} {d} bh height {d} vr {d} {d} {d}\n", .{ i, self.byte_heights.len, bh.height, vr.y, vr.h, vr.y + vr.h });
+            end_byte = bh.byte;
+
+            self.byte_height_after_idx = i;
+            break;
+        }
+    }
+
+    // assume min width stays the same
+    self.data().min_size.w = (dvui.minSizeGet(self.data().id) orelse Size.all(0)).w;
+
+    return .{ .start = start_byte, .end = end_byte };
+}
+
 const AddTextExAction = enum {
     none,
     click,
@@ -1003,6 +1087,11 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
     }
 
     text_loop: while (txt.len > 0) {
+        if (self.byte_height_ready) |bhr| {
+            self.byte_heights_new.append(cw.arena(), bhr) catch {};
+            self.byte_height_ready = null;
+        }
+
         var linestart: f32 = 0;
 
         // Often we measure text for a size, then try to render text into that
@@ -1298,6 +1387,15 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
                 self.data().min_size.w = @max(self.data().min_size.w, newline_size.w);
                 self.data().min_size.h = @max(self.data().min_size.h, newline_size.h);
                 self.current_line_width = 0.0;
+
+                var last_bh_height: f32 = 0;
+                if (self.byte_heights_new.items.len > 0) {
+                    last_bh_height = self.byte_heights_new.items[self.byte_heights_new.items.len - 1].height;
+                }
+
+                if (self.insert_pt.y > last_bh_height + ByteHeight.dist) {
+                    self.byte_height_ready = .{ .byte = self.bytes_seen, .height = self.insert_pt.y };
+                }
             } else if (txt.len > 0) {
                 self.lineBreak();
             }
@@ -1337,6 +1435,39 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction,
 
 pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     self.add_text_done = true;
+
+    if (self.byte_height_after_idx) |i| {
+        const bh = self.byte_heights[i];
+
+        const extra_height = self.byte_heights[self.byte_heights.len - 1].height - bh.height;
+        self.insert_pt.y += extra_height;
+
+        // set min height
+        const end_size = self.data().options.padSize(.{ .h = self.insert_pt.y });
+        self.data().min_size.h = @max(self.data().min_size.h, end_size.h);
+
+        // copy all the ByteHeights we skipped, but not the final one
+        if ((i + 1) < self.byte_heights.len) {
+            self.byte_heights_new.appendSlice(dvui.currentWindow().arena(), self.byte_heights[i .. self.byte_heights.len - 1]) catch {};
+        }
+
+        // update the bytes we skipped
+        self.bytes_seen = self.byte_heights[self.byte_heights.len - 1].byte;
+    }
+
+    const os = self.data().options;
+    const contentMinSize = self.data().min_size.padNeg(os.paddingGet()).padNeg(os.borderGet()).padNeg(os.marginGet());
+    self.byte_heights_new.append(dvui.currentWindow().arena(), .{ .byte = self.bytes_seen, .height = contentMinSize.h }) catch {};
+    //std.debug.print("final height: {d} at {d}\n", .{ contentMinSize.h, self.bytes_seen });
+
+    //const crs = self.data().contentRectScale();
+    //for (self.byte_heights_new.items) |bhn| {
+    //    const p: dvui.Path = .{ .points = &.{
+    //        crs.pointToPhysical(.{ .x = 0, .y = bhn.height }),
+    //        crs.pointToPhysical(.{ .x = 100, .y = bhn.height }),
+    //    } };
+    //    p.stroke(.{ .thickness = 1, .color = .red });
+    //}
 
     self.selection.cursor = @min(self.selection.cursor, self.bytes_seen);
     self.selection.start = @min(self.selection.start, self.bytes_seen);
@@ -1813,6 +1944,7 @@ pub fn deinit(self: *TextLayoutWidget) void {
     dvui.dataSet(null, self.data().id, "_sel_start_r", self.sel_start_r);
     dvui.dataSet(null, self.data().id, "_sel_end_r", self.sel_end_r);
     dvui.dataSet(null, self.data().id, "_selection", self.selection.*);
+    dvui.dataSetSlice(null, self.data().id, "_byte_heights", self.byte_heights_new.items);
 
     if (self.scroll_to_cursor_next_frame) {
         dvui.dataSet(null, self.data().id, "_scroll_to_cursor", true);
