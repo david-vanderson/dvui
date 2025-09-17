@@ -35,6 +35,10 @@ pub const InitOptions = struct {
     /// If true, break text on space to fit (or any character if width is < 10 Ms)
     break_lines: bool = true,
 
+    /// If true, assume text is the same as we saw last frame and only process
+    /// what is needed for visibility (and copy).
+    cache_layout: bool = false,
+
     // Whether to enter touch editing mode on a touch-release (no drag) if we
     // were not focused before the touch.
     touch_edit_just_focused: bool = true,
@@ -211,6 +215,9 @@ focus_at_start: bool = false,
 /// SAFETY: Set in `touchEditing`
 te_floating: FloatingWidget = undefined,
 
+cache_layout: bool = false,
+cache_layout_bytes: ?bytesNeededReturn = null,
+cache_layout_bytes_seen: usize = 0,
 byte_height_ready: ?ByteHeight = null,
 byte_heights: []ByteHeight = undefined, // from last frame
 byte_heights_new: std.ArrayList(ByteHeight) = .empty, // creating this frame
@@ -222,6 +229,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         .wd = WidgetData.init(src, .{}, options),
         .selection_in = init_opts.selection,
         .break_lines = init_opts.break_lines,
+        .cache_layout = init_opts.cache_layout,
         .kerning = init_opts.kerning,
         .touch_edit_just_focused = init_opts.touch_edit_just_focused,
     };
@@ -987,9 +995,9 @@ pub const ByteHeight = struct {
     height: f32,
 };
 
-/// Assumes text is the same from last frame, and returns only the byte range
-/// needed for display (or copy).
-pub fn bytesNeeded(self: *TextLayoutWidget) ?struct { start: usize, end: usize } {
+const bytesNeededReturn = struct { start: usize, end: usize };
+
+fn bytesNeeded(self: *TextLayoutWidget) ?bytesNeededReturn {
     // FIXME
     // if breaking lines, width must be the same from last frame
     // invalidate must not have been called
@@ -1059,8 +1067,27 @@ const AddTextExAction = enum {
 };
 
 /// `Options.color_accent` overrides the background for selected text
-fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction, opts: Options) bool {
+fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) bool {
     var ret = false;
+
+    var text = text_in;
+    if (self.cache_layout) {
+        if (self.cache_layout_bytes == null) self.cache_layout_bytes = self.bytesNeeded();
+
+        if (self.cache_layout_bytes) |clb| {
+            const start = @min(text.len, clb.start -| self.cache_layout_bytes_seen);
+            const end = @min(text.len, clb.end -| self.cache_layout_bytes_seen);
+
+            //std.debug.print("clb {d} .. {d} bytes {d} taking {d} .. {d}\n", .{ clb.start, clb.end, self.cache_layout_bytes_seen, start, end });
+
+            self.cache_layout_bytes_seen += text.len;
+            text = text[start..end];
+            if (text.len == 0) return false;
+        } else {
+            // bytesNeeded returned false, we can't do it this frame
+            self.cache_layout = false;
+        }
+    }
 
     const cw = dvui.currentWindow();
 
