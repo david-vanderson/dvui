@@ -2,7 +2,84 @@ var line_height_factor: f32 = 1.2;
 
 /// ![image](Examples-text_layout.png)
 pub fn layoutText() void {
-    _ = dvui.sliderEntry(@src(), "line height: {d:0.2}", .{ .value = &line_height_factor, .min = 0.1, .max = 2, .interval = 0.1 }, .{});
+    {
+        var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        defer box.deinit();
+
+        const show_large_doc: *bool = dvui.dataGetPtrDefault(null, box.data().id, "show_large_doc", bool, false);
+
+        _ = dvui.sliderEntry(@src(), "line height: {d:0.2}", .{ .value = &line_height_factor, .min = 0.1, .max = 2, .interval = 0.1 }, .{});
+
+        if (dvui.button(@src(), "Large Doc", .{}, .{ .gravity_x = 1.0 })) {
+            show_large_doc.* = !show_large_doc.*;
+        }
+
+        if (show_large_doc.*) {
+            var fw = dvui.floatingWindow(@src(), .{}, .{ .max_size_content = .width(500) });
+            defer fw.deinit();
+
+            var buf: [100]u8 = undefined;
+            const fps_str = std.fmt.bufPrint(&buf, "{d:0>3.0} fps", .{dvui.FPS()}) catch unreachable;
+
+            fw.dragAreaSet(dvui.windowHeader("Large Text Layout", fps_str, show_large_doc));
+
+            const copies: *usize = dvui.dataGetPtrDefault(null, box.data().id, "copies", usize, 100);
+            const break_lines: *bool = dvui.dataGetPtrDefault(null, box.data().id, "break_lines", bool, false);
+            const kerning: *usize = dvui.dataGetPtrDefault(null, box.data().id, "kerning", usize, 0);
+            const refresh: *bool = dvui.dataGetPtrDefault(null, box.data().id, "refresh", bool, true);
+            {
+                var box2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+                defer box2.deinit();
+
+                var copies_val: f32 = @floatFromInt(copies.*);
+                if (dvui.sliderEntry(@src(), "copies: {d:0.0}", .{ .value = &copies_val, .min = 0, .max = 1000, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+                    copies.* = @intFromFloat(@round(copies_val));
+                }
+
+                _ = dvui.checkbox(@src(), refresh, "Refresh", .{});
+
+                if (refresh.*) {
+                    dvui.refresh(null, @src(), null);
+                }
+            }
+
+            {
+                var box2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+                defer box2.deinit();
+
+                if (dvui.checkbox(@src(), break_lines, "Break Lines", .{ .gravity_y = 0.5 })) {
+                    // todo
+                }
+
+                if (dvui.dropdown(@src(), &.{ "Kern null", "Kern true", "Kern false" }, kerning, .{ .gravity_y = 0.5, .min_size_content = .width(120) })) {
+                    // todo
+                }
+
+                if (dvui.checkbox(@src(), &dvui.currentWindow().kerning, "Kern Global", .{ .gravity_y = 0.5 })) {
+                    // todo
+                }
+            }
+
+            var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+            defer scroll.deinit();
+
+            var kern: ?bool = null;
+            if (kerning.* == 1) kern = true;
+            if (kerning.* == 2) kern = false;
+            var tl = dvui.textLayout(@src(), .{ .break_lines = break_lines.*, .kerning = kern }, .{ .expand = .both });
+            defer tl.deinit();
+
+            const lorem1 = "{d} Header line with 9 indented (kerning test T.)\n";
+            const lorem2 = "    {d} an indented line\n";
+
+            for (0..copies.*) |i| {
+                tl.format(lorem1, .{i}, .{});
+                for (0..9) |k| {
+                    tl.format(lorem2, .{k}, .{});
+                }
+            }
+        }
+    }
 
     {
         var tl = TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
@@ -100,6 +177,7 @@ test "DOCIMG text_layout" {
     try t.saveImage(frame, null, "Examples-text_layout.png");
 }
 
+const std = @import("std");
 const dvui = @import("../dvui.zig");
 const entypo = dvui.entypo;
 const TextLayoutWidget = dvui.TextLayoutWidget;
