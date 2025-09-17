@@ -361,24 +361,21 @@ pub const Branch = struct {
             .margin = .{ .x = init_opts.indent },
         };
 
-        const anim_defaults = Options{
-            .name = "ExpanderAnimation",
-            .expand = opts.expand,
-        };
-
         if (self.expanded) {
-            if (self.init_options.animation_duration > 0)
-                self.anim = dvui.animate(
-                    @src(),
-                    .{
-                        .duration = self.init_options.animation_duration,
-                        .easing = self.init_options.animation_easing,
-                        .kind = .vertical,
-                    },
-                    anim_defaults.override(opts.strip()),
-                );
+            self.anim = dvui.animate(
+                @src(),
+                .{
+                    .duration = self.init_options.animation_duration,
+                    .easing = self.init_options.animation_easing,
+                    .kind = if (self.init_options.animation_duration > 0) .vertical else .none,
+                },
+                defaults.override(opts),
+            );
 
-            self.expander_vbox = dvui.BoxWidget.init(src, .{ .dir = .vertical }, defaults.override(opts));
+            // Always expand the inner box to fill the animation
+            const expander_opts = dvui.Options{ .expand = .both };
+
+            self.expander_vbox = dvui.BoxWidget.init(src, .{ .dir = .vertical }, expander_opts.override(opts.strip()));
             self.expander_vbox.install();
             self.expander_vbox.drawBackground();
 
