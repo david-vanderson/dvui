@@ -19,6 +19,7 @@ pub const InitOptions = struct {
 };
 
 pub const Kind = enum {
+    none,
     alpha,
     vertical,
     horizontal,
@@ -36,19 +37,22 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *AnimateWidget) void {
-    if (dvui.firstFrame(self.data().id)) {
-        // start begin animation
-        self.start();
-    }
+    if (self.init_opts.kind != .none) {
+        if (dvui.firstFrame(self.data().id)) {
+            // start begin animation
+            self.start();
+        }
 
-    if (dvui.animationGet(self.data().id, "_end")) |a| {
-        self.val = a.value();
-    } else if (dvui.animationGet(self.data().id, "_start")) |a| {
-        self.val = a.value();
+        if (dvui.animationGet(self.data().id, "_end")) |a| {
+            self.val = a.value();
+        } else if (dvui.animationGet(self.data().id, "_start")) |a| {
+            self.val = a.value();
+        }
     }
 
     if (self.val) |v| {
         switch (self.init_opts.kind) {
+            .none => {},
             .alpha => {
                 self.prev_alpha = dvui.alpha(v);
             },
@@ -133,6 +137,7 @@ pub fn deinit(self: *AnimateWidget) void {
     defer self.* = undefined;
     if (self.val) |v| {
         switch (self.init_opts.kind) {
+            .none => {},
             .alpha => {
                 dvui.alphaSet(self.prev_alpha);
             },
