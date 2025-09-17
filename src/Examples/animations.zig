@@ -95,7 +95,7 @@ pub fn animations() void {
 
             dvui.labelNoFmt(@src(), "Animate", .{}, .{ .gravity_y = 0.5 });
 
-            _ = dvui.dropdown(@src(), &.{ "alpha", "horizontal", "vertical" }, &global.animation_choice, .{});
+            _ = dvui.dropdown(@src(), &.{ "alpha", "horizontal", "vertical", "none" }, &global.animation_choice, .{});
 
             dvui.labelNoFmt(@src(), "easing", .{}, .{ .gravity_y = 0.5 });
 
@@ -155,6 +155,7 @@ pub fn animations() void {
                 0 => .alpha,
                 1 => .horizontal,
                 2 => .vertical,
+                3 => .none,
                 else => unreachable,
             };
             var animator = dvui.animate(@src(), .{ .kind = kind, .duration = global.duration, .easing = global.easing }, .{ .expand = .both, .gravity_x = if (global.center) 0.5 else 0.0, .gravity_y = if (global.center) 0.5 else 0.0 });
