@@ -19,6 +19,7 @@ pub const InitOptions = struct {
 };
 
 pub const Kind = enum {
+    none,
     alpha,
     vertical,
     horizontal,
@@ -49,6 +50,7 @@ pub fn install(self: *AnimateWidget) void {
 
     if (self.val) |v| {
         switch (self.init_opts.kind) {
+            .none => {},
             .alpha => {
                 self.prev_alpha = dvui.alpha(v);
             },
@@ -133,6 +135,7 @@ pub fn deinit(self: *AnimateWidget) void {
     defer self.* = undefined;
     if (self.val) |v| {
         switch (self.init_opts.kind) {
+            .none => {},
             .alpha => {
                 dvui.alphaSet(self.prev_alpha);
             },
