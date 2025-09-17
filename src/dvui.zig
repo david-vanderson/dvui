@@ -119,7 +119,7 @@ pub var scroll_speed: f32 = 20;
 /// * float precision in this range (0.125) is small enough so integer stuff still works
 ///
 /// If positions/sizes are getting into this range, then likely something is going wrong.
-pub const max_float_safe: f32 = 1_000_000; // 1000000 and 1e6 for searchability
+pub const max_float_safe: f32 = 2_000_000; // 2000000 and 2e6 for searchability
 
 pub const c = @cImport({
     // musl fails to compile saying missing "bits/setjmp.h", and nobody should
