@@ -322,8 +322,6 @@ pub fn show(self: *Debug) void {
         _ = self.logRefresh(log_refresh);
     }
 
-    _ = dvui.checkbox(@src(), &dvui.kerning_extra, "Kerning Extra", .{});
-
     var custom_label: ?[]const u8 = null;
     var max_fps: f32 = 60;
     if (dvui.currentWindow().max_fps) |mfps| {
