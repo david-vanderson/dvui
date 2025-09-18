@@ -23,10 +23,12 @@ pub fn layoutText() void {
 
             fw.dragAreaSet(dvui.windowHeader("Large Text Layout", fps_str, show_large_doc));
 
+            var cache_ok = true;
+
             const copies: *usize = dvui.dataGetPtrDefault(null, box.data().id, "copies", usize, 100);
             const break_lines: *bool = dvui.dataGetPtrDefault(null, box.data().id, "break_lines", bool, false);
             const kerning: *usize = dvui.dataGetPtrDefault(null, box.data().id, "kerning", usize, 0);
-            const refresh: *bool = dvui.dataGetPtrDefault(null, box.data().id, "refresh", bool, true);
+            const refresh: *bool = dvui.dataGetPtrDefault(null, box.data().id, "refresh", bool, false);
             {
                 var box2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
                 defer box2.deinit();
@@ -34,6 +36,7 @@ pub fn layoutText() void {
                 var copies_val: f32 = @floatFromInt(copies.*);
                 if (dvui.sliderEntry(@src(), "copies: {d:0.0}", .{ .value = &copies_val, .min = 0, .max = 1000, .interval = 1 }, .{ .gravity_y = 0.5 })) {
                     copies.* = @intFromFloat(@round(copies_val));
+                    cache_ok = false;
                 }
 
                 _ = dvui.checkbox(@src(), refresh, "Refresh", .{});
@@ -52,11 +55,11 @@ pub fn layoutText() void {
                 }
 
                 if (dvui.dropdown(@src(), &.{ "Kern null", "Kern true", "Kern false" }, kerning, .{ .gravity_y = 0.5, .min_size_content = .width(120) })) {
-                    // todo
+                    cache_ok = false;
                 }
 
                 if (dvui.checkbox(@src(), &dvui.currentWindow().kerning, "Kern Global", .{ .gravity_y = 0.5 })) {
-                    // todo
+                    cache_ok = false;
                 }
             }
 
@@ -66,16 +69,17 @@ pub fn layoutText() void {
             var kern: ?bool = null;
             if (kerning.* == 1) kern = true;
             if (kerning.* == 2) kern = false;
-            var tl = dvui.textLayout(@src(), .{ .break_lines = break_lines.*, .kerning = kern }, .{ .expand = .both });
+            var tl = dvui.textLayout(@src(), .{ .cache_layout = cache_ok, .break_lines = break_lines.*, .kerning = kern }, .{ .expand = .both });
             defer tl.deinit();
 
-            const lorem1 = "{d} Header line with 9 indented (kerning test T.)\n";
-            const lorem2 = "    {d} an indented line\n";
+            const lorem1 = "Header line with 9 indented (kerning test T.)\n";
+            const lorem2 = "    an indented line\n";
 
             for (0..copies.*) |i| {
-                tl.format(lorem1, .{i}, .{});
-                for (0..9) |k| {
-                    tl.format(lorem2, .{k}, .{});
+                tl.format("{d} ", .{i}, .{});
+                tl.addText(lorem1, .{});
+                for (0..9) |_| {
+                    tl.addText(lorem2, .{});
                 }
             }
         }
