@@ -1013,14 +1013,22 @@ fn bytesNeeded(self: *TextLayoutWidget) ?bytesNeededReturn {
     var start_byte: usize = 0;
     var end_byte: usize = self.byte_heights[self.byte_heights.len - 1].byte;
 
+    const Context = struct { height: f32, byte: usize };
+    var context: Context = .{ .height = vr.y, .byte = std.math.maxInt(usize) };
+    var sel_end: usize = 0;
+    if (self.copy_sel) |sel| {
+        context.byte = sel.start;
+        sel_end = sel.end;
+    }
+
     // binary search for the start
     const predicateFn = struct {
-        fn predicateFn(height: f32, item: ByteHeight) bool {
-            return item.height <= height;
+        fn predicateFn(ctx: Context, item: ByteHeight) bool {
+            return item.height <= ctx.height and item.byte < ctx.byte;
         }
     }.predicateFn;
 
-    const first_past_height = std.sort.partitionPoint(ByteHeight, self.byte_heights, vr.y, predicateFn);
+    const first_past_height = std.sort.partitionPoint(ByteHeight, self.byte_heights, context, predicateFn);
     if (first_past_height > 0) {
         // starting not at the top
         const startBH = self.byte_heights[first_past_height - 1];
@@ -1045,7 +1053,7 @@ fn bytesNeeded(self: *TextLayoutWidget) ?bytesNeededReturn {
 
     // linear scan for the end
     for (self.byte_heights[first_past_height..], first_past_height..) |bh, i| {
-        if (bh.height >= (vr.y + vr.h)) {
+        if (bh.height >= (vr.y + vr.h) and bh.byte > sel_end) {
             //std.debug.print("found end {d} {d} bh height {d} vr {d} {d} {d}\n", .{ i, self.byte_heights.len, bh.height, vr.y, vr.h, vr.y + vr.h });
             end_byte = bh.byte;
 
