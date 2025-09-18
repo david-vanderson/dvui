@@ -108,6 +108,8 @@ pub const useFreeType = !wasm;
 /// The amount of physical pixels to scroll per "tick" of the scroll wheel
 pub var scroll_speed: f32 = 20;
 
+pub var kerning_extra: bool = true;
+
 /// Used as a default maximum in various places:
 /// * Options.max_size_content
 /// * Font.textSizeEx max_width
@@ -135,9 +137,9 @@ pub const c = @cImport({
         @cInclude("freetype/ftsizes.h");
         @cInclude("freetype/ftstroke.h");
         @cInclude("freetype/fttrigon.h");
-    } else {
-        @cInclude("stb_truetype.h");
     }
+
+    @cInclude("stb_truetype.h");
 
     if (wasm) {
         @cDefine("STBI_NO_STDIO", "1");
@@ -575,6 +577,7 @@ const GlyphInfo = struct {
 };
 
 pub const FontCacheEntry = struct {
+    pub const kernInfoMaxCodepoint = 0x100;
     const ascii_size = 127;
     face: if (useFreeType) c.FT_Face else c.stbtt_fontinfo,
     // This name should come from `Window.font_bytes` and lives as long as it does
@@ -584,11 +587,13 @@ pub const FontCacheEntry = struct {
     ascent: f32,
     glyph_info: std.AutoHashMap(u32, GlyphInfo),
     glyph_info_ascii: [ascii_size]GlyphInfo,
+    kern_info: std.AutoHashMap(u64, void),
     texture_atlas_cache: ?Texture = null,
 
     pub fn deinit(self: *FontCacheEntry, win: *Window) void {
         defer self.* = undefined;
         self.glyph_info.deinit();
+        self.kern_info.deinit();
         if (useFreeType) {
             _ = c.FT_Done_Face(self.face);
         }
@@ -941,6 +946,13 @@ pub const FontCacheEntry = struct {
     }
 
     pub fn kern(fce: *FontCacheEntry, codepoint1: u32, codepoint2: u32) f32 {
+        if (codepoint1 == std.unicode.replacement_character or codepoint2 == std.unicode.replacement_character) return 0;
+
+        if (dvui.kerning_extra and codepoint1 < FontCacheEntry.kernInfoMaxCodepoint and codepoint2 < FontCacheEntry.kernInfoMaxCodepoint) {
+            const combined: u64 = (@as(u64, @intCast(codepoint1)) << 32) | @as(u64, codepoint2);
+            if (!fce.kern_info.contains(combined)) return 0;
+        }
+
         if (useFreeType) {
             const index1 = c.FT_Get_Char_Index(fce.face, codepoint1);
             const index2 = c.FT_Get_Char_Index(fce.face, codepoint2);
@@ -1079,6 +1091,48 @@ pub const FontCacheEntry = struct {
         //std.debug.print("textSizeRaw size {d} for \"{s}\" {d}x{d} {d}\n", .{ self.size, text, tw, th, ei });
         return Size{ .w = tw, .h = th };
     }
+
+    pub fn populateKernInfo(fce: *FontCacheEntry, ttf_bytes: []const u8, name: []const u8) void {
+        const offset = c.stbtt_GetFontOffsetForIndex(ttf_bytes.ptr, 0);
+        if (offset < 0) {
+            log.warn("fontCacheInit stbtt error when calling stbtt_GetFontOffsetForIndex font {s}\n", .{name});
+            return;
+        }
+        var stbface: c.stbtt_fontinfo = undefined;
+        if (c.stbtt_InitFont(&stbface, ttf_bytes.ptr, offset) != 1) {
+            log.warn("fontCacheInit stbtt error when calling stbtt_InitFont font {s}\n", .{name});
+            return;
+        }
+
+        // make temporary lookup table from glyph index to codepoint
+        const lookup: []u32 = dvui.currentWindow().arena().alloc(u32, 4000) catch return;
+        @memset(lookup, 0);
+        for (1..FontCacheEntry.kernInfoMaxCodepoint) |cp| {
+            const glyph_idx: c_int = c.stbtt_FindGlyphIndex(&stbface, @intCast(cp));
+            //std.debug.print("cp {d} glyph idx {d}\n", .{ cp, glyph_idx });
+            if (glyph_idx > 0) {
+                lookup[@intCast(glyph_idx)] = @intCast(cp);
+            }
+        }
+
+        const kern_len: c_int = c.stbtt_GetKerningTableLength(&stbface);
+        //std.debug.print("kerning len {d}\n", .{kern_len});
+
+        const stbKernTable: []c.stbtt_kerningentry = dvui.currentWindow().arena().alloc(c.stbtt_kerningentry, @intCast(kern_len)) catch return;
+
+        _ = c.stbtt_GetKerningTable(&stbface, stbKernTable.ptr, kern_len);
+        //std.debug.print("actual kerning len {d}\n", .{len});
+
+        for (stbKernTable) |ke| {
+            if (ke.advance == 0) continue;
+            const cp1 = lookup[@intCast(ke.glyph1)];
+            const cp2 = lookup[@intCast(ke.glyph2)];
+            if (cp1 == 0 or cp2 == 0) continue;
+            //std.debug.print("  kern {d} {d} {d}\n", .{ lookup[@intCast(ke.glyph1)], lookup[@intCast(ke.glyph2)], ke.advance });
+            const combined: u64 = (@as(u64, @intCast(cp1)) << 32) | @as(u64, cp2);
+            fce.kern_info.put(combined, {}) catch return;
+        }
+    }
 };
 
 // Get or load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
@@ -1149,11 +1203,14 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontEr
                     .ascent = @floor(ascent),
                     .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(currentWindow().gpa),
                     .glyph_info_ascii = undefined,
+                    .kern_info = std.AutoHashMap(u64, void).init(currentWindow().gpa),
                 };
 
                 for (0..ret.glyph_info_ascii.len) |i| {
                     ret.glyph_info_ascii[i] = try ret.glyphInfoGenerate(@intCast(i));
                 }
+
+                ret.populateKernInfo(ttf_bytes, name);
 
                 return ret;
             }
