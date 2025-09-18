@@ -1003,9 +1003,6 @@ fn bytesNeeded(self: *TextLayoutWidget) ?bytesNeededReturn {
     // invalidate must not have been called
     if (self.byte_heights.len == 0) return null;
 
-    // FIXME
-    // need to also expand to include copy_sel if set
-
     // intersect our content rect with the clipping rect
     const clip_logical = self.data().contentRectScale().rectFromPhysical(dvui.clipGet());
     const vr = self.data().contentRect().intersect(clip_logical);
@@ -1092,7 +1089,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             text = text[start..end];
             if (text.len == 0) return false;
         } else {
-            // bytesNeeded returned false, we can't do it this frame
+            // bytesNeeded returned null, we can't do it this frame
             self.cache_layout = false;
         }
     }
@@ -1494,6 +1491,16 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     const os = self.data().options;
     const contentMinSize = self.data().min_size.padNeg(os.paddingGet()).padNeg(os.borderGet()).padNeg(os.marginGet());
     self.byte_heights_new.append(dvui.currentWindow().arena(), .{ .byte = self.bytes_seen, .height = contentMinSize.h }) catch {};
+
+    if (self.cache_layout) {
+        // sanity check
+        const old = self.byte_heights[self.byte_heights.len - 1].height;
+        const new = self.byte_heights_new.items[self.byte_heights_new.items.len - 1].height;
+        if (new < (old - 0.001) or new > (old + 0.001)) {
+            dvui.logError(@src(), error.CacheLayoutError, "the height of the processed text changed, cache_layout should have been false this frame", .{});
+            self.byte_heights_new.clearAndFree(dvui.currentWindow().arena());
+        }
+    }
     //std.debug.print("final height: {d} at {d}\n", .{ contentMinSize.h, self.bytes_seen });
 
     //const crs = self.data().contentRectScale();
