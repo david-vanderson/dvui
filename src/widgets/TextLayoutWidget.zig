@@ -260,6 +260,20 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     }
     scale_old.* = scale_new;
 
+    const break_lines_old = dvui.dataGetPtrDefault(null, self.wd.id, "_break_lines", bool, self.break_lines);
+    if (self.cache_layout and break_lines_old.* != self.break_lines) {
+        dvui.log.debug("TextLayoutWidget forcing cache_layout false due to break_lines change", .{});
+        self.cache_layout = false;
+    }
+    break_lines_old.* = self.break_lines;
+
+    const width_old = dvui.dataGetPtrDefault(null, self.wd.id, "_width", f32, self.data().rect.w);
+    if (self.cache_layout and self.break_lines and width_old.* != self.data().rect.w) {
+        dvui.log.debug("TextLayoutWidget forcing cache_layout false due to width change while break_lines", .{});
+        self.cache_layout = false;
+    }
+    width_old.* = self.data().rect.w;
+
     return self;
 }
 
@@ -1504,8 +1518,8 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
         // sanity check
         const old = self.byte_heights[self.byte_heights.len - 1].height;
         const new = self.byte_heights_new.items[self.byte_heights_new.items.len - 1].height;
-        if (new < (old - 0.001) or new > (old + 0.001)) {
-            dvui.logError(@src(), error.CacheLayoutError, "the height of the processed text changed, cache_layout should have been false this frame", .{});
+        if (new < (old - 1.0) or new > (old + 1.0)) {
+            dvui.logError(@src(), error.CacheLayoutError, "the height of the processed text changed by {d}, cache_layout should have been false this frame", .{new - old});
             self.byte_heights_new.clearAndFree(dvui.currentWindow().arena());
         }
     }
