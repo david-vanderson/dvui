@@ -403,7 +403,6 @@ pub fn deinit(self: *Self) void {
     {
         var it = self.font_cache.iterator();
         while (it.next()) |item| {
-            item.value_ptr.glyph_info.deinit();
             item.value_ptr.deinit(self);
         }
         self.font_cache.deinit(self.gpa);
@@ -1112,7 +1111,6 @@ pub fn begin(
         defer self.lifo().free(deadFonts);
         for (deadFonts) |id| {
             var tce = self.font_cache.fetchRemove(id).?;
-            tce.value.glyph_info.deinit();
             tce.value.deinit(self);
         }
         //std.debug.print("font_cache {d}\n", .{self.font_cache.count()});

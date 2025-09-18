@@ -588,6 +588,7 @@ pub const FontCacheEntry = struct {
 
     pub fn deinit(self: *FontCacheEntry, win: *Window) void {
         defer self.* = undefined;
+        self.glyph_info.deinit();
         if (useFreeType) {
             _ = c.FT_Done_Face(self.face);
         }
