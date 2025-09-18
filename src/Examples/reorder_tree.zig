@@ -657,6 +657,13 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
                     dvui.log.debug("Failed to track branch state!", .{});
                 };
 
+                var box = dvui.box(@src(), .{ .dir = .vertical }, .{
+                    .expand = .horizontal,
+                    .background = false,
+                    .gravity_y = 1.0,
+                });
+                defer box.deinit();
+
                 exampleFileTreeSearch(
                     abs_path,
                     base_entries,
