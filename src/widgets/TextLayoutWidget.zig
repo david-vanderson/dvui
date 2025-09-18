@@ -252,6 +252,14 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         self.scroll_to_cursor = true;
     }
 
+    const scale_old = dvui.dataGetPtrDefault(null, self.wd.id, "_scale", f32, dvui.parentGet().screenRectScale(Rect{}).s);
+    const scale_new = dvui.parentGet().screenRectScale(Rect{}).s;
+    if (self.cache_layout and scale_old.* != scale_new) {
+        dvui.log.debug("TextLayoutWidget forcing cache_layout false due to scale change", .{});
+        self.cache_layout = false;
+    }
+    scale_old.* = scale_new;
+
     return self;
 }
 
