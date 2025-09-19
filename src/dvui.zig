@@ -3500,8 +3500,8 @@ pub const ClickOptions = struct {
     rect: ?Rect.Physical = null,
 };
 
-pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?union(enum) { mouse: Event.Mouse, key: Event.Key } {
-    var click_event: ?union(enum) { mouse: Event.Mouse, key: Event.Key } = null;
+pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
+    var click_event: ?Event.EventTypes = null;
 
     const click_rect = opts.rect orelse wd.borderRectScale().r;
     for (dvui.events()) |*e| {
@@ -3539,7 +3539,7 @@ pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?union(enum) { mouse
                             // so the user doesn't have to remember
                             dvui.refresh(null, @src(), wd.id);
 
-                            click_event = me;
+                            click_event = .{ .mouse = me };
                         }
                     }
                 } else if (me.action == .motion and me.button.touch()) {
@@ -3570,7 +3570,7 @@ pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?union(enum) { mouse
             .key => |ke| {
                 if (ke.action == .down and ke.matchBind("activate")) {
                     e.handle(@src(), wd);
-                    click_event = ke;
+                    click_event = .{ .key = ke };
                     dvui.refresh(null, @src(), wd.id);
                 }
             },

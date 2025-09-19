@@ -5,6 +5,12 @@ const enums = dvui.enums;
 
 const Event = @This();
 
+pub const EventTypes = union(enum) {
+    mouse: Mouse,
+    key: Key,
+    text: Text,
+};
+
 /// Should not be set directly, use the `handle` method
 handled: bool = false,
 
@@ -15,11 +21,8 @@ target_widgetId: ?dvui.Id = null,
 
 // num increments within a frame, used in focusRemainingEvents
 num: u16 = 0,
-evt: union(enum) {
-    mouse: Mouse,
-    key: Key,
-    text: Text,
-},
+
+evt: EventTypes,
 
 pub fn format(self: *const Event, writer: *std.Io.Writer) !void {
     try writer.print("Event({d}){{{s} ", .{ self.num, @tagName(self.evt) });
