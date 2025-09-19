@@ -3500,9 +3500,9 @@ pub const ClickOptions = struct {
     rect: ?Rect.Physical = null,
 };
 
-/// Handles all events needed for clicking behaviour, used by `ButtonWidget`.
-pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
-    var is_clicked = false;
+pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
+    var click_event: ?Event.EventTypes = null;
+
     const click_rect = opts.rect orelse wd.borderRectScale().r;
     for (dvui.events()) |*e| {
         if (!dvui.eventMatch(e, .{ .id = wd.id, .r = click_rect }))
@@ -3532,13 +3532,14 @@ pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
 
                         // if the release was within our border, the click is successful
                         if (click_rect.contains(me.p)) {
-                            is_clicked = true;
 
                             // if the user interacts successfully with a
                             // widget, it usually means part of the GUI is
                             // changing, so the convention is to call refresh
                             // so the user doesn't have to remember
                             dvui.refresh(null, @src(), wd.id);
+
+                            click_event = .{ .mouse = me };
                         }
                     }
                 } else if (me.action == .motion and me.button.touch()) {
@@ -3569,14 +3570,23 @@ pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
             .key => |ke| {
                 if (ke.action == .down and ke.matchBind("activate")) {
                     e.handle(@src(), wd);
-                    is_clicked = true;
+                    click_event = .{ .key = ke };
                     dvui.refresh(null, @src(), wd.id);
                 }
             },
             else => {},
         }
     }
-    return is_clicked;
+    return click_event;
+}
+
+/// Handles all events needed for clicking behaviour, used by `ButtonWidget`.
+pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
+    if (clickedEx(wd, opts)) |_| {
+        return true;
+    }
+
+    return false;
 }
 
 /// Animation state - see `animation` and `animationGet`.
