@@ -3492,12 +3492,17 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
 pub const ClickOptions = struct {
     /// Is set to true if the cursor is hovering the click rect
     hovered: ?*bool = null,
+
     /// If not null, this will be set when the cursor is within the click rect
     hover_cursor: ?enums.Cursor = .hand,
+
     /// The rect in which clicks are checked
     ///
     /// Defaults to the border rect of the `WidgetData`
     rect: ?Rect.Physical = null,
+
+    /// Which mouse buttons to react to.
+    buttons: enum { pointer, any } = .pointer,
 };
 
 pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
@@ -3515,13 +3520,13 @@ pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
 
                     // focus this widget for events after this one (starting with e.num)
                     dvui.focusWidget(wd.id, null, e.num);
-                } else if (me.action == .press and me.button.pointer()) {
+                } else if (me.action == .press and (if (opts.buttons == .pointer) me.button.pointer() else true)) {
                     e.handle(@src(), wd);
                     dvui.captureMouse(wd, e.num);
 
                     // for touch events, we want to cancel our click if a drag is started
                     dvui.dragPreStart(me.p, .{});
-                } else if (me.action == .release and me.button.pointer()) {
+                } else if (me.action == .release and (if (opts.buttons == .pointer) me.button.pointer() else true)) {
                     // mouse button was released, do we still have mouse capture?
                     if (dvui.captured(wd.id)) {
                         e.handle(@src(), wd);

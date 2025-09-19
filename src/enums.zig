@@ -29,7 +29,7 @@ pub const TextureInterpolation = enum {
 };
 
 pub const Button = enum {
-    // used for mouse motion events
+    // used for mouse motion/wheel/position events, but never for press/release
     none,
 
     left,
@@ -59,15 +59,8 @@ pub const Button = enum {
         return (s >= start and s <= end);
     }
 
-    pub fn mouse(self: Button) bool {
-        const s = @intFromEnum(self);
-        const start = @intFromEnum(Button.left);
-        const end = @intFromEnum(Button.eight);
-        return (s >= start and s <= end);
-    }
-
     pub fn pointer(self: Button) bool {
-        return (self.mouse() or self.touch());
+        return (self == .left or self.touch());
     }
 };
 
