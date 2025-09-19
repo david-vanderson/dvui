@@ -59,8 +59,15 @@ pub const Button = enum {
         return (s >= start and s <= end);
     }
 
+    pub fn mouse(self: Button) bool {
+        const s = @intFromEnum(self);
+        const start = @intFromEnum(Button.left);
+        const end = @intFromEnum(Button.eight);
+        return (s >= start and s <= end);
+    }
+
     pub fn pointer(self: Button) bool {
-        return (self == .left or self.touch());
+        return (self.mouse() or self.touch());
     }
 };
 
