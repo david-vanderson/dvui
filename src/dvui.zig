@@ -3500,6 +3500,9 @@ pub const ClickOptions = struct {
     ///
     /// Defaults to the border rect of the `WidgetData`
     rect: ?Rect.Physical = null,
+
+    /// Which mouse buttons to react to.
+    buttons: enum { pointer, any } = .pointer,
 };
 
 pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
@@ -3517,13 +3520,13 @@ pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
 
                     // focus this widget for events after this one (starting with e.num)
                     dvui.focusWidget(wd.id, null, e.num);
-                } else if (me.action == .press and me.button != enums.Button.none) {
+                } else if (me.action == .press and (if (opts.buttons == .pointer) me.button.pointer() else true)) {
                     e.handle(@src(), wd);
                     dvui.captureMouse(wd, e.num);
 
                     // for touch events, we want to cancel our click if a drag is started
                     dvui.dragPreStart(me.p, .{});
-                } else if (me.action == .release and me.button != enums.Button.none) {
+                } else if (me.action == .release and (if (opts.buttons == .pointer) me.button.pointer() else true)) {
                     // mouse button was released, do we still have mouse capture?
                     if (dvui.captured(wd.id)) {
                         e.handle(@src(), wd);
@@ -3584,21 +3587,11 @@ pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
 
 /// Handles all events needed for clicking behaviour, used by `ButtonWidget`.
 pub fn clicked(wd: *const WidgetData, opts: ClickOptions) bool {
-    const click_evt = clickedEx(wd, opts) orelse return false;
-
-    switch (click_evt) {
-        .mouse => |mouse_evt| {
-            // now only default clicked depends on the pointer method
-            return mouse_evt.button.pointer();
-        },
-        // key was already checked
-        .key => |_| {
-            return true;
-        },
-        else => {
-            return false;
-        },
+    if (clickedEx(wd, opts)) |_| {
+        return true;
     }
+
+    return false;
 }
 
 /// Animation state - see `animation` and `animationGet`.
