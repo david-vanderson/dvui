@@ -29,7 +29,7 @@ pub const TextureInterpolation = enum {
 };
 
 pub const Button = enum {
-    // used for mouse motion events
+    // used for mouse motion/wheel/position events, but never for press/release
     none,
 
     left,
