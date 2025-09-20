@@ -1066,13 +1066,13 @@ pub fn cursorShow(_: Context, value: ?bool) !bool {
 
 pub fn refresh(_: Context) void {}
 
-pub fn setCursor(ctx: Context, cursor: dvui.enums.Cursor) void {
+pub fn setCursor(ctx: Context, cursor: dvui.enums.Cursor) !void {
     const self = stateFromHwnd(hwndFromContext(ctx));
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;
     const new_shown_state = if (cursor == .hidden) false else if (self.cursor_last == .hidden) true else null;
     if (new_shown_state) |new_state| {
-        if (try self.cursorShow(new_state) == new_state) {
+        if (try ctx.cursorShow(new_state) == new_state) {
             log.err("Cursor shown state was out of sync", .{});
         }
         // Return early if we are hiding
@@ -1098,7 +1098,7 @@ pub fn setCursor(ctx: Context, cursor: dvui.enums.Cursor) void {
         // NOTE: We set the class cursor because using win32.setCursor requires handling win32.WN_SETCURSOR
         // and messes with the default resize cursors of the window.
         _ = win32.SetClassLongPtrW(
-            hwndFromContext(self),
+            hwndFromContext(ctx),
             win32.GCLP_HCURSOR, // change cursor
             @intCast(@intFromPtr(hcursor)),
         );
@@ -1634,7 +1634,7 @@ pub fn main() !void {
             if (res != .ok) break;
 
             // cursor management
-            b.setCursor(win.cursorRequested());
+            try b.setCursor(win.cursorRequested());
         },
         .quit, .close_windows => break,
     };
