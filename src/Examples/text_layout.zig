@@ -51,7 +51,7 @@ pub fn layoutText() void {
                 defer box2.deinit();
 
                 if (dvui.checkbox(@src(), break_lines, "Break Lines", .{ .gravity_y = 0.5 })) {
-                    // todo
+                    cache_ok = false;
                 }
 
                 if (dvui.dropdown(@src(), &.{ "Kern null", "Kern true", "Kern false" }, kerning, .{ .gravity_y = 0.5, .min_size_content = .width(120) })) {

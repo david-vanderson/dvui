@@ -93,6 +93,8 @@ text_changed_start: usize = std.math.maxInt(usize),
 text_changed_end: usize = 0, // index of bytes before edits (so matches previous frame)
 text_changed_added: i64 = 0, // bytes added
 
+cache_ok: bool = true,
+
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextEntryWidget {
     var scroll_init_opts = ScrollAreaWidget.InitOpts{
         .vertical = if (init_opts.scroll_vertical orelse init_opts.multiline) .auto else .none,
@@ -133,11 +135,17 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     const len_byte = std.mem.indexOfScalar(u8, text, 0) orelse text.len;
     const len_utf8_boundary = dvui.findUtf8Start(text[0..len_byte], len_byte);
 
+    var init_options = init_opts;
+    if (dvui.dataGet(null, wd.id, "cache_bad", bool)) |_| {
+        dvui.dataRemove(null, wd.id, "cache_bad");
+        init_options.cache_layout = false;
+    }
+
     return .{
         .wd = wd,
         .scroll_init_opts = scroll_init_opts,
         .padding = padding,
-        .init_opts = init_opts,
+        .init_opts = init_options,
         .text = text,
         .len = len_utf8_boundary,
     };
@@ -416,7 +424,7 @@ pub fn textSet(self: *TextEntryWidget, text: []const u8, selected: bool) void {
 }
 
 pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
-    if (new.len == 0) return;
+    dvui.dataSet(null, self.data().id, "cache_bad", true);
 
     // strip out carriage returns, which we get from copy/paste on windows
     if (std.mem.indexOfScalar(u8, new, '\r')) |idx| {
@@ -482,7 +490,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
     }
 
     // make room if we can
-    if (sel.cursor + new_len < self.text.len) {
+    if (new_len > 0 and sel.cursor + new_len < self.text.len) {
         std.mem.copyBackwards(u8, self.text[sel.cursor + new_len ..], self.text[sel.cursor..self.len]);
     }
 
