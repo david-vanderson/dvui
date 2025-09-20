@@ -170,14 +170,10 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 .target = target,
                 .optimize = optimize,
             });
-            dvui_opts.addChecks(testing_mod, "testing-backend");
-            dvui_opts.addTests(testing_mod, "testing-backend");
+            dvui_opts.addChecks(testing_mod, "testing-backend", true);
 
             const dvui_testing = addDvuiModule("dvui_testing", dvui_opts);
-            dvui_opts.addChecks(dvui_testing, "dvui_testing");
-            if (test_dvui_and_app) {
-                dvui_opts.addTests(dvui_testing, "dvui_testing");
-            }
+            dvui_opts.addChecks(dvui_testing, "dvui_testing", test_dvui_and_app);
 
             linkBackend(dvui_testing, testing_mod);
             const example_opts: ExampleOptions = .{
@@ -194,8 +190,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 .optimize = optimize,
                 .link_libc = true,
             });
-            dvui_opts.addChecks(sdl_mod, "sdl2-backend");
-            dvui_opts.addTests(sdl_mod, "sdl2-backend");
+            dvui_opts.addChecks(sdl_mod, "sdl2-backend", true);
 
             const sdl2_options = b.addOptions();
 
@@ -256,10 +251,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             }
 
             const dvui_sdl = addDvuiModule("dvui_sdl2", dvui_opts);
-            dvui_opts.addChecks(dvui_sdl, "dvui_sdl2");
-            if (test_dvui_and_app) {
-                dvui_opts.addTests(dvui_sdl, "dvui_sdl2");
-            }
+            dvui_opts.addChecks(dvui_sdl, "dvui_sdl2", test_dvui_and_app);
 
             linkBackend(dvui_sdl, sdl_mod);
             const example_opts: ExampleOptions = .{
@@ -278,8 +270,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 .optimize = optimize,
                 .link_libc = true,
             });
-            dvui_opts.addChecks(sdl_mod, "sdl3-backend");
-            dvui_opts.addTests(sdl_mod, "sdl3-backend");
+            dvui_opts.addChecks(sdl_mod, "sdl3-backend", true);
 
             const sdl3_options = b.addOptions();
             sdl3_options.addOption(
@@ -305,10 +296,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             sdl_mod.addOptions("sdl_options", sdl3_options);
 
             const dvui_sdl = addDvuiModule("dvui_sdl3", dvui_opts);
-            dvui_opts.addChecks(dvui_sdl, "dvui_sdl3");
-            if (test_dvui_and_app) {
-                dvui_opts.addTests(dvui_sdl, "dvui_sdl3");
-            }
+            dvui_opts.addChecks(dvui_sdl, "dvui_sdl3", test_dvui_and_app);
 
             linkBackend(dvui_sdl, sdl_mod);
             const example_opts: ExampleOptions = .{
@@ -341,8 +329,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 .optimize = optimize,
                 .link_libc = true,
             });
-            dvui_opts.addChecks(raylib_mod, "raylib-backend");
-            dvui_opts.addTests(raylib_mod, "raylib-backend");
+            dvui_opts.addChecks(raylib_mod, "raylib-backend", true);
 
             const maybe_ray = b.lazyDependency(
                 "raylib",
@@ -383,10 +370,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             var dvui_opts_raylib = dvui_opts;
             dvui_opts_raylib.add_stb_image = false;
             const dvui_raylib = addDvuiModule("dvui_raylib", dvui_opts_raylib);
-            dvui_opts.addChecks(dvui_raylib, "dvui_raylib");
-            if (test_dvui_and_app) {
-                dvui_opts.addTests(dvui_raylib, "dvui_raylib");
-            }
+            dvui_opts.addChecks(dvui_raylib, "dvui_raylib", test_dvui_and_app);
 
             linkBackend(dvui_raylib, raylib_mod);
             const example_opts: ExampleOptions = .{
@@ -406,18 +390,14 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                     .optimize = optimize,
                     .link_libc = true,
                 });
-                dvui_opts.addChecks(dx11_mod, "dx11-backend");
-                dvui_opts.addTests(dx11_mod, "dx11-backend");
+                dvui_opts.addChecks(dx11_mod, "dx11-backend", true);
 
                 if (b.lazyDependency("win32", .{})) |zigwin32| {
                     dx11_mod.addImport("win32", zigwin32.module("win32"));
                 }
 
                 const dvui_dx11 = addDvuiModule("dvui_dx11", dvui_opts);
-                dvui_opts.addChecks(dvui_dx11, "dvui_dx11");
-                if (test_dvui_and_app) {
-                    dvui_opts.addTests(dvui_dx11, "dvui_dx11");
-                }
+                dvui_opts.addChecks(dvui_dx11, "dvui_dx11", test_dvui_and_app);
 
                 linkBackend(dvui_dx11, dx11_mod);
                 const example_opts: ExampleOptions = .{
@@ -448,15 +428,11 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 .optimize = optimize,
             });
             web_mod.export_symbol_names = export_symbol_names;
-            dvui_opts.addChecks(web_mod, "web-backend");
-            dvui_opts.addTests(web_mod, "web-backend");
+            dvui_opts.addChecks(web_mod, "web-backend", true);
 
             // NOTE: exported module uses the standard target so it can be overridden by users
             const dvui_web = addDvuiModule("dvui_web", dvui_opts);
-            dvui_opts.addChecks(web_mod, "dvui_web");
-            if (test_dvui_and_app) {
-                dvui_opts.addTests(web_mod, "dvui_web");
-            }
+            dvui_opts.addChecks(web_mod, "dvui_web", test_dvui_and_app);
 
             linkBackend(dvui_web, web_mod);
 
@@ -509,22 +485,21 @@ const DvuiModuleOptions = struct {
     use_lld: ?bool = null,
     build_options: *std.Build.Step.Options,
 
-    fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
-        const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters, .use_lld = self.use_lld });
-        self.b.installArtifact(tests); // Compile check on default install step
+    fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8, should_run_tests: bool) void {
+        const tests = self.b.addTest(.{
+            .root_module = mod,
+            .name = self.b.fmt("test-{s}", .{name}),
+            .filters = self.test_filters,
+            .use_lld = self.use_lld,
+        });
+        self.b.getInstallStep().dependOn(&tests.step); // Compile check on default install step
         if (self.check_step) |step| {
             step.dependOn(&tests.step);
         }
-    }
-    fn addTests(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
-        if (self.test_step) |step| {
-            const tests = self.b.addTest(.{
-                .root_module = mod,
-                .name = name,
-                .filters = self.test_filters,
-                .use_lld = self.use_lld,
-            });
-            step.dependOn(&self.b.addRunArtifact(tests).step);
+        if (should_run_tests) {
+            if (self.test_step) |step| {
+                step.dependOn(&self.b.addRunArtifact(tests).step);
+            }
         }
     }
 };
@@ -631,11 +606,12 @@ fn addExample(
     }
 
     if (add_tests) {
-        opts.addChecks(mod, name);
-        opts.addTests(mod, name);
         var test_step_opts = opts;
         test_step_opts.test_step = b.step("test-" ++ name, "Test " ++ name);
-        test_step_opts.addTests(mod, name);
+        test_step_opts.addChecks(mod, name, true);
+        if (opts.test_step) |step| {
+            step.dependOn(test_step_opts.test_step.?);
+        }
     }
 
     const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
