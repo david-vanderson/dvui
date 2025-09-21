@@ -554,28 +554,31 @@ fn addDvuiModule(
         dvui_mod.linkSystemLibrary("ole32", .{});
     }
 
-    dvui_mod.addIncludePath(b.path("src/stb"));
+    const stb_source = "external/stb/";
+    dvui_mod.addIncludePath(b.path(stb_source));
+
+    dvui_mod.addIncludePath(b.path("src/external/stb"));
 
     if (target.result.cpu.arch == .wasm32 or target.result.cpu.arch == .wasm64) {
         dvui_mod.addCSourceFiles(.{
             .files = &.{
-                "src/stb/stb_image_impl.c",
-                "src/stb/stb_image_write_impl.c",
-                "src/stb/stb_truetype_impl.c",
+                stb_source ++ "stb_image_impl.c",
+                stb_source ++ "stb_image_write_impl.c",
+                stb_source ++ "stb_truetype_impl.c",
             },
             .flags = &.{ "-DINCLUDE_CUSTOM_LIBC_FUNCS=1", "-DSTBI_NO_STDLIB=1", "-DSTBIW_NO_STDLIB=1" },
         });
     } else {
         if (opts.add_stb_image) {
             dvui_mod.addCSourceFiles(.{ .files = &.{
-                "src/stb/stb_image_impl.c",
-                "src/stb/stb_image_write_impl.c",
+                stb_source ++ "stb_image_impl.c",
+                stb_source ++ "stb_image_write_impl.c",
             } });
         }
-        dvui_mod.addCSourceFiles(.{ .files = &.{"src/stb/stb_truetype_impl.c"} });
+        dvui_mod.addCSourceFiles(.{ .files = &.{stb_source ++ "stb_truetype_impl.c"} });
 
-        dvui_mod.addIncludePath(b.path("src/tfd"));
-        dvui_mod.addCSourceFiles(.{ .files = &.{"src/tfd/tinyfiledialogs.c"} });
+        dvui_mod.addIncludePath(b.path("external/tfd"));
+        dvui_mod.addCSourceFiles(.{ .files = &.{"external/tfd/tinyfiledialogs.c"} });
 
         if (b.systemIntegrationOption("freetype", .{})) {
             dvui_mod.linkSystemLibrary("freetype2", .{});
