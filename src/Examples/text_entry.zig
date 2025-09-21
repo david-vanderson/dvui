@@ -23,11 +23,6 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
 
         fw.dragAreaSet(dvui.windowHeader("Large Text Entry", fps_str, show_large_doc));
 
-        var cache_ok = true;
-        if (dvui.dataGet(null, uniqId, "cache_bad", bool)) |_| {
-            dvui.dataRemove(null, uniqId, "cache_bad");
-            cache_ok = false;
-        }
         var copies_changed = false;
 
         const copies: *usize = dvui.dataGetPtrDefault(null, uniqId, "copies", usize, 100);
@@ -50,33 +45,40 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
                 dvui.refresh(null, @src(), null);
             }
 
-            if (dvui.checkbox(@src(), break_lines, "Break Lines", .{ .gravity_y = 0.5 })) {
-                cache_ok = false;
-            }
+            _ = dvui.checkbox(@src(), break_lines, "Break Lines", .{ .gravity_y = 0.5 });
         }
 
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
 
-        var tl = dvui.textEntry(@src(), .{ .multiline = true, .cache_layout = cache_ok, .break_lines = break_lines.*, .scroll_horizontal = !break_lines.*, .text = .{ .internal = .{ .limit = 2_000_000 } } }, .{ .expand = .both });
+        var tl = dvui.TextEntryWidget.init(@src(), .{ .multiline = true, .cache_layout = true, .break_lines = break_lines.*, .scroll_horizontal = !break_lines.*, .text = .{ .internal = .{ .limit = 2_000_000 } } }, .{ .expand = .both });
         defer tl.deinit();
+        tl.install();
+        tl.processEvents();
 
+        const num_done = dvui.dataGetPtrDefault(null, uniqId, "num_done", usize, 0);
         if (dvui.firstFrame(tl.data().id) or copies_changed) {
+            num_done.* = 0;
+            tl.textSet("", false);
+        }
+
+        if (num_done.* < copies.*) {
             const lorem1 = "Header line with 9 indented\n";
             const lorem2 = "    an indented line\n";
 
-            tl.textSet("", false);
-
-            for (0..copies.*) |_| {
-                //tl.format("{d} ", .{i}, .{});
+            for (num_done.*..@min(num_done.* + 10, copies.*)) |i| {
+                num_done.* += 1;
+                var buf2: [10]u8 = undefined;
+                const written = std.fmt.bufPrint(&buf2, "{d} ", .{i}) catch unreachable;
+                tl.textTyped(written, false);
                 tl.textTyped(lorem1, false);
                 for (0..9) |_| {
                     tl.textTyped(lorem2, false);
                 }
             }
-
-            dvui.dataSet(null, uniqId, "cache_bad", true);
         }
+
+        tl.draw();
     }
 
     var enter_pressed = false;

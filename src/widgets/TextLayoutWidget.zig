@@ -1118,11 +1118,11 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         if (self.cache_layout_bytes) |clb| {
             const start = @min(text.len, clb.start -| self.cache_layout_bytes_seen);
             const end = @min(text.len, clb.end -| self.cache_layout_bytes_seen);
+            self.cache_layout_bytes_seen += text.len;
 
-            //std.debug.print("clb {d} .. {d} bytes {d} taking {d} .. {d}\n", .{ clb.start, clb.end, self.cache_layout_bytes_seen, start, end });
+            //std.debug.print("{d} clb {d} .. {d} bytes {d} taking {d} .. {d}\n", .{ self.bytes_seen, clb.start, clb.end, self.cache_layout_bytes_seen, start, end });
 
             text = text[start..end];
-            self.cache_layout_bytes_seen += text.len;
             if (text.len == 0) return false;
         } else {
             // bytesNeeded returned null, we can't do it this frame
@@ -1509,10 +1509,8 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     if (self.cache_layout and self.byte_heights.len > 0) {
         // sanity check
         std.debug.assert(self.cache_layout_bytes != null);
-        std.debug.assert(self.cache_layout_bytes_seen == (self.cache_layout_bytes.?.end - self.cache_layout_bytes.?.start));
 
         var edit_height: f32 = undefined;
-        var edit_bytes: i64 = undefined;
         if (self.byte_height_after_idx) |i| {
             // this is not the final one
             const bh = self.byte_heights[i];
@@ -1520,7 +1518,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
             // we expected to end at bh.height without edits, this is the extra
             // height the edits gave (might be negative)
             edit_height = self.insert_pt.y - bh.height;
-            edit_bytes = @as(i64, @intCast(self.bytes_seen)) - @as(i64, @intCast(bh.byte));
+            const edit_bytes: i64 = @as(i64, @intCast(self.bytes_seen)) - @as(i64, @intCast(bh.byte));
 
             // these are the height and bytes we are skipping
             const extra_height = self.byte_heights[self.byte_heights.len - 1].height - bh.height;
@@ -1557,6 +1555,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
             bh.height += edit_height;
         }
 
+        std.debug.assert(self.cache_layout_bytes_seen == self.bytes_seen);
         //std.debug.print("edit_height {d}\n", .{edit_height});
 
         // TODO: if edit_height is negative, we might not render some text for a frame - need to scan further in byte_heights until we find one that is not visible
