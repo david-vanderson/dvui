@@ -1,6 +1,9 @@
 # DVUI - Immediate Zig GUI for Apps and Games
 
-[Homepage](https://david-vanderson.github.io) A Zig GUI toolkit for whole applications or extra debugging windows in an existing application. [online demo](https://david-vanderson.github.io/demo)
+Zig GUI toolkit for whole applications or debugging windows in existing applications.
+* [Homepage](https://david-vanderson.github.io)
+* [Online Demo](https://david-vanderson.github.io/demo)
+* [Devlog](https://david-vanderson.github.io/log/2025)
 
 Tested with [Zig](https://ziglang.org/) 0.15.1 (use tag v0.3.0 for zig 0.14.1)
 
