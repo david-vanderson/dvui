@@ -4,7 +4,7 @@
 //! are the processed by these helpers
 
 const std = @import("std");
-const dvui = @import("dvui.zig");
+const dvui = @import("../dvui.zig");
 const WidgetData = dvui.WidgetData;
 const Id = dvui.Id;
 const Rect = dvui.Rect;

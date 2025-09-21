@@ -1,5 +1,5 @@
 const std = @import("std");
-const enums_backend = @import("src/enums_backend.zig");
+const enums_backend = @import("src/types/enums_backend.zig");
 const Pkg = std.Build.Pkg;
 const Compile = std.Build.Step.Compile;
 

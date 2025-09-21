@@ -1,6 +1,6 @@
 const builtin = @import("builtin");
 const std = @import("std");
-const dvui = @import("dvui.zig");
+const dvui = @import("../dvui.zig");
 const enums_backend = @import("enums_backend.zig");
 
 pub const Backend = enums_backend.Backend;
