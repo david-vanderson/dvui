@@ -145,7 +145,7 @@ _widget_stack: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
-debug: @import("Debug.zig") = .{},
+debug: @import("../Debug.zig") = .{},
 
 pub const Subwindow = struct {
     id: Id,
@@ -1770,7 +1770,7 @@ const c = dvui.c;
 const std = @import("std");
 const math = std.math;
 const builtin = @import("builtin");
-const dvui = @import("dvui.zig");
+const dvui = @import("../dvui.zig");
 
 const zig_arena = @import("build_options").zig_arena orelse false;
 

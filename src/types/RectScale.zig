@@ -1,4 +1,4 @@
-const dvui = @import("dvui.zig");
+const dvui = @import("../dvui.zig");
 
 const Point = dvui.Point;
 const Rect = dvui.Rect;

@@ -39,22 +39,22 @@ pub const fnv = std.hash.Fnv1a_64;
 
 pub const App = @import("App.zig");
 pub const Backend = @import("Backend.zig");
-pub const Window = @import("Window.zig");
+pub const Window = @import("types/Window.zig");
 pub const Examples = @import("Examples.zig");
 
-pub const Color = @import("Color.zig");
-pub const Event = @import("Event.zig");
-pub const Font = @import("Font.zig");
-pub const Options = @import("Options.zig");
-pub const Point = @import("Point.zig").Point;
-pub const Rect = @import("Rect.zig").Rect;
-pub const RectScale = @import("RectScale.zig");
-pub const ScrollInfo = @import("ScrollInfo.zig");
-pub const Size = @import("Size.zig").Size;
-pub const Theme = @import("Theme.zig");
-pub const Vertex = @import("Vertex.zig");
-pub const Widget = @import("Widget.zig");
-pub const WidgetData = @import("WidgetData.zig");
+pub const Color = @import("types/Color.zig");
+pub const Event = @import("types/Event.zig");
+pub const Font = @import("types/Font.zig");
+pub const Options = @import("types/Options.zig");
+pub const Point = @import("types/Point.zig").Point;
+pub const Rect = @import("types/Rect.zig").Rect;
+pub const RectScale = @import("types/RectScale.zig");
+pub const ScrollInfo = @import("types/ScrollInfo.zig");
+pub const Size = @import("types/Size.zig").Size;
+pub const Theme = @import("types/Theme.zig");
+pub const Vertex = @import("types/Vertex.zig");
+pub const Widget = @import("types/Widget.zig");
+pub const WidgetData = @import("types/WidgetData.zig");
 
 pub const entypo = @import("icons/entypo.zig");
 
@@ -95,12 +95,12 @@ pub const TreeWidget = widgets.TreeWidget;
 pub const VirtualParentWidget = widgets.VirtualParentWidget;
 pub const GridWidget = widgets.GridWidget;
 pub const struct_ui = @import("struct_ui.zig");
-pub const enums = @import("enums.zig");
-pub const easing = @import("easing.zig");
+pub const enums = @import("types/enums.zig");
+pub const easing = @import("utils/easing.zig");
 pub const testing = @import("testing.zig");
-pub const selection = @import("selection.zig");
-pub const ShrinkingArenaAllocator = @import("shrinking_arena_allocator.zig").ShrinkingArenaAllocator;
-pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHashMap;
+pub const selection = @import("types/selection.zig");
+pub const ShrinkingArenaAllocator = @import("ds/shrinking_arena_allocator.zig").ShrinkingArenaAllocator;
+pub const TrackingAutoHashMap = @import("ds/tracking_hash_map.zig").TrackingAutoHashMap;
 
 pub const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
 pub const useFreeType = !wasm;
