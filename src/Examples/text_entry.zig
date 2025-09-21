@@ -24,6 +24,10 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
         fw.dragAreaSet(dvui.windowHeader("Large Text Entry", fps_str, show_large_doc));
 
         var cache_ok = true;
+        if (dvui.dataGet(null, uniqId, "cache_bad", bool)) |_| {
+            dvui.dataRemove(null, uniqId, "cache_bad");
+            cache_ok = false;
+        }
         var copies_changed = false;
 
         const copies: *usize = dvui.dataGetPtrDefault(null, uniqId, "copies", usize, 100);
@@ -70,6 +74,8 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
                     tl.textTyped(lorem2, false);
                 }
             }
+
+            dvui.dataSet(null, uniqId, "cache_bad", true);
         }
     }
 
