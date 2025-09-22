@@ -155,9 +155,19 @@ pub fn install(self: *TextEntryWidget) void {
     self.prevClip = dvui.clip(self.data().borderRectScale().r);
     const borderClip = dvui.clipGet();
 
+    // We do this dance with last_focused_id_this_frame so scroll will process
+    // key events we skip (like page up/down). Normally it would not (text
+    // entry is not a child of scroll). So with this we make scroll think that
+    // text entry ran as a child.
+    const focused = (self.data().id == dvui.lastFocusedIdInFrame());
+    if (focused) dvui.currentWindow().last_focused_id_this_frame = .zero;
+
     self.scroll = ScrollAreaWidget.init(@src(), self.scroll_init_opts, self.data().options.strip().override(.{ .expand = .both }));
+
     // scrollbars process mouse events here
     self.scroll.install();
+
+    if (focused) dvui.currentWindow().last_focused_id_this_frame = self.data().id;
 
     self.scrollClip = dvui.clipGet();
 
@@ -232,8 +242,9 @@ pub fn matchEvent(self: *TextEntryWidget, e: *Event) bool {
     // textLayout could be passively listening to events in matchEvent, so
     // don't short circuit
     const match1 = dvui.eventMatchSimple(e, self.data());
-    const match2 = self.textLayout.matchEvent(e);
-    return match1 or match2;
+    const match2 = self.scroll.scroll.?.matchEvent(e);
+    const match3 = self.textLayout.matchEvent(e);
+    return match1 or match2 or match3;
 }
 
 pub fn processEvents(self: *TextEntryWidget) void {
@@ -586,6 +597,10 @@ pub fn addNullTerminator(self: *TextEntryWidget) void {
 }
 
 pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
+    // scroll gets first crack, because it is logically outside the text area
+    self.scroll.scroll.?.processEvent(e);
+    if (e.handled) return;
+
     switch (e.evt) {
         .key => |ke| blk: {
             if (ke.action == .down and ke.matchBind("next_widget")) {
@@ -881,10 +896,15 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
         self.textLayout.processEvent(e);
 
         if (!e.handled and e.evt == .key) {
-            // Mark all key events as handled. This allows checking a
-            // keybind (like "d") after the textEntry, but where
-            // textEntry will get it first.
-            e.handle(@src(), self.data());
+            switch (e.evt.key.code) {
+                .page_up, .page_down => {}, // handled by scroll container
+                else => {
+                    // Mark all remaining key events as handled. This allows
+                    // checking a keybind (like "d") after the textEntry, but
+                    // where textEntry will get it first.
+                    e.handle(@src(), self.data());
+                },
+            }
         }
     }
 }
