@@ -845,6 +845,11 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
             }
 
             while (self.cursor_seen and wlr.count > 0) {
+                // do this first, so if we break out of the loop but never see
+                // more text we still scroll to cursor
+                self.scroll_to_cursor_next_frame = true;
+                dvui.refresh(null, @src(), self.data().id);
+
                 switch (wlr.scratch_kind) {
                     .punc => {
                         // skipping over punc
@@ -871,9 +876,6 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
                         }
                     },
                 }
-
-                self.scroll_to_cursor_next_frame = true;
-                dvui.refresh(null, @src(), self.data().id);
             }
         },
     }
@@ -975,12 +977,6 @@ fn cursorSeen(self: *TextLayoutWidget) void {
                 dvui.dataSet(null, self.data().id, "_sel_move_cursor_updown_select", cud.select);
                 dvui.refresh(null, @src(), self.data().id);
 
-                // scroll up/down to where we want the cursor, don't need
-                // overscroll because we are staying within the current text
-                dvui.scrollTo(.{
-                    .screen_rect = self.screenRectScale(cr_new.outset(self.data().options.paddingGet())).r,
-                });
-
                 // even though we scrolled to where we thought the cursor would
                 // be, we might have moved up from a long line to a short one
                 // and need to scroll horizontally
@@ -1033,9 +1029,42 @@ pub fn bytesNeeded(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, 
     const Context = struct { height: f32, byte: usize };
     var context: Context = .{ .height = vr.y, .byte = edit_start };
     var sel_end: usize = edit_end;
+    var end_height = vr.y + vr.h;
+
     if (self.copy_sel) |sel| {
-        context.byte = sel.start;
-        sel_end = sel.end;
+        context.byte = @min(context.byte, sel.start);
+        sel_end = @max(sel_end, sel.end);
+    }
+
+    var include_cursor = self.scroll_to_cursor;
+
+    // if we are moving the cursor, need to process the text around where we are moving it
+    switch (self.sel_move) {
+        .none => {},
+        .mouse => {}, // all in visible region
+        .expand_pt => |*ep| {
+            switch (ep.which) {
+                .word, .line => {}, // all in visible region
+                .home, .end => include_cursor = true,
+            }
+        },
+        .char_left_right => include_cursor = true,
+        .cursor_updown => |*cud| {
+            if (cud.pt) |p| {
+                // found cursor last frame, need to include p this frame
+                context.height = @min(context.height, p.y);
+                end_height = @max(end_height, p.y);
+            } else {
+                // we are looking for the cursor to move from
+                include_cursor = true;
+            }
+        },
+        .word_left_right => include_cursor = true,
+    }
+
+    if (include_cursor) {
+        context.byte = @min(context.byte, self.selection.cursor);
+        sel_end = @max(sel_end, self.selection.cursor);
     }
 
     // binary search for the start
@@ -1059,10 +1088,24 @@ pub fn bytesNeeded(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, 
         self.insert_pt.y = startBH.height;
         self.bytes_seen = start_byte;
 
-        if (!self.cursor_seen and (self.selection.cursor < self.bytes_seen)) {
+        if (!include_cursor and (self.selection.cursor < self.bytes_seen)) {
+            std.debug.assert(self.cursor_seen == false);
             self.cursor_rect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = 10 };
-            self.scroll_to_cursor = false;
             self.cursorSeen();
+        }
+
+        switch (self.sel_move) {
+            .word_left_right => |*wlr| {
+                if (wlr.count < 0) {
+                    // update default so that if someone does tons of word left in
+                    // the same frame (so they move to before we started processing
+                    // text, they will only go back to this index (instead of 0)
+                    for (&wlr.word_start_idx) |*i| {
+                        i.* = start_byte;
+                    }
+                }
+            },
+            else => {},
         }
 
         //std.debug.print("setting min height to {d}\n", .{self.insert_pt.y});
@@ -1077,7 +1120,7 @@ pub fn bytesNeeded(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, 
 
     // linear scan for the end (but not the final)
     for (self.byte_heights[first_past_height .. self.byte_heights.len - 1], first_past_height..) |bh, i| {
-        if (bh.height >= (vr.y + vr.h) and bh.byte > sel_end) {
+        if (bh.height >= end_height and bh.byte > sel_end) {
             //std.debug.print("found end {d} {d} bh height {d} vr {d} {d} {d}\n", .{ i, self.byte_heights.len, bh.height, vr.y, vr.h, vr.y + vr.h });
             end_byte = bh.byte;
 
@@ -1096,7 +1139,7 @@ pub fn bytesNeeded(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, 
         end_byte -= @intCast(-edit_added);
     }
 
-    //std.debug.print("bytesNeeded {d} {d} {d}\n", .{ start_byte, end_byte, edit_added });
+    //std.debug.print("bytesNeeded end {d} {d} {d}\n", .{ start_byte, end_byte, edit_added });
 
     return .{ .start = start_byte, .end = end_byte };
 }
