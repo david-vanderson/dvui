@@ -108,7 +108,7 @@ pub fn draw(self: *LabelWidget) void {
     var iter = std.mem.splitScalar(u8, self.label_str, '\n');
     var line_height_adj: f32 = undefined;
     var first: bool = true;
-    while (iter.next()) |line| {
+    while (iter.next()) |line_slice| {
         if (first) {
             line_height_adj = self.data().options.fontGet().textHeight() * (self.data().options.fontGet().line_height_factor - 1.0);
             first = false;
@@ -116,10 +116,23 @@ pub fn draw(self: *LabelWidget) void {
             rs.r.y += rs.s * line_height_adj;
         }
 
-        const tsize = self.data().options.fontGet().textSize(line);
+        var line = line_slice;
+        var tsize = self.data().options.fontGet().textSize(line);
 
         // this is only about horizontal direction
-        const lineRect = dvui.placeIn(self.data().contentRect(), tsize, .none, label_gravity);
+        var lineRect = dvui.placeIn(self.data().contentRect(), tsize, .none, label_gravity);
+
+        const ellip = "...";
+        var ellipsize = false;
+        if (tsize.w > self.data().contentRect().w) {
+            ellipsize = true;
+            const esize = self.data().options.fontGet().textSize(ellip);
+            var endi: usize = 0;
+            tsize = self.data().options.fontGet().textSizeEx(line, .{ .max_width = self.data().contentRect().w - esize.w, .end_idx = &endi });
+            line = line[0..endi];
+            lineRect = dvui.placeIn(self.data().contentRect(), tsize, .none, .{ .x = 0, .y = 0 });
+        }
+
         const liners = self.data().parent.screenRectScale(lineRect);
 
         rs.r.x = liners.r.x;
@@ -131,6 +144,19 @@ pub fn draw(self: *LabelWidget) void {
         }) catch |err| {
             dvui.logError(@src(), err, "Failed to render text: {s}", .{line});
         };
+
+        if (ellipsize) {
+            rs.r.x += liners.r.w;
+            dvui.renderText(.{
+                .font = self.data().options.fontGet(),
+                .text = ellip,
+                .rs = rs,
+                .color = self.data().options.color(.text),
+            }) catch |err| {
+                dvui.logError(@src(), err, "Failed to render ellipses after text: {s}", .{line});
+            };
+        }
+
         rs.r.y += rs.s * tsize.h;
     }
     dvui.clipSet(oldclip);
