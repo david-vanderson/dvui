@@ -126,7 +126,7 @@ pub fn basicWidgets() void {
 
         const entries = [_][]const u8{ "First", "Second", "Third is a really long one that doesn't fit" };
 
-        _ = dvui.dropdown(@src(), &entries, &dropdown_val, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5 });
+        _ = dvui.dropdown(@src(), &entries, &dropdown_val, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5, .max_size_content = .width(200) });
 
         dropdownAdvanced();
     }
