@@ -93,7 +93,7 @@ pub fn main() !void {
             }
 
             // cursor management
-            first_backend.setCursor(win.cursorRequested());
+            try first_backend.setCursor(win.cursorRequested());
 
             // Example of how to show a dialog from another thread (outside of win.begin/win.end)
             if (show_dialog_outside_frame) {
@@ -136,7 +136,7 @@ fn gui_frame() !void {
             }
 
             //if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
-                //return false;
+            //return false;
             //}
         }
 
