@@ -102,6 +102,18 @@ pub const selection = @import("selection.zig");
 pub const ShrinkingArenaAllocator = @import("shrinking_arena_allocator.zig").ShrinkingArenaAllocator;
 pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHashMap;
 
+pub const Texture = @import("Texture.zig");
+pub const TextureTarget = Texture.Target;
+/// Source data for `image()` and `imageSize()`.
+pub const ImageSource = Texture.ImageSource;
+pub const imageSize = Texture.ImageSource.size;
+pub const textureCreate = Texture.create;
+pub const textureUpdate = Texture.update;
+pub const textureCreateTarget = Texture.Target.create;
+pub const textureReadTarget = Texture.readTarget;
+pub const textureFromTarget = Texture.fromTarget;
+pub const textureDestroyLater = Texture.destroyLater;
+
 pub const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
 pub const useFreeType = !wasm;
 
@@ -1198,133 +1210,9 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontEr
     }
 }
 
-/// A texture held by the backend.  Can be drawn with `renderTexture`.
-pub const Texture = struct {
-    ptr: *anyopaque,
-    width: u32,
-    height: u32,
-
-    pub const CacheKey = u64;
-
-    /// Update a texture that was created with `textureCreate`. or fromImageSource
-    ///
-    /// The dimensions of the image must match the initial dimensions!
-    /// Only valid to call while the underlying Texture is not destroyed!
-    ///
-    /// Only valid between `Window.begin` and `Window.end`.
-    pub fn updateImageSource(self: *Texture, src: ImageSource) !void {
-        switch (src) {
-            .imageFile => |f| {
-                const img = try Color.PMAImage.fromImageFile(f.name, currentWindow().arena(), f.bytes);
-                defer currentWindow().arena().free(img.pma);
-                try textureUpdate(self, img.pma, f.interpolation);
-            },
-            .pixels => |px| {
-                const copy = try currentWindow().arena().dupe(u8, px.rgba);
-                defer currentWindow().arena().free(copy);
-                const pma = Color.PMA.sliceFromRGBA(copy);
-                try textureUpdate(self, pma, px.interpolation);
-            },
-            .pixelsPMA => |px| {
-                try textureUpdate(self, px.rgba, px.interpolation);
-            },
-            .texture => |_| @panic("this is not supported currently"),
-        }
-    }
-    /// creates a new Texture from an ImageSource
-    ///
-    /// Only valid between `Window.begin` and `Window.end`.
-    pub fn fromImageSource(source: ImageSource) !Texture {
-        return switch (source) {
-            .imageFile => |f| try Texture.fromImageFile(f.name, f.bytes, f.interpolation),
-            .pixelsPMA => |px| try Texture.fromPixelsPMA(px.rgba, px.width, px.height, px.interpolation),
-            .pixels => |px| blk: {
-                // Using arena here instead of lifo as this buffer is likely to be large and we
-                // prefer that lifo doesn't reallocate as often. Arena is intended for larger,
-                // one of allocations and we can still free the buffer here
-                const copy = try currentWindow().arena().dupe(u8, px.rgba);
-                defer currentWindow().arena().free(copy);
-                break :blk try Texture.fromPixelsPMA(Color.PMA.sliceFromRGBA(copy), px.width, px.height, px.interpolation);
-            },
-            .texture => |t| t,
-        };
-    }
-
-    pub fn fromImageFile(name: []const u8, image_bytes: []const u8, interpolation: enums.TextureInterpolation) (Backend.TextureError || StbImageError)!Texture {
-        const img = Color.PMAImage.fromImageFile(name, currentWindow().arena(), image_bytes) catch return StbImageError.stbImageError;
-        defer currentWindow().arena().free(img.pma);
-        return try textureCreate(img.pma, img.width, img.height, interpolation);
-    }
-
-    pub fn fromPixelsPMA(pma: []const dvui.Color.PMA, width: u32, height: u32, interpolation: enums.TextureInterpolation) Backend.TextureError!Texture {
-        return try dvui.textureCreate(pma, width, height, interpolation);
-    }
-
-    /// Render `tvg_bytes` at `height` into a `Texture`.  Name is for debugging.
-    ///
-    /// Only valid between `Window.begin`and `Window.end`.
-    pub fn fromTvgFile(name: []const u8, tvg_bytes: []const u8, height: u32, icon_opts: IconRenderOptions) (Backend.TextureError || TvgError)!Texture {
-        const cw = currentWindow();
-        const img = Color.PMAImage.fromTvgFile(name, cw.lifo(), cw.arena(), tvg_bytes, height, icon_opts) catch return TvgError.tvgError;
-        defer cw.lifo().free(img.pma);
-        return try textureCreate(img.pma, img.width, img.height, .linear);
-    }
-};
-
-/// A texture held by the backend that can be drawn onto.  See `Picture`.
-pub const TextureTarget = struct {
-    ptr: *anyopaque,
-    width: u32,
-    height: u32,
-};
-
-/// Gets a texture from the internal texture cache. If a texture
-/// isn't used for one frame it gets removed from the cache and
-/// destroyed.
-///
-/// If you want to lazily create a texture, you could do:
-/// ```zig
-/// const texture = dvui.textureGetCached(key) orelse blk: {
-///     const texture = ...; // Create your texture here
-///     dvui.textureAddToCache(key, texture);
-///     break :blk texture;
-/// }
-/// ```
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn textureGetCached(key: Texture.CacheKey) ?Texture {
-    const cw = currentWindow();
-    return cw.texture_cache.get(key);
-}
-
-/// Add a texture to the cache. This is useful if you want to load
-/// and image from disk, create a texture from it and then unload
-/// it from memory. The texture will remain in the cache as long
-/// as it's key is accessed at least once per frame.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn textureAddToCache(key: Texture.CacheKey, texture: Texture) void {
-    const cw = currentWindow();
-    const prev = cw.texture_cache.fetchPut(cw.gpa, key, texture) catch |err| {
-        logError(@src(), err, "Could not add texture with key {x} to cache", .{key});
-        return;
-    };
-    if (prev) |kv| {
-        dvui.textureDestroyLater(kv.value);
-    }
-}
-
-/// Remove a key from the cache. This can force the re-creation
-/// of a texture created by `ImageSource` for example.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn textureInvalidateCache(key: Texture.CacheKey) void {
-    const cw = currentWindow();
-    const prev = cw.texture_cache.fetchRemove(key);
-    if (prev) |kv| {
-        dvui.textureDestroyLater(kv.value);
-    }
-}
+pub const textureGetCached = Texture.Cache.get;
+pub const textureAddToCache = Texture.Cache.add;
+pub const textureInvalidateCache = Texture.Cache.invalidate;
 
 /// Takes in svg bytes and returns a tvg bytes that can be used
 /// with `icon` or `iconTexture`
@@ -5445,156 +5333,6 @@ pub fn icon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []cons
     iw.deinit();
 }
 
-/// Source data for `image()` and `imageSize()`.
-pub const ImageSource = union(enum) {
-    /// bytes of an supported image file (i.e. png, jpeg, gif, ...)
-    imageFile: struct {
-        bytes: []const u8,
-        // Optional name/filename for debugging
-        name: []const u8 = "imageFile",
-        interpolation: enums.TextureInterpolation = .linear,
-        invalidation: InvalidationStrategy = .ptr,
-    },
-
-    /// bytes of an premultiplied rgba u8 array in row major order
-    pixelsPMA: struct {
-        rgba: []Color.PMA,
-        width: u32,
-        height: u32,
-        interpolation: enums.TextureInterpolation = .linear,
-        invalidation: InvalidationStrategy = .ptr,
-    },
-
-    /// bytes of a non premultiplied rgba u8 array in row major order, will
-    /// be converted to premultiplied when making a texture
-    pixels: struct {
-        /// FIXME: This cannot use `[]const Color` because it's not marked `extern`
-        ///        and doesn't have a stable memory layout
-        rgba: []const u8,
-        width: u32,
-        height: u32,
-        interpolation: enums.TextureInterpolation = .linear,
-        invalidation: InvalidationStrategy = .ptr,
-    },
-
-    /// When providing a texture directly, `hash` will return 0 and it will
-    /// not be inserted into the texture cache.
-    texture: Texture,
-
-    pub const InvalidationStrategy = enum {
-        /// The pointer will be used to determine if the source has changed.
-        ///
-        /// Changing the data behind the pointer will NOT invalidate the texture
-        ptr,
-        /// The bytes will be used to determine if the source has changed.
-        ///
-        /// Changing the data behind the pointer WILL invalidate the texture,
-        /// but checking all the bytes every frame can be costly
-        bytes,
-        /// Do not cache the texture at all and generate a new texture each frame
-        always,
-    };
-
-    /// Pass the return value of this to `dvui.textureInvalidate` to
-    /// remove the texture from the cache.
-    ///
-    /// When providing a texture directly with `ImageSource.texture`,
-    /// this function will always return 0 as it doesn't interact with
-    /// the texture cache.
-    pub fn hash(self: ImageSource) u64 {
-        var h = fnv.init();
-        // .always hashes ptr (for uniqueness) and image dimensions so we can update the texture if dimensions stay the same
-        const img_dimensions = imageSize(self) catch Size{ .w = 0, .h = 0 };
-        var dim: [2]u32 = .{ @intFromFloat(img_dimensions.w), @intFromFloat(img_dimensions.h) };
-        const img_dim_bytes = std.mem.asBytes(&dim); // hashing u32 here instead of float because of unstable bit representation in floating point numbers
-
-        switch (self) {
-            .imageFile => |file| {
-                switch (file.invalidation) {
-                    .ptr => h.update(std.mem.asBytes(&file.bytes.ptr)),
-                    .bytes => h.update(file.bytes),
-                    .always => {
-                        h.update(std.mem.asBytes(&file.bytes.ptr));
-                        h.update(img_dim_bytes);
-                    },
-                }
-                h.update(std.mem.asBytes(&@intFromEnum(file.interpolation)));
-            },
-            .pixelsPMA => |pixels| {
-                switch (pixels.invalidation) {
-                    .ptr, .always => h.update(std.mem.asBytes(&pixels.rgba.ptr)),
-                    .bytes => h.update(@ptrCast(pixels.rgba)),
-                }
-                h.update(std.mem.asBytes(&@intFromEnum(pixels.interpolation)));
-                h.update(img_dim_bytes);
-            },
-            .pixels => |pixels| {
-                switch (pixels.invalidation) {
-                    .ptr, .always => h.update(std.mem.asBytes(&pixels.rgba.ptr)),
-                    .bytes => h.update(std.mem.sliceAsBytes(pixels.rgba)),
-                }
-                h.update(std.mem.asBytes(&@intFromEnum(pixels.interpolation)));
-                h.update(img_dim_bytes);
-            },
-            .texture => return 0,
-        }
-        return h.final();
-    }
-
-    /// Will get the texture from cache or create it if it doesn't already exist
-    ///
-    /// Only valid between `Window.begin` and `Window.end`
-    pub fn getTexture(self: ImageSource) !Texture {
-        const key = self.hash();
-        const invalidate = switch (self) {
-            .imageFile => |f| f.invalidation,
-            .pixels => |px| px.invalidation,
-            .pixelsPMA => |px| px.invalidation,
-            // return texture directly
-            .texture => |tex| return tex,
-        };
-        if (textureGetCached(key)) |cached_texture| {
-            // if invalidate = always, we update the texture using updateImageSource for efficency, otherwise return the cached Texture
-            if (invalidate == .always) {
-                var tex_mut = cached_texture;
-                try tex_mut.updateImageSource(self);
-                return tex_mut;
-            } else return cached_texture;
-        } else {
-            // cache was empty we create a new Texture
-            const new_texture = try Texture.fromImageSource(self);
-            textureAddToCache(key, new_texture);
-            return new_texture;
-        }
-    }
-};
-
-/// Get the size of a raster image.  If source is .imageFile, this only decodes
-/// enough info to get the size.
-///
-/// See `image`.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn imageSize(source: ImageSource) !Size {
-    switch (source) {
-        .imageFile => |file| {
-            var w: c_int = undefined;
-            var h: c_int = undefined;
-            var n: c_int = undefined;
-            const ok = c.stbi_info_from_memory(file.bytes.ptr, @as(c_int, @intCast(file.bytes.len)), &w, &h, &n);
-            if (ok == 1) {
-                return .{ .w = @floatFromInt(w), .h = @floatFromInt(h) };
-            } else {
-                log.warn("imageSize stbi_info error on image \"{s}\": {s}\n", .{ file.name, c.stbi_failure_reason() });
-                return StbImageError.stbImageError;
-            }
-        },
-        .pixelsPMA => |a| return .{ .w = @floatFromInt(a.width), .h = @floatFromInt(a.height) },
-        .pixels => |a| return .{ .w = @floatFromInt(a.width), .h = @floatFromInt(a.height) },
-        .texture => |tex| return .{ .w = @floatFromInt(tex.width), .h = @floatFromInt(tex.height) },
-    }
-}
-
 pub const ImageInitOptions = struct {
     /// Data to create the texture.
     source: ImageSource,
@@ -7203,84 +6941,6 @@ pub fn renderText(opts: renderTextOptions) Backend.GenericError!void {
     }
 
     try renderTriangles(builder.build_unowned(), texture_atlas);
-}
-
-/// Create a texture that can be rendered with `renderTexture`.
-///
-/// Remember to destroy the texture at some point, see `textureDestroyLater`.
-///
-/// Only valid between `Window.begin` and `Window.end`.
-pub fn textureCreate(pixels: []const Color.PMA, width: u32, height: u32, interpolation: enums.TextureInterpolation) Backend.TextureError!Texture {
-    if (pixels.len != width * height) {
-        log.err("Texture was created with an incorrect amount of pixels, expected {d} but got {d} (w: {d}, h: {d})", .{ pixels.len, width * height, width, height });
-    }
-    return currentWindow().backend.textureCreate(@ptrCast(pixels.ptr), width, height, interpolation);
-}
-
-/// Update a texture that was created with `textureCreate`.
-///
-/// If the backend does not support updating textures, it will be destroyed and
-/// recreated, changing the pointer inside tex.
-///
-/// Only valid between `Window.begin` and `Window.end`.
-pub fn textureUpdate(tex: *Texture, pma: []const dvui.Color.PMA, interpolation: enums.TextureInterpolation) !void {
-    if (pma.len != tex.width * tex.height) @panic("Texture size and supplied Content did not match");
-    currentWindow().backend.textureUpdate(tex.*, @ptrCast(pma.ptr)) catch |err| {
-        // texture update not supported by backend, destroy and create texture
-        if (err == Backend.TextureError.NotImplemented) {
-            const new_tex = try textureCreate(pma, tex.width, tex.height, interpolation);
-            textureDestroyLater(tex.*);
-            tex.* = new_tex;
-        } else {
-            return err;
-        }
-    };
-}
-
-/// Create a texture that can be rendered with `renderTexture` and drawn to
-/// with `renderTarget`.  Starts transparent (all zero).
-///
-/// Remember to destroy the texture at some point, see `textureDestroyLater`.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.TextureInterpolation) Backend.TextureError!TextureTarget {
-    return try currentWindow().backend.textureCreateTarget(width, height, interpolation);
-}
-
-/// Read pixels from texture created with `textureCreateTarget`.
-///
-/// Returns pixels allocated by arena.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn textureReadTarget(arena: std.mem.Allocator, texture: TextureTarget) Backend.TextureError![]Color.PMA {
-    const size: usize = texture.width * texture.height * @sizeOf(Color.PMA);
-    const pixels = try arena.alloc(u8, size);
-    errdefer arena.free(pixels);
-
-    try currentWindow().backend.textureReadTarget(texture, pixels.ptr);
-
-    return @ptrCast(pixels);
-}
-
-/// Convert a target texture to a normal texture.  target is destroyed.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn textureFromTarget(target: TextureTarget) Backend.TextureError!Texture {
-    return currentWindow().backend.textureFromTarget(target);
-}
-
-/// Destroy a texture created with `textureCreate` at the end of the frame.
-///
-/// While `Backend.textureDestroy` immediately destroys the texture, this
-/// function deferres the destruction until the end of the frame, so it is safe
-/// to use even in a subwindow where rendering is deferred.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn textureDestroyLater(texture: Texture) void {
-    const cw = currentWindow();
-    cw.texture_trash.append(cw.arena(), texture) catch |err| {
-        dvui.log.err("textureDestroyLater got {any}\n", .{err});
-    };
 }
 
 pub const RenderTarget = struct {
