@@ -113,7 +113,7 @@ font_cache: dvui.TrackingAutoHashMap(u64, dvui.FontCacheEntry, .get_and_put) = .
 /// Uses `gpa` allocator
 font_bytes: std.AutoHashMapUnmanaged(dvui.Font.FontId, dvui.FontBytesEntry) = .empty,
 /// Uses `gpa` allocator
-texture_cache: dvui.TrackingAutoHashMap(dvui.Texture.CacheKey, dvui.Texture, .get_and_put) = .empty,
+texture_cache: dvui.Texture.Cache.Storage = .empty,
 /// Uses `arena` allocator
 texture_trash: std.ArrayListUnmanaged(dvui.Texture) = .empty,
 dialog_mutex: std.Thread.Mutex = .{},
