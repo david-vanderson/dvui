@@ -33,8 +33,8 @@
         },
         // required for the directx11 backend
         .win32 = .{
-            .url = "git+https://github.com/marlersoft/zigwin32#be58d3816810c1e4c20781cc7223a60906467d3c",
-            .hash = "zigwin32-25.0.28-preview-AAAAAHsJ-wPA4nREAzT_OOkF6gLrornNuHqREfHDADoS",
+            .url = "git+https://github.com/RedPhoenixQ/zigwin32#4a44fbe09c7d41e28c94be997355ace483310895",
+            .hash = "zigwin32-25.0.28-preview-AAAAAI945AOPFc3CuZtqtTjMjUgAmtdlrdt5tIG4i78w",
             .lazy = true,
         },
         // for rendering tvg icons
