@@ -11,6 +11,76 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
     var left_alignment = dvui.Alignment.init(@src(), 0);
     defer left_alignment.deinit();
 
+    const uniqId = dvui.parentGet().extendId(@src(), 0);
+    const show_large_doc: *bool = dvui.dataGetPtrDefault(null, uniqId, "show_large_doc", bool, false);
+
+    if (show_large_doc.*) {
+        var fw = dvui.floatingWindow(@src(), .{}, .{ .max_size_content = .width(500), .min_size_content = .height(500) });
+        defer fw.deinit();
+
+        var buf: [100]u8 = undefined;
+        const fps_str = std.fmt.bufPrint(&buf, "{d:0>3.0} fps", .{dvui.FPS()}) catch unreachable;
+
+        fw.dragAreaSet(dvui.windowHeader("Large Text Entry", fps_str, show_large_doc));
+
+        var copies_changed = false;
+
+        const copies: *usize = dvui.dataGetPtrDefault(null, uniqId, "copies", usize, 100);
+        const break_lines: *bool = dvui.dataGetPtrDefault(null, uniqId, "break_lines", bool, false);
+        const refresh: *bool = dvui.dataGetPtrDefault(null, uniqId, "refresh", bool, false);
+        {
+            var box2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer box2.deinit();
+
+            var copies_val: f32 = @floatFromInt(copies.*);
+            if (dvui.sliderEntry(@src(), "copies: {d:0.0}", .{ .value = &copies_val, .min = 0, .max = 1000, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+                copies.* = @intFromFloat(@round(copies_val));
+                copies_changed = true;
+                fw.autoSize();
+            }
+
+            _ = dvui.checkbox(@src(), refresh, "Refresh", .{});
+
+            if (refresh.*) {
+                dvui.refresh(null, @src(), null);
+            }
+
+            _ = dvui.checkbox(@src(), break_lines, "Break Lines", .{ .gravity_y = 0.5 });
+        }
+
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+        defer scroll.deinit();
+
+        var tl = dvui.TextEntryWidget.init(@src(), .{ .multiline = true, .cache_layout = true, .break_lines = break_lines.*, .scroll_horizontal = !break_lines.*, .text = .{ .internal = .{ .limit = 2_000_000 } } }, .{ .expand = .both });
+        defer tl.deinit();
+        tl.install();
+        tl.processEvents();
+
+        const num_done = dvui.dataGetPtrDefault(null, uniqId, "num_done", usize, 0);
+        if (dvui.firstFrame(tl.data().id) or copies_changed) {
+            num_done.* = 0;
+            tl.textSet("", false);
+        }
+
+        if (num_done.* < copies.*) {
+            const lorem1 = "Header line with 9 indented\n";
+            const lorem2 = "    an indented line\n";
+
+            for (num_done.*..@min(num_done.* + 10, copies.*)) |i| {
+                num_done.* += 1;
+                var buf2: [10]u8 = undefined;
+                const written = std.fmt.bufPrint(&buf2, "{d} ", .{i}) catch unreachable;
+                tl.textTyped(written, false);
+                tl.textTyped(lorem1, false);
+                for (0..9) |_| {
+                    tl.textTyped(lorem2, false);
+                }
+            }
+        }
+
+        tl.draw();
+    }
+
     var enter_pressed = false;
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
@@ -25,6 +95,10 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
         te.deinit();
 
         dvui.label(@src(), "(limit {d})", .{text_entry_buf.len}, .{ .gravity_y = 0.5 });
+
+        if (dvui.button(@src(), "Large Doc", .{}, .{ .gravity_x = 1.0 })) {
+            show_large_doc.* = !show_large_doc.*;
+        }
     }
 
     {
