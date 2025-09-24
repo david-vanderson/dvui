@@ -203,7 +203,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
             if (!rs.r.empty()) {
                 rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{
                     .color = self.options.color(.border),
-                    .fade = if (self.rectScale().s > 1.0) 0.0 else 1.0,
+                    .fade = if (self.rectScale().s >= 2.0) 0.0 else 1.0,
                 });
             }
         }
@@ -214,7 +214,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
         if (!rs.r.empty()) {
             rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{
                 .color = opts.fill_color orelse self.options.color(.fill),
-                .fade = if (self.rectScale().s > 1.0) 0.0 else 1.0,
+                .fade = if (self.rectScale().s >= 2.0) 0.0 else 1.0,
             });
         }
     }
