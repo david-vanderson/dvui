@@ -379,6 +379,34 @@ pub const Branch = struct {
             self.expander_vbox.install();
             self.expander_vbox.drawBackground();
 
+            {
+                var path = dvui.Path.Builder.init(dvui.currentWindow().lifo());
+                defer path.deinit();
+
+                const r = self.expander_vbox.wd.rectScale().r;
+                const radii = opts.corner_radiusGet().scale(self.expander_vbox.wd.rectScale().s, dvui.Rect.Physical);
+
+                // Top left corner arc
+                path.addArc(
+                    .{ .x = r.x + radii.x, .y = r.y + radii.y },
+                    radii.x,
+                    std.math.pi * 1.5,
+                    std.math.pi,
+                    false,
+                );
+
+                // Bottom left corner arc
+                path.addArc(
+                    .{ .x = r.x + radii.x, .y = r.y + r.h - radii.y },
+                    radii.x,
+                    std.math.pi,
+                    std.math.pi * 0.5,
+                    false,
+                );
+
+                path.build().stroke(.{ .thickness = 1, .color = opts.color(.border) });
+            }
+
             // Since our items are padded, we need to add some extra space to the top
             _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = self.options.paddingGet().y * 2.0 } });
         }

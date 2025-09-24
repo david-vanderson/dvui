@@ -398,7 +398,6 @@ pub fn reorderTree(uniqueId: dvui.Id) void {
             .padding = dvui.Rect.all(1),
         },
         .{
-            .border = .{ .x = 1 },
             .corner_radius = dvui.Rect.all(4),
             .box_shadow = .{
                 .color = .black,
@@ -946,9 +945,8 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
         .color_fill = dvui.themeGet().color(.window, .fill),
         .color_border = tree_palette[0],
         .expand = .horizontal,
-        .corner_radius = root_branch.button.wd.options.corner_radius,
+        .corner_radius = .all(8),
         .background = true,
-        .border = .{ .x = 1 },
         .box_shadow = .{
             .color = .black,
             .offset = .{ .x = -5, .y = 5 },
