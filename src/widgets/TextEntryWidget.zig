@@ -51,6 +51,11 @@ pub const InitOptions = struct {
     /// Faded text shown when the textEntry is empty
     placeholder: ?[]const u8 = null,
 
+    /// If true, assume text (and text height) is the same (excepting edits we
+    /// do internally) as we saw last frame and only process what is needed for
+    /// visibility (and copy).
+    cache_layout: bool = false,
+
     break_lines: bool = false,
     kerning: ?bool = null,
     scroll_vertical: ?bool = null, // default is value of multiline
@@ -80,8 +85,13 @@ padding: Rect,
 init_opts: InitOptions,
 text: []u8,
 len: usize,
-text_changed: bool = false,
 enter_pressed: bool = false, // not valid if multiline
+text_changed: bool = false,
+
+// see textChanged()
+text_changed_start: usize = std.math.maxInt(usize),
+text_changed_end: usize = 0, // index of bytes before edits (so matches previous frame)
+text_changed_added: i64 = 0, // bytes added
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextEntryWidget {
     var scroll_init_opts = ScrollAreaWidget.InitOpts{
@@ -145,13 +155,27 @@ pub fn install(self: *TextEntryWidget) void {
     self.prevClip = dvui.clip(self.data().borderRectScale().r);
     const borderClip = dvui.clipGet();
 
+    // We do this dance with last_focused_id_this_frame so scroll will process
+    // key events we skip (like page up/down). Normally it would not (text
+    // entry is not a child of scroll). So with this we make scroll think that
+    // text entry ran as a child.
+    const focused = (self.data().id == dvui.lastFocusedIdInFrame());
+    if (focused) dvui.currentWindow().last_focused_id_this_frame = .zero;
+
     self.scroll = ScrollAreaWidget.init(@src(), self.scroll_init_opts, self.data().options.strip().override(.{ .expand = .both }));
+
     // scrollbars process mouse events here
     self.scroll.install();
 
+    if (focused) dvui.currentWindow().last_focused_id_this_frame = self.data().id;
+
     self.scrollClip = dvui.clipGet();
 
-    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .kerning = self.init_opts.kerning, .touch_edit_just_focused = false }, self.data().options.strip().override(.{ .expand = .both, .padding = self.padding }));
+    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .kerning = self.init_opts.kerning, .touch_edit_just_focused = false, .cache_layout = self.init_opts.cache_layout }, self.data().options.strip().override(.{ .expand = .both, .padding = self.padding }));
+
+    // if textLayout forced cache_layout to false, we need to honor that
+    self.init_opts.cache_layout = self.textLayout.cache_layout;
+
     self.textLayout.install(.{ .focused = self.data().id == dvui.focusedWidgetId(), .show_touch_draggables = (self.len > 0) });
     self.textClip = dvui.clipGet();
 
@@ -218,8 +242,9 @@ pub fn matchEvent(self: *TextEntryWidget, e: *Event) bool {
     // textLayout could be passively listening to events in matchEvent, so
     // don't short circuit
     const match1 = dvui.eventMatchSimple(e, self.data());
-    const match2 = self.textLayout.matchEvent(e);
-    return match1 or match2;
+    const match2 = self.scroll.scroll.?.matchEvent(e);
+    const match3 = self.textLayout.matchEvent(e);
+    return match1 or match2 or match3;
 }
 
 pub fn processEvents(self: *TextEntryWidget) void {
@@ -279,6 +304,13 @@ pub fn draw(self: *TextEntryWidget) void {
             self.textLayout.addText(pc, self.data().options.strip());
         }
     } else {
+        if (self.init_opts.cache_layout) {
+            self.textLayout.cache_layout_bytes = self.textLayout.bytesNeeded(
+                self.text_changed_start,
+                self.text_changed_end,
+                self.text_changed_added,
+            );
+        }
         self.textLayout.addText(self.text[0..self.len], self.data().options.strip());
     }
 
@@ -354,14 +386,51 @@ pub fn minSizeForChild(self: *TextEntryWidget, s: Size) void {
     self.data().minSizeMax(self.data().options.padSize(s));
 }
 
+pub fn textChangedRemoved(self: *TextEntryWidget, start: usize, end: usize) void {
+    self.textChanged(start, end, @as(i64, @intCast(start)) - @as(i64, @intCast(end)));
+}
+
+// Inserting text is at a single point in the previous frame's indexing.
+pub fn textChangedAdded(self: *TextEntryWidget, pos: usize, added: usize) void {
+    self.textChanged(pos, pos, @intCast(added));
+}
+
+// Only needed when cache_layout is true.  We are maintaining an interval of
+// bytes from last frame plus a total number added (might be negative) in that
+// interval.  This is sent to textLayout so it will process at least this
+// interval (plus whatever is visible).
+pub fn textChanged(self: *TextEntryWidget, start: usize, end: usize, added: i64) void {
+    self.text_changed = true;
+    if (end > self.text_changed_start) {
+        // end is in current bytes, so we update it to previous frame's indexing
+        var end_old: usize = undefined;
+        if (self.text_changed_added >= 0) {
+            end_old = end - @as(usize, @intCast(self.text_changed_added));
+        } else {
+            end_old = end + @as(usize, @intCast(-self.text_changed_added));
+        }
+        // This assumes that the current update happens after (in bytes) all
+        // previous updates.  This is not exact, but will always give an
+        // interval that includes all the updates.
+        self.text_changed_end = @max(self.text_changed_end, end_old);
+    } else {
+        // before previous updates then indexing is the same
+        self.text_changed_end = @max(self.text_changed_end, end);
+    }
+
+    // if we are before the previous updates then the indexing is the same
+    self.text_changed_start = @min(self.text_changed_start, start);
+    self.text_changed_added += added;
+
+    //std.debug.print("textChanged {d} {d} {d}\n", .{ self.text_changed_start, self.text_changed_end, self.text_changed_added });
+}
+
 pub fn textSet(self: *TextEntryWidget, text: []const u8, selected: bool) void {
     self.textLayout.selection.selectAll();
     self.textTyped(text, selected);
 }
 
 pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
-    if (new.len == 0) return;
-
     // strip out carriage returns, which we get from copy/paste on windows
     if (std.mem.indexOfScalar(u8, new, '\r')) |idx| {
         self.textTyped(new[0..idx], selected);
@@ -372,11 +441,11 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
     var sel = self.textLayout.selectionGet(self.len);
     if (!sel.empty()) {
         // delete selection
+        self.textChangedRemoved(sel.start, sel.end);
         std.mem.copyForwards(u8, self.text[sel.start..], self.text[sel.end..self.len]);
         self.len -= (sel.end - sel.start);
         sel.end = sel.start;
         sel.cursor = sel.start;
-        self.text_changed = true;
     }
 
     const space_left = self.text.len - self.len;
@@ -426,12 +495,12 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
     }
 
     // make room if we can
-    if (sel.cursor + new_len < self.text.len) {
+    if (new_len > 0 and sel.cursor + new_len < self.text.len) {
         std.mem.copyBackwards(u8, self.text[sel.cursor + new_len ..], self.text[sel.cursor..self.len]);
     }
 
     if (new_len > 0) {
-        self.text_changed = true;
+        self.textChangedAdded(sel.cursor, new_len);
     }
 
     // update our len and maintain 0 termination if possible
@@ -528,6 +597,10 @@ pub fn addNullTerminator(self: *TextEntryWidget) void {
 }
 
 pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
+    // scroll gets first crack, because it is logically outside the text area
+    self.scroll.scroll.?.processEvent(e);
+    if (e.handled) return;
+
     switch (e.evt) {
         .key => |ke| blk: {
             if (ke.action == .down and ke.matchBind("next_widget")) {
@@ -675,13 +748,13 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                         var sel = self.textLayout.selectionGet(self.len);
                         if (!sel.empty()) {
                             // just delete selection
+                            self.textChangedRemoved(sel.start, sel.end);
                             std.mem.copyForwards(u8, self.text[sel.start..], self.text[sel.end..self.len]);
                             self.len -= (sel.end - sel.start);
                             self.addNullTerminator();
                             sel.end = sel.start;
                             sel.cursor = sel.start;
                             self.textLayout.scroll_to_cursor = true;
-                            self.text_changed = true;
                         } else if (ke.matchBind("delete_prev_word")) {
                             // delete word before cursor
 
@@ -699,13 +772,13 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             }
 
                             // delete from sel.cursor to oldcur
+                            if (sel.cursor != oldcur) self.textChangedRemoved(sel.cursor, oldcur);
                             std.mem.copyForwards(u8, self.text[sel.cursor..], self.text[oldcur..self.len]);
                             self.len -= (oldcur - sel.cursor);
                             self.addNullTerminator();
                             sel.end = sel.cursor;
                             sel.start = sel.cursor;
                             self.textLayout.scroll_to_cursor = true;
-                            self.text_changed = (sel.cursor != oldcur);
                         } else if (sel.cursor > 0) {
                             // delete character just before cursor
                             //
@@ -715,6 +788,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             // does not have the pattern 10xxxxxx.
                             var i: usize = 1;
                             while (sel.cursor - i > 0 and self.text[sel.cursor - i] & 0xc0 == 0x80) : (i += 1) {}
+                            self.textChangedRemoved(sel.cursor - i, sel.cursor);
                             std.mem.copyForwards(u8, self.text[sel.cursor - i ..], self.text[sel.cursor..self.len]);
                             self.len -= i;
                             self.addNullTerminator();
@@ -722,7 +796,6 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             sel.start = sel.cursor;
                             sel.end = sel.cursor;
                             self.textLayout.scroll_to_cursor = true;
-                            self.text_changed = true;
                         }
                     }
                 },
@@ -732,13 +805,13 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                         var sel = self.textLayout.selectionGet(self.len);
                         if (!sel.empty()) {
                             // just delete selection
+                            self.textChangedRemoved(sel.start, sel.end);
                             std.mem.copyForwards(u8, self.text[sel.start..], self.text[sel.end..self.len]);
                             self.len -= (sel.end - sel.start);
                             self.addNullTerminator();
                             sel.end = sel.start;
                             sel.cursor = sel.start;
                             self.textLayout.scroll_to_cursor = true;
-                            self.text_changed = true;
                         } else if (ke.matchBind("delete_next_word")) {
                             // delete word after cursor
 
@@ -756,10 +829,10 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             }
 
                             // delete from oldcur to sel.cursor
+                            if (sel.cursor != oldcur) self.textChangedRemoved(oldcur, sel.cursor);
                             std.mem.copyForwards(u8, self.text[oldcur..], self.text[sel.cursor..self.len]);
                             self.len -= (sel.cursor - oldcur);
                             self.addNullTerminator();
-                            self.text_changed = (sel.cursor != oldcur);
                             sel.cursor = oldcur;
                             sel.end = sel.cursor;
                             sel.start = sel.cursor;
@@ -771,11 +844,11 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             const ii = std.unicode.utf8ByteSequenceLength(self.text[sel.cursor]) catch 1;
                             const i = @min(ii, self.len - sel.cursor);
 
+                            self.textChangedRemoved(sel.cursor, sel.cursor + i);
                             std.mem.copyForwards(u8, self.text[sel.cursor..], self.text[sel.cursor + i .. self.len]);
                             self.len -= i;
                             self.addNullTerminator();
                             self.textLayout.scroll_to_cursor = true;
-                            self.text_changed = true;
                         }
                     }
                 },
@@ -823,10 +896,15 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
         self.textLayout.processEvent(e);
 
         if (!e.handled and e.evt == .key) {
-            // Mark all key events as handled. This allows checking a
-            // keybind (like "d") after the textEntry, but where
-            // textEntry will get it first.
-            e.handle(@src(), self.data());
+            switch (e.evt.key.code) {
+                .page_up, .page_down => {}, // handled by scroll container
+                else => {
+                    // Mark all remaining key events as handled. This allows
+                    // checking a keybind (like "d") after the textEntry, but
+                    // where textEntry will get it first.
+                    e.handle(@src(), self.data());
+                },
+            }
         }
     }
 }
@@ -857,13 +935,13 @@ pub fn cut(self: *TextEntryWidget) void {
         dvui.clipboardTextSet(self.text[sel.start..sel.end]);
 
         // delete selection
+        self.textChangedRemoved(sel.start, sel.end);
         std.mem.copyForwards(u8, self.text[sel.start..], self.text[sel.end..self.len]);
         self.len -= (sel.end - sel.start);
         self.addNullTerminator();
         sel.end = sel.start;
         sel.cursor = sel.start;
         self.textLayout.scroll_to_cursor = true;
-        self.text_changed = true;
     }
 }
 
