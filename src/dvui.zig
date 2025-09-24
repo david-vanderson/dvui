@@ -118,6 +118,36 @@ pub const textureReadTarget = Texture.readTarget;
 pub const textureFromTarget = Texture.fromTarget;
 pub const textureDestroyLater = Texture.destroyLater;
 
+/// Gets a texture from the internal texture cache. If a texture
+/// isn't used for one frame it gets removed from the cache and
+/// destroyed.
+///
+/// If you want to lazily create a texture, you could do:
+/// ```zig
+/// const texture = dvui.textureGetCached(key) orelse blk: {
+///     const texture = ...; // Create your texture here
+///     dvui.textureAddToCache(key, texture);
+///     break :blk texture;
+/// }
+/// ```
+pub fn textureGetCached(key: Texture.Cache.Key) ?Texture {
+    return currentWindow().texture_cache.get(key);
+}
+/// See `Texture.Cache.add`
+pub fn textureAddToCache(key: Texture.Cache.Key, texture: Texture) void {
+    currentWindow().texture_cache.add(currentWindow().gpa, key, texture) catch |err| {
+        dvui.logError(@src(), err, "Could not add texture with key {x} to cache", .{key});
+        return;
+    };
+}
+/// See `Texture.Cache.invalidate`
+pub fn textureInvalidateCache(key: Texture.Cache.Key) void {
+    currentWindow().texture_cache.invalidate(currentWindow().gpa, key) catch |err| {
+        dvui.logError(@src(), err, "Could not invalidate texture with key {x}", .{key});
+        return;
+    };
+}
+
 pub const render = @import("render.zig");
 pub const RenderCommand = render.RenderCommand;
 pub const RenderTarget = render.Target;
@@ -1064,10 +1094,6 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontEr
         return ret;
     }
 }
-
-pub const textureGetCached = Texture.Cache.get;
-pub const textureAddToCache = Texture.Cache.add;
-pub const textureInvalidateCache = Texture.Cache.invalidate;
 
 /// Takes in svg bytes and returns a tvg bytes that can be used
 /// with `icon` or `iconTexture`
