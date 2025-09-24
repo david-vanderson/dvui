@@ -1075,7 +1075,13 @@ pub fn begin(
     self.data().rect = Rect.Natural.fromSize(self.backend.windowSize()).scale(1.0 / self.content_scale, Rect);
     self.natural_scale = if (self.data().rect.w == 0) 1.0 else self.rect_pixels.w / self.data().rect.w;
 
-    //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.data().rect.w, self.data().rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
+    // deal with floating point weirdness when content_scale is like 1.25
+    // otherwise we could end up with rect.w == 753.60004 or natural_scale 1.2499999
+    self.data().rect.w = @round(self.data().rect.w * 100.0) / 100.0;
+    self.data().rect.h = @round(self.data().rect.h * 100.0) / 100.0;
+    self.natural_scale = @round(self.natural_scale * 100.0) / 100.0;
+
+    //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d} content_scale {d}", .{ self.data().rect.w, self.data().rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale, self.content_scale });
 
     dvui.subwindowAdd(self.data().id, self.data().rect, self.rect_pixels, false, null, true);
 
