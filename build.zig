@@ -691,7 +691,7 @@ fn addWebExample(
     const cb = b.addExecutable(.{
         .name = "cacheBuster",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/utils/cacheBuster.zig"),
+            .root_source_file = b.path("src/cacheBuster.zig"),
             .target = b.graph.host,
         }),
     });
