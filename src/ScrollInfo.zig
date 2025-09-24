@@ -1,5 +1,5 @@
 const std = @import("std");
-const dvui = @import("../dvui.zig");
+const dvui = @import("dvui.zig");
 
 const Point = dvui.Point;
 const Rect = dvui.Rect;

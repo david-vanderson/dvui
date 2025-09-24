@@ -1,5 +1,5 @@
 const std = @import("std");
-const dvui = @import("../dvui.zig");
+const dvui = @import("dvui.zig");
 
 const Color = dvui.Color;
 const Options = dvui.Options;

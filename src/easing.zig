@@ -9,7 +9,7 @@
 // Adapted from https://gist.github.com/Kryzarel/bba64622057f21a1d6d44879f9cd7bd4
 
 const std = @import("std");
-const dvui = @import("../dvui.zig");
+const dvui = @import("dvui.zig");
 
 pub const EasingFn = fn (t: f32) f32;
 

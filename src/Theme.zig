@@ -1,4 +1,4 @@
-const dvui = @import("../dvui.zig");
+const dvui = @import("dvui.zig");
 const std = @import("std");
 
 const Color = dvui.Color;
@@ -196,8 +196,8 @@ pub fn picker(src: std.builtin.SourceLocation, themes: []const Theme, opts: Opti
 }
 
 pub const builtin = struct {
-    pub const adwaita_light = @import("../themes/Adwaita.zig").light;
-    pub const adwaita_dark = @import("../themes/Adwaita.zig").dark;
+    pub const adwaita_light = @import("themes/Adwaita.zig").light;
+    pub const adwaita_dark = @import("themes/Adwaita.zig").dark;
     pub const dracula = QuickTheme.builtin.dracula.toTheme(null) catch unreachable;
     pub const gruvbox = QuickTheme.builtin.gruvbox.toTheme(null) catch unreachable;
     pub const jungle = QuickTheme.builtin.jungle.toTheme(null) catch unreachable;
@@ -228,12 +228,12 @@ pub const builtins = blk: {
 
 pub const QuickTheme = struct {
     pub const builtin = struct {
-        pub const adwaita_light: QuickTheme = @import("../themes/adwaita_light.zon");
-        pub const adwaita_dark: QuickTheme = @import("../themes/adwaita_dark.zon");
-        pub const dracula: QuickTheme = @import("../themes/dracula.zon");
-        pub const gruvbox: QuickTheme = @import("../themes/gruvbox.zon");
-        pub const jungle: QuickTheme = @import("../themes/jungle.zon");
-        pub const opendyslexic: QuickTheme = @import("../themes/opendyslexic.zon");
+        pub const adwaita_light: QuickTheme = @import("themes/adwaita_light.zon");
+        pub const adwaita_dark: QuickTheme = @import("themes/adwaita_dark.zon");
+        pub const dracula: QuickTheme = @import("themes/dracula.zon");
+        pub const gruvbox: QuickTheme = @import("themes/gruvbox.zon");
+        pub const jungle: QuickTheme = @import("themes/jungle.zon");
+        pub const opendyslexic: QuickTheme = @import("themes/opendyslexic.zon");
 
         test {
             // Ensures all the .zon files are valid `QuickTheme` types
