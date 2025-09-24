@@ -1,4 +1,4 @@
-const dvui = @import("../dvui.zig");
+const dvui = @import("dvui.zig");
 
 pos: dvui.Point.Physical,
 col: dvui.Color.PMA,

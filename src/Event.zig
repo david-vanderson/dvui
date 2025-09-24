@@ -1,4 +1,4 @@
-const dvui = @import("../dvui.zig");
+const dvui = @import("dvui.zig");
 const std = @import("std");
 
 const enums = dvui.enums;

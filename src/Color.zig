@@ -1,8 +1,8 @@
 const std = @import("std");
-const hsluv = @import("../utils/hsluv.zig");
+const hsluv = @import("hsluv.zig");
 
 const Color = @This();
-const dvui = @import("../dvui.zig");
+const dvui = @import("dvui.zig");
 
 const tvg = @import("svg2tvg");
 
