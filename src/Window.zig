@@ -113,9 +113,7 @@ font_cache: dvui.TrackingAutoHashMap(u64, dvui.FontCacheEntry, .get_and_put) = .
 /// Uses `gpa` allocator
 font_bytes: std.AutoHashMapUnmanaged(dvui.Font.FontId, dvui.FontBytesEntry) = .empty,
 /// Uses `gpa` allocator
-texture_cache: dvui.Texture.Cache.Storage = .empty,
-/// Uses `arena` allocator
-texture_trash: std.ArrayListUnmanaged(dvui.Texture) = .empty,
+texture_cache: dvui.Texture.Cache = .{},
 dialog_mutex: std.Thread.Mutex = .{},
 /// Uses `gpa` allocator
 dialogs: std.ArrayListUnmanaged(Dialog) = .empty,
@@ -371,10 +369,7 @@ pub fn deinit(self: *Self) void {
     }
     self.datas_trash.deinit(self.arena());
 
-    for (self.texture_trash.items) |tex| {
-        self.backend.textureDestroy(tex);
-    }
-    self.texture_trash.deinit(self.arena());
+    self.texture_cache.deinit(self.gpa, self.backend);
 
     {
         var it = self.datas.iterator();
@@ -406,14 +401,6 @@ pub fn deinit(self: *Self) void {
             item.value_ptr.deinit(self);
         }
         self.font_cache.deinit(self.gpa);
-    }
-
-    {
-        var it = self.texture_cache.iterator();
-        while (it.next()) |item| {
-            self.backend.textureDestroy(item.value_ptr.*);
-        }
-        self.texture_cache.deinit(self.gpa);
     }
 
     self.dialogs.deinit(self.gpa);
@@ -1009,7 +996,7 @@ pub fn begin(
     self.debug.reset(self.gpa);
 
     self.datas_trash = .empty;
-    self.texture_trash = .empty;
+    try self.texture_cache.reset(self.lifo(), self.backend);
 
     {
         var i: usize = 0;
@@ -1120,16 +1107,6 @@ pub fn begin(
             tce.value.deinit(self);
         }
         //std.debug.print("font_cache {d}\n", .{self.font_cache.count()});
-    }
-
-    {
-        const deadTextures = try self.texture_cache.reset(self.lifo());
-        defer self.lifo().free(deadTextures);
-        for (deadTextures) |id| {
-            const ice = self.texture_cache.fetchRemove(id).?;
-            self.backend.textureDestroy(ice.value);
-        }
-        //std.debug.print("texture_cache {d}\n", .{self.texture_cache.count()});
     }
 
     if (!self.captured_last_frame) {
@@ -1590,12 +1567,6 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     }
     // Set to empty because it's allocated on the arena and will be freed there
     self.datas_trash = .empty;
-
-    for (self.texture_trash.items) |tex| {
-        self.backend.textureDestroy(tex);
-    }
-    // Set to empty because it's allocated on the arena and will be freed there
-    self.texture_trash = .empty;
 
     // events may have been tagged with a focus widget that never showed up
     const evts = dvui.events();
