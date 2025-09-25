@@ -199,11 +199,21 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
                 bg = true;
             }
 
-            const rs = self.borderRectScale();
+            var rs = self.borderRectScale();
             if (!rs.r.empty()) {
+                const fade: f32 = if (self.rectScale().s >= 2.0) 0.0 else 1.0;
+                if (fade > 0) {
+                    // if any border is zero, inset by half the fade so it doesn't bleed out
+                    var inset: Rect.Physical = .{};
+                    if (b.x == 0) inset.x = fade * 0.5;
+                    if (b.y == 0) inset.y = fade * 0.5;
+                    if (b.w == 0) inset.w = fade * 0.5;
+                    if (b.h == 0) inset.h = fade * 0.5;
+                    rs.r = rs.r.inset(inset);
+                }
                 rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{
                     .color = self.options.color(.border),
-                    .fade = if (self.rectScale().s >= 2.0) 0.0 else 1.0,
+                    .fade = fade,
                 });
             }
         }
