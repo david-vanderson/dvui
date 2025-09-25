@@ -761,7 +761,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
     var row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
     {
         dvui.label(@src(), "Font Style", .{}, .{ .gravity_y = 0.5 });
-        const styles = std.meta.tags(dvui.Theme.Style);
+        const styles = std.meta.tags(dvui.Theme.Style.Name);
         var dd = dvui.DropdownWidget.init(@src(), .{
             .label = if (self.style) |style| @tagName(style) else "null",
         }, .{
@@ -794,7 +794,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
     row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .margin = .{ .y = 5 } });
     defer row.deinit();
 
-    const OptionsColors = enum { fill, text, border };
+    const OptionsColors = enum { fill, fill_hover, fill_press, text, text_hover, text_press, border };
     const active_color = dvui.dataGetPtrDefault(null, id, "Color", OptionsColors, .fill);
 
     {

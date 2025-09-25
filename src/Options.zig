@@ -45,12 +45,17 @@ gravity_y: ?f32 = null,
 // possible number, same tab_index goes in install() order, 0 disables
 tab_index: ?u16 = null,
 
-// used to override widget and theme defaults
-style: ?Theme.Style = null,
-
-color_text: ?Color = null,
+// these colors override anything else
 color_fill: ?Color = null,
+color_fill_hover: ?Color = null,
+color_fill_press: ?Color = null,
+color_text: ?Color = null,
+color_text_hover: ?Color = null,
+color_text_press: ?Color = null,
 color_border: ?Color = null,
+
+// if colors above are not given, source them from this style in the theme
+style: ?Theme.Style.Name = null,
 
 // use to override font_style
 font: ?Font = null,
@@ -193,8 +198,12 @@ pub const ColorAsk = enum {
 pub fn color(self: *const Options, ask: ColorAsk) Color {
     return switch (ask) {
         .border => self.color_border,
-        .fill, .fill_hover, .fill_press => if (self.color_fill) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
-        .text, .text_hover, .text_press => if (self.color_text) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
+        .fill => self.color_fill,
+        .fill_hover => self.color_fill_hover orelse if (self.color_fill) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
+        .fill_press => self.color_fill_press orelse if (self.color_fill) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
+        .text => self.color_text,
+        .text_hover => self.color_text_hover orelse if (self.color_text) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
+        .text_press => self.color_text_press orelse if (self.color_text) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
     } orelse dvui.themeGet().color(self.styleGet(), ask);
 }
 
@@ -272,7 +281,7 @@ pub fn rotationGet(self: *const Options) f32 {
     return self.rotation orelse 0.0;
 }
 
-pub fn styleGet(self: *const Options) Theme.Style {
+pub fn styleGet(self: *const Options) Theme.Style.Name {
     return self.style orelse .content;
 }
 
@@ -318,15 +327,15 @@ pub fn strip(self: *const Options) Options {
         .expand = null,
         .gravity_x = null,
         .gravity_y = null,
+        .tab_index = null,
+        .box_shadow = null,
 
         // ignore defaults of internal widgets
-        .tab_index = null,
         .margin = Rect{},
         .border = Rect{},
         .padding = Rect{},
         .corner_radius = Rect{},
         .background = false,
-        .box_shadow = null,
 
         // keep the rest
         .style = self.style,
