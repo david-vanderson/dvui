@@ -8,7 +8,7 @@ pub fn plots() void {
 
         const xs: []const f64 = &.{ 0, 1, 2, 3, 4, 5 };
         const ys: []const f64 = &.{ 0, 4, 2, 6, 5, 9 };
-        dvui.plotXY(@src(), .{}, 1, xs, ys, .{});
+        dvui.plotXY(@src(), .{ .xs = xs, .ys = ys }, .{});
     }
 
     {
@@ -19,7 +19,7 @@ pub fn plots() void {
 
         const xs: []const f64 = &.{ 0, 1, 2, 3, 4, 5 };
         const ys: []const f64 = &.{ 9, 5, 6, 2, 4, 0 };
-        dvui.plotXY(@src(), .{}, 2, xs, ys, .{ .color_accent = dvui.themeGet().err.fill orelse .red });
+        dvui.plotXY(@src(), .{ .thick = 2, .xs = xs, .ys = ys, .color = dvui.themeGet().err.fill orelse .red }, .{});
     }
 
     var save: ?enum { png, jpg } = null;

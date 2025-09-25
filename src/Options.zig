@@ -47,9 +47,7 @@ tab_index: ?u16 = null,
 
 // used to override widget and theme defaults
 style: ?Theme.Style = null,
-/// Used by some widgets to override an accent color,
-/// usually sourced from `Theme.highlight.fill`
-color_accent: ?Color = null,
+
 color_text: ?Color = null,
 color_fill: ?Color = null,
 color_border: ?Color = null,
@@ -282,7 +280,6 @@ pub fn styleGet(self: *const Options) Theme.Style {
 pub fn stylesOnly(self: *const Options) Options {
     return .{
         .style = self.style,
-        .color_accent = self.color_accent,
         .color_text = self.color_text,
         .color_fill = self.color_fill,
         .color_border = self.color_border,
@@ -333,7 +330,6 @@ pub fn strip(self: *const Options) Options {
 
         // keep the rest
         .style = self.style,
-        .color_accent = self.color_accent,
         .color_text = self.color_text,
         .color_fill = self.color_fill,
         .color_border = self.color_border,
@@ -392,7 +388,6 @@ pub fn hash(self: *const Options) u64 {
 
     hasher.update(asBytes(&self.styleGet()));
 
-    if (self.color_accent) |col| hasher.update(asBytes(&col));
     if (self.color_text) |col| hasher.update(asBytes(&col));
     if (self.color_fill) |col| hasher.update(asBytes(&col));
     if (self.color_border) |col| hasher.update(asBytes(&col));
