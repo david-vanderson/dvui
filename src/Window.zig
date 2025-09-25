@@ -1635,6 +1635,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
             if (e.handled) continue;
             log.debug("Unhandled {f}", .{e});
         }
+        log.debug("Event Handing Frame End", .{});
     }
 
     self.mouse_pt_prev = self.mouse_pt;
