@@ -164,7 +164,7 @@ pub fn animations() void {
             if (start) animator.start();
             if (end) animator.startEnd();
 
-            dvui.plotXY(@src(), .{}, 1, &global.xs, &global.ys, .{ .expand = .both });
+            dvui.plotXY(@src(), .{ .xs = &global.xs, .ys = &global.ys }, .{ .expand = .both });
         }
 
         if (dvui.button(@src(), "Animating Dialog (drop)", .{}, .{})) {

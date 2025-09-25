@@ -640,7 +640,7 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
             var col = dvui.box(@src(), .{ .dir = .horizontal }, .{ .border = .all(1), .expand = .both });
             defer col.deinit();
 
-            if (dvui.slider(@src(), .vertical, gravity_y, .{ .expand = .vertical })) {
+            if (dvui.slider(@src(), .{ .dir = .vertical, .fraction = gravity_y }, .{ .expand = .vertical })) {
                 changed = true;
             }
 
@@ -649,7 +649,7 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
 
             dvui.labelNoFmt(@src(), "gravity", .{}, .{ .gravity_y = 0.5 });
 
-            if (dvui.slider(@src(), .horizontal, gravity_x, .{ .expand = .horizontal, .gravity_y = 1 })) {
+            if (dvui.slider(@src(), .{ .fraction = gravity_x }, .{ .expand = .horizontal, .gravity_y = 1 })) {
                 changed = true;
             }
         }
@@ -794,7 +794,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
     row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .margin = .{ .y = 5 } });
     defer row.deinit();
 
-    const OptionsColors = enum { fill, text, border, accent };
+    const OptionsColors = enum { fill, text, border };
     const active_color = dvui.dataGetPtrDefault(null, id, "Color", OptionsColors, .fill);
 
     {

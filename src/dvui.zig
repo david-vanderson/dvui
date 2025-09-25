@@ -4630,16 +4630,23 @@ pub var slider_defaults: Options = .{
     .style = .control,
 };
 
+pub const SliderInitOptions = struct {
+    fraction: *f32,
+
+    dir: enums.Direction = .horizontal,
+
+    /// Color of the left/top side of the slider.  If null, uses Theme.highlight.fill
+    color_bar: ?Color = null,
+};
+
 /// returns true if fraction (0-1) was changed
-///
-/// `Options.color_accent` overrides the color of the left side of the slider
-pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *f32, opts: Options) bool {
-    std.debug.assert(fraction.* >= 0);
-    std.debug.assert(fraction.* <= 1);
+pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opts: Options) bool {
+    std.debug.assert(init_opts.fraction.* >= 0);
+    std.debug.assert(init_opts.fraction.* <= 1);
 
     const options = slider_defaults.override(opts);
 
-    var b = box(src, .{ .dir = dir }, options);
+    var b = box(src, .{ .dir = init_opts.dir }, options);
     defer b.deinit();
 
     tabIndexSet(b.data().id, options.tab_index);
@@ -4649,7 +4656,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
 
     const br = b.data().contentRect();
     const knobsize = @min(br.w, br.h);
-    const track = switch (dir) {
+    const track = switch (init_opts.dir) {
         .horizontal => Rect{ .x = knobsize / 2, .y = br.h / 2 - 2, .w = br.w - knobsize, .h = 4 },
         .vertical => Rect{ .x = br.w / 2 - 2, .y = knobsize / 2, .w = 4, .h = br.h - knobsize },
     };
@@ -4690,7 +4697,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
                 if (p) |pp| {
                     var min: f32 = undefined;
                     var max: f32 = undefined;
-                    switch (dir) {
+                    switch (init_opts.dir) {
                         .horizontal => {
                             min = trackrs.r.x;
                             max = trackrs.r.x + trackrs.r.w;
@@ -4702,9 +4709,9 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
                     }
 
                     if (max > min) {
-                        const v = if (dir == .horizontal) pp.x else (trackrs.r.y + trackrs.r.h - pp.y);
-                        fraction.* = (v - min) / (max - min);
-                        fraction.* = @max(0, @min(1, fraction.*));
+                        const v = if (init_opts.dir == .horizontal) pp.x else (trackrs.r.y + trackrs.r.h - pp.y);
+                        init_opts.fraction.* = (v - min) / (max - min);
+                        init_opts.fraction.* = @max(0, @min(1, init_opts.fraction.*));
                         ret = true;
                     }
                 }
@@ -4714,12 +4721,12 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
                     switch (ke.code) {
                         .left, .down => {
                             e.handle(@src(), b.data());
-                            fraction.* = @max(0, @min(1, fraction.* - 0.05));
+                            init_opts.fraction.* = @max(0, @min(1, init_opts.fraction.* - 0.05));
                             ret = true;
                         },
                         .right, .up => {
                             e.handle(@src(), b.data());
-                            fraction.* = @max(0, @min(1, fraction.* + 0.05));
+                            init_opts.fraction.* = @max(0, @min(1, init_opts.fraction.* + 0.05));
                             ret = true;
                         },
                         else => {},
@@ -4730,10 +4737,10 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         }
     }
 
-    const perc = @max(0, @min(1, fraction.*));
+    const perc = @max(0, @min(1, init_opts.fraction.*));
 
     var part = trackrs.r;
-    switch (dir) {
+    switch (init_opts.dir) {
         .horizontal => part.w *= perc,
         .vertical => {
             const h = part.h * (1 - perc);
@@ -4742,10 +4749,10 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = opts.color_accent orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
+        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = init_opts.color_bar orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
     }
 
-    switch (dir) {
+    switch (init_opts.dir) {
         .horizontal => {
             part.x = part.x + part.w;
             part.w = trackrs.r.w - part.w;
@@ -4759,7 +4766,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
     }
 
-    const knobRect = switch (dir) {
+    const knobRect = switch (init_opts.dir) {
         .horizontal => Rect{ .x = (br.w - knobsize) * perc, .w = knobsize, .h = knobsize },
         .vertical => Rect{ .y = (br.h - knobsize) * (1 - perc), .w = knobsize, .h = knobsize },
     };
@@ -5186,9 +5193,11 @@ pub var progress_defaults: Options = .{
 pub const Progress_InitOptions = struct {
     dir: enums.Direction = .horizontal,
     percent: f32,
+
+    /// If null, uses Theme.highlight.fill
+    color: ?Color = null,
 };
 
-/// `Options.color_accent` overrides the color of the left side of the progress bar
 pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions, opts: Options) void {
     const options = progress_defaults.override(opts);
 
@@ -5213,7 +5222,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = opts.color_accent orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
+    part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
 }
 
 pub var checkbox_defaults: Options = .{
@@ -5870,17 +5879,29 @@ pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, 
     return ret;
 }
 
-/// `Options.color_accent` overrides the color of the plot line
-pub fn plotXY(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, thick: f32, xs: []const f64, ys: []const f64, opts: Options) void {
+pub const PlotXYOptions = struct {
+    plot_opts: PlotWidget.InitOptions = .{},
+
+    // Logical pixels
+    thick: f32 = 1.0,
+
+    // If null, uses Theme.highlight.fill
+    color: ?Color = null,
+
+    xs: []const f64,
+    ys: []const f64,
+};
+
+pub fn plotXY(src: std.builtin.SourceLocation, init_opts: PlotXYOptions, opts: Options) void {
     const defaults: Options = .{ .padding = .{} };
-    var p = dvui.plot(src, plot_opts, defaults.override(opts));
+    var p = dvui.plot(src, init_opts.plot_opts, defaults.override(opts));
 
     var s1 = p.line();
-    for (xs, ys) |x, y| {
+    for (init_opts.xs, init_opts.ys) |x, y| {
         s1.point(x, y);
     }
 
-    s1.stroke(thick, opts.color_accent orelse dvui.themeGet().color(.highlight, .fill));
+    s1.stroke(init_opts.thick, init_opts.color orelse dvui.themeGet().color(.highlight, .fill));
 
     s1.deinit();
     p.deinit();

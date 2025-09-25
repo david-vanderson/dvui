@@ -1122,7 +1122,7 @@ pub fn gridNavigation() void {
 
                     var fraction: f32 = @floatCast(x.*);
                     fraction /= 100;
-                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .gravity_y = 1 }))) {
+                    if (dvui.slider(@src(), .{ .fraction = &fraction }, style.options(focus_cell).override(.{ .gravity_y = 1 }))) {
                         x.* = fraction * 10000;
                         x.* = @round(x.*) / 100;
                     }
@@ -1142,7 +1142,7 @@ pub fn gridNavigation() void {
                     var fraction: f32 = @floatCast(y1.*);
                     fraction += 100;
                     fraction /= 200;
-                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1, .color_accent = .red }))) {
+                    if (dvui.slider(@src(), .{ .fraction = &fraction, .color_bar = .red }, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1 }))) {
                         y1.* = fraction * 20000;
                         y1.* = @round((y1.* - 10000)) / 100;
                     }
@@ -1162,7 +1162,7 @@ pub fn gridNavigation() void {
                     var fraction: f32 = @floatCast(y2.*);
                     fraction += 100;
                     fraction /= 200;
-                    if (dvui.slider(@src(), .horizontal, &fraction, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1, .color_accent = .blue }))) {
+                    if (dvui.slider(@src(), .{ .fraction = &fraction, .color_bar = .blue }, style.options(focus_cell).override(.{ .max_size_content = .width(50), .gravity_y = 1 }))) {
                         y2.* = fraction * 20000;
                         y2.* = @round((y2.* - 10000)) / 100;
                     }

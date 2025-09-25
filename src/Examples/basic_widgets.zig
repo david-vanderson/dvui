@@ -136,8 +136,8 @@ pub fn basicWidgets() void {
         defer hbox.deinit();
 
         dvui.label(@src(), "Sliders", .{}, .{ .gravity_y = 0.5 });
-        _ = dvui.slider(@src(), .horizontal, &slider_val, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
-        _ = dvui.slider(@src(), .vertical, &slider_val, .{ .expand = .vertical, .min_size_content = .{ .w = 10 }, .corner_radius = dvui.Rect.all(100) });
+        _ = dvui.slider(@src(), .{ .fraction = &slider_val }, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
+        _ = dvui.slider(@src(), .{ .dir = .vertical, .fraction = &slider_val }, .{ .expand = .vertical, .min_size_content = .{ .w = 10 }, .corner_radius = dvui.Rect.all(100) });
         dvui.label(@src(), "Value: {d:2.2}", .{slider_val}, .{ .gravity_y = 0.5 });
     }
 

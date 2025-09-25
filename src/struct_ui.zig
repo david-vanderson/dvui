@@ -312,7 +312,7 @@ pub fn numberFieldWidget(
 
             if (!read_only) {
                 var percent = opt.toNormalizedPercent(T, field_value_ptr.*);
-                _ = dvui.slider(@src(), .horizontal, &percent, .{
+                _ = dvui.slider(@src(), .{ .fraction = &percent }, .{
                     .expand = .horizontal,
                     .min_size_content = .{ .w = 100, .h = 20 },
                 });
