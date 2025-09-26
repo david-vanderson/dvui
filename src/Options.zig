@@ -202,8 +202,8 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
         .fill_hover => self.color_fill_hover orelse if (self.color_fill) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
         .fill_press => self.color_fill_press orelse if (self.color_fill) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
         .text => self.color_text,
-        .text_hover => self.color_text_hover orelse if (self.color_text) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
-        .text_press => self.color_text_press orelse if (self.color_text) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
+        .text_hover => self.color_text_hover orelse self.color_text,
+        .text_press => self.color_text_press orelse self.color_text,
     } orelse dvui.themeGet().color(self.styleGet(), ask);
 }
 
