@@ -13,20 +13,7 @@ pub const log = std.log.scoped(.dvui);
 backend: dvui.Backend,
 previous_window: ?*Window = null,
 
-/// list of subwindows including base, later windows are on top of earlier
-/// windows
-/// Uses `gpa` allocator
-subwindows: std.ArrayListUnmanaged(Subwindow) = .empty,
-
-/// id of the subwindow widgets are being added to
-subwindow_currentId: Id = .zero,
-
-/// natural rect of the last subwindow, dialogs use this
-/// to center themselves
-subwindow_currentRect: Rect.Natural = .{},
-
-/// id of the subwindow that has focus
-focused_subwindowId: Id = .zero,
+subwindows: dvui.Subwindows = .{},
 
 last_focused_id_this_frame: Id = .zero,
 last_focused_id_in_subwindow: Id = .zero,
@@ -143,21 +130,6 @@ render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
 debug: @import("Debug.zig") = .{},
-
-pub const Subwindow = struct {
-    id: Id,
-    rect: Rect,
-    rect_pixels: dvui.Rect.Physical,
-    focused_widgetId: ?Id = null,
-    /// Uses `arena` allocator
-    render_cmds: std.ArrayListUnmanaged(dvui.RenderCommand) = .empty,
-    /// Uses `arena` allocator
-    render_cmds_after: std.ArrayListUnmanaged(dvui.RenderCommand) = .empty,
-    used: bool = true,
-    modal: bool = false,
-    stay_above_parent_window: ?Id = null,
-    mouse_events: bool = true,
-};
 
 pub const InitOptions = struct {
     id_extra: usize = 0,
@@ -331,7 +303,7 @@ pub fn init(
 
     errdefer self.deinit();
 
-    self.focused_subwindowId = self.data().id;
+    self.subwindows.focused_id = self.data().id;
     self.frame_time_ns = 1;
 
     if (dvui.useFreeType) {
@@ -442,28 +414,60 @@ pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?Id) voi
     self.backend.refresh();
 }
 
-pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?Id, event_num: ?u16) void {
-    const winId = subwindow_id orelse self.subwindow_currentId;
-    if (self.focused_subwindowId != winId) {
-        self.focused_subwindowId = winId;
-        self.refreshWindow(@src(), null);
+pub fn focusWidget(self: *Self, id: ?Id, subwindow_id: ?Id, event_num: ?u16) void {
+    self.scroll_to_focused = false;
+    const swid = subwindow_id orelse self.subwindows.current_id;
+    if (self.subwindows.get(swid)) |sw| {
+        if (sw.focused_widget_id == id) return;
+        sw.focused_widget_id = id;
         if (event_num) |en| {
-            for (self.subwindows.items) |*sw| {
-                if (self.focused_subwindowId == sw.id) {
-                    self.focusEventsInternal(en, sw.id, sw.focused_widgetId);
-                    break;
+            self.focusEvents(en, sw.id, sw.focused_widget_id);
+        }
+        self.refreshWindow(@src(), null);
+
+        if (id) |wid| {
+            self.scroll_to_focused = true;
+
+            if (self.last_registered_id_this_frame == wid) {
+                self.last_focused_id_this_frame = wid;
+                self.last_focused_id_in_subwindow = wid;
+            } else {
+                // walk parent chain
+                var wd = self.data().parent.data();
+
+                while (true) : (wd = wd.parent.data()) {
+                    if (wd.id == wid) {
+                        self.last_focused_id_this_frame = wid;
+                        self.last_focused_id_in_subwindow = wid;
+                        break;
+                    }
+
+                    if (wd.id == self.data().id) {
+                        // got to base Window
+                        break;
+                    }
                 }
             }
         }
     }
 }
 
+pub fn focusSubwindow(self: *Self, subwindow_id: ?Id, event_num: ?u16) void {
+    const winId = subwindow_id orelse self.subwindows.current_id;
+    if (self.subwindows.focused_id == winId) return;
+
+    self.subwindows.focused_id = winId;
+    self.refreshWindow(@src(), null);
+    if (event_num) |en| {
+        if (self.subwindows.focused()) |sw| {
+            self.focusEvents(en, sw.id, sw.focused_widget_id);
+        }
+    }
+}
+
 // Only for keyboard events
-pub fn focusEventsInternal(self: *Self, event_num: u16, windowId: ?Id, widgetId: ?Id) void {
-    var evts = self.events.items;
-    var k: usize = 0;
-    while (k < evts.len) : (k += 1) {
-        var e: *Event = &evts[k];
+pub fn focusEvents(self: *Self, event_num: u16, windowId: ?Id, widgetId: ?Id) void {
+    for (self.events.items) |*e| {
         if (e.num > event_num) {
             switch (e.evt) {
                 .key, .text => {
@@ -477,11 +481,8 @@ pub fn focusEventsInternal(self: *Self, event_num: u16, windowId: ?Id, widgetId:
 }
 
 // Only for mouse/touch events
-pub fn captureEventsInternal(self: *Self, event_num: u16, widgetId: ?Id) void {
-    var evts = self.events.items;
-    var k: usize = 0;
-    while (k < evts.len) : (k += 1) {
-        var e: *Event = &evts[k];
+pub fn captureEvents(self: *Self, event_num: u16, widgetId: ?Id) void {
+    for (self.events.items) |*e| {
         if (e.num > event_num) {
             switch (e.evt) {
                 .key, .text => {},
@@ -517,11 +518,11 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
         .evt = .{ .key = event },
-        .target_windowId = self.focused_subwindowId,
-        .target_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
+        .target_windowId = self.subwindows.focused_id,
+        .target_widgetId = if (self.subwindows.focused()) |sw| sw.focused_widget_id else null,
     });
 
-    const ret = (self.data().id != self.focused_subwindowId);
+    const ret = (self.data().id != self.subwindows.focused_id);
     try self.positionMouseEventAdd();
     return ret;
 }
@@ -549,11 +550,11 @@ pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) std.mem.All
                 .selected = selected,
             },
         },
-        .target_windowId = self.focused_subwindowId,
-        .target_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
+        .target_windowId = self.subwindows.focused_id,
+        .target_widgetId = if (self.subwindows.focused()) |sw| sw.focused_widget_id else null,
     });
 
-    const ret = (self.data().id != self.focused_subwindowId);
+    const ret = (self.data().id != self.subwindows.focused_id);
     try self.positionMouseEventAdd();
     return ret;
 }
@@ -570,7 +571,7 @@ pub fn addEventMouseMotion(self: *Self, newpt: Point.Physical) std.mem.Allocator
     //log.debug("mouse motion {d} {d} -> {d} {d}", .{ x, y, newpt.x, newpt.y });
     const dp = newpt.diff(self.mouse_pt);
     self.mouse_pt = newpt;
-    const winId = self.windowFor(self.mouse_pt);
+    const winId = self.subwindows.windowFor(self.mouse_pt);
 
     // maybe could do focus follows mouse here
     // - generate a .focus event here instead of just doing focusWindow(winId, null);
@@ -639,7 +640,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
     }
 
     const widget_id = if (self.capture) |cap| cap.id else null;
-    const winId = self.windowFor(self.mouse_pt);
+    const winId = self.subwindows.windowFor(self.mouse_pt);
 
     if (action == .press and bb.pointer()) {
         // normally the focus event is what focuses windows, but since the
@@ -648,7 +649,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
         if (winId == self.data().id) {
             // focus the window here so any more key events get routed
             // properly
-            self.focusSubwindowInternal(self.data().id, null);
+            self.focusSubwindow(self.data().id, null);
         }
 
         // add focus event
@@ -699,7 +700,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
 pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) std.mem.Allocator.Error!bool {
     self.positionMouseEventRemove();
 
-    const winId = self.windowFor(self.mouse_pt);
+    const winId = self.subwindows.windowFor(self.mouse_pt);
 
     //std.debug.print("mouse wheel {d}\n", .{ticks});
 
@@ -744,7 +745,7 @@ pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, y
 
     const dp = (Point{ .x = dxnorm * self.data().rect.w, .y = dynorm * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
 
-    const winId = self.windowFor(self.mouse_pt);
+    const winId = self.subwindows.windowFor(self.mouse_pt);
 
     const widget_id = if (self.capture) |cap| cap.id else null;
 
@@ -969,19 +970,7 @@ pub fn begin(
 
     try self.data_store.reset(self.gpa);
     try self.texture_cache.reset(self.lifo(), self.backend);
-
-    {
-        var i: usize = 0;
-        while (i < self.subwindows.items.len) {
-            var sw = &self.subwindows.items[i];
-            if (sw.used) {
-                sw.used = false;
-                i += 1;
-            } else {
-                _ = self.subwindows.orderedRemove(i);
-            }
-        }
-    }
+    self.subwindows.reset();
 
     for (self.frame_times, 0..) |_, i| {
         if (i == (self.frame_times.len - 1)) {
@@ -1030,9 +1019,8 @@ pub fn begin(
 
     //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d} content_scale {d}", .{ self.data().rect.w, self.data().rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale, self.content_scale });
 
-    dvui.subwindowAdd(self.data().id, self.data().rect, self.rect_pixels, false, null, true);
-
-    _ = dvui.subwindowCurrentSet(self.data().id, .cast(self.data().rect));
+    try self.subwindows.add(self.gpa, self.data().id, self.data().rect, self.rect_pixels, false, null, true);
+    _ = self.subwindows.setCurrent(self.data().id, .cast(self.data().rect));
 
     self.extra_frames_needed -|= 1;
     self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
@@ -1047,7 +1035,7 @@ pub fn begin(
                 kv.value_ptr.start_time -|= micros;
                 kv.value_ptr.end_time -|= micros;
                 if (kv.value_ptr.start_time <= 0 and kv.value_ptr.end_time > 0) {
-                    dvui.refresh(null, @src(), null);
+                    self.refreshWindow(@src(), null);
                 }
             }
         }
@@ -1094,7 +1082,7 @@ fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
             .button = .none,
             .mod = self.modifiers,
             .p = self.mouse_pt,
-            .floating_win = self.windowFor(self.mouse_pt),
+            .floating_win = self.subwindows.windowFor(self.mouse_pt),
         } },
     });
 }
@@ -1105,44 +1093,6 @@ fn positionMouseEventRemove(self: *Self) void {
             log.err("positionMouseEventRemove removed a non-mouse or non-position event\n", .{});
         }
     }
-}
-
-pub fn windowFor(self: *const Self, p: Point.Physical) Id {
-    var i = self.subwindows.items.len;
-    while (i > 0) : (i -= 1) {
-        const sw = &self.subwindows.items[i - 1];
-        if (sw.mouse_events and (sw.modal or sw.rect_pixels.contains(p))) {
-            return sw.id;
-        }
-    }
-
-    return self.data().id;
-}
-
-pub fn subwindowCurrent(self: *const Self) *Subwindow {
-    var i = self.subwindows.items.len;
-    while (i > 0) : (i -= 1) {
-        const sw = &self.subwindows.items[i - 1];
-        if (sw.id == self.subwindow_currentId) {
-            return sw;
-        }
-    }
-
-    log.warn("subwindowCurrent failed to find the current subwindow, returning base window\n", .{});
-    return &self.subwindows.items[0];
-}
-
-pub fn subwindowFocused(self: *const Self) *Subwindow {
-    var i = self.subwindows.items.len;
-    while (i > 0) : (i -= 1) {
-        const sw = &self.subwindows.items[i - 1];
-        if (sw.id == self.focused_subwindowId) {
-            return sw;
-        }
-    }
-
-    log.warn("subwindowFocused failed to find the focused subwindow, returning base window\n", .{});
-    return &self.subwindows.items[0];
 }
 
 /// Return the cursor the gui wants.  Client code should cache this if
@@ -1159,7 +1109,7 @@ pub fn cursorRequested(self: *const Self) dvui.enums.Cursor {
 /// Client code should cache this if switching the platform's cursor is
 /// expensive.
 pub fn cursorRequestedFloating(self: *const Self) ?dvui.enums.Cursor {
-    if (self.capture != null or self.windowFor(self.mouse_pt) != self.data().id) {
+    if (self.capture != null or self.subwindows.windowFor(self.mouse_pt) != self.data().id) {
         // gui owns the cursor if we have mouse capture or if the mouse is above
         // a floating window
         return self.cursorRequested();
@@ -1179,7 +1129,7 @@ pub fn textInputRequested(self: *const Self) ?Rect.Natural {
 }
 
 pub fn addRenderCommand(self: *Self, cmd: dvui.RenderCommand.Command, after: bool) void {
-    var sw = self.subwindowCurrent();
+    var sw = self.subwindows.current() orelse &self.subwindows.stack.items[0];
     const render_cmd: dvui.RenderCommand = .{
         .clip = self.clipRect,
         .alpha = self.alpha,
@@ -1311,7 +1261,7 @@ pub fn endRendering(self: *Self, opts: endOptions) void {
 
     self.debug.show();
 
-    for (self.subwindows.items) |*sw| {
+    for (self.subwindows.stack.items) |*sw| {
         self.renderCommands(sw.render_cmds.items) catch |err| {
             dvui.logError(@src(), err, "Failed to render commands for subwindow {x}", .{sw.id});
         };
@@ -1350,7 +1300,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
             }
             self.drag_state = .none;
             self.drag_name = null;
-            dvui.refresh(null, @src(), null);
+            self.refreshWindow(@src(), null);
         }
 
         if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.rect_pixels, .cleanup = true }))
@@ -1359,7 +1309,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         if (e.evt == .mouse) {
             if (e.evt.mouse.action == .focus) {
                 // unhandled click, clear focus
-                dvui.focusWidget(null, null, null);
+                self.focusWidget(null, null, null);
             }
         } else if (e.evt == .key) {
             if (e.evt.key.action == .down and e.evt.key.matchBind("next_widget")) {
@@ -1384,19 +1334,20 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
     self.mouse_pt_prev = self.mouse_pt;
 
-    if (!self.subwindowFocused().used) {
+    const focused_sw = self.subwindows.focused();
+    if (focused_sw != null and !focused_sw.?.used) {
         // our focused subwindow didn't show this frame, focus the highest one that did
-        var i = self.subwindows.items.len;
+        var i = self.subwindows.stack.items.len;
         while (i > 0) : (i -= 1) {
-            const sw = self.subwindows.items[i - 1];
+            const sw = self.subwindows.stack.items[i - 1];
             if (sw.used and sw.stay_above_parent_window == null) {
                 //std.debug.print("focused subwindow lost, focusing {d}\n", .{i - 1});
-                dvui.focusSubwindow(sw.id, null);
+                self.focusSubwindow(sw.id, null);
                 break;
             }
         }
 
-        dvui.refresh(null, @src(), null);
+        self.refreshWindow(@src(), null);
     }
 
     // Check that the final event was our synthetic mouse position event.
