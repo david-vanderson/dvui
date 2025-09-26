@@ -178,7 +178,7 @@ pub fn addChoiceLabel(self: *DropdownWidget, label_text: []const u8) bool {
     var mi = self.addChoice();
     defer mi.deinit();
 
-    dvui.labelNoFmt(@src(), label_text, .{}, self.options.strip().override(mi.colors()));
+    dvui.labelNoFmt(@src(), label_text, .{}, mi.data().options.strip().override(mi.style()));
 
     if (mi.activeRect()) |_| {
         self.close();
@@ -196,7 +196,7 @@ pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
         }
     }
 
-    self.drop_mi = MenuItemWidget.init(@src(), .{}, self.options.stylesOnly().override(.{ .id_extra = self.drop_mi_index, .expand = .horizontal }));
+    self.drop_mi = MenuItemWidget.init(@src(), .{}, self.options.styleOnly().override(.{ .id_extra = self.drop_mi_index, .expand = .horizontal }));
     self.drop_mi_id = self.drop_mi.data().id;
     self.drop_mi.install();
     self.drop_mi.processEvents();

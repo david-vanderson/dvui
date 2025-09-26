@@ -2,7 +2,7 @@ var custom_theme = modified_adwaita_theme;
 var custom_theme_name_buffer: [128]u8 = "Adwaita modified".* ++ @as([128 - 16]u8, @splat(0));
 var hsv_color: Color.HSV = .fromColor(.black);
 /// Used so that the `content` style can use the same logic as the other styles
-var content_style: Theme.ColorStyle = .{};
+var content_style: Theme.Style = .{};
 
 const modified_adwaita_theme = blk: {
     var theme = Theme.builtin.adwaita_light;
@@ -81,7 +81,7 @@ pub fn theming() void {
                 if (tab.clicked()) {
                     active_page.* = page;
                 }
-                dvui.labelNoFmt(@src(), @tagName(page), .{}, tab.colors());
+                dvui.labelNoFmt(@src(), @tagName(page), .{}, tab.style());
             }
         }
 
@@ -156,7 +156,7 @@ fn fonts(theme: *Theme) bool {
             if (tab.clicked()) {
                 active_font.* = font_style;
             }
-            dvui.labelNoFmt(@src(), @tagName(font_style), .{}, tab.colors());
+            dvui.labelNoFmt(@src(), @tagName(font_style), .{}, tab.style());
         }
     }
 
@@ -224,10 +224,10 @@ fn styles(theme: *Theme) bool {
     const first_box = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .both });
     defer first_box.deinit();
 
-    const active_style = dvui.dataGetPtrDefault(null, first_box.data().id, "Style", Theme.Style, .content);
+    const active_style = dvui.dataGetPtrDefault(null, first_box.data().id, "Style", Theme.Style.Name, .content);
     var style_changed: bool = false;
 
-    var style: *Theme.ColorStyle = undefined;
+    var style: *Theme.Style = undefined;
 
     const active_color = dvui.dataGetPtrDefault(null, first_box.data().id, "Color", ColorNames, .fill);
 
@@ -239,10 +239,10 @@ fn styles(theme: *Theme) bool {
         defer tabs.deinit();
 
         {
-            const theme_styles = comptime std.meta.tags(Theme.Style);
+            const theme_styles = comptime std.meta.tags(Theme.Style.Name);
             var dd = dvui.DropdownWidget.init(@src(), .{
                 .label = @tagName(active_style.*),
-                .selected_index = std.mem.indexOfScalar(Theme.Style, theme_styles, active_style.*),
+                .selected_index = std.mem.indexOfScalar(Theme.Style.Name, theme_styles, active_style.*),
             }, .{
                 .min_size_content = .{ .w = 110 },
                 .expand = .horizontal,
@@ -262,7 +262,7 @@ fn styles(theme: *Theme) bool {
 
         style = switch (active_style.*) {
             .content => blk: {
-                inline for (@typeInfo(Theme.ColorStyle).@"struct".fields) |field| {
+                inline for (@typeInfo(Theme.Style).@"struct".fields) |field| {
                     @field(content_style, field.name) = @field(theme, field.name);
                 }
                 break :blk &content_style;
@@ -305,7 +305,7 @@ fn styles(theme: *Theme) bool {
                 .background = true,
                 .color_fill = color,
             });
-            dvui.labelNoFmt(@src(), @tagName(color_name), .{}, tab.colors().override(.{ .margin = .{ .x = wd.rect.w }, .gravity_y = 0.5 }));
+            dvui.labelNoFmt(@src(), @tagName(color_name), .{}, tab.style().override(.{ .margin = .{ .x = wd.rect.w }, .gravity_y = 0.5 }));
         }
     }
 
