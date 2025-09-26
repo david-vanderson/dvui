@@ -13,6 +13,20 @@ pub fn styling() void {
         _ = dvui.button(@src(), "Window", .{}, .{ .style = .window });
         _ = dvui.button(@src(), "Content", .{}, .{ .style = .content });
         _ = dvui.button(@src(), "Control", .{}, .{});
+
+        _ = dvui.button(@src(), "Custom Fill", .{}, .{
+            .color_fill = .purple,
+            .color_fill_hover = .maroon,
+            .color_fill_press = .magenta,
+        });
+
+        _ = dvui.button(@src(), "Custom Text", .{}, .{
+            .color_text = .green,
+            .color_text_hover = .blue,
+            .color_text_press = .cyan,
+            .color_border = .yellow,
+            .border = .all(1),
+        });
     }
 
     {
