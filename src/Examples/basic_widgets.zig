@@ -281,7 +281,9 @@ pub fn dropdownAdvanced() void {
     };
 
     var theme = dvui.themeGet();
+    theme.control.fill_hover = dvui.Color.purple;
     theme.highlight.fill = dvui.Color.purple;
+    theme.control.text_hover = dvui.Color.red;
     theme.highlight.text = dvui.Color.red;
 
     var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = g.choice }, .{ .min_size_content = .{ .w = 100 }, .theme = &theme });
