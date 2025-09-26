@@ -240,8 +240,8 @@ pub fn opacity(self: Color, mult: f32) Color {
     };
 }
 
-pub fn format(self: *const Color, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-    try std.fmt.format(writer, "Color{{ {x} {x} {x} {x} }}", .{ self.r, self.g, self.b, self.a });
+pub fn format(self: *const Color, writer: *std.Io.Writer) !void {
+    try writer.print("Color{{ {x} {x} {x} {x} }}", .{ self.r, self.g, self.b, self.a });
 }
 
 /// Linear interpolocation of colors component wise
