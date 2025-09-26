@@ -81,7 +81,7 @@ pub fn theming() void {
                 if (tab.clicked()) {
                     active_page.* = page;
                 }
-                dvui.labelNoFmt(@src(), @tagName(page), .{}, tab.colors());
+                dvui.labelNoFmt(@src(), @tagName(page), .{}, tab.style());
             }
         }
 
@@ -156,7 +156,7 @@ fn fonts(theme: *Theme) bool {
             if (tab.clicked()) {
                 active_font.* = font_style;
             }
-            dvui.labelNoFmt(@src(), @tagName(font_style), .{}, tab.colors());
+            dvui.labelNoFmt(@src(), @tagName(font_style), .{}, tab.style());
         }
     }
 
@@ -305,7 +305,7 @@ fn styles(theme: *Theme) bool {
                 .background = true,
                 .color_fill = color,
             });
-            dvui.labelNoFmt(@src(), @tagName(color_name), .{}, tab.colors().override(.{ .margin = .{ .x = wd.rect.w }, .gravity_y = 0.5 }));
+            dvui.labelNoFmt(@src(), @tagName(color_name), .{}, tab.style().override(.{ .margin = .{ .x = wd.rect.w }, .gravity_y = 0.5 }));
         }
     }
 

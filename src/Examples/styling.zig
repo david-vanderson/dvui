@@ -30,6 +30,22 @@ pub fn styling() void {
     }
 
     {
+        dvui.label(@src(), "Pass Theme Directly", .{}, .{});
+
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
+        for (dvui.Theme.builtins, 0..) |theme, i| {
+            var buf: [100]u8 = undefined;
+            const b = std.fmt.bufPrint(&buf, "{s}", .{theme.name}) catch unreachable;
+            _ = dvui.button(@src(), b, .{}, .{
+                .id_extra = i,
+                .theme = &theme,
+            });
+        }
+    }
+
+    {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .min_size_content = .{ .h = 9 } });
         defer hbox.deinit();
 

@@ -235,7 +235,7 @@ pub fn focusBorder(self: *const WidgetData) void {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;
 
-        rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = thick, .color = dvui.themeGet().focus, .after = true });
+        rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = thick, .color = self.options.themeGet().focus, .after = true });
     }
 }
 

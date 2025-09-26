@@ -78,7 +78,7 @@ pub fn drawBackground(self: *MenuItemWidget) void {
     }
 
     if (self.data().visible()) {
-        const cols = self.colors();
+        const cols = self.style();
         const rs = self.data().backgroundRectScale();
         const cr = self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical);
         if (self.show_active) {
@@ -99,8 +99,8 @@ pub fn drawBackground(self: *MenuItemWidget) void {
 }
 
 /// Returns an `Options` struct with color/style overrides for the hover and press state
-pub fn colors(self: *MenuItemWidget) Options {
-    var opts: Options = .{ .style = self.data().options.style };
+pub fn style(self: *MenuItemWidget) Options {
+    var opts: Options = self.data().options.styleOnly();
     if (self.show_active and !self.init_opts.focus_as_outline) {
         opts.style = .highlight;
     } else if (self.highlight or (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow())) {
