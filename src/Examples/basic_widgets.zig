@@ -280,14 +280,13 @@ pub fn dropdownAdvanced() void {
         var choice: ?usize = null;
     };
 
-    const oldt = dvui.themeGet();
-    var t = oldt;
-    t.highlight.fill = dvui.Color.purple;
-    t.highlight.text = dvui.Color.red;
-    dvui.themeSet(t);
-    defer dvui.themeSet(oldt);
+    var theme = dvui.themeGet();
+    theme.control.fill_hover = dvui.Color.purple;
+    theme.highlight.fill = dvui.Color.purple;
+    theme.control.text_hover = dvui.Color.red;
+    theme.highlight.text = dvui.Color.red;
 
-    var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = g.choice }, .{ .min_size_content = .{ .w = 100 } });
+    var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = g.choice }, .{ .min_size_content = .{ .w = 100 }, .theme = &theme });
     dd.install();
     defer dd.deinit();
 
@@ -328,7 +327,7 @@ pub fn dropdownAdvanced() void {
             var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
             defer hbox2.deinit();
 
-            const opts: Options = mi.colors();
+            const opts: Options = mi.data().options.strip().override(mi.style());
 
             dvui.icon(
                 @src(),
@@ -348,6 +347,7 @@ pub fn dropdownAdvanced() void {
         if (dd.addChoiceLabel("just text")) {
             g.choice = 1;
         }
+
         {
             var mi = dd.addChoice();
             defer mi.deinit();
@@ -355,7 +355,7 @@ pub fn dropdownAdvanced() void {
             var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
             defer vbox.deinit();
 
-            const opts: Options = mi.colors();
+            const opts: Options = mi.data().options.strip().override(mi.style());
 
             _ = dvui.image(@src(), .{ .source = .{ .imageFile = .{ .bytes = zig_favicon, .name = "zig favicon" } } }, opts.override(.{ .gravity_x = 0.5 }));
             dvui.labelNoFmt(@src(), "image above text", .{}, opts.override(.{ .gravity_x = 0.5, .padding = .{} }));

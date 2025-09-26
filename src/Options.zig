@@ -45,12 +45,20 @@ gravity_y: ?f32 = null,
 // possible number, same tab_index goes in install() order, 0 disables
 tab_index: ?u16 = null,
 
-// used to override widget and theme defaults
-style: ?Theme.Style = null,
-
-color_text: ?Color = null,
+// Used to override the style/theme.
 color_fill: ?Color = null,
+color_fill_hover: ?Color = null,
+color_fill_press: ?Color = null,
+color_text: ?Color = null,
+color_text_hover: ?Color = null,
+color_text_press: ?Color = null,
 color_border: ?Color = null,
+
+// If a color above is null, source it from this style (if null, .content) in the theme.
+style: ?Theme.Style.Name = null,
+
+// If not null, source colors from here instead of the global theme.
+theme: ?*const Theme = null,
 
 // use to override font_style
 font: ?Font = null,
@@ -193,9 +201,13 @@ pub const ColorAsk = enum {
 pub fn color(self: *const Options, ask: ColorAsk) Color {
     return switch (ask) {
         .border => self.color_border,
-        .fill, .fill_hover, .fill_press => if (self.color_fill) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
-        .text, .text_hover, .text_press => if (self.color_text) |col| dvui.themeGet().adjustColorForState(col, ask) else null,
-    } orelse dvui.themeGet().color(self.styleGet(), ask);
+        .fill => self.color_fill,
+        .fill_hover => self.color_fill_hover orelse if (self.color_fill) |col| self.themeGet().adjustColorForState(col, ask) else null,
+        .fill_press => self.color_fill_press orelse if (self.color_fill) |col| self.themeGet().adjustColorForState(col, ask) else null,
+        .text => self.color_text,
+        .text_hover => self.color_text_hover orelse self.color_text,
+        .text_press => self.color_text_press orelse self.color_text,
+    } orelse self.themeGet().color(self.styleGet(), ask);
 }
 
 pub fn fontGet(self: *const Options) Font {
@@ -204,15 +216,15 @@ pub fn fontGet(self: *const Options) Font {
     }
 
     return switch (self.font_style orelse .body) {
-        .body => dvui.themeGet().font_body,
-        .heading => dvui.themeGet().font_heading,
-        .caption => dvui.themeGet().font_caption,
-        .caption_heading => dvui.themeGet().font_caption_heading,
-        .title => dvui.themeGet().font_title,
-        .title_1 => dvui.themeGet().font_title_1,
-        .title_2 => dvui.themeGet().font_title_2,
-        .title_3 => dvui.themeGet().font_title_3,
-        .title_4 => dvui.themeGet().font_title_4,
+        .body => self.themeGet().font_body,
+        .heading => self.themeGet().font_heading,
+        .caption => self.themeGet().font_caption,
+        .caption_heading => self.themeGet().font_caption_heading,
+        .title => self.themeGet().font_title,
+        .title_1 => self.themeGet().font_title_1,
+        .title_2 => self.themeGet().font_title_2,
+        .title_3 => self.themeGet().font_title_3,
+        .title_4 => self.themeGet().font_title_4,
     };
 }
 
@@ -272,16 +284,26 @@ pub fn rotationGet(self: *const Options) f32 {
     return self.rotation orelse 0.0;
 }
 
-pub fn styleGet(self: *const Options) Theme.Style {
+pub fn styleGet(self: *const Options) Theme.Style.Name {
     return self.style orelse .content;
 }
 
+pub fn themeGet(self: *const Options) *const Theme {
+    return self.theme orelse &dvui.currentWindow().theme;
+}
+
 /// Keeps only the fonts, colors and style
-pub fn stylesOnly(self: *const Options) Options {
+pub fn styleOnly(self: *const Options) Options {
     return .{
         .style = self.style,
-        .color_text = self.color_text,
+        .theme = self.theme,
+
         .color_fill = self.color_fill,
+        .color_fill_hover = self.color_fill_hover,
+        .color_fill_press = self.color_fill_press,
+        .color_text = self.color_text,
+        .color_text_hover = self.color_text_hover,
+        .color_text_press = self.color_text_press,
         .color_border = self.color_border,
 
         .font = self.font,
@@ -289,8 +311,12 @@ pub fn stylesOnly(self: *const Options) Options {
     };
 }
 
-// Used in compound widgets to strip out the styling that should only apply
-// to the outermost container widget.  For example, with a button
+// Used in compound widgets to strip out the styling that should only apply to
+// the outermost container widget.  Also zero out
+// margin/border/padding/background because those are usually for freestanding
+// widgets.
+//
+// For example, with a button
 // (container with label) the container uses:
 // - rect
 // - min_size_content
@@ -305,6 +331,7 @@ pub fn stylesOnly(self: *const Options) Options {
 // while the label uses:
 // - fonts
 // - colors
+// - and we don't want the normal label margin/padding
 pub fn strip(self: *const Options) Options {
     return Options{
         // reset to defaults of internal widgets
@@ -318,20 +345,25 @@ pub fn strip(self: *const Options) Options {
         .expand = null,
         .gravity_x = null,
         .gravity_y = null,
+        .tab_index = null,
+        .box_shadow = null,
 
         // ignore defaults of internal widgets
-        .tab_index = null,
         .margin = Rect{},
         .border = Rect{},
         .padding = Rect{},
         .corner_radius = Rect{},
         .background = false,
-        .box_shadow = null,
 
         // keep the rest
         .style = self.style,
-        .color_text = self.color_text,
+        .theme = self.theme,
         .color_fill = self.color_fill,
+        .color_fill_hover = self.color_fill_hover,
+        .color_fill_press = self.color_fill_press,
+        .color_text = self.color_text,
+        .color_text_hover = self.color_text_hover,
+        .color_text_press = self.color_text_press,
         .color_border = self.color_border,
 
         .font = self.font,
@@ -387,9 +419,14 @@ pub fn hash(self: *const Options) u64 {
     hasher.update(asBytes(&self.backgroundGet()));
 
     hasher.update(asBytes(&self.styleGet()));
+    hasher.update(asBytes(self.themeGet()));
 
-    if (self.color_text) |col| hasher.update(asBytes(&col));
     if (self.color_fill) |col| hasher.update(asBytes(&col));
+    if (self.color_fill_hover) |col| hasher.update(asBytes(&col));
+    if (self.color_fill_press) |col| hasher.update(asBytes(&col));
+    if (self.color_text) |col| hasher.update(asBytes(&col));
+    if (self.color_text_hover) |col| hasher.update(asBytes(&col));
+    if (self.color_text_press) |col| hasher.update(asBytes(&col));
     if (self.color_border) |col| hasher.update(asBytes(&col));
 
     const fontStyle: FontStyle = self.font_style orelse .body;

@@ -55,7 +55,7 @@ pub fn processEvents(self: *ButtonWidget) void {
 }
 
 pub fn drawBackground(self: *ButtonWidget) void {
-    self.data().borderAndBackground(.{ .fill_color = self.colors().color_fill });
+    self.data().borderAndBackground(.{ .fill_color = self.style().color_fill });
 }
 
 pub fn drawFocus(self: *ButtonWidget) void {
@@ -65,8 +65,8 @@ pub fn drawFocus(self: *ButtonWidget) void {
 }
 
 /// Returns an `Options` struct with color/style overrides for the hover and press state
-pub fn colors(self: *ButtonWidget) Options {
-    var opts: Options = .{ .style = self.data().options.style };
+pub fn style(self: *ButtonWidget) Options {
+    var opts = self.data().options.styleOnly();
     if (dvui.captured(self.data().id)) {
         opts.color_fill = self.data().options.color(.fill_press);
         opts.color_text = self.data().options.color(.text_press);

@@ -7,13 +7,25 @@ const Options = dvui.Options;
 
 const Theme = @This();
 
-/// enum used in Options to pick a ColorStyle from Theme
-pub const Style = enum {
-    content,
-    window,
-    control,
-    highlight,
-    err,
+/// Colors for controls (like buttons), if null fall back to theme colors and
+/// automatically adjust fill for hover/press.
+pub const Style = struct {
+    /// enum used in Options to pick a Style from Theme
+    pub const Name = enum {
+        content,
+        window,
+        control,
+        highlight,
+        err,
+    };
+
+    fill: ?Color = null,
+    fill_hover: ?Color = null,
+    fill_press: ?Color = null,
+    text: ?Color = null,
+    text_hover: ?Color = null,
+    text_press: ?Color = null,
+    border: ?Color = null,
 };
 
 name: []const u8,
@@ -49,19 +61,19 @@ text_press: ?Color = null,
 border: Color,
 
 /// colors for normal controls like buttons
-control: ColorStyle,
+control: Style,
 
 /// colors for windows/boxes that contain controls like scrollArea and floatingWindow
-window: ColorStyle,
+window: Style,
 
 /// colors for highlighting:
 /// * menu/dropdown items
 /// * checkboxes
 /// * radio buttons
-highlight: ColorStyle,
+highlight: Style,
 
 /// colors for buttons to perform dangerous actions
-err: ColorStyle,
+err: Style,
 
 font_body: Font,
 font_heading: Font,
@@ -75,18 +87,6 @@ font_title_4: Font,
 
 /// if true, all strings in `Theme` will be freed in `deinit`
 allocated_strings: bool = false,
-
-/// Colors for controls (like buttons), if null fall back to theme colors and
-/// automatically adjust fill for hover/press.
-pub const ColorStyle = struct {
-    fill: ?Color = null,
-    fill_hover: ?Color = null,
-    fill_press: ?Color = null,
-    text: ?Color = null,
-    text_hover: ?Color = null,
-    text_press: ?Color = null,
-    border: ?Color = null,
-};
 
 pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
     if (self.allocated_strings) {
@@ -115,16 +115,16 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
 /// If a color with a state (like `fill_hover`) is `null`, then the `fill` color
 /// will be used and adjusted by `Theme.adjustColorForState`.
 ///
-pub fn color(self: *const Theme, style: Style, ask: Options.ColorAsk) Color {
-    const cs: ColorStyle = switch (style) {
+pub fn color(self: *const Theme, style_name: Style.Name, ask: Options.ColorAsk) Color {
+    const cs: Style = switch (style_name) {
         .content => return sw: switch (ask) {
             .border => self.border,
             .fill => self.adjustColorForState(self.fill, ask),
             .fill_hover => self.fill_hover orelse continue :sw .fill,
             .fill_press => self.fill_press orelse continue :sw .fill,
-            .text => self.adjustColorForState(self.text, ask),
-            .text_hover => self.text_hover orelse continue :sw .text,
-            .text_press => self.text_press orelse continue :sw .text,
+            .text => self.text,
+            .text_hover => self.text_hover orelse self.text,
+            .text_press => self.text_press orelse self.text,
         },
         .control => self.control,
         .window => self.window,
@@ -137,7 +137,7 @@ pub fn color(self: *const Theme, style: Style, ask: Options.ColorAsk) Color {
         .fill => if (cs.fill) |col| self.adjustColorForState(col, ask) else self.color(.content, ask),
         .fill_hover => cs.fill_hover orelse continue :sw .fill,
         .fill_press => cs.fill_press orelse continue :sw .fill,
-        .text => if (cs.text) |col| self.adjustColorForState(col, ask) else self.color(.content, ask),
+        .text => cs.text orelse self.color(.content, ask),
         .text_hover => cs.text_hover orelse continue :sw .text,
         .text_press => cs.text_press orelse continue :sw .text,
     };
@@ -378,7 +378,7 @@ pub const QuickTheme = struct {
         };
     }
 
-    fn parseStyle(style: QuickColorStyle) Color.FromHexError!ColorStyle {
+    fn parseStyle(style: QuickColorStyle) Color.FromHexError!Style {
         return .{
             .fill = if (style.fill) |hex| try .tryFromHex(hex) else null,
             .fill_hover = if (style.fill_hover) |hex| try .tryFromHex(hex) else null,

@@ -13,6 +13,36 @@ pub fn styling() void {
         _ = dvui.button(@src(), "Window", .{}, .{ .style = .window });
         _ = dvui.button(@src(), "Content", .{}, .{ .style = .content });
         _ = dvui.button(@src(), "Control", .{}, .{});
+
+        _ = dvui.button(@src(), "Custom Fill", .{}, .{
+            .color_fill = .purple,
+            .color_fill_hover = .maroon,
+            .color_fill_press = .magenta,
+        });
+
+        _ = dvui.button(@src(), "Custom Text", .{}, .{
+            .color_text = .green,
+            .color_text_hover = .blue,
+            .color_text_press = .cyan,
+            .color_border = .yellow,
+            .border = .all(1),
+        });
+    }
+
+    {
+        dvui.label(@src(), "Pass Theme Directly", .{}, .{});
+
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
+        for (dvui.Theme.builtins, 0..) |theme, i| {
+            var buf: [100]u8 = undefined;
+            const b = std.fmt.bufPrint(&buf, "{s}", .{theme.name}) catch unreachable;
+            _ = dvui.button(@src(), b, .{}, .{
+                .id_extra = i,
+                .theme = &theme,
+            });
+        }
     }
 
     {

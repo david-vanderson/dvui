@@ -4557,10 +4557,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
     // - gets a rectangle from bw
     // - draws itself
     // - reports its min size to bw
-    labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, opts.strip()
-        // override with the button colors to update the press and hover colors correctly
-        .override(bw.colors())
-        .override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
+    labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, opts.strip().override(bw.style()).override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
 
     // draw focus
     bw.drawFocus();
@@ -4586,7 +4583,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
         name,
         tvg_bytes,
         icon_opts,
-        opts.strip().override(bw.colors()).override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text }),
+        opts.strip().override(bw.style()).override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text }),
     );
 
     const click = bw.clicked();
@@ -4604,7 +4601,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
 
     // process events (mouse and keyboard)
     bw.processEvents();
-    const options = opts.strip().override(bw.colors()).override(.{ .gravity_y = 0.5 });
+    const options = opts.strip().override(bw.style()).override(.{ .gravity_y = 0.5 });
 
     // draw background/border
     bw.drawBackground();
