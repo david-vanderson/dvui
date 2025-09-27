@@ -149,6 +149,69 @@ pub fn deinit(self: *LabelWidget) void {
     self.data().minSizeReportToParent();
 }
 
+pub const Helpers = struct {
+    /// Format and display a label.
+    ///
+    /// See `labelEx` and `labelNoFmt`.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) void {
+        var lw = LabelWidget.init(src, fmt, args, .{}, opts);
+        lw.install();
+        lw.draw();
+        lw.deinit();
+    }
+
+    /// Format and display a label with extra label options.
+    ///
+    /// See `label` and `labelNoFmt`.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn labelEx(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) void {
+        var lw = LabelWidget.init(src, fmt, args, init_opts, opts);
+        lw.install();
+        lw.draw();
+        lw.deinit();
+    }
+
+    /// Display a label (no formatting) with extra label options.
+    ///
+    /// See `label` and `labelEx`.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, init_opts: LabelWidget.InitOptions, opts: Options) void {
+        var lw = LabelWidget.initNoFmt(src, str, init_opts, opts);
+        lw.install();
+        lw.draw();
+        lw.deinit();
+    }
+
+    /// A clickable label.  Good for hyperlinks.
+    /// Returns true if it's been clicked.
+    pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) bool {
+        var lw = LabelWidget.init(src, fmt, args, init_opts, opts.override(.{ .name = "LabelClick" }));
+        // draw border and background
+        lw.install();
+
+        dvui.tabIndexSet(lw.data().id, lw.data().options.tab_index);
+
+        const ret = dvui.clicked(lw.data(), .{});
+
+        // draw text
+        lw.draw();
+
+        // draw an accent border if we are focused
+        if (lw.data().id == dvui.focusedWidgetId()) {
+            lw.data().focusBorder();
+        }
+
+        // done with lw, have it report min size to parent
+        lw.deinit();
+
+        return ret;
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

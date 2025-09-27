@@ -78,7 +78,6 @@ pub const FloatingWidget = widgets.FloatingWidget;
 pub const FloatingTooltipWidget = widgets.FloatingTooltipWidget;
 pub const FloatingMenuWidget = widgets.FloatingMenuWidget;
 pub const IconWidget = widgets.IconWidget;
-pub const LabelWidget = widgets.LabelWidget;
 pub const MenuWidget = widgets.MenuWidget;
 pub const MenuItemWidget = widgets.MenuItemWidget;
 pub const OverlayWidget = widgets.OverlayWidget;
@@ -109,6 +108,12 @@ pub const ButtonWidget = widgets.ButtonWidget;
 pub const button = ButtonWidget.Helpers.button;
 pub const buttonIcon = ButtonWidget.Helpers.buttonIcon;
 pub const buttonLabelAndIcon = ButtonWidget.Helpers.buttonLabelAndIcon;
+
+pub const LabelWidget = widgets.LabelWidget;
+pub const label = LabelWidget.Helpers.label;
+pub const labelEx = LabelWidget.Helpers.labelEx;
+pub const labelNoFmt = LabelWidget.Helpers.labelNoFmt;
+pub const labelClick = LabelWidget.Helpers.labelClick;
 
 pub const Texture = @import("Texture.zig");
 pub const TextureTarget = Texture.Target;
@@ -4315,67 +4320,6 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
     ret.processEvents();
     ret.drawBackground();
     return ret;
-}
-
-/// A clickable label.  Good for hyperlinks.
-/// Returns true if it's been clicked.
-pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) bool {
-    var lw = LabelWidget.init(src, fmt, args, init_opts, opts.override(.{ .name = "LabelClick" }));
-    // draw border and background
-    lw.install();
-
-    dvui.tabIndexSet(lw.data().id, lw.data().options.tab_index);
-
-    const ret = dvui.clicked(lw.data(), .{});
-
-    // draw text
-    lw.draw();
-
-    // draw an accent border if we are focused
-    if (lw.data().id == dvui.focusedWidgetId()) {
-        lw.data().focusBorder();
-    }
-
-    // done with lw, have it report min size to parent
-    lw.deinit();
-
-    return ret;
-}
-
-/// Format and display a label.
-///
-/// See `labelEx` and `labelNoFmt`.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) void {
-    var lw = LabelWidget.init(src, fmt, args, .{}, opts);
-    lw.install();
-    lw.draw();
-    lw.deinit();
-}
-
-/// Format and display a label with extra label options.
-///
-/// See `label` and `labelNoFmt`.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn labelEx(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) void {
-    var lw = LabelWidget.init(src, fmt, args, init_opts, opts);
-    lw.install();
-    lw.draw();
-    lw.deinit();
-}
-
-/// Display a label (no formatting) with extra label options.
-///
-/// See `label` and `labelEx`.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, init_opts: LabelWidget.InitOptions, opts: Options) void {
-    var lw = LabelWidget.initNoFmt(src, str, init_opts, opts);
-    lw.install();
-    lw.draw();
-    lw.deinit();
 }
 
 /// Display an icon rasterized lazily from tvg_bytes.
