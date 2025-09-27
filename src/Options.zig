@@ -419,7 +419,8 @@ pub fn hash(self: *const Options) u64 {
     hasher.update(asBytes(&self.backgroundGet()));
 
     hasher.update(asBytes(&self.styleGet()));
-    hasher.update(asBytes(self.themeGet()));
+    // FIXME: Should hash the theme fields here in a consistent way
+    // hasher.update(asBytes(self.themeGet()));
 
     if (self.color_fill) |col| hasher.update(asBytes(&col));
     if (self.color_fill_hover) |col| hasher.update(asBytes(&col));
