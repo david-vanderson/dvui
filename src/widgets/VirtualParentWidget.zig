@@ -64,6 +64,22 @@ pub fn deinit(self: *VirtualParentWidget) void {
     dvui.parentReset(self.data().id, self.data().parent);
 }
 
+pub const Helpers = struct {
+    /// Shim to make widget ids unique.
+    ///
+    /// Useful when you wrap some widgets into a function, but that function does
+    /// not have a parent widget.  See makeLabels() in src/Examples.zig
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) *VirtualParentWidget {
+        var ret = dvui.widgetAlloc(VirtualParentWidget);
+        ret.* = VirtualParentWidget.init(src, opts);
+        ret.data().was_allocated_on_widget_stack = true;
+        ret.install();
+        return ret;
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

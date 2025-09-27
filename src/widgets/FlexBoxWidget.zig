@@ -119,6 +119,22 @@ pub fn deinit(self: *FlexBoxWidget) void {
     dvui.parentReset(self.data().id, self.data().parent);
 }
 
+pub const Helpers = struct {
+    /// Box laying out children horizontally, making new rows as needed.
+    ///
+    /// See `box`.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) *FlexBoxWidget {
+        var ret = dvui.widgetAlloc(FlexBoxWidget);
+        ret.* = FlexBoxWidget.init(src, init_opts, opts);
+        ret.data().was_allocated_on_widget_stack = true;
+        ret.install();
+        ret.drawBackground();
+        return ret;
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

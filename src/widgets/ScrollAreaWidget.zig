@@ -207,6 +207,16 @@ pub fn deinit(self: *ScrollAreaWidget) void {
     self.hbox.deinit();
 }
 
+pub const Helpers = struct {
+    pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) *ScrollAreaWidget {
+        var ret = dvui.widgetAlloc(ScrollAreaWidget);
+        ret.* = ScrollAreaWidget.init(src, init_opts, opts);
+        ret.init_opts.was_allocated_on_widget_stack = true;
+        ret.install();
+        return ret;
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

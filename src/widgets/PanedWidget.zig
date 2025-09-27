@@ -423,6 +423,23 @@ pub fn deinit(self: *PanedWidget) void {
     dvui.parentReset(self.data().id, self.data().parent);
 }
 
+pub const Helpers = struct {
+    /// Splits area in two with a user-moveable sash between.
+    ///
+    /// Automatically collapses (only shows one of the two sides) when it has less
+    /// than init_opts.collapsed_size space.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: Options) *PanedWidget {
+        var ret = dvui.widgetAlloc(PanedWidget);
+        ret.* = PanedWidget.init(src, init_opts, opts);
+        ret.data().was_allocated_on_widget_stack = true;
+        ret.install();
+        ret.processEvents();
+        return ret;
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

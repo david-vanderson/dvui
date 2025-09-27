@@ -157,6 +157,21 @@ pub fn deinit(self: *AnimateWidget) void {
     dvui.parentReset(self.data().id, self.data().parent);
 }
 
+pub const Helpers = struct {
+    /// Wrapper widget that takes a single child and animates it.
+    ///
+    /// `AnimateWidget.start` is called for you on the first frame.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) *AnimateWidget {
+        var ret = dvui.widgetAlloc(AnimateWidget);
+        ret.* = AnimateWidget.init(src, init_opts, opts);
+        ret.data().was_allocated_on_widget_stack = true;
+        ret.install();
+        return ret;
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

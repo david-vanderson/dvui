@@ -60,40 +60,6 @@ pub const WidgetData = @import("WidgetData.zig");
 
 pub const entypo = @import("icons/entypo.zig");
 
-// Note : Import widgets this way (i.e. importing them via `src/import_widgets.zig`
-// so they are nicely referenced in docs.
-// Having `pub const widgets = ` allow to refer the page with `dvui.widgets` in doccoment
-pub const widgets = @import("import_widgets.zig");
-pub const AnimateWidget = widgets.AnimateWidget;
-pub const BoxWidget = widgets.BoxWidget;
-pub const CacheWidget = widgets.CacheWidget;
-pub const ColorPickerWidget = widgets.ColorPickerWidget;
-pub const FlexBoxWidget = widgets.FlexBoxWidget;
-pub const ReorderWidget = widgets.ReorderWidget;
-pub const Reorderable = ReorderWidget.Reorderable;
-pub const ContextWidget = widgets.ContextWidget;
-pub const DropdownWidget = widgets.DropdownWidget;
-pub const FloatingWindowWidget = widgets.FloatingWindowWidget;
-pub const FloatingWidget = widgets.FloatingWidget;
-pub const FloatingTooltipWidget = widgets.FloatingTooltipWidget;
-pub const FloatingMenuWidget = widgets.FloatingMenuWidget;
-pub const IconWidget = widgets.IconWidget;
-pub const MenuWidget = widgets.MenuWidget;
-pub const MenuItemWidget = widgets.MenuItemWidget;
-pub const OverlayWidget = widgets.OverlayWidget;
-pub const PanedWidget = widgets.PanedWidget;
-pub const PlotWidget = widgets.PlotWidget;
-pub const ScaleWidget = widgets.ScaleWidget;
-pub const ScrollAreaWidget = widgets.ScrollAreaWidget;
-pub const ScrollBarWidget = widgets.ScrollBarWidget;
-pub const ScrollContainerWidget = widgets.ScrollContainerWidget;
-pub const SuggestionWidget = widgets.SuggestionWidget;
-pub const TabsWidget = widgets.TabsWidget;
-pub const TextEntryWidget = widgets.TextEntryWidget;
-pub const TextLayoutWidget = widgets.TextLayoutWidget;
-pub const TreeWidget = widgets.TreeWidget;
-pub const VirtualParentWidget = widgets.VirtualParentWidget;
-pub const GridWidget = widgets.GridWidget;
 pub const struct_ui = @import("struct_ui.zig");
 pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
@@ -104,16 +70,92 @@ pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHas
 pub const PNGEncoder = @import("PNGEncoder.zig");
 pub const JPGEncoder = @import("JPGEncoder.zig");
 
+// --- Widgets ---
+
+// Note : Import widgets this way (i.e. importing them via `src/import_widgets.zig`
+// so they are nicely referenced in docs.
+// Having `pub const widgets = ` allow to refer the page with `dvui.widgets` in doccoment
+pub const widgets = @import("import_widgets.zig");
+
+pub const AnimateWidget = widgets.AnimateWidget;
+pub const animate = AnimateWidget.Helpers.animate;
+
+pub const BoxWidget = widgets.BoxWidget;
+pub const box = BoxWidget.Helpers.box;
+
 pub const ButtonWidget = widgets.ButtonWidget;
 pub const button = ButtonWidget.Helpers.button;
 pub const buttonIcon = ButtonWidget.Helpers.buttonIcon;
 pub const buttonLabelAndIcon = ButtonWidget.Helpers.buttonLabelAndIcon;
+
+pub const CacheWidget = widgets.CacheWidget;
+pub const cache = CacheWidget.Helpers.cache;
+
+pub const ColorPickerWidget = widgets.ColorPickerWidget;
+
+pub const ContextWidget = widgets.ContextWidget;
+pub const context = ContextWidget.Helpers.context;
+
+pub const DropdownWidget = widgets.DropdownWidget;
+
+pub const FlexBoxWidget = widgets.FlexBoxWidget;
+pub const flexbox = FlexBoxWidget.Helpers.flexbox;
+
+pub const FloatingWidget = widgets.FloatingWidget;
+pub const FloatingWindowWidget = widgets.FloatingWindowWidget;
+pub const floatingWindow = FloatingWindowWidget.Helpers.floatingWindow;
+pub const FloatingMenuWidget = widgets.FloatingMenuWidget;
+pub const floatingMenu = FloatingMenuWidget.Helpers.floatingMenu;
+pub const FloatingTooltipWidget = widgets.FloatingTooltipWidget;
+pub const tooltip = FloatingTooltipWidget.Helpers.tooltip;
+
+pub const GridWidget = widgets.GridWidget;
+
+pub const IconWidget = widgets.IconWidget;
 
 pub const LabelWidget = widgets.LabelWidget;
 pub const label = LabelWidget.Helpers.label;
 pub const labelEx = LabelWidget.Helpers.labelEx;
 pub const labelNoFmt = LabelWidget.Helpers.labelNoFmt;
 pub const labelClick = LabelWidget.Helpers.labelClick;
+
+pub const MenuWidget = widgets.MenuWidget;
+pub const MenuItemWidget = widgets.MenuItemWidget;
+
+pub const OverlayWidget = widgets.OverlayWidget;
+pub const overlay = OverlayWidget.Helpers.overlay;
+
+pub const PlotWidget = widgets.PlotWidget;
+
+pub const PanedWidget = widgets.PanedWidget;
+pub const paned = PanedWidget.Helpers.paned;
+
+pub const ReorderWidget = widgets.ReorderWidget;
+pub const Reorderable = ReorderWidget.Reorderable;
+pub const reorder = ReorderWidget.Helpers.reorder;
+
+pub const ScaleWidget = widgets.ScaleWidget;
+pub const scale = ScaleWidget.Helpers.scale;
+
+pub const ScrollAreaWidget = widgets.ScrollAreaWidget;
+pub const scrollArea = ScrollAreaWidget.Helpers.scrollArea;
+pub const ScrollBarWidget = widgets.ScrollBarWidget;
+pub const ScrollContainerWidget = widgets.ScrollContainerWidget;
+
+pub const SuggestionWidget = widgets.SuggestionWidget;
+
+pub const TabsWidget = widgets.TabsWidget;
+
+pub const TextEntryWidget = widgets.TextEntryWidget;
+
+pub const TextLayoutWidget = widgets.TextLayoutWidget;
+
+pub const TreeWidget = widgets.TreeWidget;
+
+pub const VirtualParentWidget = widgets.VirtualParentWidget;
+pub const virtualParent = VirtualParentWidget.Helpers.virtualParent;
+
+// --- End Widgets ---
 
 pub const Texture = @import("Texture.zig");
 pub const TextureTarget = Texture.Target;
@@ -2812,36 +2854,6 @@ pub fn wantTextInput(r: Rect.Natural) void {
     cw.text_input_rect = r;
 }
 
-/// Temporary menu that floats above current layer.  Usually contains multiple
-/// `menuItemLabel`, `menuItemIcon`, or `menuItem`, but can contain any
-/// widgets.
-///
-/// Clicking outside of the menu or any child menus closes it.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) *FloatingMenuWidget {
-    var ret = widgetAlloc(FloatingMenuWidget);
-    ret.* = FloatingMenuWidget.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
-    return ret;
-}
-
-/// Subwindow that the user can generally resize and move around.
-///
-/// Usually you want to add `windowHeader` as the first child.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) *FloatingWindowWidget {
-    var ret = widgetAlloc(FloatingWindowWidget);
-    ret.* = FloatingWindowWidget.init(src, floating_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
-    ret.processEventsBefore();
-    ret.drawBackground();
-    return ret;
-}
-
 /// Normal widgets seen at the top of `floatingWindow`.  Includes a close
 /// button, centered title str, and right_str on the right.
 ///
@@ -3560,19 +3572,6 @@ pub fn toastsShow(id: ?Id, rect: Rect.Natural) void {
     }
 }
 
-/// Wrapper widget that takes a single child and animates it.
-///
-/// `AnimateWidget.start` is called for you on the first frame.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) *AnimateWidget {
-    var ret = widgetAlloc(AnimateWidget);
-    ret.* = AnimateWidget.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
-    return ret;
-}
-
 /// Show chosen entry, and click to display all entries in a floating menu.
 ///
 /// See `DropdownWidget` for more advanced usage.
@@ -3815,21 +3814,6 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     return expanded;
 }
 
-/// Splits area in two with a user-moveable sash between.
-///
-/// Automatically collapses (only shows one of the two sides) when it has less
-/// than init_opts.collapsed_size space.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: Options) *PanedWidget {
-    var ret = widgetAlloc(PanedWidget);
-    ret.* = PanedWidget.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
-    ret.processEvents();
-    return ret;
-}
-
 /// Show text with wrapping (optional).  Supports mouse and touch selection.
 ///
 /// Text is added incrementally with `TextLayoutWidget.addText` or
@@ -3855,132 +3839,6 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
     // call addText() any number of times
 
     // can call addTextDone() (will be called automatically if you don't)
-    return ret;
-}
-
-/// Context menu.  Pass a screen space pixel rect in `init_opts`, then
-/// `.activePoint()` says whether to show a menu.
-///
-/// The menu code should happen before `.deinit()`, but don't put regular widgets
-/// directly inside Context.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: Options) *ContextWidget {
-    var ret = widgetAlloc(ContextWidget);
-    ret.* = ContextWidget.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
-    ret.processEvents();
-    return ret;
-}
-
-/// Show a floating text tooltip as long as the mouse is inside init_opts.active_rect.
-///
-/// Use init_opts.interactive = true to allow mouse interaction with the
-/// tooltip contents.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget.InitOptions, comptime fmt: []const u8, fmt_args: anytype, opts: Options) void {
-    var tt: dvui.FloatingTooltipWidget = .init(src, init_opts, opts);
-    if (tt.shown()) {
-        var tl2 = dvui.textLayout(@src(), .{}, .{ .background = false });
-        tl2.format(fmt, fmt_args, .{});
-        tl2.deinit();
-    }
-    tt.deinit();
-}
-
-/// Shim to make widget ids unique.
-///
-/// Useful when you wrap some widgets into a function, but that function does
-/// not have a parent widget.  See makeLabels() in src/Examples.zig
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) *VirtualParentWidget {
-    var ret = widgetAlloc(VirtualParentWidget);
-    ret.* = VirtualParentWidget.init(src, opts);
-    ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
-    return ret;
-}
-
-/// Lays out children according to gravity anywhere inside.  Useful to overlap
-/// children.
-///
-/// See `box`.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn overlay(src: std.builtin.SourceLocation, opts: Options) *OverlayWidget {
-    var ret = widgetAlloc(OverlayWidget);
-    ret.* = OverlayWidget.init(src, opts);
-    ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
-    ret.drawBackground();
-    return ret;
-}
-
-/// Box that packs children with gravity 0 or 1, or anywhere with gravity
-/// between (0,1).
-///
-/// A child with gravity between (0,1) in dir direction is not packed, and
-/// instead positioned in the whole box area, like `overlay`.
-///
-/// A child with gravity 0 or 1 in dir direction is packed either at the start
-/// (gravity 0) or end (gravity 1).
-///
-/// Extra space is allocated evenly to all packed children expanded in dir
-/// direction.
-///
-/// If init_opts.equal_space is true, all packed children get equal space.
-///
-/// See `flexbox`.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn box(src: std.builtin.SourceLocation, init_opts: BoxWidget.InitOptions, opts: Options) *BoxWidget {
-    var ret = widgetAlloc(BoxWidget);
-    ret.* = BoxWidget.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
-    ret.drawBackground();
-    return ret;
-}
-
-/// Box laying out children horizontally, making new rows as needed.
-///
-/// See `box`.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) *FlexBoxWidget {
-    var ret = widgetAlloc(FlexBoxWidget);
-    ret.* = FlexBoxWidget.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
-    ret.drawBackground();
-    return ret;
-}
-
-pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) *CacheWidget {
-    var ret = widgetAlloc(CacheWidget);
-    ret.* = CacheWidget.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
-    return ret;
-}
-
-pub fn reorder(src: std.builtin.SourceLocation, init_opts: ReorderWidget.InitOptions, opts: Options) *ReorderWidget {
-    var ret = widgetAlloc(ReorderWidget);
-    ret.* = ReorderWidget.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
-    ret.processEvents();
-    return ret;
-}
-
-pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) *ScrollAreaWidget {
-    var ret = widgetAlloc(ScrollAreaWidget);
-    ret.* = ScrollAreaWidget.init(src, init_opts, opts);
-    ret.init_opts.was_allocated_on_widget_stack = true;
-    ret.install();
     return ret;
 }
 
@@ -4249,15 +4107,6 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
 
     path.addArc(r.center(), @min(r.w, r.h) / 3, start, end, false);
     path.build().stroke(.{ .thickness = 3.0 * rs.s, .color = options.color(.text) });
-}
-
-pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) *ScaleWidget {
-    var ret = widgetAlloc(ScaleWidget);
-    ret.* = ScaleWidget.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
-    ret.processEvents();
-    return ret;
 }
 
 pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) *MenuWidget {

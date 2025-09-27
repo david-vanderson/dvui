@@ -304,6 +304,23 @@ pub fn deinit(self: *FloatingMenuWidget) void {
     _ = dvui.renderingSet(self.prev_rendering);
 }
 
+pub const Helpers = struct {
+    /// Temporary menu that floats above current layer.  Usually contains multiple
+    /// `menuItemLabel`, `menuItemIcon`, or `menuItem`, but can contain any
+    /// widgets.
+    ///
+    /// Clicking outside of the menu or any child menus closes it.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) *FloatingMenuWidget {
+        var ret = dvui.widgetAlloc(FloatingMenuWidget);
+        ret.* = FloatingMenuWidget.init(src, init_opts, opts);
+        ret.data().was_allocated_on_widget_stack = true;
+        ret.install();
+        return ret;
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

@@ -584,6 +584,23 @@ pub fn deinit(self: *FloatingWindowWidget) void {
     _ = dvui.renderingSet(self.prev_rendering);
 }
 
+pub const Helpers = struct {
+    /// Subwindow that the user can generally resize and move around.
+    ///
+    /// Usually you want to add `windowHeader` as the first child.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) *FloatingWindowWidget {
+        var ret = dvui.widgetAlloc(FloatingWindowWidget);
+        ret.* = FloatingWindowWidget.init(src, floating_opts, opts);
+        ret.data().was_allocated_on_widget_stack = true;
+        ret.install();
+        ret.processEventsBefore();
+        ret.drawBackground();
+        return ret;
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

@@ -188,6 +188,16 @@ pub fn deinit(self: *CacheWidget) void {
     dvui.parentReset(self.data().id, self.data().parent);
 }
 
+pub const Helpers = struct {
+    pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) *CacheWidget {
+        var ret = dvui.widgetAlloc(CacheWidget);
+        ret.* = CacheWidget.init(src, init_opts, opts);
+        ret.data().was_allocated_on_widget_stack = true;
+        ret.install();
+        return ret;
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

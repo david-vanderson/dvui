@@ -148,6 +148,24 @@ pub fn deinit(self: *ContextWidget) void {
     dvui.parentReset(self.data().id, self.data().parent);
 }
 
+pub const Helpers = struct {
+    /// Context menu.  Pass a screen space pixel rect in `init_opts`, then
+    /// `.activePoint()` says whether to show a menu.
+    ///
+    /// The menu code should happen before `.deinit()`, but don't put regular widgets
+    /// directly inside Context.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: Options) *ContextWidget {
+        var ret = dvui.widgetAlloc(ContextWidget);
+        ret.* = ContextWidget.init(src, init_opts, opts);
+        ret.data().was_allocated_on_widget_stack = true;
+        ret.install();
+        ret.processEvents();
+        return ret;
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

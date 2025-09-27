@@ -427,6 +427,17 @@ pub fn reorderSlice(comptime T: type, slice: []T, removed_idx: usize, insert_bef
     }
 }
 
+pub const Helpers = struct {
+    pub fn reorder(src: std.builtin.SourceLocation, init_opts: ReorderWidget.InitOptions, opts: Options) *ReorderWidget {
+        var ret = dvui.widgetAlloc(ReorderWidget);
+        ret.* = ReorderWidget.init(src, init_opts, opts);
+        ret.data().was_allocated_on_widget_stack = true;
+        ret.install();
+        ret.processEvents();
+        return ret;
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

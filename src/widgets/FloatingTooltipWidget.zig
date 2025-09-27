@@ -255,6 +255,24 @@ pub fn deinit(self: *FloatingTooltipWidget) void {
     _ = dvui.renderingSet(self.prev_rendering);
 }
 
+pub const Helpers = struct {
+    /// Show a floating text tooltip as long as the mouse is inside init_opts.active_rect.
+    ///
+    /// Use init_opts.interactive = true to allow mouse interaction with the
+    /// tooltip contents.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget.InitOptions, comptime fmt: []const u8, fmt_args: anytype, opts: Options) void {
+        var tt: dvui.FloatingTooltipWidget = .init(src, init_opts, opts);
+        if (tt.shown()) {
+            var tl2 = dvui.textLayout(@src(), .{}, .{ .background = false });
+            tl2.format(fmt, fmt_args, .{});
+            tl2.deinit();
+        }
+        tt.deinit();
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

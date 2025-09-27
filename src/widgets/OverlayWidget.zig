@@ -57,6 +57,23 @@ pub fn deinit(self: *OverlayWidget) void {
     dvui.parentReset(self.data().id, self.data().parent);
 }
 
+pub const Helpers = struct {
+    /// Lays out children according to gravity anywhere inside.  Useful to overlap
+    /// children.
+    ///
+    /// See `box`.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn overlay(src: std.builtin.SourceLocation, opts: Options) *OverlayWidget {
+        var ret = dvui.widgetAlloc(OverlayWidget);
+        ret.* = OverlayWidget.init(src, opts);
+        ret.data().was_allocated_on_widget_stack = true;
+        ret.install();
+        ret.drawBackground();
+        return ret;
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

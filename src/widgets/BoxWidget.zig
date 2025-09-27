@@ -301,6 +301,34 @@ pub fn deinit(self: *BoxWidget) void {
     dvui.parentReset(self.data().id, self.data().parent);
 }
 
+pub const Helpers = struct {
+    /// Box that packs children with gravity 0 or 1, or anywhere with gravity
+    /// between (0,1).
+    ///
+    /// A child with gravity between (0,1) in dir direction is not packed, and
+    /// instead positioned in the whole box area, like `overlay`.
+    ///
+    /// A child with gravity 0 or 1 in dir direction is packed either at the start
+    /// (gravity 0) or end (gravity 1).
+    ///
+    /// Extra space is allocated evenly to all packed children expanded in dir
+    /// direction.
+    ///
+    /// If init_opts.equal_space is true, all packed children get equal space.
+    ///
+    /// See `flexbox`.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn box(src: std.builtin.SourceLocation, init_opts: BoxWidget.InitOptions, opts: Options) *BoxWidget {
+        var ret = dvui.widgetAlloc(BoxWidget);
+        ret.* = BoxWidget.init(src, init_opts, opts);
+        ret.data().was_allocated_on_widget_stack = true;
+        ret.install();
+        ret.drawBackground();
+        return ret;
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }
