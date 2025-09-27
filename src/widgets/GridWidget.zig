@@ -40,6 +40,8 @@ const ScrollBarWidget = dvui.ScrollBarWidget;
 pub const CellStyle = @import("GridWidget/CellStyle.zig");
 const GridWidget = @This();
 
+pub const Helpers = @import("./GridWidget/Helpers.zig");
+
 pub var defaults: Options = .{
     .name = "GridWidget",
     .background = true,
