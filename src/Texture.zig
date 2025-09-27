@@ -24,55 +24,73 @@ pub const Target = struct {
 };
 
 pub const Cache = struct {
+    cache: Storage = .empty,
+    /// Used to defer destroying textures until the next call to `reset` or `deinit`
+    trash: Trash = .empty,
+
     pub const Storage = dvui.TrackingAutoHashMap(Key, Texture, .get_and_put);
+    pub const Trash = std.ArrayListUnmanaged(dvui.Texture);
+
     pub const Key = u64;
 
-    /// Gets a texture from the internal texture cache. If a texture
-    /// isn't used for one frame it gets removed from the cache and
-    /// destroyed.
-    ///
-    /// If you want to lazily create a texture, you could do:
-    /// ```zig
-    /// const texture = dvui.textureGetCached(key) orelse blk: {
-    ///     const texture = ...; // Create your texture here
-    ///     dvui.textureAddToCache(key, texture);
-    ///     break :blk texture;
-    /// }
-    /// ```
-    ///
-    /// Only valid between `Window.begin`and `Window.end`.
-    pub fn get(key: Key) ?Texture {
-        const cw = dvui.currentWindow();
-        return cw.texture_cache.get(key);
+    pub fn get(self: *Cache, key: Key) ?Texture {
+        return self.cache.get(key);
     }
 
     /// Add a texture to the cache. This is useful if you want to load
     /// and image from disk, create a texture from it and then unload
     /// it from memory. The texture will remain in the cache as long
-    /// as it's key is accessed at least once per frame.
-    ///
-    /// Only valid between `Window.begin`and `Window.end`.
-    pub fn add(key: Key, texture: Texture) void {
-        const cw = dvui.currentWindow();
-        const prev = cw.texture_cache.fetchPut(cw.gpa, key, texture) catch |err| {
-            dvui.logError(@src(), err, "Could not add texture with key {x} to cache", .{key});
-            return;
-        };
+    /// as it's key is accessed at least once per call to `reset`.
+    pub fn add(self: *Cache, gpa: std.mem.Allocator, key: Key, texture: Texture) std.mem.Allocator.Error!void {
+        try self.trash.ensureUnusedCapacity(gpa, 1);
+        const prev = try self.cache.fetchPut(gpa, key, texture);
         if (prev) |kv| {
-            dvui.textureDestroyLater(kv.value);
+            self.trash.appendAssumeCapacity(kv.value);
         }
     }
 
     /// Remove a key from the cache. This can force the re-creation
-    /// of a texture created by `dvui.ImageSource` for example.
+    /// of a texture created by `ImageSource` for example.
     ///
-    /// Only valid between `Window.begin`and `Window.end`.
-    pub fn invalidate(key: Key) void {
-        const cw = dvui.currentWindow();
-        const prev = cw.texture_cache.fetchRemove(key);
+    /// `gpa` is needed to store the texture for deferred destruction
+    pub fn invalidate(self: *Cache, gpa: std.mem.Allocator, key: Key) std.mem.Allocator.Error!void {
+        try self.trash.ensureUnusedCapacity(gpa, 1);
+        const prev = self.cache.fetchRemove(key);
         if (prev) |kv| {
-            dvui.textureDestroyLater(kv.value);
+            self.trash.appendAssumeCapacity(kv.value);
         }
+    }
+
+    /// Destroys all unused and trashed textures since the last
+    /// call to `reset`
+    ///
+    /// `allocator` is only used for the returned slice and can be
+    /// different from the one used for calls to `add`
+    pub fn reset(self: *Cache, allocator: std.mem.Allocator, backend: dvui.Backend) std.mem.Allocator.Error!void {
+        const keys = try self.cache.reset(allocator);
+        defer allocator.free(keys);
+        errdefer comptime unreachable;
+        for (keys) |key| {
+            backend.textureDestroy(self.cache.fetchRemove(key).?.value);
+        }
+        for (self.trash.items) |tex| {
+            backend.textureDestroy(tex);
+        }
+        self.trash.clearRetainingCapacity();
+    }
+
+    /// Deallocates and destroys all stored textures
+    pub fn deinit(self: *Cache, gpa: std.mem.Allocator, backend: dvui.Backend) void {
+        defer self.* = undefined;
+        var it = self.cache.iterator();
+        while (it.next()) |item| {
+            backend.textureDestroy(item.value_ptr.*);
+        }
+        self.cache.deinit(gpa);
+        for (self.trash.items) |tex| {
+            backend.textureDestroy(tex);
+        }
+        self.trash.deinit(gpa);
     }
 };
 
@@ -183,7 +201,7 @@ pub const ImageSource = union(enum) {
             // return texture directly
             .texture => |tex| return tex,
         };
-        if (Cache.get(key)) |cached_texture| {
+        if (dvui.textureGetCached(key)) |cached_texture| {
             // if invalidate = always, we update the texture using updateImageSource for efficency, otherwise return the cached Texture
             if (invalidate == .always) {
                 var tex_mut = cached_texture;
@@ -193,7 +211,7 @@ pub const ImageSource = union(enum) {
         } else {
             // cache was empty we create a new Texture
             const new_texture = try Texture.fromImageSource(self);
-            Cache.add(key, new_texture);
+            dvui.textureAddToCache(key, new_texture);
             return new_texture;
         }
     }
@@ -353,7 +371,7 @@ pub fn fromTarget(target: Target) TextureError!Texture {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn destroyLater(texture: Texture) void {
     const cw = dvui.currentWindow();
-    cw.texture_trash.append(cw.arena(), texture) catch |err| {
+    cw.texture_cache.trash.append(cw.gpa, texture) catch |err| {
         dvui.log.err("Texture destroyLater got {any}\n", .{err});
     };
 }

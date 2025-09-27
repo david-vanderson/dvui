@@ -97,11 +97,8 @@ button_order: dvui.enums.DialogButtonOrder = .cancel_ok,
 min_sizes: dvui.TrackingAutoHashMap(Id, Size, .put_only) = .empty,
 /// Uses `gpa` allocator
 tags: dvui.TrackingAutoHashMap([]const u8, dvui.TagData, .put_only) = .empty,
-data_mutex: std.Thread.Mutex = .{},
 /// Uses `gpa` allocator
-datas: dvui.TrackingAutoHashMap(Id, SavedData, .get_and_put) = .empty,
-/// Uses `arena` allocator
-datas_trash: std.ArrayListUnmanaged(SavedData) = .empty,
+data_store: dvui.Data = .{},
 /// Uses `gpa` allocator
 animations: dvui.TrackingAutoHashMap(Id, Animation, .get_and_put) = .empty,
 /// Uses `gpa` allocator
@@ -113,9 +110,7 @@ font_cache: dvui.TrackingAutoHashMap(u64, dvui.FontCacheEntry, .get_and_put) = .
 /// Uses `gpa` allocator
 font_bytes: std.AutoHashMapUnmanaged(dvui.Font.FontId, dvui.FontBytesEntry) = .empty,
 /// Uses `gpa` allocator
-texture_cache: dvui.Texture.Cache.Storage = .empty,
-/// Uses `arena` allocator
-texture_trash: std.ArrayListUnmanaged(dvui.Texture) = .empty,
+texture_cache: dvui.Texture.Cache = .{},
 dialog_mutex: std.Thread.Mutex = .{},
 /// Uses `gpa` allocator
 dialogs: std.ArrayListUnmanaged(Dialog) = .empty,
@@ -160,24 +155,6 @@ pub const Subwindow = struct {
     modal: bool = false,
     stay_above_parent_window: ?Id = null,
     mouse_events: bool = true,
-};
-
-const SavedData = struct {
-    alignment: u8,
-    data: []u8,
-
-    type_str: if (builtin.mode == .Debug) []const u8 else void = undefined,
-    copy_slice: if (builtin.mode == .Debug) bool else void = undefined,
-
-    pub fn free(self: *const SavedData, allocator: std.mem.Allocator) void {
-        if (self.data.len != 0) {
-            allocator.rawFree(
-                self.data,
-                std.mem.Alignment.fromByteUnits(self.alignment),
-                @returnAddress(),
-            );
-        }
-    }
 };
 
 pub const InitOptions = struct {
@@ -366,21 +343,9 @@ pub fn init(
 }
 
 pub fn deinit(self: *Self) void {
-    for (self.datas_trash.items) |sd| {
-        sd.free(self.gpa);
-    }
-    self.datas_trash.deinit(self.arena());
+    self.data_store.deinit(self.gpa);
 
-    for (self.texture_trash.items) |tex| {
-        self.backend.textureDestroy(tex);
-    }
-    self.texture_trash.deinit(self.arena());
-
-    {
-        var it = self.datas.iterator();
-        while (it.next()) |item| item.value_ptr.free(self.gpa);
-        self.datas.deinit(self.gpa);
-    }
+    self.texture_cache.deinit(self.gpa, self.backend);
 
     self.debug.deinit(self.gpa);
 
@@ -406,14 +371,6 @@ pub fn deinit(self: *Self) void {
             item.value_ptr.deinit(self);
         }
         self.font_cache.deinit(self.gpa);
-    }
-
-    {
-        var it = self.texture_cache.iterator();
-        while (it.next()) |item| {
-            self.backend.textureDestroy(item.value_ptr.*);
-        }
-        self.texture_cache.deinit(self.gpa);
     }
 
     self.dialogs.deinit(self.gpa);
@@ -1008,8 +965,8 @@ pub fn begin(
 
     self.debug.reset(self.gpa);
 
-    self.datas_trash = .empty;
-    self.texture_trash = .empty;
+    try self.data_store.reset(self.gpa);
+    try self.texture_cache.reset(self.lifo(), self.backend);
 
     {
         var i: usize = 0;
@@ -1050,18 +1007,6 @@ pub fn begin(
             self.gpa.free(name);
         }
         //std.debug.print("tags {d}\n", .{self.tags.count()});
-    }
-
-    {
-        self.data_mutex.lock();
-        defer self.data_mutex.unlock();
-        const deadData = try self.datas.reset(self.lifo());
-        defer self.lifo().free(deadData);
-        for (deadData) |id| {
-            var sd = self.datas.fetchRemove(id).?;
-            sd.value.free(self.gpa);
-        }
-        //std.debug.print("datas {d}\n", .{self.datas.count()});
     }
 
     // Swap current and previous tab index lists
@@ -1120,16 +1065,6 @@ pub fn begin(
             tce.value.deinit(self);
         }
         //std.debug.print("font_cache {d}\n", .{self.font_cache.count()});
-    }
-
-    {
-        const deadTextures = try self.texture_cache.reset(self.lifo());
-        defer self.lifo().free(deadTextures);
-        for (deadTextures) |id| {
-            const ice = self.texture_cache.fetchRemove(id).?;
-            self.backend.textureDestroy(ice.value);
-        }
-        //std.debug.print("texture_cache {d}\n", .{self.texture_cache.count()});
     }
 
     if (!self.captured_last_frame) {
@@ -1311,110 +1246,6 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
     }
 }
 
-/// data is copied into internal storage
-pub fn dataSetAdvanced(self: *Self, id: Id, key: []const u8, data_in: anytype, comptime copy_slice: bool, num_copies: usize) void {
-    const hash = id.update(key);
-
-    const dt = @typeInfo(@TypeOf(data_in));
-    const dt_type_str = @typeName(@TypeOf(data_in));
-    const bytes: []const u8 = if (copy_slice) blk: {
-        var bytes = std.mem.sliceAsBytes(data_in);
-        if (dt.pointer.sentinel() != null) {
-            bytes.len += @sizeOf(dt.pointer.child);
-        }
-        break :blk bytes;
-    } else std.mem.asBytes(&data_in);
-
-    const alignment = comptime blk: {
-        if (copy_slice) {
-            break :blk dt.pointer.alignment;
-        } else {
-            break :blk @alignOf(@TypeOf(data_in));
-        }
-    };
-
-    self.data_mutex.lock();
-    defer self.data_mutex.unlock();
-
-    const entry = self.datas.getOrPut(self.gpa, hash) catch |err| {
-        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
-        return;
-    };
-
-    const is_same_size = entry.value_ptr.data.len == bytes.len * num_copies;
-    const should_trash = entry.found_existing and !is_same_size;
-    if (should_trash) {
-        // log.debug("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, key });
-        if (builtin.mode == .Debug) {
-            if (!std.mem.eql(u8, entry.value_ptr.type_str, @typeName(@TypeOf(data_in))) or entry.value_ptr.copy_slice != copy_slice) {
-                std.debug.panic(
-                    "dataSetAdvanced: stored type {s} (slice {any}) doesn't match asked for type {s} (slice {any})",
-                    .{ entry.value_ptr.type_str, entry.value_ptr.copy_slice, @typeName(@TypeOf(data_in)), copy_slice },
-                );
-            }
-        }
-        self.datas_trash.append(self.arena(), entry.value_ptr.*) catch |err| {
-            // Remove from map so it dataGet doesn't return an undefined value
-            _ = self.datas.remove(hash);
-            dvui.logError(@src(), err, "Previous data could not be added to the trash, id {x} key {s}", .{ id, key });
-            return;
-        };
-    }
-    if (!entry.found_existing or should_trash) {
-        entry.value_ptr.* = .{
-            .alignment = alignment,
-            .data = self.gpa.allocWithOptions(u8, bytes.len * num_copies, .fromByteUnits(alignment), null) catch |err| switch (err) {
-                error.OutOfMemory => {
-                    dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
-                    return;
-                },
-            },
-        };
-        if (builtin.mode == .Debug) {
-            entry.value_ptr.type_str = dt_type_str;
-            entry.value_ptr.copy_slice = copy_slice;
-        }
-    }
-
-    // Set data
-    for (0..num_copies) |i| {
-        @memcpy(entry.value_ptr.data[i * bytes.len ..][0..bytes.len], bytes);
-    }
-}
-
-/// returns the backing byte slice if we have one
-pub fn dataGetInternal(self: *Self, id: Id, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
-    const hash = id.update(key);
-
-    self.data_mutex.lock();
-    defer self.data_mutex.unlock();
-
-    if (self.datas.getPtr(hash)) |sd| {
-        if (builtin.mode == .Debug) {
-            if (!std.mem.eql(u8, sd.type_str, @typeName(T)) or sd.copy_slice != slice) {
-                std.debug.panic("dataGetInternal: stored type {s} (slice {any}) doesn't match asked for type {s} (slice {any})", .{ sd.type_str, sd.copy_slice, @typeName(T), slice });
-            }
-        }
-        return sd.data;
-    } else {
-        return null;
-    }
-}
-
-pub fn dataRemove(self: *Self, id: Id, key: []const u8) void {
-    const hash = id.update(key);
-
-    self.data_mutex.lock();
-    defer self.data_mutex.unlock();
-
-    if (self.datas.fetchRemove(hash)) |dd| {
-        self.datas_trash.append(self.arena(), dd.value) catch |err| {
-            dvui.logError(@src(), err, "Previous data could not be added to the trash, id {x} key {s}", .{ id, key });
-            return;
-        };
-    }
-}
-
 ///  Add a dialog to be displayed on the GUI thread during `Window.end`.
 ///
 ///  See `dvui.dialogAdd` for higher level api.
@@ -1583,19 +1414,6 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
     // Call this before freeing data so backend can use data allocated during frame.
     try self.backend.end();
-
-    // log.debug("Datas trash {d}", .{self.datas_trash.items.len});
-    for (self.datas_trash.items) |sd| {
-        sd.free(self.gpa);
-    }
-    // Set to empty because it's allocated on the arena and will be freed there
-    self.datas_trash = .empty;
-
-    for (self.texture_trash.items) |tex| {
-        self.backend.textureDestroy(tex);
-    }
-    // Set to empty because it's allocated on the arena and will be freed there
-    self.texture_trash = .empty;
 
     // events may have been tagged with a focus widget that never showed up
     const evts = dvui.events();
