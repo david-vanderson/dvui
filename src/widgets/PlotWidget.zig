@@ -327,6 +327,44 @@ pub fn deinit(self: *PlotWidget) void {
     self.box.deinit();
 }
 
+pub const Helpers = struct {
+    pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, opts: Options) *PlotWidget {
+        var ret = dvui.widgetAlloc(PlotWidget);
+        ret.* = PlotWidget.init(src, plot_opts, opts);
+        ret.init_options.was_allocated_on_widget_stack = true;
+        ret.install();
+        return ret;
+    }
+
+    pub const PlotXYOptions = struct {
+        plot_opts: InitOptions = .{},
+
+        // Logical pixels
+        thick: f32 = 1.0,
+
+        // If null, uses Theme.highlight.fill
+        color: ?dvui.Color = null,
+
+        xs: []const f64,
+        ys: []const f64,
+    };
+
+    pub fn plotXY(src: std.builtin.SourceLocation, init_opts: PlotXYOptions, opts: Options) void {
+        const xy_defaults: Options = .{ .padding = .{} };
+        var p = dvui.plot(src, init_opts.plot_opts, xy_defaults.override(opts));
+
+        var s1 = p.line();
+        for (init_opts.xs, init_opts.ys) |x, y| {
+            s1.point(x, y);
+        }
+
+        s1.stroke(init_opts.thick, init_opts.color orelse dvui.themeGet().color(.highlight, .fill));
+
+        s1.deinit();
+        p.deinit();
+    }
+};
+
 const Options = dvui.Options;
 const Point = dvui.Point;
 const Rect = dvui.Rect;

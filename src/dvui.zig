@@ -132,6 +132,8 @@ pub const OverlayWidget = widgets.OverlayWidget;
 pub const overlay = OverlayWidget.Helpers.overlay;
 
 pub const PlotWidget = widgets.PlotWidget;
+pub const plot = PlotWidget.Helpers.plot;
+pub const plotXY = PlotWidget.Helpers.plotXY;
 
 pub const PanedWidget = widgets.PanedWidget;
 pub const paned = PanedWidget.Helpers.paned;
@@ -5392,42 +5394,6 @@ pub const Picture = struct {
         dvui.renderTexture(texture, .{ .r = self.r }, .{}) catch {};
     }
 };
-
-pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, opts: Options) *PlotWidget {
-    var ret = widgetAlloc(PlotWidget);
-    ret.* = PlotWidget.init(src, plot_opts, opts);
-    ret.init_options.was_allocated_on_widget_stack = true;
-    ret.install();
-    return ret;
-}
-
-pub const PlotXYOptions = struct {
-    plot_opts: PlotWidget.InitOptions = .{},
-
-    // Logical pixels
-    thick: f32 = 1.0,
-
-    // If null, uses Theme.highlight.fill
-    color: ?Color = null,
-
-    xs: []const f64,
-    ys: []const f64,
-};
-
-pub fn plotXY(src: std.builtin.SourceLocation, init_opts: PlotXYOptions, opts: Options) void {
-    const defaults: Options = .{ .padding = .{} };
-    var p = dvui.plot(src, init_opts.plot_opts, defaults.override(opts));
-
-    var s1 = p.line();
-    for (init_opts.xs, init_opts.ys) |x, y| {
-        s1.point(x, y);
-    }
-
-    s1.stroke(init_opts.thick, init_opts.color orelse dvui.themeGet().color(.highlight, .fill));
-
-    s1.deinit();
-    p.deinit();
-}
 
 /// Display a struct and allow the user to edit values
 ///
