@@ -323,16 +323,15 @@ pub fn getHueSelectorTexture(dir: dvui.enums.Direction) dvui.Backend.TextureErro
     h.update("hue");
     h.update(std.mem.asBytes(&dir));
     const id = h.final();
-    const cw = dvui.currentWindow();
-    const res = try cw.texture_cache.getOrPut(cw.gpa, id);
-    if (!res.found_existing) {
+    if (dvui.textureGetCached(id)) |cached| return cached else {
         const width: u32, const height: u32 = switch (dir) {
             .horizontal => .{ hue_selector_colors.len, 1 },
             .vertical => .{ 1, hue_selector_colors.len },
         };
-        res.value_ptr.* = try dvui.textureCreate(&hue_selector_colors, width, height, .linear);
+        const texture = try dvui.textureCreate(&hue_selector_colors, width, height, .linear);
+        dvui.textureAddToCache(id, texture);
+        return texture;
     }
-    return res.value_ptr.*;
 }
 
 pub fn getValueSaturationTexture(hue: f32) dvui.Backend.TextureError!dvui.Texture {
@@ -340,14 +339,13 @@ pub fn getValueSaturationTexture(hue: f32) dvui.Backend.TextureError!dvui.Textur
     h.update("value");
     h.update(std.mem.asBytes(&(hue * 10000)));
     const id = h.final();
-    const cw = dvui.currentWindow();
-    const res = try cw.texture_cache.getOrPut(cw.gpa, id);
-    if (!res.found_existing) {
+    if (dvui.textureGetCached(id)) |cached| return cached else {
         var pixels: [4]Color.PMA = .{ .white, .cast(Color.HSV.toColor(.{ .h = hue })), .black, .black };
         // set top right corner to the max value of that hue
-        res.value_ptr.* = try dvui.textureCreate(&pixels, 2, 2, .linear);
+        const texture = try dvui.textureCreate(&pixels, 2, 2, .linear);
+        dvui.textureAddToCache(id, texture);
+        return texture;
     }
-    return res.value_ptr.*;
 }
 
 const hue_selector_colors: [7]Color.PMA = .{ .red, .yellow, .lime, .cyan, .blue, .magenta, .red };

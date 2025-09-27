@@ -118,6 +118,36 @@ pub const textureReadTarget = Texture.readTarget;
 pub const textureFromTarget = Texture.fromTarget;
 pub const textureDestroyLater = Texture.destroyLater;
 
+/// Gets a texture from the internal texture cache. If a texture
+/// isn't used for one frame it gets removed from the cache and
+/// destroyed.
+///
+/// If you want to lazily create a texture, you could do:
+/// ```zig
+/// const texture = dvui.textureGetCached(key) orelse blk: {
+///     const texture = ...; // Create your texture here
+///     dvui.textureAddToCache(key, texture);
+///     break :blk texture;
+/// }
+/// ```
+pub fn textureGetCached(key: Texture.Cache.Key) ?Texture {
+    return currentWindow().texture_cache.get(key);
+}
+/// See `Texture.Cache.add`
+pub fn textureAddToCache(key: Texture.Cache.Key, texture: Texture) void {
+    currentWindow().texture_cache.add(currentWindow().gpa, key, texture) catch |err| {
+        dvui.logError(@src(), err, "Could not add texture with key {x} to cache", .{key});
+        return;
+    };
+}
+/// See `Texture.Cache.invalidate`
+pub fn textureInvalidateCache(key: Texture.Cache.Key) void {
+    currentWindow().texture_cache.invalidate(currentWindow().gpa, key) catch |err| {
+        dvui.logError(@src(), err, "Could not invalidate texture with key {x}", .{key});
+        return;
+    };
+}
+
 pub const render = @import("render.zig");
 pub const RenderCommand = render.RenderCommand;
 pub const RenderTarget = render.Target;
@@ -135,6 +165,8 @@ pub const BasicLayout = layout.BasicLayout;
 pub const Alignment = layout.Alignment;
 pub const PlaceOnScreenAvoid = layout.PlaceOnScreenAvoid;
 pub const placeOnScreen = layout.placeOnScreen;
+
+pub const Data = @import("Data.zig");
 
 pub const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
 pub const useFreeType = !wasm;
@@ -1065,10 +1097,6 @@ pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontEr
     }
 }
 
-pub const textureGetCached = Texture.Cache.get;
-pub const textureAddToCache = Texture.Cache.add;
-pub const textureInvalidateCache = Texture.Cache.invalidate;
-
 /// Takes in svg bytes and returns a tvg bytes that can be used
 /// with `icon` or `iconTexture`
 ///
@@ -1970,6 +1998,11 @@ pub const hashSrc = void;
 /// DEPRECATED: See `dvui.Id.update`
 pub const hashIdKey = void;
 
+// Used for all the data functions
+fn currentOverrideOrPanic(win: ?*Window) *Window {
+    return win orelse current_window orelse @panic("dataSet current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
+}
+
 /// Set key/value pair for given id.
 ///
 /// Can be called from any thread.
@@ -1984,7 +2017,10 @@ pub const hashIdKey = void;
 ///
 /// If you want to store the contents of a slice, use `dataSetSlice`.
 pub fn dataSet(win: ?*Window, id: Id, key: []const u8, data: anytype) void {
-    dataSetAdvanced(win, id, key, data, false, 1);
+    const w = currentOverrideOrPanic(win);
+    (w.data_store.set(w.gpa, id.update(key), data)) catch |err| {
+        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+    };
 }
 
 /// Set key/value pair for given id, copying the slice contents. Can be passed
@@ -2000,30 +2036,20 @@ pub fn dataSet(win: ?*Window, id: Id, key: []const u8, data: anytype) void {
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the data to.
 pub fn dataSetSlice(win: ?*Window, id: Id, key: []const u8, data: anytype) void {
-    dataSetSliceCopies(win, id, key, data, 1);
+    const w = currentOverrideOrPanic(win);
+    (w.data_store.setSlice(w.gpa, id.update(key), data)) catch |err| {
+        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+    };
 }
 
 /// Same as `dataSetSlice`, but will copy data `num_copies` times all concatenated
 /// into a single slice.  Useful to get dvui to allocate a specific number of
 /// entries that you want to fill in after.
 pub fn dataSetSliceCopies(win: ?*Window, id: Id, key: []const u8, data: anytype, num_copies: usize) void {
-    const dt = @typeInfo(@TypeOf(data));
-    if (dt == .pointer and dt.pointer.size == .slice) {
-        if (dt.pointer.sentinel()) |s| {
-            dataSetAdvanced(win, id, key, @as([:s]dt.pointer.child, @constCast(data)), true, num_copies);
-        } else {
-            dataSetAdvanced(win, id, key, @as([]dt.pointer.child, @constCast(data)), true, num_copies);
-        }
-    } else if (dt == .pointer and dt.pointer.size == .one and @typeInfo(dt.pointer.child) == .array) {
-        const child_type = @typeInfo(dt.pointer.child);
-        if (child_type.array.sentinel()) |s| {
-            dataSetAdvanced(win, id, key, @as([:s]child_type.array.child, @constCast(data)), true, num_copies);
-        } else {
-            dataSetAdvanced(win, id, key, @as([]child_type.array.child, @constCast(data)), true, num_copies);
-        }
-    } else {
-        @compileError("dataSetSlice needs a slice or pointer to array, given " ++ @typeName(@TypeOf(data)));
-    }
+    const w = currentOverrideOrPanic(win);
+    (w.data_store.setSliceCopies(w.gpa, id.update(key), data, num_copies)) catch |err| {
+        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+    };
 }
 
 /// Set key/value pair for given id.
@@ -2039,15 +2065,10 @@ pub fn dataSetSliceCopies(win: ?*Window, id: Id, key: []const u8, data: anytype,
 /// contents are copied into internal storage. If false, only the slice itself
 /// (ptr and len) and stored.
 pub fn dataSetAdvanced(win: ?*Window, id: Id, key: []const u8, data: anytype, comptime copy_slice: bool, num_copies: usize) void {
-    if (win) |w| {
-        // we are being called from non gui thread or outside begin()/end()
-        w.dataSetAdvanced(id, key, data, copy_slice, num_copies);
+    if (copy_slice) {
+        return dataSetSliceCopies(win, id, key, data, num_copies);
     } else {
-        if (current_window) |cw| {
-            cw.dataSetAdvanced(id, key, data, copy_slice, num_copies);
-        } else {
-            @panic("dataSet current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
-        }
+        return dataSet(win, id, key, data);
     }
 }
 
@@ -2062,11 +2083,8 @@ pub fn dataSetAdvanced(win: ?*Window, id: Id, key: []const u8, data: anytype, co
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGet(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
-    if (dataGetInternal(win, id, key, T, false)) |bytes| {
-        return @as(*T, @ptrCast(@alignCast(bytes.ptr))).*;
-    } else {
-        return null;
-    }
+    const w = currentOverrideOrPanic(win);
+    return if (w.data_store.getPtr(id.update(key), T)) |v| v.* else null;
 }
 
 /// Retrieve the value for given key associated with id.  If no value was stored, store default and then return it.
@@ -2080,10 +2098,9 @@ pub fn dataGet(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: T) T {
-    if (dataGetInternal(win, id, key, T, false)) |bytes| {
-        return @as(*T, @ptrCast(@alignCast(bytes.ptr))).*;
-    } else {
-        dataSet(win, id, key, default);
+    const w = currentOverrideOrPanic(win);
+    if (w.data_store.getPtr(id.update(key), T)) |v| return v.* else {
+        w.data_store.set(w.gpa, id.update(key), default);
         return default;
     }
 }
@@ -2105,12 +2122,11 @@ pub fn dataGetDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, 
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetPtrDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: T) *T {
-    if (dataGetPtr(win, id, key, T)) |ptr| {
-        return ptr;
-    } else {
-        dataSet(win, id, key, default);
-        return dataGetPtr(win, id, key, T).?;
-    }
+    const w = currentOverrideOrPanic(win);
+    return w.data_store.getPtrDefault(w.gpa, id.update(key), T, default) catch |err| {
+        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+        @panic("dataGetPtrDefault failed");
+    };
 }
 
 /// Retrieve a pointer to the value for given key associated with id.
@@ -2128,11 +2144,8 @@ pub fn dataGetPtrDefault(win: ?*Window, id: Id, key: []const u8, comptime T: typ
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetPtr(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?*T {
-    if (dataGetInternal(win, id, key, T, false)) |bytes| {
-        return @as(*T, @ptrCast(@alignCast(bytes.ptr)));
-    } else {
-        return null;
-    }
+    const w = currentOverrideOrPanic(win);
+    return w.data_store.getPtr(id.update(key), T);
 }
 
 /// Retrieve slice contents for given key associated with id.
@@ -2151,20 +2164,8 @@ pub fn dataGetPtr(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?*T 
 ///
 /// The slice will always be valid until the next call to `Window.end`.
 pub fn dataGetSlice(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
-    const dt = @typeInfo(T);
-    if (dt != .pointer or dt.pointer.size != .slice) {
-        @compileError("dataGetSlice needs a slice, given " ++ @typeName(T));
-    }
-
-    if (dataGetInternal(win, id, key, T, true)) |bytes| {
-        if (dt.pointer.sentinel()) |sentinel| {
-            return @as([:sentinel]align(@alignOf(dt.pointer.child)) dt.pointer.child, @ptrCast(@alignCast(std.mem.bytesAsSlice(dt.pointer.child, bytes[0 .. bytes.len - @sizeOf(dt.pointer.child)]))));
-        } else {
-            return @as([]align(@alignOf(dt.pointer.child)) dt.pointer.child, @alignCast(std.mem.bytesAsSlice(dt.pointer.child, bytes)));
-        }
-    } else {
-        return null;
-    }
+    const w = currentOverrideOrPanic(win);
+    return w.data_store.getSlice(id.update(key), T);
 }
 
 /// Retrieve slice contents for given key associated with id.
@@ -2183,23 +2184,19 @@ pub fn dataGetSlice(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T
 ///
 /// The slice will always be valid until the next call to `Window.end`.
 pub fn dataGetSliceDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
-    return dataGetSlice(win, id, key, T) orelse blk: {
-        dataSetSlice(win, id, key, default);
-        break :blk dataGetSlice(win, id, key, T).?;
+    const w = currentOverrideOrPanic(win);
+    return w.data_store.getSliceDefault(w.gpa, id.update(key), T, default) catch |err| {
+        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+        @panic("dataGetSliceDefault failed");
     };
 }
 
 // returns the backing slice of bytes if we have it
 pub fn dataGetInternal(win: ?*Window, id: Id, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
-    if (win) |w| {
-        // we are being called from non gui thread or outside begin()/end()
-        return w.dataGetInternal(id, key, T, slice);
+    if (slice) {
+        return dataGetPtr(win, id, key, T);
     } else {
-        if (current_window) |cw| {
-            return cw.dataGetInternal(id, key, T, slice);
-        } else {
-            @panic("dataGet current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
-        }
+        return dataGetSlice(win, id, key, T);
     }
 }
 
@@ -2211,16 +2208,10 @@ pub fn dataGetInternal(win: ?*Window, id: Id, key: []const u8, comptime T: type,
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the dialog to.
 pub fn dataRemove(win: ?*Window, id: Id, key: []const u8) void {
-    if (win) |w| {
-        // we are being called from non gui thread or outside begin()/end()
-        return w.dataRemove(id, key);
-    } else {
-        if (current_window) |cw| {
-            return cw.dataRemove(id, key);
-        } else {
-            @panic("dataRemove current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
-        }
-    }
+    const w = currentOverrideOrPanic(win);
+    return w.data_store.remove(w.gpa, id.update(key)) catch |err| {
+        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+    };
 }
 
 /// Return a rect that fits inside avail given the options. avail wins over

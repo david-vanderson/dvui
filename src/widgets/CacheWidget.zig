@@ -67,9 +67,7 @@ pub fn install(self: *CacheWidget) void {
         if (dvui.textureGetCached(self.hash)) |t| {
             // if we had a texture, show it this frame because our contents needs a frame to get sizing
             self.drawCachedTexture(t);
-
-            dvui.textureDestroyLater(t);
-            _ = dvui.currentWindow().texture_cache.remove(self.hash);
+            dvui.textureInvalidateCache(self.hash);
 
             // now we've shown the texture, so prevent any widgets from drawing on top of it this frame
             // - can happen if some widgets precalculate their size (like label)

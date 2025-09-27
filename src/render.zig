@@ -389,12 +389,12 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     h.update(std.mem.asBytes(&icon_opts));
     const hash = h.final();
 
-    const texture = Texture.Cache.get(hash) orelse blk: {
+    const texture = dvui.textureGetCached(hash) orelse blk: {
         const texture = Texture.fromTvgFile(name, tvg_bytes, @intFromFloat(ask_height), icon_opts) catch |err| {
             dvui.logError(@src(), err, "Could not create texture from tvg file \"{s}\"", .{name});
             return;
         };
-        Texture.Cache.add(hash, texture);
+        dvui.textureAddToCache(hash, texture);
         break :blk texture;
     };
 
