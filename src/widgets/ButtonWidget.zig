@@ -123,6 +123,92 @@ pub fn deinit(self: *ButtonWidget) void {
     dvui.parentReset(self.data().id, self.data().parent);
 }
 
+pub const Helpers = struct {
+    pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options) bool {
+        // initialize widget and get rectangle from parent
+        var bw = ButtonWidget.init(src, init_opts, opts);
+
+        // make ourselves the new parent
+        bw.install();
+
+        // process events (mouse and keyboard)
+        bw.processEvents();
+
+        // draw background/border
+        bw.drawBackground();
+
+        // use pressed text color if desired
+        const click = bw.clicked();
+
+        // this child widget:
+        // - has bw as parent
+        // - gets a rectangle from bw
+        // - draws itself
+        // - reports its min size to bw
+        dvui.labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, opts.strip().override(bw.style()).override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
+
+        // draw focus
+        bw.drawFocus();
+
+        // restore previous parent
+        // send our min size to parent
+        bw.deinit();
+
+        return click;
+    }
+
+    pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, icon_opts: dvui.IconRenderOptions, opts: Options) bool {
+        const button_icon_defaults = Options{ .padding = Rect.all(4) };
+        var bw = ButtonWidget.init(src, init_opts, button_icon_defaults.override(opts));
+        bw.install();
+        bw.processEvents();
+        bw.drawBackground();
+
+        // When someone passes min_size_content to buttonIcon, they want the icon
+        // to be that size, so we pass it through.
+        dvui.icon(
+            @src(),
+            name,
+            tvg_bytes,
+            icon_opts,
+            opts.strip().override(bw.style()).override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text }),
+        );
+
+        const click = bw.clicked();
+        bw.drawFocus();
+        bw.deinit();
+        return click;
+    }
+
+    pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options) bool {
+        // initialize widget and get rectangle from parent
+        var bw = ButtonWidget.init(src, init_opts, opts);
+
+        // make ourselves the new parent
+        bw.install();
+
+        // process events (mouse and keyboard)
+        bw.processEvents();
+        const options = opts.strip().override(bw.style()).override(.{ .gravity_y = 0.5 });
+
+        // draw background/border
+        bw.drawBackground();
+        {
+            var outer_hbox = dvui.box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer outer_hbox.deinit();
+            dvui.icon(@src(), label_str, tvg_bytes, .{}, options.strip().override(.{ .gravity_x = 1.0, .color_text = opts.color_text }));
+            dvui.labelEx(@src(), "{s}", .{label_str}, .{ .align_x = 0.5 }, options.strip().override(.{ .expand = .both }));
+        }
+
+        const click = bw.clicked();
+
+        bw.drawFocus();
+
+        bw.deinit();
+        return click;
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

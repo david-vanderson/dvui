@@ -71,7 +71,6 @@ pub const ColorPickerWidget = widgets.ColorPickerWidget;
 pub const FlexBoxWidget = widgets.FlexBoxWidget;
 pub const ReorderWidget = widgets.ReorderWidget;
 pub const Reorderable = ReorderWidget.Reorderable;
-pub const ButtonWidget = widgets.ButtonWidget;
 pub const ContextWidget = widgets.ContextWidget;
 pub const DropdownWidget = widgets.DropdownWidget;
 pub const FloatingWindowWidget = widgets.FloatingWindowWidget;
@@ -105,6 +104,11 @@ pub const ShrinkingArenaAllocator = @import("shrinking_arena_allocator.zig").Shr
 pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHashMap;
 pub const PNGEncoder = @import("PNGEncoder.zig");
 pub const JPGEncoder = @import("JPGEncoder.zig");
+
+pub const ButtonWidget = widgets.ButtonWidget;
+pub const button = ButtonWidget.Helpers.button;
+pub const buttonIcon = ButtonWidget.Helpers.buttonIcon;
+pub const buttonLabelAndIcon = ButtonWidget.Helpers.buttonLabelAndIcon;
 
 pub const Texture = @import("Texture.zig");
 pub const TextureTarget = Texture.Target;
@@ -4525,90 +4529,6 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) void {
 
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
-}
-
-pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options) bool {
-    // initialize widget and get rectangle from parent
-    var bw = ButtonWidget.init(src, init_opts, opts);
-
-    // make ourselves the new parent
-    bw.install();
-
-    // process events (mouse and keyboard)
-    bw.processEvents();
-
-    // draw background/border
-    bw.drawBackground();
-
-    // use pressed text color if desired
-    const click = bw.clicked();
-
-    // this child widget:
-    // - has bw as parent
-    // - gets a rectangle from bw
-    // - draws itself
-    // - reports its min size to bw
-    labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, opts.strip().override(bw.style()).override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
-
-    // draw focus
-    bw.drawFocus();
-
-    // restore previous parent
-    // send our min size to parent
-    bw.deinit();
-
-    return click;
-}
-
-pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, icon_opts: IconRenderOptions, opts: Options) bool {
-    const defaults = Options{ .padding = Rect.all(4) };
-    var bw = ButtonWidget.init(src, init_opts, defaults.override(opts));
-    bw.install();
-    bw.processEvents();
-    bw.drawBackground();
-
-    // When someone passes min_size_content to buttonIcon, they want the icon
-    // to be that size, so we pass it through.
-    icon(
-        @src(),
-        name,
-        tvg_bytes,
-        icon_opts,
-        opts.strip().override(bw.style()).override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text }),
-    );
-
-    const click = bw.clicked();
-    bw.drawFocus();
-    bw.deinit();
-    return click;
-}
-
-pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options) bool {
-    // initialize widget and get rectangle from parent
-    var bw = ButtonWidget.init(src, init_opts, opts);
-
-    // make ourselves the new parent
-    bw.install();
-
-    // process events (mouse and keyboard)
-    bw.processEvents();
-    const options = opts.strip().override(bw.style()).override(.{ .gravity_y = 0.5 });
-
-    // draw background/border
-    bw.drawBackground();
-    {
-        var outer_hbox = box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
-        defer outer_hbox.deinit();
-        icon(@src(), label_str, tvg_bytes, .{}, options.strip().override(.{ .gravity_x = 1.0, .color_text = opts.color_text }));
-        labelEx(@src(), "{s}", .{label_str}, .{ .align_x = 0.5 }, options.strip().override(.{ .expand = .both }));
-    }
-
-    const click = bw.clicked();
-
-    bw.drawFocus();
-
-    bw.deinit();
-    return click;
 }
 
 pub var slider_defaults: Options = .{
