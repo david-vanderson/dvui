@@ -348,6 +348,84 @@ pub fn getValueSaturationTexture(hue: f32) dvui.Backend.TextureError!dvui.Textur
     }
 }
 
+pub const Helpers = struct {
+    pub const ColorPickerInitOptions = struct {
+        hsv: *Color.HSV,
+        dir: dvui.enums.Direction = .horizontal,
+        sliders: enum { rgb, hsv } = .rgb,
+        alpha: bool = false,
+        /// Shows a `textEntryColor`
+        hex_text_entry: bool = true,
+    };
+
+    /// A photoshop style color picker
+    ///
+    /// Returns true of the color was changed
+    pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOptions, opts: Options) bool {
+        var picker = ColorPickerWidget.init(src, .{ .dir = init_opts.dir, .hsv = init_opts.hsv }, opts);
+        picker.install();
+        defer picker.deinit();
+
+        var changed = picker.color_changed;
+        var rgb = init_opts.hsv.toColor();
+
+        var side_box = dvui.box(@src(), .{}, .{});
+        defer side_box.deinit();
+
+        const slider_expand = Options.Expand.fromDirection(.horizontal);
+        switch (init_opts.sliders) {
+            .rgb => {
+                var r = @as(f32, @floatFromInt(rgb.r));
+                var g = @as(f32, @floatFromInt(rgb.g));
+                var b = @as(f32, @floatFromInt(rgb.b));
+                var a = @as(f32, @floatFromInt(rgb.a));
+
+                var slider_changed = false;
+                if (dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &r, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                    slider_changed = true;
+                }
+                if (dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &g, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                    slider_changed = true;
+                }
+                if (dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &b, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                    slider_changed = true;
+                }
+                if (init_opts.alpha and dvui.sliderEntry(@src(), "A: {d:0.0}", .{ .value = &a, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                    slider_changed = true;
+                }
+                if (slider_changed) {
+                    init_opts.hsv.* = .fromColor(.{ .r = @intFromFloat(r), .g = @intFromFloat(g), .b = @intFromFloat(b), .a = @intFromFloat(a) });
+                    changed = true;
+                }
+            },
+            .hsv => {
+                if (dvui.sliderEntry(@src(), "H: {d:0.0}", .{ .value = &init_opts.hsv.h, .min = 0, .max = 359.99, .interval = 1 }, .{ .expand = slider_expand })) {
+                    changed = true;
+                }
+                if (dvui.sliderEntry(@src(), "S: {d:0.2}", .{ .value = &init_opts.hsv.s, .min = 0, .max = 1, .interval = 0.01 }, .{ .expand = slider_expand })) {
+                    changed = true;
+                }
+                if (dvui.sliderEntry(@src(), "V: {d:0.2}", .{ .value = &init_opts.hsv.v, .min = 0, .max = 1, .interval = 0.01 }, .{ .expand = slider_expand })) {
+                    changed = true;
+                }
+                if (init_opts.alpha and dvui.sliderEntry(@src(), "A: {d:0.2}", .{ .value = &init_opts.hsv.a, .min = 0, .max = 1, .interval = 0.01 }, .{ .expand = slider_expand })) {
+                    changed = true;
+                }
+            },
+        }
+
+        if (init_opts.hex_text_entry) {
+            const res = dvui.textEntryColor(@src(), .{ .allow_alpha = init_opts.alpha, .value = &rgb }, .{ .expand = slider_expand });
+            if (res.changed) {
+                init_opts.hsv.* = .fromColor(rgb);
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+};
+
 const hue_selector_colors: [7]Color.PMA = .{ .red, .yellow, .lime, .cyan, .blue, .magenta, .red };
 
 const Options = dvui.Options;
