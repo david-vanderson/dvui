@@ -116,7 +116,7 @@ pub fn register(self: *WidgetData) void {
             // prevents stuff in scroll area outside viewport being caught
             dvui.clipGet().contains(cw.mouse_pt) and
             // prevents stuff in lower subwindows being caught
-            cw.windowFor(cw.mouse_pt) == dvui.subwindowCurrentId())
+            cw.subwindows.windowFor(cw.mouse_pt) == dvui.subwindowCurrentId())
         {
             cw.debug.under_mouse_stack.append(cw.gpa, .{
                 .id = self.id,

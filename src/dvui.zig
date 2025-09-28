@@ -40,6 +40,7 @@ pub const fnv = std.hash.Fnv1a_64;
 pub const App = @import("App.zig");
 pub const Backend = @import("Backend.zig");
 pub const Window = @import("Window.zig");
+pub const Subwindows = @import("Subwindows.zig");
 pub const Examples = @import("Examples.zig");
 
 pub const Color = @import("Color.zig");
@@ -220,6 +221,16 @@ pub const placeOnScreen = layout.placeOnScreen;
 
 pub const Data = @import("Data.zig");
 
+pub const native_dialogs = @import("native_dialogs.zig");
+pub const dialogWasmFileOpen = native_dialogs.Wasm.open;
+pub const wasmFileUploaded = native_dialogs.Wasm.uploaded;
+pub const dialogWasmFileOpenMultiple = native_dialogs.Wasm.openMultiple;
+pub const wasmFileUploadedMultiple = native_dialogs.Wasm.uploadedMultiple;
+pub const dialogNativeFileOpen = native_dialogs.Native.open;
+pub const dialogNativeFileOpenMultiple = native_dialogs.Native.openMultiple;
+pub const dialogNativeFileSave = native_dialogs.Native.save;
+pub const dialogNativeFolderSelect = native_dialogs.Native.folderSelect;
+
 pub const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
 pub const useFreeType = !wasm;
 
@@ -265,6 +276,7 @@ pub const c = @cImport({
     @cInclude("stb_image.h");
     @cInclude("stb_image_write.h");
 
+    // Used by native dialogs
     if (!wasm) {
         @cInclude("tinyfiledialogs.h");
     }
@@ -1193,9 +1205,7 @@ pub const IconRenderOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn focusedSubwindowId() Id {
-    const cw = currentWindow();
-    const sw = cw.subwindowFocused();
-    return sw.id;
+    return currentWindow().subwindows.focused_id;
 }
 
 /// Focus a subwindow.
@@ -1205,7 +1215,7 @@ pub fn focusedSubwindowId() Id {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn focusSubwindow(subwindow_id: ?Id, event_num: ?u16) void {
-    currentWindow().focusSubwindowInternal(subwindow_id, event_num);
+    currentWindow().focusSubwindow(subwindow_id, event_num);
 }
 
 /// Raise a subwindow to the top of the stack.
@@ -1215,39 +1225,9 @@ pub fn focusSubwindow(subwindow_id: ?Id, event_num: ?u16) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn raiseSubwindow(subwindow_id: Id) void {
     const cw = currentWindow();
-    // don't check against subwindows[0] - that's that main window
-    var items = cw.subwindows.items[1..];
-    for (items, 0..) |sw, i| {
-        if (sw.id == subwindow_id) {
-            if (sw.stay_above_parent_window != null) {
-                //std.debug.print("raiseSubwindow: tried to raise a subwindow {x} with stay_above_parent_window set\n", .{subwindow_id});
-                return;
-            }
-
-            if (i == (items.len - 1)) {
-                // already on top
-                return;
-            }
-
-            // move it to the end, also move any stay_above_parent_window subwindows
-            // directly on top of it as well - we know from above that the
-            // first window does not have stay_above_parent_window so this loop ends
-            var first = true;
-            while (first or items[i].stay_above_parent_window != null) {
-                first = false;
-                const item = items[i];
-                for (items[i..(items.len - 1)], 0..) |*b, k| {
-                    b.* = items[i + 1 + k];
-                }
-                items[items.len - 1] = item;
-            }
-
-            return;
-        }
-    }
-
-    log.warn("raiseSubwindow couldn't find subwindow {x}\n", .{subwindow_id});
-    return;
+    cw.subwindows.raise(subwindow_id) catch |err| {
+        logError(@src(), err, "subwindow id {x}", .{subwindow_id});
+    };
 }
 
 /// Focus a widget in the given subwindow (if null, the current subwindow).
@@ -1261,46 +1241,7 @@ pub fn raiseSubwindow(subwindow_id: Id) void {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn focusWidget(id: ?Id, subwindow_id: ?Id, event_num: ?u16) void {
-    const cw = currentWindow();
-    cw.scroll_to_focused = false;
-    const swid = subwindow_id orelse subwindowCurrentId();
-    for (cw.subwindows.items) |*sw| {
-        if (swid == sw.id) {
-            if (sw.focused_widgetId != id) {
-                sw.focused_widgetId = id;
-                if (event_num) |en| {
-                    cw.focusEventsInternal(en, sw.id, sw.focused_widgetId);
-                }
-                refresh(null, @src(), null);
-
-                if (id) |wid| {
-                    cw.scroll_to_focused = true;
-
-                    if (cw.last_registered_id_this_frame == wid) {
-                        cw.last_focused_id_this_frame = wid;
-                        cw.last_focused_id_in_subwindow = wid;
-                    } else {
-                        // walk parent chain
-                        var wd = cw.data().parent.data();
-
-                        while (true) : (wd = wd.parent.data()) {
-                            if (wd.id == wid) {
-                                cw.last_focused_id_this_frame = wid;
-                                cw.last_focused_id_in_subwindow = wid;
-                                break;
-                            }
-
-                            if (wd.id == cw.data().id) {
-                                // got to base Window
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            break;
-        }
-    }
+    currentWindow().focusWidget(id, subwindow_id, event_num);
 }
 
 /// Id of the focused widget (if any) in the focused subwindow.
@@ -1308,13 +1249,8 @@ pub fn focusWidget(id: ?Id, subwindow_id: ?Id, event_num: ?u16) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn focusedWidgetId() ?Id {
     const cw = currentWindow();
-    for (cw.subwindows.items) |*sw| {
-        if (cw.focused_subwindowId == sw.id) {
-            return sw.focused_widgetId;
-        }
-    }
-
-    return null;
+    const sw = cw.subwindows.focused() orelse return null;
+    return sw.focused_widget_id;
 }
 
 /// Id of the focused widget (if any) in the current subwindow.
@@ -1322,8 +1258,11 @@ pub fn focusedWidgetId() ?Id {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn focusedWidgetIdInCurrentSubwindow() ?Id {
     const cw = currentWindow();
-    const sw = cw.subwindowCurrent();
-    return sw.focused_widgetId;
+    const sw = cw.subwindows.current() orelse blk: {
+        log.warn("failed to find the focused subwindow, using base window\n", .{});
+        break :blk &cw.subwindows.stack.items[0];
+    };
+    return sw.focused_widget_id;
 }
 
 /// Last widget id we saw this frame that was the focused widget.
@@ -1381,61 +1320,9 @@ pub fn cursorSet(cursor: enums.Cursor) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn subwindowAdd(id: Id, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?Id, mouse_events: bool) void {
     const cw = currentWindow();
-    for (cw.subwindows.items) |*sw| {
-        if (id == sw.id) {
-            // this window was here previously, just update data, so it stays in the same place in the stack
-            sw.used = true;
-            sw.rect = rect;
-            sw.rect_pixels = rect_pixels;
-            sw.modal = modal;
-            sw.stay_above_parent_window = stay_above_parent_window;
-            sw.mouse_events = mouse_events;
-
-            if (sw.render_cmds.items.len > 0 or sw.render_cmds_after.items.len > 0) {
-                log.warn("subwindowAdd {x} is clearing some drawing commands (did you try to draw between subwindowCurrentSet and subwindowAdd?)\n", .{id});
-            }
-
-            sw.render_cmds = .empty;
-            sw.render_cmds_after = .empty;
-            return;
-        }
-    }
-
-    // haven't seen this window before
-    const sw = Window.Subwindow{
-        .id = id,
-        .rect = rect,
-        .rect_pixels = rect_pixels,
-        .modal = modal,
-        .stay_above_parent_window = stay_above_parent_window,
-        .mouse_events = mouse_events,
+    cw.subwindows.add(cw.gpa, id, rect, rect_pixels, modal, stay_above_parent_window, mouse_events) catch |err| {
+        logError(@src(), err, "Could not insert {f} {f} into subwindow list, events in this or other subwindows might not work properly", .{ id, rect_pixels });
     };
-    if (stay_above_parent_window) |subwin_id| {
-        // it wants to be above subwin_id
-        var i: usize = 0;
-        while (i < cw.subwindows.items.len and cw.subwindows.items[i].id != subwin_id) {
-            i += 1;
-        }
-
-        if (i < cw.subwindows.items.len) {
-            i += 1;
-        }
-
-        // i points just past subwin_id, go until we run out of subwindows that want to be on top of this subwin_id
-        while (i < cw.subwindows.items.len and cw.subwindows.items[i].stay_above_parent_window == subwin_id) {
-            i += 1;
-        }
-
-        // i points just past all subwindows that want to be on top of this subwin_id
-        cw.subwindows.insert(cw.gpa, i, sw) catch |err| {
-            logError(@src(), err, "Could not insert {f} {f} into subwindow list, events in this or other subwindows might not work properly", .{ id, rect_pixels });
-        };
-    } else {
-        // just put it on the top
-        cw.subwindows.append(cw.gpa, sw) catch |err| {
-            logError(@src(), err, "Could not insert {f} {f} into subwindow list, events in this or other subwindows might not work properly", .{ id, rect_pixels });
-        };
-    }
 }
 
 pub const subwindowCurrentSetReturn = struct {
@@ -1449,12 +1336,8 @@ pub const subwindowCurrentSetReturn = struct {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn subwindowCurrentSet(id: Id, rect: ?Rect.Natural) subwindowCurrentSetReturn {
     const cw = currentWindow();
-    const ret: subwindowCurrentSetReturn = .{ .id = cw.subwindow_currentId, .rect = cw.subwindow_currentRect };
-    cw.subwindow_currentId = id;
-    if (rect) |r| {
-        cw.subwindow_currentRect = r;
-    }
-    return ret;
+    const prev_id, const prev_rect = cw.subwindows.setCurrent(id, rect);
+    return .{ .id = prev_id, .rect = prev_rect };
 }
 
 /// Id of current subwindow (the one widgets run now will be in).
@@ -1462,7 +1345,7 @@ pub fn subwindowCurrentSet(id: Id, rect: ?Rect.Natural) subwindowCurrentSetRetur
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn subwindowCurrentId() Id {
     const cw = currentWindow();
-    return cw.subwindow_currentId;
+    return cw.subwindows.current_id;
 }
 
 /// The difference between the final mouse position this frame and last frame.
@@ -1511,10 +1394,10 @@ pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
     if (cm) |capture| {
         // log.debug("Mouse capture (event {d}): {any}", .{ event_num, cm });
         cw.captured_last_frame = true;
-        cw.captureEventsInternal(event_num, capture.id);
+        cw.captureEvents(event_num, capture.id);
     } else {
         // Unmark all following mouse events
-        cw.captureEventsInternal(event_num, null);
+        cw.captureEvents(event_num, null);
         // log.debug("Mouse uncapture (event {d}): {?any}", .{ event_num, cw.capture });
         // for (dvui.events()) |*e| {
         //     if (e.evt == .mouse) {
@@ -1534,10 +1417,10 @@ pub fn captureMouseMaintain(cm: CaptureMouse) void {
     if (cw.capture != null and cw.capture.?.id == cm.id) {
         // to maintain capture, we must be on or above the
         // top modal window
-        var i = cw.subwindows.items.len;
+        var i = cw.subwindows.stack.items.len;
         while (i > 0) : (i -= 1) {
-            const sw = &cw.subwindows.items[i - 1];
-            if (sw.id == cw.subwindow_currentId) {
+            const sw = &cw.subwindows.stack.items[i - 1];
+            if (sw.id == cw.subwindows.current_id) {
                 // maintaining capture
                 // either our floating window is above the top modal
                 // or there are no floating modal windows
@@ -1681,12 +1564,10 @@ pub fn refresh(win: ?*Window, src: std.builtin.SourceLocation, id: ?Id) void {
         // we are being called from non gui thread, the gui thread might be
         // sleeping, so need to trigger a wakeup via the backend
         w.refreshBackend(src, id);
+    } else if (current_window) |cw| {
+        cw.refreshWindow(src, id);
     } else {
-        if (current_window) |cw| {
-            cw.refreshWindow(src, id);
-        } else {
-            log.err("{s}:{d} refresh current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()", .{ src.file, src.line });
-        }
+        log.err("{s}:{d} refresh current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()", .{ src.file, src.line });
     }
 }
 
@@ -2600,7 +2481,7 @@ pub fn tabIndexSet(widget_id: Id, tab_index: ?u16) void {
         return;
 
     var cw = currentWindow();
-    const ti = TabIndex{ .windowId = cw.subwindow_currentId, .widgetId = widget_id, .tabIndex = (tab_index orelse math.maxInt(u16)) };
+    const ti = TabIndex{ .windowId = cw.subwindows.current_id, .widgetId = widget_id, .tabIndex = (tab_index orelse math.maxInt(u16)) };
     cw.tab_index.append(cw.gpa, ti) catch |err| {
         logError(@src(), err, "Could not set tab index. This might break keyboard navigation as the widget may become unreachable via tab", .{});
     };
@@ -2618,7 +2499,7 @@ pub fn tabIndexNext(event_num: ?u16) void {
     var oldtab: ?u16 = null;
     if (widgetId != null) {
         for (cw.tab_index_prev.items) |ti| {
-            if (ti.windowId == cw.focused_subwindowId and ti.widgetId == widgetId.?) {
+            if (ti.windowId == cw.subwindows.focused_id and ti.widgetId == widgetId.?) {
                 oldtab = ti.tabIndex;
                 break;
             }
@@ -2632,7 +2513,7 @@ pub fn tabIndexNext(event_num: ?u16) void {
     var foundFocus = false;
 
     for (cw.tab_index_prev.items) |ti| {
-        if (ti.windowId == cw.focused_subwindowId) {
+        if (ti.windowId == cw.subwindows.focused_id) {
             if (ti.widgetId == widgetId) {
                 foundFocus = true;
             } else if (foundFocus == true and oldtab != null and ti.tabIndex == oldtab.?) {
@@ -2664,7 +2545,7 @@ pub fn tabIndexPrev(event_num: ?u16) void {
     var oldtab: ?u16 = null;
     if (widgetId != null) {
         for (cw.tab_index_prev.items) |ti| {
-            if (ti.windowId == cw.focused_subwindowId and ti.widgetId == widgetId.?) {
+            if (ti.windowId == cw.subwindows.focused_id and ti.widgetId == widgetId.?) {
                 oldtab = ti.tabIndex;
                 break;
             }
@@ -2678,7 +2559,7 @@ pub fn tabIndexPrev(event_num: ?u16) void {
     var foundFocus = false;
 
     for (cw.tab_index_prev.items) |ti| {
-        if (ti.windowId == cw.focused_subwindowId) {
+        if (ti.windowId == cw.subwindows.focused_id) {
             if (ti.widgetId == widgetId) {
                 foundFocus = true;
 
@@ -2865,7 +2746,7 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
     dataSetSlice(opts.window, id, "_title", opts.title);
     dataSetSlice(opts.window, id, "_message", opts.message);
     dataSetSlice(opts.window, id, "_ok_label", opts.ok_label);
-    dataSet(opts.window, id, "_center_on", (opts.window orelse currentWindow()).subwindow_currentRect);
+    dataSet(opts.window, id, "_center_on", (opts.window orelse currentWindow()).subwindows.current_rect);
     if (opts.cancel_label) |cl| {
         dataSetSlice(opts.window, id, "_cancel_label", cl);
     }
@@ -2917,7 +2798,7 @@ pub fn dialogDisplay(id: Id) !void {
         return;
     };
 
-    const center_on = dvui.dataGet(null, id, "_center_on", Rect.Natural) orelse currentWindow().subwindow_currentRect;
+    const center_on = dvui.dataGet(null, id, "_center_on", Rect.Natural) orelse currentWindow().subwindows.current_rect;
 
     const cancel_label = dvui.dataGetSlice(null, id, "_cancel_label", []u8);
     const default = dvui.dataGet(null, id, "_default", enums.DialogResponse);
@@ -2987,288 +2868,6 @@ pub fn dialogDisplay(id: Id) !void {
     tl.addText(message, .{});
     tl.deinit();
     scroll.deinit();
-}
-
-pub const DialogWasmFileOptions = struct {
-    /// Filter files shown by setting the [accept](https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/accept) attribute
-    ///
-    /// Example: ".pdf, image/*"
-    accept: ?[]const u8 = null,
-};
-
-const WasmFile = struct {
-    id: Id,
-    index: usize,
-    /// The size of the data in bytes
-    size: usize,
-    /// The filename of the uploaded file. Does not include the path of the file
-    name: [:0]const u8,
-
-    pub fn readData(self: *WasmFile, allocator: std.mem.Allocator) std.mem.Allocator.Error![]u8 {
-        std.debug.assert(wasm); // WasmFile shouldn't be used outside wasm builds
-        const data = try allocator.alloc(u8, self.size);
-        dvui.backend.readFileData(self.id, self.index, data.ptr);
-        return data;
-    }
-};
-
-/// Opens a file picker WITHOUT blocking. The file can be accessed by calling `wasmFileUploaded` with the same id
-///
-/// This function does nothing in non-wasm builds
-pub fn dialogWasmFileOpen(id: Id, opts: DialogWasmFileOptions) void {
-    if (!wasm) return;
-    dvui.backend.openFilePicker(id, opts.accept, false);
-}
-
-/// Will only return a non-null value for a single frame
-///
-/// This function does nothing in non-wasm builds
-pub fn wasmFileUploaded(id: Id) ?WasmFile {
-    if (!wasm) return null;
-    const num_files = dvui.backend.getNumberOfFilesAvailable(id);
-    if (num_files == 0) return null;
-    if (num_files > 1) {
-        log.err("Received more than one file for id {d}. Did you mean to call wasmFileUploadedMultiple?", .{id});
-    }
-    const name = dvui.backend.getFileName(id, 0);
-    const size = dvui.backend.getFileSize(id, 0);
-    if (name == null or size == null) {
-        log.err("Could not get file metadata. Got size: {?d} and name: {?s}", .{ size, name });
-        return null;
-    }
-    return WasmFile{
-        .id = id,
-        .index = 0,
-        .size = size.?,
-        .name = name.?,
-    };
-}
-
-/// Opens a file picker WITHOUT blocking. The files can be accessed by calling `wasmFileUploadedMultiple` with the same id
-///
-/// This function does nothing in non-wasm builds
-pub fn dialogWasmFileOpenMultiple(id: Id, opts: DialogWasmFileOptions) void {
-    if (!wasm) return;
-    dvui.backend.openFilePicker(id, opts.accept, true);
-}
-
-/// Will only return a non-null value for a single frame
-///
-/// This function does nothing in non-wasm builds
-pub fn wasmFileUploadedMultiple(id: Id) ?[]WasmFile {
-    if (!wasm) return null;
-    const num_files = dvui.backend.getNumberOfFilesAvailable(id);
-    if (num_files == 0) return null;
-
-    const files = dvui.currentWindow().arena().alloc(WasmFile, num_files) catch |err| {
-        log.err("File upload skipped, failed to allocate space for file handles: {any}", .{err});
-        return null;
-    };
-    for (0.., files) |i, *file| {
-        const name = dvui.backend.getFileName(id, i);
-        const size = dvui.backend.getFileSize(id, i);
-        if (name == null or size == null) {
-            log.err("Could not get file metadata for id {d} file number {d}. Got size: {?d} and name: {?s}", .{ id, i, size, name });
-            return null;
-        }
-        file.* = WasmFile{
-            .id = id,
-            .index = i,
-            .size = size.?,
-            .name = name.?,
-        };
-    }
-    return files;
-}
-
-pub const DialogNativeFileOptions = struct {
-    /// Title of the dialog window
-    title: ?[]const u8 = null,
-
-    /// Starting file or directory (if ends with /)
-    path: ?[]const u8 = null,
-
-    /// Filter files shown .filters = .{"*.png", "*.jpg"}
-    filters: ?[]const []const u8 = null,
-
-    /// Description for filters given ("image files")
-    filter_description: ?[]const u8 = null,
-};
-
-/// Block while showing a native file open dialog.  Return the selected file
-/// path or null if cancelled.  See `dialogNativeFileOpenMultiple`
-///
-/// Not thread safe, but can be used from any thread.
-///
-/// Returned string is created by passed allocator.  Not implemented for web (returns null).
-pub fn dialogNativeFileOpen(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) std.mem.Allocator.Error!?[:0]const u8 {
-    if (wasm) {
-        return null;
-    }
-
-    return dialogNativeFileInternal(true, false, alloc, opts);
-}
-
-/// Block while showing a native file open dialog with multiple selection.
-/// Return the selected file paths or null if cancelled.
-///
-/// Not thread safe, but can be used from any thread.
-///
-/// Returned slice and strings are created by passed allocator.  Not implemented for web (returns null).
-pub fn dialogNativeFileOpenMultiple(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) std.mem.Allocator.Error!?[][:0]const u8 {
-    if (wasm) {
-        return null;
-    }
-
-    return dialogNativeFileInternal(true, true, alloc, opts);
-}
-
-/// Block while showing a native file save dialog.  Return the selected file
-/// path or null if cancelled.
-///
-/// Not thread safe, but can be used from any thread.
-///
-/// Returned string is created by passed allocator.  Not implemented for web (returns null).
-pub fn dialogNativeFileSave(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) std.mem.Allocator.Error!?[:0]const u8 {
-    if (wasm) {
-        return null;
-    }
-
-    return dialogNativeFileInternal(false, false, alloc, opts);
-}
-
-fn dialogNativeFileInternal(comptime open: bool, comptime multiple: bool, alloc: std.mem.Allocator, opts: DialogNativeFileOptions) if (multiple) std.mem.Allocator.Error!?[][:0]const u8 else std.mem.Allocator.Error!?[:0]const u8 {
-    var backing: [500]u8 = undefined;
-    var buf: []u8 = &backing;
-
-    var title: ?[*:0]const u8 = null;
-    if (opts.title) |t| {
-        const dupe = std.fmt.bufPrintZ(buf, "{s}", .{t}) catch null;
-        if (dupe) |dt| {
-            title = dt.ptr;
-            buf = buf[dt.len + 1 ..];
-        }
-    }
-
-    var path: ?[*:0]const u8 = null;
-    if (opts.path) |p| {
-        const dupe = std.fmt.bufPrintZ(buf, "{s}", .{p}) catch null;
-        if (dupe) |dp| {
-            path = dp.ptr;
-            buf = buf[dp.len + 1 ..];
-        }
-    }
-
-    var filters_backing: [20:null]?[*:0]const u8 = undefined;
-    var filters: ?[*:null]?[*:0]const u8 = null;
-    var filter_count: usize = 0;
-    if (opts.filters) |fs| {
-        filters = &filters_backing;
-        for (fs, 0..) |f, i| {
-            if (i == filters_backing.len) {
-                log.err("dialogNativeFileOpen got too many filters {d}, only using {d}", .{ fs.len, filters_backing.len });
-                break;
-            }
-            const dupe = std.fmt.bufPrintZ(buf, "{s}", .{f}) catch null;
-            if (dupe) |df| {
-                filters.?[i] = df;
-                filters.?[i + 1] = null;
-                filter_count = i + 1;
-                buf = buf[df.len + 1 ..];
-            }
-        }
-    }
-
-    var filter_desc: ?[*:0]const u8 = null;
-    if (opts.filter_description) |fd| {
-        const dupe = std.fmt.bufPrintZ(buf, "{s}", .{fd}) catch null;
-        if (dupe) |dfd| {
-            filter_desc = dfd.ptr;
-            buf = buf[dfd.len + 1 ..];
-        }
-    }
-
-    var result: if (multiple) ?[][:0]const u8 else ?[:0]const u8 = null;
-    const tfd_ret: [*c]const u8 = blk: {
-        if (open) {
-            break :blk dvui.c.tinyfd_openFileDialog(title, path, @intCast(filter_count), filters, filter_desc, if (multiple) 1 else 0);
-        } else {
-            break :blk dvui.c.tinyfd_saveFileDialog(title, path, @intCast(filter_count), filters, filter_desc);
-        }
-    };
-
-    if (tfd_ret) |r| {
-        if (multiple) {
-            const r_slice = std.mem.span(r);
-            const num = std.mem.count(u8, r_slice, "|") + 1;
-            result = try alloc.alloc([:0]const u8, num);
-            var it = std.mem.splitScalar(u8, r_slice, '|');
-            var i: usize = 0;
-            while (it.next()) |f| {
-                result.?[i] = try alloc.dupeZ(u8, f);
-                i += 1;
-            }
-        } else {
-            result = try alloc.dupeZ(u8, std.mem.span(r));
-        }
-    }
-
-    // TODO: tinyfd maintains malloced memory from call to call, and we should
-    // figure out a way to get it to release that.
-
-    return result;
-}
-
-pub const DialogNativeFolderSelectOptions = struct {
-    /// Title of the dialog window
-    title: ?[]const u8 = null,
-
-    /// Starting file or directory (if ends with /)
-    path: ?[]const u8 = null,
-};
-
-/// Block while showing a native folder select dialog. Return the selected
-/// folder path or null if cancelled.
-///
-/// Not thread safe, but can be used from any thread.
-///
-/// Returned string is created by passed allocator.  Not implemented for web (returns null).
-pub fn dialogNativeFolderSelect(alloc: std.mem.Allocator, opts: DialogNativeFolderSelectOptions) std.mem.Allocator.Error!?[]const u8 {
-    if (wasm) {
-        return null;
-    }
-
-    var backing: [500]u8 = undefined;
-    var buf: []u8 = &backing;
-
-    var title: ?[*:0]const u8 = null;
-    if (opts.title) |t| {
-        const dupe = std.fmt.bufPrintZ(buf, "{s}", .{t}) catch null;
-        if (dupe) |dt| {
-            title = dt.ptr;
-            buf = buf[dt.len + 1 ..];
-        }
-    }
-
-    var path: ?[*:0]const u8 = null;
-    if (opts.path) |p| {
-        const dupe = std.fmt.bufPrintZ(buf, "{s}", .{p}) catch null;
-        if (dupe) |dp| {
-            path = dp.ptr;
-            buf = buf[dp.len + 1 ..];
-        }
-    }
-
-    var result: ?[]const u8 = null;
-    const tfd_ret = dvui.c.tinyfd_selectFolderDialog(title, path);
-    if (tfd_ret) |r| {
-        result = try alloc.dupe(u8, std.mem.sliceTo(r, 0));
-    }
-
-    // TODO: tinyfd maintains malloced memory from call to call, and we should
-    // figure out a way to get it to release that.
-
-    return result;
 }
 
 /// Add a toast.  Use `toast` for a simple message.
