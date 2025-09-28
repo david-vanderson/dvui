@@ -40,6 +40,7 @@ pub const fnv = std.hash.Fnv1a_64;
 pub const App = @import("App.zig");
 pub const Backend = @import("Backend.zig");
 pub const Window = @import("Window.zig");
+pub const Subwindows = @import("Subwindows.zig");
 pub const Examples = @import("Examples.zig");
 
 pub const Color = @import("Color.zig");
@@ -1157,9 +1158,7 @@ pub const IconRenderOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn focusedSubwindowId() Id {
-    const cw = currentWindow();
-    const sw = cw.subwindowFocused();
-    return sw.id;
+    return currentWindow().subwindows.focused_id;
 }
 
 /// Focus a subwindow.
@@ -1169,7 +1168,7 @@ pub fn focusedSubwindowId() Id {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn focusSubwindow(subwindow_id: ?Id, event_num: ?u16) void {
-    currentWindow().focusSubwindowInternal(subwindow_id, event_num);
+    currentWindow().focusSubwindow(subwindow_id, event_num);
 }
 
 /// Raise a subwindow to the top of the stack.
@@ -1179,39 +1178,9 @@ pub fn focusSubwindow(subwindow_id: ?Id, event_num: ?u16) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn raiseSubwindow(subwindow_id: Id) void {
     const cw = currentWindow();
-    // don't check against subwindows[0] - that's that main window
-    var items = cw.subwindows.items[1..];
-    for (items, 0..) |sw, i| {
-        if (sw.id == subwindow_id) {
-            if (sw.stay_above_parent_window != null) {
-                //std.debug.print("raiseSubwindow: tried to raise a subwindow {x} with stay_above_parent_window set\n", .{subwindow_id});
-                return;
-            }
-
-            if (i == (items.len - 1)) {
-                // already on top
-                return;
-            }
-
-            // move it to the end, also move any stay_above_parent_window subwindows
-            // directly on top of it as well - we know from above that the
-            // first window does not have stay_above_parent_window so this loop ends
-            var first = true;
-            while (first or items[i].stay_above_parent_window != null) {
-                first = false;
-                const item = items[i];
-                for (items[i..(items.len - 1)], 0..) |*b, k| {
-                    b.* = items[i + 1 + k];
-                }
-                items[items.len - 1] = item;
-            }
-
-            return;
-        }
-    }
-
-    log.warn("raiseSubwindow couldn't find subwindow {x}\n", .{subwindow_id});
-    return;
+    cw.subwindows.raise(subwindow_id) catch |err| {
+        logError(@src(), err, "subwindow id {x}", .{subwindow_id});
+    };
 }
 
 /// Focus a widget in the given subwindow (if null, the current subwindow).
@@ -1225,46 +1194,7 @@ pub fn raiseSubwindow(subwindow_id: Id) void {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn focusWidget(id: ?Id, subwindow_id: ?Id, event_num: ?u16) void {
-    const cw = currentWindow();
-    cw.scroll_to_focused = false;
-    const swid = subwindow_id orelse subwindowCurrentId();
-    for (cw.subwindows.items) |*sw| {
-        if (swid == sw.id) {
-            if (sw.focused_widgetId != id) {
-                sw.focused_widgetId = id;
-                if (event_num) |en| {
-                    cw.focusEventsInternal(en, sw.id, sw.focused_widgetId);
-                }
-                refresh(null, @src(), null);
-
-                if (id) |wid| {
-                    cw.scroll_to_focused = true;
-
-                    if (cw.last_registered_id_this_frame == wid) {
-                        cw.last_focused_id_this_frame = wid;
-                        cw.last_focused_id_in_subwindow = wid;
-                    } else {
-                        // walk parent chain
-                        var wd = cw.data().parent.data();
-
-                        while (true) : (wd = wd.parent.data()) {
-                            if (wd.id == wid) {
-                                cw.last_focused_id_this_frame = wid;
-                                cw.last_focused_id_in_subwindow = wid;
-                                break;
-                            }
-
-                            if (wd.id == cw.data().id) {
-                                // got to base Window
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            break;
-        }
-    }
+    currentWindow().focusWidget(id, subwindow_id, event_num);
 }
 
 /// Id of the focused widget (if any) in the focused subwindow.
@@ -1272,13 +1202,8 @@ pub fn focusWidget(id: ?Id, subwindow_id: ?Id, event_num: ?u16) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn focusedWidgetId() ?Id {
     const cw = currentWindow();
-    for (cw.subwindows.items) |*sw| {
-        if (cw.focused_subwindowId == sw.id) {
-            return sw.focused_widgetId;
-        }
-    }
-
-    return null;
+    const sw = cw.subwindows.focused() orelse return null;
+    return sw.focused_widget_id;
 }
 
 /// Id of the focused widget (if any) in the current subwindow.
@@ -1286,8 +1211,11 @@ pub fn focusedWidgetId() ?Id {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn focusedWidgetIdInCurrentSubwindow() ?Id {
     const cw = currentWindow();
-    const sw = cw.subwindowCurrent();
-    return sw.focused_widgetId;
+    const sw = cw.subwindows.current() orelse blk: {
+        log.warn("failed to find the focused subwindow, using base window\n", .{});
+        break :blk &cw.subwindows.stack.items[0];
+    };
+    return sw.focused_widget_id;
 }
 
 /// Last widget id we saw this frame that was the focused widget.
@@ -1345,61 +1273,9 @@ pub fn cursorSet(cursor: enums.Cursor) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn subwindowAdd(id: Id, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?Id, mouse_events: bool) void {
     const cw = currentWindow();
-    for (cw.subwindows.items) |*sw| {
-        if (id == sw.id) {
-            // this window was here previously, just update data, so it stays in the same place in the stack
-            sw.used = true;
-            sw.rect = rect;
-            sw.rect_pixels = rect_pixels;
-            sw.modal = modal;
-            sw.stay_above_parent_window = stay_above_parent_window;
-            sw.mouse_events = mouse_events;
-
-            if (sw.render_cmds.items.len > 0 or sw.render_cmds_after.items.len > 0) {
-                log.warn("subwindowAdd {x} is clearing some drawing commands (did you try to draw between subwindowCurrentSet and subwindowAdd?)\n", .{id});
-            }
-
-            sw.render_cmds = .empty;
-            sw.render_cmds_after = .empty;
-            return;
-        }
-    }
-
-    // haven't seen this window before
-    const sw = Window.Subwindow{
-        .id = id,
-        .rect = rect,
-        .rect_pixels = rect_pixels,
-        .modal = modal,
-        .stay_above_parent_window = stay_above_parent_window,
-        .mouse_events = mouse_events,
+    cw.subwindows.add(cw.gpa, id, rect, rect_pixels, modal, stay_above_parent_window, mouse_events) catch |err| {
+        logError(@src(), err, "Could not insert {f} {f} into subwindow list, events in this or other subwindows might not work properly", .{ id, rect_pixels });
     };
-    if (stay_above_parent_window) |subwin_id| {
-        // it wants to be above subwin_id
-        var i: usize = 0;
-        while (i < cw.subwindows.items.len and cw.subwindows.items[i].id != subwin_id) {
-            i += 1;
-        }
-
-        if (i < cw.subwindows.items.len) {
-            i += 1;
-        }
-
-        // i points just past subwin_id, go until we run out of subwindows that want to be on top of this subwin_id
-        while (i < cw.subwindows.items.len and cw.subwindows.items[i].stay_above_parent_window == subwin_id) {
-            i += 1;
-        }
-
-        // i points just past all subwindows that want to be on top of this subwin_id
-        cw.subwindows.insert(cw.gpa, i, sw) catch |err| {
-            logError(@src(), err, "Could not insert {f} {f} into subwindow list, events in this or other subwindows might not work properly", .{ id, rect_pixels });
-        };
-    } else {
-        // just put it on the top
-        cw.subwindows.append(cw.gpa, sw) catch |err| {
-            logError(@src(), err, "Could not insert {f} {f} into subwindow list, events in this or other subwindows might not work properly", .{ id, rect_pixels });
-        };
-    }
 }
 
 pub const subwindowCurrentSetReturn = struct {
@@ -1413,12 +1289,8 @@ pub const subwindowCurrentSetReturn = struct {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn subwindowCurrentSet(id: Id, rect: ?Rect.Natural) subwindowCurrentSetReturn {
     const cw = currentWindow();
-    const ret: subwindowCurrentSetReturn = .{ .id = cw.subwindow_currentId, .rect = cw.subwindow_currentRect };
-    cw.subwindow_currentId = id;
-    if (rect) |r| {
-        cw.subwindow_currentRect = r;
-    }
-    return ret;
+    const prev_id, const prev_rect = cw.subwindows.setCurrent(id, rect);
+    return .{ .id = prev_id, .rect = prev_rect };
 }
 
 /// Id of current subwindow (the one widgets run now will be in).
@@ -1426,7 +1298,7 @@ pub fn subwindowCurrentSet(id: Id, rect: ?Rect.Natural) subwindowCurrentSetRetur
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn subwindowCurrentId() Id {
     const cw = currentWindow();
-    return cw.subwindow_currentId;
+    return cw.subwindows.current_id;
 }
 
 /// Optional features you might want when doing a mouse/touch drag.
@@ -1619,10 +1491,10 @@ pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
     if (cm) |capture| {
         // log.debug("Mouse capture (event {d}): {any}", .{ event_num, cm });
         cw.captured_last_frame = true;
-        cw.captureEventsInternal(event_num, capture.id);
+        cw.captureEvents(event_num, capture.id);
     } else {
         // Unmark all following mouse events
-        cw.captureEventsInternal(event_num, null);
+        cw.captureEvents(event_num, null);
         // log.debug("Mouse uncapture (event {d}): {?any}", .{ event_num, cw.capture });
         // for (dvui.events()) |*e| {
         //     if (e.evt == .mouse) {
@@ -1642,10 +1514,10 @@ pub fn captureMouseMaintain(cm: CaptureMouse) void {
     if (cw.capture != null and cw.capture.?.id == cm.id) {
         // to maintain capture, we must be on or above the
         // top modal window
-        var i = cw.subwindows.items.len;
+        var i = cw.subwindows.stack.items.len;
         while (i > 0) : (i -= 1) {
-            const sw = &cw.subwindows.items[i - 1];
-            if (sw.id == cw.subwindow_currentId) {
+            const sw = &cw.subwindows.stack.items[i - 1];
+            if (sw.id == cw.subwindows.current_id) {
                 // maintaining capture
                 // either our floating window is above the top modal
                 // or there are no floating modal windows
@@ -1789,12 +1661,10 @@ pub fn refresh(win: ?*Window, src: std.builtin.SourceLocation, id: ?Id) void {
         // we are being called from non gui thread, the gui thread might be
         // sleeping, so need to trigger a wakeup via the backend
         w.refreshBackend(src, id);
+    } else if (current_window) |cw| {
+        cw.refreshWindow(src, id);
     } else {
-        if (current_window) |cw| {
-            cw.refreshWindow(src, id);
-        } else {
-            log.err("{s}:{d} refresh current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()", .{ src.file, src.line });
-        }
+        log.err("{s}:{d} refresh current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()", .{ src.file, src.line });
     }
 }
 
@@ -2708,7 +2578,7 @@ pub fn tabIndexSet(widget_id: Id, tab_index: ?u16) void {
         return;
 
     var cw = currentWindow();
-    const ti = TabIndex{ .windowId = cw.subwindow_currentId, .widgetId = widget_id, .tabIndex = (tab_index orelse math.maxInt(u16)) };
+    const ti = TabIndex{ .windowId = cw.subwindows.current_id, .widgetId = widget_id, .tabIndex = (tab_index orelse math.maxInt(u16)) };
     cw.tab_index.append(cw.gpa, ti) catch |err| {
         logError(@src(), err, "Could not set tab index. This might break keyboard navigation as the widget may become unreachable via tab", .{});
     };
@@ -2726,7 +2596,7 @@ pub fn tabIndexNext(event_num: ?u16) void {
     var oldtab: ?u16 = null;
     if (widgetId != null) {
         for (cw.tab_index_prev.items) |ti| {
-            if (ti.windowId == cw.focused_subwindowId and ti.widgetId == widgetId.?) {
+            if (ti.windowId == cw.subwindows.focused_id and ti.widgetId == widgetId.?) {
                 oldtab = ti.tabIndex;
                 break;
             }
@@ -2740,7 +2610,7 @@ pub fn tabIndexNext(event_num: ?u16) void {
     var foundFocus = false;
 
     for (cw.tab_index_prev.items) |ti| {
-        if (ti.windowId == cw.focused_subwindowId) {
+        if (ti.windowId == cw.subwindows.focused_id) {
             if (ti.widgetId == widgetId) {
                 foundFocus = true;
             } else if (foundFocus == true and oldtab != null and ti.tabIndex == oldtab.?) {
@@ -2772,7 +2642,7 @@ pub fn tabIndexPrev(event_num: ?u16) void {
     var oldtab: ?u16 = null;
     if (widgetId != null) {
         for (cw.tab_index_prev.items) |ti| {
-            if (ti.windowId == cw.focused_subwindowId and ti.widgetId == widgetId.?) {
+            if (ti.windowId == cw.subwindows.focused_id and ti.widgetId == widgetId.?) {
                 oldtab = ti.tabIndex;
                 break;
             }
@@ -2786,7 +2656,7 @@ pub fn tabIndexPrev(event_num: ?u16) void {
     var foundFocus = false;
 
     for (cw.tab_index_prev.items) |ti| {
-        if (ti.windowId == cw.focused_subwindowId) {
+        if (ti.windowId == cw.subwindows.focused_id) {
             if (ti.widgetId == widgetId) {
                 foundFocus = true;
 
@@ -2973,7 +2843,7 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
     dataSetSlice(opts.window, id, "_title", opts.title);
     dataSetSlice(opts.window, id, "_message", opts.message);
     dataSetSlice(opts.window, id, "_ok_label", opts.ok_label);
-    dataSet(opts.window, id, "_center_on", (opts.window orelse currentWindow()).subwindow_currentRect);
+    dataSet(opts.window, id, "_center_on", (opts.window orelse currentWindow()).subwindows.current_rect);
     if (opts.cancel_label) |cl| {
         dataSetSlice(opts.window, id, "_cancel_label", cl);
     }
@@ -3025,7 +2895,7 @@ pub fn dialogDisplay(id: Id) !void {
         return;
     };
 
-    const center_on = dvui.dataGet(null, id, "_center_on", Rect.Natural) orelse currentWindow().subwindow_currentRect;
+    const center_on = dvui.dataGet(null, id, "_center_on", Rect.Natural) orelse currentWindow().subwindows.current_rect;
 
     const cancel_label = dvui.dataGetSlice(null, id, "_cancel_label", []u8);
     const default = dvui.dataGet(null, id, "_default", enums.DialogResponse);
