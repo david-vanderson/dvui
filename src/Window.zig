@@ -111,11 +111,13 @@ font_cache: dvui.TrackingAutoHashMap(u64, dvui.FontCacheEntry, .get_and_put) = .
 font_bytes: std.AutoHashMapUnmanaged(dvui.Font.FontId, dvui.FontBytesEntry) = .empty,
 /// Uses `gpa` allocator
 texture_cache: dvui.Texture.Cache = .{},
-dialog_mutex: std.Thread.Mutex = .{},
 /// Uses `gpa` allocator
-dialogs: std.ArrayListUnmanaged(Dialog) = .empty,
+dialogs: dvui.Dialogs = .{},
 /// Uses `gpa` allocator
-toasts: std.ArrayListUnmanaged(Toast) = .empty,
+///
+/// A toast is a dialog that will be displayed is a special
+/// positioned floating window at the end of the frame
+toasts: dvui.Dialogs = .{},
 /// Uses `gpa` allocator
 keybinds: std.StringHashMapUnmanaged(dvui.enums.Keybind) = .empty,
 
@@ -1246,75 +1248,6 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
     }
 }
 
-///  Add a dialog to be displayed on the GUI thread during `Window.end`.
-///
-///  See `dvui.dialogAdd` for higher level api.
-///
-///  Can be called from any thread. Returns a locked mutex that must be unlocked
-///  by the caller.
-///
-///  If calling from a non-GUI thread, do any dataSet() calls before unlocking the
-///  mutex to ensure that data is available before the dialog is displayed.
-pub fn dialogAdd(self: *Self, id: Id, display: dvui.DialogDisplayFn) *std.Thread.Mutex {
-    self.dialog_mutex.lock();
-
-    for (self.dialogs.items) |*d| {
-        if (d.id == id) {
-            d.display = display;
-            break;
-        }
-    } else {
-        self.dialogs.append(self.gpa, Dialog{ .id = id, .display = display }) catch |err| {
-            dvui.logError(@src(), err, "Could not add dialog to the list", .{});
-        };
-    }
-
-    return &self.dialog_mutex;
-}
-
-/// Only called from gui thread.
-pub fn dialogRemove(self: *Self, id: Id) void {
-    self.dialog_mutex.lock();
-    defer self.dialog_mutex.unlock();
-
-    for (self.dialogs.items, 0..) |*d, i| {
-        if (d.id == id) {
-            _ = self.dialogs.orderedRemove(i);
-            return;
-        }
-    }
-}
-
-fn dialogsShow(self: *Self) void {
-    var i: usize = 0;
-    var dia: ?Dialog = null;
-    while (true) {
-        self.dialog_mutex.lock();
-        if (i < self.dialogs.items.len and
-            dia != null and
-            dia.?.id == self.dialogs.items[i].id)
-        {
-            // we just did this one, move to the next
-            i += 1;
-        }
-
-        if (i < self.dialogs.items.len) {
-            dia = self.dialogs.items[i];
-        } else {
-            dia = null;
-        }
-        self.dialog_mutex.unlock();
-
-        if (dia) |d| {
-            d.display(d.id) catch |err| {
-                log.warn("Dialog {x} got {any} from its display function", .{ d.id, err });
-            };
-        } else {
-            break;
-        }
-    }
-}
-
 pub fn timer(self: *Self, id: Id, micros: i32) void {
     // when start_time is in the future, we won't spam frames, so this will
     // cause a single frame and then expire
@@ -1330,44 +1263,32 @@ pub fn timerRemove(self: *Self, id: Id) void {
     _ = self.animations.remove(h);
 }
 
-/// Add a toast to be displayed on the GUI thread. Can be called from any
-/// thread. Returns a locked mutex that must be unlocked by the caller.  If
-/// calling from a non-GUI thread, do any `dvui.dataSet` calls before unlocking
-/// the mutex to ensure that data is available before the dialog is
-/// displayed.
-pub fn toastAdd(self: *Self, id: Id, subwindow_id: ?Id, display: dvui.DialogDisplayFn, timeout: ?i32) *std.Thread.Mutex {
-    self.dialog_mutex.lock();
+/// Standard way of showing toasts.  For the main window, this is called with
+/// null in Window.end().
+///
+/// For floating windows or other widgets, pass non-null id. Then it shows
+/// toasts that were previously added with non-null subwindow_id, and they are
+/// shown on top of the current subwindow.
+///
+/// Toasts are shown in rect centered horizontally and 70% down vertically.
+pub fn toastsShow(self: *Self, subwindow_id: ?Id, rect: Rect.Natural) void {
+    var it = self.toasts.iterator(subwindow_id);
+    it.i = self.toasts.indexOfSubwindow(subwindow_id) orelse return;
+    var toast_win = dvui.FloatingWindowWidget.init(@src(), .{ .stay_above_parent_window = subwindow_id != null, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
+    defer toast_win.deinit();
 
-    for (self.toasts.items) |*t| {
-        if (t.id == id) {
-            t.display = display;
-            t.subwindow_id = subwindow_id;
-            break;
-        }
-    } else {
-        self.toasts.append(self.gpa, Toast{ .id = id, .subwindow_id = subwindow_id, .display = display }) catch |err| {
-            dvui.logError(@src(), err, "Could not add toast {x} to the list", .{id});
+    toast_win.data().rect = dvui.placeIn(.cast(rect), toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
+    toast_win.install();
+    toast_win.drawBackground();
+    toast_win.autoSize(); // affects next frame
+
+    var vbox = dvui.box(@src(), .{}, .{});
+    defer vbox.deinit();
+
+    while (it.next()) |t| {
+        t.display(t.id) catch |err| {
+            dvui.logError(@src(), err, "Toast {x}", .{t.id});
         };
-    }
-
-    if (timeout) |tt| {
-        self.timer(id, tt);
-    } else {
-        self.timerRemove(id);
-    }
-
-    return &self.dialog_mutex;
-}
-
-pub fn toastRemove(self: *Self, id: Id) void {
-    self.dialog_mutex.lock();
-    defer self.dialog_mutex.unlock();
-
-    for (self.toasts.items, 0..) |*t, i| {
-        if (t.id == id) {
-            _ = self.toasts.orderedRemove(i);
-            return;
-        }
     }
 }
 
@@ -1381,7 +1302,12 @@ pub fn endRendering(self: *Self, opts: endOptions) void {
     if (opts.show_toasts) {
         dvui.toastsShow(null, dvui.windowRect());
     }
-    self.dialogsShow();
+    var dialog_it = self.dialogs.iterator(null);
+    while (dialog_it.next()) |d| {
+        d.display(d.id) catch |err| {
+            dvui.logError(@src(), err, "Dialog {x}", .{d.id});
+        };
+    }
 
     self.debug.show();
 
