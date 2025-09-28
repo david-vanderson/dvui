@@ -34,7 +34,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         .reorderable_size = dvui.dataGet(null, wd.id, "_reorderable_size", dvui.Size) orelse .{},
     };
 
-    if (self.drag_point != null and dvui.currentWindow().drag_state != .dragging) {
+    if (self.drag_point != null and dvui.currentWindow().dragging.state != .dragging) {
         self.drag_ending = true;
         dvui.captureMouse(null, 0);
     }
@@ -174,7 +174,7 @@ pub fn dragStart(self: *ReorderWidget, reorder_id: usize, p: dvui.Point.Physical
     dvui.captureMouse(self.data(), event_num);
     if (self.init_opts.drag_name) |dn| {
         // set drag_name to start cross-widget drag
-        dvui.currentWindow().drag_name = dn;
+        dvui.currentWindow().dragging.name = dn;
         dvui.captureMouse(null, 0);
     }
 }

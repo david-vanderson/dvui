@@ -150,7 +150,7 @@ pub fn init(gpa: std.mem.Allocator) RaylibBackend {
 }
 
 pub fn shouldBlockRaylibInput(self: *RaylibBackend) bool {
-    return (dvui.currentWindow().drag_state != .none or self.dvui_consumed_events);
+    return (dvui.currentWindow().dragging.state != .none or self.dvui_consumed_events);
 }
 
 pub fn deinit(self: *RaylibBackend) void {
