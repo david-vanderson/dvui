@@ -17,6 +17,9 @@ pub const Style = struct {
         control,
         highlight,
         err,
+        app1,
+        app2,
+        app3,
     };
 
     fill: ?Color = null,
@@ -61,19 +64,24 @@ text_press: ?Color = null,
 border: Color,
 
 /// colors for normal controls like buttons
-control: Style,
+control: Style = .{},
 
 /// colors for windows/boxes that contain controls like scrollArea and floatingWindow
-window: Style,
+window: Style = .{},
 
 /// colors for highlighting:
 /// * menu/dropdown items
 /// * checkboxes
 /// * radio buttons
-highlight: Style,
+highlight: Style = .{},
 
 /// colors for buttons to perform dangerous actions
-err: Style,
+err: Style = .{},
+
+/// reserved for application use
+app1: Style = .{},
+app2: Style = .{},
+app3: Style = .{},
 
 font_body: Font,
 font_heading: Font,
@@ -130,6 +138,9 @@ pub fn color(self: *const Theme, style_name: Style.Name, ask: Options.ColorAsk) 
         .window => self.window,
         .highlight => self.highlight,
         .err => self.err,
+        .app1 => self.app1,
+        .app2 => self.app2,
+        .app3 => self.app3,
     };
 
     return sw: switch (ask) {
