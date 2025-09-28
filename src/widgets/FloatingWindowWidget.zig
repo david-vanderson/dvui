@@ -156,7 +156,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             // only position ourselves once by default
             self.auto_pos = false;
 
-            const centering: Rect.Natural = self.init_options.center_on orelse dvui.currentWindow().subwindow_currentRect;
+            const centering: Rect.Natural = self.init_options.center_on orelse dvui.currentWindow().subwindows.current_rect;
             self.wd.rect.x = centering.x + (centering.w - self.wd.rect.w) / 2;
             self.wd.rect.y = centering.y + (centering.h - self.wd.rect.h) / 2;
 
@@ -182,7 +182,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
                 while (nudge) {
                     nudge = false;
                     // don't check against subwindows[0] - that's that main window
-                    for (cw.subwindows.items[1..]) |subw| {
+                    for (cw.subwindows.stack.items[1..]) |subw| {
                         if (subw.id != self.wd.id and subw.rect.topLeft().equals(self.data().rect.topLeft())) {
                             self.wd.rect.x += 24;
                             self.wd.rect.y += 24;
