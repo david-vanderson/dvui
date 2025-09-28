@@ -106,6 +106,11 @@ pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHas
 pub const PNGEncoder = @import("PNGEncoder.zig");
 pub const JPGEncoder = @import("JPGEncoder.zig");
 
+pub const Dialogs = @import("Dialogs.zig");
+pub const Dialog = Dialogs.Dialog;
+/// Toasts are just specialized dialogs
+pub const Toast = Dialog;
+
 pub const Texture = @import("Texture.zig");
 pub const TextureTarget = Texture.Target;
 /// Source data for `image()` and `imageSize()`.
@@ -2888,14 +2893,6 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
     return ret;
 }
 
-pub const DialogDisplayFn = *const fn (Id) anyerror!void;
-pub const DialogCallAfterFn = *const fn (Id, enums.DialogResponse) anyerror!void;
-
-pub const Dialog = struct {
-    id: Id,
-    display: DialogDisplayFn,
-};
-
 pub const IdMutex = struct {
     id: Id,
     mutex: *std.Thread.Mutex,
@@ -2911,33 +2908,32 @@ pub const IdMutex = struct {
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you
 /// **must** pass a pointer to the Window you want to add the dialog to.
-pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplayFn) IdMutex {
-    if (win) |w| {
+pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, display: Dialog.DisplayFn) IdMutex {
+    const w: *Window, const id: Id = if (win) |w|
         // we are being called from non gui thread
-        const id = Id.extendId(null, src, id_extra);
-        const mutex = w.dialogAdd(id, display);
-        refresh(win, @src(), id); // will wake up gui thread
-        return .{ .id = id, .mutex = mutex };
-    } else {
-        if (current_window) |cw| {
-            const parent = parentGet();
-            const id = parent.extendId(src, id_extra);
-            const mutex = cw.dialogAdd(id, display);
-            refresh(win, @src(), id);
-            return .{ .id = id, .mutex = mutex };
-        } else {
-            std.debug.panic("{s}:{d} dialogAdd current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()\n", .{ src.file, src.line });
-        }
-    }
+        .{ w, Id.extendId(null, src, id_extra) }
+    else if (current_window) |cw|
+        .{ cw, parentGet().extendId(src, id_extra) }
+    else {
+        std.debug.panic("{s}:{d} dialogAdd current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()\n", .{ src.file, src.line });
+    };
+    const mutex = w.dialogs.add(w.gpa, .{ .id = id, .display = display }) catch |err| {
+        logError(@src(), err, "failed to add dialog", .{});
+        w.dialogs.mutex.lock();
+        return .{ .id = .zero, .mutex = &w.dialogs.mutex };
+    };
+    refresh(win, @src(), id);
+    return .{ .id = id, .mutex = mutex };
 }
 
 /// Only called from gui thread.
 pub fn dialogRemove(id: Id) void {
     const cw = currentWindow();
-    cw.dialogRemove(id);
-    refresh(null, @src(), id);
+    cw.dialogs.remove(id);
+    cw.refreshWindow(@src(), id);
 }
 
+pub const DialogCallAfterFn = *const fn (dvui.Id, dvui.enums.DialogResponse) anyerror!void;
 pub const DialogOptions = struct {
     id_extra: usize = 0,
     window: ?*Window = null,
@@ -2948,7 +2944,7 @@ pub const DialogOptions = struct {
     cancel_label: ?[]const u8 = null,
     default: ?enums.DialogResponse = .ok,
     max_size: ?Options.MaxSize = null,
-    displayFn: DialogDisplayFn = dialogDisplay,
+    displayFn: Dialog.DisplayFn = dialogDisplay,
     callafterFn: ?DialogCallAfterFn = null,
 };
 
@@ -3372,12 +3368,6 @@ pub fn dialogNativeFolderSelect(alloc: std.mem.Allocator, opts: DialogNativeFold
     return result;
 }
 
-pub const Toast = struct {
-    id: Id,
-    subwindow_id: ?Id,
-    display: DialogDisplayFn,
-};
-
 /// Add a toast.  Use `toast` for a simple message.
 ///
 /// If subwindow_id is null, the toast will be shown during `Window.end`.  If
@@ -3392,24 +3382,27 @@ pub const Toast = struct {
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the Window you want to add the toast to.
-pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?Id, display: DialogDisplayFn, timeout: ?i32) IdMutex {
-    if (win) |w| {
+pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?Id, display: Dialog.DisplayFn, timeout: ?i32) IdMutex {
+    const w: *Window, const id: Id = if (win) |w|
         // we are being called from non gui thread
-        const id = Id.extendId(null, src, id_extra);
-        const mutex = w.toastAdd(id, subwindow_id, display, timeout);
-        refresh(win, @src(), id);
-        return .{ .id = id, .mutex = mutex };
+        .{ w, Id.extendId(null, src, id_extra) }
+    else if (current_window) |cw|
+        .{ cw, parentGet().extendId(src, id_extra) }
+    else {
+        std.debug.panic("{s}:{d} toastAdd current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()", .{ src.file, src.line });
+    };
+    const mutex = w.toasts.add(w.gpa, .{ .id = id, .subwindow_id = subwindow_id, .display = display }) catch |err| {
+        logError(@src(), err, "failed to add toast", .{});
+        w.toasts.mutex.lock();
+        return .{ .id = .zero, .mutex = &w.toasts.mutex };
+    };
+    refresh(win, @src(), id);
+    if (timeout) |tt| {
+        w.timer(id, tt);
     } else {
-        if (current_window) |cw| {
-            const parent = parentGet();
-            const id = parent.extendId(src, id_extra);
-            const mutex = cw.toastAdd(id, subwindow_id, display, timeout);
-            refresh(win, @src(), id);
-            return .{ .id = id, .mutex = mutex };
-        } else {
-            std.debug.panic("{s}:{d} toastAdd current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()", .{ src.file, src.line });
-        }
+        w.timerRemove(id);
     }
+    return .{ .id = id, .mutex = mutex };
 }
 
 /// Remove a previously added toast.
@@ -3417,7 +3410,7 @@ pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize,
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn toastRemove(id: Id) void {
     const cw = currentWindow();
-    cw.toastRemove(id);
+    cw.toasts.remove(id);
     refresh(null, @src(), id);
 }
 
@@ -3426,54 +3419,12 @@ pub fn toastRemove(id: Id) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn toastsFor(subwindow_id: ?Id) ?ToastIterator {
     const cw = dvui.currentWindow();
-    cw.dialog_mutex.lock();
-    defer cw.dialog_mutex.unlock();
-
-    for (cw.toasts.items, 0..) |*t, i| {
-        if (t.subwindow_id == subwindow_id) {
-            return ToastIterator.init(cw, subwindow_id, i);
-        }
-    }
-
-    return null;
+    var it = cw.toasts.iterator(subwindow_id);
+    it.i = cw.toasts.indexOfSubwindow(subwindow_id) orelse return null;
+    return it;
 }
 
-pub const ToastIterator = struct {
-    const Self = @This();
-    cw: *Window,
-    subwindow_id: ?Id,
-    i: usize,
-    last_id: ?Id = null,
-
-    pub fn init(win: *Window, subwindow_id: ?Id, i: usize) Self {
-        return Self{ .cw = win, .subwindow_id = subwindow_id, .i = i };
-    }
-
-    pub fn next(self: *Self) ?Toast {
-        self.cw.dialog_mutex.lock();
-        defer self.cw.dialog_mutex.unlock();
-
-        // have to deal with toasts possibly removing themselves inbetween
-        // calls to next()
-
-        const items = self.cw.toasts.items;
-        if (self.i < items.len and self.last_id != null and self.last_id.? == items[self.i].id) {
-            // we already did this one, move to the next
-            self.i += 1;
-        }
-
-        while (self.i < items.len and items[self.i].subwindow_id != self.subwindow_id) {
-            self.i += 1;
-        }
-
-        if (self.i < items.len) {
-            self.last_id = items[self.i].id;
-            return items[self.i];
-        }
-
-        return null;
-    }
-};
+pub const ToastIterator = Dialogs.Iterator;
 
 pub const ToastOptions = struct {
     id_extra: usize = 0,
@@ -3481,7 +3432,7 @@ pub const ToastOptions = struct {
     subwindow_id: ?Id = null,
     timeout: ?i32 = 5_000_000,
     message: []const u8,
-    displayFn: DialogDisplayFn = toastDisplay,
+    displayFn: Dialog.DisplayFn = toastDisplay,
 };
 
 /// Add a simple toast.  Use `toastAdd` for more complex toasts.
@@ -3530,25 +3481,7 @@ pub fn toastDisplay(id: Id) !void {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn toastsShow(id: ?Id, rect: Rect.Natural) void {
-    var ti = dvui.toastsFor(id);
-    if (ti) |*it| {
-        var toast_win = dvui.FloatingWindowWidget.init(@src(), .{ .stay_above_parent_window = id != null, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
-        defer toast_win.deinit();
-
-        toast_win.data().rect = dvui.placeIn(.cast(rect), toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
-        toast_win.install();
-        toast_win.drawBackground();
-        toast_win.autoSize(); // affects next frame
-
-        var vbox = dvui.box(@src(), .{}, .{});
-        defer vbox.deinit();
-
-        while (it.next()) |t| {
-            t.display(t.id) catch |err| {
-                log.warn("Toast {x} got {any} from its display function", .{ t.id, err });
-            };
-        }
-    }
+    currentWindow().toastsShow(id, rect);
 }
 
 /// Wrapper widget that takes a single child and animates it.
