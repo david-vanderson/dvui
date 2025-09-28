@@ -173,6 +173,16 @@ pub const placeOnScreen = layout.placeOnScreen;
 
 pub const Data = @import("Data.zig");
 
+pub const native_dialogs = @import("native_dialogs.zig");
+pub const dialogWasmFileOpen = native_dialogs.Wasm.open;
+pub const wasmFileUploaded = native_dialogs.Wasm.uploaded;
+pub const dialogWasmFileOpenMultiple = native_dialogs.Wasm.openMultiple;
+pub const wasmFileUploadedMultiple = native_dialogs.Wasm.uploadedMultiple;
+pub const dialogNativeFileOpen = native_dialogs.Native.open;
+pub const dialogNativeFileOpenMultiple = native_dialogs.Native.openMultiple;
+pub const dialogNativeFileSave = native_dialogs.Native.save;
+pub const dialogNativeFolderSelect = native_dialogs.Native.folderSelect;
+
 pub const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
 pub const useFreeType = !wasm;
 
@@ -218,6 +228,7 @@ pub const c = @cImport({
     @cInclude("stb_image.h");
     @cInclude("stb_image_write.h");
 
+    // Used by native dialogs
     if (!wasm) {
         @cInclude("tinyfiledialogs.h");
     }
@@ -3084,288 +3095,6 @@ pub fn dialogDisplay(id: Id) !void {
     tl.addText(message, .{});
     tl.deinit();
     scroll.deinit();
-}
-
-pub const DialogWasmFileOptions = struct {
-    /// Filter files shown by setting the [accept](https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/accept) attribute
-    ///
-    /// Example: ".pdf, image/*"
-    accept: ?[]const u8 = null,
-};
-
-const WasmFile = struct {
-    id: Id,
-    index: usize,
-    /// The size of the data in bytes
-    size: usize,
-    /// The filename of the uploaded file. Does not include the path of the file
-    name: [:0]const u8,
-
-    pub fn readData(self: *WasmFile, allocator: std.mem.Allocator) std.mem.Allocator.Error![]u8 {
-        std.debug.assert(wasm); // WasmFile shouldn't be used outside wasm builds
-        const data = try allocator.alloc(u8, self.size);
-        dvui.backend.readFileData(self.id, self.index, data.ptr);
-        return data;
-    }
-};
-
-/// Opens a file picker WITHOUT blocking. The file can be accessed by calling `wasmFileUploaded` with the same id
-///
-/// This function does nothing in non-wasm builds
-pub fn dialogWasmFileOpen(id: Id, opts: DialogWasmFileOptions) void {
-    if (!wasm) return;
-    dvui.backend.openFilePicker(id, opts.accept, false);
-}
-
-/// Will only return a non-null value for a single frame
-///
-/// This function does nothing in non-wasm builds
-pub fn wasmFileUploaded(id: Id) ?WasmFile {
-    if (!wasm) return null;
-    const num_files = dvui.backend.getNumberOfFilesAvailable(id);
-    if (num_files == 0) return null;
-    if (num_files > 1) {
-        log.err("Received more than one file for id {d}. Did you mean to call wasmFileUploadedMultiple?", .{id});
-    }
-    const name = dvui.backend.getFileName(id, 0);
-    const size = dvui.backend.getFileSize(id, 0);
-    if (name == null or size == null) {
-        log.err("Could not get file metadata. Got size: {?d} and name: {?s}", .{ size, name });
-        return null;
-    }
-    return WasmFile{
-        .id = id,
-        .index = 0,
-        .size = size.?,
-        .name = name.?,
-    };
-}
-
-/// Opens a file picker WITHOUT blocking. The files can be accessed by calling `wasmFileUploadedMultiple` with the same id
-///
-/// This function does nothing in non-wasm builds
-pub fn dialogWasmFileOpenMultiple(id: Id, opts: DialogWasmFileOptions) void {
-    if (!wasm) return;
-    dvui.backend.openFilePicker(id, opts.accept, true);
-}
-
-/// Will only return a non-null value for a single frame
-///
-/// This function does nothing in non-wasm builds
-pub fn wasmFileUploadedMultiple(id: Id) ?[]WasmFile {
-    if (!wasm) return null;
-    const num_files = dvui.backend.getNumberOfFilesAvailable(id);
-    if (num_files == 0) return null;
-
-    const files = dvui.currentWindow().arena().alloc(WasmFile, num_files) catch |err| {
-        log.err("File upload skipped, failed to allocate space for file handles: {any}", .{err});
-        return null;
-    };
-    for (0.., files) |i, *file| {
-        const name = dvui.backend.getFileName(id, i);
-        const size = dvui.backend.getFileSize(id, i);
-        if (name == null or size == null) {
-            log.err("Could not get file metadata for id {d} file number {d}. Got size: {?d} and name: {?s}", .{ id, i, size, name });
-            return null;
-        }
-        file.* = WasmFile{
-            .id = id,
-            .index = i,
-            .size = size.?,
-            .name = name.?,
-        };
-    }
-    return files;
-}
-
-pub const DialogNativeFileOptions = struct {
-    /// Title of the dialog window
-    title: ?[]const u8 = null,
-
-    /// Starting file or directory (if ends with /)
-    path: ?[]const u8 = null,
-
-    /// Filter files shown .filters = .{"*.png", "*.jpg"}
-    filters: ?[]const []const u8 = null,
-
-    /// Description for filters given ("image files")
-    filter_description: ?[]const u8 = null,
-};
-
-/// Block while showing a native file open dialog.  Return the selected file
-/// path or null if cancelled.  See `dialogNativeFileOpenMultiple`
-///
-/// Not thread safe, but can be used from any thread.
-///
-/// Returned string is created by passed allocator.  Not implemented for web (returns null).
-pub fn dialogNativeFileOpen(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) std.mem.Allocator.Error!?[:0]const u8 {
-    if (wasm) {
-        return null;
-    }
-
-    return dialogNativeFileInternal(true, false, alloc, opts);
-}
-
-/// Block while showing a native file open dialog with multiple selection.
-/// Return the selected file paths or null if cancelled.
-///
-/// Not thread safe, but can be used from any thread.
-///
-/// Returned slice and strings are created by passed allocator.  Not implemented for web (returns null).
-pub fn dialogNativeFileOpenMultiple(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) std.mem.Allocator.Error!?[][:0]const u8 {
-    if (wasm) {
-        return null;
-    }
-
-    return dialogNativeFileInternal(true, true, alloc, opts);
-}
-
-/// Block while showing a native file save dialog.  Return the selected file
-/// path or null if cancelled.
-///
-/// Not thread safe, but can be used from any thread.
-///
-/// Returned string is created by passed allocator.  Not implemented for web (returns null).
-pub fn dialogNativeFileSave(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) std.mem.Allocator.Error!?[:0]const u8 {
-    if (wasm) {
-        return null;
-    }
-
-    return dialogNativeFileInternal(false, false, alloc, opts);
-}
-
-fn dialogNativeFileInternal(comptime open: bool, comptime multiple: bool, alloc: std.mem.Allocator, opts: DialogNativeFileOptions) if (multiple) std.mem.Allocator.Error!?[][:0]const u8 else std.mem.Allocator.Error!?[:0]const u8 {
-    var backing: [500]u8 = undefined;
-    var buf: []u8 = &backing;
-
-    var title: ?[*:0]const u8 = null;
-    if (opts.title) |t| {
-        const dupe = std.fmt.bufPrintZ(buf, "{s}", .{t}) catch null;
-        if (dupe) |dt| {
-            title = dt.ptr;
-            buf = buf[dt.len + 1 ..];
-        }
-    }
-
-    var path: ?[*:0]const u8 = null;
-    if (opts.path) |p| {
-        const dupe = std.fmt.bufPrintZ(buf, "{s}", .{p}) catch null;
-        if (dupe) |dp| {
-            path = dp.ptr;
-            buf = buf[dp.len + 1 ..];
-        }
-    }
-
-    var filters_backing: [20:null]?[*:0]const u8 = undefined;
-    var filters: ?[*:null]?[*:0]const u8 = null;
-    var filter_count: usize = 0;
-    if (opts.filters) |fs| {
-        filters = &filters_backing;
-        for (fs, 0..) |f, i| {
-            if (i == filters_backing.len) {
-                log.err("dialogNativeFileOpen got too many filters {d}, only using {d}", .{ fs.len, filters_backing.len });
-                break;
-            }
-            const dupe = std.fmt.bufPrintZ(buf, "{s}", .{f}) catch null;
-            if (dupe) |df| {
-                filters.?[i] = df;
-                filters.?[i + 1] = null;
-                filter_count = i + 1;
-                buf = buf[df.len + 1 ..];
-            }
-        }
-    }
-
-    var filter_desc: ?[*:0]const u8 = null;
-    if (opts.filter_description) |fd| {
-        const dupe = std.fmt.bufPrintZ(buf, "{s}", .{fd}) catch null;
-        if (dupe) |dfd| {
-            filter_desc = dfd.ptr;
-            buf = buf[dfd.len + 1 ..];
-        }
-    }
-
-    var result: if (multiple) ?[][:0]const u8 else ?[:0]const u8 = null;
-    const tfd_ret: [*c]const u8 = blk: {
-        if (open) {
-            break :blk dvui.c.tinyfd_openFileDialog(title, path, @intCast(filter_count), filters, filter_desc, if (multiple) 1 else 0);
-        } else {
-            break :blk dvui.c.tinyfd_saveFileDialog(title, path, @intCast(filter_count), filters, filter_desc);
-        }
-    };
-
-    if (tfd_ret) |r| {
-        if (multiple) {
-            const r_slice = std.mem.span(r);
-            const num = std.mem.count(u8, r_slice, "|") + 1;
-            result = try alloc.alloc([:0]const u8, num);
-            var it = std.mem.splitScalar(u8, r_slice, '|');
-            var i: usize = 0;
-            while (it.next()) |f| {
-                result.?[i] = try alloc.dupeZ(u8, f);
-                i += 1;
-            }
-        } else {
-            result = try alloc.dupeZ(u8, std.mem.span(r));
-        }
-    }
-
-    // TODO: tinyfd maintains malloced memory from call to call, and we should
-    // figure out a way to get it to release that.
-
-    return result;
-}
-
-pub const DialogNativeFolderSelectOptions = struct {
-    /// Title of the dialog window
-    title: ?[]const u8 = null,
-
-    /// Starting file or directory (if ends with /)
-    path: ?[]const u8 = null,
-};
-
-/// Block while showing a native folder select dialog. Return the selected
-/// folder path or null if cancelled.
-///
-/// Not thread safe, but can be used from any thread.
-///
-/// Returned string is created by passed allocator.  Not implemented for web (returns null).
-pub fn dialogNativeFolderSelect(alloc: std.mem.Allocator, opts: DialogNativeFolderSelectOptions) std.mem.Allocator.Error!?[]const u8 {
-    if (wasm) {
-        return null;
-    }
-
-    var backing: [500]u8 = undefined;
-    var buf: []u8 = &backing;
-
-    var title: ?[*:0]const u8 = null;
-    if (opts.title) |t| {
-        const dupe = std.fmt.bufPrintZ(buf, "{s}", .{t}) catch null;
-        if (dupe) |dt| {
-            title = dt.ptr;
-            buf = buf[dt.len + 1 ..];
-        }
-    }
-
-    var path: ?[*:0]const u8 = null;
-    if (opts.path) |p| {
-        const dupe = std.fmt.bufPrintZ(buf, "{s}", .{p}) catch null;
-        if (dupe) |dp| {
-            path = dp.ptr;
-            buf = buf[dp.len + 1 ..];
-        }
-    }
-
-    var result: ?[]const u8 = null;
-    const tfd_ret = dvui.c.tinyfd_selectFolderDialog(title, path);
-    if (tfd_ret) |r| {
-        result = try alloc.dupe(u8, std.mem.sliceTo(r, 0));
-    }
-
-    // TODO: tinyfd maintains malloced memory from call to call, and we should
-    // figure out a way to get it to release that.
-
-    return result;
 }
 
 /// Add a toast.  Use `toast` for a simple message.
