@@ -153,6 +153,53 @@ pub fn textureInvalidateCache(key: Texture.Cache.Key) void {
     };
 }
 
+pub const Dragging = @import("Dragging.zig");
+/// See `Dragging.preStart`
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn dragPreStart(p: Point.Physical, options: Dragging.StartOptions) void {
+    currentWindow().dragging.preStart(p, options);
+}
+/// See `Dragging.start`
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn dragStart(p: Point.Physical, options: Dragging.StartOptions) void {
+    currentWindow().dragging.start(p, options);
+}
+/// Get offset previously given to `dragPreStart` or `dragStart`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn dragOffset() Point.Physical {
+    return currentWindow().dragging.offset;
+}
+/// Get rect from mouse position using offset and size previously given to
+/// `dragPreStart` or `dragStart`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn dragRect() Rect.Physical {
+    return currentWindow().dragging.getRect();
+}
+/// See `Dragging.get`
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn dragging(p: Point.Physical, name: ?[]const u8) ?Point.Physical {
+    return currentWindow().dragging.get(p, .{ .name = name, .window_natural_scale = currentWindow().natural_scale });
+}
+/// True if `dragging` and `dragStart` (or `dragPreStart`) was the given name.
+///
+/// Use to know when a cross-widget drag is in progress.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn dragName(name: ?[]const u8) bool {
+    return currentWindow().dragging.matchName(name);
+}
+/// Stop any mouse drag.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn dragEnd() void {
+    currentWindow().dragging.end();
+}
+
 pub const render = @import("render.zig");
 pub const RenderCommand = render.RenderCommand;
 pub const RenderTarget = render.Target;
@@ -1418,150 +1465,6 @@ pub fn subwindowCurrentId() Id {
     return cw.subwindow_currentId;
 }
 
-/// Optional features you might want when doing a mouse/touch drag.
-pub const DragStartOptions = struct {
-    /// Use this cursor from when a drag starts to when it ends.
-    cursor: ?enums.Cursor = null,
-
-    /// Offset of point of interest from the mouse.  Useful during a drag to
-    /// locate where to move the point of interest.
-    offset: Point.Physical = .{},
-
-    /// Size of the item being dragged.  offset plus this makes a screen rect
-    /// saying where the dragged item is relative to the mouse.
-    size: Size.Physical = .{},
-
-    /// Used for cross-widget dragging.  See `dragName`.
-    name: ?[]const u8 = null,
-};
-
-/// Prepare for a possible mouse drag.  This will detect a drag, and also a
-/// normal click (mouse down and up without a drag).
-///
-/// * `dragging` will return a Point once mouse motion has moved at least 3
-/// natural pixels away from p.
-///
-/// * if cursor is non-null and a drag starts, use that cursor while dragging
-///
-/// * offset given here can be retrieved later with `dragOffset` - example is
-/// dragging bottom right corner of floating window.  The drag can start
-/// anywhere in the hit area (passing the offset to the true corner), then
-/// during the drag, the `dragOffset` is added to the current mouse location to
-/// recover where to move the true corner.
-///
-/// See `dragStart` to immediately start a drag.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn dragPreStart(p: Point.Physical, options: DragStartOptions) void {
-    const cw = currentWindow();
-    cw.drag_state = .prestart;
-    cw.drag_pt = p;
-    cw.drag_offset = options.offset;
-    cw.drag_size = options.size;
-    cw.cursor_dragging = options.cursor;
-    cw.drag_name = options.name;
-}
-
-/// Start a mouse drag from p.  Use when only dragging is possible (normal
-/// click would do nothing), otherwise use `dragPreStart`.
-///
-/// * if cursor is non-null, use that cursor while dragging
-///
-/// * offset given here can be retrieved later with `dragOffset` - example is
-/// dragging bottom right corner of floating window.  The drag can start
-/// anywhere in the hit area (passing the offset to the true corner), then
-/// during the drag, the `dragOffset` is added to the current mouse location to
-/// recover where to move the true corner.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn dragStart(p: Point.Physical, options: DragStartOptions) void {
-    const cw = currentWindow();
-    cw.drag_state = .dragging;
-    cw.drag_pt = p;
-    cw.drag_offset = options.offset;
-    cw.drag_size = options.size;
-    cw.cursor_dragging = options.cursor;
-    cw.drag_name = options.name;
-}
-
-/// Get offset previously given to `dragPreStart` or `dragStart`.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn dragOffset() Point.Physical {
-    const cw = currentWindow();
-    return cw.drag_offset;
-}
-
-/// Get rect from mouse position using offset and size previously given to
-/// `dragPreStart` or `dragStart`.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn dragRect() Rect.Physical {
-    const cw = currentWindow();
-    const topleft = cw.mouse_pt.plus(cw.drag_offset);
-    return Rect.Physical.fromPoint(topleft).toSize(cw.drag_size);
-}
-
-/// If a mouse drag is happening, return the pixel difference to p from the
-/// previous dragging call or the drag starting location (from `dragPreStart`
-/// or `dragStart`).  Otherwise return null, meaning a drag hasn't started yet.
-///
-/// If name is given, returns null immediately if it doesn't match the name /
-/// given to `dragPreStart` or `dragStart`.  This is useful for widgets that need
-/// multiple different kinds of drags.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn dragging(p: Point.Physical, name: ?[]const u8) ?Point.Physical {
-    const cw = currentWindow();
-
-    if (name) |n| {
-        if (!std.mem.eql(u8, n, cw.drag_name orelse "")) return null;
-    }
-
-    switch (cw.drag_state) {
-        .none => return null,
-        .dragging => {
-            const dp = p.diff(cw.drag_pt);
-            cw.drag_pt = p;
-            return dp;
-        },
-        .prestart => {
-            const dp = p.diff(cw.drag_pt);
-            const dps = dp.scale(1 / windowNaturalScale(), Point.Natural);
-            if (@abs(dps.x) > 3 or @abs(dps.y) > 3) {
-                cw.drag_pt = p;
-                cw.drag_state = .dragging;
-                return dp;
-            } else {
-                return null;
-            }
-        },
-    }
-}
-
-/// True if `dragging` and `dragStart` (or `dragPreStart`) was the given name.
-///
-/// Use to know when a cross-widget drag is in progress.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn dragName(name: ?[]const u8) bool {
-    if (name) |n| {
-        const cw = currentWindow();
-        return cw.drag_state == .dragging and cw.drag_name != null and std.mem.eql(u8, n, cw.drag_name.?);
-    } else {
-        return false;
-    }
-}
-
-/// Stop any mouse drag.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn dragEnd() void {
-    const cw = currentWindow();
-    cw.drag_state = .none;
-    cw.drag_name = null;
-}
-
 /// The difference between the final mouse position this frame and last frame.
 /// Use `mouseTotalMotion().nonZero()` to detect if any mouse motion has occurred.
 ///
@@ -2376,10 +2279,10 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             }
 
             const cw = currentWindow();
-            if (cw.drag_state == .dragging and cw.drag_name != null and (opts.drag_name == null or !std.mem.eql(u8, cw.drag_name.?, opts.drag_name.?))) {
+            if (cw.dragging.state == .dragging and cw.dragging.name != null and (opts.drag_name == null or !std.mem.eql(u8, cw.dragging.name.?, opts.drag_name.?))) {
                 // a cross-widget drag is happening that we don't know about
                 if (builtin.mode == .Debug and opts.debug) {
-                    log.debug("eventMatch {f} drag_name ({?s}) given but current drag is ({?s})", .{ e, opts.drag_name, cw.drag_name });
+                    log.debug("eventMatch {f} drag_name ({?s}) given but current drag is ({?s})", .{ e, opts.drag_name, cw.dragging.name });
                 }
                 return false;
             }
