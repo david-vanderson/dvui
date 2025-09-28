@@ -60,15 +60,7 @@ mouse_pt_prev: Point.Physical = .{ .x = -1, .y = -1 },
 modifiers: dvui.enums.Mod = .none,
 inject_motion_event: bool = false,
 
-drag_state: enum {
-    none,
-    prestart,
-    dragging,
-} = .none,
-drag_pt: Point.Physical = .{},
-drag_offset: Point.Physical = .{},
-drag_name: ?[]const u8 = null,
-drag_size: Size.Physical = .{},
+dragging: dvui.Dragging = .{},
 
 frame_time_ns: i128 = 0,
 loop_wait_target: ?i128 = null,
@@ -122,7 +114,6 @@ toasts: dvui.Dialogs = .{},
 keybinds: std.StringHashMapUnmanaged(dvui.enums.Keybind) = .empty,
 
 cursor_requested: ?dvui.enums.Cursor = null,
-cursor_dragging: ?dvui.enums.Cursor = null,
 
 wd: WidgetData,
 rect_pixels: dvui.Rect.Physical = .{},
@@ -1148,8 +1139,8 @@ pub fn subwindowFocused(self: *const Self) *Subwindow {
 /// Return the cursor the gui wants.  Client code should cache this if
 /// switching the platform's cursor is expensive.
 pub fn cursorRequested(self: *const Self) dvui.enums.Cursor {
-    if (self.drag_state == .dragging and self.cursor_dragging != null) {
-        return self.cursor_dragging.?;
+    if (self.dragging.state == .dragging and self.dragging.cursor != null) {
+        return self.dragging.cursor.?;
     } else {
         return self.cursor_requested orelse .arrow;
     }
@@ -1344,12 +1335,12 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // events may have been tagged with a focus widget that never showed up
     const evts = dvui.events();
     for (evts) |*e| {
-        if (self.drag_state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release) {
+        if (self.dragging.state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release) {
             if (self.debug.logEvents(null)) {
-                log.debug("Clearing drag ({?s}) for unhandled mouse release", .{self.drag_name});
+                log.debug("Clearing drag ({?s}) for unhandled mouse release", .{self.dragging.name});
             }
-            self.drag_state = .none;
-            self.drag_name = null;
+            self.dragging.state = .none;
+            self.dragging.name = null;
             dvui.refresh(null, @src(), null);
         }
 
