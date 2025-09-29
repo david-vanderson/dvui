@@ -102,7 +102,6 @@ pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
 pub const testing = @import("testing.zig");
 pub const selection = @import("selection.zig");
-pub const ShrinkingArenaAllocator = @import("shrinking_arena_allocator.zig").ShrinkingArenaAllocator;
 pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHashMap;
 pub const PNGEncoder = @import("PNGEncoder.zig");
 pub const JPGEncoder = @import("JPGEncoder.zig");
@@ -371,17 +370,9 @@ pub fn currentWindow() *Window {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetAlloc(comptime T: type) *T {
-    if (@import("build_options").zig_arena orelse false) {
-        return currentWindow().arena().create(T) catch @panic("OOM");
-    }
-
     const cw = currentWindow();
-    const alloc = cw._widget_stack.allocatorLIFO();
-    const ptr = alloc.create(T) catch {
-        log.debug("Widget stack overflowed, falling back to long term arena allocator", .{});
-        return cw.arena().create(T) catch @panic("OOM");
-    };
-    // std.debug.print("PUSH {*} ({d}) {x}\n", .{ ptr, @alignOf(@TypeOf(ptr)), cw._widget_stack.end_index });
+    const alloc = cw._widget_stack.allocator();
+    const ptr = alloc.create(T) catch @panic("OOM");
     return ptr;
 }
 
@@ -392,11 +383,8 @@ pub fn widgetAlloc(comptime T: type) *T {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetFree(ptr: anytype) void {
-    if (@import("build_options").zig_arena orelse false) {
-        return;
-    }
     const ws = &currentWindow()._widget_stack;
-    ws.allocatorLIFO().destroy(ptr);
+    ws.allocator().destroy(ptr);
 }
 
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {

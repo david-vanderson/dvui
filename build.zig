@@ -30,11 +30,6 @@ pub fn build(b: *std.Build) !void {
 
     const build_options = b.addOptions();
     build_options.addOption(
-        ?bool,
-        "zig_arena",
-        b.option(bool, "zig_arena", "Use zig std lib arena for memory management"),
-    );
-    build_options.addOption(
         ?[]const u8,
         "snapshot_image_suffix",
         b.option([]const u8, "snapshot-images", "When this name is defined, dvui.testing.snapshot will save an image ending with the string provided"),
