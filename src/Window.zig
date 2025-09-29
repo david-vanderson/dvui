@@ -113,10 +113,10 @@ capture: ?dvui.CaptureMouse = null,
 captured_last_frame: bool = false,
 
 gpa: std.mem.Allocator,
-_arena: if (zig_arena) std.heap.ArenaAllocator else dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
-_lifo_arena: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
+_arena: std.heap.ArenaAllocator,
+_lifo_arena: std.heap.ArenaAllocator,
 /// Used to allocate widgets with a fixed location
-_widget_stack: dvui.ShrinkingArenaAllocator(.{ .reuse_memory = builtin.mode != .Debug }),
+_widget_stack: std.heap.ArenaAllocator,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
@@ -149,7 +149,7 @@ pub fn init(
 
     var self = Self{
         .gpa = gpa,
-        ._arena = if (init_opts.arena) |a| (if (zig_arena) a else .initArena(a)) else .init(gpa),
+        ._arena = if (init_opts.arena) |a| a else .init(gpa),
         ._lifo_arena = .init(gpa),
         ._widget_stack = .init(gpa),
         .wd = WidgetData{
@@ -374,8 +374,7 @@ pub fn deinit(self: *Self) void {
 /// For allocations that should live for the entire frame, see
 /// `Window.arena`
 pub fn lifo(self: *Self) std.mem.Allocator {
-    if (zig_arena) return self.arena();
-    return self._lifo_arena.allocatorLIFO();
+    return self._lifo_arena.allocator();
 }
 
 /// A general allocator for using during a frame. All allocations
@@ -1346,33 +1345,23 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // event to the end this will print a debug message.
     self.positionMouseEventRemove();
 
-    // Allocators
-    // std.log.debug("peak lifo arena {d} (0x{0x})", .{self._lifo_arena.peak_usage});
-    // std.log.debug("peak arena {d} (0x{0x})", .{self._arena.peak_usage});
-    // std.log.debug("peak widget stack {d} (0x{0x})", .{self.peak_widget_stack});
-
-    // self._arena.debug_log();
-    if (zig_arena) {
-        _ = self._arena.reset(.retain_capacity);
-    } else {
-        _ = self._arena.reset(.shrink_to_peak_usage);
+    {
+        const cap = self._arena.queryCapacity();
+        //std.log.debug("_arena capacity {d}", .{cap});
+        _ = self._arena.reset(.{ .retain_with_limit = cap - @divTrunc(cap, 10) });
     }
 
-    if (self._lifo_arena.current_usage != 0 and !self._lifo_arena.has_expanded()) {
-        log.warn("Arena was not empty at the end of the frame, {d} bytes left. Did you forget to free memory somewhere?", .{self._lifo_arena.current_usage});
-        // const buf: [*]u8 = @ptrCast(self._lifo_arena.arena.state.buffer_list.first.?);
-        // std.log.debug("Arena content {s}", .{buf[@sizeOf(usize)..self._lifo_arena.current_usage]});
+    {
+        const cap = self._lifo_arena.queryCapacity();
+        //std.log.debug("_lifo_arena capacity {d}", .{cap});
+        _ = self._lifo_arena.reset(.{ .retain_with_limit = cap - @divTrunc(cap, 10) });
     }
-    // self._lifo_arena.debug_log();
-    _ = self._lifo_arena.reset(.shrink_to_peak_usage);
 
-    if (self._widget_stack.current_usage != 0 and !self._widget_stack.has_expanded()) {
-        log.warn("Widget stack was not empty at the end of the frame, {d} bytes left. Did you forget to call deinit?", .{self._widget_stack.current_usage});
-        // const buf: [*]u8 = @ptrCast(self._widget_stack.arena.state.buffer_list.first.?);
-        // std.log.debug("Widget stack content {s}", .{buf[@sizeOf(usize)..self._widget_stack.current_usage]});
+    {
+        const cap = self._widget_stack.queryCapacity();
+        //std.log.debug("_widget_stack capacity {d}", .{cap});
+        _ = self._widget_stack.reset(.{ .retain_with_limit = cap - @divTrunc(cap, 10) });
     }
-    // self._widget_stack.debug_log();
-    _ = self._widget_stack.reset(.shrink_to_peak_usage);
 
     try self.initEvents();
 
@@ -1464,8 +1453,6 @@ const std = @import("std");
 const math = std.math;
 const builtin = @import("builtin");
 const dvui = @import("dvui.zig");
-
-const zig_arena = @import("build_options").zig_arena orelse false;
 
 test {
     @import("std").testing.refAllDecls(@This());
