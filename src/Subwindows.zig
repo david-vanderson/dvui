@@ -150,7 +150,7 @@ pub fn reset(self: *Subwindows) void {
         if (sw.used) {
             sw.used = false;
         } else {
-            _ = self.stack.orderedRemove(i);
+            _ = self.stack.orderedRemove(i - 1);
         }
     }
 }
