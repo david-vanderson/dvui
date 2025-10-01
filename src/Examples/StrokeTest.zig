@@ -85,7 +85,7 @@ pub fn processEvent(self: *Self, e: *dvui.Event) void {
 
                         for (points, 0..) |p, i| {
                             const dp = dvui.Point.diff(p, mp);
-                            if (@abs(dp.x) < 5 and @abs(dp.y) < 5) {
+                            if (@abs(dp.x) < 10 and @abs(dp.y) < 10) {
                                 dragi = i;
                                 break;
                             }
