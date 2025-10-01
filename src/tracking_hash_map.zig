@@ -52,6 +52,9 @@ pub fn TrackingAutoHashMap(
         /// See `HashMap.Iterator`
         pub const Iterator = struct {
             map_it: HashMap.Iterator,
+            // The current std hashmap can remove keys without invalidating
+            // the iterator or any pointers, which is used by this iterator
+            map: *HashMap,
 
             /// Sets each entry as used if get tracking is enabled
             pub fn next(it: *Iterator) ?Entry {
@@ -74,6 +77,20 @@ pub fn TrackingAutoHashMap(
                     .value_ptr = &entry.value_ptr.inner,
                 };
             }
+
+            /// Resets the used state of all entries, removing the unused values and returning their entries
+            pub fn next_resetting(it: *Iterator) ?KV {
+                // This locking asserts that the removal doesn't invalidate the iterator
+                it.map.lockPointers();
+                defer it.map.unlockPointers();
+                var entry = it.map_it.next() orelse return null;
+                while (entry.value_ptr.used) {
+                    entry.value_ptr.used = false;
+                    entry = it.map_it.next() orelse return null;
+                }
+                defer it.map.removeByPtr(entry.key_ptr);
+                return .{ .key = entry.key_ptr.*, .value = entry.value_ptr.inner, .used = entry.value_ptr.used };
+            }
         };
 
         /// See `HashMap.deinit`
@@ -88,8 +105,8 @@ pub fn TrackingAutoHashMap(
         }
 
         /// See `HashMap.iterator`
-        pub fn iterator(self: *const Self) Iterator {
-            return .{ .map_it = self.map.iterator() };
+        pub fn iterator(self: *Self) Iterator {
+            return .{ .map_it = self.map.iterator(), .map = &self.map };
         }
 
         /// See `HashMap.put`
@@ -153,18 +170,11 @@ pub fn TrackingAutoHashMap(
             tracked.used = used;
         }
 
-        /// Returns all keys that had not been used since the last call to this function
-        pub fn reset(self: *Self, allocator: std.mem.Allocator) std.mem.Allocator.Error![]const K {
-            var unused = std.ArrayListUnmanaged(K).empty;
-            var map_it = self.map.iterator();
-            while (map_it.next()) |entry| {
-                if (entry.value_ptr.used) {
-                    entry.value_ptr.used = false;
-                } else {
-                    try unused.append(allocator, entry.key_ptr.*);
-                }
-            }
-            return unused.toOwnedSlice(allocator);
+        /// Resets and removes all unused values. It you need access to the removed key and values,
+        /// use `Iterator.next_resetting` directly
+        pub fn reset(self: *Self) void {
+            var map_it = self.iterator();
+            while (map_it.next_resetting()) |_| {}
         }
     };
 }
@@ -180,11 +190,7 @@ test TrackingAutoHashMap {
 
     try std.testing.expectEqual(3, map.count());
 
-    { // Reset
-        const unused_keys = try map.reset(std.testing.allocator);
-        defer std.testing.allocator.free(unused_keys);
-        try std.testing.expectEqualSlices(u32, &.{}, unused_keys);
-    }
+    map.reset();
 
     try map.put(std.testing.allocator, 4, 44);
     const prev = try map.fetchPut(std.testing.allocator, 3, 333);
@@ -199,11 +205,7 @@ test TrackingAutoHashMap {
     const get = map.get(2);
     try std.testing.expectEqual(22, get);
 
-    { // Reset
-        const unused_keys = try map.reset(std.testing.allocator);
-        defer std.testing.allocator.free(unused_keys);
-        try std.testing.expectEqualSlices(u32, &.{1}, unused_keys);
-    }
+    map.reset();
 }
 
 const std = @import("std");

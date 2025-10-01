@@ -66,12 +66,10 @@ pub const Cache = struct {
     ///
     /// `allocator` is only used for the returned slice and can be
     /// different from the one used for calls to `add`
-    pub fn reset(self: *Cache, allocator: std.mem.Allocator, backend: dvui.Backend) std.mem.Allocator.Error!void {
-        const keys = try self.cache.reset(allocator);
-        defer allocator.free(keys);
-        errdefer comptime unreachable;
-        for (keys) |key| {
-            backend.textureDestroy(self.cache.fetchRemove(key).?.value);
+    pub fn reset(self: *Cache, backend: dvui.Backend) void {
+        var it = self.cache.iterator();
+        while (it.next_resetting()) |kv| {
+            backend.textureDestroy(kv.value);
         }
         for (self.trash.items) |tex| {
             backend.textureDestroy(tex);
