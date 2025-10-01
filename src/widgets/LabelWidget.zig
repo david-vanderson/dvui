@@ -17,6 +17,7 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     align_x: f32 = 0,
     align_y: f32 = 0,
+    ellipsize: bool = true,
 
     pub fn gravityGet(self: InitOptions) Options.Gravity {
         return .{ .x = self.align_x, .y = self.align_y };
@@ -124,7 +125,7 @@ pub fn draw(self: *LabelWidget) void {
 
         const ellip = "...";
         var ellipsize = false;
-        if (tsize.w > self.data().contentRect().w) {
+        if (self.init_options.ellipsize and tsize.w > self.data().contentRect().w) {
             ellipsize = true;
             const esize = self.data().options.fontGet().textSize(ellip);
             var endi: usize = 0;
