@@ -958,8 +958,8 @@ pub fn begin(
 
     self.debug.reset(self.gpa);
 
-    try self.data_store.reset(self.gpa);
-    try self.texture_cache.reset(self.lifo(), self.backend);
+    self.data_store.reset(self.gpa);
+    self.texture_cache.reset(self.backend);
     self.subwindows.reset();
 
     for (self.frame_times, 0..) |_, i| {
@@ -970,22 +970,14 @@ pub fn begin(
         }
     }
 
-    {
-        const deadSizes = try self.min_sizes.reset(self.lifo());
-        defer self.lifo().free(deadSizes);
-        for (deadSizes) |id| {
-            _ = self.min_sizes.remove(id);
-        }
-        //std.debug.print("min_sizes {d}\n", .{self.min_sizes.count()});
-    }
+    self.min_sizes.reset();
+    //std.debug.print("min_sizes {d}\n", .{self.min_sizes.count()});
 
     {
-        const deadTags = try self.tags.reset(self.lifo());
-        defer self.lifo().free(deadTags);
-        for (deadTags) |name| {
-            _ = self.tags.remove(name);
-            //std.debug.print("tag dead free {s}\n", .{name});
-            self.gpa.free(name);
+        var it = self.tags.iterator();
+        while (it.next_resetting()) |kv| {
+            //std.debug.print("tag dead free {s}\n", .{kv.key});
+            self.gpa.free(kv.key);
         }
         //std.debug.print("tags {d}\n", .{self.tags.count()});
     }
@@ -1029,20 +1021,14 @@ pub fn begin(
                 }
             }
         }
-
-        const deadAnimations = try self.animations.reset(self.lifo());
-        defer self.lifo().free(deadAnimations);
-        for (deadAnimations) |id| {
-            _ = self.animations.remove(id);
-        }
+        self.animations.reset();
     }
 
     {
-        const deadFonts = try self.font_cache.reset(self.lifo());
-        defer self.lifo().free(deadFonts);
-        for (deadFonts) |id| {
-            var tce = self.font_cache.fetchRemove(id).?;
-            tce.value.deinit(self);
+        var it = self.font_cache.iterator();
+        while (it.next_resetting()) |kv| {
+            var fce = kv.value;
+            fce.deinit(self);
         }
         //std.debug.print("font_cache {d}\n", .{self.font_cache.count()});
     }
