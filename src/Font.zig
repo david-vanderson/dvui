@@ -10,6 +10,11 @@ size: f32,
 line_height_factor: f32 = 1.2,
 id: FontId,
 
+// default bytes if font id is not found in database
+pub const default_ttf_bytes = TTFBytes.Vera;
+// NOTE: This font name should match the name in the font data base
+pub const default_font_id = FontId.Vera;
+
 pub fn hash(font: Font) u64 {
     var h = dvui.fnv.init();
     const bytes = if (dvui.currentWindow().font_bytes.get(font.id)) |fbe| fbe.ttf_bytes else Font.default_ttf_bytes;
@@ -114,11 +119,6 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     // convert size back from font units
     return s.scale(target_fraction, Size);
 }
-
-// default bytes if font id is not found in database
-pub const default_ttf_bytes = TTFBytes.Vera;
-// NOTE: This font name should match the name in the font data base
-pub const default_font_id = FontId.Vera;
 
 pub const FontId = enum(u64) {
     // The following predefined names for TTFBytes (verified at comptime)
