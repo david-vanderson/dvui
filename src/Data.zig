@@ -72,7 +72,6 @@ pub fn setSlice(self: *Data, gpa: std.mem.Allocator, key: Key, data: anytype) st
 }
 pub fn setSliceCopies(self: *Data, gpa: std.mem.Allocator, key: Key, data: anytype, num_copies: usize) std.mem.Allocator.Error!void {
     const S = @TypeOf(data);
-    if (num_copies == 0) return;
     const sentinel = @typeInfo(Slice(S)).pointer.sentinel();
     const slice, _ = try self.getOrPutSliceT(gpa, key, Slice(S), data.len * num_copies + @intFromBool(sentinel != null), true);
     for (0..num_copies) |i| {
