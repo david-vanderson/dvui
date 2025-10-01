@@ -85,9 +85,7 @@ tab_index_prev: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
 tab_index: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
-font_cache: dvui.TrackingAutoHashMap(u64, dvui.FontCacheEntry, .get_and_put) = .empty,
-/// Uses `gpa` allocator
-font_bytes: std.AutoHashMapUnmanaged(dvui.Font.FontId, dvui.FontBytesEntry) = .empty,
+fonts: dvui.Font.Cache = .{},
 /// Uses `gpa` allocator
 texture_cache: dvui.Texture.Cache = .{},
 /// Uses `gpa` allocator
@@ -165,7 +163,8 @@ pub fn init(
             .parent = undefined,
         },
         .backend = backend_ctx,
-        .font_bytes = try dvui.Font.initTTFBytesDatabase(gpa),
+        // TODO: Add some way to opt-out of including the builtin fonts in the built binary
+        .fonts = try .initWithBuiltins(gpa),
         .theme = if (init_opts.theme) |t| t else switch (init_opts.color_scheme orelse backend_ctx.preferredColorScheme() orelse .light) {
             .light => Theme.builtin.adwaita_light,
             .dark => Theme.builtin.adwaita_dark,
@@ -298,7 +297,7 @@ pub fn init(
     self.frame_time_ns = 1;
 
     if (dvui.useFreeType) {
-        dvui.FontCacheEntry.intToError(c.FT_Init_FreeType(&dvui.ft2lib)) catch |err| {
+        dvui.Font.FreeType.intToError(c.FT_Init_FreeType(&dvui.ft2lib)) catch |err| {
             dvui.log.err("freetype error {any} trying to init freetype library\n", .{err});
             return error.freetypeError;
         };
@@ -311,6 +310,7 @@ pub fn deinit(self: *Self) void {
     self.data_store.deinit(self.gpa);
 
     self.texture_cache.deinit(self.gpa, self.backend);
+    self.fonts.deinit(self.gpa, self.backend);
 
     self.debug.deinit(self.gpa);
 
@@ -330,30 +330,12 @@ pub fn deinit(self: *Self) void {
     self.tab_index_prev.deinit(self.gpa);
     self.tab_index.deinit(self.gpa);
 
-    {
-        var it = self.font_cache.iterator();
-        while (it.next()) |item| {
-            item.value_ptr.deinit(self);
-        }
-        self.font_cache.deinit(self.gpa);
-    }
-
     self.dialogs.deinit(self.gpa);
     self.toasts.deinit(self.gpa);
     self.keybinds.deinit(self.gpa);
     self._arena.deinit();
     self._lifo_arena.deinit();
     self._widget_stack.deinit();
-
-    {
-        var it = self.font_bytes.valueIterator();
-        while (it.next()) |fbe| {
-            if (fbe.allocator) |a| {
-                a.free(fbe.ttf_bytes);
-            }
-        }
-    }
-    self.font_bytes.deinit(self.gpa);
     dvui.struct_ui.deinit(self.gpa);
     self.* = undefined;
 }
@@ -961,6 +943,7 @@ pub fn begin(
     self.data_store.reset(self.gpa);
     self.texture_cache.reset(self.backend);
     self.subwindows.reset();
+    self.fonts.reset(self.gpa, self.backend);
 
     for (self.frame_times, 0..) |_, i| {
         if (i == (self.frame_times.len - 1)) {
@@ -1022,15 +1005,6 @@ pub fn begin(
             }
         }
         self.animations.reset();
-    }
-
-    {
-        var it = self.font_cache.iterator();
-        while (it.next_resetting()) |kv| {
-            var fce = kv.value;
-            fce.deinit(self);
-        }
-        //std.debug.print("font_cache {d}\n", .{self.font_cache.count()});
     }
 
     if (!self.captured_last_frame) {

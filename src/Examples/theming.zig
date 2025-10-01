@@ -176,7 +176,7 @@ fn fonts(theme: *Theme) bool {
 
     var current_font_index: ?usize = null;
     var current_font_name: []const u8 = "Unknown";
-    var it = dvui.currentWindow().font_bytes.iterator();
+    var it = dvui.currentWindow().fonts.database.iterator();
     var i: usize = 0;
     while (it.next()) |entry| : (i += 1) {
         if (entry.key_ptr.* == edited_font.id) {
@@ -188,7 +188,7 @@ fn fonts(theme: *Theme) bool {
     var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = current_font_index, .label = current_font_name }, .{});
     dd.install();
     if (dd.dropped()) {
-        it = dvui.currentWindow().font_bytes.iterator();
+        it = dvui.currentWindow().fonts.database.iterator();
         while (it.next()) |entry| {
             if (dd.addChoiceLabel(entry.value_ptr.name)) {
                 edited_font.id = entry.key_ptr.*;

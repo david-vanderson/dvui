@@ -141,7 +141,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     const sized_font = opts.font.resize(target_size);
 
     // might get a slightly smaller font
-    var fce = try dvui.fontCacheGet(sized_font);
+    var fce = try cw.fonts.getOrCreate(cw.gpa, sized_font);
 
     // this must be synced with Font.textSizeEx()
     const target_fraction = if (cw.snap_to_pixels) 1.0 else target_size / fce.height;
@@ -151,12 +151,12 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         // if kern_in is given, assume we already did this when measuring the text
         var utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
         while (utf8it.nextCodepoint()) |codepoint| {
-            _ = try fce.glyphInfoGetOrReplacement(codepoint);
+            _ = try fce.glyphInfoGetOrReplacement(cw.gpa, codepoint);
         }
     }
 
     // Generate new texture atlas if needed to update glyph uv coords
-    const texture_atlas = fce.getTextureAtlas() catch |err| switch (err) {
+    const texture_atlas = fce.getTextureAtlas(cw.gpa, cw.backend) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
             dvui.log.err("Could not get texture atlas for font {f}, text area marked in magenta, to display '{s}'", .{ opts.font.id, opts.text });
@@ -208,7 +208,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     while (i < opts.text.len) {
         const cplen = std.unicode.utf8ByteSequenceLength(opts.text[i]) catch unreachable;
         const codepoint = std.unicode.utf8Decode(opts.text[i..][0..cplen]) catch unreachable;
-        const gi = try fce.glyphInfoGetOrReplacement(codepoint);
+        const gi = try fce.glyphInfoGetOrReplacement(cw.gpa, codepoint);
 
         if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
             const kk = fce.kern(last_codepoint, codepoint);
