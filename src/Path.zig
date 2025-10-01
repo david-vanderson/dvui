@@ -357,38 +357,49 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
         return tempPath.build().fillConvexTriangles(allocator, .{ .color = opts.color, .fade = 1.0 });
     }
 
+    const Side = enum {
+        none,
+        left,
+        right,
+    };
+
     // a single segment can't be closed
     const closed: bool = if (path.points.len == 2) false else opts.closed;
 
-    var vtx_count = path.points.len * 4;
+    var vtx_count = path.points.len * 8;
     if (!closed) {
         vtx_count += 4;
     }
-    var idx_count = (path.points.len - 1) * 18;
+    // max is 18 per leg (2 tri fill plus 4 tri fade)
+    // plus (if miter is too long) 18 for fill and fade at each corner
+    var idx_count = (path.points.len - 1) * 18 + (path.points.len - 2) * 18;
     if (closed) {
-        idx_count += 18;
+        idx_count += 18 + 2 * 18;
     } else {
         idx_count += 8 * 3;
     }
 
     var builder = try Triangles.Builder.init(allocator, vtx_count, idx_count);
-    errdefer comptime unreachable; // No errors from this point on
 
     const col: Color.PMA = .fromColor(opts.color);
 
     const aa_size = 1.0;
-    var vtx_start: u16 = 0;
+    var vtx_left: u16 = 0;
+    var vtx_right: u16 = 0;
     var i: usize = 0;
-    while (i < path.points.len) : (i += 1) {
+    const last_i: usize = if (closed) path.points.len + 1 else path.points.len;
+    while (i < last_i) : (i += 1) {
         const ai: u16 = @intCast((i + path.points.len - 1) % path.points.len);
         const bi: u16 = @intCast(i % path.points.len);
         const ci: u16 = @intCast((i + 1) % path.points.len);
         const aa = path.points[ai];
         var bb = path.points[bi];
         const cc = path.points[ci];
+        var miter_break: Side = .none;
 
         // the amount to move from bb to the edge of the line
         var halfnorm: Point.Physical = undefined;
+        var halfnorm_miter: Point.Physical = undefined;
         var diffab: Point.Physical = undefined;
 
         if (!closed and ((i == 0) or ((i + 1) == path.points.len))) {
@@ -404,8 +415,6 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
                 }
 
                 // add 2 extra vertexes for endcap fringe
-                vtx_start += 2;
-
                 builder.appendVertex(.{
                     .pos = .{
                         .x = bb.x - halfnorm.x * (opts.thickness + aa_size) + diffbc.x * aa_size,
@@ -424,10 +433,10 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
 
                 // add indexes for endcap fringe
                 builder.appendTriangles(&.{
-                    0, vtx_start,         vtx_start + 1,
-                    0, 1,                 vtx_start,
-                    1, vtx_start + 2,     vtx_start,
-                    1, vtx_start + 2 + 1, vtx_start + 2,
+                    0, 2, 3,
+                    0, 1, 2,
+                    1, 4, 2,
+                    1, 5, 4,
                 });
             } else if ((i + 1) == path.points.len) {
                 diffab = aa.diff(bb).normalize();
@@ -451,69 +460,229 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
             const d2 = halfnorm.x * halfnorm.x + halfnorm.y * halfnorm.y;
             if (d2 > 0.000001) {
                 halfnorm = halfnorm.scale(0.5 / d2, Point.Physical);
+            } else {
+                // degenerate case - ab and bc are on top of each other
+                halfnorm = aa.diff(bb);
             }
 
             // limit distance our vertexes can be from the point to 2 * thickness so
             // very small angles don't produce huge geometries
             const l = halfnorm.length();
             if (l > 2.0) {
-                halfnorm = halfnorm.scale(2.0 / l, Point.Physical);
+                halfnorm_miter = halfnorm.scale(2.0 / l, Point.Physical);
+
+                const hn_len = halfnorm.length() * (opts.thickness + aa_size);
+                const ab_len = aa.diff(bb).length();
+                const bc_len = bb.diff(cc).length();
+                const max_len = @min(hn_len, ab_len, bc_len);
+                if (max_len < hn_len) {
+                    halfnorm = halfnorm.scale(max_len / hn_len, Point.Physical);
+                }
+
+                const dot = diffab.x * halfnorm.x + diffab.y * halfnorm.y;
+                if (dot > 0) {
+                    miter_break = .left;
+                } else {
+                    miter_break = .right;
+                }
             }
         }
 
-        // side 1 inner vertex
-        builder.appendVertex(.{
-            .pos = .{
-                .x = bb.x - halfnorm.x * opts.thickness,
-                .y = bb.y - halfnorm.y * opts.thickness,
-            },
-            .col = col,
-        });
+        const vtx_base: u16 = if (i == path.points.len) 0 else @intCast(builder.vertexes.items.len);
+        var vtx_left_in = vtx_base;
+        var vtx_right_in = vtx_left_in + 2;
 
-        // side 1 AA vertex
-        builder.appendVertex(.{
-            .pos = .{
-                .x = bb.x - halfnorm.x * (opts.thickness + aa_size),
-                .y = bb.y - halfnorm.y * (opts.thickness + aa_size),
-            },
-            .col = .transparent,
-        });
+        var vtx_left_out = vtx_left_in;
+        var vtx_right_out = vtx_right_in;
 
-        // side 2 inner vertex
-        builder.appendVertex(.{
-            .pos = .{
-                .x = bb.x + halfnorm.x * opts.thickness,
-                .y = bb.y + halfnorm.y * opts.thickness,
+        switch (miter_break) {
+            .none => {},
+            .left => {
+                vtx_left_in += 4;
+                vtx_left_out += 6;
             },
-            .col = col,
-        });
+            .right => {
+                vtx_right_in += 2;
+                vtx_right_out += 4;
+            },
+        }
 
-        // side 2 AA vertex
-        builder.appendVertex(.{
-            .pos = .{
-                .x = bb.x + halfnorm.x * (opts.thickness + aa_size),
-                .y = bb.y + halfnorm.y * (opts.thickness + aa_size),
-            },
-            .col = .transparent,
-        });
+        if (i < path.points.len) {
+            {
+                const hn = if (miter_break == .left) halfnorm_miter else halfnorm;
+                // left inner vertex
+                builder.appendVertex(.{
+                    .pos = .{
+                        .x = bb.x - hn.x * opts.thickness,
+                        .y = bb.y - hn.y * opts.thickness,
+                    },
+                    .col = col,
+                });
+
+                // left AA vertex
+                builder.appendVertex(.{
+                    .pos = .{
+                        .x = bb.x - hn.x * (opts.thickness + aa_size),
+                        .y = bb.y - hn.y * (opts.thickness + aa_size),
+                    },
+                    .col = .transparent,
+                });
+            }
+
+            {
+                const hn = if (miter_break == .right) halfnorm_miter else halfnorm;
+                // right inner vertex
+                builder.appendVertex(.{
+                    .pos = .{
+                        .x = bb.x + hn.x * opts.thickness,
+                        .y = bb.y + hn.y * opts.thickness,
+                    },
+                    .col = col,
+                });
+
+                // right AA vertex
+                builder.appendVertex(.{
+                    .pos = .{
+                        .x = bb.x + hn.x * (opts.thickness + aa_size),
+                        .y = bb.y + hn.y * (opts.thickness + aa_size),
+                    },
+                    .col = .transparent,
+                });
+            }
+
+            switch (miter_break) {
+                .none => {},
+                .left => {
+                    const hn = .{ .x = diffab.y / 2, .y = (-diffab.x) / 2 };
+
+                    // left bump start inner (vtx_left_in)
+                    builder.appendVertex(.{
+                        .pos = .{
+                            .x = bb.x - hn.x * opts.thickness,
+                            .y = bb.y - hn.y * opts.thickness,
+                        },
+                        .col = col,
+                    });
+
+                    // left bump start AA vertex
+                    builder.appendVertex(.{
+                        .pos = .{
+                            .x = bb.x - hn.x * (opts.thickness + aa_size),
+                            .y = bb.y - hn.y * (opts.thickness + aa_size),
+                        },
+                        .col = .transparent,
+                    });
+
+                    // right bump start inner (vtx_left_out)
+                    builder.appendVertex(.{
+                        .pos = .{
+                            .x = bb.x + hn.x * opts.thickness,
+                            .y = bb.y + hn.y * opts.thickness,
+                        },
+                        .col = col,
+                    });
+
+                    // right bump start AA vertex
+                    builder.appendVertex(.{
+                        .pos = .{
+                            .x = bb.x + hn.x * (opts.thickness + aa_size),
+                            .y = bb.y + hn.y * (opts.thickness + aa_size),
+                        },
+                        .col = .transparent,
+                    });
+
+                    // add triangles to fill the miter (counter clockwise y going down)
+                    builder.appendTriangles(&.{
+                        // indexes for fill
+                        vtx_left_in, vtx_base + 2,     vtx_base,
+                        vtx_base,    vtx_base + 2,     vtx_left_out,
+
+                        // aa fade
+                        vtx_left_in, vtx_base,         vtx_left_in + 1,
+                        vtx_base,    vtx_base + 1,     vtx_left_in + 1,
+
+                        vtx_base,    vtx_left_out,     vtx_left_out + 1,
+                        vtx_base,    vtx_left_out + 1, vtx_base + 1,
+                    });
+                },
+                .right => {
+                    const hn = .{ .x = diffab.y / 2, .y = (-diffab.x) / 2 };
+
+                    // right bump start inner (vtx_right_in)
+                    builder.appendVertex(.{
+                        .pos = .{
+                            .x = bb.x + hn.x * opts.thickness,
+                            .y = bb.y + hn.y * opts.thickness,
+                        },
+                        .col = col,
+                    });
+
+                    // right bump start AA vertex
+                    builder.appendVertex(.{
+                        .pos = .{
+                            .x = bb.x + hn.x * (opts.thickness + aa_size),
+                            .y = bb.y + hn.y * (opts.thickness + aa_size),
+                        },
+                        .col = .transparent,
+                    });
+
+                    // left bump start inner (vtx_right_out)
+                    builder.appendVertex(.{
+                        .pos = .{
+                            .x = bb.x - hn.x * opts.thickness,
+                            .y = bb.y - hn.y * opts.thickness,
+                        },
+                        .col = col,
+                    });
+
+                    // left bump start AA vertex
+                    builder.appendVertex(.{
+                        .pos = .{
+                            .x = bb.x - hn.x * (opts.thickness + aa_size),
+                            .y = bb.y - hn.y * (opts.thickness + aa_size),
+                        },
+                        .col = .transparent,
+                    });
+
+                    // add triangles to fill the miter (counter clockwise y going down)
+                    builder.appendTriangles(&.{
+                        // indexes for fill
+                        vtx_right_in,     vtx_base + 2,      vtx_base,
+                        vtx_base,         vtx_base + 2,      vtx_right_out,
+
+                        // aa fade
+                        vtx_right_in,     vtx_right_in + 1,  vtx_base + 2,
+                        vtx_right_in + 1, vtx_base + 3,      vtx_base + 2,
+
+                        vtx_base + 2,     vtx_base + 3,      vtx_right_out,
+                        vtx_base + 3,     vtx_right_out + 1, vtx_right_out,
+                    });
+                },
+            }
+        }
 
         // triangles must be counter-clockwise (y going down) to avoid backface culling
-        if (closed or ((i + 1) != path.points.len)) {
+        if ((i > 0) and (closed or (i < path.points.len))) {
+            // vtx1 wraps when closed
             builder.appendTriangles(&.{
                 // indexes for fill
-                vtx_start + bi * 4,     vtx_start + bi * 4 + 2, vtx_start + ci * 4,
-                vtx_start + bi * 4 + 2, vtx_start + ci * 4 + 2, vtx_start + ci * 4,
+                vtx_left,  vtx_right,        vtx_left_in,
+                vtx_right, vtx_right_in,     vtx_left_in,
 
-                // indexes for aa fade from inner to outer side 1
-                vtx_start + bi * 4,     vtx_start + ci * 4 + 1, vtx_start + bi * 4 + 1,
-                vtx_start + bi * 4,     vtx_start + ci * 4,     vtx_start + ci * 4 + 1,
+                // indexes for aa fade from inner to outer left side
+                vtx_left,  vtx_left_in + 1,  vtx_left + 1,
+                vtx_left,  vtx_left_in,      vtx_left_in + 1,
 
-                // indexes for aa fade from inner to outer side 2
-                vtx_start + bi * 4 + 2, vtx_start + bi * 4 + 3, vtx_start + ci * 4 + 3,
-                vtx_start + bi * 4 + 2, vtx_start + ci * 4 + 3, vtx_start + ci * 4 + 2,
+                // indexes for aa fade from inner to outer right side
+                vtx_right, vtx_right + 1,    vtx_right_in + 1,
+                vtx_right, vtx_right_in + 1, vtx_right_in,
             });
-        } else if (!closed and (i + 1) == path.points.len) {
+        }
+
+        if (!closed and (i + 1) == path.points.len) {
             // add 2 extra vertexes for endcap fringe
+
+            const vtx: u16 = @intCast(builder.vertexes.items.len);
             builder.appendVertex(.{
                 .pos = .{
                     .x = bb.x - halfnorm.x * (opts.thickness + aa_size) - diffab.x * aa_size,
@@ -531,12 +700,15 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
 
             builder.appendTriangles(&.{
                 // add indexes for endcap fringe
-                vtx_start + bi * 4,     vtx_start + bi * 4 + 4, vtx_start + bi * 4 + 1,
-                vtx_start + bi * 4 + 4, vtx_start + bi * 4,     vtx_start + bi * 4 + 2,
-                vtx_start + bi * 4 + 4, vtx_start + bi * 4 + 2, vtx_start + bi * 4 + 5,
-                vtx_start + bi * 4 + 2, vtx_start + bi * 4 + 3, vtx_start + bi * 4 + 5,
+                vtx_left_in,  vtx,              vtx_left_in + 1,
+                vtx,          vtx_left_in,      vtx_right_in,
+                vtx,          vtx_right_in,     vtx + 1,
+                vtx_right_in, vtx_right_in + 1, vtx + 1,
             });
         }
+
+        vtx_left = vtx_left_out;
+        vtx_right = vtx_right_out;
     }
 
     return builder.build();

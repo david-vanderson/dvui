@@ -63,8 +63,6 @@ pub const Builder = struct {
     /// The memory ownership is transferred to `Triangles`.
     /// making `Builder.deinit` unnecessary, but safe, to call
     pub fn build(self: *Builder) Triangles {
-        std.debug.assert(self.vertexes.items.len == self.vertexes.capacity);
-        std.debug.assert(self.indices.items.len == self.indices.capacity);
         defer self.* = .{ .vertexes = .empty, .indices = .empty };
         // Ownership is transferred as the the full allocated slices are returned
         return self.build_unowned();
