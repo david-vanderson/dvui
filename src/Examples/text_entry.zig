@@ -160,11 +160,11 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
         }
     };
 
-    var font_entries: []Sfont.FontNameId = dvui.currentWindow().lifo().alloc(Sfont.FontNameId, dvui.currentWindow().font_bytes.count() + 1) catch &.{};
+    var font_entries: []Sfont.FontNameId = dvui.currentWindow().lifo().alloc(Sfont.FontNameId, dvui.currentWindow().fonts.database.count() + 1) catch &.{};
     defer dvui.currentWindow().lifo().free(font_entries);
     if (font_entries.len > 0) {
         font_entries[0] = .{ "Theme Body", null };
-        var it = dvui.currentWindow().font_bytes.iterator();
+        var it = dvui.currentWindow().fonts.database.iterator();
         var i: usize = 0;
         while (it.next()) |entry| {
             i += 1;
@@ -318,7 +318,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
                 if (name.len == 0) {
                     dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Add a Name" });
                     name_error.* = true;
-                } else if (dvui.currentWindow().font_bytes.contains(.fromName(name))) {
+                } else if (dvui.currentWindow().fonts.database.contains(.fromName(name))) {
                     const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Already have font named \"{s}\"", .{name}) catch name;
                     defer dvui.currentWindow().lifo().free(msg);
                     dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = msg });
@@ -346,7 +346,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
                     if (bytes) |b| blk: {
                         dvui.addFont(name, b, dvui.currentWindow().gpa) catch |err| switch (err) {
                             error.OutOfMemory => @panic("OOM"),
-                            error.fontError => {
+                            error.FontError => {
                                 dvui.currentWindow().gpa.free(b);
                                 const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "\"{s}\" is not a valid font", .{filename}) catch filename;
                                 defer dvui.currentWindow().lifo().free(msg);
