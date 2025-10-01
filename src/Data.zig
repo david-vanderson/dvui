@@ -185,14 +185,12 @@ pub fn remove(self: *Data, gpa: std.mem.Allocator, key: Key) std.mem.Allocator.E
 
 /// Destroys all unused and trashed textures since the last
 /// call to `reset`
-pub fn reset(self: *Data, gpa: std.mem.Allocator) std.mem.Allocator.Error!void {
-    const keys = try self.storage.reset(gpa);
-    defer gpa.free(keys);
+pub fn reset(self: *Data, gpa: std.mem.Allocator) void {
     self.mutex.lock();
     defer self.mutex.unlock();
-    errdefer comptime unreachable;
-    for (keys) |key| {
-        self.storage.fetchRemove(key).?.value.free(gpa);
+    var it = self.storage.iterator();
+    while (it.next_resetting()) |kv| {
+        kv.value.free(gpa);
     }
     for (self.trash.items) |sd| {
         sd.free(gpa);
