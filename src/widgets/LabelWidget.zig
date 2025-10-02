@@ -125,7 +125,9 @@ pub fn draw(self: *LabelWidget) void {
 
         const ellip = "...";
         var ellipsize = false;
-        if (self.init_options.ellipsize and tsize.w > self.data().contentRect().w) {
+        // give ourselves a fraction of a pixel extra for floating point innacurracies:
+        // - a lot of times the content Rect is sized based on the text width
+        if (self.init_options.ellipsize and tsize.w > (self.data().contentRect().w + 0.001)) {
             ellipsize = true;
             const esize = self.data().options.fontGet().textSize(ellip);
             var endi: usize = 0;
