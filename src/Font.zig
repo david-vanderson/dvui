@@ -301,6 +301,8 @@ pub const Cache = struct {
             if (font.id == Font.default_font_id) {
                 @panic("Default font could not be loaded");
             }
+            // Remove the invalid font cache entry
+            self.cache.map.removeByPtr(entry.key_ptr);
             return self.getOrCreate(gpa, font.switchFont(Font.default_font_id));
         };
         //log.debug("- size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
