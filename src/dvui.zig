@@ -286,7 +286,7 @@ pub var ft2lib: if (useFreeType) c.FT_Library else void = undefined;
 pub const Error = std.mem.Allocator.Error || StbImageError || TvgError || FontError;
 pub const TvgError = error{tvgError};
 pub const StbImageError = error{stbImageError};
-pub const FontError = error{fontError};
+pub const FontError = Font.Error;
 
 pub const log = std.log.scoped(.dvui);
 const dvui = @This();
@@ -486,14 +486,10 @@ pub fn frameTimeNS() i128 {
     return currentWindow().frame_time_ns;
 }
 
+/// DEPRECATED: Use `Font.Cache.TTFEntry` directly
+///
 /// The bytes of a truetype font file and whether to free it.
-pub const FontBytesEntry = struct {
-    ttf_bytes: []const u8,
-    name: []const u8,
-
-    /// If not null, this will be used to free ttf_bytes.
-    allocator: ?std.mem.Allocator,
-};
+pub const FontBytesEntry = Font.Cache.TTFEntry;
 
 /// Add font to be referenced later by name.
 ///
@@ -505,648 +501,32 @@ pub const FontBytesEntry = struct {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?std.mem.Allocator) (std.mem.Allocator.Error || FontError)!void {
     var cw = currentWindow();
-
+    try cw.fonts.database.ensureUnusedCapacity(cw.gpa, 1);
     // Test if we can successfully open this font
-    const id = Font.FontId.fromName(name);
-    _ = try fontCacheInit(ttf_bytes, .{ .id = id, .size = 14 }, name);
-    try cw.font_bytes.put(cw.gpa, id, FontBytesEntry{
+    // TODO: Find some more elegant way of validating ttf files
+    const font = Font{ .id = .fromName(name), .size = 14 };
+    var entry = try Font.Cache.Entry.init(ttf_bytes, font, name);
+    // Try and cache the entry since the work is already done
+    cw.fonts.cache.put(cw.gpa, font.hash(), entry) catch entry.deinit(cw.gpa, cw.backend);
+    cw.fonts.database.putAssumeCapacity(font.id, .{
         .name = name,
-        .ttf_bytes = ttf_bytes,
+        .bytes = ttf_bytes,
         .allocator = ttf_bytes_allocator,
     });
 }
 
-const GlyphInfo = struct {
-    advance: f32, // horizontal distance to move the pen
-    leftBearing: f32, // horizontal distance from pen to bounding box left edge
-    topBearing: f32, // vertical distance from font ascent to bounding box top edge
-    w: f32, // width of bounding box
-    h: f32, // height of bounding box
-    uv: @Vector(2, f32),
-};
-
-pub const FontCacheEntry = struct {
-    const ascii_size = 127;
-    face: if (useFreeType) c.FT_Face else c.stbtt_fontinfo,
-    // This name should come from `Window.font_bytes` and lives as long as it does
-    name: []const u8,
-    scaleFactor: f32,
-    height: f32,
-    ascent: f32,
-    glyph_info: std.AutoHashMap(u32, GlyphInfo),
-    glyph_info_ascii: [ascii_size]GlyphInfo,
-    texture_atlas_cache: ?Texture = null,
-
-    pub fn deinit(self: *FontCacheEntry, win: *Window) void {
-        defer self.* = undefined;
-        self.glyph_info.deinit();
-        if (useFreeType) {
-            _ = c.FT_Done_Face(self.face);
-        }
-        if (self.texture_atlas_cache) |tex| win.backend.textureDestroy(tex);
-    }
-
-    pub const OpenFlags = packed struct(c_int) {
-        memory: bool = false,
-        stream: bool = false,
-        path: bool = false,
-        driver: bool = false,
-        params: bool = false,
-        _padding: u27 = 0,
-    };
-
-    pub const LoadFlags = packed struct(c_int) {
-        no_scale: bool = false,
-        no_hinting: bool = false,
-        render: bool = false,
-        no_bitmap: bool = false,
-        vertical_layout: bool = false,
-        force_autohint: bool = false,
-        crop_bitmap: bool = false,
-        pedantic: bool = false,
-        ignore_global_advance_with: bool = false,
-        no_recurse: bool = false,
-        ignore_transform: bool = false,
-        monochrome: bool = false,
-        linear_design: bool = false,
-        no_autohint: bool = false,
-        _padding: u1 = 0,
-        target_normal: bool = false,
-        target_light: bool = false,
-        target_mono: bool = false,
-        target_lcd: bool = false,
-        target_lcd_v: bool = false,
-        color: bool = false,
-        compute_metrics: bool = false,
-        bitmap_metrics_only: bool = false,
-        _padding0: u9 = 0,
-    };
-
-    pub fn intToError(err: c_int) !void {
-        return switch (err) {
-            c.FT_Err_Ok => {},
-            c.FT_Err_Cannot_Open_Resource => error.CannotOpenResource,
-            c.FT_Err_Unknown_File_Format => error.UnknownFileFormat,
-            c.FT_Err_Invalid_File_Format => error.InvalidFileFormat,
-            c.FT_Err_Invalid_Version => error.InvalidVersion,
-            c.FT_Err_Lower_Module_Version => error.LowerModuleVersion,
-            c.FT_Err_Invalid_Argument => error.InvalidArgument,
-            c.FT_Err_Unimplemented_Feature => error.UnimplementedFeature,
-            c.FT_Err_Invalid_Table => error.InvalidTable,
-            c.FT_Err_Invalid_Offset => error.InvalidOffset,
-            c.FT_Err_Array_Too_Large => error.ArrayTooLarge,
-            c.FT_Err_Missing_Module => error.MissingModule,
-            c.FT_Err_Missing_Property => error.MissingProperty,
-            c.FT_Err_Invalid_Glyph_Index => error.InvalidGlyphIndex,
-            c.FT_Err_Invalid_Character_Code => error.InvalidCharacterCode,
-            c.FT_Err_Invalid_Glyph_Format => error.InvalidGlyphFormat,
-            c.FT_Err_Cannot_Render_Glyph => error.CannotRenderGlyph,
-            c.FT_Err_Invalid_Outline => error.InvalidOutline,
-            c.FT_Err_Invalid_Composite => error.InvalidComposite,
-            c.FT_Err_Too_Many_Hints => error.TooManyHints,
-            c.FT_Err_Invalid_Pixel_Size => error.InvalidPixelSize,
-            c.FT_Err_Invalid_Handle => error.InvalidHandle,
-            c.FT_Err_Invalid_Library_Handle => error.InvalidLibraryHandle,
-            c.FT_Err_Invalid_Driver_Handle => error.InvalidDriverHandle,
-            c.FT_Err_Invalid_Face_Handle => error.InvalidFaceHandle,
-            c.FT_Err_Invalid_Size_Handle => error.InvalidSizeHandle,
-            c.FT_Err_Invalid_Slot_Handle => error.InvalidSlotHandle,
-            c.FT_Err_Invalid_CharMap_Handle => error.InvalidCharMapHandle,
-            c.FT_Err_Invalid_Cache_Handle => error.InvalidCacheHandle,
-            c.FT_Err_Invalid_Stream_Handle => error.InvalidStreamHandle,
-            c.FT_Err_Too_Many_Drivers => error.TooManyDrivers,
-            c.FT_Err_Too_Many_Extensions => error.TooManyExtensions,
-            c.FT_Err_Out_Of_Memory => error.OutOfMemory,
-            c.FT_Err_Unlisted_Object => error.UnlistedObject,
-            c.FT_Err_Cannot_Open_Stream => error.CannotOpenStream,
-            c.FT_Err_Invalid_Stream_Seek => error.InvalidStreamSeek,
-            c.FT_Err_Invalid_Stream_Skip => error.InvalidStreamSkip,
-            c.FT_Err_Invalid_Stream_Read => error.InvalidStreamRead,
-            c.FT_Err_Invalid_Stream_Operation => error.InvalidStreamOperation,
-            c.FT_Err_Invalid_Frame_Operation => error.InvalidFrameOperation,
-            c.FT_Err_Nested_Frame_Access => error.NestedFrameAccess,
-            c.FT_Err_Invalid_Frame_Read => error.InvalidFrameRead,
-            c.FT_Err_Raster_Uninitialized => error.RasterUninitialized,
-            c.FT_Err_Raster_Corrupted => error.RasterCorrupted,
-            c.FT_Err_Raster_Overflow => error.RasterOverflow,
-            c.FT_Err_Raster_Negative_Height => error.RasterNegativeHeight,
-            c.FT_Err_Too_Many_Caches => error.TooManyCaches,
-            c.FT_Err_Invalid_Opcode => error.InvalidOpcode,
-            c.FT_Err_Too_Few_Arguments => error.TooFewArguments,
-            c.FT_Err_Stack_Overflow => error.StackOverflow,
-            c.FT_Err_Code_Overflow => error.CodeOverflow,
-            c.FT_Err_Bad_Argument => error.BadArgument,
-            c.FT_Err_Divide_By_Zero => error.DivideByZero,
-            c.FT_Err_Invalid_Reference => error.InvalidReference,
-            c.FT_Err_Debug_OpCode => error.DebugOpCode,
-            c.FT_Err_ENDF_In_Exec_Stream => error.ENDFInExecStream,
-            c.FT_Err_Nested_DEFS => error.NestedDEFS,
-            c.FT_Err_Invalid_CodeRange => error.InvalidCodeRange,
-            c.FT_Err_Execution_Too_Long => error.ExecutionTooLong,
-            c.FT_Err_Too_Many_Function_Defs => error.TooManyFunctionDefs,
-            c.FT_Err_Too_Many_Instruction_Defs => error.TooManyInstructionDefs,
-            c.FT_Err_Table_Missing => error.TableMissing,
-            c.FT_Err_Horiz_Header_Missing => error.HorizHeaderMissing,
-            c.FT_Err_Locations_Missing => error.LocationsMissing,
-            c.FT_Err_Name_Table_Missing => error.NameTableMissing,
-            c.FT_Err_CMap_Table_Missing => error.CMapTableMissing,
-            c.FT_Err_Hmtx_Table_Missing => error.HmtxTableMissing,
-            c.FT_Err_Post_Table_Missing => error.PostTableMissing,
-            c.FT_Err_Invalid_Horiz_Metrics => error.InvalidHorizMetrics,
-            c.FT_Err_Invalid_CharMap_Format => error.InvalidCharMapFormat,
-            c.FT_Err_Invalid_PPem => error.InvalidPPem,
-            c.FT_Err_Invalid_Vert_Metrics => error.InvalidVertMetrics,
-            c.FT_Err_Could_Not_Find_Context => error.CouldNotFindContext,
-            c.FT_Err_Invalid_Post_Table_Format => error.InvalidPostTableFormat,
-            c.FT_Err_Invalid_Post_Table => error.InvalidPostTable,
-            c.FT_Err_Syntax_Error => error.Syntax,
-            c.FT_Err_Stack_Underflow => error.StackUnderflow,
-            c.FT_Err_Ignore => error.Ignore,
-            c.FT_Err_No_Unicode_Glyph_Name => error.NoUnicodeGlyphName,
-            c.FT_Err_Missing_Startfont_Field => error.MissingStartfontField,
-            c.FT_Err_Missing_Font_Field => error.MissingFontField,
-            c.FT_Err_Missing_Size_Field => error.MissingSizeField,
-            c.FT_Err_Missing_Fontboundingbox_Field => error.MissingFontboundingboxField,
-            c.FT_Err_Missing_Chars_Field => error.MissingCharsField,
-            c.FT_Err_Missing_Startchar_Field => error.MissingStartcharField,
-            c.FT_Err_Missing_Encoding_Field => error.MissingEncodingField,
-            c.FT_Err_Missing_Bbx_Field => error.MissingBbxField,
-            c.FT_Err_Bbx_Too_Big => error.BbxTooBig,
-            c.FT_Err_Corrupted_Font_Header => error.CorruptedFontHeader,
-            c.FT_Err_Corrupted_Font_Glyphs => error.CorruptedFontGlyphs,
-            else => unreachable,
-        };
-    }
-
-    pub fn invalidateTextureAtlas(self: *FontCacheEntry) void {
-        if (self.texture_atlas_cache) |tex| {
-            dvui.textureDestroyLater(tex);
-        }
-        self.texture_atlas_cache = null;
-    }
-
-    /// This needs to be called before rendering of glyphs as the uv coordinates
-    /// of the glyphs will not be correct if the atlas needs to be generated.
-    pub fn getTextureAtlas(fce: *FontCacheEntry) Backend.TextureError!Texture {
-        if (fce.texture_atlas_cache) |tex| return tex;
-
-        // number of extra pixels to add on each side of each glyph
-        const pad = 1;
-
-        const total = fce.glyph_info_ascii.len + fce.glyph_info.count();
-        const row_glyphs = @as(u32, @intFromFloat(@ceil(@sqrt(@as(f32, @floatFromInt(total))))));
-
-        var size = Size{};
-        {
-            var i: u32 = 0;
-            var rowlen: f32 = 0;
-            var it = fce.glyph_info.valueIterator();
-
-            while (i < total) {
-                if (i % row_glyphs == 0) {
-                    size.w = @max(size.w, rowlen);
-                    size.h += fce.height + 2 * pad;
-                    rowlen = 0;
-                }
-
-                const gi = if (i < fce.glyph_info_ascii.len) &fce.glyph_info_ascii[i] else it.next().?;
-
-                rowlen += gi.w + 2 * pad;
-
-                i += 1;
-            } else {
-                size.w = @max(size.w, rowlen);
-            }
-
-            size = size.ceil();
-        }
-
-        // also add an extra padding around whole texture
-        size.w += 2 * pad;
-        size.h += 2 * pad;
-
-        const cw = currentWindow();
-
-        var pixels = try cw.lifo().alloc(Color.PMA, @as(usize, @intFromFloat(size.w * size.h)));
-        defer cw.lifo().free(pixels);
-        // set all pixels to zero alpha
-        @memset(pixels, .transparent);
-
-        //const num_glyphs = fce.glyph_info.count();
-        //std.debug.print("font size {d} regen glyph atlas num {d} max size {}\n", .{ sized_font.size, num_glyphs, size });
-
-        var x: i32 = pad;
-        var y: i32 = pad;
-        var it = fce.glyph_info.iterator();
-        var i: u32 = 0;
-        while (i < total) {
-            var gi, const codepoint = if (i < fce.glyph_info_ascii.len) .{ &fce.glyph_info_ascii[i], i } else blk: {
-                const e = it.next().?;
-                break :blk .{ e.value_ptr, e.key_ptr.* };
-            };
-
-            gi.uv[0] = @as(f32, @floatFromInt(x + pad)) / size.w;
-            gi.uv[1] = @as(f32, @floatFromInt(y + pad)) / size.h;
-
-            if (useFreeType) blk: {
-                FontCacheEntry.intToError(c.FT_Load_Char(fce.face, codepoint, @as(i32, @bitCast(FontCacheEntry.LoadFlags{ .render = true })))) catch |err| {
-                    log.warn("renderText: freetype error {any} trying to FT_Load_Char codepoint {d}", .{ err, codepoint });
-                    break :blk; // will skip the failing glyph
-                };
-
-                // https://freetype.org/freetype2/docs/tutorial/step1.html#section-6
-                if (fce.face.*.glyph.*.format != c.FT_GLYPH_FORMAT_BITMAP) {
-                    FontCacheEntry.intToError(c.FT_Render_Glyph(fce.face.*.glyph, c.FT_RENDER_MODE_NORMAL)) catch |err| {
-                        log.warn("renderText freetype error {any} trying to FT_Render_Glyph codepoint {d}", .{ err, codepoint });
-                        break :blk; // will skip the failing glyph
-                    };
-                }
-
-                const bitmap = fce.face.*.glyph.*.bitmap;
-                var row: i32 = 0;
-                while (row < bitmap.rows) : (row += 1) {
-                    var col: i32 = 0;
-                    while (col < bitmap.width) : (col += 1) {
-                        const src = bitmap.buffer[@as(usize, @intCast(row * bitmap.pitch + col))];
-
-                        // because of the extra edge, offset by 1 row and 1 col
-                        const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(size.w)) + (x + col + pad)));
-
-                        // premultiplied white
-                        pixels[di] = .{ .r = src, .g = src, .b = src, .a = src };
-                    }
-                }
-            } else {
-                const out_w: u32 = @intFromFloat(gi.w);
-                const out_h: u32 = @intFromFloat(gi.h);
-
-                // single channel
-                const bitmap = try cw.lifo().alloc(u8, @as(usize, out_w * out_h));
-                defer cw.lifo().free(bitmap);
-
-                //log.debug("makecodepointBitmap size x {d} y {d} w {d} h {d} out w {d} h {d}", .{ x, y, size.w, size.h, out_w, out_h });
-
-                c.stbtt_MakeCodepointBitmapSubpixel(&fce.face, bitmap.ptr, @as(c_int, @intCast(out_w)), @as(c_int, @intCast(out_h)), @as(c_int, @intCast(out_w)), fce.scaleFactor, fce.scaleFactor, 0.0, 0.0, @as(c_int, @intCast(codepoint)));
-
-                const stride = @as(usize, @intFromFloat(size.w));
-                const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x));
-                for (0..out_h) |row| {
-                    for (0..out_w) |col| {
-                        const src = bitmap[row * out_w + col];
-                        const dest = di + (row + pad) * stride + (col + pad);
-
-                        // premultiplied white
-                        pixels[dest] = .{ .r = src, .g = src, .b = src, .a = src };
-                    }
-                }
-            }
-
-            x += @as(i32, @intFromFloat(gi.w)) + 2 * pad;
-
-            i += 1;
-            if (i % row_glyphs == 0) {
-                x = pad;
-                y += @as(i32, @intFromFloat(fce.height)) + 2 * pad;
-            }
-        }
-
-        fce.texture_atlas_cache = try textureCreate(pixels, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
-        return fce.texture_atlas_cache.?;
-    }
-
-    /// If a codepoint is missing in the font it gets the glyph for
-    /// `std.unicode.replacement_character`
-    pub fn glyphInfoGetOrReplacement(self: *FontCacheEntry, codepoint: u32) std.mem.Allocator.Error!GlyphInfo {
-        return self.glyphInfoGet(codepoint) catch |err| switch (err) {
-            FontError.fontError => self.glyphInfoGet(std.unicode.replacement_character) catch unreachable,
-            else => |e| e,
-        };
-    }
-
-    pub fn glyphInfoGet(self: *FontCacheEntry, codepoint: u32) (std.mem.Allocator.Error || FontError)!GlyphInfo {
-        if (codepoint < self.glyph_info_ascii.len)
-            return self.glyph_info_ascii[codepoint];
-
-        if (self.glyph_info.get(codepoint)) |gi| return gi;
-
-        const gi = try self.glyphInfoGenerate(codepoint);
-
-        // new glyph, need to regen texture atlas on next render
-        //std.debug.print("new glyph {}\n", .{codepoint});
-        self.invalidateTextureAtlas();
-
-        try self.glyph_info.put(codepoint, gi);
-        return gi;
-    }
-
-    pub fn glyphInfoGenerate(self: *FontCacheEntry, codepoint: u32) FontError!GlyphInfo {
-        var gi: GlyphInfo = undefined;
-
-        if (useFreeType) {
-            FontCacheEntry.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(LoadFlags{ .render = false })))) catch |err| {
-                log.warn("glyphInfoGet freetype error {any} font {s} codepoint {d}\n", .{ err, self.name, codepoint });
-                return FontError.fontError;
-            };
-
-            const m = self.face.*.glyph.*.metrics;
-            const minx = @as(f32, @floatFromInt(m.horiBearingX)) / 64.0;
-            const miny = self.ascent - @as(f32, @floatFromInt(m.horiBearingY)) / 64.0;
-
-            gi = GlyphInfo{
-                .advance = @ceil(@as(f32, @floatFromInt(m.horiAdvance)) / 64.0),
-                .leftBearing = @floor(minx),
-                .topBearing = @floor(miny),
-                .w = @ceil(minx + @as(f32, @floatFromInt(m.width)) / 64.0) - @floor(minx),
-                .h = @ceil(miny + @as(f32, @floatFromInt(m.height)) / 64.0) - @floor(miny),
-                .uv = .{ 0, 0 },
-            };
-        } else {
-            var advanceWidth: c_int = undefined;
-            var leftSideBearing: c_int = undefined;
-            c.stbtt_GetCodepointHMetrics(&self.face, @as(c_int, @intCast(codepoint)), &advanceWidth, &leftSideBearing);
-            var ix0: c_int = undefined;
-            var iy0: c_int = undefined;
-            var ix1: c_int = undefined;
-            var iy1: c_int = undefined;
-            const ret = c.stbtt_GetCodepointBox(&self.face, @as(c_int, @intCast(codepoint)), &ix0, &iy0, &ix1, &iy1);
-            const x0: f32 = if (ret == 0) 0 else self.scaleFactor * @as(f32, @floatFromInt(ix0));
-            const y0: f32 = if (ret == 0) 0 else self.scaleFactor * @as(f32, @floatFromInt(iy0));
-            const x1: f32 = if (ret == 0) 0 else self.scaleFactor * @as(f32, @floatFromInt(ix1));
-            const y1: f32 = if (ret == 0) 0 else self.scaleFactor * @as(f32, @floatFromInt(iy1));
-
-            //std.debug.print("{d} codepoint {d} stbtt x0 {d} {d} x1 {d} {d} y0 {d} {d} y1 {d} {d}\n", .{ self.ascent, codepoint, ix0, x0, ix1, x1, iy0, y0, iy1, y1 });
-
-            gi = GlyphInfo{
-                .advance = self.scaleFactor * @as(f32, @floatFromInt(advanceWidth)),
-                .leftBearing = @floor(x0),
-                .topBearing = self.ascent - @ceil(y1),
-                .w = @ceil(x1) - @floor(x0),
-                .h = @ceil(y1) - @floor(y0),
-                .uv = .{ 0, 0 },
-            };
-        }
-
-        //std.debug.print("codepoint {d} advance {d} leftBearing {d} topBearing {d} w {d} h {d}\n", .{ codepoint, gi.advance, gi.leftBearing, gi.topBearing, gi.w, gi.h });
-
-        return gi;
-    }
-
-    pub fn kern(fce: *FontCacheEntry, codepoint1: u32, codepoint2: u32) f32 {
-        if (useFreeType) {
-            const index1 = c.FT_Get_Char_Index(fce.face, codepoint1);
-            const index2 = c.FT_Get_Char_Index(fce.face, codepoint2);
-            var k: c.FT_Vector = undefined;
-            FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, index1, index2, c.FT_KERNING_DEFAULT, &k)) catch |err| {
-                log.warn("renderText freetype error {any} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, fce.name, codepoint1, codepoint2 });
-                k.x = 0;
-                k.y = 0;
-            };
-
-            return @as(f32, @floatFromInt(k.x)) / 64.0;
-        } else {
-            const kern_adv: c_int = c.stbtt_GetCodepointKernAdvance(&fce.face, @as(c_int, @intCast(codepoint1)), @as(c_int, @intCast(codepoint2)));
-            return fce.scaleFactor * @as(f32, @floatFromInt(kern_adv));
-        }
-    }
-
-    /// Doesn't scale the font or max_width, always stops at newlines
-    ///
-    /// Assumes the text is valid utf8. Will exit early with non-full
-    /// size on invalid utf8
-    pub fn textSizeRaw(
-        fce: *FontCacheEntry,
-        text: []const u8,
-        opts: Font.TextSizeOptions,
-    ) std.mem.Allocator.Error!Size {
-        const mwidth = opts.max_width orelse max_float_safe;
-
-        var x: f32 = 0;
-        var minx: f32 = 0;
-        var maxx: f32 = 0;
-        var miny: f32 = 0;
-        var maxy: f32 = fce.height;
-        var tw: f32 = 0;
-        var th: f32 = fce.height;
-
-        var ei: usize = 0;
-        var nearest_break: bool = false;
-
-        const kerning: bool = opts.kerning orelse currentWindow().kerning;
-        var last_codepoint: u32 = 0;
-        var next_kern_idx: u32 = 0;
-        var next_kern_byte: u32 = 0;
-        if (opts.kern_in) |ki| {
-            next_kern_byte = ki[next_kern_idx];
-            next_kern_idx += 1;
-        }
-
-        var i: usize = 0;
-        while (i < text.len) {
-            const cplen = std.unicode.utf8ByteSequenceLength(text[i]) catch unreachable;
-            const codepoint = std.unicode.utf8Decode(text[i..][0..cplen]) catch unreachable;
-            const gi = try fce.glyphInfoGetOrReplacement(codepoint);
-
-            if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
-                const kk = fce.kern(last_codepoint, codepoint);
-                x += kk;
-
-                if (opts.kern_in) |ki| {
-                    if (next_kern_idx < ki.len) {
-                        next_kern_byte = ki[next_kern_idx];
-                        next_kern_idx += 1;
-                    }
-                }
-
-                if (kk != 0) {
-                    if (opts.kern_out) |ko| {
-                        // fill in first 0
-                        for (ko) |*k| {
-                            if (k.* == 0) {
-                                k.* = @intCast(i);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            i += cplen;
-            last_codepoint = codepoint;
-
-            minx = @min(minx, x + gi.leftBearing);
-            maxx = @max(maxx, x + gi.leftBearing + gi.w);
-            maxx = @max(maxx, x + gi.advance);
-
-            miny = @min(miny, gi.topBearing);
-            maxy = @max(maxy, gi.topBearing + gi.h);
-
-            if (codepoint == '\n') {
-                // newlines always terminate, and don't use any space
-                ei += 1;
-                break;
-            }
-
-            if ((maxx - minx) > mwidth) {
-                switch (opts.end_metric) {
-                    .before => break, // went too far
-                    .nearest => {
-                        if ((maxx - minx) - mwidth >= mwidth - tw) {
-                            break; // current one is closest
-                        } else {
-                            // get the next glyph and then break
-                            nearest_break = true;
-                        }
-                    },
-                }
-            }
-
-            // record that we processed this codepoint
-            ei += cplen;
-
-            // update space taken by glyph
-            tw = maxx - minx;
-            th = maxy - miny;
-            x += gi.advance;
-
-            if (nearest_break) break;
-        }
-
-        // TODO: xstart and ystart
-
-        if (opts.end_idx) |endout| {
-            endout.* = ei;
-        }
-
-        if (opts.kern_out) |ko| {
-            // fill in first 0
-            for (ko) |*k| {
-                if (k.* == 0) {
-                    k.* = @intCast(i);
-                    break;
-                }
-            }
-        }
-
-        //std.debug.print("textSizeRaw size {d} for \"{s}\" {d}x{d} {d}\n", .{ self.size, text, tw, th, ei });
-        return Size{ .w = tw, .h = th };
-    }
-};
+/// DEPRECATED: Use `Font.Cache.Entry` directly
+pub const FontCacheEntry = Font.Cache.Entry;
 
 // Get or load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
-pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*FontCacheEntry {
-    var cw = currentWindow();
-    const fontHash = font.hash();
-    if (cw.font_cache.getPtr(fontHash)) |fce| return fce;
-
-    const ttf_bytes, const name = if (cw.font_bytes.get(font.id)) |fbe|
-        .{ fbe.ttf_bytes, fbe.name }
-    else blk: {
-        log.warn("Font {f} not in dvui database, using default", .{font.id});
-        break :blk .{ Font.default_ttf_bytes, @tagName(Font.default_font_id) };
-    };
-    //log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
-
-    const entry = fontCacheInit(ttf_bytes, font, name) catch {
-        if (font.id == Font.default_font_id) {
-            @panic("Default font could not be loaded");
-        }
-        return fontCacheGet(font.switchFont(Font.default_font_id));
-    };
-
-    //log.debug("- size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
-
-    try cw.font_cache.putNoClobber(cw.gpa, fontHash, entry);
-    return cw.font_cache.getPtr(fontHash).?;
+pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*Font.Cache.Entry {
+    const cw = currentWindow();
+    return cw.fonts.getOrCreate(cw.gpa, font);
 }
 
 // Load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
-pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontError!FontCacheEntry {
-    const min_pixel_size = 1;
-
-    if (useFreeType) {
-        var face: c.FT_Face = undefined;
-        var args: c.FT_Open_Args = undefined;
-        args.flags = @as(u32, @bitCast(FontCacheEntry.OpenFlags{ .memory = true }));
-        args.memory_base = ttf_bytes.ptr;
-        args.memory_size = @as(u31, @intCast(ttf_bytes.len));
-        FontCacheEntry.intToError(c.FT_Open_Face(ft2lib, &args, 0, &face)) catch |err| {
-            log.warn("fontCacheInit freetype error {any} trying to FT_Open_Face font {s}\n", .{ err, name });
-            return FontError.fontError;
-        };
-
-        // "pixel size" for freetype doesn't actually mean you'll get that height, it's more like using pts
-        // so we search for a font that has a height <= font.size
-        var pixel_size = @as(u32, @intFromFloat(@max(min_pixel_size, @floor(font.size))));
-
-        while (true) : (pixel_size -= 1) {
-            FontCacheEntry.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
-                log.warn("fontCacheInit freetype error {any} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, name });
-                return FontError.fontError;
-            };
-
-            const ascender = @as(f32, @floatFromInt(face.*.ascender)) / 64.0;
-            const ss = @as(f32, @floatFromInt(face.*.size.*.metrics.y_scale)) / 0x10000;
-            const ascent = ascender * ss;
-            const height = @as(f32, @floatFromInt(face.*.size.*.metrics.height)) / 64.0;
-
-            //std.debug.print("height {d} -> pixel_size {d}\n", .{ height, pixel_size });
-
-            if (height <= font.size or pixel_size == min_pixel_size) {
-                var ret = FontCacheEntry{
-                    .face = face,
-                    .name = name,
-                    .scaleFactor = 1.0, // not used with freetype
-                    .height = @ceil(height),
-                    .ascent = @floor(ascent),
-                    .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(currentWindow().gpa),
-                    .glyph_info_ascii = undefined,
-                };
-
-                for (0..ret.glyph_info_ascii.len) |i| {
-                    ret.glyph_info_ascii[i] = try ret.glyphInfoGenerate(@intCast(i));
-                }
-
-                return ret;
-            }
-        }
-    } else {
-        const offset = c.stbtt_GetFontOffsetForIndex(ttf_bytes.ptr, 0);
-        if (offset < 0) {
-            log.warn("fontCacheInit stbtt error when calling stbtt_GetFontOffsetForIndex font {s}\n", .{name});
-            return FontError.fontError;
-        }
-        var face: c.stbtt_fontinfo = undefined;
-        if (c.stbtt_InitFont(&face, ttf_bytes.ptr, offset) != 1) {
-            log.warn("fontCacheInit stbtt error when calling stbtt_InitFont font {s}\n", .{name});
-            return FontError.fontError;
-        }
-        const SF: f32 = c.stbtt_ScaleForPixelHeight(&face, @max(min_pixel_size, @floor(font.size)));
-
-        var face2_ascent: c_int = undefined;
-        var face2_descent: c_int = undefined;
-        var face2_linegap: c_int = undefined;
-        c.stbtt_GetFontVMetrics(&face, &face2_ascent, &face2_descent, &face2_linegap);
-        const ascent = SF * @as(f32, @floatFromInt(face2_ascent));
-        const f2_descent = SF * @as(f32, @floatFromInt(face2_descent));
-        const f2_linegap = SF * @as(f32, @floatFromInt(face2_linegap));
-        const height = ascent - f2_descent + f2_linegap;
-
-        var ret = FontCacheEntry{
-            .face = face,
-            .name = name,
-            .scaleFactor = SF,
-            .height = @ceil(height),
-            .ascent = @floor(ascent),
-            .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(currentWindow().gpa),
-            .glyph_info_ascii = undefined,
-        };
-
-        for (0..ret.glyph_info_ascii.len) |i| {
-            ret.glyph_info_ascii[i] = try ret.glyphInfoGenerate(@intCast(i));
-        }
-
-        return ret;
-    }
+pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontError!Font.Cache.Entry {
+    return Font.Cache.Entry.init(ttf_bytes, font, name);
 }
 
 /// Takes in svg bytes and returns a tvg bytes that can be used
@@ -3909,11 +3289,10 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) void {
 
     var width: u32 = 0;
     var height: u32 = 0;
-    var it = cw.font_cache.iterator();
+    var it = cw.fonts.cache.iterator();
     while (it.next()) |kv| {
-        const texture_atlas = kv.value_ptr.getTextureAtlas() catch |err| {
-            // TODO: Maybe FontCacheEntry should keep the font name for debugging? (FIX BELLOW TOO)
-            dvui.logError(@src(), err, "Could not get texture atlast with key {x} at height {d}", .{ kv.key_ptr.*, kv.value_ptr.height });
+        const texture_atlas = kv.value_ptr.getTextureAtlas(cw.gpa, cw.backend) catch |err| {
+            dvui.logError(@src(), err, "Could not get texture atlast for '{s}' at height {d}", .{ kv.value_ptr.name, kv.value_ptr.height });
             continue;
         };
         width = @max(width, texture_atlas.width);
@@ -3933,15 +3312,15 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) void {
     var rs = wd.parent.screenRectScale(placeIn(wd.contentRect(), size, .none, opts.gravityGet()));
     const color = opts.color(.text);
 
-    it = cw.font_cache.iterator();
+    it = cw.fonts.cache.iterator();
     while (it.next()) |kv| {
-        const texture_atlas = kv.value_ptr.getTextureAtlas() catch continue;
+        const texture_atlas = kv.value_ptr.getTextureAtlas(cw.gpa, cw.backend) catch continue;
         rs.r = rs.r.toSize(.{
             .w = @floatFromInt(texture_atlas.width),
             .h = @floatFromInt(texture_atlas.height),
         });
         renderTexture(texture_atlas, rs, .{ .colormod = color }) catch |err| {
-            logError(@src(), err, "Could not render font atlast", .{});
+            logError(@src(), err, "Could not render font atlast for '{s}'", .{kv.value_ptr.name});
         };
         rs.r.y += rs.r.h;
     }

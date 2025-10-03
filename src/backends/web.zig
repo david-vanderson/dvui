@@ -258,7 +258,7 @@ export fn arena_u8(len: usize) [*c]u8 {
 
 export fn new_font(ptr: [*c]u8, len: usize) void {
     if (win_ok) {
-        win.font_bytes.put(win.gpa, .Noto, dvui.FontBytesEntry{ .name = @tagName(dvui.Font.FontId.Noto), .ttf_bytes = ptr[0..len], .allocator = gpa }) catch unreachable;
+        win.fonts.database.put(win.gpa, .Noto, .{ .name = @tagName(dvui.Font.FontId.Noto), .bytes = ptr[0..len], .allocator = gpa }) catch unreachable;
     }
 }
 
