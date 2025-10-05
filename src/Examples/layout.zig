@@ -12,6 +12,57 @@ var paned_collapsed_width: f32 = 400;
 /// ![image](Examples-layout.png)
 pub fn layout() void {
     {
+        const uniqId = dvui.parentGet().extendId(@src(), 0);
+        const show_dialog = dvui.dataGetPtrDefault(null, uniqId, "show_dialog", bool, false);
+
+        if (dvui.button(@src(), "Dialog Style\nLayout", .{}, .{})) {
+            show_dialog.* = !show_dialog.*;
+        }
+
+        if (show_dialog.*) {
+            var fw = dvui.floatingWindow(@src(), .{}, .{});
+            defer fw.deinit();
+
+            fw.dragAreaSet(dvui.windowHeader("Dialog Style Layout", "", show_dialog));
+
+            {
+                var box_top = dvui.box(@src(), .{}, .{ .border = .all(1) });
+                defer box_top.deinit();
+
+                dvui.label(@src(), "Step 1: non-expanded stuff at the top", .{}, .{});
+            }
+
+            {
+                var box_bottom = dvui.box(@src(), .{}, .{ .gravity_y = 1.0, .border = .all(1), .gravity_x = 0.5 });
+                defer box_bottom.deinit();
+
+                dvui.label(@src(), "Step 2: non-expanded stuff at the bottom (gravity_y = 1.0)", .{}, .{});
+                dvui.label(@src(), "Note: these buttons will switch order depending on platform", .{}, .{});
+
+                var box_bottom_buttons = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 0.5 });
+                defer box_bottom_buttons.deinit();
+
+                const gravx: f32, const tindex: u16 = switch (dvui.currentWindow().button_order) {
+                    .cancel_ok => .{ 0.0, 1 },
+                    .ok_cancel => .{ 1.0, 3 },
+                };
+
+                _ = dvui.button(@src(), "Cancel", .{}, .{ .tab_index = tindex, .gravity_x = gravx });
+                _ = dvui.button(@src(), "Ok", .{}, .{ .tab_index = 2 });
+            }
+
+            {
+                var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window, .border = .all(1) });
+                defer scroll.deinit();
+                var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
+                defer tl.deinit();
+                tl.addText("Step 3: expanded stuff in the middle to take up the remaining space.\n\n", .{});
+                tl.addText("Use dvui.dialog() for a fire-and-forget version of this kind of thing.\n\n", .{});
+                tl.addText("Here is some\ntext on a\nfew lines\nto show\nscrolling\nif needed.", .{});
+            }
+        }
+    }
+    {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 

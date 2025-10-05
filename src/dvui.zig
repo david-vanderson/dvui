@@ -2232,7 +2232,7 @@ pub fn dialogDisplay(id: Id) !void {
 
     // Now add the scroll area which will get the remaining space
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
-    var tl = dvui.textLayout(@src(), .{}, .{ .background = false, .gravity_x = 0.5 });
+    var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
     tl.addText(message, .{});
     tl.deinit();
     scroll.deinit();
