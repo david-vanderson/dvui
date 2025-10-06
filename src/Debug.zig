@@ -454,7 +454,8 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
     defer if (gravity_y_was_null and !changed) {
         self.gravity_y = null;
     };
-    const gravity_y = &self.gravity_y.?;
+    var grav_y_inv = 1.0 - self.gravity_y.?;
+    const gravity_y = &grav_y_inv;
 
     const gravity_x_was_null = self.gravity_x == null;
     self.gravity_x = self.gravityGet().x;
@@ -641,6 +642,7 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
             defer col.deinit();
 
             if (dvui.slider(@src(), .{ .dir = .vertical, .fraction = gravity_y }, .{ .expand = .vertical })) {
+                self.gravity_y.? = 1.0 - gravity_y.*;
                 changed = true;
             }
 
