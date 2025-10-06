@@ -114,7 +114,40 @@ pub fn show(self: *Debug) void {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
-        dvui.labelNoFmt(@src(), "Hex id of widget to highlight:", .{}, .{ .gravity_y = 0.5 });
+        var log_refresh = self.logRefresh(null);
+        if (dvui.checkbox(@src(), &log_refresh, "Refresh Logging", .{})) {
+            _ = self.logRefresh(log_refresh);
+        }
+
+        var custom_label: ?[]const u8 = null;
+        var max_fps: f32 = 60;
+        if (dvui.currentWindow().max_fps) |mfps| {
+            max_fps = mfps;
+        } else {
+            custom_label = "max fps: unlimited";
+        }
+
+        if (dvui.sliderEntry(@src(), "max fps: {d:0.0}", .{ .value = &max_fps, .min = 1, .max = 60, .interval = 1, .label = custom_label }, .{ .min_size_content = .width(200), .gravity_y = 0.5 })) {
+            if (max_fps >= 60) {
+                dvui.currentWindow().max_fps = null;
+            } else {
+                dvui.currentWindow().max_fps = max_fps;
+            }
+        }
+    }
+
+    var log_events = self.logEvents(null);
+    if (dvui.checkbox(@src(), &log_events, "Event Logging", .{})) {
+        _ = self.logEvents(log_events);
+    }
+
+    _ = dvui.spacer(@src(), .{ .min_size_content = .all(4) });
+
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
+        dvui.labelNoFmt(@src(), "Widget Id:", .{}, .{ .gravity_y = 0.5 });
 
         var buf = [_]u8{0} ** 20;
         if (self.widget_id != .zero) {
@@ -126,9 +159,14 @@ pub fn show(self: *Debug) void {
         te.deinit();
 
         self.widget_id = @enumFromInt(std.fmt.parseInt(u64, std.mem.sliceTo(&buf, 0), 16) catch 0);
+
+        var temp = (debug_target == .focused);
+        if (dvui.checkbox(@src(), &temp, "Follow Focus", .{ .gravity_y = 0.5 })) {
+            debug_target = if (debug_target == .focused) .none else .focused;
+        }
     }
 
-    var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 } });
+    var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
     tl.install(.{});
 
     {
@@ -170,30 +208,29 @@ pub fn show(self: *Debug) void {
         const rs = wd.rectScale();
         tl.format(
             \\{x} {s}
-            \\
-            \\{f}
-            \\min {f}
-            \\{any}
-            \\scale {d}
-            \\padding {f}
-            \\border {f}
-            \\margin {f}
-            \\
             \\{s}:{d}
-            \\id_extra {?d}
+            \\min {f}
+            \\expand {any}
+            \\gravity x {d:0>.2} y {d:0>.2}
+            \\margin {f}
+            \\border {f}
+            \\padding {f}
+            \\rs.s {d}
+            \\rs.r {f}
         , .{
             wd.id,
             wd.options.name orelse "???",
-            rs.r,
-            wd.min_size,
-            wd.options.expandGet(),
-            rs.s,
-            wd.options.paddingGet().scale(rs.s, Rect.Physical),
-            wd.options.borderGet().scale(rs.s, Rect.Physical),
-            wd.options.marginGet().scale(rs.s, Rect.Physical),
             wd.src.file,
             wd.src.line,
-            wd.options.id_extra,
+            wd.min_size,
+            wd.options.expandGet(),
+            wd.options.gravityGet().x,
+            wd.options.gravityGet().y,
+            wd.options.marginGet(),
+            wd.options.borderGet(),
+            wd.options.paddingGet(),
+            rs.s,
+            rs.r,
         }, .{});
     }
     tl.deinit();
@@ -233,10 +270,6 @@ pub fn show(self: *Debug) void {
 
     if (dvui.button(@src(), if (debug_target == .mouse_until_esc) "Stop (Or Press Esc)" else "Debug Under Mouse (until esc)", .{}, .{})) {
         debug_target = if (debug_target == .mouse_until_esc) .none else .mouse_until_esc;
-    }
-
-    if (dvui.button(@src(), if (debug_target == .focused) "Stop Debugging Focus" else "Debug Focus", .{}, .{})) {
-        debug_target = if (debug_target == .focused) .none else .focused;
     }
 
     if (dvui.button(@src(), "Show all option overrides", .{}, .{})) {
@@ -317,31 +350,6 @@ pub fn show(self: *Debug) void {
         }
     }
 
-    var log_refresh = self.logRefresh(null);
-    if (dvui.checkbox(@src(), &log_refresh, "Refresh Logging", .{})) {
-        _ = self.logRefresh(log_refresh);
-    }
-
-    var custom_label: ?[]const u8 = null;
-    var max_fps: f32 = 60;
-    if (dvui.currentWindow().max_fps) |mfps| {
-        max_fps = mfps;
-    } else {
-        custom_label = "max fps: unlimited";
-    }
-
-    if (dvui.sliderEntry(@src(), "max fps: {d:0.0}", .{ .value = &max_fps, .min = 1, .max = 60, .interval = 1, .label = custom_label }, .{ .min_size_content = .width(200) })) {
-        if (max_fps >= 60) {
-            dvui.currentWindow().max_fps = null;
-        } else {
-            dvui.currentWindow().max_fps = max_fps;
-        }
-    }
-
-    var log_events = self.logEvents(null);
-    if (dvui.checkbox(@src(), &log_events, "Event Logging", .{})) {
-        _ = self.logEvents(log_events);
-    }
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false, .min_size_content = .height(200) });
     defer scroll.deinit();
 
