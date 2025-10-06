@@ -30,6 +30,19 @@ pub fn layout() void {
                 defer box_top.deinit();
 
                 dvui.label(@src(), "Step 1: non-expanded stuff at the top", .{}, .{});
+
+                var box_top1 = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+                defer box_top1.deinit();
+
+                dvui.label(@src(), "Globally change the dialog button order:", .{}, .{});
+
+                const entries = [_][]const u8{ @tagName(dvui.enums.DialogButtonOrder.cancel_ok), @tagName(dvui.enums.DialogButtonOrder.ok_cancel) };
+
+                var selected: usize = @intFromEnum(dvui.currentWindow().button_order);
+
+                if (dvui.dropdown(@src(), &entries, &selected, .{})) {
+                    dvui.currentWindow().button_order = @enumFromInt(selected);
+                }
             }
 
             {
