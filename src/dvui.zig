@@ -2369,6 +2369,8 @@ pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOpt
 
 /// Show chosen entry, and click to display all entries in a floating menu.
 ///
+/// Returns true if any entry was selected (even the already chosen one).
+///
 /// See `DropdownWidget` for more advanced usage.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
@@ -2381,6 +2383,33 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
         for (entries, 0..) |e, i| {
             if (dd.addChoiceLabel(e)) {
                 choice.* = i;
+                ret = true;
+            }
+        }
+    }
+
+    dd.deinit();
+    return ret;
+}
+
+/// Show @tagName of choice, and click to display all tags in that enum in a floating menu.
+///
+/// Returns true if any enum value was selected (even the already chosen one).
+///
+/// See `DropdownWidget` for more advanced usage.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: *T, opts: Options) bool {
+    if (@typeInfo(T) != .@"enum") @compileError("Expected enum, found '" ++ @typeName(T) ++ "'");
+
+    var dd = dvui.DropdownWidget.init(src, .{ .selected_index = @intFromEnum(choice.*), .label = @tagName(choice.*) }, opts);
+    dd.install();
+
+    var ret = false;
+    if (dd.dropped()) {
+        inline for (@typeInfo(T).@"enum".fields) |e| {
+            if (dd.addChoiceLabel(e.name)) {
+                choice.* = @field(T, e.name);
                 ret = true;
             }
         }
