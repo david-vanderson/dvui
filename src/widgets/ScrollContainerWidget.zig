@@ -47,6 +47,7 @@ si: *ScrollInfo,
 init_opts: InitOptions,
 last_focus: dvui.Id,
 parentScroll: ?*ScrollContainerWidget = null,
+subwindowId: dvui.Id,
 
 // si.viewport.x/y might be updated in the middle of a frame, this prevents
 // those visual artifacts
@@ -71,6 +72,7 @@ pub fn init(src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, init_o
         .si = io_scroll_info,
         .init_opts = init_options,
         .last_focus = dvui.lastFocusedIdInFrame(),
+        .subwindowId = dvui.subwindowCurrentId(),
     };
 
     if (dvui.dataGet(null, self.data().id, "_finger_down", bool)) |down| self.finger_down = down;
@@ -461,7 +463,9 @@ pub fn processMotionScroll(self: *ScrollContainerWidget, motion: dvui.Point.Phys
 
     if (propagate) {
         if (self.parentScroll) |parent| {
-            parent.processMotionScroll(motion);
+            if (parent.subwindowId == self.subwindowId) {
+                parent.processMotionScroll(motion);
+            }
         }
     }
 }
