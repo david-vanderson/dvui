@@ -207,10 +207,10 @@ pub fn processEvent(self: *MenuWidget, e: *Event) void {
                             e.handle(@src(), self.data());
                         }
                     }
+                }
 
-                    if (!e.handled) {
-                        self.mouse_over = true;
-                    }
+                if (self.mouse_mode and !e.handled) {
+                    self.mouse_over = true;
                 }
             }
         },
