@@ -167,7 +167,6 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
         .mouse => |me| {
             if (me.action == .focus) {
                 e.handle(@src(), self.data());
-                self.mouse_over = true;
                 dvui.focusWidget(self.data().id, null, e.num);
             } else if (me.action == .press and me.button.pointer()) {
                 // This works differently than normal (like buttons) where we
@@ -227,8 +226,6 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 // focus the menu item under the mouse even if it's not
                 // moving then it breaks keyboard navigation.
                 if (dvui.mouseTotalMotion().nonZero()) {
-                    self.mouse_over = true;
-
                     if (menu().?.has_focused_child or menu().?.submenus_activated or menu().?.floating()) {
                         // we shouldn't have gotten this event if the motion
                         // was towards a submenu (caught in MenuWidget)
@@ -242,6 +239,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 }
 
                 if (menu().?.mouse_mode) {
+                    self.mouse_over = true;
                     dvui.cursorSet(.arrow);
                     self.highlight = true;
                 }
