@@ -126,7 +126,6 @@ pub fn draw(self: *LabelWidget) void {
         var lineRect = dvui.placeIn(self.data().contentRect(), tsize, .none, label_gravity);
 
         const ellip = "...";
-        self.ellipsized = false;
         // give ourselves a fraction of a pixel extra for floating point innacurracies:
         // - a lot of times the content Rect is sized based on the text width
         if (self.init_options.ellipsize and tsize.w > (self.data().contentRect().w + 0.001)) {
