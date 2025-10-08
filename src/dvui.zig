@@ -112,7 +112,8 @@ pub const Dialog = Dialogs.Dialog;
 /// Toasts are just specialized dialogs
 pub const Toast = Dialog;
 
-/// Acessibility
+/// Accessibility
+pub const accesskit_enabled = @import("build_options").accesskit_enabled;
 pub const AccessKit = @import("AccessKit.zig");
 pub var accesskit: AccessKit = undefined;
 
@@ -3476,7 +3477,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
 
     var b = box(src, .{ .dir = init_opts.dir }, A11yOptions.defaultRoleTo(options, .SLIDER));
     defer b.deinit();
-    if (b.data().accesskit_node) |ak_node| {
+    if (b.data().accesskit_node()) |ak_node| {
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.FOCUS);
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.SET_VALUE);
         AccessKit.nodeSetNumericValue(ak_node, init_opts.fraction.*);
@@ -3673,7 +3674,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     b.install();
     defer b.deinit();
 
-    if (b.data().accesskit_node) |ak_node| {
+    if (b.data().accesskit_node()) |ak_node| {
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.FOCUS);
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.SET_VALUE);
         AccessKit.nodeSetNumericValue(ak_node, init_opts.value.*);

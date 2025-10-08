@@ -1543,7 +1543,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
     }
 
     // TODO: This only shows the currently visible text. What behavioure do we actually want here?
-    if (self.data().accesskit_node) |ak_node| {
+    if (self.data().accesskit_node()) |ak_node| {
         const ak_value = dvui.AccessKit.nodeValue(ak_node);
         if (ak_value != 0) {
             defer dvui.AccessKit.stringFree(ak_value);

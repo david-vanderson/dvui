@@ -85,10 +85,17 @@ pub fn roleOrDefault(opts: ?AccessibilityOptions, default_role: Role) Role {
         default_role;
 }
 
+pub const nodeCreate = if (dvui.accesskit_enabled) nodeCreateReal else nodeCreateFake;
+
+inline fn nodeCreateFake(_: *AccessKit, _: *dvui.WidgetData, _: Role, _: std.builtin.SourceLocation) ?*Node {
+    return null;
+}
+
 /// Create a new Node for AccessKit
 /// `default_role` is used for the role unless overridden in wd.options.a11y
 /// Returns null if no accessibility information is required for this widget.
-pub fn nodeCreate(self: *AccessKit, wd: *dvui.WidgetData, default_role: Role, src: std.builtin.SourceLocation) ?*Node {
+pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, default_role: Role, src: std.builtin.SourceLocation) ?*Node {
+
     if (!self.active) return null;
     if (!wd.visible()) return null;
 
@@ -97,7 +104,7 @@ pub fn nodeCreate(self: *AccessKit, wd: *dvui.WidgetData, default_role: Role, sr
 
     const ak_role = roleOrDefault(wd.options.a11y, default_role);
     const ak_node = nodeNew(ak_role.asU8()) orelse @panic("TODO");
-    wd.accesskit_node = ak_node;
+    wd.ak_node = ak_node;
     const border_rect = dvui.clipGet().intersect(wd.borderRectScale().r);
     nodeSetBounds(ak_node, .{ .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
 
@@ -134,7 +141,7 @@ pub fn nodeParent(self: *const AccessKit, wd: *dvui.WidgetData) *Node {
     var parent_wd = wd.parent.data();
     // While parent is not parent's parent and parent is not ourselves.
     while (parent_wd.id != parent_wd.parent.data().id and parent_wd.id != wd.id) : (parent_wd = parent_wd.parent.data()) {
-        return parent_wd.accesskit_node orelse continue;
+        return parent_wd.accesskit_node() orelse continue;
     }
     return self.root;
 }
@@ -301,6 +308,8 @@ pub fn pushUpdates(self: *AccessKit) void {
 }
 
 pub fn deinit(self: *AccessKit) void {
+    if (!dvui.accesskit_enabled) return;
+
     self.mutex.lock();
     defer self.mutex.unlock();
 

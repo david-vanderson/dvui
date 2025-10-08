@@ -24,7 +24,7 @@ options: Options,
 src: std.builtin.SourceLocation,
 rect_scale: ?RectScale = null,
 was_allocated_on_widget_stack: bool = false,
-accesskit_node: ?*dvui.AccessKit.Node = null,
+ak_node: ?*dvui.AccessKit.Node = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
     const parent = dvui.parentGet();
@@ -343,6 +343,11 @@ pub fn minSizeReportToParent(self: *const WidgetData) void {
 pub fn validate(self: *const WidgetData) *WidgetData {
     std.debug.assert(self.id != Id.undef); // Indicates a use after deinit() error.
     return @constCast(self);
+}
+
+pub inline fn accesskit_node(self: *WidgetData) ?*dvui.AccessKit.Node {
+    if (!dvui.accesskit_enabled) return null;
+    return self.ak_node;
 }
 
 test {
