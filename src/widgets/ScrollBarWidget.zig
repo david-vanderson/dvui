@@ -60,7 +60,46 @@ pub fn install(self: *ScrollBarWidget) void {
 
     const grabrs = self.data().parent.screenRectScale(self.grabRect);
     self.processEvents(grabrs.r);
-    _ = dvui.accesskit.nodeCreate(self.data(), .SCROLL_BAR); // TODO: Is this right?
+
+    // TODO: I'm pretty sure we can optimize this so that we only set actions and min on "first frame"
+    if (dvui.accesskit.nodeCreate(self.data(), .SCROLL_BAR, @src())) |ak_node| {
+        switch (self.dir) {
+            .horizontal => {
+                dvui.AccessKit.nodeSetLabel(ak_node, "Horizontal");
+                dvui.AccessKit.nodeClearReadOnly(ak_node);
+                dvui.AccessKit.nodeSetOrientation(ak_node, dvui.AccessKit.c.ACCESSKIT_ORIENTATION_HORIZONTAL);
+                dvui.AccessKit.nodeSetNumericValue(ak_node, self.si.viewport.x);
+                dvui.AccessKit.nodeSetMinNumericValue(ak_node, 0);
+                dvui.AccessKit.nodeSetMaxNumericValue(ak_node, self.si.virtual_size.w);
+                dvui.AccessKit.nodeSetNumericValueStep(ak_node, 1);
+                dvui.AccessKit.nodeSetNumericValueJump(ak_node, 100);
+
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.CLICK);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.FOCUS);
+                //dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SCROLL_LEFT);
+                //dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SCROLL_RIGHT);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SET_SCROLL_OFFSET);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SCROLL_TO_POINT);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SET_VALUE);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.INCREMENT);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.DECREMENT);
+            },
+
+            .vertical => {
+                dvui.AccessKit.nodeSetNumericValue(ak_node, self.si.viewport.y);
+                dvui.AccessKit.nodeSetOrientation(ak_node, dvui.AccessKit.c.ACCESSKIT_ORIENTATION_VERTICAL);
+                dvui.AccessKit.nodeSetLabel(ak_node, "Vertical");
+                dvui.AccessKit.nodeSetScrollY(ak_node, 50);
+                dvui.AccessKit.nodeSetScrollYMin(ak_node, 0);
+                dvui.AccessKit.nodeSetScrollYMax(ak_node, 100);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SCROLL_UP);
+
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SCROLL_UP);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SCROLL_DOWN);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SCROLL_TO_POINT);
+            },
+        }
+    }
 }
 
 pub fn data(self: *ScrollBarWidget) *WidgetData {
