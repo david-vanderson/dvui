@@ -6,9 +6,6 @@ const SDLBackend = @import("sdl-backend");
 comptime {
     std.debug.assert(@hasDecl(SDLBackend, "SDLBackend"));
 }
-//pub const ak = @cImport({
-//    @cInclude("accesskit.h");
-//});
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
@@ -22,9 +19,6 @@ var scale_val: f32 = 1.0;
 var show_dialog_outside_frame: bool = false;
 var g_backend: ?SDLBackend = null;
 var g_win: ?*dvui.Window = null;
-
-// acesskit POC
-var first_frame = true;
 
 /// This example shows how to use the dvui for a normal application:
 /// - dvui renders the whole application
@@ -49,28 +43,11 @@ pub fn main() !void {
         .vsync = vsync,
         .title = "DVUI SDL Standalone Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
-        .hidden = true,
+        .hidden = if (dvui.accesskit_enabled) true else false,
     });
     g_backend = backend;
     defer backend.deinit();
 
-    //const props: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(backend.window);
-    //const prop = SDLBackend.c.SDL_GetPointerProperty(
-    //    props,
-    //    SDLBackend.c.SDL_PROP_WINDOW_WIN32_HWND_POINTER,
-    //    null,
-    //) orelse @panic("No HWND Set");
-    //
-    //    const hwnd: ak.HWND = @intFromPtr(prop);
-    //    const ak_adapter = ak.accesskit_windows_subclassing_adapter_new(
-    //        hwnd,
-    //        buildInitialTreeUpdate,
-    //        null,
-    //        doAction,
-    //        null,
-    //    );
-    //    _ = ak_adapter;
-    //    _ = SDLBackend.c.SDL_ShowWindow(backend.window); // TODO:
     _ = SDLBackend.c.SDL_EnableScreenSaver();
 
     // init dvui Window (maps onto a single OS window)
@@ -83,8 +60,10 @@ pub fn main() !void {
     });
     defer win.deinit();
 
+    std.debug.print("accesskit_enabled: {}\n", .{dvui.accesskit_enabled});
+
     var interrupted = false;
-    dvui.AccessKit.initSDL3(&dvui.accesskit, &backend, &win);
+    if (dvui.accesskit_enabled) dvui.AccessKit.initSDL3(&dvui.accesskit, &backend, &win);
     defer dvui.accesskit.deinit();
     _ = SDLBackend.c.SDL_ShowWindow(backend.window);
 
@@ -94,7 +73,10 @@ pub fn main() !void {
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(nstime);
-        dvui.accesskit.newFrame();
+        if (dvui.accesskit_enabled) {
+            dvui.accesskit.newFrame();
+            dvui.accesskit.addAllEvents();
+        }
         // send all SDL events to dvui for processing
         const quit = try backend.addAllEvents(&win);
         if (quit) break :main_loop;
@@ -117,7 +99,7 @@ pub fn main() !void {
 
         // render frame to OS
         try backend.renderPresent();
-        dvui.accesskit.pushUpdates();
+        if (dvui.accesskit_enabled) dvui.accesskit.pushUpdates();
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);
         interrupted = try backend.waitEventTimeout(wait_event_micros);

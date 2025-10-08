@@ -27,6 +27,7 @@ pub fn build(b: *std.Build) !void {
     if (generate_doc_images) {
         back_to_build = .sdl2;
     }
+
     const build_options = b.addOptions();
     build_options.addOption(
         ?[]const u8,
@@ -52,6 +53,14 @@ pub fn build(b: *std.Build) !void {
         b.option(bool, "log-error-trace", "If error logs should include the error return trace (automatically enabled with log stack traces)"),
     );
 
+    const accesskit_enabled = b.option(bool, "accesskit", "Build with AccessKit support") orelse false;
+
+    build_options.addOption(
+        bool,
+        "accesskit_enabled",
+        accesskit_enabled,
+    );
+
     const dvui_opts = DvuiModuleOptions{
         .b = b,
         .target = target,
@@ -60,6 +69,7 @@ pub fn build(b: *std.Build) !void {
         .test_filters = test_filters,
         .check_step = check_step,
         .use_lld = use_lld,
+        .accesskit_enabled = accesskit_enabled,
         .build_options = build_options,
     };
 
@@ -465,6 +475,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                     .optimize = optimize,
                     .build_options = dvui_opts.build_options,
                     .test_filters = dvui_opts.test_filters,
+                    .accesskit_enabled = false,
                     // no tests or checks needed, they are check above in native build
                 };
 
@@ -501,6 +512,7 @@ const DvuiModuleOptions = struct {
     test_filters: []const []const u8,
     add_stb_image: bool = true,
     use_lld: ?bool = null,
+    accesskit_enabled: bool,
     build_options: *std.Build.Step.Options,
 
     fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
@@ -547,9 +559,12 @@ fn addDvuiModule(
         dvui_mod.linkSystemLibrary("comdlg32", .{});
         dvui_mod.linkSystemLibrary("ole32", .{});
     }
-    dvui_mod.addLibraryPath(b.path("accesskit"));
+
     dvui_mod.addIncludePath(b.path("accesskit"));
-    dvui_mod.linkSystemLibrary("accesskit", .{});
+    if (opts.accesskit_enabled) {
+        dvui_mod.addLibraryPath(b.path("accesskit"));
+        dvui_mod.linkSystemLibrary("accesskit", .{});
+    }
 
     const stb_source = "external/stb/";
     dvui_mod.addIncludePath(b.path(stb_source));
@@ -628,8 +643,11 @@ fn addExample(
         if (b.lazyDependency("win32", .{})) |zigwin32| {
             mod.addImport("win32", zigwin32.module("win32"));
         }
-        mod.linkSystemLibrary("ws2_32", .{});
-        mod.linkSystemLibrary("Userenv", .{});
+
+        if (opts.accesskit_enabled) {
+            mod.linkSystemLibrary("ws2_32", .{});
+            mod.linkSystemLibrary("Userenv", .{});
+        }
     }
 
     if (add_tests) {
@@ -639,7 +657,7 @@ fn addExample(
         test_step_opts.test_step = b.step("test-" ++ name, "Test " ++ name);
         test_step_opts.addTests(mod, name);
     }
-    exe.addIncludePath(b.path("accesskit"));
+
     const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
     const compile_cmd = b.addInstallArtifact(exe, .{});
     compile_step.dependOn(&compile_cmd.step);
