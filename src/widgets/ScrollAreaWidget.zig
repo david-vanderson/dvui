@@ -12,6 +12,7 @@ const WidgetData = dvui.WidgetData;
 const BoxWidget = dvui.BoxWidget;
 const ScrollBarWidget = dvui.ScrollBarWidget;
 const ScrollContainerWidget = dvui.ScrollContainerWidget;
+const A11yOptions = dvui.A11yOptions;
 
 const ScrollAreaWidget = @This();
 
@@ -55,7 +56,7 @@ scroll: ?ScrollContainerWidget = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) ScrollAreaWidget {
     return .{
-        .hbox = BoxWidget.init(src, .{ .dir = .horizontal }, defaults.override(opts)),
+        .hbox = BoxWidget.init(src, .{ .dir = .horizontal }, A11yOptions.defaultRoleTo(defaults.override(opts), .SCROLL_VIEW)),
         .init_opts = init_opts,
     };
 }
@@ -69,9 +70,6 @@ pub fn install(self: *ScrollAreaWidget) void {
     self.scroll.?.install();
     self.scroll.?.processEvents();
     self.scroll.?.processVelocity();
-    // TODO: This results in duplicate ID's being registered and I don't really know why?
-    // There could also be an issue with widgets that store their widget data in box widgets.
-    //_ = dvui.accesskit.nodeCreate(self.data(), .SCROLL_VIEW); // TODO: Is this right?
 }
 
 pub fn installScrollBars(self: *ScrollAreaWidget) void {

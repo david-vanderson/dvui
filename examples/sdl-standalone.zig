@@ -25,54 +25,6 @@ var g_win: ?*dvui.Window = null;
 
 // acesskit POC
 var first_frame = true;
-//fn buildInitialTreeUpdate(_: ?*anyopaque) callconv(.c) ?*ak.accesskit_tree_update {
-//    const TITLE_ID = 0x1236;
-//    const BUTTON_ID = 0x1235;
-//    const WINDOW_ID = 0x1234;
-//
-//    const root: *ak.accesskit_node = ak.accesskit_node_new(ak.ACCESSKIT_ROLE_WINDOW) orelse @panic("null");
-//    ak.accesskit_node_set_label(root, "This is an SDL3 demo");
-//
-//    const title = ak.accesskit_node_new(ak.ACCESSKIT_ROLE_TITLE_BAR) orelse @panic("null");
-//    ak.accesskit_node_set_label(title, "This is a title"); // TODO: This isn't working.
-//    ak.accesskit_node_push_child(root, TITLE_ID);
-//
-//    const node: ?*ak.accesskit_node = ak.accesskit_node_new(ak.ACCESSKIT_ROLE_BUTTON);
-//    ak.accesskit_node_set_bounds(node, .{ .x0 = 50, .y0 = 50, .x1 = 150, .y1 = 150 });
-//    ak.accesskit_node_set_label(node, "Button Label");
-//    ak.accesskit_node_add_action(node, ak.ACCESSKIT_ACTION_FOCUS);
-//    ak.accesskit_node_add_action(node, ak.ACCESSKIT_ACTION_CLICK);
-//    ak.accesskit_node_push_child(root, BUTTON_ID);
-//
-//    const result: ?*ak.accesskit_tree_update = ak.accesskit_tree_update_with_capacity_and_focus(5, WINDOW_ID); // TODO: this takes capacity and focus (obs). What is the node id?
-//    const tree: ?*ak.accesskit_tree = ak.accesskit_tree_new(WINDOW_ID); // TODO: Window ID
-//    ak.accesskit_tree_update_set_tree(result, tree);
-//
-//    ak.accesskit_tree_update_push_node(result, WINDOW_ID, root);
-//    ak.accesskit_tree_update_push_node(result, TITLE_ID, title);
-//    ak.accesskit_tree_update_push_node(result, BUTTON_ID, node);
-//
-//    return result;
-//}
-//
-//fn doAction(request: [*c]ak.accesskit_action_request, userdata: ?*anyopaque) callconv(.c) void {
-//    _ = request;
-//    _ = userdata;
-//    //  struct action_handler_state *state = userdata;
-//    //  SDL_Event event;
-//    //  SDL_zero(event);
-//    //  event.type = state->event_type;
-//    //  event.user.windowID = state->window_id;
-//    //  event.user.data1 = (void *)((uintptr_t)(request->target));
-//    //  if (request->action == ACCESSKIT_ACTION_FOCUS) {
-//    //    event.user.code = SET_FOCUS_MSG;
-//    //    SDL_PushEvent(&event);
-//    //  } else if (request->action == ACCESSKIT_ACTION_CLICK) {
-//    //    event.user.code = DO_DEFAULT_ACTION_MSG;
-//    //    SDL_PushEvent(&event);
-//    //  }
-//    //  accesskit_action_request_free(request);
-//}
 
 /// This example shows how to use the dvui for a normal application:
 /// - dvui renders the whole application

@@ -1,10 +1,7 @@
 // TODO:
-// [ ] Need ot take into account clipping when giving rect positions.
-// [ ] If something is not on screen, then don't add it to the accessibility tree.
-// [ ] Use the tracking hash map to work out which nodes to remove from the previous frame. Looks like because we rebuilt the parent tree each time,
-//     we don't need to actually remove the nodes, which is great!
 // [ ] MENU vs MENU ITEMS.. There isn't really a distinction in DVUI? Maybe the use of floating menu widget could sort this out for us?
-const c = @cImport({
+// [ ] Create structs/enums for common values like ORIENTATION
+pub const c = @cImport({
     @cInclude("accesskit.h");
 });
 const builtin = @import("builtin");
@@ -91,9 +88,12 @@ pub fn roleOrDefault(opts: ?AccessibilityOptions, default_role: Role) Role {
 /// Create a new Node for AccessKit
 /// `default_role` is used for the role unless overridden in wd.options.a11y
 /// Returns null if no accessibility information is required for this widget.
-pub fn nodeCreate(self: *AccessKit, wd: *dvui.WidgetData, default_role: Role) ?*Node {
+pub fn nodeCreate(self: *AccessKit, wd: *dvui.WidgetData, default_role: Role, src: std.builtin.SourceLocation) ?*Node {
     if (!self.active) return null;
     if (!wd.visible()) return null;
+
+    _ = src;
+    //std.debug.print("Creating Node for {x} at {s}:{d}\n", .{ wd.id, src.file, src.line });
 
     const ak_role = roleOrDefault(wd.options.a11y, default_role);
     const ak_node = nodeNew(ak_role.asU8()) orelse @panic("TODO");

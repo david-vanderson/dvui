@@ -236,7 +236,7 @@ pub fn install(self: *TextEntryWidget) void {
 
     // textLayout clips to its content, but we need to get events out to our border
     dvui.clipSet(borderClip);
-    if (dvui.accesskit.nodeCreate(self.data(), if (self.init_opts.multiline) .MULTILINE_TEXT_INPUT else .TEXT_INPUT)) |ak_node| {
+    if (dvui.accesskit.nodeCreate(self.data(), if (self.init_opts.multiline) .MULTILINE_TEXT_INPUT else .TEXT_INPUT, @src())) |ak_node| {
         dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.FOCUS);
         dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SET_VALUE);
         const str = dvui.currentWindow().arena().dupeZ(u8, self.text) catch "";

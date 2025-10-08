@@ -252,7 +252,7 @@ pub fn install(self: *FloatingWindowWidget) void {
     self.prevClip = dvui.clipGet();
     dvui.clipSet(dvui.windowRectPixels());
 
-    if (dvui.accesskit.nodeCreate(self.data(), .WINDOW)) |ak_node| {
+    if (dvui.accesskit.nodeCreate(self.data(), .WINDOW, @src())) |ak_node| {
         if (self.init_options.modal)
             dvui.AccessKit.nodeSetModal(ak_node)
         else

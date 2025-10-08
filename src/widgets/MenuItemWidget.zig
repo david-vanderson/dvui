@@ -52,7 +52,7 @@ pub fn install(self: *MenuItemWidget) void {
     self.data().borderAndBackground(.{});
 
     dvui.parentSet(self.widget());
-    _ = dvui.accesskit.nodeCreate(self.data(), .MENU_ITEM);
+    _ = dvui.accesskit.nodeCreate(self.data(), .MENU_ITEM, @src());
 }
 
 pub fn drawBackground(self: *MenuItemWidget) void {

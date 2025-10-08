@@ -88,7 +88,7 @@ pub fn install(self: *BoxWidget) void {
     }
 
     dvui.parentSet(self.widget());
-    _ = dvui.accesskit.nodeCreate(self.data(), .GENERIC_CONTAINER);
+    _ = dvui.accesskit.nodeCreate(self.data(), .GENERIC_CONTAINER, @src());
 }
 
 pub fn drawBackground(self: *BoxWidget) void {

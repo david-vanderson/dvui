@@ -136,7 +136,7 @@ pub fn install(self: *MenuWidget) void {
 
     self.box = BoxWidget.init(@src(), .{ .dir = self.init_opts.dir }, self.data().options.strip().override(.{ .expand = .both }));
     self.box.install();
-    _ = dvui.accesskit.nodeCreate(self.data(), .MENU);
+    _ = dvui.accesskit.nodeCreate(self.data(), .MENU, @src());
     self.box.drawBackground();
 }
 

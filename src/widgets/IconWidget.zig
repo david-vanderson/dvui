@@ -38,7 +38,7 @@ pub fn install(self: *IconWidget) void {
     self.data().register();
     self.data().borderAndBackground(.{});
     // TODO: Broked
-    if (dvui.accesskit.nodeCreate(self.data(), .IMAGE)) |ak_node| {
+    if (dvui.accesskit.nodeCreate(self.data(), .IMAGE, @src())) |ak_node| {
         const label = (self.data().options.a11y orelse dvui.A11yOptions{ .label = self.name }).label orelse ""; // TODO: Again UGH!!
 
         const str = dvui.currentWindow().arena().dupeZ(u8, label) catch "";
