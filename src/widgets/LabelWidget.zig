@@ -29,6 +29,7 @@ label_str: []const u8,
 /// An allocator to free `label_str` on `deinit`
 allocator: ?std.mem.Allocator,
 init_options: InitOptions,
+ellipsized: bool,
 
 pub fn init(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: InitOptions, opts: Options) LabelWidget {
     comptime if (!std.unicode.utf8ValidateSlice(fmt)) @compileError("Format strings must be valid utf-8");
@@ -83,6 +84,7 @@ pub fn initNoFmtAllocator(src: std.builtin.SourceLocation, label_str: []const u8
         .init_options = init_opts,
         .label_str = label_str,
         .allocator = allocator,
+        .ellipsized = false,
     };
 }
 
@@ -125,10 +127,12 @@ pub fn draw(self: *LabelWidget) void {
 
         const ellip = "...";
         var ellipsize = false;
+        self.ellipsized = false;
         // give ourselves a fraction of a pixel extra for floating point innacurracies:
         // - a lot of times the content Rect is sized based on the text width
         if (self.init_options.ellipsize and tsize.w > (self.data().contentRect().w + 0.001)) {
             ellipsize = true;
+            self.ellipsized = true;
             const esize = self.data().options.fontGet().textSize(ellip);
             var endi: usize = 0;
             tsize = self.data().options.fontGet().textSizeEx(line, .{ .max_width = self.data().contentRect().w - esize.w, .end_idx = &endi });
