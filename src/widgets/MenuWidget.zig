@@ -136,6 +136,7 @@ pub fn install(self: *MenuWidget) void {
 
     self.box = BoxWidget.init(@src(), .{ .dir = self.init_opts.dir }, self.data().options.strip().override(.{ .expand = .both }));
     self.box.install();
+    _ = dvui.accesskit.nodeCreate(self.data(), .MENU);
     self.box.drawBackground();
 }
 
@@ -207,10 +208,10 @@ pub fn processEvent(self: *MenuWidget, e: *Event) void {
                             e.handle(@src(), self.data());
                         }
                     }
-                }
 
-                if (self.mouse_mode and !e.handled) {
-                    self.mouse_over = true;
+                    if (!e.handled) {
+                        self.mouse_over = true;
+                    }
                 }
             }
         },

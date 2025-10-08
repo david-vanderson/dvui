@@ -2,9 +2,13 @@ const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
 const SDLBackend = @import("sdl-backend");
+
 comptime {
     std.debug.assert(@hasDecl(SDLBackend, "SDLBackend"));
 }
+//pub const ak = @cImport({
+//    @cInclude("accesskit.h");
+//});
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
@@ -12,12 +16,63 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 const vsync = true;
-const show_demo = true;
+const show_demo = false;
 var scale_val: f32 = 1.0;
 
 var show_dialog_outside_frame: bool = false;
 var g_backend: ?SDLBackend = null;
 var g_win: ?*dvui.Window = null;
+
+// acesskit POC
+var first_frame = true;
+//fn buildInitialTreeUpdate(_: ?*anyopaque) callconv(.c) ?*ak.accesskit_tree_update {
+//    const TITLE_ID = 0x1236;
+//    const BUTTON_ID = 0x1235;
+//    const WINDOW_ID = 0x1234;
+//
+//    const root: *ak.accesskit_node = ak.accesskit_node_new(ak.ACCESSKIT_ROLE_WINDOW) orelse @panic("null");
+//    ak.accesskit_node_set_label(root, "This is an SDL3 demo");
+//
+//    const title = ak.accesskit_node_new(ak.ACCESSKIT_ROLE_TITLE_BAR) orelse @panic("null");
+//    ak.accesskit_node_set_label(title, "This is a title"); // TODO: This isn't working.
+//    ak.accesskit_node_push_child(root, TITLE_ID);
+//
+//    const node: ?*ak.accesskit_node = ak.accesskit_node_new(ak.ACCESSKIT_ROLE_BUTTON);
+//    ak.accesskit_node_set_bounds(node, .{ .x0 = 50, .y0 = 50, .x1 = 150, .y1 = 150 });
+//    ak.accesskit_node_set_label(node, "Button Label");
+//    ak.accesskit_node_add_action(node, ak.ACCESSKIT_ACTION_FOCUS);
+//    ak.accesskit_node_add_action(node, ak.ACCESSKIT_ACTION_CLICK);
+//    ak.accesskit_node_push_child(root, BUTTON_ID);
+//
+//    const result: ?*ak.accesskit_tree_update = ak.accesskit_tree_update_with_capacity_and_focus(5, WINDOW_ID); // TODO: this takes capacity and focus (obs). What is the node id?
+//    const tree: ?*ak.accesskit_tree = ak.accesskit_tree_new(WINDOW_ID); // TODO: Window ID
+//    ak.accesskit_tree_update_set_tree(result, tree);
+//
+//    ak.accesskit_tree_update_push_node(result, WINDOW_ID, root);
+//    ak.accesskit_tree_update_push_node(result, TITLE_ID, title);
+//    ak.accesskit_tree_update_push_node(result, BUTTON_ID, node);
+//
+//    return result;
+//}
+//
+//fn doAction(request: [*c]ak.accesskit_action_request, userdata: ?*anyopaque) callconv(.c) void {
+//    _ = request;
+//    _ = userdata;
+//    //  struct action_handler_state *state = userdata;
+//    //  SDL_Event event;
+//    //  SDL_zero(event);
+//    //  event.type = state->event_type;
+//    //  event.user.windowID = state->window_id;
+//    //  event.user.data1 = (void *)((uintptr_t)(request->target));
+//    //  if (request->action == ACCESSKIT_ACTION_FOCUS) {
+//    //    event.user.code = SET_FOCUS_MSG;
+//    //    SDL_PushEvent(&event);
+//    //  } else if (request->action == ACCESSKIT_ACTION_CLICK) {
+//    //    event.user.code = DO_DEFAULT_ACTION_MSG;
+//    //    SDL_PushEvent(&event);
+//    //  }
+//    //  accesskit_action_request_free(request);
+//}
 
 /// This example shows how to use the dvui for a normal application:
 /// - dvui renders the whole application
@@ -42,10 +97,28 @@ pub fn main() !void {
         .vsync = vsync,
         .title = "DVUI SDL Standalone Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
+        .hidden = true,
     });
     g_backend = backend;
     defer backend.deinit();
 
+    //const props: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(backend.window);
+    //const prop = SDLBackend.c.SDL_GetPointerProperty(
+    //    props,
+    //    SDLBackend.c.SDL_PROP_WINDOW_WIN32_HWND_POINTER,
+    //    null,
+    //) orelse @panic("No HWND Set");
+    //
+    //    const hwnd: ak.HWND = @intFromPtr(prop);
+    //    const ak_adapter = ak.accesskit_windows_subclassing_adapter_new(
+    //        hwnd,
+    //        buildInitialTreeUpdate,
+    //        null,
+    //        doAction,
+    //        null,
+    //    );
+    //    _ = ak_adapter;
+    //    _ = SDLBackend.c.SDL_ShowWindow(backend.window); // TODO:
     _ = SDLBackend.c.SDL_EnableScreenSaver();
 
     // init dvui Window (maps onto a single OS window)
@@ -59,15 +132,17 @@ pub fn main() !void {
     defer win.deinit();
 
     var interrupted = false;
+    dvui.AccessKit.initSDL3(&dvui.accesskit, &backend, &win);
+    defer dvui.accesskit.deinit();
+    _ = SDLBackend.c.SDL_ShowWindow(backend.window);
 
     main_loop: while (true) {
-
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(interrupted);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(nstime);
-
+        dvui.accesskit.newFrame();
         // send all SDL events to dvui for processing
         const quit = try backend.addAllEvents(&win);
         if (quit) break :main_loop;
@@ -90,7 +165,7 @@ pub fn main() !void {
 
         // render frame to OS
         try backend.renderPresent();
-
+        dvui.accesskit.pushUpdates();
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);
         interrupted = try backend.waitEventTimeout(wait_event_micros);
@@ -109,7 +184,7 @@ fn gui_frame() bool {
     const backend = g_backend orelse return false;
 
     {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal, .name = "main" });
         defer hbox.deinit();
 
         var m = dvui.menu(@src(), .horizontal, .{});
@@ -172,9 +247,11 @@ fn gui_frame() bool {
     tl2.deinit();
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
-    if (dvui.button(@src(), label, .{}, .{})) {
+    var wd: dvui.WidgetData = undefined;
+    if (dvui.button(@src(), label, .{}, .{ .data_out = &wd })) {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
+    //ak.buttonAdd(&wd, label);
 
     if (dvui.button(@src(), "Debug Window", .{}, .{})) {
         dvui.toggleDebugWindow();

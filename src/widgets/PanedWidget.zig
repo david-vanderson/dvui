@@ -162,6 +162,7 @@ pub fn install(self: *PanedWidget) void {
     self.prevClip = dvui.clip(self.data().contentRectScale().r);
 
     dvui.parentSet(self.widget());
+    _ = dvui.accesskit.nodeCreate(self.data(), .PANE);
 }
 
 pub fn matchEvent(self: *PanedWidget, e: *Event) bool {

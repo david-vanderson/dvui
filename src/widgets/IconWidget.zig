@@ -37,6 +37,14 @@ pub fn init(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []cons
 pub fn install(self: *IconWidget) void {
     self.data().register();
     self.data().borderAndBackground(.{});
+    // TODO: Broked
+    if (dvui.accesskit.nodeCreate(self.data(), .IMAGE)) |ak_node| {
+        const label = (self.data().options.a11y orelse dvui.A11yOptions{ .label = self.name }).label orelse ""; // TODO: Again UGH!!
+
+        const str = dvui.currentWindow().arena().dupeZ(u8, label) catch "";
+        defer dvui.currentWindow().arena().free(str);
+        dvui.AccessKit.nodeSetLabel(ak_node, str);
+    }
 }
 
 pub fn data(self: *IconWidget) *WidgetData {

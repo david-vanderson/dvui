@@ -27,7 +27,6 @@ pub fn build(b: *std.Build) !void {
     if (generate_doc_images) {
         back_to_build = .sdl2;
     }
-
     const build_options = b.addOptions();
     build_options.addOption(
         ?[]const u8,
@@ -548,6 +547,9 @@ fn addDvuiModule(
         dvui_mod.linkSystemLibrary("comdlg32", .{});
         dvui_mod.linkSystemLibrary("ole32", .{});
     }
+    dvui_mod.addLibraryPath(b.path("accesskit"));
+    dvui_mod.addIncludePath(b.path("accesskit"));
+    dvui_mod.linkSystemLibrary("accesskit", .{});
 
     const stb_source = "external/stb/";
     dvui_mod.addIncludePath(b.path(stb_source));
@@ -626,6 +628,8 @@ fn addExample(
         if (b.lazyDependency("win32", .{})) |zigwin32| {
             mod.addImport("win32", zigwin32.module("win32"));
         }
+        mod.linkSystemLibrary("ws2_32", .{});
+        mod.linkSystemLibrary("Userenv", .{});
     }
 
     if (add_tests) {
@@ -635,7 +639,7 @@ fn addExample(
         test_step_opts.test_step = b.step("test-" ++ name, "Test " ++ name);
         test_step_opts.addTests(mod, name);
     }
-
+    exe.addIncludePath(b.path("accesskit"));
     const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
     const compile_cmd = b.addInstallArtifact(exe, .{});
     compile_step.dependOn(&compile_cmd.step);

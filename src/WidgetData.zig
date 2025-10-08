@@ -24,6 +24,7 @@ options: Options,
 src: std.builtin.SourceLocation,
 rect_scale: ?RectScale = null,
 was_allocated_on_widget_stack: bool = false,
+accesskit_node: ?*dvui.AccessKit.Node = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
     const parent = dvui.parentGet();

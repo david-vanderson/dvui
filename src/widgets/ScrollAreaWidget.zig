@@ -69,6 +69,9 @@ pub fn install(self: *ScrollAreaWidget) void {
     self.scroll.?.install();
     self.scroll.?.processEvents();
     self.scroll.?.processVelocity();
+    // TODO: This results in duplicate ID's being registered and I don't really know why?
+    // There could also be an issue with widgets that store their widget data in box widgets.
+    //_ = dvui.accesskit.nodeCreate(self.data(), .SCROLL_VIEW); // TODO: Is this right?
 }
 
 pub fn installScrollBars(self: *ScrollAreaWidget) void {

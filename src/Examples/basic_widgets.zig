@@ -136,8 +136,19 @@ pub fn basicWidgets() void {
         defer hbox.deinit();
 
         dvui.label(@src(), "Sliders", .{}, .{ .gravity_y = 0.5 });
-        _ = dvui.slider(@src(), .{ .fraction = &slider_val }, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
-        _ = dvui.slider(@src(), .{ .dir = .vertical, .fraction = &slider_val }, .{ .expand = .vertical, .min_size_content = .{ .w = 10 }, .corner_radius = dvui.Rect.all(100) });
+        _ = dvui.slider(@src(), .{ .fraction = &slider_val }, .{
+            .expand = .horizontal,
+            .gravity_y = 0.5,
+            .corner_radius = dvui.Rect.all(100),
+            //            .a11y = .{ .labeled_by = label_wd.id },
+            .a11y = .{ .label = "Sliders1" },
+        });
+        _ = dvui.slider(@src(), .{ .dir = .vertical, .fraction = &slider_val }, .{
+            .expand = .vertical,
+            .min_size_content = .{ .w = 10 },
+            .corner_radius = dvui.Rect.all(100),
+            .a11y = .{ .label = "Sliders2" },
+        });
         dvui.label(@src(), "Value: {d:2.2}", .{slider_val}, .{ .gravity_y = 0.5 });
     }
 
@@ -154,7 +165,12 @@ pub fn basicWidgets() void {
                 custom_label = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d} and {d}p", .{ whole, part }) catch null;
             }
             defer if (custom_label) |cl| dvui.currentWindow().lifo().free(cl);
-            _ = dvui.sliderEntry(@src(), "val: {d:0.3}", .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null), .label = custom_label }, .{ .gravity_y = 0.5 });
+            _ = dvui.sliderEntry(
+                @src(),
+                "val: {d:0.3}",
+                .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null), .label = custom_label },
+                .{ .gravity_y = 0.5, .a11y = .{ .label = "Slider Entry" } },
+            );
             dvui.label(@src(), "(enter, ctrl-click or touch-tap)", .{}, .{ .gravity_y = 0.5 });
         } else {
             _ = dvui.sliderVector(@src(), "{d:0.2}", 3, &slider_vector_array, .{ .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) }, .{});
