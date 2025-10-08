@@ -12,12 +12,12 @@ const WidgetData = dvui.WidgetData;
 const BoxWidget = dvui.BoxWidget;
 const ScrollBarWidget = dvui.ScrollBarWidget;
 const ScrollContainerWidget = dvui.ScrollContainerWidget;
-const A11yOptions = dvui.A11yOptions;
 
 const ScrollAreaWidget = @This();
 
 pub var defaults: Options = .{
     .name = "ScrollAreaWidget",
+    .role = .SCROLL_VIEW,
     .background = true,
     // generally the top of a scroll area is against something flat (like
     // window header), and the bottom is against something curved (bottom
@@ -56,7 +56,7 @@ scroll: ?ScrollContainerWidget = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) ScrollAreaWidget {
     return .{
-        .hbox = BoxWidget.init(src, .{ .dir = .horizontal }, A11yOptions.defaultRoleTo(defaults.override(opts), .SCROLL_VIEW)),
+        .hbox = BoxWidget.init(src, .{ .dir = .horizontal }, defaults.override(opts)),
         .init_opts = init_opts,
     };
 }

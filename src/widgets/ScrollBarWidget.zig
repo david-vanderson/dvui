@@ -15,6 +15,7 @@ const ScrollBarWidget = @This();
 
 pub var defaults: Options = .{
     .name = "ScrollBar",
+    .role = .SCROLL_BAR,
     .min_size_content = .{ .w = 10, .h = 10 },
 };
 
@@ -62,7 +63,7 @@ pub fn install(self: *ScrollBarWidget) void {
     self.processEvents(grabrs.r);
 
     // TODO: I'm pretty sure we can optimize this so that we only set actions and min on "first frame"
-    if (dvui.accesskit.nodeCreate(self.data(), .SCROLL_BAR, @src())) |ak_node| {
+    if (self.data().accesskit_node()) |ak_node| {
         switch (self.dir) {
             .horizontal => {
                 dvui.AccessKit.nodeSetLabel(ak_node, "Horizontal");

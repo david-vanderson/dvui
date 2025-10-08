@@ -24,6 +24,7 @@ const TextLayoutWidget = @This();
 /// 500 if our min width is zero).
 pub var defaults: Options = .{
     .name = "TextLayout",
+    .role = .DOCUMENT, // TODO: is this right?  Does it depend on how much text?
     .padding = Rect.all(6),
     .background = true,
     .style = .content,
@@ -472,7 +473,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
         }
     }
     // TODO: Is document the right role? It sort of is e.g. a web page is a document. Need to find other examples of this sort of text display.
-    if (dvui.accesskit.nodeCreate(self.data(), .DOCUMENT, @src())) |ak_node| {
+    if (self.data().accesskit_node()) |ak_node| {
         dvui.AccessKit.nodeSetReadOnly(ak_node);
     }
 }
