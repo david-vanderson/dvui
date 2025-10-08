@@ -60,6 +60,7 @@ pub fn install(self: *ScrollBarWidget) void {
 
     const grabrs = self.data().parent.screenRectScale(self.grabRect);
     self.processEvents(grabrs.r);
+    _ = dvui.accesskit.nodeCreate(self.data(), .SCROLL_BAR); // TODO: Is this right?
 }
 
 pub fn data(self: *ScrollBarWidget) *WidgetData {

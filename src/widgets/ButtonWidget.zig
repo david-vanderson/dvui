@@ -44,10 +44,14 @@ pub fn install(self: *ButtonWidget) void {
     dvui.parentSet(self.widget());
 
     dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
+    if (dvui.accesskit.nodeCreate(self.data(), .BUTTON)) |ak_node| {
+        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.FOCUS);
+        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.CLICK);
+    }
 }
 
 pub fn matchEvent(self: *ButtonWidget, e: *Event) bool {
-    return dvui.eventMatchSimple(e, self.data());
+    return dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
 }
 
 pub fn processEvents(self: *ButtonWidget) void {

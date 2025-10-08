@@ -6,6 +6,7 @@ const Font = dvui.Font;
 const Rect = dvui.Rect;
 const Size = dvui.Size;
 const Theme = dvui.Theme;
+const AccessibilityOptions = @import("AccessibilityOptions.zig"); // TODO: Move to DVUI
 
 const Options = @This();
 
@@ -96,6 +97,7 @@ font_style: ?FontStyle = null,
 
 /// Render a box shadow in `WidgetData.borderAndBackground`.
 box_shadow: ?BoxShadow = null,
+a11y: ?AccessibilityOptions = null,
 
 pub const Expand = enum {
     none,
@@ -347,6 +349,7 @@ pub fn strip(self: *const Options) Options {
         .gravity_y = null,
         .tab_index = null,
         .box_shadow = null,
+        .a11y = null,
 
         // ignore defaults of internal widgets
         .margin = Rect{},

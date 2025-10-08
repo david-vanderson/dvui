@@ -42,6 +42,7 @@ pub fn install(self: *FlexBoxWidget) void {
     dvui.parentSet(self.widget());
 
     self.prevClip = dvui.clip(self.data().contentRectScale().r);
+    _ = dvui.accesskit.nodeCreate(self.data(), .GENERIC_CONTAINER);
 }
 
 pub fn drawBackground(self: *FlexBoxWidget) void {

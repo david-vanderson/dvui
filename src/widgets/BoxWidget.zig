@@ -48,7 +48,7 @@ ran_off: bool = false,
 pixels_per_w: f32 = 0,
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) BoxWidget {
-    const defaults = Options{ .name = "Box" };
+    const defaults = Options{ .name = "Box" }; //, .a11y = .{ .role = } }; // TODO:
     const wd = WidgetData.init(src, .{}, defaults.override(opts));
     return .{
         .wd = wd,
@@ -88,6 +88,7 @@ pub fn install(self: *BoxWidget) void {
     }
 
     dvui.parentSet(self.widget());
+    _ = dvui.accesskit.nodeCreate(self.data(), .GENERIC_CONTAINER);
 }
 
 pub fn drawBackground(self: *BoxWidget) void {

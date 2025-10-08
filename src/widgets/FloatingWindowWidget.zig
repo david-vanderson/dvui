@@ -251,6 +251,13 @@ pub fn install(self: *FloatingWindowWidget) void {
     // - gives us all mouse events
     self.prevClip = dvui.clipGet();
     dvui.clipSet(dvui.windowRectPixels());
+
+    if (dvui.accesskit.nodeCreate(self.data(), .WINDOW)) |ak_node| {
+        if (self.init_options.modal)
+            dvui.AccessKit.nodeSetModal(ak_node)
+        else
+            dvui.AccessKit.nodeClearModal(ak_node);
+    }
 }
 
 pub fn drawBackground(self: *FloatingWindowWidget) void {

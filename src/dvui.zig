@@ -47,6 +47,7 @@ pub const Color = @import("Color.zig");
 pub const Event = @import("Event.zig");
 pub const Font = @import("Font.zig");
 pub const Options = @import("Options.zig");
+pub const A11yOptions = @import("AccessibilityOptions.zig");
 pub const Point = @import("Point.zig").Point;
 pub const Path = @import("Path.zig");
 pub const Rect = @import("Rect.zig").Rect;
@@ -110,6 +111,10 @@ pub const Dialogs = @import("Dialogs.zig");
 pub const Dialog = Dialogs.Dialog;
 /// Toasts are just specialized dialogs
 pub const Toast = Dialog;
+
+/// Acessibility
+pub const AccessKit = @import("AccessKit.zig");
+pub var accesskit: AccessKit = undefined;
 
 pub const Texture = @import("Texture.zig");
 pub const TextureTarget = Texture.Target;
@@ -2002,8 +2007,12 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Rect.Physical {
     var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
 
-    dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{ .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
-
+    dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{
+        .expand = .horizontal,
+        .font_style = .heading,
+        .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 },
+        .a11y = .{ .label_for = dvui.subwindowCurrentId() },
+    });
     if (openflag) |of| {
         if (dvui.buttonIcon(
             @src(),
@@ -3094,7 +3103,7 @@ pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options
 pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: MenuItemWidget.InitOptions, opts: Options) ?Rect.Natural {
     var mi = menuItem(src, init_opts, opts);
 
-    var labelopts = opts.strip();
+    var labelopts = opts.strip().override(.{ .a11y = .{ .label_for = mi.data().id } });
 
     var ret: ?Rect.Natural = null;
     if (mi.activeRect()) |r| {
@@ -3148,7 +3157,7 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
 /// A clickable label.  Good for hyperlinks.
 /// Returns true if it's been clicked.
 pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) bool {
-    var lw = LabelWidget.init(src, fmt, args, init_opts, opts.override(.{ .name = "LabelClick" }));
+    var lw = LabelWidget.init(src, fmt, args, init_opts, A11yOptions.defaultRoleTo(opts.override(.{ .name = "LabelClick" }), .LINK));
     // draw border and background
     lw.install();
 
@@ -3392,7 +3401,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
 }
 
 pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, icon_opts: IconRenderOptions, opts: Options) bool {
-    const defaults = Options{ .padding = Rect.all(4) };
+    const defaults = Options{ .padding = Rect.all(4), .a11y = .{ .label = name } };
     var bw = ButtonWidget.init(src, init_opts, defaults.override(opts));
     bw.install();
     bw.processEvents();
@@ -3465,8 +3474,15 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
 
     const options = slider_defaults.override(opts);
 
-    var b = box(src, .{ .dir = init_opts.dir }, options);
+    var b = box(src, .{ .dir = init_opts.dir }, A11yOptions.defaultRoleTo(options, .SLIDER));
     defer b.deinit();
+    if (b.data().accesskit_node) |ak_node| {
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.FOCUS);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.SET_VALUE);
+        AccessKit.nodeSetNumericValue(ak_node, init_opts.fraction.*);
+        AccessKit.nodeSetMinNumericValue(ak_node, 0);
+        AccessKit.nodeSetMaxNumericValue(ak_node, 1);
+    }
 
     tabIndexSet(b.data().id, options.tab_index);
 
@@ -3552,7 +3568,11 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
                     }
                 }
             },
-            else => {},
+            .text => |te| blk: {
+                e.handle(@src(), b.data());
+                const value: f32 = std.fmt.parseFloat(f32, te.txt) catch break :blk;
+                init_opts.fraction.* = std.math.clamp(value, 0.0, 1.0);
+            },
         }
     }
 
@@ -3649,9 +3669,17 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
     var ret = false;
     var hover = false;
-    var b = BoxWidget.init(src, .{ .dir = .horizontal }, options);
+    var b = BoxWidget.init(src, .{ .dir = .horizontal }, A11yOptions.defaultRoleTo(options, .SLIDER));
     b.install();
     defer b.deinit();
+
+    if (b.data().accesskit_node) |ak_node| {
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.FOCUS);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.SET_VALUE);
+        AccessKit.nodeSetNumericValue(ak_node, init_opts.value.*);
+        if (init_opts.min) |min| AccessKit.nodeSetMinNumericValue(ak_node, min);
+        if (init_opts.max) |max| AccessKit.nodeSetMaxNumericValue(ak_node, max);
+    }
 
     tabIndexSet(b.data().id, options.tab_index);
 
@@ -3719,6 +3747,13 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             if (e.evt == .mouse and e.evt.mouse.action == .focus) {
                 e.handle(@src(), b.data());
                 focusWidget(b.data().id, null, e.num);
+            }
+
+            if (e.evt == .text) {
+                e.handle(@src(), b.data());
+                text_mode = false;
+                te.textSet(e.evt.text.txt, false);
+                new_val = std.fmt.parseFloat(f32, te_buf[0..te.len]) catch null;
             }
 
             if (!e.handled) {
@@ -3894,7 +3929,13 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                         }
                     }
                 },
-                else => {},
+                .text => |te| {
+                    e.handle(@src(), b.data());
+                    var value = std.fmt.parseFloat(f32, te.txt) catch init_opts.min orelse 0;
+                    if (init_opts.min) |min| value = @max(min, value);
+                    if (init_opts.max) |max| value = @min(max, value);
+                    init_opts.value.* = value;
+                },
             }
         }
 
@@ -4058,7 +4099,7 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
     const options = checkbox_defaults.override(opts);
     var ret = false;
 
-    var bw = ButtonWidget.init(src, .{}, options.strip().override(options));
+    var bw = ButtonWidget.init(src, .{}, A11yOptions.defaultRoleTo(options.strip().override(options), .CHECK_BOX));
 
     bw.install();
     bw.processEvents();
@@ -4148,7 +4189,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     const options = radio_defaults.override(opts);
     var ret = false;
 
-    var bw = ButtonWidget.init(src, .{}, options.strip().override(options));
+    var bw = ButtonWidget.init(src, .{}, A11yOptions.defaultRoleTo(options.strip().override(options), .RADIO_BUTTON));
 
     bw.install();
     bw.processEvents();

@@ -1021,7 +1021,8 @@ pub fn begin(
     try self.backend.begin(self.arena());
 }
 
-fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
+// TODO: Temp pub
+pub fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
     const widget_id = if (self.capture) |cap| cap.id else null;
 
     try self.events.append(self.arena(), .{
@@ -1037,7 +1038,8 @@ fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
     });
 }
 
-fn positionMouseEventRemove(self: *Self) void {
+// TODO: TEMP pub
+pub fn positionMouseEventRemove(self: *Self) void {
     if (self.events.pop()) |e| {
         if (e.evt != .mouse or e.evt.mouse.action != .position) {
             log.err("positionMouseEventRemove removed a non-mouse or non-position event\n", .{});

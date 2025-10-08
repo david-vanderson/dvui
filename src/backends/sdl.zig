@@ -420,6 +420,7 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !bool {
     //}
     var event: c.SDL_Event = undefined;
     const poll_got_event = if (sdl3) true else 1;
+    dvui.accesskit.addAllEvents();
     while (c.SDL_PollEvent(&event) == poll_got_event) {
         _ = try self.addEvent(win, event);
         switch (event.type) {
