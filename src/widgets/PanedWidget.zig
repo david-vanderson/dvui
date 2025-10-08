@@ -80,7 +80,7 @@ pub const AutoFitOptions = struct {
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) PanedWidget {
-    const defaults = Options{ .name = "Paned" };
+    const defaults = Options{ .name = "Paned", .role = .PANE};
     const wd = WidgetData.init(src, .{}, defaults.override(opts));
 
     const rect = wd.contentRect();
@@ -162,7 +162,6 @@ pub fn install(self: *PanedWidget) void {
     self.prevClip = dvui.clip(self.data().contentRectScale().r);
 
     dvui.parentSet(self.widget());
-    _ = dvui.accesskit.nodeCreate(self.data(), .PANE, @src());
 }
 
 pub fn matchEvent(self: *PanedWidget, e: *Event) bool {

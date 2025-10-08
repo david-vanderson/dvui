@@ -105,6 +105,10 @@ pub fn register(self: *WidgetData) void {
         hasher.update(std.mem.asBytes(&(self.id == focused_widget_id)));
     }
 
+    if (self.options.role) |role| {
+        _ = dvui.accesskit.nodeCreate(self, role);
+    }
+
     if (cw.debug.target == .focused and self.id == focused_widget_id) {
         cw.debug.widget_id = self.id;
     }

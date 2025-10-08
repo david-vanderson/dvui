@@ -6,7 +6,6 @@ const Font = dvui.Font;
 const Rect = dvui.Rect;
 const Size = dvui.Size;
 const Theme = dvui.Theme;
-const AccessibilityOptions = @import("AccessibilityOptions.zig"); // TODO: Move to DVUI
 
 const Options = @This();
 
@@ -16,7 +15,7 @@ id_extra: ?usize = null,
 /// String for programmatically interacting with widgets, like in tests.
 tag: ?[]const u8 = null,
 
-/// Use to name the kind of widget for debugging.
+/// Name for accessibility and debugging.
 name: ?[]const u8 = null,
 
 /// Pass a pointer to get a copy of the widget's `data` when `register` was
@@ -97,7 +96,9 @@ font_style: ?FontStyle = null,
 
 /// Render a box shadow in `WidgetData.borderAndBackground`.
 box_shadow: ?BoxShadow = null,
-a11y: ?AccessibilityOptions = null,
+
+/// Accessibility
+role: ?dvui.AccessKit.Role = null,
 
 pub const Expand = enum {
     none,
@@ -349,7 +350,7 @@ pub fn strip(self: *const Options) Options {
         .gravity_y = null,
         .tab_index = null,
         .box_shadow = null,
-        .a11y = null,
+        .role = null,
 
         // ignore defaults of internal widgets
         .margin = Rect{},

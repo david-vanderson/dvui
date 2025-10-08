@@ -77,33 +77,22 @@ pub fn initSDL3(self: *AccessKit, backend: *SDLBackend, window: *dvui.Window) vo
     }
 }
 
-/// Return the role from opts.a11y if it is set, otherwise return the default_role
-pub fn roleOrDefault(opts: ?AccessibilityOptions, default_role: Role) Role {
-    return if (opts) |a11y|
-        a11y.role orelse default_role
-    else
-        default_role;
-}
-
 pub const nodeCreate = if (dvui.accesskit_enabled) nodeCreateReal else nodeCreateFake;
 
-inline fn nodeCreateFake(_: *AccessKit, _: *dvui.WidgetData, _: Role, _: std.builtin.SourceLocation) ?*Node {
+inline fn nodeCreateFake(_: *AccessKit, _: *dvui.WidgetData, _: Role) ?*Node {
     return null;
 }
 
 /// Create a new Node for AccessKit
-/// `default_role` is used for the role unless overridden in wd.options.a11y
 /// Returns null if no accessibility information is required for this widget.
-pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, default_role: Role, src: std.builtin.SourceLocation) ?*Node {
+pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node {
 
     if (!self.active) return null;
     if (!wd.visible()) return null;
 
-    _ = src;
     //std.debug.print("Creating Node for {x} at {s}:{d}\n", .{ wd.id, src.file, src.line });
 
-    const ak_role = roleOrDefault(wd.options.a11y, default_role);
-    const ak_node = nodeNew(ak_role.asU8()) orelse @panic("TODO");
+    const ak_node = nodeNew(role.asU8()) orelse @panic("TODO");
     wd.ak_node = ak_node;
     const border_rect = dvui.clipGet().intersect(wd.borderRectScale().r);
     nodeSetBounds(ak_node, .{ .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
@@ -112,24 +101,24 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, default_role: Role
         const parent_node = self.nodeParent(wd);
         nodePushChild(parent_node, wd.id.asU64());
     }
-    if (wd.options.a11y) |a11y| {
-        if (a11y.label_for) |wid| {
-            if (self.nodes.get(wid)) |labeled_node| {
-                nodePushLabelledBy(labeled_node, wd.id.asU64());
-            } else {
-                dvui.log.debug("AccessKit: Invalid widget id passed to label_for: {x}", .{wid});
-            }
-        }
-        if (a11y.labeled_by) |wid| {
-            nodePushLabelledBy(ak_node, wid.asU64());
-        }
+    //if (wd.options.a11y) |a11y| {
+    //    if (a11y.label_for) |wid| {
+    //        if (self.nodes.get(wid)) |labeled_node| {
+    //            nodePushLabelledBy(labeled_node, wd.id.asU64());
+    //        } else {
+    //            dvui.log.debug("AccessKit: Invalid widget id passed to label_for: {x}", .{wid});
+    //        }
+    //    }
+    //    if (a11y.labeled_by) |wid| {
+    //        nodePushLabelledBy(ak_node, wid.asU64());
+    //    }
 
-        if (a11y.label) |label| {
-            const str = self.window.arena().dupeZ(u8, label) catch "";
-            defer dvui.currentWindow().arena().free(str);
-            nodeSetLabel(ak_node, str);
-        }
+    if (wd.options.name) |label| {
+        const str = self.window.arena().dupeZ(u8, label) catch "";
+        defer dvui.currentWindow().arena().free(str);
+        nodeSetLabel(ak_node, str);
     }
+
     if (self.nodes.contains(wd.id)) @panic("Dupe!!"); // TODO:
     self.nodes.put(self.window.gpa, wd.id, ak_node) catch @panic("TODO");
 
@@ -1124,4 +1113,3 @@ pub const Size = c.accesskit_size;
 pub const OptLresult = c.accesskit_opt_lresult;
 
 const std = @import("std");
-const AccessibilityOptions = @import("AccessibilityOptions.zig");

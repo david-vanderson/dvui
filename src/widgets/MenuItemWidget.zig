@@ -15,7 +15,8 @@ const menu = dvui.MenuWidget.current;
 const MenuItemWidget = @This();
 
 pub var defaults: Options = .{
-    .name = "MenuItem",
+    .name = "Menu Item",
+    .role = .MENU_ITEM,
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
     .style = .control,
@@ -52,7 +53,6 @@ pub fn install(self: *MenuItemWidget) void {
     self.data().borderAndBackground(.{});
 
     dvui.parentSet(self.widget());
-    _ = dvui.accesskit.nodeCreate(self.data(), .MENU_ITEM, @src());
 }
 
 pub fn drawBackground(self: *MenuItemWidget) void {

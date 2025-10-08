@@ -47,7 +47,6 @@ pub const Color = @import("Color.zig");
 pub const Event = @import("Event.zig");
 pub const Font = @import("Font.zig");
 pub const Options = @import("Options.zig");
-pub const A11yOptions = @import("AccessibilityOptions.zig");
 pub const Point = @import("Point.zig").Point;
 pub const Path = @import("Path.zig");
 pub const Rect = @import("Rect.zig").Rect;
@@ -2012,7 +2011,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
         .expand = .horizontal,
         .font_style = .heading,
         .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 },
-        .a11y = .{ .label_for = dvui.subwindowCurrentId() },
+        //.a11y = .{ .label_for = dvui.subwindowCurrentId() },
     });
     if (openflag) |of| {
         if (dvui.buttonIcon(
@@ -3104,7 +3103,7 @@ pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options
 pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: MenuItemWidget.InitOptions, opts: Options) ?Rect.Natural {
     var mi = menuItem(src, init_opts, opts);
 
-    var labelopts = opts.strip().override(.{ .a11y = .{ .label_for = mi.data().id } });
+    var labelopts = opts.strip(); //.override(.{ .a11y = .{ .label_for = mi.data().id } });
 
     var ret: ?Rect.Natural = null;
     if (mi.activeRect()) |r| {
@@ -3158,7 +3157,8 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
 /// A clickable label.  Good for hyperlinks.
 /// Returns true if it's been clicked.
 pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) bool {
-    var lw = LabelWidget.init(src, fmt, args, init_opts, A11yOptions.defaultRoleTo(opts.override(.{ .name = "LabelClick" }), .LINK));
+    const defaults: Options = .{ .name = "LabelClick", .role = .LINK};
+    var lw = LabelWidget.init(src, fmt, args, init_opts, defaults.override(opts));
     // draw border and background
     lw.install();
 
@@ -3402,7 +3402,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
 }
 
 pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, icon_opts: IconRenderOptions, opts: Options) bool {
-    const defaults = Options{ .padding = Rect.all(4), .a11y = .{ .label = name } };
+    const defaults = Options{ .padding = Rect.all(4), .name = name };
     var bw = ButtonWidget.init(src, init_opts, defaults.override(opts));
     bw.install();
     bw.processEvents();
@@ -3453,9 +3453,10 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
 }
 
 pub var slider_defaults: Options = .{
+    .name = "Slider",
+    .role = .SLIDER,
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 20, .h = 20 },
-    .name = "Slider",
     .style = .control,
 };
 
@@ -3475,8 +3476,9 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
 
     const options = slider_defaults.override(opts);
 
-    var b = box(src, .{ .dir = init_opts.dir }, A11yOptions.defaultRoleTo(options, .SLIDER));
+    var b = box(src, .{ .dir = init_opts.dir }, options);
     defer b.deinit();
+
     if (b.data().accesskit_node()) |ak_node| {
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.FOCUS);
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.SET_VALUE);
@@ -3633,12 +3635,13 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
 }
 
 pub var slider_entry_defaults: Options = .{
+    .name = "SliderEntry",
+    .role = .SLIDER,
     .margin = Rect.all(4),
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(2),
     .background = true,
     // min size calculated from font
-    .name = "SliderEntry",
     .style = .control,
 };
 
@@ -3670,7 +3673,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
     var ret = false;
     var hover = false;
-    var b = BoxWidget.init(src, .{ .dir = .horizontal }, A11yOptions.defaultRoleTo(options, .SLIDER));
+    var b = BoxWidget.init(src, .{ .dir = .horizontal }, options);
     b.install();
     defer b.deinit();
 
@@ -4088,6 +4091,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 
 pub var checkbox_defaults: Options = .{
     .name = "Checkbox",
+    .role = .CHECK_BOX,
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(6),
 };
@@ -4100,7 +4104,7 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
     const options = checkbox_defaults.override(opts);
     var ret = false;
 
-    var bw = ButtonWidget.init(src, .{}, A11yOptions.defaultRoleTo(options.strip().override(options), .CHECK_BOX));
+    var bw = ButtonWidget.init(src, .{}, options.strip().override(options));
 
     bw.install();
     bw.processEvents();
@@ -4182,6 +4186,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
 pub var radio_defaults: Options = .{
     .name = "Radio",
+    .role = .RADIO_BUTTON,
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(6),
 };
@@ -4190,7 +4195,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     const options = radio_defaults.override(opts);
     var ret = false;
 
-    var bw = ButtonWidget.init(src, .{}, A11yOptions.defaultRoleTo(options.strip().override(options), .RADIO_BUTTON));
+    var bw = ButtonWidget.init(src, .{}, options.strip().override(options));
 
     bw.install();
     bw.processEvents();

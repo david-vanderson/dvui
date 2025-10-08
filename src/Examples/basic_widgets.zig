@@ -140,14 +140,13 @@ pub fn basicWidgets() void {
             .expand = .horizontal,
             .gravity_y = 0.5,
             .corner_radius = dvui.Rect.all(100),
-            //            .a11y = .{ .labeled_by = label_wd.id },
-            .a11y = .{ .label = "Sliders1" },
+            .name = "Sliders1",
         });
         _ = dvui.slider(@src(), .{ .dir = .vertical, .fraction = &slider_val }, .{
             .expand = .vertical,
             .min_size_content = .{ .w = 10 },
             .corner_radius = dvui.Rect.all(100),
-            .a11y = .{ .label = "Sliders2" },
+            .name = "Sliders2",
         });
         dvui.label(@src(), "Value: {d:2.2}", .{slider_val}, .{ .gravity_y = 0.5 });
     }
@@ -169,7 +168,7 @@ pub fn basicWidgets() void {
                 @src(),
                 "val: {d:0.3}",
                 .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null), .label = custom_label },
-                .{ .gravity_y = 0.5, .a11y = .{ .label = "Slider Entry" } },
+                .{ .gravity_y = 0.5 },
             );
             dvui.label(@src(), "(enter, ctrl-click or touch-tap)", .{}, .{ .gravity_y = 0.5 });
         } else {
