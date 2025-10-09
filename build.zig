@@ -560,7 +560,7 @@ fn addDvuiModule(
         dvui_mod.linkSystemLibrary("ole32", .{});
     }
 
-    dvui_mod.addIncludePath(b.path("accesskit"));
+    dvui_mod.addIncludePath(b.path("external/accesskit-c"));
     if (opts.accesskit_enabled) {
         dvui_mod.addLibraryPath(b.path("accesskit"));
         dvui_mod.linkSystemLibrary("accesskit", .{});
@@ -568,8 +568,6 @@ fn addDvuiModule(
 
     const stb_source = "external/stb/";
     dvui_mod.addIncludePath(b.path(stb_source));
-
-    dvui_mod.addIncludePath(b.path("src/external/stb"));
 
     if (target.result.cpu.arch == .wasm32 or target.result.cpu.arch == .wasm64) {
         dvui_mod.addCSourceFiles(.{
