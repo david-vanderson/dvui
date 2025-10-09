@@ -101,28 +101,32 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
         const parent_node = self.nodeParent(wd);
         nodePushChild(parent_node, wd.id.asU64());
     }
-    //if (wd.options.a11y) |a11y| {
-    //    if (a11y.label_for) |wid| {
-    //        if (self.nodes.get(wid)) |labeled_node| {
-    //            nodePushLabelledBy(labeled_node, wd.id.asU64());
-    //        } else {
-    //            dvui.log.debug("AccessKit: Invalid widget id passed to label_for: {x}", .{wid});
-    //        }
-    //    }
-    //    if (a11y.labeled_by) |wid| {
-    //        nodePushLabelledBy(ak_node, wid.asU64());
-    //    }
 
-    if (wd.options.name) |label| {
-        const str = self.window.arena().dupeZ(u8, label) catch "";
-        defer dvui.currentWindow().arena().free(str);
-        nodeSetLabel(ak_node, str);
+    if (wd.options.label) |label| {
+        switch (label) {
+            .by => |id| {
+                nodePushLabelledBy(ak_node, id.asU64());
+            },
+            .text => |txt| {
+                const str = self.window.arena().dupeZ(u8, txt) catch "";
+                defer dvui.currentWindow().arena().free(str);
+                nodeSetLabel(ak_node, str);
+            },
+        }
     }
 
     if (self.nodes.contains(wd.id)) @panic("Dupe!!"); // TODO:
     self.nodes.put(self.window.gpa, wd.id, ak_node) catch @panic("TODO");
 
     return ak_node;
+}
+
+pub inline fn nodeLabelFor(self: *AccessKit, label_id: dvui.Id, target_id: dvui.Id) void {
+    if (!dvui.accesskit_enabled) return;
+
+    if (self.nodes.get(target_id)) |node| {
+        nodePushLabelledBy(node, label_id.asU64());
+    }
 }
 
 /// Return the node of the nearest parent widget that has a non-null accesskit node.

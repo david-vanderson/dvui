@@ -2007,12 +2007,16 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Rect.Physical {
     var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
 
+    var label_wd: WidgetData = undefined;
     dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{
         .expand = .horizontal,
         .font_style = .heading,
         .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 },
-        //.a11y = .{ .label_for = dvui.subwindowCurrentId() },
+        .data_out = &label_wd,
     });
+
+    dvui.accesskit.nodeLabelFor(label_wd.id, dvui.subwindowCurrentId());
+
     if (openflag) |of| {
         if (dvui.buttonIcon(
             @src(),
@@ -3103,7 +3107,8 @@ pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options
 pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: MenuItemWidget.InitOptions, opts: Options) ?Rect.Natural {
     var mi = menuItem(src, init_opts, opts);
 
-    var labelopts = opts.strip(); //.override(.{ .a11y = .{ .label_for = mi.data().id } });
+    var label_data: WidgetData = undefined;
+    var labelopts = opts.strip().override(.{ .data_out = &label_data });
 
     var ret: ?Rect.Natural = null;
     if (mi.activeRect()) |r| {
@@ -3115,6 +3120,7 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, ini
     }
 
     labelNoFmt(@src(), label_str, .{}, labelopts);
+    dvui.accesskit.nodeLabelFor(label_data.id, mi.data().id);
 
     mi.deinit();
 
@@ -3402,7 +3408,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
 }
 
 pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, icon_opts: IconRenderOptions, opts: Options) bool {
-    const defaults = Options{ .padding = Rect.all(4), .name = name };
+    const defaults = Options{ .padding = Rect.all(4), .label = .{ .text = name } };
     var bw = ButtonWidget.init(src, init_opts, defaults.override(opts));
     bw.install();
     bw.processEvents();

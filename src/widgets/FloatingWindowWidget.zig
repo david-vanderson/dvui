@@ -96,8 +96,8 @@ drag_area: Rect.Physical = undefined,
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingWindowWidget {
     const options = defaults.override(opts);
     var box_options = options;
-    box_options.name = null;
     box_options.role = null;
+    box_options.label = null;
     box_options.id_extra = null;
     box_options.rect = null; // if the user passes in a rect, don't pass it to the BoxWidget
 
@@ -114,8 +114,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             // passing options.rect will stop WidgetData.init from calling rectFor
             // which is important because we are outside normal layout
             .rect = .{},
-            .name = options.name,
             .role = options.role,
+            .label = options.label,
         }),
         .init_options = init_opts,
     };

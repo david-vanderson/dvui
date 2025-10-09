@@ -15,8 +15,22 @@ id_extra: ?usize = null,
 /// String for programmatically interacting with widgets, like in tests.
 tag: ?[]const u8 = null,
 
-/// Name for accessibility and debugging.
+/// Name for debugging, says what kind of widget ("Button" or "Text Entry").
 name: ?[]const u8 = null,
+
+/// Accessibility role (.BUTTON or .TEXT_INPUT), says what kind of widget.
+role: ?dvui.AccessKit.Role = null,
+
+/// Accessibility label, either another widget or text.
+label: ?union(enum) {
+    /// Use the label from a different widget.  This is preferred if there is a
+    /// visible widget that labels this one.
+    by: dvui.Id,
+
+    /// Use this text as the label.  Prefer using .by if possible - .text is
+    /// for cases where there is no visible label (like an icon or image).
+    text: []const u8,
+} = null,
 
 /// Pass a pointer to get a copy of the widget's `data` when `register` was
 /// called.  Useful for getting id/rect info out of a higher-level function.
@@ -96,9 +110,6 @@ font_style: ?FontStyle = null,
 
 /// Render a box shadow in `WidgetData.borderAndBackground`.
 box_shadow: ?BoxShadow = null,
-
-/// Accessibility
-role: ?dvui.AccessKit.Role = null,
 
 pub const Expand = enum {
     none,
@@ -351,6 +362,7 @@ pub fn strip(self: *const Options) Options {
         .tab_index = null,
         .box_shadow = null,
         .role = null,
+        .label = null,
 
         // ignore defaults of internal widgets
         .margin = Rect{},
