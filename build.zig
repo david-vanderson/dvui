@@ -560,9 +560,23 @@ fn addDvuiModule(
         dvui_mod.linkSystemLibrary("ole32", .{});
     }
 
-    dvui_mod.addIncludePath(b.path("external/accesskit-c"));
+    const ak_dep = b.dependency("accesskit", .{});
+    dvui_mod.addIncludePath(ak_dep.path("include"));
     if (opts.accesskit_enabled) {
-        dvui_mod.addLibraryPath(b.path("accesskit"));
+        const os_path = if (target.result.os.tag == .windows) "windows" //
+            else if (target.result.os.tag.isDarwin()) "macos" //
+            else @panic("Not supported");
+        const arch_path = if (target.result.cpu.arch.isAARCH64()) "arm64" //
+            else if (target.result.cpu.arch == .x86) "x86" //
+            else if (target.result.cpu.arch == .x86_64) "x86_64" //
+            else @panic("Not supported");
+
+        const abi_path = if (target.result.os.tag == .windows) "msvc" //
+            else if (target.result.os.tag.isDarwin()) "" //
+            else @panic("Not supported");
+        const sub_path = b.pathJoin(&.{ "lib", os_path, arch_path, abi_path, "static" });
+        const path = ak_dep.path(sub_path);
+        dvui_mod.addLibraryPath(path);
         dvui_mod.linkSystemLibrary("accesskit", .{});
     }
 
