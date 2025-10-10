@@ -101,7 +101,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     box_options.id_extra = null;
     box_options.rect = null; // if the user passes in a rect, don't pass it to the BoxWidget
 
-
     var self = FloatingWindowWidget{
         // options is really for our embedded BoxWidget, so save them for the
         // end of install()

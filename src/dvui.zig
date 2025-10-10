@@ -3163,7 +3163,7 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
 /// A clickable label.  Good for hyperlinks.
 /// Returns true if it's been clicked.
 pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) bool {
-    const defaults: Options = .{ .name = "LabelClick", .role = .LINK};
+    const defaults: Options = .{ .name = "LabelClick", .role = .LINK };
     var lw = LabelWidget.init(src, fmt, args, init_opts, defaults.override(opts));
     // draw border and background
     lw.install();

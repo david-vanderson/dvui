@@ -24,7 +24,7 @@ pub fn init(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []cons
         size = Size{ .w = dvui.iconWidth(name, tvg_bytes, h) catch h, .h = h };
     }
 
-    const defaults = Options{ .label = .{ .text = name }, .role = .IMAGE};
+    const defaults = Options{ .label = .{ .text = name }, .role = .IMAGE };
 
     return .{
         .wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .min_size_content = size })),
