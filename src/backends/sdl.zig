@@ -1018,14 +1018,14 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 log.debug("event TEXTINPUT {s}\n", .{txt});
             }
 
-            return try win.addEventText(txt);
+            return try win.addEventText(.{ .text = txt });
         },
         if (sdl3) c.SDL_EVENT_TEXT_EDITING else c.SDL_TEXTEDITING => {
             const strlen: u8 = @intCast(c.SDL_strlen(if (sdl3) event.edit.text else &event.edit.text));
             if (self.log_events) {
                 log.debug("event TEXTEDITING {s} start {d} len {d} strlen {d}\n", .{ event.edit.text, event.edit.start, event.edit.length, strlen });
             }
-            return try win.addEventTextEx(event.edit.text[0..strlen], true);
+            return try win.addEventText(.{ .text = event.edit.text[0..strlen], .selected = true });
         },
         if (sdl3) c.SDL_EVENT_MOUSE_MOTION else c.SDL_MOUSEMOTION => {
             const touch = event.motion.which == c.SDL_TOUCH_MOUSEID;

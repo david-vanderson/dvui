@@ -114,7 +114,6 @@ pub const Toast = Dialog;
 /// Accessibility
 pub const accesskit_enabled = @import("build_options").accesskit_enabled;
 pub const AccessKit = @import("AccessKit.zig");
-pub var accesskit: AccessKit = undefined;
 
 pub const Texture = @import("Texture.zig");
 pub const TextureTarget = Texture.Target;
@@ -2015,7 +2014,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
         .data_out = &label_wd,
     });
 
-    dvui.accesskit.nodeLabelFor(label_wd.id, dvui.subwindowCurrentId());
+    dvui.AccessKit.nodeLabelFor(label_wd.id, dvui.subwindowCurrentId());
 
     if (openflag) |of| {
         if (dvui.buttonIcon(
@@ -3120,7 +3119,7 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, ini
     }
 
     labelNoFmt(@src(), label_str, .{}, labelopts);
-    dvui.accesskit.nodeLabelFor(label_data.id, mi.data().id);
+    dvui.AccessKit.nodeLabelFor(label_data.id, mi.data().id);
 
     mi.deinit();
 

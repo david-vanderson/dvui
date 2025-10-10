@@ -19,24 +19,18 @@ var _fltused: c_int = 1;
 
 pub const AccessKit = @This();
 const dvui = @import("dvui.zig");
-const SDLBackend = @import("backend");
 
-backend: *SDLBackend,
-window: *dvui.Window,
-adapter: AdapterType(),
-root_id: u64 = undefined,
+adapter: ?AdapterType() = null,
 // Note: Any access to `nodes` must be protected by `mutex`.
-nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node),
-// Note: Any access to `events` must be protected by `mutex`.
-events: std.ArrayList(dvui.Event),
+nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node) = .empty,
 // Note: Any access to `action_requests` must be protected by `mutex`.
-action_requests: std.ArrayList(ActionRequest),
+action_requests: std.ArrayList(ActionRequest) = .empty,
 status: enum {
     off,
     starting,
     on,
 } = .off,
-mutex: std.Thread.Mutex,
+mutex: std.Thread.Mutex = .{},
 
 fn AdapterType() type {
     if (builtin.os.tag == .windows) {
@@ -47,21 +41,16 @@ fn AdapterType() type {
         return void;
     }
 }
+
 /// Perform SDL3-specific initialization
-pub fn initSDL3(self: *AccessKit, backend: *SDLBackend, window: *dvui.Window) void {
-    // TODO: This is windows OS-specific right now
-    self.* = .{
-        .backend = backend,
-        .window = window,
-        .adapter = undefined,
-        .nodes = .empty,
-        .action_requests = .empty,
-        .events = .empty,
-        .mutex = .{},
-    };
+pub fn initialize(self: *AccessKit) void {
+    if (dvui.backend.kind != .sdl3) @compileError("AccessKit currently only implemented for SDL3 backend");
+
+    const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
+    const SDLBackend = dvui.backend;
 
     if (builtin.os.tag == .windows) {
-        const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(backend.window);
+        const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.instance().window);
         const hwnd = SDLBackend.c.SDL_GetPointerProperty(
             properties,
             SDLBackend.c.SDL_PROP_WINDOW_WIN32_HWND_POINTER,
@@ -76,7 +65,7 @@ pub fn initSDL3(self: *AccessKit, backend: *SDLBackend, window: *dvui.Window) vo
             self,
         ) orelse @panic("null");
     } else if (builtin.os.tag.isDarwin()) {
-        const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(backend.window);
+        const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.instance().window);
         const hwnd = SDLBackend.c.SDL_GetPointerProperty(
             properties,
             SDLBackend.c.SDL_PROP_WINDOW_COCOA_WINDOW_POINTER,
@@ -98,6 +87,10 @@ inline fn nodeCreateFake(_: *AccessKit, _: *dvui.WidgetData, _: Role) ?*Node {
 /// Create a new Node for AccessKit
 /// Returns null if no accessibility information is required for this widget.
 pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node {
+    if (self.adapter == null) {
+        self.initialize();
+    }
+
     if (!wd.visible()) return null;
 
     const is_root = (wd.id == wd.parent.data().id);
@@ -127,9 +120,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     const border_rect = dvui.clipGet().intersect(wd.borderRectScale().r);
     nodeSetBounds(ak_node, .{ .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
 
-    if (is_root) {
-        self.root_id = wd.id.asU64();
-    } else {
+    if (!is_root) {
         const parent_node = nodeParent(wd);
         nodePushChild(parent_node, wd.id.asU64());
     }
@@ -148,15 +139,16 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     }
 
     if (self.nodes.contains(wd.id)) @panic("Dupe!!"); // TODO:
-    self.nodes.put(self.window.gpa, wd.id, ak_node) catch @panic("TODO");
+    const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
+    self.nodes.put(window.gpa, wd.id, ak_node) catch @panic("TODO");
 
     return ak_node;
 }
 
-pub inline fn nodeLabelFor(self: *AccessKit, label_id: dvui.Id, target_id: dvui.Id) void {
+pub inline fn nodeLabelFor(label_id: dvui.Id, target_id: dvui.Id) void {
     if (!dvui.accesskit_enabled) return;
 
-    if (self.nodes.get(target_id)) |node| {
+    if (dvui.currentWindow().accesskit.nodes.get(target_id)) |node| {
         nodePushLabelledBy(node, label_id.asU64());
     }
 }
@@ -177,62 +169,64 @@ pub fn nodeParent(wd_in: *dvui.WidgetData) *Node {
 /// Convert any actions during the frame into events to be processed next frame
 /// Note: Assumes `mutex` is already held.
 fn processActions(self: *AccessKit) void {
+    const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
     for (self.action_requests.items) |request| {
         switch (request.action) {
-            Action.CLICK => {
-                const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
-                    dvui.log.debug("AccessKit: Action {d} received for a target {x} without a node.", .{ request.action, request.target });
-                    return;
-                };
-                const bounds = _: {
-                    const bounds_maybe = nodeBounds(ak_node);
-                    if (bounds_maybe.has_value) break :_ bounds_maybe.value;
-                    dvui.log.debug("AccessKit: Action {d} received for a target {x} without node bounds.", .{ request.action, request.target });
-                    return;
-                };
-                const click_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
-                const floating_win = self.window.subwindows.windowFor(click_point);
-                const motion_evt: dvui.Event = .{ .target_widgetId = @enumFromInt(request.target), .evt = .{ .mouse = .{
-                    .action = .{ .motion = .{ .x = 0, .y = 0 } },
-                    .button = .none,
-                    .mod = .none,
-                    .p = click_point,
-                    .floating_win = floating_win,
-                } } };
-                self.events.append(self.window.gpa, motion_evt) catch @panic("TODO");
+            //Action.CLICK => {
+            //    const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
+            //        dvui.log.debug("AccessKit: Action {d} received for a target {x} without a node.", .{ request.action, request.target });
+            //        return;
+            //    };
+            //    const bounds = _: {
+            //        const bounds_maybe = nodeBounds(ak_node);
+            //        if (bounds_maybe.has_value) break :_ bounds_maybe.value;
+            //        dvui.log.debug("AccessKit: Action {d} received for a target {x} without node bounds.", .{ request.action, request.target });
+            //        return;
+            //    };
+            //    const click_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
+            //    const floating_win = window.subwindows.windowFor(click_point);
 
-                const focus_evt: dvui.Event = .{
-                    .target_widgetId = @enumFromInt(request.target),
-                    .evt = .{
-                        .mouse = .{
-                            .action = .focus,
-                            .button = .left,
-                            .mod = .none,
-                            .p = click_point,
-                            .floating_win = floating_win,
-                        },
-                    },
-                };
-                self.events.append(self.window.gpa, focus_evt) catch @panic("TODO");
+            //    const motion_evt: dvui.Event = .{ .target_widgetId = @enumFromInt(request.target), .evt = .{ .mouse = .{
+            //        .action = .{ .motion = .{ .x = 0, .y = 0 } },
+            //        .button = .none,
+            //        .mod = .none,
+            //        .p = click_point,
+            //        .floating_win = floating_win,
+            //    } } };
+            //    window.events.append(window.gpa, motion_evt) catch @panic("TODO");
 
-                const click_evt: dvui.Event = .{ .target_widgetId = @enumFromInt(request.target), .evt = .{ .mouse = .{
-                    .action = .press,
-                    .button = .left,
-                    .mod = .none,
-                    .p = click_point,
-                    .floating_win = floating_win,
-                } } };
-                self.events.append(self.window.gpa, click_evt) catch @panic("TODO");
+            //    const focus_evt: dvui.Event = .{
+            //        .target_widgetId = @enumFromInt(request.target),
+            //        .evt = .{
+            //            .mouse = .{
+            //                .action = .focus,
+            //                .button = .left,
+            //                .mod = .none,
+            //                .p = click_point,
+            //                .floating_win = floating_win,
+            //            },
+            //        },
+            //    };
+            //    window.events.append(window.gpa, focus_evt) catch @panic("TODO");
 
-                const release_evt: dvui.Event = .{ .target_widgetId = @enumFromInt(request.target), .evt = .{ .mouse = .{
-                    .action = .release,
-                    .button = .left,
-                    .mod = .none,
-                    .p = click_point,
-                    .floating_win = floating_win,
-                } } };
-                self.events.append(self.window.gpa, release_evt) catch @panic("TODO");
-            },
+            //    const click_evt: dvui.Event = .{ .target_widgetId = @enumFromInt(request.target), .evt = .{ .mouse = .{
+            //        .action = .press,
+            //        .button = .left,
+            //        .mod = .none,
+            //        .p = click_point,
+            //        .floating_win = floating_win,
+            //    } } };
+            //    window.events.append(window.gpa, click_evt) catch @panic("TODO");
+
+            //    const release_evt: dvui.Event = .{ .target_widgetId = @enumFromInt(request.target), .evt = .{ .mouse = .{
+            //        .action = .release,
+            //        .button = .left,
+            //        .mod = .none,
+            //        .p = click_point,
+            //        .floating_win = floating_win,
+            //    } } };
+            //    window.events.append(window.gpa, release_evt) catch @panic("TODO");
+            //},
             Action.SET_VALUE => {
                 const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
                     dvui.log.debug("AccessKit: Action {d} received for a target {x} without a node.", .{ request.action, request.target });
@@ -246,27 +240,13 @@ fn processActions(self: *AccessKit) void {
                         return;
                     };
                     const mid_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
-                    const floating_win = self.window.subwindows.windowFor(mid_point);
+                    _ = window.addEventFocus(.{ .pt = mid_point, .target_id = @enumFromInt(request.target) }) catch @panic("TODO");
 
-                    self.events.append(self.window.gpa, dvui.Event{
-                        .target_widgetId = @enumFromInt(request.target),
-                        .evt = .{
-                            .mouse = .{
-                                .action = .focus,
-                                .button = .none,
-                                .mod = .none,
-                                .p = mid_point,
-                                .floating_win = floating_win,
-                            },
-                        },
-                    }) catch @panic("TODO");
-
-                    const text_value = value: {
+                    const text_value: []const u8 = value: {
                         switch (request.data.value.tag) {
-                            // Note this has to be done on gpa, rather than arena as we need it available for the start of the next frame.
-                            c.ACCESSKIT_ACTION_DATA_VALUE => break :value self.window.gpa.dupe(u8, std.mem.span(request.data.value.unnamed_0.unnamed_1.value)) catch @panic("TODO"),
+                            c.ACCESSKIT_ACTION_DATA_VALUE => break :value std.mem.span(request.data.value.unnamed_0.unnamed_1.value),
                             c.ACCESSKIT_ACTION_DATA_NUMERIC_VALUE => {
-                                var writer: std.io.Writer.Allocating = .init(self.window.gpa);
+                                var writer: std.io.Writer.Allocating = .init(window.arena());
                                 writer.writer.print("{d:.6}", .{request.data.value.unnamed_0.unnamed_2.numeric_value}) catch @panic("TODO");
                                 break :value writer.toOwnedSlice() catch @panic("TODO");
                             },
@@ -275,25 +255,16 @@ fn processActions(self: *AccessKit) void {
                             },
                         }
                     };
-                    const text_evt: dvui.Event = .{
-                        .target_widgetId = @enumFromInt(request.target),
-                        .target_windowId = self.window.subwindows.windowFor(mid_point),
-                        .evt = .{
-                            .text = .{
-                                .txt = @constCast(text_value), // TODO: Not sure proper way to do this?
-                                .selected = false,
-                            },
-                        },
-                    };
-                    self.events.append(self.window.gpa, text_evt) catch @panic("TODO");
+
+                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target)}) catch @panic("TODO");
                 }
             },
             else => {},
         }
     }
     if (self.action_requests.items.len > 0) {
-        self.action_requests.clearAndFree(self.window.gpa);
-        dvui.refresh(self.window, @src(), null);
+        self.action_requests.clearAndFree(window.gpa);
+        dvui.refresh(window, @src(), null);
     }
 }
 
@@ -311,20 +282,20 @@ pub fn pushUpdates(self: *AccessKit) void {
     // Created events will not be processed until the start of the next frame.
     self.processActions();
 
-    // TODO: Windows-specific
     if (builtin.os.tag == .windows) {
-        const queued_events = c.accesskit_windows_subclassing_adapter_update_if_active(self.adapter, frameTreeUpdate, self);
+        const queued_events = c.accesskit_windows_subclassing_adapter_update_if_active(self.adapter.?, frameTreeUpdate, self);
         if (queued_events) |events| {
             c.accesskit_windows_queued_events_raise(events);
         }
     } else if (builtin.os.tag.isDarwin()) {
-        const queued_events = c.accesskit_macos_subclassing_adapter_update_if_active(self.adapter, frameTreeUpdate, self);
+        const queued_events = c.accesskit_macos_subclassing_adapter_update_if_active(self.adapter.?, frameTreeUpdate, self);
         if (queued_events) |events| {
             c.accesskit_macos_queued_events_raise(events);
         }
     }
 
-    self.nodes.clearAndFree(self.window.gpa);
+    const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
+    self.nodes.clearAndFree(window.gpa);
 }
 
 pub fn deinit(self: *AccessKit) void {
@@ -333,23 +304,27 @@ pub fn deinit(self: *AccessKit) void {
     self.mutex.lock();
     defer self.mutex.unlock();
 
-    self.action_requests.clearAndFree(self.window.gpa);
-    self.events.clearAndFree(self.window.gpa);
-    self.nodes.clearAndFree(self.window.gpa);
+    if (self.adapter == null) return;
+
+    const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
+
+    self.action_requests.clearAndFree(window.gpa);
+    self.nodes.clearAndFree(window.gpa);
     if (builtin.os.tag == .windows)
-        c.accesskit_windows_subclassing_adapter_free(self.adapter)
+        c.accesskit_windows_subclassing_adapter_free(self.adapter.?)
     else if (builtin.os.tag.isDarwin())
-        c.accesskit_macos_subclassing_adapter_free(self.adapter);
+        c.accesskit_macos_subclassing_adapter_free(self.adapter.?);
 }
 
 /// Pushes all the nodes created during the current frame to AccessKit
 /// Called once per frame (if accessibility is initialized)
-/// Note: This callback can occur on a non-gui thread.
+/// Note: This callback is only during the dynamic extent of pushUpdates on the same thread. TODO: verify this.
 fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     var self: *AccessKit = @ptrCast(@alignCast(instance));
+    const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
 
-    const tree = treeNew(self.root_id) orelse @panic("null");
-    const result = treeUpdateWithCapacityAndFocus(self.nodes.count(), self.root_id);
+    const tree = treeNew(window.wd.id.asU64()) orelse @panic("null");
+    const result = treeUpdateWithCapacityAndFocus(self.nodes.count(), window.wd.id.asU64());
     treeUpdateSetTree(result, tree);
     var itr = self.nodes.iterator();
     while (itr.next()) |item| {
@@ -374,7 +349,8 @@ fn initialTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     self.status = .starting;
 
     // Refresh so that the full tree is sent next frame.
-    dvui.refresh(self.window, @src(), null);
+    const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
+    dvui.refresh(window, @src(), null);
     return result;
 }
 
@@ -389,8 +365,9 @@ fn doAction(request: [*c]c.accesskit_action_request, userdata: ?*anyopaque) call
     self.mutex.lock();
     defer self.mutex.unlock();
 
-    self.action_requests.append(self.window.gpa, request.?.*) catch @panic("TODO");
-    dvui.refresh(self.window, @src(), null);
+    const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
+    self.action_requests.append(window.gpa, request.?.*) catch @panic("TODO");
+    dvui.refresh(window, @src(), null);
 }
 
 /// Backends should call this to add any events raised by responding to actions.
