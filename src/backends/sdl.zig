@@ -423,9 +423,9 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !bool {
     while (c.SDL_PollEvent(&event) == poll_got_event) {
         _ = try self.addEvent(win, event);
         switch (event.type) {
-            if (sdl3) c.SDL_EVENT_QUIT else c.SDL_QUIT => {
-                return true;
-            },
+            if (sdl3) c.SDL_EVENT_WINDOW_CLOSE_REQUESTED else c.SDL_WINDOWEVENT_CLOSE,
+            if (sdl3) c.SDL_EVENT_QUIT else c.SDL_QUIT,
+            => return true,
             // TODO: revisit with sdl3
             //c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
             //std.debug.print("sdl window scale changed event\n", .{});
@@ -1500,14 +1500,19 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_FAILURE;
     };
 
-    if (event.?.type == c.SDL_EVENT_WINDOW_RESIZED) {
-        //std.debug.print("resize {d}x{d}\n", .{e.window.data1, e.window.data2});
-        // getting a resize event means we are likely in a callback, so don't call any wait functions
-        appState.have_resize = true;
-    }
-
-    if (event.?.type == c.SDL_EVENT_QUIT) {
-        return c.SDL_APP_SUCCESS; // end the program, reporting success to the OS.
+    switch (event.?.type) {
+        c.SDL_EVENT_WINDOW_RESIZED => {
+            //std.debug.print("resize {d}x{d}\n", .{e.window.data1, e.window.data2});
+            // getting a resize event means we are likely in a callback, so don't call any wait functions
+            appState.have_resize = true;
+        },
+        // Other user action requested close
+        c.SDL_EVENT_QUIT,
+        // Window manager requested close
+        c.SDL_EVENT_WINDOW_CLOSE_REQUESTED,
+        // end the program, reporting success to the OS.
+        => return c.SDL_APP_SUCCESS,
+        else => {},
     }
 
     return c.SDL_APP_CONTINUE;
