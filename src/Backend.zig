@@ -20,6 +20,10 @@ pub fn init(impl: *Implementation) Backend {
     return .{ .impl = impl };
 }
 
+pub fn instance(self: Backend) *Implementation {
+    return self.impl;
+}
+
 /// Get monotonic nanosecond timestamp. Doesn't have to be system time.
 pub fn nanoTime(self: Backend) i128 {
     return self.impl.nanoTime();

@@ -120,6 +120,9 @@ end_rendering_done: bool = false,
 
 debug: @import("Debug.zig") = .{},
 
+accesskit: dvui.AccessKit,
+
+
 pub const InitOptions = struct {
     id_extra: usize = 0,
     arena: ?std.heap.ArenaAllocator = null,
@@ -169,6 +172,7 @@ pub fn init(
             .light => Theme.builtin.adwaita_light,
             .dark => Theme.builtin.adwaita_dark,
         },
+        .accesskit = .{},
     };
 
     try self.initEvents();
@@ -307,6 +311,8 @@ pub fn init(
 }
 
 pub fn deinit(self: *Self) void {
+    if (dvui.accesskit_enabled) self.accesskit.deinit();
+
     self.data_store.deinit(self.gpa);
 
     self.texture_cache.deinit(self.gpa, self.backend);
@@ -499,6 +505,12 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
     return ret;
 }
 
+pub const AddEventTextOptions = struct {
+    text: []const u8,
+    selected: bool = false,
+    target_id: ?dvui.Id = null,
+};
+
 /// Add an event that represents text being typed.  This is distinct from
 /// key up/down because the text could come from an IME (Input Method
 /// Editor).
@@ -506,11 +518,7 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventText(self: *Self, text: []const u8) std.mem.Allocator.Error!bool {
-    return try self.addEventTextEx(text, false);
-}
-
-pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) std.mem.Allocator.Error!bool {
+pub fn addEventText(self: *Self, opts: AddEventTextOptions) std.mem.Allocator.Error!bool {
     self.positionMouseEventRemove();
 
     self.event_num += 1;
@@ -518,17 +526,59 @@ pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) std.mem.All
         .num = self.event_num,
         .evt = .{
             .text = .{
-                .txt = try self.arena().dupe(u8, text),
-                .selected = selected,
+                .txt = try self.arena().dupe(u8, opts.text),
+                .selected = opts.selected,
             },
         },
         .target_windowId = self.subwindows.focused_id,
-        .target_widgetId = if (self.subwindows.focused()) |sw| sw.focused_widget_id else null,
+        .target_widgetId = opts.target_id orelse if (self.subwindows.focused()) |sw| sw.focused_widget_id else null,
     });
 
     const ret = (self.data().id != self.subwindows.focused_id);
     try self.positionMouseEventAdd();
     return ret;
+}
+
+pub const AddEventFocusOptions = struct {
+    pt: Point.Physical,
+    button: dvui.enums.Button = .none,
+    target_id: ?dvui.Id = null,
+};
+
+/// Focus the widget under pt, without moving mouse_pt.
+pub fn addEventFocus(self: *Self, opts: AddEventFocusOptions) std.mem.Allocator.Error!bool {
+    self.positionMouseEventRemove();
+
+    const target_id = opts.target_id orelse if (self.capture) |cap| cap.id else null;
+    const winId = self.subwindows.windowFor(opts.pt);
+
+    // normally the focus event is what focuses windows, but since the
+    // base window is instantiated before events are added, it has to
+    // do any event processing as the events come in, right now
+    if (winId == self.data().id) {
+        // focus the window here so any more key events get routed
+        // properly
+        self.focusSubwindow(self.data().id, null);
+    }
+
+    // add focus event
+    self.event_num += 1;
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .target_widgetId = target_id,
+        .evt = .{
+            .mouse = .{
+                .action = .focus,
+                .button = opts.button,
+                .mod = self.modifiers,
+                .p = opts.pt,
+                .floating_win = winId,
+            },
+        },
+    });
+
+    try self.positionMouseEventAdd();
+    return (self.data().id != winId);
 }
 
 /// Add a mouse motion event that the mouse is now at physical pixel pt.  This
@@ -605,8 +655,6 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
         }
     }
 
-    self.positionMouseEventRemove();
-
     if (xynorm) |xyn| {
         self.mouse_pt = (Point{ .x = xyn.x * self.data().rect.w, .y = xyn.y * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
     }
@@ -615,31 +663,10 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
     const winId = self.subwindows.windowFor(self.mouse_pt);
 
     if (action == .press and bb.pointer()) {
-        // normally the focus event is what focuses windows, but since the
-        // base window is instantiated before events are added, it has to
-        // do any event processing as the events come in, right now
-        if (winId == self.data().id) {
-            // focus the window here so any more key events get routed
-            // properly
-            self.focusSubwindow(self.data().id, null);
-        }
-
-        // add focus event
-        self.event_num += 1;
-        try self.events.append(self.arena(), Event{
-            .num = self.event_num,
-            .target_widgetId = widget_id,
-            .evt = .{
-                .mouse = .{
-                    .action = .focus,
-                    .button = bb,
-                    .mod = self.modifiers,
-                    .p = self.mouse_pt,
-                    .floating_win = winId,
-                },
-            },
-        });
+        _ = try self.addEventFocus(.{ .pt = self.mouse_pt, .button = bb });
     }
+
+    self.positionMouseEventRemove();
 
     self.event_num += 1;
     try self.events.append(self.arena(), Event{
@@ -1330,6 +1357,10 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     if (self.inject_motion_event) {
         self.inject_motion_event = false;
         _ = try self.addEventMouseMotion(self.mouse_pt);
+    }
+
+    if (dvui.accesskit_enabled) {
+        self.accesskit.pushUpdates();
     }
 
     defer dvui.current_window = self.previous_window;
