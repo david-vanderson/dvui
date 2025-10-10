@@ -74,7 +74,6 @@ pub fn main() !void {
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(nstime);
         if (dvui.accesskit_enabled) {
-            dvui.accesskit.newFrame();
             dvui.accesskit.addAllEvents();
         }
         // send all SDL events to dvui for processing
@@ -181,11 +180,9 @@ fn gui_frame() bool {
     tl2.deinit();
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
-    var wd: dvui.WidgetData = undefined;
-    if (dvui.button(@src(), label, .{}, .{ .data_out = &wd })) {
+    if (dvui.button(@src(), label, .{}, .{})) {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
-    //ak.buttonAdd(&wd, label);
 
     if (dvui.button(@src(), "Debug Window", .{}, .{})) {
         dvui.toggleDebugWindow();

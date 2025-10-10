@@ -12,9 +12,8 @@ const SDLBackend = @import("backend");
 
 backend: *SDLBackend,
 window: *dvui.Window,
-root: *Node,
-root_id: u64,
 adapter: AdapterType(),
+root: *Node = undefined,
 // Note: Any access to `nodes` must be protected by `mutex`.
 nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node),
 // Note: Any access to `events` must be protected by `mutex`.
@@ -39,8 +38,6 @@ pub fn initSDL3(self: *AccessKit, backend: *SDLBackend, window: *dvui.Window) vo
     self.* = .{
         .backend = backend,
         .window = window,
-        .root = undefined,
-        .root_id = window.data().id.asU64(),
         .adapter = undefined,
         .nodes = .empty,
         .action_requests = .empty,
@@ -90,17 +87,15 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     if (!self.active) return null;
     if (!wd.visible()) return null;
 
-    //std.debug.print("Creating Node for {x} at {s}:{d}\n", .{ wd.id, src.file, src.line });
+    //std.debug.print("Creating Node for {x} at {s}:{d}\n", .{ wd.id, wd.src.file, wd.src.line });
 
     const ak_node = nodeNew(role.asU8()) orelse @panic("TODO");
     wd.ak_node = ak_node;
     const border_rect = dvui.clipGet().intersect(wd.borderRectScale().r);
     nodeSetBounds(ak_node, .{ .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
 
-    if (wd.id.asU64() != dvui.accesskit.root_id) {
-        const parent_node = self.nodeParent(wd);
-        nodePushChild(parent_node, wd.id.asU64());
-    }
+    const parent_node = self.nodeParent(wd);
+    nodePushChild(parent_node, wd.id.asU64());
 
     if (wd.options.label) |label| {
         switch (label) {
@@ -108,7 +103,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
                 nodePushLabelledBy(ak_node, id.asU64());
             },
             .text => |txt| {
-                const str = self.window.arena().dupeZ(u8, txt) catch "";
+                const str = dvui.currentWindow().arena().dupeZ(u8, txt) catch "";
                 defer dvui.currentWindow().arena().free(str);
                 nodeSetLabel(ak_node, str);
             },
@@ -130,13 +125,21 @@ pub inline fn nodeLabelFor(self: *AccessKit, label_id: dvui.Id, target_id: dvui.
 }
 
 /// Return the node of the nearest parent widget that has a non-null accesskit node.
-pub fn nodeParent(self: *const AccessKit, wd: *dvui.WidgetData) *Node {
-    var parent_wd = wd.parent.data();
-    // While parent is not parent's parent and parent is not ourselves.
-    while (parent_wd.id != parent_wd.parent.data().id and parent_wd.id != wd.id) : (parent_wd = parent_wd.parent.data()) {
-        return parent_wd.accesskit_node() orelse continue;
+pub fn nodeParent(self: *const AccessKit, wd_in: *dvui.WidgetData) *Node {
+    if (wd_in.id == wd_in.parent.data().id) {
+        //std.debug.print("parent ak node at root\n", .{});
+        return self.root;
     }
-    return self.root;
+
+    var wd = wd_in.parent.data();
+    while (true) : (wd = wd.parent.data()) {
+        if (wd.accesskit_node()) |ak_node| {
+            //std.debug.print("parent ak node at {x} at {s}:{d}\n", .{ wd.id, wd.src.file, wd.src.line});
+            return ak_node;
+        }
+    }
+
+    unreachable;
 }
 
 /// Convert any actions during the frame into events to be processed next frame
@@ -262,14 +265,12 @@ fn processActions(self: *AccessKit) void {
     }
 }
 
-/// Must be called at the start of each frame.
-/// TODO: This doesn't do much anymore. Maybe window should add itself as the root node instead of calling this?
-pub fn newFrame(self: *AccessKit) void {
-    self.mutex.lock();
-    defer self.mutex.unlock();
+fn nodesReset(self: *AccessKit) void {
+    self.nodes.clearAndFree(self.window.gpa);
 
-    self.root = nodeNew(Role.WINDOW.asU8()) orelse @panic("null");
-    self.nodes.put(self.window.gpa, @enumFromInt(self.root_id), self.root) catch @panic("TODO");
+    // add generic root node
+    self.root = nodeNew(Role.GENERIC_CONTAINER.asU8()) orelse @panic("null");
+    self.nodes.put(self.window.gpa, .zero, self.root) catch @panic("TODO");
 }
 
 /// Must be called at the end of each frame.
@@ -297,7 +298,8 @@ pub fn pushUpdates(self: *AccessKit) void {
             c.accesskit_macos_queued_events_raise(events);
         }
     }
-    self.nodes.clearAndFree(self.window.gpa);
+
+    self.nodesReset();
 }
 
 pub fn deinit(self: *AccessKit) void {
@@ -321,8 +323,8 @@ pub fn deinit(self: *AccessKit) void {
 fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     var self: *AccessKit = @ptrCast(@alignCast(instance));
 
-    const result = treeUpdateWithCapacityAndFocus(self.nodes.count(), self.root_id);
-    const tree = treeNew(self.root_id) orelse @panic("null");
+    const tree = treeNew(0) orelse @panic("null");
+    const result = treeUpdateWithCapacityAndFocus(self.nodes.count(), 0);
     treeUpdateSetTree(result, tree);
     var itr = self.nodes.iterator();
     while (itr.next()) |item| {
@@ -339,12 +341,14 @@ fn initialTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     self.mutex.lock();
     defer self.mutex.unlock();
 
-    const root = nodeNew(Role.WINDOW.asU8()) orelse @panic("null");
-    const tree = treeNew(self.root_id) orelse @panic("null");
-    const result = treeUpdateWithCapacityAndFocus(1, self.root_id);
+    const root = nodeNew(Role.GENERIC_CONTAINER.asU8()) orelse @panic("null");
+    const tree = treeNew(0) orelse @panic("null");
+    const result = treeUpdateWithCapacityAndFocus(1, 0);
     treeUpdateSetTree(result, tree);
-    treeUpdatePushNode(result, self.root_id, root);
+    treeUpdatePushNode(result, 0, root);
     self.active = true;
+
+    self.nodesReset();
 
     // Refresh so that the full tree is sent next frame.
     dvui.refresh(self.window, @src(), null);
