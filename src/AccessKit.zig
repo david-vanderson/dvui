@@ -24,14 +24,18 @@ const SDLBackend = @import("backend");
 backend: *SDLBackend,
 window: *dvui.Window,
 adapter: AdapterType(),
-root: *Node = undefined,
+root_id: u64 = undefined,
 // Note: Any access to `nodes` must be protected by `mutex`.
 nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node),
 // Note: Any access to `events` must be protected by `mutex`.
 events: std.ArrayList(dvui.Event),
 // Note: Any access to `action_requests` must be protected by `mutex`.
 action_requests: std.ArrayList(ActionRequest),
-active: bool = false,
+status: enum {
+    off,
+    starting,
+    on,
+} = .off,
 mutex: std.Thread.Mutex,
 
 fn AdapterType() type {
@@ -94,8 +98,27 @@ inline fn nodeCreateFake(_: *AccessKit, _: *dvui.WidgetData, _: Role) ?*Node {
 /// Create a new Node for AccessKit
 /// Returns null if no accessibility information is required for this widget.
 pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node {
-    if (!self.active) return null;
     if (!wd.visible()) return null;
+
+    const is_root = (wd.id == wd.parent.data().id);
+
+    {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+
+        switch (self.status) {
+            .off => return null,
+            .starting => {
+                if (is_root) {
+                    self.status = .on;
+                }
+                else {
+                    return null;
+                }
+            },
+            .on => {},
+        }
+    }
 
     //std.debug.print("Creating Node for {x} at {s}:{d}\n", .{ wd.id, wd.src.file, wd.src.line });
 
@@ -104,8 +127,12 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     const border_rect = dvui.clipGet().intersect(wd.borderRectScale().r);
     nodeSetBounds(ak_node, .{ .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
 
-    const parent_node = self.nodeParent(wd);
-    nodePushChild(parent_node, wd.id.asU64());
+    if (is_root) {
+        self.root_id = wd.id.asU64();
+    } else {
+        const parent_node = nodeParent(wd);
+        nodePushChild(parent_node, wd.id.asU64());
+    }
 
     if (wd.options.label) |label| {
         switch (label) {
@@ -135,12 +162,7 @@ pub inline fn nodeLabelFor(self: *AccessKit, label_id: dvui.Id, target_id: dvui.
 }
 
 /// Return the node of the nearest parent widget that has a non-null accesskit node.
-pub fn nodeParent(self: *const AccessKit, wd_in: *dvui.WidgetData) *Node {
-    if (wd_in.id == wd_in.parent.data().id) {
-        //std.debug.print("parent ak node at root\n", .{});
-        return self.root;
-    }
-
+pub fn nodeParent(wd_in: *dvui.WidgetData) *Node {
     var wd = wd_in.parent.data();
     while (true) : (wd = wd.parent.data()) {
         if (wd.accesskit_node()) |ak_node| {
@@ -275,22 +297,15 @@ fn processActions(self: *AccessKit) void {
     }
 }
 
-fn nodesReset(self: *AccessKit) void {
-    self.nodes.clearAndFree(self.window.gpa);
-
-    // add generic root node
-    self.root = nodeNew(Role.GENERIC_CONTAINER.asU8()) orelse @panic("null");
-    self.nodes.put(self.window.gpa, .zero, self.root) catch @panic("TODO");
-}
-
 /// Must be called at the end of each frame.
 /// Pushes any nodes created during the frame to the accesskit tree.
 pub fn pushUpdates(self: *AccessKit) void {
-    if (!self.active) {
-        return;
-    }
     self.mutex.lock();
     defer self.mutex.unlock();
+
+    if (self.status != .on) {
+        return;
+    }
 
     // Take any actions from this frame and create events for them.
     // Created events will not be processed until the start of the next frame.
@@ -309,7 +324,7 @@ pub fn pushUpdates(self: *AccessKit) void {
         }
     }
 
-    self.nodesReset();
+    self.nodes.clearAndFree(self.window.gpa);
 }
 
 pub fn deinit(self: *AccessKit) void {
@@ -333,8 +348,8 @@ pub fn deinit(self: *AccessKit) void {
 fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     var self: *AccessKit = @ptrCast(@alignCast(instance));
 
-    const tree = treeNew(0) orelse @panic("null");
-    const result = treeUpdateWithCapacityAndFocus(self.nodes.count(), 0);
+    const tree = treeNew(self.root_id) orelse @panic("null");
+    const result = treeUpdateWithCapacityAndFocus(self.nodes.count(), self.root_id);
     treeUpdateSetTree(result, tree);
     var itr = self.nodes.iterator();
     while (itr.next()) |item| {
@@ -351,14 +366,12 @@ fn initialTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     self.mutex.lock();
     defer self.mutex.unlock();
 
-    const root = nodeNew(Role.GENERIC_CONTAINER.asU8()) orelse @panic("null");
+    const root = nodeNew(Role.WINDOW.asU8()) orelse @panic("null");
     const tree = treeNew(0) orelse @panic("null");
     const result = treeUpdateWithCapacityAndFocus(1, 0);
     treeUpdateSetTree(result, tree);
     treeUpdatePushNode(result, 0, root);
-    self.active = true;
-
-    self.nodesReset();
+    self.status = .starting;
 
     // Refresh so that the full tree is sent next frame.
     dvui.refresh(self.window, @src(), null);

@@ -80,7 +80,7 @@ pub const AutoFitOptions = struct {
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) PanedWidget {
-    const defaults = Options{ .name = "Paned", .role = .PANE};
+    const defaults = Options{ .name = "Paned", .role = .PANE };
     const wd = WidgetData.init(src, .{}, defaults.override(opts));
 
     const rect = wd.contentRect();
