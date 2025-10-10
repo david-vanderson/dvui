@@ -6,6 +6,17 @@ pub const c = @cImport({
 });
 const builtin = @import("builtin");
 
+// When linking to accesskit for non-msvc builds, the _fltuser symbol is undefined. Zig only defines this symbol
+// for abi = .mscv and abi = .none, which makes gnu and musl builds break.
+// Until we can build and link the accesskit c library with zig, we need this work-around as
+// both the msvc and mingw builds of accesskit reference this symbol.
+comptime {
+    if (builtin.os.tag == .windows and (builtin.abi != .none or builtin.abi != .msvc)) {
+        @export(&_fltused, .{ .name = "_fltused", .linkage = .weak });
+    }
+}
+var _fltused: c_int = 1;
+
 pub const AccessKit = @This();
 const dvui = @import("dvui.zig");
 const SDLBackend = @import("backend");
@@ -83,7 +94,6 @@ inline fn nodeCreateFake(_: *AccessKit, _: *dvui.WidgetData, _: Role) ?*Node {
 /// Create a new Node for AccessKit
 /// Returns null if no accessibility information is required for this widget.
 pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node {
-
     if (!self.active) return null;
     if (!wd.visible()) return null;
 
