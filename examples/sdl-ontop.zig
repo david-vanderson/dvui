@@ -24,6 +24,7 @@ pub fn main() !void {
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         dvui.Backend.Common.windowsAttachConsole() catch {};
     }
+    SDLBackend.enableSDLLogging();
     dvui.Examples.show_demo_window = show_demo;
 
     // app_init is a stand-in for what your application is already doing to set things up
