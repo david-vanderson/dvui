@@ -1,8 +1,10 @@
-//! Adds accessibility support to widgets via the AccessKit library 
-pub const c = @cImport({
-    @cInclude("accesskit.h");
-});
+//! Adds accessibility support to widgets via the AccessKit library
 const builtin = @import("builtin");
+pub const c = @cImport({
+    if (!builtin.target.cpu.arch.isWasm()) {
+        @cInclude("accesskit.h");
+    }
+});
 
 // When linking to accesskit for non-msvc builds, the _fltuser symbol is undefined. Zig only defines this symbol
 // for abi = .mscv and abi = .none, which makes gnu and musl builds break.
@@ -102,8 +104,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
             .starting => {
                 if (is_root) {
                     self.status = .on;
-                }
-                else {
+                } else {
                     return null;
                 }
             },
@@ -254,7 +255,7 @@ fn processActions(self: *AccessKit) void {
                         }
                     };
 
-                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target)}) catch @panic("TODO");
+                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target) }) catch @panic("TODO");
                 }
             },
             else => {},
@@ -439,7 +440,9 @@ pub fn addAllEvents(self: *AccessKit) void {
 
 // While we could build this at comptime, it is nicer for ZLS etc to just
 // write it out long form. This list is inlikely to change often.
-pub const Role = enum(u8) {
+pub const Role = if (builtin.target.cpu.arch.isWasm()) RoleNoAccessKit else RoleAccessKit;
+
+const RoleAccessKit = enum(u8) {
     pub fn asU8(self: Role) u8 {
         return @intFromEnum(self);
     }
@@ -1073,7 +1076,7 @@ pub const VerticalOffset = c.accesskit_vertical_offset;
 pub const MacosAdapter = c.accesskit_macos_adapter;
 pub const MacosQueuedEvents = c.accesskit_macos_queued_events;
 pub const MacosSubclassingAdapter = c.accesskit_macos_subclassing_adapter;
-pub const Node = c.accesskit_node;
+pub const Node = if (!builtin.target.cpu.arch.isWasm()) c.accesskit_node else struct {};
 pub const Tree = c.accesskit_tree;
 pub const TreeUpdate = c.accesskit_tree_update;
 pub const UnixAdapter = c.accesskit_unix_adapter;
@@ -1113,9 +1116,193 @@ pub const CustomActions = c.accesskit_custom_actions;
 pub const Point = c.accesskit_point;
 pub const ActionDataTag = c.accesskit_action_data_Tag;
 pub const OptActionData = c.accesskit_opt_action_data;
-pub const ActionRequest = c.accesskit_action_request;
+pub const ActionRequest = if (!builtin.target.cpu.arch.isWasm()) c.accesskit_action_request else struct {};
 pub const Vec2 = c.accesskit_vec2;
 pub const Size = c.accesskit_size;
 pub const OptLresult = c.accesskit_opt_lresult;
-
 const std = @import("std");
+
+const RoleNoAccessKit = enum(u8) {
+    CELL,
+    LABEL,
+    IMAGE,
+    LINK,
+    ROW,
+    LIST_ITEM,
+    LIST_MARKER,
+    TREE_ITEM,
+    LIST_BOX_OPTION,
+    MENU_ITEM,
+    MENU_LIST_OPTION,
+    PARAGRAPH,
+    GENERIC_CONTAINER,
+    CHECK_BOX,
+    RADIO_BUTTON,
+    TEXT_INPUT,
+    BUTTON,
+    DEFAULT_BUTTON,
+    PANE,
+    ROW_HEADER,
+    COLUMN_HEADER,
+    ROW_GROUP,
+    LIST,
+    TABLE,
+    LAYOUT_TABLE_CELL,
+    LAYOUT_TABLE_ROW,
+    LAYOUT_TABLE,
+    SWITCH,
+    MENU,
+    MULTILINE_TEXT_INPUT,
+    SEARCH_INPUT,
+    DATE_INPUT,
+    DATE_TIME_INPUT,
+    WEEK_INPUT,
+    MONTH_INPUT,
+    TIME_INPUT,
+    EMAIL_INPUT,
+    NUMBER_INPUT,
+    PASSWORD_INPUT,
+    PHONE_NUMBER_INPUT,
+    URL_INPUT,
+    ABBR,
+    ALERT,
+    ALERT_DIALOG,
+    APPLICATION,
+    ARTICLE,
+    AUDIO,
+    BANNER,
+    BLOCKQUOTE,
+    CANVAS,
+    CAPTION,
+    CARET,
+    CODE,
+    COLOR_WELL,
+    COMBO_BOX,
+    EDITABLE_COMBO_BOX,
+    COMPLEMENTARY,
+    COMMENT,
+    CONTENT_DELETION,
+    CONTENT_INSERTION,
+    CONTENT_INFO,
+    DEFINITION,
+    DESCRIPTION_LIST,
+    DESCRIPTION_LIST_DETAIL,
+    DESCRIPTION_LIST_TERM,
+    DETAILS,
+    DIALOG,
+    DIRECTORY,
+    DISCLOSURE_TRIANGLE,
+    DOCUMENT,
+    EMBEDDED_OBJECT,
+    EMPHASIS,
+    FEED,
+    FIGURE_CAPTION,
+    FIGURE,
+    FOOTER,
+    FOOTER_AS_NON_LANDMARK,
+    FORM,
+    GRID,
+    GROUP,
+    HEADER,
+    HEADER_AS_NON_LANDMARK,
+    HEADING,
+    IFRAME,
+    IFRAME_PRESENTATIONAL,
+    IME_CANDIDATE,
+    KEYBOARD,
+    LEGEND,
+    LINE_BREAK,
+    LIST_BOX,
+    LOG,
+    MAIN,
+    MARK,
+    MARQUEE,
+    MATH,
+    MENU_BAR,
+    MENU_ITEM_CHECK_BOX,
+    MENU_ITEM_RADIO,
+    MENU_LIST_POPUP,
+    METER,
+    NAVIGATION,
+    NOTE,
+    PLUGIN_OBJECT,
+    PORTAL,
+    PRE,
+    PROGRESS_INDICATOR,
+    RADIO_GROUP,
+    REGION,
+    ROOT_WEB_AREA,
+    RUBY,
+    RUBY_ANNOTATION,
+    SCROLL_BAR,
+    SCROLL_VIEW,
+    SEARCH,
+    SECTION,
+    SLIDER,
+    SPIN_BUTTON,
+    SPLITTER,
+    STATUS,
+    STRONG,
+    SUGGESTION,
+    SVG_ROOT,
+    TAB,
+    TAB_LIST,
+    TAB_PANEL,
+    TERM,
+    TIME,
+    TIMER,
+    TITLE_BAR,
+    TOOLBAR,
+    TOOLTIP,
+    TREE,
+    TREE_GRID,
+    VIDEO,
+    WEB_VIEW,
+    WINDOW,
+    PDF_ACTIONABLE_HIGHLIGHT,
+    PDF_ROOT,
+    GRAPHICS_DOCUMENT,
+    GRAPHICS_OBJECT,
+    GRAPHICS_SYMBOL,
+    DOC_ABSTRACT,
+    DOC_ACKNOWLEDGEMENTS,
+    DOC_AFTERWORD,
+    DOC_APPENDIX,
+    DOC_BACK_LINK,
+    DOC_BIBLIO_ENTRY,
+    DOC_BIBLIOGRAPHY,
+    DOC_BIBLIO_REF,
+    DOC_CHAPTER,
+    DOC_COLOPHON,
+    DOC_CONCLUSION,
+    DOC_COVER,
+    DOC_CREDIT,
+    DOC_CREDITS,
+    DOC_DEDICATION,
+    DOC_ENDNOTE,
+    DOC_ENDNOTES,
+    DOC_EPIGRAPH,
+    DOC_EPILOGUE,
+    DOC_ERRATA,
+    DOC_EXAMPLE,
+    DOC_FOOTNOTE,
+    DOC_FOREWORD,
+    DOC_GLOSSARY,
+    DOC_GLOSS_REF,
+    DOC_INDEX,
+    DOC_INTRODUCTION,
+    DOC_NOTE_REF,
+    DOC_NOTICE,
+    DOC_PAGE_BREAK,
+    DOC_PAGE_FOOTER,
+    DOC_PAGE_HEADER,
+    DOC_PAGE_LIST,
+    DOC_PART,
+    DOC_PREFACE,
+    DOC_PROLOGUE,
+    DOC_PULLQUOTE,
+    DOC_QNA,
+    DOC_SUBTITLE,
+    DOC_TIP,
+    DOC_TOC,
+};
