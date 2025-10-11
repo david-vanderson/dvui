@@ -54,6 +54,7 @@ fn menuSet(m: ?*MenuWidget) ?*MenuWidget {
 
 pub var defaults: Options = .{
     .name = "Menu",
+    .role = .MENU,
     .style = .window,
 };
 

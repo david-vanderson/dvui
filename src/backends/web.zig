@@ -305,7 +305,7 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
         },
         7 => {
             const str = @as([*]u8, @ptrFromInt(int1))[0..int2];
-            _ = try w.addEventText(str);
+            _ = try w.addEventText(. { .text = str } );
         },
         8 => {
             const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + int1);

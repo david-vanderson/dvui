@@ -1336,7 +1336,7 @@ pub fn wndProc(
             const ascii_char: u8 = @truncate(wparam);
             if (std.ascii.isPrint(ascii_char)) {
                 const string: []const u8 = &.{ascii_char};
-                _ = state.dvui_window.addEventText(string) catch {};
+                _ = state.dvui_window.addEventText(. { .text = string } ) catch {};
             }
             return 0;
         },

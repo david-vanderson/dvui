@@ -15,7 +15,8 @@ const menu = dvui.MenuWidget.current;
 const MenuItemWidget = @This();
 
 pub var defaults: Options = .{
-    .name = "MenuItem",
+    .name = "Menu Item",
+    .role = .MENU_ITEM,
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
     .style = .control,

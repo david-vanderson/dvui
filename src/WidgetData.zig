@@ -24,6 +24,7 @@ options: Options,
 src: std.builtin.SourceLocation,
 rect_scale: ?RectScale = null,
 was_allocated_on_widget_stack: bool = false,
+ak_node: ?*dvui.AccessKit.Node = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
     const parent = dvui.parentGet();
@@ -102,6 +103,10 @@ pub fn register(self: *WidgetData) void {
         hasher.update(std.mem.asBytes(&self.options.hash()));
         hasher.update(std.mem.asBytes(&self.rectScale()));
         hasher.update(std.mem.asBytes(&(self.id == focused_widget_id)));
+    }
+
+    if (self.options.role) |role| {
+        _ = dvui.currentWindow().accesskit.nodeCreate(self, role);
     }
 
     if (cw.debug.target == .focused and self.id == focused_widget_id) {
@@ -342,6 +347,11 @@ pub fn minSizeReportToParent(self: *const WidgetData) void {
 pub fn validate(self: *const WidgetData) *WidgetData {
     std.debug.assert(self.id != Id.undef); // Indicates a use after deinit() error.
     return @constCast(self);
+}
+
+pub inline fn accesskit_node(self: *WidgetData) ?*dvui.AccessKit.Node {
+    if (!dvui.accesskit_enabled) return null;
+    return self.ak_node;
 }
 
 test {

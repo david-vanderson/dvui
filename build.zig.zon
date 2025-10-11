@@ -42,5 +42,9 @@
             .url = "git+https://github.com/nat3Github/zig-lib-svg2tvg#78797970be3d676a9087696ec36d6f29a522b580",
             .hash = "svg2tvg-0.0.0-HpMZuWZ3BgApRrFbd9CxtabLoXEA5odBFUDFrDqno8Ih",
         },
+        .accesskit = .{
+            .url = "https://github.com/AccessKit/accesskit-c/releases/download/0.17.1/accesskit-c-0.17.1.zip",
+            .hash = "N-V-__8AAJ37FAuEZXG593uEuYETrkoxDz78QLL32k0GkaYG",
+        },
     },
 }

@@ -15,6 +15,7 @@ const ButtonWidget = @This();
 
 pub var defaults: Options = .{
     .name = "Button",
+    .role = .BUTTON,
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
@@ -44,6 +45,11 @@ pub fn install(self: *ButtonWidget) void {
     dvui.parentSet(self.widget());
 
     dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
+
+    if (self.data().accesskit_node()) |ak_node| {
+        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.FOCUS);
+        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.CLICK);
+    }
 }
 
 pub fn matchEvent(self: *ButtonWidget, e: *Event) bool {
