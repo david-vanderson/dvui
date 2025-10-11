@@ -25,6 +25,7 @@ pub fn main() !void {
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         dvui.Backend.Common.windowsAttachConsole() catch {};
     }
+    RaylibBackend.enableRaylibLogging();
     defer _ = gpa_instance.deinit();
 
     // init Raylib backend (creates OS window)
