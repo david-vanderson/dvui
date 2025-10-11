@@ -535,6 +535,12 @@ const DvuiModuleOptions = struct {
     }
 };
 
+fn accessKitIsSupported(target: std.Build.ResolvedTarget) bool {
+    if (target.result.os.tag != .windows and !target.result.os.tag.isDarwin()) return false;
+    if (!target.result.cpu.arch.isAARCH64() and !target.result.cpu.arch.isX86()) return false;
+    return true;
+}
+
 fn addDvuiModule(
     comptime name: []const u8,
     opts: DvuiModuleOptions,
@@ -565,17 +571,16 @@ fn addDvuiModule(
     if (opts.accesskit_enabled) {
         const os_path = if (target.result.os.tag == .windows) "windows" //
             else if (target.result.os.tag.isDarwin()) "macos" //
-            else @panic("Not supported");
+            else "unsupported";
         const arch_path = if (target.result.cpu.arch.isAARCH64()) "arm64" //
             else if (target.result.cpu.arch == .x86) "x86" //
             else if (target.result.cpu.arch == .x86_64) "x86_64" //
-            else @panic("Not supported");
+            else "unsupported";
 
         const abi_path = if (target.result.os.tag == .windows) "msvc" //
             else if (target.result.os.tag.isDarwin()) "" //
-            else @panic("Not supported");
-        const sub_path = b.pathJoin(&.{ "lib", os_path, arch_path, abi_path, "static" });
-        const path = ak_dep.path(sub_path);
+            else "";
+        const path = ak_dep.path(b.pathJoin(&.{ "lib", os_path, arch_path, abi_path, "static" }));
         dvui_mod.addLibraryPath(path);
         dvui_mod.linkSystemLibrary("accesskit", .{});
     }
@@ -673,6 +678,11 @@ fn addExample(
     const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
     const compile_cmd = b.addInstallArtifact(exe, .{});
     compile_step.dependOn(&compile_cmd.step);
+
+    if (opts.accesskit_enabled and !accessKitIsSupported(opts.target)) {
+        compile_step.dependOn(&b.addFail("Accesskit is not supported for this OS / CPU combination. Build with -Daccesskit_enabled=false").step);
+    }
+
     b.getInstallStep().dependOn(compile_step);
 
     const run_cmd = b.addRunArtifact(exe);
