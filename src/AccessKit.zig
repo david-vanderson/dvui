@@ -1,6 +1,4 @@
-// TODO:
-// [ ] MENU vs MENU ITEMS.. There isn't really a distinction in DVUI? Maybe the use of floating menu widget could sort this out for us?
-// [ ] Create structs/enums for common values like ORIENTATION
+//! Adds accessibility support to widgets via the AccessKit library 
 pub const c = @cImport({
     @cInclude("accesskit.h");
 });
@@ -11,7 +9,7 @@ const builtin = @import("builtin");
 // Until we can build and link the accesskit c library with zig, we need this work-around as
 // both the msvc and mingw builds of accesskit reference this symbol.
 comptime {
-    if (builtin.os.tag == .windows and (builtin.abi != .none or builtin.abi != .msvc)) {
+    if (builtin.os.tag == .windows and builtin.cpu.arch.isX86() and dvui.accesskit_enabled) {
         @export(&_fltused, .{ .name = "_fltused", .linkage = .weak });
     }
 }
