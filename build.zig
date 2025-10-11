@@ -535,7 +535,7 @@ const DvuiModuleOptions = struct {
     }
 };
 
-fn accessKitIsSupported(target: std.Build.ResolvedTarget) bool {
+fn accessKitSupported(target: std.Build.ResolvedTarget) bool {
     if (target.result.os.tag != .windows and !target.result.os.tag.isDarwin()) return false;
     if (!target.result.cpu.arch.isAARCH64() and !target.result.cpu.arch.isX86()) return false;
     return true;
@@ -679,8 +679,8 @@ fn addExample(
     const compile_cmd = b.addInstallArtifact(exe, .{});
     compile_step.dependOn(&compile_cmd.step);
 
-    if (opts.accesskit_enabled and !accessKitIsSupported(opts.target)) {
-        compile_step.dependOn(&b.addFail("Accesskit is not supported for this OS / CPU combination. Build with -Daccesskit_enabled=false").step);
+    if (opts.accesskit_enabled and !accessKitSupported(opts.target)) {
+        compile_step.dependOn(&b.addFail("Accesskit is not supported for this target. Build with -Daccesskit=false").step);
     }
 
     b.getInstallStep().dependOn(compile_step);

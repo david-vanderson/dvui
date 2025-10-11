@@ -47,6 +47,7 @@ si: *ScrollInfo,
 init_opts: InitOptions,
 last_focus: dvui.Id,
 parentScroll: ?*ScrollContainerWidget = null,
+subwindowId: dvui.Id,
 
 // si.viewport.x/y might be updated in the middle of a frame, this prevents
 // those visual artifacts
@@ -71,6 +72,7 @@ pub fn init(src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, init_o
         .si = io_scroll_info,
         .init_opts = init_options,
         .last_focus = dvui.lastFocusedIdInFrame(),
+        .subwindowId = dvui.subwindowCurrentId(),
     };
 
     if (dvui.dataGet(null, self.data().id, "_finger_down", bool)) |down| self.finger_down = down;
@@ -429,6 +431,13 @@ pub fn processScrollTo(
 pub fn processMotionScroll(self: *ScrollContainerWidget, motion: dvui.Point.Physical) void {
     const rs = self.data().borderRectScale();
 
+    var have_parent: bool = false;
+    if (self.parentScroll) |parent| {
+        if (parent.subwindowId == self.subwindowId) {
+            have_parent = true;
+        }
+    }
+
     // We propagate (instead of not handling the motion event) because we have
     // capture.
     //
@@ -443,25 +452,37 @@ pub fn processMotionScroll(self: *ScrollContainerWidget, motion: dvui.Point.Phys
     var propagate: bool = false;
 
     if (self.si.vertical != .none) {
-        self.si.viewport.y -= motion.y / rs.s;
-        self.si.velocity.y = -motion.y / rs.s;
-        dvui.refresh(null, @src(), self.data().id);
-        if (@abs(motion.y) > @abs(motion.x) and (self.si.viewport.y < 0 or self.si.viewport.y > self.si.scrollMax(.vertical))) {
+        if (!have_parent or
+            (motion.y > 0 and self.si.viewport.y > 0) or
+            (motion.y < 0 and self.si.viewport.y < self.si.scrollMax(.vertical)))
+        {
+            // can scroll in that direction or no parent, so scroll anyway (might bump past the limit)
+            self.si.viewport.y -= motion.y / rs.s;
+            self.si.velocity.y = -motion.y / rs.s;
+            dvui.refresh(null, @src(), self.data().id);
+        } else if (@abs(motion.y) > @abs(motion.x)) {
             propagate = true;
         }
     }
+
     if (self.si.horizontal != .none) {
-        self.si.viewport.x -= motion.x / rs.s;
-        self.si.velocity.x = -motion.x / rs.s;
-        dvui.refresh(null, @src(), self.data().id);
-        if (@abs(motion.x) > @abs(motion.y) and (self.si.viewport.x < 0 or self.si.viewport.x > self.si.scrollMax(.horizontal))) {
+        if (!have_parent or
+            (motion.x > 0 and self.si.viewport.x > 0) or
+            (motion.x < 0 and self.si.viewport.x < self.si.scrollMax(.horizontal)))
+        {
+            self.si.viewport.x -= motion.x / rs.s;
+            self.si.velocity.x = -motion.x / rs.s;
+            dvui.refresh(null, @src(), self.data().id);
+        } else if (@abs(motion.x) > @abs(motion.y)) {
             propagate = true;
         }
     }
 
     if (propagate) {
         if (self.parentScroll) |parent| {
-            parent.processMotionScroll(motion);
+            if (parent.subwindowId == self.subwindowId) {
+                parent.processMotionScroll(motion);
+            }
         }
     }
 }
