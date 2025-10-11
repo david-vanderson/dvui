@@ -902,9 +902,20 @@ pub fn EndDrawingWaitEventTimeout(_: *RaylibBackend, timeout_micros: u32) void {
 }
 
 // I believe this is included through raylib.h that in turn includes <stdio.h>
-pub extern "c" fn vsnprintf(str: [*c]u8, size: isize, format: [*c]const u8, args: c.va_list) c_int;
+extern "c" fn vsnprintf(
+    str: [*c]u8,
+    size: isize,
+    format: [*c]const u8,
+    /// FIXME: This should be `c.va_list` but compilation fails because of invalid parameter for the calling convention
+    args: ?*anyopaque,
+) c_int;
 
-fn raylibLogCallback(msgType: c_int, text: [*c]const u8, args: c.va_list) callconv(.c) void {
+fn raylibLogCallback(
+    msgType: c_int,
+    text: [*c]const u8,
+    /// FIXME: This should be `c.va_list` but compilation fails because of invalid parameter for the calling convention
+    args: ?*anyopaque,
+) callconv(.c) void {
     const logger = std.log.scoped(.Raylib);
     var buf: [255:0]u8 = undefined;
     const len = vsnprintf(&buf, buf.len + 1, text, args);
@@ -928,7 +939,8 @@ fn raylibLogCallback(msgType: c_int, text: [*c]const u8, args: c.va_list) callco
 /// This set enables the internal logging of raylib based on the level of std.log
 /// (and the `.Raylib` scope, falling back to the level of `.RaylibBackend`)
 pub fn enableRaylibLogging() void {
-    c.SetTraceLogCallback(&raylibLogCallback);
+    // FIXME: @ptrCast here is needed because of `c.va_list` error, see `raylibLogCallback`
+    c.SetTraceLogCallback(@ptrCast(&raylibLogCallback));
     const level = for (std.options.log_scope_levels) |scope_level| {
         if (scope_level.scope == .Raylib) break switch (scope_level.level) {
             .debug => c.LOG_DEBUG,
