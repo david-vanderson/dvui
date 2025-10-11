@@ -1,7 +1,7 @@
 //! Adds accessibility support to widgets via the AccessKit library
 const builtin = @import("builtin");
 pub const c = @cImport({
-    if (!builtin.target.cpu.arch.isWasm()) {
+    if (builtin.link_libc) {
         @cInclude("accesskit.h");
     }
 });
@@ -440,7 +440,7 @@ pub fn addAllEvents(self: *AccessKit) void {
 
 // While we could build this at comptime, it is nicer for ZLS etc to just
 // write it out long form. This list is inlikely to change often.
-pub const Role = if (builtin.target.cpu.arch.isWasm()) RoleNoAccessKit else RoleAccessKit;
+pub const Role = if (builtin.link_libc) RoleAccessKit else RoleNoAccessKit;
 
 const RoleAccessKit = enum(u8) {
     pub fn asU8(self: Role) u8 {
