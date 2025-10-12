@@ -28,7 +28,7 @@ pub const Cache = struct {
     /// Used to defer destroying textures until the next call to `reset` or `deinit`
     trash: Trash = .empty,
 
-    pub const Storage = dvui.TrackingAutoHashMap(Key, Texture, .get_and_put);
+    pub const Storage = dvui.TrackingAutoHashMap(Key, Texture, .{ .tracking = .get_and_put, .reset = .delayed });
     pub const Trash = std.ArrayListUnmanaged(dvui.Texture);
 
     pub const Key = u64;

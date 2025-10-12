@@ -467,13 +467,13 @@ pub fn tag(name: []const u8, data: TagData) void {
     var cw = currentWindow();
 
     if (cw.tags.map.getPtr(name)) |old_data| {
-        if (old_data.used) {
+        if (old_data.used()) {
             dvui.log.err("duplicate tag name \"{s}\" id {x} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ name, data.id });
             cw.debug.widget_id = data.id;
         }
 
         old_data.*.inner = data;
-        old_data.used = true;
+        old_data.setUsed(true);
         return;
     }
 

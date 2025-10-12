@@ -73,13 +73,13 @@ theme: Theme,
 button_order: dvui.enums.DialogButtonOrder = .cancel_ok,
 
 /// Uses `gpa` allocator
-min_sizes: dvui.TrackingAutoHashMap(Id, Size, .put_only) = .empty,
+min_sizes: dvui.TrackingAutoHashMap(Id, Size, .{ .tracking = .put_only, .reset = .delayed }) = .empty,
 /// Uses `gpa` allocator
-tags: dvui.TrackingAutoHashMap([]const u8, dvui.TagData, .put_only) = .empty,
+tags: dvui.TrackingAutoHashMap([]const u8, dvui.TagData, .{ .tracking = .put_only, .reset = .immediate }) = .empty,
 /// Uses `gpa` allocator
 data_store: dvui.Data = .{},
 /// Uses `gpa` allocator
-animations: dvui.TrackingAutoHashMap(Id, Animation, .get_and_put) = .empty,
+animations: dvui.TrackingAutoHashMap(Id, Animation, .{ .tracking = .get_and_put, .reset = .immediate }) = .empty,
 /// Uses `gpa` allocator
 tab_index_prev: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator

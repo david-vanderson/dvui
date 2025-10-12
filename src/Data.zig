@@ -6,7 +6,7 @@ pub const Data = @This();
 
 pub const Key = dvui.Id;
 
-pub const Storage = dvui.TrackingAutoHashMap(Key, SavedData, .get_and_put);
+pub const Storage = dvui.TrackingAutoHashMap(Key, SavedData, .{ .tracking = .get_and_put, .reset = .delayed });
 pub const Trash = std.ArrayListUnmanaged(SavedData);
 
 const SavedData = struct {

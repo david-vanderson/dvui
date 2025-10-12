@@ -1,7 +1,15 @@
 pub fn Tracked(comptime V: type) type {
     return struct {
         inner: V,
-        used: bool = true,
+        count_times_unused: u16 = 0,
+
+        pub fn used(self: *const @This()) bool {
+            return self.count_times_unused == 0;
+        }
+
+        pub fn setUsed(self: *@This(), new_used: bool) void {
+            self.count_times_unused = if (new_used) 0 else @max(1, self.count_times_unused);
+        }
     };
 }
 
@@ -13,16 +21,33 @@ pub const TrackingKind = enum {
     put_only,
 };
 
+pub const TrackingDelay = enum {
+    /// Immediately remove the item on the first call to `reset` where the
+    /// item wasn't used
+    immediate,
+    /// This will wait for `reset_delay` number of calls to `reset` in a row
+    /// before actually removing the value from the map
+    delayed,
+
+    fn delay(comptime self: @This()) comptime_int {
+        return switch (self) {
+            .immediate => 0,
+            .delayed => 1000,
+        };
+    }
+};
+
+pub const InitOptions = struct {
+    tracking: TrackingKind,
+    reset: TrackingDelay,
+};
+
 /// A wrapper around `std.HashMapUnmanaged` that stores a `used` flag next
 /// to the value to allow for removal on unused values.
 ///
 /// Calling `TrackingAutoHashMap.reset` gives a list of keys that has not been
 /// accessed since the last call to `TrackingAutoHashMap.reset`.
-pub fn TrackingAutoHashMap(
-    comptime K: type,
-    comptime V: type,
-    comptime tracking: TrackingKind,
-) type {
+pub fn TrackingAutoHashMap(comptime K: type, comptime V: type, comptime opts: InitOptions) type {
     return struct {
         map: HashMap = .empty,
 
@@ -59,7 +84,7 @@ pub fn TrackingAutoHashMap(
             /// Sets each entry as used if get tracking is enabled
             pub fn next(it: *Iterator) ?Entry {
                 const entry = it.map_it.next() orelse return null;
-                if (tracking != .put_only) entry.value_ptr.used = true;
+                if (opts.tracking != .put_only) entry.value_ptr.setUsed(true);
                 return .{
                     .key_ptr = entry.key_ptr,
                     .value_ptr = &entry.value_ptr.inner,
@@ -69,7 +94,7 @@ pub fn TrackingAutoHashMap(
             /// A version of `next` that only returns items that has been used
             pub fn next_used(it: *Iterator) ?Entry {
                 var entry = it.map_it.next() orelse return null;
-                while (!entry.value_ptr.used) {
+                while (!entry.value_ptr.used()) {
                     entry = it.map_it.next() orelse return null;
                 }
                 return .{
@@ -84,12 +109,13 @@ pub fn TrackingAutoHashMap(
                 it.map.lockPointers();
                 defer it.map.unlockPointers();
                 var entry = it.map_it.next() orelse return null;
-                while (entry.value_ptr.used) {
-                    entry.value_ptr.used = false;
+                while (entry.value_ptr.count_times_unused <= opts.reset.delay()) {
+                    entry.value_ptr.count_times_unused += 1;
                     entry = it.map_it.next() orelse return null;
                 }
+                if (opts.reset == .delayed) std.log.debug("Remove {x}\n", .{entry.key_ptr.*});
                 defer it.map.removeByPtr(entry.key_ptr);
-                return .{ .key = entry.key_ptr.*, .value = entry.value_ptr.inner, .used = entry.value_ptr.used };
+                return .{ .key = entry.key_ptr.*, .value = entry.value_ptr.inner, .used = entry.value_ptr.used() };
             }
         };
 
@@ -124,13 +150,13 @@ pub fn TrackingAutoHashMap(
         /// Additionally contains `KV.used` to indicate if the value was used before the fetch
         pub fn fetchPut(self: *Self, allocator: Allocator, key: K, value: V) Allocator.Error!?KV {
             const kv = try self.map.fetchPut(allocator, key, .{ .inner = value }) orelse return null;
-            return .{ .key = kv.key, .value = kv.value.inner, .used = kv.value.used };
+            return .{ .key = kv.key, .value = kv.value.inner, .used = kv.value.used() };
         }
 
         /// See `HashMap.getPtr`
         pub fn getPtr(self: Self, key: K) ?*V {
             const item = self.map.getPtr(key) orelse return null;
-            if (tracking != .put_only) item.used = true;
+            if (opts.tracking != .put_only) item.setUsed(true);
             return &item.inner;
         }
 
@@ -142,7 +168,7 @@ pub fn TrackingAutoHashMap(
         /// See `HashMap.getOrPut`
         pub fn getOrPut(self: *Self, allocator: Allocator, key: K) Allocator.Error!GetOrPutResult {
             const entry = try self.map.getOrPut(allocator, key);
-            if (tracking != .put_only) entry.value_ptr.used = true;
+            if (opts.tracking != .put_only) entry.value_ptr.setUsed(true);
             return .{
                 .key_ptr = entry.key_ptr,
                 .value_ptr = &entry.value_ptr.inner,
@@ -160,14 +186,14 @@ pub fn TrackingAutoHashMap(
         /// Additionally contains `KV.used` to indicate if the value was used before the fetch
         pub fn fetchRemove(self: *Self, key: K) ?KV {
             const kv = self.map.fetchRemove(key) orelse return null;
-            return .{ .key = kv.key, .value = kv.value.inner, .used = kv.value.used };
+            return .{ .key = kv.key, .value = kv.value.inner, .used = kv.value.used() };
         }
 
         /// Takes a `value_ptr` from and iterator `Entry` or from `getPtr`and sets the used
         /// state to the value provided.
         pub fn setUsed(value_ptr: *V, used: bool) void {
             const tracked: *Tracked(V) = @fieldParentPtr("inner", value_ptr);
-            tracked.used = used;
+            tracked.setUsed(used);
         }
 
         /// Resets and removes all unused values. It you need access to the removed key and values,
@@ -180,7 +206,7 @@ pub fn TrackingAutoHashMap(
 }
 
 test TrackingAutoHashMap {
-    var map = TrackingAutoHashMap(u32, u32, .get_and_put).empty;
+    var map = TrackingAutoHashMap(u32, u32, .{ .tracking = .get_and_put, .reset = .immediate }).empty;
     defer map.deinit(std.testing.allocator);
     try std.testing.expectEqual(0, map.count());
 

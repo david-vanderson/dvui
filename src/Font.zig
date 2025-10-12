@@ -224,7 +224,7 @@ pub const builtin = struct {
 
 pub const Cache = struct {
     database: std.AutoHashMapUnmanaged(FontId, TTFEntry) = .empty,
-    cache: dvui.TrackingAutoHashMap(u64, Entry, .get_and_put) = .empty,
+    cache: dvui.TrackingAutoHashMap(u64, Entry, .{ .tracking = .get_and_put, .reset = .delayed }) = .empty,
 
     pub const TTFEntry = struct {
         bytes: []const u8,
