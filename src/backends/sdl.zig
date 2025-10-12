@@ -293,7 +293,7 @@ inline fn toErr(res: SDL_ERROR, what: []const u8) !void {
 }
 
 inline fn logErr(what: []const u8) dvui.Backend.GenericError {
-    std.log.err("{s} failed, error={s}", .{ what, c.SDL_GetError() });
+    log.err("{s} failed, error={s}", .{ what, c.SDL_GetError() });
     return dvui.Backend.GenericError.BackendError;
 }
 
@@ -332,7 +332,8 @@ pub fn setIconFromABGR8888(self: *SDLBackend, data: [*]const u8, icon_w: c_int, 
     defer if (sdl3) c.SDL_DestroySurface(surface) else c.SDL_FreeSurface(surface);
 
     if (sdl3) {
-        try toErr(c.SDL_SetWindowIcon(self.window, surface), "SDL_SetWindowIcon in setIconFromABGR8888");
+        // `toErr` logs the error for us
+        toErr(c.SDL_SetWindowIcon(self.window, surface), "SDL_SetWindowIcon in setIconFromABGR8888") catch {};
     } else {
         c.SDL_SetWindowIcon(self.window, surface);
     }
