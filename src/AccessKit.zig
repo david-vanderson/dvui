@@ -1,7 +1,7 @@
 //! Adds accessibility support to widgets via the AccessKit library
 const builtin = @import("builtin");
 pub const c = @cImport({
-    if (builtin.link_libc) {
+    if (dvui.accesskit_enabled) {
         @cInclude("accesskit.h");
     }
 });
@@ -18,6 +18,7 @@ comptime {
 var _fltused: c_int = 1;
 
 pub const AccessKit = @This();
+const std = @import("std");
 const dvui = @import("dvui.zig");
 
 adapter: ?AdapterType() = null,
@@ -33,9 +34,9 @@ status: enum {
 mutex: std.Thread.Mutex = .{},
 
 fn AdapterType() type {
-    if (builtin.os.tag == .windows) {
+    if (dvui.accesskit_enabled and builtin.os.tag == .windows) {
         return *c.accesskit_windows_subclassing_adapter;
-    } else if (builtin.os.tag.isDarwin()) {
+    } else if (dvui.accesskit_enabled and builtin.os.tag.isDarwin()) {
         return *c.accesskit_macos_subclassing_adapter;
     } else {
         return void;
@@ -440,13 +441,16 @@ pub fn addAllEvents(self: *AccessKit) void {
 
 // While we could build this at comptime, it is nicer for ZLS etc to just
 // write it out long form. This list is inlikely to change often.
-pub const Role = if (builtin.link_libc) RoleAccessKit else RoleNoAccessKit;
+pub const Role = if (dvui.accesskit_enabled) RoleAccessKit else RoleNoAccessKit;
 
-const RoleAccessKit = enum(u8) {
-    pub fn asU8(self: Role) u8 {
+// Enums
+pub const RoleAccessKit = enum(u8) {
+    pub fn asU8(self: RoleAccessKit) u8 {
         return @intFromEnum(self);
     }
 
+    UNKNOWN = c.ACCESSKIT_ROLE_UNKNOWN,
+    TEXT_RUN = c.ACCESSKIT_ROLE_TEXT_RUN,
     CELL = c.ACCESSKIT_ROLE_CELL,
     LABEL = c.ACCESSKIT_ROLE_LABEL,
     IMAGE = c.ACCESSKIT_ROLE_IMAGE,
@@ -633,6 +637,7 @@ const RoleAccessKit = enum(u8) {
     TERMINAL = c.ACCESSKIT_ROLE_TERMINAL,
 };
 
+// Enum Structs
 pub const Action = struct {
     pub const CLICK = c.ACCESSKIT_ACTION_CLICK;
     pub const FOCUS = c.ACCESSKIT_ACTION_FOCUS;
@@ -656,16 +661,175 @@ pub const Action = struct {
     pub const SET_SEQUENTIAL_FOCUS_NAVIGATION_STARTING_POINT = c.ACCESSKIT_ACTION_SET_SEQUENTIAL_FOCUS_NAVIGATION_STARTING_POINT;
     pub const SET_VALUE = c.ACCESSKIT_ACTION_SET_VALUE;
     pub const SHOW_CONTEXT_MENU = c.ACCESSKIT_ACTION_SHOW_CONTEXT_MENU;
-    pub const DATA_CUSTOM_ACTION = c.ACCESSKIT_ACTION_DATA_CUSTOM_ACTION;
-    pub const DATA_VALUE = c.ACCESSKIT_ACTION_DATA_VALUE;
-    pub const DATA_NUMERIC_VALUE = c.ACCESSKIT_ACTION_DATA_NUMERIC_VALUE;
-    pub const DATA_SCROLL_UNIT = c.ACCESSKIT_ACTION_DATA_SCROLL_UNIT;
-    pub const DATA_SCROLL_HINT = c.ACCESSKIT_ACTION_DATA_SCROLL_HINT;
-    pub const DATA_SCROLL_TO_POINT = c.ACCESSKIT_ACTION_DATA_SCROLL_TO_POINT;
-    pub const DATA_SET_SCROLL_OFFSET = c.ACCESSKIT_ACTION_DATA_SET_SCROLL_OFFSET;
-    pub const DATA_SET_TEXT_SELECTION = c.ACCESSKIT_ACTION_DATA_SET_TEXT_SELECTION;
 };
 
+pub const AriaCurrent = struct {
+    pub const FALSE = c.ACCESSKIT_ARIA_CURRENT_FALSE;
+    pub const TRUE = c.ACCESSKIT_ARIA_CURRENT_TRUE;
+    pub const PAGE = c.ACCESSKIT_ARIA_CURRENT_PAGE;
+    pub const STEP = c.ACCESSKIT_ARIA_CURRENT_STEP;
+    pub const LOCATION = c.ACCESSKIT_ARIA_CURRENT_LOCATION;
+    pub const DATE = c.ACCESSKIT_ARIA_CURRENT_DATE;
+    pub const TIME = c.ACCESSKIT_ARIA_CURRENT_TIME;
+};
+
+pub const AutoComplete = struct {
+    pub const INLINE = c.ACCESSKIT_AUTO_COMPLETE_INLINE;
+    pub const LIST = c.ACCESSKIT_AUTO_COMPLETE_LIST;
+    pub const BOTH = c.ACCESSKIT_AUTO_COMPLETE_BOTH;
+};
+
+pub const HasPopup = struct {
+    pub const MENU = c.ACCESSKIT_HAS_POPUP_MENU;
+    pub const LISTBOX = c.ACCESSKIT_HAS_POPUP_LISTBOX;
+    pub const TREE = c.ACCESSKIT_HAS_POPUP_TREE;
+    pub const GRID = c.ACCESSKIT_HAS_POPUP_GRID;
+    pub const DIALOG = c.ACCESSKIT_HAS_POPUP_DIALOG;
+};
+
+pub const Invalid = struct {
+    pub const TRUE = c.ACCESSKIT_INVALID_TRUE;
+    pub const GRAMMAR = c.ACCESSKIT_INVALID_GRAMMAR;
+    pub const SPELLING = c.ACCESSKIT_INVALID_SPELLING;
+};
+
+pub const ListStyle = struct {
+    pub const CIRCLE = c.ACCESSKIT_LIST_STYLE_CIRCLE;
+    pub const DISC = c.ACCESSKIT_LIST_STYLE_DISC;
+    pub const IMAGE = c.ACCESSKIT_LIST_STYLE_IMAGE;
+    pub const NUMERIC = c.ACCESSKIT_LIST_STYLE_NUMERIC;
+    pub const SQUARE = c.ACCESSKIT_LIST_STYLE_SQUARE;
+    pub const OTHER = c.ACCESSKIT_LIST_STYLE_OTHER;
+};
+
+pub const Live = struct {
+    pub const OFF = c.ACCESSKIT_LIVE_OFF;
+    pub const POLITE = c.ACCESSKIT_LIVE_POLITE;
+    pub const ASSERTIVE = c.ACCESSKIT_LIVE_ASSERTIVE;
+};
+
+pub const Orientation = struct {
+    pub const HORIZONTAL = c.ACCESSKIT_ORIENTATION_HORIZONTAL;
+    pub const VERTICAL = c.ACCESSKIT_ORIENTATION_VERTICAL;
+};
+
+pub const ScrollHint = struct {
+    pub const TOP_LEFT = c.ACCESSKIT_SCROLL_HINT_TOP_LEFT;
+    pub const BOTTOM_RIGHT = c.ACCESSKIT_SCROLL_HINT_BOTTOM_RIGHT;
+    pub const TOP_EDGE = c.ACCESSKIT_SCROLL_HINT_TOP_EDGE;
+    pub const BOTTOM_EDGE = c.ACCESSKIT_SCROLL_HINT_BOTTOM_EDGE;
+    pub const LEFT_EDGE = c.ACCESSKIT_SCROLL_HINT_LEFT_EDGE;
+    pub const RIGHT_EDGE = c.ACCESSKIT_SCROLL_HINT_RIGHT_EDGE;
+};
+
+pub const ScrollUnit = struct {
+    pub const ITEM = c.ACCESSKIT_SCROLL_UNIT_ITEM;
+    pub const PAGE = c.ACCESSKIT_SCROLL_UNIT_PAGE;
+};
+
+pub const SortDirection = struct {
+    pub const ASCENDING = c.ACCESSKIT_SORT_DIRECTION_ASCENDING;
+    pub const DESCENDING = c.ACCESSKIT_SORT_DIRECTION_DESCENDING;
+    pub const OTHER = c.ACCESSKIT_SORT_DIRECTION_OTHER;
+};
+
+pub const TextAlign = struct {
+    pub const LEFT = c.ACCESSKIT_TEXT_ALIGN_LEFT;
+    pub const RIGHT = c.ACCESSKIT_TEXT_ALIGN_RIGHT;
+    pub const CENTER = c.ACCESSKIT_TEXT_ALIGN_CENTER;
+    pub const JUSTIFY = c.ACCESSKIT_TEXT_ALIGN_JUSTIFY;
+};
+
+pub const TextDecoration = struct {
+    pub const SOLID = c.ACCESSKIT_TEXT_DECORATION_SOLID;
+    pub const DOTTED = c.ACCESSKIT_TEXT_DECORATION_DOTTED;
+    pub const DASHED = c.ACCESSKIT_TEXT_DECORATION_DASHED;
+    pub const DOUBLE = c.ACCESSKIT_TEXT_DECORATION_DOUBLE;
+    pub const WAVY = c.ACCESSKIT_TEXT_DECORATION_WAVY;
+};
+
+pub const TextDirection = struct {
+    pub const LEFT_TO_RIGHT = c.ACCESSKIT_TEXT_DIRECTION_LEFT_TO_RIGHT;
+    pub const RIGHT_TO_LEFT = c.ACCESSKIT_TEXT_DIRECTION_RIGHT_TO_LEFT;
+    pub const TOP_TO_BOTTOM = c.ACCESSKIT_TEXT_DIRECTION_TOP_TO_BOTTOM;
+    pub const BOTTOM_TO_TOP = c.ACCESSKIT_TEXT_DIRECTION_BOTTOM_TO_TOP;
+};
+
+pub const Toggled = struct {
+    pub const FALSE = c.ACCESSKIT_TOGGLED_FALSE;
+    pub const TRUE = c.ACCESSKIT_TOGGLED_TRUE;
+    pub const MIXED = c.ACCESSKIT_TOGGLED_MIXED;
+};
+
+pub const VerticalOffset = struct {
+    pub const SUBSCRIPT = c.ACCESSKIT_VERTICAL_OFFSET_SUBSCRIPT;
+    pub const SUPERSCRIPT = c.ACCESSKIT_VERTICAL_OFFSET_SUPERSCRIPT;
+};
+
+pub const ActionData = struct {
+    pub const CUSTOM_ACTION = c.ACCESSKIT_ACTION_DATA_CUSTOM_ACTION;
+    pub const VALUE = c.ACCESSKIT_ACTION_DATA_VALUE;
+    pub const NUMERIC_VALUE = c.ACCESSKIT_ACTION_DATA_NUMERIC_VALUE;
+    pub const SCROLL_UNIT = c.ACCESSKIT_ACTION_DATA_SCROLL_UNIT;
+    pub const SCROLL_HINT = c.ACCESSKIT_ACTION_DATA_SCROLL_HINT;
+    pub const SCROLL_TO_POINT = c.ACCESSKIT_ACTION_DATA_SCROLL_TO_POINT;
+    pub const SET_SCROLL_OFFSET = c.ACCESSKIT_ACTION_DATA_SET_SCROLL_OFFSET;
+    pub const SET_TEXT_SELECTION = c.ACCESSKIT_ACTION_DATA_SET_TEXT_SELECTION;
+};
+
+// Mappings
+pub const MacosAdapter = c.accesskit_macos_adapter;
+pub const MacosQueuedEvents = c.accesskit_macos_queued_events;
+pub const MacosSubclassingAdapter = c.accesskit_macos_subclassing_adapter;
+pub const Node = if (dvui.accesskit_enabled) c.accesskit_node else struct {};
+pub const Tree = c.accesskit_tree;
+pub const TreeUpdate = c.accesskit_tree_update;
+pub const UnixAdapter = c.accesskit_unix_adapter;
+pub const WindowsAdapter = c.accesskit_windows_adapter;
+pub const WindowsQueuedEvents = c.accesskit_windows_queued_events;
+pub const WindowsSubclassingAdapter = c.accesskit_windows_subclassing_adapter;
+pub const nodeId = c.accesskit_node_id;
+pub const NodeIds = c.accesskit_node_ids;
+pub const OptNodeId = c.accesskit_opt_node_id;
+pub const OptDouble = c.accesskit_opt_double;
+pub const OptIndex = c.accesskit_opt_index;
+pub const OptColor = c.accesskit_opt_color;
+pub const OptTextDecoration = c.accesskit_opt_text_decoration;
+pub const Lengths = c.accesskit_lengths;
+pub const OptCoords = c.accesskit_opt_coords;
+pub const OptBool = c.accesskit_opt_bool;
+pub const OptInvalid = c.accesskit_opt_invalid;
+pub const OptToggled = c.accesskit_opt_toggled;
+pub const OptLive = c.accesskit_opt_live;
+pub const OptTextDirection = c.accesskit_opt_text_direction;
+pub const OptOrientation = c.accesskit_opt_orientation;
+pub const OptSortDirection = c.accesskit_opt_sort_direction;
+pub const OptAriaCurrent = c.accesskit_opt_aria_current;
+pub const OptAutoComplete = c.accesskit_opt_auto_complete;
+pub const OptHasPopup = c.accesskit_opt_has_popup;
+pub const OptListStyle = c.accesskit_opt_list_style;
+pub const OptTextAlign = c.accesskit_opt_text_align;
+pub const OptVerticalOffset = c.accesskit_opt_vertical_offset;
+pub const Affine = c.accesskit_affine;
+pub const Rect = c.accesskit_rect;
+pub const OptRect = c.accesskit_opt_rect;
+pub const TextPosition = c.accesskit_text_position;
+pub const TextSelection = c.accesskit_text_selection;
+pub const OptTextSelection = c.accesskit_opt_text_selection;
+pub const CustomAction = c.accesskit_custom_action;
+pub const CustomActions = c.accesskit_custom_actions;
+pub const Point = c.accesskit_point;
+pub const actionDataTag = c.accesskit_action_data_Tag;
+pub const OptActionData = c.accesskit_opt_action_data;
+pub const ActionRequest = if (dvui.accesskit_enabled) c.accesskit_action_request else struct {};
+pub const Vec2 = c.accesskit_vec2;
+pub const Size = c.accesskit_size;
+pub const actionHandlerCallback = c.accesskit_action_handler_callback;
+pub const treeUpdateFactoryUserdata = c.accesskit_tree_update_factory_userdata;
+pub const treeUpdateFactory = c.accesskit_tree_update_factory;
+pub const activationHandlerCallback = c.accesskit_activation_handler_callback;
+pub const deactivationHandlerCallback = c.accesskit_deactivation_handler_callback;
+pub const OptLresult = c.accesskit_opt_lresult;
 pub const nodeRole = c.accesskit_node_role;
 pub const nodeSetRole = c.accesskit_node_set_role;
 pub const nodeSupportsAction = c.accesskit_node_supports_action;
@@ -994,8 +1158,7 @@ pub const nodeCustomActions = c.accesskit_node_custom_actions;
 pub const nodeSetCustomActions = c.accesskit_node_set_custom_actions;
 pub const nodePushCustomAction = c.accesskit_node_push_custom_action;
 pub const nodeClearCustomActions = c.accesskit_node_clear_custom_actions;
-// Use the nodeCreate method instead.
-const nodeNew = c.accesskit_node_new;
+pub const nodeNew = c.accesskit_node_new;
 pub const nodeFree = c.accesskit_node_free;
 pub const treeNew = c.accesskit_tree_new;
 pub const treeFree = c.accesskit_tree_free;
@@ -1048,81 +1211,38 @@ pub const rectIntersect = c.accesskit_rect_intersect;
 pub const sizeToVec2 = c.accesskit_size_to_vec2;
 pub const vec2ToPoint = c.accesskit_vec2_to_point;
 pub const vec2ToSize = c.accesskit_vec2_to_size;
+pub const macosQueuedEventsRaise = c.accesskit_macos_queued_events_raise;
+pub const macosAdapterNew = c.accesskit_macos_adapter_new;
+pub const macosAdapterFree = c.accesskit_macos_adapter_free;
+pub const macosAdapterUpdateIfActive = c.accesskit_macos_adapter_update_if_active;
+pub const macosAdapterUpdateViewFocusState = c.accesskit_macos_adapter_update_view_focus_state;
+pub const macosAdapterViewChildren = c.accesskit_macos_adapter_view_children;
+pub const macosAdapterFocus = c.accesskit_macos_adapter_focus;
+pub const macosAdapterHitTest = c.accesskit_macos_adapter_hit_test;
+pub const macosSubclassingAdapterNew = c.accesskit_macos_subclassing_adapter_new;
+pub const macosSubclassingAdapterForWindow = c.accesskit_macos_subclassing_adapter_for_window;
+pub const macosSubclassingAdapterFree = c.accesskit_macos_subclassing_adapter_free;
+pub const macosSubclassingAdapterUpdateIfActive = c.accesskit_macos_subclassing_adapter_update_if_active;
+pub const macosSubclassingAdapterUpdateViewFocusState = c.accesskit_macos_subclassing_adapter_update_view_focus_state;
+pub const macosAddFocusForwarderToWindowClass = c.accesskit_macos_add_focus_forwarder_to_window_class;
 pub const unixAdapterNew = c.accesskit_unix_adapter_new;
 pub const unixAdapterFree = c.accesskit_unix_adapter_free;
 pub const unixAdapterSetRootWindowBounds = c.accesskit_unix_adapter_set_root_window_bounds;
 pub const unixAdapterUpdateIfActive = c.accesskit_unix_adapter_update_if_active;
 pub const unixAdapterUpdateWindowFocusState = c.accesskit_unix_adapter_update_window_focus_state;
-
-// Action is overridden above
-//pub const Action = ak.accesskit_action;
-pub const AriaCurrent = c.accesskit_aria_current;
-pub const AutoComplete = c.accesskit_auto_complete;
-pub const HasPopup = c.accesskit_has_popup;
-pub const Invalid = c.accesskit_invalid;
-pub const ListStyle = c.accesskit_list_style;
-pub const Live = c.accesskit_live;
-pub const Orientation = c.accesskit_orientation;
-// Role is overridden above
-//pub const Role = ak.accesskit_role;
-pub const ScrollHint = c.accesskit_scroll_hint;
-pub const ScrollUnit = c.accesskit_scroll_unit;
-pub const SortDirection = c.accesskit_sort_direction;
-pub const TextAlign = c.accesskit_text_align;
-pub const TextDecoration = c.accesskit_text_decoration;
-pub const TextDirection = c.accesskit_text_direction;
-pub const Toggled = c.accesskit_toggled;
-pub const VerticalOffset = c.accesskit_vertical_offset;
-pub const MacosAdapter = c.accesskit_macos_adapter;
-pub const MacosQueuedEvents = c.accesskit_macos_queued_events;
-pub const MacosSubclassingAdapter = c.accesskit_macos_subclassing_adapter;
-pub const Node = if (!builtin.target.cpu.arch.isWasm()) c.accesskit_node else struct {};
-pub const Tree = c.accesskit_tree;
-pub const TreeUpdate = c.accesskit_tree_update;
-pub const UnixAdapter = c.accesskit_unix_adapter;
-pub const WindowsAdapter = c.accesskit_windows_adapter;
-pub const WindowsQueuedEvents = c.accesskit_windows_queued_events;
-pub const WindowsSubclassingAdapter = c.accesskit_windows_subclassing_adapter;
-pub const NodeId = c.accesskit_node_id;
-pub const NodeIds = c.accesskit_node_ids;
-pub const OptNodeId = c.accesskit_opt_node_id;
-pub const OptDouble = c.accesskit_opt_double;
-pub const OptIndex = c.accesskit_opt_index;
-pub const OptColor = c.accesskit_opt_color;
-pub const OptTextDecoration = c.accesskit_opt_text_decoration;
-pub const Lengths = c.accesskit_lengths;
-pub const OptCoords = c.accesskit_opt_coords;
-pub const OptBool = c.accesskit_opt_bool;
-pub const OptInvalid = c.accesskit_opt_invalid;
-pub const OptToggled = c.accesskit_opt_toggled;
-pub const OptLive = c.accesskit_opt_live;
-pub const OptTextDirection = c.accesskit_opt_text_direction;
-pub const OptOrientation = c.accesskit_opt_orientation;
-pub const OptSortDirection = c.accesskit_opt_sort_direction;
-pub const OptAriaCurrent = c.accesskit_opt_aria_current;
-pub const OptAutoComplete = c.accesskit_opt_auto_complete;
-pub const OptHasPopup = c.accesskit_opt_has_popup;
-pub const OptListStyle = c.accesskit_opt_list_style;
-pub const OptTextAlign = c.accesskit_opt_text_align;
-pub const OptVerticalOffset = c.accesskit_opt_vertical_offset;
-pub const Affine = c.accesskit_affine;
-pub const Rect = c.accesskit_rect;
-pub const OptRect = c.accesskit_opt_rect;
-pub const TextPosition = c.accesskit_text_position;
-pub const TextSelection = c.accesskit_text_selection;
-pub const OptTextSelection = c.accesskit_opt_text_selection;
-pub const CustomAction = c.accesskit_custom_action;
-pub const CustomActions = c.accesskit_custom_actions;
-pub const Point = c.accesskit_point;
-pub const ActionDataTag = c.accesskit_action_data_Tag;
-pub const OptActionData = c.accesskit_opt_action_data;
-pub const ActionRequest = if (!builtin.target.cpu.arch.isWasm()) c.accesskit_action_request else struct {};
-pub const Vec2 = c.accesskit_vec2;
-pub const Size = c.accesskit_size;
-pub const OptLresult = c.accesskit_opt_lresult;
-const std = @import("std");
-
-const RoleNoAccessKit = enum(u8) {
+pub const windowsQueuedEventsRaise = c.accesskit_windows_queued_events_raise;
+pub const windowsAdapterNew = c.accesskit_windows_adapter_new;
+pub const windowsAdapterFree = c.accesskit_windows_adapter_free;
+pub const windowsAdapterUpdateIfActive = c.accesskit_windows_adapter_update_if_active;
+pub const windowsAdapterUpdateWindowFocusState = c.accesskit_windows_adapter_update_window_focus_state;
+pub const windowsAdapterHandleWmGetobject = c.accesskit_windows_adapter_handle_wm_getobject;
+pub const windowsSubclassingAdapterNew = c.accesskit_windows_subclassing_adapter_new;
+pub const windowsSubclassingAdapterFree = c.accesskit_windows_subclassing_adapter_free;
+pub const windowsSubclassingAdapterUpdateIfActive = c.accesskit_windows_subclassing_adapter_update_if_active;
+// Non libc Mappings
+pub const RoleNoAccessKit = enum {
+    UNKNOWN,
+    TEXT_RUN,
     CELL,
     LABEL,
     IMAGE,
@@ -1305,4 +1425,6 @@ const RoleNoAccessKit = enum(u8) {
     DOC_SUBTITLE,
     DOC_TIP,
     DOC_TOC,
+    LIST_GRID,
+    TERMINAL,
 };
