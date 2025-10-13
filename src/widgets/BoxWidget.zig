@@ -48,7 +48,7 @@ ran_off: bool = false,
 pixels_per_w: f32 = 0,
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) BoxWidget {
-    const defaults = Options{ .name = "Box", .role = .GENERIC_CONTAINER };
+    const defaults = Options{ .name = "Box", .role = .generic_container };
     const wd = WidgetData.init(src, .{}, defaults.override(opts));
     return .{
         .wd = wd,

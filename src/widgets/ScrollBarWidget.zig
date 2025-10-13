@@ -15,7 +15,7 @@ const ScrollBarWidget = @This();
 
 pub var defaults: Options = .{
     .name = "ScrollBar",
-    .role = .SCROLL_BAR,
+    .role = .scroll_bar,
     .min_size_content = .{ .w = 10, .h = 10 },
 };
 
@@ -68,36 +68,30 @@ pub fn install(self: *ScrollBarWidget) void {
             .horizontal => {
                 dvui.AccessKit.nodeSetLabel(ak_node, "Horizontal");
                 dvui.AccessKit.nodeClearReadOnly(ak_node);
-                dvui.AccessKit.nodeSetOrientation(ak_node, dvui.AccessKit.c.ACCESSKIT_ORIENTATION_HORIZONTAL);
+                dvui.AccessKit.nodeSetOrientation(ak_node, dvui.AccessKit.Orientation.horizontal);
                 dvui.AccessKit.nodeSetNumericValue(ak_node, self.si.viewport.x);
                 dvui.AccessKit.nodeSetMinNumericValue(ak_node, 0);
                 dvui.AccessKit.nodeSetMaxNumericValue(ak_node, self.si.virtual_size.w);
                 dvui.AccessKit.nodeSetNumericValueStep(ak_node, 1);
                 dvui.AccessKit.nodeSetNumericValueJump(ak_node, 100);
 
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.CLICK);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.FOCUS);
-                //dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SCROLL_LEFT);
-                //dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SCROLL_RIGHT);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SET_SCROLL_OFFSET);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SCROLL_TO_POINT);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SET_VALUE);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.INCREMENT);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.DECREMENT);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.click);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_scroll_offset);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.scroll_to_point);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_value);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.increment);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.decrement);
             },
 
             .vertical => {
+                // TODO: Fix actions once we know what the accesskit issue with SB being readonly is.
                 dvui.AccessKit.nodeSetNumericValue(ak_node, self.si.viewport.y);
-                dvui.AccessKit.nodeSetOrientation(ak_node, dvui.AccessKit.c.ACCESSKIT_ORIENTATION_VERTICAL);
+                dvui.AccessKit.nodeSetOrientation(ak_node, dvui.AccessKit.Orientation.vertical);
                 dvui.AccessKit.nodeSetLabel(ak_node, "Vertical");
                 dvui.AccessKit.nodeSetScrollY(ak_node, 50);
                 dvui.AccessKit.nodeSetScrollYMin(ak_node, 0);
                 dvui.AccessKit.nodeSetScrollYMax(ak_node, 100);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SCROLL_UP);
-
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SCROLL_UP);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SCROLL_DOWN);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SCROLL_TO_POINT);
             },
         }
     }

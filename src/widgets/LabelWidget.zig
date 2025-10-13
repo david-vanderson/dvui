@@ -11,7 +11,7 @@ const LabelWidget = @This();
 
 pub var defaults: Options = .{
     .name = "Label",
-    .role = .LABEL,
+    .role = .label,
     .padding = Rect.all(6),
 };
 

@@ -3162,7 +3162,7 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
 /// A clickable label.  Good for hyperlinks.
 /// Returns true if it's been clicked.
 pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) bool {
-    const defaults: Options = .{ .name = "LabelClick", .role = .LINK };
+    const defaults: Options = .{ .name = "LabelClick", .role = .link };
     var lw = LabelWidget.init(src, fmt, args, init_opts, defaults.override(opts));
     // draw border and background
     lw.install();
@@ -3459,7 +3459,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
 
 pub var slider_defaults: Options = .{
     .name = "Slider",
-    .role = .SLIDER,
+    .role = .slider,
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 20, .h = 20 },
     .style = .control,
@@ -3485,8 +3485,8 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
     defer b.deinit();
 
     if (b.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.FOCUS);
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.SET_VALUE);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
         AccessKit.nodeSetNumericValue(ak_node, init_opts.fraction.*);
         AccessKit.nodeSetMinNumericValue(ak_node, 0);
         AccessKit.nodeSetMaxNumericValue(ak_node, 1);
@@ -3641,7 +3641,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
 
 pub var slider_entry_defaults: Options = .{
     .name = "SliderEntry",
-    .role = .SLIDER,
+    .role = .slider,
     .margin = Rect.all(4),
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(2),
@@ -3683,8 +3683,8 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     defer b.deinit();
 
     if (b.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.FOCUS);
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.SET_VALUE);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
         AccessKit.nodeSetNumericValue(ak_node, init_opts.value.*);
         if (init_opts.min) |min| AccessKit.nodeSetMinNumericValue(ak_node, min);
         if (init_opts.max) |max| AccessKit.nodeSetMaxNumericValue(ak_node, max);
@@ -4096,7 +4096,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 
 pub var checkbox_defaults: Options = .{
     .name = "Checkbox",
-    .role = .CHECK_BOX,
+    .role = .check_box,
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(6),
 };
@@ -4191,7 +4191,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
 pub var radio_defaults: Options = .{
     .name = "Radio",
-    .role = .RADIO_BUTTON,
+    .role = .radio_button,
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(6),
 };

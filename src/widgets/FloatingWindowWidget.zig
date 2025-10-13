@@ -16,7 +16,7 @@ const FloatingWindowWidget = @This();
 /// Defaults is for the embedded box widget
 pub var defaults: Options = .{
     .name = "Window",
-    .role = .WINDOW,
+    .role = .window,
     .corner_radius = Rect.all(5),
     .margin = Rect.all(2),
     .border = Rect.all(1),

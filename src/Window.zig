@@ -122,7 +122,6 @@ debug: @import("Debug.zig") = .{},
 
 accesskit: dvui.AccessKit,
 
-
 pub const InitOptions = struct {
     id_extra: usize = 0,
     arena: ?std.heap.ArenaAllocator = null,
@@ -157,7 +156,7 @@ pub fn init(
             .src = src,
             .id = hashval,
             .init_options = .{ .subwindow = true },
-            .options = .{ .name = "Window", .role = .WINDOW },
+            .options = .{ .name = "Window", .role = .window },
             // Unused
             .min_size = undefined,
             // Set in `begin`

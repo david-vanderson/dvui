@@ -17,7 +17,7 @@ const TextEntryWidget = @This();
 
 pub var defaults: Options = .{
     .name = "TextEntry",
-    .role = .TEXT_INPUT, // can change to multiline in init
+    .role = .text_input, // can change to multiline in init
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
     .border = Rect.all(1),
@@ -105,7 +105,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     var options = defaults.min_sizeM(14, 1);
 
     if (init_opts.multiline) {
-        options.role = .MULTILINE_TEXT_INPUT;
+        options.role = .multiline_text_input;
     }
 
     options = options.override(opts);
@@ -244,8 +244,8 @@ pub fn install(self: *TextEntryWidget) void {
     // textLayout clips to its content, but we need to get events out to our border
     dvui.clipSet(borderClip);
     if (self.data().accesskit_node()) |ak_node| {
-        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.FOCUS);
-        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.SET_VALUE);
+        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
+        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_value);
         const str = dvui.currentWindow().arena().dupeZ(u8, self.text) catch "";
         defer dvui.currentWindow().arena().free(str);
         // TODO: We don't want to always push large amounts of text each frame. So we either need to look at pushing
