@@ -179,7 +179,7 @@ pub fn install(self: *FloatingMenuWidget) void {
         pm.child_popup_rect = rs.r;
     }
 
-    self.menu = MenuWidget.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowId }, self.options.strip().override(.{ .expand = .horizontal }));
+    self.menu = MenuWidget.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowId }, self.options.strip().override(.{ .role = .none, .expand = .horizontal }));
     self.menu.install();
 }
 

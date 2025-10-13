@@ -93,6 +93,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     }
 
     if (!wd.visible()) return null;
+    if (wd.options.role == .none) return null;
 
     const is_root = (wd.id == wd.parent.data().id);
 
@@ -449,6 +450,7 @@ pub const RoleAccessKit = enum(u8) {
         return @intFromEnum(self);
     }
 
+    none = 255,
     unknown = c.ACCESSKIT_ROLE_UNKNOWN,
     text_run = c.ACCESSKIT_ROLE_TEXT_RUN,
     cell = c.ACCESSKIT_ROLE_CELL,
@@ -1241,6 +1243,7 @@ pub const windowsSubclassingAdapterFree = c.accesskit_windows_subclassing_adapte
 pub const windowsSubclassingAdapterUpdateIfActive = c.accesskit_windows_subclassing_adapter_update_if_active;
 // Non libc Mappings
 pub const RoleNoAccessKit = enum {
+    none,
     unknown,
     text_run,
     cell,
