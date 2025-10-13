@@ -566,9 +566,10 @@ fn addDvuiModule(
         dvui_mod.linkSystemLibrary("ole32", .{});
     }
 
-    const ak_dep = b.dependency("accesskit", .{});
-    dvui_mod.addIncludePath(ak_dep.path("include"));
     if (opts.accesskit_enabled) {
+        const ak_dep = b.dependency("accesskit", .{});
+        dvui_mod.addIncludePath(ak_dep.path("include"));
+
         const os_path = if (target.result.os.tag == .windows) "windows" //
             else if (target.result.os.tag.isDarwin()) "macos" //
             else "unsupported";
