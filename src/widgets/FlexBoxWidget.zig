@@ -28,7 +28,7 @@ max_row_width_prev: f32 = 0.0,
 width_nobreak: f32 = 0.0, // width if all children were on one row
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FlexBoxWidget {
-    const defaults = Options{ .name = "FlexBox", .role = .GENERIC_CONTAINER };
+    const defaults = Options{ .name = "FlexBox", .role = .generic_container };
     var self = FlexBoxWidget{
         .wd = WidgetData.init(src, .{}, defaults.override(opts)),
         .init_options = init_opts,

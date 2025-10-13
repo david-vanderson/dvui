@@ -227,7 +227,7 @@ fn processActions(self: *AccessKit) void {
             //    } } };
             //    window.events.append(window.gpa, release_evt) catch @panic("TODO");
             //},
-            Action.SET_VALUE => {
+            Action.set_value => {
                 const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
                     dvui.log.debug("AccessKit: Action {d} received for a target {x} without a node.", .{ request.action, request.target });
                     return;
@@ -244,8 +244,8 @@ fn processActions(self: *AccessKit) void {
 
                     const text_value: []const u8 = value: {
                         switch (request.data.value.tag) {
-                            c.ACCESSKIT_ACTION_DATA_VALUE => break :value std.mem.span(request.data.value.unnamed_0.unnamed_1.value),
-                            c.ACCESSKIT_ACTION_DATA_NUMERIC_VALUE => {
+                            ActionData.value => break :value std.mem.span(request.data.value.unnamed_0.unnamed_1.value),
+                            ActionData.numeric_value => {
                                 var writer: std.io.Writer.Allocating = .init(window.arena());
                                 writer.writer.print("{d:.6}", .{request.data.value.unnamed_0.unnamed_2.numeric_value}) catch @panic("TODO");
                                 break :value writer.toOwnedSlice() catch @panic("TODO");
@@ -341,7 +341,7 @@ fn initialTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     self.mutex.lock();
     defer self.mutex.unlock();
 
-    const root = nodeNew(Role.WINDOW.asU8()) orelse @panic("null");
+    const root = nodeNew(Role.window.asU8()) orelse @panic("null");
     const tree = treeNew(0) orelse @panic("null");
     const result = treeUpdateWithCapacityAndFocus(1, 0);
     treeUpdateSetTree(result, tree);
@@ -449,332 +449,332 @@ pub const RoleAccessKit = enum(u8) {
         return @intFromEnum(self);
     }
 
-    UNKNOWN = c.ACCESSKIT_ROLE_UNKNOWN,
-    TEXT_RUN = c.ACCESSKIT_ROLE_TEXT_RUN,
-    CELL = c.ACCESSKIT_ROLE_CELL,
-    LABEL = c.ACCESSKIT_ROLE_LABEL,
-    IMAGE = c.ACCESSKIT_ROLE_IMAGE,
-    LINK = c.ACCESSKIT_ROLE_LINK,
-    ROW = c.ACCESSKIT_ROLE_ROW,
-    LIST_ITEM = c.ACCESSKIT_ROLE_LIST_ITEM,
-    LIST_MARKER = c.ACCESSKIT_ROLE_LIST_MARKER,
-    TREE_ITEM = c.ACCESSKIT_ROLE_TREE_ITEM,
-    LIST_BOX_OPTION = c.ACCESSKIT_ROLE_LIST_BOX_OPTION,
-    MENU_ITEM = c.ACCESSKIT_ROLE_MENU_ITEM,
-    MENU_LIST_OPTION = c.ACCESSKIT_ROLE_MENU_LIST_OPTION,
-    PARAGRAPH = c.ACCESSKIT_ROLE_PARAGRAPH,
-    GENERIC_CONTAINER = c.ACCESSKIT_ROLE_GENERIC_CONTAINER,
-    CHECK_BOX = c.ACCESSKIT_ROLE_CHECK_BOX,
-    RADIO_BUTTON = c.ACCESSKIT_ROLE_RADIO_BUTTON,
-    TEXT_INPUT = c.ACCESSKIT_ROLE_TEXT_INPUT,
-    BUTTON = c.ACCESSKIT_ROLE_BUTTON,
-    DEFAULT_BUTTON = c.ACCESSKIT_ROLE_DEFAULT_BUTTON,
-    PANE = c.ACCESSKIT_ROLE_PANE,
-    ROW_HEADER = c.ACCESSKIT_ROLE_ROW_HEADER,
-    COLUMN_HEADER = c.ACCESSKIT_ROLE_COLUMN_HEADER,
-    ROW_GROUP = c.ACCESSKIT_ROLE_ROW_GROUP,
-    LIST = c.ACCESSKIT_ROLE_LIST,
-    TABLE = c.ACCESSKIT_ROLE_TABLE,
-    LAYOUT_TABLE_CELL = c.ACCESSKIT_ROLE_LAYOUT_TABLE_CELL,
-    LAYOUT_TABLE_ROW = c.ACCESSKIT_ROLE_LAYOUT_TABLE_ROW,
-    LAYOUT_TABLE = c.ACCESSKIT_ROLE_LAYOUT_TABLE,
-    SWITCH = c.ACCESSKIT_ROLE_SWITCH,
-    MENU = c.ACCESSKIT_ROLE_MENU,
-    MULTILINE_TEXT_INPUT = c.ACCESSKIT_ROLE_MULTILINE_TEXT_INPUT,
-    SEARCH_INPUT = c.ACCESSKIT_ROLE_SEARCH_INPUT,
-    DATE_INPUT = c.ACCESSKIT_ROLE_DATE_INPUT,
-    DATE_TIME_INPUT = c.ACCESSKIT_ROLE_DATE_TIME_INPUT,
-    WEEK_INPUT = c.ACCESSKIT_ROLE_WEEK_INPUT,
-    MONTH_INPUT = c.ACCESSKIT_ROLE_MONTH_INPUT,
-    TIME_INPUT = c.ACCESSKIT_ROLE_TIME_INPUT,
-    EMAIL_INPUT = c.ACCESSKIT_ROLE_EMAIL_INPUT,
-    NUMBER_INPUT = c.ACCESSKIT_ROLE_NUMBER_INPUT,
-    PASSWORD_INPUT = c.ACCESSKIT_ROLE_PASSWORD_INPUT,
-    PHONE_NUMBER_INPUT = c.ACCESSKIT_ROLE_PHONE_NUMBER_INPUT,
-    URL_INPUT = c.ACCESSKIT_ROLE_URL_INPUT,
-    ABBR = c.ACCESSKIT_ROLE_ABBR,
-    ALERT = c.ACCESSKIT_ROLE_ALERT,
-    ALERT_DIALOG = c.ACCESSKIT_ROLE_ALERT_DIALOG,
-    APPLICATION = c.ACCESSKIT_ROLE_APPLICATION,
-    ARTICLE = c.ACCESSKIT_ROLE_ARTICLE,
-    AUDIO = c.ACCESSKIT_ROLE_AUDIO,
-    BANNER = c.ACCESSKIT_ROLE_BANNER,
-    BLOCKQUOTE = c.ACCESSKIT_ROLE_BLOCKQUOTE,
-    CANVAS = c.ACCESSKIT_ROLE_CANVAS,
-    CAPTION = c.ACCESSKIT_ROLE_CAPTION,
-    CARET = c.ACCESSKIT_ROLE_CARET,
-    CODE = c.ACCESSKIT_ROLE_CODE,
-    COLOR_WELL = c.ACCESSKIT_ROLE_COLOR_WELL,
-    COMBO_BOX = c.ACCESSKIT_ROLE_COMBO_BOX,
-    EDITABLE_COMBO_BOX = c.ACCESSKIT_ROLE_EDITABLE_COMBO_BOX,
-    COMPLEMENTARY = c.ACCESSKIT_ROLE_COMPLEMENTARY,
-    COMMENT = c.ACCESSKIT_ROLE_COMMENT,
-    CONTENT_DELETION = c.ACCESSKIT_ROLE_CONTENT_DELETION,
-    CONTENT_INSERTION = c.ACCESSKIT_ROLE_CONTENT_INSERTION,
-    CONTENT_INFO = c.ACCESSKIT_ROLE_CONTENT_INFO,
-    DEFINITION = c.ACCESSKIT_ROLE_DEFINITION,
-    DESCRIPTION_LIST = c.ACCESSKIT_ROLE_DESCRIPTION_LIST,
-    DESCRIPTION_LIST_DETAIL = c.ACCESSKIT_ROLE_DESCRIPTION_LIST_DETAIL,
-    DESCRIPTION_LIST_TERM = c.ACCESSKIT_ROLE_DESCRIPTION_LIST_TERM,
-    DETAILS = c.ACCESSKIT_ROLE_DETAILS,
-    DIALOG = c.ACCESSKIT_ROLE_DIALOG,
-    DIRECTORY = c.ACCESSKIT_ROLE_DIRECTORY,
-    DISCLOSURE_TRIANGLE = c.ACCESSKIT_ROLE_DISCLOSURE_TRIANGLE,
-    DOCUMENT = c.ACCESSKIT_ROLE_DOCUMENT,
-    EMBEDDED_OBJECT = c.ACCESSKIT_ROLE_EMBEDDED_OBJECT,
-    EMPHASIS = c.ACCESSKIT_ROLE_EMPHASIS,
-    FEED = c.ACCESSKIT_ROLE_FEED,
-    FIGURE_CAPTION = c.ACCESSKIT_ROLE_FIGURE_CAPTION,
-    FIGURE = c.ACCESSKIT_ROLE_FIGURE,
-    FOOTER = c.ACCESSKIT_ROLE_FOOTER,
-    FOOTER_AS_NON_LANDMARK = c.ACCESSKIT_ROLE_FOOTER_AS_NON_LANDMARK,
-    FORM = c.ACCESSKIT_ROLE_FORM,
-    GRID = c.ACCESSKIT_ROLE_GRID,
-    GROUP = c.ACCESSKIT_ROLE_GROUP,
-    HEADER = c.ACCESSKIT_ROLE_HEADER,
-    HEADER_AS_NON_LANDMARK = c.ACCESSKIT_ROLE_HEADER_AS_NON_LANDMARK,
-    HEADING = c.ACCESSKIT_ROLE_HEADING,
-    IFRAME = c.ACCESSKIT_ROLE_IFRAME,
-    IFRAME_PRESENTATIONAL = c.ACCESSKIT_ROLE_IFRAME_PRESENTATIONAL,
-    IME_CANDIDATE = c.ACCESSKIT_ROLE_IME_CANDIDATE,
-    KEYBOARD = c.ACCESSKIT_ROLE_KEYBOARD,
-    LEGEND = c.ACCESSKIT_ROLE_LEGEND,
-    LINE_BREAK = c.ACCESSKIT_ROLE_LINE_BREAK,
-    LIST_BOX = c.ACCESSKIT_ROLE_LIST_BOX,
-    LOG = c.ACCESSKIT_ROLE_LOG,
-    MAIN = c.ACCESSKIT_ROLE_MAIN,
-    MARK = c.ACCESSKIT_ROLE_MARK,
-    MARQUEE = c.ACCESSKIT_ROLE_MARQUEE,
-    MATH = c.ACCESSKIT_ROLE_MATH,
-    MENU_BAR = c.ACCESSKIT_ROLE_MENU_BAR,
-    MENU_ITEM_CHECK_BOX = c.ACCESSKIT_ROLE_MENU_ITEM_CHECK_BOX,
-    MENU_ITEM_RADIO = c.ACCESSKIT_ROLE_MENU_ITEM_RADIO,
-    MENU_LIST_POPUP = c.ACCESSKIT_ROLE_MENU_LIST_POPUP,
-    METER = c.ACCESSKIT_ROLE_METER,
-    NAVIGATION = c.ACCESSKIT_ROLE_NAVIGATION,
-    NOTE = c.ACCESSKIT_ROLE_NOTE,
-    PLUGIN_OBJECT = c.ACCESSKIT_ROLE_PLUGIN_OBJECT,
-    PORTAL = c.ACCESSKIT_ROLE_PORTAL,
-    PRE = c.ACCESSKIT_ROLE_PRE,
-    PROGRESS_INDICATOR = c.ACCESSKIT_ROLE_PROGRESS_INDICATOR,
-    RADIO_GROUP = c.ACCESSKIT_ROLE_RADIO_GROUP,
-    REGION = c.ACCESSKIT_ROLE_REGION,
-    ROOT_WEB_AREA = c.ACCESSKIT_ROLE_ROOT_WEB_AREA,
-    RUBY = c.ACCESSKIT_ROLE_RUBY,
-    RUBY_ANNOTATION = c.ACCESSKIT_ROLE_RUBY_ANNOTATION,
-    SCROLL_BAR = c.ACCESSKIT_ROLE_SCROLL_BAR,
-    SCROLL_VIEW = c.ACCESSKIT_ROLE_SCROLL_VIEW,
-    SEARCH = c.ACCESSKIT_ROLE_SEARCH,
-    SECTION = c.ACCESSKIT_ROLE_SECTION,
-    SLIDER = c.ACCESSKIT_ROLE_SLIDER,
-    SPIN_BUTTON = c.ACCESSKIT_ROLE_SPIN_BUTTON,
-    SPLITTER = c.ACCESSKIT_ROLE_SPLITTER,
-    STATUS = c.ACCESSKIT_ROLE_STATUS,
-    STRONG = c.ACCESSKIT_ROLE_STRONG,
-    SUGGESTION = c.ACCESSKIT_ROLE_SUGGESTION,
-    SVG_ROOT = c.ACCESSKIT_ROLE_SVG_ROOT,
-    TAB = c.ACCESSKIT_ROLE_TAB,
-    TAB_LIST = c.ACCESSKIT_ROLE_TAB_LIST,
-    TAB_PANEL = c.ACCESSKIT_ROLE_TAB_PANEL,
-    TERM = c.ACCESSKIT_ROLE_TERM,
-    TIME = c.ACCESSKIT_ROLE_TIME,
-    TIMER = c.ACCESSKIT_ROLE_TIMER,
-    TITLE_BAR = c.ACCESSKIT_ROLE_TITLE_BAR,
-    TOOLBAR = c.ACCESSKIT_ROLE_TOOLBAR,
-    TOOLTIP = c.ACCESSKIT_ROLE_TOOLTIP,
-    TREE = c.ACCESSKIT_ROLE_TREE,
-    TREE_GRID = c.ACCESSKIT_ROLE_TREE_GRID,
-    VIDEO = c.ACCESSKIT_ROLE_VIDEO,
-    WEB_VIEW = c.ACCESSKIT_ROLE_WEB_VIEW,
-    WINDOW = c.ACCESSKIT_ROLE_WINDOW,
-    PDF_ACTIONABLE_HIGHLIGHT = c.ACCESSKIT_ROLE_PDF_ACTIONABLE_HIGHLIGHT,
-    PDF_ROOT = c.ACCESSKIT_ROLE_PDF_ROOT,
-    GRAPHICS_DOCUMENT = c.ACCESSKIT_ROLE_GRAPHICS_DOCUMENT,
-    GRAPHICS_OBJECT = c.ACCESSKIT_ROLE_GRAPHICS_OBJECT,
-    GRAPHICS_SYMBOL = c.ACCESSKIT_ROLE_GRAPHICS_SYMBOL,
-    DOC_ABSTRACT = c.ACCESSKIT_ROLE_DOC_ABSTRACT,
-    DOC_ACKNOWLEDGEMENTS = c.ACCESSKIT_ROLE_DOC_ACKNOWLEDGEMENTS,
-    DOC_AFTERWORD = c.ACCESSKIT_ROLE_DOC_AFTERWORD,
-    DOC_APPENDIX = c.ACCESSKIT_ROLE_DOC_APPENDIX,
-    DOC_BACK_LINK = c.ACCESSKIT_ROLE_DOC_BACK_LINK,
-    DOC_BIBLIO_ENTRY = c.ACCESSKIT_ROLE_DOC_BIBLIO_ENTRY,
-    DOC_BIBLIOGRAPHY = c.ACCESSKIT_ROLE_DOC_BIBLIOGRAPHY,
-    DOC_BIBLIO_REF = c.ACCESSKIT_ROLE_DOC_BIBLIO_REF,
-    DOC_CHAPTER = c.ACCESSKIT_ROLE_DOC_CHAPTER,
-    DOC_COLOPHON = c.ACCESSKIT_ROLE_DOC_COLOPHON,
-    DOC_CONCLUSION = c.ACCESSKIT_ROLE_DOC_CONCLUSION,
-    DOC_COVER = c.ACCESSKIT_ROLE_DOC_COVER,
-    DOC_CREDIT = c.ACCESSKIT_ROLE_DOC_CREDIT,
-    DOC_CREDITS = c.ACCESSKIT_ROLE_DOC_CREDITS,
-    DOC_DEDICATION = c.ACCESSKIT_ROLE_DOC_DEDICATION,
-    DOC_ENDNOTE = c.ACCESSKIT_ROLE_DOC_ENDNOTE,
-    DOC_ENDNOTES = c.ACCESSKIT_ROLE_DOC_ENDNOTES,
-    DOC_EPIGRAPH = c.ACCESSKIT_ROLE_DOC_EPIGRAPH,
-    DOC_EPILOGUE = c.ACCESSKIT_ROLE_DOC_EPILOGUE,
-    DOC_ERRATA = c.ACCESSKIT_ROLE_DOC_ERRATA,
-    DOC_EXAMPLE = c.ACCESSKIT_ROLE_DOC_EXAMPLE,
-    DOC_FOOTNOTE = c.ACCESSKIT_ROLE_DOC_FOOTNOTE,
-    DOC_FOREWORD = c.ACCESSKIT_ROLE_DOC_FOREWORD,
-    DOC_GLOSSARY = c.ACCESSKIT_ROLE_DOC_GLOSSARY,
-    DOC_GLOSS_REF = c.ACCESSKIT_ROLE_DOC_GLOSS_REF,
-    DOC_INDEX = c.ACCESSKIT_ROLE_DOC_INDEX,
-    DOC_INTRODUCTION = c.ACCESSKIT_ROLE_DOC_INTRODUCTION,
-    DOC_NOTE_REF = c.ACCESSKIT_ROLE_DOC_NOTE_REF,
-    DOC_NOTICE = c.ACCESSKIT_ROLE_DOC_NOTICE,
-    DOC_PAGE_BREAK = c.ACCESSKIT_ROLE_DOC_PAGE_BREAK,
-    DOC_PAGE_FOOTER = c.ACCESSKIT_ROLE_DOC_PAGE_FOOTER,
-    DOC_PAGE_HEADER = c.ACCESSKIT_ROLE_DOC_PAGE_HEADER,
-    DOC_PAGE_LIST = c.ACCESSKIT_ROLE_DOC_PAGE_LIST,
-    DOC_PART = c.ACCESSKIT_ROLE_DOC_PART,
-    DOC_PREFACE = c.ACCESSKIT_ROLE_DOC_PREFACE,
-    DOC_PROLOGUE = c.ACCESSKIT_ROLE_DOC_PROLOGUE,
-    DOC_PULLQUOTE = c.ACCESSKIT_ROLE_DOC_PULLQUOTE,
-    DOC_QNA = c.ACCESSKIT_ROLE_DOC_QNA,
-    DOC_SUBTITLE = c.ACCESSKIT_ROLE_DOC_SUBTITLE,
-    DOC_TIP = c.ACCESSKIT_ROLE_DOC_TIP,
-    DOC_TOC = c.ACCESSKIT_ROLE_DOC_TOC,
-    LIST_GRID = c.ACCESSKIT_ROLE_LIST_GRID,
-    TERMINAL = c.ACCESSKIT_ROLE_TERMINAL,
+    unknown = c.ACCESSKIT_ROLE_UNKNOWN,
+    text_run = c.ACCESSKIT_ROLE_TEXT_RUN,
+    cell = c.ACCESSKIT_ROLE_CELL,
+    label = c.ACCESSKIT_ROLE_LABEL,
+    image = c.ACCESSKIT_ROLE_IMAGE,
+    link = c.ACCESSKIT_ROLE_LINK,
+    row = c.ACCESSKIT_ROLE_ROW,
+    list_item = c.ACCESSKIT_ROLE_LIST_ITEM,
+    list_marker = c.ACCESSKIT_ROLE_LIST_MARKER,
+    tree_item = c.ACCESSKIT_ROLE_TREE_ITEM,
+    list_box_option = c.ACCESSKIT_ROLE_LIST_BOX_OPTION,
+    menu_item = c.ACCESSKIT_ROLE_MENU_ITEM,
+    menu_list_option = c.ACCESSKIT_ROLE_MENU_LIST_OPTION,
+    paragraph = c.ACCESSKIT_ROLE_PARAGRAPH,
+    generic_container = c.ACCESSKIT_ROLE_GENERIC_CONTAINER,
+    check_box = c.ACCESSKIT_ROLE_CHECK_BOX,
+    radio_button = c.ACCESSKIT_ROLE_RADIO_BUTTON,
+    text_input = c.ACCESSKIT_ROLE_TEXT_INPUT,
+    button = c.ACCESSKIT_ROLE_BUTTON,
+    default_button = c.ACCESSKIT_ROLE_DEFAULT_BUTTON,
+    pane = c.ACCESSKIT_ROLE_PANE,
+    row_header = c.ACCESSKIT_ROLE_ROW_HEADER,
+    column_header = c.ACCESSKIT_ROLE_COLUMN_HEADER,
+    row_group = c.ACCESSKIT_ROLE_ROW_GROUP,
+    list = c.ACCESSKIT_ROLE_LIST,
+    table = c.ACCESSKIT_ROLE_TABLE,
+    layout_table_cell = c.ACCESSKIT_ROLE_LAYOUT_TABLE_CELL,
+    layout_table_row = c.ACCESSKIT_ROLE_LAYOUT_TABLE_ROW,
+    layout_table = c.ACCESSKIT_ROLE_LAYOUT_TABLE,
+    ak_switch = c.ACCESSKIT_ROLE_SWITCH,
+    menu = c.ACCESSKIT_ROLE_MENU,
+    multiline_text_input = c.ACCESSKIT_ROLE_MULTILINE_TEXT_INPUT,
+    search_input = c.ACCESSKIT_ROLE_SEARCH_INPUT,
+    date_input = c.ACCESSKIT_ROLE_DATE_INPUT,
+    date_time_input = c.ACCESSKIT_ROLE_DATE_TIME_INPUT,
+    week_input = c.ACCESSKIT_ROLE_WEEK_INPUT,
+    month_input = c.ACCESSKIT_ROLE_MONTH_INPUT,
+    time_input = c.ACCESSKIT_ROLE_TIME_INPUT,
+    email_input = c.ACCESSKIT_ROLE_EMAIL_INPUT,
+    number_input = c.ACCESSKIT_ROLE_NUMBER_INPUT,
+    password_input = c.ACCESSKIT_ROLE_PASSWORD_INPUT,
+    phone_number_input = c.ACCESSKIT_ROLE_PHONE_NUMBER_INPUT,
+    url_input = c.ACCESSKIT_ROLE_URL_INPUT,
+    abbr = c.ACCESSKIT_ROLE_ABBR,
+    alert = c.ACCESSKIT_ROLE_ALERT,
+    alert_dialog = c.ACCESSKIT_ROLE_ALERT_DIALOG,
+    application = c.ACCESSKIT_ROLE_APPLICATION,
+    article = c.ACCESSKIT_ROLE_ARTICLE,
+    audio = c.ACCESSKIT_ROLE_AUDIO,
+    banner = c.ACCESSKIT_ROLE_BANNER,
+    blockquote = c.ACCESSKIT_ROLE_BLOCKQUOTE,
+    canvas = c.ACCESSKIT_ROLE_CANVAS,
+    caption = c.ACCESSKIT_ROLE_CAPTION,
+    caret = c.ACCESSKIT_ROLE_CARET,
+    code = c.ACCESSKIT_ROLE_CODE,
+    color_well = c.ACCESSKIT_ROLE_COLOR_WELL,
+    combo_box = c.ACCESSKIT_ROLE_COMBO_BOX,
+    editable_combo_box = c.ACCESSKIT_ROLE_EDITABLE_COMBO_BOX,
+    complementary = c.ACCESSKIT_ROLE_COMPLEMENTARY,
+    comment = c.ACCESSKIT_ROLE_COMMENT,
+    content_deletion = c.ACCESSKIT_ROLE_CONTENT_DELETION,
+    content_insertion = c.ACCESSKIT_ROLE_CONTENT_INSERTION,
+    content_info = c.ACCESSKIT_ROLE_CONTENT_INFO,
+    definition = c.ACCESSKIT_ROLE_DEFINITION,
+    description_list = c.ACCESSKIT_ROLE_DESCRIPTION_LIST,
+    description_list_detail = c.ACCESSKIT_ROLE_DESCRIPTION_LIST_DETAIL,
+    description_list_term = c.ACCESSKIT_ROLE_DESCRIPTION_LIST_TERM,
+    details = c.ACCESSKIT_ROLE_DETAILS,
+    dialog = c.ACCESSKIT_ROLE_DIALOG,
+    directory = c.ACCESSKIT_ROLE_DIRECTORY,
+    disclosure_triangle = c.ACCESSKIT_ROLE_DISCLOSURE_TRIANGLE,
+    document = c.ACCESSKIT_ROLE_DOCUMENT,
+    embedded_object = c.ACCESSKIT_ROLE_EMBEDDED_OBJECT,
+    emphasis = c.ACCESSKIT_ROLE_EMPHASIS,
+    feed = c.ACCESSKIT_ROLE_FEED,
+    figure_caption = c.ACCESSKIT_ROLE_FIGURE_CAPTION,
+    figure = c.ACCESSKIT_ROLE_FIGURE,
+    footer = c.ACCESSKIT_ROLE_FOOTER,
+    footer_as_non_landmark = c.ACCESSKIT_ROLE_FOOTER_AS_NON_LANDMARK,
+    form = c.ACCESSKIT_ROLE_FORM,
+    grid = c.ACCESSKIT_ROLE_GRID,
+    group = c.ACCESSKIT_ROLE_GROUP,
+    header = c.ACCESSKIT_ROLE_HEADER,
+    header_as_non_landmark = c.ACCESSKIT_ROLE_HEADER_AS_NON_LANDMARK,
+    heading = c.ACCESSKIT_ROLE_HEADING,
+    iframe = c.ACCESSKIT_ROLE_IFRAME,
+    iframe_presentational = c.ACCESSKIT_ROLE_IFRAME_PRESENTATIONAL,
+    ime_candidate = c.ACCESSKIT_ROLE_IME_CANDIDATE,
+    keyboard = c.ACCESSKIT_ROLE_KEYBOARD,
+    legend = c.ACCESSKIT_ROLE_LEGEND,
+    line_break = c.ACCESSKIT_ROLE_LINE_BREAK,
+    list_box = c.ACCESSKIT_ROLE_LIST_BOX,
+    log = c.ACCESSKIT_ROLE_LOG,
+    main = c.ACCESSKIT_ROLE_MAIN,
+    mark = c.ACCESSKIT_ROLE_MARK,
+    marquee = c.ACCESSKIT_ROLE_MARQUEE,
+    math = c.ACCESSKIT_ROLE_MATH,
+    menu_bar = c.ACCESSKIT_ROLE_MENU_BAR,
+    menu_item_check_box = c.ACCESSKIT_ROLE_MENU_ITEM_CHECK_BOX,
+    menu_item_radio = c.ACCESSKIT_ROLE_MENU_ITEM_RADIO,
+    menu_list_popup = c.ACCESSKIT_ROLE_MENU_LIST_POPUP,
+    meter = c.ACCESSKIT_ROLE_METER,
+    navigation = c.ACCESSKIT_ROLE_NAVIGATION,
+    note = c.ACCESSKIT_ROLE_NOTE,
+    plugin_object = c.ACCESSKIT_ROLE_PLUGIN_OBJECT,
+    portal = c.ACCESSKIT_ROLE_PORTAL,
+    pre = c.ACCESSKIT_ROLE_PRE,
+    progress_indicator = c.ACCESSKIT_ROLE_PROGRESS_INDICATOR,
+    radio_group = c.ACCESSKIT_ROLE_RADIO_GROUP,
+    region = c.ACCESSKIT_ROLE_REGION,
+    root_web_area = c.ACCESSKIT_ROLE_ROOT_WEB_AREA,
+    ruby = c.ACCESSKIT_ROLE_RUBY,
+    ruby_annotation = c.ACCESSKIT_ROLE_RUBY_ANNOTATION,
+    scroll_bar = c.ACCESSKIT_ROLE_SCROLL_BAR,
+    scroll_view = c.ACCESSKIT_ROLE_SCROLL_VIEW,
+    search = c.ACCESSKIT_ROLE_SEARCH,
+    section = c.ACCESSKIT_ROLE_SECTION,
+    slider = c.ACCESSKIT_ROLE_SLIDER,
+    spin_button = c.ACCESSKIT_ROLE_SPIN_BUTTON,
+    splitter = c.ACCESSKIT_ROLE_SPLITTER,
+    status = c.ACCESSKIT_ROLE_STATUS,
+    strong = c.ACCESSKIT_ROLE_STRONG,
+    suggestion = c.ACCESSKIT_ROLE_SUGGESTION,
+    svg_root = c.ACCESSKIT_ROLE_SVG_ROOT,
+    tab = c.ACCESSKIT_ROLE_TAB,
+    tab_list = c.ACCESSKIT_ROLE_TAB_LIST,
+    tab_panel = c.ACCESSKIT_ROLE_TAB_PANEL,
+    term = c.ACCESSKIT_ROLE_TERM,
+    time = c.ACCESSKIT_ROLE_TIME,
+    timer = c.ACCESSKIT_ROLE_TIMER,
+    title_bar = c.ACCESSKIT_ROLE_TITLE_BAR,
+    toolbar = c.ACCESSKIT_ROLE_TOOLBAR,
+    tooltip = c.ACCESSKIT_ROLE_TOOLTIP,
+    tree = c.ACCESSKIT_ROLE_TREE,
+    tree_grid = c.ACCESSKIT_ROLE_TREE_GRID,
+    video = c.ACCESSKIT_ROLE_VIDEO,
+    web_view = c.ACCESSKIT_ROLE_WEB_VIEW,
+    window = c.ACCESSKIT_ROLE_WINDOW,
+    pdf_actionable_highlight = c.ACCESSKIT_ROLE_PDF_ACTIONABLE_HIGHLIGHT,
+    pdf_root = c.ACCESSKIT_ROLE_PDF_ROOT,
+    graphics_document = c.ACCESSKIT_ROLE_GRAPHICS_DOCUMENT,
+    graphics_object = c.ACCESSKIT_ROLE_GRAPHICS_OBJECT,
+    graphics_symbol = c.ACCESSKIT_ROLE_GRAPHICS_SYMBOL,
+    doc_abstract = c.ACCESSKIT_ROLE_DOC_ABSTRACT,
+    doc_acknowledgements = c.ACCESSKIT_ROLE_DOC_ACKNOWLEDGEMENTS,
+    doc_afterword = c.ACCESSKIT_ROLE_DOC_AFTERWORD,
+    doc_appendix = c.ACCESSKIT_ROLE_DOC_APPENDIX,
+    doc_back_link = c.ACCESSKIT_ROLE_DOC_BACK_LINK,
+    doc_biblio_entry = c.ACCESSKIT_ROLE_DOC_BIBLIO_ENTRY,
+    doc_bibliography = c.ACCESSKIT_ROLE_DOC_BIBLIOGRAPHY,
+    doc_biblio_ref = c.ACCESSKIT_ROLE_DOC_BIBLIO_REF,
+    doc_chapter = c.ACCESSKIT_ROLE_DOC_CHAPTER,
+    doc_colophon = c.ACCESSKIT_ROLE_DOC_COLOPHON,
+    doc_conclusion = c.ACCESSKIT_ROLE_DOC_CONCLUSION,
+    doc_cover = c.ACCESSKIT_ROLE_DOC_COVER,
+    doc_credit = c.ACCESSKIT_ROLE_DOC_CREDIT,
+    doc_credits = c.ACCESSKIT_ROLE_DOC_CREDITS,
+    doc_dedication = c.ACCESSKIT_ROLE_DOC_DEDICATION,
+    doc_endnote = c.ACCESSKIT_ROLE_DOC_ENDNOTE,
+    doc_endnotes = c.ACCESSKIT_ROLE_DOC_ENDNOTES,
+    doc_epigraph = c.ACCESSKIT_ROLE_DOC_EPIGRAPH,
+    doc_epilogue = c.ACCESSKIT_ROLE_DOC_EPILOGUE,
+    doc_errata = c.ACCESSKIT_ROLE_DOC_ERRATA,
+    doc_example = c.ACCESSKIT_ROLE_DOC_EXAMPLE,
+    doc_footnote = c.ACCESSKIT_ROLE_DOC_FOOTNOTE,
+    doc_foreword = c.ACCESSKIT_ROLE_DOC_FOREWORD,
+    doc_glossary = c.ACCESSKIT_ROLE_DOC_GLOSSARY,
+    doc_gloss_ref = c.ACCESSKIT_ROLE_DOC_GLOSS_REF,
+    doc_index = c.ACCESSKIT_ROLE_DOC_INDEX,
+    doc_introduction = c.ACCESSKIT_ROLE_DOC_INTRODUCTION,
+    doc_note_ref = c.ACCESSKIT_ROLE_DOC_NOTE_REF,
+    doc_notice = c.ACCESSKIT_ROLE_DOC_NOTICE,
+    doc_page_break = c.ACCESSKIT_ROLE_DOC_PAGE_BREAK,
+    doc_page_footer = c.ACCESSKIT_ROLE_DOC_PAGE_FOOTER,
+    doc_page_header = c.ACCESSKIT_ROLE_DOC_PAGE_HEADER,
+    doc_page_list = c.ACCESSKIT_ROLE_DOC_PAGE_LIST,
+    doc_part = c.ACCESSKIT_ROLE_DOC_PART,
+    doc_preface = c.ACCESSKIT_ROLE_DOC_PREFACE,
+    doc_prologue = c.ACCESSKIT_ROLE_DOC_PROLOGUE,
+    doc_pullquote = c.ACCESSKIT_ROLE_DOC_PULLQUOTE,
+    doc_qna = c.ACCESSKIT_ROLE_DOC_QNA,
+    doc_subtitle = c.ACCESSKIT_ROLE_DOC_SUBTITLE,
+    doc_tip = c.ACCESSKIT_ROLE_DOC_TIP,
+    doc_toc = c.ACCESSKIT_ROLE_DOC_TOC,
+    list_grid = c.ACCESSKIT_ROLE_LIST_GRID,
+    terminal = c.ACCESSKIT_ROLE_TERMINAL,
 };
 
 // Enum Structs
 pub const Action = struct {
-    pub const CLICK = c.ACCESSKIT_ACTION_CLICK;
-    pub const FOCUS = c.ACCESSKIT_ACTION_FOCUS;
-    pub const BLUR = c.ACCESSKIT_ACTION_BLUR;
-    pub const COLLAPSE = c.ACCESSKIT_ACTION_COLLAPSE;
-    pub const EXPAND = c.ACCESSKIT_ACTION_EXPAND;
-    pub const CUSTOM_ACTION = c.ACCESSKIT_ACTION_CUSTOM_ACTION;
-    pub const DECREMENT = c.ACCESSKIT_ACTION_DECREMENT;
-    pub const INCREMENT = c.ACCESSKIT_ACTION_INCREMENT;
-    pub const HIDE_TOOLTIP = c.ACCESSKIT_ACTION_HIDE_TOOLTIP;
-    pub const SHOW_TOOLTIP = c.ACCESSKIT_ACTION_SHOW_TOOLTIP;
-    pub const REPLACE_SELECTED_TEXT = c.ACCESSKIT_ACTION_REPLACE_SELECTED_TEXT;
-    pub const SCROLL_DOWN = c.ACCESSKIT_ACTION_SCROLL_DOWN;
-    pub const SCROLL_LEFT = c.ACCESSKIT_ACTION_SCROLL_LEFT;
-    pub const SCROLL_RIGHT = c.ACCESSKIT_ACTION_SCROLL_RIGHT;
-    pub const SCROLL_UP = c.ACCESSKIT_ACTION_SCROLL_UP;
-    pub const SCROLL_INTO_VIEW = c.ACCESSKIT_ACTION_SCROLL_INTO_VIEW;
-    pub const SCROLL_TO_POINT = c.ACCESSKIT_ACTION_SCROLL_TO_POINT;
-    pub const SET_SCROLL_OFFSET = c.ACCESSKIT_ACTION_SET_SCROLL_OFFSET;
-    pub const SET_TEXT_SELECTION = c.ACCESSKIT_ACTION_SET_TEXT_SELECTION;
-    pub const SET_SEQUENTIAL_FOCUS_NAVIGATION_STARTING_POINT = c.ACCESSKIT_ACTION_SET_SEQUENTIAL_FOCUS_NAVIGATION_STARTING_POINT;
-    pub const SET_VALUE = c.ACCESSKIT_ACTION_SET_VALUE;
-    pub const SHOW_CONTEXT_MENU = c.ACCESSKIT_ACTION_SHOW_CONTEXT_MENU;
+    pub const click = c.ACCESSKIT_ACTION_CLICK;
+    pub const focus = c.ACCESSKIT_ACTION_FOCUS;
+    pub const blur = c.ACCESSKIT_ACTION_BLUR;
+    pub const collapse = c.ACCESSKIT_ACTION_COLLAPSE;
+    pub const expand = c.ACCESSKIT_ACTION_EXPAND;
+    pub const custom_action = c.ACCESSKIT_ACTION_CUSTOM_ACTION;
+    pub const decrement = c.ACCESSKIT_ACTION_DECREMENT;
+    pub const increment = c.ACCESSKIT_ACTION_INCREMENT;
+    pub const hide_tooltip = c.ACCESSKIT_ACTION_HIDE_TOOLTIP;
+    pub const show_tooltip = c.ACCESSKIT_ACTION_SHOW_TOOLTIP;
+    pub const replace_selected_text = c.ACCESSKIT_ACTION_REPLACE_SELECTED_TEXT;
+    pub const scroll_down = c.ACCESSKIT_ACTION_SCROLL_DOWN;
+    pub const scroll_left = c.ACCESSKIT_ACTION_SCROLL_LEFT;
+    pub const scroll_right = c.ACCESSKIT_ACTION_SCROLL_RIGHT;
+    pub const scroll_up = c.ACCESSKIT_ACTION_SCROLL_UP;
+    pub const scroll_into_view = c.ACCESSKIT_ACTION_SCROLL_INTO_VIEW;
+    pub const scroll_to_point = c.ACCESSKIT_ACTION_SCROLL_TO_POINT;
+    pub const set_scroll_offset = c.ACCESSKIT_ACTION_SET_SCROLL_OFFSET;
+    pub const set_text_selection = c.ACCESSKIT_ACTION_SET_TEXT_SELECTION;
+    pub const set_sequential_focus_navigation_starting_point = c.ACCESSKIT_ACTION_SET_SEQUENTIAL_FOCUS_NAVIGATION_STARTING_POINT;
+    pub const set_value = c.ACCESSKIT_ACTION_SET_VALUE;
+    pub const show_context_menu = c.ACCESSKIT_ACTION_SHOW_CONTEXT_MENU;
 };
 
 pub const AriaCurrent = struct {
-    pub const FALSE = c.ACCESSKIT_ARIA_CURRENT_FALSE;
-    pub const TRUE = c.ACCESSKIT_ARIA_CURRENT_TRUE;
-    pub const PAGE = c.ACCESSKIT_ARIA_CURRENT_PAGE;
-    pub const STEP = c.ACCESSKIT_ARIA_CURRENT_STEP;
-    pub const LOCATION = c.ACCESSKIT_ARIA_CURRENT_LOCATION;
-    pub const DATE = c.ACCESSKIT_ARIA_CURRENT_DATE;
-    pub const TIME = c.ACCESSKIT_ARIA_CURRENT_TIME;
+    pub const ak_false = c.ACCESSKIT_ARIA_CURRENT_FALSE;
+    pub const ak_true = c.ACCESSKIT_ARIA_CURRENT_TRUE;
+    pub const page = c.ACCESSKIT_ARIA_CURRENT_PAGE;
+    pub const step = c.ACCESSKIT_ARIA_CURRENT_STEP;
+    pub const location = c.ACCESSKIT_ARIA_CURRENT_LOCATION;
+    pub const date = c.ACCESSKIT_ARIA_CURRENT_DATE;
+    pub const time = c.ACCESSKIT_ARIA_CURRENT_TIME;
 };
 
 pub const AutoComplete = struct {
-    pub const INLINE = c.ACCESSKIT_AUTO_COMPLETE_INLINE;
-    pub const LIST = c.ACCESSKIT_AUTO_COMPLETE_LIST;
-    pub const BOTH = c.ACCESSKIT_AUTO_COMPLETE_BOTH;
+    pub const ak_inline = c.ACCESSKIT_AUTO_COMPLETE_INLINE;
+    pub const list = c.ACCESSKIT_AUTO_COMPLETE_LIST;
+    pub const both = c.ACCESSKIT_AUTO_COMPLETE_BOTH;
 };
 
 pub const HasPopup = struct {
-    pub const MENU = c.ACCESSKIT_HAS_POPUP_MENU;
-    pub const LISTBOX = c.ACCESSKIT_HAS_POPUP_LISTBOX;
-    pub const TREE = c.ACCESSKIT_HAS_POPUP_TREE;
-    pub const GRID = c.ACCESSKIT_HAS_POPUP_GRID;
-    pub const DIALOG = c.ACCESSKIT_HAS_POPUP_DIALOG;
+    pub const menu = c.ACCESSKIT_HAS_POPUP_MENU;
+    pub const listbox = c.ACCESSKIT_HAS_POPUP_LISTBOX;
+    pub const tree = c.ACCESSKIT_HAS_POPUP_TREE;
+    pub const grid = c.ACCESSKIT_HAS_POPUP_GRID;
+    pub const dialog = c.ACCESSKIT_HAS_POPUP_DIALOG;
 };
 
 pub const Invalid = struct {
-    pub const TRUE = c.ACCESSKIT_INVALID_TRUE;
-    pub const GRAMMAR = c.ACCESSKIT_INVALID_GRAMMAR;
-    pub const SPELLING = c.ACCESSKIT_INVALID_SPELLING;
+    pub const ak_true = c.ACCESSKIT_INVALID_TRUE;
+    pub const grammar = c.ACCESSKIT_INVALID_GRAMMAR;
+    pub const spelling = c.ACCESSKIT_INVALID_SPELLING;
 };
 
 pub const ListStyle = struct {
-    pub const CIRCLE = c.ACCESSKIT_LIST_STYLE_CIRCLE;
-    pub const DISC = c.ACCESSKIT_LIST_STYLE_DISC;
-    pub const IMAGE = c.ACCESSKIT_LIST_STYLE_IMAGE;
-    pub const NUMERIC = c.ACCESSKIT_LIST_STYLE_NUMERIC;
-    pub const SQUARE = c.ACCESSKIT_LIST_STYLE_SQUARE;
-    pub const OTHER = c.ACCESSKIT_LIST_STYLE_OTHER;
+    pub const circle = c.ACCESSKIT_LIST_STYLE_CIRCLE;
+    pub const disc = c.ACCESSKIT_LIST_STYLE_DISC;
+    pub const image = c.ACCESSKIT_LIST_STYLE_IMAGE;
+    pub const numeric = c.ACCESSKIT_LIST_STYLE_NUMERIC;
+    pub const square = c.ACCESSKIT_LIST_STYLE_SQUARE;
+    pub const other = c.ACCESSKIT_LIST_STYLE_OTHER;
 };
 
 pub const Live = struct {
-    pub const OFF = c.ACCESSKIT_LIVE_OFF;
-    pub const POLITE = c.ACCESSKIT_LIVE_POLITE;
-    pub const ASSERTIVE = c.ACCESSKIT_LIVE_ASSERTIVE;
+    pub const off = c.ACCESSKIT_LIVE_OFF;
+    pub const polite = c.ACCESSKIT_LIVE_POLITE;
+    pub const assertive = c.ACCESSKIT_LIVE_ASSERTIVE;
 };
 
 pub const Orientation = struct {
-    pub const HORIZONTAL = c.ACCESSKIT_ORIENTATION_HORIZONTAL;
-    pub const VERTICAL = c.ACCESSKIT_ORIENTATION_VERTICAL;
+    pub const horizontal = c.ACCESSKIT_ORIENTATION_HORIZONTAL;
+    pub const vertical = c.ACCESSKIT_ORIENTATION_VERTICAL;
 };
 
 pub const ScrollHint = struct {
-    pub const TOP_LEFT = c.ACCESSKIT_SCROLL_HINT_TOP_LEFT;
-    pub const BOTTOM_RIGHT = c.ACCESSKIT_SCROLL_HINT_BOTTOM_RIGHT;
-    pub const TOP_EDGE = c.ACCESSKIT_SCROLL_HINT_TOP_EDGE;
-    pub const BOTTOM_EDGE = c.ACCESSKIT_SCROLL_HINT_BOTTOM_EDGE;
-    pub const LEFT_EDGE = c.ACCESSKIT_SCROLL_HINT_LEFT_EDGE;
-    pub const RIGHT_EDGE = c.ACCESSKIT_SCROLL_HINT_RIGHT_EDGE;
+    pub const top_left = c.ACCESSKIT_SCROLL_HINT_TOP_LEFT;
+    pub const bottom_right = c.ACCESSKIT_SCROLL_HINT_BOTTOM_RIGHT;
+    pub const top_edge = c.ACCESSKIT_SCROLL_HINT_TOP_EDGE;
+    pub const bottom_edge = c.ACCESSKIT_SCROLL_HINT_BOTTOM_EDGE;
+    pub const left_edge = c.ACCESSKIT_SCROLL_HINT_LEFT_EDGE;
+    pub const right_edge = c.ACCESSKIT_SCROLL_HINT_RIGHT_EDGE;
 };
 
 pub const ScrollUnit = struct {
-    pub const ITEM = c.ACCESSKIT_SCROLL_UNIT_ITEM;
-    pub const PAGE = c.ACCESSKIT_SCROLL_UNIT_PAGE;
+    pub const item = c.ACCESSKIT_SCROLL_UNIT_ITEM;
+    pub const page = c.ACCESSKIT_SCROLL_UNIT_PAGE;
 };
 
 pub const SortDirection = struct {
-    pub const ASCENDING = c.ACCESSKIT_SORT_DIRECTION_ASCENDING;
-    pub const DESCENDING = c.ACCESSKIT_SORT_DIRECTION_DESCENDING;
-    pub const OTHER = c.ACCESSKIT_SORT_DIRECTION_OTHER;
+    pub const ascending = c.ACCESSKIT_SORT_DIRECTION_ASCENDING;
+    pub const descending = c.ACCESSKIT_SORT_DIRECTION_DESCENDING;
+    pub const other = c.ACCESSKIT_SORT_DIRECTION_OTHER;
 };
 
 pub const TextAlign = struct {
-    pub const LEFT = c.ACCESSKIT_TEXT_ALIGN_LEFT;
-    pub const RIGHT = c.ACCESSKIT_TEXT_ALIGN_RIGHT;
-    pub const CENTER = c.ACCESSKIT_TEXT_ALIGN_CENTER;
-    pub const JUSTIFY = c.ACCESSKIT_TEXT_ALIGN_JUSTIFY;
+    pub const left = c.ACCESSKIT_TEXT_ALIGN_LEFT;
+    pub const right = c.ACCESSKIT_TEXT_ALIGN_RIGHT;
+    pub const center = c.ACCESSKIT_TEXT_ALIGN_CENTER;
+    pub const justify = c.ACCESSKIT_TEXT_ALIGN_JUSTIFY;
 };
 
 pub const TextDecoration = struct {
-    pub const SOLID = c.ACCESSKIT_TEXT_DECORATION_SOLID;
-    pub const DOTTED = c.ACCESSKIT_TEXT_DECORATION_DOTTED;
-    pub const DASHED = c.ACCESSKIT_TEXT_DECORATION_DASHED;
-    pub const DOUBLE = c.ACCESSKIT_TEXT_DECORATION_DOUBLE;
-    pub const WAVY = c.ACCESSKIT_TEXT_DECORATION_WAVY;
+    pub const solid = c.ACCESSKIT_TEXT_DECORATION_SOLID;
+    pub const dotted = c.ACCESSKIT_TEXT_DECORATION_DOTTED;
+    pub const dashed = c.ACCESSKIT_TEXT_DECORATION_DASHED;
+    pub const double = c.ACCESSKIT_TEXT_DECORATION_DOUBLE;
+    pub const wavy = c.ACCESSKIT_TEXT_DECORATION_WAVY;
 };
 
 pub const TextDirection = struct {
-    pub const LEFT_TO_RIGHT = c.ACCESSKIT_TEXT_DIRECTION_LEFT_TO_RIGHT;
-    pub const RIGHT_TO_LEFT = c.ACCESSKIT_TEXT_DIRECTION_RIGHT_TO_LEFT;
-    pub const TOP_TO_BOTTOM = c.ACCESSKIT_TEXT_DIRECTION_TOP_TO_BOTTOM;
-    pub const BOTTOM_TO_TOP = c.ACCESSKIT_TEXT_DIRECTION_BOTTOM_TO_TOP;
+    pub const left_to_right = c.ACCESSKIT_TEXT_DIRECTION_LEFT_TO_RIGHT;
+    pub const right_to_left = c.ACCESSKIT_TEXT_DIRECTION_RIGHT_TO_LEFT;
+    pub const top_to_bottom = c.ACCESSKIT_TEXT_DIRECTION_TOP_TO_BOTTOM;
+    pub const bottom_to_top = c.ACCESSKIT_TEXT_DIRECTION_BOTTOM_TO_TOP;
 };
 
 pub const Toggled = struct {
-    pub const FALSE = c.ACCESSKIT_TOGGLED_FALSE;
-    pub const TRUE = c.ACCESSKIT_TOGGLED_TRUE;
-    pub const MIXED = c.ACCESSKIT_TOGGLED_MIXED;
+    pub const ak_false = c.ACCESSKIT_TOGGLED_FALSE;
+    pub const ak_true = c.ACCESSKIT_TOGGLED_TRUE;
+    pub const mixed = c.ACCESSKIT_TOGGLED_MIXED;
 };
 
 pub const VerticalOffset = struct {
-    pub const SUBSCRIPT = c.ACCESSKIT_VERTICAL_OFFSET_SUBSCRIPT;
-    pub const SUPERSCRIPT = c.ACCESSKIT_VERTICAL_OFFSET_SUPERSCRIPT;
+    pub const subscript = c.ACCESSKIT_VERTICAL_OFFSET_SUBSCRIPT;
+    pub const superscript = c.ACCESSKIT_VERTICAL_OFFSET_SUPERSCRIPT;
 };
 
 pub const ActionData = struct {
-    pub const CUSTOM_ACTION = c.ACCESSKIT_ACTION_DATA_CUSTOM_ACTION;
-    pub const VALUE = c.ACCESSKIT_ACTION_DATA_VALUE;
-    pub const NUMERIC_VALUE = c.ACCESSKIT_ACTION_DATA_NUMERIC_VALUE;
-    pub const SCROLL_UNIT = c.ACCESSKIT_ACTION_DATA_SCROLL_UNIT;
-    pub const SCROLL_HINT = c.ACCESSKIT_ACTION_DATA_SCROLL_HINT;
-    pub const SCROLL_TO_POINT = c.ACCESSKIT_ACTION_DATA_SCROLL_TO_POINT;
-    pub const SET_SCROLL_OFFSET = c.ACCESSKIT_ACTION_DATA_SET_SCROLL_OFFSET;
-    pub const SET_TEXT_SELECTION = c.ACCESSKIT_ACTION_DATA_SET_TEXT_SELECTION;
+    pub const custom_action = c.ACCESSKIT_ACTION_DATA_CUSTOM_ACTION;
+    pub const value = c.ACCESSKIT_ACTION_DATA_VALUE;
+    pub const numeric_value = c.ACCESSKIT_ACTION_DATA_NUMERIC_VALUE;
+    pub const scroll_unit = c.ACCESSKIT_ACTION_DATA_SCROLL_UNIT;
+    pub const scroll_hint = c.ACCESSKIT_ACTION_DATA_SCROLL_HINT;
+    pub const scroll_to_point = c.ACCESSKIT_ACTION_DATA_SCROLL_TO_POINT;
+    pub const set_scroll_offset = c.ACCESSKIT_ACTION_DATA_SET_SCROLL_OFFSET;
+    pub const set_text_selection = c.ACCESSKIT_ACTION_DATA_SET_TEXT_SELECTION;
 };
 
 // Mappings
@@ -788,7 +788,7 @@ pub const UnixAdapter = c.accesskit_unix_adapter;
 pub const WindowsAdapter = c.accesskit_windows_adapter;
 pub const WindowsQueuedEvents = c.accesskit_windows_queued_events;
 pub const WindowsSubclassingAdapter = c.accesskit_windows_subclassing_adapter;
-pub const nodeId = c.accesskit_node_id;
+pub const NodeId = c.accesskit_node_id;
 pub const NodeIds = c.accesskit_node_ids;
 pub const OptNodeId = c.accesskit_opt_node_id;
 pub const OptDouble = c.accesskit_opt_double;
@@ -819,16 +819,16 @@ pub const OptTextSelection = c.accesskit_opt_text_selection;
 pub const CustomAction = c.accesskit_custom_action;
 pub const CustomActions = c.accesskit_custom_actions;
 pub const Point = c.accesskit_point;
-pub const actionDataTag = c.accesskit_action_data_Tag;
+pub const ActionDataTag = c.accesskit_action_data_Tag;
 pub const OptActionData = c.accesskit_opt_action_data;
 pub const ActionRequest = if (dvui.accesskit_enabled) c.accesskit_action_request else struct {};
 pub const Vec2 = c.accesskit_vec2;
 pub const Size = c.accesskit_size;
 pub const actionHandlerCallback = c.accesskit_action_handler_callback;
-pub const treeUpdateFactoryUserdata = c.accesskit_tree_update_factory_userdata;
-pub const treeUpdateFactory = c.accesskit_tree_update_factory;
-pub const activationHandlerCallback = c.accesskit_activation_handler_callback;
-pub const deactivationHandlerCallback = c.accesskit_deactivation_handler_callback;
+pub const TreeUpdateFactoryUserdata = c.accesskit_tree_update_factory_userdata;
+pub const TreeUpdateFactory = c.accesskit_tree_update_factory;
+pub const ActivationHandlerCallback = c.accesskit_activation_handler_callback;
+pub const DeactivationHandlerCallback = c.accesskit_deactivation_handler_callback;
 pub const OptLresult = c.accesskit_opt_lresult;
 pub const nodeRole = c.accesskit_node_role;
 pub const nodeSetRole = c.accesskit_node_set_role;
@@ -1241,190 +1241,190 @@ pub const windowsSubclassingAdapterFree = c.accesskit_windows_subclassing_adapte
 pub const windowsSubclassingAdapterUpdateIfActive = c.accesskit_windows_subclassing_adapter_update_if_active;
 // Non libc Mappings
 pub const RoleNoAccessKit = enum {
-    UNKNOWN,
-    TEXT_RUN,
-    CELL,
-    LABEL,
-    IMAGE,
-    LINK,
-    ROW,
-    LIST_ITEM,
-    LIST_MARKER,
-    TREE_ITEM,
-    LIST_BOX_OPTION,
-    MENU_ITEM,
-    MENU_LIST_OPTION,
-    PARAGRAPH,
-    GENERIC_CONTAINER,
-    CHECK_BOX,
-    RADIO_BUTTON,
-    TEXT_INPUT,
-    BUTTON,
-    DEFAULT_BUTTON,
-    PANE,
-    ROW_HEADER,
-    COLUMN_HEADER,
-    ROW_GROUP,
-    LIST,
-    TABLE,
-    LAYOUT_TABLE_CELL,
-    LAYOUT_TABLE_ROW,
-    LAYOUT_TABLE,
-    SWITCH,
-    MENU,
-    MULTILINE_TEXT_INPUT,
-    SEARCH_INPUT,
-    DATE_INPUT,
-    DATE_TIME_INPUT,
-    WEEK_INPUT,
-    MONTH_INPUT,
-    TIME_INPUT,
-    EMAIL_INPUT,
-    NUMBER_INPUT,
-    PASSWORD_INPUT,
-    PHONE_NUMBER_INPUT,
-    URL_INPUT,
-    ABBR,
-    ALERT,
-    ALERT_DIALOG,
-    APPLICATION,
-    ARTICLE,
-    AUDIO,
-    BANNER,
-    BLOCKQUOTE,
-    CANVAS,
-    CAPTION,
-    CARET,
-    CODE,
-    COLOR_WELL,
-    COMBO_BOX,
-    EDITABLE_COMBO_BOX,
-    COMPLEMENTARY,
-    COMMENT,
-    CONTENT_DELETION,
-    CONTENT_INSERTION,
-    CONTENT_INFO,
-    DEFINITION,
-    DESCRIPTION_LIST,
-    DESCRIPTION_LIST_DETAIL,
-    DESCRIPTION_LIST_TERM,
-    DETAILS,
-    DIALOG,
-    DIRECTORY,
-    DISCLOSURE_TRIANGLE,
-    DOCUMENT,
-    EMBEDDED_OBJECT,
-    EMPHASIS,
-    FEED,
-    FIGURE_CAPTION,
-    FIGURE,
-    FOOTER,
-    FOOTER_AS_NON_LANDMARK,
-    FORM,
-    GRID,
-    GROUP,
-    HEADER,
-    HEADER_AS_NON_LANDMARK,
-    HEADING,
-    IFRAME,
-    IFRAME_PRESENTATIONAL,
-    IME_CANDIDATE,
-    KEYBOARD,
-    LEGEND,
-    LINE_BREAK,
-    LIST_BOX,
-    LOG,
-    MAIN,
-    MARK,
-    MARQUEE,
-    MATH,
-    MENU_BAR,
-    MENU_ITEM_CHECK_BOX,
-    MENU_ITEM_RADIO,
-    MENU_LIST_POPUP,
-    METER,
-    NAVIGATION,
-    NOTE,
-    PLUGIN_OBJECT,
-    PORTAL,
-    PRE,
-    PROGRESS_INDICATOR,
-    RADIO_GROUP,
-    REGION,
-    ROOT_WEB_AREA,
-    RUBY,
-    RUBY_ANNOTATION,
-    SCROLL_BAR,
-    SCROLL_VIEW,
-    SEARCH,
-    SECTION,
-    SLIDER,
-    SPIN_BUTTON,
-    SPLITTER,
-    STATUS,
-    STRONG,
-    SUGGESTION,
-    SVG_ROOT,
-    TAB,
-    TAB_LIST,
-    TAB_PANEL,
-    TERM,
-    TIME,
-    TIMER,
-    TITLE_BAR,
-    TOOLBAR,
-    TOOLTIP,
-    TREE,
-    TREE_GRID,
-    VIDEO,
-    WEB_VIEW,
-    WINDOW,
-    PDF_ACTIONABLE_HIGHLIGHT,
-    PDF_ROOT,
-    GRAPHICS_DOCUMENT,
-    GRAPHICS_OBJECT,
-    GRAPHICS_SYMBOL,
-    DOC_ABSTRACT,
-    DOC_ACKNOWLEDGEMENTS,
-    DOC_AFTERWORD,
-    DOC_APPENDIX,
-    DOC_BACK_LINK,
-    DOC_BIBLIO_ENTRY,
-    DOC_BIBLIOGRAPHY,
-    DOC_BIBLIO_REF,
-    DOC_CHAPTER,
-    DOC_COLOPHON,
-    DOC_CONCLUSION,
-    DOC_COVER,
-    DOC_CREDIT,
-    DOC_CREDITS,
-    DOC_DEDICATION,
-    DOC_ENDNOTE,
-    DOC_ENDNOTES,
-    DOC_EPIGRAPH,
-    DOC_EPILOGUE,
-    DOC_ERRATA,
-    DOC_EXAMPLE,
-    DOC_FOOTNOTE,
-    DOC_FOREWORD,
-    DOC_GLOSSARY,
-    DOC_GLOSS_REF,
-    DOC_INDEX,
-    DOC_INTRODUCTION,
-    DOC_NOTE_REF,
-    DOC_NOTICE,
-    DOC_PAGE_BREAK,
-    DOC_PAGE_FOOTER,
-    DOC_PAGE_HEADER,
-    DOC_PAGE_LIST,
-    DOC_PART,
-    DOC_PREFACE,
-    DOC_PROLOGUE,
-    DOC_PULLQUOTE,
-    DOC_QNA,
-    DOC_SUBTITLE,
-    DOC_TIP,
-    DOC_TOC,
-    LIST_GRID,
-    TERMINAL,
+    unknown,
+    text_run,
+    cell,
+    label,
+    image,
+    link,
+    row,
+    list_item,
+    list_marker,
+    tree_item,
+    list_box_option,
+    menu_item,
+    menu_list_option,
+    paragraph,
+    generic_container,
+    check_box,
+    radio_button,
+    text_input,
+    button,
+    default_button,
+    pane,
+    row_header,
+    column_header,
+    row_group,
+    list,
+    table,
+    layout_table_cell,
+    layout_table_row,
+    layout_table,
+    ak_switch,
+    menu,
+    multiline_text_input,
+    search_input,
+    date_input,
+    date_time_input,
+    week_input,
+    month_input,
+    time_input,
+    email_input,
+    number_input,
+    password_input,
+    phone_number_input,
+    url_input,
+    abbr,
+    alert,
+    alert_dialog,
+    application,
+    article,
+    audio,
+    banner,
+    blockquote,
+    canvas,
+    caption,
+    caret,
+    code,
+    color_well,
+    combo_box,
+    editable_combo_box,
+    complementary,
+    comment,
+    content_deletion,
+    content_insertion,
+    content_info,
+    definition,
+    description_list,
+    description_list_detail,
+    description_list_term,
+    details,
+    dialog,
+    directory,
+    disclosure_triangle,
+    document,
+    embedded_object,
+    emphasis,
+    feed,
+    figure_caption,
+    figure,
+    footer,
+    footer_as_non_landmark,
+    form,
+    grid,
+    group,
+    header,
+    header_as_non_landmark,
+    heading,
+    iframe,
+    iframe_presentational,
+    ime_candidate,
+    keyboard,
+    legend,
+    line_break,
+    list_box,
+    log,
+    main,
+    mark,
+    marquee,
+    math,
+    menu_bar,
+    menu_item_check_box,
+    menu_item_radio,
+    menu_list_popup,
+    meter,
+    navigation,
+    note,
+    plugin_object,
+    portal,
+    pre,
+    progress_indicator,
+    radio_group,
+    region,
+    root_web_area,
+    ruby,
+    ruby_annotation,
+    scroll_bar,
+    scroll_view,
+    search,
+    section,
+    slider,
+    spin_button,
+    splitter,
+    status,
+    strong,
+    suggestion,
+    svg_root,
+    tab,
+    tab_list,
+    tab_panel,
+    term,
+    time,
+    timer,
+    title_bar,
+    toolbar,
+    tooltip,
+    tree,
+    tree_grid,
+    video,
+    web_view,
+    window,
+    pdf_actionable_highlight,
+    pdf_root,
+    graphics_document,
+    graphics_object,
+    graphics_symbol,
+    doc_abstract,
+    doc_acknowledgements,
+    doc_afterword,
+    doc_appendix,
+    doc_back_link,
+    doc_biblio_entry,
+    doc_bibliography,
+    doc_biblio_ref,
+    doc_chapter,
+    doc_colophon,
+    doc_conclusion,
+    doc_cover,
+    doc_credit,
+    doc_credits,
+    doc_dedication,
+    doc_endnote,
+    doc_endnotes,
+    doc_epigraph,
+    doc_epilogue,
+    doc_errata,
+    doc_example,
+    doc_footnote,
+    doc_foreword,
+    doc_glossary,
+    doc_gloss_ref,
+    doc_index,
+    doc_introduction,
+    doc_note_ref,
+    doc_notice,
+    doc_page_break,
+    doc_page_footer,
+    doc_page_header,
+    doc_page_list,
+    doc_part,
+    doc_preface,
+    doc_prologue,
+    doc_pullquote,
+    doc_qna,
+    doc_subtitle,
+    doc_tip,
+    doc_toc,
+    list_grid,
+    terminal,
 };

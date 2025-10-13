@@ -16,7 +16,7 @@ const MenuItemWidget = @This();
 
 pub var defaults: Options = .{
     .name = "Menu Item",
-    .role = .MENU_ITEM,
+    .role = .menu_item,
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
     .style = .control,

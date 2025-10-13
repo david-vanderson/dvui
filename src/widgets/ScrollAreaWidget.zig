@@ -17,7 +17,7 @@ const ScrollAreaWidget = @This();
 
 pub var defaults: Options = .{
     .name = "ScrollAreaWidget",
-    .role = .SCROLL_VIEW,
+    .role = .scroll_view,
     .background = true,
     // generally the top of a scroll area is against something flat (like
     // window header), and the bottom is against something curved (bottom
