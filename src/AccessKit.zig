@@ -22,6 +22,8 @@ const std = @import("std");
 const dvui = @import("dvui.zig");
 
 adapter: ?AdapterType() = null,
+// The ak_node id for the widget which last had focus this frame.
+focused_id: usize = 0,
 // Note: Any access to `nodes` must be protected by `mutex`.
 nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node) = .empty,
 // Note: Any access to `action_requests` must be protected by `mutex`.
@@ -96,6 +98,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     if (wd.options.role == .none) return null;
 
     const is_root = (wd.id == wd.parent.data().id);
+    const focused_current_id: dvui.Id = dvui.focusedWidgetId() orelse dvui.focusedSubwindowId();
 
     {
         self.mutex.lock();
@@ -114,16 +117,19 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
         }
     }
 
-    //std.debug.print("Creating Node for {x} at {s}:{d}\n", .{ wd.id, wd.src.file, wd.src.line });
+    //std.debug.print("Creating Node for {x} with role {?t} at {s}:{d}\n", .{ wd.id, wd.options.role, wd.src.file, wd.src.line });
 
-    const ak_node = nodeNew(role.asU8()) orelse @panic("TODO");
+    const ak_node = nodeNew(role.asU8()) orelse return null;
     wd.ak_node = ak_node;
     const border_rect = dvui.clipGet().intersect(wd.borderRectScale().r);
     nodeSetBounds(ak_node, .{ .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
 
     if (!is_root) {
-        const parent_node = nodeParent(wd);
+        const parent_node: *Node, const parent_id: dvui.Id = nodeParent(wd);
         nodePushChild(parent_node, wd.id.asU64());
+        if (wd.id == focused_current_id) {
+            self.focused_id = (if (wd.id == focused_current_id) wd.id else parent_id).asU64();
+        }
     }
 
     if (wd.options.label) |label| {
@@ -139,7 +145,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
         }
     }
 
-    if (self.nodes.contains(wd.id)) @panic("Dupe!!"); // TODO:
+    std.debug.assert(!self.nodes.contains(wd.id));
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
     self.nodes.put(window.gpa, wd.id, ak_node) catch @panic("TODO");
 
@@ -155,12 +161,12 @@ pub inline fn nodeLabelFor(label_id: dvui.Id, target_id: dvui.Id) void {
 }
 
 /// Return the node of the nearest parent widget that has a non-null accesskit node.
-pub fn nodeParent(wd_in: *dvui.WidgetData) *Node {
+pub fn nodeParent(wd_in: *dvui.WidgetData) struct { *Node, dvui.Id } {
     var wd = wd_in.parent.data();
     while (true) : (wd = wd.parent.data()) {
         if (wd.accesskit_node()) |ak_node| {
-            //std.debug.print("parent ak node at {x} at {s}:{d}\n", .{ wd.id, wd.src.file, wd.src.line});
-            return ak_node;
+            //std.debug.print("parent node is {x} at {s}:{d}\n", .{ wd.id, wd.src.file, wd.src.line });
+            return .{ ak_node, wd.id };
         }
     }
 
@@ -297,6 +303,7 @@ pub fn pushUpdates(self: *AccessKit) void {
 
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
     self.nodes.clearAndFree(window.gpa);
+    self.focused_id = 0;
 }
 
 pub fn deinit(self: *AccessKit) void {
@@ -325,7 +332,8 @@ fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
 
     const tree = treeNew(window.wd.id.asU64()) orelse @panic("null");
-    const result = treeUpdateWithCapacityAndFocus(self.nodes.count(), window.wd.id.asU64());
+    if (self.focused_id == 0) self.focused_id = window.data().id.asU64();
+    const result = treeUpdateWithCapacityAndFocus(self.nodes.count(), self.focused_id);
     treeUpdateSetTree(result, tree);
     var itr = self.nodes.iterator();
     while (itr.next()) |item| {
