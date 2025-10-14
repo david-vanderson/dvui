@@ -580,30 +580,35 @@ pub fn addEventFocus(self: *Self, opts: AddEventFocusOptions) std.mem.Allocator.
     return (self.data().id != winId);
 }
 
+pub const AddEventMouseMotionOptions = struct {
+    pt: Point.Physical,
+    target_id: ?dvui.Id = null,
+};
+
 /// Add a mouse motion event that the mouse is now at physical pixel pt.  This
 /// is only for a mouse - for touch motion use addEventTouchMotion().
 ///
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventMouseMotion(self: *Self, newpt: Point.Physical) std.mem.Allocator.Error!bool {
+pub fn addEventMouseMotion(self: *Self, opts: AddEventMouseMotionOptions) std.mem.Allocator.Error!bool {
     self.positionMouseEventRemove();
 
     //log.debug("mouse motion {d} {d} -> {d} {d}", .{ x, y, newpt.x, newpt.y });
-    const dp = newpt.diff(self.mouse_pt);
-    self.mouse_pt = newpt;
+    const dp = opts.pt.diff(self.mouse_pt);
+    self.mouse_pt = opts.pt;
     const winId = self.subwindows.windowFor(self.mouse_pt);
 
     // maybe could do focus follows mouse here
     // - generate a .focus event here instead of just doing focusWindow(winId, null);
     // - how to make it optional?
 
-    const widget_id = if (self.capture) |cap| cap.id else null;
+    const target_id = opts.target_id orelse if (self.capture) |cap| cap.id else null;
 
     self.event_num += 1;
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
-        .target_widgetId = widget_id,
+        .target_widgetId = target_id,
         .evt = .{
             .mouse = .{
                 .action = .{ .motion = dp },
@@ -626,8 +631,15 @@ pub fn addEventMouseMotion(self: *Self, newpt: Point.Physical) std.mem.Allocator
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
 pub fn addEventMouseButton(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Action) std.mem.Allocator.Error!bool {
-    return addEventPointer(self, b, action, null);
+    return addEventPointer(self, .{ .button = b, .action = action });
 }
+
+pub const AddEventPointerOptions = struct {
+    button: dvui.enums.Button,
+    action: Event.Mouse.Action,
+    xynorm: ?Point = null,
+    target_id: ?dvui.Id = null,
+};
 
 /// Add a touch up/down event.  This is similar to addEventMouseButton but
 /// also includes a normalized (0-1) touch point.
@@ -635,8 +647,8 @@ pub fn addEventMouseButton(self: *Self, b: dvui.enums.Button, action: Event.Mous
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Action, xynorm: ?Point) std.mem.Allocator.Error!bool {
-    if (self.debug.target == .mouse_until_click and action == .press and b.pointer()) {
+pub fn addEventPointer(self: *Self, opts: AddEventPointerOptions) std.mem.Allocator.Error!bool {
+    if (self.debug.target == .mouse_until_click and opts.action == .press and opts.button.pointer()) {
         // a left click or touch will stop the debug stuff from following
         // the mouse, but need to stop it at the end of the frame when
         // we've gotten the info
@@ -644,24 +656,24 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
         return true;
     }
 
-    var bb = b;
+    var bb = opts.button;
     if (self.debug.touch_simulate_events and bb == .left) {
         bb = .touch0;
-        if (action == .press) {
+        if (opts.action == .press) {
             self.debug.touch_simulate_down = true;
-        } else if (action == .release) {
+        } else if (opts.action == .release) {
             self.debug.touch_simulate_down = false;
         }
     }
 
-    if (xynorm) |xyn| {
+    if (opts.xynorm) |xyn| {
         self.mouse_pt = (Point{ .x = xyn.x * self.data().rect.w, .y = xyn.y * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
     }
 
-    const widget_id = if (self.capture) |cap| cap.id else null;
+    const target_id = opts.target_id orelse if (self.capture) |cap| cap.id else null;
     const winId = self.subwindows.windowFor(self.mouse_pt);
 
-    if (action == .press and bb.pointer()) {
+    if (opts.action == .press and bb.pointer()) {
         _ = try self.addEventFocus(.{ .pt = self.mouse_pt, .button = bb });
     }
 
@@ -670,10 +682,10 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
     self.event_num += 1;
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
-        .target_widgetId = widget_id,
+        .target_widgetId = target_id,
         .evt = .{
             .mouse = .{
-                .action = action,
+                .action = opts.action,
                 .button = bb,
                 .mod = self.modifiers,
                 .p = self.mouse_pt,
@@ -1355,7 +1367,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
     if (self.inject_motion_event) {
         self.inject_motion_event = false;
-        _ = try self.addEventMouseMotion(self.mouse_pt);
+        _ = try self.addEventMouseMotion(.{ .pt = self.mouse_pt });
     }
 
     if (dvui.accesskit_enabled) {
