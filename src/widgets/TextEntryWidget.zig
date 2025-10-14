@@ -104,7 +104,9 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 
     var options = defaults.min_sizeM(14, 1);
 
-    if (init_opts.multiline) {
+    if (init_opts.password_char != null) {
+        options.role = .password_input;
+    } else if (init_opts.multiline) {
         options.role = .multiline_text_input;
     }
 
@@ -246,11 +248,13 @@ pub fn install(self: *TextEntryWidget) void {
     if (self.data().accesskit_node()) |ak_node| {
         dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
         dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_value);
-        const str = dvui.currentWindow().arena().dupeZ(u8, self.text) catch "";
-        defer dvui.currentWindow().arena().free(str);
-        // TODO: We don't want to always push large amounts of text each frame. So we either need to look at pushing
-        // only chunks of text, ot only pushing when the text has actually changed since last frame.
-        dvui.AccessKit.nodeSetValue(ak_node, str);
+        if (self.data().options.role != .password_input) {
+            const str = dvui.currentWindow().arena().dupeZ(u8, self.text) catch "";
+            defer dvui.currentWindow().arena().free(str);
+            // TODO: We don't want to always push large amounts of text each frame. So we either need to look at pushing
+            // only chunks of text, ot only pushing when the text has actually changed since last frame.
+            dvui.AccessKit.nodeSetValue(ak_node, str);
+        }
     }
 }
 
