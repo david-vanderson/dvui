@@ -4141,6 +4141,9 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
         _ = spacer(@src(), .{ .min_size_content = .width(checkbox_defaults.paddingGet().w) });
         labelNoFmt(@src(), str, .{}, options.strip().override(.{ .gravity_y = 0.5 }));
     }
+    if (bw.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeSetToggled(ak_node, if (target.*) 1 else 0);
+    }
 
     return ret;
 }
