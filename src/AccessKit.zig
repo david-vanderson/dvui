@@ -98,7 +98,6 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     if (wd.options.role == .none) return null;
 
     const is_root = (wd.id == wd.parent.data().id);
-    const focused_current_id: dvui.Id = dvui.focusedWidgetId() orelse dvui.focusedSubwindowId();
 
     {
         self.mutex.lock();
@@ -125,10 +124,10 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     nodeSetBounds(ak_node, .{ .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
 
     if (!is_root) {
-        const parent_node: *Node, const parent_id: dvui.Id = nodeParent(wd);
+        const parent_node: *Node = nodeParent(wd);
         nodePushChild(parent_node, wd.id.asU64());
-        if (wd.id == focused_current_id) {
-            self.focused_id = (if (wd.id == focused_current_id) wd.id else parent_id).asU64();
+        if (wd.id == dvui.focusedWidgetId() orelse dvui.focusedSubwindowId()) {
+            self.focused_id = wd.id.asU64();
         }
     }
 
@@ -161,12 +160,12 @@ pub inline fn nodeLabelFor(label_id: dvui.Id, target_id: dvui.Id) void {
 }
 
 /// Return the node of the nearest parent widget that has a non-null accesskit node.
-pub fn nodeParent(wd_in: *dvui.WidgetData) struct { *Node, dvui.Id } {
+pub fn nodeParent(wd_in: *dvui.WidgetData) *Node {
     var wd = wd_in.parent.data();
     while (true) : (wd = wd.parent.data()) {
         if (wd.accesskit_node()) |ak_node| {
             //std.debug.print("parent node is {x} at {s}:{d}\n", .{ wd.id, wd.src.file, wd.src.line });
-            return .{ ak_node, wd.id };
+            return ak_node;
         }
     }
 

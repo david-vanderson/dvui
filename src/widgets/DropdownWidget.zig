@@ -18,7 +18,6 @@ drop_adjust: f32 = 0,
 
 pub var defaults: Options = .{
     .name = "Dropdown",
-    .role = .combo_box,
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
@@ -43,13 +42,13 @@ pub fn wrapOuter(opts: Options) Options {
 
 pub fn wrapInner(opts: Options) Options {
     return opts.strip().override(.{
+        .role = .combo_box,
         .tab_index = opts.tab_index,
         .border = opts.border,
         .padding = opts.padding,
         .corner_radius = opts.corner_radius,
         .background = opts.background,
         .expand = .both,
-        .role = .none,
     });
 }
 
