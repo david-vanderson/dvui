@@ -283,7 +283,7 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
     //    wasm.wasm_panic(msg.ptr, msg.len);
     //};
     switch (which) {
-        1 => _ = try w.addEventMouseMotion(.{ .x = float1, .y = float2 }),
+        1 => _ = try w.addEventMouseMotion(.{ .pt = .{ .x = float1, .y = float2 } }),
         2 => _ = try w.addEventMouseButton(buttonFromJS(int1), .press),
         3 => _ = try w.addEventMouseButton(buttonFromJS(int1), .release),
         4 => _ = try w.addEventMouseWheel(float1 * dvui.scroll_speed, if (int1 > 0) .vertical else .horizontal),
@@ -305,16 +305,16 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
         },
         7 => {
             const str = @as([*]u8, @ptrFromInt(int1))[0..int2];
-            _ = try w.addEventText(. { .text = str } );
+            _ = try w.addEventText(.{ .text = str });
         },
         8 => {
             const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + int1);
-            _ = try w.addEventPointer(touch, .press, .{ .x = float1, .y = float2 });
+            _ = try w.addEventPointer(.{ .button = touch, .action = .press, .xynorm = .{ .x = float1, .y = float2 } });
             touchPoints[int1] = .{ .x = float1, .y = float2 };
         },
         9 => {
             const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + int1);
-            _ = try w.addEventPointer(touch, .release, .{ .x = float1, .y = float2 });
+            _ = try w.addEventPointer(.{ .button = touch, .action = .release, .xynorm = .{ .x = float1, .y = float2 } });
             touchPoints[int1] = null;
         },
         10 => {
