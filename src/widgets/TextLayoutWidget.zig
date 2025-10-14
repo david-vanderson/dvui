@@ -24,7 +24,7 @@ const TextLayoutWidget = @This();
 /// 500 if our min width is zero).
 pub var defaults: Options = .{
     .name = "TextLayout",
-    .role = .document, // TODO: is this right?  Does it depend on how much text?
+    .role = .label, // TODO: Use labels until can support .text_run
     .padding = Rect.all(6),
     .background = true,
     .style = .content,
