@@ -1046,13 +1046,17 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
 
             if (sdl3) {
                 return try win.addEventMouseMotion(.{
-                    .x = event.motion.x * scale,
-                    .y = event.motion.y * scale,
+                    .pt = .{
+                        .x = event.motion.x * scale,
+                        .y = event.motion.y * scale,
+                    },
                 });
             } else {
                 return try win.addEventMouseMotion(.{
-                    .x = @as(f32, @floatFromInt(event.motion.x)) * scale,
-                    .y = @as(f32, @floatFromInt(event.motion.y)) * scale,
+                    .pt = .{
+                        .x = @as(f32, @floatFromInt(event.motion.x)) * scale,
+                        .y = @as(f32, @floatFromInt(event.motion.y)) * scale,
+                    },
                 });
             }
         },
@@ -1105,14 +1109,14 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 log.debug("event FINGERDOWN {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
             }
 
-            return try win.addEventPointer(.touch0, .press, .{ .x = event.tfinger.x, .y = event.tfinger.y });
+            return try win.addEventPointer(.{ .button = .touch0, .action = .press, .xynorm = .{ .x = event.tfinger.x, .y = event.tfinger.y }});
         },
         if (sdl3) c.SDL_EVENT_FINGER_UP else c.SDL_FINGERUP => {
             if (self.log_events) {
                 log.debug("event FINGERUP {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
             }
 
-            return try win.addEventPointer(.touch0, .release, .{ .x = event.tfinger.x, .y = event.tfinger.y });
+            return try win.addEventPointer(.{ .button = .touch0, .action = .release, .xynorm = .{ .x = event.tfinger.x, .y = event.tfinger.y }});
         },
         if (sdl3) c.SDL_EVENT_FINGER_MOTION else c.SDL_FINGERMOTION => {
             if (self.log_events) {

@@ -178,61 +178,26 @@ fn processActions(self: *AccessKit) void {
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
     for (self.action_requests.items) |request| {
         switch (request.action) {
-            //Action.CLICK => {
-            //    const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
-            //        dvui.log.debug("AccessKit: Action {d} received for a target {x} without a node.", .{ request.action, request.target });
-            //        return;
-            //    };
-            //    const bounds = _: {
-            //        const bounds_maybe = nodeBounds(ak_node);
-            //        if (bounds_maybe.has_value) break :_ bounds_maybe.value;
-            //        dvui.log.debug("AccessKit: Action {d} received for a target {x} without node bounds.", .{ request.action, request.target });
-            //        return;
-            //    };
-            //    const click_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
-            //    const floating_win = window.subwindows.windowFor(click_point);
+            Action.click => {
+                const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
+                    dvui.log.debug("AccessKit: Action {d} received for a target {x} without a node.", .{ request.action, request.target });
+                    return;
+                };
+                const bounds = blk: {
+                    const bounds_maybe = nodeBounds(ak_node);
+                    if (bounds_maybe.has_value) break :blk bounds_maybe.value;
+                    dvui.log.debug("AccessKit: Action {d} received for a target {x} without node bounds.", .{ request.action, request.target });
+                    return;
+                };
+                const click_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
 
-            //    const motion_evt: dvui.Event = .{ .target_widgetId = @enumFromInt(request.target), .evt = .{ .mouse = .{
-            //        .action = .{ .motion = .{ .x = 0, .y = 0 } },
-            //        .button = .none,
-            //        .mod = .none,
-            //        .p = click_point,
-            //        .floating_win = floating_win,
-            //    } } };
-            //    window.events.append(window.gpa, motion_evt) catch @panic("TODO");
+                _ = window.addEventMouseMotion(.{ .pt = click_point, .target_id = @enumFromInt(request.target) }) catch @panic("TODO");
 
-            //    const focus_evt: dvui.Event = .{
-            //        .target_widgetId = @enumFromInt(request.target),
-            //        .evt = .{
-            //            .mouse = .{
-            //                .action = .focus,
-            //                .button = .left,
-            //                .mod = .none,
-            //                .p = click_point,
-            //                .floating_win = floating_win,
-            //            },
-            //        },
-            //    };
-            //    window.events.append(window.gpa, focus_evt) catch @panic("TODO");
+                // sending a left press also sends a focus event
+                _ = window.addEventPointer(.{.button = .left, .action = .press, .target_id = @enumFromInt(request.target)}) catch @panic("TODO");
+                _ = window.addEventPointer(.{.button = .left, .action = .release, .target_id = @enumFromInt(request.target)}) catch @panic("TODO");
 
-            //    const click_evt: dvui.Event = .{ .target_widgetId = @enumFromInt(request.target), .evt = .{ .mouse = .{
-            //        .action = .press,
-            //        .button = .left,
-            //        .mod = .none,
-            //        .p = click_point,
-            //        .floating_win = floating_win,
-            //    } } };
-            //    window.events.append(window.gpa, click_evt) catch @panic("TODO");
-
-            //    const release_evt: dvui.Event = .{ .target_widgetId = @enumFromInt(request.target), .evt = .{ .mouse = .{
-            //        .action = .release,
-            //        .button = .left,
-            //        .mod = .none,
-            //        .p = click_point,
-            //        .floating_win = floating_win,
-            //    } } };
-            //    window.events.append(window.gpa, release_evt) catch @panic("TODO");
-            //},
+            },
             Action.set_value => {
                 const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
                     dvui.log.debug("AccessKit: Action {d} received for a target {x} without a node.", .{ request.action, request.target });
