@@ -542,7 +542,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
             if (self.log_events) {
                 std.debug.print("raylib event text entry {s}\n", .{string});
             }
-            if (try win.addEventText(. { .text = string })) disable_raylib_input = true;
+            if (try win.addEventText(.{ .text = string })) disable_raylib_input = true;
         }
 
         //check if keymod
@@ -577,7 +577,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
             if (self.log_events) {
                 std.debug.print("raylib event text entry {s}\n", .{string});
             }
-            if (try win.addEventText(. { .text = string })) disable_raylib_input = true;
+            if (try win.addEventText(.{ .text = string })) disable_raylib_input = true;
         }
     }
 
@@ -589,7 +589,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
         // like natural coords but ignores content scaling
         const scale = self.pixelSize().w / self.windowSize().w;
 
-        if (try win.addEventMouseMotion(.{ .x = mouse_pos.x * scale, .y = mouse_pos.y * scale })) disable_raylib_input = true;
+        if (try win.addEventMouseMotion(.{ .pt = .{ .x = mouse_pos.x * scale, .y = mouse_pos.y * scale } })) disable_raylib_input = true;
         if (self.log_events) {
             //std.debug.print("raylib event Mouse Moved\n", .{});
         }
