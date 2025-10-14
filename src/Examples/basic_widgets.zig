@@ -327,7 +327,7 @@ pub fn dropdownAdvanced() void {
             "dropdown_triangle",
             entypo.chevron_small_down,
             .{},
-            .{ .gravity_y = 0.5 },
+            .{ .gravity_y = 0.5, .role = .none },
         );
 
         hbox2.deinit();

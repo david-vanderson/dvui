@@ -4204,8 +4204,8 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     var ret = false;
 
     var bw = ButtonWidget.init(src, .{}, options.strip().override(options));
-
     bw.install();
+
     bw.processEvents();
     // don't call button drawBackground(), it wouldn't do anything anyway because we stripped the options so no border/background
     // don't call button drawFocus(), we don't want a focus ring around the label
@@ -4230,6 +4230,10 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     if (label_str) |str| {
         _ = spacer(@src(), .{ .min_size_content = .width(radio_defaults.paddingGet().w) });
         labelNoFmt(@src(), str, .{}, options.strip().override(.{ .gravity_y = 0.5 }));
+    }
+
+    if (bw.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeSetToggled(ak_node, if (active) 1 else 0);
     }
 
     return ret;

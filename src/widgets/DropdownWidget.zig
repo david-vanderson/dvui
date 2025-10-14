@@ -37,10 +37,11 @@ pub fn wrapOuter(opts: Options) Options {
     ret.border = Rect{};
     ret.padding = Rect{};
     ret.background = false;
+    ret.role = .none;
     return ret;
 }
 
-pub fn wrapInner(opts: Options) Options {
+pub fn wrapInner(self: DropdownWidget, opts: Options) Options {
     return opts.strip().override(.{
         .role = .combo_box,
         .tab_index = opts.tab_index,
@@ -49,6 +50,7 @@ pub fn wrapInner(opts: Options) Options {
         .corner_radius = opts.corner_radius,
         .background = opts.background,
         .expand = .both,
+        .label = if (self.init_options.label) |label| .{ .text = label } else null,
     });
 }
 
@@ -66,7 +68,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 pub fn install(self: *DropdownWidget) void {
     self.menu.install();
 
-    self.menuItem = MenuItemWidget.init(@src(), .{ .submenu = true, .focus_as_outline = true }, wrapInner(self.options));
+    self.menuItem = MenuItemWidget.init(@src(), .{ .submenu = true, .focus_as_outline = true }, self.wrapInner(self.options));
     self.menuItem.install();
     self.menuItem.processEvents();
     self.menuItem.drawBackground();
@@ -85,7 +87,7 @@ pub fn install(self: *DropdownWidget) void {
             "dropdown_triangle",
             dvui.entypo.chevron_small_down,
             .{},
-            self.options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }),
+            self.options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0, .role = .none }),
         );
     }
     if (self.data().accesskit_node()) |ak_node| {
