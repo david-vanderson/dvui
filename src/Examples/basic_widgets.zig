@@ -110,7 +110,7 @@ pub fn basicWidgets() void {
         defer hbox.deinit();
 
         dvui.label(@src(), "Text Entry", .{}, .{ .gravity_y = 0.5 });
-        var te = dvui.textEntry(@src(), .{}, .{});
+        var te = dvui.textEntry(@src(), .{}, .{ .label = .{ .label_widget = .prev } });
         te.deinit();
     }
 
@@ -301,7 +301,11 @@ pub fn dropdownAdvanced() void {
     theme.control.text_hover = dvui.Color.red;
     theme.highlight.text = dvui.Color.red;
 
-    var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = g.choice }, .{ .min_size_content = .{ .w = 100 }, .theme = &theme });
+    var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = g.choice }, .{
+        .min_size_content = .{ .w = 100 },
+        .theme = &theme,
+        .label = .{ .label_widget = .next },
+    });
     dd.install();
     defer dd.deinit();
 

@@ -28,6 +28,15 @@ focused_id: usize = 0,
 nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node) = .empty,
 // Note: Any access to `action_requests` must be protected by `mutex`.
 action_requests: std.ArrayList(ActionRequest) = .empty,
+
+// The last seen node with `role = .label`
+prev_label_id: dvui.Id = .zero,
+
+// `node_to_label` contains the node that will be labeled with the next
+// created label node.
+node_waiting_label: bool = false,
+node_to_label: dvui.Id = .zero,
+
 status: enum {
     off,
     starting,
@@ -133,8 +142,27 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
 
     if (wd.options.label) |label| {
         switch (label) {
-            .by => |id| {
+            .by_id => |id| {
                 nodePushLabelledBy(ak_node, id.asU64());
+            },
+            .for_id => |id| blk: {
+                const for_node = self.nodes.get(id) orelse {
+                    dvui.log.debug("AccessKit: TODO\n", .{});
+                    break :blk;
+                };
+                AccessKit.nodePushLabelledBy(for_node, wd.id.asU64());
+            },
+            .label_widget => |direction| {
+                switch (direction) {
+                    .next => {
+                        self.node_to_label = wd.id;
+                        self.node_waiting_label = true;
+                    },
+                    .prev => {
+                        std.debug.assert(self.nodes.contains(self.prev_label_id));
+                        nodePushLabelledBy(ak_node, self.prev_label_id.asU64());
+                    },
+                }
             },
             .text => |txt| {
                 const str = dvui.currentWindow().arena().dupeZ(u8, txt) catch "";
@@ -143,20 +171,25 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
             },
         }
     }
+    if (wd.options.role == .label) {
+        if (self.node_waiting_label) {
+            if (self.node_to_label == .zero) {
+                self.node_waiting_label = false;
+            } else {
+                const for_node = self.nodes.get(self.node_to_label) orelse unreachable;
+                nodePushLabelledBy(for_node, wd.id.asU64());
+                self.node_waiting_label = false;
+                self.node_to_label = .zero;
+            }
+        }
+        self.prev_label_id = wd.id;
+    }
 
     std.debug.assert(!self.nodes.contains(wd.id));
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
     self.nodes.put(window.gpa, wd.id, ak_node) catch @panic("TODO");
 
     return ak_node;
-}
-
-pub inline fn nodeLabelFor(label_id: dvui.Id, target_id: dvui.Id) void {
-    if (!dvui.accesskit_enabled) return;
-
-    if (dvui.currentWindow().accesskit.nodes.get(target_id)) |node| {
-        nodePushLabelledBy(node, label_id.asU64());
-    }
 }
 
 /// Return the node of the nearest parent widget that has a non-null accesskit node.
@@ -194,9 +227,8 @@ fn processActions(self: *AccessKit) void {
                 _ = window.addEventMouseMotion(.{ .pt = click_point, .target_id = @enumFromInt(request.target) }) catch @panic("TODO");
 
                 // sending a left press also sends a focus event
-                _ = window.addEventPointer(.{.button = .left, .action = .press, .target_id = @enumFromInt(request.target)}) catch @panic("TODO");
-                _ = window.addEventPointer(.{.button = .left, .action = .release, .target_id = @enumFromInt(request.target)}) catch @panic("TODO");
-
+                _ = window.addEventPointer(.{ .button = .left, .action = .press, .target_id = @enumFromInt(request.target) }) catch @panic("TODO");
+                _ = window.addEventPointer(.{ .button = .left, .action = .release, .target_id = @enumFromInt(request.target) }) catch @panic("TODO");
             },
             Action.set_value => {
                 const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
@@ -798,7 +830,7 @@ pub const OptActionData = c.accesskit_opt_action_data;
 pub const ActionRequest = if (dvui.accesskit_enabled) c.accesskit_action_request else struct {};
 pub const Vec2 = c.accesskit_vec2;
 pub const Size = c.accesskit_size;
-pub const actionHandlerCallback = c.accesskit_action_handler_callback;
+pub const ActionHandlerCallback = c.accesskit_action_handler_callback;
 pub const TreeUpdateFactoryUserdata = c.accesskit_tree_update_factory_userdata;
 pub const TreeUpdateFactory = c.accesskit_tree_update_factory;
 pub const ActivationHandlerCallback = c.accesskit_activation_handler_callback;
