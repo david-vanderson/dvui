@@ -43,7 +43,6 @@ pub fn main() !void {
         .vsync = vsync,
         .title = "DVUI SDL Standalone Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
-        .hidden = if (dvui.accesskit_enabled) true else false,
     });
     g_backend = backend;
     defer backend.deinit();
@@ -60,13 +59,7 @@ pub fn main() !void {
     });
     defer win.deinit();
 
-    std.debug.print("accesskit_enabled: {}\n", .{dvui.accesskit_enabled});
-
     var interrupted = false;
-    if (dvui.accesskit_enabled) win.accesskit.initialize();
-        //dvui.AccessKit.initSDL3(&dvui.accesskit, &backend, &win);
-    //defer dvui.accesskit.deinit();
-    _ = SDLBackend.c.SDL_ShowWindow(backend.window);
 
     main_loop: while (true) {
         // beginWait coordinates with waitTime below to run frames only when needed
@@ -74,9 +67,7 @@ pub fn main() !void {
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(nstime);
-        if (dvui.accesskit_enabled) {
-            //dvui.accesskit.addAllEvents();
-        }
+
         // send all SDL events to dvui for processing
         const quit = try backend.addAllEvents(&win);
         if (quit) break :main_loop;
@@ -99,7 +90,7 @@ pub fn main() !void {
 
         // render frame to OS
         try backend.renderPresent();
-        //if (dvui.accesskit_enabled) dvui.accesskit.pushUpdates();
+
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);
         interrupted = try backend.waitEventTimeout(wait_event_micros);

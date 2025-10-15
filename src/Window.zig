@@ -292,7 +292,7 @@ pub fn init(
     //    self.snap_to_pixels = false;
     //}
 
-    log.info("window logical {f} pixels {f} natural scale {d} initial content scale {d} snap_to_pixels {any}\n", .{ winSize, pxSize, pxSize.w / winSize.w, self.content_scale, self.snap_to_pixels });
+    log.info("window logical {f} pixels {f} natural scale {d} initial content scale {d} snap_to_pixels {any} accesskit {any}\n", .{ winSize, pxSize, pxSize.w / winSize.w, self.content_scale, self.snap_to_pixels, dvui.accesskit_enabled });
 
     errdefer self.deinit();
 
@@ -945,6 +945,13 @@ pub fn begin(
     self: *Self,
     time_ns: i128,
 ) dvui.Backend.GenericError!void {
+
+    if (dvui.accesskit_enabled and self.backend.impl.ak_initialize_in_begin) {
+        self.backend.impl.ak_initialize_in_begin = false;
+        self.accesskit.initialize();
+        _ = dvui.backend.c.SDL_ShowWindow(self.backend.impl.window);
+    }
+
     var micros_since_last: u32 = 1;
     if (time_ns > self.frame_time_ns) {
         // enforce monotinicity
@@ -1059,8 +1066,7 @@ pub fn begin(
     try self.backend.begin(self.arena());
 }
 
-// TODO: Temp pub
-pub fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
+fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
     const widget_id = if (self.capture) |cap| cap.id else null;
 
     try self.events.append(self.arena(), .{
@@ -1076,8 +1082,7 @@ pub fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
     });
 }
 
-// TODO: TEMP pub
-pub fn positionMouseEventRemove(self: *Self) void {
+fn positionMouseEventRemove(self: *Self) void {
     if (self.events.pop()) |e| {
         if (e.evt != .mouse or e.evt.mouse.action != .position) {
             log.err("positionMouseEventRemove removed a non-mouse or non-position event\n", .{});

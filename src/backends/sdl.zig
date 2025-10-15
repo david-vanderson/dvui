@@ -31,6 +31,7 @@ const log = std.log.scoped(.SDLBackend);
 
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
+ak_initialize_in_begin: bool = false,
 we_own_window: bool = false,
 touch_mouse_events: bool = false,
 log_events: bool = false,
@@ -79,7 +80,15 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         MACOS_enable_scroll_momentum();
     }
 
-    const hidden_flag = if (options.hidden) c.SDL_WINDOW_HIDDEN else 0;
+    var hidden = options.hidden;
+    var show_window_in_begin = false;
+    if (dvui.accesskit_enabled and !hidden) {
+        // hide the window until we can intialize accesskit in Window.begin
+        hidden = true;
+        show_window_in_begin = true;
+    }
+
+    const hidden_flag = if (hidden) c.SDL_WINDOW_HIDDEN else 0;
     const fullscreen_flag = if (options.fullscreen) c.SDL_WINDOW_FULLSCREEN else 0;
     const window: *c.SDL_Window = if (sdl3)
         c.SDL_CreateWindow(
@@ -131,6 +140,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     try toErr(c.SDL_SetRenderDrawBlendMode(renderer, pma_blend), "SDL_SetRenderDrawBlendMode in initWindow");
 
     var back = init(window, renderer);
+    back.ak_initialize_in_begin = show_window_in_begin;
     back.we_own_window = true;
 
     if (sdl3) {
