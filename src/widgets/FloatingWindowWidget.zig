@@ -119,8 +119,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         .init_options = init_opts,
     };
 
-    self.options.rect = null; // if the user passes in a rect, don't pass it to the BoxWidget
-
     var autopossize = true;
     if (self.init_options.rect) |ior| {
         // user is storing the rect for us across open/close

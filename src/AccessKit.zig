@@ -62,7 +62,7 @@ pub fn initialize(self: *AccessKit) void {
     const SDLBackend = dvui.backend;
 
     if (builtin.os.tag == .windows) {
-        const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.instance().window);
+        const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.impl.window);
         const hwnd = SDLBackend.c.SDL_GetPointerProperty(
             properties,
             SDLBackend.c.SDL_PROP_WINDOW_WIN32_HWND_POINTER,
@@ -77,7 +77,7 @@ pub fn initialize(self: *AccessKit) void {
             self,
         ) orelse @panic("null");
     } else if (builtin.os.tag.isDarwin()) {
-        const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.instance().window);
+        const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.impl.window);
         const hwnd = SDLBackend.c.SDL_GetPointerProperty(
             properties,
             SDLBackend.c.SDL_PROP_WINDOW_COCOA_WINDOW_POINTER,
@@ -99,10 +99,6 @@ inline fn nodeCreateFake(_: *AccessKit, _: *dvui.WidgetData, _: Role) ?*Node {
 /// Create a new Node for AccessKit
 /// Returns null if no accessibility information is required for this widget.
 pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node {
-    if (self.adapter == null) {
-        self.initialize();
-    }
-
     if (!wd.visible()) return null;
     if (wd.options.role == .none) return null;
 
