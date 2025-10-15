@@ -17,7 +17,7 @@ pub fn moveTo(tag: []const u8) !void {
     };
     if (!tag_data.visible) return error.WidgetNotVisible;
     const cw = dvui.currentWindow();
-    _ = try cw.addEventMouseMotion(tag_data.rect.center());
+    _ = try cw.addEventMouseMotion(.{ .pt = tag_data.rect.center() });
 }
 
 /// Presses and releases the button at the current mouse position
@@ -29,7 +29,7 @@ pub fn click(b: dvui.enums.Button) !void {
 
 pub fn writeText(text: []const u8) !void {
     const cw = dvui.currentWindow();
-    _ = try cw.addEventText(text);
+    _ = try cw.addEventText(. { .text = text } );
 }
 
 pub fn pressKey(code: dvui.enums.Key, mod: dvui.enums.Mod) !void {

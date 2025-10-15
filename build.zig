@@ -53,6 +53,14 @@ pub fn build(b: *std.Build) !void {
         b.option(bool, "log-error-trace", "If error logs should include the error return trace (automatically enabled with log stack traces)"),
     );
 
+    const accesskit_enabled = b.option(bool, "accesskit", "Build with AccessKit support") orelse false;
+
+    build_options.addOption(
+        bool,
+        "accesskit_enabled",
+        accesskit_enabled,
+    );
+
     const dvui_opts = DvuiModuleOptions{
         .b = b,
         .target = target,
@@ -61,6 +69,7 @@ pub fn build(b: *std.Build) !void {
         .test_filters = test_filters,
         .check_step = check_step,
         .use_lld = use_lld,
+        .accesskit_enabled = accesskit_enabled,
         .build_options = build_options,
     };
 
@@ -466,6 +475,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                     .optimize = optimize,
                     .build_options = dvui_opts.build_options,
                     .test_filters = dvui_opts.test_filters,
+                    .accesskit_enabled = false,
                     // no tests or checks needed, they are check above in native build
                 };
 
@@ -502,6 +512,7 @@ const DvuiModuleOptions = struct {
     test_filters: []const []const u8,
     add_stb_image: bool = true,
     use_lld: ?bool = null,
+    accesskit_enabled: bool,
     build_options: *std.Build.Step.Options,
 
     fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
@@ -523,6 +534,12 @@ const DvuiModuleOptions = struct {
         }
     }
 };
+
+fn accessKitSupported(target: std.Build.ResolvedTarget) bool {
+    if (target.result.os.tag != .windows and !target.result.os.tag.isDarwin()) return false;
+    if (!target.result.cpu.arch.isAARCH64() and !target.result.cpu.arch.isX86()) return false;
+    return true;
+}
 
 fn addDvuiModule(
     comptime name: []const u8,
@@ -549,10 +566,28 @@ fn addDvuiModule(
         dvui_mod.linkSystemLibrary("ole32", .{});
     }
 
+    if (opts.accesskit_enabled) {
+        const ak_dep = b.dependency("accesskit", .{});
+        dvui_mod.addIncludePath(ak_dep.path("include"));
+
+        const os_path = if (target.result.os.tag == .windows) "windows" //
+            else if (target.result.os.tag.isDarwin()) "macos" //
+            else "unsupported";
+        const arch_path = if (target.result.cpu.arch.isAARCH64()) "arm64" //
+            else if (target.result.cpu.arch == .x86) "x86" //
+            else if (target.result.cpu.arch == .x86_64) "x86_64" //
+            else "unsupported";
+
+        const abi_path = if (target.result.os.tag == .windows) "msvc" //
+            else if (target.result.os.tag.isDarwin()) "" //
+            else "";
+        const path = ak_dep.path(b.pathJoin(&.{ "lib", os_path, arch_path, abi_path, "static" }));
+        dvui_mod.addLibraryPath(path);
+        dvui_mod.linkSystemLibrary("accesskit", .{});
+    }
+
     const stb_source = "external/stb/";
     dvui_mod.addIncludePath(b.path(stb_source));
-
-    dvui_mod.addIncludePath(b.path("src/external/stb"));
 
     if (target.result.cpu.arch == .wasm32 or target.result.cpu.arch == .wasm64) {
         dvui_mod.addCSourceFiles(.{
@@ -626,6 +661,11 @@ fn addExample(
         if (b.lazyDependency("win32", .{})) |zigwin32| {
             mod.addImport("win32", zigwin32.module("win32"));
         }
+
+        if (opts.accesskit_enabled) {
+            mod.linkSystemLibrary("ws2_32", .{});
+            mod.linkSystemLibrary("Userenv", .{});
+        }
     }
 
     if (add_tests) {
@@ -639,6 +679,11 @@ fn addExample(
     const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
     const compile_cmd = b.addInstallArtifact(exe, .{});
     compile_step.dependOn(&compile_cmd.step);
+
+    if (opts.accesskit_enabled and !accessKitSupported(opts.target)) {
+        compile_step.dependOn(&b.addFail("Accesskit is not supported for this target. Build with -Daccesskit=false").step);
+    }
+
     b.getInstallStep().dependOn(compile_step);
 
     const run_cmd = b.addRunArtifact(exe);

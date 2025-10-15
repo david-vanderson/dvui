@@ -111,6 +111,10 @@ pub const Dialog = Dialogs.Dialog;
 /// Toasts are just specialized dialogs
 pub const Toast = Dialog;
 
+/// Accessibility
+pub const accesskit_enabled = @import("build_options").accesskit_enabled;
+pub const AccessKit = @import("AccessKit.zig");
+
 pub const Texture = @import("Texture.zig");
 pub const TextureTarget = Texture.Target;
 /// Source data for `image()` and `imageSize()`.
@@ -2002,7 +2006,12 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Rect.Physical {
     var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
 
-    dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{ .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
+    dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{
+        .expand = .horizontal,
+        .font_style = .heading,
+        .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 },
+        .label = .{ .for_id = dvui.subwindowCurrentId() },
+    });
 
     if (openflag) |of| {
         if (dvui.buttonIcon(
@@ -3094,7 +3103,7 @@ pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options
 pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: MenuItemWidget.InitOptions, opts: Options) ?Rect.Natural {
     var mi = menuItem(src, init_opts, opts);
 
-    var labelopts = opts.strip();
+    var labelopts = opts.strip().override(.{ .label = .{ .for_id = mi.data().id } });
 
     var ret: ?Rect.Natural = null;
     if (mi.activeRect()) |r| {
@@ -3148,7 +3157,8 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
 /// A clickable label.  Good for hyperlinks.
 /// Returns true if it's been clicked.
 pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) bool {
-    var lw = LabelWidget.init(src, fmt, args, init_opts, opts.override(.{ .name = "LabelClick" }));
+    const defaults: Options = .{ .name = "LabelClick", .role = .link };
+    var lw = LabelWidget.init(src, fmt, args, init_opts, defaults.override(opts));
     // draw border and background
     lw.install();
 
@@ -3392,7 +3402,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
 }
 
 pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, icon_opts: IconRenderOptions, opts: Options) bool {
-    const defaults = Options{ .padding = Rect.all(4) };
+    const defaults = Options{ .padding = Rect.all(4), .label = .{ .text = name } };
     var bw = ButtonWidget.init(src, init_opts, defaults.override(opts));
     bw.install();
     bw.processEvents();
@@ -3443,9 +3453,10 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
 }
 
 pub var slider_defaults: Options = .{
+    .name = "Slider",
+    .role = .slider,
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 20, .h = 20 },
-    .name = "Slider",
     .style = .control,
 };
 
@@ -3467,6 +3478,14 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
 
     var b = box(src, .{ .dir = init_opts.dir }, options);
     defer b.deinit();
+
+    if (b.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
+        AccessKit.nodeSetNumericValue(ak_node, init_opts.fraction.*);
+        AccessKit.nodeSetMinNumericValue(ak_node, 0);
+        AccessKit.nodeSetMaxNumericValue(ak_node, 1);
+    }
 
     tabIndexSet(b.data().id, options.tab_index);
 
@@ -3552,7 +3571,11 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
                     }
                 }
             },
-            else => {},
+            .text => |te| blk: {
+                e.handle(@src(), b.data());
+                const value: f32 = std.fmt.parseFloat(f32, te.txt) catch break :blk;
+                init_opts.fraction.* = std.math.clamp(value, 0.0, 1.0);
+            },
         }
     }
 
@@ -3612,12 +3635,13 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
 }
 
 pub var slider_entry_defaults: Options = .{
+    .name = "SliderEntry",
+    .role = .slider,
     .margin = Rect.all(4),
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(2),
     .background = true,
     // min size calculated from font
-    .name = "SliderEntry",
     .style = .control,
 };
 
@@ -3652,6 +3676,14 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     var b = BoxWidget.init(src, .{ .dir = .horizontal }, options);
     b.install();
     defer b.deinit();
+
+    if (b.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
+        AccessKit.nodeSetNumericValue(ak_node, init_opts.value.*);
+        if (init_opts.min) |min| AccessKit.nodeSetMinNumericValue(ak_node, min);
+        if (init_opts.max) |max| AccessKit.nodeSetMaxNumericValue(ak_node, max);
+    }
 
     tabIndexSet(b.data().id, options.tab_index);
 
@@ -3719,6 +3751,13 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             if (e.evt == .mouse and e.evt.mouse.action == .focus) {
                 e.handle(@src(), b.data());
                 focusWidget(b.data().id, null, e.num);
+            }
+
+            if (e.evt == .text) {
+                e.handle(@src(), b.data());
+                text_mode = false;
+                te.textSet(e.evt.text.txt, false);
+                new_val = std.fmt.parseFloat(f32, te_buf[0..te.len]) catch null;
             }
 
             if (!e.handled) {
@@ -3894,7 +3933,13 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                         }
                     }
                 },
-                else => {},
+                .text => |te| {
+                    e.handle(@src(), b.data());
+                    var value = std.fmt.parseFloat(f32, te.txt) catch init_opts.min orelse 0;
+                    if (init_opts.min) |min| value = @max(min, value);
+                    if (init_opts.max) |max| value = @min(max, value);
+                    init_opts.value.* = value;
+                },
             }
         }
 
@@ -4046,6 +4091,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 
 pub var checkbox_defaults: Options = .{
     .name = "Checkbox",
+    .role = .check_box,
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(6),
 };
@@ -4089,6 +4135,9 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
     if (label_str) |str| {
         _ = spacer(@src(), .{ .min_size_content = .width(checkbox_defaults.paddingGet().w) });
         labelNoFmt(@src(), str, .{}, options.strip().override(.{ .gravity_y = 0.5 }));
+    }
+    if (bw.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeSetToggled(ak_node, if (target.*) AccessKit.Toggled.ak_true else AccessKit.Toggled.ak_false);
     }
 
     return ret;
@@ -4140,6 +4189,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
 pub var radio_defaults: Options = .{
     .name = "Radio",
+    .role = .radio_button,
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(6),
 };
@@ -4149,8 +4199,8 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     var ret = false;
 
     var bw = ButtonWidget.init(src, .{}, options.strip().override(options));
-
     bw.install();
+
     bw.processEvents();
     // don't call button drawBackground(), it wouldn't do anything anyway because we stripped the options so no border/background
     // don't call button drawFocus(), we don't want a focus ring around the label
@@ -4175,6 +4225,10 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     if (label_str) |str| {
         _ = spacer(@src(), .{ .min_size_content = .width(radio_defaults.paddingGet().w) });
         labelNoFmt(@src(), str, .{}, options.strip().override(.{ .gravity_y = 0.5 }));
+    }
+
+    if (bw.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeSetToggled(ak_node, if (active) AccessKit.Toggled.ak_true else AccessKit.Toggled.ak_false);
     }
 
     return ret;

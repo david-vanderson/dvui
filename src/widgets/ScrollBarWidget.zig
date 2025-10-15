@@ -15,6 +15,7 @@ const ScrollBarWidget = @This();
 
 pub var defaults: Options = .{
     .name = "ScrollBar",
+    .role = .scroll_bar,
     .min_size_content = .{ .w = 10, .h = 10 },
 };
 
@@ -60,6 +61,41 @@ pub fn install(self: *ScrollBarWidget) void {
 
     const grabrs = self.data().parent.screenRectScale(self.grabRect);
     self.processEvents(grabrs.r);
+
+    // TODO: I'm pretty sure we can optimize this so that we only set actions and min on "first frame"
+    if (self.data().accesskit_node()) |ak_node| {
+        switch (self.dir) {
+            .horizontal => {
+                dvui.AccessKit.nodeSetLabel(ak_node, "Horizontal");
+                dvui.AccessKit.nodeSetOrientation(ak_node, dvui.AccessKit.Orientation.horizontal);
+                dvui.AccessKit.nodeSetNumericValue(ak_node, self.si.viewport.x);
+                dvui.AccessKit.nodeSetMinNumericValue(ak_node, 0);
+                dvui.AccessKit.nodeSetMaxNumericValue(ak_node, self.si.virtual_size.w);
+                dvui.AccessKit.nodeSetNumericValueStep(ak_node, 1);
+                dvui.AccessKit.nodeSetNumericValueJump(ak_node, 100);
+
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.click);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.scroll_to_point);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_value);
+            },
+
+            .vertical => {
+                dvui.AccessKit.nodeSetLabel(ak_node, "Vertical");
+                dvui.AccessKit.nodeSetOrientation(ak_node, dvui.AccessKit.Orientation.vertical);
+                dvui.AccessKit.nodeSetNumericValue(ak_node, self.si.viewport.x);
+                dvui.AccessKit.nodeSetMinNumericValue(ak_node, 0);
+                dvui.AccessKit.nodeSetMaxNumericValue(ak_node, self.si.virtual_size.w);
+                dvui.AccessKit.nodeSetNumericValueStep(ak_node, 1);
+                dvui.AccessKit.nodeSetNumericValueJump(ak_node, 100);
+
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.click);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.scroll_to_point);
+                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_value);
+            },
+        }
+    }
 }
 
 pub fn data(self: *ScrollBarWidget) *WidgetData {
