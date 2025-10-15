@@ -2006,15 +2006,12 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Rect.Physical {
     var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
 
-    var label_wd: WidgetData = undefined;
     dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{
         .expand = .horizontal,
         .font_style = .heading,
         .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 },
-        .data_out = &label_wd,
+        .label = .{ .for_id = dvui.subwindowCurrentId() },
     });
-
-    dvui.AccessKit.nodeLabelFor(label_wd.id, dvui.subwindowCurrentId());
 
     if (openflag) |of| {
         if (dvui.buttonIcon(
@@ -3106,8 +3103,7 @@ pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options
 pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: MenuItemWidget.InitOptions, opts: Options) ?Rect.Natural {
     var mi = menuItem(src, init_opts, opts);
 
-    var label_data: WidgetData = undefined;
-    var labelopts = opts.strip().override(.{ .data_out = &label_data });
+    var labelopts = opts.strip().override(.{ .label = .{ .for_id = mi.data().id } });
 
     var ret: ?Rect.Natural = null;
     if (mi.activeRect()) |r| {
@@ -3119,7 +3115,6 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, ini
     }
 
     labelNoFmt(@src(), label_str, .{}, labelopts);
-    dvui.AccessKit.nodeLabelFor(label_data.id, mi.data().id);
 
     mi.deinit();
 

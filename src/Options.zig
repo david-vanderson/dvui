@@ -25,7 +25,13 @@ role: ?dvui.AccessKit.Role = null,
 label: ?union(enum) {
     /// Use the label from a different widget.  This is preferred if there is a
     /// visible widget that labels this one.
-    by: dvui.Id,
+    by_id: dvui.Id,
+
+    /// Use this label for a different widget.
+    for_id: dvui.Id,
+
+    /// Use the previous or next label widget to label this widget.
+    label_widget: enum { prev, next },
 
     /// Use this text as the label.  Prefer using .by if possible - .text is
     /// for cases where there is no visible label (like an icon or image).

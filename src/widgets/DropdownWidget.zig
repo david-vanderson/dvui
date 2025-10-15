@@ -38,10 +38,11 @@ pub fn wrapOuter(opts: Options) Options {
     ret.padding = Rect{};
     ret.background = false;
     ret.role = .none;
+    ret.label = null;
     return ret;
 }
 
-pub fn wrapInner(self: DropdownWidget, opts: Options) Options {
+pub fn wrapInner(opts: Options) Options {
     return opts.strip().override(.{
         .role = .combo_box,
         .tab_index = opts.tab_index,
@@ -50,7 +51,7 @@ pub fn wrapInner(self: DropdownWidget, opts: Options) Options {
         .corner_radius = opts.corner_radius,
         .background = opts.background,
         .expand = .both,
-        .label = if (self.init_options.label) |label| .{ .text = label } else null,
+        .label = opts.label orelse .{ .label_widget = .next },
     });
 }
 
@@ -68,7 +69,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 pub fn install(self: *DropdownWidget) void {
     self.menu.install();
 
-    self.menuItem = MenuItemWidget.init(@src(), .{ .submenu = true, .focus_as_outline = true }, self.wrapInner(self.options));
+    self.menuItem = MenuItemWidget.init(@src(), .{ .submenu = true, .focus_as_outline = true }, wrapInner(self.options));
     self.menuItem.install();
     self.menuItem.processEvents();
     self.menuItem.drawBackground();
@@ -90,7 +91,13 @@ pub fn install(self: *DropdownWidget) void {
             self.options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0, .role = .none }),
         );
     }
-    if (self.data().accesskit_node()) |ak_node| {
+    if (self.menuItem.data().accesskit_node()) |ak_node| {
+        //        if (self.init_options.label == null) {
+        //            std.debug.print("setting labeeled by next\n", .{});
+        //            dvui.currentWindow().accesskit.nodeLabelledByNext(self.menuItem.data().id);
+        //        } else {
+        //            std.debug.print("label is {?s}\n", .{self.init_options.label});
+        //        }
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
         //AccessKit.nodeAddAction(ak_node, AccessKit.Action.expand); TODO: Potential case for supporting expand.
