@@ -92,15 +92,10 @@ pub fn install(self: *DropdownWidget) void {
         );
     }
     if (self.menuItem.data().accesskit_node()) |ak_node| {
-        //        if (self.init_options.label == null) {
-        //            std.debug.print("setting labeeled by next\n", .{});
-        //            dvui.currentWindow().accesskit.nodeLabelledByNext(self.menuItem.data().id);
-        //        } else {
-        //            std.debug.print("label is {?s}\n", .{self.init_options.label});
-        //        }
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
-        //AccessKit.nodeAddAction(ak_node, AccessKit.Action.expand); TODO: Potential case for supporting expand.
+        //TODO: Potential case for supporting expand.
+        //AccessKit.nodeAddAction(ak_node, AccessKit.Action.expand);
     }
 }
 

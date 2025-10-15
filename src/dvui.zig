@@ -4137,7 +4137,7 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
         labelNoFmt(@src(), str, .{}, options.strip().override(.{ .gravity_y = 0.5 }));
     }
     if (bw.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeSetToggled(ak_node, if (target.*) 1 else 0);
+        AccessKit.nodeSetToggled(ak_node, if (target.*) AccessKit.Toggled.ak_true else AccessKit.Toggled.ak_false);
     }
 
     return ret;
@@ -4228,7 +4228,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     }
 
     if (bw.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeSetToggled(ak_node, if (active) 1 else 0);
+        AccessKit.nodeSetToggled(ak_node, if (active) AccessKit.Toggled.ak_true else AccessKit.Toggled.ak_false);
     }
 
     return ret;

@@ -147,7 +147,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
             },
             .for_id => |id| blk: {
                 const for_node = self.nodes.get(id) orelse {
-                    dvui.log.debug("AccessKit: TODO\n", .{});
+                    dvui.log.debug("AccessKit: label.for_id {x} is not a valid acesskit node", .{id});
                     break :blk;
                 };
                 AccessKit.nodePushLabelledBy(for_node, wd.id.asU64());
@@ -187,7 +187,11 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
 
     std.debug.assert(!self.nodes.contains(wd.id));
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
-    self.nodes.put(window.gpa, wd.id, ak_node) catch @panic("TODO");
+    self.nodes.put(window.gpa, wd.id, ak_node) catch |err| {
+        dvui.logError(@src(), err, "AccessKit: unable to add node", .{});
+        nodeFree(ak_node);
+        return null;
+    };
 
     return ak_node;
 }
@@ -224,11 +228,11 @@ fn processActions(self: *AccessKit) void {
                 };
                 const click_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
 
-                _ = window.addEventMouseMotion(.{ .pt = click_point, .target_id = @enumFromInt(request.target) }) catch @panic("TODO");
+                _ = window.addEventMouseMotion(.{ .pt = click_point, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
 
                 // sending a left press also sends a focus event
-                _ = window.addEventPointer(.{ .button = .left, .action = .press, .target_id = @enumFromInt(request.target) }) catch @panic("TODO");
-                _ = window.addEventPointer(.{ .button = .left, .action = .release, .target_id = @enumFromInt(request.target) }) catch @panic("TODO");
+                _ = window.addEventPointer(.{ .button = .left, .action = .press, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
+                _ = window.addEventPointer(.{ .button = .left, .action = .release, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
             },
             Action.set_value => {
                 const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
@@ -243,15 +247,15 @@ fn processActions(self: *AccessKit) void {
                         return;
                     };
                     const mid_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
-                    _ = window.addEventFocus(.{ .pt = mid_point, .target_id = @enumFromInt(request.target) }) catch @panic("TODO");
+                    _ = window.addEventFocus(.{ .pt = mid_point, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
 
                     const text_value: []const u8 = value: {
                         switch (request.data.value.tag) {
                             ActionData.value => break :value std.mem.span(request.data.value.unnamed_0.unnamed_1.value),
                             ActionData.numeric_value => {
                                 var writer: std.io.Writer.Allocating = .init(window.arena());
-                                writer.writer.print("{d:.6}", .{request.data.value.unnamed_0.unnamed_2.numeric_value}) catch @panic("TODO");
-                                break :value writer.toOwnedSlice() catch @panic("TODO");
+                                writer.writer.print("{d:.6}", .{request.data.value.unnamed_0.unnamed_2.numeric_value}) catch break :value "";
+                                break :value writer.toOwnedSlice() catch break :value "";
                             },
                             else => {
                                 break :value "";
@@ -259,7 +263,7 @@ fn processActions(self: *AccessKit) void {
                         }
                     };
 
-                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target) }) catch @panic("TODO");
+                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
                 }
             },
             else => {},
@@ -269,6 +273,10 @@ fn processActions(self: *AccessKit) void {
         self.action_requests.clearAndFree(window.gpa);
         dvui.refresh(window, @src(), null);
     }
+}
+
+fn logEventAddError(src: std.builtin.SourceLocation, err: anyerror) void {
+    dvui.logError(src, err, "Accesskit: Event for action has not been added", .{});
 }
 
 /// Must be called at the end of each frame.
@@ -371,81 +379,12 @@ fn doAction(request: [*c]c.accesskit_action_request, userdata: ?*anyopaque) call
     defer self.mutex.unlock();
 
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
-    self.action_requests.append(window.gpa, request.?.*) catch @panic("TODO");
+    self.action_requests.append(window.gpa, request.?.*) catch |err| {
+        dvui.logError(@src(), err, "AccessKit: Unable to add action request", .{});
+    };
     dvui.refresh(window, @src(), null);
 }
 
-/// Backends should call this to add any events raised by responding to actions.
-/// Accessibility events should be added before any other backend events.
-pub fn addAllEvents(self: *AccessKit) void {
-    self.mutex.lock();
-    defer self.mutex.unlock();
-
-    for (self.events.items) |*evt| {
-        switch (evt.evt) {
-            .text => |*te| {
-                self.window.positionMouseEventRemove();
-                self.window.event_num += 1;
-                evt.num = self.window.event_num;
-                // Move text from gpa to arena
-                const old_text = te.txt;
-                te.txt = self.window.arena().dupe(u8, old_text) catch @panic("TODO");
-                self.window.gpa.free(old_text);
-                self.window.events.append(self.window.arena(), evt.*) catch @panic("TODO");
-                self.window.positionMouseEventAdd() catch @panic("TODO");
-            },
-            .mouse => |me| {
-                switch (me.action) {
-                    .motion => |motion| {
-                        if (true) {
-                            self.window.positionMouseEventRemove();
-                            self.window.event_num += 1;
-                            evt.num = self.window.event_num;
-                            self.window.events.append(self.window.arena(), evt.*) catch @panic("TODO");
-                            self.window.positionMouseEventAdd() catch @panic("TODO");
-                        } else {
-                            _ = self.window.addEventMouseMotion(motion) catch @panic("TODO");
-                        }
-                        dvui.refresh(self.window, @src(), null);
-                    },
-                    .press => {
-                        self.window.positionMouseEventRemove();
-
-                        self.window.event_num += 1;
-                        evt.num = self.window.event_num;
-                        self.window.events.append(self.window.arena(), evt.*) catch @panic("TODO");
-                        self.window.positionMouseEventAdd() catch @panic("TODO");
-                        dvui.refresh(self.window, @src(), null);
-                    },
-                    .release => {
-                        self.window.positionMouseEventRemove();
-                        self.window.event_num += 1;
-                        evt.num = self.window.event_num;
-                        self.window.events.append(self.window.arena(), evt.*) catch @panic("TODO");
-                        self.window.positionMouseEventAdd() catch @panic("TODO");
-                        dvui.refresh(self.window, @src(), null);
-                    },
-                    .focus => {
-                        self.window.positionMouseEventRemove();
-                        self.window.event_num += 1;
-                        evt.num = self.window.event_num;
-                        self.window.events.append(self.window.arena(), evt.*) catch @panic("TODO");
-                        self.window.positionMouseEventAdd() catch @panic("TODO");
-                        self.window.focusSubwindow(me.floating_win, self.window.event_num); // TODO: Required.
-                    },
-                    else => {},
-                }
-            },
-            else => {
-                dvui.log.debug("Recevied unhandled AccessKit action event: {f}\n", .{evt});
-            },
-        }
-    }
-    dvui.accesskit.events.clearAndFree(self.window.gpa);
-}
-
-// While we could build this at comptime, it is nicer for ZLS etc to just
-// write it out long form. This list is inlikely to change often.
 pub const Role = if (dvui.accesskit_enabled) RoleAccessKit else RoleNoAccessKit;
 
 // Enums
