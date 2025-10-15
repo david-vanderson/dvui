@@ -248,7 +248,8 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
         }
     }
 
-    {
+    // TODO: raylib wasm
+    if (false) {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 

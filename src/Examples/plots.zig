@@ -78,6 +78,8 @@ pub fn plots() void {
         s1.stroke(1, dvui.themeGet().focus);
     }
 
+    if (true) return; // TODO: raylib wasm
+
     if (pic) |*p| {
         // `save` is not null because `pic` is not null
         p.stop();
