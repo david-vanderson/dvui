@@ -35,7 +35,8 @@ fb_width: ?c_int = null,
 fb_height: ?c_int = null,
 
 const vertexSource =
-    \\#version 330
+    \\#version 300 es
+    \\precision mediump float;
     \\in vec3 vertexPosition;
     \\in vec2 vertexTexCoord;
     \\in vec4 vertexColor;
@@ -51,7 +52,8 @@ const vertexSource =
 ;
 
 const fragSource =
-    \\#version 330
+    \\#version 300 es
+    \\precision mediump float;
     \\in vec2 fragTexCoord;
     \\in vec4 fragColor;
     \\out vec4 finalColor;
@@ -581,17 +583,18 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
         }
     }
 
-    const mouse_move = c.GetMouseDelta();
-    if (mouse_move.x != 0 or mouse_move.y != 0) {
+    //const mouse_move = c.GetMouseDelta();
+    if (true) { //mouse_move.x != 0 or mouse_move.y != 0) {
         const mouse_pos = c.GetMousePosition();
 
         // raylib gives us mouse coords in "window coords" which is kind of
         // like natural coords but ignores content scaling
         const scale = self.pixelSize().w / self.windowSize().w;
 
-        if (try win.addEventMouseMotion(.{ .pt = .{ .x = mouse_pos.x * scale, .y = mouse_pos.y * scale } })) disable_raylib_input = true;
+        const pt: dvui.Point.Physical = .{ .x = mouse_pos.x * scale, .y = mouse_pos.y * scale };
+        if (try win.addEventMouseMotion(.{ .pt = pt })) disable_raylib_input = true;
         if (self.log_events) {
-            //std.debug.print("raylib event Mouse Moved\n", .{});
+            std.debug.print("raylib event Mouse Moved {d} {d}\n", .{ pt.x, pt.y });
         }
     }
 

@@ -132,7 +132,8 @@ pub fn demo() void {
         var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .min_size_content = .width(width), .corner_radius = .{ .w = 5, .h = 5 } });
         defer fbox.deinit();
 
-        inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
+        //inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
+        inline for (0..1) |i| {
             const e = @as(demoKind, @enumFromInt(i));
             var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = .size(dvui.Size.all(120)), .margin = Rect.all(5), .style = .content, .tag = "demo_button_" ++ @tagName(e) });
             bw.install();

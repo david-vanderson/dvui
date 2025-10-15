@@ -26,7 +26,7 @@ pub const Wasm = struct {
     ///
     /// This function does nothing in non-wasm builds
     pub fn open(id: dvui.Id, opts: DialogOptions) void {
-        if (comptime !dvui.wasm) return;
+        if (comptime dvui.wasm) return;
         dvui.backend.openFilePicker(id, opts.accept, false);
     }
 
@@ -34,7 +34,7 @@ pub const Wasm = struct {
     ///
     /// This function does nothing in non-wasm builds
     pub fn uploaded(id: dvui.Id) ?File {
-        if (comptime !dvui.wasm) return null;
+        if (comptime dvui.wasm) return null;
         const num_files = dvui.backend.getNumberOfFilesAvailable(id);
         if (num_files == 0) return null;
         if (num_files > 1) {
@@ -58,7 +58,7 @@ pub const Wasm = struct {
     ///
     /// This function does nothing in non-wasm builds
     pub fn openMultiple(id: dvui.Id, opts: DialogOptions) void {
-        if (comptime !dvui.wasm) return;
+        if (comptime dvui.wasm) return;
         dvui.backend.openFilePicker(id, opts.accept, true);
     }
 
@@ -66,7 +66,7 @@ pub const Wasm = struct {
     ///
     /// This function does nothing in non-wasm builds
     pub fn uploadedMultiple(id: dvui.Id) ?[]File {
-        if (comptime !dvui.wasm) return null;
+        if (comptime dvui.wasm) return null;
         const num_files = dvui.backend.getNumberOfFilesAvailable(id);
         if (num_files == 0) return null;
 

@@ -10,6 +10,8 @@ pub const LinuxDisplayBackend = enum {
     Both,
 };
 
+pub const emsdk = @import("raylib").emsdk;
+
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -596,7 +598,7 @@ fn addDvuiModule(
                 stb_source ++ "stb_image_write_impl.c",
                 stb_source ++ "stb_truetype_impl.c",
             },
-            .flags = &.{ "-DINCLUDE_CUSTOM_LIBC_FUNCS=1", "-DSTBI_NO_STDLIB=1", "-DSTBIW_NO_STDLIB=1" },
+            //.flags = &.{ "-DINCLUDE_CUSTOM_LIBC_FUNCS=1", "-DSTBI_NO_STDLIB=1", "-DSTBIW_NO_STDLIB=1" },
         });
     } else {
         if (opts.add_stb_image) {
