@@ -387,6 +387,9 @@ fn doAction(request: [*c]c.accesskit_action_request, userdata: ?*anyopaque) call
 
 pub const Role = if (dvui.accesskit_enabled) RoleAccessKit else RoleNoAccessKit;
 
+// All types below are generated from accesskit.h
+// See accesskit_gen.zig in the tools directory for more details
+
 // Enums
 pub const RoleAccessKit = enum(u8) {
     pub fn asU8(self: RoleAccessKit) u8 {
