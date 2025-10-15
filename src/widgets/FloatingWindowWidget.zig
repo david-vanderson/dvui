@@ -15,6 +15,8 @@ const FloatingWindowWidget = @This();
 
 /// Defaults is for the embedded box widget
 pub var defaults: Options = .{
+    .name = "Window",
+    .role = .window,
     .corner_radius = Rect.all(5),
     .margin = Rect.all(2),
     .border = Rect.all(1),
@@ -92,10 +94,17 @@ drag_part: ?DragPart = null,
 drag_area: Rect.Physical = undefined,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingWindowWidget {
+    const options = defaults.override(opts);
+    var box_options = options;
+    box_options.role = null;
+    box_options.label = null;
+    box_options.id_extra = null;
+    box_options.rect = null; // if the user passes in a rect, don't pass it to the BoxWidget
+
     var self = FloatingWindowWidget{
         // options is really for our embedded BoxWidget, so save them for the
         // end of install()
-        .options = defaults.override(opts),
+        .options = box_options,
 
         // the floating window itself doesn't have any styling, it comes from
         // the embedded BoxWidget
@@ -104,12 +113,11 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             // passing options.rect will stop WidgetData.init from calling rectFor
             // which is important because we are outside normal layout
             .rect = .{},
-            .name = "FloatingWindow",
+            .role = options.role,
+            .label = options.label,
         }),
         .init_options = init_opts,
     };
-
-    self.options.rect = null; // if the user passes in a rect, don't pass it to the BoxWidget
 
     var autopossize = true;
     if (self.init_options.rect) |ior| {
@@ -251,6 +259,13 @@ pub fn install(self: *FloatingWindowWidget) void {
     // - gives us all mouse events
     self.prevClip = dvui.clipGet();
     dvui.clipSet(dvui.windowRectPixels());
+
+    if (self.data().accesskit_node()) |ak_node| {
+        if (self.init_options.modal)
+            dvui.AccessKit.nodeSetModal(ak_node)
+        else
+            dvui.AccessKit.nodeClearModal(ak_node);
+    }
 }
 
 pub fn drawBackground(self: *FloatingWindowWidget) void {

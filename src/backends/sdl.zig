@@ -31,6 +31,7 @@ const log = std.log.scoped(.SDLBackend);
 
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
+ak_initialize_in_begin: bool = false,
 we_own_window: bool = false,
 touch_mouse_events: bool = false,
 log_events: bool = false,
@@ -79,7 +80,15 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         MACOS_enable_scroll_momentum();
     }
 
-    const hidden_flag = if (options.hidden) c.SDL_WINDOW_HIDDEN else 0;
+    var hidden = options.hidden;
+    var show_window_in_begin = false;
+    if (dvui.accesskit_enabled and !hidden) {
+        // hide the window until we can intialize accesskit in Window.begin
+        hidden = true;
+        show_window_in_begin = true;
+    }
+
+    const hidden_flag = if (hidden) c.SDL_WINDOW_HIDDEN else 0;
     const fullscreen_flag = if (options.fullscreen) c.SDL_WINDOW_FULLSCREEN else 0;
     const window: *c.SDL_Window = if (sdl3)
         c.SDL_CreateWindow(
@@ -131,6 +140,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     try toErr(c.SDL_SetRenderDrawBlendMode(renderer, pma_blend), "SDL_SetRenderDrawBlendMode in initWindow");
 
     var back = init(window, renderer);
+    back.ak_initialize_in_begin = show_window_in_begin;
     back.we_own_window = true;
 
     if (sdl3) {
@@ -1019,14 +1029,14 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 log.debug("event TEXTINPUT {s}\n", .{txt});
             }
 
-            return try win.addEventText(txt);
+            return try win.addEventText(.{ .text = txt });
         },
         if (sdl3) c.SDL_EVENT_TEXT_EDITING else c.SDL_TEXTEDITING => {
             const strlen: u8 = @intCast(c.SDL_strlen(if (sdl3) event.edit.text else &event.edit.text));
             if (self.log_events) {
                 log.debug("event TEXTEDITING {s} start {d} len {d} strlen {d}\n", .{ event.edit.text, event.edit.start, event.edit.length, strlen });
             }
-            return try win.addEventTextEx(event.edit.text[0..strlen], true);
+            return try win.addEventText(.{ .text = event.edit.text[0..strlen], .selected = true });
         },
         if (sdl3) c.SDL_EVENT_MOUSE_MOTION else c.SDL_MOUSEMOTION => {
             const touch = event.motion.which == c.SDL_TOUCH_MOUSEID;
@@ -1047,13 +1057,17 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
 
             if (sdl3) {
                 return try win.addEventMouseMotion(.{
-                    .x = event.motion.x * scale,
-                    .y = event.motion.y * scale,
+                    .pt = .{
+                        .x = event.motion.x * scale,
+                        .y = event.motion.y * scale,
+                    },
                 });
             } else {
                 return try win.addEventMouseMotion(.{
-                    .x = @as(f32, @floatFromInt(event.motion.x)) * scale,
-                    .y = @as(f32, @floatFromInt(event.motion.y)) * scale,
+                    .pt = .{
+                        .x = @as(f32, @floatFromInt(event.motion.x)) * scale,
+                        .y = @as(f32, @floatFromInt(event.motion.y)) * scale,
+                    },
                 });
             }
         },
@@ -1106,14 +1120,14 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 log.debug("event FINGERDOWN {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
             }
 
-            return try win.addEventPointer(.touch0, .press, .{ .x = event.tfinger.x, .y = event.tfinger.y });
+            return try win.addEventPointer(.{ .button = .touch0, .action = .press, .xynorm = .{ .x = event.tfinger.x, .y = event.tfinger.y } });
         },
         if (sdl3) c.SDL_EVENT_FINGER_UP else c.SDL_FINGERUP => {
             if (self.log_events) {
                 log.debug("event FINGERUP {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
             }
 
-            return try win.addEventPointer(.touch0, .release, .{ .x = event.tfinger.x, .y = event.tfinger.y });
+            return try win.addEventPointer(.{ .button = .touch0, .action = .release, .xynorm = .{ .x = event.tfinger.x, .y = event.tfinger.y } });
         },
         if (sdl3) c.SDL_EVENT_FINGER_MOTION else c.SDL_FINGERMOTION => {
             if (self.log_events) {

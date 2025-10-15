@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
 const SDLBackend = @import("sdl-backend");
+
 comptime {
     std.debug.assert(@hasDecl(SDLBackend, "SDLBackend"));
 }
@@ -12,7 +13,7 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 const vsync = true;
-const show_demo = true;
+const show_demo = false;
 var scale_val: f32 = 1.0;
 
 var show_dialog_outside_frame: bool = false;
@@ -62,7 +63,6 @@ pub fn main() !void {
     var interrupted = false;
 
     main_loop: while (true) {
-
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(interrupted);
 
@@ -110,7 +110,7 @@ fn gui_frame() bool {
     const backend = g_backend orelse return false;
 
     {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal, .name = "main" });
         defer hbox.deinit();
 
         var m = dvui.menu(@src(), .horizontal, .{});

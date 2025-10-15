@@ -11,6 +11,7 @@ const LabelWidget = @This();
 
 pub var defaults: Options = .{
     .name = "Label",
+    .role = .label,
     .padding = Rect.all(6),
 };
 
@@ -101,6 +102,15 @@ pub fn data(self: *LabelWidget) *WidgetData {
 pub fn install(self: *LabelWidget) void {
     self.data().register();
     self.data().borderAndBackground(.{});
+
+    if (self.data().accesskit_node()) |ak_node| {
+        const str = dvui.currentWindow().arena().dupeZ(u8, self.label_str) catch "";
+        defer dvui.currentWindow().arena().free(str);
+        dvui.AccessKit.nodeSetValue(ak_node, str);
+        if (self.data().options.label == null) {
+            dvui.AccessKit.nodeSetLabel(ak_node, str);
+        }
+    }
 }
 
 pub fn draw(self: *LabelWidget) void {

@@ -10,6 +10,7 @@ const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
 const BoxWidget = dvui.BoxWidget;
+const AccessKit = dvui.AccessKit;
 
 const enums = dvui.enums;
 
@@ -54,6 +55,7 @@ fn menuSet(m: ?*MenuWidget) ?*MenuWidget {
 
 pub var defaults: Options = .{
     .name = "Menu",
+    .role = .menu,
     .style = .window,
 };
 
@@ -137,6 +139,10 @@ pub fn install(self: *MenuWidget) void {
     self.box = BoxWidget.init(@src(), .{ .dir = self.init_opts.dir }, self.data().options.strip().override(.{ .expand = .both }));
     self.box.install();
     self.box.drawBackground();
+    if (self.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
+    }
 }
 
 pub fn close(self: *MenuWidget) void {

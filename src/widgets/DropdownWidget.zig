@@ -17,11 +17,11 @@ drop_height: f32 = 0,
 drop_adjust: f32 = 0,
 
 pub var defaults: Options = .{
+    .name = "Dropdown",
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
     .background = true,
-    .name = "Dropdown",
     .style = .control,
 };
 
@@ -37,17 +37,21 @@ pub fn wrapOuter(opts: Options) Options {
     ret.border = Rect{};
     ret.padding = Rect{};
     ret.background = false;
+    ret.role = .none;
+    ret.label = null;
     return ret;
 }
 
 pub fn wrapInner(opts: Options) Options {
     return opts.strip().override(.{
+        .role = .combo_box,
         .tab_index = opts.tab_index,
         .border = opts.border,
         .padding = opts.padding,
         .corner_radius = opts.corner_radius,
         .background = opts.background,
         .expand = .both,
+        .label = opts.label orelse .{ .label_widget = .next },
     });
 }
 
@@ -58,7 +62,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         .init_options = init_opts,
         .menu = MenuWidget.init(src, .{ .dir = .horizontal }, wrapOuter(options)),
     };
-    if (dvui.dataGet(null, self.menu.wd.id, "_drop_adjust", f32)) |adjust| self.drop_adjust = adjust;
+    if (dvui.dataGet(null, self.data().id, "_drop_adjust", f32)) |adjust| self.drop_adjust = adjust;
     return self;
 }
 
@@ -84,9 +88,19 @@ pub fn install(self: *DropdownWidget) void {
             "dropdown_triangle",
             dvui.entypo.chevron_small_down,
             .{},
-            self.options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }),
+            self.options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0, .role = .none }),
         );
     }
+    if (self.menuItem.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
+        //TODO: Potential case for supporting expand.
+        //AccessKit.nodeAddAction(ak_node, AccessKit.Action.expand);
+    }
+}
+
+pub fn data(self: *DropdownWidget) *WidgetData {
+    return self.menu.data();
 }
 
 pub fn close(self: *DropdownWidget) void {
@@ -100,7 +114,7 @@ pub fn dropped(self: *DropdownWidget) bool {
     }
 
     if (self.menuItem.activeRect()) |r| {
-        self.drop = FloatingMenuWidget.init(@src(), .{ .from = r, .avoid = .none }, .{ .min_size_content = .cast(r.size()) });
+        self.drop = FloatingMenuWidget.init(@src(), .{ .from = r, .avoid = .none }, .{ .role = .none, .min_size_content = .cast(r.size()) });
         var drop = &self.drop.?;
         self.drop_first_frame = dvui.firstFrame(drop.data().id);
 
@@ -196,7 +210,7 @@ pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
         }
     }
 
-    self.drop_mi = MenuItemWidget.init(@src(), .{}, self.options.styleOnly().override(.{ .id_extra = self.drop_mi_index, .expand = .horizontal }));
+    self.drop_mi = MenuItemWidget.init(@src(), .{}, self.options.styleOnly().override(.{ .role = .list_item, .id_extra = self.drop_mi_index, .expand = .horizontal }));
     self.drop_mi_id = self.drop_mi.data().id;
     self.drop_mi.install();
     self.drop_mi.processEvents();
@@ -206,7 +220,7 @@ pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
         if (self.init_options.selected_index) |si| {
             if (si == self.drop_mi_index) {
                 dvui.focusWidget(self.drop_mi.data().id, null, null);
-                dvui.dataSet(null, self.menu.wd.id, "_drop_adjust", self.drop_height);
+                dvui.dataSet(null, self.data().id, "_drop_adjust", self.drop_height);
             }
         }
     }
@@ -230,12 +244,13 @@ pub fn deinit(self: *DropdownWidget) void {
 const Options = dvui.Options;
 const Rect = dvui.Rect;
 const Event = dvui.Event;
+const WidgetData = dvui.WidgetData;
+const AccessKit = dvui.AccessKit;
 
 const MenuWidget = dvui.MenuWidget;
 const MenuItemWidget = dvui.MenuItemWidget;
 const FloatingMenuWidget = dvui.FloatingMenuWidget;
 const LabelWidget = dvui.LabelWidget;
-
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 

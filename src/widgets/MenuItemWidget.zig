@@ -8,6 +8,7 @@ const RectScale = dvui.RectScale;
 const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
+const AccessKit = dvui.AccessKit;
 
 /// The parent menu of this item
 const menu = dvui.MenuWidget.current;
@@ -15,7 +16,8 @@ const menu = dvui.MenuWidget.current;
 const MenuItemWidget = @This();
 
 pub var defaults: Options = .{
-    .name = "MenuItem",
+    .name = "Menu Item",
+    .role = .menu_item,
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
     .style = .control,
@@ -52,6 +54,10 @@ pub fn install(self: *MenuItemWidget) void {
     self.data().borderAndBackground(.{});
 
     dvui.parentSet(self.widget());
+    if (self.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
+    }
 }
 
 pub fn drawBackground(self: *MenuItemWidget) void {

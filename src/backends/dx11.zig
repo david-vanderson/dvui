@@ -1241,7 +1241,9 @@ pub fn wndProc(
             const x = win32.xFromLparam(lparam);
             const y = win32.yFromLparam(lparam);
             _ = stateFromHwnd(hwnd).dvui_window.addEventMouseMotion(
-                .{ .x = @floatFromInt(x), .y = @floatFromInt(y) },
+                .{
+                    .pt = .{ .x = @floatFromInt(x), .y = @floatFromInt(y) },
+                },
             ) catch {};
             return 0;
         },
@@ -1336,7 +1338,7 @@ pub fn wndProc(
             const ascii_char: u8 = @truncate(wparam);
             if (std.ascii.isPrint(ascii_char)) {
                 const string: []const u8 = &.{ascii_char};
-                _ = state.dvui_window.addEventText(string) catch {};
+                _ = state.dvui_window.addEventText(.{ .text = string }) catch {};
             }
             return 0;
         },

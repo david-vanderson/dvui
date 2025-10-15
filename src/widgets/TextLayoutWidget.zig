@@ -24,6 +24,7 @@ const TextLayoutWidget = @This();
 /// 500 if our min width is zero).
 pub var defaults: Options = .{
     .name = "TextLayout",
+    .role = .label, // TODO: Use labels until can support .text_run
     .padding = Rect.all(6),
     .background = true,
     .style = .content,
@@ -470,6 +471,9 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             dvui.dataSet(null, fc.data().id, "_offset", offset);
             fc.deinit();
         }
+    }
+    if (self.data().accesskit_node()) |ak_node| {
+        dvui.AccessKit.nodeSetReadOnly(ak_node);
     }
 }
 
@@ -1536,6 +1540,26 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         // transitioned us into touch editing, but we don't want to transition
         // if the click happened on clickable text
         self.touch_editing = false;
+    }
+
+    // TODO: This only shows the currently visible text. What behavior do we actually want here?
+    if (self.data().accesskit_node()) |ak_node| {
+        const ak_value = dvui.AccessKit.nodeValue(ak_node);
+        if (ak_value != 0) {
+            defer dvui.AccessKit.stringFree(ak_value);
+            const current_value = std.mem.span(ak_value);
+            allocate_new: {
+                var new_value = cw.arena().allocWithOptions(u8, current_value.len + text.len, null, 0) catch break :allocate_new;
+                @memcpy(new_value[0..current_value.len], current_value);
+                @memcpy(new_value[current_value.len .. current_value.len + text.len], text);
+
+                dvui.AccessKit.nodeSetValue(ak_node, new_value);
+            }
+        } else {
+            const str = cw.arena().dupeZ(u8, text) catch "";
+            defer cw.arena().free(str);
+            dvui.AccessKit.nodeSetValue(ak_node, str);
+        }
     }
 
     return ret;
