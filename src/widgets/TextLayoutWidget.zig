@@ -472,7 +472,6 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             fc.deinit();
         }
     }
-    // TODO: Is document the right role? It sort of is e.g. a web page is a document. Need to find other examples of this sort of text display.
     if (self.data().accesskit_node()) |ak_node| {
         dvui.AccessKit.nodeSetReadOnly(ak_node);
     }
@@ -1543,18 +1542,19 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         self.touch_editing = false;
     }
 
-    // TODO: This only shows the currently visible text. What behavioure do we actually want here?
+    // TODO: This only shows the currently visible text. What behavior do we actually want here?
     if (self.data().accesskit_node()) |ak_node| {
         const ak_value = dvui.AccessKit.nodeValue(ak_node);
         if (ak_value != 0) {
             defer dvui.AccessKit.stringFree(ak_value);
             const current_value = std.mem.span(ak_value);
+            allocate_new: {
+                var new_value = cw.arena().allocWithOptions(u8, current_value.len + text.len, null, 0) catch break :allocate_new;
+                @memcpy(new_value[0..current_value.len], current_value);
+                @memcpy(new_value[current_value.len .. current_value.len + text.len], text);
 
-            var new_value = cw.arena().allocWithOptions(u8, current_value.len + text.len, null, 0) catch @panic("TODO");
-            @memcpy(new_value[0..current_value.len], current_value);
-            @memcpy(new_value[current_value.len .. current_value.len + text.len], text);
-
-            dvui.AccessKit.nodeSetValue(ak_node, new_value);
+                dvui.AccessKit.nodeSetValue(ak_node, new_value);
+            }
         } else {
             const str = cw.arena().dupeZ(u8, text) catch "";
             defer cw.arena().free(str);
