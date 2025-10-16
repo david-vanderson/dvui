@@ -357,8 +357,10 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
         ), "SetWindowPos in initWindow");
     }
     // Returns 0 if the window was previously hidden
-    _ = win32.ShowWindow(hwnd, .{ .SHOWNORMAL = 1 });
-    try boolToErr(win32.UpdateWindow(hwnd), "UpdateWindow in initWindow");
+    if (!dvui.accesskit_enabled) {
+        _ = win32.ShowWindow(hwnd, .{ .SHOWNORMAL = 1 });
+        try boolToErr(win32.UpdateWindow(hwnd), "UpdateWindow in initWindow");
+    }
     return contextFromHwnd(hwnd);
 }
 
@@ -1105,7 +1107,7 @@ pub fn setCursor(ctx: Context, cursor: dvui.enums.Cursor) !void {
     }
 }
 
-fn hwndFromContext(ctx: Context) win32.HWND {
+pub fn hwndFromContext(ctx: Context) win32.HWND {
     return @ptrCast(ctx);
 }
 pub fn contextFromHwnd(hwnd: win32.HWND) Context {
@@ -1137,7 +1139,9 @@ pub fn attach(
     const addr: usize = @bitCast(win32.GetWindowLongPtrW(hwnd, win32.WINDOW_LONG_PTR_INDEX._USERDATA));
     if (addr == 0) @panic("unable to attach window state pointer to HWND, did you set cbWndExtra to be >= to @sizeof(usize)?");
 
-    var dvui_window = try dvui.Window.init(@src(), gpa, contextFromHwnd(hwnd).backend(), opt.window_init_opts);
+    const ctx = contextFromHwnd(hwnd).backend();
+
+    var dvui_window = try dvui.Window.init(@src(), gpa, ctx, opt.window_init_opts);
     errdefer dvui_window.deinit();
     window_state.* = .{
         .vsync = opt.vsync,
