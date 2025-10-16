@@ -33,6 +33,7 @@ cursor_last: dvui.enums.Cursor = .arrow,
 frame_buffers: std.AutoArrayHashMap(u32, u32),
 fb_width: ?c_int = null,
 fb_height: ?c_int = null,
+ak_initialize_in_begin: bool = true,
 
 const vertexSource =
     \\#version 330
@@ -95,6 +96,9 @@ pub const InitOptions = struct {
 pub fn createWindow(options: InitOptions) void {
     c.SetConfigFlags(c.FLAG_WINDOW_RESIZABLE);
     c.SetConfigFlags(c.FLAG_WINDOW_HIGHDPI);
+    if (dvui.accesskit_enabled) {
+        c.SetConfigFlags(c.FLAG_WINDOW_HIDDEN);
+    }
     if (options.vsync) {
         c.SetConfigFlags(c.FLAG_VSYNC_HINT);
     }

@@ -945,11 +945,19 @@ pub fn begin(
     self: *Self,
     time_ns: i128,
 ) dvui.Backend.GenericError!void {
-
-    if (dvui.accesskit_enabled and self.backend.impl.ak_initialize_in_begin) {
+    if (dvui.accesskit_enabled and dvui.backend.kind == .dx11) {
+        self.accesskit.initialize();
+        const hwnd: dvui.backend.win32.HWND = @ptrCast(self.backend.impl);
+        _ = dvui.backend.win32.ShowWindow(hwnd, .{ .SHOWNORMAL = 1 });
+        _ = dvui.backend.win32.UpdateWindow(hwnd);
+    } else if (dvui.accesskit_enabled and self.backend.impl.ak_initialize_in_begin) {
         self.backend.impl.ak_initialize_in_begin = false;
         self.accesskit.initialize();
-        _ = dvui.backend.c.SDL_ShowWindow(self.backend.impl.window);
+        switch (dvui.backend.kind) {
+            .sdl3, .sdl2 => _ = dvui.backend.c.SDL_ShowWindow(self.backend.impl.window),
+            .raylib => dvui.backend.c.ClearWindowState(dvui.backend.c.FLAG_WINDOW_HIDDEN),
+            else => unreachable,
+        }
     }
 
     var micros_since_last: u32 = 1;

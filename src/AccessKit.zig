@@ -56,27 +56,18 @@ fn AdapterType() type {
 
 /// Perform SDL3-specific initialization
 pub fn initialize(self: *AccessKit) void {
-    if (dvui.backend.kind != .sdl3) @compileError("AccessKit currently only implemented for SDL3 backend");
-
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
-    const SDLBackend = dvui.backend;
 
     if (builtin.os.tag == .windows) {
-        const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.impl.window);
-        const hwnd = SDLBackend.c.SDL_GetPointerProperty(
-            properties,
-            SDLBackend.c.SDL_PROP_WINDOW_WIN32_HWND_POINTER,
-            null,
-        ) orelse @panic("No HWND");
-
         self.adapter = c.accesskit_windows_subclassing_adapter_new(
-            @intFromPtr(hwnd),
+            windowsHWND(window),
             initialTreeUpdate,
             self,
             doAction,
             self,
         ) orelse @panic("null");
     } else if (builtin.os.tag.isDarwin()) {
+        const SDLBackend = dvui.backend;
         const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.impl.window);
         const hwnd = SDLBackend.c.SDL_GetPointerProperty(
             properties,
@@ -87,6 +78,37 @@ pub fn initialize(self: *AccessKit) void {
         // TODO: This results in a null pointer unwrap. I assume the window class is wrong?
         //ak.accesskit_macos_add_focus_forwarder_to_window_class("SDLWindow");
         self.adapter = c.accesskit_macos_subclassing_adapter_for_window(@ptrCast(hwnd), initialTreeUpdate, self, doAction, self) orelse @panic("null");
+    }
+}
+
+pub fn windowsHWND(window: *dvui.Window) c.HWND {
+    switch (dvui.backend.kind) {
+        .sdl3 => {
+            const SDLBackend = dvui.backend;
+            const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.impl.window);
+            const hwnd = SDLBackend.c.SDL_GetPointerProperty(
+                properties,
+                SDLBackend.c.SDL_PROP_WINDOW_WIN32_HWND_POINTER,
+                null,
+            ) orelse @panic("No HWND");
+            return @intFromPtr(hwnd);
+        },
+        .sdl2 => {
+            const SDLBackend = dvui.backend;
+            var wmInfo: SDLBackend.c.SDL_SysWMinfo = undefined;
+            SDLBackend.c.SDL_GetVersion(&wmInfo.version);
+            _ = SDLBackend.c.SDL_GetWindowWMInfo(window.backend.impl.window, &wmInfo);
+            return @ptrCast(wmInfo.info.win.window);
+        },
+        .raylib => {
+            return @intFromPtr(dvui.backend.c.GetWindowHandle());
+        },
+        .dx11 => {
+            return @intFromPtr(window.backend.impl.hwndFromContext());
+        },
+        else => {
+            @compileError("Accesskit is not supported for this backend");
+        },
     }
 }
 
@@ -121,7 +143,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
         }
     }
 
-    //std.debug.print("Creating Node for {x} with role {?t} at {s}:{d}\n", .{ wd.id, wd.options.role, wd.src.file, wd.src.line });
+    // std.debug.print("Creating Node for {x} with role {?t} at {s}:{d}\n", .{ wd.id, wd.options.role, wd.src.file, wd.src.line });
 
     const ak_node = nodeNew(role.asU8()) orelse return null;
     wd.ak_node = ak_node;
@@ -197,7 +219,7 @@ pub fn nodeParent(wd_in: *dvui.WidgetData) *Node {
     var wd = wd_in.parent.data();
     while (true) : (wd = wd.parent.data()) {
         if (wd.accesskit_node()) |ak_node| {
-            //std.debug.print("parent node is {x} at {s}:{d}\n", .{ wd.id, wd.src.file, wd.src.line });
+            // std.debug.print("parent node is {x} at {s}:{d}\n", .{ wd.id, wd.src.file, wd.src.line });
             return ak_node;
         }
     }

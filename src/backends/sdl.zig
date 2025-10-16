@@ -15,6 +15,7 @@ pub const c = blk: {
         });
     }
     break :blk @cImport({
+        @cInclude("SDL2/SDL_syswm.h");
         @cInclude("SDL2/SDL.h");
     });
 };
