@@ -55,6 +55,7 @@ pub fn initialize(self: *AccessKit) void {
             self,
         ) orelse @panic("null");
     } else if (builtin.os.tag.isDarwin()) {
+        if (dvui.backend.kind != .sdl3) @compileError("Accesskit is not supported for this OS/backend");
         const SDLBackend = dvui.backend;
         const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.impl.window);
         const hwnd = SDLBackend.c.SDL_GetPointerProperty(
