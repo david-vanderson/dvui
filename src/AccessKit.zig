@@ -10,6 +10,8 @@ pub const AccessKit = @This();
 const std = @import("std");
 const dvui = @import("dvui.zig");
 
+const log = std.log.scoped(.AccessKit);
+
 adapter: ?AdapterType() = null,
 // The ak_node id for the widget which last had focus this frame.
 focused_id: usize = 0,
@@ -68,6 +70,8 @@ pub fn initialize(self: *AccessKit) void {
         //ak.accesskit_macos_add_focus_forwarder_to_window_class("SDLWindow");
         self.adapter = c.accesskit_macos_subclassing_adapter_for_window(@ptrCast(hwnd), initialTreeUpdate, self, doAction, self) orelse @panic("null");
     }
+
+    log.info("initialized successfully", .{});
 }
 
 pub fn windowsHWND(window: *dvui.Window) c.HWND {
@@ -154,7 +158,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
             },
             .for_id => |id| blk: {
                 const for_node = self.nodes.get(id) orelse {
-                    dvui.log.debug("AccessKit: label.for_id {x} is not a valid acesskit node", .{id});
+                    log.debug("label.for_id {x} is not a valid acesskit node", .{id});
                     break :blk;
                 };
                 AccessKit.nodePushLabelledBy(for_node, wd.id.asU64());
@@ -224,13 +228,13 @@ fn processActions(self: *AccessKit) void {
         switch (request.action) {
             Action.click => {
                 const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
-                    dvui.log.debug("AccessKit: Action {d} received for a target {x} without a node.", .{ request.action, request.target });
+                    log.debug("Action {d} received for a target {x} without a node.", .{ request.action, request.target });
                     return;
                 };
                 const bounds = blk: {
                     const bounds_maybe = nodeBounds(ak_node);
                     if (bounds_maybe.has_value) break :blk bounds_maybe.value;
-                    dvui.log.debug("AccessKit: Action {d} received for a target {x} without node bounds.", .{ request.action, request.target });
+                    log.debug("Action {d} received for a target {x} without node bounds.", .{ request.action, request.target });
                     return;
                 };
                 const click_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
@@ -243,14 +247,14 @@ fn processActions(self: *AccessKit) void {
             },
             Action.set_value => {
                 const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
-                    dvui.log.debug("AccessKit: Action {d} received for a target {x} without a node.", .{ request.action, request.target });
+                    log.debug("Action {d} received for a target {x} without a node.", .{ request.action, request.target });
                     return;
                 };
                 if (request.data.has_value) {
                     const bounds = _: {
                         const bounds_maybe = nodeBounds(ak_node);
                         if (bounds_maybe.has_value) break :_ bounds_maybe.value;
-                        dvui.log.debug("AccessKit: Action {d} received for a target {x} without node bounds.", .{ request.action, request.target });
+                        log.debug("Action {d} received for a target {x} without node bounds.", .{ request.action, request.target });
                         return;
                     };
                     const mid_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
