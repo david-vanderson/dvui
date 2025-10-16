@@ -516,7 +516,7 @@ const DvuiModuleOptions = struct {
     build_options: *std.Build.Step.Options,
 
     fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
-        const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters, .use_lld = self.use_lld });
+        const tests = self.b.addTest(.{ .root_module = mod, .name = self.b.fmt("{s}-check", .{name}), .filters = self.test_filters, .use_lld = self.use_lld });
         self.b.installArtifact(tests); // Compile check on default install step
         if (self.check_step) |step| {
             step.dependOn(&tests.step);
@@ -526,7 +526,7 @@ const DvuiModuleOptions = struct {
         if (self.test_step) |step| {
             const tests = self.b.addTest(.{
                 .root_module = mod,
-                .name = name,
+                .name = self.b.fmt("{s}-test", .{name}),
                 .filters = self.test_filters,
                 .use_lld = self.use_lld,
             });
