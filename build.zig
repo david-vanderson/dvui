@@ -517,11 +517,12 @@ const DvuiModuleOptions = struct {
 
     fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
         const tests = self.b.addTest(.{ .root_module = mod, .name = self.b.fmt("{s}-check", .{name}), .filters = self.test_filters, .use_lld = self.use_lld });
-        self.b.installArtifact(tests); // Compile check on default install step
+        self.b.getInstallStep().dependOn(&tests.step);
         if (self.check_step) |step| {
             step.dependOn(&tests.step);
         }
     }
+
     fn addTests(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
         if (self.test_step) |step| {
             const tests = self.b.addTest(.{
