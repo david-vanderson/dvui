@@ -121,8 +121,7 @@ pub const AccessKit = @import("AccessKit.zig");
 // accesskit c library with zig, we need this work-around as both the msvc and
 // mingw builds of accesskit reference this symbol.
 comptime {
-    if (accesskit_enabled and builtin.os.tag == .windows and
-        (builtin.cpu.arch.isX86() or builtin.cpu.arch.isX86_64())) {
+    if (accesskit_enabled and builtin.os.tag == .windows and builtin.cpu.arch.isX86()) {
         @export(&_fltused, .{ .name = "_fltused", .linkage = .weak });
     }
 }
