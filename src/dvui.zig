@@ -1019,7 +1019,7 @@ pub fn FPS() f32 {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn parentGet() Widget {
-    return currentWindow().data().parent;
+    return currentWindow().current_parent;
 }
 
 /// Make w the new parent widget.  See `parentGet`.
@@ -1027,7 +1027,7 @@ pub fn parentGet() Widget {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn parentSet(w: Widget) void {
     const cw = currentWindow();
-    cw.data().parent = w;
+    cw.current_parent = w;
 }
 
 /// Make a previous parent widget the current parent.
@@ -1036,32 +1036,26 @@ pub fn parentSet(w: Widget) void {
 /// a widget's `.deinit()` was accidentally not called.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn parentReset(id: Id, w: Widget) void {
+pub fn parentReset(id: Id, prev_parent: Widget) void {
     const cw = currentWindow();
-    const actual_current = cw.data().parent.data().id;
-    if (id != actual_current) {
-        cw.debug.widget_id = actual_current;
-
-        var wd = cw.data().parent.data();
+    const currentId = cw.current_parent.data().id;
+    if (id != currentId) {
+        cw.debug.widget_id = currentId;
 
         log.err("widget is not closed within its parent. did you forget to call `.deinit()`?", .{});
 
-        while (true) : (wd = wd.parent.data()) {
-            log.err("  {s}:{d} {s} {x}{s}", .{
+        var iter = cw.current_parent.data().iterator();
+
+        while (iter.next()) |wd| {
+            log.err("  {s}:{d} {s} {x}", .{
                 wd.src.file,
                 wd.src.line,
                 wd.options.name orelse "???",
                 wd.id,
-                if (wd.id == cw.data().id) "\n" else "",
             });
-
-            if (wd.id == cw.data().id) {
-                // got to base Window
-                break;
-            }
         }
     }
-    cw.data().parent = w;
+    cw.current_parent = prev_parent;
 }
 
 /// Set if dvui should immediately render, and return the previous setting.
