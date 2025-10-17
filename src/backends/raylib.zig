@@ -171,9 +171,10 @@ pub fn deinit(self: *RaylibBackend) void {
 pub fn accessKitShouldInitialize(self: *RaylibBackend) bool {
     return self.ak_should_initialized;
 }
+
 pub fn accessKitInitInBegin(self: *RaylibBackend) !void {
     std.debug.assert(self.ak_should_initialized);
-    c.ClearWindowState(c.FLAG_WINDOW_HIDDEN);
+    dvui.backend.c.ClearWindowState(dvui.backend.c.FLAG_WINDOW_HIDDEN);
     self.ak_should_initialized = false;
 }
 
