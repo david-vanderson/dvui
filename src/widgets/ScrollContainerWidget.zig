@@ -251,6 +251,15 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Opt
         // last child is.
         dvui.currentWindow().debug.widget_id = id;
         dvui.log.debug("{s}:{d} got child {x} after expanded child", .{ @src().file, @src().line, id });
+        var iter = dvui.parentGet().data().iterator();
+        while (iter.next()) |wd| {
+            dvui.log.debug("  {s}:{d} {s} {x}", .{
+                wd.src.file,
+                wd.src.line,
+                wd.options.name orelse "???",
+                wd.id,
+            });
+        }
     } else if (e.isVertical()) {
         self.seen_expanded_child = true;
     }
