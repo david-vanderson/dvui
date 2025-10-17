@@ -40,6 +40,9 @@ pub fn debuggingErrors() void {
         var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         dvui.labelNoFmt(@src(), "this \xFFtext\xFF includes some \xFF invalid utf-8\xFF\xFF\xFF which is replaced with \xFF", .{}, .{});
+        const tl = dvui.textLayout(@src(), .{ .cache_layout = true }, .{});
+        defer tl.deinit();
+        tl.addText("Some \xFFinvalid utf-8 \xc3 in a text layout", .{});
     }
 
     if (dvui.expander(@src(), "Scroll child after expanded child (will log error)", .{}, .{ .expand = .horizontal })) {
