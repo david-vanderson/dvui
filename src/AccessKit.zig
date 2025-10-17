@@ -2,6 +2,8 @@
 const builtin = @import("builtin");
 pub const c = @cImport({
     if (dvui.accesskit_enabled) {
+        // Workaround for a symbol clash on aarch64-windows
+        @cDefine("__mingw_current_teb", "___mingw_current_teb");
         @cInclude("accesskit.h");
     }
 });
