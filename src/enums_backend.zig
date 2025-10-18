@@ -11,6 +11,7 @@ pub const Backend = enum {
     raylib,
     dx11,
     web,
+    webgpu,
     /// Does no rendering!
     testing,
 };

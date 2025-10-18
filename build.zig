@@ -495,6 +495,35 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 addWebExample("web-app", b.path("examples/app.zig"), example_opts, wasm_dvui_opts);
             }
         },
+        .webgpu => {
+            const webgpu_mod = b.addModule("webgpu", .{
+                .root_source_file = b.path("src/backends/webgpu.zig"),
+                .target = target,
+                .optimize = optimize,
+                .link_libc = true,
+            });
+            dvui_opts.addChecks(webgpu_mod, "webgpu-backend");
+            dvui_opts.addTests(webgpu_mod, "webgpu-backend");
+
+            // TODO: Add wgpu-native dependency when available
+            // if (b.lazyDependency("wgpu_native_zig", .{})) |wgpu_dep| {
+            //     webgpu_mod.addImport("wgpu", wgpu_dep.module("wgpu"));
+            // }
+
+            const dvui_webgpu = addDvuiModule("dvui_webgpu", dvui_opts);
+            dvui_opts.addChecks(dvui_webgpu, "dvui_webgpu");
+            if (test_dvui_and_app) {
+                dvui_opts.addTests(dvui_webgpu, "dvui_webgpu");
+            }
+
+            linkBackend(dvui_webgpu, webgpu_mod);
+            const example_opts: ExampleOptions = .{
+                .dvui_mod = dvui_webgpu,
+                .backend_name = "webgpu-backend",
+                .backend_mod = webgpu_mod,
+            };
+            addExample("webgpu-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
+        },
     }
 }
 
