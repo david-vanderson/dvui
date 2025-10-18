@@ -23,7 +23,7 @@ pub const WindowState = struct {
     last_window_size: dvui.Size.Natural = .{ .w = 800, .h = 600 },
     cursor_last: dvui.enums.Cursor = .arrow,
 
-    texture_interpolation: std.AutoHashMap(*anyopaque, dvui.enums.TextureInterpolation) = undefined,
+    texture_interpolation: std.AutoHashMapUnmanaged(*anyopaque, dvui.enums.TextureInterpolation) = .empty,
 
     device: *win32.ID3D11Device,
     device_context: *win32.ID3D11DeviceContext,
@@ -47,8 +47,9 @@ pub const WindowState = struct {
     arena: std.mem.Allocator = undefined,
 
     pub fn deinit(state: *WindowState) void {
+        const gpa = state.dvui_window.gpa;
         state.dvui_window.deinit();
-        state.texture_interpolation.deinit();
+        state.texture_interpolation.deinit(gpa);
         if (state.render_target) |rt| {
             _ = rt.IUnknown.Release();
         }
@@ -280,8 +281,6 @@ pub fn RegisterClass(name: [*:0]const u16, opt: RegisterClassOptions) error{Win3
 pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
     const style = win32.WS_OVERLAPPEDWINDOW;
     const style_ex: win32.WINDOW_EX_STYLE = .{ .APPWINDOW = 1, .WINDOWEDGE = 1 };
-
-    window_state.texture_interpolation = .init(options.dvui_gpa);
 
     const create_args: CreateWindowArgs = .{
         .window_state = window_state,
@@ -696,7 +695,7 @@ pub fn textureCreate(self: Context, pixels: [*]const u8, width: u32, height: u32
     ) catch return dvui.Backend.TextureError.TextureCreate;
     errdefer _ = texture.IUnknown.Release();
 
-    try state.texture_interpolation.put(texture, interpolation);
+    try state.texture_interpolation.put(state.dvui_window.gpa, texture, interpolation);
 
     return dvui.Texture{ .ptr = texture, .width = width, .height = height };
 }
@@ -726,7 +725,7 @@ pub fn textureCreateTarget(self: Context, width: u32, height: u32, interpolation
     ) catch return dvui.Backend.TextureError.TextureCreate;
     errdefer _ = texture.IUnknown.Release();
 
-    try state.texture_interpolation.put(texture, interpolation);
+    try state.texture_interpolation.put(state.dvui_window.gpa, texture, interpolation);
     return .{ .ptr = @ptrCast(texture), .width = width, .height = height };
 }
 
