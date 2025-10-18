@@ -9,11 +9,15 @@ const gpa = gpa_instance.allocator();
 
 const log = std.log.scoped(.Dx11Ontop);
 
-pub const panic = win32.messageBoxThenPanic(.{ .title = "Dx11 Ontop Panic!" });
+// pub const panic = win32.messageBoxThenPanic(.{ .title = "Dx11 Ontop Panic!" });
 
 var backend_attached = false;
 
 pub fn main() !void {
+    if (@import("builtin").os.tag == .windows) { // optional
+        // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
+        dvui.Backend.Common.windowsAttachConsole() catch {};
+    }
     defer _ = gpa_instance.deinit();
     const wnd = createWindow();
 
