@@ -376,7 +376,9 @@ pub fn iterator(self: *const WidgetData) ParentIterator {
     return .{ .wd = self };
 }
 
-pub inline fn accesskit_node(self: *WidgetData) ?*dvui.AccessKit.Node {
+// NOTE: `inline` is required so that null will be returned at comptime. Otherwise other
+//       accesskit functions, which are not linked, might be referenced and fail to compile
+pub inline fn accesskit_node(self: *const WidgetData) ?*dvui.AccessKit.Node {
     if (!dvui.accesskit_enabled) return null;
     return self.ak_node;
 }
