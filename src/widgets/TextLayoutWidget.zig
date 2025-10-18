@@ -1152,37 +1152,36 @@ const AddTextExAction = enum {
 
 fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) bool {
     var ret = false;
+    const cw = dvui.currentWindow();
 
-    var text = text_in;
+    var txt = dvui.toUtf8(cw.lifo(), text_in) catch |err| blk: {
+        dvui.logError(@src(), err, "Failed to convert to utf8", .{});
+        break :blk text_in;
+    };
+    defer if (txt.ptr != txt.ptr) cw.lifo().free(txt);
+
     if (self.cache_layout) {
         if (self.cache_layout_bytes == null) self.cache_layout_bytes = self.bytesNeeded(std.math.maxInt(usize), 0, 0);
 
         if (self.cache_layout_bytes) |clb| {
-            const start = @min(text.len, clb.start -| self.cache_layout_bytes_seen);
-            const end = @min(text.len, clb.end -| self.cache_layout_bytes_seen);
-            self.cache_layout_bytes_seen += text.len;
+            const start = @min(txt.len, clb.start -| self.cache_layout_bytes_seen);
+            const end = @min(txt.len, clb.end -| self.cache_layout_bytes_seen);
+            self.cache_layout_bytes_seen += txt.len;
 
             //std.debug.print("{d} clb {d} .. {d} bytes {d} taking {d} .. {d}\n", .{ self.bytes_seen, clb.start, clb.end, self.cache_layout_bytes_seen, start, end });
 
-            text = text[start..end];
-            if (text.len == 0) return false;
+            txt = txt[start..end];
+            if (txt.len == 0) return false;
         } else {
             // bytesNeeded returned null, we can't do it this frame
             self.cache_layout = false;
         }
     }
 
-    const cw = dvui.currentWindow();
-
     const options = self.data().options.override(opts);
     const msize = options.fontGet().sizeM(1, 1);
     const line_height = options.fontGet().lineHeight();
     self.current_line_height = @max(self.current_line_height, line_height);
-    var txt = dvui.toUtf8(cw.lifo(), text) catch |err| blk: {
-        dvui.logError(@src(), err, "Failed to convert to utf8", .{});
-        break :blk text;
-    };
-    defer if (text.ptr != txt.ptr) cw.lifo().free(txt);
 
     var container_width = self.data().contentRect().w;
     if (container_width == 0) {
@@ -1549,14 +1548,14 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             defer dvui.AccessKit.stringFree(ak_value);
             const current_value = std.mem.span(ak_value);
             allocate_new: {
-                var new_value = cw.arena().allocWithOptions(u8, current_value.len + text.len, null, 0) catch break :allocate_new;
+                var new_value = cw.arena().allocWithOptions(u8, current_value.len + txt.len, null, 0) catch break :allocate_new;
                 @memcpy(new_value[0..current_value.len], current_value);
-                @memcpy(new_value[current_value.len .. current_value.len + text.len], text);
+                @memcpy(new_value[current_value.len .. current_value.len + txt.len], txt);
 
                 dvui.AccessKit.nodeSetValue(ak_node, new_value);
             }
         } else {
-            const str = cw.arena().dupeZ(u8, text) catch "";
+            const str = cw.arena().dupeZ(u8, txt) catch "";
             defer cw.arena().free(str);
             dvui.AccessKit.nodeSetValue(ak_node, str);
         }

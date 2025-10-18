@@ -612,7 +612,7 @@ fn addDvuiModule(
         dvui_mod.linkSystemLibrary("accesskit", .{});
     }
 
-    const stb_source = "external/stb/";
+    const stb_source = "vendor/stb/";
     dvui_mod.addIncludePath(b.path(stb_source));
 
     if (target.result.cpu.arch == .wasm32 or target.result.cpu.arch == .wasm64) {
@@ -633,8 +633,8 @@ fn addDvuiModule(
         }
         dvui_mod.addCSourceFiles(.{ .files = &.{stb_source ++ "stb_truetype_impl.c"} });
 
-        dvui_mod.addIncludePath(b.path("external/tfd"));
-        dvui_mod.addCSourceFiles(.{ .files = &.{"external/tfd/tinyfiledialogs.c"} });
+        dvui_mod.addIncludePath(b.path("vendor/tfd"));
+        dvui_mod.addCSourceFiles(.{ .files = &.{"vendor/tfd/tinyfiledialogs.c"} });
 
         if (b.systemIntegrationOption("freetype", .{})) {
             dvui_mod.linkSystemLibrary("freetype2", .{});

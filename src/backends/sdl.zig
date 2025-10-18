@@ -304,7 +304,7 @@ inline fn toErr(res: SDL_ERROR, what: []const u8) !void {
 }
 
 inline fn logErr(what: []const u8) dvui.Backend.GenericError {
-    std.log.err("{s} failed, error={s}", .{ what, c.SDL_GetError() });
+    log.err("{s} failed, error={s}", .{ what, c.SDL_GetError() });
     return dvui.Backend.GenericError.BackendError;
 }
 
@@ -343,7 +343,8 @@ pub fn setIconFromABGR8888(self: *SDLBackend, data: [*]const u8, icon_w: c_int, 
     defer if (sdl3) c.SDL_DestroySurface(surface) else c.SDL_FreeSurface(surface);
 
     if (sdl3) {
-        try toErr(c.SDL_SetWindowIcon(self.window, surface), "SDL_SetWindowIcon in setIconFromABGR8888");
+        // `toErr` logs the error for us
+        toErr(c.SDL_SetWindowIcon(self.window, surface), "SDL_SetWindowIcon in setIconFromABGR8888") catch {};
     } else {
         c.SDL_SetWindowIcon(self.window, surface);
     }
@@ -447,9 +448,9 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !bool {
     while (c.SDL_PollEvent(&event) == poll_got_event) {
         _ = try self.addEvent(win, event);
         switch (event.type) {
-            if (sdl3) c.SDL_EVENT_QUIT else c.SDL_QUIT => {
-                return true;
-            },
+            if (sdl3) c.SDL_EVENT_WINDOW_CLOSE_REQUESTED else c.SDL_WINDOWEVENT_CLOSE,
+            if (sdl3) c.SDL_EVENT_QUIT else c.SDL_QUIT,
+            => return true,
             // TODO: revisit with sdl3
             //c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
             //std.debug.print("sdl window scale changed event\n", .{});
@@ -1325,6 +1326,89 @@ pub fn getSDLVersion() std.SemanticVersion {
     }
 }
 
+fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: c_uint, message: [*c]const u8) callconv(.c) void {
+    _ = userdata;
+    switch (category) {
+        c.SDL_LOG_CATEGORY_APPLICATION => sdlLog(.SDL_APPLICATION, priority, message),
+        c.SDL_LOG_CATEGORY_ERROR => sdlLog(.SDL_ERROR, priority, message),
+        c.SDL_LOG_CATEGORY_ASSERT => sdlLog(.SDL_ASSERT, priority, message),
+        c.SDL_LOG_CATEGORY_SYSTEM => sdlLog(.SDL_SYSTEM, priority, message),
+        c.SDL_LOG_CATEGORY_AUDIO => sdlLog(.SDL_AUDIO, priority, message),
+        c.SDL_LOG_CATEGORY_VIDEO => sdlLog(.SDL_VIDEO, priority, message),
+        c.SDL_LOG_CATEGORY_RENDER => sdlLog(.SDL_RENDER, priority, message),
+        c.SDL_LOG_CATEGORY_INPUT => sdlLog(.SDL_INPUT, priority, message),
+        c.SDL_LOG_CATEGORY_TEST => sdlLog(.SDL_TEST, priority, message),
+        // These are the set of reserved categories that don't have fixed names between sdl2 and sdl3.
+        // It's simpler to deal with them as a group because there is no easy way to remove a switch case at comptime
+        c.SDL_LOG_CATEGORY_TEST + 1...c.SDL_LOG_CATEGORY_CUSTOM - 1 => if (sdl3 and category == c.SDL_LOG_CATEGORY_GPU)
+            sdlLog(.SDL_GPU, priority, message)
+        else
+            sdlLog(.SDL_RESERVED, priority, message),
+        // starting from c.SDL_LOG_CATEGORY_CUSTOM any greater values are all custom categories
+        else => sdlLog(.SDL_CUSTOM, priority, message),
+    }
+}
+
+fn sdlLog(comptime category: @Type(.enum_literal), priority: c_uint, message: [*c]const u8) void {
+    const logger = std.log.scoped(category);
+    switch (priority) {
+        c.SDL_LOG_PRIORITY_VERBOSE => logger.debug("VERBOSE: {s}", .{message}),
+        c.SDL_LOG_PRIORITY_DEBUG => logger.debug("{s}", .{message}),
+        c.SDL_LOG_PRIORITY_INFO => logger.info("{s}", .{message}),
+        c.SDL_LOG_PRIORITY_WARN => logger.warn("{s}", .{message}),
+        c.SDL_LOG_PRIORITY_ERROR => logger.err("{s}", .{message}),
+        c.SDL_LOG_PRIORITY_CRITICAL => logger.err("CRITICAL: {s}", .{message}),
+        else => if (sdl3 and priority == c.SDL_LOG_PRIORITY_TRACE)
+            logger.debug("TRACE: {s}", .{message})
+        else
+            logger.err("UNKNOWN: {s}", .{message}),
+    }
+}
+
+/// This set enables the internal logging of SDL based on the level of std.log (and the SDL_... scopes)
+pub fn enableSDLLogging() void {
+    if (sdl3) c.SDL_SetLogOutputFunction(&sdlLogCallback, null) else c.SDL_LogSetOutputFunction(&sdlLogCallback, null);
+    // Set default log level
+    const default_log_level: c.SDL_LogPriority = if (std.log.logEnabled(.debug, .SDLBackend))
+        c.SDL_LOG_PRIORITY_VERBOSE
+    else if (std.log.logEnabled(.info, .SDLBackend))
+        c.SDL_LOG_PRIORITY_INFO
+    else if (std.log.logEnabled(.warn, .SDLBackend))
+        c.SDL_LOG_PRIORITY_WARN
+    else
+        c.SDL_LOG_PRIORITY_ERROR;
+    if (sdl3) c.SDL_SetLogPriorities(default_log_level) else c.SDL_LogSetAllPriority(default_log_level);
+
+    const categories = [_]struct { c_uint, @Type(.enum_literal) }{
+        .{ c.SDL_LOG_CATEGORY_APPLICATION, .SDL_APPLICATION },
+        .{ c.SDL_LOG_CATEGORY_ERROR, .SDL_ERROR },
+        .{ c.SDL_LOG_CATEGORY_ASSERT, .SDL_ASSERT },
+        .{ c.SDL_LOG_CATEGORY_SYSTEM, .SDL_SYSTEM },
+        .{ c.SDL_LOG_CATEGORY_AUDIO, .SDL_AUDIO },
+        .{ c.SDL_LOG_CATEGORY_VIDEO, .SDL_VIDEO },
+        .{ c.SDL_LOG_CATEGORY_RENDER, .SDL_RENDER },
+        .{ c.SDL_LOG_CATEGORY_INPUT, .SDL_INPUT },
+        .{ c.SDL_LOG_CATEGORY_TEST, .SDL_TEST },
+    } ++ (if (!sdl3) .{} else .{
+        .{ c.SDL_LOG_CATEGORY_GPU, .SDL_GPU },
+    });
+    inline for (categories) |category_data| {
+        const category, const scope = category_data;
+        for (std.options.log_scope_levels) |scope_level| {
+            if (scope_level.scope == scope) {
+                const log_level: c.SDL_LogPriority = switch (scope_level.level) {
+                    .debug => c.SDL_LOG_PRIORITY_VERBOSE,
+                    .info => c.SDL_LOG_PRIORITY_INFO,
+                    .warn => c.SDL_LOG_PRIORITY_WARN,
+                    .err => c.SDL_LOG_PRIORITY_ERROR,
+                };
+                if (sdl3) c.SDL_SetLogPriority(category, log_level) else c.SDL_LogSetPriority(category, log_level);
+                break;
+            }
+        }
+    }
+}
+
 // This must be exposed in the app's root source file.
 pub fn main() !u8 {
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
@@ -1333,6 +1417,7 @@ pub fn main() !u8 {
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         dvui.Backend.Common.windowsAttachConsole() catch {};
     }
+    enableSDLLogging();
 
     if (sdl3 and (sdl_options.callbacks orelse true) and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows)) {
         // We are using sdl's callbacks to support rendering during OS resizing
@@ -1528,14 +1613,19 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_FAILURE;
     };
 
-    if (event.?.type == c.SDL_EVENT_WINDOW_RESIZED) {
-        //std.debug.print("resize {d}x{d}\n", .{e.window.data1, e.window.data2});
-        // getting a resize event means we are likely in a callback, so don't call any wait functions
-        appState.have_resize = true;
-    }
-
-    if (event.?.type == c.SDL_EVENT_QUIT) {
-        return c.SDL_APP_SUCCESS; // end the program, reporting success to the OS.
+    switch (event.?.type) {
+        c.SDL_EVENT_WINDOW_RESIZED => {
+            //std.debug.print("resize {d}x{d}\n", .{e.window.data1, e.window.data2});
+            // getting a resize event means we are likely in a callback, so don't call any wait functions
+            appState.have_resize = true;
+        },
+        // Other user action requested close
+        c.SDL_EVENT_QUIT,
+        // Window manager requested close
+        c.SDL_EVENT_WINDOW_CLOSE_REQUESTED,
+        // end the program, reporting success to the OS.
+        => return c.SDL_APP_SUCCESS,
+        else => {},
     }
 
     return c.SDL_APP_CONTINUE;

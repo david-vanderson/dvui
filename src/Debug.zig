@@ -136,9 +136,19 @@ pub fn show(self: *Debug) void {
         }
     }
 
-    var log_events = self.logEvents(null);
-    if (dvui.checkbox(@src(), &log_events, "Event Logging", .{})) {
-        _ = self.logEvents(log_events);
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
+        var log_events = self.logEvents(null);
+        if (dvui.checkbox(@src(), &log_events, "Event Logging", .{})) {
+            _ = self.logEvents(log_events);
+        }
+
+        var wd: dvui.WidgetData = undefined;
+        _ = dvui.checkbox(@src(), &dvui.currentWindow().debug.touch_simulate_events, "Simulate Touch With Mouse", .{ .data_out = &wd });
+
+        dvui.tooltip(@src(), .{ .active_rect = wd.borderRectScale().r }, "mouse drag will scroll\ntext layout/entry have draggables and menu", .{}, .{});
     }
 
     _ = dvui.spacer(@src(), .{ .min_size_content = .all(4) });
