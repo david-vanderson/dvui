@@ -101,6 +101,7 @@ keybinds: std.StringHashMapUnmanaged(dvui.enums.Keybind) = .empty,
 cursor_requested: ?dvui.enums.Cursor = null,
 
 wd: WidgetData,
+current_parent: Widget,
 rect_pixels: dvui.Rect.Physical = .{},
 natural_scale: f32 = 1.0,
 /// can set separately but gets folded into natural_scale
@@ -164,6 +165,8 @@ pub fn init(
             // Set in `begin`
             .parent = undefined,
         },
+        // Set in `begin`
+        .current_parent = undefined,
         .backend = backend_ctx,
         // TODO: Add some way to opt-out of including the builtin fonts in the built binary
         .fonts = try .initWithBuiltins(gpa),
@@ -410,17 +413,11 @@ pub fn focusWidget(self: *Self, id: ?Id, subwindow_id: ?Id, event_num: ?u16) voi
                 self.last_focused_id_in_subwindow = wid;
             } else {
                 // walk parent chain
-                var wd = self.data().parent.data();
-
-                while (true) : (wd = wd.parent.data()) {
+                var iter = self.current_parent.data().iterator();
+                while (iter.next()) |wd| {
                     if (wd.id == wid) {
                         self.last_focused_id_this_frame = wid;
                         self.last_focused_id_in_subwindow = wid;
-                        break;
-                    }
-
-                    if (wd.id == self.data().id) {
-                        // got to base Window
                         break;
                     }
                 }
@@ -1054,6 +1051,7 @@ pub fn begin(
     self.captured_last_frame = false;
 
     self.data().parent = self.widget();
+    self.current_parent = self.widget();
     self.data().register();
 
     self.layout = .{};
@@ -1274,6 +1272,9 @@ pub fn endRendering(self: *Self, opts: endOptions) void {
 /// meaning wait for event).  If wanted, pass return value to `waitTime` to
 /// get a useful time to wait between render loops.
 pub fn end(self: *Self, opts: endOptions) !?u32 {
+    // make sure all widgets reset the parent
+    dvui.parentReset(self.data().id, self.widget());
+
     if (!self.end_rendering_done) {
         self.endRendering(opts);
     }

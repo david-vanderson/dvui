@@ -16,6 +16,7 @@ pub fn main() !void {
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         try dvui.Backend.Common.windowsAttachConsole();
     }
+    RaylibBackend.enableRaylibLogging();
     var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_instance.allocator();
 

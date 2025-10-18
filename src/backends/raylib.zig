@@ -915,8 +915,67 @@ pub fn EndDrawingWaitEventTimeout(_: *RaylibBackend, timeout_micros: u32) void {
     return;
 }
 
+// I believe this is included through raylib.h that in turn includes <stdio.h>
+extern "c" fn vsnprintf(
+    str: [*c]u8,
+    size: isize,
+    format: [*c]const u8,
+    /// FIXME: This should be `c.va_list` but compilation fails because of invalid parameter for the calling convention
+    args: ?*anyopaque,
+) c_int;
+
+fn raylibLogCallback(
+    msgType: c_int,
+    text: [*c]const u8,
+    /// FIXME: This should be `c.va_list` but compilation fails because of invalid parameter for the calling convention
+    args: ?*anyopaque,
+) callconv(.c) void {
+    const logger = std.log.scoped(.Raylib);
+    var buf: [255:0]u8 = undefined;
+    const len = vsnprintf(&buf, buf.len + 1, text, args);
+    const msg: [:0]const u8, const postfix = if (len < 0)
+        .{ std.mem.span(text), " (PRINT ERRORED)" }
+    else if (len > buf.len)
+        .{ buf[0.. :0], "..." }
+    else blk: {
+        @branchHint(.likely);
+        break :blk .{ buf[0..@intCast(len) :0], "" };
+    };
+    switch (msgType) {
+        c.LOG_TRACE, c.LOG_DEBUG => logger.debug("{s}{s}", .{ msg, postfix }),
+        c.LOG_INFO => logger.info("{s}{s}", .{ msg, postfix }),
+        c.LOG_WARNING => logger.warn("{s}{s}", .{ msg, postfix }),
+        c.LOG_ERROR, c.LOG_FATAL => logger.err("{s}{s}", .{ msg, postfix }),
+        else => logger.debug("{s}{s}", .{ msg, postfix }),
+    }
+}
+
+/// This set enables the internal logging of raylib based on the level of std.log
+/// (and the `.Raylib` scope, falling back to the level of `.RaylibBackend`)
+pub fn enableRaylibLogging() void {
+    // FIXME: @ptrCast here is needed because of `c.va_list` error, see `raylibLogCallback`
+    c.SetTraceLogCallback(@ptrCast(&raylibLogCallback));
+    const level = for (std.options.log_scope_levels) |scope_level| {
+        if (scope_level.scope == .Raylib) break switch (scope_level.level) {
+            .debug => c.LOG_DEBUG,
+            .info => c.LOG_INFO,
+            .warn => c.LOG_WARNING,
+            .wee => c.LOG_ERROR,
+        };
+    } else if (std.log.logEnabled(.debug, .RaylibBackend))
+        c.LOG_DEBUG
+    else if (std.log.logEnabled(.info, .RaylibBackend))
+        c.LOG_INFO
+    else if (std.log.logEnabled(.warn, .RaylibBackend))
+        c.LOG_WARNING
+    else
+        c.LOG_ERROR;
+    c.SetTraceLogLevel(level);
+}
+
 pub fn main() !void {
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
+    enableRaylibLogging();
 
     if (builtin.os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196

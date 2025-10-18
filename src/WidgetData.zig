@@ -349,6 +349,33 @@ pub fn validate(self: *const WidgetData) *WidgetData {
     return @constCast(self);
 }
 
+pub fn isRoot(self: *const WidgetData) bool {
+    // Window is its own parent
+    return (self.id == self.parent.data().id);
+}
+
+pub const ParentIterator = struct {
+    wd: ?*const WidgetData,
+
+    pub fn next(it: *ParentIterator) ?*const WidgetData {
+        const ret = it.wd;
+
+        if (it.wd) |wd| {
+            if (wd.isRoot()) {
+                it.wd = null;
+            } else {
+                it.wd = wd.parent.data();
+            }
+        }
+
+        return ret;
+    }
+};
+
+pub fn iterator(self: *const WidgetData) ParentIterator {
+    return .{ .wd = self };
+}
+
 pub inline fn accesskit_node(self: *WidgetData) ?*dvui.AccessKit.Node {
     if (!dvui.accesskit_enabled) return null;
     return self.ak_node;

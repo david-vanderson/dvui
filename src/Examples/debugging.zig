@@ -14,10 +14,6 @@ pub fn debuggingErrors() void {
     dvui.label(@src(), "- text, icons, and images rounded to nearest pixel", .{}, .{ .margin = .{ .x = 10 } });
     dvui.label(@src(), "- text rendered at the closest smaller font (not stretched)", .{}, .{ .margin = .{ .x = 10 } });
 
-    _ = dvui.checkbox(@src(), &dvui.currentWindow().debug.touch_simulate_events, "Convert mouse events to touch", .{});
-    dvui.label(@src(), "- mouse drag will scroll", .{}, .{ .margin = .{ .x = 10 } });
-    dvui.label(@src(), "- mouse click in text layout/entry shows touch draggables and menu", .{}, .{ .margin = .{ .x = 10 } });
-
     if (dvui.expander(@src(), "Virtual Parent (affects IDs but not layout)", .{}, .{ .expand = .horizontal })) {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = .{ .x = 10 } });
         defer hbox.deinit();
@@ -44,6 +40,9 @@ pub fn debuggingErrors() void {
         var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         dvui.labelNoFmt(@src(), "this \xFFtext\xFF includes some \xFF invalid utf-8\xFF\xFF\xFF which is replaced with \xFF", .{}, .{});
+        const tl = dvui.textLayout(@src(), .{ .cache_layout = true }, .{});
+        defer tl.deinit();
+        tl.addText("Some \xFFinvalid utf-8 \xc3 in a text layout", .{});
     }
 
     if (dvui.expander(@src(), "Scroll child after expanded child (will log error)", .{}, .{ .expand = .horizontal })) {
