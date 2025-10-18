@@ -58,7 +58,10 @@ pub fn initialize(self: *AccessKit) void {
         if (dvui.backend.kind == .dx11) {
             self.adapter = c.accesskit_windows_adapter_new(
                 windowsHWND(window),
-                false, // TOOD: ?? Is the window focused?
+                // If the window currently has focus.
+                // TODO: We currently assume we always have focus as this initialization is performed
+                //       at program startup so we are most likely focused. This should be verified in some way
+                true,
                 doAction,
                 self,
             ) orelse @panic("null");
