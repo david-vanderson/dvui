@@ -2,7 +2,7 @@
 const builtin = @import("builtin");
 pub const c = @cImport({
     if (dvui.accesskit_enabled) {
-        // Workaround for a symbol clash on aarch64-windows
+        // Workaround for a linker symbol clash on aarch64-windows
         @cDefine("__mingw_current_teb", "___mingw_current_teb");
         @cInclude("accesskit.h");
     }
@@ -39,7 +39,11 @@ mutex: std.Thread.Mutex = .{},
 
 fn AdapterType() type {
     if (dvui.accesskit_enabled and builtin.os.tag == .windows) {
-        return *c.accesskit_windows_subclassing_adapter;
+        if (dvui.backend.kind == .dx11) {
+            return *c.accesskit_windows_adapter;
+        } else {
+            return *c.accesskit_windows_subclassing_adapter;
+        }
     } else if (dvui.accesskit_enabled and builtin.os.tag.isDarwin()) {
         return *c.accesskit_macos_subclassing_adapter;
     } else {
@@ -51,13 +55,22 @@ pub fn initialize(self: *AccessKit) void {
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
 
     if (builtin.os.tag == .windows) {
-        self.adapter = c.accesskit_windows_subclassing_adapter_new(
-            windowsHWND(window),
-            initialTreeUpdate,
-            self,
-            doAction,
-            self,
-        ) orelse @panic("null");
+        if (dvui.backend.kind == .dx11) {
+            self.adapter = c.accesskit_windows_adapter_new(
+                windowsHWND(window),
+                false, // TOOD: ?? Is the window focused?
+                doAction,
+                self,
+            ) orelse @panic("null");
+        } else {
+            self.adapter = c.accesskit_windows_subclassing_adapter_new(
+                windowsHWND(window),
+                initialTreeUpdate,
+                self,
+                doAction,
+                self,
+            ) orelse @panic("null");
+        }
     } else if (builtin.os.tag.isDarwin()) {
         if (dvui.backend.kind != .sdl3) @compileError("Accesskit is not supported for this OS/backend");
         const SDLBackend = dvui.backend;
@@ -307,9 +320,16 @@ pub fn pushUpdates(self: *AccessKit) void {
     self.processActions();
 
     if (builtin.os.tag == .windows) {
-        const queued_events = c.accesskit_windows_subclassing_adapter_update_if_active(self.adapter.?, frameTreeUpdate, self);
-        if (queued_events) |events| {
-            c.accesskit_windows_queued_events_raise(events);
+        if (dvui.backend.kind == .dx11) {
+            const queued_events = c.accesskit_windows_adapter_update_if_active(self.adapter.?, frameTreeUpdate, self);
+            if (queued_events) |events| {
+                c.accesskit_windows_queued_events_raise(events);
+            }
+        } else {
+            const queued_events = c.accesskit_windows_subclassing_adapter_update_if_active(self.adapter.?, frameTreeUpdate, self);
+            if (queued_events) |events| {
+                c.accesskit_windows_queued_events_raise(events);
+            }
         }
     } else if (builtin.os.tag.isDarwin()) {
         const queued_events = c.accesskit_macos_subclassing_adapter_update_if_active(self.adapter.?, frameTreeUpdate, self);
@@ -336,7 +356,11 @@ pub fn deinit(self: *AccessKit) void {
     self.action_requests.clearAndFree(window.gpa);
     self.nodes.clearAndFree(window.gpa);
     if (builtin.os.tag == .windows)
-        c.accesskit_windows_subclassing_adapter_free(self.adapter.?)
+        if (dvui.backend.kind == .dx11) {
+            c.accesskit_windows_adapter_free(self.adapter.?);
+        } else {
+            c.accesskit_windows_subclassing_adapter_free(self.adapter.?);
+        }
     else if (builtin.os.tag.isDarwin())
         c.accesskit_macos_subclassing_adapter_free(self.adapter.?);
 }
@@ -344,7 +368,7 @@ pub fn deinit(self: *AccessKit) void {
 /// Pushes all the nodes created during the current frame to AccessKit
 /// Called once per frame (if accessibility is initialized)
 /// Note: This callback is only during the dynamic extent of pushUpdates on the same thread. TODO: verify this.
-fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
+pub fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     var self: *AccessKit = @ptrCast(@alignCast(instance));
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
 
@@ -362,7 +386,7 @@ fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
 /// Creates the initial tree update when accessibility information is first requested by the OS
 /// The initial tree only contains basic window details. These are updated when frameTreeUpdate runs.
 /// Note: This callback can occur on a non-gui thread.
-fn initialTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
+pub fn initialTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     var self: *AccessKit = @ptrCast(@alignCast(instance));
     self.mutex.lock();
     defer self.mutex.unlock();
