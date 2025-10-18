@@ -16,7 +16,6 @@ const global = struct {
 
 pub const WindowState = struct {
     vsync: bool,
-    ak_should_initialized: bool = dvui.accesskit_enabled,
 
     dvui_window: dvui.Window,
 
@@ -328,6 +327,9 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
         ) catch {},
         .light => {},
     }
+    if (dvui.accesskit_enabled) {
+        window_state.dvui_window.accesskit.initialize();
+    }
 
     if (options.size) |size| {
         const dpi = win32.GetDpiForWindow(hwnd);
@@ -357,32 +359,16 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
             win32.SWP_NOCOPYBITS,
         ), "SetWindowPos in initWindow");
     }
-    // When access kit is enabled, we defer showing the window until accessKitInitInBegin is called
-    if (!dvui.accesskit_enabled) {
-        // Returns 0 if the window was previously hidden
-        _ = win32.ShowWindow(hwnd, .{ .SHOWNORMAL = 1 });
-        try boolToErr(win32.UpdateWindow(hwnd), "UpdateWindow in initWindow");
-    }
+    // Returns 0 if the window was previously hidden
+    _ = win32.ShowWindow(hwnd, .{ .SHOWNORMAL = 1 });
+    try boolToErr(win32.UpdateWindow(hwnd), "UpdateWindow in initWindow");
     return contextFromHwnd(hwnd);
 }
 
 /// Cleanup routine
 pub fn deinit(self: Context) void {
+    global.pending_close = true;
     if (0 == win32.DestroyWindow(hwndFromContext(self))) win32.panicWin32("DestroyWindow", win32.GetLastError());
-}
-
-pub fn accessKitShouldInitialize(ctx: Context) bool {
-    const hwnd = hwndFromContext(ctx);
-    const state = stateFromHwnd(hwnd);
-    return state.ak_should_initialized;
-}
-pub fn accessKitInitInBegin(ctx: Context) !void {
-    const hwnd = hwndFromContext(ctx);
-    const state = stateFromHwnd(hwnd);
-    std.debug.assert(state.ak_should_initialized);
-    _ = win32.ShowWindow(hwnd, .{ .SHOWNORMAL = 1 });
-    try boolToErr(win32.UpdateWindow(hwnd), "UpdateWindow in accessKitInitInBegin");
-    state.ak_should_initialized = false;
 }
 
 /// Resizes the SwapChain based on the new window size
@@ -1361,6 +1347,41 @@ pub fn wndProc(
                 _ = state.dvui_window.addEventText(.{ .text = string }) catch {};
             }
             return 0;
+        },
+        win32.WM_SETFOCUS, win32.WM_EXITSIZEMOVE, win32.WM_EXITMENULOOP => {
+            if (dvui.accesskit_enabled and stateFromHwnd(hwnd).dvui_window.accesskit.status != .off) {
+                const events = dvui.AccessKit.c.accesskit_windows_adapter_update_window_focus_state(stateFromHwnd(hwnd).dvui_window.accesskit.adapter, true);
+                if (events) |_| {
+                    dvui.AccessKit.c.accesskit_windows_queued_events_raise(events);
+                }
+            }
+            return 0;
+        },
+        win32.WM_KILLFOCUS, win32.WM_ENTERSIZEMOVE, win32.WM_ENTERMENULOOP => {
+            if (dvui.accesskit_enabled and stateFromHwnd(hwnd).dvui_window.accesskit.status != .off) {
+                const events = dvui.AccessKit.c.accesskit_windows_adapter_update_window_focus_state(stateFromHwnd(hwnd).dvui_window.accesskit.adapter, false);
+                if (events) |_| {
+                    dvui.AccessKit.c.accesskit_windows_queued_events_raise(events);
+                }
+            }
+            return 0;
+        },
+        win32.WM_GETOBJECT => {
+            if (dvui.accesskit_enabled and !global.pending_close) {
+                const state = stateFromHwnd(hwnd);
+                const ak = state.dvui_window.accesskit;
+                const result = dvui.AccessKit.c.accesskit_windows_adapter_handle_wm_getobject(
+                    ak.adapter,
+                    wparam,
+                    lparam,
+                    if (ak.status != .on) dvui.AccessKit.initialTreeUpdate else dvui.AccessKit.frameTreeUpdate,
+                    &stateFromHwnd(hwnd).dvui_window.accesskit,
+                );
+                if (result.has_value) {
+                    return result.value;
+                }
+            }
+            return win32.DefWindowProcW(hwnd, umsg, wparam, lparam);
         },
         else => return win32.DefWindowProcW(hwnd, umsg, wparam, lparam),
     }
