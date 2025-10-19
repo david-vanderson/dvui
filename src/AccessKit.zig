@@ -2,24 +2,17 @@
 const builtin = @import("builtin");
 pub const c = @cImport({
     if (dvui.accesskit_enabled) {
+        // Workaround for a linker symbol clash on aarch64-windows
+        @cDefine("__mingw_current_teb", "___mingw_current_teb");
         @cInclude("accesskit.h");
     }
 });
 
-// When linking to accesskit for non-msvc builds, the _fltuser symbol is undefined. Zig only defines this symbol
-// for abi = .mscv and abi = .none, which makes gnu and musl builds break.
-// Until we can build and link the accesskit c library with zig, we need this work-around as
-// both the msvc and mingw builds of accesskit reference this symbol.
-comptime {
-    if (builtin.os.tag == .windows and builtin.cpu.arch.isX86() and dvui.accesskit_enabled) {
-        @export(&_fltused, .{ .name = "_fltused", .linkage = .weak });
-    }
-}
-var _fltused: c_int = 1;
-
 pub const AccessKit = @This();
 const std = @import("std");
 const dvui = @import("dvui.zig");
+
+const log = std.log.scoped(.AccessKit);
 
 adapter: ?AdapterType() = null,
 // The ak_node id for the widget which last had focus this frame.
@@ -46,7 +39,11 @@ mutex: std.Thread.Mutex = .{},
 
 fn AdapterType() type {
     if (dvui.accesskit_enabled and builtin.os.tag == .windows) {
-        return *c.accesskit_windows_subclassing_adapter;
+        if (dvui.backend.kind == .dx11) {
+            return *c.accesskit_windows_adapter;
+        } else {
+            return *c.accesskit_windows_subclassing_adapter;
+        }
     } else if (dvui.accesskit_enabled and builtin.os.tag.isDarwin()) {
         return *c.accesskit_macos_subclassing_adapter;
     } else {
@@ -54,39 +51,92 @@ fn AdapterType() type {
     }
 }
 
-/// Perform SDL3-specific initialization
 pub fn initialize(self: *AccessKit) void {
-    if (dvui.backend.kind != .sdl3) @compileError("AccessKit currently only implemented for SDL3 backend");
-
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
-    const SDLBackend = dvui.backend;
 
     if (builtin.os.tag == .windows) {
-        const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.impl.window);
-        const hwnd = SDLBackend.c.SDL_GetPointerProperty(
-            properties,
-            SDLBackend.c.SDL_PROP_WINDOW_WIN32_HWND_POINTER,
-            null,
-        ) orelse @panic("No HWND");
-
-        self.adapter = c.accesskit_windows_subclassing_adapter_new(
-            @intFromPtr(hwnd),
-            initialTreeUpdate,
-            self,
-            doAction,
-            self,
-        ) orelse @panic("null");
+        if (dvui.backend.kind == .dx11) {
+            self.adapter = c.accesskit_windows_adapter_new(
+                windowsHWND(window),
+                // If the window currently has focus.
+                // TODO: We currently assume we always have focus as this initialization is performed
+                //       at program startup so we are most likely focused. This should be verified in some way
+                true,
+                doAction,
+                self,
+            ) orelse @panic("null");
+        } else {
+            self.adapter = c.accesskit_windows_subclassing_adapter_new(
+                windowsHWND(window),
+                initialTreeUpdate,
+                self,
+                doAction,
+                self,
+            ) orelse @panic("null");
+        }
     } else if (builtin.os.tag.isDarwin()) {
-        const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.impl.window);
-        const hwnd = SDLBackend.c.SDL_GetPointerProperty(
-            properties,
-            SDLBackend.c.SDL_PROP_WINDOW_COCOA_WINDOW_POINTER,
-            null,
-        ) orelse @panic("No HWND");
-
         // TODO: This results in a null pointer unwrap. I assume the window class is wrong?
         //ak.accesskit_macos_add_focus_forwarder_to_window_class("SDLWindow");
-        self.adapter = c.accesskit_macos_subclassing_adapter_for_window(@ptrCast(hwnd), initialTreeUpdate, self, doAction, self) orelse @panic("null");
+        self.adapter = c.accesskit_macos_subclassing_adapter_for_window(macOSWinPtr(window), initialTreeUpdate, self, doAction, self) orelse @panic("null");
+    }
+
+    log.info("initialized successfully", .{});
+}
+
+fn windowsHWND(window: *dvui.Window) c.HWND {
+    switch (dvui.backend.kind) {
+        .sdl3 => {
+            const SDLBackend = dvui.backend;
+            const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.impl.window);
+            const hwnd = SDLBackend.c.SDL_GetPointerProperty(
+                properties,
+                SDLBackend.c.SDL_PROP_WINDOW_WIN32_HWND_POINTER,
+                null,
+            ) orelse @panic("No HWND");
+            return @intFromPtr(hwnd);
+        },
+        .sdl2 => {
+            const SDLBackend = dvui.backend;
+            var wmInfo: SDLBackend.c.SDL_SysWMinfo = undefined;
+            SDLBackend.c.SDL_GetVersion(&wmInfo.version);
+            _ = SDLBackend.c.SDL_GetWindowWMInfo(window.backend.impl.window, &wmInfo);
+            return @ptrCast(wmInfo.info.win.window);
+        },
+        .raylib => {
+            return @intFromPtr(dvui.backend.c.GetWindowHandle());
+        },
+        .dx11 => {
+            return @intFromPtr(window.backend.impl.hwndFromContext());
+        },
+        else => {
+            @compileError("Accesskit is not supported for this backend");
+        },
+    }
+}
+
+fn macOSWinPtr(window: *dvui.Window) *anyopaque {
+    const SDLBackend = dvui.backend;
+
+    switch (dvui.backend.kind) {
+        .sdl2 => {
+            var wmInfo: SDLBackend.c.SDL_SysWMinfo = undefined;
+            SDLBackend.c.SDL_GetVersion(&wmInfo.version);
+            _ = SDLBackend.c.SDL_GetWindowWMInfo(window.backend.impl.window, &wmInfo);
+            return wmInfo.info.cocoa.window orelse @panic("No HWND");
+        },
+        .sdl3 => {
+            const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.impl.window);
+            const hwnd = SDLBackend.c.SDL_GetPointerProperty(
+                properties,
+                SDLBackend.c.SDL_PROP_WINDOW_COCOA_WINDOW_POINTER,
+                null,
+            ) orelse @panic("No HWND");
+            return hwnd;
+        },
+        .raylib => {
+            return dvui.backend.c.GetWindowHandle() orelse @panic("No HWND");
+        },
+        else => @compileError("Accesskit is not supported for this OS/backend"),
     }
 }
 
@@ -119,7 +169,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
         }
     }
 
-    //std.debug.print("Creating Node for {x} with role {?t} at {s}:{d}\n", .{ wd.id, wd.options.role, wd.src.file, wd.src.line });
+    // std.debug.print("Creating Node for {x} with role {?t} at {s}:{d}\n", .{ wd.id, wd.options.role, wd.src.file, wd.src.line });
 
     const ak_node = nodeNew(role.asU8()) orelse return null;
     wd.ak_node = ak_node;
@@ -141,7 +191,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
             },
             .for_id => |id| blk: {
                 const for_node = self.nodes.get(id) orelse {
-                    dvui.log.debug("AccessKit: label.for_id {x} is not a valid acesskit node", .{id});
+                    log.debug("label.for_id {x} is not a valid acesskit node", .{id});
                     break :blk;
                 };
                 AccessKit.nodePushLabelledBy(for_node, wd.id.asU64());
@@ -195,7 +245,7 @@ pub fn nodeParent(wd_in: *dvui.WidgetData) *Node {
     var iter = wd_in.parent.data().iterator();
     while (iter.next()) |wd| {
         if (wd.accesskit_node()) |ak_node| {
-            //std.debug.print("parent node is {x} at {s}:{d}\n", .{ wd.id, wd.src.file, wd.src.line });
+            // std.debug.print("parent node is {x} at {s}:{d}\n", .{ wd.id, wd.src.file, wd.src.line });
             return ak_node;
         }
     }
@@ -211,13 +261,13 @@ fn processActions(self: *AccessKit) void {
         switch (request.action) {
             Action.click => {
                 const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
-                    dvui.log.debug("AccessKit: Action {d} received for a target {x} without a node.", .{ request.action, request.target });
+                    log.debug("Action {d} received for a target {x} without a node.", .{ request.action, request.target });
                     return;
                 };
                 const bounds = blk: {
                     const bounds_maybe = nodeBounds(ak_node);
                     if (bounds_maybe.has_value) break :blk bounds_maybe.value;
-                    dvui.log.debug("AccessKit: Action {d} received for a target {x} without node bounds.", .{ request.action, request.target });
+                    log.debug("Action {d} received for a target {x} without node bounds.", .{ request.action, request.target });
                     return;
                 };
                 const click_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
@@ -230,14 +280,14 @@ fn processActions(self: *AccessKit) void {
             },
             Action.set_value => {
                 const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
-                    dvui.log.debug("AccessKit: Action {d} received for a target {x} without a node.", .{ request.action, request.target });
+                    log.debug("Action {d} received for a target {x} without a node.", .{ request.action, request.target });
                     return;
                 };
                 if (request.data.has_value) {
                     const bounds = _: {
                         const bounds_maybe = nodeBounds(ak_node);
                         if (bounds_maybe.has_value) break :_ bounds_maybe.value;
-                        dvui.log.debug("AccessKit: Action {d} received for a target {x} without node bounds.", .{ request.action, request.target });
+                        log.debug("Action {d} received for a target {x} without node bounds.", .{ request.action, request.target });
                         return;
                     };
                     const mid_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
@@ -288,9 +338,16 @@ pub fn pushUpdates(self: *AccessKit) void {
     self.processActions();
 
     if (builtin.os.tag == .windows) {
-        const queued_events = c.accesskit_windows_subclassing_adapter_update_if_active(self.adapter.?, frameTreeUpdate, self);
-        if (queued_events) |events| {
-            c.accesskit_windows_queued_events_raise(events);
+        if (dvui.backend.kind == .dx11) {
+            const queued_events = c.accesskit_windows_adapter_update_if_active(self.adapter.?, frameTreeUpdate, self);
+            if (queued_events) |events| {
+                c.accesskit_windows_queued_events_raise(events);
+            }
+        } else {
+            const queued_events = c.accesskit_windows_subclassing_adapter_update_if_active(self.adapter.?, frameTreeUpdate, self);
+            if (queued_events) |events| {
+                c.accesskit_windows_queued_events_raise(events);
+            }
         }
     } else if (builtin.os.tag.isDarwin()) {
         const queued_events = c.accesskit_macos_subclassing_adapter_update_if_active(self.adapter.?, frameTreeUpdate, self);
@@ -317,7 +374,11 @@ pub fn deinit(self: *AccessKit) void {
     self.action_requests.clearAndFree(window.gpa);
     self.nodes.clearAndFree(window.gpa);
     if (builtin.os.tag == .windows)
-        c.accesskit_windows_subclassing_adapter_free(self.adapter.?)
+        if (dvui.backend.kind == .dx11) {
+            c.accesskit_windows_adapter_free(self.adapter.?);
+        } else {
+            c.accesskit_windows_subclassing_adapter_free(self.adapter.?);
+        }
     else if (builtin.os.tag.isDarwin())
         c.accesskit_macos_subclassing_adapter_free(self.adapter.?);
 }
@@ -325,7 +386,7 @@ pub fn deinit(self: *AccessKit) void {
 /// Pushes all the nodes created during the current frame to AccessKit
 /// Called once per frame (if accessibility is initialized)
 /// Note: This callback is only during the dynamic extent of pushUpdates on the same thread. TODO: verify this.
-fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
+pub fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     var self: *AccessKit = @ptrCast(@alignCast(instance));
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
 
@@ -343,7 +404,7 @@ fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
 /// Creates the initial tree update when accessibility information is first requested by the OS
 /// The initial tree only contains basic window details. These are updated when frameTreeUpdate runs.
 /// Note: This callback can occur on a non-gui thread.
-fn initialTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
+pub fn initialTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     var self: *AccessKit = @ptrCast(@alignCast(instance));
     self.mutex.lock();
     defer self.mutex.unlock();

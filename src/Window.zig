@@ -942,11 +942,7 @@ pub fn begin(
     self: *Self,
     time_ns: i128,
 ) dvui.Backend.GenericError!void {
-    if (dvui.accesskit_enabled and self.backend.impl.ak_initialize_in_begin) {
-        self.backend.impl.ak_initialize_in_begin = false;
-        self.accesskit.initialize();
-        _ = dvui.backend.c.SDL_ShowWindow(self.backend.impl.window);
-    }
+    try self.backend.accessKitInitInBegin(&self.accesskit);
 
     var micros_since_last: u32 = 1;
     if (time_ns > self.frame_time_ns) {
