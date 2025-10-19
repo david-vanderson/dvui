@@ -1156,7 +1156,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             }
             if (dvui.accesskit_enabled and builtin.os.tag == .linux) {
                 dvui.AccessKit.c.accesskit_unix_adapter_update_window_focus_state(win.accesskit.adapter, true);
-            } else if (builtin.os.tag == .macos) {
+            } else if (dvui.accesskit_enabled and builtin.os.tag == .macos) {
                 const events = dvui.AccessKit.c.accesskit_macos_subclassing_adapter_update_view_focus_state(win.accesskit.adapter, true);
                 if (events) |evts| {
                     dvui.AccessKit.c.accesskit_macos_queued_events_raise(evts);
