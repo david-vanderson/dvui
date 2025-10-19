@@ -112,7 +112,7 @@ pub const Dialog = Dialogs.Dialog;
 pub const Toast = Dialog;
 
 /// Accessibility
-pub const accesskit_enabled = @import("build_options").accesskit != .off;
+pub const accesskit_enabled = @import("build_options").accesskit != .off and backend.kind != .testing and backend.kind != .web;
 pub const AccessKit = @import("AccessKit.zig");
 
 // When linking to accesskit for non-msvc builds, the _fltuser symbol is

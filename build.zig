@@ -71,7 +71,7 @@ pub fn build(b: *std.Build) !void {
         accesskit,
     );
 
-    const dvui_opts = DvuiModuleOptions{
+    var dvui_opts = DvuiModuleOptions{
         .b = b,
         .target = target,
         .optimize = optimize,
@@ -89,6 +89,7 @@ pub fn build(b: *std.Build) !void {
         for (std.meta.tags(enums_backend.Backend)) |backend| {
             switch (backend) {
                 .custom, .sdl => continue,
+                .web, .testing => dvui_opts.accesskit = .off,
                 else => {},
             }
             // if we are building all the backends, here's where we do dvui tests
@@ -714,7 +715,7 @@ fn addExample(
     if (opts.accesskit.enabled() and !accessKitSupported(opts.target)) {
         compile_step.dependOn(&b.addFail("Accesskit is not supported for this target. Build with -Daccesskit=off").step);
     } else if (opts.accesskit == .shared) {
-        run_cmd.step.dependOn(&b.addInstallFileWithDir(accessKitPath(
+        compile_step.dependOn(&b.addInstallFileWithDir(accessKitPath(
             b,
             opts.target,
             b.dependency("accesskit", .{}),
