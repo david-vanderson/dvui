@@ -75,24 +75,15 @@ pub fn initialize(self: *AccessKit) void {
             ) orelse @panic("null");
         }
     } else if (builtin.os.tag.isDarwin()) {
-        if (dvui.backend.kind != .sdl3) @compileError("Accesskit is not supported for this OS/backend");
-        const SDLBackend = dvui.backend;
-        const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.impl.window);
-        const hwnd = SDLBackend.c.SDL_GetPointerProperty(
-            properties,
-            SDLBackend.c.SDL_PROP_WINDOW_COCOA_WINDOW_POINTER,
-            null,
-        ) orelse @panic("No HWND");
-
         // TODO: This results in a null pointer unwrap. I assume the window class is wrong?
         //ak.accesskit_macos_add_focus_forwarder_to_window_class("SDLWindow");
-        self.adapter = c.accesskit_macos_subclassing_adapter_for_window(@ptrCast(hwnd), initialTreeUpdate, self, doAction, self) orelse @panic("null");
+        self.adapter = c.accesskit_macos_subclassing_adapter_for_window(macOSWinPtr(window), initialTreeUpdate, self, doAction, self) orelse @panic("null");
     }
 
     log.info("initialized successfully", .{});
 }
 
-pub fn windowsHWND(window: *dvui.Window) c.HWND {
+fn windowsHWND(window: *dvui.Window) c.HWND {
     switch (dvui.backend.kind) {
         .sdl3 => {
             const SDLBackend = dvui.backend;
@@ -120,6 +111,32 @@ pub fn windowsHWND(window: *dvui.Window) c.HWND {
         else => {
             @compileError("Accesskit is not supported for this backend");
         },
+    }
+}
+
+fn macOSWinPtr(window: *dvui.Window) *anyopaque {
+    const SDLBackend = dvui.backend;
+
+    switch (dvui.backend.kind) {
+        .sdl2 => {
+            var wmInfo: SDLBackend.c.SDL_SysWMinfo = undefined;
+            SDLBackend.c.SDL_GetVersion(&wmInfo.version);
+            _ = SDLBackend.c.SDL_GetWindowWMInfo(window.backend.impl.window, &wmInfo);
+            return wmInfo.info.cocoa.window orelse @panic("No HWND");
+        },
+        .sdl3 => {
+            const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.impl.window);
+            const hwnd = SDLBackend.c.SDL_GetPointerProperty(
+                properties,
+                SDLBackend.c.SDL_PROP_WINDOW_COCOA_WINDOW_POINTER,
+                null,
+            ) orelse @panic("No HWND");
+            return hwnd;
+        },
+        .raylib => {
+            return dvui.backend.c.GetWindowHandle() orelse @panic("No HWND");
+        },
+        else => @compileError("Accesskit is not supported for this OS/backend"),
     }
 }
 
