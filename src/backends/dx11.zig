@@ -23,7 +23,7 @@ pub const WindowState = struct {
     last_window_size: dvui.Size.Natural = .{ .w = 800, .h = 600 },
     cursor_last: dvui.enums.Cursor = .arrow,
 
-    texture_interpolation: std.AutoHashMap(*anyopaque, dvui.enums.TextureInterpolation) = undefined,
+    texture_interpolation: std.AutoHashMapUnmanaged(*anyopaque, dvui.enums.TextureInterpolation) = .empty,
 
     device: *win32.ID3D11Device,
     device_context: *win32.ID3D11DeviceContext,
@@ -47,8 +47,9 @@ pub const WindowState = struct {
     arena: std.mem.Allocator = undefined,
 
     pub fn deinit(state: *WindowState) void {
+        const gpa = state.dvui_window.gpa;
         state.dvui_window.deinit();
-        state.texture_interpolation.deinit();
+        state.texture_interpolation.deinit(gpa);
         if (state.render_target) |rt| {
             _ = rt.IUnknown.Release();
         }
@@ -281,8 +282,6 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
     const style = win32.WS_OVERLAPPEDWINDOW;
     const style_ex: win32.WINDOW_EX_STYLE = .{ .APPWINDOW = 1, .WINDOWEDGE = 1 };
 
-    window_state.texture_interpolation = .init(options.dvui_gpa);
-
     const create_args: CreateWindowArgs = .{
         .window_state = window_state,
         .vsync = options.vsync,
@@ -327,6 +326,9 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
         ) catch {},
         .light => {},
     }
+    if (dvui.accesskit_enabled) {
+        window_state.dvui_window.accesskit.initialize();
+    }
 
     if (options.size) |size| {
         const dpi = win32.GetDpiForWindow(hwnd);
@@ -364,6 +366,7 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
 
 /// Cleanup routine
 pub fn deinit(self: Context) void {
+    global.pending_close = true;
     if (0 == win32.DestroyWindow(hwndFromContext(self))) win32.panicWin32("DestroyWindow", win32.GetLastError());
 }
 
@@ -692,7 +695,7 @@ pub fn textureCreate(self: Context, pixels: [*]const u8, width: u32, height: u32
     ) catch return dvui.Backend.TextureError.TextureCreate;
     errdefer _ = texture.IUnknown.Release();
 
-    try state.texture_interpolation.put(texture, interpolation);
+    try state.texture_interpolation.put(state.dvui_window.gpa, texture, interpolation);
 
     return dvui.Texture{ .ptr = texture, .width = width, .height = height };
 }
@@ -722,7 +725,7 @@ pub fn textureCreateTarget(self: Context, width: u32, height: u32, interpolation
     ) catch return dvui.Backend.TextureError.TextureCreate;
     errdefer _ = texture.IUnknown.Release();
 
-    try state.texture_interpolation.put(texture, interpolation);
+    try state.texture_interpolation.put(state.dvui_window.gpa, texture, interpolation);
     return .{ .ptr = @ptrCast(texture), .width = width, .height = height };
 }
 
@@ -1105,7 +1108,7 @@ pub fn setCursor(ctx: Context, cursor: dvui.enums.Cursor) !void {
     }
 }
 
-fn hwndFromContext(ctx: Context) win32.HWND {
+pub fn hwndFromContext(ctx: Context) win32.HWND {
     return @ptrCast(ctx);
 }
 pub fn contextFromHwnd(hwnd: win32.HWND) Context {
@@ -1137,7 +1140,9 @@ pub fn attach(
     const addr: usize = @bitCast(win32.GetWindowLongPtrW(hwnd, win32.WINDOW_LONG_PTR_INDEX._USERDATA));
     if (addr == 0) @panic("unable to attach window state pointer to HWND, did you set cbWndExtra to be >= to @sizeof(usize)?");
 
-    var dvui_window = try dvui.Window.init(@src(), gpa, contextFromHwnd(hwnd).backend(), opt.window_init_opts);
+    const ctx = contextFromHwnd(hwnd).backend();
+
+    var dvui_window = try dvui.Window.init(@src(), gpa, ctx, opt.window_init_opts);
     errdefer dvui_window.deinit();
     window_state.* = .{
         .vsync = opt.vsync,
@@ -1341,6 +1346,41 @@ pub fn wndProc(
                 _ = state.dvui_window.addEventText(.{ .text = string }) catch {};
             }
             return 0;
+        },
+        win32.WM_SETFOCUS, win32.WM_EXITSIZEMOVE, win32.WM_EXITMENULOOP => {
+            if (dvui.accesskit_enabled and stateFromHwnd(hwnd).dvui_window.accesskit.status != .off) {
+                const events = dvui.AccessKit.c.accesskit_windows_adapter_update_window_focus_state(stateFromHwnd(hwnd).dvui_window.accesskit.adapter, true);
+                if (events) |_| {
+                    dvui.AccessKit.c.accesskit_windows_queued_events_raise(events);
+                }
+            }
+            return 0;
+        },
+        win32.WM_KILLFOCUS, win32.WM_ENTERSIZEMOVE, win32.WM_ENTERMENULOOP => {
+            if (dvui.accesskit_enabled and stateFromHwnd(hwnd).dvui_window.accesskit.status != .off) {
+                const events = dvui.AccessKit.c.accesskit_windows_adapter_update_window_focus_state(stateFromHwnd(hwnd).dvui_window.accesskit.adapter, false);
+                if (events) |_| {
+                    dvui.AccessKit.c.accesskit_windows_queued_events_raise(events);
+                }
+            }
+            return 0;
+        },
+        win32.WM_GETOBJECT => {
+            if (dvui.accesskit_enabled and !global.pending_close) {
+                const state = stateFromHwnd(hwnd);
+                const ak = state.dvui_window.accesskit;
+                const result = dvui.AccessKit.c.accesskit_windows_adapter_handle_wm_getobject(
+                    ak.adapter,
+                    wparam,
+                    lparam,
+                    if (ak.status != .on) dvui.AccessKit.initialTreeUpdate else dvui.AccessKit.frameTreeUpdate,
+                    &stateFromHwnd(hwnd).dvui_window.accesskit,
+                );
+                if (result.has_value) {
+                    return result.value;
+                }
+            }
+            return win32.DefWindowProcW(hwnd, umsg, wparam, lparam);
         },
         else => return win32.DefWindowProcW(hwnd, umsg, wparam, lparam),
     }

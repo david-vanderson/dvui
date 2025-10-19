@@ -10,6 +10,16 @@ pub const LinuxDisplayBackend = enum {
     Both,
 };
 
+const AccesskitOptions = enum {
+    static,
+    shared,
+    off,
+
+    pub fn enabled(self: AccesskitOptions) bool {
+        return self != .off;
+    }
+};
+
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -53,15 +63,15 @@ pub fn build(b: *std.Build) !void {
         b.option(bool, "log-error-trace", "If error logs should include the error return trace (automatically enabled with log stack traces)"),
     );
 
-    const accesskit_enabled = b.option(bool, "accesskit", "Build with AccessKit support") orelse false;
+    const accesskit = b.option(AccesskitOptions, "accesskit", "Build with AccessKit support") orelse .off;
 
     build_options.addOption(
-        bool,
-        "accesskit_enabled",
-        accesskit_enabled,
+        AccesskitOptions,
+        "accesskit",
+        accesskit,
     );
 
-    const dvui_opts = DvuiModuleOptions{
+    var dvui_opts = DvuiModuleOptions{
         .b = b,
         .target = target,
         .optimize = optimize,
@@ -69,7 +79,7 @@ pub fn build(b: *std.Build) !void {
         .test_filters = test_filters,
         .check_step = check_step,
         .use_lld = use_lld,
-        .accesskit_enabled = accesskit_enabled,
+        .accesskit = accesskit,
         .build_options = build_options,
     };
 
@@ -79,6 +89,7 @@ pub fn build(b: *std.Build) !void {
         for (std.meta.tags(enums_backend.Backend)) |backend| {
             switch (backend) {
                 .custom, .sdl => continue,
+                .web, .testing => dvui_opts.accesskit = .off,
                 else => {},
             }
             // if we are building all the backends, here's where we do dvui tests
@@ -475,7 +486,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                     .optimize = optimize,
                     .build_options = dvui_opts.build_options,
                     .test_filters = dvui_opts.test_filters,
-                    .accesskit_enabled = false,
+                    .accesskit = .off,
                     // no tests or checks needed, they are check above in native build
                 };
 
@@ -512,21 +523,22 @@ const DvuiModuleOptions = struct {
     test_filters: []const []const u8,
     add_stb_image: bool = true,
     use_lld: ?bool = null,
-    accesskit_enabled: bool,
+    accesskit: AccesskitOptions = .off,
     build_options: *std.Build.Step.Options,
 
     fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
-        const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters, .use_lld = self.use_lld });
-        self.b.installArtifact(tests); // Compile check on default install step
+        const tests = self.b.addTest(.{ .root_module = mod, .name = self.b.fmt("{s}-check", .{name}), .filters = self.test_filters, .use_lld = self.use_lld });
+        self.b.getInstallStep().dependOn(&tests.step);
         if (self.check_step) |step| {
             step.dependOn(&tests.step);
         }
     }
+
     fn addTests(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
         if (self.test_step) |step| {
             const tests = self.b.addTest(.{
                 .root_module = mod,
-                .name = name,
+                .name = self.b.fmt("{s}-test", .{name}),
                 .filters = self.test_filters,
                 .use_lld = self.use_lld,
             });
@@ -539,6 +551,34 @@ fn accessKitSupported(target: std.Build.ResolvedTarget) bool {
     if (target.result.os.tag != .windows and !target.result.os.tag.isDarwin()) return false;
     if (!target.result.cpu.arch.isAARCH64() and !target.result.cpu.arch.isX86()) return false;
     return true;
+}
+
+fn accessKitPath(b: *std.Build, target: std.Build.ResolvedTarget, ak_dep: *std.Build.Dependency, opt: AccesskitOptions, full_lib_path: bool) std.Build.LazyPath {
+    const os_path = if (target.result.os.tag == .windows) "windows" //
+        else if (target.result.os.tag.isDarwin()) "macos" //
+        else "unsupported";
+    const arch_path = if (target.result.cpu.arch.isAARCH64()) "arm64" //
+        else if (target.result.cpu.arch == .x86) "x86" //
+        else if (target.result.cpu.arch == .x86_64) "x86_64" //
+        else "unsupported";
+
+    const abi_path = if (target.result.os.tag == .windows) "msvc" //
+        else if (target.result.os.tag.isDarwin()) "" //
+        else "";
+
+    const linkage_path = @tagName(opt);
+
+    if (full_lib_path) {
+        return ak_dep.path(b.pathJoin(&.{ "lib", os_path, arch_path, abi_path, linkage_path, accessKitLibName(target) }));
+    } else {
+        return ak_dep.path(b.pathJoin(&.{ "lib", os_path, arch_path, abi_path, linkage_path }));
+    }
+}
+
+fn accessKitLibName(target: std.Build.ResolvedTarget) []const u8 {
+    return if (target.result.os.tag == .windows) "accesskit.dll" //
+    else if (target.result.os.tag.isDarwin()) "libaccesskit.dylib" //
+    else "unsupported";
 }
 
 fn addDvuiModule(
@@ -566,23 +606,10 @@ fn addDvuiModule(
         dvui_mod.linkSystemLibrary("ole32", .{});
     }
 
-    if (opts.accesskit_enabled) {
+    if (opts.accesskit.enabled()) {
         const ak_dep = b.dependency("accesskit", .{});
         dvui_mod.addIncludePath(ak_dep.path("include"));
-
-        const os_path = if (target.result.os.tag == .windows) "windows" //
-            else if (target.result.os.tag.isDarwin()) "macos" //
-            else "unsupported";
-        const arch_path = if (target.result.cpu.arch.isAARCH64()) "arm64" //
-            else if (target.result.cpu.arch == .x86) "x86" //
-            else if (target.result.cpu.arch == .x86_64) "x86_64" //
-            else "unsupported";
-
-        const abi_path = if (target.result.os.tag == .windows) "msvc" //
-            else if (target.result.os.tag.isDarwin()) "" //
-            else "";
-        const path = ak_dep.path(b.pathJoin(&.{ "lib", os_path, arch_path, abi_path, "static" }));
-        dvui_mod.addLibraryPath(path);
+        dvui_mod.addLibraryPath(accessKitPath(b, target, ak_dep, opts.accesskit, false));
         dvui_mod.linkSystemLibrary("accesskit", .{});
     }
 
@@ -662,7 +689,7 @@ fn addExample(
             mod.addImport("win32", zigwin32.module("win32"));
         }
 
-        if (opts.accesskit_enabled) {
+        if (opts.accesskit.enabled()) {
             mod.linkSystemLibrary("ws2_32", .{});
             mod.linkSystemLibrary("Userenv", .{});
         }
@@ -680,14 +707,22 @@ fn addExample(
     const compile_cmd = b.addInstallArtifact(exe, .{});
     compile_step.dependOn(&compile_cmd.step);
 
-    if (opts.accesskit_enabled and !accessKitSupported(opts.target)) {
-        compile_step.dependOn(&b.addFail("Accesskit is not supported for this target. Build with -Daccesskit=false").step);
-    }
-
     b.getInstallStep().dependOn(compile_step);
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(compile_step);
+
+    if (opts.accesskit.enabled() and !accessKitSupported(opts.target)) {
+        compile_step.dependOn(&b.addFail("Accesskit is not supported for this target. Build with -Daccesskit=off").step);
+    } else if (opts.accesskit == .shared) {
+        compile_step.dependOn(&b.addInstallFileWithDir(accessKitPath(
+            b,
+            opts.target,
+            b.dependency("accesskit", .{}),
+            opts.accesskit,
+            true,
+        ), .bin, accessKitLibName(opts.target)).step);
+    }
 
     const run_step = b.step(name, "Run " ++ name);
     run_step.dependOn(&run_cmd.step);

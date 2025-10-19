@@ -112,8 +112,20 @@ pub const Dialog = Dialogs.Dialog;
 pub const Toast = Dialog;
 
 /// Accessibility
-pub const accesskit_enabled = @import("build_options").accesskit_enabled;
+pub const accesskit_enabled = @import("build_options").accesskit != .off and backend.kind != .testing and backend.kind != .web;
 pub const AccessKit = @import("AccessKit.zig");
+
+// When linking to accesskit for non-msvc builds, the _fltuser symbol is
+// undefined. Zig only defines this symbol for abi = .mscv and abi = .none,
+// which makes gnu and musl builds break.  Until we can build and link the
+// accesskit c library with zig, we need this work-around as both the msvc and
+// mingw builds of accesskit reference this symbol.
+comptime {
+    if (accesskit_enabled and builtin.os.tag == .windows and builtin.cpu.arch.isX86()) {
+        @export(&_fltused, .{ .name = "_fltused", .linkage = .weak });
+    }
+}
+var _fltused: c_int = 1;
 
 pub const Texture = @import("Texture.zig");
 pub const TextureTarget = Texture.Target;

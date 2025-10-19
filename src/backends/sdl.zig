@@ -15,6 +15,7 @@ pub const c = blk: {
         });
     }
     break :blk @cImport({
+        @cInclude("SDL2/SDL_syswm.h");
         @cInclude("SDL2/SDL.h");
     });
 };
@@ -31,7 +32,7 @@ const log = std.log.scoped(.SDLBackend);
 
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
-ak_initialize_in_begin: bool = false,
+ak_should_initialized: bool = dvui.accesskit_enabled,
 we_own_window: bool = false,
 touch_mouse_events: bool = false,
 log_events: bool = false,
@@ -83,7 +84,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     var hidden = options.hidden;
     var show_window_in_begin = false;
     if (dvui.accesskit_enabled and !hidden) {
-        // hide the window until we can intialize accesskit in Window.begin
+        // hide the window until we can initialize accesskit in Window.begin
         hidden = true;
         show_window_in_begin = true;
     }
@@ -140,7 +141,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     try toErr(c.SDL_SetRenderDrawBlendMode(renderer, pma_blend), "SDL_SetRenderDrawBlendMode in initWindow");
 
     var back = init(window, renderer);
-    back.ak_initialize_in_begin = show_window_in_begin;
+    back.ak_should_initialized = show_window_in_begin;
     back.we_own_window = true;
 
     if (sdl3) {
@@ -347,6 +348,19 @@ pub fn setIconFromABGR8888(self: *SDLBackend, data: [*]const u8, icon_w: c_int, 
     } else {
         c.SDL_SetWindowIcon(self.window, surface);
     }
+}
+
+pub fn accessKitShouldInitialize(self: *SDLBackend) bool {
+    return self.ak_should_initialized;
+}
+pub fn accessKitInitInBegin(self: *SDLBackend) !void {
+    std.debug.assert(self.ak_should_initialized);
+    if (sdl3) {
+        try toErr(c.SDL_ShowWindow(self.window), "SDL_ShowWindow in accessKitInitInBegin");
+    } else {
+        c.SDL_ShowWindow(self.window);
+    }
+    self.ak_should_initialized = false;
 }
 
 /// Return true if interrupted by event
