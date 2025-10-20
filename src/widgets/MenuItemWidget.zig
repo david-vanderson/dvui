@@ -51,6 +51,10 @@ pub fn install(self: *MenuItemWidget) void {
 
     dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
 
+    if (!menu().?.mouse_mode and menu().?.parentMenu != null and dvui.focusedWidgetIdInCurrentSubwindow() == null) {
+        dvui.focusWidget(self.data().id, null, null);
+    }
+
     self.data().borderAndBackground(.{});
 
     dvui.parentSet(self.widget());
