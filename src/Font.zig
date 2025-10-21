@@ -317,10 +317,11 @@ pub const Cache = struct {
         height: f32,
         ascent: f32,
         glyph_info: std.AutoHashMapUnmanaged(u32, GlyphInfo) = .empty,
-        glyph_info_ascii: [ascii_size]GlyphInfo,
+        glyph_info_ascii: [ascii_size - ascii_start]GlyphInfo,
         texture_atlas_cache: ?Texture = null,
 
         const ascii_size = 127;
+        const ascii_start = 32;
 
         const GlyphInfo = struct {
             advance: f32, // horizontal distance to move the pen
@@ -408,7 +409,7 @@ pub const Cache = struct {
 
             // Pre-generate the ascii glyphs
             for (0..self.glyph_info_ascii.len) |i| {
-                self.glyph_info_ascii[i] = try self.glyphInfoGenerate(@intCast(i));
+                self.glyph_info_ascii[i] = try self.glyphInfoGenerate(@intCast(i + ascii_start));
             }
 
             return self;
@@ -483,7 +484,7 @@ pub const Cache = struct {
             var it = self.glyph_info.iterator();
             var i: u32 = 0;
             while (i < total) {
-                var gi, const codepoint = if (i < self.glyph_info_ascii.len) .{ &self.glyph_info_ascii[i], i } else blk: {
+                var gi, const codepoint = if (i < self.glyph_info_ascii.len) .{ &self.glyph_info_ascii[i], i + ascii_start } else blk: {
                     const e = it.next().?;
                     break :blk .{ e.value_ptr, e.key_ptr.* };
                 };
@@ -567,8 +568,8 @@ pub const Cache = struct {
         }
 
         pub fn glyphInfoGet(self: *Entry, gpa: std.mem.Allocator, codepoint: u32) (std.mem.Allocator.Error || Error)!GlyphInfo {
-            if (codepoint < self.glyph_info_ascii.len)
-                return self.glyph_info_ascii[codepoint];
+            if (ascii_start <= codepoint and codepoint < ascii_size)
+                return self.glyph_info_ascii[codepoint - ascii_start];
 
             if (self.glyph_info.get(codepoint)) |gi| return gi;
 
