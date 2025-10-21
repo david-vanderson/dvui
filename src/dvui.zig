@@ -2339,6 +2339,7 @@ pub fn toast(src: std.builtin.SourceLocation, opts: ToastOptions) void {
 pub fn toastDisplay(id: Id) !void {
     const message = dvui.dataGetSlice(null, id, "_message", []u8) orelse {
         log.err("toastDisplay lost data for toast {x}\n", .{id});
+        dvui.toastRemove(id);
         return;
     };
 
