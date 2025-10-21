@@ -33,8 +33,8 @@ label: ?union(enum) {
     /// Use the previous or next label widget to label this widget.
     label_widget: enum { prev, next },
 
-    /// Use this text as the label.  Prefer using .by if possible - .text is
-    /// for cases where there is no visible label (like an icon or image).
+    /// Use this text as the label.  Prefer another option if possible - this
+    /// is for when there is no visible label (like an icon or image).
     text: []const u8,
 } = null,
 
