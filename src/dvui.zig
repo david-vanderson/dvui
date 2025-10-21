@@ -4111,40 +4111,40 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
     const options = checkbox_defaults.override(opts);
     var ret = false;
 
-    var bw = ButtonWidget.init(src, .{}, options.strip().override(options));
+    var b = box(src, .{ .dir = .horizontal }, options);
+    defer b.deinit();
 
-    bw.install();
-    bw.processEvents();
-    // don't call button drawBackground(), it wouldn't do anything anyway because we stripped the options so no border/background
-    // don't call button drawFocus(), we don't want a focus ring around the label
-    defer bw.deinit();
+    dvui.tabIndexSet(b.data().id, b.data().options.tab_index);
 
-    if (bw.clicked()) {
+    var hovered: bool = false;
+    if (dvui.clicked(b.data(), .{ .hovered = &hovered })) {
         target.* = !target.*;
         ret = true;
         if (sel_opts.selection_info) |sel_info| {
-            sel_info.add(sel_opts.selection_id, target.*, bw.data());
+            sel_info.add(sel_opts.selection_id, target.*, b.data());
         }
     }
 
-    var b = box(@src(), .{ .dir = .horizontal }, options.strip().override(.{ .expand = .both }));
-    defer b.deinit();
+    if (b.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
+        AccessKit.nodeSetToggled(ak_node, if (target.*) AccessKit.Toggled.ak_true else AccessKit.Toggled.ak_false);
+    }
 
     const check_size = options.fontGet().textHeight();
     const s = spacer(@src(), .{ .min_size_content = Size.all(check_size), .gravity_y = 0.5 });
 
     const rs = s.borderRectScale();
 
-    if (bw.data().visible()) {
-        checkmark(target.*, bw.focused(), rs, bw.pressed(), bw.hovered(), options);
+    if (b.data().visible()) {
+        const focused = b.data().id == dvui.focusedWidgetId();
+        const pressed = dvui.captured(b.data().id);
+        checkmark(target.*, focused, rs, pressed, hovered, options);
     }
 
     if (label_str) |str| {
         _ = spacer(@src(), .{ .min_size_content = .width(checkbox_defaults.paddingGet().w) });
         labelNoFmt(@src(), str, .{}, options.strip().override(.{ .gravity_y = 0.5 }));
-    }
-    if (bw.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeSetToggled(ak_node, if (target.*) AccessKit.Toggled.ak_true else AccessKit.Toggled.ak_false);
     }
 
     return ret;
