@@ -82,6 +82,9 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 - Touch support
   - selection draggables in text entries
   - pinch-zoom scaling
+- Accessibility support via [AccessKit](https://accesskit.dev/)
+  - add `-Daccesskit` to `zig build`
+  - see [Accessibility](#Accessibility)
 - Native file dialogs via [tinyfiledialogs](https://sourceforge.net/projects/tinyfiledialogs)
 - Animations
 - Themes
@@ -267,6 +270,8 @@ If parent has more space than the children need, it will lay them out using the 
 - expand - whether this child should take more space or not
 - gravity - if not expanded, where to position child in larger space
 
+See [implementation details](readme-implementation.md) for more information.
+
 ### Appearance
 Each widget has the following options that can be changed through the Options struct when creating the widget:
 - margin (space outside border)
@@ -277,20 +282,19 @@ Each widget has the following options that can be changed through the Options st
 - background (fills space inside border with background color)
 - corner_radius (for each corner)
 - box_shadow
-- colors (either RGBA value or named)
-  - example RGBA `.color_text = .{ .color = .{ .r = 0xe0, .g = 0x1b, .b = 0x24 } }`
-  - example HEX `.color_text = .fromHex("#e01b24")`
-  - example named `.color_text = .err` (get current theme's `color_err`)
-  - color_accent
-  - color_text
-  - color_text_press
+- style (use theme's colors)
+- colors (directly specify)
   - color_fill
   - color_fill_hover
   - color_fill_press
+  - color_text
+  - color_text_hover
+  - color_text_press
   - color_border
 - font_style (use theme's fonts)
   - or directly set font:
     - font
+- theme (use a separate theme altogether)
 
 Each widget has its own default options.  These can be changed directly:
 ```zig
@@ -309,4 +313,25 @@ The theme's color_accent is also used to show keyboard focus.
 
 The default theme will attempt to follow the system dark or light mode, or it can be set in the `Window` init options or by setting the `Window.theme` field directly. See the app and standalone examples for how to set the default theme. 
 
-See [implementation details](readme-implementation.md) for more information.
+### Accessibility
+
+DVUI has varying support for different kinds of accessibility infrastructure.  Currently we have:
+
+* Keyboard Navigation
+  * most widgets support keyboard navigation
+
+* Language Support
+  * text rendering is simple left-to-right single glyph for each unicode codepoint
+  * grapheme clusters currently unsupported
+  * no right-to-left or mixed text direction
+
+* Language Input
+  * IME (Input Method Editor) works in SDL and web backends
+
+* Audio Output
+  * accesskit integration for screen readers and alternate input events
+  * add `-Daccesskit` to `zig build`
+  * see `Options.role` and `Options.label`
+  * this is still new, please report problems and missing widget support
+
+
