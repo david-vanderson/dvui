@@ -1,6 +1,7 @@
 open: bool = false,
 options_editor_open: bool = false,
 options_override_list_open: bool = false,
+show_frame_times: bool = false,
 
 /// 0 means no widget is selected
 widget_id: dvui.Id = .zero,
@@ -92,6 +93,10 @@ pub fn logRefresh(self: *Debug, val: ?bool) bool {
 
 /// Returns early if `Debug.open` is `false`
 pub fn show(self: *Debug) void {
+    if (self.show_frame_times) {
+        self.showFrameTimes();
+    }
+
     if (!self.open) return;
 
     if (self.target == .mouse_quitting) {
@@ -115,7 +120,7 @@ pub fn show(self: *Debug) void {
         defer hbox.deinit();
 
         var log_refresh = self.logRefresh(null);
-        if (dvui.checkbox(@src(), &log_refresh, "Refresh Logging", .{})) {
+        if (dvui.checkbox(@src(), &log_refresh, "Refresh Logging", .{ .gravity_y = 0.5 })) {
             _ = self.logRefresh(log_refresh);
         }
 
@@ -133,6 +138,10 @@ pub fn show(self: *Debug) void {
             } else {
                 dvui.currentWindow().max_fps = max_fps;
             }
+        }
+
+        if (dvui.button(@src(), "Frame Times", .{}, .{})) {
+            self.show_frame_times = !self.show_frame_times;
         }
     }
 
@@ -373,6 +382,45 @@ pub fn show(self: *Debug) void {
 
         dvui.label(@src(), "{x} {s}", .{ item.id, item.name }, .{ .gravity_y = 0.5 });
     }
+}
+
+fn showFrameTimes(self: *Debug) void {
+    var float = dvui.floatingWindow(@src(), .{ .open_flag = &self.show_frame_times }, .{ .min_size_content = .{ .w = 600, .h = 100 } });
+    defer float.deinit();
+
+    float.dragAreaSet(dvui.windowHeader("Frame Times", "", &self.show_frame_times));
+
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+
+    var data = dvui.dataGetSlice(null, uniqueId, "data", []f64) orelse blk: {
+        dvui.dataSetSliceCopies(null, uniqueId, "data", &[1]f64{0}, 400);
+        break :blk dvui.dataGetSlice(null, uniqueId, "data", []f64) orelse unreachable;
+    };
+
+    const cw = dvui.currentWindow();
+    const so_far_nanos = @max(cw.frame_time_ns, cw.backend.nanoTime()) - cw.frame_time_ns;
+    const so_far_micros = @as(u32, @intCast(@divFloor(so_far_nanos, 1000)));
+    const new_data: f64 = @as(f64, @floatFromInt(so_far_micros)) / 1000.0;
+
+    for (0..data.len - 1) |i| {
+        data[i] = data[i + 1];
+    }
+    data[data.len - 1] = new_data;
+
+    var xs = dvui.currentWindow().arena().alloc(f64, data.len) catch @panic("OOM");
+    defer dvui.currentWindow().arena().free(xs);
+
+    for (0..data.len) |i| {
+        xs[i] = @floatFromInt(i);
+    }
+
+    var yaxis: dvui.PlotWidget.Axis = .{
+        .name = "ms",
+        .min = 0,
+        .max = 50,
+    };
+
+    dvui.plotXY(@src(), .{ .xs = xs, .ys = data, .plot_opts = .{ .y_axis = &yaxis } }, .{ .expand = .both, .margin = .{ .x = 6 } });
 }
 
 const OptionsEditorTab = enum { layout, style };
