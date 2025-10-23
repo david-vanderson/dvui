@@ -328,10 +328,13 @@ DVUI has varying support for different kinds of accessibility infrastructure.  C
 * Language Input
   * IME (Input Method Editor) works in SDL and web backends
 
-* Audio Output
-  * accesskit integration for screen readers and alternate input events
-  * add `-Daccesskit` to `zig build`
-  * see `Options.role` and `Options.label`
-  * this is still new, please report problems and missing widget support
+* High Contrast Themes
+  * dvui's themes can support this
+  * no current OS integration
 
+* Screen Reading and Alternate Input
+  * [AccessKit](https://accesskit.dev/) integration
+  * add `-Daccesskit` to `zig build`
+  * uses `Options.role` and `Options.label`
+  * see [readme-accessibility](readme-accessibility.md) for more information
 

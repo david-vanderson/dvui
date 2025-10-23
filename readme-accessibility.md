@@ -2,15 +2,21 @@
 
 ## What is accessibility?
 
-Most modern operating system provide an accessibility API to assist users who cannot use standard computer I/O devices to interact with applications.
+Most modern operating system provide an accessibility API to assist users who cannot use standard computer I/O devices to interact with applications.  See the "Accessibility" section of [README](README.md) for additional accessibility concerns.
 
 These users often interact via 'screen reader' that can read text and other accessibility labels from the application. Some readers will also provide the user with a way to perform actions on an application, such as clicking a button, or setting the text in a text box. Others will rely on the keyboard navigation features provided by the application.
 
-DVUI implements accessibility through the [AccessKit](https://github.com/AccessKit/accesskit) toolkit, which provides a common interface to the operating system-specific accessibility APIs.
+DVUI implements this part of accessibility through the [AccessKit](https://github.com/AccessKit/accesskit) toolkit, which provides a common interface to the operating system-specific accessibility APIs.
 
-To ensure our DVUI applications are enjoyed by as many users as possible, I would encourage you to treat accessibility as a first-class requirement for your application and to test it just as you would any other feature. 
+While DVUI tries to make this easy to integrate, some effort at the application level is required:
+* adding accessibility labels to images
+* ensuring visible labels are read for the correct content
+* testing tab ordering and keyboard navigation
+* general testing with screen readers (see below)
 
-## Any other benefits. Any downsides?
+## Benefits and Downsides
+
+The primary benefit is making your appliation useable by a wider array of users.
 
 Incorporating accessibility makes your UI application scriptable. Each widget that has a node in the accessibility tree publishes its current value along with the set of actions it can perform. By using your platform's accessibility API, you can write automated tests as well as allowing your users to script common tasks.
 
@@ -20,13 +26,13 @@ The overhead of creating AccessKit nodes is only incurred when the operating sys
 
 ## Enabling AccessKit in DVUI
 
-AccessKit can be included as either a static or dynamic link library. Use -Daccesskit=static or -Daccesskit=shared to enable AccessKit support. 
+AccessKit can be included as either a static or dynamic link library. Use `-Daccesskit=static` or `-Daccesskit=shared` to enable AccessKit support. 
 
 Not all combinations of backends and operating systems are currently supported. 
 - Linux - Coming soon.
 - Windows - Support for all backends, except raylib static due to symbol clashes.
 - MacOS - Support for SDL2, SDL3 and Raylib.
-- Web - Not currently supported by AccessKit but is planning to do so. 
+- Web - Not currently supported by AccessKit but it is planned. 
 
 When you compile you application with AccessKit enabled, most of the accessibility work is taken care of for you and your users will gain most of the benefits of accessibility support. However, DVUI doesn't know your application's intent or any semantic details about the UX, so it is not possible to automate everything. 
 
@@ -54,6 +60,7 @@ There are other AccessKit APIs that let you provide more details to the accessib
     }
 }
 ```
+
 ## Testing for accessibility
 
 As all accessibility APIs are operating system specific, different tools are required to test on each platform.
@@ -66,19 +73,19 @@ The basic test you should do is to open the Narrator using `ctrl-win-enter` (The
 2) Press `caps-r` to read the screen. The reader should read all controls and their displayed content.
     - If the reader is reading from controls that should be skipped (e.g. the down triangle in a custom dropdown), set .role = .none in the widget creation options for the image.
     - If the reader is skipping a widget that should be added, set .role to an appropriate value for that widget. 
-    - Check that fields are labelled correctly (e.g. associating a label for a text box). DVUI has some heuristics to pick up this label but use the .label = .for or .by in the widget options to properly associate labels is preferred.
+    - Check that fields are labelled correctly (e.g. associating a label for a text box). DVUI has some heuristics for this but use the .label = .for or .by in the widget options to properly associate labels if needed.
 3) Tab through each widget. 
     - Make sure each focusable widget has an appropriate `.tab_index` (either manually assigned or generated) and has a sensible position in the tab order.
     - Make sure the reader highlights each widget and reads out the correct value.
 4) Pay special attention to images and icons. Make sure to add a `.label` option to give descriptive labels to these widgets.
 
-The above steps only test reading from the screen. Actions can also be testing.
+The above steps only test reading from the screen. Actions can also be tested.
 1) Download, install and run [Accessibility Insights](https://accessibilityinsights.io/)
 2) Click on each widget
 3) Look in the bottom right pane for a list of values and actions applicable to each widget.
-    - If you don't see an action for an actionable widget and it is a DVUI widget, raise an issue.
+    - If you don't see an action for an actionable widget and it is a DVUI widget, please file an issue.
     - If it is your widget, use `AccessKit.nodeAddAction()` and other relevant API to add the appropriate actions.
-    - The best way to understand what actions are available for which roles is to look at the rust source code.
+    - The best way to understand what actions are available for which roles is to look at the AccessKit source code.
 
 See [AccessKit - Tips for application developers](https://github.com/AccessKit/accesskit/blob/main/README-APPLICATION-DEVELOPERS.md)
 
@@ -90,9 +97,9 @@ See [AccessKit - Tips for application developers](https://github.com/AccessKit/a
 
 See [AccessKit - Tips for application developers](https://github.com/AccessKit/accesskit/blob/main/README-APPLICATION-DEVELOPERS.md)
 
-## DVUI and AccessKit
+## DVUI and AccessKit Details
 
-AccessKit is an accessibility library written in Rust that abstracts the underlying operating system specific accessibility APIs into a unified one.
+AccessKit is an accessibility library written in Rust that provides a unified API to the underlying operating system specific accessibility APIs.
 
 AccessKit requires:
 1) A tree of "node ids" representing the parent / child relationships and the roles of each node.
@@ -100,12 +107,11 @@ AccessKit requires:
 
 As DVUI does not keep state for all widget values, a full set of node id's and a full set of updates is sent at the end of each frame.
 
-The DVUI WidgetId is used as the AccessKit node id. When a widget is created, if 1) Accessibility is active, 2) The Widget has a role and it is not .none, 3) The widget is at least partially visible or the widget is the focused widget, then a new AccessKit node will be created via `dvui.accesskit.nodeCreate()`
-Widgets will then set any values or actions against the created node.
+The DVUI WidgetId is used as the AccessKit node id. When a widget is created, if 1) Accessibility is active, 2) The Widget has a role and it is not .none, 3) The widget is at least partially visible or the widget is the focused widget, then a new AccessKit node will be created via `dvui.accesskit.nodeCreate()`.  Widgets will then set any values or actions against the created node.
 
-The visibility check should be removed in future and the nodeSetClipsChildren API should be used for anything that clips contained child widgets. The focused node is always added to the tree, even if it is not visible, meaning it can have the wrong parent. But this stops the screen reader's focus shifting to the main window when the focused widget scrolls off the screen.
+The visibility check should be removed in future and the nodeSetClipsChildren API should be used for anything that clips contained child widgets. The focused node is always added to the tree, even if it is not visible, meaning it can have the wrong parent. But this stops the screen reader's focus from shifting to the main window when the focused widget scrolls off the screen.
 
-Note: AccessKit is still a relatively new and evolving library. Not all platform accessibility features are supported and support for some features may be partially implemented or buggy.
+Note: AccessKit is still a relatively new and evolving library. Not all platform accessibility features are supported and support for some features may be partially implemented.  Please file any issues!
 
 ### Multithreading requirements
 
@@ -132,9 +138,9 @@ It is planned to support scrolling actions once the read-only issue with AccessK
 ### Widget creators
 
 Each widget's `install()` should check if an accessibility node was created by using `self.data().accesskit_node()` or equivalent. If this returns non-null, AccessKit functions can be used on the returned node to set any values and events for that widget. Common functions are:
-- `nodeSetValue` / `nodeSetNumericValue` - Used to set the value to be read out by the reader. See rust source code for details on what values can be set for each role.
+- `nodeSetValue` / `nodeSetNumericValue` - Used to set the value to be read out by the reader. See AccessKit source code for details on what values can be set for each role.
 - `nodesetToggled` - For checkboxes, radio buttons etc.
-- `nodeAddAction` - Common actions are .click, .focus, .toggle. See rust source code for the actions available for each role.
+- `nodeAddAction` - Common actions are .click, .focus, .toggle. See AccessKit source code for the actions available for each role.
 
 If your widget can have a value set, then make sure to handle the `text` event to allow that value to be set via a set_value action.
 
@@ -222,6 +228,4 @@ if (te.data().accesskit_node()) | ak_node | {
 | checkbox | check_box | Y | Y | N | Fully supported |
 | radio | radio_button | Y* | Y | N | Best practice: Create a radio group with a surrounding box|
 | textEntryNumber | number_input | Y | Y | N | Fully supported. Supports min, max and valid/invalid. |
-
-
 
