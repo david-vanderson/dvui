@@ -134,7 +134,17 @@ pub fn demo() void {
 
         inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
-            var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = .size(dvui.Size.all(120)), .margin = Rect.all(5), .style = .content, .tag = "demo_button_" ++ @tagName(e) });
+            var bw = dvui.ButtonWidget.init(@src(), .{}, .{
+                .id_extra = i,
+                .border = Rect.all(1),
+                .background = true,
+                .min_size_content = dvui.Size.all(120),
+                .max_size_content = .size(dvui.Size.all(120)),
+                .margin = Rect.all(5),
+                .style = .content,
+                .tag = "demo_button_" ++ @tagName(e),
+                .label = .{ .text = e.name() },
+            });
             bw.install();
             bw.processEvents();
             bw.drawBackground();
