@@ -12,6 +12,7 @@ pub var defaults: Options = .{
     .background = false,
     .corner_radius = Rect{},
     .name = "Tabs",
+    .role = .tab_panel,
 };
 
 pub const InitOptions = struct {
@@ -78,8 +79,8 @@ pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8) bool {
 
 pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
     var tab_defaults: Options = switch (self.init_options.dir) {
-        .horizontal => .{ .id_extra = self.tab_index, .background = true, .corner_radius = .{ .x = 5, .y = 5 }, .margin = .{ .x = 2, .w = 2 } },
-        .vertical => .{ .id_extra = self.tab_index, .background = true, .corner_radius = .{ .x = 5, .h = 5 }, .margin = .{ .y = 2, .h = 2 } },
+        .horizontal => .{ .id_extra = self.tab_index, .background = true, .corner_radius = .{ .x = 5, .y = 5 }, .margin = .{ .x = 2, .w = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
+        .vertical => .{ .id_extra = self.tab_index, .background = true, .corner_radius = .{ .x = 5, .h = 5 }, .margin = .{ .y = 2, .h = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
     };
 
     self.tab_index += 1;
@@ -150,6 +151,9 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
             },
         }
     }
+    if (self.tab_button.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeSetSelected(ak_node, selected);
+    }
 
     return &self.tab_button;
 }
@@ -169,6 +173,7 @@ const Point = dvui.Point;
 const BoxWidget = dvui.BoxWidget;
 const ButtonWidget = dvui.ButtonWidget;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
+const AccessKit = dvui.AccessKit;
 
 const std = @import("std");
 const math = std.math;
