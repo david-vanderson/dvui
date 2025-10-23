@@ -18,7 +18,9 @@ pub const InitOptions = struct {
 };
 
 pub var defaults = Options{
-    .name = "ColorPicker",
+    .name = "Color Picker",
+    .label = .{ .text = "Color Picker" },
+    .role = .group,
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ColorPickerWidget {
@@ -50,7 +52,9 @@ pub fn deinit(self: *ColorPickerWidget) void {
 }
 
 pub const value_saturation_box_defaults = Options{
-    .name = "ValueSaturationBox",
+    .name = "Saturation Selector",
+    .label = .{ .text = "Saturation Selector" },
+    .role = .group,
     .expand = .ratio,
     .min_size_content = .all(100),
     .margin = .all(2),
@@ -62,6 +66,9 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
 
     var b = dvui.box(src, .{ .dir = .horizontal }, options);
     defer b.deinit();
+
+    // Accessibility TODO: Needs 2d-slider support from AccessKit. It's not possible to attach
+    // a horizontal and vertical value to a single widget.
 
     dvui.tabIndexSet(b.data().id, options.tab_index);
 
@@ -175,9 +182,10 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
 }
 
 pub var hue_slider_defaults: Options = .{
+    .name = "Hue Slider",
+    .role = .slider,
     .margin = .all(2),
     .min_size_content = .{ .w = 20, .h = 20 },
-    .name = "HueSlider",
 };
 
 /// Returns true if the hue was changed
@@ -192,6 +200,15 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
 
     var b = dvui.box(src, .{ .dir = dir }, options);
     defer b.deinit();
+
+    if (b.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
+        AccessKit.nodeSetOrientation(ak_node, AccessKit.Orientation.horizontal);
+        AccessKit.nodeSetMinNumericValue(ak_node, 0);
+        AccessKit.nodeSetMaxNumericValue(ak_node, 359);
+        AccessKit.nodeSetNumericValue(ak_node, hue.*);
+    }
 
     dvui.tabIndexSet(b.data().id, options.tab_index);
 
@@ -266,7 +283,12 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
                     }
                 }
             },
-            else => {},
+            .text => |te| {
+                const new_hue = std.fmt.parseFloat(f32, te.txt) catch hue.*;
+                if (new_hue >= 0 and new_hue < 360) {
+                    hue.* = new_hue;
+                }
+            },
         }
     }
 
@@ -352,6 +374,7 @@ const hue_selector_colors: [7]Color.PMA = .{ .red, .yellow, .lime, .cyan, .blue,
 
 const Options = dvui.Options;
 const Color = dvui.Color;
+const AccessKit = dvui.AccessKit;
 
 const std = @import("std");
 const dvui = @import("../dvui.zig");

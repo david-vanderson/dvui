@@ -210,7 +210,12 @@ pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
         }
     }
 
-    self.drop_mi = MenuItemWidget.init(@src(), .{}, self.options.styleOnly().override(.{ .role = .list_item, .id_extra = self.drop_mi_index, .expand = .horizontal }));
+    self.drop_mi = MenuItemWidget.init(@src(), .{}, self.options.styleOnly().override(.{
+        .role = .list_item,
+        .label = .{ .label_widget = .next },
+        .id_extra = self.drop_mi_index,
+        .expand = .horizontal,
+    }));
     self.drop_mi_id = self.drop_mi.data().id;
     self.drop_mi.install();
     self.drop_mi.processEvents();

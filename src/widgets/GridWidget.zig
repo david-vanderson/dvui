@@ -36,12 +36,14 @@ const BoxWidget = dvui.BoxWidget;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
 const ScrollContainerWidget = dvui.ScrollContainerWidget;
 const ScrollBarWidget = dvui.ScrollBarWidget;
+const AccessKit = dvui.AccessKit;
 
 pub const CellStyle = @import("GridWidget/CellStyle.zig");
 const GridWidget = @This();
 
 pub var defaults: Options = .{
     .name = "GridWidget",
+    .role = .grid,
     .background = true,
     .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
     // Small padding to separate first column from left edge of the grid
@@ -78,6 +80,8 @@ pub const Cell = struct {
     }
 };
 
+// TODO: Add label to this?
+// TODO: Add a style to this?
 pub const CellOptions = struct {
     // Set the height or width of a cell.
     // width is ignored when col_widths is supplied to init_opts.
@@ -107,6 +111,7 @@ pub const CellOptions = struct {
             .background = self.background,
             .color_fill = self.color_fill,
             .color_border = self.color_border,
+            .role = .cell,
         };
     }
 
@@ -150,7 +155,6 @@ pub const InitOpts = struct {
     was_allocated_on_widget_stack: bool = false,
 };
 
-// TODO: Can I make that const?
 pub const WidthsOrNum = union(enum) {
     col_widths: []f32,
     num_cols: usize,
@@ -328,6 +332,11 @@ pub fn deinit(self: *GridWidget) void {
     defer if (should_free) dvui.widgetFree(self);
     defer self.* = undefined;
 
+    if (self.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeSetRowCount(ak_node, self.max_row);
+        AccessKit.nodeSetColumnCount(ak_node, self.col_widths.len);
+    }
+
     // resizing if row heights changed or a resize was requested via init options.
     if (self.resizing) {
         dvui.refresh(null, @src(), self.data().id);
@@ -490,6 +499,11 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, cell: Cell, 
     }
     self.next_row_y = @max(self.next_row_y, self.this_row_y + if (opts.height() > 0) opts.height() else self.row_height);
 
+    if (cell_box.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeSetRowIndex(ak_node, cell.row_num);
+        AccessKit.nodeSetColumnIndex(ak_node, cell.col_num);
+    }
+
     return cell_box;
 }
 
@@ -622,6 +636,7 @@ fn headerScrollAreaCreate(self: *GridWidget) void {
             .process_events_after = false,
         }, .{
             .name = "GridWidgetHeaderScroll",
+            .role = .header,
             .expand = .horizontal,
             .min_size_content = .{ .h = if (self.header_height > 0) self.header_height else self.last_header_height, .w = self.totalWidth() },
         });

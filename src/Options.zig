@@ -22,21 +22,7 @@ name: ?[]const u8 = null,
 role: ?dvui.AccessKit.Role = null,
 
 /// Accessibility label, either another widget or text.
-label: ?union(enum) {
-    /// Use the label from a different widget.  This is preferred if there is a
-    /// visible widget that labels this one.
-    by_id: dvui.Id,
-
-    /// Use this label for a different widget.
-    for_id: dvui.Id,
-
-    /// Use the previous or next label widget to label this widget.
-    label_widget: enum { prev, next },
-
-    /// Use this text as the label.  Prefer another option if possible - this
-    /// is for when there is no visible label (like an icon or image).
-    text: []const u8,
-} = null,
+label: ?LabelOpts = null,
 
 /// Pass a pointer to get a copy of the widget's `data` when `register` was
 /// called.  Useful for getting id/rect info out of a higher-level function.
@@ -116,6 +102,22 @@ font_style: ?FontStyle = null,
 
 /// Render a box shadow in `WidgetData.borderAndBackground`.
 box_shadow: ?BoxShadow = null,
+
+pub const LabelOpts = union(enum) {
+    /// Use the label from a different widget.  This is preferred if there is a
+    /// visible widget that labels this one.
+    by_id: dvui.Id,
+
+    /// Use this label for a different widget.
+    for_id: dvui.Id,
+
+    /// Use the previous or next label widget to label this widget.
+    label_widget: enum { prev, next },
+
+    /// Use this text as the label.  Prefer using .by if possible - .text is
+    /// for cases where there is no visible label (like an icon or image).
+    text: []const u8,
+};
 
 pub const Expand = enum {
     none,

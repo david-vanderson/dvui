@@ -62,7 +62,8 @@ pub fn install(self: *ScrollBarWidget) void {
     const grabrs = self.data().parent.screenRectScale(self.grabRect);
     self.processEvents(grabrs.r);
 
-    // TODO: I'm pretty sure we can optimize this so that we only set actions and min on "first frame"
+    // Accessibility TODO: Setting value to viewport.x is not correct as it will always show position
+    // as being hte top of the viewport and can't hit 100%.
     if (self.data().accesskit_node()) |ak_node| {
         switch (self.dir) {
             .horizontal => {

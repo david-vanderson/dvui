@@ -20,6 +20,8 @@ data_max: Data = .{ .x = -std.math.floatMax(f64), .y = -std.math.floatMax(f64) }
 
 pub var defaults: Options = .{
     .name = "Plot",
+    .role = .group,
+    .label = .{ .text = "Plot" },
     .padding = Rect.all(6),
     .background = true,
     .min_size_content = .{ .w = 20, .h = 20 },
@@ -162,7 +164,7 @@ pub fn install(self: *PlotWidget) void {
     //xaxis_padding.deinit();
 
     // data area
-    var data_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
+    var data_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .role = .image, .label = .{ .text = self.init_options.title orelse "" } });
 
     // mouse hover
     if (self.init_options.mouse_hover) {

@@ -2345,8 +2345,11 @@ pub fn toastDisplay(id: Id) !void {
 
     var animator = dvui.animate(@src(), .{ .kind = .alpha, .duration = 500_000 }, .{ .id_extra = id.asUsize() });
     defer animator.deinit();
-    dvui.labelNoFmt(@src(), message, .{}, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 } });
-
+    var label_wd: WidgetData = undefined;
+    dvui.labelNoFmt(@src(), message, .{}, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 }, .data_out = &label_wd });
+    if (label_wd.accesskit_node()) |ak_node| {
+        AccessKit.nodeSetLive(ak_node, AccessKit.Live.polite);
+    }
     if (dvui.timerDone(id)) {
         animator.startEnd();
     }
@@ -2440,6 +2443,7 @@ pub const SuggestionInitOptions = struct {
     opened: bool = false,
     open_on_text_change: bool = true,
     open_on_focus: bool = true,
+    label: ?Options.LabelOpts = null,
 };
 
 /// Wraps a textEntry to provide an attached menu (dropdown) of choices.
@@ -2472,7 +2476,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
         .was_allocated_on_widget_stack = true,
         .rs = te.data().borderRectScale(),
         .text_entry_id = te.data().id,
-    }, .{ .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
+    }, .{ .label = .{ .text = te.getText() }, .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
     sug.install();
     if (open_sug) {
         sug.open();
@@ -2590,7 +2594,12 @@ pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Init
     combo.te.data().was_allocated_on_widget_stack = true;
     combo.te.install();
 
-    combo.sug = dvui.suggestion(combo.te, .{ .button = true, .open_on_focus = false, .open_on_text_change = false });
+    if (combo.te.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeSetRole(ak_node, AccessKit.Role.editable_combo_box.asU8());
+        // Accessibility TODO: Expand and collapse
+    }
+
+    combo.sug = dvui.suggestion(combo.te, .{ .button = true, .open_on_focus = false, .open_on_text_change = false, .label = .{ .text = combo.te.getText() } });
     // suggestion forwards events to textEntry, so don't call te.processEvents()
     combo.te.draw();
 
@@ -2614,19 +2623,24 @@ pub const ExpanderOptions = struct {
 pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ExpanderOptions, opts: Options) bool {
     const options = expander_defaults.override(opts);
 
+    var exp_box = BoxWidget.init(src, .{ .dir = .horizontal }, options.strip().override(.{ .role = .group }));
+    exp_box.install();
+    exp_box.drawBackground();
+    defer exp_box.deinit();
+
+    var expanded: bool = init_opts.default_expanded;
+    if (dvui.dataGet(null, exp_box.data().id, "_expand", bool)) |e| {
+        expanded = e;
+    }
+
     // Use the ButtonWidget to do margin/border/padding, but use strip so we
     // don't get any of ButtonWidget's defaults
-    var bc = ButtonWidget.init(src, .{}, options.strip().override(options));
+    var bc = ButtonWidget.init(@src(), .{}, options.strip().override(options).override(.{ .label = .{ .text = if (expanded) "Collapse" else "Expand" } }));
     bc.install();
     bc.processEvents();
     bc.drawBackground();
     bc.drawFocus();
     defer bc.deinit();
-
-    var expanded: bool = init_opts.default_expanded;
-    if (dvui.dataGet(null, bc.data().id, "_expand", bool)) |e| {
-        expanded = e;
-    }
 
     if (bc.clicked()) {
         expanded = !expanded;
@@ -2647,9 +2661,10 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
             .{ .gravity_y = 0.5 },
         );
     }
-    labelNoFmt(@src(), label_str, .{}, options.strip());
+    labelNoFmt(@src(), label_str, .{}, options.strip().override(.{ .label = .{ .for_id = exp_box.data().id } }));
 
-    dvui.dataSet(null, bc.data().id, "_expand", expanded);
+    dvui.dataSet(null, exp_box.data().id, "_expand", expanded);
+    // Accessibility TODO: Support expand and collapse actions, but can;t find a way to get it to work.
 
     return expanded;
 }
@@ -2720,11 +2735,16 @@ pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOpt
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget.InitOptions, comptime fmt: []const u8, fmt_args: anytype, opts: Options) void {
-    var tt: dvui.FloatingTooltipWidget = .init(src, init_opts, opts);
+    var tt: dvui.FloatingTooltipWidget = .init(src, init_opts, opts.override(.{ .role = .tooltip }));
     if (tt.shown()) {
         var tl2 = dvui.textLayout(@src(), .{}, .{ .background = false });
         tl2.format(fmt, fmt_args, .{});
         tl2.deinit();
+        if (tt.data().accesskit_node()) |ak_node| {
+            var str_builder: std.Io.Writer.Allocating = .init(currentWindow().arena());
+            str_builder.writer.print(fmt, fmt_args) catch {};
+            AccessKit.nodeSetLabel(ak_node, str_builder.toOwnedSliceSentinel(0) catch "");
+        }
     }
     tt.deinit();
 }
@@ -2897,7 +2917,14 @@ pub fn gridHeadingSortable(
         .corner_radius = Rect.all(0),
     };
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
-    const heading_opts = heading_defaults.override(opts.options(.col(col_num)));
+    var heading_opts = heading_defaults.override(opts.options(.col(col_num)));
+    const label_wd: *WidgetData = wd: {
+        if (heading_opts.data_out) |data_out| break :wd data_out;
+
+        var internal_wd: WidgetData = undefined;
+        heading_opts.data_out = &internal_wd;
+        break :wd &internal_wd;
+    };
 
     var cell = g.headerCell(src, col_num, opts.cellOptions(.col(col_num)));
     defer cell.deinit();
@@ -2914,6 +2941,15 @@ pub fn gridHeadingSortable(
         g.sortChanged(col_num);
     }
     dir.* = g.sort_direction;
+
+    if (label_wd.accesskit_node()) |ak_node| {
+        switch (dir.*) {
+            .ascending => AccessKit.nodeSetSortDirection(ak_node, AccessKit.SortDirection.ascending),
+            .descending => AccessKit.nodeSetSortDirection(ak_node, AccessKit.SortDirection.descending),
+            .unsorted => {},
+        }
+    }
+
     return sort_changed;
 }
 
@@ -2943,6 +2979,8 @@ pub fn gridHeadingCheckbox(
     checkbox_opts.padding = ButtonWidget.defaults.paddingGet();
     checkbox_opts.gravity_x = header_options.gravity_x;
     checkbox_opts.gravity_y = header_options.gravity_y;
+    var checkbox_wd: WidgetData = undefined;
+    checkbox_opts.data_out = &checkbox_wd;
 
     var cell = g.headerCell(src, col_num, opts.cellOptions(.col(col_num)));
     defer cell.deinit();
@@ -2959,6 +2997,10 @@ pub fn gridHeadingCheckbox(
     }
     if (is_clicked) {
         select_state.* = if (selected) .select_all else .select_none;
+    }
+
+    if (checkbox_wd.accesskit_node()) |ak_node| {
+        AccessKit.nodeSetLabel(ak_node, if (select_state.* == .select_all) "Select none" else "Select all");
     }
     return is_clicked;
 }
@@ -3257,12 +3299,13 @@ pub const ImageInitOptions = struct {
 
 /// Show raster image.  dvui will handle texture creation/destruction for you,
 /// unless the source is .texture.  See ImageSource.InvalidationStrategy.
+/// Please pass the .label option to add accessibility text to the image.
 ///
 /// See `imageSize`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts: Options) WidgetData {
-    const options = (Options{ .name = "image" }).override(opts);
+    const options = (Options{ .name = "image", .role = .image }).override(opts);
 
     var size = Size{};
     if (options.min_size_content) |msc| {
@@ -3489,6 +3532,10 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
     if (b.data().accesskit_node()) |ak_node| {
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
+        AccessKit.nodeSetOrientation(ak_node, switch (init_opts.dir) {
+            .vertical => AccessKit.Orientation.vertical,
+            .horizontal => AccessKit.Orientation.horizontal,
+        });
         AccessKit.nodeSetNumericValue(ak_node, init_opts.fraction.*);
         AccessKit.nodeSetMinNumericValue(ak_node, 0);
         AccessKit.nodeSetMaxNumericValue(ak_node, 1);
@@ -3688,6 +3735,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
         AccessKit.nodeSetNumericValue(ak_node, init_opts.value.*);
+        AccessKit.nodeSetOrientation(ak_node, AccessKit.Orientation.horizontal);
         if (init_opts.min) |min| AccessKit.nodeSetMinNumericValue(ak_node, min);
         if (init_opts.max) |max| AccessKit.nodeSetMaxNumericValue(ak_node, max);
     }
@@ -4056,6 +4104,7 @@ pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, 
 }
 
 pub var progress_defaults: Options = .{
+    .role = .progress_indicator,
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 10, .h = 10 },
     .style = .control,
@@ -4094,6 +4143,12 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
         },
     }
     part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
+
+    if (b.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeSetMinNumericValue(ak_node, 0);
+        AccessKit.nodeSetMaxNumericValue(ak_node, 100);
+        AccessKit.nodeSetNumericValue(ak_node, perc * 100);
+    }
 }
 
 pub var checkbox_defaults: Options = .{
@@ -4370,6 +4425,9 @@ pub fn TextEntryNumberResult(comptime T: type) type {
 }
 
 pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryNumberInitOptions(T), opts: Options) TextEntryNumberResult(T) {
+    const default_opts: Options = .{
+        .role = .number_input,
+    };
     const base_filter = "1234567890";
     const filter = switch (@typeInfo(T)) {
         .int => |int| switch (int.signedness) {
@@ -4396,7 +4454,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         }
     }
 
-    var te = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer } }, opts);
+    var te = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer } }, default_opts.override(opts));
     te.install();
     te.processEvents();
 
@@ -4452,6 +4510,26 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
             minmax_text = std.fmt.bufPrint(&minmax_buffer, "(max: {d})", .{init_opts.max.?}) catch unreachable;
         }
         te.textLayout.addText(minmax_text, .{ .color_text = opts.color(.fill_hover) });
+    }
+    if (te.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeClearValue(ak_node); // Only set a numberic value
+        if (@typeInfo(T) == .float) {
+            if (init_opts.min) |min| AccessKit.nodeSetMinNumericValue(ak_node, @floatCast(min));
+            if (init_opts.max) |max| AccessKit.nodeSetMinNumericValue(ak_node, @floatCast(max));
+            if (num) |value|
+                AccessKit.nodeSetNumericValue(ak_node, @floatCast(value));
+        } else {
+            if (init_opts.min) |min| AccessKit.nodeSetMinNumericValue(ak_node, @floatFromInt(min));
+            if (init_opts.max) |max| AccessKit.nodeSetMinNumericValue(ak_node, @floatFromInt(max));
+            if (num) |value|
+                AccessKit.nodeSetNumericValue(ak_node, @floatFromInt(value));
+        }
+        if (result.value == .Valid) {
+            AccessKit.nodeClearInvalid(ak_node);
+        } else {
+            AccessKit.nodeSetInvalid(ak_node, AccessKit.Invalid.ak_true);
+            AccessKit.nodeSetNumericValue(ak_node, 0);
+        }
     }
 
     te.deinit();
