@@ -6,17 +6,17 @@ Most modern operating system provide an accessibility API to assist users who ca
 
 These users often interact via 'screen reader' that can read text and other accessibility labels from the application. Some readers will also provide the user with a way to perform actions on an application, such as clicking a button, or setting the text in a text box. Others will rely on the keyboard navigation features provided by the application.
 
-DVUI implements accessibility through the AccessKit (link) toolkit, which provides a common interface to the operating system-specific accessibility APIs.
+DVUI implements accessibility through the [AccessKit](https://github.com/AccessKit/accesskit) toolkit, which provides a common interface to the operating system-specific accessibility APIs.
 
 To ensure our DVUI applications are enjoyed by as many users as possible, I would encourage you to treat accessibility as a first-class requirement for your application and to test it just as you would any other feature. 
 
 ## Any other benefits. Any downsides?
 
-Incorporating accessibility makes your UI application scriptable. Each widget that has a node in the accessibility tree which publishes its current value along with the set of actions it can perform. By using your platform's accessibility API, you can write automated tests and allows users to script common usage scenarios.
+Incorporating accessibility makes your UI application scriptable. Each widget that has a node in the accessibility tree publishes its current value along with the set of actions it can perform. By using your platform's accessibility API, you can write automated tests as well as allowing your users to script common tasks.
 
 Outside of the additional executable size from including the AccessKit library, there is very little performance impact from supporting AccessKit. (Essentially, two additional if statements per widget) 
 
-The overhead incurred with creating AccessKit nodes is only incurred when the operating system's accessibility API is activated by a screen reader or similar application.
+The overhead of creating AccessKit nodes is only incurred when the operating system's accessibility API is activated by a screen reader or similar application.
 
 ## Enabling AccessKit in DVUI
 
@@ -100,8 +100,10 @@ AccessKit requires:
 
 As DVUI does not keep state for all widget values, a full set of node id's and a full set of updates is sent at the end of each frame.
 
-The DVUI WidgetId is used as the AccessKit node id. When a widget is created, if 1) Accessibility is active, 2) The Widget has a role and it is not .none, a new AccessKit node will be created via `dvui.accesskit.nodeCreate()`
+The DVUI WidgetId is used as the AccessKit node id. When a widget is created, if 1) Accessibility is active, 2) The Widget has a role and it is not .none, 3) The widget is at least partially visible or the widget is the focused widget, then a new AccessKit node will be created via `dvui.accesskit.nodeCreate()`
 Widgets will then set any values or actions against the created node.
+
+The visibility check should be removed in future and the nodeSetClipsChildren API should be used for anything that clips contained child widgets. The focused node is always added to the tree, even if it is not visible, meaning it can have the wrong parent. But this stops the screen reader's focus shifting to the main window when the focused widget scrolls off the screen.
 
 Note: AccessKit is still a relatively new and evolving library. Not all platform accessibility features are supported and support for some features may be partially implemented or buggy.
 
