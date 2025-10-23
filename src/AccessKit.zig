@@ -150,7 +150,7 @@ inline fn nodeCreateFake(_: *AccessKit, _: *dvui.WidgetData, _: Role) ?*Node {
 /// Create a new Node for AccessKit
 /// Returns null if no accessibility information is required for this widget.
 pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node {
-    if (!wd.visible()) return null;
+    if (!wd.visible() and wd.id != dvui.focusedWidgetId()) return null;
     if (wd.options.role == .none) return null;
 
     {
