@@ -64,6 +64,10 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
 pub fn register(self: *WidgetData) void {
     self.rect_scale = self.rectScaleFromParent();
 
+    if (self.options.role) |role| {
+        _ = dvui.currentWindow().accesskit.nodeCreate(self, role);
+    }
+
     if (self.options.data_out) |do| {
         do.* = self.*;
     }
@@ -103,10 +107,6 @@ pub fn register(self: *WidgetData) void {
         hasher.update(std.mem.asBytes(&self.options.hash()));
         hasher.update(std.mem.asBytes(&self.rectScale()));
         hasher.update(std.mem.asBytes(&(self.id == focused_widget_id)));
-    }
-
-    if (self.options.role) |role| {
-        _ = dvui.currentWindow().accesskit.nodeCreate(self, role);
     }
 
     if (cw.debug.target == .focused and self.id == focused_widget_id) {

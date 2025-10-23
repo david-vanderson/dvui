@@ -7,6 +7,7 @@ const RectScale = dvui.RectScale;
 const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
+const AccessKit = dvui.AccessKit;
 
 const TreeWidget = @This();
 
@@ -27,7 +28,7 @@ pub const InitOptions = struct {
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TreeWidget {
     var self = TreeWidget{};
-    const defaults = Options{ .name = "Tree" };
+    const defaults = Options{ .name = "Tree", .role = .tree };
     self.init_options = init_opts;
     self.wd = WidgetData.init(src, .{}, defaults.override(opts));
     self.id_branch = dvui.dataGet(null, self.wd.id, "_id_branch", usize) orelse null;
@@ -38,18 +39,24 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             self.drag_ending = true;
         }
     }
+
     return self;
 }
 
 pub fn install(self: *TreeWidget) void {
-    self.wd.register();
-    self.wd.borderAndBackground(.{});
+    self.data().register();
+    self.data().borderAndBackground(.{});
 
     dvui.parentSet(self.widget());
 
     self.vbox = dvui.BoxWidget.init(@src(), .{ .dir = .vertical }, self.wd.options);
     self.vbox.install();
     self.vbox.drawBackground();
+
+    if (self.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
+    }
 }
 
 pub fn tree(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) *TreeWidget {
@@ -71,15 +78,15 @@ pub fn data(self: *TreeWidget) *WidgetData {
 
 pub fn rectFor(self: *TreeWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
-    return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *TreeWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.data().contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *TreeWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s));
+    self.data().minSizeMax(self.data().options.padSize(s));
 }
 
 pub fn matchEvent(self: *TreeWidget, event: *dvui.Event) bool {
@@ -99,7 +106,7 @@ pub fn matchEvent(self: *TreeWidget, event: *dvui.Event) bool {
 
     if (self.init_options.drag_name) |dn| {
         if (dvui.dragName(dn)) {
-            return dvui.eventMatch(event, .{ .id = self.wd.id, .r = self.data().borderRectScale().r, .drag_name = dn });
+            return dvui.eventMatch(event, .{ .id = self.data().id, .r = self.data().borderRectScale().r, .drag_name = dn });
         }
     }
 
@@ -117,7 +124,7 @@ pub fn processEvents(self: *TreeWidget) void {
 }
 
 pub fn processEvent(self: *TreeWidget, e: *dvui.Event) void {
-    if (dvui.captured(self.wd.id) or (self.init_options.drag_name != null and dvui.dragName(self.init_options.drag_name.?))) {
+    if (dvui.captured(self.data().id) or (self.init_options.drag_name != null and dvui.dragName(self.init_options.drag_name.?))) {
         switch (e.evt) {
             .mouse => |me| {
                 if ((me.action == .press or me.action == .release) and me.button.pointer()) {
@@ -142,26 +149,26 @@ pub fn deinit(self: *TreeWidget) void {
     if (self.drag_ending) {
         self.id_branch = null;
         self.drag_point = null;
-        dvui.refresh(null, @src(), self.wd.id);
+        dvui.refresh(null, @src(), self.data().id);
     }
 
     if (self.id_branch) |idr| {
-        dvui.dataSet(null, self.wd.id, "_id_branch", idr);
+        dvui.dataSet(null, self.data().id, "_id_branch", idr);
     } else {
-        dvui.dataRemove(null, self.wd.id, "_id_branch");
+        dvui.dataRemove(null, self.data().id, "_id_branch");
     }
 
     if (self.drag_point) |dp| {
-        dvui.dataSet(null, self.wd.id, "_drag_point", dp);
+        dvui.dataSet(null, self.data().id, "_drag_point", dp);
     } else {
-        dvui.dataRemove(null, self.wd.id, "_drag_point");
+        dvui.dataRemove(null, self.data().id, "_drag_point");
     }
 
-    dvui.dataSet(null, self.wd.id, "_branch_size", self.branch_size);
+    dvui.dataSet(null, self.data().id, "_branch_size", self.branch_size);
 
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
-    dvui.parentReset(self.wd.id, self.wd.parent);
+    self.data().minSizeSetAndRefresh();
+    self.data().minSizeReportToParent();
+    dvui.parentReset(self.data().id, self.data().parent);
 }
 
 pub fn dragStart(self: *TreeWidget, branch_id: usize, p: dvui.Point.Physical) void {
@@ -176,10 +183,16 @@ pub fn dragStart(self: *TreeWidget, branch_id: usize, p: dvui.Point.Physical) vo
 }
 
 pub fn branch(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: Branch.InitOptions, opts: Options) *Branch {
+    const defaults: dvui.Options = .{ .role = .tree_item };
     const ret = dvui.widgetAlloc(Branch);
-    ret.* = Branch.init(src, self, init_opts, opts);
+    ret.* = Branch.init(src, self, init_opts, defaults.override(opts));
     ret.install();
     ret.data().was_allocated_on_widget_stack = true;
+    if (ret.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
+        // Accessibility TODO: Support expand / collapse when available.
+    }
     return ret;
 }
 
@@ -228,7 +241,7 @@ pub const Branch = struct {
     // can call this after init before install
     pub fn floating(self: *Branch) bool {
         // if drag_point is non-null, id_reorderable is non-null
-        if (self.tree.drag_point != null and self.tree.id_branch.? == (self.init_options.branch_id orelse self.wd.id.asUsize()) and !self.tree.drag_ending) {
+        if (self.tree.drag_point != null and self.tree.id_branch.? == (self.init_options.branch_id orelse self.data().id.asUsize()) and !self.tree.drag_ending) {
             return true;
         }
 
@@ -240,9 +253,9 @@ pub const Branch = struct {
         var check_button_hovered: bool = false;
         if (self.tree.drag_point) |dp| {
             const topleft = dp.plus(dvui.dragOffset().plus(.{ .x = 5, .y = 5 }));
-            if (self.tree.id_branch.? == (self.init_options.branch_id orelse self.wd.id.asUsize())) {
+            if (self.tree.id_branch.? == (self.init_options.branch_id orelse self.data().id.asUsize())) {
                 // we are being dragged - put in floating widget
-                self.wd.register();
+                self.data().register();
                 dvui.parentSet(self.widget());
 
                 self.floating_widget = dvui.FloatingWidget.init(
@@ -296,11 +309,11 @@ pub const Branch = struct {
             .margin = dvui.Rect.all(0),
         };
 
-        self.vbox = dvui.BoxWidget.init(@src(), .{ .dir = .vertical }, no_padding.override(self.options));
+        self.vbox = dvui.BoxWidget.init(@src(), .{ .dir = .vertical }, no_padding.override(self.options.strip()));
         self.vbox.install();
         self.vbox.drawBackground();
 
-        self.button = dvui.ButtonWidget.init(@src(), .{}, no_padding.override(self.options));
+        self.button = dvui.ButtonWidget.init(@src(), .{}, no_padding.override(self.options.strip()));
         self.button.install();
         self.button.processEvents();
         self.button.drawBackground();
@@ -308,15 +321,15 @@ pub const Branch = struct {
         // Check if the button is hovered if we are expanded, this allows us to set the target rs when
         // the entry is expanded
         if (self.button.hovered() and check_button_hovered) {
-            var rs = self.wd.rectScale();
+            var rs = self.data().rectScale();
             self.target_rs = rs;
             rs.r.h = 2.0;
             rs.r.fill(.{}, .{ .color = dvui.themeGet().focus, .fade = 1.0 });
         }
 
-        self.tree.branch_size = self.button.wd.rect.size();
+        self.tree.branch_size = self.button.data().rect.size();
 
-        self.hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, no_padding.override(self.options));
+        self.hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, no_padding.override(self.options.strip()));
         self.hbox.install();
         self.hbox.drawBackground();
 
@@ -328,10 +341,10 @@ pub const Branch = struct {
                 switch (e.evt) {
                     .mouse => |me| {
                         if (me.action == .motion) {
-                            if (dvui.captured(self.button.wd.id)) {
+                            if (dvui.captured(self.button.data().id)) {
                                 e.handle(@src(), self.button.data());
                                 if (dvui.dragging(me.p, null)) |_| {
-                                    self.tree.dragStart(self.wd.id.asUsize(), me.p);
+                                    self.tree.dragStart(self.data().id.asUsize(), me.p);
 
                                     break :loop;
                                 }
@@ -394,7 +407,7 @@ pub const Branch = struct {
 
     pub fn removed(self: *Branch) bool {
         // if drag_ending is true, id_reorderable is non-null
-        if (self.tree.drag_ending and self.tree.id_branch.? == (self.init_options.branch_id orelse self.wd.id.asUsize())) {
+        if (self.tree.drag_ending and self.tree.id_branch.? == (self.init_options.branch_id orelse self.data().id.asUsize())) {
             return true;
         }
 
@@ -425,15 +438,15 @@ pub const Branch = struct {
 
     pub fn rectFor(self: *Branch, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         _ = id;
-        return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+        return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
     }
 
     pub fn screenRectScale(self: *Branch, rect: Rect) RectScale {
-        return self.wd.contentRectScale().rectToRectScale(rect);
+        return self.data().contentRectScale().rectToRectScale(rect);
     }
 
     pub fn minSizeForChild(self: *Branch, s: Size) void {
-        self.wd.minSizeMax(self.wd.options.padSize(s));
+        self.data().minSizeMax(self.data().options.padSize(s));
     }
 
     pub fn deinit(self: *Branch) void {
@@ -449,7 +462,7 @@ pub const Branch = struct {
                 }
             }
 
-            dvui.dataSet(null, self.wd.id, "_expanded", self.expanded);
+            dvui.dataSet(null, self.data().id, "_expanded", self.expanded);
         } else {
             self.hbox.deinit();
             self.button.deinit();
@@ -457,14 +470,14 @@ pub const Branch = struct {
         self.vbox.deinit();
 
         if (self.floating_widget) |*fw| {
-            self.wd.minSizeMax(fw.wd.min_size);
+            self.data().minSizeMax(fw.data().min_size);
             fw.deinit();
         }
 
-        self.wd.minSizeSetAndRefresh();
-        self.wd.minSizeReportToParent();
+        self.data().minSizeSetAndRefresh();
+        self.data().minSizeReportToParent();
 
-        dvui.parentReset(self.wd.id, self.wd.parent);
+        dvui.parentReset(self.data().id, self.data().parent);
     }
 };
 

@@ -114,9 +114,14 @@ pub fn basicWidgets() void {
         te.deinit();
     }
 
-    inline for (@typeInfo(RadioChoice).@"enum".fields, 0..) |field, i| {
-        if (dvui.radio(@src(), radio_choice == @as(RadioChoice, @enumFromInt(field.value)), "Radio " ++ field.name, .{ .id_extra = i })) {
-            radio_choice = @enumFromInt(field.value);
+    {
+        var vbox = dvui.box(@src(), .{}, .{ .role = .radio_group, .label = .{ .text = "Radio buttons" } });
+        defer vbox.deinit();
+
+        inline for (@typeInfo(RadioChoice).@"enum".fields, 0..) |field, i| {
+            if (dvui.radio(@src(), radio_choice == @as(RadioChoice, @enumFromInt(field.value)), "Radio " ++ field.name, .{ .id_extra = i })) {
+                radio_choice = @enumFromInt(field.value);
+            }
         }
     }
 

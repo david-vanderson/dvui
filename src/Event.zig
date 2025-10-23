@@ -48,6 +48,7 @@ pub fn handle(self: *Event, src: std.builtin.SourceLocation, wd: *const dvui.Wid
 pub const Text = struct {
     txt: []u8,
     selected: bool = false,
+    replace: bool = false,
 };
 
 pub const Key = struct {
