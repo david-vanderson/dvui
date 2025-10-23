@@ -9,6 +9,7 @@ const RectScale = dvui.RectScale;
 const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
+const AccessKit = dvui.AccessKit;
 
 const enums = dvui.enums;
 
@@ -162,6 +163,13 @@ pub fn install(self: *PanedWidget) void {
     self.prevClip = dvui.clip(self.data().contentRectScale().r);
 
     dvui.parentSet(self.widget());
+    if (self.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
+        AccessKit.nodeSetMinNumericValue(ak_node, 0);
+        AccessKit.nodeSetMaxNumericValue(ak_node, 1);
+        AccessKit.nodeSetNumericValue(ak_node, self.split_ratio.*);
+    }
 }
 
 pub fn matchEvent(self: *PanedWidget, e: *Event) bool {

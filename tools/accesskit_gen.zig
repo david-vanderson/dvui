@@ -83,10 +83,10 @@ pub fn main() !void {
     var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
     const gpa = debug_allocator.allocator();
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdout_writer = std.fs.File.stdout().writerStreaming(&stdout_buffer);
     const stdout = &stdout_writer.interface;
     defer stdout.flush() catch {}; // Don't forget to flush!
-    var stderr_writer = std.fs.File.stderr().writer(&.{});
+    var stderr_writer = std.fs.File.stderr().writerStreaming(&.{});
     const stderr = &stderr_writer.interface;
 
     if (builtin.os.tag != .windows) {

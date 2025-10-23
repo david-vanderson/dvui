@@ -17,7 +17,8 @@ const log = std.log.scoped(.AccessKit);
 adapter: ?AdapterType() = null,
 // The ak_node id for the widget which last had focus this frame.
 focused_id: usize = 0,
-// Note: Any access to `nodes` must be protected by `mutex`.
+// Note: Access to `nodes` must be protected by `mutex`.
+// Safe for read-only access from gui-thread, without mutex.
 nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node) = .empty,
 // Note: Any access to `action_requests` must be protected by `mutex`.
 action_requests: std.ArrayList(ActionRequest) = .empty,
@@ -149,7 +150,7 @@ inline fn nodeCreateFake(_: *AccessKit, _: *dvui.WidgetData, _: Role) ?*Node {
 /// Create a new Node for AccessKit
 /// Returns null if no accessibility information is required for this widget.
 pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node {
-    if (!wd.visible()) return null;
+    if (!wd.visible() and wd.id != dvui.focusedWidgetId()) return null;
     if (wd.options.role == .none) return null;
 
     {
@@ -169,7 +170,8 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
         }
     }
 
-    // std.debug.print("Creating Node for {x} with role {?t} at {s}:{d}\n", .{ wd.id, wd.options.role, wd.src.file, wd.src.line });
+    if (debug_node_tree)
+        std.debug.print("Creating Node for {x} with role {?t} at {s}:{d}\n", .{ wd.id, wd.options.role, wd.src.file, wd.src.line });
 
     const ak_node = nodeNew(role.asU8()) orelse return null;
     wd.ak_node = ak_node;
@@ -220,10 +222,12 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
             if (self.node_to_label == .zero) {
                 self.node_waiting_label = false;
             } else {
-                const for_node = self.nodes.get(self.node_to_label) orelse unreachable;
-                nodePushLabelledBy(for_node, wd.id.asU64());
-                self.node_waiting_label = false;
-                self.node_to_label = .zero;
+                // If the labelled node is no longer visible, it will not be found.
+                if (self.nodes.get(self.node_to_label)) |for_node| {
+                    nodePushLabelledBy(for_node, wd.id.asU64());
+                    self.node_waiting_label = false;
+                    self.node_to_label = .zero;
+                }
             }
         }
         self.prev_label_id = wd.id;
@@ -245,7 +249,8 @@ pub fn nodeParent(wd_in: *dvui.WidgetData) *Node {
     var iter = wd_in.parent.data().iterator();
     while (iter.next()) |wd| {
         if (wd.accesskit_node()) |ak_node| {
-            // std.debug.print("parent node is {x} at {s}:{d}\n", .{ wd.id, wd.src.file, wd.src.line });
+            if (debug_node_tree)
+                std.debug.print("parent node is {x} at {s}:{d}\n", .{ wd.id, wd.src.file, wd.src.line });
             return ak_node;
         }
     }
@@ -298,7 +303,7 @@ fn processActions(self: *AccessKit) void {
                             ActionData.value => break :value std.mem.span(request.data.value.unnamed_0.unnamed_1.value),
                             ActionData.numeric_value => {
                                 var writer: std.io.Writer.Allocating = .init(window.arena());
-                                writer.writer.print("{d:.6}", .{request.data.value.unnamed_0.unnamed_2.numeric_value}) catch break :value "";
+                                writer.writer.print("{d}", .{request.data.value.unnamed_0.unnamed_2.numeric_value}) catch break :value "";
                                 break :value writer.toOwnedSlice() catch break :value "";
                             },
                             else => {
@@ -307,7 +312,7 @@ fn processActions(self: *AccessKit) void {
                         }
                     };
 
-                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target), .replace = true }) catch |err| logEventAddError(@src(), err);
                 }
             },
             else => {},
@@ -1432,3 +1437,5 @@ pub const RoleNoAccessKit = enum {
     list_grid,
     terminal,
 };
+
+const debug_node_tree = false;

@@ -14,6 +14,7 @@ selected_index: usize = 0, // 0 indexed
 activate_selected: bool = false,
 
 pub var defaults: Options = .{
+    .role = .suggestion,
     .name = "Suggestions",
 };
 
@@ -34,7 +35,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *SuggestionWidget) void {
-    self.menu = dvui.MenuWidget.init(@src(), .{ .dir = .horizontal, .close_without_focused_child = false }, .{ .rect = .{}, .id_extra = self.options.idExtra() });
+    self.menu = dvui.MenuWidget.init(@src(), .{ .dir = .horizontal, .close_without_focused_child = false }, .{ .role = .none, .rect = .{}, .id_extra = self.options.idExtra() });
     self.menu.install();
 }
 
@@ -90,7 +91,13 @@ pub fn addChoiceLabel(self: *SuggestionWidget, label_str: []const u8) bool {
 }
 
 pub fn addChoice(self: *SuggestionWidget) *MenuItemWidget {
-    self.drop_mi = MenuItemWidget.init(@src(), .{ .highlight_only = true }, .{ .id_extra = self.drop_mi_index, .expand = .horizontal, .padding = .{} });
+    self.drop_mi = MenuItemWidget.init(@src(), .{ .highlight_only = true }, .{
+        .role = .list_item,
+        .label = .{ .label_widget = .next },
+        .id_extra = self.drop_mi_index,
+        .expand = .horizontal,
+        .padding = .{},
+    });
     self.drop_mi.?.install();
     self.drop_mi.?.processEvents();
     if (self.drop_mi.?.data().id == dvui.focusedWidgetId()) {

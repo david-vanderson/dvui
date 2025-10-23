@@ -171,7 +171,7 @@ pub fn install(self: *TextEntryWidget) void {
     const focused = (self.data().id == dvui.lastFocusedIdInFrame());
     if (focused) dvui.currentWindow().last_focused_id_this_frame = .zero;
 
-    self.scroll = ScrollAreaWidget.init(@src(), self.scroll_init_opts, self.data().options.strip().override(.{ .expand = .both }));
+    self.scroll = ScrollAreaWidget.init(@src(), self.scroll_init_opts, self.data().options.strip().override(.{ .role = .none, .expand = .both }));
 
     // scrollbars process mouse events here
     self.scroll.install();
@@ -180,7 +180,7 @@ pub fn install(self: *TextEntryWidget) void {
 
     self.scrollClip = dvui.clipGet();
 
-    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .kerning = self.init_opts.kerning, .touch_edit_just_focused = false, .cache_layout = self.init_opts.cache_layout }, self.data().options.strip().override(.{ .expand = .both, .padding = self.padding }));
+    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .kerning = self.init_opts.kerning, .touch_edit_just_focused = false, .cache_layout = self.init_opts.cache_layout }, self.data().options.strip().override(.{ .role = .none, .expand = .both, .padding = self.padding }));
 
     // if textLayout forced cache_layout to false, we need to honor that
     self.init_opts.cache_layout = self.textLayout.cache_layout;
@@ -889,6 +889,9 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
         .text => |te| {
             e.handle(@src(), self.data());
             var new = std.mem.sliceTo(te.txt, 0);
+            if (te.replace) {
+                self.textLayout.selection.selectAll();
+            }
             if (self.init_opts.multiline) {
                 self.textTyped(new, te.selected);
             } else {
