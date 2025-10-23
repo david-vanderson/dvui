@@ -184,6 +184,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
 pub var hue_slider_defaults: Options = .{
     .name = "Hue Slider",
     .role = .slider,
+    .label = .{ .text = "Hue" },
     .margin = .all(2),
     .min_size_content = .{ .w = 20, .h = 20 },
 };
