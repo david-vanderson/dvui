@@ -54,7 +54,7 @@ loop_wait_target: ?i128 = null,
 loop_wait_target_can_interrupt: bool = false,
 loop_target_slop: i32 = 1000, // 1ms frame overhead seems a good place to start
 loop_target_slop_frames: i32 = 0,
-frame_times: [30]u32 = [_]u32{0} ** 30,
+frame_times: [10]u32 = @splat(0),
 
 /// Debugging aid, only used in waitTime(), null means no max
 max_fps: ?f32 = null,
@@ -786,6 +786,16 @@ pub fn FPS(self: *const Self) f32 {
 
     const avg = @as(f32, @floatFromInt(diff)) / @as(f32, @floatFromInt(self.frame_times.len - 1));
     const fps = 1_000_000.0 / avg;
+
+    if (false) {
+        std.debug.print("frame times\n", .{});
+        var last: u32 = self.frame_times[0];
+        for (self.frame_times, 0..) |t, i| {
+            std.debug.print("  {d} {d} - {d}\n", .{ i, t, last - t });
+            last = t;
+        }
+    }
+
     return fps;
 }
 
