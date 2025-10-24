@@ -183,9 +183,9 @@ if (te.data().accesskit_node()) | ak_node | {
 ```
 
 #### Labeling
-Labellng is one of the most important things you can do to make your appliction more accessible. Widgets can be labelled by setting the `.label` option for any widget. Labels should give the screen reader enough context for a widget so the user csn know what that widget is for. 
+Labellng is one of the most important things you can do to make your appliction more accessible. Widgets can be labelled by setting the `.label` via options. Labels should give the screen reader enough context to determine that widget's function.
 
-For example, if a user moves focus to a text entry, the text box should be labeeled with it's purpose. Typically, this will the contents of the label widget preceding the text entry.
+For example, if a user moves focus to a text entry, the text box should be labeled with its purpose. Typically, this will the contents of the label widget preceding the text entry.
 
 DVUI offers the following labeling options:
    * text - set label directly
