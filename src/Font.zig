@@ -224,7 +224,9 @@ pub const builtin = struct {
 
 pub const Cache = struct {
     database: std.AutoHashMapUnmanaged(FontId, TTFEntry) = .empty,
-    cache: dvui.TrackingAutoHashMap(u64, Entry, .{ .tracking = .get_and_put, .reset = .delayed }) = .empty,
+    cache: dvui.TrackingAutoHashMap(u64, Entry, .{ .tracking = .get_and_put }) = .empty,
+
+    pub const default_timeout = dvui.RemovalTimeout.from_micros(std.time.us_per_min);
 
     pub const TTFEntry = struct {
         bytes: []const u8,
@@ -277,16 +279,16 @@ pub const Cache = struct {
         self.database.deinit(gpa);
     }
 
-    pub fn reset(self: *Cache, gpa: std.mem.Allocator, backend: Backend) void {
+    pub fn reset(self: *Cache, gpa: std.mem.Allocator, backend: Backend, micros_since_last_reset: u32) void {
         var it = self.cache.iterator();
-        while (it.next_resetting()) |kv| {
+        while (it.next_resetting(micros_since_last_reset)) |kv| {
             var fce = kv.value;
             fce.deinit(gpa, backend);
         }
     }
 
     pub fn getOrCreate(self: *Cache, gpa: std.mem.Allocator, font: Font) std.mem.Allocator.Error!*Entry {
-        const entry = try self.cache.getOrPut(gpa, font.hash());
+        const entry = try self.cache.getOrPutWithTimeout(gpa, font.hash(), default_timeout);
         if (entry.found_existing) return entry.value_ptr;
 
         const ttf_bytes, const name = if (self.database.get(font.id)) |fbe|

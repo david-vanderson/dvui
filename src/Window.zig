@@ -73,13 +73,13 @@ theme: Theme,
 button_order: dvui.enums.DialogButtonOrder = .cancel_ok,
 
 /// Uses `gpa` allocator
-min_sizes: dvui.TrackingAutoHashMap(Id, Size, .{ .tracking = .put_only, .reset = .delayed }) = .empty,
+min_sizes: dvui.TrackingAutoHashMap(Id, Size, .{ .tracking = .put_only }) = .empty,
 /// Uses `gpa` allocator
-tags: dvui.TrackingAutoHashMap([]const u8, dvui.TagData, .{ .tracking = .put_only, .reset = .immediate }) = .empty,
+tags: dvui.TrackingAutoHashMap([]const u8, dvui.TagData, .{ .tracking = .put_only }) = .empty,
 /// Uses `gpa` allocator
 data_store: dvui.Data = .{},
 /// Uses `gpa` allocator
-animations: dvui.TrackingAutoHashMap(Id, Animation, .{ .tracking = .get_and_put, .reset = .immediate }) = .empty,
+animations: dvui.TrackingAutoHashMap(Id, Animation, .{ .tracking = .get_and_put }) = .empty,
 /// Uses `gpa` allocator
 tab_index_prev: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
@@ -989,10 +989,10 @@ pub fn begin(
 
     self.debug.reset(self.gpa);
 
-    self.data_store.reset(self.gpa);
-    self.texture_cache.reset(self.backend);
+    self.data_store.reset(self.gpa, micros_since_last);
+    self.texture_cache.reset(self.backend, micros_since_last);
     self.subwindows.reset();
-    self.fonts.reset(self.gpa, self.backend);
+    self.fonts.reset(self.gpa, self.backend, micros_since_last);
 
     for (self.frame_times, 0..) |_, i| {
         if (i == (self.frame_times.len - 1)) {
@@ -1002,12 +1002,12 @@ pub fn begin(
         }
     }
 
-    self.min_sizes.reset();
+    self.min_sizes.reset(micros_since_last);
     //std.debug.print("min_sizes {d}\n", .{self.min_sizes.count()});
 
     {
         var it = self.tags.iterator();
-        while (it.next_resetting()) |kv| {
+        while (it.next_resetting(micros_since_last)) |kv| {
             //std.debug.print("tag dead free {s}\n", .{kv.key});
             self.gpa.free(kv.key);
         }
@@ -1053,7 +1053,7 @@ pub fn begin(
                 }
             }
         }
-        self.animations.reset();
+        self.animations.reset(micros_since_last);
     }
 
     if (!self.captured_last_frame) {

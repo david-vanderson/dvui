@@ -28,7 +28,7 @@ pub const Cache = struct {
     /// Used to defer destroying textures until the next call to `reset` or `deinit`
     trash: Trash = .empty,
 
-    pub const Storage = dvui.TrackingAutoHashMap(Key, Texture, .{ .tracking = .get_and_put, .reset = .delayed });
+    pub const Storage = dvui.TrackingAutoHashMap(Key, Texture, .{ .tracking = .get_and_put });
     pub const Trash = std.ArrayListUnmanaged(dvui.Texture);
 
     pub const Key = u64;
@@ -42,8 +42,14 @@ pub const Cache = struct {
     /// it from memory. The texture will remain in the cache as long
     /// as it's key is accessed at least once per call to `reset`.
     pub fn add(self: *Cache, gpa: std.mem.Allocator, key: Key, texture: Texture) std.mem.Allocator.Error!void {
+        return addWithTimeout(self, gpa, key, texture, .immediate);
+    }
+    /// See `add`
+    ///
+    /// The timeout decides how much time must pass after a value has been used before it's removed from the map
+    pub fn addWithTimeout(self: *Cache, gpa: std.mem.Allocator, key: Key, texture: Texture, timeout: dvui.RemovalTimeout) std.mem.Allocator.Error!void {
         try self.trash.ensureUnusedCapacity(gpa, 1);
-        const prev = try self.cache.fetchPut(gpa, key, texture);
+        const prev = try self.cache.fetchPutWithTimeout(gpa, key, texture, timeout);
         if (prev) |kv| {
             self.trash.appendAssumeCapacity(kv.value);
         }
@@ -66,9 +72,9 @@ pub const Cache = struct {
     ///
     /// `allocator` is only used for the returned slice and can be
     /// different from the one used for calls to `add`
-    pub fn reset(self: *Cache, backend: dvui.Backend) void {
+    pub fn reset(self: *Cache, backend: dvui.Backend, micros_since_last_reset: u32) void {
         var it = self.cache.iterator();
-        while (it.next_resetting()) |kv| {
+        while (it.next_resetting(micros_since_last_reset)) |kv| {
             backend.textureDestroy(kv.value);
         }
         for (self.trash.items) |tex| {

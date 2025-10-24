@@ -6,7 +6,7 @@ pub const Data = @This();
 
 pub const Key = dvui.Id;
 
-pub const Storage = dvui.TrackingAutoHashMap(Key, SavedData, .{ .tracking = .get_and_put, .reset = .delayed });
+pub const Storage = dvui.TrackingAutoHashMap(Key, SavedData, .{ .tracking = .get_and_put });
 pub const Trash = std.ArrayListUnmanaged(SavedData);
 
 const SavedData = struct {
@@ -62,18 +62,18 @@ fn Slice(S: type) type {
         @compileError("Data.Slice needs a slice or pointer to array, given " ++ @typeName(S));
 }
 
-pub fn set(self: *Data, gpa: std.mem.Allocator, key: Key, data: anytype) std.mem.Allocator.Error!void {
-    const value, _ = try self.getOrPutT(gpa, key, @TypeOf(data));
+pub fn set(self: *Data, gpa: std.mem.Allocator, key: Key, data: anytype, timeout: dvui.RemovalTimeout) std.mem.Allocator.Error!void {
+    const value, _ = try self.getOrPutT(gpa, key, @TypeOf(data), timeout);
     value.* = data;
 }
 
-pub fn setSlice(self: *Data, gpa: std.mem.Allocator, key: Key, data: anytype) std.mem.Allocator.Error!void {
-    return setSliceCopies(self, gpa, key, data, 1);
+pub fn setSlice(self: *Data, gpa: std.mem.Allocator, key: Key, data: anytype, timeout: dvui.RemovalTimeout) std.mem.Allocator.Error!void {
+    return setSliceCopies(self, gpa, key, data, 1, timeout);
 }
-pub fn setSliceCopies(self: *Data, gpa: std.mem.Allocator, key: Key, data: anytype, num_copies: usize) std.mem.Allocator.Error!void {
+pub fn setSliceCopies(self: *Data, gpa: std.mem.Allocator, key: Key, data: anytype, num_copies: usize, timeout: dvui.RemovalTimeout) std.mem.Allocator.Error!void {
     const S = @TypeOf(data);
     const sentinel = @typeInfo(Slice(S)).pointer.sentinel();
-    const slice, _ = try self.getOrPutSliceT(gpa, key, Slice(S), data.len * num_copies + @intFromBool(sentinel != null), true);
+    const slice, _ = try self.getOrPutSliceT(gpa, key, Slice(S), data.len * num_copies + @intFromBool(sentinel != null), true, timeout);
     for (0..num_copies) |i| {
         @memcpy(slice[i * data.len ..][0..data.len], data);
     }
@@ -83,8 +83,8 @@ pub fn setSliceCopies(self: *Data, gpa: std.mem.Allocator, key: Key, data: anyty
 pub fn getPtr(self: *Data, key: Key, comptime T: type) ?*T {
     return @ptrCast(@alignCast(self.get(key, if (SavedData.DebugInfo == void) {} else .{ .name = @typeName(T), .kind = .single_item })));
 }
-pub fn getPtrDefault(self: *Data, gpa: std.mem.Allocator, key: Key, comptime T: type, default: T) std.mem.Allocator.Error!*T {
-    const value, const existing = try self.getOrPutT(gpa, key, T);
+pub fn getPtrDefault(self: *Data, gpa: std.mem.Allocator, key: Key, comptime T: type, default: T, timeout: dvui.RemovalTimeout) std.mem.Allocator.Error!*T {
+    const value, const existing = try self.getOrPutT(gpa, key, T, timeout);
     if (!existing) value.* = default;
     return value;
 }
@@ -92,9 +92,9 @@ pub fn getPtrDefault(self: *Data, gpa: std.mem.Allocator, key: Key, comptime T: 
 pub fn getSlice(self: *Data, key: Key, comptime S: type) ?Slice(S) {
     return @ptrCast(@alignCast(self.get(key, if (SavedData.DebugInfo == void) {} else .{ .name = @typeName(@typeInfo(S).pointer.child), .kind = .slice })));
 }
-pub fn getSliceDefault(self: *Data, gpa: std.mem.Allocator, key: Key, comptime S: type, default: []const @typeInfo(S).pointer.child) std.mem.Allocator.Error!Slice(S) {
+pub fn getSliceDefault(self: *Data, gpa: std.mem.Allocator, key: Key, comptime S: type, default: []const @typeInfo(S).pointer.child, timeout: dvui.RemovalTimeout) std.mem.Allocator.Error!Slice(S) {
     const sentinel = @typeInfo(Slice(S)).pointer.sentinel();
-    const slice, const existing = try self.getOrPutSliceT(gpa, key, Slice(S), default.len, false);
+    const slice, const existing = try self.getOrPutSliceT(gpa, key, Slice(S), default.len, false, timeout);
     if (!existing) {
         @memcpy(slice, default);
         if (sentinel) |s| slice[default.len] = s;
@@ -102,18 +102,19 @@ pub fn getSliceDefault(self: *Data, gpa: std.mem.Allocator, key: Key, comptime S
     return slice;
 }
 
-fn getOrPutT(self: *Data, gpa: std.mem.Allocator, key: Key, comptime T: type) std.mem.Allocator.Error!struct { *T, bool } {
+fn getOrPutT(self: *Data, gpa: std.mem.Allocator, key: Key, comptime T: type, timeout: dvui.RemovalTimeout) std.mem.Allocator.Error!struct { *T, bool } {
     const bytes, const existing = try self.getOrPut(
         gpa,
         key,
         @sizeOf(T),
         @alignOf(T),
         true,
+        timeout,
         if (SavedData.DebugInfo == void) {} else .{ .name = @typeName(T), .kind = .single_item },
     );
     return .{ @ptrCast(@alignCast(bytes)), existing };
 }
-fn getOrPutSliceT(self: *Data, gpa: std.mem.Allocator, key: Key, comptime S: type, len: usize, replace_existing: bool) std.mem.Allocator.Error!struct { S, bool } {
+fn getOrPutSliceT(self: *Data, gpa: std.mem.Allocator, key: Key, comptime S: type, len: usize, replace_existing: bool, timeout: dvui.RemovalTimeout) std.mem.Allocator.Error!struct { S, bool } {
     const st = @typeInfo(S);
     const T = st.pointer.child;
     const bytes, const existing = try self.getOrPut(
@@ -122,18 +123,19 @@ fn getOrPutSliceT(self: *Data, gpa: std.mem.Allocator, key: Key, comptime S: typ
         @sizeOf(T) * len + @intFromBool(st.pointer.sentinel() != null),
         st.pointer.alignment,
         replace_existing,
+        timeout,
         if (SavedData.DebugInfo == void) {} else .{ .name = @typeName(T), .kind = .slice },
     );
     return .{ @ptrCast(@alignCast(bytes)), existing };
 }
 
 /// Returns the backing byte slice and a boolean indicating if we found an existing entry
-pub fn getOrPut(self: *Data, gpa: std.mem.Allocator, key: Key, len: usize, alignment: u8, replace_existing: bool, debug: SavedData.DebugInfo) std.mem.Allocator.Error!struct { []u8, bool } {
+pub fn getOrPut(self: *Data, gpa: std.mem.Allocator, key: Key, len: usize, alignment: u8, replace_existing: bool, timeout: dvui.RemovalTimeout, debug: SavedData.DebugInfo) std.mem.Allocator.Error!struct { []u8, bool } {
     self.mutex.lock();
     defer self.mutex.unlock();
 
     if (replace_existing) try self.trash.ensureUnusedCapacity(gpa, 1);
-    const entry = try self.storage.getOrPut(gpa, key);
+    const entry = try self.storage.getOrPutWithTimeout(gpa, key, timeout);
     errdefer _ = self.storage.remove(key);
 
     const should_trash = replace_existing and entry.found_existing and entry.value_ptr.data.len != len;
@@ -185,11 +187,11 @@ pub fn remove(self: *Data, gpa: std.mem.Allocator, key: Key) std.mem.Allocator.E
 
 /// Destroys all unused and trashed textures since the last
 /// call to `reset`
-pub fn reset(self: *Data, gpa: std.mem.Allocator) void {
+pub fn reset(self: *Data, gpa: std.mem.Allocator, micros_since_last_reset: u32) void {
     self.mutex.lock();
     defer self.mutex.unlock();
     var it = self.storage.iterator();
-    while (it.next_resetting()) |kv| {
+    while (it.next_resetting(micros_since_last_reset)) |kv| {
         kv.value.free(gpa);
     }
     for (self.trash.items) |sd| {

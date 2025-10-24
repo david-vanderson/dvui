@@ -103,6 +103,7 @@ pub const easing = @import("easing.zig");
 pub const testing = @import("testing.zig");
 pub const selection = @import("selection.zig");
 pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHashMap;
+pub const RemovalTimeout = @import("tracking_hash_map.zig").RemovalTimeout;
 pub const PNGEncoder = @import("PNGEncoder.zig");
 pub const JPGEncoder = @import("JPGEncoder.zig");
 
@@ -156,7 +157,10 @@ pub fn textureGetCached(key: Texture.Cache.Key) ?Texture {
 }
 /// See `Texture.Cache.add`
 pub fn textureAddToCache(key: Texture.Cache.Key, texture: Texture) void {
-    currentWindow().texture_cache.add(currentWindow().gpa, key, texture) catch |err| {
+    return textureAddToCacheWithTimeout(key, texture, .immediate);
+}
+pub fn textureAddToCacheWithTimeout(key: Texture.Cache.Key, texture: Texture, timeout: RemovalTimeout) void {
+    currentWindow().texture_cache.addWithTimeout(currentWindow().gpa, key, texture, timeout) catch |err| {
         dvui.logError(@src(), err, "Could not add texture with key {x} to cache", .{key});
         return;
     };
@@ -523,7 +527,7 @@ pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?st
     const font = Font{ .id = .fromName(name), .size = 14 };
     var entry = try Font.Cache.Entry.init(ttf_bytes, font, name);
     // Try and cache the entry since the work is already done
-    cw.fonts.cache.put(cw.gpa, font.hash(), entry) catch entry.deinit(cw.gpa, cw.backend);
+    cw.fonts.cache.putWithTimeout(cw.gpa, font.hash(), entry, Font.Cache.default_timeout) catch entry.deinit(cw.gpa, cw.backend);
     cw.fonts.database.putAssumeCapacity(font.id, .{
         .name = name,
         .bytes = ttf_bytes,
@@ -1184,8 +1188,14 @@ fn currentOverrideOrPanic(win: ?*Window) *Window {
 ///
 /// If you want to store the contents of a slice, use `dataSetSlice`.
 pub fn dataSet(win: ?*Window, id: Id, key: []const u8, data: anytype) void {
+    return dataSetWithTimeout(win, id, key, data, .immediate);
+}
+/// See `dataSets`
+///
+/// The timeout decides how much time must pass after a value has been used before it's removed from the map
+pub fn dataSetWithTimeout(win: ?*Window, id: Id, key: []const u8, data: anytype, timeout: RemovalTimeout) void {
     const w = currentOverrideOrPanic(win);
-    (w.data_store.set(w.gpa, id.update(key), data)) catch |err| {
+    w.data_store.set(w.gpa, id.update(key), data, timeout) catch |err| {
         dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
     };
 }
@@ -1203,8 +1213,14 @@ pub fn dataSet(win: ?*Window, id: Id, key: []const u8, data: anytype) void {
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the data to.
 pub fn dataSetSlice(win: ?*Window, id: Id, key: []const u8, data: anytype) void {
+    return dataSetSliceWithTimeout(win, id, key, data, .immediate);
+}
+/// See `dataSetSlice`
+///
+/// The timeout decides how much time must pass after a value has been used before it's removed from the map
+pub fn dataSetSliceWithTimeout(win: ?*Window, id: Id, key: []const u8, data: anytype, timeout: RemovalTimeout) void {
     const w = currentOverrideOrPanic(win);
-    (w.data_store.setSlice(w.gpa, id.update(key), data)) catch |err| {
+    w.data_store.setSlice(w.gpa, id.update(key), data, timeout) catch |err| {
         dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
     };
 }
@@ -1213,8 +1229,14 @@ pub fn dataSetSlice(win: ?*Window, id: Id, key: []const u8, data: anytype) void 
 /// into a single slice.  Useful to get dvui to allocate a specific number of
 /// entries that you want to fill in after.
 pub fn dataSetSliceCopies(win: ?*Window, id: Id, key: []const u8, data: anytype, num_copies: usize) void {
+    return dataSetSliceCopiesWithTimeout(win, id, key, data, num_copies, .immediate);
+}
+/// See `dataSetSliceCopies`
+///
+/// The timeout decides how much time must pass after a value has been used before it's removed from the map
+pub fn dataSetSliceCopiesWithTimeout(win: ?*Window, id: Id, key: []const u8, data: anytype, num_copies: usize, timeout: RemovalTimeout) void {
     const w = currentOverrideOrPanic(win);
-    (w.data_store.setSliceCopies(w.gpa, id.update(key), data, num_copies)) catch |err| {
+    w.data_store.setSliceCopies(w.gpa, id.update(key), data, num_copies, timeout) catch |err| {
         dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
     };
 }
@@ -1232,10 +1254,16 @@ pub fn dataSetSliceCopies(win: ?*Window, id: Id, key: []const u8, data: anytype,
 /// contents are copied into internal storage. If false, only the slice itself
 /// (ptr and len) and stored.
 pub fn dataSetAdvanced(win: ?*Window, id: Id, key: []const u8, data: anytype, comptime copy_slice: bool, num_copies: usize) void {
+    return dataSetAdvancedWithTimeout(win, id, key, data, copy_slice, num_copies, .immediate);
+}
+/// See `dataSetAdvanced`
+///
+/// The timeout decides how much time must pass after a value has been used before it's removed from the map
+pub fn dataSetAdvancedWithTimeout(win: ?*Window, id: Id, key: []const u8, data: anytype, comptime copy_slice: bool, num_copies: usize, timeout: RemovalTimeout) void {
     if (copy_slice) {
-        return dataSetSliceCopies(win, id, key, data, num_copies);
+        return dataSetSliceCopies(win, id, key, data, num_copies, timeout);
     } else {
-        return dataSet(win, id, key, data);
+        return dataSet(win, id, key, data, timeout);
     }
 }
 
@@ -1267,7 +1295,7 @@ pub fn dataGet(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
 pub fn dataGetDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: T) T {
     const w = currentOverrideOrPanic(win);
     if (w.data_store.getPtr(id.update(key), T)) |v| return v.* else {
-        w.data_store.set(w.gpa, id.update(key), default);
+        w.data_store.set(w.gpa, id.update(key), default, .immediate);
         return default;
     }
 }
@@ -1290,7 +1318,7 @@ pub fn dataGetDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, 
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetPtrDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: T) *T {
     const w = currentOverrideOrPanic(win);
-    return w.data_store.getPtrDefault(w.gpa, id.update(key), T, default) catch |err| {
+    return w.data_store.getPtrDefault(w.gpa, id.update(key), T, default, .immediate) catch |err| {
         dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
         @panic("dataGetPtrDefault failed");
     };
@@ -1352,7 +1380,7 @@ pub fn dataGetSlice(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T
 /// The slice will always be valid until the next call to `Window.end`.
 pub fn dataGetSliceDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
     const w = currentOverrideOrPanic(win);
-    return w.data_store.getSliceDefault(w.gpa, id.update(key), T, default) catch |err| {
+    return w.data_store.getSliceDefault(w.gpa, id.update(key), T, default, .immediate) catch |err| {
         dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
         @panic("dataGetSliceDefault failed");
     };
