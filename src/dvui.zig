@@ -2608,7 +2608,7 @@ pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Init
 
 pub var expander_defaults: Options = .{
     .name = "Expander",
-    .role = .button,
+    .role = .group,
     .padding = Rect.all(4),
     .font_style = .heading,
 };
@@ -2643,10 +2643,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     if (b.data().accesskit_node()) |ak_node| {
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
-        AccessKit.nodeSetToggled(ak_node, if (expanded) AccessKit.Toggled.ak_true else AccessKit.Toggled.ak_false);
     }
-
-    //var bc = ButtonWidget.init(@src(), .{}, options.strip().override(options).override(.{ .label = .{ .text = if (expanded) "Collapse" else "Expand" } }));
 
     b.drawBackground();
     if (b.data().visible() and b.data().id == dvui.focusedWidgetId()) {
@@ -2654,14 +2651,14 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     }
 
     if (expanded) {
-        icon(@src(), "down_arrow", entypo.triangle_down, .{}, .{ .gravity_y = 0.5 });
+        icon(@src(), "down_arrow", entypo.triangle_down, .{}, .{ .gravity_y = 0.5, .role = .none });
     } else {
         icon(
             @src(),
             "right_arrow",
             entypo.triangle_right,
             .{},
-            .{ .gravity_y = 0.5 },
+            .{ .gravity_y = 0.5, .role = .none },
         );
     }
     labelNoFmt(@src(), label_str, .{}, options.strip().override(.{ .label = .{ .for_id = b.data().id } }));
