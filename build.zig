@@ -548,14 +548,21 @@ const DvuiModuleOptions = struct {
 };
 
 fn accessKitSupported(target: std.Build.ResolvedTarget) bool {
-    if (target.result.os.tag != .windows and !target.result.os.tag.isDarwin()) return false;
-    if (!target.result.cpu.arch.isAARCH64() and !target.result.cpu.arch.isX86()) return false;
-    return true;
+    if (target.result.os.tag == .windows) {
+        return target.result.cpu.arch.isAARCH64() or target.result.cpu.arch.isX86();
+    } else if (target.result.os.tag.isDarwin()) {
+        return target.result.cpu.arch.isAARCH64() or target.result.cpu.arch == .x86_64;
+    } else if (target.result.os.tag == .linux) {
+        return target.result.cpu.arch.isX86();
+    } else {
+        return false;
+    }
 }
 
 fn accessKitPath(b: *std.Build, target: std.Build.ResolvedTarget, ak_dep: *std.Build.Dependency, opt: AccesskitOptions, full_lib_path: bool) std.Build.LazyPath {
     const os_path = if (target.result.os.tag == .windows) "windows" //
         else if (target.result.os.tag.isDarwin()) "macos" //
+        else if (target.result.os.tag == .linux) "linux" //
         else "unsupported";
     const arch_path = if (target.result.cpu.arch.isAARCH64()) "arm64" //
         else if (target.result.cpu.arch == .x86) "x86" //
@@ -564,6 +571,7 @@ fn accessKitPath(b: *std.Build, target: std.Build.ResolvedTarget, ak_dep: *std.B
 
     const abi_path = if (target.result.os.tag == .windows) "msvc" //
         else if (target.result.os.tag.isDarwin()) "" //
+        else if (target.result.os.tag == .linux) "" //
         else "";
 
     const linkage_path = @tagName(opt);
@@ -575,9 +583,11 @@ fn accessKitPath(b: *std.Build, target: std.Build.ResolvedTarget, ak_dep: *std.B
     }
 }
 
+
 fn accessKitLibName(target: std.Build.ResolvedTarget) []const u8 {
     return if (target.result.os.tag == .windows) "accesskit.dll" //
     else if (target.result.os.tag.isDarwin()) "libaccesskit.dylib" //
+    else if (target.result.os.tag == .linux) "libaccesskit.so" //
     else "unsupported";
 }
 
