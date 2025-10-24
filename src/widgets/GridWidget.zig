@@ -258,7 +258,7 @@ pub fn init(src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitO
                         break :blk col_widths;
                     }
                 }
-                dvui.dataSetSliceCopies(null, self.data().id, "_col_widths", &[1]f32{0}, num_cols);
+                dvui.dataSetSliceCopiesWithTimeout(null, self.data().id, "_col_widths", &[1]f32{0}, num_cols, .ten_seconds);
                 if (dvui.dataGetSlice(null, self.data().id, "_col_widths", []f32)) |col_widths| {
                     break :blk col_widths;
                 } else {
@@ -361,14 +361,14 @@ pub fn deinit(self: *GridWidget) void {
         bscroll.deinit();
     }
     self.scroll.deinit();
-    dvui.dataSet(null, self.data().id, "_header_height", self.header_height);
-    dvui.dataSet(null, self.data().id, "_resizing", self.resizing);
-    dvui.dataSet(null, self.data().id, "_row_height", self.row_height);
-    dvui.dataSet(null, self.data().id, "_sort_col", self.sort_col_number);
-    dvui.dataSet(null, self.data().id, "_sort_direction", self.sort_direction);
-    dvui.dataSet(null, self.data().id, "_hsi", self.hsi);
+    dvui.dataSetWithTimeout(null, self.data().id, "_header_height", self.header_height, .ten_seconds);
+    dvui.dataSetWithTimeout(null, self.data().id, "_resizing", self.resizing, .ten_seconds);
+    dvui.dataSetWithTimeout(null, self.data().id, "_row_height", self.row_height, .ten_seconds);
+    dvui.dataSetWithTimeout(null, self.data().id, "_sort_col", self.sort_col_number, .ten_seconds);
+    dvui.dataSetWithTimeout(null, self.data().id, "_sort_direction", self.sort_direction, .ten_seconds);
+    dvui.dataSetWithTimeout(null, self.data().id, "_hsi", self.hsi, .ten_seconds);
     if (self.bsi == &self.default_scroll_info) {
-        dvui.dataSet(null, self.data().id, "_default_si", self.default_scroll_info);
+        dvui.dataSetWithTimeout(null, self.data().id, "_default_si", self.default_scroll_info, .ten_seconds);
     }
 
     self.vbox.deinit();

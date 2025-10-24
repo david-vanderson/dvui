@@ -1124,15 +1124,17 @@ pub fn windowNaturalScale() f32 {
     return currentWindow().natural_scale;
 }
 
-/// True if this is the first frame we've seen this widget id, meaning we don't
+/// True if this is the first frame we've seen this widget id, meaning we may not
 /// know its min size yet.  The widget will record its min size in `.deinit()`.
 ///
-/// If a widget is not seen for a frame, its min size will be forgotten and
-/// firstFrame will return true the next frame we see it.
+/// If a widget is not seen for a frame, this function will always return true,
+/// but we may still have a previous min size value stored.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn firstFrame(id: Id) bool {
-    return minSizeGet(id) == null;
+    const cw = currentWindow();
+    const ptr = cw.min_sizes.getPtr(id) orelse return true;
+    return !cw.min_sizes.getState(ptr).usedLastReset();
 }
 
 /// Get the min size recorded for id from last frame or null if id was not seen

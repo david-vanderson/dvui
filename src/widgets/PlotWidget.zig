@@ -299,7 +299,7 @@ pub fn deinit(self: *PlotWidget) void {
     } else {
         self.x_axis.min = self.data_min.x;
         self.x_axis.max = self.data_max.x;
-        dvui.dataSet(null, self.box.data().id, "_x_axis", self.x_axis.*);
+        dvui.dataSetWithTimeout(null, self.box.data().id, "_x_axis", self.x_axis.*, .five_seconds);
     }
     if (self.init_options.y_axis) |y_axis| {
         if (y_axis.min == null) {
@@ -311,7 +311,7 @@ pub fn deinit(self: *PlotWidget) void {
     } else {
         self.y_axis.min = self.data_min.y;
         self.y_axis.max = self.data_max.y;
-        dvui.dataSet(null, self.box.data().id, "_y_axis", self.y_axis.*);
+        dvui.dataSetWithTimeout(null, self.box.data().id, "_y_axis", self.y_axis.*, .five_seconds);
     }
 
     if (self.hover_data) |hd| {

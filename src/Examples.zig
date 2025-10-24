@@ -74,6 +74,7 @@ pub const demoKind = enum {
 };
 
 pub var demo_active: demoKind = .basic_widgets;
+var invalidate_demo: ?demoKind = null;
 pub const demo_window_tag = "dvui_example_window";
 
 pub fn demo() void {
@@ -131,7 +132,6 @@ pub fn demo() void {
 
         var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .min_size_content = .width(width), .corner_radius = .{ .w = 5, .h = 5 } });
         defer fbox.deinit();
-
         inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
             var bw = dvui.ButtonWidget.init(@src(), .{}, .{
@@ -152,7 +152,9 @@ pub fn demo() void {
             const use_cache = true;
             var cache: *dvui.CacheWidget = undefined;
             if (use_cache) {
-                cache = dvui.cache(@src(), .{ .invalidate = invalidate }, .{ .expand = .both });
+                cache = dvui.cache(@src(), .{ .invalidate = invalidate or (invalidate_demo == e) }, .{ .expand = .both });
+                // Only invalidate once
+                if (invalidate_demo == e) invalidate_demo = null;
             }
             if (!use_cache or cache.uncached()) {
                 const box = dvui.box(@src(), .{}, .{ .expand = .both });
@@ -201,6 +203,7 @@ pub fn demo() void {
             bw.drawFocus();
 
             if (bw.clicked()) {
+                if (demo_active != e) invalidate_demo = demo_active;
                 demo_active = e;
                 if (paned.collapsed()) {
                     paned.animateSplit(0.0);
@@ -216,6 +219,7 @@ pub fn demo() void {
             defer hbox.deinit();
 
             if (paned.collapsed() and dvui.button(@src(), "Back to Demos", .{}, .{ .min_size_content = .{ .h = 30 }, .tag = "dvui_demo_window_back" })) {
+                invalidate_demo = demo_active;
                 paned.animateSplit(1.0);
             }
 

@@ -32,6 +32,11 @@ pub const RemovalTimeout = enum(u32) {
     /// Immediately remove the item on the first call to `reset` where the
     /// item wasn't used
     immediate = 0,
+    one_second = std.time.us_per_s,
+    five_seconds = std.time.us_per_s * 5,
+    ten_seconds = std.time.us_per_s * 10,
+    thirty_seconds = std.time.us_per_s * 30,
+    one_minute = std.time.us_per_min,
     /// Used internally to denote that the item has been used
     used = std.math.maxInt(u32),
     /// Any other number of microseconds of not being used until the item should be removed

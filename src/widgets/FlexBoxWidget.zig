@@ -112,7 +112,7 @@ pub fn deinit(self: *FlexBoxWidget) void {
     const should_free = self.data().was_allocated_on_widget_stack;
     defer if (should_free) dvui.widgetFree(self);
     defer self.* = undefined;
-    dvui.dataSet(null, self.data().id, "_mrw", self.max_row_width);
+    dvui.dataSetWithTimeout(null, self.data().id, "_mrw", self.max_row_width, .ten_seconds);
     dvui.clipSet(self.prevClip);
     self.data().minSizeSetAndRefresh();
     self.data().minSizeReportToParent();

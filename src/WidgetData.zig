@@ -319,7 +319,7 @@ pub fn minSizeSetAndRefresh(self: *WidgetData) void {
 
     var cw = dvui.currentWindow();
 
-    const existing_min_size = cw.min_sizes.fetchPut(cw.gpa, self.id, self.min_size) catch |err| blk: {
+    const existing_min_size = cw.min_sizes.fetchPutWithTimeout(cw.gpa, self.id, self.min_size, .one_minute) catch |err| blk: {
         // returning an error here means that all widgets deinit can return
         // it, which is very annoying because you can't "defer try
         // widget.deinit()".  Also if we are having memory issues then we

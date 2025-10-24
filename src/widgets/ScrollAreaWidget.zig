@@ -184,7 +184,7 @@ pub fn data(self: *ScrollAreaWidget) *WidgetData {
 
 pub fn setContainerRect(self: *ScrollAreaWidget, rect: dvui.Rect) void {
     // only storing the topleft inset, assuming only scrollbars on bottom/right
-    dvui.dataSet(null, self.hbox.data().id, "_linsets", dvui.Size{ .w = rect.x, .h = rect.y });
+    dvui.dataSetWithTimeout(null, self.hbox.data().id, "_linsets", dvui.Size{ .w = rect.x, .h = rect.y }, .ten_seconds);
 }
 
 pub fn deinit(self: *ScrollAreaWidget) void {
@@ -193,7 +193,7 @@ pub fn deinit(self: *ScrollAreaWidget) void {
     defer self.* = undefined;
 
     if (self.scroll) |*s| {
-        dvui.dataSet(null, self.hbox.data().id, "_scroll_id", s.data().id);
+        dvui.dataSetWithTimeout(null, self.hbox.data().id, "_scroll_id", s.data().id, .ten_seconds);
         s.deinit();
     }
 
@@ -203,7 +203,7 @@ pub fn deinit(self: *ScrollAreaWidget) void {
 
     if (self.vbar_grab) |vb| vb.draw();
 
-    dvui.dataSet(null, self.hbox.data().id, "_scroll_info", self.si.*);
+    dvui.dataSetWithTimeout(null, self.hbox.data().id, "_scroll_info", self.si.*, .ten_seconds);
 
     self.hbox.deinit();
 }

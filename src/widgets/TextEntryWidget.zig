@@ -45,6 +45,8 @@ pub const InitOptions = struct {
         /// - use getText() to get contents.
         internal: struct {
             limit: usize = 10_000,
+            /// Sets a timeout for when the text entry isn't rendered before the content gets removed
+            timeout: dvui.RemovalTimeout = .immediate,
         },
     };
 
@@ -488,7 +490,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
                 if (new_size != self.text.len) {
                     // NOTE: Using prev_text is safe because data is trashed and stays valid until the end of the frame
                     const prev_text = self.text;
-                    dvui.dataSetSliceCopies(null, self.data().id, "_buffer", &[_]u8{0}, new_size);
+                    dvui.dataSetSliceCopiesWithTimeout(null, self.data().id, "_buffer", &[_]u8{0}, new_size, i.timeout);
                     self.text = dvui.dataGetSlice(null, self.data().id, "_buffer", []u8).?;
                     const min_len = @min(prev_text.len, self.text.len);
                     if (self.text.ptr != prev_text.ptr) {
@@ -992,10 +994,10 @@ pub fn deinit(self: *TextEntryWidget) void {
                     dvui.logError(@src(), std.mem.Allocator.Error.OutOfMemory, "{x} TextEntryWidget.textTyped failed to realloc backing (current size {d}, new size {d})", .{ self.data().id, self.text.len, new_len });
                 }
             },
-            .internal => {
+            .internal => |i| {
                 // NOTE: Using prev_text is safe because data is trashed and stays valid until the end of the frame
                 const prev_text = self.text;
-                dvui.dataSetSliceCopies(null, self.data().id, "_buffer", &[_]u8{0}, new_len);
+                dvui.dataSetSliceCopiesWithTimeout(null, self.data().id, "_buffer", &[_]u8{0}, new_len, i.timeout);
                 self.text = dvui.dataGetSlice(null, self.data().id, "_buffer", []u8).?;
                 const min_len = @min(prev_text.len, self.text.len);
                 @memcpy(self.text[0..min_len], prev_text[0..min_len]);

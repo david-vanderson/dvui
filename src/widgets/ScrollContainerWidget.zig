@@ -634,8 +634,8 @@ pub fn deinit(self: *ScrollContainerWidget) void {
         self.processEventsAfter();
     }
 
-    dvui.dataSet(null, self.data().id, "_fv_id", self.first_visible_id);
-    dvui.dataSet(null, self.data().id, "_fv_offset", self.first_visible_offset);
+    dvui.dataSetWithTimeout(null, self.data().id, "_fv_id", self.first_visible_id, .ten_seconds);
+    dvui.dataSetWithTimeout(null, self.data().id, "_fv_offset", self.first_visible_offset, .ten_seconds);
     dvui.dataSet(null, self.data().id, "_finger_down", self.finger_down);
 
     const padded = self.data().options.padSize(self.nextVirtualSize);

@@ -226,7 +226,7 @@ pub const Cache = struct {
     database: std.AutoHashMapUnmanaged(FontId, TTFEntry) = .empty,
     cache: dvui.TrackingAutoHashMap(u64, Entry, .{ .tracking = .get_and_put }) = .empty,
 
-    pub const default_timeout = dvui.RemovalTimeout.from_micros(std.time.us_per_min);
+    pub const default_timeout = dvui.RemovalTimeout.one_minute;
 
     pub const TTFEntry = struct {
         bytes: []const u8,
