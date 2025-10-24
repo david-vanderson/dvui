@@ -9,7 +9,8 @@ These users often interact via 'screen reader' that can read text and other acce
 DVUI implements this part of accessibility through the [AccessKit](https://github.com/AccessKit/accesskit) toolkit, which provides a common interface to the operating system-specific accessibility APIs.
 
 While DVUI tries to make this easy to integrate, some effort at the application level is required:
-* adding accessibility labels to images
+* adding accessibility labels to images and icons
+* adding accessiblity labels to entry widgets such as textboxes and groups of widgets. See [Labeling](#labeling) for more details.
 * ensuring visible labels are read for the correct content
 * testing tab ordering and keyboard navigation
 * general testing with screen readers (see below)
@@ -180,6 +181,20 @@ if (te.data().accesskit_node()) | ak_node | {
     AccessKit.nodeSetNumericValue(ak_node, std.fmt.parseInt(te.getText()) catch 0);
 }
 ```
+
+#### Labeling
+Labellng is one of the most important things you can do to make your appliction more accessible. Widgets can be labelled by setting the `.label` option for any widget. Labels should give the screen reader enough context for a widget so the user csn know what that widget is for. 
+
+For example, if a user moves focus to a text entry, the text box should be labeeled with it's purpose. Typically, this will the contents of the label widget preceding the text entry.
+
+DVUI offers the following labeling options:
+   * text - set label directly
+   * by_id - Pass the id of the label widget containing the label
+   * for_id - This label widget labels another widget.
+   * label_widget = .prev - This widget is labeled by the last created label widget.
+   * label_widget  = .next - This widget is labeled by the next created label widget.
+
+Alternatively, you can also use the `AccessKit.nodeSetLabel` and `AccessKit.nodeSetLabeledBy` functions.
 
 ## Current State of Accessibility in DVUI
 
