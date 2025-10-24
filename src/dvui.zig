@@ -2607,6 +2607,8 @@ pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Init
 }
 
 pub var expander_defaults: Options = .{
+    .name = "Expander",
+    .role = .button,
     .padding = Rect.all(4),
     .font_style = .heading,
 };
@@ -2623,33 +2625,34 @@ pub const ExpanderOptions = struct {
 pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ExpanderOptions, opts: Options) bool {
     const options = expander_defaults.override(opts);
 
-    var exp_box = BoxWidget.init(src, .{ .dir = .horizontal }, options.strip().override(.{ .role = .group }));
-    exp_box.install();
-    exp_box.drawBackground();
-    defer exp_box.deinit();
+    var b = box(src, .{ .dir = .horizontal }, options);
+    defer b.deinit();
+
+    dvui.tabIndexSet(b.data().id, b.data().options.tab_index);
 
     var expanded: bool = init_opts.default_expanded;
-    if (dvui.dataGet(null, exp_box.data().id, "_expand", bool)) |e| {
+    if (dvui.dataGet(null, b.data().id, "_expand", bool)) |e| {
         expanded = e;
     }
 
-    // Use the ButtonWidget to do margin/border/padding, but use strip so we
-    // don't get any of ButtonWidget's defaults
-    var bc = ButtonWidget.init(@src(), .{}, options.strip().override(options).override(.{ .label = .{ .text = if (expanded) "Collapse" else "Expand" } }));
-    bc.install();
-    bc.processEvents();
-    bc.drawBackground();
-    bc.drawFocus();
-    defer bc.deinit();
-
-    if (bc.clicked()) {
+    var hovered: bool = false;
+    if (dvui.clicked(b.data(), .{ .hovered = &hovered })) {
         expanded = !expanded;
     }
 
-    var bcbox = BoxWidget.init(@src(), .{ .dir = .horizontal }, options.strip());
-    defer bcbox.deinit();
-    bcbox.install();
-    bcbox.drawBackground();
+    if (b.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
+        AccessKit.nodeSetToggled(ak_node, if (expanded) AccessKit.Toggled.ak_true else AccessKit.Toggled.ak_false);
+    }
+
+    //var bc = ButtonWidget.init(@src(), .{}, options.strip().override(options).override(.{ .label = .{ .text = if (expanded) "Collapse" else "Expand" } }));
+
+    b.drawBackground();
+    if (b.data().visible() and b.data().id == dvui.focusedWidgetId()) {
+        b.data().focusBorder();
+    }
+
     if (expanded) {
         icon(@src(), "down_arrow", entypo.triangle_down, .{}, .{ .gravity_y = 0.5 });
     } else {
@@ -2661,9 +2664,9 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
             .{ .gravity_y = 0.5 },
         );
     }
-    labelNoFmt(@src(), label_str, .{}, options.strip().override(.{ .label = .{ .for_id = exp_box.data().id } }));
+    labelNoFmt(@src(), label_str, .{}, options.strip().override(.{ .label = .{ .for_id = b.data().id } }));
 
-    dvui.dataSet(null, exp_box.data().id, "_expand", expanded);
+    dvui.dataSet(null, b.data().id, "_expand", expanded);
     // Accessibility TODO: Support expand and collapse actions, but can;t find a way to get it to work.
 
     return expanded;

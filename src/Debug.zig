@@ -385,10 +385,20 @@ pub fn show(self: *Debug) void {
 }
 
 fn showFrameTimes(self: *Debug) void {
-    var float = dvui.floatingWindow(@src(), .{ .open_flag = &self.show_frame_times }, .{ .min_size_content = .{ .w = 600, .h = 100 } });
+    var float = dvui.floatingWindow(@src(), .{ .open_flag = &self.show_frame_times }, .{ .min_size_content = .width(600) });
     defer float.deinit();
 
     float.dragAreaSet(dvui.windowHeader("Frame Times", "", &self.show_frame_times));
+
+    {
+        var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .gravity_y = 1.0 });
+        defer b.deinit();
+
+        var tl = dvui.textLayout(@src(), .{}, .{ .expand = .both });
+        defer tl.deinit();
+
+        tl.addText("Shows time (ms) between Window.begin/end for last 400 frames.", .{});
+    }
 
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
 
@@ -420,7 +430,7 @@ fn showFrameTimes(self: *Debug) void {
         .max = 50,
     };
 
-    dvui.plotXY(@src(), .{ .xs = xs, .ys = data, .plot_opts = .{ .y_axis = &yaxis } }, .{ .expand = .both, .margin = .{ .x = 6 } });
+    dvui.plotXY(@src(), .{ .xs = xs, .ys = data, .plot_opts = .{ .y_axis = &yaxis } }, .{ .expand = .both, .min_size_content = .height(50) });
 }
 
 const OptionsEditorTab = enum { layout, style };
