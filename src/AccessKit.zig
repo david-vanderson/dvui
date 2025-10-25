@@ -82,7 +82,6 @@ pub fn initialize(self: *AccessKit) void {
         //ak.accesskit_macos_add_focus_forwarder_to_window_class("SDLWindow");
         self.adapter = c.accesskit_macos_subclassing_adapter_for_window(macOSWinPtr(window), initialTreeUpdate, self, doAction, self) orelse @panic("null");
     } else if (builtin.os.tag == .linux) {
-        std.debug.print("setting adapter\n", .{});
         self.adapter = c.accesskit_unix_adapter_new(initialTreeUpdate, self, doAction, self, deactivateAccessibility, self) orelse @panic("null");
     } else {
         @panic("Accesskit initialization failed: no supported adapter found");
@@ -175,7 +174,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
         .on => {},
     }
 
-std.debug.print("creating node\n", .{});
+    //std.debug.print("creating node\n", .{});
     if (debug_node_tree)
         std.debug.print("Creating Node for {x} with role {?t} at {s}:{d}\n", .{ wd.id, wd.options.role, wd.src.file, wd.src.line });
 
@@ -343,7 +342,7 @@ pub fn pushUpdates(self: *AccessKit) void {
     if (builtin.os.tag == .linux)
         c.accesskit_unix_adapter_update_window_focus_state(self.adapter.?, true);
 
-    std.debug.print("push updates = {t}\n", .{self.status});
+    //std.debug.print("push updates = {t}\n", .{self.status});
     if (self.status != .on) {
         return;
     }
@@ -370,7 +369,7 @@ pub fn pushUpdates(self: *AccessKit) void {
             c.accesskit_macos_queued_events_raise(events);
         }
     } else if (builtin.os.tag == .linux) {
-        std.debug.print("updating if active\n", .{});
+        //std.debug.print("updating if active\n", .{});
         c.accesskit_unix_adapter_update_if_active(self.adapter.?, frameTreeUpdate, self);
     }
 
@@ -407,7 +406,7 @@ pub fn deinit(self: *AccessKit) void {
 /// Called once per frame (if accessibility is initialized)
 /// Note: This callback is only during the dynamic extent of pushUpdates on the same thread. TODO: verify this.
 pub fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
-    std.debug.print("frame tree update\n", .{});
+    //std.debug.print("frame tree update\n", .{});
     var self: *AccessKit = @ptrCast(@alignCast(instance));
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
 
@@ -426,7 +425,7 @@ pub fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
 /// The initial tree only contains basic window details. These are updated when frameTreeUpdate runs.
 /// Note: This callback can occur on a non-gui thread.
 pub fn initialTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
-    std.debug.print("init tree update\n", .{});
+    //std.debug.print("init tree update\n", .{});
     var self: *AccessKit = @ptrCast(@alignCast(instance));
     self.mutex.lock();
     defer self.mutex.unlock();
