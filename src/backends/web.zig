@@ -19,6 +19,7 @@ var touchPoints: [10]?dvui.Point = [_]?dvui.Point{null} ** 10;
 var have_event = false;
 
 cursor_last: dvui.enums.Cursor = .wait,
+force_new_window: bool = false,
 
 const EventTemp = struct {
     kind: u8,
@@ -690,8 +691,8 @@ pub fn clipboardTextSet(_: *WebBackend, text: []const u8) !void {
     return;
 }
 
-pub fn openURL(_: *WebBackend, url: []const u8, new_window: bool) !void {
-    wasm.wasm_open_url(url.ptr, url.len, new_window);
+pub fn openURL(self: *WebBackend, url: []const u8, new_window: bool) !void {
+    wasm.wasm_open_url(url.ptr, url.len, self.force_new_window or new_window);
 }
 
 pub fn preferredColorScheme(_: *WebBackend) ?dvui.enums.ColorScheme {
