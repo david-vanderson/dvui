@@ -3809,13 +3809,6 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                 focusWidget(b.data().id, null, e.num);
             }
 
-            if (e.evt == .text) {
-                e.handle(@src(), b.data());
-                text_mode = false;
-                te.textSet(e.evt.text.txt, false);
-                new_val = std.fmt.parseFloat(f32, te_buf[0..te.len]) catch null;
-            }
-
             if (!e.handled) {
                 te.processEvent(e);
             }
@@ -3833,8 +3826,11 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         if (!text_mode) {
             refresh(null, @src(), b.data().id);
 
-            if (new_val) |nv| {
-                init_opts.value.* = nv;
+            if (new_val) |*nv| {
+                if (init_opts.min) |min| nv.* = @max(min, nv.*);
+                if (init_opts.max) |max| nv.* = @min(max, nv.*);
+
+                init_opts.value.* = nv.*;
                 ret = true;
             }
         }
