@@ -583,7 +583,6 @@ fn accessKitPath(b: *std.Build, target: std.Build.ResolvedTarget, ak_dep: *std.B
     }
 }
 
-
 fn accessKitLibName(target: std.Build.ResolvedTarget) []const u8 {
     return if (target.result.os.tag == .windows) "accesskit.dll" //
     else if (target.result.os.tag.isDarwin()) "libaccesskit.dylib" //
@@ -621,6 +620,10 @@ fn addDvuiModule(
         dvui_mod.addIncludePath(ak_dep.path("include"));
         dvui_mod.addLibraryPath(accessKitPath(b, target, ak_dep, opts.accesskit, false));
         dvui_mod.linkSystemLibrary("accesskit", .{});
+
+        if (target.result.os.tag == .linux) {
+            dvui_mod.linkSystemLibrary("unwind", .{});
+        }
     }
 
     const stb_source = "vendor/stb/";
