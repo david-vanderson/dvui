@@ -607,7 +607,7 @@ pub fn clipboardTextSet(self: *SDLBackend, text: []const u8) !void {
     try toErr(c.SDL_SetClipboardText(c_text.ptr), "SDL_SetClipboardText in clipboardTextSet");
 }
 
-pub fn openURL(self: *SDLBackend, url: []const u8) !void {
+pub fn openURL(self: *SDLBackend, url: []const u8, _: bool) !void {
     const c_url = try self.arena.dupeZ(u8, url);
     defer self.arena.free(c_url);
     try toErr(c.SDL_OpenURL(c_url.ptr), "SDL_OpenURL in openURL");

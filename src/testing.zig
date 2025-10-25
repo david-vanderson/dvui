@@ -29,7 +29,7 @@ pub fn click(b: dvui.enums.Button) !void {
 
 pub fn writeText(text: []const u8) !void {
     const cw = dvui.currentWindow();
-    _ = try cw.addEventText(. { .text = text } );
+    _ = try cw.addEventText(.{ .text = text });
 }
 
 pub fn pressKey(code: dvui.enums.Key, mod: dvui.enums.Mod) !void {

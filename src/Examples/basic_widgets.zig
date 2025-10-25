@@ -92,15 +92,10 @@ pub fn basicWidgets() void {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
-        dvui.label(@src(), "Link:", .{}, .{ .gravity_y = 0.5 });
+        dvui.label(@src(), "Link:", .{}, .{});
 
-        if (dvui.labelClick(@src(), "https://david-vanderson.github.io/", .{}, .{}, .{ .gravity_y = 0.5, .color_text = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } })) {
-            _ = dvui.openURL("https://david-vanderson.github.io/");
-        }
-
-        if (dvui.labelClick(@src(), "docs", .{}, .{}, .{ .gravity_y = 0.5, .margin = .{ .x = 10 }, .color_text = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } })) {
-            _ = dvui.openURL("https://david-vanderson.github.io/docs");
-        }
+        dvui.link(@src(), .{ .url = "https://david-vanderson.github.io/" }, .{});
+        dvui.link(@src(), .{ .label = "docs", .url = "https://david-vanderson.github.io/docs" }, .{ .margin = .{ .x = 10 } });
     }
 
     _ = dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});

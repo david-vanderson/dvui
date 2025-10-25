@@ -31,9 +31,7 @@ pub fn debuggingErrors() void {
             dvui.label(@src(), " - fix by passing .id_extra = <loop index>", .{}, .{ .id_extra = i });
         }
 
-        if (dvui.labelClick(@src(), "See https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids", .{}, .{}, .{ .color_text = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } })) {
-            _ = dvui.openURL("https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids");
-        }
+        dvui.link(@src(), .{ .url = "https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids" }, .{});
     }
 
     if (dvui.expander(@src(), "Invalid utf-8 text", .{}, .{ .expand = .horizontal })) {
