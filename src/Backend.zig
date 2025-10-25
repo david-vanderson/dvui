@@ -125,9 +125,10 @@ pub fn clipboardTextSet(self: Backend, text: []const u8) GenericError!void {
     return self.impl.clipboardTextSet(text);
 }
 
-/// Open URL in system browser
-pub fn openURL(self: Backend, url: []const u8) GenericError!void {
-    return self.impl.openURL(url);
+/// Open URL in system browser.  If using the web backend, new_window controls
+/// whether to navigate the current page to the url or open in a new window/tab.
+pub fn openURL(self: Backend, url: []const u8, new_window: bool) GenericError!void {
+    return self.impl.openURL(url, new_window);
 }
 
 /// Get the preferredColorScheme if available

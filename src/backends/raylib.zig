@@ -445,7 +445,7 @@ pub fn clipboardTextSet(self: *RaylibBackend, text: []const u8) !void {
     c.SetClipboardText(c_text.ptr);
 }
 
-pub fn openURL(self: *RaylibBackend, url: []const u8) !void {
+pub fn openURL(self: *RaylibBackend, url: []const u8, _: bool) !void {
     const c_url = try self.arena.dupeZ(u8, url);
     defer self.arena.free(c_url);
     c.OpenURL(c_url.ptr);

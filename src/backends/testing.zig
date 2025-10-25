@@ -140,7 +140,7 @@ pub fn clipboardTextSet(self: *TestingBackend, text: []const u8) std.mem.Allocat
 }
 
 /// Open URL in system browser
-pub fn openURL(_: *TestingBackend, _: []const u8) std.mem.Allocator.Error!void {}
+pub fn openURL(_: *TestingBackend, _: []const u8, _: bool) std.mem.Allocator.Error!void {}
 
 pub fn preferredColorScheme(_: *TestingBackend) ?dvui.enums.ColorScheme {
     return null;

@@ -1025,7 +1025,7 @@ pub fn clipboardTextSet(self: Context, text: []const u8) !void {
     _ = win32.SetClipboardData(@intFromEnum(win32.CF_UNICODETEXT), @ptrFromInt(handle_usize)) orelse try lastErr("SetClipboardData in clipboardTextSet");
 }
 
-pub fn openURL(self: Context, url: []const u8) !void {
+pub fn openURL(self: Context, url: []const u8, _: bool) !void {
     const hwnd = hwndFromContext(self);
     const arena = stateFromHwnd(hwnd).arena;
 

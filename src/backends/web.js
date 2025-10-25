@@ -757,7 +757,7 @@ class Dvui {
                     this.textInputRect = [];
                 }
             },
-            wasm_open_url: (ptr, len) => {
+            wasm_open_url: (ptr, len, new_win) => {
                 let url = utf8decoder.decode(
                     new Uint8Array(
                         this.instance.exports.memory.buffer,
@@ -765,7 +765,12 @@ class Dvui {
                         len,
                     ),
                 );
-                window.open(url);
+
+                if (new_win) {
+                    window.open(url);
+                } else {
+                    window.location.href = url;
+                }
             },
             wasm_preferred_color_scheme: () => {
                 if (

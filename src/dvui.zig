@@ -976,13 +976,18 @@ pub fn clipboardTextSet(text: []const u8) void {
     };
 }
 
+pub const OpenURLOptions = struct {
+    url: []const u8,
+    new_window: bool = true,
+};
+
 /// Ask the system to open the given url.
 /// http:// and https:// urls can be opened.
 /// returns true if the backend reports the URL was opened.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn openURL(url: []const u8) bool {
-    const parsed = std.Uri.parse(url) catch return false;
+pub fn openURL(opts: OpenURLOptions) bool {
+    const parsed = std.Uri.parse(opts.url) catch return false;
     if (!std.ascii.eqlIgnoreCase(parsed.scheme, "http") and
         !std.ascii.eqlIgnoreCase(parsed.scheme, "https"))
     {
@@ -993,17 +998,17 @@ pub fn openURL(url: []const u8) bool {
     }
 
     const cw = currentWindow();
-    cw.backend.openURL(url) catch |err| {
-        logError(@src(), err, "Could not open url '{s}'", .{url});
+    cw.backend.openURL(opts.url, opts.new_window) catch |err| {
+        logError(@src(), err, "Could not open url '{s}'", .{opts.url});
         return false;
     };
     return true;
 }
 
 test openURL {
-    try std.testing.expect(openURL("notepad.exe") == false);
-    try std.testing.expect(openURL("https://") == false);
-    try std.testing.expect(openURL("file:///") == false);
+    try std.testing.expect(openURL(.{ .url = "notepad.exe" }) == false);
+    try std.testing.expect(openURL(.{ .url = "https://" }) == false);
+    try std.testing.expect(openURL(.{ .url = "file:///" }) == false);
 }
 
 /// Seconds elapsed between last frame and current.  This value can be quite
@@ -3203,17 +3208,44 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
     return ret;
 }
 
-/// A clickable label.  Good for hyperlinks.
+pub const LinkOptions = struct {
+    /// url navigated to when clicked
+    url: []const u8,
+
+    /// label shown to user - if null, uses url
+    label: ?[]const u8 = null,
+};
+
+/// A label that calls `openURL` when clicked.
+pub fn link(src: std.builtin.SourceLocation, init_opts: LinkOptions, opts: Options) void {
+    const defaults: Options = .{ .color_text = dvui.themeGet().focus };
+    var click_event: dvui.Event.EventTypes = undefined;
+    if (dvui.labelClick(src, "{s}", .{init_opts.label orelse init_opts.url}, .{ .click_event = &click_event }, defaults.override(opts))) {
+        const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));
+        _ = dvui.openURL(.{ .url = init_opts.url, .new_window = new_window });
+    }
+}
+
+pub const LabelClickOptions = struct {
+    label_opts: LabelWidget.InitOptions = .{},
+    click_event: ?*Event.EventTypes = null,
+};
+
+/// A clickable label.  See `link`.
 /// Returns true if it's been clicked.
-pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) bool {
+pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelClickOptions, opts: Options) bool {
     const defaults: Options = .{ .name = "LabelClick", .role = .link };
-    var lw = LabelWidget.init(src, fmt, args, init_opts, defaults.override(opts));
+    var lw = LabelWidget.init(src, fmt, args, init_opts.label_opts, defaults.override(opts));
     // draw border and background
     lw.install();
 
     dvui.tabIndexSet(lw.data().id, lw.data().options.tab_index);
 
-    const ret = dvui.clicked(lw.data(), .{});
+    var ret = false;
+    if (dvui.clickedEx(lw.data(), .{})) |click_event| {
+        ret = true;
+        if (init_opts.click_event) |ce| ce.* = click_event;
+    }
 
     // draw text
     lw.draw();
