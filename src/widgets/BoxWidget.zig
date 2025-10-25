@@ -296,7 +296,7 @@ pub fn deinit(self: *BoxWidget) void {
     self.data().minSizeSetAndRefresh();
     self.data().minSizeReportToParent();
 
-    dvui.dataSet(null, self.data().id, "_data", Data{ .packed_children = self.packed_children, .total_weight = self.total_weight, .min_space_taken = self.min_space_taken });
+    dvui.dataSetWithTimeout(null, self.data().id, "_data", Data{ .packed_children = self.packed_children, .total_weight = self.total_weight, .min_space_taken = self.min_space_taken }, .ten_seconds);
 
     dvui.parentReset(self.data().id, self.data().parent);
 }
