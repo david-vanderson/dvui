@@ -92,6 +92,19 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 
 ## Getting Started
 
+Add the dvui dependency:
+```
+zig fetch --save git+https://github.com/david-vanderson/dvui#main
+```
+
+Add build.zig logic (here using sdl3 backend):
+```
+const dvui_dep = b.dependency("dvui", .{ .target = target, .optimize = optimize, .backend = .sdl3 });
+exe.root_module.addImport("dvui", dvui_dep.module("dvui_sdl3"));
+```
+
+If you are starting a new project, copy the [app example](/examples/app.zig).
+
 [DVUI Demo](https://github.com/david-vanderson/dvui-demo) is a template project you can use as a starting point.
 - build.zig and build.zig.zon show how to reference dvui as a zig dependency
 - for applications, you can use the dvui.App layer to have dvui manage the mainloop for you
@@ -100,6 +113,16 @@ Important Tips:
 * Use the debug window (`dvui.toggleDebugWindow()`)
 * Read the [devlog](https://david-vanderson.github.io/log)
   * Especially about [units](https://david-vanderson.github.io/log/2025/#2025-05-12)
+
+For zls autocomplete to work on dvui's backend, you must import it directly.  In build.zig:
+```
+mod.addImport("sdl-backend", dvui_dep.module("sdl3"));
+```
+
+Then in your code:
+```
+const SDLBackend = @import("sdl-backend");
+```
 
 ## Built-in Widgets
 
