@@ -445,23 +445,28 @@ pub const Cache = struct {
             var size = Size{};
             {
                 var i: u32 = 0;
-                var rowlen: f32 = 0;
-                var it = self.glyph_info.valueIterator();
+                var row: Size = .{};
+                var it = self.glyph_info.iterator();
 
                 while (i < total) {
-                    if (i % row_glyphs == 0) {
-                        size.w = @max(size.w, rowlen);
-                        size.h += self.height + 2 * pad;
-                        rowlen = 0;
-                    }
+                    const gi, const codepoint = if (i < self.glyph_info_ascii.len) .{ &self.glyph_info_ascii[i], i + ascii_start } else blk: {
+                        const e = it.next().?;
+                        break :blk .{ e.value_ptr, e.key_ptr.* };
+                    };
+                    _ = codepoint;
 
-                    const gi = if (i < self.glyph_info_ascii.len) &self.glyph_info_ascii[i] else it.next().?;
-
-                    rowlen += gi.w + 2 * pad;
+                    row.w += gi.w + 2 * pad;
+                    row.h = @max(row.h, gi.h + 2 * pad);
 
                     i += 1;
+                    if (i % row_glyphs == 0) {
+                        size.w = @max(size.w, row.w);
+                        size.h += row.h;
+                        row = .{};
+                    }
                 } else {
-                    size.w = @max(size.w, rowlen);
+                    size.w = @max(size.w, row.w);
+                    size.h += row.h;
                 }
 
                 size = size.ceil();
@@ -482,6 +487,7 @@ pub const Cache = struct {
             var x: i32 = pad;
             var y: i32 = pad;
             var it = self.glyph_info.iterator();
+            var row_height: u32 = 0;
             var i: u32 = 0;
             while (i < total) {
                 var gi, const codepoint = if (i < self.glyph_info_ascii.len) .{ &self.glyph_info_ascii[i], i + ascii_start } else blk: {
@@ -507,6 +513,7 @@ pub const Cache = struct {
                     }
 
                     const bitmap = self.face.*.glyph.*.bitmap;
+                    row_height = @max(row_height, bitmap.rows);
                     var row: i32 = 0;
                     while (row < bitmap.rows) : (row += 1) {
                         var col: i32 = 0;
@@ -523,6 +530,7 @@ pub const Cache = struct {
                 } else {
                     const out_w: u32 = @intFromFloat(gi.w);
                     const out_h: u32 = @intFromFloat(gi.h);
+                    row_height = @max(row_height, out_h);
 
                     // single channel
                     const bitmap = try gpa.alloc(u8, @as(usize, out_w * out_h));
@@ -550,7 +558,8 @@ pub const Cache = struct {
                 i += 1;
                 if (i % row_glyphs == 0) {
                     x = pad;
-                    y += @as(i32, @intFromFloat(self.height)) + 2 * pad;
+                    y += @intCast(row_height + 2 * pad);
+                    row_height = 0;
                 }
             }
 
