@@ -615,10 +615,16 @@ fn addDvuiModule(
         dvui_mod.linkSystemLibrary("ole32", .{});
     }
 
+    // the system integration option check has to always occur even if accesskit is disabled for
+    // it to be displayed in the build help
+    const accesskit_from_system = b.systemIntegrationOption("accesskit", .{});
     if (opts.accesskit.enabled()) {
         const ak_dep = b.dependency("accesskit", .{});
         dvui_mod.addIncludePath(ak_dep.path("include"));
-        dvui_mod.addLibraryPath(accessKitPath(b, target, ak_dep, opts.accesskit, false));
+
+        if (!accesskit_from_system) {
+            dvui_mod.addLibraryPath(accessKitPath(b, target, ak_dep, opts.accesskit, false));
+        }
         dvui_mod.linkSystemLibrary("accesskit", .{});
 
         if (target.result.os.tag == .linux) {
@@ -735,6 +741,8 @@ fn addExample(
             opts.accesskit,
             true,
         ), .bin, accessKitLibName(opts.target)).step);
+        // Converts shared lib path to be relative to exe install directory.
+        exe.root_module.addRPathSpecial("$ORIGIN");
     }
 
     const run_step = b.step(name, "Run " ++ name);
