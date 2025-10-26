@@ -122,7 +122,9 @@ current_line_width: f32 = 0.0, // width of lines if break_lines was false
 touch_edit_just_focused: bool,
 
 cursor_pt: ?Point = null,
+cursor_event: ?dvui.Event.EventTypes = null,
 click_pt: ?Point = null,
+click_event: ?dvui.Event.EventTypes = null,
 click_num: u8 = 0,
 
 bytes_seen: usize = 0,
@@ -492,11 +494,27 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) void {
     _ = self.addTextEx(text, .none, opts);
 }
 
-pub fn addTextClick(self: *TextLayoutWidget, text: []const u8, opts: Options) bool {
+pub fn addTextClick(self: *TextLayoutWidget, text: []const u8, opts: Options) ?dvui.Event.EventTypes {
     return self.addTextEx(text, .click, opts);
 }
 
-pub fn addTextHover(self: *TextLayoutWidget, text: []const u8, opts: Options) bool {
+pub const AddLinkOptions = struct {
+    /// url navigated to when clicked
+    url: []const u8,
+
+    /// text shown to user - if null, uses url
+    text: ?[]const u8 = null,
+};
+
+pub fn addLink(self: *TextLayoutWidget, init_opts: AddLinkOptions, opts: Options) void {
+    const defs: Options = .{ .color_text = dvui.themeGet().focus };
+    if (self.addTextClick(init_opts.text orelse init_opts.url, defs.override(opts))) |click_event| {
+        const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));
+        _ = dvui.openURL(.{ .url = init_opts.url, .new_window = new_window });
+    }
+}
+
+pub fn addTextHover(self: *TextLayoutWidget, text: []const u8, opts: Options) ?dvui.Event.EventTypes {
     return self.addTextEx(text, .hover, opts);
 }
 
@@ -506,7 +524,7 @@ pub fn addTextTooltip(self: *TextLayoutWidget, src: std.builtin.SourceLocation, 
         .position = .sticky,
     }, .{ .id_extra = opts.idExtra() });
 
-    if (self.addTextHover(text, opts)) {
+    if (self.addTextHover(text, opts)) |_| {
         tt.init_options.active_rect = dvui.windowRectPixels();
     }
 
@@ -1150,8 +1168,8 @@ const AddTextExAction = enum {
     hover,
 };
 
-fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) bool {
-    var ret = false;
+fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) ?dvui.Event.EventTypes {
+    var ret: ?dvui.Event.EventTypes = null;
     const cw = dvui.currentWindow();
 
     var txt = dvui.toUtf8(cw.lifo(), text_in) catch |err| blk: {
@@ -1171,7 +1189,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             //std.debug.print("{d} clb {d} .. {d} bytes {d} taking {d} .. {d}\n", .{ self.bytes_seen, clb.start, clb.end, self.cache_layout_bytes_seen, start, end });
 
             txt = txt[start..end];
-            if (txt.len == 0) return false;
+            if (txt.len == 0) return null;
         } else {
             // bytesNeeded returned null, we can't do it this frame
             self.cache_layout = false;
@@ -1313,7 +1331,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                     if (action == .click) {
                         dvui.cursorSet(.hand);
                     } else if (action == .hover) {
-                        ret = true;
+                        ret = self.cursor_event;
                     }
                 }
             }
@@ -1322,7 +1340,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
                 if (p.x > rs.x and p.x < (rs.x + rs.w) and p.y > rs.y and p.y < (rs.y + rs.h)) {
                     if (action == .click) {
-                        ret = true;
+                        ret = self.click_event;
                     }
                 }
             }
@@ -1534,7 +1552,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         }
     }
 
-    if (action == .click and ret) {
+    if (action == .click and (ret != null)) {
         // we can only click when not in touch editing, so that click must have
         // transitioned us into touch editing, but we don't want to transition
         // if the click happened on clickable text
@@ -1872,7 +1890,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                 e.handle(@src(), self.data());
                 // focus so that we can receive keyboard input
                 dvui.focusWidget(self.data().id, null, e.num);
-            } else if (me.action == .press and me.button.pointer()) {
+            } else if (me.action == .press and (me.button.pointer() or me.button == .middle)) {
                 e.handle(@src(), self.data());
                 // capture and start drag
                 dvui.captureMouse(self.data(), e.num);
@@ -1886,7 +1904,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                         // need to refresh draggables
                         dvui.refresh(null, @src(), self.data().id);
                     }
-                } else {
+                } else if (me.button.pointer()) {
                     // a click always sets sel_move - has the highest priority
                     const p = self.data().contentRectScale().pointFromPhysical(me.p);
                     self.sel_move = .{ .mouse = .{ .down_pt = p } };
@@ -1900,17 +1918,20 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                         self.sel_move = .{ .expand_pt = .{ .which = .line, .pt = p } };
                     }
                 }
-            } else if (me.action == .release and me.button.pointer()) {
+            } else if (me.action == .release and (me.button.pointer() or me.button == .middle)) {
                 e.handle(@src(), self.data());
 
                 if (dvui.captured(self.data().id)) {
                     if (!self.touch_editing and dvui.dragging(me.p, null) == null) {
                         // click without drag
                         self.click_pt = self.data().contentRectScale().pointFromPhysical(me.p);
+                        self.click_event = e.evt;
 
-                        self.click_num += 1;
-                        if (self.click_num == 4) {
-                            self.click_num = 1;
+                        if (me.button.pointer()) {
+                            self.click_num += 1;
+                            if (self.click_num == 4) {
+                                self.click_num = 1;
+                            }
                         }
                     }
 
@@ -1975,6 +1996,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                 self.click_num = 0;
             } else if (me.action == .position) {
                 self.cursor_pt = self.data().contentRectScale().pointFromPhysical(me.p);
+                self.cursor_event = e.evt;
             }
         },
         .key => |ke| blk: {

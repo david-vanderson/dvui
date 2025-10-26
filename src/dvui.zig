@@ -3242,7 +3242,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
     dvui.tabIndexSet(lw.data().id, lw.data().options.tab_index);
 
     var ret = false;
-    if (dvui.clickedEx(lw.data(), .{})) |click_event| {
+    if (dvui.clickedEx(lw.data(), .{ .buttons = .any })) |click_event| {
         ret = true;
         if (init_opts.click_event) |ce| ce.* = click_event;
     }

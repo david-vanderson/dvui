@@ -132,9 +132,13 @@ pub fn layoutText() void {
         const lorem2 = " Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\n";
         tl.addText(lorem, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
 
-        if (tl.addTextClick("This text is a link that is part of the text layout and goes to the dvui home page.", .{ .color_text = .{ .r = 0x35, .g = 0x84, .b = 0xe4 }, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) })) {
-            _ = dvui.openURL(.{ .url = "https://david-vanderson.github.io/" });
-        }
+        tl.addLink(
+            .{
+                .text = "This text is a link that is part of the text layout and goes to the dvui home page.",
+                .url = "https://david-vanderson.github.io/",
+            },
+            .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) },
+        );
 
         tl.addText(lorem2, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
 
