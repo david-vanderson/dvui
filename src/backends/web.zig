@@ -19,7 +19,7 @@ var touchPoints: [10]?dvui.Point = [_]?dvui.Point{null} ** 10;
 var have_event = false;
 
 cursor_last: dvui.enums.Cursor = .wait,
-force_new_window: bool = false,
+force_new_window: bool = true,
 
 const EventTemp = struct {
     kind: u8,
