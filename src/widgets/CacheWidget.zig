@@ -12,6 +12,10 @@ const CacheWidget = @This();
 
 pub const InitOptions = struct {
     invalidate: bool = false,
+    /// How long should the texture be cached for when it's no longer shown.
+    /// This can be useful if you have multiple views and expect the user to
+    /// move between them relatively quickely, but still want the cache to stay alive.
+    timeout: dvui.RemovalTimeout = .ten_seconds,
 };
 
 wd: WidgetData,
@@ -176,11 +180,11 @@ pub fn deinit(self: *CacheWidget) void {
             dvui.logError(@src(), err, "Could not get texture from caching target", .{});
             break :blk;
         };
-        dvui.textureAddToCache(self.hash, texture);
+        dvui.textureAddToCacheWithTimeout(self.hash, texture, self.init_opts.timeout);
         // draw texture so we see it this frame
         self.drawCachedTexture(texture);
 
-        dvui.dataSet(null, self.data().id, "_tex_uv", self.tex_uv);
+        dvui.dataSetWithTimeout(null, self.data().id, "_tex_uv", self.tex_uv, self.init_opts.timeout);
         dvui.dataRemove(null, self.data().id, "_cache_now");
     }
     self.data().minSizeSetAndRefresh();

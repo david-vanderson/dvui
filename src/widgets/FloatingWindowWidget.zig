@@ -225,7 +225,7 @@ pub fn install(self: *FloatingWindowWidget) void {
         dvui.focusSubwindow(self.data().id, null);
 
         // write back before we hide ourselves for the first frame
-        dvui.dataSet(null, self.data().id, "_rect", self.data().rect);
+        dvui.dataSetWithTimeout(null, self.data().id, "_rect", self.data().rect, .ten_seconds);
         if (self.init_options.rect) |ior| {
             // send rect back to user
             ior.* = self.data().rect;
@@ -575,7 +575,7 @@ pub fn deinit(self: *FloatingWindowWidget) void {
 
     if (!dvui.firstFrame(self.data().id)) {
         // if firstFrame, we already did this in install
-        dvui.dataSet(null, self.data().id, "_rect", self.data().rect);
+        dvui.dataSetWithTimeout(null, self.data().id, "_rect", self.data().rect, .ten_seconds);
         if (self.init_options.rect) |ior| {
             // send rect back to user
             ior.* = self.data().rect;
@@ -583,11 +583,11 @@ pub fn deinit(self: *FloatingWindowWidget) void {
     }
 
     if (dvui.captured(self.data().id)) {
-        dvui.dataSet(null, self.data().id, "_drag_part", self.drag_part.?);
+        dvui.dataSetWithTimeout(null, self.data().id, "_drag_part", self.drag_part.?, .ten_seconds);
     }
 
-    dvui.dataSet(null, self.data().id, "_auto_pos", self.auto_pos);
-    dvui.dataSet(null, self.data().id, "_auto_size", self.auto_size);
+    dvui.dataSetWithTimeout(null, self.data().id, "_auto_pos", self.auto_pos, .ten_seconds);
+    dvui.dataSetWithTimeout(null, self.data().id, "_auto_size", self.auto_size, .ten_seconds);
     self.data().minSizeSetAndRefresh();
 
     // outside normal layout, don't call minSizeForChild or self.data().minSizeReportToParent();
