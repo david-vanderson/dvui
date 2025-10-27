@@ -1388,6 +1388,29 @@ pub fn dataRemove(win: ?*Window, id: Id, key: []const u8) void {
     };
 }
 
+test "data get/set/remove basic" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    dataSet(null, .zero, "data", {});
+    try std.testing.expectEqual({}, dataGet(null, .zero, "data", void));
+
+    dataSetSlice(null, .zero, "dataSlice", @as([]const u8, "ab"));
+    try std.testing.expectEqualSlices(u8, "ab", dataGetSlice(null, .zero, "dataSlice", []u8).?);
+    dataSetSlice(null, .zero, "dataSliceSentinel", "ab");
+    try std.testing.expectEqualSlices(u8, "ab", dataGetSlice(null, .zero, "dataSliceSentinel", [:0]u8).?);
+
+    dataSetSliceCopies(null, .zero, "dataSliceCopies", @as([]const u8, "ab"), 2);
+    try std.testing.expectEqualSlices(u8, "abab", dataGetSlice(null, .zero, "dataSliceCopies", []u8).?);
+    dataSetSliceCopies(null, .zero, "dataSliceCopiesSentinel", &[_:1234]u16{ 1, 2 }, 2);
+    try std.testing.expectEqualSlices(u16, &.{ 1, 2, 1, 2 }, dataGetSlice(null, .zero, "dataSliceCopiesSentinel", [:1234]u16).?);
+
+    try std.testing.expectEqual('a', dataGetDefault(null, .zero, "data_default", u8, 'a'));
+    try std.testing.expectEqual('a', dataGet(null, .zero, "data_default", u8));
+    dataRemove(null, .zero, "data_default");
+    try std.testing.expectEqual(null, dataGet(null, .zero, "data_default", u8));
+}
+
 /// Return a rect that fits inside avail given the options. avail wins over
 /// `min_size`.
 pub fn placeIn(avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
