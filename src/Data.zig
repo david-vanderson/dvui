@@ -15,11 +15,13 @@ const SavedData = struct {
 
     debug: DebugInfo,
 
-    pub const Kind = enum(u1) {
+    pub const Kind = enum(u2) {
         /// Store the data pointer to by the slice
         single_item,
         /// Store the slice as ptr and len (not copying the data)
         slice,
+        /// Store the slice as ptr and len (not copying the data) with embedded sentinel value
+        slice_with_sentinel,
     };
 
     pub const DebugInfo = if (builtin.mode == .Debug) struct {
@@ -90,7 +92,10 @@ pub fn getPtrDefault(self: *Data, gpa: std.mem.Allocator, key: Key, comptime T: 
 }
 
 pub fn getSlice(self: *Data, key: Key, comptime S: type) ?Slice(S) {
-    const bytes = self.get(key, if (SavedData.DebugInfo == void) {} else .{ .name = @typeName(@typeInfo(S).pointer.child), .kind = .slice });
+    const bytes = self.get(key, if (SavedData.DebugInfo == void) {} else .{
+        .name = @typeName(@typeInfo(S).pointer.child),
+        .kind = if (@typeInfo(S).pointer.sentinel() == null) .slice else .slice_with_sentinel,
+    });
     if (bytes) |b| {
         var data: Slice(S) = @ptrCast(@alignCast(b));
         return if (@typeInfo(Slice(S)).pointer.sentinel()) |s|
@@ -130,7 +135,10 @@ fn getOrPutSliceT(self: *Data, gpa: std.mem.Allocator, key: Key, comptime S: typ
         @sizeOf(T) * (len + @intFromBool(st.pointer.sentinel() != null)),
         st.pointer.alignment,
         replace_existing,
-        if (SavedData.DebugInfo == void) {} else .{ .name = @typeName(T), .kind = .slice },
+        if (SavedData.DebugInfo == void) {} else .{
+            .name = @typeName(T),
+            .kind = if (@typeInfo(S).pointer.sentinel() == null) .slice else .slice_with_sentinel,
+        },
     );
     return .{ @ptrCast(@alignCast(bytes)), existing };
 }
