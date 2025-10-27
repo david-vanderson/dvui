@@ -199,9 +199,9 @@ pub const Branch = struct {
         branch_id: ?usize = null,
 
         // If animation duration is greater than 0, the expander will animate accordingly
-        animation_duration: i32 = 400_000,
+        animation_duration: i32 = 100_000,
 
-        animation_easing: *const dvui.easing.EasingFn = dvui.easing.outBack,
+        animation_easing: *const dvui.easing.EasingFn = dvui.easing.outQuad,
     };
 
     wd: WidgetData = undefined,
