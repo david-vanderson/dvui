@@ -328,7 +328,7 @@ pub const Branch = struct {
         self.button.install();
         self.button.processEvents();
         self.button.drawBackground();
-        self.button.drawFocus();
+        //self.button.drawFocus();
 
         // Check if the button is hovered if we are expanded, this allows us to set the target rs when
         // the entry is expanded
