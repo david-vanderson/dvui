@@ -12,7 +12,7 @@ const AccessKit = dvui.AccessKit;
 const TreeWidget = @This();
 
 wd: WidgetData = undefined,
-vbox: dvui.BoxWidget = undefined,
+layout: dvui.BasicLayout = .{},
 id_branch: ?usize = null, // matches Reorderable.reorder_id
 drag_point: ?dvui.Point.Physical = null,
 drag_ending: bool = false,
@@ -49,10 +49,6 @@ pub fn install(self: *TreeWidget) void {
 
     dvui.parentSet(self.widget());
 
-    self.vbox = dvui.BoxWidget.init(@src(), .{ .dir = .vertical }, self.wd.options);
-    self.vbox.install();
-    self.vbox.drawBackground();
-
     if (self.data().accesskit_node()) |ak_node| {
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
@@ -77,8 +73,7 @@ pub fn data(self: *TreeWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *TreeWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    _ = id;
-    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
+    return self.layout.rectFor(self.data().contentRect().justSize(), id, min_size, e, g);
 }
 
 pub fn screenRectScale(self: *TreeWidget, rect: Rect) RectScale {
@@ -86,7 +81,8 @@ pub fn screenRectScale(self: *TreeWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *TreeWidget, s: Size) void {
-    self.data().minSizeMax(self.data().options.padSize(s));
+    const ms = self.layout.minSizeForChild(s);
+    self.data().minSizeMax(self.data().options.padSize(ms));
 }
 
 pub fn matchEvent(self: *TreeWidget, event: *dvui.Event) bool {
@@ -144,8 +140,6 @@ pub fn deinit(self: *TreeWidget) void {
     defer if (should_free) dvui.widgetFree(self);
     defer self.* = undefined;
 
-    self.vbox.deinit();
-
     if (self.drag_ending) {
         self.id_branch = null;
         self.drag_point = null;
@@ -183,9 +177,8 @@ pub fn dragStart(self: *TreeWidget, branch_id: usize, p: dvui.Point.Physical) vo
 }
 
 pub fn branch(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: Branch.InitOptions, opts: Options) *Branch {
-    const defaults: dvui.Options = .{ .role = .tree_item };
     const ret = dvui.widgetAlloc(Branch);
-    ret.* = Branch.init(src, self, init_opts, defaults.override(opts));
+    ret.* = Branch.init(src, self, init_opts, opts);
     ret.install();
     ret.data().was_allocated_on_widget_stack = true;
     if (ret.data().accesskit_node()) |ak_node| {
@@ -212,9 +205,9 @@ pub const Branch = struct {
     };
 
     wd: WidgetData = undefined,
+    layout: dvui.BasicLayout = .{},
     button: dvui.ButtonWidget = undefined,
     hbox: dvui.BoxWidget = undefined,
-    vbox: dvui.BoxWidget = undefined,
     expander_vbox: dvui.BoxWidget = undefined,
     tree: *TreeWidget = undefined,
     init_options: Branch.InitOptions = undefined,
@@ -226,13 +219,38 @@ pub const Branch = struct {
     can_expand: bool = false,
     anim: ?*dvui.AnimateWidget = null,
 
+    pub fn wrapOuter(opts: Options) Options {
+        var ret = opts;
+        ret.tab_index = null;
+        ret.border = Rect{};
+        ret.padding = Rect{};
+        ret.background = false;
+        ret.role = .none;
+        ret.label = null;
+        return ret;
+    }
+
+    pub fn wrapInner(opts: Options) Options {
+        var ret: Options = .{
+            .margin = .{},
+        };
+        ret = ret.override(opts);
+        ret.expand = .horizontal;
+        ret.label = opts.label orelse .{ .label_widget = .next };
+        return ret;
+    }
+
+    pub var defaults = Options{
+        .name = "Branch",
+        .role = .tree_item,
+    };
+
     pub fn init(src: std.builtin.SourceLocation, reorder: *TreeWidget, init_opts: Branch.InitOptions, opts: Options) Branch {
         var self = Branch{};
         self.tree = reorder;
-        const defaults = Options{ .name = "Branch" };
         self.init_options = init_opts;
-        self.options = defaults.override(opts);
-        self.wd = WidgetData.init(src, .{}, self.options.override(.{ .rect = .{} }));
+        self.options = opts;
+        self.wd = WidgetData.init(src, .{}, defaults.override(wrapOuter(self.options).override(.{ .rect = .{} })));
         self.expanded = if (dvui.dataGet(null, self.wd.id, "_expanded", bool)) |e| e else init_opts.expanded;
 
         return self;
@@ -265,7 +283,7 @@ pub const Branch = struct {
                 );
                 self.floating_widget.?.install();
             } else {
-                self.wd = WidgetData.init(self.wd.src, .{}, self.options);
+                self.wd = WidgetData.init(self.wd.src, .{}, defaults.override(wrapOuter(self.options)));
                 self.wd.register();
                 dvui.parentSet(self.widget());
 
@@ -297,26 +315,17 @@ pub const Branch = struct {
                 }
             }
         } else {
-            self.wd = WidgetData.init(self.wd.src, .{}, self.options);
+            self.wd = WidgetData.init(self.wd.src, .{}, defaults.override(wrapOuter(self.options)));
 
             self.wd.register();
             dvui.parentSet(self.widget());
         }
 
-        const no_padding = Options{
-            .name = "Padding",
-            .padding = dvui.Rect.all(0),
-            .margin = dvui.Rect.all(0),
-        };
-
-        self.vbox = dvui.BoxWidget.init(@src(), .{ .dir = .vertical }, no_padding.override(self.options));
-        self.vbox.install();
-        self.vbox.drawBackground();
-
-        self.button = dvui.ButtonWidget.init(@src(), .{}, no_padding.override(self.options));
+        self.button = dvui.ButtonWidget.init(@src(), .{}, wrapInner(self.options));
         self.button.install();
         self.button.processEvents();
         self.button.drawBackground();
+        self.button.drawFocus();
 
         // Check if the button is hovered if we are expanded, this allows us to set the target rs when
         // the entry is expanded
@@ -329,9 +338,8 @@ pub const Branch = struct {
 
         self.tree.branch_size = self.button.data().rect.size();
 
-        self.hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, no_padding.override(self.options));
+        self.hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
         self.hbox.install();
-        self.hbox.drawBackground();
 
         if (self.tree.init_options.enable_reordering) {
             loop: for (dvui.events()) |*e| {
@@ -369,7 +377,7 @@ pub const Branch = struct {
         self.hbox.deinit();
         self.button.deinit();
 
-        const defaults = Options{
+        const default_opts = Options{
             .name = "Expander",
             .margin = .{ .x = init_opts.indent },
         };
@@ -382,7 +390,7 @@ pub const Branch = struct {
                     .easing = self.init_options.animation_easing,
                     .kind = if (self.init_options.animation_duration > 0) .vertical else .none,
                 },
-                defaults.override(opts),
+                default_opts.override(opts),
             );
 
             // Always expand the inner box to fill the animation
@@ -391,9 +399,6 @@ pub const Branch = struct {
             self.expander_vbox = dvui.BoxWidget.init(src, .{ .dir = .vertical }, expander_opts.override(opts.strip()));
             self.expander_vbox.install();
             self.expander_vbox.drawBackground();
-
-            // Since our items are padded, we need to add some extra space to the top
-            _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = self.options.paddingGet().y * 2.0 } });
         }
 
         self.can_expand = true;
@@ -437,8 +442,7 @@ pub const Branch = struct {
     }
 
     pub fn rectFor(self: *Branch, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        _ = id;
-        return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
+        return self.layout.rectFor(self.data().contentRect().justSize(), id, min_size, e, g);
     }
 
     pub fn screenRectScale(self: *Branch, rect: Rect) RectScale {
@@ -446,7 +450,8 @@ pub const Branch = struct {
     }
 
     pub fn minSizeForChild(self: *Branch, s: Size) void {
-        self.data().minSizeMax(self.data().options.padSize(s));
+        const ms = self.layout.minSizeForChild(s);
+        self.data().minSizeMax(self.data().options.padSize(ms));
     }
 
     pub fn deinit(self: *Branch) void {
@@ -467,7 +472,6 @@ pub const Branch = struct {
             self.hbox.deinit();
             self.button.deinit();
         }
-        self.vbox.deinit();
 
         if (self.floating_widget) |*fw| {
             self.data().minSizeMax(fw.data().min_size);

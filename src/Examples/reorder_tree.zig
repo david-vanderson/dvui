@@ -395,7 +395,8 @@ pub fn reorderTree(uniqueId: dvui.Id) void {
             .padding = dvui.Rect.all(4),
         },
         .{
-            .padding = dvui.Rect.all(1),
+            .margin = dvui.Rect.all(1),
+            .padding = dvui.Rect.all(2),
         },
         .{
             .border = .{ .x = 1 },
@@ -656,13 +657,6 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
                 reorder_tree_open_branches.put(branch_id, {}) catch {
                     dvui.log.debug("Failed to track branch state!", .{});
                 };
-
-                var box = dvui.box(@src(), .{ .dir = .vertical }, .{
-                    .expand = .horizontal,
-                    .background = false,
-                    .gravity_y = 1.0,
-                });
-                defer box.deinit();
 
                 exampleFileTreeSearch(
                     abs_path,
