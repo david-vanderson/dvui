@@ -159,7 +159,7 @@ pub fn init(
             .init_options = .{ .subwindow = true },
             .options = .{ .name = "Window", .role = .window },
             // Unused
-            .min_size = undefined,
+            .min_size = .{},
             // Set in `begin`
             .rect = undefined,
             // Set in `begin`
