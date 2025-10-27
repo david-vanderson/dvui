@@ -548,14 +548,21 @@ const DvuiModuleOptions = struct {
 };
 
 fn accessKitSupported(target: std.Build.ResolvedTarget) bool {
-    if (target.result.os.tag != .windows and !target.result.os.tag.isDarwin()) return false;
-    if (!target.result.cpu.arch.isAARCH64() and !target.result.cpu.arch.isX86()) return false;
-    return true;
+    if (target.result.os.tag == .windows) {
+        return target.result.cpu.arch.isAARCH64() or target.result.cpu.arch.isX86();
+    } else if (target.result.os.tag.isDarwin()) {
+        return target.result.cpu.arch.isAARCH64() or target.result.cpu.arch == .x86_64;
+    } else if (target.result.os.tag == .linux) {
+        return target.result.cpu.arch.isX86();
+    } else {
+        return false;
+    }
 }
 
 fn accessKitPath(b: *std.Build, target: std.Build.ResolvedTarget, ak_dep: *std.Build.Dependency, opt: AccesskitOptions, full_lib_path: bool) std.Build.LazyPath {
     const os_path = if (target.result.os.tag == .windows) "windows" //
         else if (target.result.os.tag.isDarwin()) "macos" //
+        else if (target.result.os.tag == .linux) "linux" //
         else "unsupported";
     const arch_path = if (target.result.cpu.arch.isAARCH64()) "arm64" //
         else if (target.result.cpu.arch == .x86) "x86" //
@@ -564,6 +571,7 @@ fn accessKitPath(b: *std.Build, target: std.Build.ResolvedTarget, ak_dep: *std.B
 
     const abi_path = if (target.result.os.tag == .windows) "msvc" //
         else if (target.result.os.tag.isDarwin()) "" //
+        else if (target.result.os.tag == .linux) "" //
         else "";
 
     const linkage_path = @tagName(opt);
@@ -578,6 +586,7 @@ fn accessKitPath(b: *std.Build, target: std.Build.ResolvedTarget, ak_dep: *std.B
 fn accessKitLibName(target: std.Build.ResolvedTarget) []const u8 {
     return if (target.result.os.tag == .windows) "accesskit.dll" //
     else if (target.result.os.tag.isDarwin()) "libaccesskit.dylib" //
+    else if (target.result.os.tag == .linux) "libaccesskit.so" //
     else "unsupported";
 }
 
@@ -606,11 +615,21 @@ fn addDvuiModule(
         dvui_mod.linkSystemLibrary("ole32", .{});
     }
 
+    // the system integration option check has to always occur even if accesskit is disabled for
+    // it to be displayed in the build help
+    const accesskit_from_system = b.systemIntegrationOption("accesskit", .{});
     if (opts.accesskit.enabled()) {
         const ak_dep = b.dependency("accesskit", .{});
         dvui_mod.addIncludePath(ak_dep.path("include"));
-        dvui_mod.addLibraryPath(accessKitPath(b, target, ak_dep, opts.accesskit, false));
+
+        if (!accesskit_from_system) {
+            dvui_mod.addLibraryPath(accessKitPath(b, target, ak_dep, opts.accesskit, false));
+        }
         dvui_mod.linkSystemLibrary("accesskit", .{});
+
+        if (target.result.os.tag == .linux) {
+            dvui_mod.linkSystemLibrary("unwind", .{});
+        }
     }
 
     const stb_source = "vendor/stb/";
@@ -722,6 +741,8 @@ fn addExample(
             opts.accesskit,
             true,
         ), .bin, accessKitLibName(opts.target)).step);
+        // Converts shared lib path to be relative to exe install directory.
+        exe.root_module.addRPathSpecial("$ORIGIN");
     }
 
     const run_step = b.step(name, "Run " ++ name);

@@ -1150,6 +1150,51 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
 
             return try win.addEventTouchMotion(.touch0, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy);
         },
+        if (sdl3) c.SDL_EVENT_WINDOW_FOCUS_GAINED else c.SDL_WINDOWEVENT_FOCUS_GAINED => {
+            if (self.log_events) {
+                log.debug("event FOCUS_GAINED\n", .{});
+            }
+            if (dvui.accesskit_enabled and builtin.os.tag == .linux) {
+                dvui.AccessKit.c.accesskit_unix_adapter_update_window_focus_state(win.accesskit.adapter, true);
+            } else if (dvui.accesskit_enabled and builtin.os.tag == .macos) {
+                const events = dvui.AccessKit.c.accesskit_macos_subclassing_adapter_update_view_focus_state(win.accesskit.adapter, true);
+                if (events) |evts| {
+                    dvui.AccessKit.c.accesskit_macos_queued_events_raise(evts);
+                }
+            }
+            return false;
+        },
+        if (sdl3) c.SDL_EVENT_WINDOW_FOCUS_LOST else c.SDL_WINDOWEVENT_FOCUS_LOST => {
+            if (self.log_events) {
+                log.debug("event FOCUS_LOST\n", .{});
+            }
+            if (dvui.accesskit_enabled and builtin.os.tag == .linux) {
+                dvui.AccessKit.c.accesskit_unix_adapter_update_window_focus_state(win.accesskit.adapter, false);
+            } else if (dvui.accesskit_enabled and builtin.os.tag == .macos) {
+                const events = dvui.AccessKit.c.accesskit_macos_subclassing_adapter_update_view_focus_state(win.accesskit.adapter, false);
+                if (events) |evts| {
+                    dvui.AccessKit.c.accesskit_macos_queued_events_raise(evts);
+                }
+            }
+            return false;
+        },
+        if (sdl3) c.SDL_EVENT_WINDOW_SHOWN else c.SDL_WINDOWEVENT_SHOWN => {
+            if (self.log_events) {
+                log.debug("event WINDOW_SHOWN\n", .{});
+            }
+            if (dvui.accesskit_enabled and builtin.os.tag == .linux) {
+                var x: i32, var y: i32 = .{ undefined, undefined };
+                _ = c.SDL_GetWindowPosition(win.backend.impl.window, &x, &y);
+                var w: i32, var h: i32 = .{ undefined, undefined };
+                _ = c.SDL_GetWindowSize(win.backend.impl.window, &w, &h);
+                var top: i32, var bot: i32, var left: i32, var right: i32 = .{ undefined, undefined, undefined, undefined };
+                _ = c.SDL_GetWindowBordersSize(win.backend.impl.window, &top, &left, &bot, &right);
+                const outer_bounds: dvui.AccessKit.Rect = .{ .x0 = @floatFromInt(x - left), .y0 = @floatFromInt(y - top), .x1 = @floatFromInt(x + w + right), .y1 = @floatFromInt(y + h + bot) };
+                const inner_bounds: dvui.AccessKit.Rect = .{ .x0 = @floatFromInt(x), .y0 = @floatFromInt(y), .x1 = @floatFromInt(x + w), .y1 = @floatFromInt(y + h) };
+                dvui.AccessKit.c.accesskit_unix_adapter_set_root_window_bounds(win.accesskit.adapter.?, outer_bounds, inner_bounds);
+            }
+            return false;
+        },
         else => {
             if (self.log_events) {
                 log.debug("unhandled SDL event type {any}\n", .{event.type});
