@@ -15,11 +15,13 @@ const SavedData = struct {
 
     debug: DebugInfo,
 
-    pub const Kind = enum(u1) {
+    pub const Kind = enum(u2) {
         /// Store the data pointer to by the slice
         single_item,
         /// Store the slice as ptr and len (not copying the data)
         slice,
+        /// Store the slice as ptr and len (not copying the data) with embedded sentinel value
+        slice_with_sentinel,
     };
 
     pub const DebugInfo = if (builtin.mode == .Debug) struct {
@@ -73,11 +75,11 @@ pub fn setSlice(self: *Data, gpa: std.mem.Allocator, key: Key, data: anytype) st
 pub fn setSliceCopies(self: *Data, gpa: std.mem.Allocator, key: Key, data: anytype, num_copies: usize) std.mem.Allocator.Error!void {
     const S = @TypeOf(data);
     const sentinel = @typeInfo(Slice(S)).pointer.sentinel();
-    const slice, _ = try self.getOrPutSliceT(gpa, key, Slice(S), data.len * num_copies + @intFromBool(sentinel != null), true);
+    const slice, _ = try self.getOrPutSliceT(gpa, key, Slice(S), data.len * num_copies, true);
     for (0..num_copies) |i| {
         @memcpy(slice[i * data.len ..][0..data.len], data);
     }
-    if (sentinel) |s| slice[data.len] = s;
+    if (sentinel) |s| slice[slice.len - 1] = s;
 }
 
 pub fn getPtr(self: *Data, key: Key, comptime T: type) ?*T {
@@ -90,7 +92,18 @@ pub fn getPtrDefault(self: *Data, gpa: std.mem.Allocator, key: Key, comptime T: 
 }
 
 pub fn getSlice(self: *Data, key: Key, comptime S: type) ?Slice(S) {
-    return @ptrCast(@alignCast(self.get(key, if (SavedData.DebugInfo == void) {} else .{ .name = @typeName(@typeInfo(S).pointer.child), .kind = .slice })));
+    const bytes = self.get(key, if (SavedData.DebugInfo == void) {} else .{
+        .name = @typeName(@typeInfo(S).pointer.child),
+        .kind = if (@typeInfo(S).pointer.sentinel() == null) .slice else .slice_with_sentinel,
+    });
+    if (bytes) |b| {
+        var data: Slice(S) = @ptrCast(@alignCast(b));
+        return if (@typeInfo(Slice(S)).pointer.sentinel()) |s|
+            data[0 .. data.len - 1 :s]
+        else
+            data;
+    }
+    return null;
 }
 pub fn getSliceDefault(self: *Data, gpa: std.mem.Allocator, key: Key, comptime S: type, default: []const @typeInfo(S).pointer.child) std.mem.Allocator.Error!Slice(S) {
     const sentinel = @typeInfo(Slice(S)).pointer.sentinel();
@@ -119,10 +132,13 @@ fn getOrPutSliceT(self: *Data, gpa: std.mem.Allocator, key: Key, comptime S: typ
     const bytes, const existing = try self.getOrPut(
         gpa,
         key,
-        @sizeOf(T) * len + @intFromBool(st.pointer.sentinel() != null),
+        @sizeOf(T) * (len + @intFromBool(st.pointer.sentinel() != null)),
         st.pointer.alignment,
         replace_existing,
-        if (SavedData.DebugInfo == void) {} else .{ .name = @typeName(T), .kind = .slice },
+        if (SavedData.DebugInfo == void) {} else .{
+            .name = @typeName(T),
+            .kind = if (@typeInfo(S).pointer.sentinel() == null) .slice else .slice_with_sentinel,
+        },
     );
     return .{ @ptrCast(@alignCast(bytes)), existing };
 }
