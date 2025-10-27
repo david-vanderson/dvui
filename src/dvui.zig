@@ -1272,7 +1272,9 @@ pub fn dataGet(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
 pub fn dataGetDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: T) T {
     const w = currentOverrideOrPanic(win);
     if (w.data_store.getPtr(id.update(key), T)) |v| return v.* else {
-        w.data_store.set(w.gpa, id.update(key), default);
+        w.data_store.set(w.gpa, id.update(key), default) catch |err| {
+            dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+        };
         return default;
     }
 }
