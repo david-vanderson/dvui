@@ -1272,7 +1272,9 @@ pub fn dataGet(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
 pub fn dataGetDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: T) T {
     const w = currentOverrideOrPanic(win);
     if (w.data_store.getPtr(id.update(key), T)) |v| return v.* else {
-        w.data_store.set(w.gpa, id.update(key), default);
+        w.data_store.set(w.gpa, id.update(key), default) catch |err| {
+            dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+        };
         return default;
     }
 }
@@ -1384,6 +1386,29 @@ pub fn dataRemove(win: ?*Window, id: Id, key: []const u8) void {
     return w.data_store.remove(w.gpa, id.update(key)) catch |err| {
         dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
     };
+}
+
+test "data get/set/remove basic" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    dataSet(null, .zero, "data", {});
+    try std.testing.expectEqual({}, dataGet(null, .zero, "data", void));
+
+    dataSetSlice(null, .zero, "dataSlice", @as([]const u8, "ab"));
+    try std.testing.expectEqualSlices(u8, "ab", dataGetSlice(null, .zero, "dataSlice", []u8).?);
+    dataSetSlice(null, .zero, "dataSliceSentinel", "ab");
+    try std.testing.expectEqualSlices(u8, "ab", dataGetSlice(null, .zero, "dataSliceSentinel", [:0]u8).?);
+
+    dataSetSliceCopies(null, .zero, "dataSliceCopies", @as([]const u8, "ab"), 2);
+    try std.testing.expectEqualSlices(u8, "abab", dataGetSlice(null, .zero, "dataSliceCopies", []u8).?);
+    dataSetSliceCopies(null, .zero, "dataSliceCopiesSentinel", &[_:1234]u16{ 1, 2 }, 2);
+    try std.testing.expectEqualSlices(u16, &.{ 1, 2, 1, 2 }, dataGetSlice(null, .zero, "dataSliceCopiesSentinel", [:1234]u16).?);
+
+    try std.testing.expectEqual('a', dataGetDefault(null, .zero, "data_default", u8, 'a'));
+    try std.testing.expectEqual('a', dataGet(null, .zero, "data_default", u8));
+    dataRemove(null, .zero, "data_default");
+    try std.testing.expectEqual(null, dataGet(null, .zero, "data_default", u8));
 }
 
 /// Return a rect that fits inside avail given the options. avail wins over
