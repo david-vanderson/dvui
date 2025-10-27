@@ -235,22 +235,25 @@ pub const Branch = struct {
             .margin = .{},
         };
         ret = ret.override(opts);
+        ret.name = null;
         ret.expand = .horizontal;
-        ret.label = opts.label orelse .{ .label_widget = .next };
         return ret;
     }
 
     pub var defaults = Options{
         .name = "Branch",
         .role = .tree_item,
+        .label = .{ .label_widget = .next },
+        .margin = dvui.Rect.all(1),
+        .padding = dvui.Rect.all(2),
     };
 
     pub fn init(src: std.builtin.SourceLocation, reorder: *TreeWidget, init_opts: Branch.InitOptions, opts: Options) Branch {
         var self = Branch{};
         self.tree = reorder;
         self.init_options = init_opts;
-        self.options = opts;
-        self.wd = WidgetData.init(src, .{}, defaults.override(wrapOuter(self.options).override(.{ .rect = .{} })));
+        self.options = defaults.override(opts);
+        self.wd = WidgetData.init(src, .{}, wrapOuter(self.options).override(.{ .rect = .{} }));
         self.expanded = if (dvui.dataGet(null, self.wd.id, "_expanded", bool)) |e| e else init_opts.expanded;
 
         return self;
@@ -283,7 +286,7 @@ pub const Branch = struct {
                 );
                 self.floating_widget.?.install();
             } else {
-                self.wd = WidgetData.init(self.wd.src, .{}, defaults.override(wrapOuter(self.options)));
+                self.wd = WidgetData.init(self.wd.src, .{}, wrapOuter(self.options));
                 self.wd.register();
                 dvui.parentSet(self.widget());
 
@@ -315,7 +318,7 @@ pub const Branch = struct {
                 }
             }
         } else {
-            self.wd = WidgetData.init(self.wd.src, .{}, defaults.override(wrapOuter(self.options)));
+            self.wd = WidgetData.init(self.wd.src, .{}, wrapOuter(self.options));
 
             self.wd.register();
             dvui.parentSet(self.widget());

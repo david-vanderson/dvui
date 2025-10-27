@@ -226,7 +226,8 @@ pub fn show(self: *Debug) void {
     if (self.target_wd) |wd| {
         const rs = wd.rectScale();
         tl.format(
-            \\{x} {s}
+            \\{s}
+            \\role {?t}
             \\{s}:{d}
             \\min {f}
             \\expand {any}
@@ -237,8 +238,8 @@ pub fn show(self: *Debug) void {
             \\rs.s {d}
             \\rs.r {f}
         , .{
-            wd.id,
             wd.options.name orelse "???",
+            wd.options.role,
             wd.src.file,
             wd.src.line,
             wd.min_size,
