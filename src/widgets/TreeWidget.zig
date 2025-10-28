@@ -224,6 +224,7 @@ pub const Branch = struct {
         ret.tab_index = null;
         ret.border = Rect{};
         ret.padding = Rect{};
+        ret.margin = .{};
         ret.background = false;
         ret.role = .none;
         ret.label = null;
@@ -231,10 +232,7 @@ pub const Branch = struct {
     }
 
     pub fn wrapInner(opts: Options) Options {
-        var ret: Options = .{
-            .margin = .{},
-        };
-        ret = ret.override(opts);
+        var ret = opts;
         ret.name = null;
         ret.expand = .horizontal;
         return ret;
