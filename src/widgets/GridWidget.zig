@@ -207,7 +207,7 @@ last_header_height: f32 = 0, // Height of header last frame
 init_opts: InitOpts,
 
 pub fn init(src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitOpts, opts: Options) GridWidget {
-    const options = defaults.override(opts);
+    const options = defaults.themeOverride().override(opts);
     var self = GridWidget{
         .init_opts = init_opts,
         .cols = cols,

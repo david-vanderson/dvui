@@ -94,7 +94,7 @@ drag_part: ?DragPart = null,
 drag_area: Rect.Physical = undefined,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingWindowWidget {
-    const options = defaults.override(opts);
+    const options = defaults.themeOverride().override(opts);
     var box_options = options;
     box_options.role = null;
     box_options.label = null;

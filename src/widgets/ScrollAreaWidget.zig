@@ -56,7 +56,7 @@ scroll: ?ScrollContainerWidget = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) ScrollAreaWidget {
     return .{
-        .hbox = BoxWidget.init(src, .{ .dir = .horizontal }, defaults.override(opts)),
+        .hbox = BoxWidget.init(src, .{ .dir = .horizontal }, defaults.themeOverride().override(opts)),
         .init_opts = init_opts,
     };
 }

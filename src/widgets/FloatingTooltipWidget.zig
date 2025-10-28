@@ -91,7 +91,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Op
         })),
         // get scale from parent
         .scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale(),
-        .options = defaults.override(opts_in),
+        .options = defaults.themeOverride().override(opts_in),
         .init_options = init_opts,
     };
 

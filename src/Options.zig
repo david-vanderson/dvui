@@ -409,6 +409,20 @@ pub fn override(self: *const Options, over: Options) Options {
     return ret;
 }
 
+pub fn themeOverride(self: *const Options) Options {
+    var ret = self.*;
+    if (ret.themeGet().max_default_corner_radius) |mdcr| {
+        if (ret.corner_radius != null) {
+            ret.corner_radius.?.x = @min(ret.corner_radius.?.x, mdcr);
+            ret.corner_radius.?.y = @min(ret.corner_radius.?.y, mdcr);
+            ret.corner_radius.?.w = @min(ret.corner_radius.?.w, mdcr);
+            ret.corner_radius.?.h = @min(ret.corner_radius.?.h, mdcr);
+        }
+    }
+
+    return ret;
+}
+
 pub fn min_sizeM(self: *const Options, wide: f32, tall: f32) Options {
     return self.override(.{ .min_size_content = self.fontGet().sizeM(wide, tall) });
 }

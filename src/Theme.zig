@@ -93,6 +93,9 @@ font_title_2: Font,
 font_title_3: Font,
 font_title_4: Font,
 
+/// Caps widget default corner_radius.  Can be overridden at widget call sites.
+max_default_corner_radius: ?f32 = null,
+
 /// if true, all strings in `Theme` will be freed in `deinit`
 allocated_strings: bool = false,
 

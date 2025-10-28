@@ -37,7 +37,7 @@ show_active: bool = false,
 mouse_over: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) MenuItemWidget {
-    const options = defaults.override(opts);
+    const options = defaults.themeOverride().override(opts);
     const wd = WidgetData.init(src, .{}, options);
 
     return .{

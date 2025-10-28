@@ -35,7 +35,7 @@ click: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) ButtonWidget {
     return .{
-        .wd = .init(src, .{}, defaults.override(opts)),
+        .wd = .init(src, .{}, defaults.themeOverride().override(opts)),
         .init_options = init_options,
     };
 }
