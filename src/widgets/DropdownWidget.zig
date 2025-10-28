@@ -56,7 +56,7 @@ pub fn wrapInner(opts: Options) Options {
 }
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) DropdownWidget {
-    const options = defaults.override(opts);
+    const options = defaults.themeOverride().override(opts);
     var self = DropdownWidget{
         .options = options,
         .init_options = init_opts,

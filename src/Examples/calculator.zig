@@ -21,7 +21,7 @@ pub fn calculator() void {
             if (i >= loop_labels.len) continue;
             const letter = loop_labels[i];
 
-            var opts = dvui.ButtonWidget.defaults.min_sizeM(3, 1);
+            var opts = dvui.ButtonWidget.defaults.themeOverride().min_sizeM(3, 1);
             if (letter == '0') {
                 const extra_space = opts.padSize(.{}).w;
                 opts.min_size_content.?.w *= 2; // be twice as wide as normal

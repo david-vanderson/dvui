@@ -84,7 +84,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
         .wd = wd,
         // options is really for our embedded ScrollAreaWidget, so save them for the
         // end of install()
-        .options = defaults.override(opts),
+        .options = defaults.themeOverride().override(opts),
         // get scale from parent
         .scale_val = wd.parent.screenRectScale(Rect{}).s / dvui.windowNaturalScale(),
         .init_options = init_options,

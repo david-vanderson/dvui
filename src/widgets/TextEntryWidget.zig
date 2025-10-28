@@ -102,7 +102,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         .horizontal_bar = init_opts.scroll_horizontal_bar orelse (if (init_opts.multiline) .auto else .hide),
     };
 
-    var options = defaults.min_sizeM(14, 1);
+    var options = defaults.themeOverride().min_sizeM(14, 1);
 
     if (init_opts.password_char != null) {
         options.role = .password_input;
@@ -198,7 +198,7 @@ pub fn install(self: *TextEntryWidget) void {
         defer floating_widget.deinit();
 
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
-            .corner_radius = dvui.ButtonWidget.defaults.corner_radiusGet(),
+            .corner_radius = dvui.ButtonWidget.defaults.themeOverride().corner_radiusGet(),
             .background = true,
             .border = dvui.Rect.all(1),
         });

@@ -9,8 +9,6 @@ tab_index: usize = 0,
 tab_button: ButtonWidget = undefined,
 
 pub var defaults: Options = .{
-    .background = false,
-    .corner_radius = Rect{},
     .name = "Tabs",
     .role = .tab_panel,
 };
@@ -104,7 +102,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
         .vertical => tab_defaults.gravity_x = 1.0,
     }
 
-    const options = tab_defaults.override(opts);
+    const options = tab_defaults.themeOverride().override(opts);
 
     self.tab_button = ButtonWidget.init(@src(), .{}, options);
     self.tab_button.install();
