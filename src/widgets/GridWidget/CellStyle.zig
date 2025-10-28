@@ -171,7 +171,7 @@ pub const HoveredRow = struct {
 
     pub fn options(self: *const HoveredRow, cell: Cell) Options {
         const highlighted_row = self.highlighted_row orelse return self.opts;
-        if (cell.row != highlighted_row) return self.opts;
+        if (cell.row_num != highlighted_row) return self.opts;
 
         return self.opts.override(.{ .color_fill = self.opts.color_fill_hover });
     }
@@ -237,9 +237,8 @@ pub const Borders = struct {
 
     pub fn cellOptionsOverride(self: *const Borders, cell_opts: CellOptions) Borders {
         return .{
-            .external = self.borders_external,
-            .internal = self.borders_internal,
-            .color_border = self.border_color,
+            .external = self.external,
+            .internal = self.internal,
             .num_cols = self.num_cols,
             .num_rows = self.num_rows,
             .cell_opts = self.cell_opts.override(cell_opts),
@@ -254,9 +253,8 @@ pub const Borders = struct {
 
     pub fn optionsOverride(self: *const Borders, opts: Options) Borders {
         return .{
-            .external = self.borders_external,
-            .internal = self.borders_internal,
-            .color_border = self.border_color,
+            .external = self.external,
+            .internal = self.internal,
             .num_cols = self.num_cols,
             .num_rows = self.num_rows,
             .cell_opts = self.cell_opts,
@@ -266,5 +264,5 @@ pub const Borders = struct {
 };
 
 test {
-    @import("std").testing.refAllDecls(@This());
+    @import("std").testing.refAllDeclsRecursive(@This());
 }
