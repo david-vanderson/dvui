@@ -35,19 +35,20 @@ pub fn install(self: *FocusGroupWidget) void {
     dvui.parentSet(self.widget());
     self.data().register();
 
-    // put ourselves in the tab index so the whole focus group can be focused by tab
-    dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
-
-    if (self.data().id == dvui.focusedWidgetId()) {
-        // if we got focused, focus our first internal widget
-        // TODO: remember which internal widget was focused
-        dvui.tabIndexNextEx(null, self.tab_index_prev);
-    }
-
     // only register ourselves if there is no focus group already registered
     const cw = dvui.currentWindow();
     if (cw.subwindows.get(dvui.subwindowCurrentId())) |sw| {
         if (sw.focus_group == null) {
+
+            // put ourselves in the tab index so the whole focus group can be focused by tab
+            dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
+
+            if (self.data().id == dvui.focusedWidgetId()) {
+                // if we got focused, focus our first internal widget
+                // TODO: remember which internal widget was focused
+                dvui.tabIndexNextEx(null, self.tab_index_prev);
+            }
+
             sw.focus_group = self;
             //std.debug.print("subwindow {x} focus group {x}\n", .{ sw.id.asU64(), self.data().id.asU64() });
         }
