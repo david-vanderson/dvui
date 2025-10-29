@@ -18,6 +18,7 @@ pub const FloatingMenuWidget = @import("widgets/FloatingMenuWidget.zig");
 pub const FloatingTooltipWidget = @import("widgets/FloatingTooltipWidget.zig");
 pub const FloatingWidget = @import("widgets/FloatingWidget.zig");
 pub const FloatingWindowWidget = @import("widgets/FloatingWindowWidget.zig");
+pub const FocusGroupWidget = @import("widgets/FocusGroupWidget.zig");
 pub const IconWidget = @import("widgets/IconWidget.zig");
 pub const LabelWidget = @import("widgets/LabelWidget.zig");
 pub const MenuItemWidget = @import("widgets/MenuItemWidget.zig");

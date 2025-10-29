@@ -79,6 +79,7 @@ pub const FloatingWindowWidget = widgets.FloatingWindowWidget;
 pub const FloatingWidget = widgets.FloatingWidget;
 pub const FloatingTooltipWidget = widgets.FloatingTooltipWidget;
 pub const FloatingMenuWidget = widgets.FloatingMenuWidget;
+pub const FocusGroupWidget = widgets.FocusGroupWidget;
 pub const IconWidget = widgets.IconWidget;
 pub const LabelWidget = widgets.LabelWidget;
 pub const MenuWidget = widgets.MenuWidget;
@@ -1872,6 +1873,11 @@ pub const TabIndex = struct {
     windowId: Id,
     widgetId: Id,
     tabIndex: u16,
+
+    // If true, prevents tabbing to this entry.  This is used to be able to
+    // look up a widget inside a focus group so we know where to start, but
+    // don't want to be able to tab inside a focus group.
+    shadow: bool = false,
 };
 
 /// Set the tab order for this widget.  `tab_index` values are visited starting
@@ -1883,15 +1889,31 @@ pub const TabIndex = struct {
 /// A null `tab_index` means it will be visited after all normal values.  All
 /// null widgets are visited in order of calling `tabIndexSet`.
 ///
+/// If inside a FocusGroupWidget, `tab_index` controls order traversed by arrow
+/// keys instead of tab.
+///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn tabIndexSet(widget_id: Id, tab_index: ?u16) void {
     if (tab_index != null and tab_index.? == 0)
         return;
 
     var cw = currentWindow();
-    const ti = TabIndex{ .windowId = cw.subwindows.current_id, .widgetId = widget_id, .tabIndex = (tab_index orelse math.maxInt(u16)) };
+    var ti = TabIndex{ .windowId = cw.subwindows.current_id, .widgetId = widget_id, .tabIndex = (tab_index orelse math.maxInt(u16)) };
+
+    if (cw.subwindows.get(cw.subwindows.current_id)) |sw| {
+        if (sw.focus_group) |fg| {
+            fg.tab_index.append(cw.arena(), ti) catch |err| {
+                logError(@src(), err, "Could not set focus group tab index.", .{});
+            };
+
+            // now modify the TabIndex so that we can look it up in the global order
+            ti.shadow = true;
+            ti.tabIndex = fg.data().options.tab_index orelse math.maxInt(u16);
+        }
+    }
+
     cw.tab_index.append(cw.gpa, ti) catch |err| {
-        logError(@src(), err, "Could not set tab index. This might break keyboard navigation as the widget may become unreachable via tab", .{});
+        logError(@src(), err, "Could not set tab index.", .{});
     };
 }
 
@@ -1902,11 +1924,15 @@ pub fn tabIndexSet(widget_id: Id, tab_index: ?u16) void {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn tabIndexNext(event_num: ?u16) void {
+    tabIndexNextEx(event_num, currentWindow().tab_index_prev.items);
+}
+
+pub fn tabIndexNextEx(event_num: ?u16, tabs: []dvui.TabIndex) void {
     const cw = currentWindow();
     const widgetId = focusedWidgetId();
     var oldtab: ?u16 = null;
     if (widgetId != null) {
-        for (cw.tab_index_prev.items) |ti| {
+        for (tabs) |ti| {
             if (ti.windowId == cw.subwindows.focused_id and ti.widgetId == widgetId.?) {
                 oldtab = ti.tabIndex;
                 break;
@@ -1920,16 +1946,23 @@ pub fn tabIndexNext(event_num: ?u16) void {
     var newId: ?Id = null;
     var foundFocus = false;
 
-    for (cw.tab_index_prev.items) |ti| {
+    for (tabs) |ti| {
         if (ti.windowId == cw.subwindows.focused_id) {
             if (ti.widgetId == widgetId) {
                 foundFocus = true;
-            } else if (foundFocus == true and oldtab != null and ti.tabIndex == oldtab.?) {
+                continue;
+            }
+
+            if (ti.shadow) continue;
+
+            if (foundFocus == true and oldtab != null and ti.tabIndex == oldtab.?) {
                 // found the first widget after current that has the same tabindex
                 newtab = ti.tabIndex;
                 newId = ti.widgetId;
                 break;
             } else if (oldtab == null or ti.tabIndex > oldtab.?) {
+                // tabs is ordered by insertion, not tab index, so have to
+                // search all of them to find the lowest that is above oldtab
                 if (newId == null or ti.tabIndex < newtab) {
                     newtab = ti.tabIndex;
                     newId = ti.widgetId;
@@ -1948,13 +1981,19 @@ pub fn tabIndexNext(event_num: ?u16) void {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn tabIndexPrev(event_num: ?u16) void {
+    tabIndexPrevEx(event_num, currentWindow().tab_index_prev.items);
+}
+
+pub fn tabIndexPrevEx(event_num: ?u16, tabs: []dvui.TabIndex) void {
     const cw = currentWindow();
     const widgetId = focusedWidgetId();
     var oldtab: ?u16 = null;
+    var oldshadow: bool = false;
     if (widgetId != null) {
-        for (cw.tab_index_prev.items) |ti| {
+        for (tabs) |ti| {
             if (ti.windowId == cw.subwindows.focused_id and ti.widgetId == widgetId.?) {
                 oldtab = ti.tabIndex;
+                oldshadow = ti.shadow;
                 break;
             }
         }
@@ -1966,7 +2005,7 @@ pub fn tabIndexPrev(event_num: ?u16) void {
     var newId: ?Id = null;
     var foundFocus = false;
 
-    for (cw.tab_index_prev.items) |ti| {
+    for (tabs) |ti| {
         if (ti.windowId == cw.subwindows.focused_id) {
             if (ti.widgetId == widgetId) {
                 foundFocus = true;
@@ -1976,16 +2015,27 @@ pub fn tabIndexPrev(event_num: ?u16) void {
                     // might be none before so we'll go to null
                     break;
                 }
-            } else if (oldtab == null or ti.tabIndex < oldtab.? or (!foundFocus and ti.tabIndex == oldtab.?)) {
-                if (ti.tabIndex >= newtab) {
-                    newtab = ti.tabIndex;
-                    newId = ti.widgetId;
+            } else if (!ti.shadow) {
+                // tabs is ordered by insertion, not tab index, so have to
+                // search all of them to find the highest that is below oldtab
+                if (oldtab == null or ti.tabIndex < oldtab.? or (!foundFocus and ti.tabIndex == oldtab.?)) {
+                    if (ti.tabIndex >= newtab) {
+                        newtab = ti.tabIndex;
+                        newId = ti.widgetId;
+                    }
                 }
             }
         }
     }
 
     focusWidget(newId, null, event_num);
+
+    if (oldshadow) {
+        // If we shift-tabbed from inside a focusGroup, we will always focus
+        // the focusGroup itself, so do this again to focus the widget before
+        // the focusGroup.
+        tabIndexPrevEx(event_num, tabs);
+    }
 }
 
 /// Widgets that accept text input should call this on frames they have focus.
@@ -2777,6 +2827,23 @@ pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget
         }
     }
     tt.deinit();
+}
+
+/// Turns off normal tab navigation.  Use for things like a radio button group,
+/// where tab should go to the group as a whole, but within the group focus
+/// moves via key up/down.
+///
+/// Widgets inside the group are ordered by their Options.tab_index.
+///
+/// FocusGroupWidget does no layout.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn focusGroup(src: std.builtin.SourceLocation, opts: Options) *FocusGroupWidget {
+    var ret = widgetAlloc(FocusGroupWidget);
+    ret.* = FocusGroupWidget.init(src, opts);
+    ret.data().was_allocated_on_widget_stack = true;
+    ret.install();
+    return ret;
 }
 
 /// Shim to make widget ids unique.
