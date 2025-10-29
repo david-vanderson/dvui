@@ -24,6 +24,7 @@ pub const Subwindow = struct {
     modal: bool = false,
     stay_above_parent_window: ?Id = null,
     mouse_events: bool = true,
+    focus_group: ?*dvui.FocusGroupWidget = null,
 };
 
 pub fn add(self: *Subwindows, gpa: std.mem.Allocator, id: Id, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?Id, mouse_events: bool) !void {
