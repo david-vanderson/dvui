@@ -2846,6 +2846,12 @@ pub fn focusGroup(src: std.builtin.SourceLocation, opts: Options) *FocusGroupWid
     return ret;
 }
 
+/// `focusGroup` where the default role is "radio_group".
+pub fn radioGroup(src: std.builtin.SourceLocation, opts: Options) *FocusGroupWidget {
+    const defaults: Options = .{ .role = .radio_group };
+    return focusGroup(src, defaults.override(opts));
+}
+
 /// Shim to make widget ids unique.
 ///
 /// Useful when you wrap some widgets into a function, but that function does

@@ -110,8 +110,8 @@ pub fn basicWidgets() void {
     }
 
     {
-        var vbox = dvui.box(@src(), .{}, .{ .role = .radio_group, .label = .{ .text = "Radio buttons" } });
-        defer vbox.deinit();
+        var group = dvui.radioGroup(@src(), .{ .label = .{ .text = "Radio buttons" } });
+        defer group.deinit();
 
         inline for (@typeInfo(RadioChoice).@"enum".fields, 0..) |field, i| {
             if (dvui.radio(@src(), radio_choice == @as(RadioChoice, @enumFromInt(field.value)), "Radio " ++ field.name, .{ .id_extra = i })) {
