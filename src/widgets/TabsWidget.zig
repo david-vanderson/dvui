@@ -3,6 +3,8 @@ pub const TabsWidget = @This();
 init_options: InitOptions,
 scroll: ScrollAreaWidget,
 /// SAFETY: Set in `install`
+group: dvui.FocusGroupWidget = undefined,
+/// SAFETY: Set in `install`
 box: BoxWidget = undefined,
 tab_index: usize = 0,
 /// SAFETY: Set in `addTab`
@@ -33,11 +35,14 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 pub fn install(self: *TabsWidget) void {
     self.scroll.install();
 
+    self.group = dvui.FocusGroupWidget.init(@src(), .{});
+    self.group.install();
+
     const margin: Rect = switch (self.init_options.dir) {
         .horizontal => .{ .y = 2 },
         .vertical => .{ .x = 2 },
     };
-    self.box = BoxWidget.init(@src(), .{ .dir = self.init_options.dir }, .{ .margin = margin });
+    self.box = BoxWidget.init(@src(), .{ .dir = self.init_options.dir }, .{ .margin = margin, .expand = .both });
     self.box.install();
 
     var r = self.scroll.data().contentRectScale().r;
@@ -161,6 +166,7 @@ pub fn deinit(self: *TabsWidget) void {
     defer if (should_free) dvui.widgetFree(self);
     defer self.* = undefined;
     self.box.deinit();
+    self.group.deinit();
     self.scroll.deinit();
 }
 

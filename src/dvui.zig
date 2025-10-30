@@ -1927,12 +1927,12 @@ pub fn tabIndexNext(event_num: ?u16) void {
     tabIndexNextEx(event_num, currentWindow().tab_index_prev.items);
 }
 
-pub fn tabIndexNextEx(event_num: ?u16, tabs: []dvui.TabIndex) void {
+pub fn tabIndexNextEx(event_num: ?u16, tabidxs: []dvui.TabIndex) void {
     const cw = currentWindow();
     const widgetId = focusedWidgetId();
     var oldtab: ?u16 = null;
     if (widgetId != null) {
-        for (tabs) |ti| {
+        for (tabidxs) |ti| {
             if (ti.windowId == cw.subwindows.focused_id and ti.widgetId == widgetId.?) {
                 oldtab = ti.tabIndex;
                 break;
@@ -1946,7 +1946,7 @@ pub fn tabIndexNextEx(event_num: ?u16, tabs: []dvui.TabIndex) void {
     var newId: ?Id = null;
     var foundFocus = false;
 
-    for (tabs) |ti| {
+    for (tabidxs) |ti| {
         if (ti.windowId == cw.subwindows.focused_id) {
             if (ti.widgetId == widgetId) {
                 foundFocus = true;
@@ -1961,7 +1961,7 @@ pub fn tabIndexNextEx(event_num: ?u16, tabs: []dvui.TabIndex) void {
                 newId = ti.widgetId;
                 break;
             } else if (oldtab == null or ti.tabIndex > oldtab.?) {
-                // tabs is ordered by insertion, not tab index, so have to
+                // tabidxs is ordered by insertion, not tab index, so have to
                 // search all of them to find the lowest that is above oldtab
                 if (newId == null or ti.tabIndex < newtab) {
                     newtab = ti.tabIndex;
@@ -1984,13 +1984,13 @@ pub fn tabIndexPrev(event_num: ?u16) void {
     tabIndexPrevEx(event_num, currentWindow().tab_index_prev.items);
 }
 
-pub fn tabIndexPrevEx(event_num: ?u16, tabs: []dvui.TabIndex) void {
+pub fn tabIndexPrevEx(event_num: ?u16, tabidxs: []dvui.TabIndex) void {
     const cw = currentWindow();
     const widgetId = focusedWidgetId();
     var oldtab: ?u16 = null;
     var oldshadow: bool = false;
     if (widgetId != null) {
-        for (tabs) |ti| {
+        for (tabidxs) |ti| {
             if (ti.windowId == cw.subwindows.focused_id and ti.widgetId == widgetId.?) {
                 oldtab = ti.tabIndex;
                 oldshadow = ti.shadow;
@@ -2005,7 +2005,7 @@ pub fn tabIndexPrevEx(event_num: ?u16, tabs: []dvui.TabIndex) void {
     var newId: ?Id = null;
     var foundFocus = false;
 
-    for (tabs) |ti| {
+    for (tabidxs) |ti| {
         if (ti.windowId == cw.subwindows.focused_id) {
             if (ti.widgetId == widgetId) {
                 foundFocus = true;
@@ -2016,7 +2016,7 @@ pub fn tabIndexPrevEx(event_num: ?u16, tabs: []dvui.TabIndex) void {
                     break;
                 }
             } else if (!ti.shadow) {
-                // tabs is ordered by insertion, not tab index, so have to
+                // tabidxs is ordered by insertion, not tab index, so have to
                 // search all of them to find the highest that is below oldtab
                 if (oldtab == null or ti.tabIndex < oldtab.? or (!foundFocus and ti.tabIndex == oldtab.?)) {
                     if (ti.tabIndex >= newtab) {
@@ -2034,7 +2034,7 @@ pub fn tabIndexPrevEx(event_num: ?u16, tabs: []dvui.TabIndex) void {
         // If we shift-tabbed from inside a focusGroup, we will always focus
         // the focusGroup itself, so do this again to focus the widget before
         // the focusGroup.
-        tabIndexPrevEx(event_num, tabs);
+        tabIndexPrevEx(event_num, tabidxs);
     }
 }
 
@@ -3241,6 +3241,14 @@ pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions
     ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     ret.processEvents();
+    return ret;
+}
+
+pub fn tabs(src: std.builtin.SourceLocation, init_opts: TabsWidget.InitOptions, opts: Options) *TabsWidget {
+    var ret = widgetAlloc(TabsWidget);
+    ret.* = TabsWidget.init(src, init_opts, opts);
+    ret.init_options.was_allocated_on_widget_stack = true;
+    ret.install();
     return ret;
 }
 

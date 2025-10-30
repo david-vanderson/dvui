@@ -152,8 +152,7 @@ pub fn menus() void {
         defer tbox.deinit();
 
         {
-            var tabs = dvui.TabsWidget.init(@src(), .{ .dir = layout_dir.* }, .{ .expand = if (layout_dir.* == .horizontal) .horizontal else .vertical });
-            tabs.install();
+            var tabs = dvui.tabs(@src(), .{ .dir = layout_dir.* }, .{ .expand = if (layout_dir.* == .horizontal) .horizontal else .vertical });
             defer tabs.deinit();
 
             inline for (0..8) |i| {
