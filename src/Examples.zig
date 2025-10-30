@@ -371,8 +371,7 @@ pub fn grids() void {
     var tbox = dvui.box(@src(), .{}, .{ .border = Rect.all(1), .expand = .both });
     defer tbox.deinit();
     {
-        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-        tabs.install();
+        var tabs = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer tabs.deinit();
         for (0..GridType.num_grids) |tab_num| {
             const this_tab: GridType = @enumFromInt(tab_num);
