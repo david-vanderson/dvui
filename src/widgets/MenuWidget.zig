@@ -141,6 +141,12 @@ pub fn install(self: *MenuWidget) void {
     self.group = dvui.FocusGroupWidget.init(@src(), .{});
     self.group.install();
 
+    // a floating menu could have been opened by mouse, but then a key is
+    // pressed, so focus the group which will focus the first thing in the menu
+    if (!self.mouse_mode and self.floating() and dvui.focusedWidgetIdInCurrentSubwindow() == null) {
+        dvui.focusWidget(self.group.data().id, null, null);
+    }
+
     self.box = BoxWidget.init(@src(), .{ .dir = self.init_opts.dir }, self.data().options.strip().override(.{ .expand = .both }));
     self.box.install();
     self.box.drawBackground();
