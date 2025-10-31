@@ -173,6 +173,7 @@ pub const default_col_width: f32 = 100;
 //Widgets
 vbox: BoxWidget,
 /// SAFETY: Set in `install`
+group: dvui.FocusGroupWidget = undefined,
 scroll: ScrollAreaWidget = undefined, // main scroll area
 hscroll: ?ScrollAreaWidget = null, // header scroll area
 bscroll: ?ScrollContainerWidget = null, // body scroll container
@@ -358,6 +359,7 @@ pub fn deinit(self: *GridWidget) void {
     _ = dvui.spacer(@src(), .{ .min_size_content = this_size, .background = false });
 
     if (self.bscroll) |*bscroll| {
+        self.group.deinit();
         bscroll.deinit();
     }
     self.scroll.deinit();
@@ -667,6 +669,9 @@ fn bodyScrollContainerCreate(self: *GridWidget) void {
         self.bscroll.?.install();
         self.bscroll.?.processEvents();
         self.bscroll.?.processVelocity();
+
+        self.group = dvui.FocusGroupWidget.init(@src(), .{});
+        self.group.install();
     }
 }
 

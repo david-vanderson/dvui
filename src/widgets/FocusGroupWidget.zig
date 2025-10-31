@@ -103,14 +103,14 @@ pub fn deinit(self: *FocusGroupWidget) void {
 
                 switch (e.evt) {
                     .key => |ke| {
-                        if (ke.action == .down and (ke.code == .up or ke.code == .left)) {
+                        if ((ke.action == .down or ke.action == .repeat) and (ke.code == .up or ke.code == .left)) {
                             e.handle(@src(), self.data());
                             dvui.tabIndexPrevEx(e.num, self.tab_index_prev);
                             if (dvui.focusedWidgetId() == null) {
                                 // wrap around
                                 dvui.tabIndexPrevEx(e.num, self.tab_index_prev);
                             }
-                        } else if (ke.action == .down and (ke.code == .down or ke.code == .right)) {
+                        } else if ((ke.action == .down or ke.action == .repeat) and (ke.code == .down or ke.code == .right)) {
                             e.handle(@src(), self.data());
                             dvui.tabIndexNextEx(e.num, self.tab_index_prev);
                             if (dvui.focusedWidgetId() == null) {
