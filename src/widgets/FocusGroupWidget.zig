@@ -17,6 +17,8 @@ wd: WidgetData,
 child_rect_union: ?Rect = null,
 
 last_focus: dvui.Id,
+
+remember_focus: ?dvui.Id,
 tab_index_prev: []dvui.TabIndex,
 tab_index: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
 
@@ -28,6 +30,7 @@ pub fn init(src: std.builtin.SourceLocation, opts: Options) FocusGroupWidget {
         .wd = WidgetData.init(src, .{}, defaults.override(opts)),
         .last_focus = dvui.lastFocusedIdInFrame(),
         .tab_index_prev = dvui.dataGetSlice(null, id, "_tab_prev", []dvui.TabIndex) orelse &.{},
+        .remember_focus = dvui.dataGet(null, id, "_remember_focus", dvui.Id) orelse null,
     };
 }
 
@@ -44,9 +47,12 @@ pub fn install(self: *FocusGroupWidget) void {
             dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
 
             if (self.data().id == dvui.focusedWidgetId()) {
-                // if we got focused, focus our first internal widget
-                // TODO: remember which internal widget was focused
-                dvui.tabIndexNextEx(null, self.tab_index_prev);
+                // if we got focused, focus our remembered focus or first id
+                if (self.remember_focus) |id| {
+                    dvui.focusWidget(id, null, null);
+                } else {
+                    dvui.tabIndexNextEx(null, self.tab_index_prev);
+                }
             }
 
             sw.focus_group = self;
@@ -96,6 +102,7 @@ pub fn deinit(self: *FocusGroupWidget) void {
             //std.debug.print("subwindow {x} focus group null\n", .{sw.id.asU64()});
 
             const focus_id = dvui.lastFocusedIdInFrameSince(self.last_focus);
+            if (focus_id) |fid| dvui.dataSet(null, self.data().id, "_remember_focus", fid);
             const evts = dvui.events();
             for (evts) |*e| {
                 if (!dvui.eventMatch(e, .{ .id = self.data().id, .focus_id = focus_id, .r = self.data().borderRectScale().r }))
