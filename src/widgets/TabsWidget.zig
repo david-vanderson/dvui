@@ -35,7 +35,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 pub fn install(self: *TabsWidget) void {
     self.scroll.install();
 
-    self.group = dvui.FocusGroupWidget.init(@src(), .{});
+    self.group = dvui.FocusGroupWidget.init(@src(), .{}, .{});
     self.group.install();
 
     const margin: Rect = switch (self.init_options.dir) {

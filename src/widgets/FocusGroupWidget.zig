@@ -13,6 +13,7 @@ const WidgetData = dvui.WidgetData;
 
 const FocusGroupWidget = @This();
 
+init_opts: InitOptions,
 wd: WidgetData,
 child_rect_union: ?Rect = null,
 
@@ -22,11 +23,18 @@ remember_focus: ?dvui.Id,
 tab_index_prev: []dvui.TabIndex,
 tab_index: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
 
-pub fn init(src: std.builtin.SourceLocation, opts: Options) FocusGroupWidget {
+pub const InitOptions = struct {
+    /// If true wrap focus around the first/last.  If false, focus stops at
+    /// first/last.
+    wrap: bool = true,
+};
+
+pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FocusGroupWidget {
     const id = dvui.parentGet().extendId(src, opts.idExtra());
     const rect = dvui.dataGet(null, id, "_rect", Rect);
-    const defaults = Options{ .name = "Focus Group", .rect = rect orelse .{} };
+    const defaults = Options{ .name = "Focus Group", .rect = rect orelse .{}, .expand = .both };
     return FocusGroupWidget{
+        .init_opts = init_opts,
         .wd = WidgetData.init(src, .{}, defaults.override(opts)),
         .last_focus = dvui.lastFocusedIdInFrame(),
         .tab_index_prev = dvui.dataGetSlice(null, id, "_tab_prev", []dvui.TabIndex) orelse &.{},
@@ -114,15 +122,25 @@ pub fn deinit(self: *FocusGroupWidget) void {
                             e.handle(@src(), self.data());
                             dvui.tabIndexPrevEx(e.num, self.tab_index_prev);
                             if (dvui.focusedWidgetId() == null) {
-                                // wrap around
-                                dvui.tabIndexPrevEx(e.num, self.tab_index_prev);
+                                if (self.init_opts.wrap) {
+                                    // wrap around
+                                    dvui.tabIndexPrevEx(e.num, self.tab_index_prev);
+                                } else {
+                                    // go back to where we were
+                                    dvui.tabIndexNextEx(e.num, self.tab_index_prev);
+                                }
                             }
                         } else if ((ke.action == .down or ke.action == .repeat) and (ke.code == .down or ke.code == .right)) {
                             e.handle(@src(), self.data());
                             dvui.tabIndexNextEx(e.num, self.tab_index_prev);
                             if (dvui.focusedWidgetId() == null) {
-                                // wrap around
-                                dvui.tabIndexNextEx(e.num, self.tab_index_prev);
+                                if (self.init_opts.wrap) {
+                                    // wrap around
+                                    dvui.tabIndexNextEx(e.num, self.tab_index_prev);
+                                } else {
+                                    // go back to where we were
+                                    dvui.tabIndexPrevEx(e.num, self.tab_index_prev);
+                                }
                             }
                         }
                     },

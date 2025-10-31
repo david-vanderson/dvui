@@ -110,7 +110,7 @@ pub fn basicWidgets() void {
     }
 
     {
-        var group = dvui.radioGroup(@src(), .{ .label = .{ .text = "Radio buttons" } });
+        var group = dvui.radioGroup(@src(), .{}, .{ .label = .{ .text = "Radio buttons" } });
         defer group.deinit();
 
         inline for (@typeInfo(RadioChoice).@"enum".fields, 0..) |field, i| {

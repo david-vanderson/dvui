@@ -19,7 +19,7 @@ child_rect_union: ?Rect = null,
 pub fn init(src: std.builtin.SourceLocation, opts: Options) VirtualParentWidget {
     const id = dvui.parentGet().extendId(src, opts.idExtra());
     const rect = dvui.dataGet(null, id, "_rect", Rect);
-    const defaults = Options{ .name = "Virtual Parent", .rect = rect orelse .{} };
+    const defaults = Options{ .name = "Virtual Parent", .rect = rect orelse .{}, .expand = .both };
     return VirtualParentWidget{ .wd = WidgetData.init(src, .{}, defaults.override(opts)) };
 }
 
