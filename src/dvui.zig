@@ -2829,27 +2829,29 @@ pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget
     tt.deinit();
 }
 
-/// Turns off normal tab navigation.  Use for things like a radio button group,
-/// where tab should go to the group as a whole, but within the group focus
-/// moves via key up/down.
+/// Turns off normal tab navigation.  Use for things where tab should go to the
+/// group as a whole, but within the group focus moves via key up/down.
+///
+/// See `radioGroup`.
 ///
 /// Widgets inside the group are ordered by their Options.tab_index.
 ///
 /// FocusGroupWidget does no layout.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn focusGroup(src: std.builtin.SourceLocation, opts: Options) *FocusGroupWidget {
+pub fn focusGroup(src: std.builtin.SourceLocation, init_opts: FocusGroupWidget.InitOptions, opts: Options) *FocusGroupWidget {
+    const defaults: Options = .{ .role = .group };
     var ret = widgetAlloc(FocusGroupWidget);
-    ret.* = FocusGroupWidget.init(src, opts);
+    ret.* = FocusGroupWidget.init(src, init_opts, defaults.override(opts));
     ret.data().was_allocated_on_widget_stack = true;
     ret.install();
     return ret;
 }
 
 /// `focusGroup` where the default role is "radio_group".
-pub fn radioGroup(src: std.builtin.SourceLocation, opts: Options) *FocusGroupWidget {
+pub fn radioGroup(src: std.builtin.SourceLocation, init_opts: FocusGroupWidget.InitOptions, opts: Options) *FocusGroupWidget {
     const defaults: Options = .{ .role = .radio_group };
-    return focusGroup(src, defaults.override(opts));
+    return focusGroup(src, init_opts, defaults.override(opts));
 }
 
 /// Shim to make widget ids unique.

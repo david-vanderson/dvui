@@ -54,6 +54,9 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
     var scroll = dvui.scrollArea(@src(), .{ .scroll_info = &scroll_info }, .{ .expand = .both });
     defer scroll.deinit();
 
+    var group = dvui.focusGroup(@src(), .{ .wrap = false }, .{ .label = .{ .text = "Icons" } });
+    defer group.deinit();
+
     const visibleRect = scroll.si.viewport;
     var cursor: f32 = 0;
     settings.num_rows = 0;
@@ -64,7 +67,7 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
         }
         settings.num_rows += 1;
 
-        if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + settings.row_height) >= visibleRect.y) {
+        if (cursor <= (visibleRect.y + visibleRect.h + 100) and (cursor + settings.row_height + 100) >= visibleRect.y) {
             const r = Rect{ .x = 0, .y = cursor, .w = 0, .h = settings.row_height };
             var iconbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .id_extra = i, .expand = .horizontal, .rect = r });
 
@@ -84,7 +87,7 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
                 dvui.clipboardTextSet(text);
                 var buf2: [100]u8 = undefined;
                 const toast_text = std.fmt.bufPrint(&buf2, "Copied \"{s}\"", .{text}) catch "Copied <Too much text>";
-                dvui.toast(@src(), .{ .message = toast_text });
+                dvui.toast(@src(), .{ .message = toast_text, .timeout = 1_000_000 });
             }
             dvui.labelNoFmt(@src(), text, .{}, .{ .gravity_y = 0.5 });
 
