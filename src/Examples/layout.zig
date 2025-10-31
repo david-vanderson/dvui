@@ -156,11 +156,13 @@ pub fn layout() void {
             var vbox = dvui.box(@src(), .{}, .{});
             defer vbox.deinit();
             dvui.label(@src(), "Expand", .{}, .{});
+            var group = dvui.radioGroup(@src(), .{}, .{ .label = .{ .label_widget = .prev } });
             inline for (std.meta.tags(dvui.Options.Expand)) |opt| {
                 if (dvui.radio(@src(), layout_expand == opt, @tagName(opt), .{ .id_extra = @intFromEnum(opt) })) {
                     layout_expand = opt;
                 }
             }
+            group.deinit();
 
             if (Static.img) {
                 dvui.label(@src(), "UVs", .{}, .{});
@@ -179,11 +181,13 @@ pub fn layout() void {
             var vbox = dvui.box(@src(), .{}, .{});
             defer vbox.deinit();
             dvui.label(@src(), "Shrink", .{}, .{});
+            var group = dvui.radioGroup(@src(), .{}, .{ .label = .{ .label_widget = .prev } });
             inline for (std.meta.tags(dvui.Options.Expand)) |opt| {
                 if (dvui.radio(@src(), Static.shrinkE == opt, @tagName(opt), .{ .id_extra = @intFromEnum(opt) })) {
                     Static.shrinkE = opt;
                 }
             }
+            group.deinit();
         }
     }
 

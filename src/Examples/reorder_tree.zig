@@ -65,6 +65,9 @@ pub fn reorderLists() void {
             var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox2.deinit();
 
+            var group = dvui.radioGroup(@src(), .{}, .{ .label = .{ .text = "Layout" } });
+            defer group.deinit();
+
             const entries = [_][]const u8{ "Vertical", "Horizontal", "Flex" };
             for (0..3) |i| {
                 if (dvui.radio(@src(), @intFromEnum(layo.*) == i, entries[i], .{ .id_extra = i })) {
