@@ -18,6 +18,8 @@ drag_point: ?dvui.Point.Physical = null,
 drag_ending: bool = false,
 branch_size: Size = .{},
 init_options: InitOptions = undefined,
+/// SAFETY: Set in `install`
+group: dvui.FocusGroupWidget = undefined,
 
 pub const InitOptions = struct {
     enable_reordering: bool = true,
@@ -49,7 +51,10 @@ pub fn install(self: *TreeWidget) void {
 
     dvui.parentSet(self.widget());
 
-    if (self.data().accesskit_node()) |ak_node| {
+    self.group = dvui.FocusGroupWidget.init(@src(), .{});
+    self.group.install();
+
+    if (self.group.data().accesskit_node()) |ak_node| {
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
     }
@@ -139,6 +144,8 @@ pub fn deinit(self: *TreeWidget) void {
     const should_free = self.data().was_allocated_on_widget_stack;
     defer if (should_free) dvui.widgetFree(self);
     defer self.* = undefined;
+
+    self.group.deinit();
 
     if (self.drag_ending) {
         self.id_branch = null;
