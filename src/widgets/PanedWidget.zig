@@ -95,7 +95,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
         .init_opts = init_options,
         .collapsing = dvui.dataGet(null, wd.id, "_collapsing", bool) orelse false,
         .collapsed_state = dvui.dataGet(null, wd.id, "_collapsed", bool) orelse (our_size < init_options.collapsed_size),
-        .should_autofit = dvui.firstFrame(wd.id),
+        .should_autofit = dvui.dataGet(null, wd.id, "_autofit_next_frame", bool) orelse dvui.firstFrame(wd.id),
 
         // might be changed in processEvents
         .handle_thick = init_options.handle_size,
@@ -105,6 +105,13 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
             break :blk dvui.dataGetPtrDefault(null, wd.id, "_split_ratio", f32, default);
         },
     };
+
+    // autofit on the second frame, after we know the full widget size
+    if (dvui.firstFrame(wd.id)) {
+        dvui.dataSet(null, wd.id, "_autofit_next_frame", true);
+    } else if (self.should_autofit) {
+        dvui.dataRemove(null, wd.id, "_autofit_next_frame");
+    }
 
     if (self.init_opts.autofit_first != null and self.should_autofit) {
         // Make the first side take the full space to begin with
@@ -279,6 +286,16 @@ pub fn data(self: *PanedWidget) *WidgetData {
 /// Must be called before `showFirst`
 pub fn autoFit(self: *PanedWidget) void {
     self.should_autofit = true;
+    if (self.init_opts.autofit_first) |autofit| {
+        // ensure the first pane is expanded before performing layout
+        self.split_ratio.* = @max(self.split_ratio.*, autofit.min_split, 0.001);
+        self.collapsing = false;
+        self.collapsed_state = false;
+
+        if (self.init_opts.direction != .vertical) {
+            dvui.log.warn("{s}:{d}: autoFit() only works on vertical panes", .{ self.data().src.file, self.data().src.line });
+        }
+    }
 }
 
 /// Calculates the split ratio to fit the first pane to the size of its children.
