@@ -54,7 +54,7 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
     var scroll = dvui.scrollArea(@src(), .{ .scroll_info = &scroll_info }, .{ .expand = .both });
     defer scroll.deinit();
 
-    var group = dvui.focusGroup(@src(), .{ .wrap = false }, .{ .label = .{ .text = "Icons" } });
+    var group = dvui.focusGroup(@src(), .{}, .{ .label = .{ .text = "Icons" } });
     defer group.deinit();
 
     const visibleRect = scroll.si.viewport;

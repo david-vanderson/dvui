@@ -51,7 +51,7 @@ pub fn install(self: *TreeWidget) void {
 
     dvui.parentSet(self.widget());
 
-    self.group = dvui.FocusGroupWidget.init(@src(), .{ .wrap = false }, .{});
+    self.group = dvui.FocusGroupWidget.init(@src(), .{}, .{});
     self.group.install();
 
     if (self.group.data().accesskit_node()) |ak_node| {

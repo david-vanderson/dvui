@@ -670,7 +670,7 @@ fn bodyScrollContainerCreate(self: *GridWidget) void {
         self.bscroll.?.processEvents();
         self.bscroll.?.processVelocity();
 
-        self.group = dvui.FocusGroupWidget.init(@src(), .{ .wrap = false }, .{});
+        self.group = dvui.FocusGroupWidget.init(@src(), .{}, .{});
         self.group.install();
     }
 }
