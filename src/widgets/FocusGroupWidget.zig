@@ -26,7 +26,7 @@ tab_index: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
 pub const InitOptions = struct {
     /// If true wrap focus around the first/last.  If false, focus stops at
     /// first/last.
-    wrap: bool = true,
+    wrap: bool = false,
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FocusGroupWidget {
