@@ -140,6 +140,8 @@ pub fn menus() void {
         const active_tab = dvui.dataGetPtrDefault(null, hbox.data().id, "active_tab", usize, 0);
         {
             defer hbox.deinit();
+            var group = dvui.radioGroup(@src(), .{}, .{ .label = .{ .text = "Layout" } });
+            defer group.deinit();
             const entries = [_][]const u8{ "Horizontal", "Vertical" };
             for (0..2) |i| {
                 if (dvui.radio(@src(), @intFromEnum(layout_dir.*) == i, entries[i], .{ .id_extra = i })) {
@@ -152,8 +154,7 @@ pub fn menus() void {
         defer tbox.deinit();
 
         {
-            var tabs = dvui.TabsWidget.init(@src(), .{ .dir = layout_dir.* }, .{ .expand = if (layout_dir.* == .horizontal) .horizontal else .vertical });
-            tabs.install();
+            var tabs = dvui.tabs(@src(), .{ .dir = layout_dir.* }, .{ .expand = if (layout_dir.* == .horizontal) .horizontal else .vertical });
             defer tabs.deinit();
 
             inline for (0..8) |i| {
@@ -335,6 +336,8 @@ pub fn focus() void {
         }
         hbox.drawBackground();
 
+        var group = dvui.radioGroup(@src(), .{}, .{ .label = .{ .text = "Radio buttons" } });
+        defer group.deinit();
         inline for (@typeInfo(RadioChoice).@"enum".fields, 0..) |field, i| {
             if (dvui.radio(@src(), radio_choice == @as(RadioChoice, @enumFromInt(field.value)), "Radio " ++ field.name, .{ .id_extra = i })) {
                 radio_choice = @enumFromInt(field.value);

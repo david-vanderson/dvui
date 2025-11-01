@@ -26,10 +26,10 @@ pub fn plots() void {
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
-        if (dvui.button(@src(), "Save png", .{}, .{ .gravity_x = 1.0 })) {
+        if (dvui.button(@src(), "Save png", .{}, .{})) {
             save = .png;
         }
-        if (dvui.button(@src(), "Save jpg", .{}, .{ .gravity_x = 1.0 })) {
+        if (dvui.button(@src(), "Save jpg", .{}, .{})) {
             save = .jpg;
         }
     }

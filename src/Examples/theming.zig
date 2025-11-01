@@ -252,9 +252,8 @@ fn styles(theme: *Theme) bool {
     const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
     defer hbox.deinit();
     {
-        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
-        tabs.install();
-        defer tabs.deinit();
+        const vbox = dvui.box(@src(), .{}, .{});
+        defer vbox.deinit();
 
         {
             const theme_styles = comptime std.meta.tags(Theme.Style.Name);
@@ -277,6 +276,10 @@ fn styles(theme: *Theme) bool {
                 }
             }
         }
+
+        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .vertical }, .{ .expand = .both });
+        tabs.install();
+        defer tabs.deinit();
 
         style = switch (active_style.*) {
             .content => blk: {

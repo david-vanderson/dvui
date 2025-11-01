@@ -445,8 +445,9 @@ pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
 
     const active_tab = dvui.dataGetPtrDefault(null, vbox.data().id, "Tab", OptionsEditorTab, .layout);
     {
-        var overlay = dvui.overlay(@src(), .{ .expand = .horizontal });
-        defer overlay.deinit();
+        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        tabs.install();
+        defer tabs.deinit();
 
         var button_wd: dvui.WidgetData = undefined;
         if (dvui.buttonIcon(@src(), "Copy Options", dvui.entypo.copy, .{}, .{}, .{ .gravity_x = 1, .data_out = &button_wd })) {
@@ -456,10 +457,6 @@ pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
             .active_rect = button_wd.borderRectScale().r,
             .position = .vertical,
         }, "Copy Options struct to clipboard", .{}, .{});
-
-        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-        tabs.install();
-        defer tabs.deinit();
 
         if (tabs.addTabLabel(active_tab.* == .layout, "Layout")) {
             active_tab.* = .layout;

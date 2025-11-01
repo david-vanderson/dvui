@@ -73,6 +73,8 @@ parentMenu: ?*MenuWidget = null,
 last_focus: dvui.Id,
 last_focus_in_subwindow: dvui.Id,
 /// SAFETY: Set in `install`
+group: dvui.FocusGroupWidget = undefined,
+/// SAFETY: Set in `install`
 box: BoxWidget = undefined,
 
 // whether submenus should be open
@@ -134,6 +136,15 @@ pub fn install(self: *MenuWidget) void {
             continue;
 
         self.processEvent(e);
+    }
+
+    self.group = dvui.FocusGroupWidget.init(@src(), .{}, .{});
+    self.group.install();
+
+    // a floating menu could have been opened by mouse, but then a key is
+    // pressed, so focus the group which will focus the first thing in the menu
+    if (!self.mouse_mode and self.floating() and dvui.focusedWidgetIdInCurrentSubwindow() == null) {
+        dvui.focusWidget(self.group.data().id, null, null);
     }
 
     self.box = BoxWidget.init(@src(), .{ .dir = self.init_opts.dir }, self.data().options.strip().override(.{ .expand = .both }));
@@ -240,53 +251,30 @@ pub fn processEventsAfter(self: *MenuWidget) void {
                             e.handle(@src(), self.data());
                             self.close();
                         },
-                        .up => {
-                            if (self.init_opts.dir == .vertical) {
+                        .up, .down => {
+                            if (self.init_opts.dir == .horizontal) {
                                 e.handle(@src(), self.data());
-                                dvui.tabIndexPrev(e.num);
-                                if (dvui.focusedWidgetId() == null) {
-                                    // We stepped past the last item, cycle around
-                                    dvui.tabIndexPrev(e.num);
-                                }
                             }
-                        },
-                        .down => {
-                            if (self.init_opts.dir == .vertical) {
-                                e.handle(@src(), self.data());
-                                dvui.tabIndexNext(e.num);
-                                if (dvui.focusedWidgetId() == null) {
-                                    // We stepped past the last item, cycle around
-                                    dvui.tabIndexNext(e.num);
-                                }
-                            }
+                            // otherwise let focus group handle it
                         },
                         .left => {
                             if (self.init_opts.dir == .vertical) {
                                 e.handle(@src(), self.data());
                                 if (self.parentMenu) |pm| {
+                                    e.handle(@src(), self.data());
                                     pm.submenus_activated = false;
                                     if (self.init_opts.parentSubwindowId) |sid| {
                                         dvui.focusSubwindow(sid, null);
                                     }
                                 }
-                            } else {
-                                e.handle(@src(), self.data());
-                                dvui.tabIndexPrev(e.num);
-                                if (dvui.focusedWidgetId() == null) {
-                                    // We stepped past the last item, cycle around
-                                    dvui.tabIndexPrev(e.num);
-                                }
                             }
+                            // otherwise let focus group handle it
                         },
                         .right => {
-                            if (self.init_opts.dir == .horizontal) {
+                            if (self.init_opts.dir == .vertical) {
                                 e.handle(@src(), self.data());
-                                dvui.tabIndexNext(e.num);
-                                if (dvui.focusedWidgetId() == null) {
-                                    // We stepped past the last item, cycle around
-                                    dvui.tabIndexNext(e.num);
-                                }
                             }
+                            // otherwise let focus group handle it
                         },
                         else => {},
                     }
@@ -304,6 +292,7 @@ pub fn deinit(self: *MenuWidget) void {
     defer if (should_free) dvui.widgetFree(self);
     defer self.* = undefined;
     self.box.deinit();
+    self.group.deinit();
     dvui.dataSet(null, self.data().id, "_mouse_mode", self.mouse_mode);
     dvui.dataSet(null, self.data().id, "_sub_act", self.submenus_activated);
     dvui.dataSet(null, self.data().id, "_has_focused_child", self.last_focus_in_subwindow != dvui.lastFocusedIdInSubwindow());
