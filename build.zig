@@ -101,10 +101,12 @@ pub fn build(b: *std.Build) !void {
     // Docs
     {
         const docs_step = b.step("docs", "Build documentation");
-        const docs = b.addLibrary(.{ .name = "dvui", .root_module = b.createModule(.{
+        const dvui_mod = b.createModule(.{
             .root_source_file = b.path("src/dvui.zig"),
             .target = target,
-        }) });
+        });
+        dvui_mod.addOptions("build_options", build_options);
+        const docs = b.addLibrary(.{ .name = "dvui", .root_module = dvui_mod });
 
         const install_docs = b.addInstallDirectory(.{
             .source_dir = docs.getEmittedDocs(),
