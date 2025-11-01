@@ -268,12 +268,6 @@ pub fn deinit(self: *FloatingMenuWidget) void {
         }
     }
 
-    // if no widget in this popup has focus, make the menu have focus to handle keyboard events
-    // - this only happens if no menu items are there, the first grabs focus if nothing has focus
-    if (dvui.focusedWidgetIdInCurrentSubwindow() == null) {
-        dvui.focusWidget(self.menu.data().id, null, null);
-    }
-
     if (!self.have_popup_child and !self.chainFocused(true)) {
         // if a popup chain is open and the user focuses a different window
         // (not the parent of the popups), then we want to close the popups
