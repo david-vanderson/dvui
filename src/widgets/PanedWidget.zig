@@ -219,16 +219,25 @@ pub fn draw(self: *PanedWidget) void {
     var r = rs.r;
     const handle_gap = self.handleGap() * rs.s; // physical
     const thick = self.handle_thick * rs.s; // physical
+    const margin = self.init_opts.handle_margin * rs.s; // physical
     switch (self.init_opts.direction) {
         .horizontal => {
-            r.x += (r.w - handle_gap) * self.split_ratio.* + (handle_gap - thick) / 2;
+            r.x += std.math.clamp(
+                (r.w - handle_gap) * self.split_ratio.* + (handle_gap - thick) / 2,
+                margin,
+                r.w - thick - margin,
+            );
             r.w = thick;
             const height = r.h * len_ratio;
             r.y += r.h / 2 - height / 2;
             r.h = height;
         },
         .vertical => {
-            r.y += (r.h - handle_gap) * self.split_ratio.* + (handle_gap - thick) / 2;
+            r.y += std.math.clamp(
+                (r.h - handle_gap) * self.split_ratio.* + (handle_gap - thick) / 2,
+                margin,
+                r.h - thick - margin,
+            );
             r.h = thick;
             const width = r.w * len_ratio;
             r.x += r.w / 2 - width / 2;
@@ -398,19 +407,25 @@ pub fn minSizeForChild(self: *PanedWidget, s: dvui.Size) void {
 pub fn processEvent(self: *PanedWidget, e: *Event) void {
     if (e.evt == .mouse) {
         const rs = self.data().contentRectScale();
+        const handle_size = self.handleSize() * rs.s; // physical
         const handle_gap = self.handleGap() * rs.s; // physical
+
         const cursor: enums.Cursor = switch (self.init_opts.direction) {
             .horizontal => .arrow_w_e,
             .vertical => .arrow_n_s,
         };
 
         self.mouse_dist = switch (self.init_opts.direction) {
-            .horizontal => @abs(
-                e.evt.mouse.p.x - (rs.r.x + (rs.r.w - handle_gap) * self.split_ratio.* + handle_gap / 2),
-            ) / rs.s,
-            .vertical => @abs(
-                e.evt.mouse.p.y - (rs.r.y + (rs.r.h - handle_gap) * self.split_ratio.* + handle_gap / 2),
-            ) / rs.s,
+            .horizontal => @abs(e.evt.mouse.p.x - std.math.clamp(
+                rs.r.x + (rs.r.w - handle_gap) * self.split_ratio.* + handle_size,
+                0,
+                rs.r.x + rs.r.w - handle_size,
+            )) / rs.s,
+            .vertical => @abs(e.evt.mouse.p.y - std.math.clamp(
+                rs.r.y + (rs.r.h - handle_gap) * self.split_ratio.* + handle_size,
+                0,
+                rs.r.y + rs.r.h - handle_size,
+            )) / rs.s,
         };
 
         if (self.init_opts.handle_dynamic) |hd| {
