@@ -312,13 +312,12 @@ pub fn show(self: *Debug) void {
         defer menu.deinit();
 
         var it = self.options_override.iterator();
-        var i: usize = 0;
         var remove_override_id: ?dvui.Id = null;
-        while (it.next()) |entry| : (i += 1) {
+        while (it.next()) |entry| {
             const id = entry.key_ptr.*;
             const options, const src = entry.value_ptr.*;
 
-            const row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            const row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = id.asUsize() });
             defer row.deinit();
 
             var reset_wd: dvui.WidgetData = undefined;
@@ -346,7 +345,7 @@ pub fn show(self: *Debug) void {
             }, "Copy Options struct to clipboard", .{}, .{});
 
             {
-                var button = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
+                var button = dvui.ButtonWidget.init(@src(), .{}, .{ .expand = .horizontal });
                 button.install();
                 defer button.deinit();
                 button.processEvents();
