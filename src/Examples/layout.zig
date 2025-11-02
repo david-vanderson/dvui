@@ -8,6 +8,7 @@ var layout_corner_radius: Rect = Rect.all(5);
 var layout_flex_content_justify: dvui.FlexBoxWidget.ContentPosition = .center;
 var layout_expand: dvui.Options.Expand = .none;
 var paned_collapsed_width: f32 = 400;
+var paned_autofit_direction: dvui.enums.Direction = .vertical;
 
 /// ![image](Examples-layout.png)
 pub fn layout() void {
@@ -191,7 +192,7 @@ pub fn layout() void {
         }
     }
 
-    dvui.label(@src(), "margin/border/padding", .{}, .{});
+    dvui.label(@src(), "margin/border/padding", .{}, .{ .font_style = .heading });
     {
         var vbox = dvui.box(@src(), .{}, .{});
         defer vbox.deinit();
@@ -239,7 +240,7 @@ pub fn layout() void {
         }
     }
 
-    dvui.label(@src(), "Boxes", .{}, .{});
+    dvui.label(@src(), "Boxes", .{}, .{ .font_style = .heading });
     {
         const opts: Options = .{ .expand = .both, .border = Rect.all(1), .background = true, .style = .content };
 
@@ -323,7 +324,7 @@ pub fn layout() void {
             }
         }
     }
-    dvui.label(@src(), "Collapsible Pane with Draggable Sash", .{}, .{});
+    dvui.label(@src(), "Collapsible Pane with Draggable Sash", .{}, .{ .font_style = .heading });
     {
         var paned = dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = paned_collapsed_width, .handle_margin = 4 }, .{ .expand = .horizontal, .background = false, .min_size_content = .{ .h = 130 } });
         defer paned.deinit();
@@ -352,11 +353,23 @@ pub fn layout() void {
     }
     _ = dvui.sliderEntry(@src(), "collapse under {d:0.0}", .{ .value = &paned_collapsed_width, .min = 100, .max = 600, .interval = 10 }, .{});
 
-    dvui.label(@src(), "Auto-Fit Panes", .{}, .{});
+    dvui.label(@src(), "Auto-Fit Panes", .{}, .{ .font_style = .heading });
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+        dvui.label(@src(), "Direction:", .{}, .{});
+        var group = dvui.radioGroup(@src(), .{}, .{ .label = .{ .label_widget = .prev } });
+        inline for (std.meta.tags(dvui.enums.Direction)) |opt| {
+            if (dvui.radio(@src(), paned_autofit_direction == opt, @tagName(opt), .{ .id_extra = @intFromEnum(opt) })) {
+                paned_autofit_direction = opt;
+            }
+        }
+        group.deinit();
+    }
     {
         const should_fit = dvui.button(@src(), "Fit first pane", .{}, .{});
         var paned = dvui.paned(@src(), .{
-            .direction = .vertical,
+            .direction = paned_autofit_direction,
             .handle_margin = 4,
             .collapsed_size = 0,
             .autofit_first = .{ .min_split = 0.2, .max_split = 0.8, .min_size = 50 },
@@ -370,15 +383,15 @@ pub fn layout() void {
             var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .border = .all(1) });
             defer vbox.deinit();
 
-            dvui.label(@src(), "Top Side\nWith multiple lines of content\nWhere the first pane fits the content", .{}, .{});
-            _ = dvui.button(@src(), "With this button right above the split", .{}, .{});
+            dvui.label(@src(), "First Pane\nWith multiple lines of content\nWhere the first pane fits the content", .{}, .{});
+            _ = dvui.button(@src(), "With this button right against the split", .{}, .{});
         }
 
         if (paned.showSecond()) {
             var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .border = .all(1) });
             defer vbox.deinit();
 
-            dvui.label(@src(), "Bottom Side", .{}, .{});
+            dvui.label(@src(), "Second Pane", .{}, .{});
         }
     }
 }
