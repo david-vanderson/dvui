@@ -48,8 +48,6 @@ pub const InitOptions = struct {
 
     /// Used so that the split_ratio will be set dynamically so that the first side
     /// fits its children within the min/max split specified
-    ///
-    /// Only works for vertical panes
     autofit_first: ?AutoFitOptions = null,
 
     /// Whether to call draw in deinit if not called before.
@@ -116,10 +114,6 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
     if (self.init_opts.autofit_first != null and self.should_autofit) {
         // Make the first side take the full space to begin with
         self.split_ratio.* = 1.0;
-
-        if (self.init_opts.direction != .vertical) {
-            dvui.log.warn("{s}:{d}: .autofit_first only works on vertical panes", .{ src.file, src.line });
-        }
     }
 
     if (self.collapsing) {
@@ -301,10 +295,6 @@ pub fn autoFit(self: *PanedWidget) void {
         self.split_ratio.* = @max(self.split_ratio.*, autofit.min_split, 0.001);
         self.collapsing = false;
         self.collapsed_state = false;
-
-        if (self.init_opts.direction != .vertical) {
-            dvui.log.warn("{s}:{d}: autoFit() only works on vertical panes", .{ self.data().src.file, self.data().src.line });
-        }
     }
 }
 
@@ -313,10 +303,19 @@ pub fn autoFit(self: *PanedWidget) void {
 /// Must be called after all the children on `showFirst` have been called
 /// and before `showSecond` is called
 pub fn getFirstFittedRatio(self: *PanedWidget, autofit: AutoFitOptions) f32 {
-    const full_size = @max(1, self.data().contentRect().h - self.handleSize() * 2);
-    const size_of_first = @max(autofit.min_size, self.layout.min_size_children.h);
+    const content_size = switch (self.init_opts.direction) {
+        .horizontal => self.data().contentRect().w,
+        .vertical => self.data().contentRect().h,
+    };
+    // use the maximum possible handle margin to ensure we show all the content
+    const total_pane_size = content_size - self.handleSize() * 2;
+
+    const size_of_first = @max(autofit.min_size, switch (self.init_opts.direction) {
+        .horizontal => self.layout.min_size_children.w,
+        .vertical => self.layout.min_size_children.h,
+    });
     return std.math.clamp(
-        size_of_first / full_size,
+        size_of_first / @max(1, total_pane_size),
         autofit.min_split,
         autofit.max_split,
     );
