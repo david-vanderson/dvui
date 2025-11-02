@@ -217,17 +217,18 @@ pub fn draw(self: *PanedWidget) void {
 
     const rs = self.data().contentRectScale();
     var r = rs.r;
+    const handle_gap = self.handleGap() * rs.s; // physical
     const thick = self.handle_thick * rs.s; // physical
     switch (self.init_opts.direction) {
         .horizontal => {
-            r.x += r.w * self.split_ratio.* - thick / 2;
+            r.x += (r.w - handle_gap) * self.split_ratio.* + (handle_gap - thick) / 2;
             r.w = thick;
             const height = r.h * len_ratio;
             r.y += r.h / 2 - height / 2;
             r.h = height;
         },
         .vertical => {
-            r.y += r.h * self.split_ratio.* - thick / 2;
+            r.y += (r.h - handle_gap) * self.split_ratio.* + (handle_gap - thick) / 2;
             r.h = thick;
             const width = r.w * len_ratio;
             r.x += r.w / 2 - width / 2;
@@ -316,16 +317,29 @@ pub fn handleSize(self: *const PanedWidget) f32 {
     return self.handle_thick / 2 + self.init_opts.handle_margin;
 }
 
-pub fn rectFor(self: *PanedWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) dvui.Rect {
-    var r = self.data().contentRect().justSize();
-    var margin = self.handleSize();
+/// The full gap added between panes to accomodate the handle.
+///
+/// The handle itself may be drawn outside this gap when the split ratio is at or
+/// near the start or end of the paned widget.
+pub fn handleGap(self: *PanedWidget) f32 {
+    const r = self.data().contentRect();
     const space = switch (self.init_opts.direction) {
         .horizontal => r.w,
         .vertical => r.h,
     };
+    const split_point = space * self.split_ratio.*;
 
-    margin = @min(margin, space * self.split_ratio.*);
-    margin = @min(margin, space - (space * self.split_ratio.*));
+    // when the handle is at the start or end of paned, the gap shrinks to 0
+    return 2 * @min(self.handleSize(), split_point, space - split_point);
+}
+
+pub fn rectFor(self: *PanedWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) dvui.Rect {
+    const handle_gap = self.handleGap();
+    var r = self.data().contentRect().justSize();
+    switch (self.init_opts.direction) {
+        .horizontal => r.w -= handle_gap,
+        .vertical => r.h -= handle_gap,
+    }
 
     switch (self.active_side) {
         .none => {
@@ -344,8 +358,8 @@ pub fn rectFor(self: *PanedWidget, id: dvui.Id, min_size: Size, e: Options.Expan
                 .vertical => r.y -= (r.h - (r.h * self.split_ratio.*)),
             }
         } else switch (self.init_opts.direction) {
-            .horizontal => r.w = @max(0, r.w * self.split_ratio.* - margin),
-            .vertical => r.h = @max(0, r.h * self.split_ratio.* - margin),
+            .horizontal => r.w = @max(0, r.w * self.split_ratio.*),
+            .vertical => r.h = @max(0, r.h * self.split_ratio.*),
         },
         .second => if (self.collapsed()) {
             if (self.split_ratio.* == 1.0) {
@@ -358,13 +372,13 @@ pub fn rectFor(self: *PanedWidget, id: dvui.Id, min_size: Size, e: Options.Expan
         } else switch (self.init_opts.direction) {
             .horizontal => {
                 const first = r.w * self.split_ratio.*;
-                r.w = @max(0, r.w - first - margin);
-                r.x += first + margin;
+                r.w = @max(0, r.w - first);
+                r.x += first + handle_gap;
             },
             .vertical => {
                 const first = r.h * self.split_ratio.*;
-                r.h = @max(0, r.h - first - margin);
-                r.y += first + margin;
+                r.h = @max(0, r.h - first);
+                r.y += first + handle_gap;
             },
         },
     }
@@ -384,14 +398,19 @@ pub fn minSizeForChild(self: *PanedWidget, s: dvui.Size) void {
 pub fn processEvent(self: *PanedWidget, e: *Event) void {
     if (e.evt == .mouse) {
         const rs = self.data().contentRectScale();
+        const handle_gap = self.handleGap() * rs.s; // physical
         const cursor: enums.Cursor = switch (self.init_opts.direction) {
             .horizontal => .arrow_w_e,
             .vertical => .arrow_n_s,
         };
 
         self.mouse_dist = switch (self.init_opts.direction) {
-            .horizontal => @abs(e.evt.mouse.p.x - (rs.r.x + rs.r.w * self.split_ratio.*)) / rs.s,
-            .vertical => @abs(e.evt.mouse.p.y - (rs.r.y + rs.r.h * self.split_ratio.*)) / rs.s,
+            .horizontal => @abs(
+                e.evt.mouse.p.x - (rs.r.x + (rs.r.w - handle_gap) * self.split_ratio.* + handle_gap / 2),
+            ) / rs.s,
+            .vertical => @abs(
+                e.evt.mouse.p.y - (rs.r.y + (rs.r.h - handle_gap) * self.split_ratio.* + handle_gap / 2),
+            ) / rs.s,
         };
 
         if (self.init_opts.handle_dynamic) |hd| {
@@ -419,10 +438,10 @@ pub fn processEvent(self: *PanedWidget, e: *Event) void {
                     _ = dps;
                     switch (self.init_opts.direction) {
                         .horizontal => {
-                            self.split_ratio.* = (e.evt.mouse.p.x - rs.r.x) / rs.r.w;
+                            self.split_ratio.* = (e.evt.mouse.p.x - rs.r.x - handle_gap / 2) / (rs.r.w - handle_gap);
                         },
                         .vertical => {
-                            self.split_ratio.* = (e.evt.mouse.p.y - rs.r.y) / rs.r.h;
+                            self.split_ratio.* = (e.evt.mouse.p.y - rs.r.y - handle_gap / 2) / (rs.r.h - handle_gap);
                         },
                     }
 
