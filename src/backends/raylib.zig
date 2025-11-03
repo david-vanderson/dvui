@@ -9,6 +9,8 @@ pub const c = @cImport({
     @cInclude("raygui.h");
 
     @cInclude("glfw3.h");
+
+    @cInclude("emscripten.h");
 });
 
 pub const kind: dvui.enums.Backend = .raylib;
@@ -650,7 +652,12 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
 
     self.dvui_consumed_events = disable_raylib_input;
 
-    return c.WindowShouldClose();
+    if (dvui.wasm) {
+        c.emscripten_sleep(1);
+        return false;
+    } else {
+        return c.WindowShouldClose();
+    }
 }
 
 const RaylibMouseButtons = .{
