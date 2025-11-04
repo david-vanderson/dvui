@@ -495,6 +495,10 @@ pub fn cursorShow(_: *RaylibBackend, value: ?bool) bool {
 pub fn refresh(_: *RaylibBackend) void {}
 
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
+    if (dvui.wasm) {
+        // yields to browser
+        c.emscripten_sleep(1);
+    }
     var disable_raylib_input: bool = false;
 
     const shift = c.IsKeyDown(c.KEY_LEFT_SHIFT) or c.IsKeyDown(c.KEY_RIGHT_SHIFT);
@@ -653,7 +657,6 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     self.dvui_consumed_events = disable_raylib_input;
 
     if (dvui.wasm) {
-        c.emscripten_sleep(1);
         return false;
     } else {
         return c.WindowShouldClose();
