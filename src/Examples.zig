@@ -25,7 +25,7 @@ pub const demoKind = enum {
     dialogs,
     animations,
     grid,
-    struct_ui,
+    //struct_ui,
     debugging,
 
     pub fn name(self: demoKind) []const u8 {
@@ -44,7 +44,7 @@ pub const demoKind = enum {
             .scroll_canvas => "Scroll Canvas",
             .dialogs => "Dialogs / Toasts",
             .animations => "Animations",
-            .struct_ui => "Struct UI",
+            //.struct_ui => "Struct UI",
             .debugging => "Debugging",
             .grid => "Grid",
         };
@@ -66,7 +66,7 @@ pub const demoKind = enum {
             .scroll_canvas => .{ .scale = 0.35, .offset = .{ .y = -120 } },
             .dialogs => .{ .scale = 0.45, .offset = .{} },
             .animations => .{ .scale = 0.45, .offset = .{} },
-            .struct_ui => .{ .scale = 0.45, .offset = .{} },
+            //.struct_ui => .{ .scale = 0.45, .offset = .{} },
             .debugging => .{ .scale = 0.45, .offset = .{} },
             .grid => .{ .scale = 0.45, .offset = .{} },
         };
@@ -179,7 +179,7 @@ pub fn demo() void {
                     .scroll_canvas => scrollCanvas(),
                     .dialogs => dialogs(float.data().id),
                     .animations => animations(),
-                    .struct_ui => structUI(),
+                    //.struct_ui => structUI(),
                     .debugging => debuggingErrors(),
                     .grid => grids(),
                 }
@@ -237,7 +237,7 @@ pub fn demo() void {
             .scroll_canvas => scrollCanvas(),
             .dialogs => dialogs(float.data().id),
             .animations => animations(),
-            .struct_ui => structUI(),
+            //.struct_ui => structUI(),
             .debugging => debuggingErrors(),
             .grid => grids(),
         }

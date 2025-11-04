@@ -341,7 +341,7 @@ pub fn deinit(self: *Self) void {
     self._arena.deinit();
     self._lifo_arena.deinit();
     self._widget_stack.deinit();
-    dvui.struct_ui.deinit(self.gpa);
+    //dvui.struct_ui.deinit(self.gpa);
     self.* = undefined;
 }
 

@@ -97,7 +97,7 @@ pub const TextLayoutWidget = widgets.TextLayoutWidget;
 pub const TreeWidget = widgets.TreeWidget;
 pub const VirtualParentWidget = widgets.VirtualParentWidget;
 pub const GridWidget = widgets.GridWidget;
-pub const struct_ui = @import("struct_ui.zig");
+//pub const struct_ui = @import("struct_ui.zig");
 pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
 pub const testing = @import("testing.zig");
@@ -4778,24 +4778,6 @@ pub fn plotXY(src: std.builtin.SourceLocation, init_opts: PlotXYOptions, opts: O
 
     s1.deinit();
     p.deinit();
-}
-
-/// Display a struct and allow the user to edit values
-///
-/// Refer to struct_ui.zig for full API.
-/// Call StructOptions(T) to to create display options for the struct or use .{} for defaults.
-/// See struct_ui.displayStruct for more details.
-///
-/// NOTE:
-/// Any modifyable string slice fields are assigned to a duplicate copy of the the TextWidget's text.
-/// These allocations are automatically cleaned up when Window.deinit() is called.
-/// `struct_ui.string_map` can be used to check which strings have been modified and had memory allocated
-/// or to remove strings that should not be automatically deallocated by struct_ui.
-pub fn structUI(src: std.builtin.SourceLocation, comptime field_name: []const u8, struct_ptr: anytype, comptime depth: usize, struct_options: anytype) void {
-    var vbox = dvui.box(src, .{ .dir = .vertical }, .{ .expand = .horizontal });
-    defer vbox.deinit();
-    const struct_box = struct_ui.displayStruct(@src(), field_name, struct_ptr, depth, .default, struct_options, null);
-    if (struct_box) |b| b.deinit();
 }
 
 test {
