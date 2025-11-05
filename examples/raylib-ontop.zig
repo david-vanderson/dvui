@@ -104,8 +104,14 @@ fn colorPicker(result: *dvui.Color) void {
         defer overlay.deinit();
 
         const bounds = overlay.data().contentRectScale().r;
+        const ray_bounds: ray.Rectangle = .{
+            .x = bounds.x,
+            .y = bounds.y,
+            .width = bounds.w,
+            .height = bounds.h,
+        };
         var c_color: ray.Color = RaylibBackend.dvuiColorToRaylib(result.*);
-        _ = ray.GuiColorPicker(bounds, "Pick Color", &c_color);
+        _ = ray.GuiColorPicker(ray_bounds, "Pick Color", &c_color);
         result.* = RaylibBackend.raylibColorToDvui(c_color);
     }
 
