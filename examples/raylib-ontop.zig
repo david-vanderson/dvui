@@ -103,7 +103,7 @@ fn colorPicker(result: *dvui.Color) void {
         var overlay = dvui.overlay(@src(), .{ .min_size_content = .{ .w = 100, .h = 100 } });
         defer overlay.deinit();
 
-        const bounds = RaylibBackend.dvuiRectToRaylib(overlay.data().contentRectScale().r);
+        const bounds = overlay.data().contentRectScale().r;
         var c_color: ray.Color = RaylibBackend.dvuiColorToRaylib(result.*);
         _ = ray.GuiColorPicker(bounds, "Pick Color", &c_color);
         result.* = RaylibBackend.raylibColorToDvui(c_color);
