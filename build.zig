@@ -31,6 +31,7 @@ pub fn build(b: *std.Build) !void {
 
     // Setting this to false may fix linking errors: https://github.com/david-vanderson/dvui/issues/269
     const use_lld = b.option(bool, "use-lld", "The value of the use_lld executable option");
+    const use_c = b.option(bool, "use-c", "Set this to false to use the experimental zig based backend") orelse true;
     const test_filters = b.option([]const []const u8, "test-filter", "Skip tests that do not match any filter") orelse &[0][]const u8{};
 
     const generate_doc_images = b.option(bool, "generate-images", "Add this to 'docs' to generate images") orelse false;
@@ -81,6 +82,7 @@ pub fn build(b: *std.Build) !void {
         .use_lld = use_lld,
         .accesskit = accesskit,
         .build_options = build_options,
+        .use_c = use_c,
     };
 
     if (back_to_build) |backend| {
@@ -527,6 +529,7 @@ const DvuiModuleOptions = struct {
     use_lld: ?bool = null,
     accesskit: AccesskitOptions = .off,
     build_options: *std.Build.Step.Options,
+    use_c: bool = true,
 
     fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
         const tests = self.b.addTest(.{ .root_module = mod, .name = self.b.fmt("{s}-check", .{name}), .filters = self.test_filters, .use_lld = self.use_lld });
