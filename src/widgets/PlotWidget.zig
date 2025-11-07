@@ -42,9 +42,28 @@ pub const Axis = struct {
     min: ?f64 = null,
     max: ?f64 = null,
 
+    scale: ?union(enum) {
+        linear,
+        log: struct {
+            base: f64 = 10,
+        },
+    } = .linear,
+
     pub fn fraction(self: *Axis, val: f64) f32 {
         if (self.min == null or self.max == null) return 0;
-        return @floatCast((val - self.min.?) / (self.max.? - self.min.?));
+
+        const min = self.min.?;
+        const max = self.max.?;
+
+        if (self.scale == null or self.scale.? == .linear) {
+            return @floatCast((val - min) / (max - min));
+        } else if (self.scale.? == .log) {
+            const log_data = self.scale.?.log;
+            const val_exp = std.math.log(f64, log_data.base, val);
+            const min_exp = std.math.log(f64, log_data.base, min);
+            const max_exp = std.math.log(f64, log_data.base, max);
+            return @floatCast((val_exp - min_exp) / (max_exp - min_exp));
+        } else return 0;
     }
 };
 
