@@ -58,6 +58,7 @@ pub const Axis = struct {
 
     // only relevant if `ticks` != none
     draw_ticks: bool = true,
+    draw_gridlines: bool = true,
 
     pub fn fraction(self: *Axis, val: f64) f32 {
         if (self.min == null or self.max == null) return 0;
@@ -335,6 +336,24 @@ pub fn install(self: *PlotWidget) void {
 
             const tick_p = self.dataToScreen(tick);
 
+            if (self.x_axis.draw_gridlines) {
+                dvui.Path.stroke(.{
+                    .points = &.{
+                        dvui.Point.Physical{
+                            .x = self.data_rs.r.x + 5,
+                            .y = tick_p.y,
+                        },
+                        dvui.Point.Physical{
+                            .x = self.data_rs.r.x + self.data_rs.r.w,
+                            .y = tick_p.y,
+                        },
+                    },
+                }, .{
+                    .color = dvui.Color.gray.opacity(0.6),
+                    .thickness = 1,
+                });
+            }
+
             if (self.y_axis.draw_ticks) {
                 dvui.Path.stroke(.{
                     .points = &.{
@@ -378,6 +397,24 @@ pub fn install(self: *PlotWidget) void {
             const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
 
             const tick_p = self.dataToScreen(tick);
+
+            if (self.x_axis.draw_gridlines) {
+                dvui.Path.stroke(.{
+                    .points = &.{
+                        dvui.Point.Physical{
+                            .x = tick_p.x,
+                            .y = self.data_rs.r.y,
+                        },
+                        dvui.Point.Physical{
+                            .x = tick_p.x,
+                            .y = self.data_rs.r.y + self.data_rs.r.h - 5,
+                        },
+                    },
+                }, .{
+                    .color = dvui.Color.gray.opacity(0.6),
+                    .thickness = 1,
+                });
+            }
 
             if (self.x_axis.draw_ticks) {
                 dvui.Path.stroke(.{
