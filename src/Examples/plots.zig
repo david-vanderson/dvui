@@ -162,11 +162,17 @@ pub fn plots() void {
             var xaxis: dvui.PlotWidget.Axis = .{
                 .name = "Angular frequency (rad/s)",
                 .scale = .{ .log = .{} },
+                .ticks = .{
+                    .auto = .{ .num_ticks = 9 },
+                },
             };
 
             var yaxis: dvui.PlotWidget.Axis = .{
                 .name = "Amplitude (dB)",
                 .max = 10,
+                .ticks = .{
+                    .auto = .{ .num_ticks = 6 },
+                },
             };
         };
 
