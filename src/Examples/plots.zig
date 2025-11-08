@@ -160,7 +160,7 @@ pub fn plots() void {
 
         const Static = struct {
             var xaxis: dvui.PlotWidget.Axis = .{
-                .name = "Angular frequencz (rad/s)",
+                .name = "Angular frequency (rad/s)",
                 .scale = .{ .log = .{} },
             };
 
