@@ -56,6 +56,9 @@ pub const Axis = struct {
         },
     } = .{ .auto = .{ .num_ticks = 10 } },
 
+    // only relevant if `ticks` != none
+    draw_ticks: bool = true,
+
     pub fn fraction(self: *Axis, val: f64) f32 {
         if (self.min == null or self.max == null) return 0;
 
@@ -329,12 +332,33 @@ pub fn install(self: *PlotWidget) void {
             const tick_str = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{ytick}) catch "";
             defer dvui.currentWindow().lifo().free(tick_str);
             const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
-            var tick_p = self.dataToScreen(tick);
-            tick_p.x -= tick_str_size.w + pad;
-            tick_p.y = @max(tick_p.y, self.data_rs.r.y);
-            tick_p.y = @min(tick_p.y, self.data_rs.r.y + self.data_rs.r.h - tick_str_size.h);
-            //tick_p.y -= tick_str_size.h / 2;
-            const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_p).toSize(tick_str_size), .s = self.data_rs.s };
+
+            const tick_p = self.dataToScreen(tick);
+
+            if (self.y_axis.draw_ticks) {
+                dvui.Path.stroke(.{
+                    .points = &.{
+                        dvui.Point.Physical{
+                            .x = self.data_rs.r.x,
+                            .y = tick_p.y,
+                        },
+                        dvui.Point.Physical{
+                            .x = self.data_rs.r.x + 5,
+                            .y = tick_p.y,
+                        },
+                    },
+                }, .{
+                    .color = dvui.Color.white,
+                    .thickness = 1,
+                });
+            }
+
+            var tick_label_p = tick_p;
+            tick_label_p.x -= tick_str_size.w + pad;
+            tick_label_p.y = @max(tick_label_p.y, self.data_rs.r.y);
+            tick_label_p.y = @min(tick_label_p.y, self.data_rs.r.y + self.data_rs.r.h - tick_str_size.h);
+            tick_label_p.y -= tick_str_size.h / 2;
+            const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_label_p).toSize(tick_str_size), .s = self.data_rs.s };
 
             dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) }) catch |err| {
                 dvui.logError(@src(), err, "y axis tick text for {d}", .{ytick});
@@ -352,12 +376,33 @@ pub fn install(self: *PlotWidget) void {
             const tick_str = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{xtick}) catch "";
             defer dvui.currentWindow().lifo().free(tick_str);
             const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
-            var tick_p = self.dataToScreen(tick);
-            tick_p.x = @max(tick_p.x, self.data_rs.r.x);
-            tick_p.x = @min(tick_p.x, self.data_rs.r.x + self.data_rs.r.w - tick_str_size.w);
-            //tick_p.x -= tick_str_size.w / 2;
-            tick_p.y += pad;
-            const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_p).toSize(tick_str_size), .s = self.data_rs.s };
+
+            const tick_p = self.dataToScreen(tick);
+
+            if (self.x_axis.draw_ticks) {
+                dvui.Path.stroke(.{
+                    .points = &.{
+                        dvui.Point.Physical{
+                            .x = tick_p.x,
+                            .y = self.data_rs.r.y + self.data_rs.r.h,
+                        },
+                        dvui.Point.Physical{
+                            .x = tick_p.x,
+                            .y = self.data_rs.r.y + self.data_rs.r.h - 5,
+                        },
+                    },
+                }, .{
+                    .color = dvui.Color.white,
+                    .thickness = 1,
+                });
+            }
+
+            var tick_label_p = tick_p;
+            tick_label_p.x = @max(tick_label_p.x, self.data_rs.r.x);
+            tick_label_p.x = @min(tick_label_p.x, self.data_rs.r.x + self.data_rs.r.w - tick_str_size.w);
+            tick_label_p.x -= tick_str_size.w / 2;
+            tick_label_p.y += pad;
+            const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_label_p).toSize(tick_str_size), .s = self.data_rs.s };
 
             dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) }) catch |err| {
                 dvui.logError(@src(), err, "x axis tick text for {d}", .{xtick});
