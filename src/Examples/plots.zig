@@ -141,7 +141,7 @@ pub fn plots() void {
 
     {
         const S = struct {
-            var resistance: f64 = 10;
+            var resistance: f64 = 159;
             var capacitance: f64 = 1e-6;
         };
 
@@ -215,8 +215,9 @@ pub fn plots() void {
             const angular_freq: f64 = 2 * std.math.pi * freq;
 
             const tmp = angular_freq * S.resistance * S.capacitance;
-            const amplitude: f64 = 20 * @log10(1 / (1 + tmp * tmp));
-            s1.point(freq, amplitude);
+            const amplitude = std.math.sqrt(1 / (1 + tmp * tmp));
+            const amplitude_db: f64 = 20 * @log10(amplitude);
+            s1.point(freq, amplitude_db);
         }
         s1.stroke(1, if (valid) dvui.themeGet().focus else dvui.Color.red);
     }
