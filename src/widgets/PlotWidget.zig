@@ -57,15 +57,49 @@ pub const Axis = struct {
                 num_ticks: usize,
             },
         } = .{ .auto = .{ .num_ticks = 10 } },
+
         lines: enum {
             none,
             one_side,
             mirrored,
         } = .mirrored,
+
+        // if null it uses the default for `scale`
+        format: ?TickFormating = null,
     } = .{},
 
     // only relevant if `ticks` != none
     draw_gridlines: bool = true,
+
+    const TickFormating = union(enum) {
+        normal: struct {
+            precision: usize = 2,
+        },
+        scientific_notation: struct {
+            precision: usize = 4,
+        },
+        custom: *const fn (gpa: std.mem.Allocator, tick: f64) std.mem.Allocator.Error![]const u8,
+    };
+
+    pub fn formatTick(self: *Axis, gpa: std.mem.Allocator, tick: f64) ![]const u8 {
+        const tick_format = self.ticks.format orelse
+            switch (self.scale) {
+                .linear => TickFormating{ .normal = .{} },
+                .log => TickFormating{ .scientific_notation = .{} },
+            };
+
+        switch (tick_format) {
+            .normal => |cfg| {
+                return try std.fmt.allocPrint(gpa, "{d:.[1]}", .{ tick, cfg.precision });
+            },
+            .scientific_notation => |cfg| {
+                return try std.fmt.allocPrint(gpa, "{e:.[1]}", .{ tick, cfg.precision });
+            },
+            .custom => |func| {
+                return func(gpa, tick);
+            },
+        }
+    }
 
     pub fn fraction(self: *Axis, val: f64) f32 {
         if (self.min == null or self.max == null) return 0;
@@ -86,14 +120,14 @@ pub const Axis = struct {
         }
     }
 
-    pub fn getTicksLinear(self: *Axis, alloc: std.mem.Allocator, tick_count: usize) ![]f64 {
+    pub fn getTicksLinear(self: *Axis, gpa: std.mem.Allocator, tick_count: usize) ![]f64 {
         if (self.scale != .linear or tick_count == 0 or self.max == null or self.min == null)
             return &.{};
 
         const min = self.min.?;
         const max = self.max.?;
 
-        var ticks = try alloc.alloc(f64, tick_count);
+        var ticks = try gpa.alloc(f64, tick_count);
 
         switch (tick_count) {
             1 => ticks[0] = (min + max) / 2,
@@ -113,7 +147,7 @@ pub const Axis = struct {
         return ticks;
     }
 
-    pub fn getTicksLog(self: *Axis, alloc: std.mem.Allocator, tick_count: usize) ![]f64 {
+    pub fn getTicksLog(self: *Axis, gpa: std.mem.Allocator, tick_count: usize) ![]f64 {
         if (self.scale != .log or tick_count == 0 or self.max == null or self.min == null)
             return &.{};
 
@@ -126,7 +160,7 @@ pub const Axis = struct {
         const min_log = std.math.log(f64, base, min);
         const max_log = std.math.log(f64, base, max);
 
-        var ticks = try alloc.alloc(f64, tick_count);
+        var ticks = try gpa.alloc(f64, tick_count);
 
         switch (tick_count) {
             1 => ticks[0] = std.math.pow(f64, base, (min_log + max_log) / 2),
@@ -147,13 +181,13 @@ pub const Axis = struct {
         return ticks;
     }
 
-    pub fn getTicks(self: *Axis, alloc: std.mem.Allocator) ![]f64 {
+    pub fn getTicks(self: *Axis, gpa: std.mem.Allocator) ![]f64 {
         switch (self.ticks.locations) {
             .none => return &.{},
             .auto => |auto_ticks| {
                 switch (self.scale) {
-                    .linear => return self.getTicksLinear(alloc, auto_ticks.num_ticks),
-                    .log => return self.getTicksLog(alloc, auto_ticks.num_ticks),
+                    .linear => return self.getTicksLinear(gpa, auto_ticks.num_ticks),
+                    .log => return self.getTicksLog(gpa, auto_ticks.num_ticks),
                 }
             },
         }
@@ -340,7 +374,7 @@ pub fn install(self: *PlotWidget) void {
     if (self.y_axis.name) |_| {
         for (yticks) |ytick| {
             const tick: Data = .{ .x = self.x_axis.min orelse 0, .y = ytick };
-            const tick_str = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{ytick}) catch "";
+            const tick_str = self.y_axis.formatTick(dvui.currentWindow().lifo(), ytick) catch "";
             defer dvui.currentWindow().lifo().free(tick_str);
             const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
 
@@ -418,7 +452,7 @@ pub fn install(self: *PlotWidget) void {
 
         for (xticks) |xtick| {
             const tick: Data = .{ .x = xtick, .y = self.y_axis.min orelse 0 };
-            const tick_str = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{xtick}) catch "";
+            const tick_str = self.x_axis.formatTick(dvui.currentWindow().lifo(), xtick) catch "";
             defer dvui.currentWindow().lifo().free(tick_str);
             const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
 

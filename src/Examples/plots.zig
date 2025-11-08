@@ -161,18 +161,21 @@ pub fn plots() void {
 
         const cutoff_angular_freq = 1 / (S.resistance * S.capacitance);
 
-        dvui.label(@src(), "Cutoff angular frequency: {:.2} rad/s", .{cutoff_angular_freq}, .{});
+        dvui.label(@src(), "Cutoff frequency: {:.2} Hz", .{cutoff_angular_freq / (2 * std.math.pi)}, .{});
 
         var vbox = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 100 }, .expand = .ratio });
         defer vbox.deinit();
 
         const Static = struct {
             var xaxis: dvui.PlotWidget.Axis = .{
-                .name = "Angular frequency (rad/s)",
+                .name = "Frequency",
                 .scale = .{ .log = .{} },
                 .ticks = .{
                     .locations = .{
                         .auto = .{ .num_ticks = 9 },
+                    },
+                    .format = .{
+                        .custom = formatFrequency,
                     },
                 },
             };
@@ -207,15 +210,31 @@ pub fn plots() void {
 
         for (0..points) |i| {
             const exp = start_exp + step * @as(f64, @floatFromInt(i));
+
             const freq: f64 = std.math.pow(f64, 10, exp);
-            const angular_freq = 2 * std.math.pi * freq;
+            const angular_freq: f64 = 2 * std.math.pi * freq;
 
             const tmp = angular_freq * S.resistance * S.capacitance;
             const amplitude: f64 = 20 * @log10(1 / (1 + tmp * tmp));
-            s1.point(angular_freq, amplitude);
+            s1.point(freq, amplitude);
         }
         s1.stroke(1, if (valid) dvui.themeGet().focus else dvui.Color.red);
     }
+}
+
+fn formatFrequency(gpa: std.mem.Allocator, freq: f64) ![]const u8 {
+    const exp = @log10(freq);
+    const rounded_exp = std.math.round(exp);
+
+    const val = std.math.pow(f64, 10, rounded_exp);
+
+    if (rounded_exp < 3) {
+        return try std.fmt.allocPrint(gpa, "{d:.0} Hz", .{val});
+    } else if (rounded_exp < 6) {
+        return try std.fmt.allocPrint(gpa, "{d:.0} kHz", .{val / 1e3});
+    } else if (rounded_exp < 9) {
+        return try std.fmt.allocPrint(gpa, "{d:.0} MHz", .{val / 1e6});
+    } else unreachable;
 }
 
 test {
