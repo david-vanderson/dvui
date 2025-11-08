@@ -285,19 +285,38 @@ pub fn install(self: *PlotWidget) void {
     const xticks = self.x_axis.getTicks(dvui.currentWindow().lifo()) catch &.{};
     defer dvui.currentWindow().lifo().free(xticks);
 
-    var tick_width: f32 = 0;
-    if (self.y_axis.name) |_| {
+    const y_axis_tick_width: f32 = blk: {
+        if (self.y_axis.name == null) break :blk 0;
+        var max_width: f32 = 0;
+
         for (yticks) |ytick| {
-            const tick_str = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{ytick}) catch "";
+            const tick_str = self.y_axis.formatTick(dvui.currentWindow().lifo(), ytick) catch "";
             defer dvui.currentWindow().lifo().free(tick_str);
-            tick_width = @max(tick_width, tick_font.textSize(tick_str).w);
+            max_width = @max(max_width, tick_font.textSize(tick_str).w);
         }
-    }
+
+        break :blk max_width;
+    };
+
+    const x_axis_last_tick_width: f32 = blk: {
+        if (xticks.len == 0) break :blk 0;
+        const str = self.x_axis.formatTick(
+            dvui.currentWindow().lifo(),
+            xticks[xticks.len - 1],
+        ) catch "";
+        defer dvui.currentWindow().lifo().free(str);
+
+        break :blk tick_font.sizeM(@as(f32, @floatFromInt(str.len)), 1).w;
+    };
 
     var hbox1 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
 
-    // y axis
-    var yaxis = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .vertical, .min_size_content = .{ .w = tick_width } });
+    // y axis label
+    var yaxis = dvui.box(@src(), .{ .dir = .horizontal }, .{
+        .expand = .vertical,
+        .min_size_content = .{ .w = y_axis_tick_width },
+        .padding = dvui.Rect{ .w = y_axis_tick_width },
+    });
     var yaxis_rect = yaxis.data().rect;
     if (self.y_axis.name) |yname| {
         if (yname.len > 0) {
@@ -306,20 +325,20 @@ pub fn install(self: *PlotWidget) void {
     }
     yaxis.deinit();
 
-    const t = if (xticks.len > 0) xticks[xticks.len - 1] else 0;
-    const str = self.x_axis.formatTick(dvui.currentWindow().lifo(), t) catch "";
-    const tick_size = tick_font.sizeM(@as(f32, @floatFromInt(str.len)), 1);
-    dvui.currentWindow().lifo().free(str);
-
+    // x axis padding
     var xaxis_padding = dvui.box(@src(), .{ .dir = .horizontal }, .{
         .gravity_x = 1.0,
         .expand = .vertical,
-        .min_size_content = .{ .w = tick_size.w / 2 },
+        .min_size_content = .{ .w = x_axis_last_tick_width / 2 },
     });
     xaxis_padding.deinit();
 
     // data area
-    var data_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .role = .image, .label = .{ .text = self.init_options.title orelse "" } });
+    var data_box = dvui.box(@src(), .{ .dir = .horizontal }, .{
+        .expand = .both,
+        .role = .image,
+        .label = .{ .text = self.init_options.title orelse "" },
+    });
 
     // mouse hover
     if (self.init_options.mouse_hover) {
@@ -366,7 +385,7 @@ pub fn install(self: *PlotWidget) void {
         }
     }
 
-    // x axis
+    // x axis label
     var xaxis = dvui.box(@src(), .{}, .{
         .gravity_y = 1.0,
         .expand = .horizontal,
@@ -450,7 +469,12 @@ pub fn install(self: *PlotWidget) void {
             tick_label_p.y -= tick_str_size.h / 2;
             const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_label_p).toSize(tick_str_size), .s = self.data_rs.s };
 
-            dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) }) catch |err| {
+            dvui.renderText(.{
+                .font = tick_font,
+                .text = tick_str,
+                .rs = tick_rs,
+                .color = self.box.data().options.color(.text),
+            }) catch |err| {
                 dvui.logError(@src(), err, "y axis tick text for {d}", .{ytick});
             };
         }
@@ -523,7 +547,12 @@ pub fn install(self: *PlotWidget) void {
             tick_label_p.y += pad;
             const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_label_p).toSize(tick_str_size), .s = self.data_rs.s };
 
-            dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) }) catch |err| {
+            dvui.renderText(.{
+                .font = tick_font,
+                .text = tick_str,
+                .rs = tick_rs,
+                .color = self.box.data().options.color(.text),
+            }) catch |err| {
                 dvui.logError(@src(), err, "x axis tick text for {d}", .{xtick});
             };
         }
