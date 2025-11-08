@@ -131,31 +131,36 @@ pub fn plots() void {
         }
     }
 
-    var resistance: f64 = 1;
-
-    _ = dvui.textEntryNumber(@src(), f64, .{
-        .min = 10,
-        .value = &resistance,
-    }, .{});
-
-    var capacitance: f64 = 1e-6;
-
-    _ = dvui.textEntryNumber(@src(), f64, .{
-        .value = &capacitance,
-    }, .{});
-
     {
+        const S = struct {
+            var resistance: f64 = 10;
+            var capacitance: f64 = 1e-6;
+        };
+
+        dvui.label(@src(), "Resistance (Ohm)", .{}, .{});
+        const r_res = dvui.textEntryNumber(@src(), f64, .{
+            .value = &S.resistance,
+            .min = std.math.floatMin(f64),
+        }, .{});
+
+        dvui.label(@src(), "Capacitance (Farad)", .{}, .{});
+        const c_res = dvui.textEntryNumber(@src(), f64, .{
+            .value = &S.capacitance,
+            .min = std.math.floatMin(f64),
+        }, .{});
+
+        const valid = r_res.value == .Valid and c_res.value == .Valid;
+
+        const cutoff_angular_freq = 1 / (S.resistance * S.capacitance);
+
+        dvui.label(@src(), "Cutoff angular frequency: {:.2} rad/s", .{cutoff_angular_freq}, .{});
+
         var vbox = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 100 }, .expand = .ratio });
         defer vbox.deinit();
 
-        var pic: ?dvui.Picture = null;
-        if (save != null) {
-            pic = dvui.Picture.start(vbox.data().contentRectScale().r);
-        }
-
         const Static = struct {
             var xaxis: dvui.PlotWidget.Axis = .{
-                .name = "Frequency (Hz)",
+                .name = "Angular frequencz (rad/s)",
                 .scale = .{ .log = .{} },
             };
 
@@ -184,13 +189,14 @@ pub fn plots() void {
 
         for (0..points) |i| {
             const exp = start_exp + step * @as(f64, @floatFromInt(i));
-            const x: f64 = std.math.pow(f64, 10, exp);
-            const angular_freq = 2 * std.math.pi * x;
-            const tmp = angular_freq * resistance * capacitance;
-            const fval: f64 = 20 * @log10(1 / (1 + tmp * tmp));
-            s1.point(x, fval);
+            const freq: f64 = std.math.pow(f64, 10, exp);
+            const angular_freq = 2 * std.math.pi * freq;
+
+            const tmp = angular_freq * S.resistance * S.capacitance;
+            const amplitude: f64 = 20 * @log10(1 / (1 + tmp * tmp));
+            s1.point(angular_freq, amplitude);
         }
-        s1.stroke(1, dvui.themeGet().focus);
+        s1.stroke(1, if (valid) dvui.themeGet().focus else dvui.Color.red);
     }
 }
 
