@@ -277,12 +277,13 @@ pub fn install(self: *PlotWidget) void {
         dvui.label(@src(), "{s}", .{title}, .{ .gravity_x = 0.5, .font_style = .title_4 });
     }
 
-    //const str = "000";
     const tick_font = (dvui.Options{ .font_style = .caption }).fontGet();
-    //const tick_size = tick_font.sizeM(str.len, 1);
 
     const yticks = self.y_axis.getTicks(dvui.currentWindow().lifo()) catch &.{};
     defer dvui.currentWindow().lifo().free(yticks);
+
+    const xticks = self.x_axis.getTicks(dvui.currentWindow().lifo()) catch &.{};
+    defer dvui.currentWindow().lifo().free(xticks);
 
     var tick_width: f32 = 0;
     if (self.y_axis.name) |_| {
@@ -305,9 +306,17 @@ pub fn install(self: *PlotWidget) void {
     }
     yaxis.deinit();
 
-    // right padding (if adding, need to add a spacer to the right of xaxis as well)
-    //var xaxis_padding = dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0, .expand = .vertical, .min_size_content = .{ .w = tick_size.w / 2 } });
-    //xaxis_padding.deinit();
+    const t = if (xticks.len > 0) xticks[xticks.len - 1] else 0;
+    const str = self.x_axis.formatTick(dvui.currentWindow().lifo(), t) catch "";
+    const tick_size = tick_font.sizeM(@as(f32, @floatFromInt(str.len)), 1);
+    dvui.currentWindow().lifo().free(str);
+
+    var xaxis_padding = dvui.box(@src(), .{ .dir = .horizontal }, .{
+        .gravity_x = 1.0,
+        .expand = .vertical,
+        .min_size_content = .{ .w = tick_size.w / 2 },
+    });
+    xaxis_padding.deinit();
 
     // data area
     var data_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .role = .image, .label = .{ .text = self.init_options.title orelse "" } });
@@ -358,10 +367,14 @@ pub fn install(self: *PlotWidget) void {
     }
 
     // x axis
-    var xaxis = dvui.box(@src(), .{}, .{ .gravity_y = 1.0, .expand = .horizontal, .min_size_content = .{ .h = x_tick_height } });
+    var xaxis = dvui.box(@src(), .{}, .{
+        .gravity_y = 1.0,
+        .expand = .horizontal,
+        .min_size_content = .{ .h = x_tick_height * 3 },
+    });
     if (self.x_axis.name) |xname| {
         if (xname.len > 0) {
-            dvui.label(@src(), "{s}", .{xname}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+            dvui.label(@src(), "{s}", .{xname}, .{ .gravity_x = 0.5, .gravity_y = 1.0 });
         }
     }
     xaxis.deinit();
@@ -434,8 +447,6 @@ pub fn install(self: *PlotWidget) void {
 
             var tick_label_p = tick_p;
             tick_label_p.x -= tick_str_size.w + pad;
-            tick_label_p.y = @max(tick_label_p.y, self.data_rs.r.y);
-            tick_label_p.y = @min(tick_label_p.y, self.data_rs.r.y + self.data_rs.r.h - tick_str_size.h);
             tick_label_p.y -= tick_str_size.h / 2;
             const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_label_p).toSize(tick_str_size), .s = self.data_rs.s };
 
@@ -447,9 +458,6 @@ pub fn install(self: *PlotWidget) void {
 
     // x axis ticks
     if (self.x_axis.name) |_| {
-        const xticks = self.x_axis.getTicks(dvui.currentWindow().lifo()) catch &.{};
-        defer dvui.currentWindow().lifo().free(xticks);
-
         for (xticks) |xtick| {
             const tick: Data = .{ .x = xtick, .y = self.y_axis.min orelse 0 };
             const tick_str = self.x_axis.formatTick(dvui.currentWindow().lifo(), xtick) catch "";
@@ -511,8 +519,6 @@ pub fn install(self: *PlotWidget) void {
             }
 
             var tick_label_p = tick_p;
-            tick_label_p.x = @max(tick_label_p.x, self.data_rs.r.x);
-            tick_label_p.x = @min(tick_label_p.x, self.data_rs.r.x + self.data_rs.r.w - tick_str_size.w);
             tick_label_p.x -= tick_str_size.w / 2;
             tick_label_p.y += pad;
             const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_label_p).toSize(tick_str_size), .s = self.data_rs.s };
