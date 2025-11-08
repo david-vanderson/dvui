@@ -192,7 +192,7 @@ pub fn plots() void {
             .title = "RC low-pass filter",
             .x_axis = &Static.xaxis,
             .y_axis = &Static.yaxis,
-            .border_thick = 1.0,
+            .border_thick = 2.0,
             .mouse_hover = true,
         }, .{ .expand = .both });
         defer plot.deinit();

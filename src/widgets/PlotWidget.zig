@@ -33,6 +33,7 @@ pub const InitOptions = struct {
     x_axis: ?*Axis = null,
     y_axis: ?*Axis = null,
     border_thick: ?f32 = null,
+    spine_color: ?dvui.Color = null,
     mouse_hover: bool = false,
     was_allocated_on_widget_stack: bool = false,
 };
@@ -301,8 +302,9 @@ pub fn install(self: *PlotWidget) void {
     data_box.deinit();
 
     const bt: f32 = self.init_options.border_thick orelse 0.0;
+    const bc: dvui.Color = self.init_options.spine_color orelse self.box.data().options.color(.text);
     if (bt > 0) {
-        self.data_rs.r.stroke(.{}, .{ .thickness = bt * self.data_rs.s, .color = self.box.data().options.color(.text) });
+        self.data_rs.r.stroke(.{}, .{ .thickness = bt * self.data_rs.s, .color = bc });
     }
 
     const pad = 2 * self.data_rs.s;
@@ -377,7 +379,7 @@ pub fn install(self: *PlotWidget) void {
                 .none => {},
                 .one_side => {
                     dvui.Path.stroke(.{ .points = points }, .{
-                        .color = dvui.Color.white,
+                        .color = bc,
                         .thickness = 1,
                     });
                 },
@@ -386,11 +388,11 @@ pub fn install(self: *PlotWidget) void {
                     const other_side_points = &.{ points[0].plus(off), points[1].plus(off) };
 
                     dvui.Path.stroke(.{ .points = points }, .{
-                        .color = dvui.Color.white,
+                        .color = bc,
                         .thickness = 1,
                     });
                     dvui.Path.stroke(.{ .points = other_side_points }, .{
-                        .color = dvui.Color.white,
+                        .color = bc,
                         .thickness = 1,
                     });
                 },
@@ -455,7 +457,7 @@ pub fn install(self: *PlotWidget) void {
                 .none => {},
                 .one_side => {
                     dvui.Path.stroke(.{ .points = points }, .{
-                        .color = dvui.Color.white,
+                        .color = bc,
                         .thickness = 1,
                     });
                 },
@@ -464,11 +466,11 @@ pub fn install(self: *PlotWidget) void {
                     const other_side_points = &.{ points[0].plus(off), points[1].plus(off) };
 
                     dvui.Path.stroke(.{ .points = points }, .{
-                        .color = dvui.Color.white,
+                        .color = bc,
                         .thickness = 1,
                     });
                     dvui.Path.stroke(.{ .points = other_side_points }, .{
-                        .color = dvui.Color.white,
+                        .color = bc,
                         .thickness = 1,
                     });
                 },
