@@ -49,15 +49,21 @@ pub const Axis = struct {
         },
     } = .linear,
 
-    ticks: union(enum) {
-        none,
-        auto: struct {
-            num_ticks: usize,
-        },
-    } = .{ .auto = .{ .num_ticks = 10 } },
+    ticks: struct {
+        locations: union(enum) {
+            none,
+            auto: struct {
+                num_ticks: usize,
+            },
+        } = .{ .auto = .{ .num_ticks = 10 } },
+        lines: enum {
+            none,
+            one_side,
+            mirrored,
+        } = .mirrored,
+    } = .{},
 
     // only relevant if `ticks` != none
-    draw_ticks: bool = true,
     draw_gridlines: bool = true,
 
     pub fn fraction(self: *Axis, val: f64) f32 {
@@ -141,7 +147,7 @@ pub const Axis = struct {
     }
 
     pub fn getTicks(self: *Axis, alloc: std.mem.Allocator) ![]f64 {
-        switch (self.ticks) {
+        switch (self.ticks.locations) {
             .none => return &.{},
             .auto => |auto_ticks| {
                 switch (self.scale) {
@@ -326,6 +332,8 @@ pub fn install(self: *PlotWidget) void {
 
     hbox2.deinit();
 
+    const tick_line_len = 5;
+
     // y axis ticks
     if (self.y_axis.name) |_| {
         for (yticks) |ytick| {
@@ -340,7 +348,7 @@ pub fn install(self: *PlotWidget) void {
                 dvui.Path.stroke(.{
                     .points = &.{
                         dvui.Point.Physical{
-                            .x = self.data_rs.r.x + 5,
+                            .x = self.data_rs.r.x + tick_line_len,
                             .y = tick_p.y,
                         },
                         dvui.Point.Physical{
@@ -354,22 +362,38 @@ pub fn install(self: *PlotWidget) void {
                 });
             }
 
-            if (self.y_axis.draw_ticks) {
-                dvui.Path.stroke(.{
-                    .points = &.{
-                        dvui.Point.Physical{
-                            .x = self.data_rs.r.x,
-                            .y = tick_p.y,
-                        },
-                        dvui.Point.Physical{
-                            .x = self.data_rs.r.x + 5,
-                            .y = tick_p.y,
-                        },
-                    },
-                }, .{
-                    .color = dvui.Color.white,
-                    .thickness = 1,
-                });
+            const points: []const dvui.Point.Physical = &.{
+                dvui.Point.Physical{
+                    .x = self.data_rs.r.x,
+                    .y = tick_p.y,
+                },
+                dvui.Point.Physical{
+                    .x = self.data_rs.r.x + tick_line_len,
+                    .y = tick_p.y,
+                },
+            };
+
+            switch (self.y_axis.ticks.lines) {
+                .none => {},
+                .one_side => {
+                    dvui.Path.stroke(.{ .points = points }, .{
+                        .color = dvui.Color.white,
+                        .thickness = 1,
+                    });
+                },
+                .mirrored => {
+                    const off = dvui.Point.Physical{ .x = self.data_rs.r.w - tick_line_len, .y = 0 };
+                    const other_side_points = &.{ points[0].plus(off), points[1].plus(off) };
+
+                    dvui.Path.stroke(.{ .points = points }, .{
+                        .color = dvui.Color.white,
+                        .thickness = 1,
+                    });
+                    dvui.Path.stroke(.{ .points = other_side_points }, .{
+                        .color = dvui.Color.white,
+                        .thickness = 1,
+                    });
+                },
             }
 
             var tick_label_p = tick_p;
@@ -416,22 +440,38 @@ pub fn install(self: *PlotWidget) void {
                 });
             }
 
-            if (self.x_axis.draw_ticks) {
-                dvui.Path.stroke(.{
-                    .points = &.{
-                        dvui.Point.Physical{
-                            .x = tick_p.x,
-                            .y = self.data_rs.r.y + self.data_rs.r.h,
-                        },
-                        dvui.Point.Physical{
-                            .x = tick_p.x,
-                            .y = self.data_rs.r.y + self.data_rs.r.h - 5,
-                        },
-                    },
-                }, .{
-                    .color = dvui.Color.white,
-                    .thickness = 1,
-                });
+            const points: []const dvui.Point.Physical = &.{
+                dvui.Point.Physical{
+                    .x = tick_p.x,
+                    .y = self.data_rs.r.y + self.data_rs.r.h,
+                },
+                dvui.Point.Physical{
+                    .x = tick_p.x,
+                    .y = self.data_rs.r.y + self.data_rs.r.h - 5,
+                },
+            };
+
+            switch (self.x_axis.ticks.lines) {
+                .none => {},
+                .one_side => {
+                    dvui.Path.stroke(.{ .points = points }, .{
+                        .color = dvui.Color.white,
+                        .thickness = 1,
+                    });
+                },
+                .mirrored => {
+                    const off = dvui.Point.Physical{ .x = 0, .y = -(self.data_rs.r.h - 5) };
+                    const other_side_points = &.{ points[0].plus(off), points[1].plus(off) };
+
+                    dvui.Path.stroke(.{ .points = points }, .{
+                        .color = dvui.Color.white,
+                        .thickness = 1,
+                    });
+                    dvui.Path.stroke(.{ .points = other_side_points }, .{
+                        .color = dvui.Color.white,
+                        .thickness = 1,
+                    });
+                },
             }
 
             var tick_label_p = tick_p;

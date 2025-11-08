@@ -48,12 +48,20 @@ pub fn plots() void {
                 .name = "X Axis",
                 .min = 0.05,
                 .max = 0.95,
+                .ticks = .{
+                    .lines = .one_side,
+                },
+                .draw_gridlines = false,
             };
 
             var yaxis: dvui.PlotWidget.Axis = .{
                 .name = "Y Axis",
                 // let plot figure out min
                 .max = 0.8,
+                .ticks = .{
+                    .lines = .mirrored,
+                },
+                .draw_gridlines = false,
             };
         };
 
@@ -163,7 +171,9 @@ pub fn plots() void {
                 .name = "Angular frequency (rad/s)",
                 .scale = .{ .log = .{} },
                 .ticks = .{
-                    .auto = .{ .num_ticks = 9 },
+                    .locations = .{
+                        .auto = .{ .num_ticks = 9 },
+                    },
                 },
             };
 
@@ -171,7 +181,9 @@ pub fn plots() void {
                 .name = "Amplitude (dB)",
                 .max = 10,
                 .ticks = .{
-                    .auto = .{ .num_ticks = 6 },
+                    .locations = .{
+                        .auto = .{ .num_ticks = 6 },
+                    },
                 },
             };
         };
