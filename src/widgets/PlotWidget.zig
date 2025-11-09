@@ -46,7 +46,7 @@ pub const Axis = struct {
     scale: union(enum) {
         linear,
         log: struct {
-            base: f64 = 10,
+            base: f64 = 3,
         },
     } = .linear,
 
@@ -326,12 +326,14 @@ pub fn install(self: *PlotWidget) void {
     yaxis.deinit();
 
     // x axis padding
-    var xaxis_padding = dvui.box(@src(), .{ .dir = .horizontal }, .{
-        .gravity_x = 1.0,
-        .expand = .vertical,
-        .min_size_content = .{ .w = x_axis_last_tick_width / 2 },
-    });
-    xaxis_padding.deinit();
+    if (self.x_axis.name) |_| {
+        var xaxis_padding = dvui.box(@src(), .{ .dir = .horizontal }, .{
+            .gravity_x = 1.0,
+            .expand = .vertical,
+            .min_size_content = .{ .w = x_axis_last_tick_width / 2 },
+        });
+        xaxis_padding.deinit();
+    }
 
     // data area
     var data_box = dvui.box(@src(), .{ .dir = .horizontal }, .{
@@ -365,9 +367,6 @@ pub fn install(self: *PlotWidget) void {
 
     const bt: f32 = self.init_options.border_thick orelse 0.0;
     const bc: dvui.Color = self.init_options.spine_color orelse self.box.data().options.color(.text);
-    if (bt > 0) {
-        self.data_rs.r.stroke(.{}, .{ .thickness = bt * self.data_rs.s, .color = bc });
-    }
 
     const pad = 2 * self.data_rs.s;
 
@@ -397,6 +396,11 @@ pub fn install(self: *PlotWidget) void {
         }
     }
     xaxis.deinit();
+
+    _ = dvui.spacer(@src(), .{
+        .min_size_content = .width(x_axis_last_tick_width / 2),
+        .expand = .vertical,
+    });
 
     hbox2.deinit();
 
@@ -556,6 +560,10 @@ pub fn install(self: *PlotWidget) void {
                 dvui.logError(@src(), err, "x axis tick text for {d}", .{xtick});
             };
         }
+    }
+
+    if (bt > 0) {
+        self.data_rs.r.stroke(.{}, .{ .thickness = bt * self.data_rs.s, .color = bc });
     }
 
     self.old_clip = dvui.clip(self.data_rs.r);
