@@ -17,6 +17,7 @@ id_branch: ?usize = null, // matches Reorderable.reorder_id
 drag_point: ?dvui.Point.Physical = null,
 drag_ending: bool = false,
 branch_size: Size = .{},
+current_branch_focus_id: ?dvui.Id = null,
 init_options: InitOptions = undefined,
 /// SAFETY: Set in `install`
 group: dvui.FocusGroupWidget = undefined,
@@ -225,6 +226,8 @@ pub const Branch = struct {
     expanded: bool = false,
     can_expand: bool = false,
     anim: ?*dvui.AnimateWidget = null,
+    /// SAFETY: Set in `install`
+    parent_focus_id: ?dvui.Id = undefined,
 
     pub fn wrapOuter(opts: Options) Options {
         var ret = opts;
@@ -346,29 +349,59 @@ pub const Branch = struct {
 
         self.tree.branch_size = self.button.data().rect.size();
 
+        self.parent_focus_id = self.tree.current_branch_focus_id;
+        self.tree.current_branch_focus_id = self.button.data().id;
+
         self.hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
         self.hbox.install();
 
-        if (self.tree.init_options.enable_reordering) {
-            loop: for (dvui.events()) |*e| {
-                if (!self.button.matchEvent(e))
-                    continue;
+        for (dvui.events()) |*e| {
+            if (!self.button.matchEvent(e))
+                continue;
 
-                switch (e.evt) {
-                    .mouse => |me| {
-                        if (me.action == .motion) {
-                            if (dvui.captured(self.button.data().id)) {
-                                e.handle(@src(), self.button.data());
-                                if (dvui.dragging(me.p, null)) |_| {
-                                    self.tree.dragStart(self.data().id.asUsize(), me.p);
-
-                                    break :loop;
-                                }
+            switch (e.evt) {
+                .mouse => |me| {
+                    if (!self.tree.init_options.enable_reordering) continue;
+                    if (me.action == .motion) {
+                        if (dvui.captured(self.button.data().id)) {
+                            e.handle(@src(), self.button.data());
+                            if (dvui.dragging(me.p, null)) |_| {
+                                self.tree.dragStart(self.data().id.asUsize(), me.p);
                             }
                         }
-                    },
-                    else => {},
-                }
+                    }
+                },
+                .key => |ke| {
+                    if (ke.action != .down and ke.action != .repeat)
+                        continue;
+
+                    switch (ke.code) {
+                        .right => {
+                            e.handle(@src(), self.button.data());
+                            if (self.expanded) {
+                                dvui.tabIndexNextEx(e.num, self.tree.group.tab_index_prev);
+                            } else {
+                                self.expanded = true;
+                            }
+                        },
+                        .left => {
+                            e.handle(@src(), self.button.data());
+                            if (self.expanded) {
+                                self.expanded = false;
+                            } else if (self.parent_focus_id) |pid| {
+                                dvui.focusWidget(pid, null, e.num);
+                            } else {
+                                // no parent, so focus the first branch of the tree
+                                while (dvui.focusedWidgetId() != null) {
+                                    dvui.tabIndexPrevEx(e.num, self.tree.group.tab_index_prev);
+                                }
+                                dvui.tabIndexNextEx(e.num, self.tree.group.tab_index_prev);
+                            }
+                        },
+                        else => {},
+                    }
+                },
+                else => {},
             }
         }
     }
@@ -489,6 +522,7 @@ pub const Branch = struct {
         self.data().minSizeSetAndRefresh();
         self.data().minSizeReportToParent();
 
+        self.tree.current_branch_focus_id = self.parent_focus_id;
         dvui.parentReset(self.data().id, self.data().parent);
     }
 };
