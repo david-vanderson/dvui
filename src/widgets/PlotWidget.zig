@@ -46,7 +46,7 @@ pub const Axis = struct {
     scale: union(enum) {
         linear,
         log: struct {
-            base: f64 = 3,
+            base: f64 = 10,
         },
     } = .linear,
 
@@ -56,7 +56,7 @@ pub const Axis = struct {
             auto: struct {
                 num_ticks: usize,
             },
-        } = .{ .auto = .{ .num_ticks = 10 } },
+        } = .{ .auto = .{ .num_ticks = 3 } },
 
         lines: enum {
             none,
