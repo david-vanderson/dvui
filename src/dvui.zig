@@ -2830,7 +2830,7 @@ pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget
 }
 
 /// Turns off normal tab navigation.  Use for things where tab should go to the
-/// group as a whole, but within the group focus moves via key up/down.
+/// group as a whole, but within the group focus moves via key up/left/down/right.
 ///
 /// See `radioGroup`.
 ///
