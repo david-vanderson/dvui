@@ -138,7 +138,7 @@ pub fn install(self: *MenuWidget) void {
         self.processEvent(e);
     }
 
-    self.group = dvui.FocusGroupWidget.init(@src(), .{}, .{});
+    self.group = dvui.FocusGroupWidget.init(@src(), .{ .nav_key_dir = self.init_opts.dir }, .{});
     self.group.install();
 
     // a floating menu could have been opened by mouse, but then a key is

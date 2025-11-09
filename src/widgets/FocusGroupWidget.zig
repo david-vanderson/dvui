@@ -27,6 +27,9 @@ pub const InitOptions = struct {
     /// If true wrap focus around the first/last.  If false, focus stops at
     /// first/last.
     wrap: bool = false,
+    /// If non-null, only handles navigation using the keys for this direction -
+    /// left/right for horizontal, and up/down for vertical.
+    nav_key_dir: ?dvui.enums.Direction = null,
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FocusGroupWidget {
@@ -118,7 +121,11 @@ pub fn deinit(self: *FocusGroupWidget) void {
 
                 switch (e.evt) {
                     .key => |ke| {
-                        if ((ke.action == .down or ke.action == .repeat) and (ke.code == .up or ke.code == .left)) {
+                        if (ke.action != .down and ke.action != .repeat)
+                            continue;
+
+                        const key_dir = self.init_opts.nav_key_dir;
+                        if ((ke.code == .up and key_dir != .horizontal) or (ke.code == .left and key_dir != .vertical)) {
                             e.handle(@src(), self.data());
                             dvui.tabIndexPrevEx(e.num, self.tab_index_prev);
                             if (dvui.focusedWidgetId() == null) {
@@ -130,7 +137,7 @@ pub fn deinit(self: *FocusGroupWidget) void {
                                     dvui.tabIndexNextEx(e.num, self.tab_index_prev);
                                 }
                             }
-                        } else if ((ke.action == .down or ke.action == .repeat) and (ke.code == .down or ke.code == .right)) {
+                        } else if ((ke.code == .down and key_dir != .horizontal) or (ke.code == .right and key_dir != .vertical)) {
                             e.handle(@src(), self.data());
                             dvui.tabIndexNextEx(e.num, self.tab_index_prev);
                             if (dvui.focusedWidgetId() == null) {
