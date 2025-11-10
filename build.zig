@@ -83,6 +83,7 @@ pub fn build(b: *std.Build) !void {
         .accesskit = accesskit,
         .build_options = build_options,
         .use_c = use_c,
+        .add_stb_image = false, // TODO: please remove this option after completed the testing
     };
 
     if (back_to_build) |backend| {
@@ -354,68 +355,128 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 break :blk .Both;
             };
 
-            const raylib_mod = b.addModule("raylib", .{
-                .root_source_file = b.path("src/backends/raylib.zig"),
-                .target = target,
-                .optimize = optimize,
-                .link_libc = true,
-            });
-            dvui_opts.addChecks(raylib_mod, "raylib-backend");
-            dvui_opts.addTests(raylib_mod, "raylib-backend");
-
-            const maybe_ray = b.lazyDependency(
-                "raylib",
-                .{
+            //TODO: Let me do a horrible but working way first, then improve it by reducing the duplication later.
+            if (dvui_opts.use_c) {
+                const raylib_mod = b.addModule("raylib", .{
+                    .root_source_file = b.path("src/backends/raylib-c.zig"),
                     .target = target,
                     .optimize = optimize,
-                    .linux_display_backend = linux_display_backend,
-                },
-            );
-            if (maybe_ray) |ray| {
-                raylib_mod.linkLibrary(ray.artifact("raylib"));
+                    .link_libc = true,
+                });
+                dvui_opts.addChecks(raylib_mod, "raylib-backend");
+                dvui_opts.addTests(raylib_mod, "raylib-backend");
 
-                // This is to support variable framerate
-                raylib_mod.addIncludePath(ray.path("src/external/glfw/include/GLFW"));
+                const maybe_ray = b.lazyDependency(
+                    "raylib",
+                    .{
+                        .target = target,
+                        .optimize = optimize,
+                        .linux_display_backend = linux_display_backend,
+                    },
+                );
+                if (maybe_ray) |ray| {
+                    raylib_mod.linkLibrary(ray.artifact("raylib"));
 
-                // This seems wonky to me, but is copied from raylib's src/build.zig
-                if (b.lazyDependency("raygui", .{})) |raygui_dep| {
-                    if (b.lazyImport(@This(), "raylib")) |_| {
-                        // we want to write this:
-                        //raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
-                        // but that causes a second invocation of the raylib dependency but without our linux_display_backend
-                        // so it defaults to .Both which causes an error if there is no wayland-scanner
+                    // This is to support variable framerate
+                    raylib_mod.addIncludePath(ray.path("src/external/glfw/include/GLFW"));
 
-                        const raylib = ray.artifact("raylib");
-                        var gen_step = b.addWriteFiles();
-                        raylib.step.dependOn(&gen_step.step);
+                    // This seems wonky to me, but is copied from raylib's src/build.zig
+                    if (b.lazyDependency("raygui", .{})) |raygui_dep| {
+                        if (b.lazyImport(@This(), "raylib")) |_| {
+                            // we want to write this:
+                            //raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
+                            // but that causes a second invocation of the raylib dependency but without our linux_display_backend
+                            // so it defaults to .Both which causes an error if there is no wayland-scanner
 
-                        const raygui_c_path = gen_step.add("raygui.c", "#define RAYGUI_IMPLEMENTATION\n#include \"raygui.h\"\n");
-                        raylib.addCSourceFile(.{ .file = raygui_c_path });
-                        raylib.addIncludePath(raygui_dep.path("src"));
-                        raylib.addIncludePath(ray.path("src"));
+                            const raylib = ray.artifact("raylib");
+                            var gen_step = b.addWriteFiles();
+                            raylib.step.dependOn(&gen_step.step);
 
-                        raylib.installHeader(raygui_dep.path("src/raygui.h"), "raygui.h");
+                            const raygui_c_path = gen_step.add("raygui.c", "#define RAYGUI_IMPLEMENTATION\n#include \"raygui.h\"\n");
+                            raylib.addCSourceFile(.{ .file = raygui_c_path });
+                            raylib.addIncludePath(raygui_dep.path("src"));
+                            raylib.addIncludePath(ray.path("src"));
+
+                            raylib.installHeader(raygui_dep.path("src/raygui.h"), "raygui.h");
+                        }
                     }
                 }
-            }
 
-            var dvui_opts_raylib = dvui_opts;
-            dvui_opts_raylib.add_stb_image = false;
-            const dvui_raylib = addDvuiModule("dvui_raylib", dvui_opts_raylib);
-            dvui_opts.addChecks(dvui_raylib, "dvui_raylib");
-            if (test_dvui_and_app) {
-                dvui_opts.addTests(dvui_raylib, "dvui_raylib");
-            }
+                var dvui_opts_raylib = dvui_opts;
+                dvui_opts_raylib.add_stb_image = false;
+                const dvui_raylib = addDvuiModule("dvui_raylib", dvui_opts_raylib);
+                dvui_opts.addChecks(dvui_raylib, "dvui_raylib");
+                if (test_dvui_and_app) {
+                    dvui_opts.addTests(dvui_raylib, "dvui_raylib");
+                }
 
-            linkBackend(dvui_raylib, raylib_mod);
-            const example_opts: ExampleOptions = .{
-                .dvui_mod = dvui_raylib,
-                .backend_name = "raylib-backend",
-                .backend_mod = raylib_mod,
-            };
-            addExample("raylib-standalone", b.path("examples/raylib-standalone.zig"), true, example_opts, dvui_opts_raylib);
-            addExample("raylib-ontop", b.path("examples/raylib-ontop.zig"), true, example_opts, dvui_opts_raylib);
-            addExample("raylib-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts_raylib);
+                linkBackend(dvui_raylib, raylib_mod);
+                const example_opts: ExampleOptions = .{
+                    .dvui_mod = dvui_raylib,
+                    .backend_name = "raylib-backend",
+                    .backend_mod = raylib_mod,
+                };
+                addExample("raylib-standalone", b.path("examples/raylib-standalone.zig"), true, example_opts, dvui_opts_raylib);
+                addExample("raylib-ontop", b.path("examples/raylib-ontop.zig"), true, example_opts, dvui_opts_raylib);
+                addExample("raylib-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts_raylib);
+            } else {
+                // TODO: zig backend version
+                const raylib_mod = b.addModule("raylib", .{
+                    .root_source_file = b.path("src/backends/raylib-zig.zig"),
+                    .target = target,
+                    .optimize = optimize,
+                    .link_libc = true,
+                });
+                dvui_opts.addChecks(raylib_mod, "raylib-backend");
+                dvui_opts.addTests(raylib_mod, "raylib-backend");
+
+                const maybe_ray = b.lazyDependency(
+                    "raylib_zig",
+                    .{
+                        .target = target,
+                        .optimize = optimize,
+                        .linux_display_backend = linux_display_backend,
+                    },
+                );
+                if (maybe_ray) |ray| {
+                    const raylib = ray.module("raylib");
+                    const raygui = ray.module("raygui");
+                    const raylib_artifact = ray.artifact("raylib");
+
+                    raylib_mod.linkLibrary(raylib_artifact);
+                    raylib_mod.addImport("raylib", raylib);
+                    raylib_mod.addImport("raygui", raygui);
+                }
+
+                const maybe_glfw = b.lazyDependency(
+                    "zglfw",
+                    .{
+                        .target = target,
+                        .optimize = optimize,
+                    },
+                );
+                if (maybe_glfw) |glfw| {
+                    raylib_mod.addImport("zglfw", glfw.module("root"));
+                }
+
+                var dvui_opts_raylib = dvui_opts;
+                dvui_opts_raylib.add_stb_image = false;
+                const dvui_raylib = addDvuiModule("dvui_raylib", dvui_opts_raylib);
+                dvui_opts.addChecks(dvui_raylib, "dvui_raylib");
+                if (test_dvui_and_app) {
+                    dvui_opts.addTests(dvui_raylib, "dvui_raylib");
+                }
+
+                linkBackend(dvui_raylib, raylib_mod);
+                const example_opts: ExampleOptions = .{
+                    .dvui_mod = dvui_raylib,
+                    .backend_name = "raylib-backend",
+                    .backend_mod = raylib_mod,
+                };
+                addExample("raylib-standalone", b.path("examples/raylib-zig-standalone.zig"), true, example_opts, dvui_opts_raylib);
+                addExample("raylib-ontop", b.path("examples/raylib-zig-ontop.zig"), true, example_opts, dvui_opts_raylib);
+                addExample("raylib-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts_raylib);
+            }
         },
         .dx11 => {
             if (target.result.os.tag == .windows) {
