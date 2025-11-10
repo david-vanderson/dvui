@@ -56,6 +56,7 @@
         .zglfw = .{
             .url = "git+https://github.com/zig-gamedev/zglfw.git#6034a5623312c58bf5e64c1a2b686691c28575f4",
             .hash = "zglfw-0.10.0-dev-zgVDNPKyIQCBi-wv_vxkvIQq1u0bP4D56Wszx_2mszc7",
+            .lazy = true,
         },
     },
 }
