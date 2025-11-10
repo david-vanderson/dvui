@@ -20,6 +20,35 @@ const AccesskitOptions = enum {
     }
 };
 
+const CommonSdl = struct {
+    mod: *std.Build.Module,
+    options: *std.Build.Step.Options,
+};
+
+pub fn linkSdl3(
+    b: *std.Build,
+    sdl_mod: *std.Build.Module,
+    sdl3_options: *std.Build.Step.Options,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) void {
+    if (b.systemIntegrationOption("sdl3", .{})) {
+        // SDL3 from system
+        sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
+        sdl_mod.linkSystemLibrary("SDL3", .{});
+    } else {
+        // SDL3 compiled from source
+        sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
+        if (b.lazyDependency("sdl3", .{
+            .target = target,
+            .optimize = optimize,
+        })) |sdl3| {
+            sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
+        }
+    }
+    sdl_mod.addOptions("sdl_options", sdl3_options);
+}
+
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -319,6 +348,38 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("sdl2-ontop", b.path("examples/sdl-ontop.zig"), true, example_opts, dvui_opts);
             addExample("sdl2-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
+        .sdl3gpu => {
+            const sdl_mod = b.addModule("sdl3", .{
+                .root_source_file = b.path("src/backends/sdl3gpu.zig"),
+                .target = target,
+                .optimize = optimize,
+                .link_libc = true,
+            });
+            dvui_opts.addChecks(sdl_mod, "sdl3gpu-backend");
+            dvui_opts.addTests(sdl_mod, "sdl3gpu-backend");
+
+            const sdl3_options = b.addOptions();
+            // sdl3_options.addOption(
+            //     ?bool,
+            //     "callbacks",
+            //     b.option(bool, "sdl3gpu-callbacks", "Use callbacks for live resizing on windows/mac"),
+            // );
+            linkSdl3(b, sdl_mod, sdl3_options, target, optimize);
+
+            const dvui_sdl = addDvuiModule("dvui_sdl3gpu", dvui_opts);
+            // dvui_opts.addChecks(dvui_sdl, "dvui_sdl3gpu");
+            // if (test_dvui_and_app) {
+            // dvui_opts.addTests(dvui_sdl, "dvui_sdl3gpu");
+            // }
+
+            linkBackend(dvui_sdl, sdl_mod);
+            const example_opts: ExampleOptions = .{
+                .dvui_mod = dvui_sdl,
+                .backend_name = "sdl3gpu-backend",
+                .backend_mod = sdl_mod,
+            };
+            addExample("sdl3gpu-ontop", b.path("examples/sdl3gpu-ontop.zig"), true, example_opts, dvui_opts);
+        },
         .sdl3 => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true });
             const sdl_mod = b.addModule("sdl3", .{
@@ -327,8 +388,9 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 .optimize = optimize,
                 .link_libc = true,
             });
-            dvui_opts.addChecks(sdl_mod, "sdl3-backend");
-            dvui_opts.addTests(sdl_mod, "sdl3-backend");
+
+            dvui_opts.addChecks(sdl_mod, "sdl3gpu-backend");
+            dvui_opts.addTests(sdl_mod, "sdl3gpu-backend");
 
             const sdl3_options = b.addOptions();
             sdl3_options.addOption(
@@ -337,21 +399,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 b.option(bool, "sdl3-callbacks", "Use callbacks for live resizing on windows/mac"),
             );
 
-            if (b.systemIntegrationOption("sdl3", .{})) {
-                // SDL3 from system
-                sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
-                sdl_mod.linkSystemLibrary("SDL3", .{});
-            } else {
-                // SDL3 compiled from source
-                sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
-                if (b.lazyDependency("sdl3", .{
-                    .target = target,
-                    .optimize = optimize,
-                })) |sdl3| {
-                    sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
-                }
-            }
-            sdl_mod.addOptions("sdl_options", sdl3_options);
+            linkSdl3(b, sdl_mod, sdl3_options, target, optimize);
 
             const dvui_sdl = addDvuiModule("dvui_sdl3", dvui_opts);
             dvui_opts.addChecks(dvui_sdl, "dvui_sdl3");
