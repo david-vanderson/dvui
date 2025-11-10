@@ -1,0 +1,56 @@
+generator       : Google spiregg
+source lang     : HLSL
+source lang ver : 600
+source file     : 
+entry point     : main (stage=VS)
+
+
+  Input variables: 3
+
+    0:
+      spirv id  : 2
+      location  : 0
+      type      : float4
+      semantic  : 
+      name      : in.var.POSITION
+      qualifier : 
+    1:
+      spirv id  : 3
+      location  : 1
+      type      : float4
+      semantic  : 
+      name      : in.var.COLOR
+      qualifier : 
+    2:
+      spirv id  : 4
+      location  : 2
+      type      : float2
+      semantic  : 
+      name      : in.var.TEXCOORD0
+      qualifier : 
+
+
+  Output variables: 3
+
+    0:
+      spirv id  : 5
+      location  : (built-in) Position
+      type      : float4
+      semantic  : 
+      name      : 
+      qualifier : 
+    1:
+      spirv id  : 6
+      location  : 0
+      type      : float4
+      semantic  : 
+      name      : out.var.COLOR
+      qualifier : 
+    2:
+      spirv id  : 7
+      location  : 1
+      type      : float2
+      semantic  : 
+      name      : out.var.TEXCOORD0
+      qualifier : 
+
