@@ -35,6 +35,8 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 var orig_content_scale: f32 = 1.0;
+var warn_on_quit: bool = false;
+var warn_on_quit_closing: bool = false;
 
 // Runs before the first frame, after backend and dvui.Window.init()
 // - runs between win.begin()/win.end()
@@ -144,6 +146,29 @@ pub fn frame() !dvui.App.Result {
         if (dvui.currentWindow().content_scale != orig_content_scale) {
             if (dvui.button(@src(), "Reset Scale", .{}, .{})) {
                 dvui.currentWindow().content_scale = orig_content_scale;
+            }
+        }
+    }
+
+    _ = dvui.checkbox(@src(), &warn_on_quit, "Warn on Quit", .{});
+
+    if (warn_on_quit) {
+        if (warn_on_quit_closing) return .close;
+
+        const wd = dvui.currentWindow().data();
+        for (dvui.events()) |*e| {
+            if (!dvui.eventMatchSimple(e, wd)) continue;
+
+            if ((e.evt == .window and e.evt.window.action == .close) or (e.evt == .app and e.evt.app.action == .quit)) {
+                e.handle(@src(), wd);
+
+                const warnAfter: dvui.DialogCallAfterFn = struct {
+                    fn warnAfter(_: dvui.Id, response: dvui.enums.DialogResponse) !void {
+                        if (response == .ok) warn_on_quit_closing = true;
+                    }
+                }.warnAfter;
+
+                dvui.dialog(@src(), .{}, .{ .message = "Really Quit?", .cancel_label = "Cancel", .callafterFn = warnAfter });
             }
         }
     }
