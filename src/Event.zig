@@ -9,6 +9,8 @@ pub const EventTypes = union(enum) {
     mouse: Mouse,
     key: Key,
     text: Text,
+    window: Window,
+    app: App,
 };
 
 /// Should not be set directly, use the `handle` method
@@ -30,6 +32,8 @@ pub fn format(self: *const Event, writer: *std.Io.Writer) !void {
         .mouse => |me| try writer.print("{s}}}", .{@tagName(me.action)}),
         .key => |ke| try writer.print("{s}}}", .{@tagName(ke.action)}),
         .text => try writer.print("}}", .{}),
+        .window => |w| try writer.print("{s}}}", .{@tagName(w.action)}),
+        .app => |a| try writer.print("{s}}}", .{@tagName(a.action)}),
     }
 }
 
@@ -128,6 +132,26 @@ pub const Mouse = struct {
 
     p: dvui.Point.Physical,
     floating_win: dvui.Id,
+};
+
+pub const Window = struct {
+    pub const Action = enum {
+        /// User clicked close (or did something) so the window manager is
+        /// telling this window to close.
+        close,
+    };
+
+    action: Action,
+};
+
+pub const App = struct {
+    pub const Action = enum {
+        /// App as a whole is requested to quit.  Usually this is just behind
+        /// the Window close event for the last remaining OS window.
+        quit,
+    };
+
+    action: Action,
 };
 
 test {

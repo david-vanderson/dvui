@@ -438,7 +438,7 @@ pub fn refresh(_: *SDLBackend) void {
     }
 }
 
-pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !bool {
+pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
     //const flags = c.SDL_GetWindowFlags(self.window);
     //if (flags & c.SDL_WINDOW_MOUSE_FOCUS == 0 and flags & c.SDL_WINDOW_INPUT_FOCUS == 0) {
     //std.debug.print("bailing\n", .{});
@@ -447,22 +447,17 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !bool {
     const poll_got_event = if (sdl3) true else 1;
     while (c.SDL_PollEvent(&event) == poll_got_event) {
         _ = try self.addEvent(win, event);
-        switch (event.type) {
-            if (sdl3) c.SDL_EVENT_WINDOW_CLOSE_REQUESTED else c.SDL_WINDOWEVENT_CLOSE,
-            if (sdl3) c.SDL_EVENT_QUIT else c.SDL_QUIT,
-            => return true,
-            // TODO: revisit with sdl3
-            //c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
-            //std.debug.print("sdl window scale changed event\n", .{});
-            //},
-            //c.SDL_EVENT_DISPLAY_CONTENT_SCALE_CHANGED => {
-            //std.debug.print("sdl display scale changed event\n", .{});
-            //},
-            else => {},
-        }
+        //switch (event.type) {
+        //    // TODO: revisit with sdl3
+        //    //c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
+        //    //std.debug.print("sdl window scale changed event\n", .{});
+        //    //},
+        //    //c.SDL_EVENT_DISPLAY_CONTENT_SCALE_CHANGED => {
+        //    //std.debug.print("sdl display scale changed event\n", .{});
+        //    //},
+        //    else => {},
+        //}
     }
-
-    return false;
 }
 
 pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) !void {
@@ -1195,6 +1190,14 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             }
             return false;
         },
+        if (sdl3) c.SDL_EVENT_WINDOW_CLOSE_REQUESTED else c.SDL_WINDOWEVENT_CLOSE => {
+            try win.addEventWindow(.{ .action = .close });
+            return false;
+        },
+        if (sdl3) c.SDL_EVENT_QUIT else c.SDL_QUIT => {
+            try win.addEventApp(.{ .action = .quit });
+            return false;
+        },
         else => {
             if (self.log_events) {
                 log.debug("unhandled SDL event type {any}\n", .{event.type});
@@ -1526,15 +1529,22 @@ pub fn main() !u8 {
         try win.begin(nstime);
 
         // send all SDL events to dvui for processing
-        const quit = try back.addAllEvents(&win);
-        if (quit) break :main_loop;
+        try back.addAllEvents(&win);
 
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
         try toErr(c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 255), "SDL_SetRenderDrawColor in sdl main");
         try toErr(c.SDL_RenderClear(back.renderer), "SDL_RenderClear in sdl main");
 
-        const res = try app.frameFn();
+        var res = try app.frameFn();
+
+        // check for unhandled quit/close
+        for (dvui.events()) |*e| {
+            if (e.handled) continue;
+            // assuming we only have a single window
+            if (e.evt == .window and e.evt.window.action == .close) res = .close;
+            if (e.evt == .app and e.evt.app.action == .quit) res = .close;
+        }
 
         const end_micros = try win.end(.{});
 

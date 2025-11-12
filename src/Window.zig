@@ -449,6 +449,7 @@ pub fn focusEvents(self: *Self, event_num: u16, windowId: ?Id, widgetId: ?Id) vo
                     e.target_widgetId = widgetId;
                 },
                 .mouse => {},
+                .window, .app => {},
             }
         }
     }
@@ -465,6 +466,7 @@ pub fn captureEvents(self: *Self, event_num: u16, widgetId: ?Id) void {
                         e.target_widgetId = widgetId;
                     }
                 },
+                .window, .app => {},
             }
         }
     }
@@ -776,6 +778,42 @@ pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, y
     const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
     return ret;
+}
+
+/// Add an event for a OS Window-level action (close, resize, etc.)
+///
+/// This can be called outside begin/end.  You should add all the events
+/// for a frame either before begin() or just after begin() and before
+/// calling normal dvui widgets.  end() clears the event list.
+pub fn addEventWindow(self: *Self, evt: Event.Window) std.mem.Allocator.Error!void {
+    self.positionMouseEventRemove();
+
+    self.event_num += 1;
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .target_windowId = self.data().id,
+        .evt = .{ .window = evt },
+    });
+
+    try self.positionMouseEventAdd();
+}
+
+/// Add an event for an Application-level action (quit, going to background, etc.)
+///
+/// This can be called outside begin/end.  You should add all the events
+/// for a frame either before begin() or just after begin() and before
+/// calling normal dvui widgets.  end() clears the event list.
+pub fn addEventApp(self: *Self, evt: Event.App) std.mem.Allocator.Error!void {
+    self.positionMouseEventRemove();
+
+    self.event_num += 1;
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .target_windowId = self.data().id,
+        .evt = .{ .app = evt },
+    });
+
+    try self.positionMouseEventAdd();
 }
 
 pub fn FPS(self: *const Self) f32 {
