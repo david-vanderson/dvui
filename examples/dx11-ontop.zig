@@ -35,7 +35,7 @@ pub fn main() !void {
     const win: *dvui.Window = backend.getWindow();
     log.info("dvui window also init.", .{});
 
-    while (true) switch (Backend.serviceMessageQueue()) {
+    main_loop: while (true) switch (Backend.serviceMessageQueue()) {
         .queue_empty => {
             // beginWait coordinates with waitTime below to run frames only when needed
             const nstime = win.beginWait(backend.hasEvent());
@@ -46,11 +46,18 @@ pub fn main() !void {
             // draw some fancy dvui stuff
             dvui_floating_stuff();
 
+            // check for quitting
+            for (dvui.events()) |*e| {
+                // assume we only have a single window
+                if (e.evt == .window and e.evt.window.action == .close) break :main_loop;
+                if (e.evt == .app and e.evt.app.action == .quit) break :main_loop;
+            }
+
             // marks end of dvui frame, don't call dvui functions after this
             // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
             _ = try win.end(.{});
         },
-        .quit, .close_windows => break,
+        .quit => break :main_loop,
     };
 }
 

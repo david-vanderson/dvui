@@ -10,10 +10,6 @@ pub const Context = *align(1) Dx11Backend;
 
 const log = std.log.scoped(.Dx11Backend);
 
-const global = struct {
-    var pending_close = false;
-};
-
 pub const WindowState = struct {
     vsync: bool,
 
@@ -39,9 +35,6 @@ pub const WindowState = struct {
     touch_mouse_events: bool = false,
     /// Whether to log events
     log_events: bool = false,
-
-    /// Set to true once WM_CLOSE is received.
-    received_close: bool = false,
 
     /// The arena allocator (usually)
     arena: std.mem.Allocator = undefined,
@@ -223,10 +216,6 @@ pub fn getWindow(context: Context) *dvui.Window {
     return &stateFromHwnd(hwndFromContext(context)).dvui_window;
 }
 
-pub fn receivedClose(context: Context) bool {
-    return stateFromHwnd(hwndFromContext(context)).received_close;
-}
-
 pub const RegisterClassOptions = struct {
     /// styles in addition to DBLCLICKS
     style: win32.WNDCLASS_STYLES = .{},
@@ -366,7 +355,6 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
 
 /// Cleanup routine
 pub fn deinit(self: Context) void {
-    global.pending_close = true;
     if (0 == win32.DestroyWindow(hwndFromContext(self))) win32.panicWin32("DestroyWindow", win32.GetLastError());
 }
 
@@ -385,7 +373,6 @@ pub fn handleSwapChainResizing(self: Context, width: c_uint, height: c_uint) !vo
 pub const ServiceResult = union(enum) {
     queue_empty,
     quit,
-    close_windows,
 };
 /// Dispatches messages to any/all native OS windows until either the
 /// queue is empty or WM_QUIT/WM_CLOSE are encountered.
@@ -399,11 +386,6 @@ pub fn serviceMessageQueue() ServiceResult {
         if (msg.message == win32.WM_QUIT) {
             @branchHint(.unlikely);
             return .quit;
-        }
-        if (global.pending_close) {
-            @branchHint(.unlikely);
-            global.pending_close = false;
-            return .close_windows;
         }
     }
     return .queue_empty;
@@ -1190,8 +1172,7 @@ pub fn wndProc(
             // important not call DefWindowProc here because that will destroy the window
             // without notifying the app
             const state = stateFromHwnd(hwnd);
-            state.received_close = true;
-            global.pending_close = true;
+            state.dvui_window.addEventWindow(.{ .action = .close }) catch {};
             return 0;
         },
         win32.WM_PAINT => {
@@ -1366,7 +1347,7 @@ pub fn wndProc(
             return 0;
         },
         win32.WM_GETOBJECT => {
-            if (dvui.accesskit_enabled and !global.pending_close) {
+            if (dvui.accesskit_enabled) {
                 const state = stateFromHwnd(hwnd);
                 const ak = state.dvui_window.accesskit;
                 const result = dvui.AccessKit.c.accesskit_windows_adapter_handle_wm_getobject(
@@ -1667,7 +1648,15 @@ pub fn main() !void {
             try win.begin(nstime);
 
             // both dvui and dx11 drawing
-            const res = try app.frameFn();
+            var res = try app.frameFn();
+
+            // check for unhandled quit/close
+            for (dvui.events()) |*e| {
+                if (e.handled) continue;
+                // assuming we only have a single window
+                if (e.evt == .window and e.evt.window.action == .close) res = .close;
+                if (e.evt == .app and e.evt.app.action == .quit) res = .close;
+            }
 
             // marks end of dvui frame, don't call dvui functions after this
             // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
@@ -1678,7 +1667,7 @@ pub fn main() !void {
             // cursor management
             try b.setCursor(win.cursorRequested());
         },
-        .quit, .close_windows => break,
+        .quit => break,
     };
 }
 
