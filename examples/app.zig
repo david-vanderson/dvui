@@ -150,25 +150,27 @@ pub fn frame() !dvui.App.Result {
         }
     }
 
-    _ = dvui.checkbox(@src(), &warn_on_quit, "Warn on Quit", .{});
+    if (dvui.backend.kind != .web) {
+        _ = dvui.checkbox(@src(), &warn_on_quit, "Warn on Quit", .{});
 
-    if (warn_on_quit) {
-        if (warn_on_quit_closing) return .close;
+        if (warn_on_quit) {
+            if (warn_on_quit_closing) return .close;
 
-        const wd = dvui.currentWindow().data();
-        for (dvui.events()) |*e| {
-            if (!dvui.eventMatchSimple(e, wd)) continue;
+            const wd = dvui.currentWindow().data();
+            for (dvui.events()) |*e| {
+                if (!dvui.eventMatchSimple(e, wd)) continue;
 
-            if ((e.evt == .window and e.evt.window.action == .close) or (e.evt == .app and e.evt.app.action == .quit)) {
-                e.handle(@src(), wd);
+                if ((e.evt == .window and e.evt.window.action == .close) or (e.evt == .app and e.evt.app.action == .quit)) {
+                    e.handle(@src(), wd);
 
-                const warnAfter: dvui.DialogCallAfterFn = struct {
-                    fn warnAfter(_: dvui.Id, response: dvui.enums.DialogResponse) !void {
-                        if (response == .ok) warn_on_quit_closing = true;
-                    }
-                }.warnAfter;
+                    const warnAfter: dvui.DialogCallAfterFn = struct {
+                        fn warnAfter(_: dvui.Id, response: dvui.enums.DialogResponse) !void {
+                            if (response == .ok) warn_on_quit_closing = true;
+                        }
+                    }.warnAfter;
 
-                dvui.dialog(@src(), .{}, .{ .message = "Really Quit?", .cancel_label = "Cancel", .callafterFn = warnAfter });
+                    dvui.dialog(@src(), .{}, .{ .message = "Really Quit?", .cancel_label = "Cancel", .callafterFn = warnAfter });
+                }
             }
         }
     }

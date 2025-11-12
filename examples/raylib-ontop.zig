@@ -48,7 +48,7 @@ pub fn main() !void {
         try win.begin(std.time.nanoTimestamp());
 
         // send all Raylib events to dvui for processing
-        _ = try backend.addAllEvents(&win);
+        try backend.addAllEvents(&win);
 
         if (backend.shouldBlockRaylibInput()) {
             // NOTE: I am using raygui here because it has a simple lock-unlock system
