@@ -1674,12 +1674,6 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
             // getting a resize event means we are likely in a callback, so don't call any wait functions
             appState.have_resize = true;
         },
-        // Other user action requested close
-        c.SDL_EVENT_QUIT,
-        // Window manager requested close
-        c.SDL_EVENT_WINDOW_CLOSE_REQUESTED,
-        // end the program, reporting success to the OS.
-        => return c.SDL_APP_SUCCESS,
         else => {},
     }
 
@@ -1704,10 +1698,18 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     toErr(c.SDL_RenderClear(appState.back.renderer), "SDL_RenderClear in sdl main") catch return c.SDL_APP_FAILURE;
 
     const app = dvui.App.get() orelse unreachable;
-    const res = app.frameFn() catch |err| {
+    var res = app.frameFn() catch |err| {
         log.err("dvui.App.frameFn failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
+
+    // check for unhandled quit/close
+    for (dvui.events()) |*e| {
+        if (e.handled) continue;
+        // assuming we only have a single window
+        if (e.evt == .window and e.evt.window.action == .close) res = .close;
+        if (e.evt == .app and e.evt.app.action == .quit) res = .close;
+    }
 
     const end_micros = appState.win.end(.{}) catch |err| {
         log.err("dvui.Window.end failed: {any}", .{err});
