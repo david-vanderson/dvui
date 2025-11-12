@@ -1531,6 +1531,17 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     }
 
     switch (e.evt) {
+        .app => {}, // app events always match
+        .window => {
+            if (e.target_windowId) |wid| {
+                if (wid != opts.id) {
+                    if (builtin.mode == .Debug and opts.debug) {
+                        log.debug("eventMatch {f} not to this window", .{e});
+                    }
+                    return false;
+                }
+            }
+        },
         .key, .text => {
             if (e.target_windowId) |wid| {
                 // focusable event
@@ -3771,6 +3782,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
                 const value: f32 = std.fmt.parseFloat(f32, te.txt) catch break :blk;
                 init_opts.fraction.* = std.math.clamp(value, 0.0, 1.0);
             },
+            else => {},
         }
     }
 
@@ -4132,6 +4144,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                     if (init_opts.max) |max| value = @min(max, value);
                     init_opts.value.* = value;
                 },
+                else => {},
             }
         }
 

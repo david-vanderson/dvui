@@ -913,6 +913,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                 dvui.focusWidget(self.data().id, null, e.num);
             }
         },
+        else => {},
     }
 
     if (!e.handled) {

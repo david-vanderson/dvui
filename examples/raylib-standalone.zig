@@ -65,8 +65,7 @@ pub fn main() !void {
         try win.begin(nstime);
 
         // send all events to dvui for processing
-        const quit = try backend.addAllEvents(&win);
-        if (quit) break :main_loop;
+        try backend.addAllEvents(&win);
 
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
@@ -211,6 +210,13 @@ fn dvui_frame() bool {
 
     // look at demo() for examples of dvui widgets, shows in a floating window
     dvui.Examples.demo();
+
+    // check for quitting
+    for (dvui.events()) |*e| {
+        // assume we only have a single window
+        if (e.evt == .window and e.evt.window.action == .close) return false;
+        if (e.evt == .app and e.evt.app.action == .quit) return false;
+    }
 
     return true;
 }
