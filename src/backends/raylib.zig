@@ -502,8 +502,12 @@ pub fn cursorShow(_: *RaylibBackend, value: ?bool) bool {
 //TODO implement this function
 pub fn refresh(_: *RaylibBackend) void {}
 
-pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
+pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
     var disable_raylib_input: bool = false;
+
+    if (!dvui.wasm and c.WindowShouldClose()) {
+        try win.addEventApp(.{ .action = .quit });
+    }
 
     const shift = c.IsKeyDown(c.KEY_LEFT_SHIFT) or c.IsKeyDown(c.KEY_RIGHT_SHIFT);
     const capslock = c.IsKeyDown(c.KEY_CAPS_LOCK);
@@ -658,8 +662,6 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     //}
 
     self.dvui_consumed_events = disable_raylib_input;
-
-    return c.WindowShouldClose();
 }
 
 const RaylibMouseButtons = .{
@@ -997,14 +999,21 @@ pub fn main() !void {
         try win.begin(nstime);
 
         // send all events to dvui for processing
-        const quit = try b.addAllEvents(&win);
-        if (quit) break :main_loop;
+        try b.addAllEvents(&win);
 
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
         b.clear();
 
-        const res = try app.frameFn();
+        var res = try app.frameFn();
+
+        // check for unhandled quit/close
+        for (dvui.events()) |*e| {
+            if (e.handled) continue;
+            // assuming we only have a single window
+            if (e.evt == .window and e.evt.window.action == .close) res = .close;
+            if (e.evt == .app and e.evt.app.action == .quit) res = .close;
+        }
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
