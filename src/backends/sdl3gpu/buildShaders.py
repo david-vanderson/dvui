@@ -13,7 +13,7 @@ from sys import platform
 
 origDir = os.path.abspath(os.path.dirname(__file__))
 
-# Default shadercross path - will be overridden by --shadercross-path if provided
+# try using shadercross from path if --sdl-shadercross isnt set
 shadercross = 'shadercross'
 
 def discoverShaders():
