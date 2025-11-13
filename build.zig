@@ -355,14 +355,14 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 break :blk .Both;
             };
 
-            const raylib_mod = b.addModule("raylib", .{
+            const raylib_backend_mod = b.addModule("raylib", .{
                 .root_source_file = if (dvui_opts.use_c) b.path("src/backends/raylib-c.zig") else b.path("src/backends/raylib-zig.zig"),
                 .target = target,
                 .optimize = optimize,
                 .link_libc = true,
             });
-            dvui_opts.addChecks(raylib_mod, "raylib-backend");
-            dvui_opts.addTests(raylib_mod, "raylib-backend");
+            dvui_opts.addChecks(raylib_backend_mod, "raylib-backend");
+            dvui_opts.addTests(raylib_backend_mod, "raylib-backend");
 
             if (dvui_opts.use_c) {
                 const maybe_ray = b.lazyDependency(
@@ -374,30 +374,32 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                     },
                 );
                 if (maybe_ray) |ray| {
-                    raylib_mod.linkLibrary(ray.artifact("raylib"));
+                    // TranslateC implementation
+                    // Raylib C
+                    const raylib_lib = ray.artifact("raylib");
 
-                    // This is to support variable framerate
-                    raylib_mod.addIncludePath(ray.path("src/external/glfw/include/GLFW"));
+                    if (b.lazyDependency("raygui", .{})) |rgui| {
+                        const tranc = b.addTranslateC(.{
+                            .root_source_file = b.addWriteFiles().add("rayall.h",
+                                \\#define RAYGUI_IMPLEMENTATION
+                                \\#include "raylib.h"
+                                \\#include "raymath.h"
+                                \\#include "rlgl.h"
+                                \\#include "raygui.h"
+                                \\#include "glfw3.h"
+                            ),
+                            .target = target,
+                            .optimize = optimize,
+                        });
 
-                    // This seems wonky to me, but is copied from raylib's src/build.zig
-                    if (b.lazyDependency("raygui", .{})) |raygui_dep| {
-                        if (b.lazyImport(@This(), "raylib")) |_| {
-                            // we want to write this:
-                            //raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
-                            // but that causes a second invocation of the raylib dependency but without our linux_display_backend
-                            // so it defaults to .Both which causes an error if there is no wayland-scanner
+                        tranc.addIncludePath(ray.path("src"));
+                        tranc.addIncludePath(ray.path("src/external/glfw/include/GLFW"));
+                        tranc.addIncludePath(rgui.path("src"));
 
-                            const raylib = ray.artifact("raylib");
-                            var gen_step = b.addWriteFiles();
-                            raylib.step.dependOn(&gen_step.step);
+                        const raymod = tranc.createModule();
+                        raymod.linkLibrary(raylib_lib);
 
-                            const raygui_c_path = gen_step.add("raygui.c", "#define RAYGUI_IMPLEMENTATION\n#include \"raygui.h\"\n");
-                            raylib.addCSourceFile(.{ .file = raygui_c_path });
-                            raylib.addIncludePath(raygui_dep.path("src"));
-                            raylib.addIncludePath(ray.path("src"));
-
-                            raylib.installHeader(raygui_dep.path("src/raygui.h"), "raygui.h");
-                        }
+                        raylib_backend_mod.addImport("c", raymod);
                     }
                 }
             } else {
@@ -410,9 +412,9 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                     },
                 );
                 if (maybe_ray) |ray| {
-                    raylib_mod.linkLibrary(ray.artifact("raylib"));
-                    raylib_mod.addImport("raylib", ray.module("raylib"));
-                    raylib_mod.addImport("raygui", ray.module("raygui"));
+                    raylib_backend_mod.linkLibrary(ray.artifact("raylib"));
+                    raylib_backend_mod.addImport("raylib", ray.module("raylib"));
+                    raylib_backend_mod.addImport("raygui", ray.module("raygui"));
                 }
 
                 const maybe_glfw = b.lazyDependency(
@@ -423,7 +425,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                     },
                 );
                 if (maybe_glfw) |glfw| {
-                    raylib_mod.addImport("zglfw", glfw.module("root"));
+                    raylib_backend_mod.addImport("zglfw", glfw.module("root"));
                 }
             }
 
@@ -435,11 +437,11 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 dvui_opts.addTests(dvui_raylib, "dvui_raylib");
             }
 
-            linkBackend(dvui_raylib, raylib_mod);
+            linkBackend(dvui_raylib, raylib_backend_mod);
             const example_opts: ExampleOptions = .{
                 .dvui_mod = dvui_raylib,
                 .backend_name = "raylib-backend",
-                .backend_mod = raylib_mod,
+                .backend_mod = raylib_backend_mod,
             };
 
             const standalone = if (dvui_opts.use_c) b.path("examples/raylib-standalone.zig") else b.path("examples/raylib-zig-standalone.zig");
