@@ -96,7 +96,11 @@ pub fn plots() void {
             };
 
             if (dvui.backend.kind == .web) blk: {
-                var writer = std.Io.Writer.Allocating.init(dvui.currentWindow().arena());
+                const min_buffer_size = @max(dvui.PNGEncoder.min_buffer_size, dvui.JPGEncoder.min_buffer_size);
+                var writer = std.Io.Writer.Allocating.initCapacity(dvui.currentWindow().arena(), min_buffer_size) catch |err| {
+                    dvui.logError(@src(), err, "Failed to init writer for plot {t} image", .{save.?});
+                    break :blk;
+                };
                 defer writer.deinit();
                 (switch (save.?) {
                     .png => p.png(&writer.writer),
