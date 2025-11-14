@@ -247,8 +247,9 @@ pub const dialogNativeFileOpenMultiple = native_dialogs.Native.openMultiple;
 pub const dialogNativeFileSave = native_dialogs.Native.save;
 pub const dialogNativeFolderSelect = native_dialogs.Native.folderSelect;
 
-pub const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
-pub const useFreeType = !wasm;
+pub const useLibc = @import("default_options").libc;
+pub const useFreeType = @import("default_options").freetype;
+pub const useTinyFileDialogs = @import("default_options").tiny_file_dialogs;
 
 /// The amount of physical pixels to scroll per "tick" of the scroll wheel
 pub var scroll_speed: f32 = 20;
@@ -284,7 +285,7 @@ pub const c = @cImport({
         @cInclude("stb_truetype.h");
     }
 
-    if (wasm) {
+    if (!useLibc) {
         @cDefine("STBI_NO_STDIO", "1");
         @cDefine("STBI_NO_STDLIB", "1");
         @cDefine("STBIW_NO_STDLIB", "1");
@@ -293,7 +294,7 @@ pub const c = @cImport({
     @cInclude("stb_image_write.h");
 
     // Used by native dialogs
-    if (!wasm) {
+    if (useTinyFileDialogs) {
         @cInclude("tinyfiledialogs.h");
     }
 });

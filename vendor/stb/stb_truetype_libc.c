@@ -37,8 +37,9 @@ extern double dvui_c_fabs(double x);
 extern size_t dvui_c_strlen(const char * str); 
 #define STBTT_strlen(x)      dvui_c_strlen(x)
 
-extern void *dvui_c_memcpy(void *dest, const void * src, size_t n);
-#define STBTT_memcpy(dest, src, n)      dvui_c_memcpy(dest, src, n)
-extern void *dvui_c_memset(void *dest, int x, size_t n);
-#define STBTT_memset(dest, x, n)      dvui_c_memset(dest, x, n)
+// zig's compiler_rt already bundles these functions
+extern void *memcpy(void *dest, const void* src, size_t n);
+#define STBTT_memcpy(dest, src, n)    memcpy(dest, src, n)
+extern void *memset(void *dest, int x, size_t n);
+#define STBTT_memset(dest, x, n)      memset(dest, x, n)
 
