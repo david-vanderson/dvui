@@ -131,6 +131,8 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
         if (dvui.button(@src(), "Open File", .{}, .{})) {
             if (dvui.wasm) {
                 dvui.dialogWasmFileOpen(single_file_id, .{ .accept = ".png, .jpg" });
+            } else if (!dvui.useTinyFileDialogs) {
+                dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Tiny File Dilaogs disabled" });
             } else {
                 const filename = dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{
                     .title = "dvui native file open",
@@ -155,6 +157,8 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
         if (dvui.button(@src(), "Open Multiple Files", .{}, .{})) {
             if (dvui.wasm) {
                 dvui.dialogWasmFileOpenMultiple(multi_file_id, .{ .accept = ".png, .jpg" });
+            } else if (!dvui.useTinyFileDialogs) {
+                dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Tiny File Dilaogs disabled" });
             } else {
                 const filenames = dvui.dialogNativeFileOpenMultiple(dvui.currentWindow().arena(), .{
                     .title = "dvui native file open multiple",
@@ -189,6 +193,8 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
         if (dvui.button(@src(), "Open Folder", .{}, .{})) {
             if (dvui.wasm) {
                 dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
+            } else if (!dvui.useTinyFileDialogs) {
+                dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Tiny File Dilaogs disabled" });
             } else {
                 const filename = dvui.dialogNativeFolderSelect(dvui.currentWindow().arena(), .{ .title = "dvui native folder select" }) catch |err| blk: {
                     dvui.log.debug("Could not open folder select dialog, got {any}", .{err});
@@ -203,6 +209,8 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
         if (dvui.button(@src(), "Save File", .{}, .{})) {
             if (dvui.wasm) {
                 dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Save File", .ok_label = "Ok", .message = "Not available on the web.  For file download, see \"Save Plot\" in the plots example." });
+            } else if (!dvui.useTinyFileDialogs) {
+                dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Tiny File Dilaogs disabled" });
             } else {
                 const filename = dvui.dialogNativeFileSave(dvui.currentWindow().arena(), .{ .title = "dvui native file save" }) catch |err| blk: {
                     dvui.log.debug("Could not open file save dialog, got {any}", .{err});

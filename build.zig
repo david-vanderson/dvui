@@ -38,6 +38,8 @@ pub fn build(b: *std.Build) !void {
         back_to_build = .sdl2;
     }
 
+    const tiny_file_dialogs_option = b.option(bool, "tiny-file-dialogs", "OS-native file dialogs (default is backend specific)");
+
     const build_options = b.addOptions();
     build_options.addOption(
         ?[]const u8,
@@ -81,6 +83,7 @@ pub fn build(b: *std.Build) !void {
         .use_lld = use_lld,
         .accesskit = accesskit,
         .build_options = build_options,
+        .tiny_file_dialogs = tiny_file_dialogs_option,
     };
 
     if (back_to_build) |backend| {
@@ -153,12 +156,15 @@ pub fn build(b: *std.Build) !void {
     }
 }
 
-pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvui_opts: DvuiModuleOptions) void {
+pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvui_opts_in: DvuiModuleOptions) void {
+    var dvui_opts = dvui_opts_in;
     const b = dvui_opts.b;
     const target = dvui_opts.target;
     const optimize = dvui_opts.optimize;
     switch (backend) {
         .custom => {
+            dvui_opts.setDefaults(.{ .tiny_file_dialogs = false });
+
             // For export to users who are bringing their own backend.  Use in your build.zig:
             // const dvui_mod = dvui_dep.module("dvui");
             // @import("dvui").linkBackend(dvui_mod, your_backend_module);
@@ -182,6 +188,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             }
         },
         .testing => {
+            dvui_opts.setDefaults(.{ .tiny_file_dialogs = true });
             const testing_mod = b.addModule("testing", .{
                 .root_source_file = b.path("src/backends/testing.zig"),
                 .target = target,
@@ -205,6 +212,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("testing-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .sdl2 => {
+            dvui_opts.setDefaults(.{ .tiny_file_dialogs = true });
             const sdl_mod = b.addModule("sdl2", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
@@ -289,6 +297,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("sdl2-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .sdl3 => {
+            dvui_opts.setDefaults(.{ .tiny_file_dialogs = true });
             const sdl_mod = b.addModule("sdl3", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
@@ -338,6 +347,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("sdl3-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .raylib => {
+            dvui_opts.setDefaults(.{ .tiny_file_dialogs = true });
             const linux_display_backend: LinuxDisplayBackend = b.option(LinuxDisplayBackend, "linux_display_backend", "If using raylib, which linux display?") orelse blk: {
                 _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
                     error.EnvironmentVariableNotFound => break :blk .X11,
@@ -416,6 +426,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("raylib-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts_raylib);
         },
         .dx11 => {
+            dvui_opts.setDefaults(.{ .tiny_file_dialogs = true });
             if (target.result.os.tag == .windows) {
                 const dx11_mod = b.addModule("dx11", .{
                     .root_source_file = b.path("src/backends/dx11.zig"),
@@ -448,6 +459,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             }
         },
         .web => {
+            dvui_opts.setDefaults(.{ .tiny_file_dialogs = false });
             const export_symbol_names = &[_][]const u8{
                 "dvui_init",
                 "dvui_deinit",
@@ -479,7 +491,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
 
             // Examples, must be compiled for wasm32
             {
-                const wasm_dvui_opts = DvuiModuleOptions{
+                var wasm_dvui_opts = DvuiModuleOptions{
                     .b = b,
                     .target = b.resolveTargetQuery(.{
                         .cpu_arch = .wasm32,
@@ -489,8 +501,11 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                     .build_options = dvui_opts.build_options,
                     .test_filters = dvui_opts.test_filters,
                     .accesskit = .off,
+                    .tiny_file_dialogs = false,
                     // no tests or checks needed, they are check above in native build
                 };
+
+                wasm_dvui_opts.setDefaults(.{ .tiny_file_dialogs = false });
 
                 const web_mod_wasm = b.createModule(.{
                     .root_source_file = b.path("src/backends/web.zig"),
@@ -527,6 +542,26 @@ const DvuiModuleOptions = struct {
     use_lld: ?bool = null,
     accesskit: AccesskitOptions = .off,
     build_options: *std.Build.Step.Options,
+    tiny_file_dialogs: ?bool,
+
+    pub const DefaultOptions = struct {
+        tiny_file_dialogs: bool,
+    };
+
+    fn setDefaults(self: *@This(), defaults: DefaultOptions) void {
+        self.tiny_file_dialogs = self.tiny_file_dialogs orelse defaults.tiny_file_dialogs;
+    }
+
+    fn makeDefaults(self: *const @This()) *std.Build.Step.Options {
+        var ret = self.b.addOptions();
+        ret.addOption(
+            bool,
+            "tiny_file_dialogs",
+            self.tiny_file_dialogs orelse @panic("makeDefaults: tiny_file_dialogs was null"),
+        );
+
+        return ret;
+    }
 
     fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
         const tests = self.b.addTest(.{ .root_module = mod, .name = self.b.fmt("{s}-check", .{name}), .filters = self.test_filters, .use_lld = self.use_lld });
@@ -606,6 +641,7 @@ fn addDvuiModule(
         .optimize = optimize,
     });
     dvui_mod.addOptions("build_options", opts.build_options);
+    dvui_mod.addOptions("default_options", opts.makeDefaults());
     dvui_mod.addImport("svg2tvg", b.dependency("svg2tvg", .{
         .target = target,
         .optimize = optimize,
@@ -655,9 +691,6 @@ fn addDvuiModule(
         }
         dvui_mod.addCSourceFiles(.{ .files = &.{stb_source ++ "stb_truetype_impl.c"} });
 
-        dvui_mod.addIncludePath(b.path("vendor/tfd"));
-        dvui_mod.addCSourceFiles(.{ .files = &.{"vendor/tfd/tinyfiledialogs.c"} });
-
         if (b.systemIntegrationOption("freetype", .{})) {
             dvui_mod.linkSystemLibrary("freetype2", .{});
         } else {
@@ -669,6 +702,12 @@ fn addDvuiModule(
                 dvui_mod.linkLibrary(fd.artifact("freetype"));
             }
         }
+    }
+
+    const tfd = opts.tiny_file_dialogs orelse @panic("tiny_file_dialogs was null");
+    if (tfd) {
+        dvui_mod.addIncludePath(b.path("vendor/tfd"));
+        dvui_mod.addCSourceFiles(.{ .files = &.{"vendor/tfd/tinyfiledialogs.c"} });
     }
 
     return dvui_mod;
