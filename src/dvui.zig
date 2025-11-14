@@ -285,7 +285,7 @@ pub const c = @cImport({
         @cInclude("stb_truetype.h");
     }
 
-    if (useLibc) {
+    if (!useLibc) {
         @cDefine("STBI_NO_STDIO", "1");
         @cDefine("STBI_NO_STDLIB", "1");
         @cDefine("STBIW_NO_STDLIB", "1");
