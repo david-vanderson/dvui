@@ -505,7 +505,8 @@ pub fn refresh(_: *RaylibBackend) void {}
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
     var disable_raylib_input: bool = false;
 
-    if (!dvui.wasm and c.WindowShouldClose()) {
+    const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
+    if (!wasm and c.WindowShouldClose()) {
         try win.addEventApp(.{ .action = .quit });
     }
 
