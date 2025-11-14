@@ -109,6 +109,8 @@ pub fn plots() void {
                 dvui.backend.downloadData(filename, writer.written()) catch |err| {
                     dvui.logError(@src(), err, "Could not download {s}", .{filename});
                 };
+            } else if (!dvui.useTinyFileDialogs) {
+                dvui.toast(@src(), .{ .message = "Tiny File Dilaogs disabled" });
             } else {
                 const maybe_path = dvui.dialogNativeFileSave(dvui.currentWindow().lifo(), .{ .path = filename }) catch null;
                 if (maybe_path) |path| blk: {

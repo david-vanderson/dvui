@@ -294,7 +294,11 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
                 .{},
                 .{ .expand = .ratio, .gravity_x = 1.0 },
             )) {
-                new_filename = dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "Pick Font File" }) catch null;
+                if (!dvui.useTinyFileDialogs) {
+                    dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Tiny File Dilaogs disabled" });
+                } else {
+                    new_filename = dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "Pick Font File" }) catch null;
+                }
             }
 
             dvui.label(@src(), "File", .{}, .{ .gravity_y = 0.5 });
