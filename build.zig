@@ -38,6 +38,10 @@ pub fn build(b: *std.Build) !void {
         back_to_build = .sdl2;
     }
 
+    const libc_option = b.option(bool, "libc", "Use libc (default is backend specific)");
+    const freetype_option = b.option(bool, "freetype", "Freetype (or stb_truetype if false) for font rendering (default is backend specific)");
+    const tiny_file_dialogs_option = b.option(bool, "tiny-file-dialogs", "OS-native file dialogs (default is backend specific)");
+
     const build_options = b.addOptions();
     build_options.addOption(
         ?[]const u8,
@@ -81,6 +85,9 @@ pub fn build(b: *std.Build) !void {
         .use_lld = use_lld,
         .accesskit = accesskit,
         .build_options = build_options,
+        .libc = libc_option,
+        .freetype = freetype_option,
+        .tiny_file_dialogs = tiny_file_dialogs_option,
     };
 
     if (back_to_build) |backend| {
@@ -153,12 +160,15 @@ pub fn build(b: *std.Build) !void {
     }
 }
 
-pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvui_opts: DvuiModuleOptions) void {
+pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvui_opts_in: DvuiModuleOptions) void {
+    var dvui_opts = dvui_opts_in;
     const b = dvui_opts.b;
     const target = dvui_opts.target;
     const optimize = dvui_opts.optimize;
     switch (backend) {
         .custom => {
+            dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false });
+
             // For export to users who are bringing their own backend.  Use in your build.zig:
             // const dvui_mod = dvui_dep.module("dvui");
             // @import("dvui").linkBackend(dvui_mod, your_backend_module);
@@ -182,6 +192,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             }
         },
         .testing => {
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true });
             const testing_mod = b.addModule("testing", .{
                 .root_source_file = b.path("src/backends/testing.zig"),
                 .target = target,
@@ -205,6 +216,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("testing-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .sdl2 => {
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true });
             const sdl_mod = b.addModule("sdl2", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
@@ -289,6 +301,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("sdl2-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .sdl3 => {
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true });
             const sdl_mod = b.addModule("sdl3", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
@@ -338,6 +351,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("sdl3-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .raylib => {
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true });
             const linux_display_backend: LinuxDisplayBackend = b.option(LinuxDisplayBackend, "linux_display_backend", "If using raylib, which linux display?") orelse blk: {
                 _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
                     error.EnvironmentVariableNotFound => break :blk .X11,
@@ -416,6 +430,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("raylib-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts_raylib);
         },
         .dx11 => {
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true });
             if (target.result.os.tag == .windows) {
                 const dx11_mod = b.addModule("dx11", .{
                     .root_source_file = b.path("src/backends/dx11.zig"),
@@ -448,6 +463,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             }
         },
         .web => {
+            dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false });
             const export_symbol_names = &[_][]const u8{
                 "dvui_init",
                 "dvui_deinit",
@@ -470,16 +486,16 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
 
             // NOTE: exported module uses the standard target so it can be overridden by users
             const dvui_web = addDvuiModule("dvui_web", dvui_opts);
-            dvui_opts.addChecks(web_mod, "dvui_web");
+            dvui_opts.addChecks(dvui_web, "dvui_web");
             if (test_dvui_and_app) {
-                dvui_opts.addTests(web_mod, "dvui_web");
+                dvui_opts.addTests(dvui_web, "dvui_web");
             }
 
             linkBackend(dvui_web, web_mod);
 
             // Examples, must be compiled for wasm32
             {
-                const wasm_dvui_opts = DvuiModuleOptions{
+                var wasm_dvui_opts = DvuiModuleOptions{
                     .b = b,
                     .target = b.resolveTargetQuery(.{
                         .cpu_arch = .wasm32,
@@ -489,8 +505,13 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                     .build_options = dvui_opts.build_options,
                     .test_filters = dvui_opts.test_filters,
                     .accesskit = .off,
+                    .libc = false,
+                    .freetype = false,
+                    .tiny_file_dialogs = false,
                     // no tests or checks needed, they are check above in native build
                 };
+
+                wasm_dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false });
 
                 const web_mod_wasm = b.createModule(.{
                     .root_source_file = b.path("src/backends/web.zig"),
@@ -527,6 +548,42 @@ const DvuiModuleOptions = struct {
     use_lld: ?bool = null,
     accesskit: AccesskitOptions = .off,
     build_options: *std.Build.Step.Options,
+    libc: ?bool,
+    tiny_file_dialogs: ?bool,
+    freetype: ?bool,
+
+    pub const DefaultOptions = struct {
+        libc: bool,
+        freetype: bool,
+        tiny_file_dialogs: bool,
+    };
+
+    fn setDefaults(self: *@This(), defaults: DefaultOptions) void {
+        self.libc = self.libc orelse defaults.libc;
+        self.tiny_file_dialogs = self.tiny_file_dialogs orelse defaults.tiny_file_dialogs;
+        self.freetype = self.freetype orelse defaults.freetype;
+    }
+
+    fn makeDefaults(self: *const @This()) *std.Build.Step.Options {
+        var ret = self.b.addOptions();
+        ret.addOption(
+            bool,
+            "libc",
+            self.libc orelse @panic("makeDefaults: libc was null"),
+        );
+        ret.addOption(
+            bool,
+            "tiny_file_dialogs",
+            self.tiny_file_dialogs orelse @panic("makeDefaults: tiny_file_dialogs was null"),
+        );
+        ret.addOption(
+            bool,
+            "freetype",
+            self.freetype orelse @panic("makeDefaults: freetype was null"),
+        );
+
+        return ret;
+    }
 
     fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
         const tests = self.b.addTest(.{ .root_module = mod, .name = self.b.fmt("{s}-check", .{name}), .filters = self.test_filters, .use_lld = self.use_lld });
@@ -606,16 +663,11 @@ fn addDvuiModule(
         .optimize = optimize,
     });
     dvui_mod.addOptions("build_options", opts.build_options);
+    dvui_mod.addOptions("default_options", opts.makeDefaults());
     dvui_mod.addImport("svg2tvg", b.dependency("svg2tvg", .{
         .target = target,
         .optimize = optimize,
     }).module("svg2tvg"));
-
-    if (target.result.os.tag == .windows) {
-        // tinyfiledialogs needs this
-        dvui_mod.linkSystemLibrary("comdlg32", .{});
-        dvui_mod.linkSystemLibrary("ole32", .{});
-    }
 
     // the system integration option check has to always occur even if accesskit is disabled for
     // it to be displayed in the build help
@@ -637,27 +689,24 @@ fn addDvuiModule(
     const stb_source = "vendor/stb/";
     dvui_mod.addIncludePath(b.path(stb_source));
 
-    if (target.result.cpu.arch == .wasm32 or target.result.cpu.arch == .wasm64) {
+    const libc = opts.libc orelse @panic("libc was null");
+    const stb_flags: []const []const u8 = if (!libc)
+        &.{ "-DINCLUDE_CUSTOM_LIBC_FUNCS=1", "-DSTBI_NO_STDLIB=1", "-DSTBIW_NO_STDLIB=1", "-DSTBI_NO_SIMD=1" }
+    else
+        &.{};
+
+    if (opts.add_stb_image) {
         dvui_mod.addCSourceFiles(.{
             .files = &.{
                 stb_source ++ "stb_image_impl.c",
                 stb_source ++ "stb_image_write_impl.c",
-                stb_source ++ "stb_truetype_impl.c",
             },
-            .flags = &.{ "-DINCLUDE_CUSTOM_LIBC_FUNCS=1", "-DSTBI_NO_STDLIB=1", "-DSTBIW_NO_STDLIB=1" },
+            .flags = stb_flags,
         });
-    } else {
-        if (opts.add_stb_image) {
-            dvui_mod.addCSourceFiles(.{ .files = &.{
-                stb_source ++ "stb_image_impl.c",
-                stb_source ++ "stb_image_write_impl.c",
-            } });
-        }
-        dvui_mod.addCSourceFiles(.{ .files = &.{stb_source ++ "stb_truetype_impl.c"} });
+    }
 
-        dvui_mod.addIncludePath(b.path("vendor/tfd"));
-        dvui_mod.addCSourceFiles(.{ .files = &.{"vendor/tfd/tinyfiledialogs.c"} });
-
+    const freetype = opts.freetype orelse @panic("freetype was null");
+    if (freetype) {
         if (b.systemIntegrationOption("freetype", .{})) {
             dvui_mod.linkSystemLibrary("freetype2", .{});
         } else {
@@ -668,6 +717,20 @@ fn addDvuiModule(
             if (freetype_dep) |fd| {
                 dvui_mod.linkLibrary(fd.artifact("freetype"));
             }
+        }
+    } else {
+        dvui_mod.addCSourceFiles(.{ .files = &.{stb_source ++ "stb_truetype_impl.c"}, .flags = stb_flags });
+    }
+
+    const tfd = opts.tiny_file_dialogs orelse @panic("tiny_file_dialogs was null");
+    if (tfd) {
+        dvui_mod.addIncludePath(b.path("vendor/tfd"));
+        dvui_mod.addCSourceFiles(.{ .files = &.{"vendor/tfd/tinyfiledialogs.c"} });
+
+        if (target.result.os.tag == .windows) {
+            // tinyfiledialogs needs this
+            dvui_mod.linkSystemLibrary("comdlg32", .{});
+            dvui_mod.linkSystemLibrary("ole32", .{});
         }
     }
 

@@ -95,8 +95,12 @@ pub fn plots() void {
                 .jpg => "plot.jpg",
             };
 
-            if (dvui.wasm) blk: {
-                var writer = std.Io.Writer.Allocating.init(dvui.currentWindow().arena());
+            if (dvui.backend.kind == .web) blk: {
+                const min_buffer_size = @max(dvui.PNGEncoder.min_buffer_size, dvui.JPGEncoder.min_buffer_size);
+                var writer = std.Io.Writer.Allocating.initCapacity(dvui.currentWindow().arena(), min_buffer_size) catch |err| {
+                    dvui.logError(@src(), err, "Failed to init writer for plot {t} image", .{save.?});
+                    break :blk;
+                };
                 defer writer.deinit();
                 (switch (save.?) {
                     .png => p.png(&writer.writer),
@@ -109,6 +113,8 @@ pub fn plots() void {
                 dvui.backend.downloadData(filename, writer.written()) catch |err| {
                     dvui.logError(@src(), err, "Could not download {s}", .{filename});
                 };
+            } else if (!dvui.useTinyFileDialogs) {
+                dvui.toast(@src(), .{ .message = "Tiny File Dilaogs disabled" });
             } else {
                 const maybe_path = dvui.dialogNativeFileSave(dvui.currentWindow().lifo(), .{ .path = filename }) catch null;
                 if (maybe_path) |path| blk: {
