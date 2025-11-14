@@ -486,9 +486,9 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
 
             // NOTE: exported module uses the standard target so it can be overridden by users
             const dvui_web = addDvuiModule("dvui_web", dvui_opts);
-            dvui_opts.addChecks(web_mod, "dvui_web");
+            dvui_opts.addChecks(dvui_web, "dvui_web");
             if (test_dvui_and_app) {
-                dvui_opts.addTests(web_mod, "dvui_web");
+                dvui_opts.addTests(dvui_web, "dvui_web");
             }
 
             linkBackend(dvui_web, web_mod);
@@ -691,7 +691,7 @@ fn addDvuiModule(
 
     const libc = opts.libc orelse @panic("libc was null");
     const stb_flags: []const []const u8 = if (!libc)
-        &.{ "-DINCLUDE_CUSTOM_LIBC_FUNCS=1", "-DSTBI_NO_STDLIB=1", "-DSTBIW_NO_STDLIB=1" }
+        &.{ "-DINCLUDE_CUSTOM_LIBC_FUNCS=1", "-DSTBI_NO_STDLIB=1", "-DSTBIW_NO_STDLIB=1", "-DSTBI_NO_SIMD=1" }
     else
         &.{};
 

@@ -139,6 +139,8 @@ pub const Native = struct {
 
     const InternalKind = enum { save, open, openMultiple };
     fn internal(comptime kind: InternalKind, alloc: std.mem.Allocator, opts: DialogOptions) if (kind == .openMultiple) std.mem.Allocator.Error!?[][:0]const u8 else std.mem.Allocator.Error!?[:0]const u8 {
+        if (comptime !dvui.useTinyFileDialogs) return null;
+
         var backing: [500]u8 = undefined;
         var buf: []u8 = &backing;
 
@@ -232,6 +234,8 @@ pub const Native = struct {
     ///
     /// Returned string is created by passed allocator.  Not implemented for web (returns null).
     pub fn folderSelect(alloc: std.mem.Allocator, opts: FolderDialogOptions) std.mem.Allocator.Error!?[]const u8 {
+        if (comptime !dvui.useTinyFileDialogs) return null;
+
         var backing: [500]u8 = undefined;
         var buf: []u8 = &backing;
 
