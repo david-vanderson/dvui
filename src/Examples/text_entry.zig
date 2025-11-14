@@ -260,7 +260,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
         var la2 = dvui.Alignment.init(@src(), 0);
         defer la2.deinit();
 
-        if (dvui.wasm) {
+        if (dvui.backend.kind == .web) {
             if (dvui.button(@src(), "Add Noto Font", .{}, .{})) {
                 dvui.backend.wasm.wasm_add_noto_font();
             }

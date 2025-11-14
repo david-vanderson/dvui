@@ -129,7 +129,7 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
         const single_file_id = hbox.widget().extendId(@src(), 0);
 
         if (dvui.button(@src(), "Open File", .{}, .{})) {
-            if (dvui.wasm) {
+            if (dvui.backend.kind == .web) {
                 dvui.dialogWasmFileOpen(single_file_id, .{ .accept = ".png, .jpg" });
             } else if (!dvui.useTinyFileDialogs) {
                 dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Tiny File Dilaogs disabled" });
@@ -155,7 +155,7 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
         const multi_file_id = hbox.widget().extendId(@src(), 0);
 
         if (dvui.button(@src(), "Open Multiple Files", .{}, .{})) {
-            if (dvui.wasm) {
+            if (dvui.backend.kind == .web) {
                 dvui.dialogWasmFileOpenMultiple(multi_file_id, .{ .accept = ".png, .jpg" });
             } else if (!dvui.useTinyFileDialogs) {
                 dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Tiny File Dilaogs disabled" });
@@ -191,7 +191,7 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
         defer hbox.deinit();
 
         if (dvui.button(@src(), "Open Folder", .{}, .{})) {
-            if (dvui.wasm) {
+            if (dvui.backend.kind == .web) {
                 dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
             } else if (!dvui.useTinyFileDialogs) {
                 dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Tiny File Dilaogs disabled" });
@@ -207,7 +207,7 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
         }
 
         if (dvui.button(@src(), "Save File", .{}, .{})) {
-            if (dvui.wasm) {
+            if (dvui.backend.kind == .web) {
                 dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Save File", .ok_label = "Ok", .message = "Not available on the web.  For file download, see \"Save Plot\" in the plots example." });
             } else if (!dvui.useTinyFileDialogs) {
                 dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Tiny File Dilaogs disabled" });
