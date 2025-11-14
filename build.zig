@@ -31,7 +31,7 @@ pub fn build(b: *std.Build) !void {
 
     // Setting this to false may fix linking errors: https://github.com/david-vanderson/dvui/issues/269
     const use_lld = b.option(bool, "use-lld", "The value of the use_lld executable option");
-    const use_c = b.option(bool, "raylib-use-c", "Set this to false to use the experimental zig based backend for raylib") orelse true;
+    const use_c = b.option(bool, "raylib_use_c", "Set this to false to use the experimental zig based backend for raylib") orelse true;
     const test_filters = b.option([]const []const u8, "test-filter", "Skip tests that do not match any filter") orelse &[0][]const u8{};
 
     const generate_doc_images = b.option(bool, "generate-images", "Add this to 'docs' to generate images") orelse false;
@@ -83,7 +83,6 @@ pub fn build(b: *std.Build) !void {
         .accesskit = accesskit,
         .build_options = build_options,
         .use_c = use_c,
-        .add_stb_image = false, // TODO: please remove this option after completed the testing
     };
 
     if (back_to_build) |backend| {
@@ -413,8 +412,8 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 );
                 if (maybe_ray) |ray| {
                     raylib_backend_mod.linkLibrary(ray.artifact("raylib"));
-                    raylib_backend_mod.addImport("raylib", ray.module("raylib"));
-                    raylib_backend_mod.addImport("raygui", ray.module("raygui"));
+                    // raylib_backend_mod.addImport("raylib", ray.module("raylib"));
+                    // raylib_backend_mod.addImport("raygui", ray.module("raygui"));
                 }
 
                 const maybe_glfw = b.lazyDependency(
