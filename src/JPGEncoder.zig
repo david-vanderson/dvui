@@ -29,6 +29,7 @@ pub fn init(output: *std.Io.Writer) JPGEncoder {
 /// `density` is in pixels per inch (2.54 cm).
 /// `density == 0` => don't write custom density
 pub fn initDensity(output: *std.Io.Writer, density: u16) JPGEncoder {
+    std.debug.assert(output.buffer.len >= min_buffer_size);
     var self = JPGEncoder{
         .output = output,
         .density = density,

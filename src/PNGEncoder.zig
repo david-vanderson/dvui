@@ -35,6 +35,7 @@ pub fn write(output: *std.Io.Writer, pixels: []u8, width: u32, height: u32) !voi
 
 /// `resolution == 0` => don't write the pHYs chunk
 pub fn writeWithResolution(output: *std.Io.Writer, pixels: []u8, width: u32, height: u32, resolution: u32) !void {
+    std.debug.assert(output.buffer.len >= min_buffer_size);
     var png_encoder = PNGEncoder{
         .resolution = resolution,
         .output = output,
