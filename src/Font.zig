@@ -250,7 +250,7 @@ pub const Cache = struct {
                 .allocator = null,
             });
         }
-        if (!dvui.wasm) {
+        if (dvui.backend.kind != .web) {
             try self.database.putNoClobber(allocator, .Noto, dvui.FontBytesEntry{
                 .bytes = @embedFile("fonts/NotoSansKR-Regular.ttf"),
                 .name = @tagName(FontId.Noto),

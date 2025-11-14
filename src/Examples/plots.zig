@@ -95,7 +95,7 @@ pub fn plots() void {
                 .jpg => "plot.jpg",
             };
 
-            if (dvui.wasm) blk: {
+            if (dvui.backend.kind == .web) blk: {
                 var writer = std.Io.Writer.Allocating.init(dvui.currentWindow().arena());
                 defer writer.deinit();
                 (switch (save.?) {

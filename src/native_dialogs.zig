@@ -15,7 +15,7 @@ pub const Wasm = struct {
         name: [:0]const u8,
 
         pub fn readData(self: *File, allocator: std.mem.Allocator) std.mem.Allocator.Error![]u8 {
-            std.debug.assert(dvui.wasm); // WasmFile shouldn't be used outside wasm builds
+            std.debug.assert(dvui.backend.kind == .web); // WasmFile shouldn't be used outside wasm builds
             const data = try allocator.alloc(u8, self.size);
             dvui.backend.readFileData(self.id, self.index, data.ptr);
             return data;
@@ -26,7 +26,7 @@ pub const Wasm = struct {
     ///
     /// This function does nothing in non-wasm builds
     pub fn open(id: dvui.Id, opts: DialogOptions) void {
-        if (comptime !dvui.wasm) return;
+        if (comptime dvui.backend.kind != .web) return;
         dvui.backend.openFilePicker(id, opts.accept, false);
     }
 
@@ -34,7 +34,7 @@ pub const Wasm = struct {
     ///
     /// This function does nothing in non-wasm builds
     pub fn uploaded(id: dvui.Id) ?File {
-        if (comptime !dvui.wasm) return null;
+        if (comptime dvui.backend.kind != .web) return null;
         const num_files = dvui.backend.getNumberOfFilesAvailable(id);
         if (num_files == 0) return null;
         if (num_files > 1) {
@@ -58,7 +58,7 @@ pub const Wasm = struct {
     ///
     /// This function does nothing in non-wasm builds
     pub fn openMultiple(id: dvui.Id, opts: DialogOptions) void {
-        if (comptime !dvui.wasm) return;
+        if (comptime dvui.backend.kind != .web) return;
         dvui.backend.openFilePicker(id, opts.accept, true);
     }
 
@@ -66,7 +66,7 @@ pub const Wasm = struct {
     ///
     /// This function does nothing in non-wasm builds
     pub fn uploadedMultiple(id: dvui.Id) ?[]File {
-        if (comptime !dvui.wasm) return null;
+        if (comptime dvui.backend.kind != .web) return null;
         const num_files = dvui.backend.getNumberOfFilesAvailable(id);
         if (num_files == 0) return null;
 
