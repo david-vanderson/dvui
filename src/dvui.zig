@@ -247,8 +247,9 @@ pub const dialogNativeFileOpenMultiple = native_dialogs.Native.openMultiple;
 pub const dialogNativeFileSave = native_dialogs.Native.save;
 pub const dialogNativeFolderSelect = native_dialogs.Native.folderSelect;
 
-pub const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
-pub const useFreeType = !wasm;
+pub const useLibc = @import("default_options").libc;
+pub const useFreeType = @import("default_options").freetype;
+pub const useTinyFileDialogs = @import("default_options").tiny_file_dialogs;
 
 /// The amount of physical pixels to scroll per "tick" of the scroll wheel
 pub var scroll_speed: f32 = 20;
@@ -284,7 +285,7 @@ pub const c = @cImport({
         @cInclude("stb_truetype.h");
     }
 
-    if (wasm) {
+    if (!useLibc) {
         @cDefine("STBI_NO_STDIO", "1");
         @cDefine("STBI_NO_STDLIB", "1");
         @cDefine("STBIW_NO_STDLIB", "1");
@@ -293,7 +294,7 @@ pub const c = @cImport({
     @cInclude("stb_image_write.h");
 
     // Used by native dialogs
-    if (!wasm) {
+    if (useTinyFileDialogs) {
         @cInclude("tinyfiledialogs.h");
     }
 });
@@ -1531,6 +1532,17 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     }
 
     switch (e.evt) {
+        .app => {}, // app events always match
+        .window => {
+            if (e.target_windowId) |wid| {
+                if (wid != opts.id) {
+                    if (builtin.mode == .Debug and opts.debug) {
+                        log.debug("eventMatch {f} not to this window", .{e});
+                    }
+                    return false;
+                }
+            }
+        },
         .key, .text => {
             if (e.target_windowId) |wid| {
                 // focusable event
@@ -2830,7 +2842,7 @@ pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget
 }
 
 /// Turns off normal tab navigation.  Use for things where tab should go to the
-/// group as a whole, but within the group focus moves via key up/down.
+/// group as a whole, but within the group focus moves via key up/left/down/right.
 ///
 /// See `radioGroup`.
 ///
@@ -3771,6 +3783,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
                 const value: f32 = std.fmt.parseFloat(f32, te.txt) catch break :blk;
                 init_opts.fraction.* = std.math.clamp(value, 0.0, 1.0);
             },
+            else => {},
         }
     }
 
@@ -4132,6 +4145,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                     if (init_opts.max) |max| value = @min(max, value);
                     init_opts.value.* = value;
                 },
+                else => {},
             }
         }
 

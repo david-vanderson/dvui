@@ -71,7 +71,7 @@ pub fn main() !void {
     }
 
     const win = first_backend.getWindow();
-    while (true) switch (Backend.serviceMessageQueue()) {
+    main_loop: while (true) switch (Backend.serviceMessageQueue()) {
         .queue_empty => {
             // beginWait coordinates with waitTime below to run frames only when needed
             const nstime = win.beginWait(first_backend.hasEvent());
@@ -82,14 +82,41 @@ pub fn main() !void {
             // both dvui and dx11 drawing
             try gui_frame();
 
+            // check for close/quit
+            for (dvui.events()) |*e| {
+                if (!dvui.eventMatchSimple(e, win.data())) continue;
+                if ((e.evt == .window and e.evt.window.action == .close) or (e.evt == .app and e.evt.app.action == .quit)) {
+                    e.handle(@src(), win.data());
+                    break :main_loop;
+                }
+            }
+
             // marks end of dvui frame, don't call dvui functions after this
             // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
             _ = try win.end(.{});
 
-            for (extra_windows.items) |window| {
+            extra: for (extra_windows.items, 0..) |window, i| {
                 try window.backend.getWindow().begin(nstime);
                 try gui_frame();
+
+                var close = false;
+                // check for close
+                for (dvui.events()) |*e| {
+                    if (!dvui.eventMatchSimple(e, win.data())) continue;
+                    if (e.evt == .window and e.evt.window.action == .close) {
+                        e.handle(@src(), win.data());
+                        close = true;
+                    }
+                }
+
                 _ = try window.backend.getWindow().end(.{});
+
+                if (close) {
+                    //std.debug.print("window {d} closing\n", .{i});
+                    _ = extra_windows.swapRemove(i);
+                    window.deinit();
+                    break :extra;
+                }
             }
 
             // cursor management
@@ -102,20 +129,6 @@ pub fn main() !void {
             }
         },
         .quit => break,
-        .close_windows => {
-            if (first_backend.receivedClose())
-                break;
-            extras: while (true) {
-                const index: usize = blk: {
-                    for (extra_windows.items, 0..) |window, i| {
-                        if (window.backend.receivedClose()) break :blk i;
-                    }
-                    break :extras;
-                };
-                const window = extra_windows.swapRemove(index);
-                window.deinit();
-            }
-        },
     };
 }
 

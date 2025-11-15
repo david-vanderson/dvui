@@ -51,15 +51,9 @@ static double pow(double x, double y)
     return dvui_c_pow(x, y);
 }
 
-extern void *dvui_c_memset(void *dest, int x, size_t n);
-static void *memset(void * dest, int x, size_t n) {
-	return dvui_c_memset(dest, x, n);
-}
+// zig's compiler_rt already bundles these functions
+extern void *memset(void *dest, int x, size_t n);
+extern void *memcpy(void *dest, const void *src, size_t n);
+extern void *memmove(void *dest, const void *src, size_t n);
+#define STBIW_MEMMOVE(dest, src, n) memmove(dest, src, n)
 
-extern void *dvui_c_memcpy(void *dest, const void * src, size_t n);
-static void *memcpy(void * dest, const void * src, size_t n) {
-	return dvui_c_memcpy(dest, src, n);
-}
-
-extern void *dvui_c_memmove(void *dest, const void * src, size_t n);
-#define STBIW_MEMMOVE(dest, src, n) dvui_c_memmove(dest, src, n)
