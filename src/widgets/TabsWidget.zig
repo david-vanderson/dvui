@@ -1,3 +1,10 @@
+//! ## Note on ARIA Roles
+//!
+//! The `TabsWidget` is a `tablist`,
+//! containing a list of elements with the role `tab`.
+//! The content shown when you select a tab should have the role `tabpanel`.
+//!
+//! - [Tabs Pattern - ARIA Authoring Practices Guide](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/)
 pub const TabsWidget = @This();
 
 init_options: InitOptions,
@@ -12,7 +19,8 @@ tab_button: ButtonWidget = undefined,
 
 pub var defaults: Options = .{
     .name = "Tabs",
-    .role = .tab_panel,
+    // https://www.w3.org/TR/wai-aria/#tablist
+    .role = .tab_list,
 };
 
 pub const InitOptions = struct {
@@ -81,6 +89,7 @@ pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8) bool {
 }
 
 pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
+    // https://www.w3.org/TR/wai-aria/#tab
     var tab_defaults: Options = switch (self.init_options.dir) {
         .horizontal => .{ .id_extra = self.tab_index, .background = true, .corner_radius = .{ .x = 5, .y = 5 }, .margin = .{ .x = 2, .w = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
         .vertical => .{ .id_extra = self.tab_index, .background = true, .corner_radius = .{ .x = 5, .h = 5 }, .margin = .{ .y = 2, .h = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
