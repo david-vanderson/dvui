@@ -31,7 +31,6 @@ pub fn build(b: *std.Build) !void {
 
     // Setting this to false may fix linking errors: https://github.com/david-vanderson/dvui/issues/269
     const use_lld = b.option(bool, "use-lld", "The value of the use_lld executable option");
-    const use_c = b.option(bool, "raylib_use_c", "Set this to false to use the experimental zig based backend for raylib") orelse true;
     const test_filters = b.option([]const []const u8, "test-filter", "Skip tests that do not match any filter") orelse &[0][]const u8{};
 
     const generate_doc_images = b.option(bool, "generate-images", "Add this to 'docs' to generate images") orelse false;
@@ -352,7 +351,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("sdl3-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .raylib => {
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true });
+            dvui_opts.setDefaults(.{ .libc = dvui_opts_in.libc orelse true, .freetype = true, .tiny_file_dialogs = true });
             const linux_display_backend: LinuxDisplayBackend = b.option(LinuxDisplayBackend, "linux_display_backend", "If using raylib, which linux display?") orelse blk: {
                 _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
                     error.EnvironmentVariableNotFound => break :blk .X11,
@@ -367,8 +366,9 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 break :blk .Both;
             };
 
+            const libc = dvui_opts.libc.?;
             const raylib_backend_mod = b.addModule("raylib", .{
-                .root_source_file = if (dvui_opts.use_c) b.path("src/backends/raylib-c.zig") else b.path("src/backends/raylib-zig.zig"),
+                .root_source_file = if (libc) b.path("src/backends/raylib-c.zig") else b.path("src/backends/raylib-zig.zig"),
                 .target = target,
                 .optimize = optimize,
                 .link_libc = true,
@@ -376,7 +376,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             dvui_opts.addChecks(raylib_backend_mod, "raylib-backend");
             dvui_opts.addTests(raylib_backend_mod, "raylib-backend");
 
-            if (dvui_opts.use_c) {
+            if (libc) {
                 const maybe_ray = b.lazyDependency(
                     "raylib",
                     .{
@@ -456,8 +456,8 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 .backend_mod = raylib_backend_mod,
             };
 
-            const standalone = if (dvui_opts.use_c) b.path("examples/raylib-standalone.zig") else b.path("examples/raylib-zig-standalone.zig");
-            const ontop = if (dvui_opts.use_c) b.path("examples/raylib-ontop.zig") else b.path("examples/raylib-zig-ontop.zig");
+            const standalone = if (libc) b.path("examples/raylib-standalone.zig") else b.path("examples/raylib-zig-standalone.zig");
+            const ontop = if (libc) b.path("examples/raylib-ontop.zig") else b.path("examples/raylib-zig-ontop.zig");
 
             addExample("raylib-standalone", standalone, true, example_opts, dvui_opts_raylib);
             addExample("raylib-ontop", ontop, true, example_opts, dvui_opts_raylib);
