@@ -324,7 +324,8 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
 
     self.data().borderAndBackground(.{});
 
-    self.prevClip = dvui.clip(rs.r);
+    // clip to background rect for possible corner widgets, addTextEx clips to content rect
+    self.prevClip = dvui.clip(self.data().backgroundRectScale().r);
 
     if (opts.show_touch_draggables and self.touch_editing and self.te_show_draggables and self.focus_at_start and self.data().visible()) {
         const size = 36;
@@ -1171,6 +1172,9 @@ const AddTextExAction = enum {
 fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) ?dvui.Event.EventTypes {
     var ret: ?dvui.Event.EventTypes = null;
     const cw = dvui.currentWindow();
+
+    // clip to content rect for all text
+    _ = dvui.clip(self.data().contentRectScale().r);
 
     var txt = dvui.toUtf8(cw.lifo(), text_in) catch |err| blk: {
         dvui.logError(@src(), err, "Failed to convert to utf8", .{});

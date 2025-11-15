@@ -224,25 +224,6 @@ export fn dvui_c_strlen(x: [*c]const u8) usize {
     return std.mem.len(x);
 }
 
-export fn dvui_c_memcpy(dest: [*c]u8, src: [*c]const u8, n: usize) [*c]u8 {
-    @memcpy(dest[0..n], src[0..n]);
-    return dest;
-}
-
-export fn dvui_c_memmove(dest: [*c]u8, src: [*c]const u8, n: usize) [*c]u8 {
-    //log.debug("dvui_c_memmove dest {*} src {*} {d}", .{ dest, src, n });
-    const buf = dvui.currentWindow().arena().alloc(u8, n) catch unreachable;
-    defer dvui.currentWindow().arena().free(buf);
-    @memcpy(buf, src[0..n]);
-    @memcpy(dest[0..n], buf);
-    return dest;
-}
-
-export fn dvui_c_memset(dest: [*c]u8, x: u8, n: usize) [*c]u8 {
-    @memset(dest[0..n], x);
-    return dest;
-}
-
 export fn gpa_u8(len: usize) [*c]u8 {
     const buf = gpa.alloc(u8, len) catch return @ptrFromInt(0);
     return buf.ptr;

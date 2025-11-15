@@ -290,6 +290,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
                     hue.* = new_hue;
                 }
             },
+            else => {},
         }
     }
 

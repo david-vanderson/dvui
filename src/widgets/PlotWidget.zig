@@ -33,6 +33,7 @@ pub const InitOptions = struct {
     x_axis: ?*Axis = null,
     y_axis: ?*Axis = null,
     border_thick: ?f32 = null,
+    spine_color: ?dvui.Color = null,
     mouse_hover: bool = false,
     was_allocated_on_widget_stack: bool = false,
 };
@@ -42,9 +43,154 @@ pub const Axis = struct {
     min: ?f64 = null,
     max: ?f64 = null,
 
+    scale: union(enum) {
+        linear,
+        log: struct {
+            base: f64 = 10,
+        },
+    } = .linear,
+
+    ticks: struct {
+        locations: union(enum) {
+            none,
+            auto: struct {
+                num_ticks: usize,
+            },
+        } = .{ .auto = .{ .num_ticks = 3 } },
+
+        lines: enum {
+            none,
+            one_side,
+            mirrored,
+        } = .mirrored,
+
+        // if null it uses the default for `scale`
+        format: ?TickFormating = null,
+    } = .{},
+
+    // only relevant if `ticks` != none
+    draw_gridlines: bool = true,
+
+    const TickFormating = union(enum) {
+        normal: struct {
+            precision: usize = 2,
+        },
+        scientific_notation: struct {
+            precision: usize = 4,
+        },
+        custom: *const fn (gpa: std.mem.Allocator, tick: f64) std.mem.Allocator.Error![]const u8,
+    };
+
+    pub fn formatTick(self: *Axis, gpa: std.mem.Allocator, tick: f64) ![]const u8 {
+        const tick_format = self.ticks.format orelse
+            switch (self.scale) {
+                .linear => TickFormating{ .normal = .{} },
+                .log => TickFormating{ .scientific_notation = .{} },
+            };
+
+        switch (tick_format) {
+            .normal => |cfg| {
+                return try std.fmt.allocPrint(gpa, "{d:.[1]}", .{ tick, cfg.precision });
+            },
+            .scientific_notation => |cfg| {
+                return try std.fmt.allocPrint(gpa, "{e:.[1]}", .{ tick, cfg.precision });
+            },
+            .custom => |func| {
+                return func(gpa, tick);
+            },
+        }
+    }
+
     pub fn fraction(self: *Axis, val: f64) f32 {
         if (self.min == null or self.max == null) return 0;
-        return @floatCast((val - self.min.?) / (self.max.? - self.min.?));
+
+        const min = self.min.?;
+        const max = self.max.?;
+
+        switch (self.scale) {
+            .linear => {
+                return @floatCast((val - min) / (max - min));
+            },
+            .log => |log_data| {
+                const val_exp = std.math.log(f64, log_data.base, val);
+                const min_exp = std.math.log(f64, log_data.base, min);
+                const max_exp = std.math.log(f64, log_data.base, max);
+                return @floatCast((val_exp - min_exp) / (max_exp - min_exp));
+            },
+        }
+    }
+
+    pub fn getTicksLinear(self: *Axis, gpa: std.mem.Allocator, tick_count: usize) ![]f64 {
+        if (self.scale != .linear or tick_count == 0 or self.max == null or self.min == null)
+            return &.{};
+
+        const min = self.min.?;
+        const max = self.max.?;
+
+        var ticks = try gpa.alloc(f64, tick_count);
+
+        switch (tick_count) {
+            1 => ticks[0] = (min + max) / 2,
+            2 => {
+                ticks[0] = min;
+                ticks[1] = max;
+            },
+            else => |n| {
+                const span = max - min;
+                const step = span / @as(f64, @floatFromInt(n - 1));
+                for (0..n) |i| {
+                    ticks[i] = min + step * @as(f64, @floatFromInt(i));
+                }
+            },
+        }
+
+        return ticks;
+    }
+
+    pub fn getTicksLog(self: *Axis, gpa: std.mem.Allocator, tick_count: usize) ![]f64 {
+        if (self.scale != .log or tick_count == 0 or self.max == null or self.min == null)
+            return &.{};
+
+        const base = self.scale.log.base;
+
+        const min = self.min.?;
+        const max = self.max.?;
+        if (min <= 0 or max <= 0) return &.{};
+
+        const min_log = std.math.log(f64, base, min);
+        const max_log = std.math.log(f64, base, max);
+
+        var ticks = try gpa.alloc(f64, tick_count);
+
+        switch (tick_count) {
+            1 => ticks[0] = std.math.pow(f64, base, (min_log + max_log) / 2),
+            2 => {
+                ticks[0] = min;
+                ticks[1] = max;
+            },
+            else => |n| {
+                const span = max_log - min_log;
+                const step = span / @as(f64, @floatFromInt(n - 1));
+                for (0..n) |i| {
+                    const exp = min_log + step * @as(f64, @floatFromInt(i));
+                    ticks[i] = std.math.pow(f64, base, exp);
+                }
+            },
+        }
+
+        return ticks;
+    }
+
+    pub fn getTicks(self: *Axis, gpa: std.mem.Allocator) ![]f64 {
+        switch (self.ticks.locations) {
+            .none => return &.{},
+            .auto => |auto_ticks| {
+                switch (self.scale) {
+                    .linear => return self.getTicksLinear(gpa, auto_ticks.num_ticks),
+                    .log => return self.getTicksLog(gpa, auto_ticks.num_ticks),
+                }
+            },
+        }
     }
 };
 
@@ -131,26 +277,46 @@ pub fn install(self: *PlotWidget) void {
         dvui.label(@src(), "{s}", .{title}, .{ .gravity_x = 0.5, .font_style = .title_4 });
     }
 
-    //const str = "000";
     const tick_font = (dvui.Options{ .font_style = .caption }).fontGet();
-    //const tick_size = tick_font.sizeM(str.len, 1);
 
-    const yticks = [_]?f64{ self.y_axis.min, self.y_axis.max };
-    var tick_width: f32 = 0;
-    if (self.y_axis.name) |_| {
-        for (yticks) |m_ytick| {
-            if (m_ytick) |ytick| {
-                const tick_str = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{ytick}) catch "";
-                defer dvui.currentWindow().lifo().free(tick_str);
-                tick_width = @max(tick_width, tick_font.textSize(tick_str).w);
-            }
+    const yticks = self.y_axis.getTicks(dvui.currentWindow().lifo()) catch &.{};
+    defer dvui.currentWindow().lifo().free(yticks);
+
+    const xticks = self.x_axis.getTicks(dvui.currentWindow().lifo()) catch &.{};
+    defer dvui.currentWindow().lifo().free(xticks);
+
+    const y_axis_tick_width: f32 = blk: {
+        if (self.y_axis.name == null) break :blk 0;
+        var max_width: f32 = 0;
+
+        for (yticks) |ytick| {
+            const tick_str = self.y_axis.formatTick(dvui.currentWindow().lifo(), ytick) catch "";
+            defer dvui.currentWindow().lifo().free(tick_str);
+            max_width = @max(max_width, tick_font.textSize(tick_str).w);
         }
-    }
+
+        break :blk max_width;
+    };
+
+    const x_axis_last_tick_width: f32 = blk: {
+        if (xticks.len == 0) break :blk 0;
+        const str = self.x_axis.formatTick(
+            dvui.currentWindow().lifo(),
+            xticks[xticks.len - 1],
+        ) catch "";
+        defer dvui.currentWindow().lifo().free(str);
+
+        break :blk tick_font.sizeM(@as(f32, @floatFromInt(str.len)), 1).w;
+    };
 
     var hbox1 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
 
-    // y axis
-    var yaxis = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .vertical, .min_size_content = .{ .w = tick_width } });
+    // y axis label
+    var yaxis = dvui.box(@src(), .{ .dir = .horizontal }, .{
+        .expand = .vertical,
+        .min_size_content = .{ .w = y_axis_tick_width },
+        .padding = dvui.Rect{ .w = y_axis_tick_width },
+    });
     var yaxis_rect = yaxis.data().rect;
     if (self.y_axis.name) |yname| {
         if (yname.len > 0) {
@@ -159,12 +325,22 @@ pub fn install(self: *PlotWidget) void {
     }
     yaxis.deinit();
 
-    // right padding (if adding, need to add a spacer to the right of xaxis as well)
-    //var xaxis_padding = dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0, .expand = .vertical, .min_size_content = .{ .w = tick_size.w / 2 } });
-    //xaxis_padding.deinit();
+    // x axis padding
+    if (self.x_axis.name) |_| {
+        var xaxis_padding = dvui.box(@src(), .{ .dir = .horizontal }, .{
+            .gravity_x = 1.0,
+            .expand = .vertical,
+            .min_size_content = .{ .w = x_axis_last_tick_width / 2 },
+        });
+        xaxis_padding.deinit();
+    }
 
     // data area
-    var data_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .role = .image, .label = .{ .text = self.init_options.title orelse "" } });
+    var data_box = dvui.box(@src(), .{ .dir = .horizontal }, .{
+        .expand = .both,
+        .role = .image,
+        .label = .{ .text = self.init_options.title orelse "" },
+    });
 
     // mouse hover
     if (self.init_options.mouse_hover) {
@@ -190,9 +366,7 @@ pub fn install(self: *PlotWidget) void {
     data_box.deinit();
 
     const bt: f32 = self.init_options.border_thick orelse 0.0;
-    if (bt > 0) {
-        self.data_rs.r.stroke(.{}, .{ .thickness = bt * self.data_rs.s, .color = self.box.data().options.color(.text) });
-    }
+    const bc: dvui.Color = self.init_options.spine_color orelse self.box.data().options.color(.text);
 
     const pad = 2 * self.data_rs.s;
 
@@ -210,60 +384,186 @@ pub fn install(self: *PlotWidget) void {
         }
     }
 
-    // x axis
-    var xaxis = dvui.box(@src(), .{}, .{ .gravity_y = 1.0, .expand = .horizontal, .min_size_content = .{ .h = x_tick_height } });
+    // x axis label
+    var xaxis = dvui.box(@src(), .{}, .{
+        .gravity_y = 1.0,
+        .expand = .horizontal,
+        .min_size_content = .{ .h = x_tick_height * 3 },
+    });
     if (self.x_axis.name) |xname| {
         if (xname.len > 0) {
-            dvui.label(@src(), "{s}", .{xname}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+            dvui.label(@src(), "{s}", .{xname}, .{ .gravity_x = 0.5, .gravity_y = 1.0 });
         }
     }
     xaxis.deinit();
 
+    _ = dvui.spacer(@src(), .{
+        .min_size_content = .width(x_axis_last_tick_width / 2),
+        .expand = .vertical,
+    });
+
     hbox2.deinit();
+
+    const tick_line_len = 5;
 
     // y axis ticks
     if (self.y_axis.name) |_| {
-        for (yticks) |m_ytick| {
-            if (m_ytick) |ytick| {
-                const tick: Data = .{ .x = self.x_axis.min orelse 0, .y = ytick };
-                const tick_str = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{ytick}) catch "";
-                defer dvui.currentWindow().lifo().free(tick_str);
-                const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
-                var tick_p = self.dataToScreen(tick);
-                tick_p.x -= tick_str_size.w + pad;
-                tick_p.y = @max(tick_p.y, self.data_rs.r.y);
-                tick_p.y = @min(tick_p.y, self.data_rs.r.y + self.data_rs.r.h - tick_str_size.h);
-                //tick_p.y -= tick_str_size.h / 2;
-                const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_p).toSize(tick_str_size), .s = self.data_rs.s };
+        for (yticks) |ytick| {
+            const tick: Data = .{ .x = self.x_axis.min orelse 0, .y = ytick };
+            const tick_str = self.y_axis.formatTick(dvui.currentWindow().lifo(), ytick) catch "";
+            defer dvui.currentWindow().lifo().free(tick_str);
+            const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
 
-                dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) }) catch |err| {
-                    dvui.logError(@src(), err, "y axis tick text for {d}", .{ytick});
-                };
+            const tick_p = self.dataToScreen(tick);
+
+            if (self.x_axis.draw_gridlines) {
+                dvui.Path.stroke(.{
+                    .points = &.{
+                        dvui.Point.Physical{
+                            .x = self.data_rs.r.x + tick_line_len,
+                            .y = tick_p.y,
+                        },
+                        dvui.Point.Physical{
+                            .x = self.data_rs.r.x + self.data_rs.r.w,
+                            .y = tick_p.y,
+                        },
+                    },
+                }, .{
+                    .color = dvui.Color.gray.opacity(0.6),
+                    .thickness = 1,
+                });
             }
+
+            const points: []const dvui.Point.Physical = &.{
+                dvui.Point.Physical{
+                    .x = self.data_rs.r.x,
+                    .y = tick_p.y,
+                },
+                dvui.Point.Physical{
+                    .x = self.data_rs.r.x + tick_line_len,
+                    .y = tick_p.y,
+                },
+            };
+
+            switch (self.y_axis.ticks.lines) {
+                .none => {},
+                .one_side => {
+                    dvui.Path.stroke(.{ .points = points }, .{
+                        .color = bc,
+                        .thickness = 1,
+                    });
+                },
+                .mirrored => {
+                    const off = dvui.Point.Physical{ .x = self.data_rs.r.w - tick_line_len, .y = 0 };
+                    const other_side_points = &.{ points[0].plus(off), points[1].plus(off) };
+
+                    dvui.Path.stroke(.{ .points = points }, .{
+                        .color = bc,
+                        .thickness = 1,
+                    });
+                    dvui.Path.stroke(.{ .points = other_side_points }, .{
+                        .color = bc,
+                        .thickness = 1,
+                    });
+                },
+            }
+
+            var tick_label_p = tick_p;
+            tick_label_p.x -= tick_str_size.w + pad;
+            tick_label_p.y -= tick_str_size.h / 2;
+            const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_label_p).toSize(tick_str_size), .s = self.data_rs.s };
+
+            dvui.renderText(.{
+                .font = tick_font,
+                .text = tick_str,
+                .rs = tick_rs,
+                .color = self.box.data().options.color(.text),
+            }) catch |err| {
+                dvui.logError(@src(), err, "y axis tick text for {d}", .{ytick});
+            };
         }
     }
 
     // x axis ticks
     if (self.x_axis.name) |_| {
-        const xticks = [_]?f64{ self.x_axis.min, self.x_axis.max };
-        for (xticks) |m_xtick| {
-            if (m_xtick) |xtick| {
-                const tick: Data = .{ .x = xtick, .y = self.y_axis.min orelse 0 };
-                const tick_str = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{xtick}) catch "";
-                defer dvui.currentWindow().lifo().free(tick_str);
-                const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
-                var tick_p = self.dataToScreen(tick);
-                tick_p.x = @max(tick_p.x, self.data_rs.r.x);
-                tick_p.x = @min(tick_p.x, self.data_rs.r.x + self.data_rs.r.w - tick_str_size.w);
-                //tick_p.x -= tick_str_size.w / 2;
-                tick_p.y += pad;
-                const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_p).toSize(tick_str_size), .s = self.data_rs.s };
+        for (xticks) |xtick| {
+            const tick: Data = .{ .x = xtick, .y = self.y_axis.min orelse 0 };
+            const tick_str = self.x_axis.formatTick(dvui.currentWindow().lifo(), xtick) catch "";
+            defer dvui.currentWindow().lifo().free(tick_str);
+            const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
 
-                dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) }) catch |err| {
-                    dvui.logError(@src(), err, "x axis tick text for {d}", .{xtick});
-                };
+            const tick_p = self.dataToScreen(tick);
+
+            if (self.x_axis.draw_gridlines) {
+                dvui.Path.stroke(.{
+                    .points = &.{
+                        dvui.Point.Physical{
+                            .x = tick_p.x,
+                            .y = self.data_rs.r.y,
+                        },
+                        dvui.Point.Physical{
+                            .x = tick_p.x,
+                            .y = self.data_rs.r.y + self.data_rs.r.h - 5,
+                        },
+                    },
+                }, .{
+                    .color = dvui.Color.gray.opacity(0.6),
+                    .thickness = 1,
+                });
             }
+
+            const points: []const dvui.Point.Physical = &.{
+                dvui.Point.Physical{
+                    .x = tick_p.x,
+                    .y = self.data_rs.r.y + self.data_rs.r.h,
+                },
+                dvui.Point.Physical{
+                    .x = tick_p.x,
+                    .y = self.data_rs.r.y + self.data_rs.r.h - 5,
+                },
+            };
+
+            switch (self.x_axis.ticks.lines) {
+                .none => {},
+                .one_side => {
+                    dvui.Path.stroke(.{ .points = points }, .{
+                        .color = bc,
+                        .thickness = 1,
+                    });
+                },
+                .mirrored => {
+                    const off = dvui.Point.Physical{ .x = 0, .y = -(self.data_rs.r.h - 5) };
+                    const other_side_points = &.{ points[0].plus(off), points[1].plus(off) };
+
+                    dvui.Path.stroke(.{ .points = points }, .{
+                        .color = bc,
+                        .thickness = 1,
+                    });
+                    dvui.Path.stroke(.{ .points = other_side_points }, .{
+                        .color = bc,
+                        .thickness = 1,
+                    });
+                },
+            }
+
+            var tick_label_p = tick_p;
+            tick_label_p.x -= tick_str_size.w / 2;
+            tick_label_p.y += pad;
+            const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_label_p).toSize(tick_str_size), .s = self.data_rs.s };
+
+            dvui.renderText(.{
+                .font = tick_font,
+                .text = tick_str,
+                .rs = tick_rs,
+                .color = self.box.data().options.color(.text),
+            }) catch |err| {
+                dvui.logError(@src(), err, "x axis tick text for {d}", .{xtick});
+            };
         }
+    }
+
+    if (bt > 0) {
+        self.data_rs.r.stroke(.{}, .{ .thickness = bt * self.data_rs.s, .color = bc });
     }
 
     self.old_clip = dvui.clip(self.data_rs.r);
