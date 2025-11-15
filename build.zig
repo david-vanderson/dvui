@@ -412,8 +412,8 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 );
                 if (maybe_ray) |ray| {
                     raylib_backend_mod.linkLibrary(ray.artifact("raylib"));
-                    // raylib_backend_mod.addImport("raylib", ray.module("raylib"));
-                    // raylib_backend_mod.addImport("raygui", ray.module("raygui"));
+                    raylib_backend_mod.addImport("raylib", ray.module("raylib"));
+                    raylib_backend_mod.addImport("raygui", ray.module("raygui"));
                 }
 
                 const maybe_glfw = b.lazyDependency(

@@ -1,8 +1,9 @@
 const std = @import("std");
 const dvui = @import("dvui");
 const RaylibBackend = @import("raylib-backend");
-const raylib = RaylibBackend.raylib;
-const raygui = RaylibBackend.raygui;
+pub const raylib = RaylibBackend.raylib;
+pub const raygui = RaylibBackend.raygui;
+
 comptime {
     std.debug.assert(@hasDecl(RaylibBackend, "RaylibBackend"));
 }
