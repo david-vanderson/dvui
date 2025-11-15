@@ -14,7 +14,7 @@ x_axis_store: Axis = .{},
 y_axis: *Axis = undefined,
 y_axis_store: Axis = .{},
 mouse_point: ?Point.Physical = null,
-hover_data: ?Data = null,
+hover_data: ?HoverData = null,
 data_min: Data = .{ .x = std.math.floatMax(f64), .y = std.math.floatMax(f64) },
 data_max: Data = .{ .x = -std.math.floatMax(f64), .y = -std.math.floatMax(f64) },
 
@@ -194,6 +194,16 @@ pub const Axis = struct {
     }
 };
 
+pub const HoverData = union(enum) {
+    point: Data,
+    bar: struct {
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    },
+};
+
 pub const Data = struct {
     x: f64,
     y: f64,
@@ -211,7 +221,7 @@ pub const Line = struct {
             const dp = Point.Physical.diff(mp, screen_p);
             const dps = dp.toNatural();
             if (@abs(dps.x) <= 3 and @abs(dps.y) <= 3) {
-                self.plot.hover_data = data_point;
+                self.plot.hover_data = .{ .point = data_point };
             }
         }
         self.path.addPoint(screen_p);
@@ -577,6 +587,56 @@ pub fn line(self: *PlotWidget) Line {
     };
 }
 
+pub const BarOptions = struct {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    color: ?dvui.Color = null,
+};
+
+pub fn bar(self: *PlotWidget, opts: BarOptions) void {
+    const dp1 = Data{ .x = opts.x, .y = opts.y };
+    const dp2 = Data{ .x = opts.x + opts.w, .y = opts.y + opts.h };
+
+    self.dataForRange(dp1);
+    self.dataForRange(dp2);
+
+    const sp1 = self.dataToScreen(dp1);
+    const sp2 = self.dataToScreen(dp2);
+
+    if (self.mouse_point) |mp| {
+        const smin: dvui.Point.Physical = .{ .x = @min(sp1.x, sp2.x), .y = @min(sp1.y, sp2.y) };
+        const smax: dvui.Point.Physical = .{ .x = @max(sp1.x, sp2.x), .y = @max(sp1.y, sp2.y) };
+        const srect = dvui.Rect.Physical{
+            .x = smin.x,
+            .y = smin.y,
+            .w = smax.x - smin.x,
+            .h = smax.y - smin.y,
+        };
+        if (srect.contains(mp)) {
+            self.hover_data = .{ .bar = .{
+                .x = opts.x,
+                .y = opts.y,
+                .w = opts.w,
+                .h = opts.h,
+            } };
+        }
+    }
+
+    dvui.Path.fillConvex(
+        .{
+            .points = &.{
+                sp1,
+                .{ .x = sp2.x, .y = sp1.y },
+                sp2,
+                .{ .x = sp1.x, .y = sp2.y },
+            },
+        },
+        .{ .color = opts.color orelse dvui.themeGet().focus },
+    );
+}
+
 pub fn deinit(self: *PlotWidget) void {
     const should_free = self.init_options.was_allocated_on_widget_stack;
     defer if (should_free) dvui.widgetFree(self);
@@ -615,18 +675,25 @@ pub fn deinit(self: *PlotWidget) void {
     }
 
     if (self.hover_data) |hd| {
-        var p = self.box.data().contentRectScale().pointFromPhysical(self.mouse_point.?);
-        const str = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}, {d}", .{ hd.x, hd.y }) catch "";
-        // NOTE: Always calling free is safe because fallback is a 0 len slice, which is ignored
-        defer dvui.currentWindow().lifo().free(str);
-        const size: Size = (dvui.Options{}).fontGet().textSize(str);
-        p.x -= size.w / 2;
-        const padding = dvui.LabelWidget.defaults.paddingGet();
-        p.y -= size.h + padding.y + padding.h + 8;
-        dvui.label(@src(), "{d}, {d}", .{ hd.x, hd.y }, .{ .rect = Rect.fromPoint(p), .background = true, .border = Rect.all(1), .margin = .{} });
+        switch (hd) {
+            .point => |p| self.hoverLabel("{d}, {d}", .{ p.x, p.y }),
+            .bar => |b| self.hoverLabel("{d} to {d}, {d} to {d}", .{ b.x, b.x + b.w, b.y, b.y + b.h }),
+        }
     }
 
     self.box.deinit();
+}
+
+fn hoverLabel(self: *@This(), comptime fmt: []const u8, args: anytype) void {
+    var p = self.box.data().contentRectScale().pointFromPhysical(self.mouse_point.?);
+    const str = std.fmt.allocPrint(dvui.currentWindow().lifo(), fmt, args) catch "";
+    // NOTE: Always calling free is safe because fallback is a 0 len slice, which is ignored
+    defer dvui.currentWindow().lifo().free(str);
+    const size: Size = (dvui.Options{}).fontGet().textSize(str);
+    p.x -= size.w / 2;
+    const padding = dvui.LabelWidget.defaults.paddingGet();
+    p.y -= size.h + padding.y + padding.h + 8;
+    dvui.label(@src(), fmt, args, .{ .rect = Rect.fromPoint(p), .background = true, .border = Rect.all(1), .margin = .{} });
 }
 
 const Options = dvui.Options;
