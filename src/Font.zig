@@ -179,17 +179,16 @@ pub const FontId = enum(u64) {
         }
     }
 
-    // Ensure that all builtin fonts have a named variant
     comptime {
-        const EnumKV = struct { []const u8, FontId };
-        const fields = @typeInfo(FontId).@"enum".fields;
-        var kvs_array: [fields.len]EnumKV = undefined;
-        for (fields, 0..) |enumField, i| {
-            kvs_array[i] = .{ enumField.name, @field(FontId, enumField.name) };
-        }
-        const map = std.StaticStringMap(FontId).initComptime(kvs_array);
-        for (@typeInfo(builtin).@"struct".decls) |decl| {
-            std.debug.assert(map.get(decl.name) == FontId.fromName(decl.name));
+        for (@typeInfo(FontId).@"enum".fields) |field| {
+            // All named FontIds use the hash of their name as their value
+            if (field.value != dvui.fnv.hash(field.name)) {
+                @compileError("The value of '" ++ field.name ++ "' is not the hash of its name");
+            }
+            // All named FontIds reference a builtin font
+            if (!@hasDecl(builtin, field.name)) {
+                @compileError("Expected a decl in Font.builtin named '" ++ field.name ++ "'");
+            }
         }
     }
 };
@@ -199,27 +198,37 @@ pub const builtin = struct {
     pub const Aleo = @embedFile("fonts/Aleo/static/Aleo-Regular.ttf");
     pub const AleoBd = @embedFile("fonts/Aleo/static/Aleo-Bold.ttf");
     pub const Vera = @embedFile("fonts/bitstream-vera/Vera.ttf");
-    //pub const VeraBI = @embedFile("fonts/bitstream-vera/VeraBI.ttf");
+    pub const VeraBI = @embedFile("fonts/bitstream-vera/VeraBI.ttf");
     pub const VeraBd = @embedFile("fonts/bitstream-vera/VeraBd.ttf");
-    //pub const VeraIt = @embedFile("fonts/bitstream-vera/VeraIt.ttf");
-    //pub const VeraMoBI = @embedFile("fonts/bitstream-vera/VeraMoBI.ttf");
-    //pub const VeraMoBd = @embedFile("fonts/bitstream-vera/VeraMoBd.ttf");
-    //pub const VeraMoIt = @embedFile("fonts/bitstream-vera/VeraMoIt.ttf");
+    pub const VeraIt = @embedFile("fonts/bitstream-vera/VeraIt.ttf");
+    pub const VeraMoBI = @embedFile("fonts/bitstream-vera/VeraMoBI.ttf");
+    pub const VeraMoBd = @embedFile("fonts/bitstream-vera/VeraMoBd.ttf");
+    pub const VeraMoIt = @embedFile("fonts/bitstream-vera/VeraMoIt.ttf");
     pub const VeraMono = @embedFile("fonts/bitstream-vera/VeraMono.ttf");
-    //pub const VeraSe = @embedFile("fonts/bitstream-vera/VeraSe.ttf");
-    //pub const VeraSeBd = @embedFile("fonts/bitstream-vera/VeraSeBd.ttf");
+    pub const VeraSe = @embedFile("fonts/bitstream-vera/VeraSe.ttf");
+    pub const VeraSeBd = @embedFile("fonts/bitstream-vera/VeraSeBd.ttf");
     pub const Pixelify = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Regular.ttf");
-    //pub const PixelifyBd = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Bold.ttf");
-    //pub const PixelifyMe = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Medium.ttf");
-    //pub const PixelifySeBd = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-SemiBold.ttf");
-    //pub const Hack = @embedFile("fonts/hack/Hack-Regular.ttf");
-    //pub const HackBd = @embedFile("fonts/hack/Hack-Bold.ttf");
-    //pub const HackIt = @embedFile("fonts/hack/Hack-Italic.ttf");
-    //pub const HackBdIt = @embedFile("fonts/hack/Hack-BoldItalic.ttf");
+    pub const PixelifyBd = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Bold.ttf");
+    pub const PixelifyMe = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Medium.ttf");
+    pub const PixelifySeBd = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-SemiBold.ttf");
+    pub const Hack = @embedFile("fonts/hack/Hack-Regular.ttf");
+    pub const HackBd = @embedFile("fonts/hack/Hack-Bold.ttf");
+    pub const HackIt = @embedFile("fonts/hack/Hack-Italic.ttf");
+    pub const HackBdIt = @embedFile("fonts/hack/Hack-BoldItalic.ttf");
     pub const OpenDyslexic = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Regular.otf");
     pub const OpenDyslexicBd = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold.otf");
-    //pub const OpenDyslexicIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Italic.otf");
-    //pub const OpenDyslexicBdIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold-Italic.otf");
+    pub const OpenDyslexicIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Italic.otf");
+    pub const OpenDyslexicBdIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold-Italic.otf");
+    pub const Noto = @embedFile("fonts/NotoSansKR-Regular.ttf");
+
+    comptime {
+        for (@typeInfo(builtin).@"struct".decls) |decl| {
+            // All builint fonts has a named FontId
+            if (!@hasField(FontId, decl.name)) {
+                @compileError("Expected a field in FontId named '" ++ decl.name ++ "'");
+            }
+        }
+    }
 };
 
 pub const Cache = struct {
@@ -241,23 +250,51 @@ pub const Cache = struct {
         }
     };
 
-    pub fn initWithBuiltins(allocator: std.mem.Allocator) std.mem.Allocator.Error!Cache {
-        var self: Cache = .{};
-        inline for (@typeInfo(builtin).@"struct".decls) |decl| {
-            try self.database.putNoClobber(allocator, .fromName(decl.name), dvui.FontBytesEntry{
-                .bytes = @field(builtin, decl.name),
-                .name = decl.name,
+    pub fn addBuiltinFonts(self: *Cache, gpa: std.mem.Allocator, comptime named_ids: []const FontId) !void {
+        inline for (named_ids) |font| {
+            const name = @tagName(font); // If this line panics, a non-named variant of `FontId` was provided
+            try self.database.put(gpa, font, .{
+                .bytes = @field(builtin, name),
+                .name = name,
                 .allocator = null,
             });
         }
-        if (dvui.backend.kind != .web) {
-            try self.database.putNoClobber(allocator, .Noto, dvui.FontBytesEntry{
-                .bytes = @embedFile("fonts/NotoSansKR-Regular.ttf"),
-                .name = @tagName(FontId.Noto),
+    }
+    pub fn addBuiltinFontsForTheme(self: *Cache, gpa: std.mem.Allocator, comptime theme: dvui.Theme) !void {
+        const named_ids: []const FontId = comptime blk: {
+            var ids = [_]FontId{
+                theme.font_body.id,
+                theme.font_caption.id,
+                theme.font_caption_heading.id,
+                theme.font_heading.id,
+                theme.font_title.id,
+                theme.font_title_1.id,
+                theme.font_title_2.id,
+                theme.font_title_3.id,
+                theme.font_title_4.id,
+            };
+            // Filter out duplicates and unnamed `FontId` values
+            var unique_len: usize = 0;
+            for (ids) |id| switch (id) {
+                inline else => |named| {
+                    if (unique_len > 0 and std.mem.lastIndexOfScalar(FontId, ids[0..unique_len], named) != null) continue;
+                    ids[unique_len] = named;
+                    unique_len += 1;
+                },
+                _ => {}, // Unknown/unnamed font
+            };
+            if (unique_len == 0) break :blk &.{};
+            break :blk ids[0..unique_len];
+        };
+        // NOTE: we cannot call `addBuiltinFonts` here because `named_ids` is a slice to a comptime array, so we cannot use it at runtime outside this scope
+        inline for (named_ids) |font| {
+            const name = @tagName(font);
+            try self.database.put(gpa, font, .{
+                .bytes = @field(builtin, name),
+                .name = name,
                 .allocator = null,
             });
         }
-        return self;
     }
 
     pub fn deinit(self: *Cache, gpa: std.mem.Allocator, backend: Backend) void {
