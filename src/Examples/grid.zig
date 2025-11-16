@@ -12,7 +12,7 @@ pub fn gridStyling() void {
         const Banding = enum { none, rows, cols };
     };
 
-    var outer_hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+    var outer_hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .role = .tab_panel });
     defer outer_hbox.deinit();
 
     {

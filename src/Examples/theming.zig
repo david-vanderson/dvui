@@ -155,7 +155,7 @@ pub fn theming() void {
 fn fonts(theme: *Theme) bool {
     var changed = false;
 
-    const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+    const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .role = .tab_panel });
     defer hbox.deinit();
 
     const active_font = dvui.dataGetPtrDefault(null, hbox.data().id, "Fonts", Options.FontStyle, .body);
@@ -239,7 +239,7 @@ const ColorNames = enum {
 fn styles(theme: *Theme) bool {
     var changed = false;
 
-    const first_box = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .both });
+    const first_box = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .both, .role = .tab_panel });
     defer first_box.deinit();
 
     const active_style = dvui.dataGetPtrDefault(null, first_box.data().id, "Style", Theme.Style.Name, .content);
