@@ -46,6 +46,8 @@ export fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) i32 {
         return 2;
     };
 
+    try WebBackend.win.fonts.addBuiltinFontsForTheme(gpa, dvui.Theme.builtin.adwaita_light);
+
     WebBackend.win_ok = true;
 
     orig_content_scale = WebBackend.win.content_scale;

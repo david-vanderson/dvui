@@ -42,7 +42,14 @@ var warn_on_quit_closing: bool = false;
 // - runs between win.begin()/win.end()
 pub fn AppInit(win: *dvui.Window) !void {
     orig_content_scale = win.content_scale;
-    //try dvui.addFont("NOTO", @embedFile("../src/fonts/NotoSansKR-Regular.ttf"), null);
+    // Add your own bundled font files...:
+    // try dvui.addFont("NOTO", @embedFile("../src/fonts/NotoSansKR-Regular.ttf"), null);
+
+    // Or opt-in to adding the fonts for the builin themes...
+    try win.fonts.addBuiltinFontsForTheme(win.gpa, dvui.Theme.builtin.adwaita_light);
+
+    // Or add other builtin fonts
+    try win.fonts.addBuiltinFonts(win.gpa, &.{.Vera});
 
     if (false) {
         // If you need to set a theme based on the users preferred color scheme, do it here
