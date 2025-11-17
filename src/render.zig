@@ -410,6 +410,103 @@ pub fn renderImage(source: ImageSource, rs: RectScale, opts: TextureOptions) (Ba
     try renderTexture(try source.getTexture(), rs, opts);
 }
 
+pub const Ninepatch = struct {
+    tex: Texture,
+    uv: [9]Rect,
+    pub fn size(this: *const @This(), patch: usize) Size {
+        return .{
+            .w = @as(f32, @floatFromInt(this.tex.width)) * this.uv[patch].w,
+            .h = @as(f32, @floatFromInt(this.tex.height)) * this.uv[patch].h,
+        };
+    }
+};
+pub const NinepatchOptions = struct {
+    rotation: f32 = 0,
+    colormod: Color = .{},
+    background_color: ?Color = null,
+    debug: bool = false,
+
+    fade: f32 = 0.0,
+};
+pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptions) Backend.GenericError!void {
+    const sz_top_left = ninepatch.size(0);
+    const sz_top_right = ninepatch.size(2);
+    const sz_bottom_left = ninepatch.size(6);
+    const sz_bottom_right = ninepatch.size(8);
+
+    const min_total_width_top = sz_top_left.w + sz_top_right.w;
+    const min_total_width_bot = sz_bottom_left.w + sz_bottom_right.w;
+    const min_total_height_left = sz_top_left.h + sz_bottom_left.h;
+    const min_total_height_right = sz_top_right.h + sz_bottom_right.h;
+
+    std.debug.assert(rs.r.w >= min_total_width_top);
+    std.debug.assert(rs.r.w >= min_total_width_bot);
+    std.debug.assert(min_total_width_top == min_total_width_bot);
+    std.debug.assert(rs.r.h >= min_total_height_left);
+    std.debug.assert(rs.r.h >= min_total_height_right);
+    std.debug.assert(min_total_height_left == min_total_height_right);
+
+    const rs_top_left = rs.rectToRectScale(.fromSize(sz_top_left));
+    var rs_top_right = rs.rectToRectScale(.fromSize(sz_top_right));
+    var rs_bottom_left = rs.rectToRectScale(.fromSize(sz_bottom_left));
+    var rs_bottom_right = rs.rectToRectScale(.fromSize(sz_bottom_right));
+
+    var rs_top_center = rs;
+    var rs_center_left = rs;
+    var rs_bottom_center = rs;
+    var rs_center_right = rs;
+
+    var rs_center_center = rs;
+
+    rs_top_center.r.w -= rs_top_left.r.w + rs_top_right.r.w;
+    rs_top_center.r.x += rs_top_left.r.w;
+    rs_top_center.r.h = rs_top_left.r.h;
+
+    rs_top_right.r.x += rs_top_right.r.w + rs_top_center.r.w;
+
+    rs_center_left.r.h -= rs_top_left.r.h + rs_bottom_left.r.h;
+    rs_center_left.r.y += rs_top_left.r.h;
+    rs_center_left.r.w = rs_top_left.r.w;
+
+    rs_bottom_left.r.y += rs_bottom_left.r.h + rs_center_left.r.h;
+
+    rs_center_right.r.h -= rs_top_right.r.h + rs_bottom_right.r.h;
+    rs_center_right.r.y += rs_top_right.r.h;
+    rs_center_right.r.w = rs_top_right.r.w;
+    rs_center_right.r.x = rs_top_right.r.x;
+
+    rs_bottom_center.r.w -= rs_bottom_left.r.w + rs_bottom_right.r.w;
+    rs_bottom_center.r.x += rs_top_left.r.w;
+    rs_bottom_center.r.h = rs_bottom_left.r.h;
+    rs_bottom_center.r.y = rs_bottom_left.r.y;
+
+    rs_bottom_right.r.x = rs_top_right.r.x;
+    rs_bottom_right.r.y = rs_bottom_left.r.y;
+
+    rs_center_center.r.w = rs_top_center.r.w;
+    rs_center_center.r.x = rs_top_center.r.x;
+    rs_center_center.r.h = rs_center_left.r.h;
+    rs_center_center.r.y = rs_center_left.r.y;
+
+    try renderTexture(ninepatch.tex, rs_top_left, .{ .uv = ninepatch.uv[0], .background_color = opts.background_color, .rotation = opts.rotation });
+    try renderTexture(ninepatch.tex, rs_top_right, .{ .uv = ninepatch.uv[2], .background_color = opts.background_color, .rotation = opts.rotation });
+    try renderTexture(ninepatch.tex, rs_bottom_left, .{ .uv = ninepatch.uv[6], .background_color = opts.background_color, .rotation = opts.rotation });
+    try renderTexture(ninepatch.tex, rs_bottom_right, .{ .uv = ninepatch.uv[8], .background_color = opts.background_color, .rotation = opts.rotation });
+
+    try renderTexture(ninepatch.tex, rs_top_center, .{ .uv = ninepatch.uv[1], .background_color = opts.background_color, .rotation = opts.rotation });
+    try renderTexture(ninepatch.tex, rs_bottom_center, .{ .uv = ninepatch.uv[7], .background_color = opts.background_color, .rotation = opts.rotation });
+    try renderTexture(ninepatch.tex, rs_center_left, .{ .uv = ninepatch.uv[3], .background_color = opts.background_color, .rotation = opts.rotation });
+    try renderTexture(ninepatch.tex, rs_center_right, .{ .uv = ninepatch.uv[5], .background_color = opts.background_color, .rotation = opts.rotation });
+
+    try renderTexture(ninepatch.tex, rs_center_center, .{ .uv = ninepatch.uv[4], .background_color = opts.background_color, .rotation = opts.rotation });
+}
+
+pub fn renderNinepatchImage(source: ImageSource, uv: [9]Rect, rs: RectScale, opts: NinepatchOptions) (Backend.TextureError || StbImageError)!void {
+    if (rs.s == 0) return;
+    if (dvui.clipGet().intersect(rs.r).empty()) return;
+    try renderNinepatch(.{ .tex = try source.getTexture(), .uv = uv }, rs, opts);
+}
+
 const std = @import("std");
 const dvui = @import("dvui.zig");
 
