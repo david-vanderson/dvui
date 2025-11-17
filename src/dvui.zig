@@ -3589,11 +3589,20 @@ pub fn ninepatch(src: std.builtin.SourceLocation, init_opts: NinepatchInitOption
             dvui.log.debug("image {x} can't render border while rotated\n", .{wd.id});
         }
     }
+    var np_size : Size = .{};
     const render_tex_opts = RenderNinepatchOptions{
         .rotation = wd.options.rotationGet(),
+        .ninepatch_min = &np_size,
     };
     const content_rs = wd.contentRectScale();
-    renderNinepatchImage(init_opts.source, init_opts.uv, content_rs, render_tex_opts) catch |err| logError(@src(), err, "Could not render image {?s} at {}", .{ opts.name, content_rs });
+    renderNinepatchImage(init_opts.source, init_opts.uv, content_rs, render_tex_opts) catch |err| switch (err) {
+        error.NinepatchBelowMin => {
+            logError(@src(), err, "Could not render ninepatch {?s} at {} - try {any}", .{ opts.name, content_rs, np_size });
+        },
+        else => {
+            logError(@src(), err, "Could not render ninepatch {?s} at {}", .{ opts.name, content_rs });
+        },
+    };
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
 
