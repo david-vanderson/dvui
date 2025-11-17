@@ -32,7 +32,6 @@ const log = std.log.scoped(.SDLBackend);
 
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
-ak_should_initialized: bool = dvui.accesskit_enabled,
 we_own_window: bool = false,
 touch_mouse_events: bool = false,
 log_events: bool = false,
@@ -81,22 +80,13 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         MACOS_enable_scroll_momentum();
     }
 
-    var hidden = options.hidden;
-    var show_window_in_begin = false;
-    if (dvui.accesskit_enabled and !hidden) {
-        // hide the window until we can initialize accesskit in Window.begin
-        hidden = true;
-        show_window_in_begin = true;
-    }
-
-    const hidden_flag = if (hidden) c.SDL_WINDOW_HIDDEN else 0;
     const fullscreen_flag = if (options.fullscreen) c.SDL_WINDOW_FULLSCREEN else 0;
     const window: *c.SDL_Window = if (sdl3)
         c.SDL_CreateWindow(
             options.title,
             @as(c_int, @intFromFloat(options.size.w)),
             @as(c_int, @intFromFloat(options.size.h)),
-            @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | hidden_flag | fullscreen_flag),
+            @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | c.SDL_WINDOW_HIDDEN | fullscreen_flag),
         ) orelse return logErr("SDL_CreateWindow in initWindow")
     else
         c.SDL_CreateWindow(
@@ -105,7 +95,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
             c.SDL_WINDOWPOS_UNDEFINED,
             @as(c_int, @intFromFloat(options.size.w)),
             @as(c_int, @intFromFloat(options.size.h)),
-            @intCast(c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE | hidden_flag),
+            @intCast(c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE | c.SDL_WINDOW_HIDDEN),
         ) orelse return logErr("SDL_CreateWindow in initWindow");
 
     errdefer c.SDL_DestroyWindow(window);
@@ -141,7 +131,6 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     try toErr(c.SDL_SetRenderDrawBlendMode(renderer, pma_blend), "SDL_SetRenderDrawBlendMode in initWindow");
 
     var back = init(window, renderer);
-    back.ak_should_initialized = show_window_in_begin;
     back.we_own_window = true;
 
     if (sdl3) {
@@ -350,19 +339,6 @@ pub fn setIconFromABGR8888(self: *SDLBackend, data: [*]const u8, icon_w: c_int, 
     }
 }
 
-pub fn accessKitShouldInitialize(self: *SDLBackend) bool {
-    return self.ak_should_initialized;
-}
-pub fn accessKitInitInBegin(self: *SDLBackend) !void {
-    std.debug.assert(self.ak_should_initialized);
-    if (sdl3) {
-        try toErr(c.SDL_ShowWindow(self.window), "SDL_ShowWindow in accessKitInitInBegin");
-    } else {
-        c.SDL_ShowWindow(self.window);
-    }
-    self.ak_should_initialized = false;
-}
-
 /// Return true if interrupted by event
 pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) !bool {
     if (timeout_micros == std.math.maxInt(u32)) {
@@ -562,6 +538,16 @@ pub fn deinit(self: *SDLBackend) void {
         c.SDL_Quit();
     }
     self.* = undefined;
+}
+
+// XXX: Maybe we can say "you must initialize your window in a hidden state if you want accessibility support",
+// after `Window.init` you're free to show it.
+pub fn showWindow(self: *SDLBackend) !void {
+    if (sdl3) {
+        try toErr(c.SDL_ShowWindow(self.window), "SDL_ShowWindow in showWindow");
+    } else {
+        c.SDL_ShowWindow(self.window);
+    }
 }
 
 pub fn renderPresent(self: *SDLBackend) !void {
@@ -1002,6 +988,31 @@ pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
     }
 }
 
+pub fn nativeHandle(self: *SDLBackend) ?*anyopaque {
+    return if(sdl3) hd: {
+        const properties: c.SDL_PropertiesID = c.SDL_GetWindowProperties(self.window);
+
+        break :hd c.SDL_GetPointerProperty(
+            properties,
+            switch(builtin.target.os.tag) {
+                .windows => c.SDL_PROP_WINDOW_WIN32_HWND_POINTER,
+                else => |t| if(t.isDarwin()) 
+                    c.SDL_PROP_WINDOW_COCOA_WINDOW_POINTER
+                else return null,
+            },
+            null,
+        );
+    } else hd: {
+        var wmInfo: c.SDL_SysWMinfo = undefined;
+        c.SDL_GetVersion(&wmInfo.version);
+        _ = c.SDL_GetWindowWMInfo(self.window, &wmInfo);
+        break :hd switch(builtin.target.os.tag) {
+            .windows => @ptrCast(wmInfo.info.win.window),
+            else => |t| if(t.isDarwin()) @ptrCast(wmInfo.info.cocoa.window) else null,
+        };
+    };
+}
+
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
     switch (event.type) {
         if (sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
@@ -1146,48 +1157,31 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             return try win.addEventTouchMotion(.touch0, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy);
         },
         if (sdl3) c.SDL_EVENT_WINDOW_FOCUS_GAINED else c.SDL_WINDOWEVENT_FOCUS_GAINED => {
-            if (self.log_events) {
-                log.debug("event FOCUS_GAINED\n", .{});
-            }
-            if (dvui.accesskit_enabled and builtin.os.tag == .linux) {
-                dvui.AccessKit.c.accesskit_unix_adapter_update_window_focus_state(win.accesskit.adapter, true);
-            } else if (dvui.accesskit_enabled and builtin.os.tag == .macos) {
-                const events = dvui.AccessKit.c.accesskit_macos_subclassing_adapter_update_view_focus_state(win.accesskit.adapter, true);
-                if (events) |evts| {
-                    dvui.AccessKit.c.accesskit_macos_queued_events_raise(evts);
-                }
-            }
+            if (self.log_events) log.debug("event FOCUS_GAINED\n", .{});
+            win.accessibility.focusGained();
             return false;
         },
         if (sdl3) c.SDL_EVENT_WINDOW_FOCUS_LOST else c.SDL_WINDOWEVENT_FOCUS_LOST => {
-            if (self.log_events) {
-                log.debug("event FOCUS_LOST\n", .{});
-            }
-            if (dvui.accesskit_enabled and builtin.os.tag == .linux) {
-                dvui.AccessKit.c.accesskit_unix_adapter_update_window_focus_state(win.accesskit.adapter, false);
-            } else if (dvui.accesskit_enabled and builtin.os.tag == .macos) {
-                const events = dvui.AccessKit.c.accesskit_macos_subclassing_adapter_update_view_focus_state(win.accesskit.adapter, false);
-                if (events) |evts| {
-                    dvui.AccessKit.c.accesskit_macos_queued_events_raise(evts);
-                }
-            }
+            if (self.log_events) log.debug("event FOCUS_LOST\n", .{});
+            win.accessibility.focusLost();
             return false;
         },
         if (sdl3) c.SDL_EVENT_WINDOW_SHOWN else c.SDL_WINDOWEVENT_SHOWN => {
             if (self.log_events) {
                 log.debug("event WINDOW_SHOWN\n", .{});
             }
-            if (dvui.accesskit_enabled and builtin.os.tag == .linux) {
-                var x: i32, var y: i32 = .{ undefined, undefined };
-                _ = c.SDL_GetWindowPosition(win.backend.impl.window, &x, &y);
-                var w: i32, var h: i32 = .{ undefined, undefined };
-                _ = c.SDL_GetWindowSize(win.backend.impl.window, &w, &h);
-                var top: i32, var bot: i32, var left: i32, var right: i32 = .{ undefined, undefined, undefined, undefined };
-                _ = c.SDL_GetWindowBordersSize(win.backend.impl.window, &top, &left, &bot, &right);
-                const outer_bounds: dvui.AccessKit.Rect = .{ .x0 = @floatFromInt(x - left), .y0 = @floatFromInt(y - top), .x1 = @floatFromInt(x + w + right), .y1 = @floatFromInt(y + h + bot) };
-                const inner_bounds: dvui.AccessKit.Rect = .{ .x0 = @floatFromInt(x), .y0 = @floatFromInt(y), .x1 = @floatFromInt(x + w), .y1 = @floatFromInt(y + h) };
-                dvui.AccessKit.c.accesskit_unix_adapter_set_root_window_bounds(win.accesskit.adapter.?, outer_bounds, inner_bounds);
-            }
+            var x: i32, var y: i32 = .{ undefined, undefined };
+            _ = c.SDL_GetWindowPosition(win.backend.impl.window, &x, &y);
+            var w: i32, var h: i32 = .{ undefined, undefined };
+            _ = c.SDL_GetWindowSize(win.backend.impl.window, &w, &h);
+            var top: i32, var bot: i32, var left: i32, var right: i32 = .{ undefined, undefined, undefined, undefined };
+            _ = c.SDL_GetWindowBordersSize(win.backend.impl.window, &top, &left, &bot, &right);
+
+            win.accessibility.setBounds(
+                .rect(@floatFromInt(x - left), @floatFromInt(y - top), @floatFromInt(w + right), @floatFromInt(h + bot)),
+             .rect(@floatFromInt(x), @floatFromInt(y), @floatFromInt(w), @floatFromInt(h)),
+            );
+            
             return false;
         },
         if (sdl3) c.SDL_EVENT_WINDOW_CLOSE_REQUESTED else c.SDL_WINDOWEVENT_CLOSE => {
@@ -1511,6 +1505,8 @@ pub fn main() !u8 {
     var win = try dvui.Window.init(@src(), gpa, back.backend(), init_opts.window_init_options);
     defer win.deinit();
 
+    try back.showWindow();
+
     if (app.initFn) |initFn| {
         try win.begin(win.frame_time_ns);
         try initFn(&win);
@@ -1614,6 +1610,10 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
     //// init dvui Window (maps onto a single OS window)
     appState.win = dvui.Window.init(@src(), gpa, appState.back.backend(), app.config.options.window_init_options) catch |err| {
         log.err("dvui.Window.init failed: {any}", .{err});
+        return c.SDL_APP_FAILURE;
+    };
+    appState.back.showWindow() catch |err| {
+        log.err("backend.showWindow failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
 

@@ -112,21 +112,7 @@ pub const Dialog = Dialogs.Dialog;
 /// Toasts are just specialized dialogs
 pub const Toast = Dialog;
 
-/// Accessibility
-pub const accesskit_enabled = @import("build_options").accesskit != .off and backend.kind != .testing and backend.kind != .web;
-pub const AccessKit = @import("AccessKit.zig");
-
-// When linking to accesskit for non-msvc builds, the _fltuser symbol is
-// undefined. Zig only defines this symbol for abi = .mscv and abi = .none,
-// which makes gnu and musl builds break.  Until we can build and link the
-// accesskit c library with zig, we need this work-around as both the msvc and
-// mingw builds of accesskit reference this symbol.
-comptime {
-    if (accesskit_enabled and builtin.os.tag == .windows and builtin.cpu.arch.isX86()) {
-        @export(&_fltused, .{ .name = "_fltused", .linkage = .weak });
-    }
-}
-var _fltused: c_int = 1;
+pub const accessibility = @import("accessibility.zig");
 
 pub const Texture = @import("Texture.zig");
 pub const TextureTarget = Texture.Target;
@@ -2439,9 +2425,8 @@ pub fn toastDisplay(id: Id) !void {
     defer animator.deinit();
     var label_wd: WidgetData = undefined;
     dvui.labelNoFmt(@src(), message, .{}, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 }, .data_out = &label_wd });
-    if (label_wd.accesskit_node()) |ak_node| {
-        AccessKit.nodeSetLive(ak_node, AccessKit.Live.polite);
-    }
+    if(label_wd.a11y_node) |node| node.setLive(.polite);
+
     if (dvui.timerDone(id)) {
         animator.startEnd();
     }
@@ -2535,7 +2520,7 @@ pub const SuggestionInitOptions = struct {
     opened: bool = false,
     open_on_text_change: bool = true,
     open_on_focus: bool = true,
-    label: ?Options.LabelOpts = null,
+    label: ?accessibility.Label = null,
 };
 
 /// Wraps a textEntry to provide an attached menu (dropdown) of choices.
@@ -2686,8 +2671,8 @@ pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Init
     combo.te.data().was_allocated_on_widget_stack = true;
     combo.te.install();
 
-    if (combo.te.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeSetRole(ak_node, AccessKit.Role.editable_combo_box.asU8());
+    if(combo.te.data().a11y_node) |node| {
+        node.setRole(.editable_combo_box); 
         // Accessibility TODO: Expand and collapse
     }
 
@@ -2732,9 +2717,9 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
         expanded = !expanded;
     }
 
-    if (b.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
+    if (b.data().a11y_node) |node| {
+        node.addAction(.focus);
+        node.addAction(.click);
     }
 
     b.drawBackground();
@@ -2832,10 +2817,11 @@ pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget
         var tl2 = dvui.textLayout(@src(), .{}, .{ .background = false });
         tl2.format(fmt, fmt_args, .{});
         tl2.deinit();
-        if (tt.data().accesskit_node()) |ak_node| {
+        if (tt.data().a11y_node) |node| {
             var str_builder: std.Io.Writer.Allocating = .init(currentWindow().arena());
             str_builder.writer.print(fmt, fmt_args) catch {};
-            AccessKit.nodeSetLabel(ak_node, str_builder.toOwnedSliceSentinel(0) catch "");
+
+            node.setLabel(str_builder.toOwnedSliceSentinel(0) catch "");
         }
     }
     tt.deinit();
@@ -3059,10 +3045,10 @@ pub fn gridHeadingSortable(
     }
     dir.* = g.sort_direction;
 
-    if (label_wd.accesskit_node()) |ak_node| {
+    if (label_wd.a11y_node) |node| {
         switch (dir.*) {
-            .ascending => AccessKit.nodeSetSortDirection(ak_node, AccessKit.SortDirection.ascending),
-            .descending => AccessKit.nodeSetSortDirection(ak_node, AccessKit.SortDirection.descending),
+            .ascending => node.setSortDirection(.ascending),
+            .descending => node.setSortDirection(.descending),
             .unsorted => {},
         }
     }
@@ -3116,8 +3102,8 @@ pub fn gridHeadingCheckbox(
         select_state.* = if (selected) .select_all else .select_none;
     }
 
-    if (checkbox_wd.accesskit_node()) |ak_node| {
-        AccessKit.nodeSetLabel(ak_node, if (select_state.* == .select_all) "Select none" else "Select all");
+    if (checkbox_wd.a11y_node) |node| {
+        node.setLabel(if (select_state.* == .select_all) "Select none" else "Select all");
     }
     return is_clicked;
 }
@@ -3682,16 +3668,13 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
     var b = box(src, .{ .dir = init_opts.dir }, options);
     defer b.deinit();
 
-    if (b.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
-        AccessKit.nodeSetOrientation(ak_node, switch (init_opts.dir) {
-            .vertical => AccessKit.Orientation.vertical,
-            .horizontal => AccessKit.Orientation.horizontal,
-        });
-        AccessKit.nodeSetNumericValue(ak_node, init_opts.fraction.*);
-        AccessKit.nodeSetMinNumericValue(ak_node, 0);
-        AccessKit.nodeSetMaxNumericValue(ak_node, 1);
+    if (b.data().a11y_node) |node| {
+        node.addAction(.focus);
+        node.addAction(.set_value);
+        node.setOrientation(.ofDirection(init_opts.dir));
+        node.setMinNumericValue(0);
+        node.setMaxNumericValue(0);
+        node.setNumericValue(init_opts.fraction.*);
     }
 
     tabIndexSet(b.data().id, options.tab_index);
@@ -3885,13 +3868,13 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     b.install();
     defer b.deinit();
 
-    if (b.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
-        AccessKit.nodeSetNumericValue(ak_node, init_opts.value.*);
-        AccessKit.nodeSetOrientation(ak_node, AccessKit.Orientation.horizontal);
-        if (init_opts.min) |min| AccessKit.nodeSetMinNumericValue(ak_node, min);
-        if (init_opts.max) |max| AccessKit.nodeSetMaxNumericValue(ak_node, max);
+    if (b.data().a11y_node) |node| {
+        node.addAction(.focus);
+        node.addAction(.set_value);
+        node.setNumericValue(init_opts.value.*);
+        node.setOrientation(.horizontal);
+        if (init_opts.min) |min| node.setMinNumericValue(min);
+        if (init_opts.max) |max| node.setMaxNumericValue(max);
     }
 
     tabIndexSet(b.data().id, options.tab_index);
@@ -4295,10 +4278,10 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
     }
     part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
 
-    if (b.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeSetMinNumericValue(ak_node, 0);
-        AccessKit.nodeSetMaxNumericValue(ak_node, 100);
-        AccessKit.nodeSetNumericValue(ak_node, perc * 100);
+    if (b.data().a11y_node) |node| {
+        node.setMinNumericValue(0);
+        node.setMaxNumericValue(100);
+        node.setNumericValue(perc * 100);
     }
 }
 
@@ -4331,10 +4314,10 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
         }
     }
 
-    if (b.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
-        AccessKit.nodeSetToggled(ak_node, if (target.*) AccessKit.Toggled.ak_true else AccessKit.Toggled.ak_false);
+    if (b.data().a11y_node) |node| {
+        node.addAction(.focus);
+        node.addAction(.click);
+        node.setToggled(.ofBool(target.*));
     }
 
     const check_size = options.fontGet().textHeight();
@@ -4421,10 +4404,10 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
         ret = true;
     }
 
-    if (b.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
-        AccessKit.nodeSetToggled(ak_node, if (active) AccessKit.Toggled.ak_true else AccessKit.Toggled.ak_false);
+    if (b.data().a11y_node) |node| {
+        node.addAction(.focus);
+        node.addAction(.click);
+        node.setToggled(.ofBool(active));
     }
 
     const radio_size = options.fontGet().textHeight();
@@ -4662,24 +4645,22 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         }
         te.textLayout.addText(minmax_text, .{ .color_text = opts.color(.fill_hover) });
     }
-    if (te.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeClearValue(ak_node); // Only set a numberic value
+    if (te.data().a11y_node) |node| {
+        node.clearValue(); // Only set a numberic value
         if (@typeInfo(T) == .float) {
-            if (init_opts.min) |min| AccessKit.nodeSetMinNumericValue(ak_node, @floatCast(min));
-            if (init_opts.max) |max| AccessKit.nodeSetMinNumericValue(ak_node, @floatCast(max));
-            if (num) |value|
-                AccessKit.nodeSetNumericValue(ak_node, @floatCast(value));
+            if (init_opts.min) |min| node.setMinNumericValue(@floatCast(min));
+            if (init_opts.max) |max| node.setMaxNumericValue(@floatCast(max));
+            if (num) |value| node.setNumericValue(@floatCast(value));
         } else {
-            if (init_opts.min) |min| AccessKit.nodeSetMinNumericValue(ak_node, @floatFromInt(min));
-            if (init_opts.max) |max| AccessKit.nodeSetMinNumericValue(ak_node, @floatFromInt(max));
-            if (num) |value|
-                AccessKit.nodeSetNumericValue(ak_node, @floatFromInt(value));
+            if (init_opts.min) |min| node.setMinNumericValue(@floatFromInt(min));
+            if (init_opts.max) |max| node.setMaxNumericValue(@floatFromInt(max));
+            if (num) |value| node.setNumericValue(@floatFromInt(value));
         }
         if (result.value == .Valid) {
-            AccessKit.nodeClearInvalid(ak_node);
+            node.clearInvalid();
         } else {
-            AccessKit.nodeSetInvalid(ak_node, AccessKit.Invalid.ak_true);
-            AccessKit.nodeSetNumericValue(ak_node, 0);
+            node.setInvalid(.true);
+            node.setNumericValue(0);
         }
     }
 

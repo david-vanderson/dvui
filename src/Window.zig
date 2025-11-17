@@ -119,9 +119,9 @@ _widget_stack: std.heap.ArenaAllocator,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
-debug: @import("Debug.zig") = .{},
+accessibility: a11y.Instance,
 
-accesskit: dvui.AccessKit,
+debug: @import("Debug.zig") = .{},
 
 pub const InitOptions = struct {
     id_extra: usize = 0,
@@ -164,6 +164,7 @@ pub fn init(
             .rect = undefined,
             // Set in `begin`
             .parent = undefined,
+            .a11y_node = null,
         },
         // Set in `begin`
         .current_parent = undefined,
@@ -172,8 +173,9 @@ pub fn init(
             .light => Theme.builtin.adwaita_light,
             .dark => Theme.builtin.adwaita_dark,
         },
-        .accesskit = .{},
+        .accessibility = try .init(gpa, hashval, backend_ctx.nativeHandle()),
     };
+    errdefer self.deinit();
 
     try self.initEvents();
 
@@ -293,7 +295,7 @@ pub fn init(
     //    self.snap_to_pixels = false;
     //}
 
-    log.info("window logical {f} pixels {f} natural scale {d} initial content scale {d} snap_to_pixels {any} accesskit {any}\n", .{ winSize, pxSize, pxSize.w / winSize.w, self.content_scale, self.snap_to_pixels, dvui.accesskit_enabled });
+    log.info("window logical {f} pixels {f} natural scale {d} initial content scale {d} snap_to_pixels {any} accessibility {s}\n", .{ winSize, pxSize, pxSize.w / winSize.w, self.content_scale, self.snap_to_pixels, self.accessibility.name() });
 
     errdefer self.deinit();
 
@@ -311,7 +313,7 @@ pub fn init(
 }
 
 pub fn deinit(self: *Self) void {
-    if (dvui.accesskit_enabled) self.accesskit.deinit();
+    self.accessibility.deinit(self.gpa);
 
     self.data_store.deinit(self.gpa);
 
@@ -990,8 +992,6 @@ pub fn begin(
     self: *Self,
     time_ns: i128,
 ) dvui.Backend.GenericError!void {
-    try self.backend.accessKitInitInBegin(&self.accesskit);
-
     var micros_since_last: u32 = 1;
     if (time_ns > self.frame_time_ns) {
         // enforce monotinicity
@@ -1419,9 +1419,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         _ = try self.addEventMouseMotion(.{ .pt = self.mouse_pt });
     }
 
-    if (dvui.accesskit_enabled) {
-        self.accesskit.pushUpdates();
-    }
+    self.accessibility.end(self.gpa, self);
 
     defer dvui.current_window = self.previous_window;
 
@@ -1505,7 +1503,9 @@ const c = dvui.c;
 const std = @import("std");
 const math = std.math;
 const builtin = @import("builtin");
-const dvui = @import("dvui.zig");
+const dvui = @import("dvui");
+
+const a11y = dvui.accessibility;
 
 test {
     @import("std").testing.refAllDecls(@This());

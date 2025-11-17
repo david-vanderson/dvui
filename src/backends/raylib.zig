@@ -33,7 +33,6 @@ cursor_last: dvui.enums.Cursor = .arrow,
 frame_buffers: std.AutoArrayHashMap(u32, u32),
 fb_width: ?c_int = null,
 fb_height: ?c_int = null,
-ak_should_initialized: bool = dvui.accesskit_enabled,
 
 const vertexSource =
     \\#version 330
@@ -96,9 +95,8 @@ pub const InitOptions = struct {
 pub fn createWindow(options: InitOptions) void {
     c.SetConfigFlags(c.FLAG_WINDOW_RESIZABLE);
     c.SetConfigFlags(c.FLAG_WINDOW_HIGHDPI);
-    if (dvui.accesskit_enabled) {
-        c.SetConfigFlags(c.FLAG_WINDOW_HIDDEN);
-    }
+    c.SetConfigFlags(c.FLAG_WINDOW_HIDDEN);
+
     if (options.vsync) {
         c.SetConfigFlags(c.FLAG_VSYNC_HINT);
     }
@@ -159,6 +157,10 @@ pub fn shouldBlockRaylibInput(self: *RaylibBackend) bool {
     return (dvui.currentWindow().dragging.state != .none or self.dvui_consumed_events);
 }
 
+pub fn showWindow(_: RaylibBackend) void {
+    c.ClearWindowState(c.FLAG_WINDOW_HIDDEN);
+}
+
 pub fn deinit(self: *RaylibBackend) void {
     self.frame_buffers.deinit();
     c.UnloadShader(self.shader);
@@ -168,16 +170,6 @@ pub fn deinit(self: *RaylibBackend) void {
         c.CloseWindow();
     }
     self.* = undefined;
-}
-
-pub fn accessKitShouldInitialize(self: *RaylibBackend) bool {
-    return self.ak_should_initialized;
-}
-
-pub fn accessKitInitInBegin(self: *RaylibBackend) !void {
-    std.debug.assert(self.ak_should_initialized);
-    dvui.backend.c.ClearWindowState(dvui.backend.c.FLAG_WINDOW_HIDDEN);
-    self.ak_should_initialized = false;
 }
 
 pub fn backend(self: *RaylibBackend) dvui.Backend {
@@ -501,6 +493,10 @@ pub fn cursorShow(_: *RaylibBackend, value: ?bool) bool {
 
 //TODO implement this function
 pub fn refresh(_: *RaylibBackend) void {}
+
+pub fn nativeHandle(_: RaylibBackend) ?*anyopaque {
+    return c.GetWindowHandle();
+}
 
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
     var disable_raylib_input: bool = false;
@@ -978,6 +974,8 @@ pub fn main() !void {
     // init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), gpa, b.backend(), init_opts.window_init_options);
     defer win.deinit();
+
+    b.showWindow();
 
     if (app.initFn) |initFn| {
         try win.begin(win.frame_time_ns);

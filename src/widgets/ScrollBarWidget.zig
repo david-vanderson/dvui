@@ -64,36 +64,28 @@ pub fn install(self: *ScrollBarWidget) void {
 
     // Accessibility TODO: Setting value to viewport.x is not correct as it will always show position
     // as being hte top of the viewport and can't hit 100%.
-    if (self.data().accesskit_node()) |ak_node| {
+    if (self.data().a11y_node) |node| {
+        node.addAction(.click);
+        node.addAction(.focus);
+        node.addAction(.scroll_to_point);
+        node.addAction(.set_value);
+
+        node.setNumericValueStep(1);
+        node.setNumericValueJump(100);
+        node.setMinNumericValue(0);
+
         switch (self.dir) {
             .horizontal => {
-                dvui.AccessKit.nodeSetLabel(ak_node, "Horizontal");
-                dvui.AccessKit.nodeSetOrientation(ak_node, dvui.AccessKit.Orientation.horizontal);
-                dvui.AccessKit.nodeSetNumericValue(ak_node, self.si.viewport.x);
-                dvui.AccessKit.nodeSetMinNumericValue(ak_node, 0);
-                dvui.AccessKit.nodeSetMaxNumericValue(ak_node, self.si.virtual_size.w);
-                dvui.AccessKit.nodeSetNumericValueStep(ak_node, 1);
-                dvui.AccessKit.nodeSetNumericValueJump(ak_node, 100);
-
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.click);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.scroll_to_point);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_value);
+                node.setLabel("Horizontal");
+                node.setOrientation(.horizontal);
+                node.setNumericValue(self.si.viewport.x);
+                node.setMaxNumericValue(self.si.virtual_size.w);
             },
-
             .vertical => {
-                dvui.AccessKit.nodeSetLabel(ak_node, "Vertical");
-                dvui.AccessKit.nodeSetOrientation(ak_node, dvui.AccessKit.Orientation.vertical);
-                dvui.AccessKit.nodeSetNumericValue(ak_node, self.si.viewport.x);
-                dvui.AccessKit.nodeSetMinNumericValue(ak_node, 0);
-                dvui.AccessKit.nodeSetMaxNumericValue(ak_node, self.si.virtual_size.w);
-                dvui.AccessKit.nodeSetNumericValueStep(ak_node, 1);
-                dvui.AccessKit.nodeSetNumericValueJump(ak_node, 100);
-
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.click);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.scroll_to_point);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_value);
+                node.setLabel("Vertical");
+                node.setOrientation(.vertical);
+                node.setNumericValue(self.si.viewport.y);
+                node.setMaxNumericValue(self.si.virtual_size.h);
             },
         }
     }

@@ -54,9 +54,9 @@ pub fn install(self: *MenuItemWidget) void {
     self.data().borderAndBackground(.{});
 
     dvui.parentSet(self.widget());
-    if (self.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
+    if (self.data().a11y_node) |node| {
+        node.addAction(.focus);
+        node.addAction(.click);
     }
 }
 

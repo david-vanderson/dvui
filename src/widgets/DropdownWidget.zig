@@ -91,11 +91,11 @@ pub fn install(self: *DropdownWidget) void {
             self.options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0, .role = .none }),
         );
     }
-    if (self.menuItem.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
-        //TODO: Potential case for supporting expand.
-        //AccessKit.nodeAddAction(ak_node, AccessKit.Action.expand);
+    if (self.menuItem.data().a11y_node) |node| {
+        node.addAction(.focus);
+        node.addAction(.click);
+        // TODO: Potential case for supporting expand.
+        // node.addAction(.expand);
     }
 }
 

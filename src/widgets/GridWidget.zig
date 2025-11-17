@@ -333,9 +333,9 @@ pub fn deinit(self: *GridWidget) void {
     defer if (should_free) dvui.widgetFree(self);
     defer self.* = undefined;
 
-    if (self.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeSetRowCount(ak_node, self.max_row);
-        AccessKit.nodeSetColumnCount(ak_node, self.col_widths.len);
+    if (self.data().a11y_node) |node| {
+        node.setRowCount(self.max_row);
+        node.setColumnCount(self.col_widths.len);
     }
 
     // resizing if row heights changed or a resize was requested via init options.
@@ -501,9 +501,9 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, cell: Cell, 
     }
     self.next_row_y = @max(self.next_row_y, self.this_row_y + if (opts.height() > 0) opts.height() else self.row_height);
 
-    if (cell_box.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeSetRowIndex(ak_node, cell.row_num);
-        AccessKit.nodeSetColumnIndex(ak_node, cell.col_num);
+    if (cell_box.data().a11y_node) |node| {
+        node.setRowIndex(cell.row_num);
+        node.setColumnIndex(cell.col_num);
     }
 
     return cell_box;

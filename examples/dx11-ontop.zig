@@ -29,7 +29,9 @@ pub fn main() !void {
     defer backend.deinit();
     backend_attached = true;
 
-    _ = win32.ShowWindow(wnd, .{ .SHOWNORMAL = 1 });
+    // You must have hidden your window beforehand if you enabled accessibility!
+    backend.showWindow();
+
     _ = win32.UpdateWindow(wnd);
 
     const win: *dvui.Window = backend.getWindow();

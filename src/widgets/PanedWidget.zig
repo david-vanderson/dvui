@@ -164,12 +164,12 @@ pub fn install(self: *PanedWidget) void {
     self.prevClip = dvui.clip(self.data().contentRectScale().r);
 
     dvui.parentSet(self.widget());
-    if (self.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
-        AccessKit.nodeSetMinNumericValue(ak_node, 0);
-        AccessKit.nodeSetMaxNumericValue(ak_node, 1);
-        AccessKit.nodeSetNumericValue(ak_node, self.split_ratio.*);
+    if (self.data().a11y_node) |node| {
+        node.addAction(.focus);
+        node.addAction(.set_value);
+        node.setMinNumericValue(0);
+        node.setMinNumericValue(1);
+        node.setNumericValue(self.split_ratio.*);
     }
 }
 

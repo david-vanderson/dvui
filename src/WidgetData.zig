@@ -1,15 +1,3 @@
-const std = @import("std");
-const dvui = @import("dvui.zig");
-
-const Color = dvui.Color;
-const Options = dvui.Options;
-const Rect = dvui.Rect;
-const RectScale = dvui.RectScale;
-const Size = dvui.Size;
-const Widget = dvui.Widget;
-const Id = dvui.Id;
-const WidgetData = @This();
-
 pub const InitOptions = struct {
     // if true, don't send our rect through our parent because we aren't located inside our parent
     subwindow: bool = false,
@@ -24,7 +12,7 @@ options: Options,
 src: std.builtin.SourceLocation,
 rect_scale: ?RectScale = null,
 was_allocated_on_widget_stack: bool = false,
-ak_node: ?*dvui.AccessKit.Node = null,
+a11y_node: ?a11y.Node,
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
     const parent = dvui.parentGet();
@@ -58,16 +46,39 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
         .rect = rect,
         .options = options,
         .src = src,
+        .a11y_node = null, // Set in `register`
     };
 }
 
 pub fn register(self: *WidgetData) void {
     self.rect_scale = self.rectScaleFromParent();
 
-    if (self.options.role) |role| {
-        _ = dvui.currentWindow().accesskit.nodeCreate(self, role);
-    }
+    const cw = dvui.currentWindow();
 
+    if(self.options.role) |role| {
+        const a11y_ctx: a11y.NodeContext = .{
+            .id = self.id,
+            .role = role,
+            .label = self.options.label orelse .none,
+
+            .root = self.isRoot(),
+            .visible = self.visible(),
+            .focused = self.id == (dvui.focusedWidgetId() orelse dvui.focusedSubwindowId()),
+        };
+
+        if(cw.accessibility.needsNode(a11y_ctx)) {
+            self.a11y_node = cw.accessibility.createNode(cw.gpa, .{
+                .ctx = a11y_ctx,
+
+                .parent = self.nearestAccessibilityNode(),
+                .bounds = dvui.clipGet().intersect(self.borderRectScale().r),
+            }) catch blk: {
+                // XXX: log error?
+                break :blk null; 
+            };
+        }
+    }
+    
     if (self.options.data_out) |do| {
         do.* = self.*;
     }
@@ -77,8 +88,6 @@ pub fn register(self: *WidgetData) void {
     if (!self.init_options.subwindow) {
         dvui.captureMouseMaintain(.{ .id = self.id, .rect = self.borderRectScale().r, .subwindow_id = dvui.subwindowCurrentId() });
     }
-
-    var cw = dvui.currentWindow();
 
     if (self.options.tag) |t| {
         dvui.tag(t, .{ .id = self.id, .rect = self.rectScale().r, .visible = self.visible() });
@@ -354,6 +363,16 @@ pub fn isRoot(self: *const WidgetData) bool {
     return (self.id == self.parent.data().id);
 }
 
+pub fn nearestAccessibilityNode(self: *const WidgetData) ?a11y.Node {
+    var it = self.parent.data().iterator();
+    
+    while (it.next()) |wd| {
+        if(wd.a11y_node) |node| return node;
+    }
+
+    return null;
+}
+
 pub const ParentIterator = struct {
     wd: ?*const WidgetData,
 
@@ -376,13 +395,21 @@ pub fn iterator(self: *const WidgetData) ParentIterator {
     return .{ .wd = self };
 }
 
-// NOTE: `inline` is required so that null will be returned at comptime. Otherwise other
-//       accesskit functions, which are not linked, might be referenced and fail to compile
-pub inline fn accesskit_node(self: *const WidgetData) ?*dvui.AccessKit.Node {
-    if (!dvui.accesskit_enabled) return null;
-    return self.ak_node;
-}
-
 test {
     @import("std").testing.refAllDecls(@This());
 }
+
+const WidgetData = @This();
+
+const std = @import("std");
+const dvui = @import("dvui");
+
+const a11y = dvui.accessibility;
+
+const Color = dvui.Color;
+const Options = dvui.Options;
+const Rect = dvui.Rect;
+const RectScale = dvui.RectScale;
+const Size = dvui.Size;
+const Widget = dvui.Widget;
+const Id = dvui.Id;

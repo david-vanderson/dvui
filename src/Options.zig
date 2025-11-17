@@ -1,14 +1,3 @@
-const std = @import("std");
-const dvui = @import("dvui.zig");
-
-const Color = dvui.Color;
-const Font = dvui.Font;
-const Rect = dvui.Rect;
-const Size = dvui.Size;
-const Theme = dvui.Theme;
-
-const Options = @This();
-
 /// Mixed into widget id. Use when @src() is not unique (like in a loop).
 id_extra: ?usize = null,
 
@@ -18,11 +7,11 @@ tag: ?[]const u8 = null,
 /// Name for debugging, says what kind of widget ("Button" or "Text Entry").
 name: ?[]const u8 = null,
 
-/// Accessibility role (.BUTTON or .TEXT_INPUT), says what kind of widget.
-role: ?dvui.AccessKit.Role = null,
+/// Accessibility role (.button or .text_input), says what kind of widget.
+role: ?a11y.Role = null,
 
 /// Accessibility label, either another widget or text.
-label: ?LabelOpts = null,
+label: ?a11y.Label = null,
 
 /// Pass a pointer to get a copy of the widget's `data` when `register` was
 /// called.  Useful for getting id/rect info out of a higher-level function.
@@ -102,22 +91,6 @@ font_style: ?FontStyle = null,
 
 /// Render a box shadow in `WidgetData.borderAndBackground`.
 box_shadow: ?BoxShadow = null,
-
-pub const LabelOpts = union(enum) {
-    /// Use the label from a different widget.  This is preferred if there is a
-    /// visible widget that labels this one.
-    by_id: dvui.Id,
-
-    /// Use this label for a different widget.
-    for_id: dvui.Id,
-
-    /// Use the previous or next label widget to label this widget.
-    label_widget: enum { prev, next },
-
-    /// Use this text as the label.  Prefer using .by if possible - .text is
-    /// for cases where there is no visible label (like an icon or image).
-    text: []const u8,
-};
 
 pub const Expand = enum {
     none,
@@ -490,3 +463,16 @@ pub fn hash(self: *const Options) u64 {
 test {
     @import("std").testing.refAllDecls(@This());
 }
+
+const Options = @This();
+
+const std = @import("std");
+const dvui = @import("dvui");
+
+const a11y = dvui.accessibility;
+
+const Color = dvui.Color;
+const Font = dvui.Font;
+const Rect = dvui.Rect;
+const Size = dvui.Size;
+const Theme = dvui.Theme;

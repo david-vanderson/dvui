@@ -59,6 +59,10 @@ pub fn main() !void {
         },
     });
     defer win.deinit();
+
+    // You must have hidden your window beforehand if you enabled accessibility!
+    try backend.showWindow();
+
     try win.fonts.addBuiltinFontsForTheme(win.gpa, dvui.Theme.builtin.adwaita_light);
 
     var interrupted = false;

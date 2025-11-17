@@ -46,9 +46,9 @@ pub fn install(self: *ButtonWidget) void {
 
     dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
 
-    if (self.data().accesskit_node()) |ak_node| {
-        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
-        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.click);
+    if (self.data().a11y_node) |node| {
+        node.addAction(.focus);
+        node.addAction(.click);
     }
 }
 

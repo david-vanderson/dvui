@@ -315,9 +315,6 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
         ) catch {},
         .light => {},
     }
-    if (dvui.accesskit_enabled) {
-        window_state.dvui_window.accesskit.initialize();
-    }
 
     if (options.size) |size| {
         const dpi = win32.GetDpiForWindow(hwnd);
@@ -348,7 +345,6 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
         ), "SetWindowPos in initWindow");
     }
     // Returns 0 if the window was previously hidden
-    _ = win32.ShowWindow(hwnd, .{ .SHOWNORMAL = 1 });
     try boolToErr(win32.UpdateWindow(hwnd), "UpdateWindow in initWindow");
     return contextFromHwnd(hwnd);
 }
@@ -356,6 +352,10 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
 /// Cleanup routine
 pub fn deinit(self: Context) void {
     if (0 == win32.DestroyWindow(hwndFromContext(self))) win32.panicWin32("DestroyWindow", win32.GetLastError());
+}
+
+pub fn showWindow(self: Context) void {
+    _ = win32.ShowWindow(self.hwndFromContext(), .{ .SHOWNORMAL = 1 });
 }
 
 /// Resizes the SwapChain based on the new window size
@@ -1051,6 +1051,10 @@ pub fn cursorShow(_: Context, value: ?bool) !bool {
 
 pub fn refresh(_: Context) void {}
 
+pub fn nativeHandle(ctx: Context) ?*anyopaque {
+    return @ptrCast(ctx);
+}
+
 pub fn setCursor(ctx: Context, cursor: dvui.enums.Cursor) !void {
     const self = stateFromHwnd(hwndFromContext(ctx));
     if (cursor == self.cursor_last) return;
@@ -1145,6 +1149,7 @@ pub fn wndProc(
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
 ) callconv(.winapi) win32.LRESULT {
+
     switch (umsg) {
         win32.WM_CREATE => {
             const create_struct: *win32.CREATESTRUCTW = @ptrFromInt(@as(usize, @bitCast(lparam)));
@@ -1169,9 +1174,9 @@ pub fn wndProc(
             return 0;
         },
         win32.WM_CLOSE => {
+            const state = stateFromHwnd(hwnd);
             // important not call DefWindowProc here because that will destroy the window
             // without notifying the app
-            const state = stateFromHwnd(hwnd);
             state.dvui_window.addEventWindow(.{ .action = .close }) catch {};
             return 0;
         },
@@ -1202,6 +1207,7 @@ pub fn wndProc(
         win32.WM_MBUTTONUP,
         win32.WM_XBUTTONUP,
         => |msg| {
+            const state = stateFromHwnd(hwnd);
             const button: dvui.enums.Button = switch (msg) {
                 win32.WM_LBUTTONDOWN, win32.WM_LBUTTONDBLCLK, win32.WM_LBUTTONUP => .left,
                 win32.WM_RBUTTONDOWN, win32.WM_RBUTTONUP => .right,
@@ -1213,7 +1219,7 @@ pub fn wndProc(
                 },
                 else => unreachable,
             };
-            _ = stateFromHwnd(hwnd).dvui_window.addEventMouseButton(
+            _ = state.dvui_window.addEventMouseButton(
                 button,
                 switch (msg) {
                     win32.WM_LBUTTONDOWN, win32.WM_LBUTTONDBLCLK, win32.WM_RBUTTONDOWN, win32.WM_MBUTTONDOWN, win32.WM_XBUTTONDOWN => .press,
@@ -1224,9 +1230,10 @@ pub fn wndProc(
             return 0;
         },
         win32.WM_MOUSEMOVE => {
+            const state = stateFromHwnd(hwnd);
             const x = win32.xFromLparam(lparam);
             const y = win32.yFromLparam(lparam);
-            _ = stateFromHwnd(hwnd).dvui_window.addEventMouseMotion(
+            _ = state.dvui_window.addEventMouseMotion(
                 .{
                     .pt = .{ .x = @floatFromInt(x), .y = @floatFromInt(y) },
                 },
@@ -1236,10 +1243,11 @@ pub fn wndProc(
         win32.WM_MOUSEWHEEL,
         win32.WM_MOUSEHWHEEL,
         => |msg| {
+            const state = stateFromHwnd(hwnd);
             const delta: i16 = @bitCast(win32.hiword(wparam));
             const float_delta: f32 = @floatFromInt(delta);
             const wheel_delta: f32 = @floatFromInt(win32.WHEEL_DELTA);
-            _ = stateFromHwnd(hwnd).dvui_window.addEventMouseWheel(
+            _ = state.dvui_window.addEventMouseWheel(
                 float_delta / wheel_delta * dvui.scroll_speed,
                 switch (msg) {
                     win32.WM_MOUSEWHEEL => .vertical,
@@ -1292,8 +1300,8 @@ pub fn wndProc(
                 // Command mods would be the windows key, which we do not handle
 
                 const code = convertVKeyToDvuiKey(as_vkey);
-
                 const state = stateFromHwnd(hwnd);
+
                 _ = state.dvui_window.addEventKey(.{
                     .code = code,
                     .action = switch (msg) {
@@ -1329,38 +1337,16 @@ pub fn wndProc(
             return 0;
         },
         win32.WM_SETFOCUS, win32.WM_EXITSIZEMOVE, win32.WM_EXITMENULOOP => {
-            if (dvui.accesskit_enabled and stateFromHwnd(hwnd).dvui_window.accesskit.status != .off) {
-                const events = dvui.AccessKit.c.accesskit_windows_adapter_update_window_focus_state(stateFromHwnd(hwnd).dvui_window.accesskit.adapter, true);
-                if (events) |_| {
-                    dvui.AccessKit.c.accesskit_windows_queued_events_raise(events);
-                }
-            }
+            const state = stateFromHwnd(hwnd);
+            state.dvui_window.accessibility.focusGained();
             return 0;
         },
         win32.WM_KILLFOCUS, win32.WM_ENTERSIZEMOVE, win32.WM_ENTERMENULOOP => {
-            if (dvui.accesskit_enabled and stateFromHwnd(hwnd).dvui_window.accesskit.status != .off) {
-                const events = dvui.AccessKit.c.accesskit_windows_adapter_update_window_focus_state(stateFromHwnd(hwnd).dvui_window.accesskit.adapter, false);
-                if (events) |_| {
-                    dvui.AccessKit.c.accesskit_windows_queued_events_raise(events);
-                }
-            }
+            const state = stateFromHwnd(hwnd);
+            state.dvui_window.accessibility.focusLost();
             return 0;
         },
         win32.WM_GETOBJECT => {
-            if (dvui.accesskit_enabled) {
-                const state = stateFromHwnd(hwnd);
-                const ak = state.dvui_window.accesskit;
-                const result = dvui.AccessKit.c.accesskit_windows_adapter_handle_wm_getobject(
-                    ak.adapter,
-                    wparam,
-                    lparam,
-                    if (ak.status != .on) dvui.AccessKit.initialTreeUpdate else dvui.AccessKit.frameTreeUpdate,
-                    &stateFromHwnd(hwnd).dvui_window.accesskit,
-                );
-                if (result.has_value) {
-                    return result.value;
-                }
-            }
             return win32.DefWindowProcW(hwnd, umsg, wparam, lparam);
         },
         else => return win32.DefWindowProcW(hwnd, umsg, wparam, lparam),
@@ -1629,6 +1615,9 @@ pub fn main() !void {
         .icon = init_opts.icon,
     });
     defer b.deinit();
+
+    // You must have hidden your window beforehand if you enabled accessibility!
+    b.showWindow();
 
     const win = b.getWindow();
 

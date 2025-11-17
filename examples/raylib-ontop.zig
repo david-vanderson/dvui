@@ -24,7 +24,11 @@ pub fn main() !void {
 
     // create OS window directly with raylib
     ray.SetConfigFlags(ray.FLAG_WINDOW_RESIZABLE);
+    // Needed if compiling with accesskit support
+    ray.SetConfigFlags(ray.FLAG_WINDOW_HIDDEN);
+
     ray.SetConfigFlags(ray.FLAG_VSYNC_HINT);
+
     ray.InitWindow(800, 600, "DVUI Raylib Ontop Example");
     defer ray.CloseWindow();
 
@@ -32,13 +36,21 @@ pub fn main() !void {
     // init() means the app owns the window (and must call CloseWindow itself)
     var backend = RaylibBackend.init(gpa);
     defer backend.deinit();
+
     backend.log_events = true;
 
     // init dvui Window (maps onto a single OS window)
     // OS window is managed by raylib, not dvui
     var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
     defer win.deinit();
+
+    // Needed if compiling with accesskit support
+    ray.ClearWindowState(ray.FLAG_WINDOW_HIDDEN);
+
     try win.fonts.addBuiltinFontsForTheme(win.gpa, dvui.Theme.builtin.adwaita_light);
+
+    // You must have hidden your window beforehand if you enabled accessibility!
+    backend.showWindow();
 
     var selected_color: dvui.Color = dvui.Color.white;
 

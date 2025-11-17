@@ -103,12 +103,13 @@ pub fn install(self: *LabelWidget) void {
     self.data().register();
     self.data().borderAndBackground(.{});
 
-    if (self.data().accesskit_node()) |ak_node| {
+    if (self.data().a11y_node) |node| {
         const str = dvui.currentWindow().arena().dupeZ(u8, self.label_str) catch "";
         defer dvui.currentWindow().arena().free(str);
-        dvui.AccessKit.nodeSetValue(ak_node, str);
+        node.setValue(str);
+
         if (self.data().options.label == null) {
-            dvui.AccessKit.nodeSetLabel(ak_node, str);
+            node.setLabel(str);
         }
     }
 }

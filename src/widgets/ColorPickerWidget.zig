@@ -202,13 +202,13 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
     var b = dvui.box(src, .{ .dir = dir }, options);
     defer b.deinit();
 
-    if (b.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
-        AccessKit.nodeSetOrientation(ak_node, AccessKit.Orientation.horizontal);
-        AccessKit.nodeSetMinNumericValue(ak_node, 0);
-        AccessKit.nodeSetMaxNumericValue(ak_node, 359);
-        AccessKit.nodeSetNumericValue(ak_node, hue.*);
+    if (b.data().a11y_node) |node| {
+        node.addAction(.focus);
+        node.addAction(.set_value);
+        node.setOrientation(.horizontal);
+        node.setMinNumericValue(0);
+        node.setMaxNumericValue(359);
+        node.setNumericValue(hue.*);
     }
 
     dvui.tabIndexSet(b.data().id, options.tab_index);

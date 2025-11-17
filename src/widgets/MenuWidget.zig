@@ -150,9 +150,9 @@ pub fn install(self: *MenuWidget) void {
     self.box = BoxWidget.init(@src(), .{ .dir = self.init_opts.dir }, self.data().options.strip().override(.{ .expand = .both }));
     self.box.install();
     self.box.drawBackground();
-    if (self.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
+    if (self.data().a11y_node) |node| {
+        node.addAction(.focus);
+        node.addAction(.click);
     }
 }
 

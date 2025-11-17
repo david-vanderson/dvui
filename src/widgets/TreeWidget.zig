@@ -55,9 +55,9 @@ pub fn install(self: *TreeWidget) void {
     self.group = dvui.FocusGroupWidget.init(@src(), .{ .nav_key_dir = .vertical }, .{});
     self.group.install();
 
-    if (self.group.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
+    if (self.group.data().a11y_node) |node| {
+        node.addAction(.focus);
+        node.addAction(.click);
     }
 }
 
@@ -189,9 +189,9 @@ pub fn branch(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: Bra
     ret.* = Branch.init(src, self, init_opts, opts);
     ret.install();
     ret.data().was_allocated_on_widget_stack = true;
-    if (ret.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
-        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
+    if (ret.data().a11y_node) |node| {
+        node.addAction(.focus);
+        node.addAction(.click);
         // Accessibility TODO: Support expand / collapse when available.
     }
     return ret;

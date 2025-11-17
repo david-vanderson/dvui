@@ -260,12 +260,11 @@ pub fn install(self: *FloatingWindowWidget) void {
     self.prevClip = dvui.clipGet();
     dvui.clipSet(dvui.windowRectPixels());
 
-    if (self.data().accesskit_node()) |ak_node| {
-        if (self.init_options.modal)
-            dvui.AccessKit.nodeSetModal(ak_node)
-        else
-            dvui.AccessKit.nodeClearModal(ak_node);
-    }
+    if (self.data().a11y_node) |node| if (self.init_options.modal) {
+        node.setModal();
+    } else {
+        node.clearModal();
+    };
 }
 
 pub fn drawBackground(self: *FloatingWindowWidget) void {

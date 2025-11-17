@@ -245,15 +245,16 @@ pub fn install(self: *TextEntryWidget) void {
 
     // textLayout clips to its content, but we need to get events out to our border
     dvui.clipSet(borderClip);
-    if (self.data().accesskit_node()) |ak_node| {
-        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
-        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_value);
+    if (self.data().a11y_node) |node| {
+        node.addAction(.focus);
+        node.addAction(.set_value);
+
         if (self.data().options.role != .password_input) {
             const str = dvui.currentWindow().arena().dupeZ(u8, self.text) catch "";
             defer dvui.currentWindow().arena().free(str);
             // TODO: We don't want to always push large amounts of text each frame. So we either need to look at pushing
             // only chunks of text, ot only pushing when the text has actually changed since last frame.
-            dvui.AccessKit.nodeSetValue(ak_node, str);
+            node.setValue(str);
         }
     }
 }

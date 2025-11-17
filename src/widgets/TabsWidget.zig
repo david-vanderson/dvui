@@ -163,8 +163,8 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
             },
         }
     }
-    if (self.tab_button.data().accesskit_node()) |ak_node| {
-        AccessKit.nodeSetSelected(ak_node, selected);
+    if (self.tab_button.data().a11y_node) |node| {
+        node.setSelected(selected);
     }
 
     return &self.tab_button;

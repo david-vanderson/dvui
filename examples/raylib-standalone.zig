@@ -51,6 +51,9 @@ pub fn main() !void {
     defer win.deinit();
     try win.fonts.addBuiltinFontsForTheme(win.gpa, dvui.Theme.builtin.adwaita_light);
 
+    // You must have hidden your window beforehand if you enabled accessibility!
+    backend.showWindow();
+
     main_loop: while (true) {
         c.BeginDrawing();
 

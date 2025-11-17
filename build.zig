@@ -662,6 +662,7 @@ fn addDvuiModule(
         .target = target,
         .optimize = optimize,
     });
+    dvui_mod.addImport("dvui", dvui_mod);
     dvui_mod.addOptions("build_options", opts.build_options);
     dvui_mod.addOptions("default_options", opts.makeDefaults());
     dvui_mod.addImport("svg2tvg", b.dependency("svg2tvg", .{
@@ -775,7 +776,7 @@ fn addExample(
 
         if (opts.accesskit.enabled()) {
             mod.linkSystemLibrary("ws2_32", .{});
-            mod.linkSystemLibrary("Userenv", .{});
+            mod.linkSystemLibrary("userenv", .{});
         }
     }
 
@@ -850,9 +851,9 @@ fn addWebExample(
     });
 
     const cb = b.addExecutable(.{
-        .name = "cacheBuster",
+        .name = "cache_buster",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/cacheBuster.zig"),
+            .root_source_file = b.path("tools/cache_buster.zig"),
             .target = b.graph.host,
         }),
     });

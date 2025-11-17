@@ -144,14 +144,9 @@ pub fn refresh(self: Backend) void {
     return self.impl.refresh();
 }
 
-/// Initialize accessKit from `Window.begin`. Returns `true` if access kit was initialized
-// NOTE: Also requires `pub fn accessKitShouldInitialize(self) bool` to be implemented
-pub fn accessKitInitInBegin(self: Backend, accessKit: *dvui.AccessKit) GenericError!void {
-    if (!dvui.accesskit_enabled or !@hasDecl(Implementation, "accessKitShouldInitialize")) return;
-    if (self.impl.accessKitShouldInitialize()) {
-        accessKit.initialize();
-        try self.impl.accessKitInitInBegin();
-    }
+pub fn nativeHandle(self: Backend) ?*anyopaque {
+    if(!@hasDecl(Implementation, "nativeHandle")) return null;
+    return self.impl.nativeHandle();
 }
 
 test {

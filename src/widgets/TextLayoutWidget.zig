@@ -475,8 +475,8 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             fc.deinit();
         }
     }
-    if (self.data().accesskit_node()) |ak_node| {
-        dvui.AccessKit.nodeSetReadOnly(ak_node);
+    if (self.data().a11y_node) |node| {
+        node.setReadOnly();
     }
 }
 
@@ -1564,22 +1564,23 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
     }
 
     // TODO: This only shows the currently visible text. What behavior do we actually want here?
-    if (self.data().accesskit_node()) |ak_node| {
-        const ak_value = dvui.AccessKit.nodeValue(ak_node);
-        if (ak_value != 0) {
-            defer dvui.AccessKit.stringFree(ak_value);
-            const current_value = std.mem.span(ak_value);
+    if (self.data().a11y_node) |node| {
+        const maybe_current_ptr = node.value();
+        if (maybe_current_ptr) |current_ptr| {
+            defer node.freeValue(current_ptr);
+
+            const current_value = std.mem.span(current_ptr);
             allocate_new: {
                 var new_value = cw.arena().allocWithOptions(u8, current_value.len + txt.len, null, 0) catch break :allocate_new;
                 @memcpy(new_value[0..current_value.len], current_value);
                 @memcpy(new_value[current_value.len .. current_value.len + txt.len], txt);
 
-                dvui.AccessKit.nodeSetValue(ak_node, new_value);
+                node.setValue(new_value);
             }
         } else {
             const str = cw.arena().dupeZ(u8, txt) catch "";
             defer cw.arena().free(str);
-            dvui.AccessKit.nodeSetValue(ak_node, str);
+            node.setValue(str);
         }
     }
 

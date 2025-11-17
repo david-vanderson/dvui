@@ -62,6 +62,8 @@ pub fn main() !void {
         },
     });
     defer first_backend.deinit();
+    // You must have hidden your window beforehand if you enabled accessibility!
+    first_backend.showWindow();
 
     defer {
         for (extra_windows.items) |window| {
@@ -233,6 +235,7 @@ fn gui_frame() !void {
             .icon = window_icon_png, // can also call setIconFromFileContent()
         });
         errdefer backend.deinit();
+        backend.showWindow();
         try state.dvui_window.fonts.addBuiltinFontsForTheme(gpa, dvui.Theme.builtin.adwaita_light);
         extra_windows.appendAssumeCapacity(.{
             .state = state,
