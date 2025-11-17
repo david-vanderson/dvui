@@ -434,6 +434,9 @@ pub const NinepatchOptions = struct {
     ninepatch_min: ?*Size = null,
 };
 
+/// Renders a ninepatch with the given parameters.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptions) (Ninepatch.Error || Backend.GenericError)!void {
     const sz_top_left = ninepatch.size(0);
     const sz_top_right = ninepatch.size(2);
@@ -452,7 +455,7 @@ pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptio
     if (rs.r.h < min_total_height_right) return error.NinepatchBelowMin;
     if (min_total_height_left != min_total_height_right) return error.NinepatchBelowMin;
 
-    const rs_top_left = rs.rectToRectScale(.fromSize(sz_top_left));
+    var rs_top_left = rs.rectToRectScale(.fromSize(sz_top_left));
     var rs_top_right = rs.rectToRectScale(.fromSize(sz_top_right));
     var rs_bottom_left = rs.rectToRectScale(.fromSize(sz_bottom_left));
     var rs_bottom_right = rs.rectToRectScale(.fromSize(sz_bottom_right));
@@ -494,19 +497,39 @@ pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptio
     rs_center_center.r.h = rs_center_left.r.h;
     rs_center_center.r.y = rs_center_left.r.y;
 
+    //TODO: rotate rects
+    _ = &rs_top_left;
+    if (opts.rotation != 0) @panic("TODO: implement rotation for ninepatch rects");
+
+    //TODO: fade?
+    //TODO: corner radius?
+
+    //Assumption: Corners are the most likely parts to contain important details.
+    //Rendering order was decided so that corners will overwrite fill and edge patches.
+    //First render fill.
+    if (!rs_center_center.r.empty())
+        try renderTexture(ninepatch.tex, rs_center_center, .{ .uv = ninepatch.uv[4], .background_color = opts.background_color, .rotation = opts.rotation, .colormod = opts.colormod, .debug = opts.debug });
+
+    //Then render edges.
+    if (!rs_top_center.r.empty())
+        try renderTexture(ninepatch.tex, rs_top_center, .{ .uv = ninepatch.uv[1], .background_color = opts.background_color, .rotation = opts.rotation });
+    if (!rs_bottom_center.r.empty())
+        try renderTexture(ninepatch.tex, rs_bottom_center, .{ .uv = ninepatch.uv[7], .background_color = opts.background_color, .rotation = opts.rotation });
+    if (!rs_center_left.r.empty())
+        try renderTexture(ninepatch.tex, rs_center_left, .{ .uv = ninepatch.uv[3], .background_color = opts.background_color, .rotation = opts.rotation });
+    if (!rs_center_right.r.empty())
+        try renderTexture(ninepatch.tex, rs_center_right, .{ .uv = ninepatch.uv[5], .background_color = opts.background_color, .rotation = opts.rotation });
+
+    //Finally render corners.
     try renderTexture(ninepatch.tex, rs_top_left, .{ .uv = ninepatch.uv[0], .background_color = opts.background_color, .rotation = opts.rotation });
     try renderTexture(ninepatch.tex, rs_top_right, .{ .uv = ninepatch.uv[2], .background_color = opts.background_color, .rotation = opts.rotation });
     try renderTexture(ninepatch.tex, rs_bottom_left, .{ .uv = ninepatch.uv[6], .background_color = opts.background_color, .rotation = opts.rotation });
     try renderTexture(ninepatch.tex, rs_bottom_right, .{ .uv = ninepatch.uv[8], .background_color = opts.background_color, .rotation = opts.rotation });
-
-    try renderTexture(ninepatch.tex, rs_top_center, .{ .uv = ninepatch.uv[1], .background_color = opts.background_color, .rotation = opts.rotation });
-    try renderTexture(ninepatch.tex, rs_bottom_center, .{ .uv = ninepatch.uv[7], .background_color = opts.background_color, .rotation = opts.rotation });
-    try renderTexture(ninepatch.tex, rs_center_left, .{ .uv = ninepatch.uv[3], .background_color = opts.background_color, .rotation = opts.rotation });
-    try renderTexture(ninepatch.tex, rs_center_right, .{ .uv = ninepatch.uv[5], .background_color = opts.background_color, .rotation = opts.rotation });
-
-    try renderTexture(ninepatch.tex, rs_center_center, .{ .uv = ninepatch.uv[4], .background_color = opts.background_color, .rotation = opts.rotation });
 }
 
+/// Calls `renderNinepatch` with the texture created from `source`
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderNinepatchImage(source: ImageSource, uv: [9]Rect, rs: RectScale, opts: NinepatchOptions) (Ninepatch.Error || Backend.TextureError || StbImageError)!void {
     if (rs.s == 0) return;
     if (dvui.clipGet().intersect(rs.r).empty()) return;
