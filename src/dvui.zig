@@ -237,6 +237,7 @@ pub const BasicLayout = layout.BasicLayout;
 pub const Alignment = layout.Alignment;
 pub const PlaceOnScreenAvoid = layout.PlaceOnScreenAvoid;
 pub const placeOnScreen = layout.placeOnScreen;
+pub const Ninepatch = render.Ninepatch;
 
 pub const Data = @import("Data.zig");
 
@@ -3530,21 +3531,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
 
 pub const NinepatchInitOptions = struct {
     source: ImageSource,
-    uv: [9]Rect = [9]Rect{
-        // zig fmt: off
-        .rect(0.0,  0.0, 0.25, 0.25),
-        .rect(0.25, 0.0, 0.5,  0.25),
-        .rect(0.75, 0.0, 0.25, 0.25),
-
-        .rect(0.00, 0.25, 0.25, 0.5),
-        .rect(0.25, 0.25, 0.5,  0.5),
-        .rect(0.75, 0.25, 0.25, 0.5),
-
-        .rect(0.00, 0.75, 0.25, 0.25),
-        .rect(0.25, 0.75, 0.5,  0.25),
-        .rect(0.75, 0.75, 0.25, 0.25),
-        // zig fmt: on
-    },
+    uv: Ninepatch.UV = .fromInset(.rect(0.3, 0.3, 0.3, 0.3)),
 };
 
 /// Show ninepatch.
@@ -3589,7 +3576,7 @@ pub fn ninepatch(src: std.builtin.SourceLocation, init_opts: NinepatchInitOption
             dvui.log.debug("image {x} can't render border while rotated\n", .{wd.id});
         }
     }
-    var np_size : Size = .{};
+    var np_size: Size = .{};
     const render_tex_opts = RenderNinepatchOptions{
         .rotation = wd.options.rotationGet(),
         .ninepatch_min = &np_size,

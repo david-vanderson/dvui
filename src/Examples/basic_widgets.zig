@@ -211,7 +211,8 @@ pub fn basicWidgets() void {
         dvui.label(@src(), "Raster Ninepatch", .{}, .{ .gravity_y = 0.5 });
 
         const image_source: dvui.ImageSource = .{ .imageFile = .{ .bytes = img_ninepatch, .name = "ninepatch" } };
-        _ = dvui.ninepatch(@src(), .{ .source = image_source }, .{ .expand = .horizontal });
+        const image_size = dvui.imageSize(image_source) catch dvui.Size.all(24);
+        _ = dvui.ninepatch(@src(), .{ .source = image_source, .uv = .fromPixelInset(.all(8), image_size) }, .{ .expand = .horizontal });
     }
 
     {
