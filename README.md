@@ -22,6 +22,7 @@ How to run the built-in examples:
   - ```zig build raylib-standalone```
   - ```zig build raylib-ontop```
   - ```zig build raylib-app```
+  - Alternatively, if you want to use the raylib-zig based backend, append flag `-Dlibc=false`
 - Dx11
   - ```zig build dx11-standalone```
   - ```zig build dx11-ontop```
@@ -71,7 +72,7 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 - Existing backends
   - [SDL2 and SDL3](https://libsdl.org/)
   - [Web](https://david-vanderson.github.io/demo)
-  - [Raylib](https://www.raylib.com/)
+  - [Raylib](https://www.raylib.com/) and [the zig binding](https://github.com/raylib-zig/raylib-zig)
   - [Dx11](https://learn.microsoft.com/en-us/windows/win32/direct3d11/atoc-dx-graphics-direct3d-11)
 - [TinyVG](https://tinyvg.tech/) icon support via [zig-lib-svg2tvg](https://github.com/nat3Github/zig-lib-svg2tvg)
   - more icons at [zig-lib-icons](https://github.com/nat3Github/zig-lib-icons)
@@ -122,6 +123,36 @@ mod.addImport("sdl-backend", dvui_dep.module("sdl3"));
 Then in your code:
 ```
 const SDLBackend = @import("sdl-backend");
+```
+
+If you want to inject a specific [raylib-zig](https://github.com/raylib-zig/raylib-zig) version of your choice, follow the pattern below:
+
+``` zig
+// In build.zig while loading the dvui dependency
+const dvui_dep = b.dependency("dvui", .{
+    .target = target,
+    .optimize = optimize,
+    .backend = .raylib,
+    .libc = false, // To toggle zig based backend
+});
+
+// if you have your own raylib-zig dependency supplied, you shall import
+// your own dependency into rayib backend of dvui; otherwise, the both raylib
+// dependencies in your project and in dvui will conflict to each others.
+// If you don't want to import raylib dependency and use the one provided 
+// in the dvui library, you many skip the following 3 lines.
+const backend_mod = dvui_dep.module("raylib");
+backend_mod.addImport("raylib", raylib); // from your raylib dependency
+backend_mod.addImport("raygui", raygui);
+
+exe.root_module.addImport("dvui", dvui_dep.module("dvui_raylib"));
+exe.root_module.addImport("backend", dvui_dep.module("raylib"));
+
+// in your project, you may access raylib either:
+const raylib_direct = @import("raylib"); // if custom raylib is supplied
+
+const backend = @import("backend");
+const raylib_dvui = backend.raylib;
 ```
 
 ## Built-in Widgets
