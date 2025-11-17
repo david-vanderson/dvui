@@ -59,6 +59,7 @@ pub fn main() !void {
         },
     });
     defer win.deinit();
+    try win.fonts.addBuiltinFontsForTheme(win.gpa, dvui.Theme.builtin.adwaita_light);
 
     var interrupted = false;
 

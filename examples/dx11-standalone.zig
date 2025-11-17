@@ -71,6 +71,7 @@ pub fn main() !void {
     }
 
     const win = first_backend.getWindow();
+    try win.fonts.addBuiltinFontsForTheme(win.gpa, dvui.Theme.builtin.adwaita_light);
     main_loop: while (true) switch (Backend.serviceMessageQueue()) {
         .queue_empty => {
             // beginWait coordinates with waitTime below to run frames only when needed
@@ -231,6 +232,8 @@ fn gui_frame() !void {
             .title = "DVUI DX11 Standalone Example",
             .icon = window_icon_png, // can also call setIconFromFileContent()
         });
+        errdefer backend.deinit();
+        try state.dvui_window.fonts.addBuiltinFontsForTheme(gpa, dvui.Theme.builtin.adwaita_light);
         extra_windows.appendAssumeCapacity(.{
             .state = state,
             .backend = backend,

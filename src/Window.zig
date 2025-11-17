@@ -168,8 +168,6 @@ pub fn init(
         // Set in `begin`
         .current_parent = undefined,
         .backend = backend_ctx,
-        // TODO: Add some way to opt-out of including the builtin fonts in the built binary
-        .fonts = try .initWithBuiltins(gpa),
         .theme = if (init_opts.theme) |t| t else switch (init_opts.color_scheme orelse backend_ctx.preferredColorScheme() orelse .light) {
             .light => Theme.builtin.adwaita_light,
             .dark => Theme.builtin.adwaita_dark,
