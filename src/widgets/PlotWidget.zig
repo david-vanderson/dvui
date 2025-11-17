@@ -643,6 +643,16 @@ pub fn deinit(self: *PlotWidget) void {
     defer self.* = undefined;
     dvui.clipSet(self.old_clip);
 
+    if (self.data_min.x == self.data_max.x) {
+        self.data_min.x = self.data_min.x - 1;
+        self.data_max.x = self.data_max.x + 1;
+    }
+
+    if (self.data_min.y == self.data_max.y) {
+        self.data_min.y = self.data_min.y - 1;
+        self.data_max.y = self.data_max.y + 1;
+    }
+
     // maybe we got no data
     if (self.data_min.x == std.math.floatMax(f64)) {
         self.data_min = .{ .x = 0, .y = 0 };
