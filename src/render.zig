@@ -419,7 +419,11 @@ pub const Ninepatch = struct {
             .h = @as(f32, @floatFromInt(this.tex.height)) * this.uv[patch].h,
         };
     }
+    pub const Error = error{
+        NinepatchBelowMin,
+    };
 };
+
 pub const NinepatchOptions = struct {
     rotation: f32 = 0,
     colormod: Color = .{},
@@ -427,8 +431,10 @@ pub const NinepatchOptions = struct {
     debug: bool = false,
 
     fade: f32 = 0.0,
+    ninepatch_min: ?*Size = null,
 };
-pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptions) Backend.GenericError!void {
+
+pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptions) (Ninepatch.Error || Backend.GenericError)!void {
     const sz_top_left = ninepatch.size(0);
     const sz_top_right = ninepatch.size(2);
     const sz_bottom_left = ninepatch.size(6);
@@ -439,12 +445,12 @@ pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptio
     const min_total_height_left = sz_top_left.h + sz_bottom_left.h;
     const min_total_height_right = sz_top_right.h + sz_bottom_right.h;
 
-    std.debug.assert(rs.r.w >= min_total_width_top);
-    std.debug.assert(rs.r.w >= min_total_width_bot);
-    std.debug.assert(min_total_width_top == min_total_width_bot);
-    std.debug.assert(rs.r.h >= min_total_height_left);
-    std.debug.assert(rs.r.h >= min_total_height_right);
-    std.debug.assert(min_total_height_left == min_total_height_right);
+    if (rs.r.w < min_total_width_top) return error.NinepatchBelowMin;
+    if (rs.r.w < min_total_width_bot) return error.NinepatchBelowMin;
+    if (min_total_width_top != min_total_width_bot) return error.NinepatchBelowMin;
+    if (rs.r.h < min_total_height_left) return error.NinepatchBelowMin;
+    if (rs.r.h < min_total_height_right) return error.NinepatchBelowMin;
+    if (min_total_height_left != min_total_height_right) return error.NinepatchBelowMin;
 
     const rs_top_left = rs.rectToRectScale(.fromSize(sz_top_left));
     var rs_top_right = rs.rectToRectScale(.fromSize(sz_top_right));
@@ -501,7 +507,7 @@ pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptio
     try renderTexture(ninepatch.tex, rs_center_center, .{ .uv = ninepatch.uv[4], .background_color = opts.background_color, .rotation = opts.rotation });
 }
 
-pub fn renderNinepatchImage(source: ImageSource, uv: [9]Rect, rs: RectScale, opts: NinepatchOptions) (Backend.TextureError || StbImageError)!void {
+pub fn renderNinepatchImage(source: ImageSource, uv: [9]Rect, rs: RectScale, opts: NinepatchOptions) (Ninepatch.Error || Backend.TextureError || StbImageError)!void {
     if (rs.s == 0) return;
     if (dvui.clipGet().intersect(rs.r).empty()) return;
     try renderNinepatch(.{ .tex = try source.getTexture(), .uv = uv }, rs, opts);
