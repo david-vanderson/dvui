@@ -146,9 +146,34 @@ pub fn plots() void {
     }
 
     {
+        const freqs = [_]f64{ 1, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8 };
+
         const S = struct {
             var resistance: f64 = 159;
             var capacitance: f64 = 1e-6;
+
+            var xaxis: dvui.PlotWidget.Axis = .{
+                .name = "Frequency",
+                .scale = .{ .log = .{} },
+                .ticks = .{
+                    .locations = .{
+                        .custom = &freqs,
+                    },
+                    .format = .{
+                        .custom = formatFrequency,
+                    },
+                },
+            };
+
+            var yaxis: dvui.PlotWidget.Axis = .{
+                .name = "Amplitude (dB)",
+                .max = 10,
+                .ticks = .{
+                    .locations = .{
+                        .auto = .{ .num_ticks = 6 },
+                    },
+                },
+            };
         };
 
         dvui.label(@src(), "Resistance (Ohm)", .{}, .{});
@@ -172,35 +197,10 @@ pub fn plots() void {
         var vbox = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 100 }, .expand = .ratio });
         defer vbox.deinit();
 
-        const Static = struct {
-            var xaxis: dvui.PlotWidget.Axis = .{
-                .name = "Frequency",
-                .scale = .{ .log = .{} },
-                .ticks = .{
-                    .locations = .{
-                        .auto = .{ .num_ticks = 9 },
-                    },
-                    .format = .{
-                        .custom = formatFrequency,
-                    },
-                },
-            };
-
-            var yaxis: dvui.PlotWidget.Axis = .{
-                .name = "Amplitude (dB)",
-                .max = 10,
-                .ticks = .{
-                    .locations = .{
-                        .auto = .{ .num_ticks = 6 },
-                    },
-                },
-            };
-        };
-
         var plot = dvui.plot(@src(), .{
             .title = "RC low-pass filter",
-            .x_axis = &Static.xaxis,
-            .y_axis = &Static.yaxis,
+            .x_axis = &S.xaxis,
+            .y_axis = &S.yaxis,
             .border_thick = 2.0,
             .mouse_hover = true,
         }, .{ .expand = .both });

@@ -51,11 +51,12 @@ pub const Axis = struct {
     } = .linear,
 
     ticks: struct {
-        locations: union(enum) {
+        locations: union(TickLocatorType) {
             none,
             auto: struct {
                 num_ticks: usize,
             },
+            custom: []const f64,
         } = .{ .auto = .{ .num_ticks = 3 } },
 
         lines: enum {
@@ -71,7 +72,27 @@ pub const Axis = struct {
     // only relevant if `ticks` != none
     draw_gridlines: bool = true,
 
-    const TickFormating = union(enum) {
+    pub const TickLocatorType = enum {
+        none,
+        auto,
+        custom,
+    };
+
+    pub const Ticks = struct {
+        locator_type: TickLocatorType,
+        values: []const f64,
+
+        fn deinit(self: *Ticks, gpa: std.mem.Allocator) void {
+            switch (self.locator_type) {
+                .auto => {
+                    gpa.free(self.values);
+                },
+                else => {},
+            }
+        }
+    };
+
+    pub const TickFormating = union(enum) {
         normal: struct {
             precision: usize = 2,
         },
@@ -181,14 +202,26 @@ pub const Axis = struct {
         return ticks;
     }
 
-    pub fn getTicks(self: *Axis, gpa: std.mem.Allocator) ![]f64 {
+    pub fn getTicks(self: *Axis, gpa: std.mem.Allocator) !Ticks {
         switch (self.ticks.locations) {
-            .none => return &.{},
+            .none => return Ticks{
+                .locator_type = .none,
+                .values = &.{},
+            },
             .auto => |auto_ticks| {
-                switch (self.scale) {
-                    .linear => return self.getTicksLinear(gpa, auto_ticks.num_ticks),
-                    .log => return self.getTicksLog(gpa, auto_ticks.num_ticks),
-                }
+                const values = try switch (self.scale) {
+                    .linear => self.getTicksLinear(gpa, auto_ticks.num_ticks),
+                    .log => self.getTicksLog(gpa, auto_ticks.num_ticks),
+                };
+
+                return Ticks{
+                    .locator_type = .auto,
+                    .values = values,
+                };
+            },
+            .custom => |ticks| return Ticks{
+                .locator_type = .custom,
+                .values = ticks,
             },
         }
     }
@@ -289,17 +322,23 @@ pub fn install(self: *PlotWidget) void {
 
     const tick_font = (dvui.Options{ .font_style = .caption }).fontGet();
 
-    const yticks = self.y_axis.getTicks(dvui.currentWindow().lifo()) catch &.{};
-    defer dvui.currentWindow().lifo().free(yticks);
+    var yticks = self.y_axis.getTicks(dvui.currentWindow().lifo()) catch Axis.Ticks{
+        .locator_type = .none,
+        .values = &.{},
+    };
+    defer yticks.deinit(dvui.currentWindow().lifo());
 
-    const xticks = self.x_axis.getTicks(dvui.currentWindow().lifo()) catch &.{};
-    defer dvui.currentWindow().lifo().free(xticks);
+    var xticks = self.x_axis.getTicks(dvui.currentWindow().lifo()) catch Axis.Ticks{
+        .locator_type = .none,
+        .values = &.{},
+    };
+    defer xticks.deinit(dvui.currentWindow().lifo());
 
     const y_axis_tick_width: f32 = blk: {
         if (self.y_axis.name == null) break :blk 0;
         var max_width: f32 = 0;
 
-        for (yticks) |ytick| {
+        for (yticks.values) |ytick| {
             const tick_str = self.y_axis.formatTick(dvui.currentWindow().lifo(), ytick) catch "";
             defer dvui.currentWindow().lifo().free(tick_str);
             max_width = @max(max_width, tick_font.textSize(tick_str).w);
@@ -309,10 +348,10 @@ pub fn install(self: *PlotWidget) void {
     };
 
     const x_axis_last_tick_width: f32 = blk: {
-        if (xticks.len == 0) break :blk 0;
+        if (xticks.values.len == 0) break :blk 0;
         const str = self.x_axis.formatTick(
             dvui.currentWindow().lifo(),
-            xticks[xticks.len - 1],
+            xticks.values[xticks.values.len - 1],
         ) catch "";
         defer dvui.currentWindow().lifo().free(str);
 
@@ -418,7 +457,7 @@ pub fn install(self: *PlotWidget) void {
 
     // y axis ticks
     if (self.y_axis.name) |_| {
-        for (yticks) |ytick| {
+        for (yticks.values) |ytick| {
             const tick: Data = .{ .x = self.x_axis.min orelse 0, .y = ytick };
             const tick_str = self.y_axis.formatTick(dvui.currentWindow().lifo(), ytick) catch "";
             defer dvui.currentWindow().lifo().free(tick_str);
@@ -496,7 +535,7 @@ pub fn install(self: *PlotWidget) void {
 
     // x axis ticks
     if (self.x_axis.name) |_| {
-        for (xticks) |xtick| {
+        for (xticks.values) |xtick| {
             const tick: Data = .{ .x = xtick, .y = self.y_axis.min orelse 0 };
             const tick_str = self.x_axis.formatTick(dvui.currentWindow().lifo(), xtick) catch "";
             defer dvui.currentWindow().lifo().free(tick_str);
@@ -642,6 +681,16 @@ pub fn deinit(self: *PlotWidget) void {
     defer if (should_free) dvui.widgetFree(self);
     defer self.* = undefined;
     dvui.clipSet(self.old_clip);
+
+    if (self.data_min.x == self.data_max.x) {
+        self.data_min.x = self.data_min.x - 1;
+        self.data_max.x = self.data_max.x + 1;
+    }
+
+    if (self.data_min.y == self.data_max.y) {
+        self.data_min.y = self.data_min.y - 1;
+        self.data_max.y = self.data_max.y + 1;
+    }
 
     // maybe we got no data
     if (self.data_min.x == std.math.floatMax(f64)) {
