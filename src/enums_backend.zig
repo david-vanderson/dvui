@@ -9,6 +9,7 @@ pub const Backend = enum {
     sdl2,
     sdl3,
     raylib,
+    raylib_zig,
     dx11,
     web,
     /// Does no rendering!
