@@ -430,7 +430,7 @@ fn showFrameTimes(self: *Debug) void {
         .max = 50,
     };
 
-    dvui.plotXY(@src(), .{ .xs = xs, .ys = data, .plot_opts = .{ .y_axis = &yaxis } }, .{ .expand = .both, .min_size_content = .height(50) });
+    dvui.plotXY(@src(), .{ .xs = xs, .ys = data, .plot_opts = .{ .y_axis = &yaxis } }, .{ .expand = .both, .min_size_content = .height(50), .padding = .{ .y = 10, .h = 10 } });
 }
 
 const OptionsEditorTab = enum { layout, style };
