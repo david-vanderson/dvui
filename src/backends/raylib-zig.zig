@@ -163,9 +163,9 @@ pub fn deinit(self: *RaylibBackend) void {
 
     if (self.we_own_window) {
         raylib.closeWindow();
+        zglfw.terminate();
     }
     self.* = undefined;
-    zglfw.terminate();
 }
 
 pub fn accessKitShouldInitialize(self: *RaylibBackend) bool {
