@@ -7,6 +7,8 @@
 
 pub const ColorPickerWidget = @This();
 
+src: std.builtin.SourceLocation,
+opts: Options,
 init_opts: InitOptions,
 color_changed: bool = false,
 box: dvui.BoxWidget = undefined,
@@ -25,14 +27,15 @@ pub var defaults = Options{
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ColorPickerWidget {
     const self = ColorPickerWidget{
+        .src = src,
+        .opts = opts,
         .init_opts = init_opts,
-        .box = dvui.BoxWidget.init(src, .{ .dir = init_opts.dir }, defaults.override(opts)),
     };
     return self;
 }
 
 pub fn install(self: *ColorPickerWidget) void {
-    self.box.install();
+    self.box.init(self.src, .{ .dir = self.init_opts.dir }, defaults.override(self.opts));
     self.box.drawBackground();
 
     if (valueSaturationBox(@src(), self.init_opts.hsv, .{})) {
@@ -162,7 +165,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
     const br = b.data().contentRect();
     const current_point: dvui.Point = .{ .x = br.w * hsv.s, .y = br.h * (1 - hsv.v) };
 
-    var indicator = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, .{
+    var indicator = dvui.box(@src(), .{ .dir = .horizontal }, .{
         .rect = dvui.Rect.fromPoint(current_point).toSize(.all(10)).offsetNeg(.all(5)),
         .padding = .{},
         .margin = .{},
@@ -171,8 +174,6 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
         .corner_radius = .all(100),
         .color_fill = hsv.toColor(),
     });
-    indicator.install();
-    indicator.drawBackground();
     if (b.data().id == dvui.focusedWidgetId()) {
         indicator.data().focusBorder();
     }
@@ -323,7 +324,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
         .vertical => .{ .y = (br.h * fraction) - knobsize.h / 2 },
     }).toSize(knobsize);
 
-    var knob = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, .{
+    var knob = dvui.box(@src(), .{ .dir = .horizontal }, .{
         .rect = knobRect,
         .padding = .{},
         .margin = .{},
@@ -332,8 +333,6 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
         .corner_radius = .all(100),
         .color_fill = (Color.HSV{ .h = hue.* }).toColor(),
     });
-    knob.install();
-    knob.drawBackground();
     if (b.data().id == dvui.focusedWidgetId()) {
         knob.data().focusBorder();
     }

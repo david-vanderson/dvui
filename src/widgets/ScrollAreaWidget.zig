@@ -41,7 +41,10 @@ pub const InitOpts = struct {
     was_allocated_on_widget_stack: bool = false,
 };
 
-hbox: BoxWidget,
+src: std.builtin.SourceLocation,
+opts: Options,
+/// SAFETY: Set by `install`
+hbox: BoxWidget = undefined,
 vbar: ?ScrollBarWidget = null,
 vbar_grab: ?ScrollBarWidget.Grab = null,
 /// SAFETY: Set by `installScrollBars`
@@ -56,7 +59,8 @@ scroll: ?ScrollContainerWidget = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) ScrollAreaWidget {
     return .{
-        .hbox = BoxWidget.init(src, .{ .dir = .horizontal }, defaults.themeOverride().override(opts)),
+        .src = src,
+        .opts = opts,
         .init_opts = init_opts,
     };
 }
@@ -73,6 +77,7 @@ pub fn install(self: *ScrollAreaWidget) void {
 }
 
 pub fn installScrollBars(self: *ScrollAreaWidget) void {
+    self.hbox.init(self.src, .{ .dir = .horizontal }, defaults.themeOverride().override(self.opts));
     if (self.init_opts.scroll_info) |si| {
         self.si = si;
         if (self.init_opts.vertical != null) {
@@ -94,7 +99,6 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
         self.si.horizontal = self.init_opts.horizontal orelse .none;
     }
 
-    self.hbox.install();
     self.hbox.drawBackground();
 
     const focus_target = self.init_opts.focus_id orelse dvui.dataGet(null, self.hbox.data().id, "_scroll_id", dvui.Id);
@@ -161,8 +165,7 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
         self.vbar.?.deinit();
     }
 
-    self.vbox = BoxWidget.init(@src(), .{ .dir = .vertical }, self.hbox.data().options.strip().override(.{ .expand = .both, .name = "ScrollAreaWidget vbox" }));
-    self.vbox.install();
+    self.vbox.init(@src(), .{ .dir = .vertical }, self.hbox.data().options.strip().override(.{ .expand = .both, .name = "ScrollAreaWidget vbox" }));
     self.vbox.drawBackground();
 
     if (do_hbar) {
