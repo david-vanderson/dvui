@@ -76,7 +76,8 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 - Existing backends
   - [SDL2 and SDL3](https://libsdl.org/)
   - [Web](https://david-vanderson.github.io/demo)
-  - [Raylib](https://www.raylib.com/) and [the zig binding](https://github.com/raylib-zig/raylib-zig)
+  - [Raylib](https://www.raylib.com/)
+  - [Raylib-zig](https://github.com/raylib-zig/raylib-zig)
   - [Dx11](https://learn.microsoft.com/en-us/windows/win32/direct3d11/atoc-dx-graphics-direct3d-11)
 - [TinyVG](https://tinyvg.tech/) icon support via [zig-lib-svg2tvg](https://github.com/nat3Github/zig-lib-svg2tvg)
   - more icons at [zig-lib-icons](https://github.com/nat3Github/zig-lib-icons)
