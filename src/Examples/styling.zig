@@ -191,6 +191,38 @@ pub fn styling() void {
             };
         }
     }
+
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        defer hbox.deinit();
+
+        const width = dvui.dataGetPtrDefault(null, hbox.data().id, "width", f32, 24);
+        const height = dvui.dataGetPtrDefault(null, hbox.data().id, "height", f32, 24);
+
+        {
+            var vbox = dvui.box(@src(), .{}, .{ .background = true, .border = .all(1) });
+            defer vbox.deinit();
+
+            dvui.label(@src(), "Ninepatch", .{}, .{ .gravity_x = 0.5 });
+            _ = dvui.sliderEntry(@src(), "width: {d:0.0}", .{ .value = width, .min = 0, .max = 100, .interval = 1 }, .{ .gravity_x = 0.5 });
+            _ = dvui.sliderEntry(@src(), "height: {d:0.0}", .{ .value = height, .min = 0, .max = 100, .interval = 1 }, .{ .gravity_x = 0.5 });
+        }
+        {
+            var vbox = dvui.box(@src(), .{}, .{
+                .min_size_content = .{ .w = width.*, .h = height.* },
+                .max_size_content = .{ .w = width.*, .h = height.* },
+                .gravity_x = 0.5,
+                .gravity_y = 0.5,
+            });
+            defer vbox.deinit();
+
+            const image_source: dvui.ImageSource = .{ .imageFile = .{ .bytes = img_ninepatch, .name = "ninepatch" } };
+            const image_size = dvui.imageSize(image_source) catch dvui.Size.all(24);
+            _ = dvui.ninepatch(@src(), .{ .source = image_source, .uv = .fromPixelInset(.all(8), image_size) }, .{
+                .expand = .both,
+            });
+        }
+    }
 }
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a Color
@@ -260,6 +292,7 @@ test "DOCIMG styling" {
     try t.saveImage(frame, null, "Examples-styling.png");
 }
 
+const img_ninepatch = Examples.ninepatch;
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const Examples = @import("../Examples.zig");
