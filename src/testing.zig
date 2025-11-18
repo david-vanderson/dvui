@@ -124,6 +124,7 @@ pub fn init(options: InitOptions) !Self {
 
     const window = try options.allocator.create(Window);
     window.* = try dvui.Window.init(@src(), options.allocator, backend.backend(), window_init_opts);
+    try window.fonts.addBuiltinFontsForTheme(window.gpa, dvui.Theme.builtin.adwaita_light);
 
     window.begin(0) catch unreachable;
 

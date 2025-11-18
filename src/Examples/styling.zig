@@ -279,6 +279,11 @@ test "DOCIMG styling" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 300 } });
     defer t.deinit();
 
+    // Load all fonts for the themes used in this test, usually done by `Examples.demo()`
+    inline for (dvui.Theme.builtins) |theme| {
+        try t.window.fonts.addBuiltinFontsForTheme(t.window.gpa, theme);
+    }
+
     const frame = struct {
         fn frame() !dvui.App.Result {
             var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
