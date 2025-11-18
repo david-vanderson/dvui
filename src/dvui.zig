@@ -3055,8 +3055,8 @@ pub fn gridHeadingSortable(
 
     const sort_changed = switch (g.colSortOrder(col_num)) {
         .unsorted => button(@src(), heading, .{ .draw_focus = false }, heading_opts),
-        .ascending => buttonLabelAndIcon(@src(), heading, icon_ascending, .{ .draw_focus = false }, heading_opts),
-        .descending => buttonLabelAndIcon(@src(), heading, icon_descending, .{ .draw_focus = false }, heading_opts),
+        .ascending => buttonLabelAndIcon(@src(), .{ .label = heading, .tvg_bytes = icon_ascending, .button_opts = .{ .draw_focus = false } }, heading_opts),
+        .descending => buttonLabelAndIcon(@src(), .{ .label = heading, .tvg_bytes = icon_descending, .button_opts = .{ .draw_focus = false } }, heading_opts),
     };
 
     if (sort_changed) {
@@ -3700,9 +3700,16 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
     return click;
 }
 
-pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options) bool {
+pub const ButtonLabelAndIconOptions = struct {
+    button_opts: ButtonWidget.InitOptions,
+    label: []const u8,
+    tvg_bytes: []const u8,
+    icon_first: bool = false,
+};
+
+pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, combined_opts: ButtonLabelAndIconOptions, opts: Options) bool {
     // initialize widget and get rectangle from parent
-    var bw = ButtonWidget.init(src, init_opts, opts);
+    var bw = ButtonWidget.init(src, combined_opts.button_opts, opts);
 
     // make ourselves the new parent
     bw.install();
@@ -3716,8 +3723,8 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
     {
         var outer_hbox = box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer outer_hbox.deinit();
-        icon(@src(), label_str, tvg_bytes, .{}, options.strip().override(.{ .gravity_x = 1.0, .color_text = opts.color_text }));
-        labelEx(@src(), "{s}", .{label_str}, .{ .align_x = 0.5 }, options.strip().override(.{ .expand = .both }));
+        icon(@src(), combined_opts.label, combined_opts.tvg_bytes, .{}, options.strip().override(.{ .gravity_x = if (combined_opts.icon_first) 0.0 else 1.0, .color_text = opts.color_text }));
+        labelEx(@src(), "{s}", .{combined_opts.label}, .{ .align_x = 0.5 }, options.strip().override(.{ .expand = .both }));
     }
 
     const click = bw.clicked();
