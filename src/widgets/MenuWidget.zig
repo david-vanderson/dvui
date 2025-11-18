@@ -147,8 +147,7 @@ pub fn install(self: *MenuWidget) void {
         dvui.focusWidget(self.group.data().id, null, null);
     }
 
-    self.box = BoxWidget.init(@src(), .{ .dir = self.init_opts.dir }, self.data().options.strip().override(.{ .expand = .both }));
-    self.box.install();
+    self.box.init(@src(), .{ .dir = self.init_opts.dir }, self.data().options.strip().override(.{ .expand = .both }));
     self.box.drawBackground();
     if (self.data().accesskit_node()) |ak_node| {
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);

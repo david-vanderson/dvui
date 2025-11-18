@@ -352,8 +352,7 @@ pub const Branch = struct {
         self.parent_focus_id = self.tree.current_branch_focus_id;
         self.tree.current_branch_focus_id = self.button.data().id;
 
-        self.hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
-        self.hbox.install();
+        self.hbox.init(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
 
         for (dvui.events()) |*e| {
             if (!self.button.matchEvent(e))
@@ -437,8 +436,7 @@ pub const Branch = struct {
             // Always expand the inner box to fill the animation
             const expander_opts = dvui.Options{ .expand = .both };
 
-            self.expander_vbox = dvui.BoxWidget.init(src, .{ .dir = .vertical }, expander_opts.override(opts.strip()));
-            self.expander_vbox.install();
+            self.expander_vbox.init(src, .{ .dir = .vertical }, expander_opts.override(opts.strip()));
             self.expander_vbox.drawBackground();
         }
 

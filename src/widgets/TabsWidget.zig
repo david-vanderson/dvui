@@ -50,8 +50,7 @@ pub fn install(self: *TabsWidget) void {
         .horizontal => .{ .y = 2 },
         .vertical => .{ .x = 2 },
     };
-    self.box = BoxWidget.init(@src(), .{ .dir = self.init_options.dir }, .{ .margin = margin, .expand = .both });
-    self.box.install();
+    self.box.init(@src(), .{ .dir = self.init_options.dir }, .{ .margin = margin, .expand = .both });
 
     var r = self.scroll.data().contentRectScale().r;
     switch (self.init_options.dir) {

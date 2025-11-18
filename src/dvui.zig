@@ -2919,9 +2919,8 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) *OverlayWidget {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn box(src: std.builtin.SourceLocation, init_opts: BoxWidget.InitOptions, opts: Options) *BoxWidget {
     var ret = widgetAlloc(BoxWidget);
-    ret.* = BoxWidget.init(src, init_opts, opts);
+    ret.init(src, init_opts, opts);
     ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
     ret.drawBackground();
     return ret;
 }
@@ -3900,8 +3899,9 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         options.color(.fill_hover)
     else
         options.color(.fill);
-    var knob = BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = fill_color });
-    knob.install();
+
+    var knob: BoxWidget = undefined;
+    knob.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = fill_color });
     knob.drawBackground();
     if (b.data().id == focusedWidgetId()) {
         knob.data().focusBorder();
@@ -3954,8 +3954,8 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
     var ret = false;
     var hover = false;
-    var b = BoxWidget.init(src, .{ .dir = .horizontal }, options);
-    b.install();
+    var b: BoxWidget = undefined;
+    b.init(src, .{ .dir = .horizontal }, options);
     defer b.deinit();
 
     if (b.data().accesskit_node()) |ak_node| {
