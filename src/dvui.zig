@@ -3531,7 +3531,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
 
 pub const NinepatchInitOptions = struct {
     source: ImageSource,
-    uv: Ninepatch.UV = .fromInset(.rect(0.3, 0.3, 0.3, 0.3)),
+    uv: Ninepatch.UV,
 };
 
 /// Show ninepatch.
@@ -3584,7 +3584,8 @@ pub fn ninepatch(src: std.builtin.SourceLocation, init_opts: NinepatchInitOption
     const content_rs = wd.contentRectScale();
     renderNinepatchImage(init_opts.source, init_opts.uv, content_rs, render_tex_opts) catch |err| switch (err) {
         error.NinepatchBelowMin => {
-            logError(@src(), err, "Could not render ninepatch {?s} at {} - try {any}", .{ opts.name, content_rs, np_size });
+            content_rs.r.fill(.all(0), .{ .color = .black });
+            content_rs.r.stroke(.all(0), .{ .thickness = 1, .color = .white });
         },
         else => {
             logError(@src(), err, "Could not render ninepatch {?s} at {}", .{ opts.name, content_rs });
