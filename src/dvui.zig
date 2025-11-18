@@ -237,7 +237,7 @@ pub const BasicLayout = layout.BasicLayout;
 pub const Alignment = layout.Alignment;
 pub const PlaceOnScreenAvoid = layout.PlaceOnScreenAvoid;
 pub const placeOnScreen = layout.placeOnScreen;
-pub const Ninepatch = render.Ninepatch;
+pub const Ninepatch = @import("Ninepatch.zig");
 
 pub const Data = @import("Data.zig");
 
@@ -3579,7 +3579,7 @@ pub fn ninepatch(src: std.builtin.SourceLocation, init_opts: NinepatchInitOption
     }
     var np_size: Size = .{};
     const render_tex_opts = RenderNinepatchOptions{
-        .rotation = wd.options.rotationGet(),
+        // .rotation = wd.options.rotationGet(),
         .ninepatch_min = &np_size,
     };
     const content_rs = wd.contentRectScale();
