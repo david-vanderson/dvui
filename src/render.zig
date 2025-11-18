@@ -529,6 +529,7 @@ pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptio
 
     var rs_center_center = rs;
 
+    //Move rects into position
     rs_top_center.r.w -= rs_top_left.r.w + rs_top_right.r.w;
     rs_top_center.r.x += rs_top_left.r.w;
     rs_top_center.r.h = rs_top_left.r.h;
@@ -558,6 +559,35 @@ pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptio
     rs_center_center.r.x = rs_top_center.r.x;
     rs_center_center.r.h = rs_center_left.r.h;
     rs_center_center.r.y = rs_center_left.r.y;
+
+    //Floor rect positions and ceil rect sizes to prevent gaps
+    rs_top_center.r.x = @floor(rs_top_center.r.x);
+    rs_top_right.r.x = @floor(rs_top_right.r.x);
+    rs_center_center.r.x = @floor(rs_center_center.r.x);
+    rs_center_right.r.x = @floor(rs_center_right.r.x);
+    rs_bottom_center.r.x = @floor(rs_bottom_center.r.x);
+    rs_bottom_right.r.x = @floor(rs_bottom_right.r.x);
+
+    rs_center_left.r.y = @floor(rs_center_left.r.y);
+    rs_center_center.r.y = @floor(rs_center_center.r.y);
+    rs_center_right.r.y = @floor(rs_center_right.r.y);
+    rs_bottom_left.r.y = @floor(rs_bottom_left.r.y);
+    rs_bottom_center.r.y = @floor(rs_bottom_center.r.y);
+    rs_bottom_right.r.y = @floor(rs_bottom_right.r.y);
+
+    rs_top_left.r.w = @ceil(rs_top_left.r.w);
+    rs_top_center.r.w = @ceil(rs_top_center.r.w);
+    rs_center_left.r.w = @ceil(rs_center_left.r.w);
+    rs_center_center.r.w = @ceil(rs_center_center.r.w);
+    rs_bottom_left.r.w = @ceil(rs_bottom_left.r.w);
+    rs_bottom_center.r.w = @ceil(rs_bottom_center.r.w);
+
+    rs_top_left.r.h = @ceil(rs_top_left.r.h);
+    rs_top_center.r.h = @ceil(rs_top_center.r.h);
+    rs_top_right.r.h = @ceil(rs_top_right.r.h);
+    rs_center_left.r.h = @ceil(rs_center_left.r.h);
+    rs_center_center.r.h = @ceil(rs_center_center.r.h);
+    rs_center_right.r.h = @ceil(rs_center_right.r.h);
 
     //TODO: rotate rects
     _ = &rs_top_left;
