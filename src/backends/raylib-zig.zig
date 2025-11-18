@@ -5,7 +5,7 @@ pub const raylib = @import("raylib");
 pub const raygui = @import("raygui");
 pub const zglfw = @import("zglfw");
 
-pub const kind: dvui.enums.Backend = .raylib;
+pub const kind: dvui.enums.Backend = .raylib_zig;
 
 pub const RaylibBackend = @This();
 pub const Context = *RaylibBackend;
