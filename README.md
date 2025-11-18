@@ -17,12 +17,16 @@ How to run the built-in examples:
   - ```zig build sdl2-standalone```
   - ```zig build sdl2-ontop```
   - ```zig build sdl2-app```
-- Raylib
+- Raylib (C api)
   - if you encounter error `No Wayland` also add flag `-Dlinux_display_backend=X11`
   - ```zig build raylib-standalone```
   - ```zig build raylib-ontop```
   - ```zig build raylib-app```
-  - Alternatively, if you want to use the raylib-zig based backend, append flag `-Dlibc=false`
+- Raylib (raylib-zig)
+  - if you encounter error `No Wayland` also add flag `-Dlinux_display_backend=X11`
+  - ```zig build raylib-zig-standalone```
+  - ```zig build raylib-zig-ontop```
+  - ```zig build raylib-zig-app```
 - Dx11
   - ```zig build dx11-standalone```
   - ```zig build dx11-ontop```

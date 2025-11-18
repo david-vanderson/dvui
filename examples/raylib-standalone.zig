@@ -141,7 +141,7 @@ fn dvui_frame() bool {
         \\- rest of the window is a scroll area
     , .{});
     tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is set by Raylib.", .{});
+    tl2.addText("Framerate is set by Raylib (C api).", .{});
     tl2.addText("\n\n", .{});
     if (vsync) {
         tl2.addText("Framerate is capped by vsync.", .{});

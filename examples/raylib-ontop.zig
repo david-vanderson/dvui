@@ -76,7 +76,7 @@ pub fn main() !void {
             }
         }
 
-        ray.DrawText("Congrats! You Combined Raylib, Raygui and DVUI!", 20, 400, 20, ray.RAYWHITE);
+        ray.DrawText("Congrats! You Combined Raylib (C api), Raygui and DVUI!", 20, 400, 20, ray.RAYWHITE);
 
         dvuiStuff();
 
