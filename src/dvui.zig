@@ -2081,7 +2081,8 @@ pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidg
     return ret;
 }
 
-/// Subwindow that the user can generally resize and move around.
+/// Subwindow that the user can generally resize and move around.  Options.rect
+/// will control the initial position/size.
 ///
 /// Usually you want to add `windowHeader` as the first child.
 ///

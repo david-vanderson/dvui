@@ -119,33 +119,33 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         .init_options = init_opts,
     };
 
-    var autopossize = true;
+    // by default we store the rect (only while the window is open)
+    self.wd.rect = dvui.dataGet(null, self.wd.id, "_rect", Rect) orelse Rect{};
+
     if (self.init_options.rect) |ior| {
         // user is storing the rect for us across open/close
         self.wd.rect = ior.*;
-    } else if (opts.rect) |r| {
-        // we were given a rect, just use that
-        self.wd.rect = r;
-        autopossize = false;
-    } else {
-        // we store the rect (only while the window is open)
-        self.wd.rect = dvui.dataGet(null, self.wd.id, "_rect", Rect) orelse Rect{};
     }
 
-    if (autopossize) {
-        if (dvui.dataGet(null, self.wd.id, "_auto_size", @TypeOf(self.auto_size))) |as| {
-            self.auto_size = as;
-        } else {
-            if (self.data().rect.w == 0 and self.wd.rect.h == 0) {
-                self.autoSize();
-            }
+    if (dvui.firstFrame(self.wd.id)) {
+        // Options.rect only affects initial position/size
+        if (opts.rect) |r| {
+            self.wd.rect = r;
         }
+    }
 
-        if (dvui.dataGet(null, self.wd.id, "_auto_pos", @TypeOf(self.auto_pos))) |ap| {
-            self.auto_pos = ap;
-        } else {
-            self.auto_pos = (self.wd.rect.x == 0 and self.wd.rect.y == 0);
+    if (dvui.dataGet(null, self.wd.id, "_auto_size", @TypeOf(self.auto_size))) |as| {
+        self.auto_size = as;
+    } else {
+        if (self.data().rect.w == 0 and self.wd.rect.h == 0) {
+            self.autoSize();
         }
+    }
+
+    if (dvui.dataGet(null, self.wd.id, "_auto_pos", @TypeOf(self.auto_pos))) |ap| {
+        self.auto_pos = ap;
+    } else {
+        self.auto_pos = (self.wd.rect.x == 0 and self.wd.rect.y == 0);
     }
 
     if (dvui.minSizeGet(self.wd.id)) |min_size| {
@@ -236,7 +236,7 @@ pub fn install(self: *FloatingWindowWidget) void {
 
         // hide our first frame so the user doesn't see an empty window or
         // jump when we autopos/autosize - do this in install() because
-        // animation stuff might be messing with out rect after init()
+        // animation stuff might be messing with our rect after init()
         self.data().rect.w = 0;
         self.data().rect.h = 0;
     }
