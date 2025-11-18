@@ -281,8 +281,7 @@ pub fn drawBackground(self: *FloatingWindowWidget) void {
     }
 
     // we are using BoxWidget to do border/background
-    self.layout = BoxWidget.init(@src(), .{ .dir = .vertical }, self.options.override(.{ .expand = .both }));
-    self.layout.install();
+    self.layout.init(@src(), .{ .dir = .vertical }, self.options.override(.{ .expand = .both }));
     self.layout.drawBackground();
 
     // clip to just our window (layout has the margin)

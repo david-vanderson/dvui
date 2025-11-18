@@ -320,8 +320,8 @@ pub fn focus() void {
         tl.addText("Hover highlighting a box around widgets:", .{});
         tl.deinit();
 
-        var hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .padding = dvui.Rect.all(4) });
-        hbox.install();
+        var hbox: dvui.BoxWidget = undefined;
+        hbox.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .padding = dvui.Rect.all(4) });
         defer hbox.deinit();
         const evts = dvui.events();
         for (evts) |*e| {
