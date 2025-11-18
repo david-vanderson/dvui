@@ -174,7 +174,10 @@ pub fn visible(self: *const WidgetData) bool {
     return self.borderRectScale().r.visible();
 }
 
-pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?Color = null }) void {
+pub fn borderAndBackground(self: *const WidgetData, opts: struct {
+    fill_color: ?Color = null,
+    ninepatch: ?dvui.Ninepatch.Image = null,
+}) void {
     if (!self.visible()) {
         return;
     }
@@ -227,10 +230,17 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
     if (bg) {
         const rs = self.backgroundRectScale();
         if (!rs.r.empty()) {
-            rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{
-                .color = opts.fill_color orelse self.options.color(.fill),
-                .fade = if (self.rectScale().s >= 2.0) 0.0 else 1.0,
-            });
+            if (opts.ninepatch orelse self.options.ninepatch(.ninepatch_fill)) |np| {
+                var min_size: Size = .all(0);
+                dvui.renderNinepatchImage(np, rs, .{ .ninepatch_min = &min_size }) catch |err| {
+                    dvui.log.err("while drawing ninepatch: {}, {} - reported min size {any}", .{ err, rs, min_size });
+                };
+            } else {
+                rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{
+                    .color = opts.fill_color orelse self.options.color(.fill),
+                    .fade = if (self.rectScale().s >= 2.0) 0.0 else 1.0,
+                });
+            }
         }
     }
 }

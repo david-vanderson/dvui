@@ -25,6 +25,9 @@ pub const Style = struct {
     fill: ?Color = null,
     fill_hover: ?Color = null,
     fill_press: ?Color = null,
+    ninepatch_fill: ?dvui.Ninepatch.Image = null,
+    ninepatch_hover: ?dvui.Ninepatch.Image = null,
+    ninepatch_press: ?dvui.Ninepatch.Image = null,
     text: ?Color = null,
     text_hover: ?Color = null,
     text_press: ?Color = null,
@@ -50,6 +53,15 @@ fill_hover: ?Color = null,
 
 /// fill when pressed for .content Style.  Example is pressing checkbox.  If null, dvui creates one by adjusting fill (see `adjustColorForState`.
 fill_press: ?Color = null,
+
+/// ninepatch for .content Style, fallback for any Style without fill.
+ninepatch_fill: ?dvui.Ninepatch.Image = null,
+
+/// ninepatch when hovered for .content Style, fallback for any Style without fill.
+ninepatch_hover: ?dvui.Ninepatch.Image = null,
+
+/// ninepatch when pressed for .content Style, fallback for any Style without fill.
+ninepatch_press: ?dvui.Ninepatch.Image = null,
 
 /// text color for .content Style, fallback for any Style without text.  Example is text in a textLayout or textEntry.  Also used as general foreground color like a checkmark or icon color.
 text: Color,
@@ -167,6 +179,29 @@ pub fn adjustColorForState(self: *const Theme, col: Color, ask: Options.ColorAsk
     });
 }
 
+pub fn ninepatch(self: *const Theme, style_name: Style.Name, ask: Options.NinepatchAsk) ?dvui.Ninepatch.Image {
+    const cs: Style = switch (style_name) {
+        .content => return switch (ask) {
+            .ninepatch_fill => self.ninepatch_fill,
+            .ninepatch_hover => self.ninepatch_hover,
+            .ninepatch_press => self.ninepatch_press,
+        },
+        .control => self.control,
+        .window => self.window,
+        .highlight => self.highlight,
+        .err => self.err,
+        .app1 => self.app1,
+        .app2 => self.app2,
+        .app3 => self.app3,
+    };
+
+    return switch (ask) {
+        .ninepatch_fill => cs.ninepatch_fill,
+        .ninepatch_hover => cs.ninepatch_hover,
+        .ninepatch_press => cs.ninepatch_press,
+    };
+}
+
 /// To pick between the built in themes, pass `&Theme.builtins` as the `themes` argument
 ///
 /// Sets the theme on the current `dvui.Window` upon selection
@@ -216,6 +251,7 @@ pub const builtin = struct {
     pub const gruvbox = QuickTheme.builtin.gruvbox.toTheme(null) catch unreachable;
     pub const jungle = QuickTheme.builtin.jungle.toTheme(null) catch unreachable;
     pub const opendyslexic = QuickTheme.builtin.opendyslexic.toTheme(null) catch unreachable;
+    pub const win98 = @import("themes/win98.zig").light;
 
     test {
         // Ensures all builting themes are valid
@@ -337,6 +373,10 @@ pub const QuickTheme = struct {
             .fill_hover = fill_hover,
             .fill_press = fill_press,
             .border = border,
+            // TODO
+            .ninepatch_fill = null,
+            .ninepatch_hover = null,
+            .ninepatch_press = null,
 
             .control = try parseStyle(self.control),
             .window = try parseStyle(self.window),

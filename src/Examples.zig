@@ -2,7 +2,22 @@
 
 pub const zig_favicon = @embedFile("zig-favicon.png");
 pub const zig_svg = @embedFile("zig-mark.svg");
-pub const ninepatch = @embedFile("ninepatch98.png");
+pub const ninepatch = struct {
+    pub const outset = dvui.Ninepatch.Image{
+        .source = .{
+            .bytes = @embedFile("themes/ninepatch98.png"),
+            .name = "ninepatch98.png",
+        },
+        .uv = .fromPixelInset(.all(8), .all(24)),
+    };
+    pub const inset = dvui.Ninepatch.Image{
+        .source = .{
+            .bytes = @embedFile("themes/inset.png"),
+            .name = "inset.png",
+        },
+        .uv = .fromPixelInset(.all(8), .all(24)),
+    };
+};
 
 pub var show_demo_window: bool = false;
 pub var icon_browser_show: bool = false;

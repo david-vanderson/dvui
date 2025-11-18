@@ -3583,7 +3583,7 @@ pub fn ninepatch(src: std.builtin.SourceLocation, init_opts: NinepatchInitOption
         .ninepatch_min = &np_size,
     };
     const content_rs = wd.contentRectScale();
-    renderNinepatchImage(init_opts.source, init_opts.uv, content_rs, render_tex_opts) catch |err| switch (err) {
+    renderNinepatchImage(.{ .source = init_opts.source.imageFile, .uv = init_opts.uv }, content_rs, render_tex_opts) catch |err| switch (err) {
         error.NinepatchBelowMin => {
             content_rs.r.fill(.all(0), .{ .color = .black });
             content_rs.r.stroke(.all(0), .{ .thickness = 1, .color = .white });

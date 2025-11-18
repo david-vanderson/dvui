@@ -484,6 +484,11 @@ pub const Ninepatch = struct {
     pub const Error = error{
         NinepatchBelowMin,
     };
+
+    pub const Image = struct {
+        source: ImageSource.ImageFile,
+        uv: UV,
+    };
 };
 
 pub const NinepatchOptions = struct {
@@ -622,10 +627,10 @@ pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptio
 /// Calls `renderNinepatch` with the texture created from `source`
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn renderNinepatchImage(source: ImageSource, uv: Ninepatch.UV, rs: RectScale, opts: NinepatchOptions) (Ninepatch.Error || Backend.TextureError || StbImageError)!void {
+pub fn renderNinepatchImage(patch: Ninepatch.Image, rs: RectScale, opts: NinepatchOptions) (Ninepatch.Error || Backend.TextureError || StbImageError)!void {
     if (rs.s == 0) return;
     if (dvui.clipGet().intersect(rs.r).empty()) return;
-    try renderNinepatch(.{ .tex = try source.getTexture(), .uv = uv }, rs, opts);
+    try renderNinepatch(.{ .tex = try (ImageSource{ .imageFile = patch.source }).getTexture(), .uv = patch.uv }, rs, opts);
 }
 
 const std = @import("std");

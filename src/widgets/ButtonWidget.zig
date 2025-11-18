@@ -61,7 +61,11 @@ pub fn processEvents(self: *ButtonWidget) void {
 }
 
 pub fn drawBackground(self: *ButtonWidget) void {
-    self.data().borderAndBackground(.{ .fill_color = self.style().color_fill });
+    const style_opt = self.style();
+    self.data().borderAndBackground(.{
+        .fill_color = style_opt.color_fill,
+        .ninepatch = style_opt.ninepatch_fill,
+    });
 }
 
 pub fn drawFocus(self: *ButtonWidget) void {
@@ -74,9 +78,11 @@ pub fn drawFocus(self: *ButtonWidget) void {
 pub fn style(self: *ButtonWidget) Options {
     var opts = self.data().options.styleOnly();
     if (dvui.captured(self.data().id)) {
+        opts.ninepatch_fill = self.data().options.ninepatch(.ninepatch_press);
         opts.color_fill = self.data().options.color(.fill_press);
         opts.color_text = self.data().options.color(.text_press);
     } else if (self.hover) {
+        opts.ninepatch_fill = self.data().options.ninepatch(.ninepatch_hover);
         opts.color_fill = self.data().options.color(.fill_hover);
         opts.color_text = self.data().options.color(.text_hover);
     }
