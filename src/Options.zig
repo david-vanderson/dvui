@@ -6,6 +6,7 @@ const Font = dvui.Font;
 const Rect = dvui.Rect;
 const Size = dvui.Size;
 const Theme = dvui.Theme;
+const Ninepatch = dvui.Ninepatch.Image;
 
 const Options = @This();
 
@@ -59,6 +60,10 @@ color_text: ?Color = null,
 color_text_hover: ?Color = null,
 color_text_press: ?Color = null,
 color_border: ?Color = null,
+
+ninepatch_fill: ?Ninepatch = null,
+ninepatch_hover: ?Ninepatch = null,
+ninepatch_press: ?Ninepatch = null,
 
 // If a color above is null, source it from this style (if null, .content) in the theme.
 style: ?Theme.Style.Name = null,
@@ -232,6 +237,21 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
     } orelse self.themeGet().color(self.styleGet(), ask);
 }
 
+/// All the colors you can ask Options for
+pub const NinepatchAsk = enum {
+    ninepatch_fill,
+    ninepatch_hover,
+    ninepatch_press,
+};
+
+pub fn ninepatch(self: *const Options, ask: NinepatchAsk) ?dvui.Ninepatch.Image {
+    return switch (ask) {
+        .ninepatch_fill => self.ninepatch_fill,
+        .ninepatch_hover => self.ninepatch_hover orelse self.ninepatch_fill,
+        .ninepatch_press => self.ninepatch_press orelse self.ninepatch_fill,
+    } orelse self.themeGet().ninepatch(self.styleGet(), ask);
+}
+
 pub fn fontGet(self: *const Options) Font {
     if (self.font) |ff| {
         return ff;
@@ -327,6 +347,10 @@ pub fn styleOnly(self: *const Options) Options {
         .color_text_hover = self.color_text_hover,
         .color_text_press = self.color_text_press,
         .color_border = self.color_border,
+
+        .ninepatch_fill = self.ninepatch_fill,
+        .ninepatch_hover = self.ninepatch_hover,
+        .ninepatch_press = self.ninepatch_press,
 
         .font = self.font,
         .font_style = self.font_style,

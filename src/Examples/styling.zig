@@ -216,9 +216,7 @@ pub fn styling() void {
             });
             defer vbox.deinit();
 
-            const image_source: dvui.ImageSource = .{ .imageFile = .{ .bytes = img_ninepatch, .name = "ninepatch" } };
-            const image_size = dvui.imageSize(image_source) catch dvui.Size.all(24);
-            _ = dvui.ninepatch(@src(), .{ .source = image_source, .uv = .fromPixelInset(.all(8), image_size) }, .{
+            _ = dvui.ninepatch(@src(), .{ .source = .{ .imageFile = ninepatch.outset.source }, .uv = ninepatch.outset.uv }, .{
                 .expand = .both,
             });
         }
@@ -297,7 +295,7 @@ test "DOCIMG styling" {
     try t.saveImage(frame, null, "Examples-styling.png");
 }
 
-const img_ninepatch = Examples.ninepatch;
+const ninepatch = Examples.ninepatch;
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const Examples = @import("../Examples.zig");
