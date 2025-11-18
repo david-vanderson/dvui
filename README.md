@@ -132,24 +132,21 @@ If you want to inject a specific [raylib-zig](https://github.com/raylib-zig/rayl
 const dvui_dep = b.dependency("dvui", .{
     .target = target,
     .optimize = optimize,
-    .backend = .raylib,
-    .libc = false, // To toggle zig based backend
+    .backend = .raylib_zig,
 });
 
-// if you have your own raylib-zig dependency supplied, you shall import
-// your own dependency into rayib backend of dvui; otherwise, the both raylib
-// dependencies in your project and in dvui will conflict to each others.
-// If you don't want to import raylib dependency and use the one provided 
-// in the dvui library, you many skip the following 3 lines.
-const backend_mod = dvui_dep.module("raylib");
+// If you don't want to import your own raylib dependency and use the one provided 
+// in the dvui library, you may skip the following 3 lines which is used for
+// preventing raylib dependencies conflicting between the library and your projects. 
+const backend_mod = dvui_dep.module("raylib_zig");
 backend_mod.addImport("raylib", raylib); // from your raylib dependency
 backend_mod.addImport("raygui", raygui);
 
 exe.root_module.addImport("dvui", dvui_dep.module("dvui_raylib"));
-exe.root_module.addImport("backend", dvui_dep.module("raylib"));
+exe.root_module.addImport("backend", backend_mod);
 
 // in your project, you may access raylib either:
-const raylib_direct = @import("raylib"); // if custom raylib is supplied
+const raylib_direct = @import("raylib"); // if custom raylib dependency is supplied
 
 const backend = @import("backend");
 const raylib_dvui = backend.raylib;
