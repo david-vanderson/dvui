@@ -410,6 +410,224 @@ pub fn renderImage(source: ImageSource, rs: RectScale, opts: TextureOptions) (Ba
     try renderTexture(try source.getTexture(), rs, opts);
 }
 
+pub const Ninepatch = struct {
+    tex: Texture,
+    uv: UV,
+
+    pub fn size(this: *const @This(), patch: usize) Size {
+        return .{
+            .w = @as(f32, @floatFromInt(this.tex.width)) * this.uv.uv[patch].w,
+            .h = @as(f32, @floatFromInt(this.tex.height)) * this.uv.uv[patch].h,
+        };
+    }
+
+    pub const UV = struct {
+        uv: [9]Rect,
+
+        pub fn fromPixel(patches: [9]Rect, texture_size: Size) UV {
+            const w, const h, const p = .{ texture_size.w - 1, texture_size.h - 1, patches };
+            return .{ .uv = .{
+                .{ .x = p[0].topLeft().x / w, .y = p[0].topLeft().y / h, .w = p[0].w / w, .h = p[0].h / h },
+                .{ .x = p[1].topLeft().x / w, .y = p[1].topLeft().y / h, .w = p[1].w / w, .h = p[1].h / h },
+                .{ .x = p[2].topLeft().x / w, .y = p[2].topLeft().y / h, .w = p[2].w / w, .h = p[2].h / h },
+
+                .{ .x = p[3].topLeft().x / w, .y = p[3].topLeft().y / h, .w = p[3].w / w, .h = p[3].h / h },
+                .{ .x = p[4].topLeft().x / w, .y = p[4].topLeft().y / h, .w = p[4].w / w, .h = p[4].h / h },
+                .{ .x = p[5].topLeft().x / w, .y = p[5].topLeft().y / h, .w = p[5].w / w, .h = p[5].h / h },
+
+                .{ .x = p[6].topLeft().x / w, .y = p[6].topLeft().y / h, .w = p[6].w / w, .h = p[6].h / h },
+                .{ .x = p[7].topLeft().x / w, .y = p[7].topLeft().y / h, .w = p[7].w / w, .h = p[7].h / h },
+                .{ .x = p[8].topLeft().x / w, .y = p[8].topLeft().y / h, .w = p[8].w / w, .h = p[8].h / h },
+            } };
+        }
+
+        /// Returns set of 9 uvs dividing the image from top left to bottom right at lines specified by inset.
+        pub fn fromInset(inset: Rect) UV {
+            const v = [_]f32{ 0, inset.x, 1 - inset.w, 1 }; // vertical lines across image
+            const h = [_]f32{ 0, inset.y, 1 - inset.h, 1 }; // horizontal lines across image
+            return .{ .uv = .{
+                .{ .x = h[0], .y = v[0], .w = h[1] - h[0], .h = v[1] - v[0] },
+                .{ .x = h[1], .y = v[0], .w = h[2] - h[1], .h = v[1] - v[0] },
+                .{ .x = h[2], .y = v[0], .w = h[3] - h[2], .h = v[1] - v[0] },
+
+                .{ .x = h[0], .y = v[1], .w = h[1] - h[0], .h = v[2] - v[1] },
+                .{ .x = h[1], .y = v[1], .w = h[2] - h[1], .h = v[2] - v[1] },
+                .{ .x = h[2], .y = v[1], .w = h[3] - h[2], .h = v[2] - v[1] },
+
+                .{ .x = h[0], .y = v[2], .w = h[1] - h[0], .h = v[3] - v[2] },
+                .{ .x = h[1], .y = v[2], .w = h[2] - h[1], .h = v[3] - v[2] },
+                .{ .x = h[2], .y = v[2], .w = h[3] - h[2], .h = v[3] - v[2] },
+            } };
+        }
+
+        /// Returns set of 9 uvs dividing the image from top left to bottom right at lines specified by inset
+        pub fn fromPixelInset(inset_px: Rect, texture_size: Size) UV {
+            const v = [_]f32{ 0, inset_px.x, texture_size.w - inset_px.w, texture_size.w }; // vertical lines across image
+            const h = [_]f32{ 0, inset_px.y, texture_size.h - inset_px.h, texture_size.h }; // horizontal lines across image
+            const uv_px = [9]Rect{
+                .{ .x = h[0], .y = v[0], .w = h[1] - h[0], .h = v[1] - v[0] },
+                .{ .x = h[1], .y = v[0], .w = h[2] - h[1], .h = v[1] - v[0] },
+                .{ .x = h[2], .y = v[0], .w = h[3] - h[2], .h = v[1] - v[0] },
+
+                .{ .x = h[0], .y = v[1], .w = h[1] - h[0], .h = v[2] - v[1] },
+                .{ .x = h[1], .y = v[1], .w = h[2] - h[1], .h = v[2] - v[1] },
+                .{ .x = h[2], .y = v[1], .w = h[3] - h[2], .h = v[2] - v[1] },
+
+                .{ .x = h[0], .y = v[2], .w = h[1] - h[0], .h = v[3] - v[2] },
+                .{ .x = h[1], .y = v[2], .w = h[2] - h[1], .h = v[3] - v[2] },
+                .{ .x = h[2], .y = v[2], .w = h[3] - h[2], .h = v[3] - v[2] },
+            };
+            return fromPixel(uv_px, texture_size);
+        }
+    };
+
+    pub const Error = error{
+        NinepatchBelowMin,
+    };
+};
+
+pub const NinepatchOptions = struct {
+    rotation: f32 = 0,
+    colormod: Color = .{},
+    background_color: ?Color = null,
+    debug: bool = false,
+
+    fade: f32 = 0.0,
+    ninepatch_min: ?*Size = null,
+};
+
+/// Renders a ninepatch with the given parameters.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptions) (Ninepatch.Error || Backend.GenericError)!void {
+    const sz_top_left = ninepatch.size(0);
+    const sz_top_right = ninepatch.size(2);
+    const sz_bottom_left = ninepatch.size(6);
+    const sz_bottom_right = ninepatch.size(8);
+
+    const min_total_width_top = sz_top_left.w + sz_top_right.w;
+    const min_total_width_bot = sz_bottom_left.w + sz_bottom_right.w;
+    const min_total_height_left = sz_top_left.h + sz_bottom_left.h;
+    const min_total_height_right = sz_top_right.h + sz_bottom_right.h;
+
+    if (rs.r.w < min_total_width_top) return error.NinepatchBelowMin;
+    if (rs.r.w < min_total_width_bot) return error.NinepatchBelowMin;
+    if (min_total_width_top != min_total_width_bot) return error.NinepatchBelowMin;
+    if (rs.r.h < min_total_height_left) return error.NinepatchBelowMin;
+    if (rs.r.h < min_total_height_right) return error.NinepatchBelowMin;
+    if (min_total_height_left != min_total_height_right) return error.NinepatchBelowMin;
+
+    var rs_top_left = rs.rectToRectScale(.fromSize(sz_top_left));
+    var rs_top_right = rs.rectToRectScale(.fromSize(sz_top_right));
+    var rs_bottom_left = rs.rectToRectScale(.fromSize(sz_bottom_left));
+    var rs_bottom_right = rs.rectToRectScale(.fromSize(sz_bottom_right));
+
+    var rs_top_center = rs;
+    var rs_center_left = rs;
+    var rs_bottom_center = rs;
+    var rs_center_right = rs;
+
+    var rs_center_center = rs;
+
+    //Move rects into position
+    rs_top_center.r.w -= rs_top_left.r.w + rs_top_right.r.w;
+    rs_top_center.r.x += rs_top_left.r.w;
+    rs_top_center.r.h = rs_top_left.r.h;
+
+    rs_top_right.r.x += rs_top_right.r.w + rs_top_center.r.w;
+
+    rs_center_left.r.h -= rs_top_left.r.h + rs_bottom_left.r.h;
+    rs_center_left.r.y += rs_top_left.r.h;
+    rs_center_left.r.w = rs_top_left.r.w;
+
+    rs_bottom_left.r.y += rs_bottom_left.r.h + rs_center_left.r.h;
+
+    rs_center_right.r.h -= rs_top_right.r.h + rs_bottom_right.r.h;
+    rs_center_right.r.y += rs_top_right.r.h;
+    rs_center_right.r.w = rs_top_right.r.w;
+    rs_center_right.r.x = rs_top_right.r.x;
+
+    rs_bottom_center.r.w -= rs_bottom_left.r.w + rs_bottom_right.r.w;
+    rs_bottom_center.r.x += rs_top_left.r.w;
+    rs_bottom_center.r.h = rs_bottom_left.r.h;
+    rs_bottom_center.r.y = rs_bottom_left.r.y;
+
+    rs_bottom_right.r.x = rs_top_right.r.x;
+    rs_bottom_right.r.y = rs_bottom_left.r.y;
+
+    rs_center_center.r.w = rs_top_center.r.w;
+    rs_center_center.r.x = rs_top_center.r.x;
+    rs_center_center.r.h = rs_center_left.r.h;
+    rs_center_center.r.y = rs_center_left.r.y;
+
+    //Floor rect positions and ceil rect sizes to prevent gaps
+    rs_top_center.r.x = @floor(rs_top_center.r.x);
+    rs_top_right.r.x = @floor(rs_top_right.r.x);
+    rs_center_center.r.x = @floor(rs_center_center.r.x);
+    rs_center_right.r.x = @floor(rs_center_right.r.x);
+    rs_bottom_center.r.x = @floor(rs_bottom_center.r.x);
+    rs_bottom_right.r.x = @floor(rs_bottom_right.r.x);
+
+    rs_center_left.r.y = @floor(rs_center_left.r.y);
+    rs_center_center.r.y = @floor(rs_center_center.r.y);
+    rs_center_right.r.y = @floor(rs_center_right.r.y);
+    rs_bottom_left.r.y = @floor(rs_bottom_left.r.y);
+    rs_bottom_center.r.y = @floor(rs_bottom_center.r.y);
+    rs_bottom_right.r.y = @floor(rs_bottom_right.r.y);
+
+    rs_top_left.r.w = @ceil(rs_top_left.r.w);
+    rs_top_center.r.w = @ceil(rs_top_center.r.w);
+    rs_center_left.r.w = @ceil(rs_center_left.r.w);
+    rs_center_center.r.w = @ceil(rs_center_center.r.w);
+    rs_bottom_left.r.w = @ceil(rs_bottom_left.r.w);
+    rs_bottom_center.r.w = @ceil(rs_bottom_center.r.w);
+
+    rs_top_left.r.h = @ceil(rs_top_left.r.h);
+    rs_top_center.r.h = @ceil(rs_top_center.r.h);
+    rs_top_right.r.h = @ceil(rs_top_right.r.h);
+    rs_center_left.r.h = @ceil(rs_center_left.r.h);
+    rs_center_center.r.h = @ceil(rs_center_center.r.h);
+    rs_center_right.r.h = @ceil(rs_center_right.r.h);
+
+    //TODO: rotate rects
+    _ = &rs_top_left;
+    if (opts.rotation != 0) @panic("TODO: implement rotation for ninepatch rects");
+
+    //TODO: fade?
+    //TODO: corner radius?
+
+    //Assumption: Corners are the most likely parts to contain important details.
+    //Rendering order was decided so that corners will overwrite fill and edge patches.
+    //First render fill.
+    if (!rs_center_center.r.empty())
+        try renderTexture(ninepatch.tex, rs_center_center, .{ .uv = ninepatch.uv.uv[4], .background_color = opts.background_color, .rotation = opts.rotation, .colormod = opts.colormod, .debug = opts.debug });
+
+    //Then render edges.
+    if (!rs_top_center.r.empty())
+        try renderTexture(ninepatch.tex, rs_top_center, .{ .uv = ninepatch.uv.uv[1], .background_color = opts.background_color, .rotation = opts.rotation });
+    if (!rs_bottom_center.r.empty())
+        try renderTexture(ninepatch.tex, rs_bottom_center, .{ .uv = ninepatch.uv.uv[7], .background_color = opts.background_color, .rotation = opts.rotation });
+    if (!rs_center_left.r.empty())
+        try renderTexture(ninepatch.tex, rs_center_left, .{ .uv = ninepatch.uv.uv[3], .background_color = opts.background_color, .rotation = opts.rotation });
+    if (!rs_center_right.r.empty())
+        try renderTexture(ninepatch.tex, rs_center_right, .{ .uv = ninepatch.uv.uv[5], .background_color = opts.background_color, .rotation = opts.rotation });
+
+    //Finally render corners.
+    try renderTexture(ninepatch.tex, rs_top_left, .{ .uv = ninepatch.uv.uv[0], .background_color = opts.background_color, .rotation = opts.rotation });
+    try renderTexture(ninepatch.tex, rs_top_right, .{ .uv = ninepatch.uv.uv[2], .background_color = opts.background_color, .rotation = opts.rotation });
+    try renderTexture(ninepatch.tex, rs_bottom_left, .{ .uv = ninepatch.uv.uv[6], .background_color = opts.background_color, .rotation = opts.rotation });
+    try renderTexture(ninepatch.tex, rs_bottom_right, .{ .uv = ninepatch.uv.uv[8], .background_color = opts.background_color, .rotation = opts.rotation });
+}
+
+/// Calls `renderNinepatch` with the texture created from `source`
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn renderNinepatchImage(source: ImageSource, uv: Ninepatch.UV, rs: RectScale, opts: NinepatchOptions) (Ninepatch.Error || Backend.TextureError || StbImageError)!void {
+    if (rs.s == 0) return;
+    if (dvui.clipGet().intersect(rs.r).empty()) return;
+    try renderNinepatch(.{ .tex = try source.getTexture(), .uv = uv }, rs, opts);
+}
+
 const std = @import("std");
 const dvui = @import("dvui.zig");
 
