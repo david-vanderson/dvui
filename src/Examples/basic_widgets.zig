@@ -205,17 +205,6 @@ pub fn basicWidgets() void {
     }
 
     {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-        defer hbox.deinit();
-
-        dvui.label(@src(), "Raster Ninepatch", .{}, .{ .gravity_y = 0.5 });
-
-        const image_source: dvui.ImageSource = .{ .imageFile = .{ .bytes = img_ninepatch, .name = "ninepatch" } };
-        const image_size = dvui.imageSize(image_source) catch dvui.Size.all(24);
-        _ = dvui.ninepatch(@src(), .{ .source = image_source, .uv = .fromPixelInset(.all(8), image_size) }, .{ .expand = .horizontal });
-    }
-
-    {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
@@ -428,4 +417,3 @@ const Options = dvui.Options;
 
 const zig_favicon = Examples.zig_favicon;
 const zig_svg = Examples.zig_svg;
-const img_ninepatch = Examples.ninepatch;
