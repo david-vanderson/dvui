@@ -91,7 +91,7 @@ pub const InitOptions = struct {
 pub fn createWindow(options: InitOptions) void {
     raylib.setConfigFlags(raylib.ConfigFlags{
         .window_resizable = true,
-        .window_highdpi = false,
+        .window_highdpi = true,
         .window_hidden = dvui.accesskit_enabled,
         .vsync_hint = options.vsync,
     });

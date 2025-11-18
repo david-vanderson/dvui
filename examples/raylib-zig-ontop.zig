@@ -1,6 +1,6 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const RaylibBackend = @import("raylib-backend");
+const RaylibBackend = @import("raylib-zig-backend");
 pub const raylib = RaylibBackend.raylib;
 pub const raygui = RaylibBackend.raygui;
 
