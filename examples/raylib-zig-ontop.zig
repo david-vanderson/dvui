@@ -80,7 +80,7 @@ pub fn main() !void {
             }
         }
 
-        raylib.drawText("Congrats! You Combined Raylib, Raygui and DVUI!", 20, 400, 20, raylib.Color.white);
+        raylib.drawText("Congrats! You Combined Raylib (raylib-zig), Raygui and DVUI!", 20, 400, 20, raylib.Color.white);
 
         dvuiStuff();
 
