@@ -131,8 +131,7 @@ pub fn draw(self: *LabelWidget) void {
     const label_gravity = self.init_options.gravityGet();
     const rect = dvui.placeIn(self.data().contentRect(), self.data().options.min_size_contentGet(), .none, label_gravity);
     const rs = self.data().parent.screenRectScale(rect);
-    //const oldclip = dvui.clip(rs.r);
-    const oldclip = dvui.clipGet();
+    const oldclip = if (rot == 0.0) dvui.clip(rs.r) else dvui.clipGet();
     var iter = std.mem.splitScalar(u8, self.label_str, '\n');
     var line_height_adj: f32 = undefined;
     var first: bool = true;
