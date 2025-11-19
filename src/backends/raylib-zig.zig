@@ -121,7 +121,6 @@ pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) void {
 pub fn end(_: *RaylibBackend) void {}
 
 pub fn clear(_: *RaylibBackend) void {
-    // c.ClearBackground(c.BLANK);
     raylib.clearBackground(raylib.Color.blank);
 }
 
@@ -137,7 +136,6 @@ pub fn initWindow(options: InitOptions) !RaylibBackend {
 }
 
 pub fn init(gpa: std.mem.Allocator) RaylibBackend {
-    // if (!c.IsWindowReady()) {
     if (!raylib.isWindowReady()) {
         @panic(
             \\OS Window must be created before initializing dvui raylib backend.
@@ -174,7 +172,7 @@ pub fn accessKitShouldInitialize(self: *RaylibBackend) bool {
 
 pub fn accessKitInitInBegin(self: *RaylibBackend) !void {
     std.debug.assert(self.ak_should_initialized);
-    dvui.backend.c.ClearWindowState(dvui.backend.c.FLAG_WINDOW_HIDDEN);
+    raylib.clearWindowState(.{ .window_hidden = true });
     self.ak_should_initialized = false;
 }
 
@@ -211,7 +209,6 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
 
     //make sure all raylib draw calls are rendered
     //before rendering dvui elements
-    // c.rlDrawRenderBatchActive();
     raylib.gl.rlDrawRenderBatchActive();
 
     if (clipr_in) |clip_rect| {
@@ -497,10 +494,8 @@ pub fn cursorShow(_: *RaylibBackend, value: ?bool) bool {
     const prev = !raylib.isCursorOnScreen();
     if (value) |val| {
         if (val) {
-            // c.ShowCursor();
             raylib.showCursor();
         } else {
-            // c.HideCursor();
             raylib.showCursor();
         }
     }
@@ -864,14 +859,11 @@ fn shiftAscii(ascii: u8) u8 {
     };
 }
 
-// pub fn raylibColorToDvui(color: c.Color) dvui.Color {
 pub fn raylibColorToDvui(color: raylib.Color) dvui.Color {
     return dvui.Color{ .r = @intCast(color.r), .b = @intCast(color.b), .g = @intCast(color.g), .a = @intCast(color.a) };
 }
 
-// pub fn dvuiColorToRaylib(color: dvui.Color) c.Color {
 pub fn dvuiColorToRaylib(color: dvui.Color) raylib.Color {
-    // return c.Color{ .r = @intCast(color.r), .b = @intCast(color.b), .g = @intCast(color.g), .a = @intCast(color.a) };
     return raylib.Color{ .r = @intCast(color.r), .b = @intCast(color.b), .g = @intCast(color.g), .a = @intCast(color.a) };
 }
 
@@ -885,7 +877,6 @@ pub fn EndDrawingWaitEventTimeout(_: *RaylibBackend, timeout_micros: u32) void {
     }
 
     if (timeout_micros > 0) {
-        // c.EndDrawing();
         raylib.endDrawing();
 
         // TODO: investigate raylib with SUPPORT_CUSTOM_FRAME_CONTROL that
@@ -914,8 +905,6 @@ extern "c" fn vsnprintf(
 
 extern "c" fn SetTraceLogCallback(callback: *anyopaque) void;
 
-// TODO: Raylib Library doesn't support the SetTraceLogCallback, I am going to skip this
-// part of the code for now until I have understood this callback and found a solution.
 fn raylibLogCallback(
     msgType: c_int,
     text: [*c]const u8,
@@ -951,29 +940,20 @@ pub fn enableRaylibLogging() void {
     SetTraceLogCallback(@constCast(&raylibLogCallback));
     const level = for (std.options.log_scope_levels) |scope_level| {
         if (scope_level.scope == .Raylib) break switch (scope_level.level) {
-            // .debug => c.LOG_DEBUG,
-            // .info => c.LOG_INFO,
-            // .warn => c.LOG_WARNING,
-            // .wee => c.LOG_ERROR,
             .debug => raylib.TraceLogLevel.debug,
             .info => raylib.TraceLogLevel.info,
             .warn => raylib.TraceLogLevel.warning,
             .wee => raylib.TraceLogLevel.err,
         };
     } else if (std.log.logEnabled(.debug, .RaylibBackend))
-        // c.LOG_DEBUG
         raylib.TraceLogLevel.debug
     else if (std.log.logEnabled(.info, .RaylibBackend))
-        // c.LOG_INFO
         raylib.TraceLogLevel.info
     else if (std.log.logEnabled(.warn, .RaylibBackend))
-        // c.LOG_WARNING
         raylib.TraceLogLevel.warning
     else
-        // c.LOG_ERROR;
         raylib.TraceLogLevel.err;
 
-    // c.SetTraceLogLevel(level);
     raylib.setTraceLogLevel(level);
 }
 
@@ -1018,7 +998,6 @@ pub fn main() !void {
     defer if (app.deinitFn) |deinitFn| deinitFn();
 
     main_loop: while (true) {
-        // c.BeginDrawing();
         raylib.beginDrawing();
 
         // beginWait coordinates with waitTime below to run frames only when needed
