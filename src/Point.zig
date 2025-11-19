@@ -68,6 +68,11 @@ pub fn PointType(comptime units: dvui.enums.Units) type {
             }
         }
 
+        pub fn stroke(self: Point.Physical, opts: dvui.Path.StrokeOptions) void {
+            const path: dvui.Path = .{ .points = &.{self} };
+            path.stroke(opts);
+        }
+
         /// Only valid between `dvui.Window.begin`and `dvui.Window.end`.
         pub fn toNatural(self: Point.Physical) Point.Natural {
             return self.scale(1 / dvui.windowNaturalScale(), Point.Natural);

@@ -106,6 +106,10 @@ pub const TextOptions = struct {
     rs: RectScale,
     color: Color,
     background_color: ?Color = null,
+
+    /// radians clockwise, rotates around top-left corner (rs.x/rs.y)
+    /// - doesn't support background or selection yet
+    rotation: f32 = 0.0,
     sel_start: ?usize = null,
     sel_end: ?usize = null,
     sel_color: ?Color = null,
@@ -316,7 +320,12 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
             .fill(.{}, .{ .color = opts.sel_color orelse dvui.themeGet().focus, .fade = 0 });
     }
 
-    try renderTriangles(builder.build_unowned(), texture_atlas);
+    var tri = builder.build();
+    defer tri.deinit(cw.lifo());
+
+    tri.rotate(.{ .x = x_start, .y = y }, opts.rotation);
+
+    try renderTriangles(tri, texture_atlas);
 }
 
 pub const TextureOptions = struct {
