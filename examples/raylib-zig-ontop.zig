@@ -1,10 +1,12 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const RaylibBackend = @import("raylib-backend");
+const RaylibBackend = @import("raylib-zig-backend");
+pub const raylib = RaylibBackend.raylib;
+pub const raygui = RaylibBackend.raygui;
+
 comptime {
     std.debug.assert(@hasDecl(RaylibBackend, "RaylibBackend"));
 }
-const ray = RaylibBackend.c;
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
@@ -23,10 +25,12 @@ pub fn main() !void {
     defer _ = gpa_instance.deinit();
 
     // create OS window directly with raylib
-    ray.SetConfigFlags(ray.FLAG_WINDOW_RESIZABLE);
-    ray.SetConfigFlags(ray.FLAG_VSYNC_HINT);
-    ray.InitWindow(800, 600, "DVUI Raylib Ontop Example");
-    defer ray.CloseWindow();
+    raylib.setConfigFlags(.{
+        .window_resizable = true,
+        .vsync_hint = true,
+    });
+    raylib.initWindow(800, 600, "DVUI Raylib Ontop Example");
+    defer raylib.closeWindow();
 
     // init Raylib backend
     // init() means the app owns the window (and must call CloseWindow itself)
@@ -38,12 +42,11 @@ pub fn main() !void {
     // OS window is managed by raylib, not dvui
     var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
     defer win.deinit();
-    try win.fonts.addBuiltinFontsForTheme(win.gpa, dvui.Theme.builtin.adwaita_light);
 
     var selected_color: dvui.Color = dvui.Color.white;
 
-    while (!ray.WindowShouldClose()) {
-        ray.BeginDrawing();
+    while (!raylib.windowShouldClose()) {
+        raylib.beginDrawing();
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(std.time.nanoTimestamp());
@@ -54,19 +57,19 @@ pub fn main() !void {
         if (backend.shouldBlockRaylibInput()) {
             // NOTE: I am using raygui here because it has a simple lock-unlock system
             // Non-raygui raylib apps could also easily implement such a system
-            ray.GuiLock();
+            raygui.lock();
         } else {
-            ray.GuiUnlock();
+            raygui.unlock();
         }
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        ray.ClearBackground(RaylibBackend.dvuiColorToRaylib(dvui.Color.black));
+        raylib.clearBackground(RaylibBackend.dvuiColorToRaylib(dvui.Color.black));
 
         {
             var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
             defer b.deinit();
 
-            if (ray.GuiIsLocked()) {
+            if (raygui.isLocked()) {
                 dvui.label(@src(), "Raygui Status: Locked", .{}, .{});
             } else {
                 dvui.label(@src(), "Raygui Status: Unlocked", .{}, .{});
@@ -77,7 +80,7 @@ pub fn main() !void {
             }
         }
 
-        ray.DrawText("Congrats! You Combined Raylib (C api), Raygui and DVUI!", 20, 400, 20, ray.RAYWHITE);
+        raylib.drawText("Congrats! You Combined Raylib (raylib-zig), Raygui and DVUI!", 20, 400, 20, raylib.Color.white);
 
         dvuiStuff();
 
@@ -94,7 +97,7 @@ pub fn main() !void {
             backend.setCursor(.arrow);
         }
 
-        ray.EndDrawing();
+        raylib.endDrawing();
     }
 }
 
@@ -105,14 +108,14 @@ fn colorPicker(result: *dvui.Color) void {
         defer overlay.deinit();
 
         const bounds = overlay.data().contentRectScale().r;
-        const ray_bounds: ray.Rectangle = .{
+        const ray_bounds: raylib.Rectangle = .{
             .x = bounds.x,
             .y = bounds.y,
             .width = bounds.w,
             .height = bounds.h,
         };
-        var c_color: ray.Color = RaylibBackend.dvuiColorToRaylib(result.*);
-        _ = ray.GuiColorPicker(ray_bounds, "Pick Color", &c_color);
+        var c_color: raylib.Color = RaylibBackend.dvuiColorToRaylib(result.*);
+        _ = raygui.colorPicker(ray_bounds, "Pick Color", &c_color);
         result.* = RaylibBackend.raylibColorToDvui(c_color);
     }
 
