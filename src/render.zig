@@ -411,14 +411,14 @@ pub fn renderImage(source: ImageSource, rs: RectScale, opts: TextureOptions) (Ba
 }
 
 pub const NinepatchOptions = struct {
-    // rotation: f32 = 0,
     colormod: Color = .{},
     background_color: ?Color = null,
     debug: bool = false,
 
+    //TODO: implement rotation
+    // rotation: f32 = 0,
+    //TODO: implement fade
     // fade: f32 = 0.0,
-    ///Pointer to size variable to store
-    ninepatch_min: ?*Size = null,
 };
 
 /// Renders a ninepatch with the given parameters.
@@ -540,10 +540,17 @@ pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptio
 /// Calls `renderNinepatch` with the texture created from `source`
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn renderNinepatchImage(patch: Ninepatch.Image, rs: RectScale, opts: NinepatchOptions) (Ninepatch.Error || Backend.TextureError || StbImageError)!void {
+pub fn renderNinepatchImage(patch: Ninepatch.Source, rs: RectScale, opts: NinepatchOptions) (Ninepatch.Error || Backend.TextureError || StbImageError)!void {
     if (rs.s == 0) return;
     if (dvui.clipGet().intersect(rs.r).empty()) return;
-    try renderNinepatch(.{ .tex = try (ImageSource{ .imageFile = patch.source }).getTexture(), .uv = patch.uv }, rs, opts);
+    const texture_src = ImageSource{ .imageFile = .{
+        .bytes = patch.bytes,
+        .name = patch.name,
+        .interpolation = patch.interpolation,
+        .invalidation = patch.invalidation,
+    } };
+    const texture = try texture_src.getTexture();
+    try renderNinepatch(.{ .tex = texture, .uv = patch.uv }, rs, opts);
 }
 
 const std = @import("std");
