@@ -25,9 +25,9 @@ pub const Style = struct {
     fill: ?Color = null,
     fill_hover: ?Color = null,
     fill_press: ?Color = null,
-    ninepatch_fill: ?dvui.Ninepatch.Image = null,
-    ninepatch_hover: ?dvui.Ninepatch.Image = null,
-    ninepatch_press: ?dvui.Ninepatch.Image = null,
+    ninepatch_fill: ?dvui.Ninepatch.Source = null,
+    ninepatch_hover: ?dvui.Ninepatch.Source = null,
+    ninepatch_press: ?dvui.Ninepatch.Source = null,
     text: ?Color = null,
     text_hover: ?Color = null,
     text_press: ?Color = null,
@@ -55,13 +55,13 @@ fill_hover: ?Color = null,
 fill_press: ?Color = null,
 
 /// ninepatch for .content Style, fallback for any Style without fill.
-ninepatch_fill: ?dvui.Ninepatch.Image = null,
+ninepatch_fill: ?dvui.Ninepatch.Source = null,
 
 /// ninepatch when hovered for .content Style, fallback for any Style without fill.
-ninepatch_hover: ?dvui.Ninepatch.Image = null,
+ninepatch_hover: ?dvui.Ninepatch.Source = null,
 
 /// ninepatch when pressed for .content Style, fallback for any Style without fill.
-ninepatch_press: ?dvui.Ninepatch.Image = null,
+ninepatch_press: ?dvui.Ninepatch.Source = null,
 
 /// text color for .content Style, fallback for any Style without text.  Example is text in a textLayout or textEntry.  Also used as general foreground color like a checkmark or icon color.
 text: Color,
@@ -179,7 +179,7 @@ pub fn adjustColorForState(self: *const Theme, col: Color, ask: Options.ColorAsk
     });
 }
 
-pub fn ninepatch(self: *const Theme, style_name: Style.Name, ask: Options.NinepatchAsk) ?dvui.Ninepatch.Image {
+pub fn ninepatch(self: *const Theme, style_name: Style.Name, ask: Options.NinepatchAsk) ?dvui.Ninepatch.Source {
     const cs: Style = switch (style_name) {
         .content => return switch (ask) {
             .ninepatch_fill => self.ninepatch_fill,

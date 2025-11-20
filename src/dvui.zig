@@ -230,7 +230,7 @@ pub const renderIcon = render.renderIcon;
 pub const renderImage = render.renderImage;
 pub const RenderNinepatchOptions = render.NinepatchOptions;
 pub const renderNinepatch = render.renderNinepatch;
-pub const renderNinepatchImage = render.renderNinepatchImage;
+pub const renderNinepatchSource = render.renderNinepatchSource;
 
 pub const layout = @import("layout.zig");
 pub const BasicLayout = layout.BasicLayout;
