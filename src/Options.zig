@@ -6,7 +6,7 @@ const Font = dvui.Font;
 const Rect = dvui.Rect;
 const Size = dvui.Size;
 const Theme = dvui.Theme;
-const Ninepatch = dvui.Ninepatch.Source;
+const Ninepatch = dvui.Ninepatch;
 
 const Options = @This();
 
@@ -244,12 +244,15 @@ pub const NinepatchAsk = enum {
     ninepatch_press,
 };
 
-pub fn ninepatch(self: *const Options, ask: NinepatchAsk) ?dvui.Ninepatch.Source {
-    return switch (ask) {
+pub fn ninepatch(self: *const Options, ask: NinepatchAsk) ?Ninepatch {
+    const np_opt = switch (ask) {
         .ninepatch_fill => self.ninepatch_fill,
         .ninepatch_hover => self.ninepatch_hover orelse self.ninepatch_fill,
         .ninepatch_press => self.ninepatch_press orelse self.ninepatch_fill,
-    } orelse self.themeGet().ninepatch(self.styleGet(), ask);
+    };
+    if (np_opt) |np| return np;
+    const npsrc = self.themeGet().ninepatch(self.styleGet(), ask) orelse return null;
+    return npsrc.getNinepatch() catch return null;
 }
 
 pub fn fontGet(self: *const Options) Font {
@@ -298,16 +301,13 @@ pub fn backgroundSize(self: *const Options) ?Size {
     if (!self.backgroundGet()) return null;
 
     var min_size = Size{};
-    if (self.ninepatch(.ninepatch_fill)) |npsrc| blk: {
-        const np = npsrc.getNinepatch() catch break :blk;
+    if (self.ninepatch(.ninepatch_fill)) |np| {
         min_size = min_size.max(np.minSize());
     }
-    if (self.ninepatch(.ninepatch_hover)) |npsrc| blk: {
-        const np = npsrc.getNinepatch() catch break :blk;
+    if (self.ninepatch(.ninepatch_hover)) |np| {
         min_size = min_size.max(np.minSize());
     }
-    if (self.ninepatch(.ninepatch_press)) |npsrc| blk: {
-        const np = npsrc.getNinepatch() catch break :blk;
+    if (self.ninepatch(.ninepatch_press)) |np| {
         min_size = min_size.max(np.minSize());
     }
     return min_size;
