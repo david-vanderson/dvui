@@ -2,19 +2,19 @@ pub const builtins = struct {
     pub const outset = dvui.Ninepatch.Source{
         .bytes = @embedFile("themes/ninepatch98.png"),
         .name = "ninepatch98.png",
-        .uv = .fromPixelInset(.all(8), .all(24)),
+        .uv = &UV.fromPixelInset(.all(8), .all(24)),
     };
     pub const inset = dvui.Ninepatch.Source{
         .bytes = @embedFile("themes/inset.png"),
         .name = "inset.png",
-        .uv = .fromPixelInset(.all(8), .all(24)),
+        .uv = &UV.fromPixelInset(.all(8), .all(24)),
     };
 };
 
 const Ninepatch = @This();
 
 tex: Texture,
-uv: UV,
+uv: *const UV,
 
 pub fn size(this: *const @This(), patch: usize) Size {
     return .{
@@ -107,7 +107,7 @@ pub const Error = error{
 pub const Source = struct {
     bytes: []const u8,
     name: []const u8,
-    uv: UV,
+    uv: *const UV,
     interpolation: TextureInterpolation = .linear,
     invalidation: Texture.ImageSource.InvalidationStrategy = .ptr,
 

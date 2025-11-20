@@ -2,6 +2,7 @@ const std = @import("std");
 const dvui = @import("dvui.zig");
 
 const Color = dvui.Color;
+const Ninepatch = dvui.Ninepatch;
 const Options = dvui.Options;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
@@ -176,7 +177,7 @@ pub fn visible(self: *const WidgetData) bool {
 
 pub fn borderAndBackground(self: *const WidgetData, opts: struct {
     fill_color: ?Color = null,
-    ninepatch: ?dvui.Ninepatch.Source = null,
+    ninepatch: ?Ninepatch = null,
 }) void {
     if (!self.visible()) {
         return;
@@ -199,7 +200,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
             const rs = self.backgroundRectScale();
             const fill = opts.fill_color orelse self.options.color(.fill);
             const border = self.options.color(.border);
-            dvui.renderNinepatchSource(np, rs, .{ .colormod_fill = fill, .colormod_border = border }) catch |err| {
+            dvui.renderNinepatch(np, rs, .{ .colormod_fill = fill, .colormod_border = border }) catch |err| {
                 dvui.log.err("while drawing ninepatch: {}, {}", .{ err, rs });
             };
         }
