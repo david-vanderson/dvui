@@ -43,13 +43,14 @@ pub fn animations() void {
             defer hbox2.deinit();
 
             var button_wiggle = ButtonWidget.init(@src(), .{}, .{ .gravity_x = 0.5 });
+            button_wiggle.install();
             defer button_wiggle.deinit();
 
             if (dvui.animationGet(button_wiggle.data().id, "xoffset")) |a| {
                 button_wiggle.data().rect.x += 20 * (1.0 - a.value()) * (1.0 - a.value()) * @sin(a.value() * std.math.pi * 50);
+                button_wiggle.data().rect_scale = button_wiggle.data().rectScaleFromParent();
             }
 
-            button_wiggle.install();
             button_wiggle.processEvents();
             button_wiggle.drawBackground();
             dvui.labelNoFmt(@src(), "Wiggle", .{}, button_wiggle.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
