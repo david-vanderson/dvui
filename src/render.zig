@@ -430,10 +430,10 @@ pub fn renderNinepatch(ninepatch: *const Ninepatch, rs: RectScale, opts: Ninepat
     const sz_bottom_left = ninepatch.size(6);
     const sz_bottom_right = ninepatch.size(8);
 
-    const min_size = ninepatch.minSize();
+    const min_size = ninepatch.minSize().scale(rs.s, Rect.Physical);
+    const r_size = rs.r.size();
 
-    if (rs.r.w < min_size.w) return error.NinepatchBelowMin;
-    if (rs.r.h < min_size.h) return error.NinepatchBelowMin;
+    if (r_size.w < min_size.w or r_size.h < min_size.h) return error.NinepatchBelowMin;
 
     var rs_top_left = rs.rectToRectScale(.fromSize(sz_top_left));
     var rs_top_right = rs.rectToRectScale(.fromSize(sz_top_right));
@@ -522,19 +522,19 @@ pub fn renderNinepatch(ninepatch: *const Ninepatch, rs: RectScale, opts: Ninepat
 
     //Then render edges.
     if (!rs_top_center.r.empty())
-        try renderTexture(ninepatch.tex, rs_top_center, .{ .uv = ninepatch.uv.uv[1], .colormod = opts.colormod_border orelse .white });
+        try renderTexture(ninepatch.tex, rs_top_center, .{ .uv = ninepatch.uv.uv[1], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
     if (!rs_bottom_center.r.empty())
-        try renderTexture(ninepatch.tex, rs_bottom_center, .{ .uv = ninepatch.uv.uv[7], .colormod = opts.colormod_border orelse .white });
+        try renderTexture(ninepatch.tex, rs_bottom_center, .{ .uv = ninepatch.uv.uv[7], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
     if (!rs_center_left.r.empty())
-        try renderTexture(ninepatch.tex, rs_center_left, .{ .uv = ninepatch.uv.uv[3], .colormod = opts.colormod_border orelse .white });
+        try renderTexture(ninepatch.tex, rs_center_left, .{ .uv = ninepatch.uv.uv[3], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
     if (!rs_center_right.r.empty())
-        try renderTexture(ninepatch.tex, rs_center_right, .{ .uv = ninepatch.uv.uv[5], .colormod = opts.colormod_border orelse .white });
+        try renderTexture(ninepatch.tex, rs_center_right, .{ .uv = ninepatch.uv.uv[5], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
 
     //Finally render corners.
-    try renderTexture(ninepatch.tex, rs_top_left, .{ .uv = ninepatch.uv.uv[0], .colormod = opts.colormod_border orelse .white });
-    try renderTexture(ninepatch.tex, rs_top_right, .{ .uv = ninepatch.uv.uv[2], .colormod = opts.colormod_border orelse .white });
-    try renderTexture(ninepatch.tex, rs_bottom_left, .{ .uv = ninepatch.uv.uv[6], .colormod = opts.colormod_border orelse .white });
-    try renderTexture(ninepatch.tex, rs_bottom_right, .{ .uv = ninepatch.uv.uv[8], .colormod = opts.colormod_border orelse .white });
+    try renderTexture(ninepatch.tex, rs_top_left, .{ .uv = ninepatch.uv.uv[0], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
+    try renderTexture(ninepatch.tex, rs_top_right, .{ .uv = ninepatch.uv.uv[2], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
+    try renderTexture(ninepatch.tex, rs_bottom_left, .{ .uv = ninepatch.uv.uv[6], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
+    try renderTexture(ninepatch.tex, rs_bottom_right, .{ .uv = ninepatch.uv.uv[8], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
 }
 
 /// Calls `renderNinepatch` with the texture created from `source`
