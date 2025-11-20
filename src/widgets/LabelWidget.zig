@@ -166,7 +166,7 @@ pub fn draw(self: *LabelWidget) void {
         const liners = self.data().parent.screenRectScale(lineRect);
         r.x = liners.r.x;
 
-        var render_r = r;
+        var render_p = r.topLeft();
         if (rot != 0.0) {
             const cos = @cos(rot);
             const sin = @sin(rot);
@@ -189,8 +189,8 @@ pub fn draw(self: *LabelWidget) void {
             };
 
             const xy = origin.plus(rotated);
-            render_r.x = xy.x;
-            render_r.y = xy.y;
+            render_p.x = xy.x;
+            render_p.y = xy.y;
 
             //r.stroke(.all(0), .{ .after = true, .thickness = 1.0, .color = .red });
         }
@@ -198,7 +198,8 @@ pub fn draw(self: *LabelWidget) void {
         dvui.renderText(.{
             .font = self.data().options.fontGet(),
             .text = line,
-            .rs = .{ .r = render_r, .s = rs.s },
+            .p = render_p,
+            .rs = rs,
             .color = self.data().options.color(.text),
             .rotation = rot,
         }) catch |err| {
