@@ -11,6 +11,8 @@ pub const builtins = struct {
     };
 };
 
+const Ninepatch = @This();
+
 tex: Texture,
 uv: UV,
 
@@ -108,6 +110,17 @@ pub const Source = struct {
     uv: UV,
     interpolation: TextureInterpolation = .linear,
     invalidation: Texture.ImageSource.InvalidationStrategy = .ptr,
+
+    pub fn getNinepatch(patch: Source) !Ninepatch {
+        const texture_src = ImageSource{ .imageFile = .{
+            .bytes = patch.bytes,
+            .name = patch.name,
+            .interpolation = patch.interpolation,
+            .invalidation = patch.invalidation,
+        } };
+        const tex = try texture_src.getTexture();
+        return .{ .tex = tex, .uv = patch.uv };
+    }
 };
 
 const std = @import("std");

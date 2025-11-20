@@ -424,7 +424,7 @@ pub const NinepatchOptions = struct {
 /// Renders a ninepatch with the given parameters.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptions) (Ninepatch.Error || Backend.GenericError)!void {
+pub fn renderNinepatch(ninepatch: *const Ninepatch, rs: RectScale, opts: NinepatchOptions) (Ninepatch.Error || Backend.GenericError)!void {
     const sz_top_left = ninepatch.size(0);
     const sz_top_right = ninepatch.size(2);
     const sz_bottom_left = ninepatch.size(6);
@@ -543,14 +543,8 @@ pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptio
 pub fn renderNinepatchSource(patch: Ninepatch.Source, rs: RectScale, opts: NinepatchOptions) (Ninepatch.Error || Backend.TextureError || StbImageError)!void {
     if (rs.s == 0) return;
     if (dvui.clipGet().intersect(rs.r).empty()) return;
-    const texture_src = ImageSource{ .imageFile = .{
-        .bytes = patch.bytes,
-        .name = patch.name,
-        .interpolation = patch.interpolation,
-        .invalidation = patch.invalidation,
-    } };
-    const texture = try texture_src.getTexture();
-    try renderNinepatch(.{ .tex = texture, .uv = patch.uv }, rs, opts);
+    const np = try patch.getNinepatch();
+    try renderNinepatch(&np, rs, opts);
 }
 
 const std = @import("std");
