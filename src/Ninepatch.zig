@@ -1,3 +1,16 @@
+pub const builtins = struct {
+    pub const outset = dvui.Ninepatch.Source{
+        .bytes = @embedFile("themes/ninepatch98.png"),
+        .name = "ninepatch98.png",
+        .uv = .fromPixelInset(.all(8), .all(24)),
+    };
+    pub const inset = dvui.Ninepatch.Source{
+        .bytes = @embedFile("themes/inset.png"),
+        .name = "inset.png",
+        .uv = .fromPixelInset(.all(8), .all(24)),
+    };
+};
+
 tex: Texture,
 uv: UV,
 
@@ -89,16 +102,21 @@ pub const Error = error{
     NinepatchBelowMin,
 };
 
-pub const Image = struct {
-    source: ImageSource.ImageFile,
+pub const Source = struct {
+    bytes: []const u8,
+    name: []const u8,
     uv: UV,
+    interpolation: TextureInterpolation = .linear,
+    invalidation: Texture.ImageSource.InvalidationStrategy = .ptr,
 };
 
 const std = @import("std");
 const dvui = @import("dvui.zig");
 
+const Color = dvui.Color;
 const Size = dvui.Size;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
-const Texture = @import("Texture.zig");
+const Texture = dvui.Texture;
 const ImageSource = dvui.ImageSource;
+const TextureInterpolation = dvui.enums.TextureInterpolation;

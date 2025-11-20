@@ -216,9 +216,11 @@ pub fn styling() void {
             });
             defer vbox.deinit();
 
-            _ = dvui.ninepatch(@src(), .{ .source = .{ .imageFile = ninepatch.outset.source }, .uv = ninepatch.outset.uv }, .{
+            var ninepatch = dvui.box(@src(), .{}, .{
                 .expand = .both,
+                .ninepatch_fill = dvui.Ninepatch.builtins.outset,
             });
+            defer ninepatch.deinit();
         }
     }
 }
@@ -295,7 +297,6 @@ test "DOCIMG styling" {
     try t.saveImage(frame, null, "Examples-styling.png");
 }
 
-const ninepatch = Examples.ninepatch;
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const Examples = @import("../Examples.zig");
