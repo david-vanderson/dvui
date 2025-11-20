@@ -104,6 +104,10 @@ pub const TextOptions = struct {
     font: Font,
     text: []const u8,
     rs: RectScale,
+
+    /// Draw text starting here (top left corner of start of text).  If null,
+    /// use rs.r.topLeft().
+    p: ?Point.Physical = null,
     color: Color,
     background_color: ?Color = null,
 
@@ -175,19 +179,23 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
     const col: Color.PMA = .fromColor(opts.color.opacity(cw.alpha));
 
-    const x_start: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
-    var x = x_start;
-    var max_x = x_start;
-    const y: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.y) else opts.rs.r.y;
+    var start = opts.p orelse opts.rs.r.topLeft();
+    if (cw.snap_to_pixels) {
+        start.x = @round(start.x);
+        start.y = @round(start.y);
+    }
+
+    var x = start.x;
+    var max_x = start.x;
 
     if (opts.debug) {
-        dvui.log.debug("renderText x {d} y {d}\n", .{ x, y });
+        dvui.log.debug("renderText {f}\n", .{start});
     }
 
     var sel_in: bool = false;
     var sel_start_x: f32 = x;
     var sel_end_x: f32 = x;
-    var sel_max_y: f32 = y;
+    var sel_max_y: f32 = start.y;
     var sel_start: usize = opts.sel_start orelse 0;
     sel_start = @min(sel_start, utf8_text.len);
     var sel_end: usize = opts.sel_end orelse 0;
@@ -229,7 +237,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         i += cplen;
         last_codepoint = codepoint;
 
-        if (x + gi.leftBearing * target_fraction < x_start) {
+        if (x + gi.leftBearing * target_fraction < start.x) {
             // Glyph extends left of the start, like the first letter being
             // "j", which has a negative left bearing.
             //
@@ -237,7 +245,8 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
             // includes this extra space.
 
             //std.debug.print("moving x from {d} to {d}\n", .{ x, x_start - gi.leftBearing * target_fraction });
-            x = x_start - gi.leftBearing * target_fraction;
+            start.x -= gi.leftBearing * target_fraction;
+            x = start.x;
         }
 
         const nextx = x + gi.advance * target_fraction;
@@ -266,7 +275,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
             var v: Vertex = undefined;
 
             v.pos.x = leftx;
-            v.pos.y = y + gi.topBearing * target_fraction;
+            v.pos.y = start.y + gi.topBearing * target_fraction;
             v.col = col;
             v.uv = gi.uv;
             builder.appendVertex(v);
@@ -285,7 +294,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
             v.uv[0] = gi.uv[0] + gi.w / atlas_size.w;
             builder.appendVertex(v);
 
-            v.pos.y = y + (gi.topBearing + gi.h) * target_fraction;
+            v.pos.y = start.y + (gi.topBearing + gi.h) * target_fraction;
             sel_max_y = @max(sel_max_y, v.pos.y);
             v.uv[1] = gi.uv[1] + gi.h / atlas_size.h;
             builder.appendVertex(v);
@@ -323,7 +332,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     var tri = builder.build();
     defer tri.deinit(cw.lifo());
 
-    tri.rotate(.{ .x = x_start, .y = y }, opts.rotation);
+    tri.rotate(.{ .x = start.x, .y = start.y }, opts.rotation);
 
     try renderTriangles(tri, texture_atlas);
 }
