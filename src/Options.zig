@@ -6,7 +6,7 @@ const Font = dvui.Font;
 const Rect = dvui.Rect;
 const Size = dvui.Size;
 const Theme = dvui.Theme;
-const Ninepatch = dvui.Ninepatch.Image;
+const Ninepatch = dvui.Ninepatch.Source;
 
 const Options = @This();
 
@@ -244,7 +244,7 @@ pub const NinepatchAsk = enum {
     ninepatch_press,
 };
 
-pub fn ninepatch(self: *const Options, ask: NinepatchAsk) ?dvui.Ninepatch.Image {
+pub fn ninepatch(self: *const Options, ask: NinepatchAsk) ?dvui.Ninepatch.Source {
     return switch (ask) {
         .ninepatch_fill => self.ninepatch_fill,
         .ninepatch_hover => self.ninepatch_hover orelse self.ninepatch_fill,
