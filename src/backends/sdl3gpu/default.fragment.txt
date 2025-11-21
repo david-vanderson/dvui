@@ -1,0 +1,56 @@
+generator       : Google spiregg
+source lang     : HLSL
+source lang ver : 600
+source file     : 
+entry point     : main (stage=PS)
+
+
+  Input variables: 2
+
+    0:
+      spirv id  : 2
+      location  : 0
+      type      : float4
+      semantic  : 
+      name      : in.var.COLOR
+      qualifier : 
+    1:
+      spirv id  : 3
+      location  : 1
+      type      : float2
+      semantic  : 
+      name      : in.var.TEXCOORD0
+      qualifier : 
+
+
+  Output variables: 1
+
+    0:
+      spirv id  : 4
+      location  : 0
+      type      : float4
+      semantic  : 
+      name      : out.var.SV_Target0
+      qualifier : 
+
+
+  Descriptor bindings: 2
+
+    Binding 2.0
+      spirv id : 6
+      set      : 2
+      binding  : 0
+      type     : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE (SRV)
+      count    : 1
+      accessed : true
+      name     : Texture0 (type.2d.image)
+
+    Binding 2.0
+      spirv id : 8
+      set      : 2
+      binding  : 0
+      type     : VK_DESCRIPTOR_TYPE_SAMPLER (SAMPLER)
+      count    : 1
+      accessed : true
+      name     : Sampler0 (type.sampler)
+
