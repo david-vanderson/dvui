@@ -380,7 +380,7 @@ pub var current_window: ?*Window = null;
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn currentWindow() *Window {
-    return current_window orelse unreachable;
+    return current_window orelse @panic("current_window was null, most dvui functions must be between Window.begin/end");
 }
 
 /// Allocates space for a widget to the alloc stack, or the arena
