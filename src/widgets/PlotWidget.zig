@@ -1,5 +1,7 @@
 pub const PlotWidget = @This();
 
+src: std.builtin.SourceLocation,
+opts: Options,
 /// SAFETY: Set in `install`
 box: BoxWidget = undefined,
 /// SAFETY: Set in `install`
@@ -273,8 +275,9 @@ pub const Line = struct {
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) PlotWidget {
     return .{
+        .src = src,
+        .opts = opts,
         .init_options = init_opts,
-        .box = BoxWidget.init(src, .{ .dir = .vertical }, defaults.override(opts)),
     };
 }
 
@@ -295,6 +298,7 @@ pub fn dataForRange(self: *PlotWidget, data_point: Data) void {
 }
 
 pub fn install(self: *PlotWidget) void {
+    self.box.init(self.src, .{ .dir = .vertical }, defaults.override(self.opts));
     if (self.init_options.x_axis) |xa| {
         self.x_axis = xa;
     } else {
@@ -313,7 +317,6 @@ pub fn install(self: *PlotWidget) void {
         self.y_axis = &self.y_axis_store;
     }
 
-    self.box.install();
     self.box.drawBackground();
 
     if (self.init_options.title) |title| {
