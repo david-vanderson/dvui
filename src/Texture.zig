@@ -94,13 +94,7 @@ pub const Cache = struct {
 
 pub const ImageSource = union(enum) {
     /// bytes of an supported image file (i.e. png, jpeg, gif, ...)
-    imageFile: struct {
-        bytes: []const u8,
-        // Optional name/filename for debugging
-        name: []const u8 = "imageFile",
-        interpolation: TextureInterpolation = .linear,
-        invalidation: InvalidationStrategy = .ptr,
-    },
+    imageFile: ImageFile,
 
     /// bytes of an premultiplied rgba u8 array in row major order
     pixelsPMA: struct {
@@ -139,6 +133,14 @@ pub const ImageSource = union(enum) {
         bytes,
         /// Do not cache the texture at all and generate a new texture each frame
         always,
+    };
+
+    pub const ImageFile = struct {
+        bytes: []const u8,
+        // Optional name/filename for debugging
+        name: []const u8 = "imageFile",
+        interpolation: TextureInterpolation = .linear,
+        invalidation: InvalidationStrategy = .ptr,
     };
 
     /// Pass the return value of this to `dvui.textureInvalidate` to

@@ -2,6 +2,7 @@ const std = @import("std");
 const dvui = @import("dvui.zig");
 
 const Color = dvui.Color;
+const Ninepatch = dvui.Ninepatch;
 const Options = dvui.Options;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
@@ -174,7 +175,10 @@ pub fn visible(self: *const WidgetData) bool {
     return self.borderRectScale().r.visible();
 }
 
-pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?Color = null }) void {
+pub fn borderAndBackground(self: *const WidgetData, opts: struct {
+    fill_color: ?Color = null,
+    ninepatch: ?Ninepatch = null,
+}) void {
     if (!self.visible()) {
         return;
     }
@@ -190,47 +194,60 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
 
     var bg = self.options.backgroundGet();
     const b = self.options.borderGet();
-    if (b.nonZero()) {
-        const uniform: bool = (b.x == b.y and b.x == b.w and b.x == b.h);
-        if (uniform) {
-            // draw border as stroked path
-            const r = self.borderRect().inset(b.scale(0.5, Rect));
-            const rs = self.rectScale().rectToRectScale(r.offsetNeg(self.rect));
-            rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = b.x * rs.s, .color = self.options.color(.border) });
-        } else {
-            // draw border as large rect with background on top
-            if (!bg) {
-                dvui.log.debug("borderAndBackground {x} forcing background on to support non-uniform border\n", .{self.id});
-                bg = true;
-            }
 
-            var rs = self.borderRectScale();
-            if (!rs.r.empty()) {
-                const fade: f32 = if (self.rectScale().s >= 2.0) 0.0 else 1.0;
-                if (fade > 0) {
-                    // if any border is zero, inset by half the fade so it doesn't bleed out
-                    var inset: Rect.Physical = .{};
-                    if (b.x == 0) inset.x = fade * 0.5;
-                    if (b.y == 0) inset.y = fade * 0.5;
-                    if (b.w == 0) inset.w = fade * 0.5;
-                    if (b.h == 0) inset.h = fade * 0.5;
-                    rs.r = rs.r.inset(inset);
+    if (opts.ninepatch orelse self.options.ninepatch(.ninepatch_fill)) |np| {
+        if (bg) {
+            const rs = self.backgroundRectScale();
+            const fill = opts.fill_color orelse self.options.color(.fill);
+            const border = self.options.color(.border);
+            dvui.renderNinepatch(np, rs, .{ .colormod_fill = fill, .colormod_border = border }) catch |err| {
+                dvui.log.err("while drawing ninepatch: {}, {}", .{ err, rs });
+            };
+        }
+    } else {
+        if (b.nonZero()) {
+            const uniform: bool = (b.x == b.y and b.x == b.w and b.x == b.h);
+            if (uniform) {
+                // draw border as stroked path
+                const r = self.borderRect().inset(b.scale(0.5, Rect));
+                const rs = self.rectScale().rectToRectScale(r.offsetNeg(self.rect));
+                rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = b.x * rs.s, .color = self.options.color(.border) });
+            } else {
+                // draw border as large rect with background on top
+                if (!bg) {
+                    dvui.log.debug("borderAndBackground {x} forcing background on to support non-uniform border\n", .{self.id});
+                    bg = true;
                 }
-                rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{
-                    .color = self.options.color(.border),
-                    .fade = fade,
-                });
+
+                var rs = self.borderRectScale();
+                if (!rs.r.empty()) {
+                    const fade: f32 = if (self.rectScale().s >= 2.0) 0.0 else 1.0;
+                    if (fade > 0) {
+                        // if any border is zero, inset by half the fade so it doesn't bleed out
+                        var inset: Rect.Physical = .{};
+                        if (b.x == 0) inset.x = fade * 0.5;
+                        if (b.y == 0) inset.y = fade * 0.5;
+                        if (b.w == 0) inset.w = fade * 0.5;
+                        if (b.h == 0) inset.h = fade * 0.5;
+                        rs.r = rs.r.inset(inset);
+                    }
+                    rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{
+                        .color = self.options.color(.border),
+                        .fade = fade,
+                    });
+                }
             }
         }
-    }
 
-    if (bg) {
-        const rs = self.backgroundRectScale();
-        if (!rs.r.empty()) {
-            rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{
-                .color = opts.fill_color orelse self.options.color(.fill),
-                .fade = if (self.rectScale().s >= 2.0) 0.0 else 1.0,
-            });
+        if (bg) {
+            const rs = self.backgroundRectScale();
+            if (!rs.r.empty()) {
+                const fill = opts.fill_color orelse self.options.color(.fill);
+                rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{
+                    .color = fill,
+                    .fade = if (self.rectScale().s >= 2.0) 0.0 else 1.0,
+                });
+            }
         }
     }
 }
