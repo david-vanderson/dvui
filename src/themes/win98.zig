@@ -52,6 +52,8 @@ pub const light = light: {
         .text = text_color,
         .border = .white,
 
+        .max_default_corner_radius = 0.0,
+
         .control = .{
             .ninepatch_fill = dvui.Ninepatch.builtins.outset,
             .ninepatch_press = dvui.Ninepatch.builtins.inset,
