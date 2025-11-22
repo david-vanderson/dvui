@@ -74,7 +74,6 @@ wd: WidgetData,
 prevClip: Rect.Physical = undefined,
 /// SAFETY: Set in `install`
 scroll: ScrollAreaWidget = undefined,
-scroll_init_opts: ScrollAreaWidget.InitOpts,
 /// SAFETY: Set in `install`
 scrollClip: Rect.Physical = undefined,
 /// SAFETY: Set in `install`
@@ -94,7 +93,8 @@ text_changed_start: usize = std.math.maxInt(usize),
 text_changed_end: usize = 0, // index of bytes before edits (so matches previous frame)
 text_changed_added: i64 = 0, // bytes added
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextEntryWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     var scroll_init_opts = ScrollAreaWidget.InitOpts{
         .vertical = if (init_opts.scroll_vertical orelse init_opts.multiline) .auto else .none,
         .vertical_bar = init_opts.scroll_vertical_bar orelse .auto,
@@ -142,17 +142,21 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     const len_byte = std.mem.indexOfScalar(u8, text, 0) orelse text.len;
     const len_utf8_boundary = dvui.findUtf8Start(text[0..len_byte], len_byte);
 
-    return .{
+    self.* = .{
         .wd = wd,
-        .scroll_init_opts = scroll_init_opts,
         .padding = padding,
         .init_opts = init_opts,
         .text = text,
         .len = len_utf8_boundary,
-    };
-}
 
-pub fn install(self: *TextEntryWidget) void {
+        // SAFETY: The following fields are set bellow
+        .prevClip = undefined,
+        .scroll = undefined,
+        .scrollClip = undefined,
+        .textLayout = undefined,
+        .textClip = undefined,
+    };
+
     self.data().register();
 
     dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
@@ -171,7 +175,7 @@ pub fn install(self: *TextEntryWidget) void {
     const focused = (self.data().id == dvui.lastFocusedIdInFrame());
     if (focused) dvui.currentWindow().last_focused_id_this_frame = .zero;
 
-    self.scroll = ScrollAreaWidget.init(@src(), self.scroll_init_opts, self.data().options.strip().override(.{ .role = .none, .expand = .both }));
+    self.scroll = ScrollAreaWidget.init(@src(), scroll_init_opts, self.data().options.strip().override(.{ .role = .none, .expand = .both }));
 
     // scrollbars process mouse events here
     self.scroll.install();
@@ -1028,10 +1032,10 @@ test "text internal" {
         const limit = realloc_bin_size * 5 / 2;
 
         fn frame() !dvui.App.Result {
-            var entry = TextEntryWidget.init(@src(), .{
+            var entry: TextEntryWidget = undefined;
+            entry.init(@src(), .{
                 .text = .{ .internal = .{ .limit = limit } },
             }, .{ .tag = "entry" });
-            entry.install();
             defer entry.deinit();
 
             entry.processEvents();
@@ -1080,14 +1084,14 @@ test "text dynamic buffer" {
         var backing: []u8 = &.{};
 
         fn frame() !dvui.App.Result {
-            var entry = TextEntryWidget.init(@src(), .{
+            var entry: TextEntryWidget = undefined;
+            entry.init(@src(), .{
                 .text = .{ .buffer_dynamic = .{
                     .backing = &backing,
                     .allocator = fba.allocator(),
                     .limit = limit,
                 } },
             }, .{ .tag = "entry" });
-            entry.install();
             defer entry.deinit();
 
             entry.processEvents();
@@ -1135,10 +1139,10 @@ test "text buffer" {
         var buffer: [limit]u8 = undefined;
 
         fn frame() !dvui.App.Result {
-            var entry = TextEntryWidget.init(@src(), .{
+            var entry: TextEntryWidget = undefined;
+            entry.init(@src(), .{
                 .text = .{ .buffer = &buffer },
             }, .{ .tag = "entry" });
-            entry.install();
             defer entry.deinit();
 
             entry.processEvents();
