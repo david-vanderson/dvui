@@ -35,8 +35,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *SuggestionWidget) void {
-    self.menu = dvui.MenuWidget.init(@src(), .{ .dir = .horizontal, .close_without_focused_child = false }, .{ .role = .none, .rect = .{}, .id_extra = self.options.idExtra() });
-    self.menu.install();
+    self.menu.init(@src(), .{ .dir = .horizontal, .close_without_focused_child = false }, .{ .role = .none, .rect = .{}, .id_extra = self.options.idExtra() });
 }
 
 // Use this to see if dropped will return true without installing the

@@ -92,8 +92,9 @@ child_popup_rect: ?Rect.Physical = null,
 // entry that happens to be under the mouse
 mouse_mode: bool = false,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) MenuWidget {
-    var self = MenuWidget{
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *MenuWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+    self.* = MenuWidget{
         .wd = WidgetData.init(src, .{}, defaults.override(opts)),
         .init_opts = init_opts,
         .winId = dvui.subwindowCurrentId(),
@@ -115,10 +116,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 
     if (dvui.dataGet(null, self.wd.id, "_mouse_mode", bool)) |mouse_mode| self.mouse_mode = mouse_mode;
 
-    return self;
-}
-
-pub fn install(self: *MenuWidget) void {
     dvui.parentSet(self.widget());
     self.parentMenu = menuSet(self);
     self.data().register();
