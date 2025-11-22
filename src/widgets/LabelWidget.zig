@@ -32,7 +32,8 @@ allocator: ?std.mem.Allocator,
 init_options: InitOptions,
 ellipsized: bool,
 
-pub fn init(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: InitOptions, opts: Options) LabelWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *LabelWidget, src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: InitOptions, opts: Options) void {
     comptime if (!std.unicode.utf8ValidateSlice(fmt)) @compileError("Format strings must be valid utf-8");
 
     const cw = dvui.currentWindow();
@@ -58,10 +59,11 @@ pub fn init(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: any
         dvui.log.debug("LabelWidget format output was invalid utf8 for {s} with '{any}'.", .{ fmt, args });
         break :blk .{ utf8, null };
     };
-    return initNoFmtAllocator(src, str, alloc, init_opts, opts);
+    return self.initNoFmtAllocator(src, str, alloc, init_opts, opts);
 }
 
-pub fn initNoFmt(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: InitOptions, opts: Options) LabelWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn initNoFmt(self: *LabelWidget, src: std.builtin.SourceLocation, label_str: []const u8, init_opts: InitOptions, opts: Options) void {
     const arena = dvui.currentWindow().lifo();
     // If the allocation fails, the textSize will be incorrect
     // later because of invalid utf8
@@ -69,37 +71,27 @@ pub fn initNoFmt(src: std.builtin.SourceLocation, label_str: []const u8, init_op
         logAndHighlight(src, opts, err);
         break :blk label_str;
     };
-    return initNoFmtAllocator(src, str, if (str.ptr != label_str.ptr) arena else null, init_opts, opts);
+    return self.initNoFmtAllocator(src, str, if (str.ptr != label_str.ptr) arena else null, init_opts, opts);
 }
 
 /// The `allocator` argument will be used to deallocator `label_str` on
 /// when `deinit` is called.
 ///
 /// Assumes the label_str is valid utf8
-pub fn initNoFmtAllocator(src: std.builtin.SourceLocation, label_str: []const u8, allocator: ?std.mem.Allocator, init_opts: InitOptions, opts: Options) LabelWidget {
+///
+/// It's expected to call this when `self` is `undefined`
+pub fn initNoFmtAllocator(self: *LabelWidget, src: std.builtin.SourceLocation, label_str: []const u8, allocator: ?std.mem.Allocator, init_opts: InitOptions, opts: Options) void {
     const options = defaults.override(opts);
     var size = options.fontGet().textSize(label_str);
     size = Size.max(size, options.min_size_contentGet());
-    return .{
+    self.* = .{
         .wd = .init(src, .{}, options.override(.{ .min_size_content = size })),
         .init_options = init_opts,
         .label_str = label_str,
         .allocator = allocator,
         .ellipsized = false,
     };
-}
 
-fn logAndHighlight(src: std.builtin.SourceLocation, opts: Options, err: anyerror) void {
-    const newid = dvui.parentGet().extendId(src, opts.idExtra());
-    dvui.currentWindow().debug.widget_id = newid;
-    dvui.log.err("{s}:{d} LabelWidget id {x} (highlighted in red) init() got {any}", .{ src.file, src.line, newid, err });
-}
-
-pub fn data(self: *LabelWidget) *WidgetData {
-    return self.wd.validate();
-}
-
-pub fn install(self: *LabelWidget) void {
     self.data().register();
     self.data().borderAndBackground(.{});
 
@@ -111,6 +103,16 @@ pub fn install(self: *LabelWidget) void {
             dvui.AccessKit.nodeSetLabel(ak_node, str);
         }
     }
+}
+
+fn logAndHighlight(src: std.builtin.SourceLocation, opts: Options, err: anyerror) void {
+    const newid = dvui.parentGet().extendId(src, opts.idExtra());
+    dvui.currentWindow().debug.widget_id = newid;
+    dvui.log.err("{s}:{d} LabelWidget id {x} (highlighted in red) init() got {any}", .{ src.file, src.line, newid, err });
+}
+
+pub fn data(self: *LabelWidget) *WidgetData {
+    return self.wd.validate();
 }
 
 pub fn draw(self: *LabelWidget) void {
