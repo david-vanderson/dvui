@@ -37,8 +37,8 @@ pub fn theming() void {
                 dvui.themeSet(custom_theme);
             }
 
-            var theme_reset_dropdown = dvui.DropdownWidget.init(@src(), .{ .label = "Reset" }, .{});
-            theme_reset_dropdown.install();
+            var theme_reset_dropdown: dvui.DropdownWidget = undefined;
+            theme_reset_dropdown.init(@src(), .{ .label = "Reset" }, .{});
             if (theme_reset_dropdown.dropped()) {
                 for (.{modified_adwaita_theme} ++ Theme.builtins) |builtin_theme| {
                     if (theme_reset_dropdown.addChoiceLabel(builtin_theme.name)) {
@@ -203,8 +203,8 @@ fn fonts(theme: *Theme) bool {
         }
     }
 
-    var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = current_font_index, .label = current_font_name }, .{});
-    dd.install();
+    var dd: dvui.DropdownWidget = undefined;
+    dd.init(@src(), .{ .selected_index = current_font_index, .label = current_font_name }, .{});
     if (dd.dropped()) {
         it = dvui.currentWindow().fonts.database.iterator();
         while (it.next()) |entry| {
@@ -257,7 +257,8 @@ fn styles(theme: *Theme) bool {
 
         {
             const theme_styles = comptime std.meta.tags(Theme.Style.Name);
-            var dd = dvui.DropdownWidget.init(@src(), .{
+            var dd: dvui.DropdownWidget = undefined;
+            dd.init(@src(), .{
                 .label = @tagName(active_style.*),
                 .selected_index = std.mem.indexOfScalar(Theme.Style.Name, theme_styles, active_style.*),
             }, .{
@@ -265,7 +266,6 @@ fn styles(theme: *Theme) bool {
                 .expand = .horizontal,
                 .margin = .{ .y = 2 + 3, .w = 1 + 2, .h = 2 + 3 },
             });
-            dd.install();
             defer dd.deinit();
             if (dd.dropped()) {
                 for (theme_styles) |theme_style| {
@@ -351,8 +351,8 @@ fn styles(theme: *Theme) bool {
     }
 
     {
-        var dd = dvui.DropdownWidget.init(@src(), .{ .label = "Set color" }, .{ .min_size_content = .{ .w = 110 } });
-        dd.install();
+        var dd: dvui.DropdownWidget = undefined;
+        dd.init(@src(), .{ .label = "Set color" }, .{ .min_size_content = .{ .w = 110 } });
         defer dd.deinit();
         if (dd.dropped()) {
             // Only show this if the color is optional

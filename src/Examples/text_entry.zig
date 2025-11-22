@@ -236,8 +236,8 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
 
         left_alignment.spacer(@src(), 0);
 
-        var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = Sfont.dropdown, .label = font_entries[Sfont.dropdown].@"0" }, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5 });
-        dd.install();
+        var dd: dvui.DropdownWidget = undefined;
+        dd.init(@src(), .{ .selected_index = Sfont.dropdown, .label = font_entries[Sfont.dropdown].@"0" }, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5 });
         defer dd.deinit();
         if (dd.dropped()) {
             for (font_entries, 0..) |e, i| {

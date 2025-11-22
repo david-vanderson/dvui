@@ -3,10 +3,7 @@ pub const DropdownWidget = @This();
 options: Options,
 init_options: InitOptions,
 menu: MenuWidget,
-/// SAFETY: Will always be set by `install`
-/// TODO: This will panic if `install` is not called but `deinit` is.
-///       Is that a scenario we should handle?
-menuItem: MenuItemWidget = undefined,
+menuItem: MenuItemWidget,
 drop: ?FloatingMenuWidget = null,
 drop_first_frame: bool = false,
 /// SAFETY: Will always be set by `addChoice` before use
@@ -55,19 +52,17 @@ pub fn wrapInner(opts: Options) Options {
     });
 }
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) DropdownWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const options = defaults.themeOverride().override(opts);
-    var self = DropdownWidget{
+    self.* = .{
         .options = options,
         .init_options = init_opts,
         .menu = MenuWidget.init(src, .{ .dir = .horizontal }, wrapOuter(options)),
+        // SAFETY: Set bellow
+        .menuItem = undefined,
     };
     if (dvui.dataGet(null, self.data().id, "_drop_adjust", f32)) |adjust| self.drop_adjust = adjust;
-    return self;
-}
-
-pub fn install(self: *DropdownWidget) void {
-    self.menu.install();
 
     self.menuItem = MenuItemWidget.init(@src(), .{ .submenu = true, .focus_as_outline = true }, wrapInner(self.options));
     self.menuItem.install();

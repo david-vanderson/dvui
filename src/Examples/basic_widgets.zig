@@ -301,12 +301,12 @@ pub fn dropdownAdvanced() void {
     theme.control.text_hover = dvui.Color.red;
     theme.highlight.text = dvui.Color.red;
 
-    var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = g.choice }, .{
+    var dd: dvui.DropdownWidget = undefined;
+    dd.init(@src(), .{ .selected_index = g.choice }, .{
         .min_size_content = .{ .w = 100 },
         .theme = &theme,
         .label = .{ .label_widget = .next },
     });
-    dd.install();
     defer dd.deinit();
 
     // Here's what is shown when the dropdown is not dropped
