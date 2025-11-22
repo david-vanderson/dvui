@@ -4911,8 +4911,8 @@ pub const ColorPickerInitOptions = struct {
 ///
 /// Returns true of the color was changed
 pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOptions, opts: Options) bool {
-    var picker = ColorPickerWidget.init(src, .{ .dir = init_opts.dir, .hsv = init_opts.hsv }, opts);
-    picker.install();
+    var picker: ColorPickerWidget = undefined;
+    picker.init(src, .{ .dir = init_opts.dir, .hsv = init_opts.hsv }, opts);
     defer picker.deinit();
 
     var changed = picker.color_changed;

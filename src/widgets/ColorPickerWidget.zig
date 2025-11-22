@@ -25,16 +25,14 @@ pub var defaults = Options{
     .role = .group,
 };
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ColorPickerWidget {
-    const self = ColorPickerWidget{
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *ColorPickerWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+    self.* = .{
         .src = src,
         .opts = opts,
         .init_opts = init_opts,
     };
-    return self;
-}
 
-pub fn install(self: *ColorPickerWidget) void {
     self.box.init(self.src, .{ .dir = self.init_opts.dir }, defaults.override(self.opts));
     self.box.drawBackground();
 
