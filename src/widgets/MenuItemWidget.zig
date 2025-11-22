@@ -36,17 +36,16 @@ activated: bool = false,
 show_active: bool = false,
 mouse_over: bool = false,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) MenuItemWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *MenuItemWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const options = defaults.themeOverride().override(opts);
     const wd = WidgetData.init(src, .{}, options);
 
-    return .{
+    self.* = .{
         .wd = wd,
         .init_opts = init_opts,
     };
-}
 
-pub fn install(self: *MenuItemWidget) void {
     self.data().register();
 
     dvui.tabIndexSet(self.data().id, self.data().options.tab_index);

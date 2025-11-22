@@ -58,16 +58,18 @@ pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: I
     self.* = .{
         .options = options,
         .init_options = init_opts,
-        .menu = MenuWidget.init(src, .{ .dir = .horizontal }, wrapOuter(options)),
+        // SAFETY: Set bellow
+        .menu = undefined,
         // SAFETY: Set bellow
         .menuItem = undefined,
     };
-    if (dvui.dataGet(null, self.data().id, "_drop_adjust", f32)) |adjust| self.drop_adjust = adjust;
+    self.menu.init(src, .{ .dir = .horizontal }, wrapOuter(options));
 
-    self.menuItem = MenuItemWidget.init(@src(), .{ .submenu = true, .focus_as_outline = true }, wrapInner(self.options));
-    self.menuItem.install();
+    self.menuItem.init(@src(), .{ .submenu = true, .focus_as_outline = true }, wrapInner(self.options));
     self.menuItem.processEvents();
     self.menuItem.drawBackground();
+
+    if (dvui.dataGet(null, self.data().id, "_drop_adjust", f32)) |adjust| self.drop_adjust = adjust;
 
     if (self.init_options.label) |ll| {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
@@ -207,14 +209,13 @@ pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
         }
     }
 
-    self.drop_mi = MenuItemWidget.init(@src(), .{}, self.options.styleOnly().override(.{
+    self.drop_mi.init(@src(), .{}, self.options.styleOnly().override(.{
         .role = .list_item,
         .label = .{ .label_widget = .next },
         .id_extra = self.drop_mi_index,
         .expand = .horizontal,
     }));
     self.drop_mi_id = self.drop_mi.data().id;
-    self.drop_mi.install();
     self.drop_mi.processEvents();
     self.drop_mi.drawBackground();
 
