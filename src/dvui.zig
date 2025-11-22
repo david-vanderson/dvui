@@ -2477,9 +2477,8 @@ pub fn toastsShow(id: ?Id, rect: Rect.Natural) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) *AnimateWidget {
     var ret = widgetAlloc(AnimateWidget);
-    ret.* = AnimateWidget.init(src, init_opts, opts);
+    ret.init(src, init_opts, opts);
     ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
     return ret;
 }
 
