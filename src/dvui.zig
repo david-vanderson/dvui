@@ -2684,9 +2684,8 @@ pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Init
     const combo = widgetAlloc(ComboBox);
     combo.was_allocated_on_widget_stack = true;
     combo.te = widgetAlloc(TextEntryWidget);
-    combo.te.* = dvui.TextEntryWidget.init(src, init_opts, opts);
+    combo.te.init(src, init_opts, opts);
     combo.te.data().was_allocated_on_widget_stack = true;
-    combo.te.install();
 
     if (combo.te.data().accesskit_node()) |ak_node| {
         AccessKit.nodeSetRole(ak_node, AccessKit.Role.editable_combo_box.asU8());
@@ -3973,8 +3972,8 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         };
 
         // pass 0 for tab_index so you can't tab to TextEntry
-        var te = TextEntryWidget.init(@src(), .{ .text = .{ .buffer = te_buf } }, options.strip().override(.{ .min_size_content = .{}, .expand = .both, .tab_index = 0 }));
-        te.install();
+        var te: TextEntryWidget = undefined;
+        te.init(@src(), .{ .text = .{ .buffer = te_buf } }, options.strip().override(.{ .min_size_content = .{}, .expand = .both, .tab_index = 0 }));
 
         if (firstFrame(te.data().id)) {
             var sel = te.textLayout.selection;
@@ -4597,9 +4596,8 @@ pub fn findUtf8Start(text: []const u8, pos: usize) usize {
 
 pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) *TextEntryWidget {
     var ret = widgetAlloc(TextEntryWidget);
-    ret.* = TextEntryWidget.init(src, init_opts, opts);
+    ret.init(src, init_opts, opts);
     ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
     // can install corner widgets here
     //_ = dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
     ret.processEvents();
@@ -4662,8 +4660,8 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         }
     }
 
-    var te = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer } }, default_opts.override(opts));
-    te.install();
+    var te: TextEntryWidget = undefined;
+    te.init(src, .{ .text = .{ .buffer = buffer } }, default_opts.override(opts));
     te.processEvents();
 
     var result: TextEntryNumberResult(T) = .{ .enter_pressed = te.enter_pressed };
@@ -4813,8 +4811,8 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 9);
 
-    var te = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = init_opts.placeholder }, options);
-    te.install();
+    var te: TextEntryWidget = undefined;
+    te.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = init_opts.placeholder }, options);
 
     //initialize with input number
     if (init_opts.value) |v| {
