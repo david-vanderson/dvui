@@ -2075,9 +2075,8 @@ pub fn wantTextInput(r: Rect.Natural) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) *FloatingMenuWidget {
     var ret = widgetAlloc(FloatingMenuWidget);
-    ret.* = FloatingMenuWidget.init(src, init_opts, opts);
+    ret.init(src, init_opts, opts);
     ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
     return ret;
 }
 
