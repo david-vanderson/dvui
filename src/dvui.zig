@@ -2940,9 +2940,8 @@ pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOpt
 
 pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) *CacheWidget {
     var ret = widgetAlloc(CacheWidget);
-    ret.* = CacheWidget.init(src, init_opts, opts);
+    ret.init(src, init_opts, opts);
     ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
     return ret;
 }
 
