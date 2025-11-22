@@ -86,8 +86,8 @@ pub fn layoutText() void {
     }
 
     {
-        var tl = TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
-        tl.install(.{});
+        var tl: TextLayoutWidget = undefined;
+        tl.init(@src(), .{}, .{ .expand = .horizontal });
         defer tl.deinit();
 
         var cbox = dvui.box(@src(), .{ .dir = .vertical }, .{ .margin = dvui.Rect.all(6), .min_size_content = .{ .w = 40 } });

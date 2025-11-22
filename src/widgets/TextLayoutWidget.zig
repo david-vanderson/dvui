@@ -46,6 +46,9 @@ pub const InitOptions = struct {
 
     // If non null, overrides `Window.kerning` setting.
     kerning: ?bool = null,
+
+    focused: ?bool = null,
+    show_touch_draggables: bool = true,
 };
 
 pub const Selection = struct {
@@ -129,9 +132,8 @@ click_num: u8 = 0,
 
 bytes_seen: usize = 0,
 first_byte_in_line: usize = 0,
-selection_in: ?*Selection = null,
-/// SAFETY: Set in `install`, might point to `selection_store`
-selection: *Selection = undefined,
+/// might point to `selection_store`
+selection: *Selection,
 selection_store: Selection = .{},
 
 /// For simplicity we only handle a single kind of selection change per frame
@@ -222,20 +224,23 @@ cache_layout: bool = false,
 cache_layout_bytes: ?bytesNeededReturn = null,
 cache_layout_bytes_seen: usize = 0,
 byte_height_ready: ?ByteHeight = null,
-byte_heights: []ByteHeight = undefined, // from last frame
+byte_heights: []ByteHeight = &.{}, // from last frame
 byte_heights_new: std.ArrayList(ByteHeight) = .empty, // creating this frame
 byte_height_after_idx: ?usize = null,
 byte_height_edit_idx: ?usize = null,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextLayoutWidget {
+pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const options = defaults.override(opts);
-    var self = TextLayoutWidget{
+    self.* = .{
         .wd = WidgetData.init(src, .{}, options),
-        .selection_in = init_opts.selection,
         .break_lines = init_opts.break_lines,
         .cache_layout = init_opts.cache_layout,
         .kerning = init_opts.kerning,
         .touch_edit_just_focused = init_opts.touch_edit_just_focused,
+
+        // SAFETY: `self` pointer is valid here, even though the value might be `undefined` until this statement finishes
+        .selection = if (init_opts.selection) |sel_in| sel_in else &self.selection_store,
+        .selection_store = dvui.dataGetDefault(null, self.data().id, "_selection", Selection, .{}),
     };
     if (dvui.dataGet(null, self.wd.id, "_touch_editing", bool)) |val| self.touch_editing = val;
     if (dvui.dataGet(null, self.wd.id, "_te_first", bool)) |val| self.te_first = val;
@@ -245,11 +250,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     if (dvui.dataGet(null, self.wd.id, "_sel_start_r", Rect)) |val| self.sel_start_r = val;
     if (dvui.dataGet(null, self.wd.id, "_sel_end_r", Rect)) |val| self.sel_end_r = val;
     if (dvui.dataGet(null, self.wd.id, "_click_num", u8)) |val| self.click_num = val;
-    if (dvui.dataGetSlice(null, self.wd.id, "_byte_heights", []ByteHeight)) |bh| {
-        self.byte_heights = bh;
-    } else {
-        self.byte_heights = &[0]ByteHeight{};
-    }
+    if (dvui.dataGetSlice(null, self.wd.id, "_byte_heights", []ByteHeight)) |bh| self.byte_heights = bh;
 
     if (dvui.dataGet(null, self.wd.id, "_scroll_to_cursor", bool) orelse false) {
         dvui.dataRemove(null, self.wd.id, "_scroll_to_cursor");
@@ -278,23 +279,10 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     }
     width_old.* = self.data().rect.w;
 
-    return self;
-}
-
-pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, show_touch_draggables: bool = true }) void {
-    self.focus_at_start = opts.focused orelse (self.data().id == dvui.focusedWidgetId());
+    self.focus_at_start = init_opts.focused orelse (self.data().id == dvui.focusedWidgetId());
 
     self.data().register();
     dvui.parentSet(self.widget());
-
-    if (self.selection_in) |sel| {
-        self.selection = sel;
-    } else {
-        if (dvui.dataGet(null, self.data().id, "_selection", Selection)) |s| {
-            self.selection_store = s;
-        }
-        self.selection = &self.selection_store;
-    }
 
     if (dvui.captured(self.data().id)) {
         if (dvui.dataGet(null, self.data().id, "_sel_move_mouse_byte", usize)) |p| {
@@ -327,7 +315,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
     // clip to background rect for possible corner widgets, addTextEx clips to content rect
     self.prevClip = dvui.clip(self.data().backgroundRectScale().r);
 
-    if (opts.show_touch_draggables and self.touch_editing and self.te_show_draggables and self.focus_at_start and self.data().visible()) {
+    if (init_opts.show_touch_draggables and self.touch_editing and self.te_show_draggables and self.focus_at_start and self.data().visible()) {
         const size = 36;
         {
 

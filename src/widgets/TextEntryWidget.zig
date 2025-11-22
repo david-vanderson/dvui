@@ -184,12 +184,18 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
 
     self.scrollClip = dvui.clipGet();
 
-    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .kerning = self.init_opts.kerning, .touch_edit_just_focused = false, .cache_layout = self.init_opts.cache_layout }, self.data().options.strip().override(.{ .role = .none, .expand = .both, .padding = self.padding }));
+    self.textLayout.init(@src(), .{
+        .break_lines = self.init_opts.break_lines,
+        .kerning = self.init_opts.kerning,
+        .touch_edit_just_focused = false,
+        .cache_layout = self.init_opts.cache_layout,
+        .focused = self.data().id == dvui.focusedWidgetId(),
+        .show_touch_draggables = (self.len > 0),
+    }, self.data().options.strip().override(.{ .role = .none, .expand = .both, .padding = self.padding }));
 
     // if textLayout forced cache_layout to false, we need to honor that
     self.init_opts.cache_layout = self.textLayout.cache_layout;
 
-    self.textLayout.install(.{ .focused = self.data().id == dvui.focusedWidgetId(), .show_touch_draggables = (self.len > 0) });
     self.textClip = dvui.clipGet();
 
     if (self.len == 0) {

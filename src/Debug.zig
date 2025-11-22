@@ -185,8 +185,8 @@ pub fn show(self: *Debug) void {
         }
     }
 
-    var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
-    tl.install(.{});
+    var tl: dvui.TextLayoutWidget = undefined;
+    tl.init(@src(), .{}, .{ .expand = .horizontal });
 
     {
         var corner_box = dvui.box(@src(), .{}, .{ .gravity_x = 1, .margin = .all(8) });
