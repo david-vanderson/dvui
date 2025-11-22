@@ -3267,9 +3267,8 @@ pub fn tabs(src: std.builtin.SourceLocation, init_opts: TabsWidget.InitOptions, 
 
 pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) *MenuWidget {
     var ret = widgetAlloc(MenuWidget);
-    ret.* = MenuWidget.init(src, .{ .dir = dir }, opts);
+    ret.init(src, .{ .dir = dir }, opts);
     ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
     return ret;
 }
 

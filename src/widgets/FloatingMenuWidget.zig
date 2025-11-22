@@ -178,8 +178,7 @@ pub fn postInit(self: *FloatingMenuWidget, init_options: InitOptions, options: O
         pm.child_popup_rect = rs.r;
     }
 
-    self.menu = MenuWidget.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowId }, options.strip().override(.{ .role = .none, .expand = .horizontal }));
-    self.menu.install();
+    self.menu.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowId }, options.strip().override(.{ .role = .none, .expand = .horizontal }));
 }
 
 /// Gives access to the final options of the FloatingMenu before `init`
