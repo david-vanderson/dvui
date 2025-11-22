@@ -109,22 +109,24 @@ pub fn dropped(self: *DropdownWidget) bool {
     }
 
     if (self.menuItem.activeRect()) |r| {
-        self.drop = FloatingMenuWidget.init(@src(), .{ .from = r, .avoid = .none }, .{ .role = .none, .min_size_content = .cast(r.size()) });
+        const drop_opts: Options = FloatingMenuWidget.applyDefaultOptions(.{ .role = .none, .min_size_content = .cast(r.size()) });
+        self.drop = undefined; // Needs to be a non-null value so `.?` bellow doesn't panic
         var drop = &self.drop.?;
-        self.drop_first_frame = dvui.firstFrame(drop.data().id);
+        drop.preInit(@src(), drop_opts.idExtra());
 
         const s = drop.scale_val;
-
-        // move drop up to align first item
-        drop.init_options.from.x -= drop.options.borderGet().x * s;
-        drop.init_options.from.x -= drop.options.paddingGet().x * s;
-        drop.init_options.from.y -= drop.options.borderGet().y * s;
-        drop.init_options.from.y -= drop.options.paddingGet().y * s;
+        var from = r;
+        // move drop up-left to align first item
+        from.x -= drop_opts.borderGet().x * s;
+        from.x -= drop_opts.paddingGet().x * s;
+        from.y -= drop_opts.borderGet().y * s;
+        from.y -= drop_opts.paddingGet().y * s;
 
         // move drop up so selected entry is aligned
-        drop.init_options.from.y -= self.drop_adjust * s;
+        from.y -= self.drop_adjust * s;
 
-        drop.install();
+        drop.postInit(.{ .from = from, .avoid = .none }, drop_opts);
+        self.drop_first_frame = dvui.firstFrame(drop.data().id);
 
         // without this, if you trigger the dropdown with the keyboard and then
         // move the mouse, the entries are highlighted but not focused
