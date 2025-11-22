@@ -2954,9 +2954,8 @@ pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.I
 
 pub fn grid(src: std.builtin.SourceLocation, cols: GridWidget.WidthsOrNum, init_opts: GridWidget.InitOpts, opts: Options) *GridWidget {
     const ret = widgetAlloc(GridWidget);
-    ret.* = GridWidget.init(src, cols, init_opts, opts);
+    ret.init(src, cols, init_opts, opts);
     ret.init_opts.was_allocated_on_widget_stack = true;
-    ret.install();
     return ret;
 }
 

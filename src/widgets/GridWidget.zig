@@ -170,22 +170,19 @@ pub const WidthsOrNum = union(enum) {
 
 pub const default_col_width: f32 = 100;
 
-src: std.builtin.SourceLocation,
-opts: Options,
 //Widgets
-/// SAFETY: Set in `install`
-vbox: BoxWidget = undefined,
-/// SAFETY: Set in `install`
-group: dvui.FocusGroupWidget = undefined,
-scroll: ScrollAreaWidget = undefined, // main scroll area
+vbox: BoxWidget,
+/// SAFETY: Set by `bodyScrollContainerCreate`, is valid when `bscroll` is non-null
+group: dvui.FocusGroupWidget,
+scroll: ScrollAreaWidget, // main scroll area
 hscroll: ?ScrollAreaWidget = null, // header scroll area
 bscroll: ?ScrollContainerWidget = null, // body scroll container
 
 hsi: ScrollInfo = .{ .horizontal = .auto, .vertical = .none }, // Header scroll info
-/// SAFETY: Set in `install`, might point to `default_scroll_info`
-bsi: *ScrollInfo = undefined, // Body scroll info
+/// might point to `default_scroll_info`
+bsi: *ScrollInfo, // Body scroll info
 /// SAFETY: Set in `install`
-frame_viewport: Point = undefined, // Fixed scroll viewport for this frame
+frame_viewport: Point, // Fixed scroll viewport for this frame
 col_widths: []f32, // Internal or user-supplied column widths
 starting_col_widths: ?[]f32 = null, // If grid is storing col widths, keep a copy of the starting widths.
 
@@ -210,42 +207,55 @@ last_header_height: f32 = 0, // Height of header last frame
 // Options
 init_opts: InitOpts,
 
-pub fn init(src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitOpts, opts: Options) GridWidget {
-    var self = GridWidget{
-        .src = src,
-        .opts = defaults.themeOverride().override(opts),
+// Default col_widths slice to use if allocation etc fails this frame.
+var default_col_widths: [1]f32 = .{0};
+
+pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitOpts, opts: Options) void {
+    self.* = .{
         .init_opts = init_opts,
         .cols = cols,
-        // SAFETY: Set below
+        // SAFETY: Set bellow
         .col_widths = undefined,
+
+        // SAFETY: Set bellow
+        .bsi = undefined,
+        // SAFETY: Set bellow based on bsi
+        .frame_viewport = undefined,
+
+        // SAFETY: Widgets set bellow
+        .vbox = undefined,
+        .group = undefined,
+        .scroll = undefined,
     };
-    // TODO: Need to create the temp id that self.vbox would get, which is used by `self.data().id`. Remove when init and install is merged
-    const id = dvui.parentGet().extendId(src, opts.idExtra());
-    if (dvui.dataGet(null, id, "_resizing", bool)) |resizing| {
+
+    self.vbox.init(src, .{ .dir = .vertical }, defaults.themeOverride().override(opts));
+    self.vbox.drawBackground();
+
+    if (dvui.dataGet(null, self.data().id, "_resizing", bool)) |resizing| {
         self.resizing = resizing;
     }
-    if (dvui.dataGet(null, id, "_header_height", f32)) |header_height| {
+    if (dvui.dataGet(null, self.data().id, "_header_height", f32)) |header_height| {
         self.header_height = header_height;
     }
-    if (dvui.dataGet(null, id, "_row_height", f32)) |row_height| {
+    if (dvui.dataGet(null, self.data().id, "_row_height", f32)) |row_height| {
         self.last_row_height = row_height;
         self.row_height = row_height;
     }
-    if (dvui.dataGet(null, id, "_sort_col", usize)) |sort_col| {
+    if (dvui.dataGet(null, self.data().id, "_sort_col", usize)) |sort_col| {
         self.sort_col_number = sort_col;
     }
-    if (dvui.dataGet(null, id, "_sort_direction", SortDirection)) |sort_direction| {
+    if (dvui.dataGet(null, self.data().id, "_sort_direction", SortDirection)) |sort_direction| {
         self.sort_direction = sort_direction;
     }
-    if (dvui.dataGet(null, id, "_hsi", ScrollInfo)) |hsi| {
+    if (dvui.dataGet(null, self.data().id, "_hsi", ScrollInfo)) |hsi| {
         self.hsi = hsi;
     }
-    if (dvui.dataGet(null, id, "_default_si", ScrollInfo)) |default_si| {
+    if (dvui.dataGet(null, self.data().id, "_default_si", ScrollInfo)) |default_si| {
         self.default_scroll_info = default_si;
     }
 
     // Ensure resize on first initialization.
-    if (dvui.firstFrame(id)) {
+    if (dvui.firstFrame(self.data().id)) {
         self.resizing = true;
     }
 
@@ -259,16 +269,16 @@ pub fn init(src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitO
     switch (self.cols) {
         .num_cols => |num_cols| {
             self.col_widths = blk: {
-                if (dvui.dataGetSlice(null, id, "_col_widths", []f32)) |col_widths| {
+                if (dvui.dataGetSlice(null, self.data().id, "_col_widths", []f32)) |col_widths| {
                     if (col_widths.len == num_cols) {
                         break :blk col_widths;
                     }
                 }
-                dvui.dataSetSliceCopies(null, id, "_col_widths", &[1]f32{0}, num_cols);
-                if (dvui.dataGetSlice(null, id, "_col_widths", []f32)) |col_widths| {
+                dvui.dataSetSliceCopies(null, self.data().id, "_col_widths", &[1]f32{0}, num_cols);
+                if (dvui.dataGetSlice(null, self.data().id, "_col_widths", []f32)) |col_widths| {
                     break :blk col_widths;
                 } else {
-                    dvui.log.debug("GridWidget: {x} could not allocate column widths", .{id});
+                    dvui.log.debug("GridWidget: {x} could not allocate column widths", .{self.data().id});
                     break :blk &default_col_widths;
                 }
             };
@@ -279,8 +289,8 @@ pub fn init(src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitO
 
             // If the grid is keep track of col widths then keep a copy of the starting col widths.
             self.starting_col_widths = dvui.currentWindow().arena().alloc(f32, self.col_widths.len) catch |err| default: {
-                dvui.logError(@src(), err, "GridWidget {x} could not allocate column widths", .{id});
-                dvui.currentWindow().debug.widget_id = id;
+                dvui.logError(@src(), err, "GridWidget {x} could not allocate column widths", .{self.data().id});
+                dvui.currentWindow().debug.widget_id = self.data().id;
                 break :default null;
             };
             if (self.starting_col_widths) |starting| {
@@ -292,13 +302,6 @@ pub fn init(src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitO
         },
     }
 
-    return self;
-}
-
-// Default col_widths slice to use if allocation etc fails this frame.
-var default_col_widths: [1]f32 = .{0};
-
-pub fn install(self: *GridWidget) void {
     if (self.init_opts.scroll_opts) |*scroll_opts| {
         if (scroll_opts.scroll_info) |scroll_info| {
             self.bsi = scroll_info;
@@ -316,9 +319,6 @@ pub fn install(self: *GridWidget) void {
     }
 
     self.frame_viewport = self.bsi.viewport.topLeft();
-
-    self.vbox.init(self.src, .{ .dir = .vertical }, self.opts);
-    self.vbox.drawBackground();
 
     const scroll_opts: ScrollAreaWidget.InitOpts = self.init_opts.scroll_opts orelse .{ .frame_viewport = self.frame_viewport, .scroll_info = self.bsi };
     self.scroll = ScrollAreaWidget.init(
