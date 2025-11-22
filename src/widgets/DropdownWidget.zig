@@ -73,8 +73,8 @@ pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: I
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
         defer hbox.deinit();
 
-        var lw = LabelWidget.initNoFmt(@src(), ll, .{}, self.options.strip().override(.{ .gravity_y = 0.5 }));
-        lw.install();
+        var lw: LabelWidget = undefined;
+        lw.initNoFmt(@src(), ll, .{}, self.options.strip().override(.{ .gravity_y = 0.5 }));
         lw.draw();
         lw.deinit();
         _ = dvui.spacer(@src(), .{ .min_size_content = .width(6) });

@@ -3354,9 +3354,9 @@ pub const LabelClickOptions = struct {
 /// Returns true if it's been clicked.
 pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelClickOptions, opts: Options) bool {
     const defaults: Options = .{ .name = "LabelClick", .role = .link };
-    var lw = LabelWidget.init(src, fmt, args, init_opts.label_opts, defaults.override(opts));
+    var lw: LabelWidget = undefined;
+    lw.init(src, fmt, args, init_opts.label_opts, defaults.override(opts));
     // draw border and background
-    lw.install();
 
     dvui.tabIndexSet(lw.data().id, lw.data().options.tab_index);
 
@@ -3386,8 +3386,8 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) void {
-    var lw = LabelWidget.init(src, fmt, args, .{}, opts);
-    lw.install();
+    var lw: LabelWidget = undefined;
+    lw.init(src, fmt, args, .{}, opts);
     lw.draw();
     lw.deinit();
 }
@@ -3398,8 +3398,8 @@ pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: an
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn labelEx(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) void {
-    var lw = LabelWidget.init(src, fmt, args, init_opts, opts);
-    lw.install();
+    var lw: LabelWidget = undefined;
+    lw.init(src, fmt, args, init_opts, opts);
     lw.draw();
     lw.deinit();
 }
@@ -3410,8 +3410,8 @@ pub fn labelEx(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: 
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, init_opts: LabelWidget.InitOptions, opts: Options) void {
-    var lw = LabelWidget.initNoFmt(src, str, init_opts, opts);
-    lw.install();
+    var lw: LabelWidget = undefined;
+    lw.initNoFmt(src, str, init_opts, opts);
     lw.draw();
     lw.deinit();
 }

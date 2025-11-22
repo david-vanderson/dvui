@@ -184,10 +184,10 @@ pub fn animations() void {
         const left = @as(i32, @intCast(@rem(millis, 1000)));
 
         {
-            var mslabel = dvui.LabelWidget.init(@src(), "{d:0>3} ms into second", .{@as(u32, @intCast(left))}, .{}, .{});
+            var mslabel: dvui.LabelWidget = undefined;
+            mslabel.init(@src(), "{d:0>3} ms into second", .{@as(u32, @intCast(left))}, .{}, .{});
             defer mslabel.deinit();
 
-            mslabel.install();
             mslabel.draw();
 
             if (dvui.timerDoneOrNone(mslabel.data().id)) {
