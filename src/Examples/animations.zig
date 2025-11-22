@@ -42,14 +42,14 @@ pub fn animations() void {
             var hbox2 = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 200 } });
             defer hbox2.deinit();
 
-            var button_wiggle = ButtonWidget.init(@src(), .{}, .{ .gravity_x = 0.5 });
+            var button_wiggle: ButtonWidget = undefined;
+            button_wiggle.init(@src(), .{}, .{ .gravity_x = 0.5 });
             defer button_wiggle.deinit();
 
             if (dvui.animationGet(button_wiggle.data().id, "xoffset")) |a| {
                 button_wiggle.data().rect.x += 20 * (1.0 - a.value()) * (1.0 - a.value()) * @sin(a.value() * std.math.pi * 50);
             }
 
-            button_wiggle.install();
             button_wiggle.processEvents();
             button_wiggle.drawBackground();
             dvui.labelNoFmt(@src(), "Wiggle", .{}, button_wiggle.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));

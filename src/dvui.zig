@@ -3643,11 +3643,9 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) void {
 }
 
 pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options) bool {
-    // initialize widget and get rectangle from parent
-    var bw = ButtonWidget.init(src, init_opts, opts);
-
-    // make ourselves the new parent
-    bw.install();
+    // initialize widget and get rectangle from parent and make ourselves the new parent
+    var bw: ButtonWidget = undefined;
+    bw.init(src, init_opts, opts);
 
     // process events (mouse and keyboard)
     bw.processEvents();
@@ -3678,8 +3676,8 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
 pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, icon_opts: IconRenderOptions, opts: Options) bool {
     // set label on the button and clear role on icon so they don't duplicate
     const defaults = Options{ .padding = Rect.all(4), .label = .{ .text = name } };
-    var bw = ButtonWidget.init(src, init_opts, defaults.override(opts));
-    bw.install();
+    var bw: ButtonWidget = undefined;
+    bw.init(src, init_opts, defaults.override(opts));
     bw.processEvents();
     bw.drawBackground();
 
@@ -3700,11 +3698,9 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
 }
 
 pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options) bool {
-    // initialize widget and get rectangle from parent
-    var bw = ButtonWidget.init(src, init_opts, opts);
-
-    // make ourselves the new parent
-    bw.install();
+    // initialize widget and get rectangle from parent and make ourselves the new parent
+    var bw: ButtonWidget = undefined;
+    bw.init(src, init_opts, opts);
 
     // process events (mouse and keyboard)
     bw.processEvents();

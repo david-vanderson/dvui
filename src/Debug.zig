@@ -345,8 +345,8 @@ pub fn show(self: *Debug) void {
             }, "Copy Options struct to clipboard", .{}, .{});
 
             {
-                var button = dvui.ButtonWidget.init(@src(), .{}, .{ .expand = .horizontal });
-                button.install();
+                var button: dvui.ButtonWidget = undefined;
+                button.init(@src(), .{}, .{ .expand = .horizontal });
                 defer button.deinit();
                 button.processEvents();
                 button.drawBackground();

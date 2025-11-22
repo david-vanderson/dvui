@@ -332,8 +332,7 @@ pub const Branch = struct {
             dvui.parentSet(self.widget());
         }
 
-        self.button = dvui.ButtonWidget.init(@src(), .{}, wrapInner(self.options));
-        self.button.install();
+        self.button.init(@src(), .{}, wrapInner(self.options));
         self.button.processEvents();
         self.button.drawBackground();
         self.button.drawFocus();
