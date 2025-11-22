@@ -5041,9 +5041,8 @@ pub const Picture = struct {
 
 pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, opts: Options) *PlotWidget {
     var ret = widgetAlloc(PlotWidget);
-    ret.* = PlotWidget.init(src, plot_opts, opts);
+    ret.init(src, plot_opts, opts);
     ret.init_options.was_allocated_on_widget_stack = true;
-    ret.install();
     return ret;
 }
 

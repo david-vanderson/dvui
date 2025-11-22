@@ -273,14 +273,6 @@ pub const Line = struct {
     }
 };
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) PlotWidget {
-    return .{
-        .src = src,
-        .opts = opts,
-        .init_options = init_opts,
-    };
-}
-
 pub fn dataToScreen(self: *PlotWidget, data_point: Data) dvui.Point.Physical {
     const xfrac = self.x_axis.fraction(data_point.x);
     const yfrac = self.y_axis.fraction(data_point.y);
@@ -297,7 +289,14 @@ pub fn dataForRange(self: *PlotWidget, data_point: Data) void {
     self.data_max.y = @max(self.data_max.y, data_point.y);
 }
 
-pub fn install(self: *PlotWidget) void {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+    self.* = .{
+        .src = src,
+        .opts = opts,
+        .init_options = init_opts,
+    };
+
     self.box.init(self.src, .{ .dir = .vertical }, defaults.override(self.opts));
     if (self.init_options.x_axis) |xa| {
         self.x_axis = xa;
