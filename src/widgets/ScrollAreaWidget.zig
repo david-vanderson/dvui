@@ -152,11 +152,12 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
     if (do_vbar) {
         // do the scrollbars first so that they still appear even if there's not enough space
         const overlay = self.init_opts.vertical_bar == .auto_overlay;
-        self.vbar = ScrollBarWidget.init(@src(), .{
-            .scroll_info = self.si,
-            .focus_id = focus_target,
-        }, self.hbox.data().options.strip().override(.{ .gravity_x = if (overlay) 0.999 else 1.0, .expand = .vertical }));
-        self.vbar.?.install();
+        self.vbar = undefined; // Must be a non-null value for `.?` bellow
+        self.vbar.?.init(
+            @src(),
+            .{ .scroll_info = self.si, .focus_id = focus_target },
+            self.hbox.data().options.strip().override(.{ .gravity_x = if (overlay) 0.999 else 1.0, .expand = .vertical }),
+        );
         if (overlay) {
             self.vbar_grab = self.vbar.?.grab();
         } else {
@@ -170,8 +171,12 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
 
     if (do_hbar) {
         const overlay = self.init_opts.horizontal_bar == .auto_overlay;
-        self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, self.hbox.data().options.strip().override(.{ .expand = .horizontal, .gravity_y = if (overlay) 0.999 else 1.0 }));
-        self.hbar.?.install();
+        self.hbar = undefined; // Must be a non-null value for `.?` bellow
+        self.hbar.?.init(
+            @src(),
+            .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target },
+            self.hbox.data().options.strip().override(.{ .expand = .horizontal, .gravity_y = if (overlay) 0.999 else 1.0 }),
+        );
         if (overlay) {
             self.hbar_grab = self.hbar.?.grab();
         } else {
