@@ -32,20 +32,17 @@ pub const InitOptions = struct {
     nav_key_dir: ?dvui.enums.Direction = null,
 };
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FocusGroupWidget {
+pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const id = dvui.parentGet().extendId(src, opts.idExtra());
     const rect = dvui.dataGet(null, id, "_rect", Rect);
     const defaults = Options{ .name = "Focus Group", .rect = rect orelse .{}, .expand = .both };
-    return FocusGroupWidget{
+    self.* = .{
         .init_opts = init_opts,
         .wd = WidgetData.init(src, .{}, defaults.override(opts)),
         .last_focus = dvui.lastFocusedIdInFrame(),
         .tab_index_prev = dvui.dataGetSlice(null, id, "_tab_prev", []dvui.TabIndex) orelse &.{},
         .remember_focus = dvui.dataGet(null, id, "_remember_focus", dvui.Id) orelse null,
     };
-}
-
-pub fn install(self: *FocusGroupWidget) void {
     dvui.parentSet(self.widget());
     self.data().register();
 
@@ -59,8 +56,8 @@ pub fn install(self: *FocusGroupWidget) void {
 
             if (self.data().id == dvui.focusedWidgetId()) {
                 // if we got focused, focus our remembered focus or first id
-                if (self.remember_focus) |id| {
-                    dvui.focusWidget(id, null, null);
+                if (self.remember_focus) |focused_id| {
+                    dvui.focusWidget(focused_id, null, null);
                 } else {
                     dvui.tabIndexNextEx(null, self.tab_index_prev);
                 }

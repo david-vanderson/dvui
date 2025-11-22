@@ -135,8 +135,7 @@ pub fn init(self: *MenuWidget, src: std.builtin.SourceLocation, init_opts: InitO
         self.processEvent(e);
     }
 
-    self.group = dvui.FocusGroupWidget.init(@src(), .{ .nav_key_dir = self.init_opts.dir }, .{});
-    self.group.install();
+    self.group.init(@src(), .{ .nav_key_dir = self.init_opts.dir }, .{});
 
     // a floating menu could have been opened by mouse, but then a key is
     // pressed, so focus the group which will focus the first thing in the menu

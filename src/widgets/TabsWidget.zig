@@ -46,8 +46,7 @@ pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitO
     self.scroll = ScrollAreaWidget.init(src, scroll_opts, defaults.override(opts));
     self.scroll.install();
 
-    self.group = dvui.FocusGroupWidget.init(@src(), .{ .nav_key_dir = self.init_options.dir }, .{});
-    self.group.install();
+    self.group.init(@src(), .{ .nav_key_dir = self.init_options.dir }, .{});
 
     const margin: Rect = switch (self.init_options.dir) {
         .horizontal => .{ .y = 2 },
