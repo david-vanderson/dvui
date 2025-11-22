@@ -2852,9 +2852,8 @@ pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget
 pub fn focusGroup(src: std.builtin.SourceLocation, init_opts: FocusGroupWidget.InitOptions, opts: Options) *FocusGroupWidget {
     const defaults: Options = .{ .role = .group };
     var ret = widgetAlloc(FocusGroupWidget);
-    ret.* = FocusGroupWidget.init(src, init_opts, defaults.override(opts));
+    ret.init(src, init_opts, defaults.override(opts));
     ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
     return ret;
 }
 
