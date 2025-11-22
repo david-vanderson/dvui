@@ -2890,9 +2890,8 @@ pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) *VirtualPar
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn overlay(src: std.builtin.SourceLocation, opts: Options) *OverlayWidget {
     var ret = widgetAlloc(OverlayWidget);
-    ret.* = OverlayWidget.init(src, opts);
+    ret.init(src, opts);
     ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
     ret.drawBackground();
     return ret;
 }
