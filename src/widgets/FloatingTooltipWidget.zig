@@ -193,8 +193,7 @@ pub fn install(self: *FloatingTooltipWidget) void {
     dvui.clipSet(dvui.windowRectPixels());
 
     // scaler is what is drawing our background/border/box_shadow
-    self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, self.options.override(.{ .expand = .both }));
-    self.scaler.install();
+    self.scaler.init(@src(), .{ .scale = &self.scale_val }, self.options.override(.{ .expand = .both }));
 
     // clip to just our window (using clipSet since we are not inside our parent)
     _ = dvui.clip(rs.r);

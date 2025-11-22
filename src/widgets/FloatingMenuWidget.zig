@@ -163,8 +163,7 @@ pub fn postInit(self: *FloatingMenuWidget, init_options: InitOptions, options: O
         }
     }
 
-    self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
-    self.scaler.install();
+    self.scaler.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
 
     // we are using scroll to do border/background but floating windows
     // don't have margin, so turn that off

@@ -3248,9 +3248,8 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
 
 pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) *ScaleWidget {
     var ret = widgetAlloc(ScaleWidget);
-    ret.* = ScaleWidget.init(src, init_opts, opts);
+    ret.init(src, init_opts, opts);
     ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
     ret.processEvents();
     return ret;
 }

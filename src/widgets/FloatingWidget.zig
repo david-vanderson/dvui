@@ -83,8 +83,7 @@ pub fn install(self: *FloatingWidget) void {
     // clip to just our window (using clipSet since we are not inside our parent)
     _ = dvui.clip(rs.r);
 
-    self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
-    self.scaler.install();
+    self.scaler.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
 }
 
 pub fn widget(self: *FloatingWidget) Widget {
