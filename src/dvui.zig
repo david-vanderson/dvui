@@ -3255,9 +3255,8 @@ pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions
 
 pub fn tabs(src: std.builtin.SourceLocation, init_opts: TabsWidget.InitOptions, opts: Options) *TabsWidget {
     var ret = widgetAlloc(TabsWidget);
-    ret.* = TabsWidget.init(src, init_opts, opts);
+    ret.init(src, init_opts, opts);
     ret.init_options.was_allocated_on_widget_stack = true;
-    ret.install();
     return ret;
 }
 

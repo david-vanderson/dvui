@@ -86,8 +86,7 @@ pub fn theming() void {
 
         const active_page = dvui.dataGetPtrDefault(null, paned.data().id, "Page", ThemeEditingPage, .Styles);
         {
-            var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-            tabs.install();
+            const tabs = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
             defer tabs.deinit();
             inline for (std.meta.tags(ThemeEditingPage), 0..) |page, i| {
                 var tab = tabs.addTab(active_page.* == page, .{
@@ -160,8 +159,7 @@ fn fonts(theme: *Theme) bool {
 
     const active_font = dvui.dataGetPtrDefault(null, hbox.data().id, "Fonts", Options.FontStyle, .body);
     {
-        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
-        tabs.install();
+        const tabs = dvui.tabs(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
         defer tabs.deinit();
 
         inline for (comptime std.meta.tags(Options.FontStyle), 0..) |font_style, i| {
@@ -277,8 +275,7 @@ fn styles(theme: *Theme) bool {
             }
         }
 
-        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .vertical }, .{ .expand = .both });
-        tabs.install();
+        const tabs = dvui.tabs(@src(), .{ .dir = .vertical }, .{ .expand = .both });
         defer tabs.deinit();
 
         style = switch (active_style.*) {

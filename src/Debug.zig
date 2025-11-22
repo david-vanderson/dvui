@@ -444,8 +444,7 @@ pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
 
     const active_tab = dvui.dataGetPtrDefault(null, vbox.data().id, "Tab", OptionsEditorTab, .layout);
     {
-        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-        tabs.install();
+        const tabs = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer tabs.deinit();
 
         var button_wd: dvui.WidgetData = undefined;
@@ -873,8 +872,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
     const active_color = dvui.dataGetPtrDefault(null, id, "Color", OptionsColors, .fill);
 
     {
-        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
-        tabs.install();
+        const tabs = dvui.tabs(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
         defer tabs.deinit();
 
         const colors = comptime std.meta.tags(OptionsColors);
