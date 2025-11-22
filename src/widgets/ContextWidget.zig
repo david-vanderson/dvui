@@ -25,9 +25,10 @@ winId: dvui.Id,
 focused: bool = false,
 activePt: Point.Natural = .{},
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ContextWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *ContextWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const defaults = Options{ .name = "Context" };
-    var self = ContextWidget{
+    self.* = .{
         .wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .rect = dvui.parentGet().data().rectScale().rectFromPhysical(init_opts.rect) })),
         .init_options = init_opts,
         .winId = dvui.subwindowCurrentId(),
@@ -38,14 +39,10 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         }
     }
 
-    if (dvui.dataGet(null, self.wd.id, "_activePt", Point.Natural)) |a| {
+    if (dvui.dataGet(null, self.data().id, "_activePt", Point.Natural)) |a| {
         self.activePt = a;
     }
 
-    return self;
-}
-
-pub fn install(self: *ContextWidget) void {
     dvui.parentSet(self.widget());
     self.prev_menu_root = dvui.MenuWidget.Root.set(.{ .ptr = self, .close = menu_root_close });
     self.data().register();
