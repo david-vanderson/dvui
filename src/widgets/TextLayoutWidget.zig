@@ -229,6 +229,7 @@ byte_heights_new: std.ArrayList(ByteHeight) = .empty, // creating this frame
 byte_height_after_idx: ?usize = null,
 byte_height_edit_idx: ?usize = null,
 
+/// It's expected to call this when `self` is `undefined`
 pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const options = defaults.override(opts);
     self.* = .{
