@@ -48,13 +48,13 @@ pub fn basicWidgets() void {
                     // blend text and control colors
                     color = dvui.Color.average(control_opts.color(.text), control_opts.color(.fill));
                 }
-                var bw = dvui.ButtonWidget.init(@src(), .{}, .{
+                var bw: dvui.ButtonWidget = undefined;
+                bw.init(@src(), .{}, .{
                     .color_text = color,
                     // If not enabled don't include in tab order (tab_index = 0). Otherwise use default tab index (tab_index = null).
                     .tab_index = if (checkbox_enabled) null else 0,
                 });
                 defer bw.deinit();
-                bw.install();
                 if (checkbox_enabled)
                     bw.processEvents();
                 bw.drawBackground();

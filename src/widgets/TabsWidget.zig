@@ -117,8 +117,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
 
     const options = tab_defaults.themeOverride().override(opts);
 
-    self.tab_button = ButtonWidget.init(@src(), .{}, options);
-    self.tab_button.install();
+    self.tab_button.init(@src(), .{}, options);
     self.tab_button.processEvents();
     self.tab_button.drawBackground();
 

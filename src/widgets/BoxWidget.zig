@@ -47,7 +47,7 @@ ratio_extra: f32 = 0,
 ran_off: bool = false,
 pixels_per_w: f32 = 0,
 
-/// It's expected to call this on an `undefined` value
+/// It's expected to call this when `self` is `undefined`
 pub fn init(self: *BoxWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
     const defaults = Options{ .name = "Box" };
     const wd = WidgetData.init(src, .{}, defaults.override(opts));
