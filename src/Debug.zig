@@ -556,7 +556,8 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
         {
             dvui.labelNoFmt(@src(), "expand", .{}, .{ .gravity_y = 0.5 });
             const expands = std.meta.tags(Options.Expand);
-            var dd = dvui.DropdownWidget.init(@src(), .{
+            var dd: dvui.DropdownWidget = undefined;
+            dd.init(@src(), .{
                 .label = @tagName(self.expandGet()),
                 .selected_index = std.mem.indexOfScalar(Options.Expand, expands, self.expandGet()).?,
             }, .{
@@ -564,7 +565,6 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
                 .min_size_content = .{ .w = 110 },
                 .gravity_y = 0.5,
             });
-            dd.install();
             defer dd.deinit();
             if (dd.dropped()) {
                 for (expands) |new| {
@@ -837,13 +837,13 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
     {
         dvui.label(@src(), "Font Style", .{}, .{ .gravity_y = 0.5 });
         const styles = std.meta.tags(dvui.Theme.Style.Name);
-        var dd = dvui.DropdownWidget.init(@src(), .{
+        var dd: dvui.DropdownWidget = undefined;
+        dd.init(@src(), .{
             .label = if (self.style) |style| @tagName(style) else "null",
         }, .{
             .min_size_content = .{ .w = 150 },
             .gravity_y = 0.5,
         });
-        dd.install();
         defer dd.deinit();
         if (dd.dropped()) {
             if (dd.addChoiceLabel("Set to null")) {

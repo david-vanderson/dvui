@@ -2490,8 +2490,8 @@ pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOpt
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: *usize, opts: Options) bool {
-    var dd = dvui.DropdownWidget.init(src, .{ .selected_index = choice.*, .label = entries[choice.*] }, opts);
-    dd.install();
+    var dd: dvui.DropdownWidget = undefined;
+    dd.init(src, .{ .selected_index = choice.*, .label = entries[choice.*] }, opts);
 
     var ret = false;
     if (dd.dropped()) {
@@ -2517,8 +2517,8 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: *T, opts: Options) bool {
     if (@typeInfo(T) != .@"enum") @compileError("Expected enum, found '" ++ @typeName(T) ++ "'");
 
-    var dd = dvui.DropdownWidget.init(src, .{ .selected_index = @intFromEnum(choice.*), .label = @tagName(choice.*) }, opts);
-    dd.install();
+    var dd: dvui.DropdownWidget = undefined;
+    dd.init(src, .{ .selected_index = @intFromEnum(choice.*), .label = @tagName(choice.*) }, opts);
 
     var ret = false;
     if (dd.dropped()) {
@@ -2819,7 +2819,6 @@ pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOpt
     var ret = widgetAlloc(ContextWidget);
     ret.init(src, init_opts, opts);
     ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
     ret.processEvents();
     return ret;
 }
