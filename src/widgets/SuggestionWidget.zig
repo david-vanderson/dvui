@@ -1,12 +1,10 @@
 pub const SuggestionWidget = @This();
 
-id: dvui.Id,
 /// Is for the floating menu widget that might open
 options: Options,
 init_options: InitOptions,
 
-/// SAFETY: Set in `install`
-menu: MenuWidget = undefined,
+menu: MenuWidget,
 drop: ?*FloatingMenuWidget = null,
 drop_mi: ?MenuItemWidget = null,
 drop_mi_index: usize = 0,
@@ -24,18 +22,18 @@ pub const InitOptions = struct {
     was_allocated_on_widget_stack: bool = false,
 };
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) SuggestionWidget {
-    const id = dvui.parentGet().extendId(src, opts.idExtra());
-    return .{
-        .id = id,
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *SuggestionWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+    self.* = .{
         .options = defaults.override(opts),
         .init_options = init_opts,
-        .selected_index = dvui.dataGet(null, id, "_selected", usize) orelse 0,
+        // SAFETY: Set bellow
+        .selected_index = undefined,
+        // SAFETY: Set bellow
+        .menu = undefined,
     };
-}
-
-pub fn install(self: *SuggestionWidget) void {
-    self.menu.init(@src(), .{ .dir = .horizontal, .close_without_focused_child = false }, .{ .role = .none, .rect = .{}, .id_extra = self.options.idExtra() });
+    self.menu.init(src, .{ .dir = .horizontal, .close_without_focused_child = false }, .{ .role = .none, .rect = .{}, .id_extra = self.options.idExtra(), .name = "Suggestions Menu" });
+    self.selected_index = dvui.dataGet(null, self.menu.data().id, "_selected", usize) orelse 0;
 }
 
 // Use this to see if dropped will return true without installing the
@@ -123,9 +121,9 @@ pub fn deinit(self: *SuggestionWidget) void {
     defer self.* = undefined;
     if (self.selected_index > (self.drop_mi_index -| 1)) {
         self.selected_index = self.drop_mi_index -| 1;
-        dvui.refresh(null, @src(), self.id);
+        dvui.refresh(null, @src(), self.menu.data().id);
     }
-    dvui.dataSet(null, self.id, "_selected", self.selected_index);
+    dvui.dataSet(null, self.menu.data().id, "_selected", self.selected_index);
     if (self.drop != null) {
         self.drop.?.deinit();
         self.drop = null;
