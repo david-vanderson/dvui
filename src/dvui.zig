@@ -3426,8 +3426,8 @@ pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, init_opts: L
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn icon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: IconRenderOptions, opts: Options) void {
-    var iw = IconWidget.init(src, name, tvg_bytes, icon_opts, opts);
-    iw.install();
+    var iw: IconWidget = undefined;
+    iw.init(src, name, tvg_bytes, icon_opts, opts);
     iw.draw();
     iw.deinit();
 }
