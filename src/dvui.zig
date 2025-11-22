@@ -2567,12 +2567,11 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
     const min_width = te.textLayout.data().backgroundRect().w;
 
     var sug = widgetAlloc(SuggestionWidget);
-    sug.* = dvui.SuggestionWidget.init(@src(), .{
+    sug.init(@src(), .{
         .was_allocated_on_widget_stack = true,
         .rs = te.data().borderRectScale(),
         .text_entry_id = te.data().id,
     }, .{ .label = .{ .text = te.getText() }, .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
-    sug.install();
     if (open_sug) {
         sug.open();
     }
