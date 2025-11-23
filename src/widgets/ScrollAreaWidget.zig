@@ -166,9 +166,9 @@ pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts:
 
     if (init_opts.container) {
         const container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
-        self.scroll = ScrollContainerWidget.init(@src(), self.si, .{ .scroll_area = self, .lock_visible = self.init_opts.lock_visible, .frame_viewport = self.init_opts.frame_viewport, .process_events_after = self.init_opts.process_events_after }, container_opts);
+        self.scroll = undefined;
+        self.scroll.?.init(@src(), self.si, .{ .scroll_area = self, .lock_visible = self.init_opts.lock_visible, .frame_viewport = self.init_opts.frame_viewport, .process_events_after = self.init_opts.process_events_after }, container_opts);
 
-        self.scroll.?.install();
         self.scroll.?.processEvents();
         self.scroll.?.processVelocity();
     }
