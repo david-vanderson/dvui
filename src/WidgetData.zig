@@ -61,8 +61,12 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
     };
 }
 
-pub fn register(self: *WidgetData) void {
+pub fn rectChanged(self: *WidgetData) void {
     self.rect_scale = self.rectScaleFromParent();
+}
+
+pub fn register(self: *WidgetData) void {
+    self.rectChanged();
 
     if (self.options.role) |role| {
         _ = dvui.currentWindow().accesskit.nodeCreate(self, role);
