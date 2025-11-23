@@ -111,23 +111,23 @@ pub fn dropped(self: *DropdownWidget) bool {
     }
 
     if (self.menuItem.activeRect()) |r| {
-        const drop_opts: Options = FloatingMenuWidget.applyDefaultOptions(.{ .role = .none, .min_size_content = .cast(r.size()) });
-        self.drop = undefined; // Needs to be a non-null value so `.?` bellow doesn't panic
-        var drop = &self.drop.?;
-        drop.preInit(@src(), drop_opts.idExtra());
-
-        const s = drop.scale_val;
         var from = r;
+        const s = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale();
+
         // move drop up-left to align first item
-        from.x -= drop_opts.borderGet().x * s;
-        from.x -= drop_opts.paddingGet().x * s;
-        from.y -= drop_opts.borderGet().y * s;
-        from.y -= drop_opts.paddingGet().y * s;
+        const menuDefaults = dvui.FloatingMenuWidget.defaults;
+        from.x -= menuDefaults.borderGet().x * s;
+        from.x -= menuDefaults.paddingGet().x * s;
+        from.y -= menuDefaults.borderGet().y * s;
+        from.y -= menuDefaults.paddingGet().y * s;
 
         // move drop up so selected entry is aligned
         from.y -= self.drop_adjust * s;
 
-        drop.postInit(.{ .from = from, .avoid = .none }, drop_opts);
+        self.drop = undefined; // Needs to be a non-null value so `.?` bellow doesn't panic
+        var drop = &self.drop.?;
+        drop.init(@src(), .{ .from = from, .avoid = .none }, .{ .role = .none, .min_size_content = .cast(r.size()) });
+
         self.drop_first_frame = dvui.firstFrame(drop.data().id);
 
         // without this, if you trigger the dropdown with the keyboard and then
