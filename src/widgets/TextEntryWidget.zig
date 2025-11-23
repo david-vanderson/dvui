@@ -175,10 +175,8 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     const focused = (self.data().id == dvui.lastFocusedIdInFrame());
     if (focused) dvui.currentWindow().last_focused_id_this_frame = .zero;
 
-    self.scroll = ScrollAreaWidget.init(@src(), scroll_init_opts, self.data().options.strip().override(.{ .role = .none, .expand = .both }));
-
     // scrollbars process mouse events here
-    self.scroll.install();
+    self.scroll.init(@src(), scroll_init_opts, self.data().options.strip().override(.{ .role = .none, .expand = .both }));
 
     if (focused) dvui.currentWindow().last_focused_id_this_frame = self.data().id;
 

@@ -320,8 +320,9 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, cols: WidthsOrNu
 
     self.frame_viewport = self.bsi.viewport.topLeft();
 
-    const scroll_opts: ScrollAreaWidget.InitOpts = self.init_opts.scroll_opts orelse .{ .frame_viewport = self.frame_viewport, .scroll_info = self.bsi };
-    self.scroll = ScrollAreaWidget.init(
+    var scroll_opts: ScrollAreaWidget.InitOpts = self.init_opts.scroll_opts orelse .{ .frame_viewport = self.frame_viewport, .scroll_info = self.bsi };
+    scroll_opts.container = false;
+    self.scroll.init(
         @src(),
         scroll_opts,
         .{
@@ -330,7 +331,6 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, cols: WidthsOrNu
             .background = false,
         },
     );
-    self.scroll.installScrollBars();
 }
 
 pub fn deinit(self: *GridWidget) void {
@@ -627,7 +627,8 @@ pub fn totalWidth(self: *const GridWidget) f32 {
 
 fn headerScrollAreaCreate(self: *GridWidget) void {
     if (self.hscroll == null) {
-        self.hscroll = ScrollAreaWidget.init(@src(), .{
+        self.hscroll = undefined;
+        self.hscroll.?.init(@src(), .{
             .horizontal_bar = .hide,
             .vertical_bar = .hide,
             .scroll_info = &self.hsi,
@@ -639,7 +640,6 @@ fn headerScrollAreaCreate(self: *GridWidget) void {
             .expand = .horizontal,
             .min_size_content = .{ .h = if (self.header_height > 0) self.header_height else self.last_header_height, .w = self.totalWidth() },
         });
-        self.hscroll.?.install();
         if (!std.math.approxEqAbs(f32, self.header_height, self.last_header_height, 0.01)) {
             self.resizing = true;
         }

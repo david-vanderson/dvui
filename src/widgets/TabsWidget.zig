@@ -43,8 +43,7 @@ pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitO
         .box = undefined,
     };
 
-    self.scroll = ScrollAreaWidget.init(src, scroll_opts, defaults.override(opts));
-    self.scroll.install();
+    self.scroll.init(src, scroll_opts, defaults.override(opts));
 
     self.group.init(@src(), .{ .nav_key_dir = self.init_options.dir }, .{});
 

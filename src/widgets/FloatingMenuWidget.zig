@@ -167,8 +167,7 @@ pub fn postInit(self: *FloatingMenuWidget, init_options: InitOptions, options: O
 
     // we are using scroll to do border/background but floating windows
     // don't have margin, so turn that off
-    self.scroll = ScrollAreaWidget.init(@src(), .{ .horizontal = .none }, options.override(.{ .margin = .{}, .expand = .both }));
-    self.scroll.install();
+    self.scroll.init(@src(), .{ .horizontal = .none }, options.override(.{ .margin = .{}, .expand = .both }));
 
     // clip to just our window (using clipSet since we are not inside our parent)
     _ = dvui.clip(rs.r);

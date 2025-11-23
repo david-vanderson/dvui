@@ -37,14 +37,12 @@ pub const InitOpts = struct {
     frame_viewport: ?dvui.Point = null,
     lock_visible: bool = false,
     process_events_after: bool = true,
+    container: bool = true,
 
     was_allocated_on_widget_stack: bool = false,
 };
 
-src: std.builtin.SourceLocation,
-opts: Options,
-/// SAFETY: Set by `install`
-hbox: BoxWidget = undefined,
+hbox: BoxWidget,
 vbar: ?ScrollBarWidget = null,
 vbar_grab: ?ScrollBarWidget.Grab = null,
 /// SAFETY: Set by `installScrollBars`
@@ -52,32 +50,18 @@ vbox: BoxWidget = undefined,
 hbar: ?ScrollBarWidget = null,
 hbar_grab: ?ScrollBarWidget.Grab = null,
 init_opts: InitOpts,
-/// SAFETY: Set by `installScrollBars`, might point to `si_store`
 si: *ScrollInfo = undefined,
-si_store: ScrollInfo = .{},
 scroll: ?ScrollContainerWidget = null,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) ScrollAreaWidget {
-    return .{
-        .src = src,
-        .opts = opts,
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) void {
+    self.* = .{
         .init_opts = init_opts,
+        .hbox = undefined, // set below
     };
-}
 
-pub fn install(self: *ScrollAreaWidget) void {
-    self.installScrollBars();
+    self.hbox.init(src, .{ .dir = .horizontal }, defaults.themeOverride().override(opts));
 
-    const container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
-    self.scroll = ScrollContainerWidget.init(@src(), self.si, .{ .scroll_area = self, .lock_visible = self.init_opts.lock_visible, .frame_viewport = self.init_opts.frame_viewport, .process_events_after = self.init_opts.process_events_after }, container_opts);
-
-    self.scroll.?.install();
-    self.scroll.?.processEvents();
-    self.scroll.?.processVelocity();
-}
-
-pub fn installScrollBars(self: *ScrollAreaWidget) void {
-    self.hbox.init(self.src, .{ .dir = .horizontal }, defaults.themeOverride().override(self.opts));
     if (self.init_opts.scroll_info) |si| {
         self.si = si;
         if (self.init_opts.vertical != null) {
@@ -86,15 +70,10 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
         if (self.init_opts.horizontal != null) {
             dvui.log.debug("ScrollAreaWidget {x} init_opts.horizontal .{s} overridden by init_opts.scroll_info.horizontal .{s}\n", .{ self.hbox.data().id, @tagName(self.init_opts.horizontal.?), @tagName(si.horizontal) });
         }
-    } else if (dvui.dataGet(null, self.hbox.data().id, "_scroll_info", ScrollInfo)) |si| {
-        self.si_store = si;
-        self.si = &self.si_store; // can't take pointer to self in init, so we do it in install
+    } else {
+        self.si = dvui.dataGetPtrDefault(null, self.hbox.data().id, "_scroll_info", ScrollInfo, .{});
 
         // outside code might have changed what direction we scroll in
-        self.si.vertical = self.init_opts.vertical orelse .auto;
-        self.si.horizontal = self.init_opts.horizontal orelse .none;
-    } else {
-        self.si = &self.si_store; // can't take pointer to self in init, so we do it in install
         self.si.vertical = self.init_opts.vertical orelse .auto;
         self.si.horizontal = self.init_opts.horizontal orelse .none;
     }
@@ -183,6 +162,15 @@ pub fn installScrollBars(self: *ScrollAreaWidget) void {
             self.hbar.?.grab().draw();
         }
         self.hbar.?.deinit();
+    }
+
+    if (init_opts.container) {
+        const container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
+        self.scroll = ScrollContainerWidget.init(@src(), self.si, .{ .scroll_area = self, .lock_visible = self.init_opts.lock_visible, .frame_viewport = self.init_opts.frame_viewport, .process_events_after = self.init_opts.process_events_after }, container_opts);
+
+        self.scroll.?.install();
+        self.scroll.?.processEvents();
+        self.scroll.?.processVelocity();
     }
 }
 
