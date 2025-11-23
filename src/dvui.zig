@@ -2946,9 +2946,8 @@ pub fn reorder(src: std.builtin.SourceLocation, init_opts: ReorderWidget.InitOpt
 
 pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) *ScrollAreaWidget {
     var ret = widgetAlloc(ScrollAreaWidget);
-    ret.* = ScrollAreaWidget.init(src, init_opts, opts);
+    ret.init(src, init_opts, opts);
     ret.init_opts.was_allocated_on_widget_stack = true;
-    ret.install();
     return ret;
 }
 
