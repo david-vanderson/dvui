@@ -342,8 +342,8 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
             rect.w = size;
             rect.h = size;
 
-            var fc = dvui.FloatingWidget.init(@src(), .{}, .{ .rect = rect });
-            fc.install();
+            var fc: dvui.FloatingWidget = undefined;
+            fc.init(@src(), .{}, .{ .rect = rect });
 
             var offset: Point.Physical = dvui.dataGet(null, fc.data().id, "_offset", Point.Physical) orelse .{};
 
@@ -411,8 +411,8 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
             rect.w = size;
             rect.h = size;
 
-            var fc = dvui.FloatingWidget.init(@src(), .{}, .{ .rect = rect });
-            fc.install();
+            var fc: dvui.FloatingWidget = undefined;
+            fc.init(@src(), .{}, .{ .rect = rect });
 
             var offset: Point.Physical = dvui.dataGet(null, fc.data().id, "_offset", Point.Physical) orelse .{};
 
@@ -1746,24 +1746,8 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
 pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
     if (self.touch_editing and self.te_show_context_menu and self.focus_at_start and self.data().visible()) {
-        self.te_floating = dvui.FloatingWidget.init(@src(), .{}, .{});
-
         const r = dvui.windowRectScale().rectFromPhysical(dvui.clipGet());
-        if (dvui.minSizeGet(self.te_floating.data().id)) |_| {
-            const ms = dvui.minSize(self.te_floating.data().id, self.te_floating.data().options.min_sizeGet());
-            self.te_floating.data().rect.w = ms.w;
-            self.te_floating.data().rect.h = ms.h;
-
-            self.te_floating.data().rect.x = r.x + r.w - self.te_floating.data().rect.w;
-            self.te_floating.data().rect.y = r.y - self.te_floating.data().rect.h - self.data().options.paddingGet().y;
-
-            self.te_floating.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), .{ .x = self.te_floating.data().rect.x, .y = self.te_floating.data().rect.y }, .vertical, .cast(self.te_floating.data().rect)));
-        } else {
-            // need another frame to get our min size
-            dvui.refresh(null, @src(), self.te_floating.data().id);
-        }
-
-        self.te_floating.install();
+        self.te_floating.init(@src(), .{ .from = .cast(r) }, .{});
         return &self.te_floating;
     }
 

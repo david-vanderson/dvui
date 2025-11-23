@@ -19,6 +19,10 @@ pub const InitOptions = struct {
     /// Whether mouse events can match this.  Set to false if this is a drag
     /// image (so the mouse release will match the window under this).
     mouse_events: bool = true,
+
+    /// If not null, move floating widget to avoid this rect using `avoid`.
+    from: ?Rect.Natural = null,
+    avoid: dvui.PlaceOnScreenAvoid = .vertical,
 };
 
 init_opts: InitOptions,
@@ -42,13 +46,13 @@ scaler: dvui.ScaleWidget = undefined,
 ///
 /// Use FloatingWindowWidget for a floating window that the user can change
 /// size, move around, and adjust stacking.
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Options) FloatingWidget {
+pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Options) void {
     const scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale();
     var opts = opts_in;
     if (opts.min_size_content) |msc| {
         opts.min_size_content = msc.scale(scale_val, Size);
     }
-    return .{
+    self.* = .{
         // get scale from parent
         .scale_val = scale_val,
         .init_opts = init_opts,
@@ -59,9 +63,19 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Op
             .rect = opts.rect orelse .{},
         })),
     };
-}
 
-pub fn install(self: *FloatingWidget) void {
+    if (init_opts.from) |f| {
+        if (dvui.minSizeGet(self.data().id)) |_| {
+            const ms = dvui.minSize(self.data().id, opts.min_sizeGet());
+            self.data().rect = .fromPoint(.cast(f.topLeft()));
+            self.data().rect = self.data().rect.toSize(ms);
+            self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), f, init_opts.avoid, .cast(self.data().rect)));
+        } else {
+            // need another frame to get our min size
+            dvui.refresh(null, @src(), self.data().id);
+        }
+    }
+
     self.prev_rendering = dvui.renderingSet(false);
     self.data().register();
 
