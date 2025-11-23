@@ -81,8 +81,8 @@ tt_child_shown: bool = false,
 ///
 /// Use FloatingWindowWidget for a floating window that the user can change
 /// size, move around, and adjust stacking.
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Options) FloatingTooltipWidget {
-    var self = FloatingTooltipWidget{
+pub fn init(self: *FloatingTooltipWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Options) void {
+    self.* = .{
         .wd = WidgetData.init(src, .{ .subwindow = true }, (Options{ .name = "FloatingTooltip" }).override(.{
             // passing options.rect will stop WidgetData.init from calling
             // rectFor/minSizeForChild which is important because we are outside
@@ -103,8 +103,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Op
     self.options.rect = null;
 
     if (dvui.dataGet(null, self.wd.id, "_showing", bool)) |showing| self.showing = showing;
-
-    return self;
 }
 
 pub fn shown(self: *FloatingTooltipWidget) bool {

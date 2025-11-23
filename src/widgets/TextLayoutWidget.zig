@@ -509,7 +509,8 @@ pub fn addTextHover(self: *TextLayoutWidget, text: []const u8, opts: Options) ?d
 }
 
 pub fn addTextTooltip(self: *TextLayoutWidget, src: std.builtin.SourceLocation, text: []const u8, tooltip: []const u8, opts: Options) void {
-    var tt: dvui.FloatingTooltipWidget = .init(src, .{
+    var tt: dvui.FloatingTooltipWidget = undefined;
+    tt.init(src, .{
         .active_rect = .{},
         .position = .sticky,
     }, .{ .id_extra = opts.idExtra() });
