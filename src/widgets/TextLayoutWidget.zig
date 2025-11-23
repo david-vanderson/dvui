@@ -134,7 +134,6 @@ bytes_seen: usize = 0,
 first_byte_in_line: usize = 0,
 /// might point to `selection_store`
 selection: *Selection,
-selection_store: Selection = .{},
 
 /// For simplicity we only handle a single kind of selection change per frame
 sel_move: union(enum) {
@@ -239,10 +238,11 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
         .kerning = init_opts.kerning,
         .touch_edit_just_focused = init_opts.touch_edit_just_focused,
 
-        // SAFETY: `self` pointer is valid here, even though the value might be `undefined` until this statement finishes
-        .selection = if (init_opts.selection) |sel_in| sel_in else &self.selection_store,
-        .selection_store = dvui.dataGetDefault(null, self.data().id, "_selection", Selection, .{}),
+        // SAFETY: set bellow
+        .selection = undefined,
     };
+    self.selection = if (init_opts.selection) |sel_in| sel_in else dvui.dataGetPtrDefault(null, self.wd.id, "_selection", Selection, .{});
+
     if (dvui.dataGet(null, self.wd.id, "_touch_editing", bool)) |val| self.touch_editing = val;
     if (dvui.dataGet(null, self.wd.id, "_te_first", bool)) |val| self.te_first = val;
     if (dvui.dataGet(null, self.wd.id, "_te_show_draggables", bool)) |val| self.te_show_draggables = val;
