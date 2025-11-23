@@ -55,18 +55,18 @@ pub const light = light: {
         .max_default_corner_radius = 0.0,
 
         .control = .{
-            .ninepatch_fill = dvui.Ninepatch.builtins.outset,
-            .ninepatch_press = dvui.Ninepatch.builtins.inset,
-            .fill = .white,
-            .fill_hover = .white,
-            .fill_press = .white,
+            .ninepatch_fill = dvui.Ninepatch.builtins.raised,
+            .ninepatch_press = dvui.Ninepatch.builtins.sunken,
+            .fill = surface,
+            .fill_hover = surface,
+            .fill_press = surface,
         },
         .window = .{
-            .ninepatch_fill = dvui.Ninepatch.builtins.outset,
-            .ninepatch_press = dvui.Ninepatch.builtins.inset,
-            .fill = .white,
-            .fill_hover = .white,
-            .fill_press = .white,
+            .ninepatch_fill = dvui.Ninepatch.builtins.raised,
+            .ninepatch_press = dvui.Ninepatch.builtins.sunken,
+            .fill = surface,
+            .fill_hover = surface,
+            .fill_press = surface,
         },
     };
 };

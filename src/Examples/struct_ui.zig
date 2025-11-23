@@ -212,7 +212,7 @@ pub fn themeEditor() void {
         .g = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
         .b = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
     }, .{ .r = 127, .g = 127, .b = 127, .a = 255 });
-    const ninepatch_options: dvui.struct_ui.StructOptions(dvui.Ninepatch.Source) = .init(.{}, dvui.Ninepatch.builtins.outset);
+    const ninepatch_options: dvui.struct_ui.StructOptions(dvui.Ninepatch.Source) = .init(.{}, dvui.Ninepatch.builtins.raised);
     const theme: *dvui.Theme = &dvui.currentWindow().theme; // Want a pointer to the actual theme, not a copy.
     if (dvui.struct_ui.displayStruct(
         @src(),
