@@ -65,22 +65,13 @@ scroll: ScrollAreaWidget,
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    //
-    self.preInit(src, opts.idExtra());
-    self.postInit(init_opts, applyDefaultOptions(opts));
-}
-
-/// It's expected to call this when `self` is `undefined`
-///
-/// This sets `data()` and `scale_val`. All other non-defaulted fields are `undefined`
-pub fn preInit(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, id_extra: usize) void {
     self.* = .{
         // the widget itself doesn't have any styling, it comes from the
         // embedded MenuWidget
         // passing options.rect will stop WidgetData.init from calling
         // rectFor/minSizeForChild which is important because we are outside
         // normal layout
-        .wd = .init(src, .{ .subwindow = true }, .{ .id_extra = id_extra, .rect = .{} }),
+        .wd = .init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{} }),
         // get scale from parent
         .scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale(),
 
@@ -92,12 +83,8 @@ pub fn preInit(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, id_ex
         .scaler = undefined,
         .scroll = undefined,
     };
-}
 
-/// It's expected to call this when `self` is `undefined`
-///
-/// `options` is expected to already have the widget defaults applied
-pub fn postInit(self: *FloatingMenuWidget, init_options: InitOptions, options: Options) void {
+    const options = defaults.themeOverride().override(opts);
     // NOTE: options is really for our embedded ScrollAreaWidget
 
     self.prev_rendering = dvui.renderingSet(false);
@@ -108,7 +95,7 @@ pub fn postInit(self: *FloatingMenuWidget, init_options: InitOptions, options: O
     // prevents parents from processing key events if focus is inside the floating window
     self.prev_last_focus = dvui.lastFocusedIdInFrame();
 
-    const avoid: dvui.PlaceOnScreenAvoid = switch (init_options.avoid) {
+    const avoid: dvui.PlaceOnScreenAvoid = switch (init_opts.avoid) {
         .none => .none,
         .horizontal => .horizontal,
         .vertical => .vertical,
@@ -118,11 +105,11 @@ pub fn postInit(self: *FloatingMenuWidget, init_options: InitOptions, options: O
         } else .none,
     };
 
-    self.data().rect = Rect.fromPoint(.cast(init_options.from.topLeft()));
+    self.data().rect = Rect.fromPoint(.cast(init_opts.from.topLeft()));
     if (dvui.minSizeGet(self.data().id)) |_| {
         const ms = dvui.minSize(self.data().id, options.min_sizeGet());
         self.data().rect = self.data().rect.toSize(ms);
-        self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), init_options.from, avoid, .cast(self.data().rect)));
+        self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), init_opts.from, avoid, .cast(self.data().rect)));
         if (dvui.dataGet(null, self.data().id, "_check_focus", void) != null) {
             dvui.dataRemove(null, self.data().id, "_check_focus");
             if (dvui.MenuWidget.current() == null or !dvui.MenuWidget.current().?.mouse_mode or self.data().rectScale().r.contains(dvui.currentWindow().mouse_pt)) {
@@ -130,7 +117,7 @@ pub fn postInit(self: *FloatingMenuWidget, init_options: InitOptions, options: O
             }
         }
     } else {
-        self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), init_options.from, avoid, .cast(self.data().rect)));
+        self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), init_opts.from, avoid, .cast(self.data().rect)));
         dvui.dataSet(null, self.data().id, "_check_focus", {});
 
         // need a second frame to fit contents (FocusWindow calls refresh but
@@ -177,11 +164,6 @@ pub fn postInit(self: *FloatingMenuWidget, init_options: InitOptions, options: O
     }
 
     self.menu.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowId }, options.strip().override(.{ .role = .none, .expand = .horizontal }));
-}
-
-/// Gives access to the final options of the FloatingMenu before `init`
-pub fn applyDefaultOptions(opts: Options) Options {
-    return defaults.themeOverride().override(opts);
 }
 
 pub fn close(self: *FloatingMenuWidget) void {
