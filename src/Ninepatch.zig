@@ -102,10 +102,6 @@ pub const UV = struct {
     }
 };
 
-pub const Error = error{
-    NinepatchBelowMin,
-};
-
 pub const Source = struct {
     bytes: []const u8,
     name: []const u8,
