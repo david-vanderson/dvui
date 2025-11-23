@@ -286,12 +286,12 @@ pub const Branch = struct {
                 self.data().register();
                 dvui.parentSet(self.widget());
 
-                self.floating_widget = dvui.FloatingWidget.init(
+                self.floating_widget = undefined;
+                self.floating_widget.?.init(
                     @src(),
                     .{ .mouse_events = false },
                     .{ .rect = Rect.fromPoint(.cast(topleft.toNatural())), .min_size_content = self.tree.branch_size },
                 );
-                self.floating_widget.?.install();
             } else {
                 self.wd = WidgetData.init(self.wd.src, .{}, wrapOuter(self.options));
                 self.wd.register();
