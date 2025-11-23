@@ -122,11 +122,6 @@ fn drawCachedTexture(self: *CacheWidget, t: dvui.Texture) void {
     //}
 }
 
-/// Must be called before install().
-pub fn invalidate(self: *CacheWidget) void {
-    self.init_opts.invalidate = true;
-}
-
 /// Must be called after install().
 pub fn uncached(self: *const CacheWidget) bool {
     return (self.caching_tex != null or dvui.textureGetCached(self.hash) == null);
