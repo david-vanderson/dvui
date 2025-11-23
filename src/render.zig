@@ -424,7 +424,7 @@ pub const NinepatchOptions = struct {
 /// Renders a ninepatch with the given parameters.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptions) (Ninepatch.Error || Backend.GenericError)!void {
+pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptions) Backend.GenericError!void {
     const sz_top_left = ninepatch.size(0);
     const sz_top_right = ninepatch.size(2);
     const sz_bottom_left = ninepatch.size(6);
@@ -433,7 +433,20 @@ pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptio
     const min_size = ninepatch.minSize().scale(rs.s, Rect.Physical);
     const r_size = rs.r.size();
 
-    if (r_size.w < min_size.w or r_size.h < min_size.h) return error.NinepatchBelowMin;
+    if (r_size.w < min_size.w or r_size.h < min_size.h) {
+        try renderTexture(ninepatch.tex, rs, .{
+            .uv = .rect(
+                0,
+                0,
+                rs.r.x / @as(f32, @floatFromInt(ninepatch.tex.width)),
+                rs.r.y / @as(f32, @floatFromInt(ninepatch.tex.height)),
+            ),
+            .colormod = opts.colormod_border orelse .white,
+            .debug = opts.debug,
+        });
+
+        return;
+    }
 
     var rs_top_left = rs.rectToRectScale(.fromSize(sz_top_left));
     var rs_top_right = rs.rectToRectScale(.fromSize(sz_top_right));
@@ -540,7 +553,7 @@ pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptio
 /// Calls `renderNinepatch` with the texture created from `source`
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn renderNinepatchSource(patch: Ninepatch.Source, rs: RectScale, opts: NinepatchOptions) (Ninepatch.Error || Backend.TextureError || StbImageError)!void {
+pub fn renderNinepatchSource(patch: Ninepatch.Source, rs: RectScale, opts: NinepatchOptions) (Backend.TextureError || StbImageError)!void {
     if (rs.s == 0) return;
     if (dvui.clipGet().intersect(rs.r).empty()) return;
     const np = try patch.getNinepatch();
