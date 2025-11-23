@@ -218,7 +218,7 @@ pub fn styling() void {
 
             var ninepatch = dvui.box(@src(), .{}, .{
                 .expand = .both,
-                .ninepatch_fill = dvui.Ninepatch.builtins.outset.getNinepatch() catch null,
+                .ninepatch_fill = dvui.Ninepatch.builtins.raised.getNinepatch() catch null,
             });
             defer ninepatch.deinit();
         }

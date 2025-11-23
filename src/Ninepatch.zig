@@ -1,13 +1,15 @@
 pub const builtins = struct {
-    pub const outset = dvui.Ninepatch.Source{
-        .bytes = @embedFile("themes/ninepatch98.png"),
-        .name = "ninepatch98.png",
-        .uv = &UV.fromPixelInset(.all(8), .all(24)),
+    pub const raised = dvui.Ninepatch.Source{
+        .bytes = @embedFile("themes/raised.png"),
+        .name = "raised.png",
+        .uv = &UV.fromPixelInset(.all(2), .all(6)),
+        .interpolation = .nearest,
     };
-    pub const inset = dvui.Ninepatch.Source{
-        .bytes = @embedFile("themes/inset.png"),
-        .name = "inset.png",
-        .uv = &UV.fromPixelInset(.all(8), .all(24)),
+    pub const sunken = dvui.Ninepatch.Source{
+        .bytes = @embedFile("themes/sunken.png"),
+        .name = "sunken.png",
+        .uv = &UV.fromPixelInset(.all(2), .all(6)),
+        .interpolation = .nearest,
     };
 };
 
@@ -81,8 +83,8 @@ pub const UV = struct {
 
     /// Returns set of 9 uvs dividing the image from top left to bottom right at lines specified by inset
     pub fn fromPixelInset(inset_px: Rect, texture_size: Size) UV {
-        const v = [_]f32{ 0, inset_px.x, texture_size.w - inset_px.w, texture_size.w }; // vertical lines across image
-        const h = [_]f32{ 0, inset_px.y, texture_size.h - inset_px.h, texture_size.h }; // horizontal lines across image
+        const v = [_]f32{ 0, inset_px.x, texture_size.w - 1 - inset_px.w, texture_size.w }; // vertical lines across image
+        const h = [_]f32{ 0, inset_px.y, texture_size.h - 1 - inset_px.h, texture_size.h }; // horizontal lines across image
         const uv_px = [9]Rect{
             .{ .x = h[0], .y = v[0], .w = h[1] - h[0], .h = v[1] - v[0] },
             .{ .x = h[1], .y = v[0], .w = h[2] - h[1], .h = v[1] - v[0] },
