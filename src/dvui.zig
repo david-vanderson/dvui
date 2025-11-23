@@ -5000,7 +5000,7 @@ pub const Picture = struct {
     /// Only valid between `Window.begin`and `Window.end`.
     pub fn start(rect: Rect.Physical) ?Picture {
         if (rect.empty()) {
-            log.err("Picture.start() was called with an empty rect", .{});
+            //log.err("Picture.start() was called with an empty rect", .{});
             return null;
         }
 
