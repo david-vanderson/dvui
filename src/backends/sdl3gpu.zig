@@ -88,7 +88,7 @@ fn UploadBuffer(comptime T: type) type {
         usage: c.SDL_GPUBufferUsageFlags,
         transfer: *c.SDL_GPUTransferBuffer,
         buffer: *c.SDL_GPUBuffer,
-        mapped: [*]T,
+        mapped: ?[*]T,
         cap: u32,
         len: u32 = 0,
 
@@ -129,6 +129,11 @@ fn UploadBuffer(comptime T: type) type {
             };
         }
 
+        pub fn unmap(self: *@This()) void {
+            c.SDL_UnmapGPUTransferBuffer(self.device, self.transfer);
+            self.mapped = null;
+        }
+
         pub fn reset(self: *@This()) void {
             self.len = 0;
         }
@@ -149,9 +154,14 @@ fn UploadBuffer(comptime T: type) type {
             }
         }
 
+        pub fn maybeMap(self: *@This()) void {
+            if (self.mapped == null) {
+                self.mapped = @ptrCast(@alignCast(c.SDL_MapGPUTransferBuffer(self.device, self.transfer, true)));
+            }
+        }
+
         pub fn pushAssumeCap(self: *@This(), new: T) void {
-            // TODO: do more measurements on wildly the element counts resize in dvui.
-            self.mapped[self.len] = new;
+            self.mapped.?[self.len] = new;
             self.len += 1;
         }
 
@@ -167,12 +177,14 @@ fn UploadBuffer(comptime T: type) type {
                     .offset = 0,
                     .size = @intCast(self.len * element_size),
                 },
-                false,
+                true,
             );
+            self.reset();
+            self.unmap();
         }
 
         pub fn deinit(self: *@This()) void {
-            c.SDL_UnmapGPUTransferBuffer(self.device, self.transfer);
+            self.unmap();
             c.SDL_ReleaseGPUTransferBuffer(self.device, self.transfer);
             c.SDL_ReleaseGPUBuffer(self.device, self.buffer);
         }
@@ -180,7 +192,7 @@ fn UploadBuffer(comptime T: type) type {
         pub fn resize(self: *@This(), new_cap: u32) !void {
             const new_size = new_cap * element_size;
 
-            c.SDL_UnmapGPUTransferBuffer(self.device, self.transfer);
+            self.unmap();
 
             const device = self.device;
             const transfer = c.SDL_CreateGPUTransferBuffer(
@@ -292,6 +304,10 @@ const FrameUploads = struct {
         self.vertex.addUploads(copy_pass);
         self.index.addUploads(copy_pass);
         self.clip.addUploads(copy_pass);
+
+        self.vertex.maybeMap();
+        self.index.maybeMap();
+        self.clip.maybeMap();
     }
 
     fn push(self: *FrameUploads, back: *SDLBackend, backendTexture: ?*BackendTexture, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?ClipRect) !void {
@@ -308,7 +324,7 @@ const FrameUploads = struct {
         try self.index.ensureCapacityPushCount(idx.len);
         try self.clip.ensureCapacityPushCount(1);
 
-        const size = back.last_pixel_size;
+        const size = if (back.current_render_target_size) |s| s else back.last_pixel_size;
 
         for (vtx) |v| {
             self.vertex.pushAssumeCap(Vertex.fromDvui(v, size));
@@ -370,6 +386,8 @@ destroyDeviceOnExit: bool = false,
 pipeline: *c.SDL_GPUGraphicsPipeline = undefined,
 cmd: ?*c.SDL_GPUCommandBuffer = null,
 swapchain_texture: ?*c.SDL_GPUTexture = null,
+current_render_target: ?*BackendTextureTarget = null,
+current_render_target_size: ?dvui.Size.Physical = null,
 current_render_pass: ?*c.SDL_GPURenderPass = null,
 
 // White texture for non-textured draws
@@ -1225,19 +1243,6 @@ pub fn deinit(self: *SDLBackend) void {
     self.* = undefined;
 }
 
-pub fn renderPresent(self: *SDLBackend) !void {
-    if (self.cmd != null) {
-        // Submit the command buffer
-        const submitted = c.SDL_SubmitGPUCommandBuffer(self.cmd);
-        if (!submitted) {
-            log.err("Failed to submit GPU command buffer: {s}", .{c.SDL_GetError()});
-            return error.CommandBufferSubmissionFailed;
-        }
-        self.cmd = null;
-        self.swapchain_texture = null;
-    }
-}
-
 pub fn backend(self: *SDLBackend) dvui.Backend {
     return dvui.Backend.init(self);
 }
@@ -1290,9 +1295,6 @@ pub fn preferredColorScheme(_: *SDLBackend) ?dvui.enums.ColorScheme {
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
     self.frame_uploads.reset();
-}
-
-pub fn end(self: *SDLBackend) !void {
 
     // Acquire command buffer for this frame
     self.cmd = c.SDL_AcquireGPUCommandBuffer(self.device);
@@ -1311,7 +1313,9 @@ pub fn end(self: *SDLBackend) !void {
         self.swapchain_texture = null;
         return;
     }
+}
 
+pub fn finishRenderingCurrentTarget(self: *SDLBackend) !void {
     // Begin copy pass for uploading vertex/index data
     self.frame_uploads.copy_pass = c.SDL_BeginGPUCopyPass(self.cmd.?) orelse {
         log.err("Failed to begin GPU copy pass: {s}", .{c.SDL_GetError()});
@@ -1326,11 +1330,9 @@ pub fn end(self: *SDLBackend) !void {
         self.frame_uploads.copy_pass = null;
     }
 
-    // Use the swapchain texture acquired in begin() as render target
-    // TODO: Make this clear optional in the future (allow application to control clear behavior)
     var color_target = std.mem.zeroes(c.SDL_GPUColorTargetInfo);
-    color_target.texture = self.swapchain_texture;
-    color_target.clear_color = .{ .r = 0.0, .g = 0.0, .b = 0.0, .a = 1.0 };
+    color_target.texture = if (self.current_render_target == null) self.swapchain_texture else self.current_render_target.?.texture;
+    color_target.clear_color = .{ .r = 0.0, .g = 0.0, .b = 0.0, .a = if (self.current_render_target == null) 1.0 else 0.0 };
     color_target.load_op = c.SDL_GPU_LOADOP_CLEAR;
     color_target.store_op = c.SDL_GPU_STOREOP_STORE;
 
@@ -1363,6 +1365,25 @@ pub fn end(self: *SDLBackend) !void {
     if (self.current_render_pass) |pass| {
         c.SDL_EndGPURenderPass(pass);
         self.current_render_pass = null;
+    }
+
+    self.frame_uploads.reset();
+}
+
+pub fn end(self: *SDLBackend) !void {
+    try self.finishRenderingCurrentTarget();
+}
+
+pub fn renderPresent(self: *SDLBackend) !void {
+    if (self.cmd != null) {
+        // Submit the command buffer
+        const submitted = c.SDL_SubmitGPUCommandBuffer(self.cmd);
+        if (!submitted) {
+            log.err("Failed to submit GPU command buffer: {s}", .{c.SDL_GetError()});
+            return error.CommandBufferSubmissionFailed;
+        }
+        self.cmd = null;
+        self.swapchain_texture = null;
     }
 }
 
@@ -1533,19 +1554,71 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
 
 // render target for textures
 const BackendTextureTarget = struct {
-    // todo ...
+    texture: *c.SDL_GPUTexture,
+    sampler: *c.SDL_GPUSampler, // points to either linear_sampler or nearest_sampler
 };
 
-pub fn textureCreateTarget(_: *SDLBackend, _: u32, _: u32, _: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
-    return error.TextureCreate;
+pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
+    // 1. Create GPU texture
+    const texture = c.SDL_CreateGPUTexture(
+        self.device,
+        &c.SDL_GPUTextureCreateInfo{
+            .type = c.SDL_GPU_TEXTURETYPE_2D,
+            .format = c.SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+            .usage = c.SDL_GPU_TEXTUREUSAGE_SAMPLER | c.SDL_GPU_TEXTUREUSAGE_COLOR_TARGET,
+            .width = width,
+            .height = height,
+            .layer_count_or_depth = 1,
+            .num_levels = 1,
+            .sample_count = c.SDL_GPU_SAMPLECOUNT_1,
+            .props = 0,
+        },
+    ) orelse {
+        log.err("Failed to create GPU texture: {s}", .{c.SDL_GetError()});
+        return error.TextureCreate;
+    };
+    errdefer c.SDL_ReleaseGPUTexture(self.device, texture);
+
+    // 5. Allocate BackendTexture from arena and set sampler
+    const backendTexture = try self.textures_arena.allocator().create(BackendTextureTarget);
+
+    backendTexture.* = .{
+        .texture = texture,
+        .sampler = switch (interpolation) {
+            .linear => self.linear_sampler,
+            .nearest => self.nearest_sampler,
+        },
+    };
+
+    // log.info("created rendertarget 0x{x}", .{@intFromPtr(backendTexture)});
+    // log.info("texture created size {d}x{d} 0x{x}", .{ width, height, @intFromPtr(backendTexture.texture) });
+
+    return dvui.TextureTarget{
+        .ptr = backendTexture,
+        .width = width,
+        .height = height,
+    };
 }
 
-pub fn renderTarget(_: *SDLBackend, _: ?dvui.TextureTarget) !void {}
+pub fn renderTarget(self: *SDLBackend, dvuiTarget: ?dvui.TextureTarget) !void {
+    try self.finishRenderingCurrentTarget();
+
+    if (dvuiTarget) |dt| {
+        // log.info("setting rendertarget 0x{x} ", .{@intFromPtr(dt.ptr)});
+        const target: *BackendTextureTarget = @ptrCast(@alignCast(dt.ptr));
+        self.current_render_target = target;
+        self.current_render_target_size = .{ .h = @floatFromInt(dt.height), .w = @floatFromInt(dt.width) };
+    } else {
+        // log.info("setting rendertarget null ", .{});
+        self.current_render_target = null;
+        self.current_render_target_size = null;
+    }
+}
 
 pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
     _ = self;
-    _ = texture;
     _ = pixels_out;
+    log.info("trying to read 0x{x} not implemented", .{@intFromPtr(texture.ptr)});
 
     // null is the default target
     //         const orig_target = c.SDL_GetRenderTarget(self.renderer);
@@ -1575,7 +1648,7 @@ pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_
     //                 return dvui.Backend.TextureError.TextureRead;
     //         }
     //         @memcpy(pixels_out[0 .. texture.width * texture.height * 4], @as(?[*]u8, @ptrCast(surface.*.pixels)).?[0 .. texture.width * texture.height * 4]);
-    return;
+    return error.BackendError;
 }
 
 pub fn textureDestroy(self: *SDLBackend, texture: dvui.Texture) void {

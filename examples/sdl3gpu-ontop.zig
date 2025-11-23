@@ -176,5 +176,14 @@ fn app_init() !void {
         return error.BackendError;
     }
 
+    if (!c.SDL_SetGPUSwapchainParameters(
+        device,
+        window,
+        c.SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
+        c.SDL_GPU_PRESENTMODE_IMMEDIATE,
+    )) {
+        std.debug.print("Failed to set IMMEDIATE present mode: {s}", .{c.SDL_GetError()});
+    }
+
     std.debug.print("sdl gpu device created", .{});
 }
