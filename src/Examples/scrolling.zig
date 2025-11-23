@@ -183,8 +183,8 @@ pub fn scrolling() void {
             _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
 
             {
-                var scontainer = dvui.ScrollContainerWidget.init(@src(), siMain, .{ .scroll_area = &main_area, .frame_viewport = fv, .event_rect = main_area.data().borderRectScale().r }, .{ .style = .content, .expand = .both });
-                scontainer.install();
+                var scontainer: dvui.ScrollContainerWidget = undefined;
+                scontainer.init(@src(), siMain, .{ .scroll_area = &main_area, .frame_viewport = fv, .event_rect = main_area.data().borderRectScale().r }, .{ .style = .content, .expand = .both });
                 defer scontainer.deinit();
                 scontainer.processEvents();
                 scontainer.processVelocity();
