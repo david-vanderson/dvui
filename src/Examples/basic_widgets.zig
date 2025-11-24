@@ -287,6 +287,8 @@ pub fn basicWidgets() void {
         )) {
             icon_image_rotation = icon_image_rotation - 5 * std.math.pi / 180.0;
         }
+
+        dvui.label(@src(), "Weeeee!", .{}, .{ .gravity_y = 0.5, .rotation = icon_image_rotation });
     }
 }
 

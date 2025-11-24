@@ -1,6 +1,7 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const RaylibBackend = @import("raylib-backend");
+const RaylibBackend = @import("raylib-zig-backend");
+const raylib = RaylibBackend.raylib;
 comptime {
     std.debug.assert(@hasDecl(RaylibBackend, "RaylibBackend"));
 }
@@ -14,8 +15,6 @@ const vsync = true;
 var scale_val: f32 = 1.0;
 
 var show_dialog_outside_frame: bool = false;
-
-pub const c = RaylibBackend.c;
 
 /// This example shows how to use the dvui for a normal application:
 /// - dvui renders the whole application
@@ -49,10 +48,9 @@ pub fn main() !void {
         },
     });
     defer win.deinit();
-    try win.fonts.addBuiltinFontsForTheme(win.gpa, dvui.Theme.builtin.adwaita_light);
 
     main_loop: while (true) {
-        c.BeginDrawing();
+        raylib.beginDrawing();
 
         // beginWait coordinates with waitTime below to run frames only when needed
         //
@@ -142,7 +140,7 @@ fn dvui_frame() bool {
         \\- rest of the window is a scroll area
     , .{});
     tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is set by Raylib (C api).", .{});
+    tl2.addText("Framerate is set by Raylib (raylib-zig).", .{});
     tl2.addText("\n\n", .{});
     if (vsync) {
         tl2.addText("Framerate is capped by vsync.", .{});
@@ -202,7 +200,7 @@ fn dvui_frame() bool {
         // hidpi screens or display scaling)
         const r = rs.r;
         const s = rs.s / dvui.windowNaturalScale();
-        c.DrawText("Congrats! You created your first window!", @intFromFloat(r.x + 10 * s), @intFromFloat(r.y + 10 * s), @intFromFloat(20 * s), c.LIGHTGRAY);
+        raylib.drawText("Congrats! You created your first window!", @intFromFloat(r.x + 10 * s), @intFromFloat(r.y + 10 * s), @intFromFloat(20 * s), raylib.Color.light_gray);
     }
 
     if (dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
@@ -212,7 +210,6 @@ fn dvui_frame() bool {
     // look at demo() for examples of dvui widgets, shows in a floating window
     dvui.Examples.demo();
 
-    // check for quitting
     for (dvui.events()) |*e| {
         // assume we only have a single window
         if (e.evt == .window and e.evt.window.action == .close) return false;

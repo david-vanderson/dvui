@@ -18,6 +18,9 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     align_x: f32 = 0,
     align_y: f32 = 0,
+
+    /// Replace the end of text with "..." if it would be truncated.  Ignored
+    /// if text is rotated (for now).
     ellipsize: bool = true,
 
     pub fn gravityGet(self: InitOptions) Options.Gravity {
@@ -27,6 +30,7 @@ pub const InitOptions = struct {
 
 wd: WidgetData,
 label_str: []const u8,
+label_size: Size,
 /// An allocator to free `label_str` on `deinit`
 allocator: ?std.mem.Allocator,
 init_options: InitOptions,
@@ -82,12 +86,21 @@ pub fn initNoFmt(self: *LabelWidget, src: std.builtin.SourceLocation, label_str:
 /// It's expected to call this when `self` is `undefined`
 pub fn initNoFmtAllocator(self: *LabelWidget, src: std.builtin.SourceLocation, label_str: []const u8, allocator: ?std.mem.Allocator, init_opts: InitOptions, opts: Options) void {
     const options = defaults.override(opts);
-    var size = options.fontGet().textSize(label_str);
+    const lsize = options.fontGet().textSize(label_str);
+    var size = lsize;
+    if (opts.rotationGet() != 0.0) {
+        var t: dvui.Triangles = .{ .vertexes = &.{}, .indices = &.{}, .bounds = .{ .w = size.w, .h = size.h } };
+
+        t.rotate(.{}, opts.rotationGet());
+        size.w = t.bounds.w;
+        size.h = t.bounds.h;
+    }
     size = Size.max(size, options.min_size_contentGet());
     self.* = .{
         .wd = .init(src, .{}, options.override(.{ .min_size_content = size })),
         .init_options = init_opts,
         .label_str = label_str,
+        .label_size = lsize,
         .allocator = allocator,
         .ellipsized = false,
     };
@@ -116,19 +129,22 @@ pub fn data(self: *LabelWidget) *WidgetData {
 }
 
 pub fn draw(self: *LabelWidget) void {
+    const rot = self.data().options.rotationGet();
     const label_gravity = self.init_options.gravityGet();
     const rect = dvui.placeIn(self.data().contentRect(), self.data().options.min_size_contentGet(), .none, label_gravity);
-    var rs = self.data().parent.screenRectScale(rect);
-    const oldclip = dvui.clip(rs.r);
+    const rs = self.data().parent.screenRectScale(rect);
+    const oldclip = if (rot == 0.0) dvui.clip(rs.r) else dvui.clipGet();
     var iter = std.mem.splitScalar(u8, self.label_str, '\n');
     var line_height_adj: f32 = undefined;
     var first: bool = true;
+    var r = rs.r;
     while (iter.next()) |line_slice| {
+        r.x = rs.r.x;
         if (first) {
             line_height_adj = self.data().options.fontGet().textHeight() * (self.data().options.fontGet().line_height_factor - 1.0);
             first = false;
         } else {
-            rs.r.y += rs.s * line_height_adj;
+            r.y += rs.s * line_height_adj;
         }
 
         var line = line_slice;
@@ -140,7 +156,7 @@ pub fn draw(self: *LabelWidget) void {
         const ellip = "...";
         // give ourselves a fraction of a pixel extra for floating point innacurracies:
         // - a lot of times the content Rect is sized based on the text width
-        if (self.init_options.ellipsize and tsize.w > (self.data().contentRect().w + 0.001)) {
+        if (rot == 0.0 and self.init_options.ellipsize and tsize.w > (self.data().contentRect().w + 0.001)) {
             self.ellipsized = true;
             const esize = self.data().options.fontGet().textSize(ellip);
             var endi: usize = 0;
@@ -150,30 +166,61 @@ pub fn draw(self: *LabelWidget) void {
         }
 
         const liners = self.data().parent.screenRectScale(lineRect);
+        r.x = liners.r.x;
 
-        rs.r.x = liners.r.x;
+        var render_p = r.topLeft();
+        if (rot != 0.0) {
+            const cos = @cos(rot);
+            const sin = @sin(rot);
+
+            // place label size in center and rotate
+            const origin = self.data().parent.screenRectScale(rect).r.center();
+            //origin.stroke(.{ .after = true, .thickness = 3.0, .color = .blue });
+
+            //const label_size_rect: Rect.Physical = .{ .x = origin.x, .y = origin.y, .w = self.label_size.w * rs.s, .h = self.label_size.h * rs.s };
+            //label_size_rect.stroke(.all(0), .{ .after = true, .thickness = 1.0, .color = .green });
+
+            var d = (dvui.Point{ .x = -self.label_size.w / 2, .y = -self.label_size.h / 2 }).scale(rs.s, dvui.Point);
+            d.x += (self.label_size.w - tsize.w) * label_gravity.x * rs.s;
+            d.y += r.y - rs.r.y;
+
+            // rotate vector
+            const rotated: dvui.Point.Physical = .{
+                .x = d.x * cos - d.y * sin,
+                .y = d.x * sin + d.y * cos,
+            };
+
+            const xy = origin.plus(rotated);
+            render_p.x = xy.x;
+            render_p.y = xy.y;
+
+            //r.stroke(.all(0), .{ .after = true, .thickness = 1.0, .color = .red });
+        }
+
         dvui.renderText(.{
             .font = self.data().options.fontGet(),
             .text = line,
+            .p = render_p,
             .rs = rs,
             .color = self.data().options.color(.text),
+            .rotation = rot,
         }) catch |err| {
             dvui.logError(@src(), err, "Failed to render text: {s}", .{line});
         };
 
         if (self.ellipsized) {
-            rs.r.x += liners.r.w;
+            r.x += liners.r.w;
             dvui.renderText(.{
                 .font = self.data().options.fontGet(),
                 .text = ellip,
-                .rs = rs,
+                .rs = .{ .r = r, .s = rs.s },
                 .color = self.data().options.color(.text),
             }) catch |err| {
                 dvui.logError(@src(), err, "Failed to render ellipses after text: {s}", .{line});
             };
         }
 
-        rs.r.y += rs.s * tsize.h;
+        r.y += rs.s * tsize.h;
     }
     dvui.clipSet(oldclip);
 }

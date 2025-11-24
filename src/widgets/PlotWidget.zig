@@ -371,7 +371,7 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
     var yaxis_rect = yaxis.data().rect;
     if (self.y_axis.name) |yname| {
         if (yname.len > 0) {
-            dvui.label(@src(), "{s}", .{yname}, .{ .gravity_y = 0.5 });
+            dvui.label(@src(), "{s}", .{yname}, .{ .gravity_y = 0.5, .rotation = std.math.pi * 1.5 });
         }
     }
     yaxis.deinit();
