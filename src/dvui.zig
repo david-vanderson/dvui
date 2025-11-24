@@ -2542,7 +2542,7 @@ pub const SuggestionInitOptions = struct {
 
 /// Wraps a textEntry to provide an attached menu (dropdown) of choices.
 ///
-/// Use after TextEntryWidget.install(), and handles events, so don't call
+/// Use after TextEntryWidget handles events, so don't call
 /// TextEntryWidget.processEvents().
 ///
 /// Only valid between `Window.begin`and `Window.end`.

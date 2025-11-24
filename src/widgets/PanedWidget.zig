@@ -60,7 +60,6 @@ init_opts: InitOptions,
 mouse_dist: f32 = 1000, // logical
 handle_thick: f32, // logical
 split_ratio: *f32,
-/// SAFETY: Set in `install`
 prevClip: Rect.Physical = undefined,
 collapsed_state: bool,
 collapsing: bool,

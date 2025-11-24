@@ -70,15 +70,10 @@ pub const InitOptions = struct {
 };
 
 wd: WidgetData,
-/// SAFETY: Set in `install`
 prevClip: Rect.Physical = undefined,
-/// SAFETY: Set in `install`
 scroll: ScrollAreaWidget = undefined,
-/// SAFETY: Set in `install`
 scrollClip: Rect.Physical = undefined,
-/// SAFETY: Set in `install`
 textLayout: TextLayoutWidget = undefined,
-/// SAFETY: Set in `install`
 textClip: Rect.Physical = undefined,
 padding: Rect,
 

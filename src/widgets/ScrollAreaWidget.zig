@@ -45,7 +45,6 @@ pub const InitOpts = struct {
 hbox: BoxWidget,
 vbar: ?ScrollBarWidget = null,
 vbar_grab: ?ScrollBarWidget.Grab = null,
-/// SAFETY: Set by `installScrollBars`
 vbox: BoxWidget = undefined,
 hbar: ?ScrollBarWidget = null,
 hbar_grab: ?ScrollBarWidget.Grab = null,
