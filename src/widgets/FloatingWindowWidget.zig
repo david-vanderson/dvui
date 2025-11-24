@@ -93,7 +93,7 @@ drag_part: ?DragPart = null,
 /// SAFETY: Set by `install`
 drag_area: Rect.Physical = undefined,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingWindowWidget {
+pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const options = defaults.themeOverride().override(opts);
     var box_options = options;
     box_options.role = null;
@@ -101,7 +101,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     box_options.id_extra = null;
     box_options.rect = null; // if the user passes in a rect, don't pass it to the BoxWidget
 
-    var self = FloatingWindowWidget{
+    self.* = .{
         // options is really for our embedded BoxWidget, so save them for the
         // end of install()
         .options = box_options,
@@ -214,10 +214,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         self.wd.rect = .cast(dvui.placeOnScreen(screen, .{}, .none, .cast(self.data().rect)));
     }
 
-    return self;
-}
-
-pub fn install(self: *FloatingWindowWidget) void {
     self.data().register();
     self.prev_rendering = dvui.renderingSet(false);
 
