@@ -71,8 +71,8 @@ pub fn animations() void {
         }
 
         if (animating_window_show) {
-            var win = animatingWindowRect(@src(), &animating_window_rect, &animating_window_show, &animating_window_closing, .{});
-            win.install();
+            var win: FloatingWindowWidget = undefined;
+            animatingWindowRect(&win, @src(), &animating_window_rect, &animating_window_show, &animating_window_closing, .{});
             win.processEventsBefore();
             win.drawBackground();
             defer win.deinit();
@@ -247,7 +247,7 @@ pub fn animations() void {
     }
 }
 
-pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_flag: *bool, closing: *bool, opts: Options) FloatingWindowWidget {
+pub fn animatingWindowRect(fwin: *FloatingWindowWidget, src: std.builtin.SourceLocation, rect: *Rect, show_flag: *bool, closing: *bool, opts: Options) void {
     const fwin_id = dvui.parentGet().extendId(src, opts.idExtra());
 
     if (dvui.firstFrame(fwin_id)) {
@@ -261,8 +261,6 @@ pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_fl
         dvui.dataSet(null, fwin_id, "size", rect.*.size());
     }
 
-    var fwin: FloatingWindowWidget = undefined;
-
     if (dvui.animationGet(fwin_id, "rect_percent")) |a| {
         if (dvui.dataGet(null, fwin_id, "size", Size)) |ss| {
             var r = rect.*;
@@ -274,7 +272,7 @@ pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_fl
             r.h = dh;
 
             // don't pass rect so our animating rect doesn't get saved back
-            fwin = FloatingWindowWidget.init(src, .{ .open_flag = show_flag }, opts.override(.{ .rect = r }));
+            fwin.init(src, .{ .open_flag = show_flag }, opts.override(.{ .rect = r }));
 
             if (a.done() and r.empty()) {
                 // done with closing animation
@@ -282,10 +280,8 @@ pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_fl
             }
         }
     } else {
-        fwin = FloatingWindowWidget.init(src, .{ .rect = rect, .open_flag = show_flag }, opts);
+        fwin.init(src, .{ .rect = rect, .open_flag = show_flag }, opts);
     }
-
-    return fwin;
 }
 
 const AnimatingDialog = struct {
@@ -300,7 +296,8 @@ const AnimatingDialog = struct {
         // once we record a response, refresh it until we close
         _ = dvui.dataGet(null, id, "response", enums.DialogResponse);
 
-        var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id.asUsize(), .max_size_content = .width(300) });
+        var win: FloatingWindowWidget = undefined;
+        win.init(@src(), .{ .modal = modal }, .{ .id_extra = id.asUsize(), .max_size_content = .width(300) });
 
         if (dvui.firstFrame(win.data().id)) {
             dvui.animation(win.data().id, "rect_percent", .{ .start_val = 0.0, .end_val = 1.0, .end_time = duration, .easing = easing });
@@ -333,7 +330,6 @@ const AnimatingDialog = struct {
             }
         }
 
-        win.install();
         defer win.deinit();
         win.processEventsBefore();
         win.drawBackground();

@@ -2088,9 +2088,8 @@ pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidg
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) *FloatingWindowWidget {
     var ret = widgetAlloc(FloatingWindowWidget);
-    ret.* = FloatingWindowWidget.init(src, floating_opts, opts);
+    ret.init(src, floating_opts, opts);
     ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
     ret.processEventsBefore();
     ret.drawBackground();
     return ret;
