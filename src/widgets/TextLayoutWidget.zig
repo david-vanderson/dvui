@@ -1746,8 +1746,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
 pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
     if (self.touch_editing and self.te_show_context_menu and self.focus_at_start and self.data().visible()) {
-        const r = dvui.windowRectScale().rectFromPhysical(dvui.clipGet());
-        self.te_floating.init(@src(), .{ .from = .cast(r) }, .{});
+        self.te_floating.init(@src(), .{ .from = self.data().rectScale().r.toNatural() }, .{});
         return &self.te_floating;
     }
 
