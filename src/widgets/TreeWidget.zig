@@ -19,7 +19,6 @@ drag_ending: bool = false,
 branch_size: Size = .{},
 current_branch_focus_id: ?dvui.Id = null,
 init_options: InitOptions = undefined,
-/// SAFETY: Set in `install`
 group: dvui.FocusGroupWidget = undefined,
 
 pub const InitOptions = struct {
@@ -29,8 +28,8 @@ pub const InitOptions = struct {
     drag_name: ?[]const u8 = null,
 };
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TreeWidget {
-    var self = TreeWidget{};
+pub fn init(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+    self.* = .{};
     const defaults = Options{ .name = "Tree", .role = .tree };
     self.init_options = init_opts;
     self.wd = WidgetData.init(src, .{}, defaults.override(opts));
@@ -43,10 +42,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         }
     }
 
-    return self;
-}
-
-pub fn install(self: *TreeWidget) void {
     self.data().register();
     self.data().borderAndBackground(.{});
 
@@ -62,9 +57,8 @@ pub fn install(self: *TreeWidget) void {
 
 pub fn tree(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) *TreeWidget {
     var ret = dvui.widgetAlloc(TreeWidget);
-    ret.* = TreeWidget.init(src, init_opts, opts);
+    ret.init(src, init_opts, opts);
     ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
     ret.processEvents();
     return ret;
 }
@@ -185,7 +179,7 @@ pub fn dragStart(self: *TreeWidget, branch_id: usize, p: dvui.Point.Physical) vo
 
 pub fn branch(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: Branch.InitOptions, opts: Options) *Branch {
     const ret = dvui.widgetAlloc(Branch);
-    ret.* = Branch.init(src, self, init_opts, opts);
+    ret.init(src, self, init_opts, opts);
     ret.install();
     ret.data().was_allocated_on_widget_stack = true;
     if (ret.data().accesskit_node()) |ak_node| {
@@ -255,15 +249,13 @@ pub const Branch = struct {
         .padding = dvui.Rect.all(2),
     };
 
-    pub fn init(src: std.builtin.SourceLocation, reorder: *TreeWidget, init_opts: Branch.InitOptions, opts: Options) Branch {
-        var self = Branch{};
+    pub fn init(self: *Branch, src: std.builtin.SourceLocation, reorder: *TreeWidget, init_opts: Branch.InitOptions, opts: Options) void {
+        self.* = .{};
         self.tree = reorder;
         self.init_options = init_opts;
         self.options = defaults.override(opts);
         self.wd = WidgetData.init(src, .{}, wrapOuter(self.options).override(.{ .rect = .{} }));
         self.expanded = if (dvui.dataGet(null, self.wd.id, "_expanded", bool)) |e| e else init_opts.expanded;
-
-        return self;
     }
 
     // can call this after init before install
