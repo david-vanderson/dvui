@@ -278,10 +278,10 @@ pub fn average(self: Color, other: Color) Color {
 ///
 /// The pixel format will always be RGBA.
 pub const PMA = extern struct {
-    r: u8,
-    g: u8,
-    b: u8,
-    a: u8,
+    r: u8 = 0xff,
+    g: u8 = 0xff,
+    b: u8 = 0xff,
+    a: u8 = 0xff,
 
     // duplicated names from Color
     pub const white: PMA = .fromColor(.white);

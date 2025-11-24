@@ -200,7 +200,7 @@ pub fn animations() void {
         switch (dvui.backend.kind) {
             .sdl2, .sdl3 => dvui.label(@src(), "sdl: updated when not interrupted by event", .{}, .{}),
             .web => dvui.label(@src(), "web: updated when not interrupted by event", .{}, .{}),
-            .raylib => dvui.label(@src(), "raylib: only updated if non-null passed to waitTime", .{}, .{}),
+            .raylib, .raylib_zig => dvui.label(@src(), "raylib: only updated if non-null passed to waitTime", .{}, .{}),
             .dx11 => dvui.label(@src(), "dx11: only updated if non-null passed to waitTime", .{}, .{}),
             .sdl, .custom, .testing => {},
         }
@@ -251,7 +251,9 @@ pub fn animatingWindowRect(fwin: *FloatingWindowWidget, src: std.builtin.SourceL
     const fwin_id = dvui.parentGet().extendId(src, opts.idExtra());
 
     if (dvui.firstFrame(fwin_id)) {
-        dvui.animation(fwin_id, "rect_percent", .{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 300_000 });
+        // if we started at exactly zero, then the initial rect would have zero
+        // size which would trigger floatingWindow's autosize
+        dvui.animation(fwin_id, "rect_percent", .{ .start_val = 0.01, .end_val = 1.0, .start_time = 0, .end_time = 300_000 });
         dvui.dataSet(null, fwin_id, "size", rect.*.size());
     }
 
@@ -263,7 +265,10 @@ pub fn animatingWindowRect(fwin: *FloatingWindowWidget, src: std.builtin.SourceL
 
     if (dvui.animationGet(fwin_id, "rect_percent")) |a| {
         if (dvui.dataGet(null, fwin_id, "size", Size)) |ss| {
-            var r = rect.*;
+            // just some storage that'll live past this function so
+            // FloatingWindowWidget can write back to it
+            var r = dvui.dataGetPtrDefault(null, fwin_id, "garbage", Rect, .{});
+            r.* = rect.*;
             const dw = ss.w * a.value();
             const dh = ss.h * a.value();
             r.x = r.x + (r.w / 2) - (dw / 2);
@@ -271,8 +276,8 @@ pub fn animatingWindowRect(fwin: *FloatingWindowWidget, src: std.builtin.SourceL
             r.y = r.y + (r.h / 2) - (dh / 2);
             r.h = dh;
 
-            // don't pass rect so our animating rect doesn't get saved back
-            fwin.init(src, .{ .open_flag = show_flag }, opts.override(.{ .rect = r }));
+            // passing our "temporary" r instead of rect so our animating rect doesn't get saved back
+            fwin.init(src, .{ .rect = r, .open_flag = show_flag }, opts);
 
             if (a.done() and r.empty()) {
                 // done with closing animation

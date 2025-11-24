@@ -68,18 +68,23 @@ pub fn PointType(comptime units: dvui.enums.Units) type {
             }
         }
 
+        pub fn stroke(self: Point.Physical, opts: dvui.Path.StrokeOptions) void {
+            const path: dvui.Path = .{ .points = &.{self} };
+            path.stroke(opts);
+        }
+
         /// Only valid between `dvui.Window.begin`and `dvui.Window.end`.
         pub fn toNatural(self: Point.Physical) Point.Natural {
             return self.scale(1 / dvui.windowNaturalScale(), Point.Natural);
         }
 
-        pub fn format(self: *const Self, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        pub fn format(self: *const Self, writer: *std.Io.Writer) !void {
             const type_name = switch (units) {
                 .none => "Point",
                 .natural => "Point.Natural",
                 .physical => "Point.Physical",
             };
-            try std.fmt.format(writer, "{s}{{ {d} {d} }}", .{ type_name, self.x, self.y });
+            try writer.print("{s}{{ {d} {d} }}", .{ type_name, self.x, self.y });
         }
     };
 }
