@@ -41,6 +41,15 @@ pub const InitOptions = struct {
             limit: usize = 10_000,
         },
 
+        /// Use std.ArrayList(u8).  The limit is total characters, the
+        /// arraylist might allocate more capacity.  ArrayList.items is updated
+        /// in deinit() (file an issue if this is a problem).
+        array_list: struct {
+            backing: *std.ArrayList(u8),
+            allocator: std.mem.Allocator,
+            limit: usize = 10_000,
+        },
+
         /// Use internal buffer up to limit.
         /// - use getText() to get contents.
         internal: struct {
@@ -134,13 +143,24 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     const wd = WidgetData.init(src, .{}, options);
     scroll_init_opts.focus_id = wd.id;
 
-    const text = switch (init_opts.text) {
-        .buffer => |b| b,
-        .buffer_dynamic => |b| b.backing.*,
-        .internal => dvui.dataGetSliceDefault(null, wd.id, "_buffer", []u8, &.{}),
-    };
-    const len_byte = std.mem.indexOfScalar(u8, text, 0) orelse text.len;
-    const len_utf8_boundary = dvui.findUtf8Start(text[0..len_byte], len_byte);
+    var text: []u8 = undefined;
+    var find_zero = true;
+    var len_utf8_boundary: usize = undefined;
+    switch (init_opts.text) {
+        .buffer => |b| text = b,
+        .buffer_dynamic => |b| text = b.backing.*,
+        .internal => text = dvui.dataGetSliceDefault(null, wd.id, "_buffer", []u8, &.{}),
+        .array_list => |al| {
+            find_zero = false;
+            text = al.backing.items.ptr[0..@min(al.limit, al.backing.capacity)];
+            len_utf8_boundary = dvui.findUtf8Start(text, al.backing.items.len);
+        },
+    }
+
+    if (find_zero) {
+        const len_byte = std.mem.indexOfScalar(u8, text, 0) orelse text.len;
+        len_utf8_boundary = dvui.findUtf8Start(text[0..len_byte], len_byte);
+    }
 
     return .{
         .wd = wd,
@@ -480,6 +500,13 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
                     break :blk b.backing.*;
                 };
                 self.text = b.backing.*;
+            },
+            .array_list => |al| {
+                new_size = @min(new_size, al.limit);
+                al.backing.ensureTotalCapacity(al.allocator, new_size) catch |err| {
+                    dvui.logError(@src(), err, "{x} TextEntryWidget.textTyped failed to realloc ArrayList backing (current size {d}, new size {d})", .{ self.data().id, self.text.len, new_size });
+                };
+                self.text = al.backing.items.ptr[0..@min(al.limit, al.backing.capacity)];
             },
             .internal => |i| {
                 new_size = @min(new_size, i.limit);
@@ -989,6 +1016,13 @@ pub fn deinit(self: *TextEntryWidget) void {
                     dvui.logError(@src(), std.mem.Allocator.Error.OutOfMemory, "{x} TextEntryWidget.textTyped failed to realloc backing (current size {d}, new size {d})", .{ self.data().id, self.text.len, new_len });
                 }
             },
+            .array_list => |al| {
+                if (new_len < al.backing.capacity / 2) {
+                    al.backing.items.len = al.backing.capacity;
+                    al.backing.shrinkAndFree(al.allocator, new_len);
+                    self.text = al.backing.items.ptr[0..@min(al.limit, al.backing.capacity)];
+                }
+            },
             .internal => {
                 // NOTE: Using prev_text is safe because data is trashed and stays valid until the end of the frame
                 const prev_text = self.text;
@@ -998,6 +1032,13 @@ pub fn deinit(self: *TextEntryWidget) void {
                 @memcpy(self.text[0..min_len], prev_text[0..min_len]);
             },
         }
+    }
+
+    switch (self.init_opts.text) {
+        .array_list => |al| {
+            al.backing.items.len = self.len;
+        },
+        else => {},
     }
 
     self.textLayout.deinit();
