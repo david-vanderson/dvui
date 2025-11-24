@@ -1,5 +1,3 @@
-// empty backend for now
-
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
@@ -21,7 +19,7 @@ pub const kind: dvui.enums.Backend = .sdl3gpu;
 pub const SDLBackend = @This();
 pub const Context = *SDLBackend;
 
-const log = std.log.scoped(.SDLBackend);
+const log = std.log.scoped(.SDL3GPUBackend);
 
 // Embedded shaders organized by format
 const spv_shaders = struct {
@@ -51,27 +49,6 @@ const RectDraw = struct {
     index_count: u32,
     texture: *BackendTexture,
     scissor: ?c.SDL_Rect,
-};
-
-const ClipRect = extern struct {
-    x: f32 = 0.0,
-    y: f32 = 0.0,
-    w: f32 = 10000.0,
-    h: f32 = 10000.0,
-
-    pub fn fromDvui(rect: c.SDL_Rect, s: anytype) @This() {
-        _ = s;
-        return .{
-            .x = @as(f32, @floatFromInt(rect.x)),
-            .y = @as(f32, @floatFromInt(rect.y)),
-            .w = @as(f32, @floatFromInt(rect.w)),
-            .h = @as(f32, @floatFromInt(rect.h)),
-            // .x = @as(f32, @floatFromInt(rect.x)) / s.w * 2 - 1.0,
-            // .y = -(@as(f32, @floatFromInt(rect.y)) / s.h * 2 - 1.0),
-            // .w = @as(f32, @floatFromInt(rect.w)) / s.w * 2,
-            // .h = @as(f32, @floatFromInt(rect.h)) / s.h * 2,
-        };
-    }
 };
 
 fn UploadBuffer(comptime T: type) type {
