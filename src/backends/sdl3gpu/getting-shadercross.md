@@ -11,4 +11,6 @@ https://github.com/libsdl-org/SDL_shadercross/actions/runs/18569748763
 We dont use it for much in this project beyond updating the small 
 shaders which should never be updated
 
-the .txt files in this folder are the spirv reflect output, use those to help with aligning the zig implementation with the structure of the shaders.
+You can use `spirv-reflect compiled/spv/<any shader here>` to  
+view reflection info from the spirv version, use that to update
+the fields nessecary in loadShaders() in sdl3gpu
