@@ -50,6 +50,7 @@ const RectDraw = struct {
     index_start: u32,
     index_count: u32,
     texture: *BackendTexture,
+    scissor: ?c.SDL_Rect,
 };
 
 const ClipRect = extern struct {
@@ -255,7 +256,6 @@ fn UploadBuffer(comptime T: type) type {
 const FrameUploads = struct {
     vertex: UploadBuffer(Vertex),
     index: UploadBuffer(u16),
-    clip: UploadBuffer(ClipRect),
 
     // Draw calls tracking
     draws: std.ArrayList(RectDraw) = .{},
@@ -268,7 +268,6 @@ const FrameUploads = struct {
         return .{
             .vertex = try UploadBuffer(Vertex).init(device, 1000, c.SDL_GPU_BUFFERUSAGE_VERTEX),
             .index = try UploadBuffer(u16).init(device, 2000, c.SDL_GPU_BUFFERUSAGE_INDEX),
-            .clip = try UploadBuffer(ClipRect).init(device, 100, c.SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ),
             .allocator = allocator,
         };
     }
@@ -278,11 +277,9 @@ const FrameUploads = struct {
         self.draws.deinit(self.allocator);
         self.vertex.deinit();
         self.index.deinit();
-        self.clip.deinit();
     }
 
     fn reset(self: *FrameUploads) void {
-        self.clip.reset();
         self.index.reset();
         self.vertex.reset();
 
@@ -294,26 +291,24 @@ const FrameUploads = struct {
 
         self.vertex.addUploads(copy_pass);
         self.index.addUploads(copy_pass);
-        self.clip.addUploads(copy_pass);
 
         self.vertex.maybeMap();
         self.index.maybeMap();
-        self.clip.maybeMap();
     }
 
-    fn push(self: *FrameUploads, back: *SDLBackend, backendTexture: ?*BackendTexture, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?ClipRect) !void {
+    fn push(self: *FrameUploads, back: *SDLBackend, backendTexture: ?*BackendTexture, vtx: []const dvui.Vertex, idx: []const u16, scissor: ?c.SDL_Rect) !void {
         // Record draw call
         try self.draws.append(self.allocator, .{
             .index_start = self.index.len,
             .index_count = @intCast(idx.len),
             .texture = backendTexture orelse back.white_texture,
+            .scissor = scissor,
         });
 
         const vertex_start: u16 = @intCast(self.vertex.len);
 
         try self.vertex.ensureCapacityPushCount(vtx.len);
         try self.index.ensureCapacityPushCount(idx.len);
-        try self.clip.ensureCapacityPushCount(1);
 
         const size = if (back.current_render_target_size) |s| s else back.last_pixel_size;
 
@@ -324,8 +319,6 @@ const FrameUploads = struct {
         for (idx) |id| {
             self.index.pushAssumeCap(id + vertex_start);
         }
-
-        self.clip.pushAssumeCap(if (maybe_clipr) |clip| clip else .{});
     }
 };
 
@@ -687,13 +680,13 @@ pub fn loadShaders(
         0,
     );
 
-    // Fragment shader: 1 sampler, 0 storage textures, 1 storage buffers, 0 uniform buffers
+    // Fragment shader: 1 sampler, 0 storage textures, 0 storage buffers, 0 uniform buffers
     const fragment_shader = try self.loadShader(
         fragment_data,
         c.SDL_GPU_SHADERSTAGE_FRAGMENT,
         1,
         0,
-        1,
+        0,
         0,
     );
 
@@ -1147,13 +1140,25 @@ pub fn finishRenderingCurrentTarget(self: *SDLBackend) !void {
     c.SDL_BindGPUGraphicsPipeline(self.current_render_pass, self.pipeline);
     c.SDL_BindGPUVertexBuffers(self.current_render_pass, 0, &vertexBuffer, 1);
     c.SDL_BindGPUIndexBuffer(self.current_render_pass, &indexBuffer, c.SDL_GPU_INDEXELEMENTSIZE_16BIT);
-    c.SDL_BindGPUFragmentStorageBuffers(self.current_render_pass, 0, &self.frame_uploads.clip.buffer, 1);
+
+    var screenScissor = c.SDL_Rect{
+        .x = 0,
+        .y = 0,
+        .h = @intFromFloat(self.last_pixel_size.h),
+        .w = @intFromFloat(self.last_pixel_size.w),
+    };
 
     for (self.frame_uploads.draws.items, 0..) |draw, i| {
         var binding = c.SDL_GPUTextureSamplerBinding{
             .texture = draw.texture.texture,
             .sampler = draw.texture.sampler,
         };
+
+        if (draw.scissor) |*scissor| {
+            c.SDL_SetGPUScissor(self.current_render_pass, scissor);
+        } else {
+            c.SDL_SetGPUScissor(self.current_render_pass, &screenScissor);
+        }
 
         c.SDL_BindGPUFragmentSamplers(self.current_render_pass, 0, &binding, 1);
         c.SDL_DrawGPUIndexedPrimitives(self.current_render_pass, draw.index_count, 1, draw.index_start, 0, @intCast(i));
@@ -1207,11 +1212,11 @@ pub fn contentScale(self: *SDLBackend) f32 {
 }
 
 pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect.Physical) !void {
-    const clip = if (maybe_clipr) |clipr| ClipRect{
-        .x = clipr.x,
-        .y = clipr.y,
-        .w = clipr.w,
-        .h = clipr.h,
+    const clip = if (maybe_clipr) |clipr| c.SDL_Rect{
+        .x = @intFromFloat(clipr.x),
+        .y = @intFromFloat(clipr.y),
+        .w = @intFromFloat(clipr.w),
+        .h = @intFromFloat(clipr.h),
     } else null;
 
     var backendTexture: ?*BackendTexture = null;
