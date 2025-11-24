@@ -64,9 +64,9 @@ pub const light = light: {
         .window = .{
             .ninepatch_fill = dvui.Ninepatch.builtins.raised,
             .ninepatch_press = dvui.Ninepatch.builtins.sunken,
-            .fill = surface,
-            .fill_hover = surface,
-            .fill_press = surface,
+            .fill = .white,
+            .fill_hover = .white,
+            .fill_press = .white,
         },
     };
 };
