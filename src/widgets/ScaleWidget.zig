@@ -31,7 +31,6 @@ pub const InitOptions = struct {
 
 wd: WidgetData,
 init_options: InitOptions,
-/// SAFETY: Set in `install`
 scale: *f32 = undefined,
 touchPoints: *[2]?dvui.Point.Physical,
 old_dist: ?f32 = null,

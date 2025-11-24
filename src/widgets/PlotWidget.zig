@@ -2,17 +2,12 @@ pub const PlotWidget = @This();
 
 src: std.builtin.SourceLocation,
 opts: Options,
-/// SAFETY: Set in `install`
 box: BoxWidget = undefined,
-/// SAFETY: Set in `install`
 data_rs: RectScale = undefined,
-/// SAFETY: Set in `install`
 old_clip: Rect.Physical = undefined,
 init_options: InitOptions,
-/// SAFETY: Set in `install`, might point to `x_axis_store`
 x_axis: *Axis = undefined,
 x_axis_store: Axis = .{},
-/// SAFETY: Set in `install`, might point to `y_axis_store`
 y_axis: *Axis = undefined,
 y_axis_store: Axis = .{},
 mouse_point: ?Point.Physical = null,

@@ -26,15 +26,11 @@ pub const InitOptions = struct {
 };
 
 init_opts: InitOptions,
-/// SAFETY: Set by `install`
 prev_rendering: bool = undefined,
 wd: WidgetData,
-/// SAFETY: Set by `install`
 prev_windowId: dvui.Id = undefined,
-/// SAFETY: Set by `install`
 prevClip: Rect.Physical = undefined,
 scale_val: f32,
-/// SAFETY: Set by `install`
 scaler: dvui.ScaleWidget = undefined,
 
 /// FloatingWidget is a subwindow to show any temporary floating thing.
