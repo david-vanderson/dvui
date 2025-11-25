@@ -135,6 +135,7 @@ fn UploadBuffer(comptime T: type) type {
         }
 
         pub fn addUploads(self: *@This(), copy_pass: *c.SDL_GPUCopyPass) void {
+            self.unmap();
             c.SDL_UploadToGPUBuffer(
                 copy_pass,
                 &c.SDL_GPUTransferBufferLocation{
@@ -149,7 +150,6 @@ fn UploadBuffer(comptime T: type) type {
                 true,
             );
             self.reset();
-            self.unmap();
         }
 
         pub fn deinit(self: *@This()) void {
@@ -776,22 +776,6 @@ pub fn createSamplers(self: *SDLBackend) !void {
 
     log.info("Samplers created successfully", .{});
 }
-//     const white_pixel = [_]u8{ 255, 255, 255, 255 }; // RGBA white
-//
-//     // Create GPU texture
-//     const texture = c.SDL_CreateGPUTexture(
-//         self.device,
-//         &c.SDL_GPUTextureCreateInfo{
-//             .type = c.SDL_GPU_TEXTURETYPE_2D,
-//             .format = c.SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
-//             .usage = c.SDL_GPU_TEXTUREUSAGE_SAMPLER,
-//             .width = 1,
-//             .height = 1,
-//             .layer_count_or_depth = 1,
-//             .num_levels = 1,
-//             .sample_count = c.SDL_GPU_SAMPLECOUNT_1,
-//             .props = 0,
-//         },
 
 const SDL_ERROR = bool;
 const SDL_SUCCESS: SDL_ERROR = true;
@@ -1083,7 +1067,14 @@ pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     }
 }
 
-pub fn finishRenderingCurrentTarget(self: *SDLBackend) !void {
+pub fn finishRenderingCurrentTarget(self: *SDLBackend, final: bool) !void {
+    if (self.current_render_target == null) {
+        if (!final) {
+            self.frame_uploads.reset();
+            return;
+        }
+    }
+
     // Begin copy pass for uploading vertex/index data
     self.frame_uploads.copy_pass = c.SDL_BeginGPUCopyPass(self.cmd.?) orelse {
         log.err("Failed to begin GPU copy pass: {s}", .{c.SDL_GetError()});
@@ -1151,7 +1142,7 @@ pub fn finishRenderingCurrentTarget(self: *SDLBackend) !void {
 }
 
 pub fn end(self: *SDLBackend) !void {
-    try self.finishRenderingCurrentTarget();
+    try self.finishRenderingCurrentTarget(true);
 }
 
 pub fn renderPresent(self: *SDLBackend) !void {
@@ -1299,10 +1290,14 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
 
     c.SDL_EndGPUCopyPass(copy_pass);
 
-    if (!c.SDL_SubmitGPUCommandBuffer(cmd_buffer)) {
+    const fence = c.SDL_SubmitGPUCommandBufferAndAcquireFence(cmd_buffer);
+    if (fence == null) {
         log.err("Failed to submit command buffer for texture upload: {s}", .{c.SDL_GetError()});
         return error.TextureCreate;
     }
+    defer c.SDL_ReleaseGPUFence(self.device, fence);
+
+    _ = c.SDL_WaitForGPUFences(self.device, true, &fence, 1);
 
     // 5. Allocate BackendTexture from arena and set sampler
     const backendTexture = try self.textures_arena.allocator().create(BackendTexture);
@@ -1362,9 +1357,6 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
         },
     };
 
-    // log.info("created rendertarget 0x{x}", .{@intFromPtr(backendTexture)});
-    // log.info("texture created size {d}x{d} 0x{x}", .{ width, height, @intFromPtr(backendTexture.texture) });
-
     return dvui.TextureTarget{
         .ptr = backendTexture,
         .width = width,
@@ -1373,15 +1365,13 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
 }
 
 pub fn renderTarget(self: *SDLBackend, dvuiTarget: ?dvui.TextureTarget) !void {
-    try self.finishRenderingCurrentTarget();
+    try self.finishRenderingCurrentTarget(false);
 
     if (dvuiTarget) |dt| {
-        // log.info("setting rendertarget 0x{x} ", .{@intFromPtr(dt.ptr)});
         const target: *BackendTextureTarget = @ptrCast(@alignCast(dt.ptr));
         self.current_render_target = target;
         self.current_render_target_size = .{ .h = @floatFromInt(dt.height), .w = @floatFromInt(dt.width) };
     } else {
-        // log.info("setting rendertarget null ", .{});
         self.current_render_target = null;
         self.current_render_target_size = null;
     }
@@ -1392,44 +1382,16 @@ pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_
     _ = pixels_out;
     log.info("trying to read 0x{x} not implemented", .{@intFromPtr(texture.ptr)});
 
-    // null is the default target
-    //         const orig_target = c.SDL_GetRenderTarget(self.renderer);
-    //         try toErr(c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(texture.ptr))), "SDL_SetRenderTarget in textureReadTarget");
-    //         defer toErr(
-    //             c.SDL_SetRenderTarget(self.renderer, orig_target),
-    //             "SDL_SetRenderTarget in textureReadTarget",
-    //         ) catch log.err("Could not reset render target", .{});
-    //
-    //         var surface: *c.SDL_Surface = c.SDL_RenderReadPixels(self.renderer, null) orelse
-    //             logErr("SDL_RenderReadPixels in textureReadTarget") catch
-    //             return dvui.Backend.TextureError.TextureRead;
-    //         defer c.SDL_DestroySurface(surface);
-    //
-    //         if (texture.width * texture.height != surface.*.w * surface.*.h) {
-    //             log.err(
-    //                 "texture and target surface sizes did not match: texture {d} {d} surface {d} {d}\n",
-    //                 .{ texture.width, texture.height, surface.*.w, surface.*.h },
-    //             );
-    //             return dvui.Backend.TextureError.TextureRead;
-    //         }
-    //
-    //         // TODO: most common format is RGBA8888, doing conversion during copy to pixels_out should be faster
-    //         if (surface.*.format != c.SDL_PIXELFORMAT_ABGR8888) {
-    //             surface = c.SDL_ConvertSurface(surface, c.SDL_PIXELFORMAT_ABGR8888) orelse
-    //                 logErr("SDL_ConvertSurface in textureReadTarget") catch
-    //                 return dvui.Backend.TextureError.TextureRead;
-    //         }
-    //         @memcpy(pixels_out[0 .. texture.width * texture.height * 4], @as(?[*]u8, @ptrCast(surface.*.pixels)).?[0 .. texture.width * texture.height * 4]);
     return error.BackendError;
 }
 
 pub fn textureDestroy(self: *SDLBackend, texture: dvui.Texture) void {
     const backendTexture: *BackendTexture = @ptrCast(@alignCast(texture.ptr));
-    //  log.info("texture destroyed {d}x{d} 0x{x}", .{
-    //      texture.width,
-    //      texture.height,
-    //      @intFromPtr(backendTexture.texture),
-    //  });
+    // log.info("texture destroyed {d}x{d} 0x{x}", .{
+    //     texture.width,
+    //     texture.height,
+    //     @intFromPtr(backendTexture.texture),
+    // });
     c.SDL_ReleaseGPUTexture(self.device, backendTexture.texture);
     // Note: backendTexture itself is allocated from textures_arena and will be freed when arena is reset/deinit
     // Samplers are shared and will be released in deinit()
