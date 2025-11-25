@@ -26,9 +26,9 @@ pub fn main() !void {
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         dvui.Backend.Common.windowsAttachConsole() catch {};
     }
-    defer {
-        _ = gpa_instance.deinit();
-    }
+
+    defer std.debug.assert(gpa_instance.deinit() == .ok);
+
     SDLBackend.enableSDLLogging();
     dvui.Examples.show_demo_window = show_demo;
 
@@ -50,19 +50,23 @@ pub fn main() !void {
 
         // send events to dvui if they belong to floating windows
         var event: c.SDL_Event = undefined;
-        while (c.SDL_PollEvent(&event) == if (SDLBackend.sdl3) true else 1) {
+        while (c.SDL_PollEvent(&event)) {
             // some global quitting shortcuts
             switch (event.type) {
-                if (SDLBackend.sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
-                    const key = if (SDLBackend.sdl3) event.key.key else event.key.keysym.sym;
-                    const mod = if (SDLBackend.sdl3) event.key.mod else event.key.keysym.mod;
-                    const key_q = if (SDLBackend.sdl3) c.SDLK_Q else c.SDLK_q;
-                    const kmod_ctrl = if (SDLBackend.sdl3) c.SDL_KMOD_CTRL else c.KMOD_CTRL;
+                c.SDL_EVENT_KEY_DOWN => {
+                    const key = event.key.key;
+                    const mod = event.key.mod;
+                    const key_q = c.SDLK_Q;
+                    const kmod_ctrl = c.SDL_KMOD_CTRL;
                     if (((mod & kmod_ctrl) > 0) and key == key_q) {
+                        _ = try win.end(.{});
+                        try backend.renderPresent();
                         break :main_loop;
                     }
                 },
-                if (SDLBackend.sdl3) c.SDL_EVENT_QUIT else c.SDL_QUIT => {
+                c.SDL_EVENT_QUIT => {
+                    _ = try win.end(.{});
+                    try backend.renderPresent();
                     break :main_loop;
                 },
                 else => {},
@@ -98,12 +102,6 @@ pub fn main() !void {
         // render frame to OS
         try backend.renderPresent();
     }
-
-    backend.destroyDeviceOnExit = true;
-    // c.SDL_DestroyGPUDevice(device);
-
-    c.SDL_DestroyWindow(window);
-    c.SDL_Quit();
 }
 
 fn dvui_floating_stuff() void {
