@@ -46,7 +46,7 @@ pub const UV = struct {
     uv: [9]Rect,
 
     pub fn fromPixel(patches: [9]Rect, texture_size: Size) UV {
-        const w, const h, const p = .{ texture_size.w - 1, texture_size.h - 1, patches };
+        const w, const h, const p = .{ texture_size.w, texture_size.h, patches };
         return .{ .uv = .{
             .{ .x = p[0].topLeft().x / w, .y = p[0].topLeft().y / h, .w = p[0].w / w, .h = p[0].h / h },
             .{ .x = p[1].topLeft().x / w, .y = p[1].topLeft().y / h, .w = p[1].w / w, .h = p[1].h / h },
