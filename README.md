@@ -13,6 +13,9 @@ How to run the built-in examples:
   - ```zig build sdl3-standalone```
   - ```zig build sdl3-ontop```  
   - ```zig build sdl3-app```
+- SDL3GPU (uses sdlgpu for rendering)
+  - ```zig build sdl3gpu-standalone```
+  - ```zig build sdl3gpu-ontop```
 - SDL2
   - ```zig build sdl2-standalone```
   - ```zig build sdl2-ontop```
