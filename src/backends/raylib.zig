@@ -10,7 +10,9 @@ pub const c = @cImport({
 
     @cInclude("glfw3.h");
 
-    @cInclude("emscripten.h");
+    if (builtin.os.tag == .emscripten) {
+        @cInclude("emscripten.h");
+    }
 });
 
 pub const kind: dvui.enums.Backend = .raylib;
@@ -589,8 +591,8 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
         }
     }
 
-    //const mouse_move = c.GetMouseDelta();
-    if (true) { //mouse_move.x != 0 or mouse_move.y != 0) {
+    const mouse_move = c.GetMouseDelta();
+    if (mouse_move.x != 0 or mouse_move.y != 0) {
         const mouse_pos = c.GetMousePosition();
 
         // raylib gives us mouse coords in "window coords" which is kind of
