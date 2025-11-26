@@ -19,25 +19,24 @@ pub const ContentPosition = enum { start, center };
 
 wd: WidgetData,
 init_options: InitOptions,
-/// SAFETY: Set by `install`
-prevClip: Rect.Physical = undefined,
+prevClip: Rect.Physical,
 insert_pt: dvui.Point = .{},
 row_size: Size = .{},
 max_row_width: f32 = 0.0,
 max_row_width_prev: f32 = 0.0,
 width_nobreak: f32 = 0.0, // width if all children were on one row
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FlexBoxWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *FlexBoxWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const defaults = Options{ .name = "FlexBox" };
-    var self = FlexBoxWidget{
+    self.* = .{
         .wd = WidgetData.init(src, .{}, defaults.override(opts)),
         .init_options = init_opts,
+        // SAFETY: Set bellow
+        .prevClip = undefined,
     };
-    if (dvui.dataGet(null, self.wd.id, "_mrw", f32)) |mrw| self.max_row_width_prev = mrw;
-    return self;
-}
+    if (dvui.dataGet(null, self.data().id, "_mrw", f32)) |mrw| self.max_row_width_prev = mrw;
 
-pub fn install(self: *FlexBoxWidget) void {
     self.data().register();
     dvui.parentSet(self.widget());
 

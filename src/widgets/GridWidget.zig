@@ -172,17 +172,17 @@ pub const default_col_width: f32 = 100;
 
 //Widgets
 vbox: BoxWidget,
-/// SAFETY: Set in `install`
-group: dvui.FocusGroupWidget = undefined,
-scroll: ScrollAreaWidget = undefined, // main scroll area
+/// SAFETY: Set by `bodyScrollContainerCreate`, is valid when `bscroll` is non-null
+group: dvui.FocusGroupWidget,
+scroll: ScrollAreaWidget, // main scroll area
 hscroll: ?ScrollAreaWidget = null, // header scroll area
 bscroll: ?ScrollContainerWidget = null, // body scroll container
 
 hsi: ScrollInfo = .{ .horizontal = .auto, .vertical = .none }, // Header scroll info
-/// SAFETY: Set in `install`, might point to `default_scroll_info`
-bsi: *ScrollInfo = undefined, // Body scroll info
+/// might point to `default_scroll_info`
+bsi: *ScrollInfo, // Body scroll info
 /// SAFETY: Set in `install`
-frame_viewport: Point = undefined, // Fixed scroll viewport for this frame
+frame_viewport: Point, // Fixed scroll viewport for this frame
 col_widths: []f32, // Internal or user-supplied column widths
 starting_col_widths: ?[]f32 = null, // If grid is storing col widths, keep a copy of the starting widths.
 
@@ -207,15 +207,30 @@ last_header_height: f32 = 0, // Height of header last frame
 // Options
 init_opts: InitOpts,
 
-pub fn init(src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitOpts, opts: Options) GridWidget {
-    const options = defaults.themeOverride().override(opts);
-    var self = GridWidget{
+// Default col_widths slice to use if allocation etc fails this frame.
+var default_col_widths: [1]f32 = .{0};
+
+pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitOpts, opts: Options) void {
+    self.* = .{
         .init_opts = init_opts,
         .cols = cols,
-        .vbox = BoxWidget.init(src, .{ .dir = .vertical }, options),
-        // SAFETY: Set below
+        // SAFETY: Set bellow
         .col_widths = undefined,
+
+        // SAFETY: Set bellow
+        .bsi = undefined,
+        // SAFETY: Set bellow based on bsi
+        .frame_viewport = undefined,
+
+        // SAFETY: Widgets set bellow
+        .vbox = undefined,
+        .group = undefined,
+        .scroll = undefined,
     };
+
+    self.vbox.init(src, .{ .dir = .vertical }, defaults.themeOverride().override(opts));
+    self.vbox.drawBackground();
+
     if (dvui.dataGet(null, self.data().id, "_resizing", bool)) |resizing| {
         self.resizing = resizing;
     }
@@ -287,13 +302,6 @@ pub fn init(src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitO
         },
     }
 
-    return self;
-}
-
-// Default col_widths slice to use if allocation etc fails this frame.
-var default_col_widths: [1]f32 = .{0};
-
-pub fn install(self: *GridWidget) void {
     if (self.init_opts.scroll_opts) |*scroll_opts| {
         if (scroll_opts.scroll_info) |scroll_info| {
             self.bsi = scroll_info;
@@ -312,11 +320,9 @@ pub fn install(self: *GridWidget) void {
 
     self.frame_viewport = self.bsi.viewport.topLeft();
 
-    self.vbox.install();
-    self.vbox.drawBackground();
-
-    const scroll_opts: ScrollAreaWidget.InitOpts = self.init_opts.scroll_opts orelse .{ .frame_viewport = self.frame_viewport, .scroll_info = self.bsi };
-    self.scroll = ScrollAreaWidget.init(
+    var scroll_opts: ScrollAreaWidget.InitOpts = self.init_opts.scroll_opts orelse .{ .frame_viewport = self.frame_viewport, .scroll_info = self.bsi };
+    scroll_opts.container = false;
+    self.scroll.init(
         @src(),
         scroll_opts,
         .{
@@ -325,7 +331,6 @@ pub fn install(self: *GridWidget) void {
             .background = false,
         },
     );
-    self.scroll.installScrollBars();
 }
 
 pub fn deinit(self: *GridWidget) void {
@@ -414,11 +419,7 @@ pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: u
     cell_opts.id_extra = col_num;
 
     // Create the cell and install as parent.
-    var cell = dvui.widgetAlloc(BoxWidget);
-    cell.* = BoxWidget.init(src, .{ .dir = .horizontal }, cell_opts);
-    cell.data().was_allocated_on_widget_stack = true;
-    cell.install();
-    cell.drawBackground();
+    var cell = dvui.box(src, .{ .dir = .horizontal }, cell_opts);
     const first_frame = dvui.firstFrame(cell.data().id);
     // Determine heights for next frame.
     if (!first_frame) {
@@ -487,11 +488,7 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, cell: Cell, 
     // 9_223_372_036_854_775K cols should be enough for anybody.
     cell_opts.id_extra = (cell.col_num << @bitSizeOf(usize) / 2) | cell.row_num;
 
-    var cell_box = dvui.widgetAlloc(BoxWidget);
-    cell_box.* = BoxWidget.init(src, .{ .dir = .horizontal }, cell_opts);
-    cell_box.data().was_allocated_on_widget_stack = true;
-    cell_box.install();
-    cell_box.drawBackground();
+    var cell_box = dvui.box(src, .{ .dir = .horizontal }, cell_opts);
     const first_frame = dvui.firstFrame(cell_box.data().id);
     // Determine heights for next frame.
     if (!first_frame) {
@@ -630,7 +627,8 @@ pub fn totalWidth(self: *const GridWidget) f32 {
 
 fn headerScrollAreaCreate(self: *GridWidget) void {
     if (self.hscroll == null) {
-        self.hscroll = ScrollAreaWidget.init(@src(), .{
+        self.hscroll = undefined;
+        self.hscroll.?.init(@src(), .{
             .horizontal_bar = .hide,
             .vertical_bar = .hide,
             .scroll_info = &self.hsi,
@@ -642,7 +640,6 @@ fn headerScrollAreaCreate(self: *GridWidget) void {
             .expand = .horizontal,
             .min_size_content = .{ .h = if (self.header_height > 0) self.header_height else self.last_header_height, .w = self.totalWidth() },
         });
-        self.hscroll.?.install();
         if (!std.math.approxEqAbs(f32, self.header_height, self.last_header_height, 0.01)) {
             self.resizing = true;
         }
@@ -657,7 +654,8 @@ fn bodyScrollContainerCreate(self: *GridWidget) void {
     }
 
     if (self.bscroll == null) {
-        self.bscroll = ScrollContainerWidget.init(@src(), self.bsi, .{
+        self.bscroll = undefined;
+        self.bscroll.?.init(@src(), self.bsi, .{
             .scroll_area = &self.scroll,
             .frame_viewport = self.frame_viewport,
             .event_rect = self.scroll.data().borderRectScale().r,
@@ -666,12 +664,10 @@ fn bodyScrollContainerCreate(self: *GridWidget) void {
             .expand = .both,
             .background = false,
         });
-        self.bscroll.?.install();
         self.bscroll.?.processEvents();
         self.bscroll.?.processVelocity();
 
-        self.group = dvui.FocusGroupWidget.init(@src(), .{ .nav_key_dir = .vertical }, .{});
-        self.group.install();
+        self.group.init(@src(), .{ .nav_key_dir = .vertical }, .{});
     }
 }
 

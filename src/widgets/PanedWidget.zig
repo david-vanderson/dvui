@@ -60,7 +60,6 @@ init_opts: InitOptions,
 mouse_dist: f32 = 1000, // logical
 handle_thick: f32, // logical
 split_ratio: *f32,
-/// SAFETY: Set in `install`
 prevClip: Rect.Physical = undefined,
 collapsed_state: bool,
 collapsing: bool,
@@ -78,7 +77,8 @@ pub const AutoFitOptions = struct {
     min_size: f32 = 0,
 };
 
-pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) PanedWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *PanedWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
     const defaults = Options{ .name = "Paned", .role = .pane };
     const wd = WidgetData.init(src, .{}, defaults.override(opts));
 
@@ -88,7 +88,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
         .vertical => rect.h,
     };
 
-    var self = PanedWidget{
+    self.* = .{
         .wd = wd,
         .init_opts = init_options,
         .collapsing = dvui.dataGet(null, wd.id, "_collapsing", bool) orelse false,
@@ -154,10 +154,6 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
         }
     }
 
-    return self;
-}
-
-pub fn install(self: *PanedWidget) void {
     self.data().register();
 
     self.data().borderAndBackground(.{});

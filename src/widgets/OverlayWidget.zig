@@ -13,12 +13,11 @@ const OverlayWidget = @This();
 
 wd: WidgetData,
 
-pub fn init(src: std.builtin.SourceLocation, opts: Options) OverlayWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *OverlayWidget, src: std.builtin.SourceLocation, opts: Options) void {
     const defaults = Options{ .name = "Overlay" };
-    return OverlayWidget{ .wd = WidgetData.init(src, .{}, defaults.override(opts)) };
-}
+    self.* = .{ .wd = WidgetData.init(src, .{}, defaults.override(opts)) };
 
-pub fn install(self: *OverlayWidget) void {
     dvui.parentSet(self.widget());
     self.data().register();
 }

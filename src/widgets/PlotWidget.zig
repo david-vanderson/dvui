@@ -1,16 +1,13 @@
 pub const PlotWidget = @This();
 
-/// SAFETY: Set in `install`
+src: std.builtin.SourceLocation,
+opts: Options,
 box: BoxWidget = undefined,
-/// SAFETY: Set in `install`
 data_rs: RectScale = undefined,
-/// SAFETY: Set in `install`
 old_clip: Rect.Physical = undefined,
 init_options: InitOptions,
-/// SAFETY: Set in `install`, might point to `x_axis_store`
 x_axis: *Axis = undefined,
 x_axis_store: Axis = .{},
-/// SAFETY: Set in `install`, might point to `y_axis_store`
 y_axis: *Axis = undefined,
 y_axis_store: Axis = .{},
 mouse_point: ?Point.Physical = null,
@@ -271,13 +268,6 @@ pub const Line = struct {
     }
 };
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) PlotWidget {
-    return .{
-        .init_options = init_opts,
-        .box = BoxWidget.init(src, .{ .dir = .vertical }, defaults.override(opts)),
-    };
-}
-
 pub fn dataToScreen(self: *PlotWidget, data_point: Data) dvui.Point.Physical {
     const xfrac = self.x_axis.fraction(data_point.x);
     const yfrac = self.y_axis.fraction(data_point.y);
@@ -294,7 +284,15 @@ pub fn dataForRange(self: *PlotWidget, data_point: Data) void {
     self.data_max.y = @max(self.data_max.y, data_point.y);
 }
 
-pub fn install(self: *PlotWidget) void {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+    self.* = .{
+        .src = src,
+        .opts = opts,
+        .init_options = init_opts,
+    };
+
+    self.box.init(self.src, .{ .dir = .vertical }, defaults.override(self.opts));
     if (self.init_options.x_axis) |xa| {
         self.x_axis = xa;
     } else {
@@ -313,7 +311,6 @@ pub fn install(self: *PlotWidget) void {
         self.y_axis = &self.y_axis_store;
     }
 
-    self.box.install();
     self.box.drawBackground();
 
     if (self.init_options.title) |title| {

@@ -16,14 +16,12 @@ const VirtualParentWidget = @This();
 wd: WidgetData,
 child_rect_union: ?Rect = null,
 
-pub fn init(src: std.builtin.SourceLocation, opts: Options) VirtualParentWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *VirtualParentWidget, src: std.builtin.SourceLocation, opts: Options) void {
     const id = dvui.parentGet().extendId(src, opts.idExtra());
     const rect = dvui.dataGet(null, id, "_rect", Rect);
     const defaults = Options{ .name = "Virtual Parent", .rect = rect orelse .{}, .expand = .both };
-    return VirtualParentWidget{ .wd = WidgetData.init(src, .{}, defaults.override(opts)) };
-}
-
-pub fn install(self: *VirtualParentWidget) void {
+    self.* = .{ .wd = WidgetData.init(src, .{}, defaults.override(opts)) };
     dvui.parentSet(self.widget());
     self.data().register();
 }

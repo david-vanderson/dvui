@@ -51,59 +51,42 @@ pub const InitOptions = struct {
     avoid: FloatingMenuAvoid = .auto,
 };
 
-/// SAFETY: Set by `install`
-prev_rendering: bool = undefined,
+prev_rendering: bool,
 wd: WidgetData,
-/// options is for our embedded ScrollAreaWidget
-options: Options,
 prev_windowId: dvui.Id = .zero,
-prev_last_focus: dvui.Id = undefined,
+prev_last_focus: dvui.Id,
 parent_fmw: ?*FloatingMenuWidget = null,
 have_popup_child: bool = false,
-init_options: InitOptions,
-/// SAFETY: Set by `install`
-prevClip: Rect.Physical = undefined,
+prevClip: Rect.Physical,
 scale_val: f32,
-/// TODO: If `install` isn't called, this will panic in `deinti`. Should we handle that?
-/// SAFETY: Set by `install`
-menu: MenuWidget = undefined,
-/// SAFETY: Set by `install`
-scaler: dvui.ScaleWidget = undefined,
-/// SAFETY: Set by `install`
-scroll: ScrollAreaWidget = undefined,
+menu: MenuWidget,
+scaler: dvui.ScaleWidget,
+scroll: ScrollAreaWidget,
 
-pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) FloatingMenuWidget {
-    // the widget itself doesn't have any styling, it comes from the
-    // embedded MenuWidget
-    // passing options.rect will stop WidgetData.init from calling
-    // rectFor/minSizeForChild which is important because we are outside
-    // normal layout
-    const wd = WidgetData.init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{} });
-
-    var self = FloatingMenuWidget{
-        .wd = wd,
-        // options is really for our embedded ScrollAreaWidget, so save them for the
-        // end of install()
-        .options = defaults.themeOverride().override(opts),
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+    self.* = .{
+        // the widget itself doesn't have any styling, it comes from the
+        // embedded MenuWidget
+        // passing options.rect will stop WidgetData.init from calling
+        // rectFor/minSizeForChild which is important because we are outside
+        // normal layout
+        .wd = .init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{} }),
         // get scale from parent
-        .scale_val = wd.parent.screenRectScale(Rect{}).s / dvui.windowNaturalScale(),
-        .init_options = init_options,
+        .scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale(),
+
+        // SAFETY: The following fields must be set in `postInit`
+        .prev_rendering = undefined,
+        .prev_last_focus = undefined,
+        .prevClip = undefined,
+        .menu = undefined,
+        .scaler = undefined,
+        .scroll = undefined,
     };
 
-    if (self.init_options.avoid == .auto) {
-        if (dvui.MenuWidget.current()) |pm| {
-            self.init_options.avoid = switch (pm.init_opts.dir) {
-                .horizontal => .vertical,
-                .vertical => .horizontal,
-            };
-        } else {
-            self.init_options.avoid = .none;
-        }
-    }
-    return self;
-}
+    const options = defaults.themeOverride().override(opts);
+    // NOTE: options is really for our embedded ScrollAreaWidget
 
-pub fn install(self: *FloatingMenuWidget) void {
     self.prev_rendering = dvui.renderingSet(false);
 
     dvui.parentSet(self.widget());
@@ -112,18 +95,21 @@ pub fn install(self: *FloatingMenuWidget) void {
     // prevents parents from processing key events if focus is inside the floating window
     self.prev_last_focus = dvui.lastFocusedIdInFrame();
 
-    const avoid: dvui.PlaceOnScreenAvoid = switch (self.init_options.avoid) {
+    const avoid: dvui.PlaceOnScreenAvoid = switch (init_opts.avoid) {
         .none => .none,
         .horizontal => .horizontal,
         .vertical => .vertical,
-        .auto => unreachable,
+        .auto => if (dvui.MenuWidget.current()) |pm| switch (pm.init_opts.dir) {
+            .horizontal => .vertical,
+            .vertical => .horizontal,
+        } else .none,
     };
 
-    self.data().rect = Rect.fromPoint(.cast(self.init_options.from.topLeft()));
+    self.data().rect = Rect.fromPoint(.cast(init_opts.from.topLeft()));
     if (dvui.minSizeGet(self.data().id)) |_| {
-        const ms = dvui.minSize(self.data().id, self.options.min_sizeGet());
+        const ms = dvui.minSize(self.data().id, options.min_sizeGet());
         self.data().rect = self.data().rect.toSize(ms);
-        self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, .cast(self.data().rect)));
+        self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), init_opts.from, avoid, .cast(self.data().rect)));
         if (dvui.dataGet(null, self.data().id, "_check_focus", void) != null) {
             dvui.dataRemove(null, self.data().id, "_check_focus");
             if (dvui.MenuWidget.current() == null or !dvui.MenuWidget.current().?.mouse_mode or self.data().rectScale().r.contains(dvui.currentWindow().mouse_pt)) {
@@ -131,7 +117,7 @@ pub fn install(self: *FloatingMenuWidget) void {
             }
         }
     } else {
-        self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, .cast(self.data().rect)));
+        self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), init_opts.from, avoid, .cast(self.data().rect)));
         dvui.dataSet(null, self.data().id, "_check_focus", {});
 
         // need a second frame to fit contents (FocusWindow calls refresh but
@@ -164,13 +150,11 @@ pub fn install(self: *FloatingMenuWidget) void {
         }
     }
 
-    self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
-    self.scaler.install();
+    self.scaler.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
 
     // we are using scroll to do border/background but floating windows
     // don't have margin, so turn that off
-    self.scroll = ScrollAreaWidget.init(@src(), .{ .horizontal = .none }, self.options.override(.{ .margin = .{}, .expand = .both }));
-    self.scroll.install();
+    self.scroll.init(@src(), .{ .horizontal = .none }, options.override(.{ .margin = .{}, .expand = .both }));
 
     // clip to just our window (using clipSet since we are not inside our parent)
     _ = dvui.clip(rs.r);
@@ -179,8 +163,7 @@ pub fn install(self: *FloatingMenuWidget) void {
         pm.child_popup_rect = rs.r;
     }
 
-    self.menu = MenuWidget.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowId }, self.options.strip().override(.{ .role = .none, .expand = .horizontal }));
-    self.menu.install();
+    self.menu.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowId }, options.strip().override(.{ .role = .none, .expand = .horizontal }));
 }
 
 pub fn close(self: *FloatingMenuWidget) void {

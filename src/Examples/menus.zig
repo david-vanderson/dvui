@@ -100,7 +100,8 @@ pub fn menus() void {
         tl.deinit();
 
         {
-            var tt: dvui.FloatingTooltipWidget = .init(@src(), .{
+            var tt: dvui.FloatingTooltipWidget = undefined;
+            tt.init(@src(), .{
                 .active_rect = hbox.data().borderRectScale().r,
                 .interactive = true,
             }, .{ .background = false, .border = .{} });
@@ -118,7 +119,8 @@ pub fn menus() void {
 
                 _ = dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
                 {
-                    var tt2: dvui.FloatingTooltipWidget = .init(@src(), .{
+                    var tt2: dvui.FloatingTooltipWidget = undefined;
+                    tt2.init(@src(), .{
                         .active_rect = tt.data().borderRectScale().r,
                     }, .{ .max_size_content = .width(200), .box_shadow = .{} });
                     defer tt2.deinit();
@@ -320,8 +322,8 @@ pub fn focus() void {
         tl.addText("Hover highlighting a box around widgets:", .{});
         tl.deinit();
 
-        var hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .padding = dvui.Rect.all(4) });
-        hbox.install();
+        var hbox: dvui.BoxWidget = undefined;
+        hbox.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .padding = dvui.Rect.all(4) });
         defer hbox.deinit();
         const evts = dvui.events();
         for (evts) |*e| {

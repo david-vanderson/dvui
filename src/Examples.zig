@@ -138,7 +138,8 @@ pub fn demo() void {
 
         inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
-            var bw = dvui.ButtonWidget.init(@src(), .{}, .{
+            var bw: dvui.ButtonWidget = undefined;
+            bw.init(@src(), .{}, .{
                 .id_extra = i,
                 .border = Rect.all(1),
                 .background = true,
@@ -149,7 +150,6 @@ pub fn demo() void {
                 .tag = "demo_button_" ++ @tagName(e),
                 .label = .{ .text = e.name() },
             });
-            bw.install();
             bw.processEvents();
             bw.drawBackground();
 

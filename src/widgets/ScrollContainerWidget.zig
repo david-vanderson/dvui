@@ -65,9 +65,10 @@ seen_scroll_drag: bool = false,
 
 finger_down: bool = false,
 
-pub fn init(src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, init_options: InitOptions, opts: Options) ScrollContainerWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *ScrollContainerWidget, src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, init_options: InitOptions, opts: Options) void {
     const options = defaults.override(opts);
-    var self = ScrollContainerWidget{
+    self.* = .{
         .wd = WidgetData.init(src, .{}, options),
         .si = io_scroll_info,
         .init_opts = init_options,
@@ -81,16 +82,7 @@ pub fn init(src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, init_o
     self.si.viewport.w = crect.w;
     self.si.viewport.h = crect.h;
 
-    return self;
-}
-
-pub fn install(self: *ScrollContainerWidget) void {
     self.data().register();
-
-    // user code might have changed our rect
-    const crect = self.data().contentRect();
-    self.si.viewport.w = crect.w;
-    self.si.viewport.h = crect.h;
 
     if (self.init_opts.scroll_area) |sa| {
         sa.setContainerRect(crect);
