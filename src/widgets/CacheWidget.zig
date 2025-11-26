@@ -25,40 +25,25 @@ tex_uv: Size,
 old_target: dvui.RenderTarget = undefined,
 old_clip: ?Rect.Physical = null,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) CacheWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *CacheWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const defaults = Options{ .name = "Cache" };
-    const wd = WidgetData.init(src, .{}, defaults.override(opts));
-    var self = CacheWidget{
-        .wd = wd,
+    self.* = .{
+        .wd = .init(src, .{}, defaults.override(opts)),
         .init_opts = init_opts,
-        .hash = wd.id.update("_tex").asU64(),
-        .tex_uv = dvui.dataGet(null, wd.id, "_tex_uv", Size) orelse .{},
+        // SAFETY: Set bellow
+        .hash = undefined,
+        // SAFETY: Set bellow
+        .tex_uv = undefined,
         .refresh_prev_value = dvui.currentWindow().extra_frames_needed,
     };
+
+    self.hash = self.data().id.update("_tex").asU64();
+    self.tex_uv = dvui.dataGet(null, self.data().id, "_tex_uv", Size) orelse .{};
+
     dvui.currentWindow().extra_frames_needed = 0;
-    if (dvui.dataGet(null, self.wd.id, "_unsupported", bool) orelse false) self.state = .unsupported;
-    return self;
-}
+    if (dvui.dataGet(null, self.data().id, "_unsupported", bool) orelse false) self.state = .unsupported;
 
-fn drawCachedTexture(self: *CacheWidget, t: dvui.Texture) void {
-    const rs = self.data().contentRectScale();
-
-    dvui.renderTexture(t, rs, .{
-        .uv = (Rect{}).toSize(self.tex_uv),
-    }) catch |err| {
-        dvui.logError(@src(), err, "Could not render texture", .{});
-    };
-    //if (self.data().options.debugGet()) {
-    //    dvui.log.debug("drawing {d} {d} {d}x{d} {d}x{d} {d} {d}", .{ rs.r.x, rs.r.y, rs.r.w, rs.r.h, t.texture.width, t.texture.height, self.tex_uv.w, self.tex_uv.h });
-    //}
-}
-
-/// Must be called before install().
-pub fn invalidate(self: *CacheWidget) void {
-    self.init_opts.invalidate = true;
-}
-
-pub fn install(self: *CacheWidget) void {
     dvui.parentSet(self.widget());
     self.data().register();
     self.data().borderAndBackground(.{});
@@ -122,6 +107,19 @@ pub fn install(self: *CacheWidget) void {
             }
         }
     }
+}
+
+fn drawCachedTexture(self: *CacheWidget, t: dvui.Texture) void {
+    const rs = self.data().contentRectScale();
+
+    dvui.renderTexture(t, rs, .{
+        .uv = (Rect{}).toSize(self.tex_uv),
+    }) catch |err| {
+        dvui.logError(@src(), err, "Could not render texture", .{});
+    };
+    //if (self.data().options.debugGet()) {
+    //    dvui.log.debug("drawing {d} {d} {d}x{d} {d}x{d} {d} {d}", .{ rs.r.x, rs.r.y, rs.r.w, rs.r.h, t.texture.width, t.texture.height, self.tex_uv.w, self.tex_uv.h });
+    //}
 }
 
 /// Must be called after install().

@@ -37,8 +37,8 @@ pub fn theming() void {
                 dvui.themeSet(custom_theme);
             }
 
-            var theme_reset_dropdown = dvui.DropdownWidget.init(@src(), .{ .label = "Reset" }, .{});
-            theme_reset_dropdown.install();
+            var theme_reset_dropdown: dvui.DropdownWidget = undefined;
+            theme_reset_dropdown.init(@src(), .{ .label = "Reset" }, .{});
             if (theme_reset_dropdown.dropped()) {
                 for (.{modified_adwaita_theme} ++ Theme.builtins) |builtin_theme| {
                     if (theme_reset_dropdown.addChoiceLabel(builtin_theme.name)) {
@@ -86,8 +86,7 @@ pub fn theming() void {
 
         const active_page = dvui.dataGetPtrDefault(null, paned.data().id, "Page", ThemeEditingPage, .Styles);
         {
-            var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-            tabs.install();
+            const tabs = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
             defer tabs.deinit();
             inline for (std.meta.tags(ThemeEditingPage), 0..) |page, i| {
                 var tab = tabs.addTab(active_page.* == page, .{
@@ -160,8 +159,7 @@ fn fonts(theme: *Theme) bool {
 
     const active_font = dvui.dataGetPtrDefault(null, hbox.data().id, "Fonts", Options.FontStyle, .body);
     {
-        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
-        tabs.install();
+        const tabs = dvui.tabs(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
         defer tabs.deinit();
 
         inline for (comptime std.meta.tags(Options.FontStyle), 0..) |font_style, i| {
@@ -203,8 +201,8 @@ fn fonts(theme: *Theme) bool {
         }
     }
 
-    var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = current_font_index, .label = current_font_name }, .{});
-    dd.install();
+    var dd: dvui.DropdownWidget = undefined;
+    dd.init(@src(), .{ .selected_index = current_font_index, .label = current_font_name }, .{});
     if (dd.dropped()) {
         it = dvui.currentWindow().fonts.database.iterator();
         while (it.next()) |entry| {
@@ -257,7 +255,8 @@ fn styles(theme: *Theme) bool {
 
         {
             const theme_styles = comptime std.meta.tags(Theme.Style.Name);
-            var dd = dvui.DropdownWidget.init(@src(), .{
+            var dd: dvui.DropdownWidget = undefined;
+            dd.init(@src(), .{
                 .label = @tagName(active_style.*),
                 .selected_index = std.mem.indexOfScalar(Theme.Style.Name, theme_styles, active_style.*),
             }, .{
@@ -265,7 +264,6 @@ fn styles(theme: *Theme) bool {
                 .expand = .horizontal,
                 .margin = .{ .y = 2 + 3, .w = 1 + 2, .h = 2 + 3 },
             });
-            dd.install();
             defer dd.deinit();
             if (dd.dropped()) {
                 for (theme_styles) |theme_style| {
@@ -277,8 +275,7 @@ fn styles(theme: *Theme) bool {
             }
         }
 
-        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .vertical }, .{ .expand = .both });
-        tabs.install();
+        const tabs = dvui.tabs(@src(), .{ .dir = .vertical }, .{ .expand = .both });
         defer tabs.deinit();
 
         style = switch (active_style.*) {
@@ -351,8 +348,8 @@ fn styles(theme: *Theme) bool {
     }
 
     {
-        var dd = dvui.DropdownWidget.init(@src(), .{ .label = "Set color" }, .{ .min_size_content = .{ .w = 110 } });
-        dd.install();
+        var dd: dvui.DropdownWidget = undefined;
+        dd.init(@src(), .{ .label = "Set color" }, .{ .min_size_content = .{ .w = 110 } });
         defer dd.deinit();
         if (dd.dropped()) {
             // Only show this if the color is optional

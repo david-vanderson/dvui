@@ -31,12 +31,11 @@ val: ?f32 = null,
 
 prev_alpha: f32 = 1.0,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) AnimateWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *AnimateWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const defaults = Options{ .name = "Animate" };
-    return AnimateWidget{ .wd = WidgetData.init(src, .{}, defaults.override(opts)), .init_opts = init_opts };
-}
+    self.* = .{ .wd = WidgetData.init(src, .{}, defaults.override(opts)), .init_opts = init_opts };
 
-pub fn install(self: *AnimateWidget) void {
     if (self.init_opts.kind != .none) {
         if (dvui.firstFrame(self.data().id)) {
             // start begin animation

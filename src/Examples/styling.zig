@@ -70,8 +70,8 @@ pub fn styling() void {
 
     dvui.label(@src(), "directly set colors", .{}, .{});
     {
-        var picker = dvui.ColorPickerWidget.init(@src(), .{ .hsv = &hsv_color, .dir = .horizontal }, .{ .expand = .horizontal });
-        picker.install();
+        var picker: dvui.ColorPickerWidget = undefined;
+        picker.init(@src(), .{ .hsv = &hsv_color, .dir = .horizontal }, .{ .expand = .horizontal });
         defer picker.deinit();
         if (picker.color_changed) {
             backbox_color = hsv_color.toColor();

@@ -185,8 +185,8 @@ pub fn show(self: *Debug) void {
         }
     }
 
-    var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
-    tl.install(.{});
+    var tl: dvui.TextLayoutWidget = undefined;
+    tl.init(@src(), .{}, .{ .expand = .horizontal });
 
     {
         var corner_box = dvui.box(@src(), .{}, .{ .gravity_x = 1, .margin = .all(8) });
@@ -345,8 +345,8 @@ pub fn show(self: *Debug) void {
             }, "Copy Options struct to clipboard", .{}, .{});
 
             {
-                var button = dvui.ButtonWidget.init(@src(), .{}, .{ .expand = .horizontal });
-                button.install();
+                var button: dvui.ButtonWidget = undefined;
+                button.init(@src(), .{}, .{ .expand = .horizontal });
                 defer button.deinit();
                 button.processEvents();
                 button.drawBackground();
@@ -444,8 +444,7 @@ pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
 
     const active_tab = dvui.dataGetPtrDefault(null, vbox.data().id, "Tab", OptionsEditorTab, .layout);
     {
-        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-        tabs.install();
+        const tabs = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer tabs.deinit();
 
         var button_wd: dvui.WidgetData = undefined;
@@ -556,7 +555,8 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
         {
             dvui.labelNoFmt(@src(), "expand", .{}, .{ .gravity_y = 0.5 });
             const expands = std.meta.tags(Options.Expand);
-            var dd = dvui.DropdownWidget.init(@src(), .{
+            var dd: dvui.DropdownWidget = undefined;
+            dd.init(@src(), .{
                 .label = @tagName(self.expandGet()),
                 .selected_index = std.mem.indexOfScalar(Options.Expand, expands, self.expandGet()).?,
             }, .{
@@ -564,7 +564,6 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
                 .min_size_content = .{ .w = 110 },
                 .gravity_y = 0.5,
             });
-            dd.install();
             defer dd.deinit();
             if (dd.dropped()) {
                 for (expands) |new| {
@@ -837,13 +836,13 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
     {
         dvui.label(@src(), "Font Style", .{}, .{ .gravity_y = 0.5 });
         const styles = std.meta.tags(dvui.Theme.Style.Name);
-        var dd = dvui.DropdownWidget.init(@src(), .{
+        var dd: dvui.DropdownWidget = undefined;
+        dd.init(@src(), .{
             .label = if (self.style) |style| @tagName(style) else "null",
         }, .{
             .min_size_content = .{ .w = 150 },
             .gravity_y = 0.5,
         });
-        dd.install();
         defer dd.deinit();
         if (dd.dropped()) {
             if (dd.addChoiceLabel("Set to null")) {
@@ -873,8 +872,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
     const active_color = dvui.dataGetPtrDefault(null, id, "Color", OptionsColors, .fill);
 
     {
-        var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
-        tabs.install();
+        const tabs = dvui.tabs(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
         defer tabs.deinit();
 
         const colors = comptime std.meta.tags(OptionsColors);

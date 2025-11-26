@@ -46,6 +46,9 @@ pub const InitOptions = struct {
 
     // If non null, overrides `Window.kerning` setting.
     kerning: ?bool = null,
+
+    focused: ?bool = null,
+    show_touch_draggables: bool = true,
 };
 
 pub const Selection = struct {
@@ -130,10 +133,8 @@ click_num_pt: dvui.Point.Physical = .{},
 
 bytes_seen: usize = 0,
 first_byte_in_line: usize = 0,
-selection_in: ?*Selection = null,
-/// SAFETY: Set in `install`, might point to `selection_store`
-selection: *Selection = undefined,
-selection_store: Selection = .{},
+/// might point to `selection_store`
+selection: *Selection,
 
 /// For simplicity we only handle a single kind of selection change per frame
 sel_move: union(enum) {
@@ -223,21 +224,26 @@ cache_layout: bool = false,
 cache_layout_bytes: ?bytesNeededReturn = null,
 cache_layout_bytes_seen: usize = 0,
 byte_height_ready: ?ByteHeight = null,
-byte_heights: []ByteHeight = undefined, // from last frame
+byte_heights: []ByteHeight = &.{}, // from last frame
 byte_heights_new: std.ArrayList(ByteHeight) = .empty, // creating this frame
 byte_height_after_idx: ?usize = null,
 byte_height_edit_idx: ?usize = null,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextLayoutWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const options = defaults.override(opts);
-    var self = TextLayoutWidget{
+    self.* = .{
         .wd = WidgetData.init(src, .{}, options),
-        .selection_in = init_opts.selection,
         .break_lines = init_opts.break_lines,
         .cache_layout = init_opts.cache_layout,
         .kerning = init_opts.kerning,
         .touch_edit_just_focused = init_opts.touch_edit_just_focused,
+
+        // SAFETY: set bellow
+        .selection = undefined,
     };
+    self.selection = if (init_opts.selection) |sel_in| sel_in else dvui.dataGetPtrDefault(null, self.wd.id, "_selection", Selection, .{});
+
     if (dvui.dataGet(null, self.wd.id, "_touch_editing", bool)) |val| self.touch_editing = val;
     if (dvui.dataGet(null, self.wd.id, "_te_first", bool)) |val| self.te_first = val;
     if (dvui.dataGet(null, self.wd.id, "_te_show_draggables", bool)) |val| self.te_show_draggables = val;
@@ -247,11 +253,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     if (dvui.dataGet(null, self.wd.id, "_sel_end_r", Rect)) |val| self.sel_end_r = val;
     if (dvui.dataGet(null, self.wd.id, "_click_num", u8)) |val| self.click_num = val;
     if (dvui.dataGet(null, self.wd.id, "_click_num_pt", dvui.Point.Physical)) |val| self.click_num_pt = val;
-    if (dvui.dataGetSlice(null, self.wd.id, "_byte_heights", []ByteHeight)) |bh| {
-        self.byte_heights = bh;
-    } else {
-        self.byte_heights = &[0]ByteHeight{};
-    }
+    if (dvui.dataGetSlice(null, self.wd.id, "_byte_heights", []ByteHeight)) |bh| self.byte_heights = bh;
 
     if (dvui.dataGet(null, self.wd.id, "_scroll_to_cursor", bool) orelse false) {
         dvui.dataRemove(null, self.wd.id, "_scroll_to_cursor");
@@ -280,23 +282,10 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     }
     width_old.* = self.data().rect.w;
 
-    return self;
-}
-
-pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, show_touch_draggables: bool = true }) void {
-    self.focus_at_start = opts.focused orelse (self.data().id == dvui.focusedWidgetId());
+    self.focus_at_start = init_opts.focused orelse (self.data().id == dvui.focusedWidgetId());
 
     self.data().register();
     dvui.parentSet(self.widget());
-
-    if (self.selection_in) |sel| {
-        self.selection = sel;
-    } else {
-        if (dvui.dataGet(null, self.data().id, "_selection", Selection)) |s| {
-            self.selection_store = s;
-        }
-        self.selection = &self.selection_store;
-    }
 
     if (dvui.captured(self.data().id)) {
         if (dvui.dataGet(null, self.data().id, "_sel_move_mouse_byte", usize)) |p| {
@@ -329,7 +318,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
     // clip to background rect for possible corner widgets, addTextEx clips to content rect
     self.prevClip = dvui.clip(self.data().backgroundRectScale().r);
 
-    if (opts.show_touch_draggables and self.touch_editing and self.te_show_draggables and self.focus_at_start and self.data().visible()) {
+    if (init_opts.show_touch_draggables and self.touch_editing and self.te_show_draggables and self.focus_at_start and self.data().visible()) {
         const size = 36;
         {
 
@@ -355,8 +344,8 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             rect.w = size;
             rect.h = size;
 
-            var fc = dvui.FloatingWidget.init(@src(), .{}, .{ .rect = rect });
-            fc.install();
+            var fc: dvui.FloatingWidget = undefined;
+            fc.init(@src(), .{}, .{ .rect = rect });
 
             var offset: Point.Physical = dvui.dataGet(null, fc.data().id, "_offset", Point.Physical) orelse .{};
 
@@ -424,8 +413,8 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             rect.w = size;
             rect.h = size;
 
-            var fc = dvui.FloatingWidget.init(@src(), .{}, .{ .rect = rect });
-            fc.install();
+            var fc: dvui.FloatingWidget = undefined;
+            fc.init(@src(), .{}, .{ .rect = rect });
 
             var offset: Point.Physical = dvui.dataGet(null, fc.data().id, "_offset", Point.Physical) orelse .{};
 
@@ -522,7 +511,8 @@ pub fn addTextHover(self: *TextLayoutWidget, text: []const u8, opts: Options) ?d
 }
 
 pub fn addTextTooltip(self: *TextLayoutWidget, src: std.builtin.SourceLocation, text: []const u8, tooltip: []const u8, opts: Options) void {
-    var tt: dvui.FloatingTooltipWidget = .init(src, .{
+    var tt: dvui.FloatingTooltipWidget = undefined;
+    tt.init(src, .{
         .active_rect = .{},
         .position = .sticky,
     }, .{ .id_extra = opts.idExtra() });
@@ -1758,24 +1748,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
 pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
     if (self.touch_editing and self.te_show_context_menu and self.focus_at_start and self.data().visible()) {
-        self.te_floating = dvui.FloatingWidget.init(@src(), .{}, .{});
-
-        const r = dvui.windowRectScale().rectFromPhysical(dvui.clipGet());
-        if (dvui.minSizeGet(self.te_floating.data().id)) |_| {
-            const ms = dvui.minSize(self.te_floating.data().id, self.te_floating.data().options.min_sizeGet());
-            self.te_floating.data().rect.w = ms.w;
-            self.te_floating.data().rect.h = ms.h;
-
-            self.te_floating.data().rect.x = r.x + r.w - self.te_floating.data().rect.w;
-            self.te_floating.data().rect.y = r.y - self.te_floating.data().rect.h - self.data().options.paddingGet().y;
-
-            self.te_floating.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), .{ .x = self.te_floating.data().rect.x, .y = self.te_floating.data().rect.y }, .vertical, .cast(self.te_floating.data().rect)));
-        } else {
-            // need another frame to get our min size
-            dvui.refresh(null, @src(), self.te_floating.data().id);
-        }
-
-        self.te_floating.install();
+        self.te_floating.init(@src(), .{ .from = self.data().rectScale().r.toNatural() }, .{});
         return &self.te_floating;
     }
 

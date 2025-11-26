@@ -32,16 +32,15 @@ focus_id: ?dvui.Id = null,
 dir: enums.Direction,
 highlight: bool = false,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ScrollBarWidget {
-    return .{
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *ScrollBarWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+    self.* = .{
         .si = init_opts.scroll_info,
         .focus_id = init_opts.focus_id,
         .dir = init_opts.direction,
         .wd = WidgetData.init(src, .{}, defaults.override(opts)),
     };
-}
 
-pub fn install(self: *ScrollBarWidget) void {
     self.data().register();
     self.data().borderAndBackground(.{});
 

@@ -72,28 +72,22 @@ const DragPart = enum {
     }
 };
 
-/// SAFETY: Set by `install`
 prev_rendering: bool = undefined,
 wd: WidgetData,
 init_options: InitOptions,
 /// options is for our embedded BoxWidget
 options: Options,
-/// SAFETY: Set by `install`
 prev_windowInfo: dvui.subwindowCurrentSetReturn = undefined,
-/// SAFETY: Set by `install`
 prev_last_focus: dvui.Id = undefined,
-/// SAFETY: Set by `install`
 layout: BoxWidget = undefined,
-/// SAFETY: Set by `install`
 prevClip: Rect.Physical = undefined,
 auto_pos: bool = false,
 auto_size: bool = false,
 auto_size_refresh_prev_value: ?u8 = null,
 drag_part: ?DragPart = null,
-/// SAFETY: Set by `install`
 drag_area: Rect.Physical = undefined,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingWindowWidget {
+pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const options = defaults.themeOverride().override(opts);
     var box_options = options;
     box_options.role = null;
@@ -101,9 +95,9 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     box_options.id_extra = null;
     box_options.rect = null; // if the user passes in a rect, don't pass it to the BoxWidget
 
-    var self = FloatingWindowWidget{
+    self.* = .{
         // options is really for our embedded BoxWidget, so save them for the
-        // end of install()
+        // end of drawBackground()
         .options = box_options,
 
         // the floating window itself doesn't have any styling, it comes from
@@ -214,10 +208,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         self.wd.rect = .cast(dvui.placeOnScreen(screen, .{}, .none, .cast(self.data().rect)));
     }
 
-    return self;
-}
-
-pub fn install(self: *FloatingWindowWidget) void {
     self.data().register();
     self.prev_rendering = dvui.renderingSet(false);
 
@@ -235,8 +225,7 @@ pub fn install(self: *FloatingWindowWidget) void {
         dvui.refresh(null, @src(), self.data().id);
 
         // hide our first frame so the user doesn't see an empty window or
-        // jump when we autopos/autosize - do this in install() because
-        // animation stuff might be messing with our rect after init()
+        // jump when we autopos/autosize
         self.data().rect.w = 0;
         self.data().rect.h = 0;
     }
@@ -281,8 +270,7 @@ pub fn drawBackground(self: *FloatingWindowWidget) void {
     }
 
     // we are using BoxWidget to do border/background
-    self.layout = BoxWidget.init(@src(), .{ .dir = .vertical }, self.options.override(.{ .expand = .both }));
-    self.layout.install();
+    self.layout.init(@src(), .{ .dir = .vertical }, self.options.override(.{ .expand = .both }));
     self.layout.drawBackground();
 
     // clip to just our window (layout has the margin)
@@ -574,7 +562,7 @@ pub fn deinit(self: *FloatingWindowWidget) void {
     }
 
     if (!dvui.firstFrame(self.data().id)) {
-        // if firstFrame, we already did this in install
+        // if firstFrame, we already did this in init
         dvui.dataSet(null, self.data().id, "_rect", self.data().rect);
         if (self.init_options.rect) |ior| {
             // send rect back to user

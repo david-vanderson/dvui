@@ -79,16 +79,10 @@ pub const InitOptions = struct {
 };
 
 wd: WidgetData,
-/// SAFETY: Set in `install`
 prevClip: Rect.Physical = undefined,
-/// SAFETY: Set in `install`
 scroll: ScrollAreaWidget = undefined,
-scroll_init_opts: ScrollAreaWidget.InitOpts,
-/// SAFETY: Set in `install`
 scrollClip: Rect.Physical = undefined,
-/// SAFETY: Set in `install`
 textLayout: TextLayoutWidget = undefined,
-/// SAFETY: Set in `install`
 textClip: Rect.Physical = undefined,
 padding: Rect,
 
@@ -103,7 +97,8 @@ text_changed_start: usize = std.math.maxInt(usize),
 text_changed_end: usize = 0, // index of bytes before edits (so matches previous frame)
 text_changed_added: i64 = 0, // bytes added
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextEntryWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     var scroll_init_opts = ScrollAreaWidget.InitOpts{
         .vertical = if (init_opts.scroll_vertical orelse init_opts.multiline) .auto else .none,
         .vertical_bar = init_opts.scroll_vertical_bar orelse .auto,
@@ -162,17 +157,21 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         len_utf8_boundary = dvui.findUtf8Start(text[0..len_byte], len_byte);
     }
 
-    return .{
+    self.* = .{
         .wd = wd,
-        .scroll_init_opts = scroll_init_opts,
         .padding = padding,
         .init_opts = init_opts,
         .text = text,
         .len = len_utf8_boundary,
-    };
-}
 
-pub fn install(self: *TextEntryWidget) void {
+        // SAFETY: The following fields are set bellow
+        .prevClip = undefined,
+        .scroll = undefined,
+        .scrollClip = undefined,
+        .textLayout = undefined,
+        .textClip = undefined,
+    };
+
     self.data().register();
 
     dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
@@ -191,21 +190,25 @@ pub fn install(self: *TextEntryWidget) void {
     const focused = (self.data().id == dvui.lastFocusedIdInFrame());
     if (focused) dvui.currentWindow().last_focused_id_this_frame = .zero;
 
-    self.scroll = ScrollAreaWidget.init(@src(), self.scroll_init_opts, self.data().options.strip().override(.{ .role = .none, .expand = .both }));
-
     // scrollbars process mouse events here
-    self.scroll.install();
+    self.scroll.init(@src(), scroll_init_opts, self.data().options.strip().override(.{ .role = .none, .expand = .both }));
 
     if (focused) dvui.currentWindow().last_focused_id_this_frame = self.data().id;
 
     self.scrollClip = dvui.clipGet();
 
-    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .kerning = self.init_opts.kerning, .touch_edit_just_focused = false, .cache_layout = self.init_opts.cache_layout }, self.data().options.strip().override(.{ .role = .none, .expand = .both, .padding = self.padding }));
+    self.textLayout.init(@src(), .{
+        .break_lines = self.init_opts.break_lines,
+        .kerning = self.init_opts.kerning,
+        .touch_edit_just_focused = false,
+        .cache_layout = self.init_opts.cache_layout,
+        .focused = self.data().id == dvui.focusedWidgetId(),
+        .show_touch_draggables = (self.len > 0),
+    }, self.data().options.strip().override(.{ .role = .none, .expand = .both, .padding = self.padding }));
 
     // if textLayout forced cache_layout to false, we need to honor that
     self.init_opts.cache_layout = self.textLayout.cache_layout;
 
-    self.textLayout.install(.{ .focused = self.data().id == dvui.focusedWidgetId(), .show_touch_draggables = (self.len > 0) });
     self.textClip = dvui.clipGet();
 
     if (self.len == 0) {
@@ -1069,10 +1072,10 @@ test "text internal" {
         const limit = realloc_bin_size * 5 / 2;
 
         fn frame() !dvui.App.Result {
-            var entry = TextEntryWidget.init(@src(), .{
+            var entry: TextEntryWidget = undefined;
+            entry.init(@src(), .{
                 .text = .{ .internal = .{ .limit = limit } },
             }, .{ .tag = "entry" });
-            entry.install();
             defer entry.deinit();
 
             entry.processEvents();
@@ -1121,14 +1124,14 @@ test "text dynamic buffer" {
         var backing: []u8 = &.{};
 
         fn frame() !dvui.App.Result {
-            var entry = TextEntryWidget.init(@src(), .{
+            var entry: TextEntryWidget = undefined;
+            entry.init(@src(), .{
                 .text = .{ .buffer_dynamic = .{
                     .backing = &backing,
                     .allocator = fba.allocator(),
                     .limit = limit,
                 } },
             }, .{ .tag = "entry" });
-            entry.install();
             defer entry.deinit();
 
             entry.processEvents();
@@ -1176,10 +1179,10 @@ test "text buffer" {
         var buffer: [limit]u8 = undefined;
 
         fn frame() !dvui.App.Result {
-            var entry = TextEntryWidget.init(@src(), .{
+            var entry: TextEntryWidget = undefined;
+            entry.init(@src(), .{
                 .text = .{ .buffer = &buffer },
             }, .{ .tag = "entry" });
-            entry.install();
             defer entry.deinit();
 
             entry.processEvents();

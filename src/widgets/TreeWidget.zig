@@ -19,7 +19,6 @@ drag_ending: bool = false,
 branch_size: Size = .{},
 current_branch_focus_id: ?dvui.Id = null,
 init_options: InitOptions = undefined,
-/// SAFETY: Set in `install`
 group: dvui.FocusGroupWidget = undefined,
 
 pub const InitOptions = struct {
@@ -29,8 +28,8 @@ pub const InitOptions = struct {
     drag_name: ?[]const u8 = null,
 };
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TreeWidget {
-    var self = TreeWidget{};
+pub fn init(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+    self.* = .{};
     const defaults = Options{ .name = "Tree", .role = .tree };
     self.init_options = init_opts;
     self.wd = WidgetData.init(src, .{}, defaults.override(opts));
@@ -43,17 +42,12 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         }
     }
 
-    return self;
-}
-
-pub fn install(self: *TreeWidget) void {
     self.data().register();
     self.data().borderAndBackground(.{});
 
     dvui.parentSet(self.widget());
 
-    self.group = dvui.FocusGroupWidget.init(@src(), .{ .nav_key_dir = .vertical }, .{});
-    self.group.install();
+    self.group.init(@src(), .{ .nav_key_dir = .vertical }, .{});
 
     if (self.group.data().accesskit_node()) |ak_node| {
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
@@ -63,9 +57,8 @@ pub fn install(self: *TreeWidget) void {
 
 pub fn tree(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) *TreeWidget {
     var ret = dvui.widgetAlloc(TreeWidget);
-    ret.* = TreeWidget.init(src, init_opts, opts);
+    ret.init(src, init_opts, opts);
     ret.data().was_allocated_on_widget_stack = true;
-    ret.install();
     ret.processEvents();
     return ret;
 }
@@ -186,7 +179,7 @@ pub fn dragStart(self: *TreeWidget, branch_id: usize, p: dvui.Point.Physical) vo
 
 pub fn branch(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: Branch.InitOptions, opts: Options) *Branch {
     const ret = dvui.widgetAlloc(Branch);
-    ret.* = Branch.init(src, self, init_opts, opts);
+    ret.init(src, self, init_opts, opts);
     ret.install();
     ret.data().was_allocated_on_widget_stack = true;
     if (ret.data().accesskit_node()) |ak_node| {
@@ -256,15 +249,13 @@ pub const Branch = struct {
         .padding = dvui.Rect.all(2),
     };
 
-    pub fn init(src: std.builtin.SourceLocation, reorder: *TreeWidget, init_opts: Branch.InitOptions, opts: Options) Branch {
-        var self = Branch{};
+    pub fn init(self: *Branch, src: std.builtin.SourceLocation, reorder: *TreeWidget, init_opts: Branch.InitOptions, opts: Options) void {
+        self.* = .{};
         self.tree = reorder;
         self.init_options = init_opts;
         self.options = defaults.override(opts);
         self.wd = WidgetData.init(src, .{}, wrapOuter(self.options).override(.{ .rect = .{} }));
         self.expanded = if (dvui.dataGet(null, self.wd.id, "_expanded", bool)) |e| e else init_opts.expanded;
-
-        return self;
     }
 
     // can call this after init before install
@@ -287,12 +278,12 @@ pub const Branch = struct {
                 self.data().register();
                 dvui.parentSet(self.widget());
 
-                self.floating_widget = dvui.FloatingWidget.init(
+                self.floating_widget = undefined;
+                self.floating_widget.?.init(
                     @src(),
                     .{ .mouse_events = false },
                     .{ .rect = Rect.fromPoint(.cast(topleft.toNatural())), .min_size_content = self.tree.branch_size },
                 );
-                self.floating_widget.?.install();
             } else {
                 self.wd = WidgetData.init(self.wd.src, .{}, wrapOuter(self.options));
                 self.wd.register();
@@ -332,8 +323,7 @@ pub const Branch = struct {
             dvui.parentSet(self.widget());
         }
 
-        self.button = dvui.ButtonWidget.init(@src(), .{}, wrapInner(self.options));
-        self.button.install();
+        self.button.init(@src(), .{}, wrapInner(self.options));
         self.button.processEvents();
         self.button.drawBackground();
         self.button.drawFocus();
@@ -352,8 +342,7 @@ pub const Branch = struct {
         self.parent_focus_id = self.tree.current_branch_focus_id;
         self.tree.current_branch_focus_id = self.button.data().id;
 
-        self.hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
-        self.hbox.install();
+        self.hbox.init(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
 
         for (dvui.events()) |*e| {
             if (!self.button.matchEvent(e))
@@ -437,8 +426,7 @@ pub const Branch = struct {
             // Always expand the inner box to fill the animation
             const expander_opts = dvui.Options{ .expand = .both };
 
-            self.expander_vbox = dvui.BoxWidget.init(src, .{ .dir = .vertical }, expander_opts.override(opts.strip()));
-            self.expander_vbox.install();
+            self.expander_vbox.init(src, .{ .dir = .vertical }, expander_opts.override(opts.strip()));
             self.expander_vbox.drawBackground();
         }
 

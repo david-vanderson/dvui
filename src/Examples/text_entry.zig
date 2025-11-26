@@ -51,9 +51,9 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
         defer scroll.deinit();
 
-        var tl = dvui.TextEntryWidget.init(@src(), .{ .multiline = true, .cache_layout = true, .break_lines = break_lines.*, .scroll_horizontal = !break_lines.*, .text = .{ .internal = .{ .limit = 2_000_000 } } }, .{ .expand = .both });
+        var tl: dvui.TextEntryWidget = undefined;
+        tl.init(@src(), .{ .multiline = true, .cache_layout = true, .break_lines = break_lines.*, .scroll_horizontal = !break_lines.*, .text = .{ .internal = .{ .limit = 2_000_000 } } }, .{ .expand = .both });
         defer tl.deinit();
-        tl.install();
         tl.processEvents();
 
         const num_done = dvui.dataGetPtrDefault(null, uniqId, "num_done", usize, 0);
@@ -236,8 +236,8 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
 
         left_alignment.spacer(@src(), 0);
 
-        var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = Sfont.dropdown, .label = font_entries[Sfont.dropdown].@"0" }, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5 });
-        dd.install();
+        var dd: dvui.DropdownWidget = undefined;
+        dd.init(@src(), .{ .selected_index = Sfont.dropdown, .label = font_entries[Sfont.dropdown].@"0" }, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5 });
         defer dd.deinit();
         if (dd.dropped()) {
             for (font_entries, 0..) |e, i| {
@@ -415,8 +415,8 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
 
         left_alignment.spacer(@src(), 0);
 
-        var te = dvui.TextEntryWidget.init(@src(), .{}, .{ .max_size_content = .size(dvui.Options.sizeM(20, 1)) });
-        te.install();
+        var te: dvui.TextEntryWidget = undefined;
+        te.init(@src(), .{}, .{ .max_size_content = .size(dvui.Options.sizeM(20, 1)) });
 
         const entries: []const []const u8 = &.{
             "one", "two", "three", "four", "five", "six",
