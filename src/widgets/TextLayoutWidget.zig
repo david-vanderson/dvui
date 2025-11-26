@@ -126,6 +126,7 @@ cursor_event: ?dvui.Event.EventTypes = null,
 click_pt: ?Point = null,
 click_event: ?dvui.Event.EventTypes = null,
 click_num: u8 = 0,
+click_num_pt: dvui.Point.Physical = .{},
 
 bytes_seen: usize = 0,
 first_byte_in_line: usize = 0,
@@ -245,6 +246,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     if (dvui.dataGet(null, self.wd.id, "_sel_start_r", Rect)) |val| self.sel_start_r = val;
     if (dvui.dataGet(null, self.wd.id, "_sel_end_r", Rect)) |val| self.sel_end_r = val;
     if (dvui.dataGet(null, self.wd.id, "_click_num", u8)) |val| self.click_num = val;
+    if (dvui.dataGet(null, self.wd.id, "_click_num_pt", dvui.Point.Physical)) |val| self.click_num_pt = val;
     if (dvui.dataGetSlice(null, self.wd.id, "_byte_heights", []ByteHeight)) |bh| {
         self.byte_heights = bh;
     } else {
@@ -1933,8 +1935,9 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
 
                         if (me.button.pointer()) {
                             self.click_num += 1;
-                            if (self.click_num == 4) {
-                                self.click_num = 1;
+                            self.click_num_pt = me.p;
+                            if (self.click_num >= 3) {
+                                self.click_num = 0;
                             }
                         }
                     }
@@ -1997,7 +2000,12 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                     }
                 }
             } else if (me.action == .motion) {
-                self.click_num = 0;
+                if (self.click_num > 0) {
+                    const dp = me.p.diff(self.click_num_pt).toNatural();
+                    if (@abs(dp.x) > dvui.Dragging.threshold or @abs(dp.y) > dvui.Dragging.threshold) {
+                        self.click_num = 0;
+                    }
+                }
             } else if (me.action == .position) {
                 self.cursor_pt = self.data().contentRectScale().pointFromPhysical(me.p);
                 self.cursor_event = e.evt;
@@ -2166,8 +2174,10 @@ pub fn deinit(self: *TextLayoutWidget) void {
     }
     if (self.click_num == 0) {
         dvui.dataRemove(null, self.data().id, "_click_num");
+        dvui.dataRemove(null, self.data().id, "_click_num_pt");
     } else {
         dvui.dataSet(null, self.data().id, "_click_num", self.click_num);
+        dvui.dataSet(null, self.data().id, "_click_num_pt", self.click_num_pt);
     }
     dvui.clipSet(self.prevClip);
 
