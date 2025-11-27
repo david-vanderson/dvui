@@ -415,30 +415,42 @@ pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []
     const stack_trace_enabled = stack_trace_frame_count > 0;
     const err_trace_enabled = if (@import("build_options").log_error_trace) |enabled| enabled else stack_trace_enabled;
 
-    var addresses: [stack_trace_frame_count]usize = @splat(0);
-    var stack_trace = std.builtin.StackTrace{ .instruction_addresses = &addresses, .index = 0 };
-    if (!builtin.strip_debug_info) std.debug.captureStackTrace(@returnAddress(), &stack_trace);
+    //var addresses: [stack_trace_frame_count]usize = @splat(0);
+    //var stack_trace = std.builtin.StackTrace{ .instruction_addresses = &addresses, .index = 0 };
+    //if (!builtin.strip_debug_info) stack_trace = std.debug.captureCurrentStackTrace(.{}, &addresses);
 
-    const error_trace_fmt, const err_trace_arg = if (err_trace_enabled)
-        .{ "\nError trace: {?f}", @errorReturnTrace() }
-    else
-        .{ "{s}", "" }; // Needed to keep the arg count the same
-    const stack_trace_fmt, const trace_arg = if (stack_trace_enabled)
-        .{ "\nStack trace: {f}", stack_trace }
-    else
-        .{ "{s}", "" }; // Needed to keep the arg count the sames
+    //const error_trace_fmt, const err_trace_arg = if (err_trace_enabled)
+    //    .{ "\nError trace: {?f}", @errorReturnTrace() }
+    //else
+    //    .{ "{s}", "" }; // Needed to keep the arg count the same
+    //const stack_trace_fmt, const trace_arg = if (stack_trace_enabled)
+    //    .{ "\nStack trace: {f}", stack_trace }
+    //else
+    //    .{ "{s}", "" }; // Needed to keep the arg count the sames
 
     // There is no nice way to combine a comptime tuple and a runtime tuple
     const combined_args = switch (std.meta.fields(@TypeOf(args)).len) {
-        0 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), err_trace_arg, trace_arg },
-        1 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], err_trace_arg, trace_arg },
-        2 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], err_trace_arg, trace_arg },
-        3 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], err_trace_arg, trace_arg },
-        4 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], args[3], err_trace_arg, trace_arg },
-        5 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], args[3], args[4], err_trace_arg, trace_arg },
+        0 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err) },
+        1 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0] },
+        2 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1] },
+        3 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2] },
+        4 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], args[3] },
+        5 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], args[3], args[4] },
         else => @compileError("Too many arguments"),
     };
-    log.err("{s}:{d}:{d}: {s} got {s}: " ++ fmt ++ error_trace_fmt ++ stack_trace_fmt, combined_args);
+    log.err("{s}:{d}:{d}: {s} got {s}: " ++ fmt, combined_args);
+    if (err_trace_enabled) {
+        if (@errorReturnTrace()) |t| {
+            const stderr, const tty_config = std.debug.lockStderrWriter(&.{});
+            defer std.debug.unlockStderrWriter();
+            stderr.writeAll("error return context:\n") catch {};
+            std.debug.writeStackTrace(t, stderr, tty_config) catch {};
+        }
+    }
+    if (!builtin.strip_debug_info) {
+        std.debug.print("\nstack trace:\n", .{});
+        std.debug.dumpCurrentStackTrace(.{});
+    }
 }
 
 /// Get the active theme.
@@ -570,8 +582,8 @@ pub fn svgToTvg(allocator: std.mem.Allocator, svg_bytes: []const u8) (std.mem.Al
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) TvgError!f32 {
     if (height == 0) return 0.0;
-    var stream = std.io.fixedBufferStream(tvg_bytes);
-    var parser = tvg.tvg.parse(currentWindow().arena(), stream.reader()) catch |err| {
+    var stream: std.Io.Reader = .fixed(tvg_bytes);
+    var parser = tvg.tvg.parse(currentWindow().arena(), &stream) catch |err| {
         log.warn("iconWidth Tinyvg error {any} parsing icon {s}\n", .{ err, name });
         return TvgError.tvgError;
     };
