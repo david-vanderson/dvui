@@ -344,7 +344,9 @@ device: *c.SDL_GPUDevice,
 destroyDeviceOnExit: bool = false,
 
 // Pipeline and rendering resources
-pipeline: *c.SDL_GPUGraphicsPipeline = undefined,
+swapchain_pipeline: *c.SDL_GPUGraphicsPipeline = undefined,
+rendertarget_pipeline: *c.SDL_GPUGraphicsPipeline = undefined,
+external_cmdbuffer: bool = false,
 cmd: ?*c.SDL_GPUCommandBuffer = null,
 swapchain_texture: ?*c.SDL_GPUTexture = null,
 current_render_target: ?*BackendTextureTarget = null,
@@ -537,7 +539,6 @@ pub fn init(window: *c.SDL_Window, device: *c.SDL_GPUDevice, allocator: std.mem.
     var back = SDLBackend{
         .window = window,
         .device = device,
-        .pipeline = undefined,
         .textures_arena = std.heap.ArenaAllocator.init(allocator),
     };
     back.detectShaderFormat();
@@ -678,6 +679,7 @@ pub fn createPipeline(self: *SDLBackend) !void {
 
     // Get swapchain texture format
     const swapchain_format = c.SDL_GetGPUSwapchainTextureFormat(self.device, self.window);
+    log.err("swapchain format: {d}", .{swapchain_format});
 
     // Create color target description
     var color_target = std.mem.zeroes(c.SDL_GPUColorTargetDescription);
@@ -719,7 +721,13 @@ pub fn createPipeline(self: *SDLBackend) !void {
     };
 
     // Create the pipeline
-    self.pipeline = c.SDL_CreateGPUGraphicsPipeline(self.device, &pipeline_info) orelse {
+    self.swapchain_pipeline = c.SDL_CreateGPUGraphicsPipeline(self.device, &pipeline_info) orelse {
+        log.err("Failed to create graphics pipeline: {s}", .{c.SDL_GetError()});
+        return error.PipelineCreationFailed;
+    };
+
+    color_target.format = c.SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    self.rendertarget_pipeline = c.SDL_CreateGPUGraphicsPipeline(self.device, &pipeline_info) orelse {
         log.err("Failed to create graphics pipeline: {s}", .{c.SDL_GetError()});
         return error.PipelineCreationFailed;
     };
@@ -985,7 +993,8 @@ pub fn deinit(self: *SDLBackend) void {
 
     if (self.we_own_window) {
         // Release GPU resources
-        c.SDL_ReleaseGPUGraphicsPipeline(self.device, self.pipeline);
+        c.SDL_ReleaseGPUGraphicsPipeline(self.device, self.swapchain_pipeline);
+        c.SDL_ReleaseGPUGraphicsPipeline(self.device, self.rendertarget_pipeline);
 
         c.SDL_DestroyGPUDevice(self.device);
         c.SDL_DestroyWindow(self.window);
@@ -1047,6 +1056,12 @@ pub fn preferredColorScheme(_: *SDLBackend) ?dvui.enums.ColorScheme {
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
     self.frame_uploads.reset();
+    if (self.cmd != null) {
+        self.external_cmdbuffer = true;
+        return;
+    }
+
+    self.external_cmdbuffer = false;
 
     // Acquire command buffer for this frame
     self.cmd = c.SDL_AcquireGPUCommandBuffer(self.device);
@@ -1092,7 +1107,7 @@ pub fn finishRenderingCurrentTarget(self: *SDLBackend, final: bool) !void {
     var color_target = std.mem.zeroes(c.SDL_GPUColorTargetInfo);
     color_target.texture = if (self.current_render_target == null) self.swapchain_texture else self.current_render_target.?.texture;
     color_target.clear_color = .{ .r = 0.0, .g = 0.0, .b = 0.0, .a = if (self.current_render_target == null) 1.0 else 0.0 };
-    color_target.load_op = c.SDL_GPU_LOADOP_CLEAR;
+    color_target.load_op = if (self.current_render_target == null) c.SDL_GPU_LOADOP_LOAD else c.SDL_GPU_LOADOP_CLEAR;
     color_target.store_op = c.SDL_GPU_STOREOP_STORE;
 
     self.current_render_pass = c.SDL_BeginGPURenderPass(self.cmd.?, &color_target, 1, null);
@@ -1105,7 +1120,11 @@ pub fn finishRenderingCurrentTarget(self: *SDLBackend, final: bool) !void {
     var vertexBuffer: c.SDL_GPUBufferBinding = .{ .buffer = self.frame_uploads.vertex.buffer, .offset = 0 };
     var indexBuffer: c.SDL_GPUBufferBinding = .{ .buffer = self.frame_uploads.index.buffer, .offset = 0 };
 
-    c.SDL_BindGPUGraphicsPipeline(self.current_render_pass, self.pipeline);
+    if (self.current_render_target == null) {
+        c.SDL_BindGPUGraphicsPipeline(self.current_render_pass, self.swapchain_pipeline);
+    } else {
+        c.SDL_BindGPUGraphicsPipeline(self.current_render_pass, self.rendertarget_pipeline);
+    }
     c.SDL_BindGPUVertexBuffers(self.current_render_pass, 0, &vertexBuffer, 1);
     c.SDL_BindGPUIndexBuffer(self.current_render_pass, &indexBuffer, c.SDL_GPU_INDEXELEMENTSIZE_16BIT);
 
@@ -1146,16 +1165,17 @@ pub fn end(self: *SDLBackend) !void {
 }
 
 pub fn renderPresent(self: *SDLBackend) !void {
-    if (self.cmd != null) {
+    if (self.cmd != null and self.external_cmdbuffer == false) {
         // Submit the command buffer
         const submitted = c.SDL_SubmitGPUCommandBuffer(self.cmd);
         if (!submitted) {
             log.err("Failed to submit GPU command buffer: {s}", .{c.SDL_GetError()});
             return error.CommandBufferSubmissionFailed;
         }
-        self.cmd = null;
-        self.swapchain_texture = null;
     }
+    self.external_cmdbuffer = false;
+    self.cmd = null;
+    self.swapchain_texture = null;
 }
 
 pub fn pixelSize(self: *SDLBackend) dvui.Size.Physical {
