@@ -6,6 +6,7 @@ const Font = dvui.Font;
 const Rect = dvui.Rect;
 const Size = dvui.Size;
 const Theme = dvui.Theme;
+const Ninepatch = dvui.Ninepatch;
 
 const Options = @This();
 
@@ -59,6 +60,10 @@ color_text: ?Color = null,
 color_text_hover: ?Color = null,
 color_text_press: ?Color = null,
 color_border: ?Color = null,
+
+ninepatch_fill: ?Ninepatch = null,
+ninepatch_hover: ?Ninepatch = null,
+ninepatch_press: ?Ninepatch = null,
 
 // If a color above is null, source it from this style (if null, .content) in the theme.
 style: ?Theme.Style.Name = null,
@@ -232,6 +237,24 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
     } orelse self.themeGet().color(self.styleGet(), ask);
 }
 
+/// All the colors you can ask Options for
+pub const NinepatchAsk = enum {
+    ninepatch_fill,
+    ninepatch_hover,
+    ninepatch_press,
+};
+
+pub fn ninepatch(self: *const Options, ask: NinepatchAsk) ?Ninepatch {
+    const np_opt = switch (ask) {
+        .ninepatch_fill => self.ninepatch_fill,
+        .ninepatch_hover => self.ninepatch_hover orelse self.ninepatch_fill,
+        .ninepatch_press => self.ninepatch_press orelse self.ninepatch_fill,
+    };
+    if (np_opt) |np| return np;
+    const npsrc = self.themeGet().ninepatch(self.styleGet(), ask) orelse return null;
+    return npsrc.getNinepatch() catch return null;
+}
+
 pub fn fontGet(self: *const Options) Font {
     if (self.font) |ff| {
         return ff;
@@ -274,6 +297,22 @@ pub fn backgroundGet(self: *const Options) bool {
     return self.background orelse false;
 }
 
+pub fn backgroundSize(self: *const Options) ?Size {
+    if (!self.backgroundGet()) return null;
+
+    var min_size = Size{};
+    if (self.ninepatch(.ninepatch_fill)) |np| {
+        min_size = min_size.max(np.minSize());
+    }
+    if (self.ninepatch(.ninepatch_hover)) |np| {
+        min_size = min_size.max(np.minSize());
+    }
+    if (self.ninepatch(.ninepatch_press)) |np| {
+        min_size = min_size.max(np.minSize());
+    }
+    return min_size;
+}
+
 pub fn paddingGet(self: *const Options) Rect {
     return self.padding orelse Rect{};
 }
@@ -287,7 +326,7 @@ pub fn min_sizeGet(self: *const Options) Size {
 }
 
 pub fn min_size_contentGet(self: *const Options) Size {
-    return self.min_size_content orelse Size{};
+    return self.min_size_content orelse self.backgroundSize() orelse Size{};
 }
 
 pub fn max_sizeGet(self: *const Options) Size {
@@ -327,6 +366,10 @@ pub fn styleOnly(self: *const Options) Options {
         .color_text_hover = self.color_text_hover,
         .color_text_press = self.color_text_press,
         .color_border = self.color_border,
+
+        .ninepatch_fill = self.ninepatch_fill,
+        .ninepatch_hover = self.ninepatch_hover,
+        .ninepatch_press = self.ninepatch_press,
 
         .font = self.font,
         .font_style = self.font_style,
