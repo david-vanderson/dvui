@@ -450,7 +450,7 @@ pub const PMAImage = struct {
             .width = height,
             .height = height,
         };
-        var fb = std.io.fixedBufferStream(tvg_bytes);
+        var fb: std.Io.Reader = .fixed(tvg_bytes);
 
         var ow_stroke: ?tvg.Color = null;
         if (icon_opts.stroke_color) |cx| ow_stroke = ImageAdapter.conv(cx);
@@ -458,7 +458,7 @@ pub const PMAImage = struct {
         var disable_fill = false;
         if (ow_fill != null and ow_fill.?.a == 0.0) disable_fill = true;
         if (icon_opts.fill_color) |cx| ow_fill = ImageAdapter.conv(cx);
-        tvg.renderStream(render_alloc, &img, fb.reader(), .{
+        tvg.renderStream(render_alloc, &img, &fb, .{
             .overwrite_stroke_width = icon_opts.stroke_width,
             .overwrite_stroke = ow_stroke,
             .overwrite_fill = ow_fill,

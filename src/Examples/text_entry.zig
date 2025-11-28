@@ -343,7 +343,10 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
                             break :blk null;
                         };
                         if (file) |f| {
-                            bytes = f.deprecatedReader().readAllAlloc(dvui.currentWindow().gpa, 30_000_000) catch null;
+                            var buf: [500]u8 = undefined;
+                            var reader = f.reader(dvui.currentWindow().io, &buf);
+                            var iface = &reader.interface;
+                            bytes = iface.allocRemaining(dvui.currentWindow().gpa, .limited(30_000_000)) catch null;
                         }
                     }
 

@@ -120,7 +120,7 @@ pub fn plots() void {
                 if (maybe_path) |path| blk: {
                     defer dvui.currentWindow().lifo().free(path);
 
-                    var file = std.fs.createFileAbsoluteZ(path, .{}) catch |err| {
+                    var file = std.fs.createFileAbsolute(path, .{}) catch |err| {
                         dvui.log.debug("Failed to create file {s}, got {any}", .{ path, err });
                         dvui.toast(@src(), .{ .message = "Failed to create file" });
                         break :blk;
