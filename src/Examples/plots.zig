@@ -170,7 +170,7 @@ pub fn plots() void {
                 .max = 10,
                 .ticks = .{
                     .locations = .{
-                        .auto = .{ .num_ticks = 6 },
+                        .auto = .{ .tick_num_suggestion = 10 },
                     },
                 },
             };
@@ -241,7 +241,7 @@ pub fn plots() void {
                 .name = "Value",
                 .ticks = .{
                     .locations = .{
-                        .auto = .{ .num_ticks = 9 },
+                        .auto = .{ .tick_num_suggestion = 9 },
                     },
                 },
                 .min = -2,
@@ -252,7 +252,7 @@ pub fn plots() void {
                 .name = "Count",
                 .ticks = .{
                     .locations = .{
-                        .auto = .{ .num_ticks = 6 },
+                        .auto = .{ .tick_num_suggestion = 6 },
                     },
                 },
                 .max = 0,

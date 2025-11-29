@@ -51,10 +51,11 @@ pub const Axis = struct {
         locations: union(TickLocatorType) {
             none,
             auto: struct {
-                num_ticks: usize,
+                tick_num_suggestion: usize = 5,
+                tick_num_max: usize = 20,
             },
             custom: []const f64,
-        } = .{ .auto = .{ .num_ticks = 3 } },
+        } = .{ .auto = .{} },
 
         lines: enum {
             none,
@@ -138,77 +139,110 @@ pub const Axis = struct {
         }
     }
 
-    pub fn getTicksLinear(self: *Axis, gpa: std.mem.Allocator, tick_count: usize) ![]f64 {
-        if (self.scale != .linear or tick_count == 0 or self.max == null or self.min == null)
-            return &.{};
+    // nice steps are 1, 2, 5, 10
+    fn niceStep(approx_step: f64) f64 {
+        const exp = std.math.floor(std.math.log10(approx_step));
+        const multiplier = std.math.pow(f64, 10, exp);
+        const mantissa = approx_step / multiplier;
+        // mantissa is [0, 10)
 
-        const min = self.min.?;
-        const max = self.max.?;
+        const nice_mantissa: f64 = if (mantissa < 1.5)
+            1
+        else if (mantissa < 3)
+            2
+        else if (mantissa < 7)
+            5
+        else
+            10;
+
+        return nice_mantissa * multiplier;
+    }
+
+    fn getTicksLinear(
+        gpa: std.mem.Allocator,
+        min: f64,
+        max: f64,
+        tick_num_suggestion: usize,
+        tick_num_max: usize,
+    ) ![]f64 {
+        if (tick_num_suggestion == 0 or tick_num_max == 0) return &.{};
+
+        const approximate_step = (max - min) / @as(f64, @floatFromInt(tick_num_suggestion));
+        const nice_step = niceStep(approximate_step);
+
+        const first_tick = std.math.ceil(min / nice_step) * nice_step;
+        const tick_count_best: usize = @intFromFloat(std.math.ceil((max - first_tick) / nice_step));
+
+        const tick_count = @min(tick_num_max, tick_count_best);
 
         var ticks = try gpa.alloc(f64, tick_count);
-
-        switch (tick_count) {
-            1 => ticks[0] = (min + max) / 2,
-            2 => {
-                ticks[0] = min;
-                ticks[1] = max;
-            },
-            else => |n| {
-                const span = max - min;
-                const step = span / @as(f64, @floatFromInt(n - 1));
-                for (0..n) |i| {
-                    ticks[i] = min + step * @as(f64, @floatFromInt(i));
-                }
-            },
+        for (0..tick_count) |i| {
+            const tick = first_tick + @as(f64, @floatFromInt(i)) * nice_step;
+            ticks[i] = tick;
         }
 
         return ticks;
     }
 
-    pub fn getTicksLog(self: *Axis, gpa: std.mem.Allocator, tick_count: usize) ![]f64 {
-        if (self.scale != .log or tick_count == 0 or self.max == null or self.min == null)
-            return &.{};
+    pub fn getTicksLog(
+        gpa: std.mem.Allocator,
+        base: f64,
+        min: f64,
+        max: f64,
+        tick_num_suggestion: usize,
+        tick_num_max: usize,
+    ) ![]f64 {
+        const first_tick_exp = std.math.ceil(std.math.log(f64, base, min));
+        const last_tick_exp = std.math.ceil(std.math.log(f64, base, max));
 
-        const base = self.scale.log.base;
+        const exp_range = last_tick_exp - first_tick_exp;
+        const step_raw = std.math.round(exp_range / @as(f64, @floatFromInt(tick_num_suggestion)));
+        // the exponent step is clamped to a maximum of 1
+        const step = @max(step_raw, 1);
 
-        const min = self.min.?;
-        const max = self.max.?;
-        if (min <= 0 or max <= 0) return &.{};
-
-        const min_log = std.math.log(f64, base, min);
-        const max_log = std.math.log(f64, base, max);
+        const tick_count = @min(
+            tick_num_max,
+            @as(usize, @intFromFloat(last_tick_exp - first_tick_exp + 1)),
+        );
 
         var ticks = try gpa.alloc(f64, tick_count);
-
-        switch (tick_count) {
-            1 => ticks[0] = std.math.pow(f64, base, (min_log + max_log) / 2),
-            2 => {
-                ticks[0] = min;
-                ticks[1] = max;
-            },
-            else => |n| {
-                const span = max_log - min_log;
-                const step = span / @as(f64, @floatFromInt(n - 1));
-                for (0..n) |i| {
-                    const exp = min_log + step * @as(f64, @floatFromInt(i));
-                    ticks[i] = std.math.pow(f64, base, exp);
-                }
-            },
+        for (0..tick_count) |i| {
+            const exp = first_tick_exp + @as(f64, @floatFromInt(i)) * step;
+            const tick = std.math.pow(f64, base, exp);
+            ticks[i] = tick;
         }
 
         return ticks;
     }
 
     pub fn getTicks(self: *Axis, gpa: std.mem.Allocator) !Ticks {
+        const empty = Ticks{
+            .locator_type = .none,
+            .values = &.{},
+        };
+
         switch (self.ticks.locations) {
-            .none => return Ticks{
-                .locator_type = .none,
-                .values = &.{},
-            },
+            .none => return empty,
             .auto => |auto_ticks| {
+                const min = self.min orelse return empty;
+                const max = self.max orelse return empty;
+
                 const values = try switch (self.scale) {
-                    .linear => self.getTicksLinear(gpa, auto_ticks.num_ticks),
-                    .log => self.getTicksLog(gpa, auto_ticks.num_ticks),
+                    .linear => getTicksLinear(
+                        gpa,
+                        min,
+                        max,
+                        auto_ticks.tick_num_suggestion,
+                        auto_ticks.tick_num_max,
+                    ),
+                    .log => |log_scale| getTicksLog(
+                        gpa,
+                        log_scale.base,
+                        min,
+                        max,
+                        auto_ticks.tick_num_suggestion,
+                        auto_ticks.tick_num_max,
+                    ),
                 };
 
                 return Ticks{
@@ -216,9 +250,11 @@ pub const Axis = struct {
                     .values = values,
                 };
             },
-            .custom => |ticks| return Ticks{
-                .locator_type = .custom,
-                .values = ticks,
+            .custom => |ticks| {
+                return Ticks{
+                    .locator_type = .custom,
+                    .values = ticks,
+                };
             },
         }
     }
