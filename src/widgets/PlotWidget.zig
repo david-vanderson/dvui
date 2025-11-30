@@ -651,6 +651,8 @@ fn drawTickline(
     tick_line_color: dvui.Color,
     gridline_color: ?dvui.Color,
 ) void {
+    if (tick_p.x < self.data_rs.r.x or tick_p.x > self.data_rs.r.x + self.data_rs.r.w) return;
+    if (tick_p.y < self.data_rs.r.y or tick_p.y > self.data_rs.r.y + self.data_rs.r.h) return;
     // these are the positions for ticks on the left or top
     const line_start, const line_end, const gridline_start, const gridline_end = switch (dir) {
         .horizontal => blk: {
