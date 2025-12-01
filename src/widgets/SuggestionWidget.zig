@@ -89,13 +89,15 @@ pub fn addChoiceLabel(self: *SuggestionWidget, label_str: []const u8) bool {
 
 pub fn addChoice(self: *SuggestionWidget) *MenuItemWidget {
     self.drop_mi = undefined; // Must be a non-null value for the `.?` bellow
-    self.drop_mi.?.init(@src(), .{ .highlight_only = true }, .{
+    var t = &(self.drop_mi.?);
+    t.init(@src(), .{ .highlight_only = true }, .{
         .role = .list_item,
         .label = .{ .label_widget = .next },
         .id_extra = self.drop_mi_index,
         .expand = .horizontal,
         .padding = .{},
     });
+    self.drop_mi = t.*; // Work around zig ReleaseFast issue
     self.drop_mi.?.processEvents();
     if (self.drop_mi.?.data().id == dvui.focusedWidgetId()) {
         self.selected_index = self.drop_mi_index;

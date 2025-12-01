@@ -279,11 +279,13 @@ pub const Branch = struct {
                 dvui.parentSet(self.widget());
 
                 self.floating_widget = undefined;
-                self.floating_widget.?.init(
+                var t = &(self.floating_widget.?);
+                t.init(
                     @src(),
                     .{ .mouse_events = false },
                     .{ .rect = Rect.fromPoint(.cast(topleft.toNatural())), .min_size_content = self.tree.branch_size },
                 );
+                self.floating_widget = t.*; // Work around zig ReleaseFast issue
             } else {
                 self.wd = WidgetData.init(self.wd.src, .{}, wrapOuter(self.options));
                 self.wd.register();
