@@ -70,6 +70,7 @@ pub fn build(b: *std.Build) !void {
     const libc_option = b.option(bool, "libc", "Use libc (default is backend specific)");
     const freetype_option = b.option(bool, "freetype", "Freetype (or stb_truetype if false) for font rendering (default is backend specific)");
     const tiny_file_dialogs_option = b.option(bool, "tiny-file-dialogs", "OS-native file dialogs (default is backend specific)");
+    const stb_image_option = b.option(bool, "stb-image", "Build stb_image (default is backend specific, some include stb_image)");
 
     // This option is triggered only if it involved with raylib backend of any kind
     var linux_display_backend: ?LinuxDisplayBackend = null;
@@ -136,6 +137,7 @@ pub fn build(b: *std.Build) !void {
         .freetype = freetype_option,
         .tiny_file_dialogs = tiny_file_dialogs_option,
         .linux_display_backend = linux_display_backend,
+        .stb_image = stb_image_option,
     };
 
     if (back_to_build) |backend| {
@@ -215,7 +217,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
     const optimize = dvui_opts.optimize;
     switch (backend) {
         .custom => {
-            dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false });
+            dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = false });
 
             // For export to users who are bringing their own backend.  Use in your build.zig:
             // const dvui_mod = dvui_dep.module("dvui");
@@ -240,7 +242,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             }
         },
         .testing => {
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true });
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true });
             const testing_mod = b.addModule("testing", .{
                 .root_source_file = b.path("src/backends/testing.zig"),
                 .target = target,
@@ -264,7 +266,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("testing-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .sdl2 => {
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true });
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true });
             const sdl_mod = b.addModule("sdl2", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
@@ -349,7 +351,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("sdl2-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .sdl3gpu => {
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true });
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true });
             const sdl_mod = b.addModule("sdl3", .{
                 .root_source_file = b.path("src/backends/sdl3gpu.zig"),
                 .target = target,
@@ -383,7 +385,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("sdl3gpu-ontop", b.path("examples/sdl3gpu-ontop.zig"), true, example_opts, dvui_opts);
         },
         .sdl3 => {
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true });
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true });
             const sdl_mod = b.addModule("sdl3", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
@@ -420,7 +422,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("sdl3-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .raylib => {
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true });
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false });
 
             const raylib_backend_mod = b.addModule("raylib", .{
                 .root_source_file = b.path("src/backends/raylib-c.zig"),
@@ -467,9 +469,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 }
             }
 
-            var dvui_opts_raylib = dvui_opts;
-            dvui_opts_raylib.add_stb_image = false;
-            const dvui_raylib = addDvuiModule("dvui_raylib", dvui_opts_raylib);
+            const dvui_raylib = addDvuiModule("dvui_raylib", dvui_opts);
             dvui_opts.addChecks(dvui_raylib, "dvui_raylib");
             if (test_dvui_and_app) {
                 dvui_opts.addTests(dvui_raylib, "dvui_raylib");
@@ -482,12 +482,12 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 .backend_mod = raylib_backend_mod,
             };
 
-            addExample("raylib-standalone", b.path("examples/raylib-standalone.zig"), true, example_opts, dvui_opts_raylib);
-            addExample("raylib-ontop", b.path("examples/raylib-ontop.zig"), true, example_opts, dvui_opts_raylib);
-            addExample("raylib-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts_raylib);
+            addExample("raylib-standalone", b.path("examples/raylib-standalone.zig"), true, example_opts, dvui_opts);
+            addExample("raylib-ontop", b.path("examples/raylib-ontop.zig"), true, example_opts, dvui_opts);
+            addExample("raylib-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .raylib_zig => {
-            dvui_opts.setDefaults(.{ .libc = dvui_opts_in.libc orelse true, .freetype = true, .tiny_file_dialogs = true });
+            dvui_opts.setDefaults(.{ .libc = dvui_opts_in.libc orelse true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false });
 
             const raylib_backend_mod = b.addModule("raylib_zig", .{
                 .root_source_file = b.path("src/backends/raylib-zig.zig"),
@@ -523,9 +523,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 raylib_backend_mod.addImport("zglfw", glfw.module("root"));
             }
 
-            var dvui_opts_raylib = dvui_opts;
-            dvui_opts_raylib.add_stb_image = false;
-            const dvui_raylib = addDvuiModule("dvui_raylib_zig", dvui_opts_raylib);
+            const dvui_raylib = addDvuiModule("dvui_raylib_zig", dvui_opts);
             dvui_opts.addChecks(dvui_raylib, "dvui_raylib_zig");
             if (test_dvui_and_app) {
                 dvui_opts.addTests(dvui_raylib, "dvui_raylib_zig");
@@ -538,12 +536,12 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 .backend_mod = raylib_backend_mod,
             };
 
-            addExample("raylib-zig-standalone", b.path("examples/raylib-zig-standalone.zig"), true, example_opts, dvui_opts_raylib);
-            addExample("raylib-zig-ontop", b.path("examples/raylib-zig-ontop.zig"), true, example_opts, dvui_opts_raylib);
-            addExample("raylib-zig-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts_raylib);
+            addExample("raylib-zig-standalone", b.path("examples/raylib-zig-standalone.zig"), true, example_opts, dvui_opts);
+            addExample("raylib-zig-ontop", b.path("examples/raylib-zig-ontop.zig"), true, example_opts, dvui_opts);
+            addExample("raylib-zig-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .dx11 => {
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true });
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true });
             if (target.result.os.tag == .windows) {
                 const dx11_mod = b.addModule("dx11", .{
                     .root_source_file = b.path("src/backends/dx11.zig"),
@@ -576,7 +574,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             }
         },
         .web => {
-            dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false });
+            dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = true });
             const export_symbol_names = &[_][]const u8{
                 "dvui_init",
                 "dvui_deinit",
@@ -621,10 +619,11 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                     .libc = false,
                     .freetype = false,
                     .tiny_file_dialogs = false,
+                    .stb_image = true,
                     // no tests or checks needed, they are check above in native build
                 };
 
-                wasm_dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false });
+                wasm_dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = true });
 
                 const web_mod_wasm = b.createModule(.{
                     .root_source_file = b.path("src/backends/web.zig"),
@@ -657,7 +656,6 @@ const DvuiModuleOptions = struct {
     check_step: ?*std.Build.Step = null,
     test_step: ?*std.Build.Step = null,
     test_filters: []const []const u8,
-    add_stb_image: bool = true,
     use_lld: ?bool = null,
     accesskit: AccesskitOptions = .off,
     build_options: *std.Build.Step.Options,
@@ -665,17 +663,20 @@ const DvuiModuleOptions = struct {
     tiny_file_dialogs: ?bool,
     freetype: ?bool,
     linux_display_backend: ?LinuxDisplayBackend = null,
+    stb_image: ?bool,
 
     pub const DefaultOptions = struct {
         libc: bool,
         freetype: bool,
         tiny_file_dialogs: bool,
+        stb_image: bool,
     };
 
     fn setDefaults(self: *@This(), defaults: DefaultOptions) void {
         self.libc = self.libc orelse defaults.libc;
         self.tiny_file_dialogs = self.tiny_file_dialogs orelse defaults.tiny_file_dialogs;
         self.freetype = self.freetype orelse defaults.freetype;
+        self.stb_image = self.stb_image orelse defaults.stb_image;
     }
 
     fn makeDefaults(self: *const @This()) *std.Build.Step.Options {
@@ -763,7 +764,7 @@ fn accessKitLibName(target: std.Build.ResolvedTarget) []const u8 {
     else "unsupported";
 }
 
-fn addDvuiModule(
+pub fn addDvuiModule(
     comptime name: []const u8,
     opts: DvuiModuleOptions,
 ) *std.Build.Module {
@@ -809,7 +810,8 @@ fn addDvuiModule(
     else
         &.{};
 
-    if (opts.add_stb_image) {
+    const stb_image = opts.stb_image orelse @panic("stb_image was null");
+    if (stb_image) {
         dvui_mod.addCSourceFiles(.{
             .files = &.{
                 stb_source ++ "stb_image_impl.c",
