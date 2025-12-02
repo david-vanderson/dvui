@@ -130,14 +130,12 @@ pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts:
     if (do_vbar) {
         // do the scrollbars first so that they still appear even if there's not enough space
         const overlay = self.init_opts.vertical_bar == .auto_overlay;
-        self.vbar = undefined; // Must be a non-null value for `.?` bellow
-        var t = &(self.vbar.?);
-        t.init(
+        self.vbar = @as(ScrollBarWidget, undefined); // Must be a non-null value for `.?` bellow
+        self.vbar.?.init(
             @src(),
             .{ .scroll_info = self.si, .focus_id = focus_target },
             self.hbox.data().options.strip().override(.{ .gravity_x = if (overlay) 0.999 else 1.0, .expand = .vertical }),
         );
-        self.vbar = t.*; // Work around zig ReleaseFast issue
         if (overlay) {
             self.vbar_grab = self.vbar.?.grab();
         } else {
@@ -151,14 +149,12 @@ pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts:
 
     if (do_hbar) {
         const overlay = self.init_opts.horizontal_bar == .auto_overlay;
-        self.hbar = undefined; // Must be a non-null value for `.?` bellow
-        var t = &(self.hbar.?);
-        t.init(
+        self.hbar = @as(ScrollBarWidget, undefined); // Must be a non-null value for `.?` bellow
+        self.hbar.?.init(
             @src(),
             .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target },
             self.hbox.data().options.strip().override(.{ .expand = .horizontal, .gravity_y = if (overlay) 0.999 else 1.0 }),
         );
-        self.hbar = t.*; // Work around zig ReleaseFast issue
         if (overlay) {
             self.hbar_grab = self.hbar.?.grab();
         } else {
@@ -169,10 +165,8 @@ pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts:
 
     if (init_opts.container) {
         const container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
-        self.scroll = undefined;
-        var t = &(self.scroll.?);
-        t.init(@src(), self.si, .{ .scroll_area = self, .lock_visible = self.init_opts.lock_visible, .frame_viewport = self.init_opts.frame_viewport, .process_events_after = self.init_opts.process_events_after }, container_opts);
-        self.scroll = t.*; // Work around zig ReleaseFast issue
+        self.scroll = @as(ScrollContainerWidget, undefined);
+        self.scroll.?.init(@src(), self.si, .{ .scroll_area = self, .lock_visible = self.init_opts.lock_visible, .frame_viewport = self.init_opts.frame_viewport, .process_events_after = self.init_opts.process_events_after }, container_opts);
 
         self.scroll.?.processEvents();
         self.scroll.?.processVelocity();

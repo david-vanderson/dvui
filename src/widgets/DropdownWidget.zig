@@ -124,10 +124,9 @@ pub fn dropped(self: *DropdownWidget) bool {
         // move drop up so selected entry is aligned
         from.y -= self.drop_adjust * s;
 
-        self.drop = undefined; // Needs to be a non-null value so `.?` bellow doesn't panic
+        self.drop = @as(FloatingMenuWidget, undefined); // Needs to be a non-null value so `.?` bellow doesn't panic
         var drop = &self.drop.?;
         drop.init(@src(), .{ .from = from, .avoid = .none }, .{ .role = .none, .min_size_content = .cast(r.size()) });
-        self.drop = drop.*; // Work around zig ReleaseFast issue
 
         self.drop_first_frame = dvui.firstFrame(drop.data().id);
 

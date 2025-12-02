@@ -627,9 +627,8 @@ pub fn totalWidth(self: *const GridWidget) f32 {
 
 fn headerScrollAreaCreate(self: *GridWidget) void {
     if (self.hscroll == null) {
-        self.hscroll = undefined;
-        var t = &(self.hscroll.?);
-        t.init(@src(), .{
+        self.hscroll = @as(ScrollAreaWidget, undefined);
+        self.hscroll.?.init(@src(), .{
             .horizontal_bar = .hide,
             .vertical_bar = .hide,
             .scroll_info = &self.hsi,
@@ -641,7 +640,6 @@ fn headerScrollAreaCreate(self: *GridWidget) void {
             .expand = .horizontal,
             .min_size_content = .{ .h = if (self.header_height > 0) self.header_height else self.last_header_height, .w = self.totalWidth() },
         });
-        self.hscroll = t.*; // Work around zig ReleaseFast issue
         if (!std.math.approxEqAbs(f32, self.header_height, self.last_header_height, 0.01)) {
             self.resizing = true;
         }
@@ -656,9 +654,8 @@ fn bodyScrollContainerCreate(self: *GridWidget) void {
     }
 
     if (self.bscroll == null) {
-        self.bscroll = undefined;
-        var t = &(self.bscroll.?); // Work around zig ReleaseFast issue
-        t.init(@src(), self.bsi, .{
+        self.bscroll = @as(ScrollContainerWidget, undefined);
+        self.bscroll.?.init(@src(), self.bsi, .{
             .scroll_area = &self.scroll,
             .frame_viewport = self.frame_viewport,
             .event_rect = self.scroll.data().borderRectScale().r,
@@ -667,7 +664,6 @@ fn bodyScrollContainerCreate(self: *GridWidget) void {
             .expand = .both,
             .background = false,
         });
-        self.bscroll = t.*;
         self.bscroll.?.processEvents();
         self.bscroll.?.processVelocity();
 
