@@ -49,9 +49,10 @@ pub fn plots() void {
                 .min = 0.05,
                 .max = 0.95,
                 .ticks = .{
-                    .lines = .one_side,
+                    .side = .left_or_top,
+                    .subticks = true,
                 },
-                .draw_gridlines = false,
+                .gridline_color = gridline_color,
             };
 
             var yaxis: dvui.PlotWidget.Axis = .{
@@ -59,9 +60,9 @@ pub fn plots() void {
                 // let plot figure out min
                 .max = 0.8,
                 .ticks = .{
-                    .lines = .mirrored,
+                    .side = .both,
                 },
-                .draw_gridlines = false,
+                .gridline_color = gridline_color,
             };
         };
 
@@ -146,8 +147,6 @@ pub fn plots() void {
     }
 
     {
-        const freqs = [_]f64{ 1, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8 };
-
         const S = struct {
             var resistance: f64 = 159;
             var capacitance: f64 = 1e-6;
@@ -156,13 +155,13 @@ pub fn plots() void {
                 .name = "Frequency",
                 .scale = .{ .log = .{} },
                 .ticks = .{
-                    .locations = .{
-                        .custom = &freqs,
-                    },
                     .format = .{
                         .custom = formatFrequency,
                     },
+                    .subticks = true,
                 },
+                .gridline_color = gridline_color,
+                .subtick_gridline_color = subtick_gridline_color,
             };
 
             var yaxis: dvui.PlotWidget.Axis = .{
@@ -170,9 +169,10 @@ pub fn plots() void {
                 .max = 10,
                 .ticks = .{
                     .locations = .{
-                        .auto = .{ .num_ticks = 6 },
+                        .auto = .{ .tick_num_suggestion = 10 },
                     },
                 },
+                .gridline_color = gridline_color,
             };
         };
 
@@ -241,7 +241,7 @@ pub fn plots() void {
                 .name = "Value",
                 .ticks = .{
                     .locations = .{
-                        .auto = .{ .num_ticks = 9 },
+                        .auto = .{ .tick_num_suggestion = 9 },
                     },
                 },
                 .min = -2,
@@ -252,7 +252,7 @@ pub fn plots() void {
                 .name = "Count",
                 .ticks = .{
                     .locations = .{
-                        .auto = .{ .num_ticks = 6 },
+                        .auto = .{ .tick_num_suggestion = 6 },
                     },
                 },
                 .max = 0,
@@ -337,8 +337,13 @@ fn formatFrequency(gpa: std.mem.Allocator, freq: f64) ![]const u8 {
         return try std.fmt.allocPrint(gpa, "{d:.0} kHz", .{val / 1e3});
     } else if (rounded_exp < 9) {
         return try std.fmt.allocPrint(gpa, "{d:.0} MHz", .{val / 1e6});
-    } else unreachable;
+    } else {
+        return try std.fmt.allocPrint(gpa, "{d:.0} GHz", .{val / 1e9});
+    }
 }
+
+const gridline_color = dvui.Color.fromHSLuv(0, 0, 50, 90);
+const subtick_gridline_color = dvui.Color.fromHSLuv(0, 0, 30, 70);
 
 test {
     @import("std").testing.refAllDecls(@This());

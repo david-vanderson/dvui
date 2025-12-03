@@ -18,6 +18,8 @@ const show_demo = false;
 var window: *c.SDL_Window = undefined;
 var device: *c.SDL_GPUDevice = undefined;
 
+const log = std.log.scoped(.SDL3GPUBackend);
+
 /// This example shows how to use dvui for floating windows on top of an existing application
 /// - dvui renders only floating windows
 /// - framerate is managed by application, not dvui
@@ -44,6 +46,24 @@ pub fn main() !void {
     defer win.deinit();
 
     main_loop: while (true) {
+        const cmd = c.SDL_AcquireGPUCommandBuffer(backend.device);
+        var swapchain_texture: ?*c.SDL_GPUTexture = null;
+
+        // Acquire swapchain texture for this frame
+        var swapchain_w: u32 = 0;
+        var swapchain_h: u32 = 0;
+        if (!c.SDL_WaitAndAcquireGPUSwapchainTexture(cmd, backend.window, &swapchain_texture, &swapchain_w, &swapchain_h)) {
+            log.err("Failed to acquire swapchain texture: {s}", .{c.SDL_GetError()});
+            _ = c.SDL_SubmitGPUCommandBuffer(cmd);
+            backend.cmd = null;
+            backend.swapchain_texture = null;
+            return;
+        }
+
+        // acquire the command buffer and loan it to the backend
+        // if cmd is set before calling begin() we are responsible for submitting it
+        backend.cmd = cmd;
+        backend.swapchain_texture = swapchain_texture;
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(std.time.nanoTimestamp());
@@ -80,6 +100,14 @@ pub fn main() !void {
         }
 
         // clear the window
+        var color_target = std.mem.zeroes(c.SDL_GPUColorTargetInfo);
+        color_target.texture = backend.swapchain_texture;
+        color_target.clear_color = .{ .r = 0.0, .g = 0.0, .b = 0.0, .a = 1.0 };
+        color_target.load_op = c.SDL_GPU_LOADOP_CLEAR;
+        color_target.store_op = c.SDL_GPU_STOREOP_STORE;
+
+        const clearPass = c.SDL_BeginGPURenderPass(backend.cmd, &color_target, 1, null);
+        c.SDL_EndGPURenderPass(clearPass);
 
         // draw hello-triangle with sdl-gpu
 
@@ -101,6 +129,13 @@ pub fn main() !void {
 
         // render frame to OS
         try backend.renderPresent();
+
+        // its still on us to issue the submit and present
+        const submitted = c.SDL_SubmitGPUCommandBuffer(cmd);
+        if (!submitted) {
+            log.err("Failed to submit GPU command buffer: {s}", .{c.SDL_GetError()});
+            return error.CommandBufferSubmissionFailed;
+        }
     }
 }
 
