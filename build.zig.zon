@@ -6,8 +6,8 @@
     .paths = .{""},
     .dependencies = .{
         .sdl = .{
-            .url = "git+https://github.com/allyourcodebase/SDL#d29847ebcb6da34dec466a06163431982500a092",
-            .hash = "SDL-2.32.6-JToi38aTEgECY2mV9iUG7dNouCbarfJ1mkzjjm53gC80",
+            .url = "git+https://github.com/david-vanderson/SDL#9f55441191309f398ee9dd05f79204804534c82c",
+            .hash = "SDL-2.32.10-JToi3_20EgHNDvChM7oxZdyt0EDIHI9P-hwA4EntHLXY",
             .lazy = true,
         },
         .sdl3 = .{
@@ -39,8 +39,8 @@
         },
         // for rendering tvg icons
         .svg2tvg = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-svg2tvg#78797970be3d676a9087696ec36d6f29a522b580",
-            .hash = "svg2tvg-0.0.0-HpMZuWZ3BgApRrFbd9CxtabLoXEA5odBFUDFrDqno8Ih",
+            .url = "git+https://github.com/nat3Github/zig-lib-svg2tvg#511c7b43e17e9a077336c770c1f8bb0d3693dfa4",
+            .hash = "svg2tvg-0.0.0-HpMZuSJ3BgCojnf5v2kA97C8TZCJwaIiaKjGb3Wwrs1j",
         },
         .accesskit = .{
             .url = "https://github.com/AccessKit/accesskit-c/releases/download/0.17.1/accesskit-c-0.17.1.zip",
