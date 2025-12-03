@@ -284,7 +284,7 @@ pub const Reorderable = struct {
                 self.data().register();
                 dvui.parentSet(self.widget());
 
-                self.floating_widget = undefined;
+                self.floating_widget = @as(dvui.FloatingWidget, undefined);
                 self.floating_widget.?.init(@src(), .{ .mouse_events = false }, .{ .rect = Rect.fromPoint(.cast(topleft.toNatural())), .min_size_content = self.reorder.reorderable_size });
             } else {
                 if (self.init_options.last_slot) {

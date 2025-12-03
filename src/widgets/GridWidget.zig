@@ -627,7 +627,7 @@ pub fn totalWidth(self: *const GridWidget) f32 {
 
 fn headerScrollAreaCreate(self: *GridWidget) void {
     if (self.hscroll == null) {
-        self.hscroll = undefined;
+        self.hscroll = @as(ScrollAreaWidget, undefined);
         self.hscroll.?.init(@src(), .{
             .horizontal_bar = .hide,
             .vertical_bar = .hide,
@@ -654,7 +654,7 @@ fn bodyScrollContainerCreate(self: *GridWidget) void {
     }
 
     if (self.bscroll == null) {
-        self.bscroll = undefined;
+        self.bscroll = @as(ScrollContainerWidget, undefined);
         self.bscroll.?.init(@src(), self.bsi, .{
             .scroll_area = &self.scroll,
             .frame_viewport = self.frame_viewport,

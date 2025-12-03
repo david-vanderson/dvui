@@ -51,23 +51,31 @@ pub const Axis = struct {
         locations: union(TickLocatorType) {
             none,
             auto: struct {
-                num_ticks: usize,
+                tick_num_suggestion: usize = 5,
+                tick_num_max: usize = 20,
             },
             custom: []const f64,
-        } = .{ .auto = .{ .num_ticks = 3 } },
+        } = .{ .auto = .{} },
 
-        lines: enum {
-            none,
-            one_side,
-            mirrored,
-        } = .mirrored,
+        side: TicklinesSide = .both,
 
         // if null it uses the default for `scale`
         format: ?TickFormating = null,
+
+        subticks: bool = false,
     } = .{},
 
-    // only relevant if `ticks` != none
-    draw_gridlines: bool = true,
+    // only relevant if `ticks.locations` != none
+    // if null the gridlines are not rendered
+    gridline_color: ?dvui.Color = null,
+    subtick_gridline_color: ?dvui.Color = null,
+
+    pub const TicklinesSide = enum {
+        none,
+        left_or_top,
+        right_or_bottom,
+        both,
+    };
 
     pub const TickLocatorType = enum {
         none,
@@ -78,15 +86,23 @@ pub const Axis = struct {
     pub const Ticks = struct {
         locator_type: TickLocatorType,
         values: []const f64,
+        subticks: []const f64,
 
         fn deinit(self: *Ticks, gpa: std.mem.Allocator) void {
             switch (self.locator_type) {
                 .auto => {
                     gpa.free(self.values);
+                    gpa.free(self.subticks);
                 },
                 else => {},
             }
         }
+
+        const empty = Ticks{
+            .locator_type = .none,
+            .values = &.{},
+            .subticks = &.{},
+        };
     };
 
     pub const TickFormating = union(enum) {
@@ -138,87 +154,165 @@ pub const Axis = struct {
         }
     }
 
-    pub fn getTicksLinear(self: *Axis, gpa: std.mem.Allocator, tick_count: usize) ![]f64 {
-        if (self.scale != .linear or tick_count == 0 or self.max == null or self.min == null)
-            return &.{};
+    // nice steps are 1, 2, 5, 10
+    fn niceStep(approx_step: f64) f64 {
+        const exp = std.math.floor(std.math.log10(approx_step));
+        const multiplier = std.math.pow(f64, 10, exp);
+        const mantissa = approx_step / multiplier;
+        // mantissa is [0, 10)
 
-        const min = self.min.?;
-        const max = self.max.?;
+        const nice_mantissa: f64 = if (mantissa < 1.5)
+            1
+        else if (mantissa < 3)
+            2
+        else if (mantissa < 7)
+            5
+        else
+            10;
 
-        var ticks = try gpa.alloc(f64, tick_count);
-
-        switch (tick_count) {
-            1 => ticks[0] = (min + max) / 2,
-            2 => {
-                ticks[0] = min;
-                ticks[1] = max;
-            },
-            else => |n| {
-                const span = max - min;
-                const step = span / @as(f64, @floatFromInt(n - 1));
-                for (0..n) |i| {
-                    ticks[i] = min + step * @as(f64, @floatFromInt(i));
-                }
-            },
-        }
-
-        return ticks;
+        return nice_mantissa * multiplier;
     }
 
-    pub fn getTicksLog(self: *Axis, gpa: std.mem.Allocator, tick_count: usize) ![]f64 {
-        if (self.scale != .log or tick_count == 0 or self.max == null or self.min == null)
-            return &.{};
+    fn getTicksLinear(
+        gpa: std.mem.Allocator,
+        min: f64,
+        max: f64,
+        tick_num_suggestion: usize,
+        tick_num_max: usize,
+        calc_subticks: bool,
+    ) !Ticks {
+        if (tick_num_suggestion == 0 or tick_num_max == 0) return Ticks.empty;
 
-        const base = self.scale.log.base;
+        const approximate_step = (max - min) / @as(f64, @floatFromInt(tick_num_suggestion));
+        const nice_step = niceStep(approximate_step);
 
-        const min = self.min.?;
-        const max = self.max.?;
-        if (min <= 0 or max <= 0) return &.{};
+        const first_tick = std.math.ceil(min / nice_step) * nice_step;
+        const tick_count_best: usize = @intFromFloat(std.math.ceil((max - first_tick) / nice_step));
 
-        const min_log = std.math.log(f64, base, min);
-        const max_log = std.math.log(f64, base, max);
+        const tick_count = @min(tick_num_max, tick_count_best);
 
         var ticks = try gpa.alloc(f64, tick_count);
-
-        switch (tick_count) {
-            1 => ticks[0] = std.math.pow(f64, base, (min_log + max_log) / 2),
-            2 => {
-                ticks[0] = min;
-                ticks[1] = max;
-            },
-            else => |n| {
-                const span = max_log - min_log;
-                const step = span / @as(f64, @floatFromInt(n - 1));
-                for (0..n) |i| {
-                    const exp = min_log + step * @as(f64, @floatFromInt(i));
-                    ticks[i] = std.math.pow(f64, base, exp);
-                }
-            },
+        for (0..tick_count) |i| {
+            const tick = first_tick + @as(f64, @floatFromInt(i)) * nice_step;
+            ticks[i] = tick;
         }
 
-        return ticks;
+        const subticks = blk: {
+            if (calc_subticks) {
+                const subtick_count: usize = 3;
+                const subticks = try gpa.alloc(f64, (ticks.len + 1) * subtick_count);
+
+                for (0..ticks.len + 1) |i| {
+                    const tick = if (i == 0)
+                        ticks[0] - nice_step
+                    else
+                        ticks[i - 1];
+
+                    for (0..subtick_count) |j| {
+                        const ratio = @as(f64, @floatFromInt(1 + j)) / @as(f64, @floatFromInt(subtick_count + 1));
+                        const off: f64 = ratio * nice_step;
+                        subticks[i * subtick_count + j] = tick + off;
+                    }
+                }
+                break :blk subticks;
+            } else {
+                break :blk &.{};
+            }
+        };
+
+        return Ticks{
+            .locator_type = .auto,
+            .values = ticks,
+            .subticks = subticks,
+        };
+    }
+
+    fn getTicksLog(
+        gpa: std.mem.Allocator,
+        base: f64,
+        min: f64,
+        max: f64,
+        tick_num_suggestion: usize,
+        tick_num_max: usize,
+        calc_subticks: bool,
+    ) !Ticks {
+        const first_tick_exp = std.math.ceil(std.math.log(f64, base, min));
+        const last_tick_exp = std.math.floor(std.math.log(f64, base, max));
+
+        const exp_range = last_tick_exp - first_tick_exp;
+        const step_raw = std.math.round(exp_range / @as(f64, @floatFromInt(tick_num_suggestion)));
+        // the exponent step is clamped to a minimum of 1
+        const step = @max(step_raw, 1);
+
+        const tick_count = @min(
+            tick_num_max,
+            @as(usize, @intFromFloat(last_tick_exp - first_tick_exp)) + 1,
+        );
+
+        var ticks = try gpa.alloc(f64, tick_count);
+        for (0..tick_count) |i| {
+            const exp = first_tick_exp + @as(f64, @floatFromInt(i)) * step;
+            const tick = std.math.pow(f64, base, exp);
+            ticks[i] = tick;
+        }
+
+        const subticks = blk: {
+            if (calc_subticks) {
+                const subtick_count: usize = @intFromFloat(base - 2);
+                const subticks = try gpa.alloc(f64, ticks.len * subtick_count);
+
+                for (0.., ticks) |i, tick| {
+                    for (0..subtick_count) |j| {
+                        const multiplier: f64 = @floatFromInt(2 + j);
+                        subticks[i * subtick_count + j] = tick * multiplier;
+                    }
+                }
+                break :blk subticks;
+            } else {
+                break :blk &.{};
+            }
+        };
+
+        return Ticks{
+            .locator_type = .auto,
+            .values = ticks,
+            .subticks = subticks,
+        };
     }
 
     pub fn getTicks(self: *Axis, gpa: std.mem.Allocator) !Ticks {
         switch (self.ticks.locations) {
-            .none => return Ticks{
-                .locator_type = .none,
-                .values = &.{},
-            },
+            .none => return Ticks.empty,
             .auto => |auto_ticks| {
-                const values = try switch (self.scale) {
-                    .linear => self.getTicksLinear(gpa, auto_ticks.num_ticks),
-                    .log => self.getTicksLog(gpa, auto_ticks.num_ticks),
-                };
+                const min = self.min orelse return Ticks.empty;
+                const max = self.max orelse return Ticks.empty;
 
-                return Ticks{
-                    .locator_type = .auto,
-                    .values = values,
+                return switch (self.scale) {
+                    .linear => getTicksLinear(
+                        gpa,
+                        min,
+                        max,
+                        auto_ticks.tick_num_suggestion,
+                        auto_ticks.tick_num_max,
+                        self.ticks.subticks,
+                    ),
+                    .log => |log_scale| getTicksLog(
+                        gpa,
+                        log_scale.base,
+                        min,
+                        max,
+                        auto_ticks.tick_num_suggestion,
+                        auto_ticks.tick_num_max,
+                        self.ticks.subticks,
+                    ),
                 };
             },
-            .custom => |ticks| return Ticks{
-                .locator_type = .custom,
-                .values = ticks,
+            .custom => |ticks| {
+                return Ticks{
+                    .locator_type = .custom,
+                    .values = ticks,
+                    .subticks = &.{},
+                };
             },
         }
     }
@@ -319,16 +413,10 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
 
     const tick_font = (dvui.Options{ .font_style = .caption }).fontGet();
 
-    var yticks = self.y_axis.getTicks(dvui.currentWindow().lifo()) catch Axis.Ticks{
-        .locator_type = .none,
-        .values = &.{},
-    };
+    var yticks = self.y_axis.getTicks(dvui.currentWindow().lifo()) catch Axis.Ticks.empty;
     defer yticks.deinit(dvui.currentWindow().lifo());
 
-    var xticks = self.x_axis.getTicks(dvui.currentWindow().lifo()) catch Axis.Ticks{
-        .locator_type = .none,
-        .values = &.{},
-    };
+    var xticks = self.x_axis.getTicks(dvui.currentWindow().lifo()) catch Axis.Ticks.empty;
     defer xticks.deinit(dvui.currentWindow().lifo());
 
     const y_axis_tick_width: f32 = blk: {
@@ -451,6 +539,7 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
     hbox2.deinit();
 
     const tick_line_len = 5;
+    const subtick_line_len = 3;
 
     // y axis ticks
     if (self.y_axis.name) |_| {
@@ -461,58 +550,14 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
             const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
 
             const tick_p = self.dataToScreen(tick);
-
-            if (self.x_axis.draw_gridlines) {
-                dvui.Path.stroke(.{
-                    .points = &.{
-                        dvui.Point.Physical{
-                            .x = self.data_rs.r.x + tick_line_len,
-                            .y = tick_p.y,
-                        },
-                        dvui.Point.Physical{
-                            .x = self.data_rs.r.x + self.data_rs.r.w,
-                            .y = tick_p.y,
-                        },
-                    },
-                }, .{
-                    .color = dvui.Color.gray.opacity(0.6),
-                    .thickness = 1,
-                });
-            }
-
-            const points: []const dvui.Point.Physical = &.{
-                dvui.Point.Physical{
-                    .x = self.data_rs.r.x,
-                    .y = tick_p.y,
-                },
-                dvui.Point.Physical{
-                    .x = self.data_rs.r.x + tick_line_len,
-                    .y = tick_p.y,
-                },
-            };
-
-            switch (self.y_axis.ticks.lines) {
-                .none => {},
-                .one_side => {
-                    dvui.Path.stroke(.{ .points = points }, .{
-                        .color = bc,
-                        .thickness = 1,
-                    });
-                },
-                .mirrored => {
-                    const off = dvui.Point.Physical{ .x = self.data_rs.r.w - tick_line_len, .y = 0 };
-                    const other_side_points = &.{ points[0].plus(off), points[1].plus(off) };
-
-                    dvui.Path.stroke(.{ .points = points }, .{
-                        .color = bc,
-                        .thickness = 1,
-                    });
-                    dvui.Path.stroke(.{ .points = other_side_points }, .{
-                        .color = bc,
-                        .thickness = 1,
-                    });
-                },
-            }
+            self.drawTickline(
+                .vertical,
+                tick_p,
+                tick_line_len,
+                self.y_axis.ticks.side,
+                bc,
+                self.y_axis.gridline_color,
+            );
 
             var tick_label_p = tick_p;
             tick_label_p.x -= tick_str_size.w + pad;
@@ -528,6 +573,19 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
                 dvui.logError(@src(), err, "y axis tick text for {d}", .{ytick});
             };
         }
+
+        for (yticks.subticks) |ytick| {
+            const tick: Data = .{ .x = self.x_axis.min orelse 0, .y = ytick };
+            const tick_p = self.dataToScreen(tick);
+            self.drawTickline(
+                .vertical,
+                tick_p,
+                subtick_line_len,
+                self.y_axis.ticks.side,
+                bc,
+                self.y_axis.subtick_gridline_color,
+            );
+        }
     }
 
     // x axis ticks
@@ -539,58 +597,14 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
             const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
 
             const tick_p = self.dataToScreen(tick);
-
-            if (self.x_axis.draw_gridlines) {
-                dvui.Path.stroke(.{
-                    .points = &.{
-                        dvui.Point.Physical{
-                            .x = tick_p.x,
-                            .y = self.data_rs.r.y,
-                        },
-                        dvui.Point.Physical{
-                            .x = tick_p.x,
-                            .y = self.data_rs.r.y + self.data_rs.r.h - 5,
-                        },
-                    },
-                }, .{
-                    .color = dvui.Color.gray.opacity(0.6),
-                    .thickness = 1,
-                });
-            }
-
-            const points: []const dvui.Point.Physical = &.{
-                dvui.Point.Physical{
-                    .x = tick_p.x,
-                    .y = self.data_rs.r.y + self.data_rs.r.h,
-                },
-                dvui.Point.Physical{
-                    .x = tick_p.x,
-                    .y = self.data_rs.r.y + self.data_rs.r.h - 5,
-                },
-            };
-
-            switch (self.x_axis.ticks.lines) {
-                .none => {},
-                .one_side => {
-                    dvui.Path.stroke(.{ .points = points }, .{
-                        .color = bc,
-                        .thickness = 1,
-                    });
-                },
-                .mirrored => {
-                    const off = dvui.Point.Physical{ .x = 0, .y = -(self.data_rs.r.h - 5) };
-                    const other_side_points = &.{ points[0].plus(off), points[1].plus(off) };
-
-                    dvui.Path.stroke(.{ .points = points }, .{
-                        .color = bc,
-                        .thickness = 1,
-                    });
-                    dvui.Path.stroke(.{ .points = other_side_points }, .{
-                        .color = bc,
-                        .thickness = 1,
-                    });
-                },
-            }
+            self.drawTickline(
+                .horizontal,
+                tick_p,
+                tick_line_len,
+                self.x_axis.ticks.side,
+                bc,
+                self.x_axis.gridline_color,
+            );
 
             var tick_label_p = tick_p;
             tick_label_p.x -= tick_str_size.w / 2;
@@ -606,6 +620,19 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
                 dvui.logError(@src(), err, "x axis tick text for {d}", .{xtick});
             };
         }
+
+        for (xticks.subticks) |xtick| {
+            const tick: Data = .{ .x = xtick, .y = self.y_axis.min orelse 0 };
+            const tick_p = self.dataToScreen(tick);
+            self.drawTickline(
+                .horizontal,
+                tick_p,
+                subtick_line_len,
+                self.x_axis.ticks.side,
+                bc,
+                self.x_axis.subtick_gridline_color,
+            );
+        }
     }
 
     if (bt > 0) {
@@ -613,6 +640,111 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
     }
 
     self.old_clip = dvui.clip(self.data_rs.r);
+}
+
+fn drawTickline(
+    self: *PlotWidget,
+    dir: dvui.enums.Direction,
+    tick_p: dvui.Point.Physical,
+    tick_line_len: f32,
+    side: PlotWidget.Axis.TicklinesSide,
+    tick_line_color: dvui.Color,
+    gridline_color: ?dvui.Color,
+) void {
+    if (tick_p.x < self.data_rs.r.x or tick_p.x > self.data_rs.r.x + self.data_rs.r.w) return;
+    if (tick_p.y < self.data_rs.r.y or tick_p.y > self.data_rs.r.y + self.data_rs.r.h) return;
+    // these are the positions for ticks on the left or top
+    const line_start, const line_end, const gridline_start, const gridline_end = switch (dir) {
+        .horizontal => blk: {
+            const start = dvui.Point.Physical{
+                .x = tick_p.x,
+                .y = self.data_rs.r.y + self.data_rs.r.h - tick_line_len,
+            };
+            const end = dvui.Point.Physical{
+                .x = tick_p.x,
+                .y = self.data_rs.r.y + self.data_rs.r.h,
+            };
+
+            const gridline_start = dvui.Point.Physical{
+                .x = tick_p.x,
+                .y = self.data_rs.r.y,
+            };
+            const gridline_end = dvui.Point.Physical{
+                .x = tick_p.x,
+                .y = self.data_rs.r.y + self.data_rs.r.h,
+            };
+
+            break :blk .{ start, end, gridline_start, gridline_end };
+        },
+        .vertical => blk: {
+            const start = dvui.Point.Physical{
+                .x = self.data_rs.r.x,
+                .y = tick_p.y,
+            };
+            const end = dvui.Point.Physical{
+                .x = self.data_rs.r.x + tick_line_len,
+                .y = tick_p.y,
+            };
+
+            const gridline_start = dvui.Point.Physical{
+                .x = self.data_rs.r.x,
+                .y = tick_p.y,
+            };
+            const gridline_end = dvui.Point.Physical{
+                .x = self.data_rs.r.x + self.data_rs.r.w,
+                .y = tick_p.y,
+            };
+
+            break :blk .{ start, end, gridline_start, gridline_end };
+        },
+    };
+
+    if (gridline_color) |col| {
+        dvui.Path.stroke(.{
+            .points = &.{ gridline_start, gridline_end },
+        }, .{
+            .color = col,
+            .thickness = 1,
+        });
+    }
+
+    const left_or_top_pts: []const dvui.Point.Physical = &.{ line_start, line_end };
+
+    const off = switch (dir) {
+        .horizontal => dvui.Point.Physical{ .x = 0, .y = -(self.data_rs.r.h - tick_line_len) },
+        .vertical => dvui.Point.Physical{ .x = self.data_rs.r.w - tick_line_len, .y = 0 },
+    };
+
+    const right_or_bottom_pts: []const dvui.Point.Physical = &.{
+        left_or_top_pts[0].plus(off),
+        left_or_top_pts[1].plus(off),
+    };
+
+    switch (side) {
+        .none => {},
+        .left_or_top => {
+            dvui.Path.stroke(.{ .points = left_or_top_pts }, .{
+                .color = tick_line_color,
+                .thickness = 1,
+            });
+        },
+        .right_or_bottom => {
+            dvui.Path.stroke(.{ .points = right_or_bottom_pts }, .{
+                .color = tick_line_color,
+                .thickness = 1,
+            });
+        },
+        .both => {
+            dvui.Path.stroke(.{ .points = left_or_top_pts }, .{
+                .color = tick_line_color,
+                .thickness = 1,
+            });
+            dvui.Path.stroke(.{ .points = right_or_bottom_pts }, .{
+                .color = tick_line_color,
+                .thickness = 1,
+            });
+        },
+    }
 }
 
 pub fn line(self: *PlotWidget) Line {

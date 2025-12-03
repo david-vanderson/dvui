@@ -88,7 +88,7 @@ pub fn addChoiceLabel(self: *SuggestionWidget, label_str: []const u8) bool {
 }
 
 pub fn addChoice(self: *SuggestionWidget) *MenuItemWidget {
-    self.drop_mi = undefined; // Must be a non-null value for the `.?` bellow
+    self.drop_mi = @as(MenuItemWidget, undefined); // Must be a non-null value for the `.?` bellow
     self.drop_mi.?.init(@src(), .{ .highlight_only = true }, .{
         .role = .list_item,
         .label = .{ .label_widget = .next },

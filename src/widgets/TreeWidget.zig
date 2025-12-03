@@ -278,7 +278,7 @@ pub const Branch = struct {
                 self.data().register();
                 dvui.parentSet(self.widget());
 
-                self.floating_widget = undefined;
+                self.floating_widget = @as(dvui.FloatingWidget, undefined);
                 self.floating_widget.?.init(
                     @src(),
                     .{ .mouse_events = false },
