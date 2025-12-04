@@ -136,7 +136,7 @@ pub fn structUI() void {
     //dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
 
     if (dvui.expander(@src(), "Theme Editor:", .{}, .{ .expand = .horizontal })) {
-        themeEditor();
+        //themeEditor();
     }
 }
 

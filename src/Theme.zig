@@ -25,9 +25,9 @@ pub const Style = struct {
     fill: ?Color = null,
     fill_hover: ?Color = null,
     fill_press: ?Color = null,
-    ninepatch_fill: ?dvui.Ninepatch.Source = null,
-    ninepatch_hover: ?dvui.Ninepatch.Source = null,
-    ninepatch_press: ?dvui.Ninepatch.Source = null,
+    ninepatch_fill: ?dvui.Ninepatch = null,
+    ninepatch_hover: ?dvui.Ninepatch = null,
+    ninepatch_press: ?dvui.Ninepatch = null,
     text: ?Color = null,
     text_hover: ?Color = null,
     text_press: ?Color = null,
@@ -55,13 +55,13 @@ fill_hover: ?Color = null,
 fill_press: ?Color = null,
 
 /// ninepatch for .content Style, fallback for any Style without fill.
-ninepatch_fill: ?dvui.Ninepatch.Source = null,
+ninepatch_fill: ?dvui.Ninepatch = null,
 
 /// ninepatch when hovered for .content Style, fallback for any Style without fill.
-ninepatch_hover: ?dvui.Ninepatch.Source = null,
+ninepatch_hover: ?dvui.Ninepatch = null,
 
 /// ninepatch when pressed for .content Style, fallback for any Style without fill.
-ninepatch_press: ?dvui.Ninepatch.Source = null,
+ninepatch_press: ?dvui.Ninepatch = null,
 
 /// text color for .content Style, fallback for any Style without text.  Example is text in a textLayout or textEntry.  Also used as general foreground color like a checkmark or icon color.
 text: Color,
@@ -179,27 +179,27 @@ pub fn adjustColorForState(self: *const Theme, col: Color, ask: Options.ColorAsk
     });
 }
 
-pub fn ninepatch(self: *const Theme, style_name: Style.Name, ask: Options.NinepatchAsk) ?dvui.Ninepatch.Source {
-    const cs: Style = switch (style_name) {
-        .content => return switch (ask) {
-            .ninepatch_fill => self.ninepatch_fill,
-            .ninepatch_hover => self.ninepatch_hover,
-            .ninepatch_press => self.ninepatch_press,
+pub fn ninepatch(self: *const Theme, style_name: Style.Name, ask: Options.NinepatchAsk) ?*const dvui.Ninepatch {
+    const cs: *const Style = switch (style_name) {
+        .content => switch (ask) {
+            .ninepatch_fill => return if (self.ninepatch_fill) |*np| np else null,
+            .ninepatch_hover => return if (self.ninepatch_hover) |*np| np else null,
+            .ninepatch_press => return if (self.ninepatch_press) |*np| np else null,
         },
-        .control => self.control,
-        .window => self.window,
-        .highlight => self.highlight,
-        .err => self.err,
-        .app1 => self.app1,
-        .app2 => self.app2,
-        .app3 => self.app3,
+        .control => &self.control,
+        .window => &self.window,
+        .highlight => &self.highlight,
+        .err => &self.err,
+        .app1 => &self.app1,
+        .app2 => &self.app2,
+        .app3 => &self.app3,
     };
 
-    return switch (ask) {
-        .ninepatch_fill => cs.ninepatch_fill,
-        .ninepatch_hover => cs.ninepatch_hover,
-        .ninepatch_press => cs.ninepatch_press,
-    };
+    switch (ask) {
+        .ninepatch_fill => return if (cs.ninepatch_fill) |*np| np else null,
+        .ninepatch_hover => return if (cs.ninepatch_hover) |*np| np else null,
+        .ninepatch_press => return if (cs.ninepatch_press) |*np| np else null,
+    }
 }
 
 /// To pick between the built in themes, pass `&Theme.builtins` as the `themes` argument

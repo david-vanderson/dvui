@@ -61,9 +61,9 @@ color_text_hover: ?Color = null,
 color_text_press: ?Color = null,
 color_border: ?Color = null,
 
-ninepatch_fill: ?Ninepatch = null,
-ninepatch_hover: ?Ninepatch = null,
-ninepatch_press: ?Ninepatch = null,
+ninepatch_fill: ?*const Ninepatch = null,
+ninepatch_hover: ?*const Ninepatch = null,
+ninepatch_press: ?*const Ninepatch = null,
 
 // If a color above is null, source it from this style (if null, .content) in the theme.
 style: ?Theme.Style.Name = null,
@@ -244,15 +244,15 @@ pub const NinepatchAsk = enum {
     ninepatch_press,
 };
 
-pub fn ninepatch(self: *const Options, ask: NinepatchAsk) ?Ninepatch {
+pub fn ninepatch(self: *const Options, ask: NinepatchAsk) ?*const Ninepatch {
     const np_opt = switch (ask) {
         .ninepatch_fill => self.ninepatch_fill,
         .ninepatch_hover => self.ninepatch_hover orelse self.ninepatch_fill,
         .ninepatch_press => self.ninepatch_press orelse self.ninepatch_fill,
     };
     if (np_opt) |np| return np;
-    const npsrc = self.themeGet().ninepatch(self.styleGet(), ask) orelse return null;
-    return npsrc.getNinepatch() catch return null;
+
+    return self.themeGet().ninepatch(self.styleGet(), ask);
 }
 
 pub fn fontGet(self: *const Options) Font {

@@ -32,8 +32,8 @@ pub fn styling() void {
     {
         dvui.label(@src(), "Pass Theme Directly", .{}, .{});
 
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-        defer hbox.deinit();
+        var fbox = dvui.flexbox(@src(), .{}, .{});
+        defer fbox.deinit();
 
         for (dvui.Theme.builtins, 0..) |theme, i| {
             var buf: [100]u8 = undefined;
@@ -218,8 +218,8 @@ pub fn styling() void {
 
             var ninepatch = dvui.box(@src(), .{}, .{
                 .expand = .both,
-                .color_fill = .white,
-                .ninepatch_fill = dvui.Ninepatch.builtins.raised.getNinepatch() catch null,
+                .style = .control,
+                .ninepatch_fill = &dvui.Theme.builtin.win98.control.ninepatch_fill.?,
                 .background = true,
             });
             defer ninepatch.deinit();
