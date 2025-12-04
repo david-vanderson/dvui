@@ -425,7 +425,9 @@ pub const NinepatchOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptions) Backend.GenericError!void {
+    if (rs.s == 0) return;
     if (rs.r.empty()) return;
+    if (dvui.clipGet().intersect(rs.r).empty()) return;
 
     const tex = ninepatch.source.getTexture() catch |err| {
         dvui.log.err("renderNinepatch() got {any}", .{err});
@@ -586,16 +588,6 @@ pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptio
     try renderTexture(tex, rs_top_right, .{ .uv = ninepatch.uv.uv[2], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
     try renderTexture(tex, rs_bottom_left, .{ .uv = ninepatch.uv.uv[6], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
     try renderTexture(tex, rs_bottom_right, .{ .uv = ninepatch.uv.uv[8], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
-}
-
-/// Calls `renderNinepatch` with the texture created from `source`
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn renderNinepatchSource(patch: Ninepatch.Source, rs: RectScale, opts: NinepatchOptions) (Backend.TextureError || StbImageError)!void {
-    if (rs.s == 0) return;
-    if (dvui.clipGet().intersect(rs.r).empty()) return;
-    const np = try patch.getNinepatch();
-    try renderNinepatch(np, rs, opts);
 }
 
 const std = @import("std");

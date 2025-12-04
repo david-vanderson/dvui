@@ -297,22 +297,6 @@ pub fn backgroundGet(self: *const Options) bool {
     return self.background orelse false;
 }
 
-pub fn backgroundSize(self: *const Options) ?Size {
-    if (!self.backgroundGet()) return null;
-
-    var min_size = Size{};
-    if (self.ninepatch(.ninepatch_fill)) |np| {
-        min_size = min_size.max(np.minSize());
-    }
-    if (self.ninepatch(.ninepatch_hover)) |np| {
-        min_size = min_size.max(np.minSize());
-    }
-    if (self.ninepatch(.ninepatch_press)) |np| {
-        min_size = min_size.max(np.minSize());
-    }
-    return min_size;
-}
-
 pub fn paddingGet(self: *const Options) Rect {
     return self.padding orelse Rect{};
 }
@@ -326,7 +310,7 @@ pub fn min_sizeGet(self: *const Options) Size {
 }
 
 pub fn min_size_contentGet(self: *const Options) Size {
-    return self.min_size_content orelse self.backgroundSize() orelse Size{};
+    return self.min_size_content orelse Size{};
 }
 
 pub fn max_sizeGet(self: *const Options) Size {
