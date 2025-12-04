@@ -1,27 +1,16 @@
-pub const builtins = struct {
-    pub const raised = dvui.Ninepatch.Source{
-        .bytes = @embedFile("themes/raised.png"),
-        .name = "raised.png",
-        .uv = &UV.fromPixelInset(.all(2), .all(6)),
-        .interpolation = .nearest,
-    };
-    pub const sunken = dvui.Ninepatch.Source{
-        .bytes = @embedFile("themes/sunken.png"),
-        .name = "sunken.png",
-        .uv = &UV.fromPixelInset(.all(2), .all(6)),
-        .interpolation = .nearest,
-    };
-};
-
 const Ninepatch = @This();
 
-tex: Texture,
-uv: *const UV,
+source: Texture.ImageSource,
+uv: UV,
 
 pub fn size(this: *const @This(), patch: usize) Size {
+    const s = this.source.size() catch |err| blk: {
+        dvui.log.err("Ninepatch.size() {any}", .{err});
+        break :blk Size{ .w = 5, .h = 5 };
+    };
     return .{
-        .w = @as(f32, @floatFromInt(this.tex.width)) * this.uv.uv[patch].w,
-        .h = @as(f32, @floatFromInt(this.tex.height)) * this.uv.uv[patch].h,
+        .w = s.w * this.uv.uv[patch].w,
+        .h = s.h * this.uv.uv[patch].h,
     };
 }
 
@@ -99,25 +88,6 @@ pub const UV = struct {
             .{ .x = h[2], .y = v[2], .w = h[3] - h[2], .h = v[3] - v[2] },
         };
         return fromPixel(uv_px, texture_size);
-    }
-};
-
-pub const Source = struct {
-    bytes: []const u8,
-    name: []const u8,
-    uv: *const UV,
-    interpolation: TextureInterpolation = .linear,
-    invalidation: Texture.ImageSource.InvalidationStrategy = .ptr,
-
-    pub fn getNinepatch(patch: Source) !Ninepatch {
-        const texture_src = ImageSource{ .imageFile = .{
-            .bytes = patch.bytes,
-            .name = patch.name,
-            .interpolation = patch.interpolation,
-            .invalidation = patch.invalidation,
-        } };
-        const tex = try texture_src.getTexture();
-        return .{ .tex = tex, .uv = patch.uv };
     }
 };
 

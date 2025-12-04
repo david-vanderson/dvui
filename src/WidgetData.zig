@@ -177,7 +177,7 @@ pub fn visible(self: *const WidgetData) bool {
 
 pub fn borderAndBackground(self: *const WidgetData, opts: struct {
     fill_color: ?Color = null,
-    ninepatch: ?Ninepatch = null,
+    ninepatch: ?*const Ninepatch = null,
 }) void {
     if (!self.visible()) {
         return;
@@ -200,7 +200,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
             const rs = self.backgroundRectScale();
             const fill = opts.fill_color orelse self.options.color(.fill);
             const border = self.options.color(.border);
-            dvui.renderNinepatch(np, rs, .{ .colormod_fill = fill, .colormod_border = border }) catch |err| {
+            dvui.renderNinepatch(np.*, rs, .{ .colormod_fill = fill, .colormod_border = border }) catch |err| {
                 dvui.log.err("while drawing ninepatch: {}, {}", .{ err, rs });
             };
         }

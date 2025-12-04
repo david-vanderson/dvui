@@ -29,6 +29,24 @@ const dialog_gray_light = Color.fromHex("b5b5b5");
 
 const link_blue = Color.fromHex("0000ff");
 
+const raised = dvui.Ninepatch{
+    .source = .{ .imageFile = .{
+        .bytes = @embedFile("raised.png"),
+        .name = "raised.png",
+        .interpolation = .nearest,
+    } },
+    .uv = dvui.Ninepatch.UV.fromPixelInset(.all(2), .all(6)),
+};
+
+const sunken = dvui.Ninepatch{
+    .source = .{ .imageFile = .{
+        .bytes = @embedFile("sunken.png"),
+        .name = "sunken.png",
+        .interpolation = .nearest,
+    } },
+    .uv = dvui.Ninepatch.UV.fromPixelInset(.all(2), .all(6)),
+};
+
 pub const light = light: {
     @setEvalBranchQuota(3123);
     break :light Theme{
@@ -55,15 +73,15 @@ pub const light = light: {
         .max_default_corner_radius = 0.0,
 
         .control = .{
-            .ninepatch_fill = dvui.Ninepatch.builtins.raised,
-            .ninepatch_press = dvui.Ninepatch.builtins.sunken,
+            .ninepatch_fill = raised,
+            .ninepatch_press = sunken,
             .fill = surface,
             .fill_hover = surface,
             .fill_press = surface,
         },
         .window = .{
-            .ninepatch_fill = dvui.Ninepatch.builtins.raised,
-            .ninepatch_press = dvui.Ninepatch.builtins.sunken,
+            .ninepatch_fill = raised,
+            .ninepatch_press = sunken,
             .fill = .white,
             .fill_hover = .white,
             .fill_press = .white,
