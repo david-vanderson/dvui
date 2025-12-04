@@ -136,7 +136,7 @@ pub fn structUI() void {
     //dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
 
     if (dvui.expander(@src(), "Theme Editor:", .{}, .{ .expand = .horizontal })) {
-        //themeEditor();
+        themeEditor();
     }
 }
 
@@ -212,7 +212,7 @@ pub fn themeEditor() void {
         .g = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
         .b = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
     }, .{ .r = 127, .g = 127, .b = 127, .a = 255 });
-    const ninepatch_options: dvui.struct_ui.StructOptions(dvui.Ninepatch.Source) = .init(.{}, dvui.Ninepatch.builtins.raised);
+    const ninepatch_options: dvui.struct_ui.StructOptions(dvui.Ninepatch) = .init(.{}, dvui.Theme.builtin.win98.control.ninepatch_fill.?);
     const theme: *dvui.Theme = &dvui.currentWindow().theme; // Want a pointer to the actual theme, not a copy.
     if (dvui.struct_ui.displayStruct(
         @src(),
