@@ -133,9 +133,9 @@ pub fn scrolling() void {
     const fv = siMain.viewport.topLeft();
     const left_side_width = 80;
     {
-        var main_area = dvui.ScrollAreaWidget.init(@src(), .{ .scroll_info = siMain, .frame_viewport = fv }, .{ .expand = .both, .max_size_content = .height(300), .background = false });
+        var main_area: dvui.ScrollAreaWidget = undefined;
+        main_area.init(@src(), .{ .scroll_info = siMain, .frame_viewport = fv, .container = false }, .{ .expand = .both, .max_size_content = .height(300), .background = false });
         defer main_area.deinit();
-        main_area.installScrollBars();
 
         {
             var hboxTop = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
@@ -183,8 +183,8 @@ pub fn scrolling() void {
             _ = dvui.spacer(@src(), .{ .min_size_content = .all(10) });
 
             {
-                var scontainer = dvui.ScrollContainerWidget.init(@src(), siMain, .{ .scroll_area = &main_area, .frame_viewport = fv, .event_rect = main_area.data().borderRectScale().r }, .{ .style = .content, .expand = .both });
-                scontainer.install();
+                var scontainer: dvui.ScrollContainerWidget = undefined;
+                scontainer.init(@src(), siMain, .{ .scroll_area = &main_area, .frame_viewport = fv, .event_rect = main_area.data().borderRectScale().r }, .{ .style = .content, .expand = .both });
                 defer scontainer.deinit();
                 scontainer.processEvents();
                 scontainer.processVelocity();

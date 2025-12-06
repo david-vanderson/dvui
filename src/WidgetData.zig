@@ -25,7 +25,7 @@ options: Options,
 src: std.builtin.SourceLocation,
 rect_scale: ?RectScale = null,
 was_allocated_on_widget_stack: bool = false,
-ak_node: ?*dvui.AccessKit.Node = null,
+ak_node: if (dvui.accesskit_enabled) ?*dvui.AccessKit.Node else void = if (dvui.accesskit_enabled) null else {},
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
     const parent = dvui.parentGet();
@@ -62,8 +62,12 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
     };
 }
 
-pub fn register(self: *WidgetData) void {
+pub fn rectChanged(self: *WidgetData) void {
     self.rect_scale = self.rectScaleFromParent();
+}
+
+pub fn register(self: *WidgetData) void {
+    self.rectChanged();
 
     if (self.options.role) |role| {
         _ = dvui.currentWindow().accesskit.nodeCreate(self, role);

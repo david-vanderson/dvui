@@ -19,18 +19,18 @@ pub const InitOptions = struct {
     /// Whether mouse events can match this.  Set to false if this is a drag
     /// image (so the mouse release will match the window under this).
     mouse_events: bool = true,
+
+    /// If not null, intersect with the clipping rect, then move floating
+    /// widget above the top-right of it.
+    from: ?Rect.Natural = null,
 };
 
 init_opts: InitOptions,
-/// SAFETY: Set by `install`
 prev_rendering: bool = undefined,
 wd: WidgetData,
-/// SAFETY: Set by `install`
 prev_windowId: dvui.Id = undefined,
-/// SAFETY: Set by `install`
 prevClip: Rect.Physical = undefined,
 scale_val: f32,
-/// SAFETY: Set by `install`
 scaler: dvui.ScaleWidget = undefined,
 
 /// FloatingWidget is a subwindow to show any temporary floating thing.
@@ -42,13 +42,13 @@ scaler: dvui.ScaleWidget = undefined,
 ///
 /// Use FloatingWindowWidget for a floating window that the user can change
 /// size, move around, and adjust stacking.
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Options) FloatingWidget {
+pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Options) void {
     const scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale();
     var opts = opts_in;
     if (opts.min_size_content) |msc| {
         opts.min_size_content = msc.scale(scale_val, Size);
     }
-    return .{
+    self.* = .{
         // get scale from parent
         .scale_val = scale_val,
         .init_opts = init_opts,
@@ -59,9 +59,23 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Op
             .rect = opts.rect orelse .{},
         })),
     };
-}
 
-pub fn install(self: *FloatingWidget) void {
+    if (init_opts.from) |f| {
+        if (dvui.minSizeGet(self.data().id)) |_| {
+            const ms = dvui.minSize(self.data().id, opts.min_sizeGet());
+            const clip = dvui.windowRectScale().rectFromPhysical(dvui.clipGet());
+            const clipped = Rect.Natural.cast(clip).intersect(f);
+            var start: Rect = .fromPoint(.cast(clipped.topRight()));
+            start = start.toSize(ms);
+            start.x -= start.w;
+            start.y -= start.h + 2;
+            self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), .{}, .none, .cast(start)));
+        } else {
+            // need another frame to get our min size
+            dvui.refresh(null, @src(), self.data().id);
+        }
+    }
+
     self.prev_rendering = dvui.renderingSet(false);
     self.data().register();
 
@@ -83,8 +97,7 @@ pub fn install(self: *FloatingWidget) void {
     // clip to just our window (using clipSet since we are not inside our parent)
     _ = dvui.clip(rs.r);
 
-    self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
-    self.scaler.install();
+    self.scaler.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
 }
 
 pub fn widget(self: *FloatingWidget) Widget {

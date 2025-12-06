@@ -48,13 +48,13 @@ pub fn basicWidgets() void {
                     // blend text and control colors
                     color = dvui.Color.average(control_opts.color(.text), control_opts.color(.fill));
                 }
-                var bw = dvui.ButtonWidget.init(@src(), .{}, .{
+                var bw: dvui.ButtonWidget = undefined;
+                bw.init(@src(), .{}, .{
                     .color_text = color,
                     // If not enabled don't include in tab order (tab_index = 0). Otherwise use default tab index (tab_index = null).
                     .tab_index = if (checkbox_enabled) null else 0,
                 });
                 defer bw.deinit();
-                bw.install();
                 if (checkbox_enabled)
                     bw.processEvents();
                 bw.drawBackground();
@@ -287,6 +287,8 @@ pub fn basicWidgets() void {
         )) {
             icon_image_rotation = icon_image_rotation - 5 * std.math.pi / 180.0;
         }
+
+        dvui.label(@src(), "Weeeee!", .{}, .{ .gravity_y = 0.5, .rotation = icon_image_rotation });
     }
 }
 
@@ -301,12 +303,12 @@ pub fn dropdownAdvanced() void {
     theme.control.text_hover = dvui.Color.red;
     theme.highlight.text = dvui.Color.red;
 
-    var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = g.choice }, .{
+    var dd: dvui.DropdownWidget = undefined;
+    dd.init(@src(), .{ .selected_index = g.choice }, .{
         .min_size_content = .{ .w = 100 },
         .theme = &theme,
         .label = .{ .label_widget = .next },
     });
-    dd.install();
     defer dd.deinit();
 
     // Here's what is shown when the dropdown is not dropped

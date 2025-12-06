@@ -23,10 +23,10 @@ drag_ending: bool = false,
 reorderable_size: Size = .{},
 found_slot: bool = false,
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ReorderWidget {
+pub fn init(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const defaults = Options{ .name = "Reorder" };
     const wd = WidgetData.init(src, .{}, defaults.override(opts));
-    var self: ReorderWidget = .{
+    self.* = .{
         .wd = wd,
         .init_opts = init_opts,
         .id_reorderable = dvui.dataGet(null, wd.id, "_id_reorderable", usize),
@@ -39,10 +39,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         dvui.captureMouse(null, 0);
     }
 
-    return self;
-}
-
-pub fn install(self: *ReorderWidget) void {
     self.data().register();
     self.data().borderAndBackground(.{});
 
@@ -186,8 +182,8 @@ pub const draggableInitOptions = struct {
 };
 
 pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOptions, opts: dvui.Options) ?dvui.Point.Physical {
-    var iw = dvui.IconWidget.init(src, "reorder_drag_icon", init_opts.tvg_bytes orelse dvui.entypo.menu, .{}, opts);
-    iw.install();
+    var iw: dvui.IconWidget = undefined;
+    iw.init(src, "reorder_drag_icon", init_opts.tvg_bytes orelse dvui.entypo.menu, .{}, opts);
     var ret: ?dvui.Point.Physical = null;
     loop: for (dvui.events()) |*e| {
         if (!iw.matchEvent(e))
@@ -224,7 +220,7 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
 
 pub fn reorderable(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: Reorderable.InitOptions, opts: Options) *Reorderable {
     const ret = dvui.widgetAlloc(Reorderable);
-    ret.* = Reorderable.init(src, self, init_opts, opts);
+    ret.init(src, self, init_opts, opts);
     ret.init_options.was_allocated_on_widget_stack = true;
     ret.install();
     return ret;
@@ -258,10 +254,10 @@ pub const Reorderable = struct {
     floating_widget: ?dvui.FloatingWidget = null,
     target_rs: ?dvui.RectScale = null,
 
-    pub fn init(src: std.builtin.SourceLocation, reorder: *ReorderWidget, init_opts: Reorderable.InitOptions, opts: Options) Reorderable {
+    pub fn init(self: *Reorderable, src: std.builtin.SourceLocation, reorder: *ReorderWidget, init_opts: Reorderable.InitOptions, opts: Options) void {
         const defaults = Options{ .name = "Reorderable" };
         const options = defaults.override(opts);
-        return .{
+        self.* = .{
             .reorder = reorder,
             .init_options = init_opts,
             .options = options,
@@ -288,8 +284,8 @@ pub const Reorderable = struct {
                 self.data().register();
                 dvui.parentSet(self.widget());
 
-                self.floating_widget = dvui.FloatingWidget.init(@src(), .{ .mouse_events = false }, .{ .rect = Rect.fromPoint(.cast(topleft.toNatural())), .min_size_content = self.reorder.reorderable_size });
-                self.floating_widget.?.install();
+                self.floating_widget = @as(dvui.FloatingWidget, undefined);
+                self.floating_widget.?.init(@src(), .{ .mouse_events = false }, .{ .rect = Rect.fromPoint(.cast(topleft.toNatural())), .min_size_content = self.reorder.reorderable_size });
             } else {
                 if (self.init_options.last_slot) {
                     self.wd = WidgetData.init(self.data().src, .{}, self.options.override(.{ .min_size_content = self.reorder.reorderable_size }));

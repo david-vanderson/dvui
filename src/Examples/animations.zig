@@ -42,14 +42,15 @@ pub fn animations() void {
             var hbox2 = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 200 } });
             defer hbox2.deinit();
 
-            var button_wiggle = ButtonWidget.init(@src(), .{}, .{ .gravity_x = 0.5 });
+            var button_wiggle: ButtonWidget = undefined;
+            button_wiggle.init(@src(), .{}, .{ .gravity_x = 0.5 });
             defer button_wiggle.deinit();
 
             if (dvui.animationGet(button_wiggle.data().id, "xoffset")) |a| {
                 button_wiggle.data().rect.x += 20 * (1.0 - a.value()) * (1.0 - a.value()) * @sin(a.value() * std.math.pi * 50);
+                button_wiggle.data().rectChanged();
             }
 
-            button_wiggle.install();
             button_wiggle.processEvents();
             button_wiggle.drawBackground();
             dvui.labelNoFmt(@src(), "Wiggle", .{}, button_wiggle.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
@@ -70,8 +71,8 @@ pub fn animations() void {
         }
 
         if (animating_window_show) {
-            var win = animatingWindowRect(@src(), &animating_window_rect, &animating_window_show, &animating_window_closing, .{});
-            win.install();
+            var win: FloatingWindowWidget = undefined;
+            animatingWindowRect(&win, @src(), &animating_window_rect, &animating_window_show, &animating_window_closing, .{});
             win.processEventsBefore();
             win.drawBackground();
             defer win.deinit();
@@ -184,10 +185,10 @@ pub fn animations() void {
         const left = @as(i32, @intCast(@rem(millis, 1000)));
 
         {
-            var mslabel = dvui.LabelWidget.init(@src(), "{d:0>3} ms into second", .{@as(u32, @intCast(left))}, .{}, .{});
+            var mslabel: dvui.LabelWidget = undefined;
+            mslabel.init(@src(), "{d:0>3} ms into second", .{@as(u32, @intCast(left))}, .{}, .{});
             defer mslabel.deinit();
 
-            mslabel.install();
             mslabel.draw();
 
             if (dvui.timerDoneOrNone(mslabel.data().id)) {
@@ -197,9 +198,9 @@ pub fn animations() void {
         }
         dvui.label(@src(), "Estimate of frame overhead {d:6} us", .{dvui.currentWindow().loop_target_slop}, .{});
         switch (dvui.backend.kind) {
-            .sdl2, .sdl3 => dvui.label(@src(), "sdl: updated when not interrupted by event", .{}, .{}),
+            .sdl2, .sdl3, .sdl3gpu => dvui.label(@src(), "sdl: updated when not interrupted by event", .{}, .{}),
             .web => dvui.label(@src(), "web: updated when not interrupted by event", .{}, .{}),
-            .raylib => dvui.label(@src(), "raylib: only updated if non-null passed to waitTime", .{}, .{}),
+            .raylib, .raylib_zig => dvui.label(@src(), "raylib: only updated if non-null passed to waitTime", .{}, .{}),
             .dx11 => dvui.label(@src(), "dx11: only updated if non-null passed to waitTime", .{}, .{}),
             .sdl, .custom, .testing => {},
         }
@@ -246,11 +247,13 @@ pub fn animations() void {
     }
 }
 
-pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_flag: *bool, closing: *bool, opts: Options) FloatingWindowWidget {
+pub fn animatingWindowRect(fwin: *FloatingWindowWidget, src: std.builtin.SourceLocation, rect: *Rect, show_flag: *bool, closing: *bool, opts: Options) void {
     const fwin_id = dvui.parentGet().extendId(src, opts.idExtra());
 
     if (dvui.firstFrame(fwin_id)) {
-        dvui.animation(fwin_id, "rect_percent", .{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 300_000 });
+        // if we started at exactly zero, then the initial rect would have zero
+        // size which would trigger floatingWindow's autosize
+        dvui.animation(fwin_id, "rect_percent", .{ .start_val = 0.01, .end_val = 1.0, .start_time = 0, .end_time = 300_000 });
         dvui.dataSet(null, fwin_id, "size", rect.*.size());
     }
 
@@ -260,11 +263,12 @@ pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_fl
         dvui.dataSet(null, fwin_id, "size", rect.*.size());
     }
 
-    var fwin: FloatingWindowWidget = undefined;
-
     if (dvui.animationGet(fwin_id, "rect_percent")) |a| {
         if (dvui.dataGet(null, fwin_id, "size", Size)) |ss| {
-            var r = rect.*;
+            // just some storage that'll live past this function so
+            // FloatingWindowWidget can write back to it
+            var r = dvui.dataGetPtrDefault(null, fwin_id, "garbage", Rect, .{});
+            r.* = rect.*;
             const dw = ss.w * a.value();
             const dh = ss.h * a.value();
             r.x = r.x + (r.w / 2) - (dw / 2);
@@ -272,8 +276,8 @@ pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_fl
             r.y = r.y + (r.h / 2) - (dh / 2);
             r.h = dh;
 
-            // don't pass rect so our animating rect doesn't get saved back
-            fwin = FloatingWindowWidget.init(src, .{ .open_flag = show_flag }, opts.override(.{ .rect = r }));
+            // passing our "temporary" r instead of rect so our animating rect doesn't get saved back
+            fwin.init(src, .{ .rect = r, .open_flag = show_flag }, opts);
 
             if (a.done() and r.empty()) {
                 // done with closing animation
@@ -281,10 +285,8 @@ pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_fl
             }
         }
     } else {
-        fwin = FloatingWindowWidget.init(src, .{ .rect = rect, .open_flag = show_flag }, opts);
+        fwin.init(src, .{ .rect = rect, .open_flag = show_flag }, opts);
     }
-
-    return fwin;
 }
 
 const AnimatingDialog = struct {
@@ -299,7 +301,8 @@ const AnimatingDialog = struct {
         // once we record a response, refresh it until we close
         _ = dvui.dataGet(null, id, "response", enums.DialogResponse);
 
-        var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id.asUsize(), .max_size_content = .width(300) });
+        var win: FloatingWindowWidget = undefined;
+        win.init(@src(), .{ .modal = modal }, .{ .id_extra = id.asUsize(), .max_size_content = .width(300) });
 
         if (dvui.firstFrame(win.data().id)) {
             dvui.animation(win.data().id, "rect_percent", .{ .start_val = 0.0, .end_val = 1.0, .end_time = duration, .easing = easing });
@@ -332,7 +335,6 @@ const AnimatingDialog = struct {
             }
         }
 
-        win.install();
         defer win.deinit();
         win.processEventsBefore();
         win.drawBackground();

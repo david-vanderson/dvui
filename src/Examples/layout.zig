@@ -247,9 +247,7 @@ pub fn layout() void {
         const breakpoint: f32 = 400;
         const equal = dvui.parentGet().data().contentRect().w > breakpoint;
 
-        var hbox = dvui.BoxWidget.init(@src(), .{ .dir = .horizontal, .equal_space = equal, .num_packed_expanded = if (equal) 2 else 1 }, .{ .expand = .horizontal });
-        hbox.install();
-        hbox.drawBackground();
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal, .equal_space = equal, .num_packed_expanded = if (equal) 2 else 1 }, .{ .expand = .horizontal });
         defer hbox.deinit();
         {
             var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .min_size_content = .{ .w = breakpoint / 2, .h = 140 }, .max_size_content = .width(breakpoint / 2), .expand = if (equal) .horizontal else .none });

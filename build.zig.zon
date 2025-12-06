@@ -11,8 +11,8 @@
             .lazy = true,
         },
         .sdl3 = .{
-            .url = "git+https://github.com/david-vanderson/SDL#81ea86c805f69edc32795c6c83f5be020335ca96",
-            .hash = "sdl-0.2.6+3.2.20-7uIn9CEjfwEuULkL_SE91eY6mMfM8KBoFolexyZHWr76",
+            .url = "git+https://github.com/david-vanderson/SDL#2c5bd165a7bd647639cbf5f7edb899410d27b695",
+            .hash = "sdl-0.2.6+3.2.20-7uIn9FAjfwGon7V_xiNW1BXyq5ZzTOgPJSbRbybb-Fwz",
             .lazy = true,
         },
         .freetype = .{
@@ -45,6 +45,18 @@
         .accesskit = .{
             .url = "https://github.com/AccessKit/accesskit-c/releases/download/0.17.1/accesskit-c-0.17.1.zip",
             .hash = "N-V-__8AAJ37FAuEZXG593uEuYETrkoxDz78QLL32k0GkaYG",
+        },
+
+        // Experimental zig bindings, any zig based backend will be located here
+        .raylib_zig = .{
+            .url = "git+https://github.com/raylib-zig/raylib-zig?ref=devel#3cd4d3179d967fc8b931514603fdbc4a43a1d771",
+            .hash = "raylib_zig-5.6.0-dev-KE8REE1LBQCL7lia-DwUkusWI1G4kJmhtatLh2kNsuiE",
+            .lazy = true,
+        },
+        .zglfw = .{
+            .url = "git+https://github.com/zig-gamedev/zglfw.git#6034a5623312c58bf5e64c1a2b686691c28575f4",
+            .hash = "zglfw-0.10.0-dev-zgVDNPKyIQCBi-wv_vxkvIQq1u0bP4D56Wszx_2mszc7",
+            .lazy = true,
         },
     },
 }

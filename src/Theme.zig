@@ -222,12 +222,12 @@ pub fn picker(src: std.builtin.SourceLocation, themes: []const Theme, opts: Opti
         }
     } else null;
 
-    var dd = dvui.DropdownWidget.init(
+    var dd: dvui.DropdownWidget = undefined;
+    dd.init(
         src,
         .{ .selected_index = theme_choice, .label = current_theme_name },
         options,
     );
-    dd.install();
 
     if (dd.dropped()) {
         for (themes) |theme| {
