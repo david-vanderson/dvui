@@ -228,6 +228,7 @@ pub const RenderTextureOptions = render.TextureOptions;
 pub const renderTexture = render.renderTexture;
 pub const renderIcon = render.renderIcon;
 pub const renderImage = render.renderImage;
+pub const Ninepatch = render.Ninepatch;
 pub const RenderNinepatchOptions = render.NinepatchOptions;
 pub const renderNinepatch = render.renderNinepatch;
 pub const renderNinepatchSource = render.renderNinepatchSource;
@@ -237,7 +238,6 @@ pub const BasicLayout = layout.BasicLayout;
 pub const Alignment = layout.Alignment;
 pub const PlaceOnScreenAvoid = layout.PlaceOnScreenAvoid;
 pub const placeOnScreen = layout.placeOnScreen;
-pub const Ninepatch = @import("Ninepatch.zig");
 
 pub const Data = @import("Data.zig");
 

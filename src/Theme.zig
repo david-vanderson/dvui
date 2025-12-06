@@ -182,9 +182,9 @@ pub fn adjustColorForState(self: *const Theme, col: Color, ask: Options.ColorAsk
 pub fn ninepatch(self: *const Theme, style_name: Style.Name, ask: Options.NinepatchAsk) ?*const dvui.Ninepatch {
     const cs: *const Style = switch (style_name) {
         .content => switch (ask) {
-            .ninepatch_fill => return if (self.ninepatch_fill) |*np| np else null,
-            .ninepatch_hover => return if (self.ninepatch_hover) |*np| np else null,
-            .ninepatch_press => return if (self.ninepatch_press) |*np| np else null,
+            .fill => return if (self.ninepatch_fill) |*np| np else null,
+            .hover => return if (self.ninepatch_hover) |*np| np else null,
+            .press => return if (self.ninepatch_press) |*np| np else null,
         },
         .control => &self.control,
         .window => &self.window,
@@ -196,9 +196,9 @@ pub fn ninepatch(self: *const Theme, style_name: Style.Name, ask: Options.Ninepa
     };
 
     switch (ask) {
-        .ninepatch_fill => return if (cs.ninepatch_fill) |*np| np else null,
-        .ninepatch_hover => return if (cs.ninepatch_hover) |*np| np else null,
-        .ninepatch_press => return if (cs.ninepatch_press) |*np| np else null,
+        .fill => return if (cs.ninepatch_fill) |*np| np else null,
+        .hover => return if (cs.ninepatch_hover) |*np| np else null,
+        .press => return if (cs.ninepatch_press) |*np| np else null,
     }
 }
 

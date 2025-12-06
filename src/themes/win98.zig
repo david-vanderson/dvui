@@ -35,7 +35,7 @@ const raised = dvui.Ninepatch{
         .name = "raised.png",
         .interpolation = .nearest,
     } },
-    .uv = dvui.Ninepatch.UV.fromPixelInset(.all(2), .all(6)),
+    .edge = .all(2),
 };
 
 const sunken = dvui.Ninepatch{
@@ -44,7 +44,7 @@ const sunken = dvui.Ninepatch{
         .name = "sunken.png",
         .interpolation = .nearest,
     } },
-    .uv = dvui.Ninepatch.UV.fromPixelInset(.all(2), .all(6)),
+    .edge = .all(2),
 };
 
 pub const light = light: {
