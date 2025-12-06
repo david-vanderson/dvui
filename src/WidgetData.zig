@@ -2,6 +2,7 @@ const std = @import("std");
 const dvui = @import("dvui.zig");
 
 const Color = dvui.Color;
+const Ninepatch = dvui.Ninepatch;
 const Options = dvui.Options;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
@@ -178,7 +179,10 @@ pub fn visible(self: *const WidgetData) bool {
     return self.borderRectScale().r.visible();
 }
 
-pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?Color = null }) void {
+pub fn borderAndBackground(self: *const WidgetData, opts: struct {
+    fill_color: ?Color = null,
+    ninepatch: ?*const Ninepatch = null,
+}) void {
     if (!self.visible()) {
         return;
     }
@@ -194,6 +198,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
 
     var bg = self.options.backgroundGet();
     const b = self.options.borderGet();
+
     if (b.nonZero()) {
         const uniform: bool = (b.x == b.y and b.x == b.w and b.x == b.h);
         if (uniform) {
@@ -202,7 +207,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
             const rs = self.rectScale().rectToRectScale(r.offsetNeg(self.rect));
             rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = b.x * rs.s, .color = self.options.color(.border) });
         } else {
-            // draw border as large rect with background on top
+            // non-uniform border, draw it first as large rect with background/ninepatch on top
             if (!bg) {
                 dvui.log.debug("borderAndBackground {x} forcing background on to support non-uniform border\n", .{self.id});
                 bg = true;
@@ -231,11 +236,20 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
     if (bg) {
         const rs = self.backgroundRectScale();
         if (!rs.r.empty()) {
+            const fill = opts.fill_color orelse self.options.color(.fill);
             rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{
-                .color = opts.fill_color orelse self.options.color(.fill),
+                .color = fill,
                 .fade = if (self.rectScale().s >= 2.0) 0.0 else 1.0,
             });
         }
+    }
+
+    // can draw a ninepatch without a background, some of it could be transparent
+    if (opts.ninepatch orelse self.options.ninepatch(.fill)) |np| {
+        const rs = self.backgroundRectScale();
+        dvui.renderNinepatch(np.*, rs, .{}) catch |err| {
+            dvui.log.err("while drawing ninepatch: {}, {}", .{ err, rs });
+        };
     }
 }
 
