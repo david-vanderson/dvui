@@ -903,7 +903,7 @@ fn canDisplayPtr(ptr: std.builtin.Type.Pointer) bool {
 /// NOTE:
 /// Any modified text fields are dynamically allocated. These are cleaned up during Window.deinit()
 /// If a string should not be automatically cleaned up (i.e will be cleaned up by a struct's deinit() method),
-/// removed the string from struct_ui.string map prior to the Window.deinit() being called.
+/// remove the string from struct_ui.string map prior to the Window.deinit() being called.
 ///
 /// The displayStringBuf() function can be used as an alternative to display strings with a user-supplied buffer.
 pub fn displayStruct(
@@ -990,7 +990,8 @@ pub fn defaultValue(T: type, struct_options: anytype) ?T {
             if (!default_found) {
                 inline for (si.fields) |field| {
                     if (field.defaultValue() == null) {
-                        @compileError(std.fmt.comptimePrint("field {s} for struct {s} does not support default initialization", .{ field.name, @typeName(T) }));
+                        // The struct can't be default initialized and no struct_options were supplied for this type.
+                        return null;
                     }
                 }
             }
