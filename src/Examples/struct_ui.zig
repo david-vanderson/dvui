@@ -213,22 +213,6 @@ pub fn themeEditor() void {
         .b = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
     }, .{ .r = 127, .g = 127, .b = 127, .a = 255 });
 
-    // Editing ninepatch fields is currently not supported.
-    const theme_options: StructOptions(dvui.Theme) = .initWithDefaults(.{
-        .ninepatch_fill = .{ .standard = .{ .display = .read_only } },
-        .ninepatch_press = .{ .standard = .{ .display = .read_only } },
-        .ninepatch_hover = .{ .standard = .{ .display = .read_only } },
-    }, null);
-    const style_options: StructOptions(dvui.Theme.Style) = .initWithDefaults(.{
-        .ninepatch_fill = .{ .standard = .{ .display = .read_only } },
-        .ninepatch_press = .{ .standard = .{ .display = .read_only } },
-        .ninepatch_hover = .{ .standard = .{ .display = .read_only } },
-    }, null);
-    const dvui_options: StructOptions(dvui.Options) = .initWithDefaults(.{
-        .ninepatch_fill = .{ .standard = .{ .display = .read_only } },
-        .ninepatch_press = .{ .standard = .{ .display = .read_only } },
-        .ninepatch_hover = .{ .standard = .{ .display = .read_only } },
-    }, .{});
     const theme: *dvui.Theme = &dvui.currentWindow().theme; // Want a pointer to the actual theme, not a copy.
     if (struct_ui.displayStruct(
         @src(),
@@ -236,18 +220,7 @@ pub fn themeEditor() void {
         theme,
         2,
         .default,
-        .{
-            theme_options,
-            style_options,
-            dvui_options,
-            color_options,
-            // Set dummy default values for the Ninepatch and the ImageSource union as they can't be default initialized.
-            StructOptions(dvui.Ninepatch).initWithDefaults(.{}, null),
-            StructOptions(dvui.Texture).init(.{}, null),
-            StructOptions(@FieldType(dvui.Texture.ImageSource, "pixelsPMA")).init(.{}, null),
-            StructOptions(@FieldType(dvui.Texture.ImageSource, "pixels")).init(.{}, null),
-            StructOptions(dvui.ImageSource.ImageFile).init(.{}, null),
-        },
+        .{color_options},
         null,
     )) |box| {
         box.deinit();
