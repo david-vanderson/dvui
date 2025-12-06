@@ -786,8 +786,8 @@ pub fn displayUnion(
                             field_value_ptr.* = @unionInit(UnionT, @tagName(choice), default);
                         } else {
                             dvui.log.debug(
-                                "struct_ui: Union field {s}.{s} cannot be selected as no default value is provided. Field will not be selected.",
-                                .{ field_name, @tagName(choice) },
+                                "struct_ui: Union field {s}.{s} cannot be selected as no default value is provided. Use struct_ui.StructOptions({s}) to provide a default.",
+                                .{ field_name, @tagName(choice), @typeName(@FieldType(UnionT, @tagName(choice))) },
                             );
                             return;
                         }
@@ -847,7 +847,10 @@ pub fn displayOptional(
         if (field_value_ptr.*) |*val| {
             displayField(@src(), field_name, val, depth, field_option, options, al);
         } else {
-            dvui.log.debug("struct_ui: Optional field {s} cannot be selected as no default value is provided.", .{field_name});
+            dvui.log.debug("struct_ui: Optional field {s} cannot be selected as no default value is provided. Use struct_ui.StructOptions({s}) to provide a default.", .{
+                field_name,
+                @typeName(optional.child),
+            });
         }
     } else if (!read_only) {
         field_value_ptr.* = null;
