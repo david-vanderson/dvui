@@ -231,7 +231,6 @@ pub const renderImage = render.renderImage;
 pub const Ninepatch = render.Ninepatch;
 pub const RenderNinepatchOptions = render.NinepatchOptions;
 pub const renderNinepatch = render.renderNinepatch;
-pub const renderNinepatchSource = render.renderNinepatchSource;
 
 pub const layout = @import("layout.zig");
 pub const BasicLayout = layout.BasicLayout;
