@@ -2,7 +2,6 @@
 
 pub const zig_favicon = @embedFile("zig-favicon.png");
 pub const zig_svg = @embedFile("zig-mark.svg");
-pub const ninepatch = @embedFile("ninepatch98.png");
 
 pub var show_demo_window: bool = false;
 pub var icon_browser_show: bool = false;

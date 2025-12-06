@@ -228,16 +228,15 @@ pub const RenderTextureOptions = render.TextureOptions;
 pub const renderTexture = render.renderTexture;
 pub const renderIcon = render.renderIcon;
 pub const renderImage = render.renderImage;
+pub const Ninepatch = render.Ninepatch;
 pub const RenderNinepatchOptions = render.NinepatchOptions;
 pub const renderNinepatch = render.renderNinepatch;
-pub const renderNinepatchImage = render.renderNinepatchImage;
 
 pub const layout = @import("layout.zig");
 pub const BasicLayout = layout.BasicLayout;
 pub const Alignment = layout.Alignment;
 pub const PlaceOnScreenAvoid = layout.PlaceOnScreenAvoid;
 pub const placeOnScreen = layout.placeOnScreen;
-pub const Ninepatch = render.Ninepatch;
 
 pub const Data = @import("Data.zig");
 
@@ -3504,74 +3503,6 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
     };
     const content_rs = wd.contentRectScale();
     renderImage(init_opts.source, content_rs, render_tex_opts) catch |err| logError(@src(), err, "Could not render image {?s} at {}", .{ opts.name, content_rs });
-    wd.minSizeSetAndRefresh();
-    wd.minSizeReportToParent();
-
-    return wd;
-}
-
-pub const NinepatchInitOptions = struct {
-    source: ImageSource,
-    uv: Ninepatch.UV,
-};
-
-/// Show ninepatch.
-/// TODO
-pub fn ninepatch(src: std.builtin.SourceLocation, init_opts: NinepatchInitOptions, opts: Options) WidgetData {
-    const options = (Options{ .name = "image", .role = .image }).override(opts);
-
-    var size = Size{};
-    if (options.min_size_content) |msc| {
-        // user gave us a min size, use it
-        size = msc;
-    } else {
-        // user didn't give us one, use natural size
-        size = dvui.imageSize(init_opts.source) catch .{ .w = 10, .h = 10 };
-    }
-
-    var wd = WidgetData.init(src, .{}, options.override(.{ .min_size_content = size }));
-    wd.register();
-
-    const cr = wd.contentRect();
-    const ms = wd.options.min_size_contentGet();
-
-    var too_big = false;
-    if (ms.w > cr.w or ms.h > cr.h) {
-        too_big = true;
-    }
-
-    const e = wd.options.expandGet();
-    const g = wd.options.gravityGet();
-    var rect = dvui.placeIn(cr, ms, e, g);
-
-    // rect is the content rect, so expand to the whole rect
-    wd.rect = rect.outset(wd.options.paddingGet()).outset(wd.options.borderGet()).outset(wd.options.marginGet());
-
-    var renderBackground: ?Color = if (wd.options.backgroundGet()) wd.options.color(.fill) else null;
-
-    if (wd.options.rotationGet() == 0.0) {
-        wd.borderAndBackground(.{});
-        renderBackground = null;
-    } else {
-        if (wd.options.borderGet().nonZero()) {
-            dvui.log.debug("image {x} can't render border while rotated\n", .{wd.id});
-        }
-    }
-    var np_size: Size = .{};
-    const render_tex_opts = RenderNinepatchOptions{
-        .rotation = wd.options.rotationGet(),
-        .ninepatch_min = &np_size,
-    };
-    const content_rs = wd.contentRectScale();
-    renderNinepatchImage(init_opts.source, init_opts.uv, content_rs, render_tex_opts) catch |err| switch (err) {
-        error.NinepatchBelowMin => {
-            content_rs.r.fill(.all(0), .{ .color = .black });
-            content_rs.r.stroke(.all(0), .{ .thickness = 1, .color = .white });
-        },
-        else => {
-            logError(@src(), err, "Could not render ninepatch {?s} at {}", .{ opts.name, content_rs });
-        },
-    };
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
 

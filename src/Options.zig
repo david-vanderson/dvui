@@ -6,6 +6,7 @@ const Font = dvui.Font;
 const Rect = dvui.Rect;
 const Size = dvui.Size;
 const Theme = dvui.Theme;
+const Ninepatch = dvui.Ninepatch;
 
 const Options = @This();
 
@@ -59,6 +60,10 @@ color_text: ?Color = null,
 color_text_hover: ?Color = null,
 color_text_press: ?Color = null,
 color_border: ?Color = null,
+
+ninepatch_fill: ?*const Ninepatch = null,
+ninepatch_hover: ?*const Ninepatch = null,
+ninepatch_press: ?*const Ninepatch = null,
 
 // If a color above is null, source it from this style (if null, .content) in the theme.
 style: ?Theme.Style.Name = null,
@@ -232,6 +237,24 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
     } orelse self.themeGet().color(self.styleGet(), ask);
 }
 
+/// All the colors you can ask Options for
+pub const NinepatchAsk = enum {
+    fill,
+    hover,
+    press,
+};
+
+pub fn ninepatch(self: *const Options, ask: NinepatchAsk) ?*const Ninepatch {
+    const np_opt = switch (ask) {
+        .fill => self.ninepatch_fill,
+        .hover => self.ninepatch_hover orelse self.ninepatch_fill,
+        .press => self.ninepatch_press orelse self.ninepatch_fill,
+    };
+    if (np_opt) |np| return np;
+
+    return self.themeGet().ninepatch(self.styleGet(), ask);
+}
+
 pub fn fontGet(self: *const Options) Font {
     if (self.font) |ff| {
         return ff;
@@ -314,7 +337,8 @@ pub fn themeGet(self: *const Options) *const Theme {
     return self.theme orelse &dvui.currentWindow().theme;
 }
 
-/// Keeps only the fonts, colors and style
+/// Keeps only the fonts and colors. Intended for stuff like buttons passing
+/// down options to internal widgets.
 pub fn styleOnly(self: *const Options) Options {
     return .{
         .style = self.style,
@@ -378,6 +402,9 @@ pub fn strip(self: *const Options) Options {
         .padding = Rect{},
         .corner_radius = Rect{},
         .background = false,
+        .ninepatch_fill = &Ninepatch.none,
+        .ninepatch_hover = &Ninepatch.none,
+        .ninepatch_press = &Ninepatch.none,
 
         // keep the rest
         .style = self.style,
