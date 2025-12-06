@@ -13,6 +13,8 @@ size: Size.Physical = .{},
 
 const Dragging = @This();
 
+pub var threshold: f32 = 3;
+
 pub const State = enum {
     none,
     prestart,
@@ -39,8 +41,8 @@ pub const StartOptions = struct {
 /// Prepare for a possible mouse drag.  This will detect a drag, and also a
 /// normal click (mouse down and up without a drag).
 ///
-/// * `dragging` will return a Point once mouse motion has moved at least 3
-/// natural pixels away from `p`.
+/// * `dragging` will return a Point once mouse motion has moved at least
+/// threshold (default 3) natural pixels away from `p`.
 ///
 /// * if cursor is non-null and a drag starts, use that cursor while dragging
 ///
@@ -129,7 +131,7 @@ pub fn get(self: *Dragging, p: Point.Physical, opts: GetOptions) ?Point.Physical
         .prestart => {
             const dp = p.diff(self.pt);
             const dps = dp.scale(1 / opts.window_natural_scale, Point.Natural);
-            if (@abs(dps.x) > 3 or @abs(dps.y) > 3) {
+            if (@abs(dps.x) > threshold or @abs(dps.y) > threshold) {
                 self.pt = p;
                 self.state = .dragging;
                 return dp;

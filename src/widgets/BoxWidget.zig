@@ -47,18 +47,16 @@ ratio_extra: f32 = 0,
 ran_off: bool = false,
 pixels_per_w: f32 = 0,
 
-pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) BoxWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *BoxWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
     const defaults = Options{ .name = "Box" };
     const wd = WidgetData.init(src, .{}, defaults.override(opts));
-    return .{
+    self.* = .{
         .wd = wd,
         .init_opts = init_options,
         .data_prev = dvui.dataGet(null, wd.id, "_data", Data),
         .child_id = if (builtin.mode == .Debug) .zero else undefined,
     };
-}
-
-pub fn install(self: *BoxWidget) void {
     self.data().register();
 
     // our rect for children has to start at 0,0

@@ -3,10 +3,7 @@ pub const DropdownWidget = @This();
 options: Options,
 init_options: InitOptions,
 menu: MenuWidget,
-/// SAFETY: Will always be set by `install`
-/// TODO: This will panic if `install` is not called but `deinit` is.
-///       Is that a scenario we should handle?
-menuItem: MenuItemWidget = undefined,
+menuItem: MenuItemWidget,
 drop: ?FloatingMenuWidget = null,
 drop_first_frame: bool = false,
 /// SAFETY: Will always be set by `addChoice` before use
@@ -55,31 +52,31 @@ pub fn wrapInner(opts: Options) Options {
     });
 }
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) DropdownWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const options = defaults.themeOverride().override(opts);
-    var self = DropdownWidget{
+    self.* = .{
         .options = options,
         .init_options = init_opts,
-        .menu = MenuWidget.init(src, .{ .dir = .horizontal }, wrapOuter(options)),
+        // SAFETY: Set bellow
+        .menu = undefined,
+        // SAFETY: Set bellow
+        .menuItem = undefined,
     };
-    if (dvui.dataGet(null, self.data().id, "_drop_adjust", f32)) |adjust| self.drop_adjust = adjust;
-    return self;
-}
+    self.menu.init(src, .{ .dir = .horizontal }, wrapOuter(options));
 
-pub fn install(self: *DropdownWidget) void {
-    self.menu.install();
-
-    self.menuItem = MenuItemWidget.init(@src(), .{ .submenu = true, .focus_as_outline = true }, wrapInner(self.options));
-    self.menuItem.install();
+    self.menuItem.init(@src(), .{ .submenu = true, .focus_as_outline = true }, wrapInner(self.options));
     self.menuItem.processEvents();
     self.menuItem.drawBackground();
+
+    if (dvui.dataGet(null, self.data().id, "_drop_adjust", f32)) |adjust| self.drop_adjust = adjust;
 
     if (self.init_options.label) |ll| {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
         defer hbox.deinit();
 
-        var lw = LabelWidget.initNoFmt(@src(), ll, .{}, self.options.strip().override(.{ .gravity_y = 0.5 }));
-        lw.install();
+        var lw: LabelWidget = undefined;
+        lw.initNoFmt(@src(), ll, .{}, self.options.strip().override(.{ .gravity_y = 0.5 }));
         lw.draw();
         lw.deinit();
         _ = dvui.spacer(@src(), .{ .min_size_content = .width(6) });
@@ -114,22 +111,24 @@ pub fn dropped(self: *DropdownWidget) bool {
     }
 
     if (self.menuItem.activeRect()) |r| {
-        self.drop = FloatingMenuWidget.init(@src(), .{ .from = r, .avoid = .none }, .{ .role = .none, .min_size_content = .cast(r.size()) });
-        var drop = &self.drop.?;
-        self.drop_first_frame = dvui.firstFrame(drop.data().id);
+        var from = r;
+        const s = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale();
 
-        const s = drop.scale_val;
-
-        // move drop up to align first item
-        drop.init_options.from.x -= drop.options.borderGet().x * s;
-        drop.init_options.from.x -= drop.options.paddingGet().x * s;
-        drop.init_options.from.y -= drop.options.borderGet().y * s;
-        drop.init_options.from.y -= drop.options.paddingGet().y * s;
+        // move drop up-left to align first item
+        const menuDefaults = dvui.FloatingMenuWidget.defaults;
+        from.x -= menuDefaults.borderGet().x * s;
+        from.x -= menuDefaults.paddingGet().x * s;
+        from.y -= menuDefaults.borderGet().y * s;
+        from.y -= menuDefaults.paddingGet().y * s;
 
         // move drop up so selected entry is aligned
-        drop.init_options.from.y -= self.drop_adjust * s;
+        from.y -= self.drop_adjust * s;
 
-        drop.install();
+        self.drop = @as(FloatingMenuWidget, undefined); // Needs to be a non-null value so `.?` bellow doesn't panic
+        var drop = &self.drop.?;
+        drop.init(@src(), .{ .from = from, .avoid = .none }, .{ .role = .none, .min_size_content = .cast(r.size()) });
+
+        self.drop_first_frame = dvui.firstFrame(drop.data().id);
 
         // without this, if you trigger the dropdown with the keyboard and then
         // move the mouse, the entries are highlighted but not focused
@@ -210,14 +209,13 @@ pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
         }
     }
 
-    self.drop_mi = MenuItemWidget.init(@src(), .{}, self.options.styleOnly().override(.{
+    self.drop_mi.init(@src(), .{}, self.options.styleOnly().override(.{
         .role = .list_item,
         .label = .{ .label_widget = .next },
         .id_extra = self.drop_mi_index,
         .expand = .horizontal,
     }));
     self.drop_mi_id = self.drop_mi.data().id;
-    self.drop_mi.install();
     self.drop_mi.processEvents();
     self.drop_mi.drawBackground();
 

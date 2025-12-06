@@ -31,7 +31,6 @@ pub const InitOptions = struct {
 
 wd: WidgetData,
 init_options: InitOptions,
-/// SAFETY: Set in `install`
 scale: *f32 = undefined,
 touchPoints: *[2]?dvui.Point.Physical,
 old_dist: ?f32 = null,
@@ -39,17 +38,16 @@ old_dist: ?f32 = null,
 old_scale: f32 = undefined,
 layout: dvui.BasicLayout = .{},
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ScaleWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *ScaleWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const defaults = Options{ .name = "Scale" };
     const wd = WidgetData.init(src, .{}, defaults.override(opts));
-    return .{
+    self.* = .{
         .wd = wd,
         .init_options = init_opts,
         .touchPoints = dvui.dataGetPtrDefault(null, wd.id, "_touchPoints", [2]?dvui.Point.Physical, .{ null, null }),
     };
-}
 
-pub fn install(self: *ScaleWidget) void {
     if (self.init_options.scale) |init_s| {
         self.scale = init_s;
     } else {

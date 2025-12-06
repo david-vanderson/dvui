@@ -74,8 +74,8 @@ pub fn scrollCanvas() void {
         var fwd: dvui.WidgetData = undefined;
 
         const mouse_point = dvui.currentWindow().mouse_pt.toNatural().diff(.{ .x = 10, .y = 10 });
-        var fw = dvui.FloatingWidget.init(@src(), .{ .mouse_events = false }, .{ .rect = Rect.fromPoint(.cast(mouse_point)), .min_size_content = .all(20), .background = true, .color_fill = dvui.themeGet().focus.opacity(0.5), .data_out = &fwd });
-        fw.install();
+        var fw: dvui.FloatingWidget = undefined;
+        fw.init(@src(), .{ .mouse_events = false }, .{ .rect = Rect.fromPoint(.cast(mouse_point)), .min_size_content = .all(20), .background = true, .color_fill = dvui.themeGet().focus.opacity(0.5), .data_out = &fwd });
         fw.deinit();
 
         // We want to get mouse motion events during the drag as if we had

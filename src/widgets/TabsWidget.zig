@@ -9,10 +9,8 @@ pub const TabsWidget = @This();
 
 init_options: InitOptions,
 scroll: ScrollAreaWidget,
-/// SAFETY: Set in `install`
-group: dvui.FocusGroupWidget = undefined,
-/// SAFETY: Set in `install`
-box: BoxWidget = undefined,
+group: dvui.FocusGroupWidget,
+box: BoxWidget,
 tab_index: usize = 0,
 /// SAFETY: Set in `addTab`
 tab_button: ButtonWidget = undefined,
@@ -29,29 +27,31 @@ pub const InitOptions = struct {
     was_allocated_on_widget_stack: bool = false,
 };
 
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TabsWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const scroll_opts: ScrollAreaWidget.InitOpts = switch (init_opts.dir) {
         .horizontal => .{ .vertical = .none, .horizontal = .auto, .horizontal_bar = .hide },
         .vertical => .{ .vertical = .auto, .vertical_bar = .hide },
     };
-    return .{
+    self.* = .{
         .init_options = init_opts,
-        .scroll = ScrollAreaWidget.init(src, scroll_opts, defaults.override(opts)),
+        // SAFETY: Set bellow
+        .scroll = undefined,
+        // SAFETY: Set bellow
+        .group = undefined,
+        // SAFETY: Set bellow
+        .box = undefined,
     };
-}
 
-pub fn install(self: *TabsWidget) void {
-    self.scroll.install();
+    self.scroll.init(src, scroll_opts, defaults.override(opts));
 
-    self.group = dvui.FocusGroupWidget.init(@src(), .{ .nav_key_dir = self.init_options.dir }, .{});
-    self.group.install();
+    self.group.init(@src(), .{ .nav_key_dir = self.init_options.dir }, .{});
 
     const margin: Rect = switch (self.init_options.dir) {
         .horizontal => .{ .y = 2 },
         .vertical => .{ .x = 2 },
     };
-    self.box = BoxWidget.init(@src(), .{ .dir = self.init_options.dir }, .{ .margin = margin, .expand = .both });
-    self.box.install();
+    self.box.init(@src(), .{ .dir = self.init_options.dir }, .{ .margin = margin, .expand = .both });
 
     var r = self.scroll.data().contentRectScale().r;
     switch (self.init_options.dir) {
@@ -118,8 +118,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
 
     const options = tab_defaults.themeOverride().override(opts);
 
-    self.tab_button = ButtonWidget.init(@src(), .{}, options);
-    self.tab_button.install();
+    self.tab_button.init(@src(), .{}, options);
     self.tab_button.processEvents();
     self.tab_button.drawBackground();
 

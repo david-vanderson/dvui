@@ -12,7 +12,8 @@ name: []const u8,
 tvg_bytes: []const u8,
 icon_opts: dvui.IconRenderOptions,
 
-pub fn init(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: dvui.IconRenderOptions, opts: Options) IconWidget {
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *IconWidget, src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: dvui.IconRenderOptions, opts: Options) void {
     var size = Size{};
     if (opts.min_size_content) |msc| {
         // user gave us a min size, use it
@@ -26,15 +27,13 @@ pub fn init(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []cons
 
     const defaults = Options{ .label = .{ .text = name }, .role = .image };
 
-    return .{
+    self.* = .{
         .wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .min_size_content = size })),
         .name = name,
         .tvg_bytes = tvg_bytes,
         .icon_opts = icon_opts,
     };
-}
 
-pub fn install(self: *IconWidget) void {
     self.data().register();
     self.data().borderAndBackground(.{});
 }

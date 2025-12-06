@@ -33,14 +33,12 @@ hover: bool = false,
 focus: bool = false,
 click: bool = false,
 
-pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) ButtonWidget {
-    return .{
+/// It's expected to call this when `self` is `undefined`
+pub fn init(self: *ButtonWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
+    self.* = .{
         .wd = .init(src, .{}, defaults.themeOverride().override(opts)),
         .init_options = init_options,
     };
-}
-
-pub fn install(self: *ButtonWidget) void {
     self.data().register();
     dvui.parentSet(self.widget());
 

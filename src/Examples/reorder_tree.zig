@@ -289,7 +289,8 @@ pub fn reorderListsAdvanced(cross_drag: bool) void {
     for (g.strings[0..g.strings_len], 0..) |s, i| {
         // overriding the reorder id used so that it doesn't use the widget ids
         // (this allows adding a list element above without making a widget)
-        var reorderable = dvui.Reorderable.init(@src(), reorder, .{ .reorder_id = i, .draw_target = false, .reinstall = false }, .{ .id_extra = i, .expand = .horizontal });
+        var reorderable: dvui.Reorderable = undefined;
+        reorderable.init(@src(), reorder, .{ .reorder_id = i, .draw_target = false, .reinstall = false }, .{ .id_extra = i, .expand = .horizontal });
         defer reorderable.deinit();
 
         if (reorderable.floating()) {
