@@ -239,16 +239,16 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
 
 /// All the colors you can ask Options for
 pub const NinepatchAsk = enum {
-    ninepatch_fill,
-    ninepatch_hover,
-    ninepatch_press,
+    fill,
+    hover,
+    press,
 };
 
 pub fn ninepatch(self: *const Options, ask: NinepatchAsk) ?*const Ninepatch {
     const np_opt = switch (ask) {
-        .ninepatch_fill => self.ninepatch_fill,
-        .ninepatch_hover => self.ninepatch_hover orelse self.ninepatch_fill,
-        .ninepatch_press => self.ninepatch_press orelse self.ninepatch_fill,
+        .fill => self.ninepatch_fill,
+        .hover => self.ninepatch_hover orelse self.ninepatch_fill,
+        .press => self.ninepatch_press orelse self.ninepatch_fill,
     };
     if (np_opt) |np| return np;
 
@@ -337,7 +337,8 @@ pub fn themeGet(self: *const Options) *const Theme {
     return self.theme orelse &dvui.currentWindow().theme;
 }
 
-/// Keeps only the fonts, colors and style
+/// Keeps only the fonts and colors. Intended for stuff like buttons passing
+/// down options to internal widgets.
 pub fn styleOnly(self: *const Options) Options {
     return .{
         .style = self.style,
@@ -350,10 +351,6 @@ pub fn styleOnly(self: *const Options) Options {
         .color_text_hover = self.color_text_hover,
         .color_text_press = self.color_text_press,
         .color_border = self.color_border,
-
-        .ninepatch_fill = self.ninepatch_fill,
-        .ninepatch_hover = self.ninepatch_hover,
-        .ninepatch_press = self.ninepatch_press,
 
         .font = self.font,
         .font_style = self.font_style,
@@ -405,6 +402,9 @@ pub fn strip(self: *const Options) Options {
         .padding = Rect{},
         .corner_radius = Rect{},
         .background = false,
+        .ninepatch_fill = &Ninepatch.none,
+        .ninepatch_hover = &Ninepatch.none,
+        .ninepatch_press = &Ninepatch.none,
 
         // keep the rest
         .style = self.style,

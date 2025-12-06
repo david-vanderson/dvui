@@ -410,21 +410,27 @@ pub fn renderImage(source: ImageSource, rs: RectScale, opts: TextureOptions) (Ba
     try renderTexture(try source.getTexture(), rs, opts);
 }
 
-pub const NinepatchOptions = struct {
-    colormod_border: ?Color = null,
-    colormod_fill: ?Color = null,
-    debug: bool = false,
+pub const Ninepatch = struct {
+    pub const none: Ninepatch = .{};
 
-    //TODO: implement rotation
-    // rotation: f32 = 0,
-    //TODO: implement fade
-    // fade: f32 = 0.0,
+    /// Image to use, default means explicitly no ninepatch.
+    source: Texture.ImageSource = .{ .imageFile = .{
+        .bytes = &.{},
+        .name = "Ninepatch.none",
+    } },
+    /// How many pixels of source make up each edge.
+    edge: Rect = .{},
+};
+
+pub const NinepatchOptions = struct {
+    debug: bool = false,
 };
 
 /// Renders a ninepatch with the given parameters.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptions) Backend.GenericError!void {
+    if (ninepatch.source.imageFile.bytes.len == 0) return;
     if (rs.s == 0) return;
     if (rs.r.empty()) return;
     if (dvui.clipGet().intersect(rs.r).empty()) return;
@@ -434,160 +440,215 @@ pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptio
         return;
     };
 
-    const sz_top_left = ninepatch.size(0);
-    const sz_top_right = ninepatch.size(2);
-    const sz_bottom_left = ninepatch.size(6);
-    const sz_bottom_right = ninepatch.size(8);
+    var rect = rs.r;
+    if (dvui.currentWindow().snap_to_pixels) {
+        rect.x = @round(rect.x);
+        rect.y = @round(rect.y);
+    }
 
-    const min_size = ninepatch.minSize().scale(rs.s, Rect.Physical);
-    const r_size = rs.r.size();
+    const ts: Size = .{
+        .w = @floatFromInt(tex.width),
+        .h = @floatFromInt(tex.width),
+    };
 
-    if (r_size.w < min_size.w and r_size.h < min_size.h) {
-        try renderTexture(tex, rs, .{
-            .uv = .rect(
-                0,
-                0,
-                rs.r.w / @as(f32, @floatFromInt(tex.width)),
-                rs.r.h / @as(f32, @floatFromInt(tex.height)),
-            ),
-            .colormod = opts.colormod_border orelse .white,
+    // scale ninepatch edge size
+    const e = ninepatch.edge.scale(rs.s, Rect.Physical);
+
+    // middle
+    var r = rect.inset(e);
+    if (!r.empty()) {
+        try renderTexture(tex, .{ .r = r, .s = rs.s }, .{
+            .uv = .{
+                .x = ninepatch.edge.x / ts.w,
+                .w = (ts.w - ninepatch.edge.x - ninepatch.edge.w) / ts.w,
+                .y = ninepatch.edge.y / ts.h,
+                .h = (ts.h - ninepatch.edge.y - ninepatch.edge.h) / ts.h,
+            },
+            .debug = opts.debug,
+        });
+    }
+
+    // top and bottom edges
+    r = rect.inset(.{ .x = e.x, .w = e.w });
+    if (!r.empty()) {
+        // bottom first, draw as much as possible from bottom up
+        var height = @min(r.h, e.h);
+        const bottom = r.y + r.h;
+        var th = height / rs.s;
+        try renderTexture(tex, .{ .r = .{
+            .x = r.x,
+            .w = r.w,
+            .y = bottom - height,
+            .h = height,
+        }, .s = rs.s }, .{
+            .uv = .{
+                .x = ninepatch.edge.x / ts.w,
+                .w = (ts.w - ninepatch.edge.x - ninepatch.edge.w) / ts.w,
+                .y = (ts.h - th) / ts.h,
+                .h = th / ts.h,
+            },
             .debug = opts.debug,
         });
 
-        return;
+        // top edge
+        height = @min(r.h, e.y);
+        th = height / rs.s;
+        try renderTexture(tex, .{ .r = .{
+            .x = r.x,
+            .w = r.w,
+            .y = r.y,
+            .h = height,
+        }, .s = rs.s }, .{
+            .uv = .{
+                .x = ninepatch.edge.x / ts.w,
+                .w = (ts.w - ninepatch.edge.x - ninepatch.edge.w) / ts.w,
+                .y = 0,
+                .h = th / ts.h,
+            },
+            .debug = opts.debug,
+        });
     }
 
-    // Size and scale corner rects
-    var rs_top_left = rs.rectToRectScale(.fromSize(sz_top_left));
-    var rs_top_right = rs.rectToRectScale(.fromSize(sz_top_right));
-    rs_top_right.r.h = rs_top_left.r.h;
-    var rs_bottom_left = rs.rectToRectScale(.fromSize(sz_bottom_left));
-    rs_bottom_left.r.w = rs_top_left.r.w;
-    var rs_bottom_right = rs.rectToRectScale(.fromSize(sz_bottom_right));
-    rs_bottom_right.r.w = rs_top_right.r.w;
-    rs_bottom_right.r.h = rs_bottom_left.r.h;
-
-    // Size and scale edge rects
-    const center_width = rs.r.w - (rs_top_left.r.w + rs_top_right.r.w);
-    var rs_top_center = rs;
-    rs_top_center.r.w = center_width + 1;
-    rs_top_center.r.h = rs_top_left.r.h;
-
-    const center_height = rs.r.h - (rs_top_left.r.h + rs_bottom_left.r.h);
-    var rs_center_left = rs;
-    rs_center_left.r.w = rs_top_left.r.w;
-    rs_center_left.r.h = center_height + 1;
-
-    var rs_center_right = rs;
-    rs_center_right.r.w = rs_top_right.r.w;
-    rs_center_right.r.h = rs_center_left.r.h;
-
-    var rs_bottom_center = rs;
-    rs_bottom_center.r.w = rs_top_center.r.w;
-    rs_bottom_center.r.h = rs_bottom_left.r.h;
-
-    // Center rect
-    var rs_center_center = rs;
-    rs_center_center.r.w = rs_top_center.r.w;
-    rs_center_center.r.h = rs_center_left.r.h;
-
-    //Move rects into position
-    //Align columns
-    rs_top_left.r.x = rs_top_left.r.x;
-    rs_center_left.r.x = rs_top_left.r.x;
-    rs_bottom_left.r.x = rs_top_left.r.x;
-
-    rs_top_center.r.x = rs_top_left.r.x + rs_top_left.r.w - 0.5;
-    rs_center_center.r.x = rs_top_center.r.x;
-    rs_bottom_center.r.x = rs_top_center.r.x;
-
-    rs_top_right.r.x = rs_top_left.r.x + rs_top_left.r.w + center_width;
-    rs_center_right.r.x = rs_top_right.r.x;
-    rs_bottom_right.r.x = rs_top_right.r.x;
-
-    //Align rows
-    rs_top_left.r.y = rs_top_left.r.y;
-    rs_top_center.r.y = rs_top_left.r.y;
-    rs_top_right.r.y = rs_top_left.r.y;
-
-    rs_center_left.r.y = rs_top_left.r.y + rs_top_left.r.h - 0.5;
-    rs_center_center.r.y = rs_center_left.r.y;
-    rs_center_right.r.y = rs_center_left.r.y;
-
-    rs_bottom_left.r.y = rs_top_left.r.y + rs_top_left.r.h + center_height;
-    rs_bottom_center.r.y = rs_bottom_left.r.y;
-    rs_bottom_right.r.y = rs_bottom_left.r.y;
-
-    //TODO: rotate rects
-    // _ = &rs_top_left;
-    // if (opts.rotation != 0) @panic("TODO: implement rotation for ninepatch rects");
-
-    //TODO: fade?
-    //TODO: corner radius?
-
-    //Render the top or left edge only if the current width/height is less than the minimum width/height
-    if (r_size.w < min_size.w) {
-        //Render left edge
-        rs_center_left.r.w = r_size.w;
-        rs_top_left.r.w = r_size.w;
-        rs_bottom_left.r.w = r_size.w;
-
-        var uv3 = ninepatch.uv.uv[3];
-        var uv0 = ninepatch.uv.uv[0];
-        var uv6 = ninepatch.uv.uv[6];
-        uv3.w = ((rs.r.w - 1) / @as(f32, @floatFromInt(tex.width)));
-        uv0.w = uv3.w;
-        uv6.w = uv3.w;
-
-        try renderTexture(tex, rs_center_left, .{ .uv = uv3, .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
-        try renderTexture(tex, rs_top_left, .{ .uv = uv0, .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
-        try renderTexture(tex, rs_bottom_left, .{ .uv = uv6, .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
-        return;
-    } else if (r_size.h < min_size.h) {
-        //Render top edge
-        rs_top_center.r.h = r_size.h;
-        rs_top_left.r.h = r_size.h;
-        rs_top_right.r.h = r_size.h;
-
-        var uv1 = ninepatch.uv.uv[1];
-        var uv0 = ninepatch.uv.uv[0];
-        var uv2 = ninepatch.uv.uv[2];
-        uv1.h = ((rs.r.h - 1) / @as(f32, @floatFromInt(tex.height)));
-        uv0.h = uv1.h;
-        uv2.h = uv1.h;
-
-        try renderTexture(tex, rs_top_center, .{ .uv = uv1, .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
-        try renderTexture(tex, rs_top_left, .{ .uv = uv0, .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
-        try renderTexture(tex, rs_top_right, .{ .uv = uv2, .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
-        return;
-    }
-
-    //Assumption: Corners are the most likely parts to contain important details.
-    //Rendering order was decided so that corners will overwrite fill and edge patches.
-    //First render fill.
-    if (!rs_center_center.r.empty())
-        try renderTexture(tex, rs_center_center, .{
-            .uv = ninepatch.uv.uv[4],
-            .colormod = opts.colormod_fill orelse .white,
-            .background_color = opts.colormod_fill,
+    // left and right edges
+    r = rect.inset(.{ .y = e.y, .h = e.h });
+    if (!r.empty()) {
+        // right first, draw from right edge
+        var width = @min(r.w, e.w);
+        const right = r.x + r.w;
+        var tw = width / rs.s;
+        try renderTexture(tex, .{ .r = .{
+            .x = right - width,
+            .w = width,
+            .y = r.y,
+            .h = r.h,
+        }, .s = rs.s }, .{
+            .uv = .{
+                .x = (ts.w - tw) / ts.w,
+                .w = tw / ts.w,
+                .y = ninepatch.edge.y / ts.h,
+                .h = (ts.h - ninepatch.edge.y - ninepatch.edge.h) / ts.h,
+            },
             .debug = opts.debug,
         });
 
-    //Then render edges.
-    if (!rs_top_center.r.empty()) {
-        try renderTexture(tex, rs_top_center, .{ .uv = ninepatch.uv.uv[1], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
-        try renderTexture(tex, rs_bottom_center, .{ .uv = ninepatch.uv.uv[7], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
-    }
-    if (!rs_center_left.r.empty()) {
-        try renderTexture(tex, rs_center_left, .{ .uv = ninepatch.uv.uv[3], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
-        try renderTexture(tex, rs_center_right, .{ .uv = ninepatch.uv.uv[5], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
+        // left
+        width = @min(r.w, e.x);
+        tw = width / rs.s;
+        try renderTexture(tex, .{ .r = .{
+            .x = r.x,
+            .w = width,
+            .y = r.y,
+            .h = r.h,
+        }, .s = rs.s }, .{
+            .uv = .{
+                .x = 0,
+                .w = tw / ts.w,
+                .y = ninepatch.edge.y / ts.h,
+                .h = (ts.h - ninepatch.edge.y - ninepatch.edge.h) / ts.h,
+            },
+            .debug = opts.debug,
+        });
     }
 
-    //Finally render corners.
-    try renderTexture(tex, rs_top_left, .{ .uv = ninepatch.uv.uv[0], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
-    try renderTexture(tex, rs_top_right, .{ .uv = ninepatch.uv.uv[2], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
-    try renderTexture(tex, rs_bottom_left, .{ .uv = ninepatch.uv.uv[6], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
-    try renderTexture(tex, rs_bottom_right, .{ .uv = ninepatch.uv.uv[8], .colormod = opts.colormod_border orelse .white, .debug = opts.debug });
+    // bottom right corner
+    {
+        r = rect;
+        const width = @min(r.w, e.w);
+        const tw = width / rs.s;
+        const height = @min(r.h, e.h);
+        const th = height / rs.s;
+        if (!r.empty()) {
+            try renderTexture(tex, .{ .r = .{
+                .x = r.x + r.w - width,
+                .w = width,
+                .y = r.y + r.h - height,
+                .h = height,
+            }, .s = rs.s }, .{
+                .uv = .{
+                    .x = (ts.w - tw) / ts.w,
+                    .w = tw / ts.w,
+                    .y = (ts.h - th) / ts.h,
+                    .h = th / ts.h,
+                },
+                .debug = opts.debug,
+            });
+        }
+    }
+
+    // bottom left corner
+    {
+        r = rect;
+        const width = @min(r.w, e.x);
+        const tw = width / rs.s;
+        const height = @min(r.h, e.h);
+        const th = height / rs.s;
+        if (!r.empty()) {
+            try renderTexture(tex, .{ .r = .{
+                .x = r.x,
+                .w = width,
+                .y = r.y + r.h - height,
+                .h = height,
+            }, .s = rs.s }, .{
+                .uv = .{
+                    .x = 0,
+                    .w = tw / ts.w,
+                    .y = (ts.h - th) / ts.h,
+                    .h = th / ts.h,
+                },
+                .debug = opts.debug,
+            });
+        }
+    }
+
+    // top right corner
+    {
+        r = rect;
+        const width = @min(r.w, e.w);
+        const tw = width / rs.s;
+        const height = @min(r.h, e.y);
+        const th = height / rs.s;
+        if (!r.empty()) {
+            try renderTexture(tex, .{ .r = .{
+                .x = r.x + r.w - width,
+                .w = width,
+                .y = r.y,
+                .h = height,
+            }, .s = rs.s }, .{
+                .uv = .{
+                    .x = (ts.w - tw) / ts.w,
+                    .w = tw / ts.w,
+                    .y = 0,
+                    .h = th / ts.h,
+                },
+                .debug = opts.debug,
+            });
+        }
+    }
+
+    // top left corner
+    {
+        r = rect;
+        const width = @min(r.w, e.x);
+        const tw = width / rs.s;
+        const height = @min(r.h, e.y);
+        const th = height / rs.s;
+        if (!r.empty()) {
+            try renderTexture(tex, .{ .r = .{
+                .x = r.x,
+                .w = width,
+                .y = r.y,
+                .h = height,
+            }, .s = rs.s }, .{
+                .uv = .{
+                    .x = 0,
+                    .w = tw / ts.w,
+                    .y = 0,
+                    .h = th / ts.h,
+                },
+                .debug = opts.debug,
+            });
+        }
+    }
 }
 
 const std = @import("std");
@@ -605,7 +666,6 @@ const Path = dvui.Path;
 const Texture = dvui.Texture;
 const Vertex = dvui.Vertex;
 const ImageSource = dvui.ImageSource;
-const Ninepatch = dvui.Ninepatch;
 
 const StbImageError = dvui.StbImageError;
 const IconRenderOptions = dvui.IconRenderOptions;
