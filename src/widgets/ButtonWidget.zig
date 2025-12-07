@@ -59,7 +59,17 @@ pub fn processEvents(self: *ButtonWidget) void {
 }
 
 pub fn drawBackground(self: *ButtonWidget) void {
-    self.data().borderAndBackground(.{ .fill_color = self.style().color_fill });
+    const style_opt = self.style();
+    var npask: Options.NinepatchAsk = .fill;
+    if (dvui.captured(self.data().id)) {
+        npask = .press;
+    } else if (self.hover) {
+        npask = .hover;
+    }
+    self.data().borderAndBackground(.{
+        .fill_color = style_opt.color_fill,
+        .ninepatch = self.data().options.ninepatch(npask),
+    });
 }
 
 pub fn drawFocus(self: *ButtonWidget) void {

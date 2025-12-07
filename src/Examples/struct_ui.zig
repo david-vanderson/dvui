@@ -35,7 +35,7 @@ const TestStruct = struct {
     struct_ptr: *C1 = &c1,
     struct_slice: []TestStruct = &array_of_struct,
 
-    pub const structui_options: dvui.struct_ui.StructOptions(TestStruct) = .initWithDefaults(.{
+    pub const structui_options: StructOptions(TestStruct) = .initWithDefaults(.{
         .int = .{ .number = .{ .min = 5, .max = 50, .widget_type = .slider } },
         .uint = .{ .number = .{ .display = .read_only } },
         .opt_int_ptr = .{ .number = .{ .display = .none } },
@@ -71,34 +71,34 @@ pub fn structUI() void {
 
         var alignment: dvui.Alignment = .init(@src(), 0);
         defer alignment.deinit();
-        if (dvui.struct_ui.displayStruct(@src(), "test_struct", &test_instance, 1, .{ .standard = .{} }, .{TestStruct.structui_options}, &alignment)) |box| {
+        if (struct_ui.displayStruct(@src(), "test_struct", &test_instance, 1, .{ .standard = .{} }, .{TestStruct.structui_options}, &alignment)) |box| {
             defer box.deinit();
 
             // Treat the u8 array as a fixed buffer, passing itself as the backing buffer for the string.
             // Note: As the array is fixed size, 0 termination is used to indicate the end of the user-entered string.
             var slice: []u8 = &test_instance.array_u8;
-            dvui.struct_ui.displayStringBuf(@src(), "array_u8_editable_1", &slice, .{ .text = .{} }, &alignment, &test_instance.array_u8);
+            struct_ui.displayStringBuf(@src(), "array_u8_editable_1", &slice, .{ .text = .{} }, &alignment, &test_instance.array_u8);
 
             // Edit it instead as an array of ints.
-            dvui.struct_ui.displayArray(@src(), "array_u8_editable_2", &test_instance.array_u8, 0, .{ .number = .{ .min = 0, .max = 126 } }, &alignment);
+            struct_ui.displayArray(@src(), "array_u8_editable_2", &test_instance.array_u8, 0, .{ .number = .{ .min = 0, .max = 126 } }, &alignment);
 
             // Optional pointers need to be handled manually by passing the pointer value to be set when the optional is selected.
-            dvui.struct_ui.displayOptional(@src(), "opt_int_ptr", &test_instance.opt_int_ptr, 1, .{ .number = .{} }, .{}, &alignment, &TestStruct.ts_int);
+            struct_ui.displayOptional(@src(), "opt_int_ptr", &test_instance.opt_int_ptr, 1, .{ .number = .{} }, .{}, &alignment, &TestStruct.ts_int);
 
             // Union fields can also be handled manually if custom initialization is required for different cases.
-            if (dvui.struct_ui.displayContainer(@src(), "union_manual")) |union_box| {
+            if (struct_ui.displayContainer(@src(), "union_manual")) |union_box| {
                 defer union_box.deinit();
-                const selected_tag = dvui.struct_ui.unionFieldWidget(@src(), "union_manual", &test_instance.union_manual, .default);
+                const selected_tag = struct_ui.unionFieldWidget(@src(), "union_manual", &test_instance.union_manual, .default);
                 switch (selected_tag) {
                     .c1 => {
                         if (test_instance.union_manual != .c1)
                             test_instance.union_manual = .{ .c1 = .{ .value1 = 99 } };
-                        dvui.struct_ui.displayField(@src(), "c1", &test_instance.union_manual.c1, 1, .default, .{}, &alignment);
+                        struct_ui.displayField(@src(), "c1", &test_instance.union_manual.c1, 1, .default, .{}, &alignment);
                     },
                     .c2 => {
                         if (test_instance.union_manual != .c2)
                             test_instance.union_manual = .{ .c2 = .{ .value2 = 55 } };
-                        dvui.struct_ui.displayField(@src(), "c2", &test_instance.union_manual.c2, 1, .default, .{}, &alignment);
+                        struct_ui.displayField(@src(), "c2", &test_instance.union_manual.c2, 1, .default, .{}, &alignment);
                     },
                 }
             }
@@ -110,12 +110,12 @@ pub fn structUI() void {
         var b2 = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b2.deinit();
 
-        const buffered_read_only_options: dvui.struct_ui.StructOptions(StringStruct) = .init(.{
+        const buffered_read_only_options: StructOptions(StringStruct) = .init(.{
             .static_str = .{ .text = .{ .display = .read_only } },
             .var_str = .{ .text = .{ .display = .read_only } },
             .raw_buffer = .{ .text = .{ .display = .read_only } },
         }, .{});
-        const dynamic_read_only_options: dvui.struct_ui.StructOptions(StringStruct) = .init(.{
+        const dynamic_read_only_options: StructOptions(StringStruct) = .init(.{
             .static_str = .{ .text = .{ .display = .read_only } },
             .var_str = .{ .text = .{ .display = .read_only } },
         }, .{});
@@ -165,7 +165,7 @@ pub fn editStringStuctDynamic(comptime field_name: []const u8, ss: *StringStruct
     win.dragAreaSet(dvui.windowHeader("String Handling", "", &StringDemo.editing_dynamic));
 
     // An alternative way to prevent fields from being displayed. initWithDefaults, then removed the unwanted fields.
-    var options: dvui.struct_ui.StructOptions(StringStruct) = .initWithDefaults(.{
+    var options: StructOptions(StringStruct) = .initWithDefaults(.{
         .static_str = .{ .text = .{ .display = .read_write } },
     }, null);
     options.field_options.remove(.raw_buffer);
@@ -187,15 +187,15 @@ pub fn editStringStructBuffered(comptime field_name: []const u8, ss: *StringStru
 
     var alignment: dvui.Alignment = .init(@src(), 0);
     defer alignment.deinit();
-    const options: dvui.struct_ui.StructOptions(StringStruct) = .init(.{ .raw_buffer = .{ .text = .{ .display = .read_only } } }, null);
+    const options: StructOptions(StringStruct) = .init(.{ .raw_buffer = .{ .text = .{ .display = .read_only } } }, null);
 
-    if (dvui.struct_ui.displayStruct(@src(), field_name, ss, 0, .default, .{options}, &alignment)) |box| {
+    if (struct_ui.displayStruct(@src(), field_name, ss, 0, .default, .{options}, &alignment)) |box| {
         defer box.deinit();
         {
-            dvui.struct_ui.displayStringBuf(@src(), "static_str", &ss.static_str, .{ .text = .{} }, &alignment, &local.string_buffer);
+            struct_ui.displayStringBuf(@src(), "static_str", &ss.static_str, .{ .text = .{} }, &alignment, &local.string_buffer);
         }
         {
-            dvui.struct_ui.displayStringBuf(@src(), "var_str", &ss.var_str, .{ .text = .{} }, &alignment, &StringStruct.string_buf);
+            struct_ui.displayStringBuf(@src(), "var_str", &ss.var_str, .{ .text = .{} }, &alignment, &StringStruct.string_buf);
         }
     }
 }
@@ -207,13 +207,14 @@ pub fn themeEditor() void {
 
     // Initialize with just the r, g and b fields. a will not be displayed.
     // Each time a new colour struct is instantiated it will use the supplied defaults for r, g, b and a.
-    const color_options: dvui.struct_ui.StructOptions(dvui.Color) = .init(.{
+    const color_options: StructOptions(dvui.Color) = .init(.{
         .r = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
         .g = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
         .b = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
     }, .{ .r = 127, .g = 127, .b = 127, .a = 255 });
+
     const theme: *dvui.Theme = &dvui.currentWindow().theme; // Want a pointer to the actual theme, not a copy.
-    if (dvui.struct_ui.displayStruct(
+    if (struct_ui.displayStruct(
         @src(),
         "Theme",
         theme,
@@ -286,3 +287,5 @@ pub fn themeSerialization() void {
 
 const std = @import("std");
 const dvui = @import("../dvui.zig");
+const struct_ui = dvui.struct_ui;
+const StructOptions = struct_ui.StructOptions;

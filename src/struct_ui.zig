@@ -786,8 +786,8 @@ pub fn displayUnion(
                             field_value_ptr.* = @unionInit(UnionT, @tagName(choice), default);
                         } else {
                             dvui.log.debug(
-                                "struct_ui: Union field {s}.{s} cannot be selected as no default value is provided. Field will not be selected.",
-                                .{ field_name, @tagName(choice) },
+                                "struct_ui: Union field {s}.{s} cannot be selected as no default value is provided. Use struct_ui.StructOptions({s}) to provide a default.",
+                                .{ field_name, @tagName(choice), @typeName(@FieldType(UnionT, @tagName(choice))) },
                             );
                             return;
                         }
@@ -847,7 +847,10 @@ pub fn displayOptional(
         if (field_value_ptr.*) |*val| {
             displayField(@src(), field_name, val, depth, field_option, options, al);
         } else {
-            dvui.log.debug("struct_ui: Optional field {s} cannot be selected as no default value is provided.", .{field_name});
+            dvui.log.debug("struct_ui: Optional field {s} cannot be selected as no default value is provided. Use struct_ui.StructOptions({s}) to provide a default.", .{
+                field_name,
+                @typeName(optional.child),
+            });
         }
     } else if (!read_only) {
         field_value_ptr.* = null;
@@ -903,7 +906,7 @@ fn canDisplayPtr(ptr: std.builtin.Type.Pointer) bool {
 /// NOTE:
 /// Any modified text fields are dynamically allocated. These are cleaned up during Window.deinit()
 /// If a string should not be automatically cleaned up (i.e will be cleaned up by a struct's deinit() method),
-/// removed the string from struct_ui.string map prior to the Window.deinit() being called.
+/// remove the string from struct_ui.string map prior to the Window.deinit() being called.
 ///
 /// The displayStringBuf() function can be used as an alternative to display strings with a user-supplied buffer.
 pub fn displayStruct(
@@ -990,7 +993,8 @@ pub fn defaultValue(T: type, struct_options: anytype) ?T {
             if (!default_found) {
                 inline for (si.fields) |field| {
                     if (field.defaultValue() == null) {
-                        @compileError(std.fmt.comptimePrint("field {s} for struct {s} does not support default initialization", .{ field.name, @typeName(T) }));
+                        // The struct can't be default initialized and no struct_options were supplied for this type.
+                        return null;
                     }
                 }
             }
