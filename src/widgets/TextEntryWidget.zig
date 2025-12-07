@@ -468,6 +468,18 @@ pub fn textChanged(self: *TextEntryWidget, start: usize, end: usize, added: i64)
     //std.debug.print("textChanged {d} {d} {d}\n", .{ self.text_changed_start, self.text_changed_end, self.text_changed_added });
 }
 
+/// Return text as a slice to the backing storage.  The returned slice is
+/// valid after `deinit`, and is only invalidated by events or functions that
+/// change the text (like `textSet` or `paste`).
+pub fn textGet(self: *const TextEntryWidget) []u8 {
+    return self.text[0..self.len];
+}
+
+/// Deprecated in favor of `textGet`.
+pub fn getText(self: *const TextEntryWidget) []u8 {
+    return self.textGet();
+}
+
 pub fn textSet(self: *TextEntryWidget, text: []const u8, selected: bool) void {
     self.textLayout.selection.selectAll();
     self.textTyped(text, selected);
@@ -554,8 +566,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
     }
 
     // update our len and maintain 0 termination if possible
-    self.len += new_len;
-    self.addNullTerminator();
+    self.setLen(self.len + new_len);
 
     // insert
     std.mem.copyForwards(u8, self.text[sel.cursor..], new[0..new_len]);
@@ -639,10 +650,59 @@ pub fn filterOut(self: *TextEntryWidget, needle: []const u8) void {
         self.text[j] = 0;
 }
 
-/// Sets the null terminator at index self.len if there is space in the backing slice
-pub fn addNullTerminator(self: *TextEntryWidget) void {
+/// Sets the new length and does fixups:
+/// - add null terminator if there is space
+/// - shrink allocation if needed
+/// - fixup array_list backing
+pub fn setLen(self: *TextEntryWidget, newlen: usize) void {
+    self.len = newlen;
+
+    // add null terminator if there is space
     if (self.len < self.text.len) {
         self.text[self.len] = 0;
+    }
+
+    // shrink allocation if needed
+    const needed_binds = @divTrunc(self.len, realloc_bin_size) + 1;
+    const current_bins = @divTrunc(self.text.len, realloc_bin_size);
+    // dvui.log.debug("TextEntry {x} needs {d} bins, has {d}", .{ self.data().id, needed_binds, current_bins });
+    if (self.len == 0 or needed_binds < current_bins) {
+        // we want to shrink the allocation
+        const new_len = if (self.len == 0) 0 else realloc_bin_size * needed_binds;
+        switch (self.init_opts.text) {
+            .buffer => {},
+            .buffer_dynamic => |b| {
+                if (b.allocator.resize(self.text, new_len)) {
+                    b.backing.*.len = new_len;
+                    self.text.len = new_len;
+                } else {
+                    dvui.logError(@src(), std.mem.Allocator.Error.OutOfMemory, "{x} TextEntryWidget.textTyped failed to realloc backing (current size {d}, new size {d})", .{ self.data().id, self.text.len, new_len });
+                }
+            },
+            .array_list => |al| {
+                if (new_len < al.backing.capacity / 2) {
+                    al.backing.items.len = al.backing.capacity;
+                    al.backing.shrinkAndFree(al.allocator, new_len);
+                    self.text = al.backing.items.ptr[0..@min(al.limit, al.backing.capacity)];
+                }
+            },
+            .internal => {
+                // NOTE: Using prev_text is safe because data is trashed and stays valid until the end of the frame
+                const prev_text = self.text;
+                dvui.dataSetSliceCopies(null, self.data().id, "_buffer", &[_]u8{0}, new_len);
+                self.text = dvui.dataGetSlice(null, self.data().id, "_buffer", []u8).?;
+                const min_len = @min(prev_text.len, self.text.len);
+                @memcpy(self.text[0..min_len], prev_text[0..min_len]);
+            },
+        }
+    }
+
+    // fixup array_list backing
+    switch (self.init_opts.text) {
+        .array_list => |al| {
+            al.backing.items.len = self.len;
+        },
+        else => {},
     }
 }
 
@@ -800,8 +860,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             // just delete selection
                             self.textChangedRemoved(sel.start, sel.end);
                             std.mem.copyForwards(u8, self.text[sel.start..], self.text[sel.end..self.len]);
-                            self.len -= (sel.end - sel.start);
-                            self.addNullTerminator();
+                            self.setLen(self.len - (sel.end - sel.start));
                             sel.end = sel.start;
                             sel.cursor = sel.start;
                             self.textLayout.scroll_to_cursor = true;
@@ -824,8 +883,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             // delete from sel.cursor to oldcur
                             if (sel.cursor != oldcur) self.textChangedRemoved(sel.cursor, oldcur);
                             std.mem.copyForwards(u8, self.text[sel.cursor..], self.text[oldcur..self.len]);
-                            self.len -= (oldcur - sel.cursor);
-                            self.addNullTerminator();
+                            self.setLen(self.len - (oldcur - sel.cursor));
                             sel.end = sel.cursor;
                             sel.start = sel.cursor;
                             self.textLayout.scroll_to_cursor = true;
@@ -840,8 +898,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             while (sel.cursor - i > 0 and self.text[sel.cursor - i] & 0xc0 == 0x80) : (i += 1) {}
                             self.textChangedRemoved(sel.cursor - i, sel.cursor);
                             std.mem.copyForwards(u8, self.text[sel.cursor - i ..], self.text[sel.cursor..self.len]);
-                            self.len -= i;
-                            self.addNullTerminator();
+                            self.setLen(self.len - i);
                             sel.cursor -= i;
                             sel.start = sel.cursor;
                             sel.end = sel.cursor;
@@ -857,8 +914,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             // just delete selection
                             self.textChangedRemoved(sel.start, sel.end);
                             std.mem.copyForwards(u8, self.text[sel.start..], self.text[sel.end..self.len]);
-                            self.len -= (sel.end - sel.start);
-                            self.addNullTerminator();
+                            self.setLen(self.len - (sel.end - sel.start));
                             sel.end = sel.start;
                             sel.cursor = sel.start;
                             self.textLayout.scroll_to_cursor = true;
@@ -881,8 +937,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             // delete from oldcur to sel.cursor
                             if (sel.cursor != oldcur) self.textChangedRemoved(oldcur, sel.cursor);
                             std.mem.copyForwards(u8, self.text[oldcur..], self.text[sel.cursor..self.len]);
-                            self.len -= (sel.cursor - oldcur);
-                            self.addNullTerminator();
+                            self.setLen(self.len - (sel.cursor - oldcur));
                             sel.cursor = oldcur;
                             sel.end = sel.cursor;
                             sel.start = sel.cursor;
@@ -896,8 +951,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
 
                             self.textChangedRemoved(sel.cursor, sel.cursor + i);
                             std.mem.copyForwards(u8, self.text[sel.cursor..], self.text[sel.cursor + i .. self.len]);
-                            self.len -= i;
-                            self.addNullTerminator();
+                            self.setLen(self.len - i);
                             self.textLayout.scroll_to_cursor = true;
                         }
                     }
@@ -991,62 +1045,17 @@ pub fn cut(self: *TextEntryWidget) void {
         // delete selection
         self.textChangedRemoved(sel.start, sel.end);
         std.mem.copyForwards(u8, self.text[sel.start..], self.text[sel.end..self.len]);
-        self.len -= (sel.end - sel.start);
-        self.addNullTerminator();
+        self.setLen(self.len - (sel.end - sel.start));
         sel.end = sel.start;
         sel.cursor = sel.start;
         self.textLayout.scroll_to_cursor = true;
     }
 }
 
-pub fn getText(self: *const TextEntryWidget) []u8 {
-    return self.text[0..self.len];
-}
-
 pub fn deinit(self: *TextEntryWidget) void {
     const should_free = self.data().was_allocated_on_widget_stack;
     defer if (should_free) dvui.widgetFree(self);
     defer self.* = undefined;
-    const needed_binds = @divTrunc(self.len, realloc_bin_size) + 1;
-    const current_bins = @divTrunc(self.text.len, realloc_bin_size);
-    // dvui.log.debug("TextEntry {x} needs {d} bins, has {d}", .{ self.data().id, needed_binds, current_bins });
-    if (self.len == 0 or needed_binds < current_bins) {
-        // we want to shrink the allocation
-        const new_len = if (self.len == 0) 0 else realloc_bin_size * needed_binds;
-        switch (self.init_opts.text) {
-            .buffer => {},
-            .buffer_dynamic => |b| {
-                if (b.allocator.resize(self.text, new_len)) {
-                    b.backing.*.len = new_len;
-                    self.text.len = new_len;
-                } else {
-                    dvui.logError(@src(), std.mem.Allocator.Error.OutOfMemory, "{x} TextEntryWidget.textTyped failed to realloc backing (current size {d}, new size {d})", .{ self.data().id, self.text.len, new_len });
-                }
-            },
-            .array_list => |al| {
-                if (new_len < al.backing.capacity / 2) {
-                    al.backing.items.len = al.backing.capacity;
-                    al.backing.shrinkAndFree(al.allocator, new_len);
-                    self.text = al.backing.items.ptr[0..@min(al.limit, al.backing.capacity)];
-                }
-            },
-            .internal => {
-                // NOTE: Using prev_text is safe because data is trashed and stays valid until the end of the frame
-                const prev_text = self.text;
-                dvui.dataSetSliceCopies(null, self.data().id, "_buffer", &[_]u8{0}, new_len);
-                self.text = dvui.dataGetSlice(null, self.data().id, "_buffer", []u8).?;
-                const min_len = @min(prev_text.len, self.text.len);
-                @memcpy(self.text[0..min_len], prev_text[0..min_len]);
-            },
-        }
-    }
-
-    switch (self.init_opts.text) {
-        .array_list => |al| {
-            al.backing.items.len = self.len;
-        },
-        else => {},
-    }
 
     self.textLayout.deinit();
     self.scroll.deinit();
@@ -1215,4 +1224,41 @@ test "text buffer" {
 
     const full_text_buffer = (text ** (@divFloor(Local.limit, text.len) + 1))[0..Local.limit];
     try std.testing.expectEqualStrings(full_text_buffer, Local.text);
+}
+
+test "text array_list" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const Local = struct {
+        var text: []const u8 = "";
+        var al: std.ArrayList(u8) = .empty;
+
+        fn frame() !dvui.App.Result {
+            var entry: TextEntryWidget = undefined;
+            entry.init(@src(), .{ .text = .{ .array_list = .{
+                .backing = &al,
+                .allocator = std.testing.allocator,
+            } } }, .{ .tag = "entry" });
+            defer entry.deinit();
+
+            entry.processEvents();
+            entry.draw();
+            text = entry.getText();
+
+            return .ok;
+        }
+    };
+
+    defer Local.al.deinit(std.testing.allocator);
+
+    _ = try dvui.testing.step(Local.frame);
+    try dvui.testing.pressKey(.tab, .none);
+    _ = try dvui.testing.step(Local.frame);
+    try dvui.testing.expectFocused("entry");
+
+    const text = "Testing text";
+    try dvui.testing.writeText(text);
+    _ = try dvui.testing.step(Local.frame);
+    try std.testing.expectEqualStrings(text, Local.text);
 }
