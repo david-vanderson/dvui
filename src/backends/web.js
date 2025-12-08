@@ -1251,6 +1251,13 @@ class Dvui {
 
         let keydown = (ev) => {
             if (ev.key == "Tab") {
+
+                // In most browsers we don't even see a control-tab, the
+                // browser uses it to switch tabs.  But Vivaldi sends it to us
+                // first, so bail (before preventDefault) so that Vivaldi
+                // switches tabs and we don't do anything.
+                if (ev.ctrlKey) return;
+
                 // stop tab from tabbing away from the canvas
                 ev.preventDefault();
             }
