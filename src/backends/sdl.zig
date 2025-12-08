@@ -1487,12 +1487,24 @@ pub fn main() !u8 {
 
     const init_opts = app.config.get();
 
-    var gpa_instance: std.heap.DebugAllocator(.{}) = .init;
-    defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
-    const gpa = gpa_instance.allocator();
+    var debug_instance: std.heap.DebugAllocator(.{}) = .init;
+    defer if (debug_instance.deinit() != .ok) @panic("Memory leak on exit!");
+
+    const gpa = init_opts.gpa orelse switch (builtin.mode) {
+        .Debug => debug_instance.allocator(),
+        else => dvui.App.ReleaseAllocator,
+    };
+
+    var threaded_io: ?std.Io.Threaded = null;
+    const io = init_opts.io orelse blk: {
+        threaded_io = .init(gpa);
+        break :blk threaded_io.?.io();
+    };
+    defer if (threaded_io) |*to| to.deinit();
 
     // init SDL backend (creates and owns OS window)
     var back = try initWindow(.{
+        .io = io,
         .allocator = gpa,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
@@ -1511,7 +1523,7 @@ pub fn main() !u8 {
     }
 
     //// init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, back.backend(), init_opts.window_init_options);
+    var win = try dvui.Window.init(@src(), gpa, io, back.backend(), init_opts.window_init_options);
     defer win.deinit();
 
     if (app.initFn) |initFn| {
@@ -1567,17 +1579,20 @@ pub fn main() !u8 {
 
 /// used when doing sdl callbacks
 const CallbackState = struct {
+    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+    var threaded_io: ?std.Io.Threaded = null;
+
     win: dvui.Window,
     back: SDLBackend,
-    gpa: std.heap.GeneralPurposeAllocator(.{}) = .init,
-    io: std.Io.Threaded,
+    gpa: std.mem.Allocator,
+    io: std.Io,
     interrupted: bool = false,
     have_resize: bool = false,
     no_wait: bool = false,
 };
 
 /// used when doing sdl callbacks
-var appState: CallbackState = .{ .win = undefined, .back = undefined, .io = undefined };
+var appState: CallbackState = .{ .win = undefined, .back = undefined, .gpa = undefined, .io = undefined };
 
 // sdl3 callback
 fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callconv(.c) c.SDL_AppResult {
@@ -1592,13 +1607,20 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
 
     const init_opts = app.config.get();
 
-    const gpa = appState.gpa.allocator();
-    appState.io = .init(gpa);
+    appState.gpa = init_opts.gpa orelse switch (builtin.mode) {
+        .Debug => CallbackState.debug_allocator.allocator(),
+        else => dvui.App.ReleaseAllocator,
+    };
+
+    appState.io = init_opts.io orelse blk: {
+        CallbackState.threaded_io = .init(appState.gpa);
+        break :blk CallbackState.threaded_io.?.io();
+    };
 
     // init SDL backend (creates and owns OS window)
     appState.back = initWindow(.{
-        .io = appState.io.io(),
-        .allocator = gpa,
+        .io = appState.io,
+        .allocator = appState.gpa,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
         .max_size = init_opts.max_size,
@@ -1618,7 +1640,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
     }
 
     //// init dvui Window (maps onto a single OS window)
-    appState.win = dvui.Window.init(@src(), gpa, appState.io.io(), appState.back.backend(), app.config.options.window_init_options) catch |err| {
+    appState.win = dvui.Window.init(@src(), appState.gpa, appState.io, appState.back.backend(), app.config.options.window_init_options) catch |err| {
         log.err("dvui.Window.init failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
@@ -1652,7 +1674,9 @@ fn appQuit(_: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
     if (app.deinitFn) |deinitFn| deinitFn();
     appState.win.deinit();
     appState.back.deinit();
-    if (appState.gpa.deinit() != .ok) @panic("Memory leak on exit!");
+    if (CallbackState.threaded_io) |*to| to.deinit();
+    if (CallbackState.debug_allocator.deinit() != .ok) @panic("Memory leak on exit!");
+
 
     // SDL will clean up the window/renderer for us.
 }
