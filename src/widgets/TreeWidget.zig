@@ -435,12 +435,8 @@ pub const Branch = struct {
             }
         }
 
-        if (self.anim) |a| {
-            if (a.end()) {
-                if (self.expanded) {
-                    self.expanded = false;
-                }
-            }
+        if (self.anim.?.end()) {
+            self.expanded = false;
         }
 
         if (self.expanded) {
