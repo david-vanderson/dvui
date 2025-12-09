@@ -400,8 +400,9 @@ pub const Branch = struct {
     };
 
     pub fn expander(self: *Branch, src: std.builtin.SourceLocation, init_opts: ExpanderOptions, opts: Options) bool {
+        var clicked: bool = false;
         if (self.button.clicked()) {
-            self.expanded = !self.expanded;
+            clicked = true;
         }
 
         self.hbox.deinit();
@@ -412,17 +413,33 @@ pub const Branch = struct {
             .margin = .{ .x = init_opts.indent },
         };
 
-        if (self.expanded) {
-            self.anim = dvui.animate(
-                @src(),
-                .{
-                    .duration = self.init_options.animation_duration,
-                    .easing = self.init_options.animation_easing,
-                    .kind = if (self.init_options.animation_duration > 0) .vertical else .none,
-                },
-                default_opts.override(opts),
-            );
+        self.anim = dvui.animate(
+            @src(),
+            .{
+                .duration = self.init_options.animation_duration,
+                .easing = self.init_options.animation_easing,
+                .kind = if (self.init_options.animation_duration > 0) .vertical else .none,
+            },
+            default_opts.override(opts),
+        );
 
+        if (clicked) {
+            if (self.expanded) {
+                self.anim.?.init_opts.easing = dvui.easing.outQuad;
+                self.anim.?.init_opts.duration = @divTrunc(self.init_options.animation_duration, 2);
+                self.anim.?.startEnd();
+            } else {
+                self.anim.?.val = 0.0;
+                self.anim.?.start();
+                self.expanded = true;
+            }
+        }
+
+        if (self.anim.?.end()) {
+            self.expanded = false;
+        }
+
+        if (self.expanded) {
             // Always expand the inner box to fill the animation
             const expander_opts = dvui.Options{ .expand = .both };
 
@@ -491,9 +508,9 @@ pub const Branch = struct {
         if (self.can_expand) {
             if (self.expanded) {
                 self.expander_vbox.deinit();
-                if (self.anim) |a| {
-                    a.deinit();
-                }
+            }
+            if (self.anim) |a| {
+                a.deinit();
             }
 
             dvui.dataSet(null, self.data().id, "_expanded", self.expanded);
