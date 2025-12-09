@@ -46,11 +46,11 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
         }
 
         if (dvui.button(@src(), "Toast 2", .{}, .{})) {
-            dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 2 to demo window" });
+            dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 2" });
         }
 
         if (dvui.button(@src(), "Toast 3", .{}, .{})) {
-            dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 3 to demo window" });
+            dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 3 is really really long to demo window" });
         }
 
         if (dvui.button(@src(), "Toast Main Window", .{}, .{})) {

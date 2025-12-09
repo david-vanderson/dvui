@@ -1264,9 +1264,9 @@ pub fn toastsShow(self: *Self, subwindow_id: ?Id, rect: Rect.Natural) void {
     toast_win.init(@src(), .{ .stay_above_parent_window = subwindow_id != null, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
     defer toast_win.deinit();
 
-    toast_win.data().rect = dvui.placeIn(.cast(rect), toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
+    toast_win.data().rectSet(dvui.placeIn(.cast(rect), toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 }));
     toast_win.drawBackground();
-    toast_win.autoSize(); // affects next frame TODO: probably don't need?
+    toast_win.autoSize(); // affects next frame, always need as toasts can come and go
 
     var vbox = dvui.box(@src(), .{}, .{});
     defer vbox.deinit();

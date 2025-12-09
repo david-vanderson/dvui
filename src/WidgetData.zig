@@ -62,12 +62,13 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
     };
 }
 
-pub fn rectChanged(self: *WidgetData) void {
+pub fn rectSet(self: *WidgetData, r: Rect) void {
+    self.rect = r;
     self.rect_scale = self.rectScaleFromParent();
 }
 
 pub fn register(self: *WidgetData) void {
-    self.rectChanged();
+    self.rectSet(self.rect);
 
     if (self.options.role) |role| {
         _ = dvui.currentWindow().accesskit.nodeCreate(self, role);

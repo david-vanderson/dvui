@@ -2437,7 +2437,7 @@ pub fn toastDisplay(id: Id) !void {
         return;
     };
 
-    var animator = dvui.animate(@src(), .{ .kind = .alpha, .duration = 500_000 }, .{ .id_extra = id.asUsize() });
+    var animator = dvui.animate(@src(), .{ .kind = .alpha, .duration = 500_000 }, .{ .id_extra = id.asUsize(), .gravity_x = 0.5 });
     defer animator.deinit();
     var label_wd: WidgetData = undefined;
     dvui.labelNoFmt(@src(), message, .{}, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 }, .data_out = &label_wd });
@@ -2450,6 +2450,9 @@ pub fn toastDisplay(id: Id) !void {
 
     if (animator.end()) {
         dvui.toastRemove(id);
+
+        // this informs our parent that we don't need any space next frame
+        animator.data().min_size = .{};
     }
 }
 
