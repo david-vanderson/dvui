@@ -81,9 +81,6 @@ pub fn demo() void {
         return;
     }
 
-    // This will include all builtin fonts needed for the builtin themes in the binary
-    ensureAllRequiredFontsForThemesLoaded();
-
     const width = 600;
 
     var float = dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .width(width), .tag = demo_window_tag });
@@ -267,13 +264,6 @@ pub fn demo() void {
 
     if (StrokeTest.show) {
         show_stroke_test_window();
-    }
-}
-
-pub fn ensureAllRequiredFontsForThemesLoaded() void {
-    const cw = dvui.currentWindow();
-    inline for (@typeInfo(dvui.Theme.builtin).@"struct".decls) |decl| {
-        cw.fonts.addBuiltinFontsForTheme(cw.gpa, @field(dvui.Theme.builtin, decl.name)) catch @panic("Could not add builtin fonts");
     }
 }
 

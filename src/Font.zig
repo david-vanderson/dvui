@@ -7,39 +7,133 @@ const Size = dvui.Size;
 const Texture = dvui.Texture;
 const Backend = dvui.Backend;
 
+/// Font represents the parameters that dvui will try to satisfy when rendering
+/// text.  If a matching font is not found, dvui will log an error and use the
+/// internal fallback font.
+///
+/// Usually specified with `find`:
+/// const f: Font = .find(.{ .family = "Vera", .size = 20 });
 const Font = @This();
 
 const impl: enum { FreeType, STB } = if (dvui.useFreeType) .FreeType else .STB;
-
-size: f32,
-line_height_factor: f32 = 1.2,
-id: FontId,
-
 pub const Error = error{FontError};
+pub const NAME_MAX_LEN = 50;
 
-// default bytes if font id is not found in database
-pub const default_ttf_bytes = builtin.Vera;
-// NOTE: This font name should match the name in the font data base
-pub const default_font_id = FontId.Vera;
+pub fn array(s: []const u8) [NAME_MAX_LEN:0]u8 {
+    var v: [NAME_MAX_LEN:0]u8 = @splat(0);
+    @memcpy(v[0..s.len], s);
+    return v;
+}
 
-pub fn hash(font: Font) u64 {
+pub fn string(s: *const [NAME_MAX_LEN:0]u8) [:0]const u8 {
+    return std.mem.sliceTo(s, 0);
+}
+
+/// Changing any of these might query for a font.
+family: [NAME_MAX_LEN:0]u8 = @splat(0),
+size: f32 = 16,
+style: enum {
+    normal,
+    italic,
+} = .normal,
+weight: enum {
+    normal,
+    bold,
+} = .normal,
+
+/// Can be changed for any font, no query.
+line_height_factor: f32 = 1.2,
+
+pub const FindOptions = struct {
+    family: []const u8,
+    size: f32 = 16,
+    line_height_factor: f32 = 1.2,
+};
+
+pub fn find(opts: FindOptions) Font {
+    return (Font{}).withFamily(opts.family).withSize(opts.size).withLineHeight(opts.line_height_factor);
+}
+
+pub fn withFamily(self: Font, n: []const u8) Font {
+    var r: Font = self;
+    r.family = array(n);
+    return r;
+}
+
+pub fn withSize(self: Font, s: f32) Font {
+    var r = self;
+    r.size = s;
+    return r;
+}
+
+pub fn withLineHeight(self: Font, factor: f32) Font {
+    var r = self;
+    r.line_height_factor = factor;
+    return r;
+}
+
+pub fn familyName(self: *const Font) []const u8 {
+    return string(&self.family);
+}
+
+pub fn name(self: *const Font, allocator: std.mem.Allocator) []const u8 {
+    return std.fmt.allocPrint(allocator, "{s}", .{self.familyName()}) catch "";
+}
+
+/// Fonts that hash the same value use the same glyphs (same Font.Entry).
+pub fn hash(self: *const Font) u64 {
     var h = dvui.fnv.init();
-    h.update(std.mem.asBytes(&font.id));
-    h.update(std.mem.asBytes(&font.size));
+    h.update(&self.family);
+    h.update(std.mem.asBytes(&self.size));
+    h.update(std.mem.asBytes(&self.style));
+    h.update(std.mem.asBytes(&self.weight));
     return h.final();
 }
 
-pub fn switchFont(self: Font, id: FontId) Font {
-    return Font{ .size = self.size, .line_height_factor = self.line_height_factor, .id = id };
-}
+pub const Source = struct {
+    family: [NAME_MAX_LEN:0]u8 = @splat(0),
+    size: f32 = 0, // zero means this source can be any size
+    style: enum {
+        normal,
+        italic,
+    } = .normal,
+    weight: enum {
+        normal,
+        bold,
+    } = .normal,
 
-pub fn resize(self: Font, s: f32) Font {
-    return Font{ .size = s, .line_height_factor = self.line_height_factor, .id = self.id };
-}
+    // currently we assume that a single ttf only produces one
+    bytes: []const u8, // points to ttf bytes
+    /// If not null, this will be used to free ttf_bytes.
+    allocator: ?std.mem.Allocator = null,
 
-pub fn lineHeightFactor(self: Font, factor: f32) Font {
-    return Font{ .size = self.size, .line_height_factor = factor, .id = self.id };
-}
+    pub fn familyName(self: *const Source) []const u8 {
+        return string(&self.family);
+    }
+
+    pub fn name(self: *const Source, allocator: std.mem.Allocator) []const u8 {
+        return std.fmt.allocPrint(allocator, "{s}", .{self.familyName()}) catch "";
+    }
+
+    /// Return a Font that will render from this source.
+    pub fn font(self: *const Source) Font {
+        return .{
+            .family = self.family,
+        };
+    }
+
+    pub fn deinit(self: *Source) void {
+        defer self.* = undefined;
+        if (self.allocator) |alloc| {
+            alloc.free(self.bytes);
+        }
+    }
+
+    pub const fallback = Source{
+        .family = array("Vera"),
+        .bytes = @embedFile("fonts/bitstream-vera/Vera.ttf"),
+    };
+};
 
 pub fn textHeight(self: Font) f32 {
     return self.sizeM(1, 1).h;
@@ -106,7 +200,7 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     // accurate size
     const ss = dvui.parentGet().screenRectScale(Rect{}).s;
     const ask_size = self.size * ss;
-    const sized_font = self.resize(ask_size);
+    const sized_font = self.withSize(ask_size);
 
     const cw = dvui.currentWindow();
 
@@ -132,170 +226,47 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     return s.scale(target_fraction, Size);
 }
 
-pub const FontId = enum(u64) {
-    // The following predefined names for TTFBytes (verified at comptime)
-    // These give a more useful debug output for the builtin font
-    InvalidFontFile = dvui.fnv.hash("InvalidFontFile"),
-    Aleo = dvui.fnv.hash("Aleo"),
-    AleoBd = dvui.fnv.hash("AleoBd"),
-    Vera = dvui.fnv.hash("Vera"),
-    VeraBI = dvui.fnv.hash("VeraBI"),
-    VeraBd = dvui.fnv.hash("VeraBd"),
-    VeraIt = dvui.fnv.hash("VeraIt"),
-    VeraMoBI = dvui.fnv.hash("VeraMoBI"),
-    VeraMoBd = dvui.fnv.hash("VeraMoBd"),
-    VeraMoIt = dvui.fnv.hash("VeraMoIt"),
-    VeraMono = dvui.fnv.hash("VeraMono"),
-    VeraSe = dvui.fnv.hash("VeraSe"),
-    VeraSeBd = dvui.fnv.hash("VeraSeBd"),
-    Pixelify = dvui.fnv.hash("Pixelify"),
-    PixelifyBd = dvui.fnv.hash("PixelifyBd"),
-    PixelifyMe = dvui.fnv.hash("PixelifyMe"),
-    PixelifySeBd = dvui.fnv.hash("PixelifySeBd"),
-    Hack = dvui.fnv.hash("Hack"),
-    HackBd = dvui.fnv.hash("HackBd"),
-    HackIt = dvui.fnv.hash("HackIt"),
-    HackBdIt = dvui.fnv.hash("HackBdIt"),
-    OpenDyslexic = dvui.fnv.hash("OpenDyslexic"),
-    OpenDyslexicBd = dvui.fnv.hash("OpenDyslexicBd"),
-    OpenDyslexicIt = dvui.fnv.hash("OpenDyslexicIt"),
-    OpenDyslexicBdIt = dvui.fnv.hash("OpenDyslexicBdIt"),
-    // Not included in TTFBytes but should still be named
-    Noto = dvui.fnv.hash("Noto"),
-    _,
-
-    pub fn fromName(name: []const u8) FontId {
-        return @enumFromInt(dvui.fnv.hash(name));
-    }
-
-    pub fn format(self: *const FontId, writer: *std.Io.Writer) !void {
-        const named_ids = std.meta.tags(FontId);
-        for (named_ids) |named| {
-            if (named == self.*) {
-                try writer.writeAll(@tagName(named));
-            }
-        } else {
-            try writer.print("Id 0x{x}", .{@intFromEnum(self.*)});
-        }
-    }
-
-    comptime {
-        for (@typeInfo(FontId).@"enum".fields) |field| {
-            // All named FontIds use the hash of their name as their value
-            if (field.value != dvui.fnv.hash(field.name)) {
-                @compileError("The value of '" ++ field.name ++ "' is not the hash of its name");
-            }
-            // All named FontIds reference a builtin font
-            if (!@hasDecl(builtin, field.name)) {
-                @compileError("Expected a decl in Font.builtin named '" ++ field.name ++ "'");
-            }
-        }
-    }
-};
-
-pub const builtin = struct {
-    pub const InvalidFontFile = "This is a very invalid font file";
-    pub const Aleo = @embedFile("fonts/Aleo/static/Aleo-Regular.ttf");
-    pub const AleoBd = @embedFile("fonts/Aleo/static/Aleo-Bold.ttf");
-    pub const Vera = @embedFile("fonts/bitstream-vera/Vera.ttf");
-    pub const VeraBI = @embedFile("fonts/bitstream-vera/VeraBI.ttf");
-    pub const VeraBd = @embedFile("fonts/bitstream-vera/VeraBd.ttf");
-    pub const VeraIt = @embedFile("fonts/bitstream-vera/VeraIt.ttf");
-    pub const VeraMoBI = @embedFile("fonts/bitstream-vera/VeraMoBI.ttf");
-    pub const VeraMoBd = @embedFile("fonts/bitstream-vera/VeraMoBd.ttf");
-    pub const VeraMoIt = @embedFile("fonts/bitstream-vera/VeraMoIt.ttf");
-    pub const VeraMono = @embedFile("fonts/bitstream-vera/VeraMono.ttf");
-    pub const VeraSe = @embedFile("fonts/bitstream-vera/VeraSe.ttf");
-    pub const VeraSeBd = @embedFile("fonts/bitstream-vera/VeraSeBd.ttf");
-    pub const Pixelify = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Regular.ttf");
-    pub const PixelifyBd = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Bold.ttf");
-    pub const PixelifyMe = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Medium.ttf");
-    pub const PixelifySeBd = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-SemiBold.ttf");
-    pub const Hack = @embedFile("fonts/hack/Hack-Regular.ttf");
-    pub const HackBd = @embedFile("fonts/hack/Hack-Bold.ttf");
-    pub const HackIt = @embedFile("fonts/hack/Hack-Italic.ttf");
-    pub const HackBdIt = @embedFile("fonts/hack/Hack-BoldItalic.ttf");
-    pub const OpenDyslexic = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Regular.otf");
-    pub const OpenDyslexicBd = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold.otf");
-    pub const OpenDyslexicIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Italic.otf");
-    pub const OpenDyslexicBdIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold-Italic.otf");
-    pub const Noto = @embedFile("fonts/NotoSansKR-Regular.ttf");
-
-    comptime {
-        for (@typeInfo(builtin).@"struct".decls) |decl| {
-            // All builint fonts has a named FontId
-            if (!@hasField(FontId, decl.name)) {
-                @compileError("Expected a field in FontId named '" ++ decl.name ++ "'");
-            }
-        }
-    }
-};
+//pub const builtin = struct {
+//    pub const InvalidFontFile = "This is a very invalid font file";
+//    pub const Aleo = @embedFile("fonts/Aleo/static/Aleo-Regular.ttf");
+//    pub const AleoBd = @embedFile("fonts/Aleo/static/Aleo-Bold.ttf");
+//    pub const Vera = @embedFile("fonts/bitstream-vera/Vera.ttf");
+//    pub const VeraBI = @embedFile("fonts/bitstream-vera/VeraBI.ttf");
+//    pub const VeraBd = @embedFile("fonts/bitstream-vera/VeraBd.ttf");
+//    pub const VeraIt = @embedFile("fonts/bitstream-vera/VeraIt.ttf");
+//    pub const VeraMoBI = @embedFile("fonts/bitstream-vera/VeraMoBI.ttf");
+//    pub const VeraMoBd = @embedFile("fonts/bitstream-vera/VeraMoBd.ttf");
+//    pub const VeraMoIt = @embedFile("fonts/bitstream-vera/VeraMoIt.ttf");
+//    pub const VeraMono = @embedFile("fonts/bitstream-vera/VeraMono.ttf");
+//    pub const VeraSe = @embedFile("fonts/bitstream-vera/VeraSe.ttf");
+//    pub const VeraSeBd = @embedFile("fonts/bitstream-vera/VeraSeBd.ttf");
+//    pub const Pixelify = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Regular.ttf");
+//    pub const PixelifyBd = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Bold.ttf");
+//    pub const PixelifyMe = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Medium.ttf");
+//    pub const PixelifySeBd = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-SemiBold.ttf");
+//    pub const Hack = @embedFile("fonts/hack/Hack-Regular.ttf");
+//    pub const HackBd = @embedFile("fonts/hack/Hack-Bold.ttf");
+//    pub const HackIt = @embedFile("fonts/hack/Hack-Italic.ttf");
+//    pub const HackBdIt = @embedFile("fonts/hack/Hack-BoldItalic.ttf");
+//    pub const OpenDyslexic = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Regular.otf");
+//    pub const OpenDyslexicBd = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold.otf");
+//    pub const OpenDyslexicIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Italic.otf");
+//    pub const OpenDyslexicBdIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold-Italic.otf");
+//    pub const Noto = @embedFile("fonts/NotoSansKR-Regular.ttf");
+//
+//    comptime {
+//        for (@typeInfo(builtin).@"struct".decls) |decl| {
+//            // All builint fonts has a named FontId
+//            if (!@hasField(FontId, decl.name)) {
+//                @compileError("Expected a field in FontId named '" ++ decl.name ++ "'");
+//            }
+//        }
+//    }
+//};
 
 pub const Cache = struct {
-    database: std.AutoHashMapUnmanaged(FontId, TTFEntry) = .empty,
+    database: std.ArrayList(Source) = .empty,
     cache: dvui.TrackingAutoHashMap(u64, Entry, .get_and_put) = .empty,
-
-    pub const TTFEntry = struct {
-        bytes: []const u8,
-        name: []const u8,
-        /// If not null, this will be used to free ttf_bytes.
-        allocator: ?std.mem.Allocator,
-
-        pub fn deinit(self: *TTFEntry) void {
-            defer self.* = undefined;
-            if (self.allocator) |alloc| {
-                alloc.free(self.bytes);
-                alloc.free(self.name);
-            }
-        }
-    };
-
-    pub fn addBuiltinFonts(self: *Cache, gpa: std.mem.Allocator, comptime named_ids: []const FontId) !void {
-        inline for (named_ids) |font| {
-            const name = @tagName(font); // If this line panics, a non-named variant of `FontId` was provided
-            try self.database.put(gpa, font, .{
-                .bytes = @field(builtin, name),
-                .name = name,
-                .allocator = null,
-            });
-        }
-    }
-    pub fn addBuiltinFontsForTheme(self: *Cache, gpa: std.mem.Allocator, comptime theme: dvui.Theme) !void {
-        const named_ids: []const FontId = comptime blk: {
-            var ids = [_]FontId{
-                theme.font_body.id,
-                theme.font_caption.id,
-                theme.font_caption_heading.id,
-                theme.font_heading.id,
-                theme.font_title.id,
-                theme.font_title_1.id,
-                theme.font_title_2.id,
-                theme.font_title_3.id,
-                theme.font_title_4.id,
-            };
-            // Filter out duplicates and unnamed `FontId` values
-            var unique_len: usize = 0;
-            for (ids) |id| switch (id) {
-                inline else => |named| {
-                    if (unique_len > 0 and std.mem.lastIndexOfScalar(FontId, ids[0..unique_len], named) != null) continue;
-                    ids[unique_len] = named;
-                    unique_len += 1;
-                },
-                _ => {}, // Unknown/unnamed font
-            };
-            if (unique_len == 0) break :blk &.{};
-            break :blk ids[0..unique_len];
-        };
-        // NOTE: we cannot call `addBuiltinFonts` here because `named_ids` is a slice to a comptime array, so we cannot use it at runtime outside this scope
-        inline for (named_ids) |font| {
-            const name = @tagName(font);
-            try self.database.put(gpa, font, .{
-                .bytes = @field(builtin, name),
-                .name = name,
-                .allocator = null,
-            });
-        }
-    }
 
     pub fn deinit(self: *Cache, gpa: std.mem.Allocator, backend: Backend) void {
         defer self.* = undefined;
@@ -305,10 +276,9 @@ pub const Cache = struct {
         }
         self.cache.deinit(gpa);
 
-        var db_it = self.database.valueIterator();
-        while (db_it.next()) |ttf| {
-            if (ttf.allocator) |a| {
-                a.free(ttf.bytes);
+        for (self.database.items) |*source| {
+            if (source.allocator) |a| {
+                a.free(source.bytes);
             }
         }
         self.database.deinit(gpa);
@@ -326,21 +296,28 @@ pub const Cache = struct {
         const entry = try self.cache.getOrPut(gpa, font.hash());
         if (entry.found_existing) return entry.value_ptr;
 
-        const ttf_bytes, const name = if (self.database.get(font.id)) |fbe|
-            .{ fbe.bytes, fbe.name }
-        else blk: {
-            dvui.log.warn("Font {f} not in dvui database, using default", .{font.id});
-            break :blk .{ Font.default_ttf_bytes, @tagName(Font.default_font_id) };
+        const fname = font.name(gpa);
+        defer gpa.free(fname);
+
+        const ttf_bytes = blk: {
+            // search database
+            for (self.database.items) |*source| {
+                if (std.mem.eql(u8, font.familyName(), source.familyName())) {
+                    break :blk source.bytes;
+                }
+            }
+
+            dvui.log.err("Font {s} not in dvui database, using fallback", .{fname});
+            break :blk Source.fallback.bytes;
         };
+
         //log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
 
-        entry.value_ptr.* = Entry.init(ttf_bytes, font, name) catch {
-            if (font.id == Font.default_font_id) {
-                @panic("Default font could not be loaded");
-            }
-            // Remove the invalid font cache entry
+        entry.value_ptr.* = Entry.init(gpa, ttf_bytes, font) catch {
+            // Remove the invalid font cache entry, something went wrong reading the ttf_bytes
             self.cache.map.removeByPtr(entry.key_ptr);
-            return self.getOrCreate(gpa, font.switchFont(Font.default_font_id));
+            // Substitute the known good fallback font
+            return self.getOrCreate(gpa, font.withFamily(Source.fallback.familyName()));
         };
         //log.debug("- size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
         return entry.value_ptr;
@@ -348,8 +325,7 @@ pub const Cache = struct {
 
     pub const Entry = struct {
         face: if (impl == .FreeType) c.FT_Face else c.stbtt_fontinfo,
-        // This name should come from `Font.Cache.database` and lives as long as it does
-        name: []const u8,
+        name: []const u8, // gpa
         scaleFactor: f32,
         height: f32,
         ascent: f32,
@@ -370,8 +346,11 @@ pub const Cache = struct {
         };
 
         /// Load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
-        pub fn init(ttf_bytes: []const u8, font: Font, name: []const u8) Error!Entry {
+        pub fn init(gpa: std.mem.Allocator, ttf_bytes: []const u8, font: Font) Error!Entry {
             const min_pixel_size = 1;
+
+            const fname = font.name(gpa);
+            errdefer gpa.free(fname);
 
             var self: Entry = if (impl == .FreeType) blk: {
                 var face: c.FT_Face = undefined;
@@ -380,7 +359,7 @@ pub const Cache = struct {
                 args.memory_base = ttf_bytes.ptr;
                 args.memory_size = @as(u31, @intCast(ttf_bytes.len));
                 FreeType.intToError(c.FT_Open_Face(dvui.ft2lib, &args, 0, &face)) catch |err| {
-                    dvui.log.warn("fontCacheInit freetype error {any} trying to FT_Open_Face font {s}\n", .{ err, name });
+                    dvui.log.warn("Font.Cache.Entry.init() freetype error {any} trying to FT_Open_Face font {s}\n", .{ err, fname });
                     return Error.FontError;
                 };
 
@@ -390,7 +369,7 @@ pub const Cache = struct {
 
                 while (true) : (pixel_size -= 1) {
                     FreeType.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
-                        dvui.log.warn("fontCacheInit freetype error {any} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, name });
+                        dvui.log.warn("Font.Cache.Entry.init() freetype error {any} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, fname });
                         return Error.FontError;
                     };
 
@@ -404,7 +383,7 @@ pub const Cache = struct {
                     if (height <= font.size or pixel_size == min_pixel_size) {
                         break :blk .{
                             .face = face,
-                            .name = name,
+                            .name = fname,
                             .scaleFactor = 1.0, // not used with freetype
                             .height = @ceil(height),
                             .ascent = @floor(ascent),
@@ -415,12 +394,12 @@ pub const Cache = struct {
             } else blk: {
                 const offset = c.stbtt_GetFontOffsetForIndex(ttf_bytes.ptr, 0);
                 if (offset < 0) {
-                    dvui.log.warn("fontCacheInit stbtt error when calling stbtt_GetFontOffsetForIndex font {s}\n", .{name});
+                    dvui.log.warn("Font.Cache.Entry.init() stbtt error when calling stbtt_GetFontOffsetForIndex font {s}\n", .{fname});
                     return Error.FontError;
                 }
                 var face: c.stbtt_fontinfo = undefined;
                 if (c.stbtt_InitFont(&face, ttf_bytes.ptr, offset) != 1) {
-                    dvui.log.warn("fontCacheInit stbtt error when calling stbtt_InitFont font {s}\n", .{name});
+                    dvui.log.warn("Font.Cache.Entry.init() stbtt error when calling stbtt_InitFont font {s}\n", .{fname});
                     return Error.FontError;
                 }
                 const SF: f32 = c.stbtt_ScaleForPixelHeight(&face, @max(min_pixel_size, @floor(font.size)));
@@ -436,7 +415,7 @@ pub const Cache = struct {
 
                 break :blk .{
                     .face = face,
-                    .name = name,
+                    .name = fname,
                     .scaleFactor = SF,
                     .height = @ceil(height),
                     .ascent = @floor(ascent),
@@ -454,6 +433,7 @@ pub const Cache = struct {
 
         pub fn deinit(self: *Entry, gpa: std.mem.Allocator, backend: Backend) void {
             defer self.* = undefined;
+            gpa.free(self.name);
             self.glyph_info.deinit(gpa);
             if (impl == .FreeType) {
                 _ = c.FT_Done_Face(self.face);
@@ -479,7 +459,7 @@ pub const Cache = struct {
             const total = self.glyph_info_ascii.len + self.glyph_info.count();
             const row_glyphs = @as(u32, @intFromFloat(@ceil(@sqrt(@as(f32, @floatFromInt(total))))));
 
-            var size = Size{};
+            var s = Size{};
             {
                 var i: u32 = 0;
                 var row: Size = .{};
@@ -497,29 +477,29 @@ pub const Cache = struct {
 
                     i += 1;
                     if (i % row_glyphs == 0) {
-                        size.w = @max(size.w, row.w);
-                        size.h += row.h;
+                        s.w = @max(s.w, row.w);
+                        s.h += row.h;
                         row = .{};
                     }
                 } else {
-                    size.w = @max(size.w, row.w);
-                    size.h += row.h;
+                    s.w = @max(s.w, row.w);
+                    s.h += row.h;
                 }
 
-                size = size.ceil();
+                s = s.ceil();
             }
 
             // also add an extra padding around whole texture
-            size.w += 2 * pad;
-            size.h += 2 * pad;
+            s.w += 2 * pad;
+            s.h += 2 * pad;
 
-            var pixels = try gpa.alloc(dvui.Color.PMA, @as(usize, @intFromFloat(size.w * size.h)));
+            var pixels = try gpa.alloc(dvui.Color.PMA, @as(usize, @intFromFloat(s.w * s.h)));
             defer gpa.free(pixels);
             // set all pixels to zero alpha
             @memset(pixels, .transparent);
 
             //const num_glyphs = fce.glyph_info.count();
-            //std.debug.print("font size {d} regen glyph atlas num {d} max size {}\n", .{ sized_font.size, num_glyphs, size });
+            //std.debug.print("font size {d} regen glyph atlas num {d} max size {}\n", .{ sized_font.size, num_glyphs, s });
 
             var x: i32 = pad;
             var y: i32 = pad;
@@ -532,8 +512,8 @@ pub const Cache = struct {
                     break :blk .{ e.value_ptr, e.key_ptr.* };
                 };
 
-                gi.uv[0] = @as(f32, @floatFromInt(x + pad)) / size.w;
-                gi.uv[1] = @as(f32, @floatFromInt(y + pad)) / size.h;
+                gi.uv[0] = @as(f32, @floatFromInt(x + pad)) / s.w;
+                gi.uv[1] = @as(f32, @floatFromInt(y + pad)) / s.h;
 
                 if (impl == .FreeType) blk: {
                     FreeType.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(FreeType.LoadFlags{ .render = true })))) catch |err| {
@@ -558,7 +538,7 @@ pub const Cache = struct {
                             const src = bitmap.buffer[@as(usize, @intCast(row * bitmap.pitch + col))];
 
                             // because of the extra edge, offset by 1 row and 1 col
-                            const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(size.w)) + (x + col + pad)));
+                            const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(s.w)) + (x + col + pad)));
 
                             // premultiplied white
                             pixels[di] = .{ .r = src, .g = src, .b = src, .a = src };
@@ -573,11 +553,11 @@ pub const Cache = struct {
                     const bitmap = try gpa.alloc(u8, @as(usize, out_w * out_h));
                     defer gpa.free(bitmap);
 
-                    //log.debug("makecodepointBitmap size x {d} y {d} w {d} h {d} out w {d} h {d}", .{ x, y, size.w, size.h, out_w, out_h });
+                    //log.debug("makecodepointBitmap size x {d} y {d} w {d} h {d} out w {d} h {d}", .{ x, y, s.w, s.h, out_w, out_h });
 
                     c.stbtt_MakeCodepointBitmapSubpixel(&self.face, bitmap.ptr, @as(c_int, @intCast(out_w)), @as(c_int, @intCast(out_h)), @as(c_int, @intCast(out_w)), self.scaleFactor, self.scaleFactor, 0.0, 0.0, @as(c_int, @intCast(codepoint)));
 
-                    const stride = @as(usize, @intFromFloat(size.w));
+                    const stride = @as(usize, @intFromFloat(s.w));
                     const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x));
                     for (0..out_h) |row| {
                         for (0..out_w) |col| {
@@ -600,7 +580,7 @@ pub const Cache = struct {
                 }
             }
 
-            self.texture_atlas_cache = try backend.textureCreate(@ptrCast(pixels.ptr), @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
+            self.texture_atlas_cache = try backend.textureCreate(@ptrCast(pixels.ptr), @as(u32, @intFromFloat(s.w)), @as(u32, @intFromFloat(s.h)), .linear);
             return self.texture_atlas_cache.?;
         }
 

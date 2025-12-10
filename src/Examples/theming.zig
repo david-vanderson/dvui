@@ -8,8 +8,10 @@ const modified_adwaita_theme = blk: {
     var theme = Theme.builtin.adwaita_light;
 
     theme.name = "Adwaita modified";
-    theme.font_body.id = .Aleo;
-    theme.font_heading.id = .AleoBd;
+
+    theme.embedded_fonts = @import("../themes/win98.zig").fonts;
+    theme.font_body = .find(.{ .family = "Aleo" });
+    theme.font_heading = .find(.{ .family = "AleoBd" });
     theme.fill = .teal;
 
     break :blk theme;
@@ -192,22 +194,19 @@ fn fonts(theme: *Theme) bool {
 
     var current_font_index: ?usize = null;
     var current_font_name: []const u8 = "Unknown";
-    var it = dvui.currentWindow().fonts.database.iterator();
-    var i: usize = 0;
-    while (it.next()) |entry| : (i += 1) {
-        if (entry.key_ptr.* == edited_font.id) {
+    for (dvui.currentWindow().fonts.database.items, 0..) |dbs, i| {
+        if (std.mem.eql(u8, dbs.familyName(), edited_font.familyName())) {
             current_font_index = i;
-            current_font_name = entry.value_ptr.name;
+            current_font_name = edited_font.familyName();
         }
     }
 
     var dd: dvui.DropdownWidget = undefined;
     dd.init(@src(), .{ .selected_index = current_font_index, .label = current_font_name }, .{});
     if (dd.dropped()) {
-        it = dvui.currentWindow().fonts.database.iterator();
-        while (it.next()) |entry| {
-            if (dd.addChoiceLabel(entry.value_ptr.name)) {
-                edited_font.id = entry.key_ptr.*;
+        for (dvui.currentWindow().fonts.database.items) |dbs| {
+            if (dd.addChoiceLabel(dbs.familyName())) {
+                edited_font.* = edited_font.withFamily(dbs.familyName());
                 changed = true;
             }
         }
@@ -403,11 +402,6 @@ test {
 test "DOCIMG theming" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 300 } });
     defer t.deinit();
-
-    // Load all fonts for the themes used in this test, usually done by `Examples.demo()`
-    inline for (dvui.Theme.builtins) |theme| {
-        try t.window.fonts.addBuiltinFontsForTheme(t.window.gpa, theme);
-    }
 
     const frame = struct {
         fn frame() !dvui.App.Result {

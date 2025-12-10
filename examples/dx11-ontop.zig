@@ -33,7 +33,6 @@ pub fn main() !void {
     _ = win32.UpdateWindow(wnd);
 
     const win: *dvui.Window = backend.getWindow();
-    try win.fonts.addBuiltinFontsForTheme(win.gpa, dvui.Theme.builtin.adwaita_light);
     log.info("dvui window also init.", .{});
 
     main_loop: while (true) switch (Backend.serviceMessageQueue()) {
