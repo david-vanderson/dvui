@@ -111,6 +111,8 @@ max_default_corner_radius: ?f32 = null,
 /// if true, all strings in `Theme` will be freed in `deinit`
 allocated_strings: bool = false,
 
+embedded_fonts: []const Font.Source = &.{},
+
 pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
     if (self.allocated_strings) {
         gpa.free(self.name);
@@ -247,14 +249,14 @@ pub fn picker(src: std.builtin.SourceLocation, themes: []const Theme, opts: Opti
 pub const builtin = struct {
     pub const adwaita_light = @import("themes/Adwaita.zig").light;
     pub const adwaita_dark = @import("themes/Adwaita.zig").dark;
-    pub const dracula = QuickTheme.builtin.dracula.toTheme(null) catch unreachable;
-    pub const gruvbox = QuickTheme.builtin.gruvbox.toTheme(null) catch unreachable;
-    pub const jungle = QuickTheme.builtin.jungle.toTheme(null) catch unreachable;
-    pub const opendyslexic = QuickTheme.builtin.opendyslexic.toTheme(null) catch unreachable;
+    //pub const dracula = QuickTheme.builtin.dracula.toTheme(null) catch unreachable;
+    //pub const gruvbox = QuickTheme.builtin.gruvbox.toTheme(null) catch unreachable;
+    //pub const jungle = QuickTheme.builtin.jungle.toTheme(null) catch unreachable;
+    //pub const opendyslexic = QuickTheme.builtin.opendyslexic.toTheme(null) catch unreachable;
     pub const win98 = @import("themes/win98.zig").light;
 
     test {
-        // Ensures all builting themes are valid
+        // Ensures all builtin themes are valid
         std.testing.refAllDecls(@This());
     }
 };
@@ -278,8 +280,6 @@ pub const builtins = blk: {
 
 pub const QuickTheme = struct {
     pub const builtin = struct {
-        pub const adwaita_light: QuickTheme = @import("themes/adwaita_light.zon");
-        pub const adwaita_dark: QuickTheme = @import("themes/adwaita_dark.zon");
         pub const dracula: QuickTheme = @import("themes/dracula.zon");
         pub const gruvbox: QuickTheme = @import("themes/gruvbox.zon");
         pub const jungle: QuickTheme = @import("themes/jungle.zon");
@@ -292,6 +292,8 @@ pub const QuickTheme = struct {
     };
 
     name: []const u8,
+
+    embedded_fonts: []const Font.Source,
 
     // fonts
     font_size: f32 = 14,
@@ -391,42 +393,15 @@ pub const QuickTheme = struct {
                 .border = .average(.red, border),
             },
 
-            .font_body = .{
-                .size = @round(self.font_size),
-                .id = .fromName(self.font_name_body),
-            },
-            .font_heading = .{
-                .size = @round(self.font_size),
-                .id = .fromName(self.font_name_heading),
-            },
-            .font_caption = .{
-                .size = @round(self.font_size * 0.77),
-                .id = .fromName(self.font_name_caption),
-            },
-            .font_caption_heading = .{
-                .size = @round(self.font_size * 0.77),
-                .id = .fromName(self.font_name_caption),
-            },
-            .font_title = .{
-                .size = @round(self.font_size * 2.15),
-                .id = .fromName(self.font_name_title),
-            },
-            .font_title_1 = .{
-                .size = @round(self.font_size * 1.77),
-                .id = .fromName(self.font_name_title),
-            },
-            .font_title_2 = .{
-                .size = @round(self.font_size * 1.54),
-                .id = .fromName(self.font_name_title),
-            },
-            .font_title_3 = .{
-                .size = @round(self.font_size * 1.3),
-                .id = .fromName(self.font_name_title),
-            },
-            .font_title_4 = .{
-                .size = @round(self.font_size * 1.15),
-                .id = .fromName(self.font_name_title),
-            },
+            .font_body = .find(.{ .family = self.font_name_body, .size = @round(self.font_size) }),
+            .font_heading = .find(.{ .family = self.font_name_heading, .size = @round(self.font_size) }),
+            .font_caption = .find(.{ .family = self.font_name_caption, .size = @round(self.font_size * 0.77) }),
+            .font_caption_heading = .find(.{ .family = self.font_name_caption, .size = @round(self.font_size * 0.77) }),
+            .font_title = .find(.{ .family = self.font_name_title, .size = @round(self.font_size * 2.15) }),
+            .font_title_1 = .find(.{ .family = self.font_name_title, .size = @round(self.font_size * 1.77) }),
+            .font_title_2 = .find(.{ .family = self.font_name_title, .size = @round(self.font_size * 1.54) }),
+            .font_title_3 = .find(.{ .family = self.font_name_title, .size = @round(self.font_size * 1.3) }),
+            .font_title_4 = .find(.{ .family = self.font_name_title, .size = @round(self.font_size * 1.15) }),
 
             .allocated_strings = gpa != null,
         };

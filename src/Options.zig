@@ -498,9 +498,7 @@ pub fn hash(self: *const Options) u64 {
     const fontStyle: FontStyle = self.font_style orelse .body;
     hasher.update(asBytes(&fontStyle));
     const font = self.fontGet();
-    hasher.update(asBytes(&font.id));
-    hasher.update(asBytes(&font.line_height_factor));
-    hasher.update(asBytes(&font.size));
+    hasher.update(asBytes(&font.hash()));
 
     if (self.tab_index) |ti| hasher.update(asBytes(&ti));
     hasher.update(asBytes(&self.idExtra()));

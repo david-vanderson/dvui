@@ -22,21 +22,34 @@ const light_err_fill = err_hsl.color();
 const light_err_fill_hover = err_hsl.lighten(-10).color();
 const light_err_border = err_hsl.lighten(-20).color();
 
+const fonts: []const Font.Source = &.{
+    .{
+        .family = Font.array("Vera"),
+        .bytes = @embedFile("../fonts/bitstream-vera/Vera.ttf"),
+    },
+    .{
+        .family = Font.array("VeraBd"),
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraBd.ttf"),
+    },
+};
+
 pub const light = light: {
     @setEvalBranchQuota(3123);
     break :light Theme{
         .name = "Adwaita Light",
         .dark = false,
 
-        .font_body = .{ .size = 16, .id = .Vera },
-        .font_heading = .{ .size = 16, .id = .VeraBd },
-        .font_caption = .{ .size = 13, .id = .Vera, .line_height_factor = 1.1 },
-        .font_caption_heading = .{ .size = 13, .id = .VeraBd, .line_height_factor = 1.1 },
-        .font_title = .{ .size = 28, .id = .Vera },
-        .font_title_1 = .{ .size = 24, .id = .VeraBd },
-        .font_title_2 = .{ .size = 22, .id = .VeraBd },
-        .font_title_3 = .{ .size = 20, .id = .VeraBd },
-        .font_title_4 = .{ .size = 18, .id = .VeraBd },
+        .embedded_fonts = fonts,
+
+        .font_body = .find(.{ .family = "Vera" }),
+        .font_heading = .find(.{ .family = "VeraBd" }),
+        .font_caption = .find(.{ .family = "Vera", .size = 13, .line_height_factor = 1.1 }),
+        .font_caption_heading = .find(.{ .family = "VeraBd", .size = 13, .line_height_factor = 1.1 }),
+        .font_title = .find(.{ .family = "Vera", .size = 28 }),
+        .font_title_1 = .find(.{ .family = "Vera", .size = 28 }),
+        .font_title_2 = .find(.{ .family = "Vera", .size = 22 }),
+        .font_title_3 = .find(.{ .family = "Vera", .size = 20 }),
+        .font_title_4 = .find(.{ .family = "Vera", .size = 18 }),
 
         .focus = accent,
 
@@ -95,15 +108,17 @@ pub const dark = dark: {
         .name = "Adwaita Dark",
         .dark = true,
 
-        .font_body = .{ .size = 16, .id = .Vera },
-        .font_heading = .{ .size = 16, .id = .VeraBd },
-        .font_caption = .{ .size = 13, .id = .Vera, .line_height_factor = 1.1 },
-        .font_caption_heading = .{ .size = 13, .id = .VeraBd, .line_height_factor = 1.1 },
-        .font_title = .{ .size = 28, .id = .Vera },
-        .font_title_1 = .{ .size = 24, .id = .VeraBd },
-        .font_title_2 = .{ .size = 22, .id = .VeraBd },
-        .font_title_3 = .{ .size = 20, .id = .VeraBd },
-        .font_title_4 = .{ .size = 18, .id = .VeraBd },
+        .embedded_fonts = fonts,
+
+        .font_body = .find(.{ .family = "Vera" }),
+        .font_heading = .find(.{ .family = "VeraBd" }),
+        .font_caption = .find(.{ .family = "Vera", .size = 13, .line_height_factor = 1.1 }),
+        .font_caption_heading = .find(.{ .family = "VeraBd", .size = 13, .line_height_factor = 1.1 }),
+        .font_title = .find(.{ .family = "Vera", .size = 28 }),
+        .font_title_1 = .find(.{ .family = "Vera", .size = 28 }),
+        .font_title_2 = .find(.{ .family = "Vera", .size = 22 }),
+        .font_title_3 = .find(.{ .family = "Vera", .size = 20 }),
+        .font_title_4 = .find(.{ .family = "Vera", .size = 18 }),
 
         .focus = accent,
 

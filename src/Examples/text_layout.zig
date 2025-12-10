@@ -128,25 +128,27 @@ pub fn layoutText() void {
 
         tl.processEvents();
 
+        const fontWithLineHeight = dvui.themeGet().font_body.withLineHeight(line_height_factor);
+
         const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. ";
         const lorem2 = " Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\n";
-        tl.addText(lorem, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
+        tl.addText(lorem, .{ .font = fontWithLineHeight });
 
         tl.addLink(
             .{
                 .text = "This text is a link that is part of the text layout and goes to the dvui home page.",
                 .url = "https://david-vanderson.github.io/",
             },
-            .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) },
+            .{ .font = fontWithLineHeight },
         );
 
-        tl.addText(lorem2, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
+        tl.addText(lorem2, .{ .font = fontWithLineHeight });
 
         const start = "\nNotice that the text in this box is wrapping around the stuff in the corners.\n\n";
         tl.addText(start, .{ .font_style = .title_4 });
 
         const col = dvui.Color.average(tl.data().options.color(.text), tl.data().options.color(.fill));
-        tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = col, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
+        tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = col, .font = fontWithLineHeight });
 
         tl.format("This line uses zig format strings: {d}\n\n", .{12345}, .{});
 

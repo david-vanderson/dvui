@@ -219,7 +219,7 @@ pub fn styling() void {
             var ninepatch = dvui.box(@src(), .{}, .{
                 .expand = .both,
                 .style = .control,
-                .ninepatch_fill = &dvui.Theme.builtin.win98.control.ninepatch_fill.?,
+                .ninepatch_fill = &@import("../themes/win98.zig").raised,
                 .background = true,
             });
             defer ninepatch.deinit();
@@ -280,11 +280,6 @@ test {
 test "DOCIMG styling" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 300 } });
     defer t.deinit();
-
-    // Load all fonts for the themes used in this test, usually done by `Examples.demo()`
-    inline for (dvui.Theme.builtins) |theme| {
-        try t.window.fonts.addBuiltinFontsForTheme(t.window.gpa, theme);
-    }
 
     const frame = struct {
         fn frame() !dvui.App.Result {
