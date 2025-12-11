@@ -192,8 +192,18 @@ export fn dvui_c_pow(x: f64, y: f64) f64 {
     return @exp(@log(x) * y);
 }
 
-export fn dvui_c_ldexp(x: f64, n: c_int) f64 {
+fn dvui_c_ldexp(x: f64, n: c_int) callconv(.c) f64 {
     return x * @exp2(@as(f64, @floatFromInt(n)));
+}
+
+// See https://github.com/ziglang/zig/issues/23358
+comptime {
+    switch (builtin.mode) {
+        .Debug => {
+            @export(&dvui_c_ldexp, .{ .name = "dvui_c_ldexp" });
+        },
+        else => {},
+    }
 }
 
 export fn dvui_c_floor(x: f64) f64 {
