@@ -92,8 +92,10 @@ pub const StartOptions = struct {
     /// defaults will be overrulled.
     window_init_options: dvui.Window.InitOptions = .{},
     /// General purpose allocator.  If null, dvui picks a reasonable default.
+    /// Use dvui.App.config.startFn to initialize this non-statically
     gpa: ?std.mem.Allocator = null,
     /// Io implementation.  If null, dvui picks a reasonable default.
+    /// Use dvui.App.config.startFn to initialize this non-statically
     io: ?std.Io = null,
 };
 
