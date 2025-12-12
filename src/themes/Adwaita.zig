@@ -24,24 +24,53 @@ const light_err_border = err_hsl.lighten(-20).color();
 
 const fonts: []const Font.Source = &.{
     .{
-        .family = Font.array("Vera"),
+        .family = Font.array("Vera Sans"),
         .bytes = @embedFile("../fonts/bitstream-vera/Vera.ttf"),
     },
     .{
-        .family = Font.array("Vera"),
+        .family = Font.array("Vera Sans"),
         .weight = .bold,
         .bytes = @embedFile("../fonts/bitstream-vera/VeraBd.ttf"),
     },
     .{
-        .family = Font.array("Vera"),
+        .family = Font.array("Vera Sans"),
         .style = .italic,
         .bytes = @embedFile("../fonts/bitstream-vera/VeraIt.ttf"),
     },
     .{
-        .family = Font.array("Vera"),
+        .family = Font.array("Vera Sans"),
         .weight = .bold,
         .style = .italic,
         .bytes = @embedFile("../fonts/bitstream-vera/VeraBI.ttf"),
+    },
+    .{
+        .family = Font.array("Vera Sans Mono"),
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraMono.ttf"),
+    },
+    .{
+        .family = Font.array("Vera Sans Mono"),
+        .weight = .bold,
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraMoBd.ttf"),
+    },
+    .{
+        .family = Font.array("Vera Sans Mono"),
+        .style = .italic,
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraMoIt.ttf"),
+    },
+    .{
+        .family = Font.array("Vera Sans Mono"),
+        .weight = .bold,
+        .style = .italic,
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraMoBI.ttf"),
+    },
+    .{
+        .family = Font.array("Vera Serif"),
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraSe.ttf"),
+    },
+    .{
+        .family = Font.array("Vera Serif"),
+        .weight = .bold,
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraSeBd.ttf"),
     },
 };
 
@@ -53,7 +82,10 @@ pub const light = light: {
 
         .embedded_fonts = fonts,
 
-        .font = .find(.{ .family = "Vera" }),
+        .font_body = .find(.{ .family = "Vera Sans" }),
+        .font_heading = .find(.{ .family = "Vera Sans", .weight = .bold }),
+        .font_title = .find(.{ .family = "Vera Sans", .size = 20 }),
+        .font_mono = .find(.{ .family = "Vera Sans Mono" }),
 
         .focus = accent,
 
@@ -114,7 +146,10 @@ pub const dark = dark: {
 
         .embedded_fonts = fonts,
 
-        .font = .find(.{ .family = "Vera" }),
+        .font_body = .find(.{ .family = "Vera Sans" }),
+        .font_heading = .find(.{ .family = "Vera Sans", .weight = .bold }),
+        .font_title = .find(.{ .family = "Vera Sans", .size = 20 }),
+        .font_mono = .find(.{ .family = "Vera Sans Mono" }),
 
         .focus = accent,
 

@@ -10,7 +10,7 @@ const modified_adwaita_theme = blk: {
     theme.name = "Adwaita modified";
 
     theme.embedded_fonts = @import("../themes/win98.zig").fonts;
-    theme.font = .find(.{ .family = "Aleo" });
+    theme.font_body = .find(.{ .family = "Aleo" });
     theme.fill = .teal;
 
     break :blk theme;
@@ -152,7 +152,7 @@ fn fonts(theme: *Theme) bool {
     const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .role = .tab_panel });
     defer hbox.deinit();
 
-    const edited_font: *dvui.Font = &theme.font;
+    const edited_font: *dvui.Font = &theme.font_body;
 
     var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
     defer vbox.deinit();

@@ -128,7 +128,7 @@ fn dvui_frame() !void {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = dvui.themeGet().font.larger(2) });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
     const lorem = "This example shows how to use dvui in a web canvas.";
     tl.addText(lorem, .{});
     tl.deinit();

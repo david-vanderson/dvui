@@ -165,7 +165,7 @@ fn gui_frame() !void {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
     defer scroll.deinit();
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = dvui.themeGet().font.larger(2) });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
     const lorem = "This example shows how to use dvui in a normal application.";
     tl.addText(lorem, .{});
     tl.deinit();

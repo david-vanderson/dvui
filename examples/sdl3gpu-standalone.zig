@@ -139,7 +139,7 @@ fn gui_frame() bool {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = dvui.themeGet().font.larger(2) });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
     const lorem = "This example shows how to use dvui in a standalone application with SDL3 GPU.";
     tl.addText(lorem, .{});
     tl.deinit();
@@ -189,11 +189,11 @@ fn gui_frame() bool {
             defer hbox.deinit();
 
             if (dvui.button(@src(), "Zoom In", .{}, .{})) {
-                scale_val = @round(dvui.themeGet().font.size * scale_val + 1.0) / dvui.themeGet().font.size;
+                scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
             }
 
             if (dvui.button(@src(), "Zoom Out", .{}, .{})) {
-                scale_val = @round(dvui.themeGet().font.size * scale_val - 1.0) / dvui.themeGet().font.size;
+                scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
             }
         }
 

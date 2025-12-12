@@ -90,17 +90,33 @@ highlight: Style = .{},
 /// colors for buttons to perform dangerous actions
 err: Style = .{},
 
-/// reserved for application use
+/// Reserved for application use.  dvui only uses these in examples.
 app1: Style = .{},
 app2: Style = .{},
 app3: Style = .{},
 
-/// font for body text
+/// Font for body text.
 /// Use `Font.withSize`, `Font.withWeight`, etc. for variation.
 /// Suggestions:
 /// - headings: bold, same size
 /// - captions: size 2-3 smaller, smaller line height factor like 1.1
-font: Font,
+font_body: Font,
+
+/// Usually a bold version of font_body.
+/// dvui uses this by default for:
+/// * subwindow titles
+/// * active tab name
+/// * grid headers
+/// * expanders
+font_heading: Font,
+
+/// Usually a larger version of font_body.
+/// dvui uses this by default for:
+/// * plot titles
+font_title: Font,
+
+/// Font for monospaced body text.  dvui only uses this in examples.
+font_mono: Font,
 
 /// Caps widget default corner_radius.  Can be overridden at widget call sites.
 max_default_corner_radius: ?f32 = null,
@@ -108,6 +124,7 @@ max_default_corner_radius: ?f32 = null,
 /// if true, all strings in `Theme` will be freed in `deinit`
 allocated_strings: bool = false,
 
+/// Font sources here will be loaded on demand by dvui when this theme is used.
 embedded_fonts: []const Font.Source = &.{},
 
 pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
@@ -119,7 +136,10 @@ pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
 
 pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
     var ret = self.*;
-    ret.font = ret.font.withSize(ret.font.size + delta);
+    ret.font_body = ret.font_body.withSize(ret.font_body.size + delta);
+    ret.font_heading = ret.font_heading.withSize(ret.font_heading.size + delta);
+    ret.font_title = ret.font_title.withSize(ret.font_title.size + delta);
+    ret.font_mono = ret.font_mono.withSize(ret.font_mono.size + delta);
 
     return ret;
 }

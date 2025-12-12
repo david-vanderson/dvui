@@ -13,6 +13,10 @@ const Backend = dvui.Backend;
 ///
 /// Usually specified with `find`:
 /// const f: Font = .find(.{ .family = "Vera", .size = 20 });
+///
+/// To source a Font from the theme, use `theme`:
+/// const f: Font = .theme(.mono);
+/// const f = Font.theme(mono).larger(2);
 const Font = @This();
 
 const impl: enum { FreeType, STB } = if (dvui.useFreeType) .FreeType else .STB;
@@ -58,6 +62,22 @@ pub const FindOptions = struct {
 
 pub fn find(opts: FindOptions) Font {
     return (Font{}).withFamily(opts.family).withSize(opts.size).withWeight(opts.weight).withStyle(opts.style).withLineHeight(opts.line_height_factor);
+}
+
+pub const ThemeFontName = enum {
+    body,
+    heading,
+    title,
+    mono,
+};
+
+pub fn theme(which: ThemeFontName) Font {
+    switch (which) {
+        .body => return dvui.themeGet().font_body,
+        .heading => return dvui.themeGet().font_heading,
+        .title => return dvui.themeGet().font_title,
+        .mono => return dvui.themeGet().font_mono,
+    }
 }
 
 pub fn withFamily(self: Font, n: []const u8) Font {
@@ -110,6 +130,18 @@ pub fn name(self: *const Font, allocator: std.mem.Allocator) []const u8 {
         .italic => " Italic",
     };
     return std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ self.familyName(), weight, style }) catch "";
+}
+
+pub fn format(self: *const Font, writer: *std.Io.Writer) !void {
+    const weight = switch (self.weight) {
+        .normal => "",
+        .bold => " Bold",
+    };
+    const style = switch (self.style) {
+        .normal => "",
+        .italic => " Italic",
+    };
+    try writer.print("{s}{s}{s} {d}", .{ self.familyName(), weight, style, self.size });
 }
 
 /// Fonts that hash the same value use the same glyphs (same Font.Entry).
