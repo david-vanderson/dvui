@@ -2691,7 +2691,7 @@ pub const ExpanderOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ExpanderOptions, opts: Options) bool {
-    const options = expander_defaults.override(.{ .font = .theme(.heading) }).override(opts);
+    const options = expander_defaults.override(.{ .font = opts.themeGet().font_heading }).override(opts);
 
     var b = box(src, .{ .dir = .horizontal }, options);
     defer b.deinit();
