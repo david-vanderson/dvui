@@ -57,6 +57,17 @@ pub const fonts: []const Font.Source = &.{
         .weight = .bold,
         .bytes = @embedFile("../fonts/Aleo/static/Aleo-Bold.ttf"),
     },
+    .{
+        .family = Font.array("Aleo"),
+        .style = .italic,
+        .bytes = @embedFile("../fonts/Aleo/static/Aleo-Italic.ttf"),
+    },
+    .{
+        .family = Font.array("Aleo"),
+        .weight = .bold,
+        .style = .italic,
+        .bytes = @embedFile("../fonts/Aleo/static/Aleo-BoldItalic.ttf"),
+    },
 };
 
 pub const light = light: {
@@ -67,7 +78,10 @@ pub const light = light: {
 
         .embedded_fonts = fonts,
 
-        .font = .find(.{ .family = "Aleo" }),
+        .font_body = .find(.{ .family = "Aleo" }),
+        .font_heading = .find(.{ .family = "Aleo", .weight = .bold }),
+        .font_title = .find(.{ .family = "Aleo", .size = 20 }),
+        .font_mono = .find(.{ .family = "None" }),
 
         .text_select = dialog_blue_light,
         .focus = dialog_blue_light,

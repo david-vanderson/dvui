@@ -115,9 +115,9 @@ pub fn layoutText() void {
 
         cbox = dvui.box(@src(), .{}, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .style = .window, .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
         dvui.icon(@src(), "aircraft", entypo.aircraft, .{}, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 });
-        dvui.label(@src(), "Caption Heading", .{}, .{ .font = dvui.themeGet().font.larger(-3).withWeight(.bold).withLineHeight(1.1), .gravity_x = 0.5 });
+        dvui.label(@src(), "Caption Heading", .{}, .{ .font = dvui.Font.theme(.body).larger(-3).withWeight(.bold).withLineHeight(1.1), .gravity_x = 0.5 });
         var tl_caption = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
-        tl_caption.addText("Here is some caption text that is in it's own text layout.", .{ .font = dvui.themeGet().font.larger(-3).withLineHeight(1.1) });
+        tl_caption.addText("Here is some caption text that is in it's own text layout.", .{ .font = dvui.Font.theme(.body).larger(-3).withLineHeight(1.1) });
         tl_caption.deinit();
         cbox.deinit();
 
@@ -128,7 +128,9 @@ pub fn layoutText() void {
 
         tl.processEvents();
 
-        const fontWithLineHeight = dvui.themeGet().font.withLineHeight(line_height_factor);
+        const fontWithLineHeight = dvui.Font.theme(.body).withLineHeight(line_height_factor);
+
+        tl.format("Body font is {s}\n\n", .{dvui.Font.theme(.body).familyName()}, .{});
 
         const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. ";
         const lorem2 = " Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\n";
@@ -145,30 +147,36 @@ pub fn layoutText() void {
         tl.addText(lorem2, .{ .font = fontWithLineHeight });
 
         const start = "\nNotice that the text in this box is wrapping around the stuff in the corners.\n\n";
-        tl.addText(start, .{ .font = dvui.themeGet().font.larger(2) });
+        tl.addText(start, .{ .font = .theme(.title) });
 
         const col = dvui.Color.average(tl.data().options.color(.text), tl.data().options.color(.fill));
         tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = col });
 
         tl.format("This line uses zig format strings: {d}\n\n", .{12345}, .{});
 
-        const bold_font = dvui.themeGet().font.withWeight(.bold);
+        const bold_font = dvui.Font.theme(.body).withWeight(.bold);
         if (bold_font.findSource()) |_| {
             tl.addText("Bold\n", .{ .font = bold_font.larger(2) });
         } else {
             tl.addText("Bold not available (using fallback font)\n", .{ .font = bold_font.larger(2) });
         }
-        const italic_font = dvui.themeGet().font.withStyle(.italic);
+        const italic_font = dvui.Font.theme(.body).withStyle(.italic);
         if (italic_font.findSource()) |_| {
             tl.addText("Italic\n", .{ .font = italic_font.larger(2) });
         } else {
             tl.addText("Italic not available (using fallback font)\n", .{ .font = italic_font.larger(2) });
         }
+        const mono_font = dvui.Font.theme(.mono);
+        if (mono_font.findSource()) |_| {
+            tl.format("Mono Font is {s}\n", .{mono_font.familyName()}, .{ .font = mono_font.larger(2) });
+        } else {
+            tl.addText("Mono not available (using fallback font)\n", .{ .font = mono_font.larger(2) });
+        }
 
-        tl.addText("Here ", .{ .font = dvui.themeGet().font.withWeight(.bold).withStyle(.italic).larger(12), .color_text = .{ .r = 100, .b = 100 } });
-        tl.addText("is some ", .{ .font = dvui.themeGet().font.larger(6), .color_text = .{ .b = 100, .g = 100 }, .color_fill = .green });
-        tl.addText("ugly text ", .{ .font = dvui.themeGet().font.larger(8), .color_text = .{ .r = 100, .g = 100 }, .color_fill = .teal });
-        tl.addText("that shows styling.", .{ .font = dvui.themeGet().font.larger(-3), .color_text = .{ .r = 100, .g = 50, .b = 50 } });
+        tl.addText("Here ", .{ .font = dvui.Font.theme(.body).withWeight(.bold).withStyle(.italic).larger(12), .color_text = .{ .r = 100, .b = 100 } });
+        tl.addText("is some ", .{ .font = dvui.Font.theme(.body).larger(6), .color_text = .{ .b = 100, .g = 100 }, .color_fill = .green });
+        tl.addText("ugly text ", .{ .font = dvui.Font.theme(.body).larger(8), .color_text = .{ .r = 100, .g = 100 }, .color_fill = .teal });
+        tl.addText("that shows styling.", .{ .font = dvui.Font.theme(.body).larger(-3), .color_text = .{ .r = 100, .g = 50, .b = 50 } });
     }
 }
 

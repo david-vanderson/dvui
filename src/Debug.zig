@@ -361,7 +361,7 @@ pub fn show(self: *Debug) void {
                 defer stack.deinit();
 
                 dvui.label(@src(), "{x} {s} (+{d})", .{ id, options.name orelse "???", options.idExtra() }, .{ .padding = .all(1) });
-                dvui.label(@src(), "{s}:{d}", .{ src.file, src.line }, .{ .font = dvui.themeGet().font.larger(-3), .padding = .all(1) });
+                dvui.label(@src(), "{s}:{d}", .{ src.file, src.line }, .{ .font = dvui.themeGet().font_body.larger(-3), .padding = .all(1) });
             }
         }
         if (remove_override_id) |id| {

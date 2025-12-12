@@ -190,7 +190,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
 
         left_alignment.spacer(@src(), 0);
 
-        var font = dvui.themeGet().font;
+        var font = dvui.Font.theme(.body);
         if (Sfont.dropdown > 0) {
             font = dvui.currentWindow().fonts.database.items[font_entries[Sfont.dropdown].idx - 1].font();
         }

@@ -462,10 +462,10 @@ test "vary header height" {
                     var cell = grid.headerCell(@src(), col, .{ .border = dvui.Rect.all(1) });
                     defer cell.deinit();
                     dvui.label(@src(), "{}", .{col}, .{ .font = switch (col) {
-                        0 => dvui.themeGet().font.larger(6),
-                        1 => dvui.themeGet().font.larger(4),
-                        2 => dvui.themeGet().font.larger(8),
-                        3 => dvui.themeGet().font.larger(2),
+                        0 => dvui.themeGet().font_body.larger(6),
+                        1 => dvui.themeGet().font_body.larger(4),
+                        2 => dvui.themeGet().font_body.larger(8),
+                        3 => dvui.themeGet().font_body.larger(2),
                         else => unreachable,
                     } });
                 }
@@ -508,10 +508,10 @@ test "vary row height" {
                         defer cell.deinit();
                         dvui.label(@src(), "{}:{}", .{ col, row }, .{
                             .font = switch (row) {
-                                0 => dvui.themeGet().font.larger(6),
-                                1 => dvui.themeGet().font.larger(4),
-                                2 => dvui.themeGet().font.larger(8),
-                                3 => dvui.themeGet().font.larger(2),
+                                0 => dvui.themeGet().font_body.larger(6),
+                                1 => dvui.themeGet().font_body.larger(4),
+                                2 => dvui.themeGet().font_body.larger(8),
+                                3 => dvui.themeGet().font_body.larger(2),
                                 else => unreachable,
                             },
                         });
@@ -706,7 +706,7 @@ test "resize rows" {
                             .border = dvui.Rect.all(1),
                         });
                         defer cell.deinit();
-                        dvui.label(@src(), "{}:{}", .{ col, row }, .{ .font = if (action == .tall) dvui.themeGet().font.larger(8) else null });
+                        dvui.label(@src(), "{}:{}", .{ col, row }, .{ .font = if (action == .tall) dvui.themeGet().font_body.larger(8) else null });
                     }
                 }
             }

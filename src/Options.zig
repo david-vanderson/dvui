@@ -241,7 +241,7 @@ pub fn ninepatch(self: *const Options, ask: NinepatchAsk) ?*const Ninepatch {
 }
 
 pub fn fontGet(self: *const Options) Font {
-    return self.font orelse self.themeGet().font;
+    return self.font orelse self.themeGet().font_body;
 }
 
 pub fn idExtra(self: *const Options) usize {
