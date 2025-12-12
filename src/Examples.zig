@@ -81,9 +81,6 @@ pub fn demo() void {
         return;
     }
 
-    // This will include all builtin fonts needed for the builtin themes in the binary
-    ensureAllRequiredFontsForThemesLoaded();
-
     const width = 600;
 
     var float = dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .width(width), .tag = demo_window_tag });
@@ -222,7 +219,7 @@ pub fn demo() void {
                 paned.animateSplit(1.0);
             }
 
-            dvui.label(@src(), "{s}", .{demo_active.name()}, .{ .font_style = .title_2, .gravity_y = 0.5 });
+            dvui.label(@src(), "{s}", .{demo_active.name()}, .{ .font = dvui.Font.theme(.title), .gravity_y = 0.5 });
         }
 
         var scroll: ?*dvui.ScrollAreaWidget = null;
@@ -270,13 +267,6 @@ pub fn demo() void {
     }
 }
 
-pub fn ensureAllRequiredFontsForThemesLoaded() void {
-    const cw = dvui.currentWindow();
-    inline for (@typeInfo(dvui.Theme.builtin).@"struct".decls) |decl| {
-        cw.fonts.addBuiltinFontsForTheme(cw.gpa, @field(dvui.Theme.builtin, decl.name)) catch @panic("Could not add builtin fonts");
-    }
-}
-
 pub fn dialogDirect() void {
     var dialog_win = dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = &show_dialog }, .{ .max_size_content = .width(500), .background = false, .border = .all(0) });
     defer dialog_win.deinit();
@@ -299,7 +289,7 @@ pub fn dialogDirect() void {
     defer back.deinit();
 
     dialog_win.dragAreaSet(dvui.windowHeader("Dialog", "", &show_dialog));
-    dvui.label(@src(), "Asking a Question", .{}, .{ .font_style = .title_4, .gravity_x = 0.5 });
+    dvui.label(@src(), "Asking a Question", .{}, .{ .font = .theme(.title), .gravity_x = 0.5 });
     dvui.label(@src(), "This dialog is directly called by user code.", .{}, .{ .gravity_x = 0.5 });
 
     {

@@ -451,7 +451,7 @@ pub fn themeGet() Theme {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn themeSet(theme: Theme) void {
-    currentWindow().theme = theme;
+    currentWindow().themeSet(theme);
 }
 
 /// Toggle showing the debug window (run during `Window.end`).
@@ -507,11 +507,6 @@ pub fn frameTimeNS() i128 {
     return currentWindow().frame_time_ns;
 }
 
-/// DEPRECATED: Use `Font.Cache.TTFEntry` directly
-///
-/// The bytes of a truetype font file and whether to free it.
-pub const FontBytesEntry = Font.Cache.TTFEntry;
-
 /// Add font to be referenced later by name.
 ///
 /// ttf_bytes are the bytes of the ttf file
@@ -521,33 +516,13 @@ pub const FontBytesEntry = Font.Cache.TTFEntry;
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?std.mem.Allocator) (std.mem.Allocator.Error || FontError)!void {
-    var cw = currentWindow();
-    try cw.fonts.database.ensureUnusedCapacity(cw.gpa, 1);
-    // Test if we can successfully open this font
-    // TODO: Find some more elegant way of validating ttf files
-    const font = Font{ .id = .fromName(name), .size = 14 };
-    var entry = try Font.Cache.Entry.init(ttf_bytes, font, name);
-    // Try and cache the entry since the work is already done
-    cw.fonts.cache.put(cw.gpa, font.hash(), entry) catch entry.deinit(cw.gpa, cw.backend);
-    cw.fonts.database.putAssumeCapacity(font.id, .{
-        .name = name,
-        .bytes = ttf_bytes,
-        .allocator = ttf_bytes_allocator,
-    });
+    try currentWindow().addFont(name, ttf_bytes, ttf_bytes_allocator);
 }
-
-/// DEPRECATED: Use `Font.Cache.Entry` directly
-pub const FontCacheEntry = Font.Cache.Entry;
 
 // Get or load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
 pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*Font.Cache.Entry {
     const cw = currentWindow();
     return cw.fonts.getOrCreate(cw.gpa, font);
-}
-
-// Load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
-pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontError!Font.Cache.Entry {
-    return Font.Cache.Entry.init(ttf_bytes, font, name);
 }
 
 /// Takes in svg bytes and returns a tvg bytes that can be used
@@ -2108,7 +2083,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
 
     dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{
         .expand = .horizontal,
-        .font_style = .heading,
+        .font = .theme(.heading),
         .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 },
         .label = .{ .for_id = dvui.subwindowCurrentId() },
     });
@@ -2120,7 +2095,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
             entypo.cross,
             .{},
             .{},
-            .{ .font_style = .heading, .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio },
+            .{ .font = .theme(.heading), .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio },
         )) {
             of.* = false;
         }
@@ -2704,7 +2679,6 @@ pub var expander_defaults: Options = .{
     .name = "Expander",
     .role = .group,
     .padding = Rect.all(4),
-    .font_style = .heading,
 };
 
 pub const ExpanderOptions = struct {
@@ -2717,7 +2691,7 @@ pub const ExpanderOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ExpanderOptions, opts: Options) bool {
-    const options = expander_defaults.override(opts);
+    const options = expander_defaults.override(.{ .font = opts.themeGet().font_heading }).override(opts);
 
     var b = box(src, .{ .dir = .horizontal }, options);
     defer b.deinit();

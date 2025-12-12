@@ -99,7 +99,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
 
     if (selected) {
         tab_defaults.style = .window;
-        tab_defaults.font_style = .heading;
+        tab_defaults.font = opts.fontGet().withWeight(.bold);
         tab_defaults.border = switch (self.init_options.dir) {
             .horizontal => .{ .x = 1, .y = 1, .w = 1 },
             .vertical => .{ .x = 1, .y = 1, .h = 1 },

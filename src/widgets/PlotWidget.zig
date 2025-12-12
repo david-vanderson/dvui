@@ -408,10 +408,10 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
     self.box.drawBackground();
 
     if (self.init_options.title) |title| {
-        dvui.label(@src(), "{s}", .{title}, .{ .gravity_x = 0.5, .font_style = .title_4 });
+        dvui.label(@src(), "{s}", .{title}, .{ .gravity_x = 0.5, .font = opts.themeGet().font_title });
     }
 
-    const tick_font = (dvui.Options{ .font_style = .caption }).fontGet();
+    const tick_font = opts.themeGet().font_body.larger(-3);
 
     var yticks = self.y_axis.getTicks(dvui.currentWindow().lifo()) catch Axis.Ticks.empty;
     defer yticks.deinit(dvui.currentWindow().lifo());

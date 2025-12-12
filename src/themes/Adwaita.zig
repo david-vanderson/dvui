@@ -22,21 +22,70 @@ const light_err_fill = err_hsl.color();
 const light_err_fill_hover = err_hsl.lighten(-10).color();
 const light_err_border = err_hsl.lighten(-20).color();
 
+const fonts: []const Font.Source = &.{
+    .{
+        .family = Font.array("Vera Sans"),
+        .bytes = @embedFile("../fonts/bitstream-vera/Vera.ttf"),
+    },
+    .{
+        .family = Font.array("Vera Sans"),
+        .weight = .bold,
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraBd.ttf"),
+    },
+    .{
+        .family = Font.array("Vera Sans"),
+        .style = .italic,
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraIt.ttf"),
+    },
+    .{
+        .family = Font.array("Vera Sans"),
+        .weight = .bold,
+        .style = .italic,
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraBI.ttf"),
+    },
+    .{
+        .family = Font.array("Vera Sans Mono"),
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraMono.ttf"),
+    },
+    .{
+        .family = Font.array("Vera Sans Mono"),
+        .weight = .bold,
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraMoBd.ttf"),
+    },
+    .{
+        .family = Font.array("Vera Sans Mono"),
+        .style = .italic,
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraMoIt.ttf"),
+    },
+    .{
+        .family = Font.array("Vera Sans Mono"),
+        .weight = .bold,
+        .style = .italic,
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraMoBI.ttf"),
+    },
+    .{
+        .family = Font.array("Vera Serif"),
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraSe.ttf"),
+    },
+    .{
+        .family = Font.array("Vera Serif"),
+        .weight = .bold,
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraSeBd.ttf"),
+    },
+};
+
 pub const light = light: {
     @setEvalBranchQuota(3123);
     break :light Theme{
         .name = "Adwaita Light",
         .dark = false,
 
-        .font_body = .{ .size = 16, .id = .Vera },
-        .font_heading = .{ .size = 16, .id = .VeraBd },
-        .font_caption = .{ .size = 13, .id = .Vera, .line_height_factor = 1.1 },
-        .font_caption_heading = .{ .size = 13, .id = .VeraBd, .line_height_factor = 1.1 },
-        .font_title = .{ .size = 28, .id = .Vera },
-        .font_title_1 = .{ .size = 24, .id = .VeraBd },
-        .font_title_2 = .{ .size = 22, .id = .VeraBd },
-        .font_title_3 = .{ .size = 20, .id = .VeraBd },
-        .font_title_4 = .{ .size = 18, .id = .VeraBd },
+        .embedded_fonts = fonts,
+
+        .font_body = .find(.{ .family = "Vera Sans" }),
+        .font_heading = .find(.{ .family = "Vera Sans", .weight = .bold }),
+        .font_title = .find(.{ .family = "Vera Sans", .size = 20 }),
+        .font_mono = .find(.{ .family = "Vera Sans Mono" }),
 
         .focus = accent,
 
@@ -95,15 +144,12 @@ pub const dark = dark: {
         .name = "Adwaita Dark",
         .dark = true,
 
-        .font_body = .{ .size = 16, .id = .Vera },
-        .font_heading = .{ .size = 16, .id = .VeraBd },
-        .font_caption = .{ .size = 13, .id = .Vera, .line_height_factor = 1.1 },
-        .font_caption_heading = .{ .size = 13, .id = .VeraBd, .line_height_factor = 1.1 },
-        .font_title = .{ .size = 28, .id = .Vera },
-        .font_title_1 = .{ .size = 24, .id = .VeraBd },
-        .font_title_2 = .{ .size = 22, .id = .VeraBd },
-        .font_title_3 = .{ .size = 20, .id = .VeraBd },
-        .font_title_4 = .{ .size = 18, .id = .VeraBd },
+        .embedded_fonts = fonts,
+
+        .font_body = .find(.{ .family = "Vera Sans" }),
+        .font_heading = .find(.{ .family = "Vera Sans", .weight = .bold }),
+        .font_title = .find(.{ .family = "Vera Sans", .size = 20 }),
+        .font_mono = .find(.{ .family = "Vera Sans Mono" }),
 
         .focus = accent,
 

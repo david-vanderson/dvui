@@ -29,7 +29,7 @@ const dialog_gray_light = Color.fromHex("b5b5b5");
 
 const link_blue = Color.fromHex("0000ff");
 
-const raised = dvui.Ninepatch{
+pub const raised = dvui.Ninepatch{
     .source = .{ .imageFile = .{
         .bytes = @embedFile("raised.png"),
         .name = "raised.png",
@@ -38,7 +38,7 @@ const raised = dvui.Ninepatch{
     .edge = .all(2),
 };
 
-const sunken = dvui.Ninepatch{
+pub const sunken = dvui.Ninepatch{
     .source = .{ .imageFile = .{
         .bytes = @embedFile("sunken.png"),
         .name = "sunken.png",
@@ -47,21 +47,41 @@ const sunken = dvui.Ninepatch{
     .edge = .all(2),
 };
 
+pub const fonts: []const Font.Source = &.{
+    .{
+        .family = Font.array("Aleo"),
+        .bytes = @embedFile("../fonts/Aleo/static/Aleo-Regular.ttf"),
+    },
+    .{
+        .family = Font.array("Aleo"),
+        .weight = .bold,
+        .bytes = @embedFile("../fonts/Aleo/static/Aleo-Bold.ttf"),
+    },
+    .{
+        .family = Font.array("Aleo"),
+        .style = .italic,
+        .bytes = @embedFile("../fonts/Aleo/static/Aleo-Italic.ttf"),
+    },
+    .{
+        .family = Font.array("Aleo"),
+        .weight = .bold,
+        .style = .italic,
+        .bytes = @embedFile("../fonts/Aleo/static/Aleo-BoldItalic.ttf"),
+    },
+};
+
 pub const light = light: {
     @setEvalBranchQuota(3123);
     break :light Theme{
         .name = "Windows 98",
         .dark = false,
 
-        .font_body = .{ .size = 16, .id = .Aleo },
-        .font_heading = .{ .size = 16, .id = .AleoBd },
-        .font_caption = .{ .size = 13, .id = .Aleo, .line_height_factor = 1.1 },
-        .font_caption_heading = .{ .size = 13, .id = .AleoBd, .line_height_factor = 1.1 },
-        .font_title = .{ .size = 28, .id = .Aleo },
-        .font_title_1 = .{ .size = 24, .id = .AleoBd },
-        .font_title_2 = .{ .size = 22, .id = .AleoBd },
-        .font_title_3 = .{ .size = 20, .id = .AleoBd },
-        .font_title_4 = .{ .size = 18, .id = .AleoBd },
+        .embedded_fonts = fonts,
+
+        .font_body = .find(.{ .family = "Aleo" }),
+        .font_heading = .find(.{ .family = "Aleo", .weight = .bold }),
+        .font_title = .find(.{ .family = "Aleo", .size = 20 }),
+        .font_mono = .find(.{ .family = "None" }),
 
         .text_select = dialog_blue_light,
         .focus = dialog_blue_light,

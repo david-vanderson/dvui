@@ -146,7 +146,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     }
 
     const target_size = opts.font.size * opts.rs.s;
-    const sized_font = opts.font.resize(target_size);
+    const sized_font = opts.font.withSize(target_size);
 
     // might get a slightly smaller font
     var fce = try cw.fonts.getOrCreate(cw.gpa, sized_font);
@@ -167,7 +167,9 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     const texture_atlas = fce.getTextureAtlas(cw.gpa, cw.backend) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
-            dvui.log.err("Could not get texture atlas for font {f}, text area marked in magenta, to display '{s}'", .{ opts.font.id, opts.text });
+            const fname = opts.font.name(cw.arena());
+            defer cw.arena().free(fname);
+            dvui.log.err("Could not get texture atlas for font {s}, text area marked in magenta, to display '{s}'", .{ fname, opts.text });
             opts.rs.r.fill(.{}, .{ .color = .magenta });
             return;
         },

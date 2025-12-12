@@ -959,7 +959,7 @@ pub fn displayContainer(comptime src: std.builtin.SourceLocation, field_name: []
     if (dvui.expander(
         src,
         field_name,
-        .{ .default_expanded = true },
+        .{ .default_expanded = false },
         .{ .expand = .horizontal },
     )) {
         vbox = dvui.box(src, .{ .dir = .vertical }, .{

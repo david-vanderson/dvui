@@ -90,26 +90,42 @@ highlight: Style = .{},
 /// colors for buttons to perform dangerous actions
 err: Style = .{},
 
-/// reserved for application use
+/// Reserved for application use.  dvui only uses these in examples.
 app1: Style = .{},
 app2: Style = .{},
 app3: Style = .{},
 
+/// Font for body text.
+/// Use `Font.withSize`, `Font.withWeight`, etc. for variation.
+/// Suggestions:
+/// - headings: bold, same size
+/// - captions: size 2-3 smaller, smaller line height factor like 1.1
 font_body: Font,
+
+/// Usually a bold version of font_body.
+/// dvui uses this by default for:
+/// * subwindow titles
+/// * active tab name
+/// * grid headers
+/// * expanders
 font_heading: Font,
-font_caption: Font,
-font_caption_heading: Font,
+
+/// Usually a larger version of font_body.
+/// dvui uses this by default for:
+/// * plot titles
 font_title: Font,
-font_title_1: Font,
-font_title_2: Font,
-font_title_3: Font,
-font_title_4: Font,
+
+/// Font for monospaced body text.  dvui only uses this in examples.
+font_mono: Font,
 
 /// Caps widget default corner_radius.  Can be overridden at widget call sites.
 max_default_corner_radius: ?f32 = null,
 
 /// if true, all strings in `Theme` will be freed in `deinit`
 allocated_strings: bool = false,
+
+/// Font sources here will be loaded on demand by dvui when this theme is used.
+embedded_fonts: []const Font.Source = &.{},
 
 pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
     if (self.allocated_strings) {
@@ -120,15 +136,10 @@ pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
 
 pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
     var ret = self.*;
-    ret.font_body.size += delta;
-    ret.font_heading.size += delta;
-    ret.font_caption.size += delta;
-    ret.font_caption_heading.size += delta;
-    ret.font_title.size += delta;
-    ret.font_title_1.size += delta;
-    ret.font_title_2.size += delta;
-    ret.font_title_3.size += delta;
-    ret.font_title_4.size += delta;
+    ret.font_body = ret.font_body.withSize(ret.font_body.size + delta);
+    ret.font_heading = ret.font_heading.withSize(ret.font_heading.size + delta);
+    ret.font_title = ret.font_title.withSize(ret.font_title.size + delta);
+    ret.font_mono = ret.font_mono.withSize(ret.font_mono.size + delta);
 
     return ret;
 }
@@ -247,14 +258,14 @@ pub fn picker(src: std.builtin.SourceLocation, themes: []const Theme, opts: Opti
 pub const builtin = struct {
     pub const adwaita_light = @import("themes/Adwaita.zig").light;
     pub const adwaita_dark = @import("themes/Adwaita.zig").dark;
-    pub const dracula = QuickTheme.builtin.dracula.toTheme(null) catch unreachable;
-    pub const gruvbox = QuickTheme.builtin.gruvbox.toTheme(null) catch unreachable;
-    pub const jungle = QuickTheme.builtin.jungle.toTheme(null) catch unreachable;
-    pub const opendyslexic = QuickTheme.builtin.opendyslexic.toTheme(null) catch unreachable;
+    //pub const dracula = QuickTheme.builtin.dracula.toTheme(null) catch unreachable;
+    //pub const gruvbox = QuickTheme.builtin.gruvbox.toTheme(null) catch unreachable;
+    //pub const jungle = QuickTheme.builtin.jungle.toTheme(null) catch unreachable;
+    //pub const opendyslexic = QuickTheme.builtin.opendyslexic.toTheme(null) catch unreachable;
     pub const win98 = @import("themes/win98.zig").light;
 
     test {
-        // Ensures all builting themes are valid
+        // Ensures all builtin themes are valid
         std.testing.refAllDecls(@This());
     }
 };
@@ -278,8 +289,6 @@ pub const builtins = blk: {
 
 pub const QuickTheme = struct {
     pub const builtin = struct {
-        pub const adwaita_light: QuickTheme = @import("themes/adwaita_light.zon");
-        pub const adwaita_dark: QuickTheme = @import("themes/adwaita_dark.zon");
         pub const dracula: QuickTheme = @import("themes/dracula.zon");
         pub const gruvbox: QuickTheme = @import("themes/gruvbox.zon");
         pub const jungle: QuickTheme = @import("themes/jungle.zon");
@@ -292,6 +301,8 @@ pub const QuickTheme = struct {
     };
 
     name: []const u8,
+
+    embedded_fonts: []const Font.Source,
 
     // fonts
     font_size: f32 = 14,
@@ -391,42 +402,7 @@ pub const QuickTheme = struct {
                 .border = .average(.red, border),
             },
 
-            .font_body = .{
-                .size = @round(self.font_size),
-                .id = .fromName(self.font_name_body),
-            },
-            .font_heading = .{
-                .size = @round(self.font_size),
-                .id = .fromName(self.font_name_heading),
-            },
-            .font_caption = .{
-                .size = @round(self.font_size * 0.77),
-                .id = .fromName(self.font_name_caption),
-            },
-            .font_caption_heading = .{
-                .size = @round(self.font_size * 0.77),
-                .id = .fromName(self.font_name_caption),
-            },
-            .font_title = .{
-                .size = @round(self.font_size * 2.15),
-                .id = .fromName(self.font_name_title),
-            },
-            .font_title_1 = .{
-                .size = @round(self.font_size * 1.77),
-                .id = .fromName(self.font_name_title),
-            },
-            .font_title_2 = .{
-                .size = @round(self.font_size * 1.54),
-                .id = .fromName(self.font_name_title),
-            },
-            .font_title_3 = .{
-                .size = @round(self.font_size * 1.3),
-                .id = .fromName(self.font_name_title),
-            },
-            .font_title_4 = .{
-                .size = @round(self.font_size * 1.15),
-                .id = .fromName(self.font_name_title),
-            },
+            .font = .find(.{ .family = self.font_name_body, .size = @round(self.font_size) }),
 
             .allocated_strings = gpa != null,
         };
