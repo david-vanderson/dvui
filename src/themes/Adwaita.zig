@@ -32,6 +32,17 @@ const fonts: []const Font.Source = &.{
         .weight = .bold,
         .bytes = @embedFile("../fonts/bitstream-vera/VeraBd.ttf"),
     },
+    .{
+        .family = Font.array("Vera"),
+        .style = .italic,
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraIt.ttf"),
+    },
+    .{
+        .family = Font.array("Vera"),
+        .weight = .bold,
+        .style = .italic,
+        .bytes = @embedFile("../fonts/bitstream-vera/VeraBI.ttf"),
+    },
 };
 
 pub const light = light: {

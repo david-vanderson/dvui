@@ -150,18 +150,23 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
         dvui.label(@src(), "(limit {d})", .{text_entry_password_buf.len}, .{ .gravity_y = 0.5 });
     }
 
-    var font_entries: [][]const u8 = dvui.currentWindow().lifo().alloc([]const u8, dvui.currentWindow().fonts.database.items.len + 1) catch &.{};
+    const FontEntry = struct {
+        idx: usize,
+        name: []const u8,
+    };
+
+    var font_entries: []FontEntry = dvui.currentWindow().lifo().alloc(FontEntry, dvui.currentWindow().fonts.database.items.len + 1) catch &.{};
     defer dvui.currentWindow().lifo().free(font_entries);
 
     if (font_entries.len > 0) {
-        font_entries[0] = "Theme Body";
+        font_entries[0] = .{ .idx = 0, .name = "Theme Body" };
         for (dvui.currentWindow().fonts.database.items, 1..) |*dbs, i| {
-            font_entries[i] = dbs.name(dvui.currentWindow().arena());
+            font_entries[i] = .{ .idx = i, .name = dbs.name(dvui.currentWindow().arena()) };
         }
 
-        std.mem.sort([]const u8, font_entries[1..], {}, struct {
-            fn less(_: void, lhs: []const u8, rhs: []const u8) bool {
-                return std.mem.order(u8, lhs, rhs) == .lt;
+        std.mem.sort(FontEntry, font_entries[1..], {}, struct {
+            fn less(_: void, lhs: FontEntry, rhs: FontEntry) bool {
+                return std.mem.order(u8, lhs.name, rhs.name) == .lt;
             }
         }.less);
     }
@@ -187,7 +192,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
 
         var font = dvui.themeGet().font;
         if (Sfont.dropdown > 0) {
-            font = dvui.currentWindow().fonts.database.items[Sfont.dropdown - 1].font();
+            font = dvui.currentWindow().fonts.database.items[font_entries[Sfont.dropdown].idx - 1].font();
         }
 
         var te_opts: dvui.TextEntryWidget.InitOptions = .{ .multiline = true, .text = .{ .buffer_dynamic = .{
@@ -229,11 +234,11 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
         left_alignment.spacer(@src(), 0);
 
         var dd: dvui.DropdownWidget = undefined;
-        dd.init(@src(), .{ .selected_index = Sfont.dropdown, .label = font_entries[Sfont.dropdown] }, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5 });
+        dd.init(@src(), .{ .selected_index = Sfont.dropdown, .label = font_entries[Sfont.dropdown].name }, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5 });
         defer dd.deinit();
         if (dd.dropped()) {
-            for (font_entries, 0..) |e, i| {
-                if (dd.addChoiceLabel(e)) {
+            for (font_entries, 0..) |fe, i| {
+                if (dd.addChoiceLabel(fe.name)) {
                     Sfont.dropdown = i;
                 }
             }

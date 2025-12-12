@@ -34,14 +34,16 @@ pub const Weight = enum {
     bold,
 };
 
+pub const Style = enum {
+    normal,
+    italic,
+};
+
 /// Changing any of these might query for a font.
 family: [NAME_MAX_LEN:0]u8 = @splat(0),
 size: f32 = 16,
-style: enum {
-    normal,
-    italic,
-} = .normal,
 weight: Weight = .normal,
+style: Style = .normal,
 
 /// Can be changed for any font, no query.
 line_height_factor: f32 = 1.2,
@@ -50,11 +52,12 @@ pub const FindOptions = struct {
     family: []const u8,
     size: f32 = 16,
     weight: Weight = .normal,
+    style: Style = .normal,
     line_height_factor: f32 = 1.2,
 };
 
 pub fn find(opts: FindOptions) Font {
-    return (Font{}).withFamily(opts.family).withSize(opts.size).withWeight(opts.weight).withLineHeight(opts.line_height_factor);
+    return (Font{}).withFamily(opts.family).withSize(opts.size).withWeight(opts.weight).withStyle(opts.style).withLineHeight(opts.line_height_factor);
 }
 
 pub fn withFamily(self: Font, n: []const u8) Font {
@@ -81,6 +84,12 @@ pub fn withWeight(self: Font, w: Weight) Font {
     return r;
 }
 
+pub fn withStyle(self: Font, s: Style) Font {
+    var r = self;
+    r.style = s;
+    return r;
+}
+
 pub fn withLineHeight(self: Font, factor: f32) Font {
     var r = self;
     r.line_height_factor = factor;
@@ -96,7 +105,11 @@ pub fn name(self: *const Font, allocator: std.mem.Allocator) []const u8 {
         .normal => "",
         .bold => " Bold",
     };
-    return std.fmt.allocPrint(allocator, "{s}{s}", .{ self.familyName(), weight }) catch "";
+    const style = switch (self.style) {
+        .normal => "",
+        .italic => " Italic",
+    };
+    return std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ self.familyName(), weight, style }) catch "";
 }
 
 /// Fonts that hash the same value use the same glyphs (same Font.Entry).
@@ -104,19 +117,22 @@ pub fn hash(self: *const Font) u64 {
     var h = dvui.fnv.init();
     h.update(&self.family);
     h.update(std.mem.asBytes(&self.size));
-    h.update(std.mem.asBytes(&self.style));
     h.update(std.mem.asBytes(&self.weight));
+    h.update(std.mem.asBytes(&self.style));
     return h.final();
+}
+
+/// Only valid between Window.begin/end
+pub fn findSource(self: *const Font) ?Source {
+    const cw = dvui.currentWindow();
+    return cw.fonts.findSource(self.*).@"0";
 }
 
 pub const Source = struct {
     family: [NAME_MAX_LEN:0]u8 = @splat(0),
     size: f32 = 0, // zero means this source can be any size
-    style: enum {
-        normal,
-        italic,
-    } = .normal,
     weight: Weight = .normal,
+    style: Style = .normal,
 
     // currently we assume that a single ttf only produces one
     bytes: []const u8, // points to ttf bytes
@@ -132,7 +148,11 @@ pub const Source = struct {
             .normal => "",
             .bold => " Bold",
         };
-        return std.fmt.allocPrint(allocator, "{s}{s}", .{ self.familyName(), weight }) catch "";
+        const style = switch (self.style) {
+            .normal => "",
+            .italic => " Italic",
+        };
+        return std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ self.familyName(), weight, style }) catch "";
     }
 
     /// Return a Font that will render from this source.
@@ -140,6 +160,7 @@ pub const Source = struct {
         return .{
             .family = self.family,
             .weight = self.weight,
+            .style = self.style,
         };
     }
 
@@ -247,44 +268,6 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     return s.scale(target_fraction, Size);
 }
 
-//pub const builtin = struct {
-//    pub const InvalidFontFile = "This is a very invalid font file";
-//    pub const Aleo = @embedFile("fonts/Aleo/static/Aleo-Regular.ttf");
-//    pub const AleoBd = @embedFile("fonts/Aleo/static/Aleo-Bold.ttf");
-//    pub const Vera = @embedFile("fonts/bitstream-vera/Vera.ttf");
-//    pub const VeraBI = @embedFile("fonts/bitstream-vera/VeraBI.ttf");
-//    pub const VeraBd = @embedFile("fonts/bitstream-vera/VeraBd.ttf");
-//    pub const VeraIt = @embedFile("fonts/bitstream-vera/VeraIt.ttf");
-//    pub const VeraMoBI = @embedFile("fonts/bitstream-vera/VeraMoBI.ttf");
-//    pub const VeraMoBd = @embedFile("fonts/bitstream-vera/VeraMoBd.ttf");
-//    pub const VeraMoIt = @embedFile("fonts/bitstream-vera/VeraMoIt.ttf");
-//    pub const VeraMono = @embedFile("fonts/bitstream-vera/VeraMono.ttf");
-//    pub const VeraSe = @embedFile("fonts/bitstream-vera/VeraSe.ttf");
-//    pub const VeraSeBd = @embedFile("fonts/bitstream-vera/VeraSeBd.ttf");
-//    pub const Pixelify = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Regular.ttf");
-//    pub const PixelifyBd = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Bold.ttf");
-//    pub const PixelifyMe = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Medium.ttf");
-//    pub const PixelifySeBd = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-SemiBold.ttf");
-//    pub const Hack = @embedFile("fonts/hack/Hack-Regular.ttf");
-//    pub const HackBd = @embedFile("fonts/hack/Hack-Bold.ttf");
-//    pub const HackIt = @embedFile("fonts/hack/Hack-Italic.ttf");
-//    pub const HackBdIt = @embedFile("fonts/hack/Hack-BoldItalic.ttf");
-//    pub const OpenDyslexic = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Regular.otf");
-//    pub const OpenDyslexicBd = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold.otf");
-//    pub const OpenDyslexicIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Italic.otf");
-//    pub const OpenDyslexicBdIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold-Italic.otf");
-//    pub const Noto = @embedFile("fonts/NotoSansKR-Regular.ttf");
-//
-//    comptime {
-//        for (@typeInfo(builtin).@"struct".decls) |decl| {
-//            // All builint fonts has a named FontId
-//            if (!@hasField(FontId, decl.name)) {
-//                @compileError("Expected a field in FontId named '" ++ decl.name ++ "'");
-//            }
-//        }
-//    }
-//};
-
 pub const Cache = struct {
     database: std.ArrayList(Source) = .empty,
     cache: dvui.TrackingAutoHashMap(u64, Entry, .get_and_put) = .empty,
@@ -317,11 +300,17 @@ pub const Cache = struct {
         var second_best: ?usize = null;
         for (self.database.items, 0..) |*source, i| {
             if (std.mem.eql(u8, font.familyName(), source.familyName())) {
-                if (font.weight == source.weight) {
+                if (font.weight == source.weight and font.style == source.style) {
                     return .{ source.*, null }; // exact match
                 }
 
-                second_best = i;
+                if (font.weight == source.weight) {
+                    // second best is same family name and same weight
+                    second_best = i;
+                } else if (second_best == null) {
+                    // at least the family name is the same
+                    second_best = i;
+                }
             }
         }
 
