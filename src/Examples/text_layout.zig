@@ -115,9 +115,9 @@ pub fn layoutText() void {
 
         cbox = dvui.box(@src(), .{}, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .style = .window, .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
         dvui.icon(@src(), "aircraft", entypo.aircraft, .{}, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 });
-        dvui.label(@src(), "Caption Heading", .{}, .{ .font_style = .caption_heading, .gravity_x = 0.5 });
+        dvui.label(@src(), "Caption Heading", .{}, .{ .font = dvui.themeGet().font.larger(-3).withWeight(.bold).withLineHeight(1.1), .gravity_x = 0.5 });
         var tl_caption = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
-        tl_caption.addText("Here is some caption text that is in it's own text layout.", .{ .font_style = .caption });
+        tl_caption.addText("Here is some caption text that is in it's own text layout.", .{ .font = dvui.themeGet().font.larger(-3).withLineHeight(1.1) });
         tl_caption.deinit();
         cbox.deinit();
 
@@ -128,7 +128,7 @@ pub fn layoutText() void {
 
         tl.processEvents();
 
-        const fontWithLineHeight = dvui.themeGet().font_body.withLineHeight(line_height_factor);
+        const fontWithLineHeight = dvui.themeGet().font.withLineHeight(line_height_factor);
 
         const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. ";
         const lorem2 = " Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\n";
@@ -145,24 +145,19 @@ pub fn layoutText() void {
         tl.addText(lorem2, .{ .font = fontWithLineHeight });
 
         const start = "\nNotice that the text in this box is wrapping around the stuff in the corners.\n\n";
-        tl.addText(start, .{ .font_style = .title_4 });
+        tl.addText(start, .{ .font = dvui.themeGet().font.larger(2) });
 
         const col = dvui.Color.average(tl.data().options.color(.text), tl.data().options.color(.fill));
         tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = col, .font = fontWithLineHeight });
 
         tl.format("This line uses zig format strings: {d}\n\n", .{12345}, .{});
 
-        tl.addText("Title ", .{ .font_style = .title });
-        tl.addText("Title-1 ", .{ .font_style = .title_1 });
-        tl.addText("Title-2 ", .{ .font_style = .title_2 });
-        tl.addText("Title-3 ", .{ .font_style = .title_3 });
-        tl.addText("Title-4 ", .{ .font_style = .title_4 });
-        tl.addText("Heading\n", .{ .font_style = .heading });
+        tl.addText("Heading\n", .{ .font = dvui.themeGet().font.larger(2) });
 
-        tl.addText("Here ", .{ .font_style = .title, .color_text = .{ .r = 100, .b = 100 } });
-        tl.addText("is some ", .{ .font_style = .title_2, .color_text = .{ .b = 100, .g = 100 }, .color_fill = .green });
-        tl.addText("ugly text ", .{ .font_style = .title_1, .color_text = .{ .r = 100, .g = 100 }, .color_fill = .teal });
-        tl.addText("that shows styling.", .{ .font_style = .caption, .color_text = .{ .r = 100, .g = 50, .b = 50 } });
+        tl.addText("Here ", .{ .font = dvui.themeGet().font.larger(12), .color_text = .{ .r = 100, .b = 100 } });
+        tl.addText("is some ", .{ .font = dvui.themeGet().font.larger(6), .color_text = .{ .b = 100, .g = 100 }, .color_fill = .green });
+        tl.addText("ugly text ", .{ .font = dvui.themeGet().font.larger(8), .color_text = .{ .r = 100, .g = 100 }, .color_fill = .teal });
+        tl.addText("that shows styling.", .{ .font = dvui.themeGet().font.larger(-3), .color_text = .{ .r = 100, .g = 50, .b = 50 } });
     }
 }
 

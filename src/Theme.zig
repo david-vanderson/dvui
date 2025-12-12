@@ -95,15 +95,12 @@ app1: Style = .{},
 app2: Style = .{},
 app3: Style = .{},
 
-font_body: Font,
-font_heading: Font,
-font_caption: Font,
-font_caption_heading: Font,
-font_title: Font,
-font_title_1: Font,
-font_title_2: Font,
-font_title_3: Font,
-font_title_4: Font,
+/// font for body text
+/// Use `Font.withSize`, `Font.withWeight`, etc. for variation.
+/// Suggestions:
+/// - headings: bold, same size
+/// - captions: size 2-3 smaller, smaller line height factor like 1.1
+font: Font,
 
 /// Caps widget default corner_radius.  Can be overridden at widget call sites.
 max_default_corner_radius: ?f32 = null,
@@ -122,15 +119,7 @@ pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
 
 pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
     var ret = self.*;
-    ret.font_body.size += delta;
-    ret.font_heading.size += delta;
-    ret.font_caption.size += delta;
-    ret.font_caption_heading.size += delta;
-    ret.font_title.size += delta;
-    ret.font_title_1.size += delta;
-    ret.font_title_2.size += delta;
-    ret.font_title_3.size += delta;
-    ret.font_title_4.size += delta;
+    ret.font = ret.font.withSize(ret.font.size + delta);
 
     return ret;
 }
@@ -393,15 +382,7 @@ pub const QuickTheme = struct {
                 .border = .average(.red, border),
             },
 
-            .font_body = .find(.{ .family = self.font_name_body, .size = @round(self.font_size) }),
-            .font_heading = .find(.{ .family = self.font_name_heading, .size = @round(self.font_size) }),
-            .font_caption = .find(.{ .family = self.font_name_caption, .size = @round(self.font_size * 0.77) }),
-            .font_caption_heading = .find(.{ .family = self.font_name_caption, .size = @round(self.font_size * 0.77) }),
-            .font_title = .find(.{ .family = self.font_name_title, .size = @round(self.font_size * 2.15) }),
-            .font_title_1 = .find(.{ .family = self.font_name_title, .size = @round(self.font_size * 1.77) }),
-            .font_title_2 = .find(.{ .family = self.font_name_title, .size = @round(self.font_size * 1.54) }),
-            .font_title_3 = .find(.{ .family = self.font_name_title, .size = @round(self.font_size * 1.3) }),
-            .font_title_4 = .find(.{ .family = self.font_name_title, .size = @round(self.font_size * 1.15) }),
+            .font = .find(.{ .family = self.font_name_body, .size = @round(self.font_size) }),
 
             .allocated_strings = gpa != null,
         };

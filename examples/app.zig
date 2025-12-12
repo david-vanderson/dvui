@@ -95,7 +95,7 @@ pub fn frame() !dvui.App.Result {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
     defer scroll.deinit();
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = dvui.themeGet().font.larger(2) });
     const lorem = "This is a dvui.App example that can compile on multiple backends.";
     tl.addText(lorem, .{});
     tl.addText("\n\n", .{});

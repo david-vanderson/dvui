@@ -29,6 +29,11 @@ pub fn string(s: *const [NAME_MAX_LEN:0]u8) [:0]const u8 {
     return std.mem.sliceTo(s, 0);
 }
 
+pub const Weight = enum {
+    normal,
+    bold,
+};
+
 /// Changing any of these might query for a font.
 family: [NAME_MAX_LEN:0]u8 = @splat(0),
 size: f32 = 16,
@@ -36,10 +41,7 @@ style: enum {
     normal,
     italic,
 } = .normal,
-weight: enum {
-    normal,
-    bold,
-} = .normal,
+weight: Weight = .normal,
 
 /// Can be changed for any font, no query.
 line_height_factor: f32 = 1.2,
@@ -47,11 +49,12 @@ line_height_factor: f32 = 1.2,
 pub const FindOptions = struct {
     family: []const u8,
     size: f32 = 16,
+    weight: Weight = .normal,
     line_height_factor: f32 = 1.2,
 };
 
 pub fn find(opts: FindOptions) Font {
-    return (Font{}).withFamily(opts.family).withSize(opts.size).withLineHeight(opts.line_height_factor);
+    return (Font{}).withFamily(opts.family).withSize(opts.size).withWeight(opts.weight).withLineHeight(opts.line_height_factor);
 }
 
 pub fn withFamily(self: Font, n: []const u8) Font {
@@ -66,6 +69,18 @@ pub fn withSize(self: Font, s: f32) Font {
     return r;
 }
 
+pub fn larger(self: Font, ds: f32) Font {
+    var r = self;
+    r.size += ds;
+    return r;
+}
+
+pub fn withWeight(self: Font, w: Weight) Font {
+    var r = self;
+    r.weight = w;
+    return r;
+}
+
 pub fn withLineHeight(self: Font, factor: f32) Font {
     var r = self;
     r.line_height_factor = factor;
@@ -77,7 +92,11 @@ pub fn familyName(self: *const Font) []const u8 {
 }
 
 pub fn name(self: *const Font, allocator: std.mem.Allocator) []const u8 {
-    return std.fmt.allocPrint(allocator, "{s}", .{self.familyName()}) catch "";
+    const weight = switch (self.weight) {
+        .normal => "",
+        .bold => " Bold",
+    };
+    return std.fmt.allocPrint(allocator, "{s}{s}", .{ self.familyName(), weight }) catch "";
 }
 
 /// Fonts that hash the same value use the same glyphs (same Font.Entry).
@@ -97,10 +116,7 @@ pub const Source = struct {
         normal,
         italic,
     } = .normal,
-    weight: enum {
-        normal,
-        bold,
-    } = .normal,
+    weight: Weight = .normal,
 
     // currently we assume that a single ttf only produces one
     bytes: []const u8, // points to ttf bytes
@@ -112,13 +128,18 @@ pub const Source = struct {
     }
 
     pub fn name(self: *const Source, allocator: std.mem.Allocator) []const u8 {
-        return std.fmt.allocPrint(allocator, "{s}", .{self.familyName()}) catch "";
+        const weight = switch (self.weight) {
+            .normal => "",
+            .bold => " Bold",
+        };
+        return std.fmt.allocPrint(allocator, "{s}{s}", .{ self.familyName(), weight }) catch "";
     }
 
     /// Return a Font that will render from this source.
     pub fn font(self: *const Source) Font {
         return .{
             .family = self.family,
+            .weight = self.weight,
         };
     }
 
@@ -292,6 +313,25 @@ pub const Cache = struct {
         }
     }
 
+    pub fn findSource(self: *Cache, font: Font) struct { ?Source, ?Source } {
+        var second_best: ?usize = null;
+        for (self.database.items, 0..) |*source, i| {
+            if (std.mem.eql(u8, font.familyName(), source.familyName())) {
+                if (font.weight == source.weight) {
+                    return .{ source.*, null }; // exact match
+                }
+
+                second_best = i;
+            }
+        }
+
+        if (second_best) |sb| {
+            return .{ null, self.database.items[sb] };
+        }
+
+        return .{ null, null };
+    }
+
     pub fn getOrCreate(self: *Cache, gpa: std.mem.Allocator, font: Font) std.mem.Allocator.Error!*Entry {
         const entry = try self.cache.getOrPut(gpa, font.hash());
         if (entry.found_existing) return entry.value_ptr;
@@ -299,25 +339,28 @@ pub const Cache = struct {
         const fname = font.name(gpa);
         defer gpa.free(fname);
 
-        const ttf_bytes = blk: {
-            // search database
-            for (self.database.items) |*source| {
-                if (std.mem.eql(u8, font.familyName(), source.familyName())) {
-                    break :blk source.bytes;
-                }
-            }
+        const exact, const second = self.findSource(font);
 
-            dvui.log.err("Font {s} not in dvui database, using fallback", .{fname});
-            break :blk Source.fallback.bytes;
+        const source = exact orelse blk: {
+            if (second) |s| {
+                const sname = s.name(gpa);
+                defer gpa.free(sname);
+                dvui.log.err("Font {s} not in dvui database, using second best {s}", .{ fname, sname });
+                break :blk s;
+            } else {
+                dvui.log.err("Font {s} not in dvui database, using fallback", .{fname});
+                break :blk Source.fallback;
+            }
         };
 
         //log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
 
-        entry.value_ptr.* = Entry.init(gpa, ttf_bytes, font) catch {
+        entry.value_ptr.* = Entry.init(gpa, source.bytes, font) catch |err| {
+            dvui.log.err("Font {s} init got {any}, using fallback", .{ fname, err });
             // Remove the invalid font cache entry, something went wrong reading the ttf_bytes
             self.cache.map.removeByPtr(entry.key_ptr);
             // Substitute the known good fallback font
-            return self.getOrCreate(gpa, font.withFamily(Source.fallback.familyName()));
+            return self.getOrCreate(gpa, Source.fallback.font());
         };
         //log.debug("- size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
         return entry.value_ptr;

@@ -119,12 +119,12 @@ pub fn demo() void {
             }
 
             if (dvui.button(@src(), "Zoom In", .{}, .{})) {
-                scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
+                scale_val = @round(dvui.themeGet().font.size * scale_val + 1.0) / dvui.themeGet().font.size;
                 invalidate = true;
             }
 
             if (dvui.button(@src(), "Zoom Out", .{}, .{})) {
-                scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
+                scale_val = @round(dvui.themeGet().font.size * scale_val - 1.0) / dvui.themeGet().font.size;
                 invalidate = true;
             }
         }
@@ -219,7 +219,7 @@ pub fn demo() void {
                 paned.animateSplit(1.0);
             }
 
-            dvui.label(@src(), "{s}", .{demo_active.name()}, .{ .font_style = .title_2, .gravity_y = 0.5 });
+            dvui.label(@src(), "{s}", .{demo_active.name()}, .{ .font = dvui.themeGet().font.larger(6), .gravity_y = 0.5 });
         }
 
         var scroll: ?*dvui.ScrollAreaWidget = null;
@@ -289,7 +289,7 @@ pub fn dialogDirect() void {
     defer back.deinit();
 
     dialog_win.dragAreaSet(dvui.windowHeader("Dialog", "", &show_dialog));
-    dvui.label(@src(), "Asking a Question", .{}, .{ .font_style = .title_4, .gravity_x = 0.5 });
+    dvui.label(@src(), "Asking a Question", .{}, .{ .font = dvui.themeGet().font.larger(2), .gravity_x = 0.5 });
     dvui.label(@src(), "This dialog is directly called by user code.", .{}, .{ .gravity_x = 0.5 });
 
     {
