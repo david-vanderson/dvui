@@ -28,7 +28,8 @@ const fonts: []const Font.Source = &.{
         .bytes = @embedFile("../fonts/bitstream-vera/Vera.ttf"),
     },
     .{
-        .family = Font.array("VeraBd"),
+        .family = Font.array("Vera"),
+        .weight = .bold,
         .bytes = @embedFile("../fonts/bitstream-vera/VeraBd.ttf"),
     },
 };
@@ -41,15 +42,7 @@ pub const light = light: {
 
         .embedded_fonts = fonts,
 
-        .font_body = .find(.{ .family = "Vera" }),
-        .font_heading = .find(.{ .family = "VeraBd" }),
-        .font_caption = .find(.{ .family = "Vera", .size = 13, .line_height_factor = 1.1 }),
-        .font_caption_heading = .find(.{ .family = "VeraBd", .size = 13, .line_height_factor = 1.1 }),
-        .font_title = .find(.{ .family = "Vera", .size = 28 }),
-        .font_title_1 = .find(.{ .family = "Vera", .size = 28 }),
-        .font_title_2 = .find(.{ .family = "Vera", .size = 22 }),
-        .font_title_3 = .find(.{ .family = "Vera", .size = 20 }),
-        .font_title_4 = .find(.{ .family = "Vera", .size = 18 }),
+        .font = .find(.{ .family = "Vera" }),
 
         .focus = accent,
 
@@ -110,15 +103,7 @@ pub const dark = dark: {
 
         .embedded_fonts = fonts,
 
-        .font_body = .find(.{ .family = "Vera" }),
-        .font_heading = .find(.{ .family = "VeraBd" }),
-        .font_caption = .find(.{ .family = "Vera", .size = 13, .line_height_factor = 1.1 }),
-        .font_caption_heading = .find(.{ .family = "VeraBd", .size = 13, .line_height_factor = 1.1 }),
-        .font_title = .find(.{ .family = "Vera", .size = 28 }),
-        .font_title_1 = .find(.{ .family = "Vera", .size = 28 }),
-        .font_title_2 = .find(.{ .family = "Vera", .size = 22 }),
-        .font_title_3 = .find(.{ .family = "Vera", .size = 20 }),
-        .font_title_4 = .find(.{ .family = "Vera", .size = 18 }),
+        .font = .find(.{ .family = "Vera" }),
 
         .focus = accent,
 

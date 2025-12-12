@@ -53,7 +53,8 @@ pub const fonts: []const Font.Source = &.{
         .bytes = @embedFile("../fonts/Aleo/static/Aleo-Regular.ttf"),
     },
     .{
-        .family = Font.array("AleoBd"),
+        .family = Font.array("Aleo"),
+        .weight = .bold,
         .bytes = @embedFile("../fonts/Aleo/static/Aleo-Bold.ttf"),
     },
 };
@@ -66,15 +67,7 @@ pub const light = light: {
 
         .embedded_fonts = fonts,
 
-        .font_body = .find(.{ .family = "Aleo" }),
-        .font_heading = .find(.{ .family = "AleoBd" }),
-        .font_caption = .find(.{ .family = "Aleo", .size = 13, .line_height_factor = 1.1 }),
-        .font_caption_heading = .find(.{ .family = "AleoBd", .size = 13, .line_height_factor = 1.1 }),
-        .font_title = .find(.{ .family = "Aleo", .size = 28 }),
-        .font_title_1 = .find(.{ .family = "Aleo", .size = 24 }),
-        .font_title_2 = .find(.{ .family = "Aleo", .size = 22 }),
-        .font_title_3 = .find(.{ .family = "Aleo", .size = 20 }),
-        .font_title_4 = .find(.{ .family = "Aleo", .size = 18 }),
+        .font = .find(.{ .family = "Aleo" }),
 
         .text_select = dialog_blue_light,
         .focus = dialog_blue_light,

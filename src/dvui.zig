@@ -2084,9 +2084,11 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Rect.Physical {
     var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
 
+    const heading = dvui.themeGet().font.withWeight(.bold);
+
     dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{
         .expand = .horizontal,
-        .font_style = .heading,
+        .font = heading,
         .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 },
         .label = .{ .for_id = dvui.subwindowCurrentId() },
     });
@@ -2098,7 +2100,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
             entypo.cross,
             .{},
             .{},
-            .{ .font_style = .heading, .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio },
+            .{ .font = heading, .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio },
         )) {
             of.* = false;
         }
@@ -2682,7 +2684,6 @@ pub var expander_defaults: Options = .{
     .name = "Expander",
     .role = .group,
     .padding = Rect.all(4),
-    .font_style = .heading,
 };
 
 pub const ExpanderOptions = struct {
@@ -2695,7 +2696,7 @@ pub const ExpanderOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ExpanderOptions, opts: Options) bool {
-    const options = expander_defaults.override(opts);
+    const options = expander_defaults.override(.{ .font = dvui.themeGet().font.withWeight(.bold) }).override(opts);
 
     var b = box(src, .{ .dir = .horizontal }, options);
     defer b.deinit();
