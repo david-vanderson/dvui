@@ -148,13 +148,24 @@ pub fn layoutText() void {
         tl.addText(start, .{ .font = dvui.themeGet().font.larger(2) });
 
         const col = dvui.Color.average(tl.data().options.color(.text), tl.data().options.color(.fill));
-        tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = col, .font = fontWithLineHeight });
+        tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = col });
 
         tl.format("This line uses zig format strings: {d}\n\n", .{12345}, .{});
 
-        tl.addText("Heading\n", .{ .font = dvui.themeGet().font.larger(2) });
+        const bold_font = dvui.themeGet().font.withWeight(.bold);
+        if (bold_font.findSource()) |_| {
+            tl.addText("Bold\n", .{ .font = bold_font.larger(2) });
+        } else {
+            tl.addText("Bold not available (using fallback font)\n", .{ .font = bold_font.larger(2) });
+        }
+        const italic_font = dvui.themeGet().font.withStyle(.italic);
+        if (italic_font.findSource()) |_| {
+            tl.addText("Italic\n", .{ .font = italic_font.larger(2) });
+        } else {
+            tl.addText("Italic not available (using fallback font)\n", .{ .font = italic_font.larger(2) });
+        }
 
-        tl.addText("Here ", .{ .font = dvui.themeGet().font.larger(12), .color_text = .{ .r = 100, .b = 100 } });
+        tl.addText("Here ", .{ .font = dvui.themeGet().font.withWeight(.bold).withStyle(.italic).larger(12), .color_text = .{ .r = 100, .b = 100 } });
         tl.addText("is some ", .{ .font = dvui.themeGet().font.larger(6), .color_text = .{ .b = 100, .g = 100 }, .color_fill = .green });
         tl.addText("ugly text ", .{ .font = dvui.themeGet().font.larger(8), .color_text = .{ .r = 100, .g = 100 }, .color_fill = .teal });
         tl.addText("that shows styling.", .{ .font = dvui.themeGet().font.larger(-3), .color_text = .{ .r = 100, .g = 50, .b = 50 } });

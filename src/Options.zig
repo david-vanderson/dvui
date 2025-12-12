@@ -71,7 +71,7 @@ style: ?Theme.Style.Name = null,
 // If not null, source colors from here instead of the global theme.
 theme: ?*const Theme = null,
 
-// use to override font_style
+// Use specified font
 font: ?Font = null,
 
 // only used for icons/images, rotates around center, radians clockwise
