@@ -192,7 +192,7 @@ pub fn layout() void {
         }
     }
 
-    dvui.label(@src(), "margin/border/padding", .{}, .{ .font_style = .heading });
+    dvui.label(@src(), "margin/border/padding", .{}, .{ .font = .theme(.heading) });
     {
         var vbox = dvui.box(@src(), .{}, .{});
         defer vbox.deinit();
@@ -240,7 +240,7 @@ pub fn layout() void {
         }
     }
 
-    dvui.label(@src(), "Boxes", .{}, .{ .font_style = .heading });
+    dvui.label(@src(), "Boxes", .{}, .{ .font = .theme(.heading) });
     {
         const opts: Options = .{ .expand = .both, .border = Rect.all(1), .background = true, .style = .content };
 
@@ -322,7 +322,7 @@ pub fn layout() void {
             }
         }
     }
-    dvui.label(@src(), "Collapsible Pane with Draggable Sash", .{}, .{ .font_style = .heading });
+    dvui.label(@src(), "Collapsible Pane with Draggable Sash", .{}, .{ .font = .theme(.heading) });
     {
         var paned = dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = paned_collapsed_width, .handle_margin = 4 }, .{ .expand = .horizontal, .background = false, .min_size_content = .{ .h = 130 } });
         defer paned.deinit();
@@ -351,7 +351,7 @@ pub fn layout() void {
     }
     _ = dvui.sliderEntry(@src(), "collapse under {d:0.0}", .{ .value = &paned_collapsed_width, .min = 100, .max = 600, .interval = 10 }, .{});
 
-    dvui.label(@src(), "Auto-Fit Panes", .{}, .{ .font_style = .heading });
+    dvui.label(@src(), "Auto-Fit Panes", .{}, .{ .font = .theme(.heading) });
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();

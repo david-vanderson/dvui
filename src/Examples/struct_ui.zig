@@ -213,6 +213,8 @@ pub fn themeEditor() void {
         .b = .{ .number = .{ .min = 0, .max = 255, .widget_type = .slider } },
     }, .{ .r = 127, .g = 127, .b = 127, .a = 255 });
 
+    const font_source_options: StructOptions(dvui.Font.Source) = .init(.{}, null);
+
     const theme: *dvui.Theme = &dvui.currentWindow().theme; // Want a pointer to the actual theme, not a copy.
     if (struct_ui.displayStruct(
         @src(),
@@ -220,7 +222,7 @@ pub fn themeEditor() void {
         theme,
         2,
         .default,
-        .{color_options},
+        .{ color_options, font_source_options },
         null,
     )) |box| {
         box.deinit();

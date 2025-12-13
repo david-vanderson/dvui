@@ -63,10 +63,7 @@ secs_since_last_frame: f32 = 0,
 extra_frames_needed: u8 = 0,
 clipRect: dvui.Rect.Physical = .{},
 
-/// The currently active theme where colors and fonts will be sourced.
-/// This field is intended to be assigned to directly.
-///
-/// See `dvui.themeSet`
+/// Active theme for colors and fonts. Set with `dvui.themeSet` or `themeSet`.
 theme: Theme,
 
 /// Used by `dvui.dialog` for button order of Ok and Cancel.
@@ -167,13 +164,17 @@ pub fn init(
         },
         // Set in `begin`
         .current_parent = undefined,
+        .theme = undefined, // set below
         .backend = backend_ctx,
-        .theme = if (init_opts.theme) |t| t else switch (init_opts.color_scheme orelse backend_ctx.preferredColorScheme() orelse .light) {
-            .light => Theme.builtin.adwaita_light,
-            .dark => Theme.builtin.adwaita_dark,
-        },
         .accesskit = .{},
     };
+
+    if (init_opts.theme) |t| {
+        self.themeSet(t);
+    } else switch (init_opts.color_scheme orelse backend_ctx.preferredColorScheme() orelse .light) {
+        .light => self.themeSet(Theme.builtin.adwaita_light),
+        .dark => self.themeSet(Theme.builtin.adwaita_dark),
+    }
 
     try self.initEvents();
 
@@ -308,6 +309,44 @@ pub fn init(
     }
 
     return self;
+}
+
+pub fn addFont(self: *Self, name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?std.mem.Allocator) (std.mem.Allocator.Error || dvui.Font.Error)!void {
+    try self.fonts.database.ensureUnusedCapacity(self.gpa, 1);
+    // TODO: try to get this info from the ttf file, and also add override options
+    const font: dvui.Font = .find(.{ .family = name });
+    // Test if we can successfully open this font
+    // TODO: Find some more elegant way of validating ttf files
+    var entry = try dvui.Font.Cache.Entry.init(self.gpa, ttf_bytes, font);
+    // Try and cache the entry since the work is already done
+    self.fonts.cache.put(self.gpa, font.hash(), entry) catch entry.deinit(self.gpa, self.backend);
+    self.fonts.database.appendAssumeCapacity(.{
+        .family = dvui.Font.array(name),
+        .bytes = ttf_bytes,
+        .allocator = ttf_bytes_allocator,
+    });
+}
+
+pub fn addEmbeddedFontsFromTheme(self: *Self, theme: *const Theme) void {
+    // load any embedded fonts we haven't yet
+    loop: for (theme.embedded_fonts) |fs| {
+        for (self.fonts.database.items) |dbs| {
+            if (dbs.bytes.ptr == fs.bytes.ptr) continue :loop;
+        }
+
+        const name = fs.name(self.arena());
+        defer self.arena().free(name);
+
+        dvui.log.debug("adding embedded font {s}", .{name});
+        self.fonts.database.append(self.gpa, fs) catch |err| {
+            dvui.logError(@src(), err, "trying to add embedded font {s}", .{name});
+        };
+    }
+}
+
+pub fn themeSet(self: *Self, theme: Theme) void {
+    self.theme = theme;
+    self.addEmbeddedFontsFromTheme(&theme);
 }
 
 pub fn deinit(self: *Self) void {

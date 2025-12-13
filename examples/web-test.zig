@@ -46,10 +46,6 @@ export fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) i32 {
         return 2;
     };
 
-    WebBackend.win.fonts.addBuiltinFontsForTheme(gpa, dvui.Theme.builtin.adwaita_light) catch {
-        return 3;
-    };
-
     WebBackend.win_ok = true;
 
     orig_content_scale = WebBackend.win.content_scale;
@@ -132,7 +128,7 @@ fn dvui_frame() !void {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
     const lorem = "This example shows how to use dvui in a web canvas.";
     tl.addText(lorem, .{});
     tl.deinit();

@@ -461,11 +461,11 @@ test "vary header height" {
                 for (0..4) |col| {
                     var cell = grid.headerCell(@src(), col, .{ .border = dvui.Rect.all(1) });
                     defer cell.deinit();
-                    dvui.label(@src(), "{}", .{col}, .{ .font_style = switch (col) {
-                        0 => .title_2,
-                        1 => .title_3,
-                        2 => .title_1,
-                        3 => .title_4,
+                    dvui.label(@src(), "{}", .{col}, .{ .font = switch (col) {
+                        0 => dvui.themeGet().font_body.larger(6),
+                        1 => dvui.themeGet().font_body.larger(4),
+                        2 => dvui.themeGet().font_body.larger(8),
+                        3 => dvui.themeGet().font_body.larger(2),
                         else => unreachable,
                     } });
                 }
@@ -507,11 +507,11 @@ test "vary row height" {
                         });
                         defer cell.deinit();
                         dvui.label(@src(), "{}:{}", .{ col, row }, .{
-                            .font_style = switch (row) {
-                                0 => .title_2,
-                                1 => .title_3,
-                                2 => .title_1,
-                                3 => .title_4,
+                            .font = switch (row) {
+                                0 => dvui.themeGet().font_body.larger(6),
+                                1 => dvui.themeGet().font_body.larger(4),
+                                2 => dvui.themeGet().font_body.larger(8),
+                                3 => dvui.themeGet().font_body.larger(2),
                                 else => unreachable,
                             },
                         });
@@ -706,7 +706,7 @@ test "resize rows" {
                             .border = dvui.Rect.all(1),
                         });
                         defer cell.deinit();
-                        dvui.label(@src(), "{}:{}", .{ col, row }, .{ .font_style = if (action == .tall) .title_1 else null });
+                        dvui.label(@src(), "{}:{}", .{ col, row }, .{ .font = if (action == .tall) dvui.themeGet().font_body.larger(8) else null });
                     }
                 }
             }
@@ -941,7 +941,7 @@ test "header body resize" {
                     for (0..10) |row| {
                         var cell = grid.bodyCell(@src(), .colRow(col, row), .{});
                         defer cell.deinit();
-                        dvui.label(@src(), "{}:{}", .{ col, row }, .{ .font_style = .heading });
+                        dvui.label(@src(), "{}:{}", .{ col, row }, .{ .font = dvui.themeGet().font.withWeight(.bold) });
                     }
                 }
             }
