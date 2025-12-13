@@ -280,7 +280,7 @@ If you want to only render frames when needed, add `dvui.Window.beginWait()` at 
 The estimate is visible in the demo window Animations > Clock > "Estimate of frame overhead".  The estimate is only updated on frames caused by a timer expiring (like the clock example), and it starts at 1ms.
 
 ### Widget init and deinit
-The easiest way to use widgets is through the high-level functions that create and install them:
+The easiest way to use widgets is through the high-level functions that create them:
 ```zig
 {
     var box = dvui.box(@src(), .{}, .{.expand = .both});
@@ -294,10 +294,8 @@ These functions allocate memory for the widget onto an internal arena allocator 
 Instead you can allocate the widget on the stack using the lower-level functions:
 ```zig
 {
-    var box = BoxWidget.init(@src(), .{}, .{.expand = .both});
-    // box now has an id, can look up animations/timers
-
-    box.install();
+    var box: BoxWidget = undefined;
+    box.init(@src(), .{}, .{.expand = .both});
     // box is now parent widget
 
     box.drawBackground();
@@ -350,10 +348,11 @@ Each widget has the following options that can be changed through the Options st
   - color_text_hover
   - color_text_press
   - color_border
-- font_style (use theme's fonts)
-  - or directly set font:
-    - font
+- font (directly specify)
+  - can reference theme fonts via `Font.theme(.body)` (or `.heading`, `.title`, `.mono`)
 - theme (use a separate theme altogether)
+- ninepatch_fill (also _hover and _press)
+  - draw an image over the background
 
 Each widget has its own default options.  These can be changed directly:
 ```zig
@@ -363,14 +362,14 @@ dvui.ButtonWidget.defaults.background = false;
 Themes can be changed between frames or even within a frame.  The theme controls the fonts and colors referenced by font_style and named colors.
 ```zig
 if (theme_dark) {
-    win.theme = dvui.Theme.builtin.adwaita_dark;
+    dvui.themeSet(dvui.Theme.builtin.adwaita_dark);
 } else {
-    win.theme = dvui.Theme.builtin.adwaita_light;
+    dvui.themeSet(dvui.Theme.builtin.adwaita_light);
 }
 ```
-The theme's color_accent is also used to show keyboard focus.
+The theme's `focus` color is used to show keyboard focus.
 
-The default theme will attempt to follow the system dark or light mode, or it can be set in the `Window` init options or by setting the `Window.theme` field directly. See the app and standalone examples for how to set the default theme. 
+The default theme will attempt to follow the system dark or light mode, or it can be set in the `Window` init options or by calling `dvui.themeSet()`. See the app and standalone examples for how to set the default theme. 
 
 ### Accessibility
 
