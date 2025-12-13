@@ -916,7 +916,7 @@ pub fn kerningSet(kern: bool) bool {
 /// frame).
 ///
 /// src and id are for debugging, which is enabled by calling
-/// `Window.debugRefresh(true)`.  The debug window has a toggle button for this.
+/// `Window.debug.logRefresh(true)`.  The debug window has a toggle button for this.
 ///
 /// Can be called from any thread.
 ///
