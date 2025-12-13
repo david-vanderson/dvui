@@ -258,10 +258,10 @@ pub fn picker(src: std.builtin.SourceLocation, themes: []const Theme, opts: Opti
 pub const builtin = struct {
     pub const adwaita_light = @import("themes/Adwaita.zig").light;
     pub const adwaita_dark = @import("themes/Adwaita.zig").dark;
-    //pub const dracula = QuickTheme.builtin.dracula.toTheme(null) catch unreachable;
-    //pub const gruvbox = QuickTheme.builtin.gruvbox.toTheme(null) catch unreachable;
-    //pub const jungle = QuickTheme.builtin.jungle.toTheme(null) catch unreachable;
-    //pub const opendyslexic = QuickTheme.builtin.opendyslexic.toTheme(null) catch unreachable;
+    pub const dracula = @import("themes/Dracula.zig").theme;
+    pub const gruvbox = @import("themes/Gruvbox.zig").theme;
+    pub const jungle = @import("themes/Jungle.zig").theme;
+    pub const opendyslexic = @import("themes/OpenDyslexic.zig").theme;
     pub const win98 = @import("themes/win98.zig").light;
 
     test {
@@ -285,140 +285,6 @@ pub const builtins = blk: {
     }
     std.mem.sort(Theme, &array, {}, S.lessThan);
     break :blk array;
-};
-
-pub const QuickTheme = struct {
-    pub const builtin = struct {
-        pub const dracula: QuickTheme = @import("themes/dracula.zon");
-        pub const gruvbox: QuickTheme = @import("themes/gruvbox.zon");
-        pub const jungle: QuickTheme = @import("themes/jungle.zon");
-        pub const opendyslexic: QuickTheme = @import("themes/opendyslexic.zon");
-
-        test {
-            // Ensures all the .zon files are valid `QuickTheme` types
-            std.testing.refAllDecls(@This());
-        }
-    };
-
-    name: []const u8,
-
-    embedded_fonts: []const Font.Source,
-
-    // fonts
-    font_size: f32 = 14,
-    font_name_body: []const u8,
-    font_name_heading: []const u8,
-    font_name_caption: []const u8,
-    font_name_title: []const u8,
-
-    focus: []const u8,
-
-    // text/foreground color
-    text: []const u8,
-    text_hover: ?[]const u8 = null,
-    // text/foreground color when widget is pressed
-    text_press: ?[]const u8 = null,
-
-    // background color
-    fill: []const u8,
-    fill_hover: ?[]const u8 = null,
-    // fill/background color when widget is pressed
-    fill_press: ?[]const u8 = null,
-
-    border: []const u8,
-
-    control: QuickColorStyle,
-    window: QuickColorStyle,
-    highlight: QuickColorStyle,
-    /// If this is null, highlight will be created by averaging `red` and all the content colors
-    err: ?QuickColorStyle = null,
-
-    pub const QuickColorStyle = struct {
-        fill: ?[]const u8 = null,
-        fill_hover: ?[]const u8 = null,
-        fill_press: ?[]const u8 = null,
-        text: ?[]const u8 = null,
-        text_hover: ?[]const u8 = null,
-        text_press: ?[]const u8 = null,
-        border: ?[]const u8 = null,
-    };
-
-    /// Parses a json object with the fields of `QuickTheme`,
-    /// allocating copies of all the string data
-    pub fn fromString(
-        arena: std.mem.Allocator,
-        string: []const u8,
-    ) !std.json.Parsed(QuickTheme) {
-        return try std.json.parseFromSlice(
-            QuickTheme,
-            arena,
-            string,
-            .{ .allocate = .alloc_always },
-        );
-    }
-
-    /// If an allocator is provided, all name slices will be duplicated
-    /// by that allocator and freed in `Theme.deinit`. Else the names
-    /// will be used directly which is good for embedded/static slices.
-    pub fn toTheme(self: @This(), gpa: ?std.mem.Allocator) (std.mem.Allocator.Error || Color.FromHexError)!Theme {
-        @setEvalBranchQuota(5000); // Needs to handle worst case of all optionals being non-null
-        const text: Color = try .tryFromHex(self.text);
-        const text_hover: ?Color = if (self.text_hover) |hex| try .tryFromHex(hex) else null;
-        const text_press: ?Color = if (self.text_press) |hex| try .tryFromHex(hex) else null;
-        const fill: Color = try .tryFromHex(self.fill);
-        const fill_hover: ?Color = if (self.fill_hover) |hex| try .tryFromHex(hex) else null;
-        const fill_press: ?Color = if (self.fill_press) |hex| try .tryFromHex(hex) else null;
-        const border: Color = try .tryFromHex(self.border);
-        const focus: Color = try .tryFromHex(self.focus);
-
-        return Theme{
-            .name = if (gpa) |alloc| try alloc.dupe(u8, self.name) else self.name,
-            .dark = text.brightness() > fill.brightness(),
-
-            .focus = focus,
-
-            .text = text,
-            .text_hover = text_hover,
-            .text_press = text_press,
-            .fill = fill,
-            .fill_hover = fill_hover,
-            .fill_press = fill_press,
-            .border = border,
-            // TODO
-            .ninepatch_fill = null,
-            .ninepatch_hover = null,
-            .ninepatch_press = null,
-
-            .control = try parseStyle(self.control),
-            .window = try parseStyle(self.window),
-            .highlight = try parseStyle(self.highlight),
-            .err = if (self.err) |s| try parseStyle(s) else .{
-                .text = .average(.red, text),
-                .text_hover = if (text_hover) |col| .average(.red, col) else null,
-                .text_press = if (text_press) |col| .average(.red, col) else null,
-                .fill = .average(.red, fill),
-                .fill_hover = if (fill_hover) |col| .average(.red, col) else null,
-                .fill_press = if (fill_press) |col| .average(.red, col) else null,
-                .border = .average(.red, border),
-            },
-
-            .font = .find(.{ .family = self.font_name_body, .size = @round(self.font_size) }),
-
-            .allocated_strings = gpa != null,
-        };
-    }
-
-    fn parseStyle(style: QuickColorStyle) Color.FromHexError!Style {
-        return .{
-            .fill = if (style.fill) |hex| try .tryFromHex(hex) else null,
-            .fill_hover = if (style.fill_hover) |hex| try .tryFromHex(hex) else null,
-            .fill_press = if (style.fill_press) |hex| try .tryFromHex(hex) else null,
-            .text = if (style.text) |hex| try .tryFromHex(hex) else null,
-            .text_hover = if (style.text_hover) |hex| try .tryFromHex(hex) else null,
-            .text_press = if (style.text_press) |hex| try .tryFromHex(hex) else null,
-            .border = if (style.border) |hex| try .tryFromHex(hex) else null,
-        };
-    }
 };
 
 test {
