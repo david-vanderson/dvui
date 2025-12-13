@@ -37,7 +37,6 @@ pub fn main() !void {
     // init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
     defer win.deinit();
-    try win.fonts.addBuiltinFontsForTheme(win.gpa, dvui.Theme.builtin.adwaita_light);
 
     main_loop: while (true) {
 
@@ -127,7 +126,7 @@ fn dvui_floating_stuff() void {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
     const lorem = "This example shows how to use dvui for floating windows on top of an existing application.";
     tl.addText(lorem, .{});
     tl.deinit();

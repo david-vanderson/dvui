@@ -70,6 +70,10 @@ pub fn rectSet(self: *WidgetData, r: Rect) void {
 pub fn register(self: *WidgetData) void {
     self.rectSet(self.rect);
 
+    if (self.options.theme) |t| {
+        dvui.currentWindow().addEmbeddedFontsFromTheme(t);
+    }
+
     if (self.options.role) |role| {
         _ = dvui.currentWindow().accesskit.nodeCreate(self, role);
     }

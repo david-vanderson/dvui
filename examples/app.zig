@@ -42,21 +42,18 @@ var warn_on_quit_closing: bool = false;
 // - runs between win.begin()/win.end()
 pub fn AppInit(win: *dvui.Window) !void {
     orig_content_scale = win.content_scale;
+
     // Add your own bundled font files...:
     // try dvui.addFont("NOTO", @embedFile("../src/fonts/NotoSansKR-Regular.ttf"), null);
 
-    // Or opt-in to adding the fonts for the builin themes...
-    try win.fonts.addBuiltinFontsForTheme(win.gpa, dvui.Theme.builtin.adwaita_light);
-
-    // Or add other builtin fonts
-    try win.fonts.addBuiltinFonts(win.gpa, &.{.Vera});
-
     if (false) {
         // If you need to set a theme based on the users preferred color scheme, do it here
-        win.theme = switch (win.backend.preferredColorScheme() orelse .light) {
+        const theme = switch (win.backend.preferredColorScheme() orelse .light) {
             .light => dvui.Theme.builtin.adwaita_light,
             .dark => dvui.Theme.builtin.adwaita_dark,
         };
+
+        win.themeSet(theme);
     }
 }
 
@@ -98,10 +95,10 @@ pub fn frame() !dvui.App.Result {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
     defer scroll.deinit();
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
     const lorem = "This is a dvui.App example that can compile on multiple backends.";
     tl.addText(lorem, .{});
-    tl.addText("\n\n", .{});
+    tl.addText("\n", .{});
     tl.format("Current backend: {s}", .{@tagName(dvui.backend.kind)}, .{});
     if (dvui.backend.kind == .web) {
         tl.format(" : {s}", .{if (dvui.backend.wasm.wasm_about_webgl2() == 1) "webgl2" else "webgl (no mipmaps)"}, .{});

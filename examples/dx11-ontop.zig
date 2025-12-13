@@ -33,7 +33,6 @@ pub fn main() !void {
     _ = win32.UpdateWindow(wnd);
 
     const win: *dvui.Window = backend.getWindow();
-    try win.fonts.addBuiltinFontsForTheme(win.gpa, dvui.Theme.builtin.adwaita_light);
     log.info("dvui window also init.", .{});
 
     main_loop: while (true) switch (Backend.serviceMessageQueue()) {
@@ -234,7 +233,7 @@ fn dvui_floating_stuff() void {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
     defer scroll.deinit();
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
     const lorem = "This example shows how to use dvui for floating windows on top of an existing application.";
     tl.addText(lorem, .{});
     tl.deinit();
