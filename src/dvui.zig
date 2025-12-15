@@ -2089,13 +2089,14 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
     });
 
     if (openflag) |of| {
+        const opts: Options = .{ .font = .theme(.heading), .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio };
         if (dvui.buttonIcon(
             @src(),
             "close",
             entypo.cross,
             .{},
             .{},
-            .{ .font = .theme(.heading), .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio },
+            opts.themeOverride(null),
         )) {
             of.* = false;
         }
