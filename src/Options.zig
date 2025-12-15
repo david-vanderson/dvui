@@ -222,7 +222,7 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
     } orelse self.themeGet().color(self.styleGet(), ask);
 }
 
-/// All the colors you can ask Options for
+/// Kinds of Ninepatch you can ask Options for.
 pub const NinepatchAsk = enum {
     fill,
     hover,
