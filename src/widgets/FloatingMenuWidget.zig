@@ -84,7 +84,7 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
         .scroll = undefined,
     };
 
-    const options = defaults.themeOverride().override(opts);
+    const options = defaults.themeOverride(opts.theme).override(opts);
     // NOTE: options is really for our embedded ScrollAreaWidget
 
     self.prev_rendering = dvui.renderingSet(false);
