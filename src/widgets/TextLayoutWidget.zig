@@ -1195,7 +1195,6 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
     const options = self.data().options.override(opts);
     const msize = options.fontGet().sizeM(1, 1);
     const line_height = options.fontGet().lineHeight();
-    self.current_line_height = @max(self.current_line_height, line_height);
 
     var container_width = self.data().contentRect().w;
     if (container_width == 0) {
@@ -1216,6 +1215,8 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             self.byte_heights_new.append(cw.arena(), bhr) catch {};
             self.byte_height_ready = null;
         }
+
+        self.current_line_height = @max(self.current_line_height, line_height);
 
         var linestart: f32 = 0;
 
@@ -1293,7 +1294,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             if (s.w > width and (linewidth < container_width or self.insert_pt.x > linestart)) {
                 self.insert_pt.y += self.current_line_height;
                 self.insert_pt.x = 0;
-                self.current_line_height = line_height;
+                self.current_line_height = 0;
 
                 self.lineBreak();
 
@@ -1505,7 +1506,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         if (newline or txt.len > 0) {
             self.insert_pt.y += self.current_line_height;
             self.insert_pt.x = 0;
-            self.current_line_height = line_height;
+            self.current_line_height = 0;
 
             if (newline) {
                 const newline_size = self.data().options.padSize(.{ .w = self.current_line_width, .h = self.insert_pt.y + s.h });
