@@ -405,9 +405,13 @@ pub fn override(self: *const Options, over: Options) Options {
     return ret;
 }
 
-pub fn themeOverride(self: *const Options) Options {
+/// Override corner_radius with maximum from theme.
+/// Pass null to use theme from this Options.
+/// If about to override with passed Options, use that Options.theme.
+pub fn themeOverride(self: *const Options, theme: ?*const Theme) Options {
     var ret = self.*;
-    if (ret.themeGet().max_default_corner_radius) |mdcr| {
+    const t: *const Theme = theme orelse self.themeGet();
+    if (t.max_default_corner_radius) |mdcr| {
         if (ret.corner_radius != null) {
             ret.corner_radius.?.x = @min(ret.corner_radius.?.x, mdcr);
             ret.corner_radius.?.y = @min(ret.corner_radius.?.y, mdcr);

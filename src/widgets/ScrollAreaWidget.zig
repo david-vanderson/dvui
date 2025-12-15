@@ -59,7 +59,7 @@ pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts:
         .hbox = undefined, // set below
     };
 
-    self.hbox.init(src, .{ .dir = .horizontal }, defaults.themeOverride().override(opts));
+    self.hbox.init(src, .{ .dir = .horizontal }, defaults.themeOverride(opts.theme).override(opts));
 
     if (self.init_opts.scroll_info) |si| {
         self.si = si;

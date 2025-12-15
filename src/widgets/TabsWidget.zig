@@ -116,7 +116,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
         .vertical => tab_defaults.gravity_x = 1.0,
     }
 
-    const options = tab_defaults.themeOverride().override(opts);
+    const options = tab_defaults.themeOverride(opts.theme).override(opts);
 
     self.tab_button.init(@src(), .{}, options);
     self.tab_button.processEvents();
