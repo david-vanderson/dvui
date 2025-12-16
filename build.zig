@@ -10,7 +10,7 @@ pub const LinuxDisplayBackend = enum {
     Both,
 };
 
-const AccesskitOptions = enum {
+pub const AccesskitOptions = enum {
     static,
     shared,
     off,
