@@ -199,7 +199,9 @@ fn dvui_frame() bool {
 
         // rs.r is the pixel rectangle, rs.s is the scale factor (like for
         // hidpi screens or display scaling)
-        const r = rs.r;
+        // raylib multiplies everything internally by the monitor scale, so we
+        // have to divide by that
+        const r = RaylibBackend.dvuiRectToRaylib(rs.r);
         const s = rs.s / dvui.windowNaturalScale();
         c.DrawText("Congrats! You created your first window!", @intFromFloat(r.x + 10 * s), @intFromFloat(r.y + 10 * s), @intFromFloat(20 * s), c.LIGHTGRAY);
     }
