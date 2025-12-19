@@ -1052,7 +1052,7 @@ pub fn bytesNeeded(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, 
     // if we are moving the cursor, need to process the text around where we are moving it
     switch (self.sel_move) {
         .none => {},
-        .mouse => {}, // all in visible region
+        .mouse => {}, // all in visible region, excepted below
         .expand_pt => |*ep| {
             switch (ep.which) {
                 .word, .line => {}, // all in visible region
@@ -1073,7 +1073,7 @@ pub fn bytesNeeded(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, 
         .word_left_right => include_cursor = true,
     }
 
-    if (include_cursor) {
+    if (include_cursor and self.sel_move != .mouse) {
         context.byte = @min(context.byte, self.selection.cursor);
         sel_end = @max(sel_end, self.selection.cursor);
     }

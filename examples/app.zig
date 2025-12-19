@@ -118,7 +118,7 @@ const tsQueryCursorCaptureIterator = struct {
     }
 };
 
-var show_text_entry: bool = false;
+var show_text_entry: bool = true;
 
 pub fn frame() !dvui.App.Result {
     var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
@@ -186,18 +186,18 @@ pub fn frame() !dvui.App.Result {
     //tl2.deinit();
 
     if (show_text_entry) {
-        //const source = @embedFile("query.c");
-        const source =
-            \\int main() {
-            \\// Create a parser.
-            \\TSParser *parser = ts_parser_new();
-            \\
-            \\// Set the parser's language (JSON in this case).
-            \\ts_parser_set_language(parser, tree_sitter_json());
-            \\
-            \\// Build a syntax tree based on source code stored in a string.
-            \\const char *source_code = "[1, null]";
-        ;
+        const source = @embedFile("query.c");
+        //const source =
+        //    \\int main() {
+        //    \\// Create a parser.
+        //    \\TSParser *parser = ts_parser_new();
+        //    \\
+        //    \\// Set the parser's language (JSON in this case).
+        //    \\ts_parser_set_language(parser, tree_sitter_json());
+        //    \\
+        //    \\// Build a syntax tree based on source code stored in a string.
+        //    \\const char *source_code = "[1, null]";
+        //;
 
         const queries =
             \\(identifier) @variable
@@ -284,7 +284,7 @@ pub fn frame() !dvui.App.Result {
         ;
 
         var te: dvui.TextEntryWidget = undefined;
-        te.init(@src(), .{ .multiline = true, .text = .{ .internal = .{ .limit = 1_000_000 } } }, .{ .expand = .horizontal, .min_size_content = .height(300) });
+        te.init(@src(), .{ .multiline = true, .cache_layout = true, .text = .{ .internal = .{ .limit = 1_000_000 } } }, .{ .expand = .horizontal, .min_size_content = .height(300) });
         defer te.deinit();
 
         if (dvui.firstFrame(te.data().id)) {
@@ -302,11 +302,13 @@ pub fn frame() !dvui.App.Result {
         const Parser = struct {
             parser: *dvui.c.TSParser,
             tree: *dvui.c.TSTree,
+            query: *dvui.c.TSQuery,
 
             pub fn deinit(ptr: *anyopaque) void {
                 const self: *@This() = @ptrCast(@alignCast(ptr));
 
                 std.debug.print("freeing parser\n", .{});
+                dvui.c.ts_query_delete(self.query);
                 dvui.c.ts_tree_delete(self.tree);
                 dvui.c.ts_parser_delete(self.parser);
             }
@@ -318,7 +320,11 @@ pub fn frame() !dvui.App.Result {
             _ = dvui.c.ts_parser_set_language(p, tree_sitter_c());
             const tree = dvui.c.ts_parser_parse_string(p, null, text.ptr, @intCast(text.len));
 
-            const parser: Parser = .{ .parser = p.?, .tree = tree.? };
+            var errorOffset: u32 = undefined;
+            var errorType: dvui.c.TSQueryError = undefined;
+            const query = dvui.c.ts_query_new(tree_sitter_c(), queries.ptr, queries.len, &errorOffset, &errorType);
+
+            const parser: Parser = .{ .parser = p.?, .tree = tree.?, .query = query.? };
             dvui.dataSet(null, te.data().id, "parser", parser);
             dvui.dataSetDeinitFunction(null, te.data().id, "parser", &Parser.deinit);
             break :blk parser;
@@ -329,14 +335,15 @@ pub fn frame() !dvui.App.Result {
         const root = dvui.c.ts_tree_root_node(parser.tree);
 
         // queries
-        var errorOffset: u32 = undefined;
-        var errorType: dvui.c.TSQueryError = undefined;
-        const query = dvui.c.ts_query_new(tree_sitter_c(), queries.ptr, queries.len, &errorOffset, &errorType);
-        defer if (query) |q| dvui.c.ts_query_delete(q);
         const qc = dvui.c.ts_query_cursor_new();
         defer dvui.c.ts_query_cursor_delete(qc);
-        // TODO: set byte range for qc
-        if (query) |q| dvui.c.ts_query_cursor_exec(qc, q, root);
+
+        if (te.textLayout.cache_layout_bytes) |clb| {
+            //std.debug.print("setting start {d} end {d}\n", .{ clb.start, clb.end });
+            _ = dvui.c.ts_query_cursor_set_byte_range(qc, @intCast(clb.start), @intCast(clb.end));
+        }
+
+        dvui.c.ts_query_cursor_exec(qc, parser.query, root);
 
         var iter: tsQueryCursorCaptureIterator = .init(qc.?);
         while (iter.next()) |match| {
@@ -348,21 +355,21 @@ pub fn frame() !dvui.App.Result {
             }
 
             var opts: dvui.Options = .{};
-            if (std.mem.eql(u8, match.captureName(query.?), "variable")) {
+            if (std.mem.eql(u8, match.captureName(parser.query), "variable")) {
                 opts.color_text = .aqua;
-            } else if (std.mem.eql(u8, match.captureName(query.?), "constant")) {
+            } else if (std.mem.eql(u8, match.captureName(parser.query), "constant")) {
                 opts.color_text = .blue;
-            } else if (std.mem.eql(u8, match.captureName(query.?), "keyword")) {
+            } else if (std.mem.eql(u8, match.captureName(parser.query), "keyword")) {
                 opts.color_text = .purple;
-            } else if (std.mem.eql(u8, match.captureName(query.?), "operator")) {
+            } else if (std.mem.eql(u8, match.captureName(parser.query), "operator")) {
                 opts.color_text = .silver;
-            } else if (std.mem.eql(u8, match.captureName(query.?), "string")) {
+            } else if (std.mem.eql(u8, match.captureName(parser.query), "string")) {
                 opts.color_text = .maroon;
-            } else if (std.mem.eql(u8, match.captureName(query.?), "number")) {
+            } else if (std.mem.eql(u8, match.captureName(parser.query), "number")) {
                 opts.color_text = .teal;
-            } else if (std.mem.eql(u8, match.captureName(query.?), "comment")) {
+            } else if (std.mem.eql(u8, match.captureName(parser.query), "comment")) {
                 opts.color_text = .green;
-            } else if (std.mem.eql(u8, match.captureName(query.?), "function")) {
+            } else if (std.mem.eql(u8, match.captureName(parser.query), "function")) {
                 opts.color_text = dvui.Color.yellow.lighten(-30);
             }
 

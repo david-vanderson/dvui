@@ -340,13 +340,6 @@ pub fn draw(self: *TextEntryWidget) void {
             self.textLayout.addText(pc, self.data().options.strip());
         }
     } else {
-        if (self.init_opts.cache_layout) {
-            self.textLayout.cache_layout_bytes = self.textLayout.bytesNeeded(
-                self.text_changed_start,
-                self.text_changed_end,
-                self.text_changed_added,
-            );
-        }
         self.textLayout.addText(self.text[0..self.len], self.data().options.strip());
     }
 
@@ -390,6 +383,14 @@ pub fn drawBeforeText(self: *TextEntryWidget) void {
 
     // set clip back to what textLayout had, so we don't draw over the scrollbars
     dvui.clipSet(self.textClip);
+
+    if (self.init_opts.cache_layout) {
+        self.textLayout.cache_layout_bytes = self.textLayout.bytesNeeded(
+            self.text_changed_start,
+            self.text_changed_end,
+            self.text_changed_added,
+        );
+    }
 }
 
 pub fn drawAfterText(self: *TextEntryWidget) void {
