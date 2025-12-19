@@ -118,6 +118,8 @@ const tsQueryCursorCaptureIterator = struct {
     }
 };
 
+var show_text_entry: bool = false;
+
 pub fn frame() !dvui.App.Result {
     var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
     scaler.deinit();
@@ -132,6 +134,10 @@ pub fn frame() !dvui.App.Result {
         if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .tag = "first-focusable" })) |r| {
             var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
+
+            if (dvui.menuItemLabel(@src(), "Toggle TextEntry", .{}, .{ .expand = .horizontal }) != null) {
+                show_text_entry = !show_text_entry;
+            }
 
             if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
                 m.close();
@@ -179,7 +185,8 @@ pub fn frame() !dvui.App.Result {
     //}
     //tl2.deinit();
 
-    {
+    if (show_text_entry) {
+        //const source = @embedFile("query.c");
         const source =
             \\int main() {
             \\// Create a parser.
@@ -277,7 +284,7 @@ pub fn frame() !dvui.App.Result {
         ;
 
         var te: dvui.TextEntryWidget = undefined;
-        te.init(@src(), .{ .multiline = true }, .{ .expand = .horizontal, .min_size_content = .height(200) });
+        te.init(@src(), .{ .multiline = true, .text = .{ .internal = .{ .limit = 1_000_000 } } }, .{ .expand = .horizontal, .min_size_content = .height(300) });
         defer te.deinit();
 
         if (dvui.firstFrame(te.data().id)) {
@@ -292,15 +299,34 @@ pub fn frame() !dvui.App.Result {
         // used to output text that's not highlighted
         var start: usize = 0;
 
+        const Parser = struct {
+            parser: *dvui.c.TSParser,
+            tree: *dvui.c.TSTree,
+
+            pub fn deinit(ptr: *anyopaque) void {
+                const self: *@This() = @ptrCast(@alignCast(ptr));
+
+                std.debug.print("freeing parser\n", .{});
+                dvui.c.ts_tree_delete(self.tree);
+                dvui.c.ts_parser_delete(self.parser);
+            }
+        };
+
+        const parser = dvui.dataGet(null, te.data().id, "parser", Parser) orelse blk: {
+            std.debug.print("new parser\n", .{});
+            const p = dvui.c.ts_parser_new();
+            _ = dvui.c.ts_parser_set_language(p, tree_sitter_c());
+            const tree = dvui.c.ts_parser_parse_string(p, null, text.ptr, @intCast(text.len));
+
+            const parser: Parser = .{ .parser = p.?, .tree = tree.? };
+            dvui.dataSet(null, te.data().id, "parser", parser);
+            dvui.dataSetDeinitFunction(null, te.data().id, "parser", &Parser.deinit);
+            break :blk parser;
+        };
+
         // parsing
-        const parser = dvui.c.ts_parser_new();
-        defer dvui.c.ts_parser_delete(parser);
-        _ = dvui.c.ts_parser_set_language(parser, tree_sitter_c());
         // TODO: set byte range for parsing
-        const tree = dvui.c.ts_parser_parse_string(parser, null, text.ptr, @intCast(text.len));
-        const root = dvui.c.ts_tree_root_node(tree);
-        //const str = dvui.c.ts_node_string(root);
-        defer dvui.c.ts_tree_delete(tree);
+        const root = dvui.c.ts_tree_root_node(parser.tree);
 
         // queries
         var errorOffset: u32 = undefined;
