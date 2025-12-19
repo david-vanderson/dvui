@@ -234,8 +234,12 @@ pub fn frame() !dvui.App.Result {
         }
 
         te.processEvents();
+        te.drawBeforeText();
 
         const text = te.textGet();
+
+        // used to output text that's not highlighted
+        var start: usize = 0;
 
         // parsing
         const parser = dvui.c.ts_parser_new();
@@ -256,71 +260,65 @@ pub fn frame() !dvui.App.Result {
         defer dvui.c.ts_query_cursor_delete(qc);
         // TODO: set byte range for qc
         if (query) |q| dvui.c.ts_query_cursor_exec(qc, q, root);
+        var prev_match: ?struct {
+            node: dvui.c.TSNode,
+            capture_name: []const u8,
+        } = null;
         var match: dvui.c.TSQueryMatch = undefined;
         var captureIdx: u32 = undefined;
         while (dvui.c.ts_query_cursor_next_capture(qc, &match, &captureIdx)) {
-            std.debug.print("next_capture: {d} {d} {d}\n", .{ match.capture_count, captureIdx, match.pattern_index });
             const capture = match.captures[captureIdx];
+            if (prev_match) |pm| {
+                if (!dvui.c.ts_node_eq(pm.node, capture.node)) {
+                    // new capture is not the same as previous, so render previous
+                    const nstart = dvui.c.ts_node_start_byte(pm.node);
+                    const nend = dvui.c.ts_node_end_byte(pm.node);
+                    if (start < nstart) {
+                        // render non highlighted text up to this node
+                        te.textLayout.format("{s}", .{text[start..nstart]}, .{});
+                    }
+
+                    var opts: dvui.Options = .{};
+                    if (std.mem.eql(u8, pm.capture_name, "function")) {
+                        opts = .{ .color_text = .red };
+                    }
+
+                    //std.debug.print("  \"{s}\"\n", .{source[nstart..nend]});
+                    te.textLayout.format("{s}", .{text[nstart..nend]}, opts);
+
+                    start = nend;
+                }
+            }
+
+            //std.debug.print("next_capture: {d} {d} {d}\n", .{ match.capture_count, captureIdx, match.pattern_index });
             var capture_name_len: u32 = undefined;
             const capture_name = dvui.c.ts_query_capture_name_for_id(query, capture.index, &capture_name_len);
             const cname = capture_name[0..capture_name_len];
-            const nstart = dvui.c.ts_node_start_byte(capture.node);
-            const nend = dvui.c.ts_node_end_byte(capture.node);
-            std.debug.print("  node {s} name {s} \"{s}\"\n", .{ dvui.c.ts_node_string(capture.node), cname, text[nstart..nend] });
+            //const nstart = dvui.c.ts_node_start_byte(capture.node);
+            //const nend = dvui.c.ts_node_end_byte(capture.node);
+            //std.debug.print("  node {s} name {s} \"{s}\"\n", .{ dvui.c.ts_node_string(capture.node), cname, text[nstart..nend] });
+            prev_match = .{ .node = capture.node, .capture_name = cname };
         }
 
-        te.drawBeforeText();
-
-        var cursor = dvui.c.ts_tree_cursor_new(root);
-        defer dvui.c.ts_tree_cursor_delete(&cursor);
-
-        var start: usize = 0;
-
-        loop: while (true) {
-            if (dvui.c.ts_tree_cursor_goto_first_child(&cursor)) {
-                // went to a child
-                continue :loop;
-            }
-
-            // got to leaf node
-            const node = dvui.c.ts_tree_cursor_current_node(&cursor);
-            //const missing = dvui.c.ts_node_is_missing(node);
-            //std.debug.print("leaf node{s}:{s} {d} {s}\n", .{ if (missing) " M" else "", dvui.c.ts_node_string(node), dvui.c.ts_node_symbol(node), dvui.c.ts_node_type(node) });
-            const nstart = dvui.c.ts_node_start_byte(node);
-            const nend = dvui.c.ts_node_end_byte(node);
-
+        if (prev_match) |pm| {
+            //std.debug.print("rendering last match\n", .{});
+            // new capture is not the same as previous, so render previous
+            const nstart = dvui.c.ts_node_start_byte(pm.node);
+            const nend = dvui.c.ts_node_end_byte(pm.node);
             if (start < nstart) {
-                //std.debug.print("  \"{s}\"\n", .{source[start..nstart]});
+                // render non highlighted text up to this node
                 te.textLayout.format("{s}", .{text[start..nstart]}, .{});
             }
 
-            const opts: dvui.Options = switch (dvui.c.ts_node_symbol(node)) {
-                1 => .{ .color_text = .red },
-                else => .{},
-            };
+            var opts: dvui.Options = .{};
+            if (std.mem.eql(u8, pm.capture_name, "function")) {
+                opts = .{ .color_text = .red };
+            }
 
             //std.debug.print("  \"{s}\"\n", .{source[nstart..nend]});
             te.textLayout.format("{s}", .{text[nstart..nend]}, opts);
 
             start = nend;
-
-            if (dvui.c.ts_tree_cursor_goto_next_sibling(&cursor)) {
-                // went to a sibling
-                continue :loop;
-            }
-
-            // no child or sibling, go back up until we can get to a sibling
-            while (true) {
-                if (!dvui.c.ts_tree_cursor_goto_parent(&cursor)) {
-                    // back at root
-                    break :loop;
-                }
-
-                if (dvui.c.ts_tree_cursor_goto_next_sibling(&cursor)) {
-                    // successfully got to a sibling of a parent, start outer loop again
-                    continue :loop;
-                }
-            }
         }
 
         if (start < text.len) {
