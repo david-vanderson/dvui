@@ -1580,6 +1580,10 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
 }
 
 pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
+    if (self.add_text_done) {
+        dvui.log.debug("TextLayoutWidget addTextDone() called multiple times", .{});
+    }
+
     self.add_text_done = true;
 
     if (self.cache_layout and self.byte_heights.len > 0) {

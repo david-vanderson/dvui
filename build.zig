@@ -850,6 +850,27 @@ pub fn addDvuiModule(
         }
     }
 
+    const tree_sitter_dep = b.lazyDependency("tree_sitter", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    if (tree_sitter_dep) |tsd| {
+        dvui_mod.linkLibrary(tsd.artifact("tree-sitter"));
+    }
+
+    const tree_sitter_c_dep = b.lazyDependency("tree_sitter_c", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    if (tree_sitter_c_dep) |tsc| {
+        dvui_mod.addIncludePath(tsc.path("src"));
+        dvui_mod.addCSourceFiles(.{
+            .root = tsc.path(""),
+            .files = &.{"src/parser.c"},
+            .flags = &.{"-std=c11"},
+        });
+    }
+
     return dvui_mod;
 }
 
