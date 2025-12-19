@@ -300,6 +300,8 @@ pub const c = @cImport({
     if (useTinyFileDialogs) {
         @cInclude("tinyfiledialogs.h");
     }
+
+    @cInclude("tree_sitter/api.h");
 });
 
 pub var ft2lib: if (useFreeType) c.FT_Library else void = undefined;

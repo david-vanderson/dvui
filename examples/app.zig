@@ -65,6 +65,8 @@ pub fn AppFrame() !dvui.App.Result {
     return frame();
 }
 
+extern fn tree_sitter_c() callconv(.c) *dvui.c.TSLanguage;
+
 pub fn frame() !dvui.App.Result {
     var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
     scaler.deinit();
@@ -95,36 +97,126 @@ pub fn frame() !dvui.App.Result {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
     defer scroll.deinit();
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
-    const lorem = "This is a dvui.App example that can compile on multiple backends.";
-    tl.addText(lorem, .{});
-    tl.addText("\n", .{});
-    tl.format("Current backend: {s}", .{@tagName(dvui.backend.kind)}, .{});
-    if (dvui.backend.kind == .web) {
-        tl.format(" : {s}", .{if (dvui.backend.wasm.wasm_about_webgl2() == 1) "webgl2" else "webgl (no mipmaps)"}, .{});
-    }
-    tl.deinit();
+    //var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
+    //const lorem = "This is a dvui.App example that can compile on multiple backends.";
+    //tl.addText(lorem, .{});
+    //tl.addText("\n", .{});
+    //tl.format("Current backend: {s}", .{@tagName(dvui.backend.kind)}, .{});
+    //if (dvui.backend.kind == .web) {
+    //    tl.format(" : {s}", .{if (dvui.backend.wasm.wasm_about_webgl2() == 1) "webgl2" else "webgl (no mipmaps)"}, .{});
+    //}
+    //tl.deinit();
 
-    var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    tl2.addText(
-        \\DVUI
-        \\- paints the entire window
-        \\- can show floating windows and dialogs
-        \\- rest of the window is a scroll area
-    , .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is capped by vsync.", .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Cursor is always being set by dvui.", .{});
-    tl2.addText("\n\n", .{});
-    if (dvui.useFreeType) {
-        tl2.addText("Fonts are being rendered by FreeType 2.", .{});
-    } else {
-        tl2.addText("Fonts are being rendered by stb_truetype.", .{});
+    //var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+    //tl2.addText(
+    //    \\DVUI
+    //    \\- paints the entire window
+    //    \\- can show floating windows and dialogs
+    //    \\- rest of the window is a scroll area
+    //, .{});
+    //tl2.addText("\n\n", .{});
+    //tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
+    //tl2.addText("\n\n", .{});
+    //tl2.addText("Framerate is capped by vsync.", .{});
+    //tl2.addText("\n\n", .{});
+    //tl2.addText("Cursor is always being set by dvui.", .{});
+    //tl2.addText("\n\n", .{});
+    //if (dvui.useFreeType) {
+    //    tl2.addText("Fonts are being rendered by FreeType 2.", .{});
+    //} else {
+    //    tl2.addText("Fonts are being rendered by stb_truetype.", .{});
+    //}
+    //tl2.deinit();
+
+    {
+        const source =
+            \\int main() {
+            \\// Create a parser.
+            \\TSParser *parser = ts_parser_new();
+            \\
+            \\// Set the parser's language (JSON in this case).
+            \\ts_parser_set_language(parser, tree_sitter_json());
+            \\
+            \\// Build a syntax tree based on source code stored in a string.
+            \\const char *source_code = "[1, null]";
+        ;
+
+        var te: dvui.TextEntryWidget = undefined;
+        te.init(@src(), .{ .multiline = true }, .{ .expand = .horizontal, .min_size_content = .height(200) });
+        defer te.deinit();
+
+        if (dvui.firstFrame(te.data().id)) {
+            te.textSet(source, false);
+        }
+
+        te.processEvents();
+
+        const text = te.textGet();
+
+        const parser = dvui.c.ts_parser_new();
+        defer dvui.c.ts_parser_delete(parser);
+        _ = dvui.c.ts_parser_set_language(parser, tree_sitter_c());
+        const tree = dvui.c.ts_parser_parse_string(parser, null, text.ptr, @intCast(text.len));
+        const root = dvui.c.ts_tree_root_node(tree);
+        //const str = dvui.c.ts_node_string(root);
+        defer dvui.c.ts_tree_delete(tree);
+
+        te.drawBeforeText();
+        defer te.textLayout.addTextDone(.{});
+        defer te.drawAfterText();
+
+        var cursor = dvui.c.ts_tree_cursor_new(root);
+        defer dvui.c.ts_tree_cursor_delete(&cursor);
+
+        var start: usize = 0;
+
+        loop: while (true) {
+            if (dvui.c.ts_tree_cursor_goto_first_child(&cursor)) {
+                // went to a child
+                continue :loop;
+            }
+
+            // got to leaf node
+            const node = dvui.c.ts_tree_cursor_current_node(&cursor);
+            //const missing = dvui.c.ts_node_is_missing(node);
+            //std.debug.print("leaf node{s}:{s} {d} {s}\n", .{ if (missing) " M" else "", dvui.c.ts_node_string(node), dvui.c.ts_node_symbol(node), dvui.c.ts_node_type(node) });
+            const nstart = dvui.c.ts_node_start_byte(node);
+            const nend = dvui.c.ts_node_end_byte(node);
+
+            if (start < nstart) {
+                //std.debug.print("  \"{s}\"\n", .{source[start..nstart]});
+                te.textLayout.format("{s}", .{text[start..nstart]}, .{});
+            }
+
+            const opts: dvui.Options = switch (dvui.c.ts_node_symbol(node)) {
+                1 => .{ .color_text = .red },
+                else => .{},
+            };
+
+            //std.debug.print("  \"{s}\"\n", .{source[nstart..nend]});
+            te.textLayout.format("{s}", .{text[nstart..nend]}, opts);
+
+            start = nend;
+
+            if (dvui.c.ts_tree_cursor_goto_next_sibling(&cursor)) {
+                // went to a sibling
+                continue :loop;
+            }
+
+            // no child or sibling, go back up until we can get to a sibling
+            while (true) {
+                if (!dvui.c.ts_tree_cursor_goto_parent(&cursor)) {
+                    // back at root
+                    break :loop;
+                }
+
+                if (dvui.c.ts_tree_cursor_goto_next_sibling(&cursor)) {
+                    // successfully got to a sibling of a parent, start outer loop again
+                    continue :loop;
+                }
+            }
+        }
     }
-    tl2.deinit();
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
     if (dvui.button(@src(), label, .{}, .{ .tag = "show-demo-btn" })) {

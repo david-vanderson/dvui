@@ -301,14 +301,7 @@ pub fn processEvents(self: *TextEntryWidget) void {
 }
 
 pub fn draw(self: *TextEntryWidget) void {
-    const focused = (self.data().id == dvui.focusedWidgetId());
-
-    if (focused) {
-        dvui.wantTextInput(self.data().borderRectScale().r.toNatural());
-    }
-
-    // set clip back to what textLayout had, so we don't draw over the scrollbars
-    dvui.clipSet(self.textClip);
+    self.drawBeforeText();
 
     if (self.init_opts.password_char) |pc| {
         // adjust selection for obfuscation
@@ -385,6 +378,22 @@ pub fn draw(self: *TextEntryWidget) void {
         sel.end = send.?;
     }
 
+    self.drawAfterText();
+}
+
+pub fn drawBeforeText(self: *TextEntryWidget) void {
+    const focused = (self.data().id == dvui.focusedWidgetId());
+
+    if (focused) {
+        dvui.wantTextInput(self.data().borderRectScale().r.toNatural());
+    }
+
+    // set clip back to what textLayout had, so we don't draw over the scrollbars
+    dvui.clipSet(self.textClip);
+}
+
+pub fn drawAfterText(self: *TextEntryWidget) void {
+    const focused = (self.data().id == dvui.focusedWidgetId());
     if (focused) {
         self.drawCursor();
     }
