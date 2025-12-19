@@ -67,6 +67,57 @@ pub fn AppFrame() !dvui.App.Result {
 
 extern fn tree_sitter_c() callconv(.c) *dvui.c.TSLanguage;
 
+const tsQueryCursorCaptureIterator = struct {
+    pub const Match = struct {
+        node: dvui.c.TSNode,
+        capture_index: u32,
+
+        pub fn captureName(self: *const Match, query: *const dvui.c.TSQuery) []const u8 {
+            var len: u32 = undefined;
+            const name = dvui.c.ts_query_capture_name_for_id(query, self.capture_index, &len);
+            return name[0..len];
+        }
+    };
+
+    query_cursor: *dvui.c.TSQueryCursor,
+    prev_match: ?Match,
+
+    pub fn init(qc: *dvui.c.TSQueryCursor) tsQueryCursorCaptureIterator {
+        return .{
+            .query_cursor = qc,
+            .prev_match = null,
+        };
+    }
+
+    pub fn next(self: *tsQueryCursorCaptureIterator) ?Match {
+        var match: dvui.c.TSQueryMatch = undefined;
+        var captureIdx: u32 = undefined;
+        loop: while (dvui.c.ts_query_cursor_next_capture(self.query_cursor, &match, &captureIdx)) {
+            const capture = match.captures[captureIdx];
+            if (self.prev_match) |pm| {
+                if (dvui.c.ts_node_eq(pm.node, capture.node)) {
+                    // same node as previous
+                    self.prev_match = .{ .node = capture.node, .capture_index = capture.index };
+                    continue :loop;
+                }
+
+                // not the same
+                const ret = self.prev_match;
+                self.prev_match = .{ .node = capture.node, .capture_index = capture.index };
+                return ret;
+            } else {
+                // first time
+                self.prev_match = .{ .node = capture.node, .capture_index = capture.index };
+                continue :loop;
+            }
+        }
+
+        const ret = self.prev_match;
+        self.prev_match = null;
+        return ret;
+    }
+};
+
 pub fn frame() !dvui.App.Result {
     var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
     scaler.deinit();
@@ -260,59 +311,33 @@ pub fn frame() !dvui.App.Result {
         defer dvui.c.ts_query_cursor_delete(qc);
         // TODO: set byte range for qc
         if (query) |q| dvui.c.ts_query_cursor_exec(qc, q, root);
-        var prev_match: ?struct {
-            node: dvui.c.TSNode,
-            capture_name: []const u8,
-        } = null;
-        var match: dvui.c.TSQueryMatch = undefined;
-        var captureIdx: u32 = undefined;
-        while (dvui.c.ts_query_cursor_next_capture(qc, &match, &captureIdx)) {
-            const capture = match.captures[captureIdx];
-            if (prev_match) |pm| {
-                if (!dvui.c.ts_node_eq(pm.node, capture.node)) {
-                    // new capture is not the same as previous, so render previous
-                    const nstart = dvui.c.ts_node_start_byte(pm.node);
-                    const nend = dvui.c.ts_node_end_byte(pm.node);
-                    if (start < nstart) {
-                        // render non highlighted text up to this node
-                        te.textLayout.format("{s}", .{text[start..nstart]}, .{});
-                    }
 
-                    var opts: dvui.Options = .{};
-                    if (std.mem.eql(u8, pm.capture_name, "function")) {
-                        opts = .{ .color_text = .red };
-                    }
-
-                    //std.debug.print("  \"{s}\"\n", .{source[nstart..nend]});
-                    te.textLayout.format("{s}", .{text[nstart..nend]}, opts);
-
-                    start = nend;
-                }
-            }
-
-            //std.debug.print("next_capture: {d} {d} {d}\n", .{ match.capture_count, captureIdx, match.pattern_index });
-            var capture_name_len: u32 = undefined;
-            const capture_name = dvui.c.ts_query_capture_name_for_id(query, capture.index, &capture_name_len);
-            const cname = capture_name[0..capture_name_len];
-            //const nstart = dvui.c.ts_node_start_byte(capture.node);
-            //const nend = dvui.c.ts_node_end_byte(capture.node);
-            //std.debug.print("  node {s} name {s} \"{s}\"\n", .{ dvui.c.ts_node_string(capture.node), cname, text[nstart..nend] });
-            prev_match = .{ .node = capture.node, .capture_name = cname };
-        }
-
-        if (prev_match) |pm| {
-            //std.debug.print("rendering last match\n", .{});
-            // new capture is not the same as previous, so render previous
-            const nstart = dvui.c.ts_node_start_byte(pm.node);
-            const nend = dvui.c.ts_node_end_byte(pm.node);
+        var iter: tsQueryCursorCaptureIterator = .init(qc.?);
+        while (iter.next()) |match| {
+            const nstart = dvui.c.ts_node_start_byte(match.node);
+            const nend = dvui.c.ts_node_end_byte(match.node);
             if (start < nstart) {
                 // render non highlighted text up to this node
                 te.textLayout.format("{s}", .{text[start..nstart]}, .{});
             }
 
             var opts: dvui.Options = .{};
-            if (std.mem.eql(u8, pm.capture_name, "function")) {
-                opts = .{ .color_text = .red };
+            if (std.mem.eql(u8, match.captureName(query.?), "variable")) {
+                opts.color_text = .aqua;
+            } else if (std.mem.eql(u8, match.captureName(query.?), "constant")) {
+                opts.color_text = .blue;
+            } else if (std.mem.eql(u8, match.captureName(query.?), "keyword")) {
+                opts.color_text = .purple;
+            } else if (std.mem.eql(u8, match.captureName(query.?), "operator")) {
+                opts.color_text = .silver;
+            } else if (std.mem.eql(u8, match.captureName(query.?), "string")) {
+                opts.color_text = .maroon;
+            } else if (std.mem.eql(u8, match.captureName(query.?), "number")) {
+                opts.color_text = .teal;
+            } else if (std.mem.eql(u8, match.captureName(query.?), "comment")) {
+                opts.color_text = .green;
+            } else if (std.mem.eql(u8, match.captureName(query.?), "function")) {
+                opts.color_text = dvui.Color.yellow.lighten(-30);
             }
 
             //std.debug.print("  \"{s}\"\n", .{source[nstart..nend]});
