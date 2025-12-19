@@ -9,9 +9,12 @@ pub const Key = dvui.Id;
 pub const Storage = dvui.TrackingAutoHashMap(Key, SavedData, .get_and_put);
 pub const Trash = std.ArrayListUnmanaged(SavedData);
 
+pub const DeinitFunction = *const fn (*anyopaque) void;
+
 const SavedData = struct {
     alignment: u8,
     data: []u8,
+    deinit: ?DeinitFunction = null,
 
     debug: DebugInfo,
 
@@ -39,6 +42,9 @@ const SavedData = struct {
 
     pub fn free(self: *const SavedData, gpa: std.mem.Allocator) void {
         if (self.data.len != 0) {
+            if (self.deinit) |func| {
+                func(self.data.ptr);
+            }
             gpa.rawFree(
                 self.data,
                 std.mem.Alignment.fromByteUnits(self.alignment),
@@ -186,6 +192,15 @@ pub fn get(self: *Data, key: Key, debug: SavedData.DebugInfo) ?[]u8 {
         return sd.data;
     } else {
         return null;
+    }
+}
+
+pub fn setDeinitFunction(self: *Data, key: Key, func: DeinitFunction) void {
+    self.mutex.lock();
+    defer self.mutex.unlock();
+
+    if (self.storage.getPtr(key)) |sd| {
+        sd.deinit = func;
     }
 }
 
