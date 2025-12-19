@@ -141,6 +141,90 @@ pub fn frame() !dvui.App.Result {
             \\const char *source_code = "[1, null]";
         ;
 
+        const queries =
+            \\(identifier) @variable
+            \\
+            \\((identifier) @constant
+            \\ (#match? @constant "^[A-Z][A-Z\\d_]*$"))
+            \\
+            \\"break" @keyword
+            \\"case" @keyword
+            \\"const" @keyword
+            \\"continue" @keyword
+            \\"default" @keyword
+            \\"do" @keyword
+            \\"else" @keyword
+            \\"enum" @keyword
+            \\"extern" @keyword
+            \\"for" @keyword
+            \\"if" @keyword
+            \\"inline" @keyword
+            \\"return" @keyword
+            \\"sizeof" @keyword
+            \\"static" @keyword
+            \\"struct" @keyword
+            \\"switch" @keyword
+            \\"typedef" @keyword
+            \\"union" @keyword
+            \\"volatile" @keyword
+            \\"while" @keyword
+            \\
+            \\"#define" @keyword
+            \\"#elif" @keyword
+            \\"#else" @keyword
+            \\"#endif" @keyword
+            \\"#if" @keyword
+            \\"#ifdef" @keyword
+            \\"#ifndef" @keyword
+            \\"#include" @keyword
+            \\(preproc_directive) @keyword
+            \\
+            \\"--" @operator
+            \\"-" @operator
+            \\"-=" @operator
+            \\"->" @operator
+            \\"=" @operator
+            \\"!=" @operator
+            \\"*" @operator
+            \\"&" @operator
+            \\"&&" @operator
+            \\"+" @operator
+            \\"++" @operator
+            \\"+=" @operator
+            \\"<" @operator
+            \\"==" @operator
+            \\">" @operator
+            \\"||" @operator
+            \\
+            \\"." @delimiter
+            \\";" @delimiter
+            \\
+            \\(string_literal) @string
+            \\(system_lib_string) @string
+            \\
+            \\(null) @constant
+            \\(number_literal) @number
+            \\(char_literal) @number
+            \\
+            \\(field_identifier) @property
+            \\(statement_identifier) @label
+            \\(type_identifier) @type
+            \\(primitive_type) @type
+            \\(sized_type_specifier) @type
+            \\
+            \\(call_expression
+            \\  function: (identifier) @function)
+            \\(call_expression
+            \\  function: (field_expression
+            \\    field: (field_identifier) @function))
+            \\(function_declarator
+            \\  declarator: (identifier) @function)
+            \\(preproc_function_def
+            \\  name: (identifier) @function.special)
+            \\
+            \\(comment) @comment
+        ;
+
         var te: dvui.TextEntryWidget = undefined;
         te.init(@src(), .{ .multiline = true }, .{ .expand = .horizontal, .min_size_content = .height(200) });
         defer te.deinit();
@@ -153,17 +237,39 @@ pub fn frame() !dvui.App.Result {
 
         const text = te.textGet();
 
+        // parsing
         const parser = dvui.c.ts_parser_new();
         defer dvui.c.ts_parser_delete(parser);
         _ = dvui.c.ts_parser_set_language(parser, tree_sitter_c());
+        // TODO: set byte range for parsing
         const tree = dvui.c.ts_parser_parse_string(parser, null, text.ptr, @intCast(text.len));
         const root = dvui.c.ts_tree_root_node(tree);
         //const str = dvui.c.ts_node_string(root);
         defer dvui.c.ts_tree_delete(tree);
 
+        // queries
+        var errorOffset: u32 = undefined;
+        var errorType: dvui.c.TSQueryError = undefined;
+        const query = dvui.c.ts_query_new(tree_sitter_c(), queries.ptr, queries.len, &errorOffset, &errorType);
+        defer if (query) |q| dvui.c.ts_query_delete(q);
+        const qc = dvui.c.ts_query_cursor_new();
+        defer dvui.c.ts_query_cursor_delete(qc);
+        // TODO: set byte range for qc
+        if (query) |q| dvui.c.ts_query_cursor_exec(qc, q, root);
+        var match: dvui.c.TSQueryMatch = undefined;
+        var captureIdx: u32 = undefined;
+        while (dvui.c.ts_query_cursor_next_capture(qc, &match, &captureIdx)) {
+            std.debug.print("next_capture: {d} {d} {d}\n", .{ match.capture_count, captureIdx, match.pattern_index });
+            const capture = match.captures[captureIdx];
+            var capture_name_len: u32 = undefined;
+            const capture_name = dvui.c.ts_query_capture_name_for_id(query, capture.index, &capture_name_len);
+            const cname = capture_name[0..capture_name_len];
+            const nstart = dvui.c.ts_node_start_byte(capture.node);
+            const nend = dvui.c.ts_node_end_byte(capture.node);
+            std.debug.print("  node {s} name {s} \"{s}\"\n", .{ dvui.c.ts_node_string(capture.node), cname, text[nstart..nend] });
+        }
+
         te.drawBeforeText();
-        defer te.textLayout.addTextDone(.{});
-        defer te.drawAfterText();
 
         var cursor = dvui.c.ts_tree_cursor_new(root);
         defer dvui.c.ts_tree_cursor_delete(&cursor);
@@ -216,6 +322,12 @@ pub fn frame() !dvui.App.Result {
                 }
             }
         }
+
+        if (start < text.len) {
+            te.textLayout.format("{s}", .{text[start..text.len]}, .{});
+        }
+        te.textLayout.addTextDone(.{});
+        te.drawAfterText();
     }
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
