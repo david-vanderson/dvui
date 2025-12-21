@@ -58,5 +58,15 @@
             .hash = "zglfw-0.10.0-dev-zgVDNPKyIQCBi-wv_vxkvIQq1u0bP4D56Wszx_2mszc7",
             .lazy = true,
         },
+        .tree_sitter = .{
+            .url = "git+https://github.com/tree-sitter/tree-sitter#eacb95c85da15005f091729f3225609d0db67963",
+            .hash = "tree_sitter-0.27.0-Tw2sRwKWCwCqwcmq1ZXGlBVEa1887b3t2RwZdmIRrX3Z",
+            .lazy = true,
+        },
+        .tree_sitter_c = .{
+            .url = "git+https://github.com/tree-sitter/tree-sitter-c#586dd62ad4d3532895ea80a8382d21307b4733bd",
+            .hash = "tree_sitter_c-0.24.1-ns1YLwdjQACIi5BEwewiqu6a6Zcl91RWoSWbz0KmxUOj",
+            .lazy = true,
+        },
     },
 }

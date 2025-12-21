@@ -301,14 +301,7 @@ pub fn processEvents(self: *TextEntryWidget) void {
 }
 
 pub fn draw(self: *TextEntryWidget) void {
-    const focused = (self.data().id == dvui.focusedWidgetId());
-
-    if (focused) {
-        dvui.wantTextInput(self.data().borderRectScale().r.toNatural());
-    }
-
-    // set clip back to what textLayout had, so we don't draw over the scrollbars
-    dvui.clipSet(self.textClip);
+    self.drawBeforeText();
 
     if (self.init_opts.password_char) |pc| {
         // adjust selection for obfuscation
@@ -347,13 +340,6 @@ pub fn draw(self: *TextEntryWidget) void {
             self.textLayout.addText(pc, self.data().options.strip());
         }
     } else {
-        if (self.init_opts.cache_layout) {
-            self.textLayout.cache_layout_bytes = self.textLayout.bytesNeeded(
-                self.text_changed_start,
-                self.text_changed_end,
-                self.text_changed_added,
-            );
-        }
         self.textLayout.addText(self.text[0..self.len], self.data().options.strip());
     }
 
@@ -385,6 +371,30 @@ pub fn draw(self: *TextEntryWidget) void {
         sel.end = send.?;
     }
 
+    self.drawAfterText();
+}
+
+pub fn drawBeforeText(self: *TextEntryWidget) void {
+    const focused = (self.data().id == dvui.focusedWidgetId());
+
+    if (focused) {
+        dvui.wantTextInput(self.data().borderRectScale().r.toNatural());
+    }
+
+    // set clip back to what textLayout had, so we don't draw over the scrollbars
+    dvui.clipSet(self.textClip);
+
+    if (self.init_opts.cache_layout) {
+        self.textLayout.cache_layout_bytes = self.textLayout.bytesNeeded(
+            self.text_changed_start,
+            self.text_changed_end,
+            self.text_changed_added,
+        );
+    }
+}
+
+pub fn drawAfterText(self: *TextEntryWidget) void {
+    const focused = (self.data().id == dvui.focusedWidgetId());
     if (focused) {
         self.drawCursor();
     }

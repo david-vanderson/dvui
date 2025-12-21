@@ -65,6 +65,61 @@ pub fn AppFrame() !dvui.App.Result {
     return frame();
 }
 
+extern fn tree_sitter_c() callconv(.c) *dvui.c.TSLanguage;
+
+const tsQueryCursorCaptureIterator = struct {
+    pub const Match = struct {
+        node: dvui.c.TSNode,
+        capture_index: u32,
+
+        pub fn captureName(self: *const Match, query: *const dvui.c.TSQuery) []const u8 {
+            var len: u32 = undefined;
+            const name = dvui.c.ts_query_capture_name_for_id(query, self.capture_index, &len);
+            return name[0..len];
+        }
+    };
+
+    query_cursor: *dvui.c.TSQueryCursor,
+    prev_match: ?Match,
+
+    pub fn init(qc: *dvui.c.TSQueryCursor) tsQueryCursorCaptureIterator {
+        return .{
+            .query_cursor = qc,
+            .prev_match = null,
+        };
+    }
+
+    pub fn next(self: *tsQueryCursorCaptureIterator) ?Match {
+        var match: dvui.c.TSQueryMatch = undefined;
+        var captureIdx: u32 = undefined;
+        loop: while (dvui.c.ts_query_cursor_next_capture(self.query_cursor, &match, &captureIdx)) {
+            const capture = match.captures[captureIdx];
+            if (self.prev_match) |pm| {
+                if (dvui.c.ts_node_eq(pm.node, capture.node)) {
+                    // same node as previous
+                    self.prev_match = .{ .node = capture.node, .capture_index = capture.index };
+                    continue :loop;
+                }
+
+                // not the same
+                const ret = self.prev_match;
+                self.prev_match = .{ .node = capture.node, .capture_index = capture.index };
+                return ret;
+            } else {
+                // first time
+                self.prev_match = .{ .node = capture.node, .capture_index = capture.index };
+                continue :loop;
+            }
+        }
+
+        const ret = self.prev_match;
+        self.prev_match = null;
+        return ret;
+    }
+};
+
+var show_text_entry: bool = true;
+
 pub fn frame() !dvui.App.Result {
     var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
     scaler.deinit();
@@ -79,6 +134,10 @@ pub fn frame() !dvui.App.Result {
         if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .tag = "first-focusable" })) |r| {
             var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
+
+            if (dvui.menuItemLabel(@src(), "Toggle TextEntry", .{}, .{ .expand = .horizontal }) != null) {
+                show_text_entry = !show_text_entry;
+            }
 
             if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
                 m.close();
@@ -95,36 +154,250 @@ pub fn frame() !dvui.App.Result {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
     defer scroll.deinit();
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
-    const lorem = "This is a dvui.App example that can compile on multiple backends.";
-    tl.addText(lorem, .{});
-    tl.addText("\n", .{});
-    tl.format("Current backend: {s}", .{@tagName(dvui.backend.kind)}, .{});
-    if (dvui.backend.kind == .web) {
-        tl.format(" : {s}", .{if (dvui.backend.wasm.wasm_about_webgl2() == 1) "webgl2" else "webgl (no mipmaps)"}, .{});
-    }
-    tl.deinit();
+    //var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
+    //const lorem = "This is a dvui.App example that can compile on multiple backends.";
+    //tl.addText(lorem, .{});
+    //tl.addText("\n", .{});
+    //tl.format("Current backend: {s}", .{@tagName(dvui.backend.kind)}, .{});
+    //if (dvui.backend.kind == .web) {
+    //    tl.format(" : {s}", .{if (dvui.backend.wasm.wasm_about_webgl2() == 1) "webgl2" else "webgl (no mipmaps)"}, .{});
+    //}
+    //tl.deinit();
 
-    var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    tl2.addText(
-        \\DVUI
-        \\- paints the entire window
-        \\- can show floating windows and dialogs
-        \\- rest of the window is a scroll area
-    , .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is capped by vsync.", .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Cursor is always being set by dvui.", .{});
-    tl2.addText("\n\n", .{});
-    if (dvui.useFreeType) {
-        tl2.addText("Fonts are being rendered by FreeType 2.", .{});
-    } else {
-        tl2.addText("Fonts are being rendered by stb_truetype.", .{});
+    //var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+    //tl2.addText(
+    //    \\DVUI
+    //    \\- paints the entire window
+    //    \\- can show floating windows and dialogs
+    //    \\- rest of the window is a scroll area
+    //, .{});
+    //tl2.addText("\n\n", .{});
+    //tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
+    //tl2.addText("\n\n", .{});
+    //tl2.addText("Framerate is capped by vsync.", .{});
+    //tl2.addText("\n\n", .{});
+    //tl2.addText("Cursor is always being set by dvui.", .{});
+    //tl2.addText("\n\n", .{});
+    //if (dvui.useFreeType) {
+    //    tl2.addText("Fonts are being rendered by FreeType 2.", .{});
+    //} else {
+    //    tl2.addText("Fonts are being rendered by stb_truetype.", .{});
+    //}
+    //tl2.deinit();
+
+    if (show_text_entry) {
+        //const source = @embedFile("query.c");
+        const source =
+            \\int main() {
+            \\// Create a parser.
+            \\TSParser *parser = ts_parser_new();
+            \\
+            \\// Set the parser's language (JSON in this case).
+            \\ts_parser_set_language(parser, tree_sitter_json());
+            \\
+            \\// Build a syntax tree based on source code stored in a string.
+            \\const char *source_code = "[1, null]";
+        ;
+
+        const queries =
+            \\(identifier) @variable
+            \\
+            \\((identifier) @constant
+            \\ (#match? @constant "^[A-Z][A-Z\\d_]*$"))
+            \\
+            \\"break" @keyword
+            \\"case" @keyword
+            \\"const" @keyword
+            \\"continue" @keyword
+            \\"default" @keyword
+            \\"do" @keyword
+            \\"else" @keyword
+            \\"enum" @keyword
+            \\"extern" @keyword
+            \\"for" @keyword
+            \\"if" @keyword
+            \\"inline" @keyword
+            \\"return" @keyword
+            \\"sizeof" @keyword
+            \\"static" @keyword
+            \\"struct" @keyword
+            \\"switch" @keyword
+            \\"typedef" @keyword
+            \\"union" @keyword
+            \\"volatile" @keyword
+            \\"while" @keyword
+            \\
+            \\"#define" @keyword
+            \\"#elif" @keyword
+            \\"#else" @keyword
+            \\"#endif" @keyword
+            \\"#if" @keyword
+            \\"#ifdef" @keyword
+            \\"#ifndef" @keyword
+            \\"#include" @keyword
+            \\(preproc_directive) @keyword
+            \\
+            \\"--" @operator
+            \\"-" @operator
+            \\"-=" @operator
+            \\"->" @operator
+            \\"=" @operator
+            \\"!=" @operator
+            \\"*" @operator
+            \\"&" @operator
+            \\"&&" @operator
+            \\"+" @operator
+            \\"++" @operator
+            \\"+=" @operator
+            \\"<" @operator
+            \\"==" @operator
+            \\">" @operator
+            \\"||" @operator
+            \\
+            \\"." @delimiter
+            \\";" @delimiter
+            \\
+            \\(string_literal) @string
+            \\(system_lib_string) @string
+            \\
+            \\(null) @constant
+            \\(number_literal) @number
+            \\(char_literal) @number
+            \\
+            \\(field_identifier) @property
+            \\(statement_identifier) @label
+            \\(type_identifier) @type
+            \\(primitive_type) @type
+            \\(sized_type_specifier) @type
+            \\
+            \\(call_expression
+            \\  function: (identifier) @function)
+            \\(call_expression
+            \\  function: (field_expression
+            \\    field: (field_identifier) @function))
+            \\(function_declarator
+            \\  declarator: (identifier) @function)
+            \\(preproc_function_def
+            \\  name: (identifier) @function.special)
+            \\
+            \\(comment) @comment
+        ;
+
+        var te: dvui.TextEntryWidget = undefined;
+        te.init(@src(), .{ .multiline = true, .cache_layout = true, .text = .{ .internal = .{ .limit = 1_000_000 } } }, .{ .expand = .horizontal, .min_size_content = .height(300) });
+        defer te.deinit();
+
+        if (dvui.firstFrame(te.data().id)) {
+            te.textSet(source, false);
+        }
+
+        te.processEvents();
+        te.drawBeforeText();
+
+        const text = te.textGet();
+
+        // used to output text that's not highlighted
+        var start: usize = 0;
+
+        const Parser = struct {
+            parser: *dvui.c.TSParser,
+            tree: *dvui.c.TSTree,
+            query: *dvui.c.TSQuery,
+
+            pub fn deinit(ptr: *anyopaque) void {
+                const self: *@This() = @ptrCast(@alignCast(ptr));
+
+                dvui.c.ts_query_delete(self.query);
+                dvui.c.ts_tree_delete(self.tree);
+                dvui.c.ts_parser_delete(self.parser);
+            }
+        };
+
+        var parser = dvui.dataGetPtr(null, te.data().id, "parser", Parser) orelse blk: {
+            const p = dvui.c.ts_parser_new();
+            _ = dvui.c.ts_parser_set_language(p, tree_sitter_c());
+            const tree = dvui.c.ts_parser_parse_string(p, null, text.ptr, @intCast(text.len));
+
+            var errorOffset: u32 = undefined;
+            var errorType: dvui.c.TSQueryError = undefined;
+            const query = dvui.c.ts_query_new(tree_sitter_c(), queries.ptr, queries.len, &errorOffset, &errorType);
+
+            const parser: Parser = .{ .parser = p.?, .tree = tree.?, .query = query.? };
+            dvui.dataSet(null, te.data().id, "parser", parser);
+            dvui.dataSetDeinitFunction(null, te.data().id, "parser", &Parser.deinit);
+            break :blk dvui.dataGetPtr(null, te.data().id, "parser", Parser).?;
+        };
+
+        if (te.text_changed and !dvui.firstFrame(te.data().id)) {
+            var edit: dvui.c.TSInputEdit = undefined;
+            edit.start_byte = @intCast(te.text_changed_start);
+            edit.old_end_byte = @intCast(te.text_changed_end);
+            edit.new_end_byte = @intCast(@as(i64, @intCast(te.text_changed_end)) + te.text_changed_added);
+
+            edit.start_point = .{ .row = 0, .column = 0 };
+            edit.old_end_point = .{ .row = 0, .column = 0 };
+            edit.new_end_point = .{ .row = 0, .column = 0 };
+
+            dvui.c.ts_tree_edit(parser.tree, &edit);
+
+            const tree = dvui.c.ts_parser_parse_string(parser.parser, parser.tree, text.ptr, @intCast(text.len));
+            dvui.c.ts_tree_delete(parser.tree);
+            parser.tree = tree.?;
+        }
+
+        // parsing
+        const root = dvui.c.ts_tree_root_node(parser.tree);
+
+        // queries
+        const qc = dvui.c.ts_query_cursor_new();
+        defer dvui.c.ts_query_cursor_delete(qc);
+
+        if (te.textLayout.cache_layout_bytes) |clb| {
+            _ = dvui.c.ts_query_cursor_set_byte_range(qc, @intCast(clb.start), @intCast(clb.end));
+        }
+
+        dvui.c.ts_query_cursor_exec(qc, parser.query, root);
+
+        var iter: tsQueryCursorCaptureIterator = .init(qc.?);
+        while (iter.next()) |match| {
+            const nstart = dvui.c.ts_node_start_byte(match.node);
+            const nend = dvui.c.ts_node_end_byte(match.node);
+            if (start < nstart) {
+                // render non highlighted text up to this node
+                te.textLayout.format("{s}", .{text[start..nstart]}, .{});
+            }
+
+            var opts: dvui.Options = .{};
+            if (std.mem.eql(u8, match.captureName(parser.query), "variable")) {
+                opts.color_text = .aqua;
+            } else if (std.mem.eql(u8, match.captureName(parser.query), "constant")) {
+                opts.color_text = .blue;
+            } else if (std.mem.eql(u8, match.captureName(parser.query), "keyword")) {
+                opts.color_text = .purple;
+            } else if (std.mem.eql(u8, match.captureName(parser.query), "operator")) {
+                opts.color_text = .silver;
+            } else if (std.mem.eql(u8, match.captureName(parser.query), "string")) {
+                opts.color_text = .maroon;
+            } else if (std.mem.eql(u8, match.captureName(parser.query), "number")) {
+                opts.color_text = .teal;
+            } else if (std.mem.eql(u8, match.captureName(parser.query), "comment")) {
+                opts.color_text = .green;
+            } else if (std.mem.eql(u8, match.captureName(parser.query), "function")) {
+                opts.color_text = dvui.Color.yellow.lighten(-30);
+            }
+
+            te.textLayout.format("{s}", .{text[nstart..nend]}, opts);
+
+            start = nend;
+        }
+
+        if (start < text.len) {
+            // any leftover non highlighted text
+            te.textLayout.format("{s}", .{text[start..text.len]}, .{});
+        }
+        te.textLayout.addTextDone(.{});
+        te.drawAfterText();
     }
-    tl2.deinit();
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
     if (dvui.button(@src(), label, .{}, .{ .tag = "show-demo-btn" })) {
