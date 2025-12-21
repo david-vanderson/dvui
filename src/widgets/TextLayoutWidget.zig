@@ -11,6 +11,7 @@ const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
 const FloatingWidget = dvui.FloatingWidget;
+const AccessKit = dvui.AccessKit;
 
 const TextLayoutWidget = @This();
 
@@ -24,7 +25,7 @@ const TextLayoutWidget = @This();
 /// 500 if our min width is zero).
 pub var defaults: Options = .{
     .name = "TextLayout",
-    .role = .label, // TODO: Use labels until can support .text_run
+    .role = .label,
     .padding = Rect.all(6),
     .background = true,
     .style = .content,
@@ -40,15 +41,19 @@ pub const InitOptions = struct {
     /// and only process what is needed for visibility (and copy).
     cache_layout: bool = false,
 
-    // Whether to enter touch editing mode on a touch-release (no drag) if we
-    // were not focused before the touch.
+    /// Whether to enter touch editing mode on a touch-release (no drag) if we
+    /// were not focused before the touch.
     touch_edit_just_focused: bool = true,
 
-    // If non null, overrides `Window.kerning` setting.
+    /// If non null, overrides `Window.kerning` setting.
     kerning: ?bool = null,
 
     focused: ?bool = null,
     show_touch_draggables: bool = true,
+
+    /// If non null, overrides the parent widget for any accesskit text runs created
+    /// by this widget.
+    ak_text_parent: ?dvui.Id = null,
 };
 
 pub const Selection = struct {
@@ -108,9 +113,15 @@ pub const Selection = struct {
     }
 };
 
+// Text selection information for accesskit.
+const TextRunSelectionInfo = struct {
+    node_id: dvui.Id,
+    pos: usize,
+};
+
 /// This is used for word selection - 2 clicks and ctrl+left/right - everything
 /// here is not a word, and everything else is.
-pub const word_breaks = " \n!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+pub const word_breaks = " \n!\"#$%&()*+,-./:;<=>?@[\\]^_`{|}~";
 
 wd: WidgetData,
 corners: [4]?Rect = [_]?Rect{null} ** 4,
@@ -229,6 +240,14 @@ byte_heights_new: std.ArrayList(ByteHeight) = .empty, // creating this frame
 byte_height_after_idx: ?usize = null,
 byte_height_edit_idx: ?usize = null,
 
+// AccessKit text reading / selection
+textrun_parent: ?dvui.Id = null,
+textrun_anchor: ?TextRunSelectionInfo = null,
+textrun_focus: ?TextRunSelectionInfo = null,
+textrun_cursor: ?TextRunSelectionInfo = null,
+// Did the last textAdd end with a newline?
+newline: bool = false,
+
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const options = defaults.override(opts);
@@ -238,6 +257,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
         .cache_layout = init_opts.cache_layout,
         .kerning = init_opts.kerning,
         .touch_edit_just_focused = init_opts.touch_edit_just_focused,
+        .textrun_parent = init_opts.ak_text_parent,
 
         // SAFETY: set bellow
         .selection = undefined,
@@ -466,6 +486,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
             fc.deinit();
         }
     }
+
     if (self.data().accesskit_node()) |ak_node| {
         dvui.AccessKit.nodeSetReadOnly(ak_node);
     }
@@ -1167,6 +1188,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
 
     // clip to content rect for all text
     _ = dvui.clip(self.data().contentRectScale().r);
+    self.newline = false;
 
     var txt = dvui.toUtf8(cw.lifo(), text_in) catch |err| blk: {
         dvui.logError(@src(), err, "Failed to convert to utf8", .{});
@@ -1265,7 +1287,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             s = options.fontGet().textSizeEx(txt[0..end], .{ .kerning = self.kerning });
         }
 
-        const newline = (txt[end - 1] == '\n');
+        self.newline = (txt[end - 1] == '\n');
 
         //std.debug.print("{d} 1 txt to {d} \"{s}\"\n", .{ container_width, end, txt[0..end] });
 
@@ -1274,7 +1296,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             // try to break on space if:
             // - slice ended due to width (not newline)
             // - linewidth is long enough (otherwise too narrow to break on space)
-            if (end < txt.len and !newline and linewidth > (10 * msize.w)) {
+            if (end < txt.len and !self.newline and linewidth > (10 * msize.w)) {
                 // now we are under the length limit but might be in the middle of a word
                 // look one char further because we might be right at the end of a word
                 const spaceIdx = std.mem.lastIndexOfLinear(u8, txt[0 .. end + 1], " ");
@@ -1364,7 +1386,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                         sel_bytes[i] = self.bytes_seen + pt_end;
                         self.sel_pts[i] = null;
                     } else {
-                        if (newline and p.y < (rs.y + rs.h)) {
+                        if (self.newline and p.y < (rs.y + rs.h)) {
                             // point is after this text on this same horizontal line
                             sel_bytes[i] = self.bytes_seen + end - 1;
                             self.sel_pts[i] = null;
@@ -1420,18 +1442,50 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         { // Scope here is for deallocating rtxt before handling copying to clipboard on the arena
             const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = @min(s.h, self.data().contentRect().h - self.insert_pt.y) });
             //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
-            var rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
+            var rtxt = if (self.newline) txt[0 .. end - 1] else txt[0..end];
 
             // If the newline is part of the selection, then render it as a
             // selected space.  This matches Chrome's behavior, although this is
             // not a universal - Firefox doesn't do this.
-            if (newline and
+            if (self.newline and
                 (self.selection.start -| self.bytes_seen -| rtxt.len) == 0 and
                 (self.selection.end -| self.bytes_seen -| rtxt.len) > 0)
             {
                 rtxt = std.mem.concat(cw.lifo(), u8, &.{ rtxt, " " }) catch txt;
             }
             defer if (txt.ptr != rtxt.ptr) cw.lifo().free(rtxt);
+            const textrun_info: ?AccessKit.TextRunOptions = info: {
+                if (dvui.accesskit_enabled) {
+                    if (self.textrunParentNode()) |parent_node| {
+                        var text_run_widget = dvui.virtualParent(@src(), .{
+                            .role = .text_run,
+                            .id_extra = self.bytes_seen,
+                            // Text run needs to be parented to the containing widget.
+                            .ak_node_parent = parent_node,
+                        });
+                        defer text_run_widget.deinit();
+                        if (self.textrun_anchor == null and self.selection.start >= self.bytes_seen and self.selection.start <= self.bytes_seen + rtxt.len) {
+                            self.textrun_anchor = .{
+                                .node_id = text_run_widget.data().id,
+                                .pos = self.selection.start - self.bytes_seen,
+                            };
+                        }
+                        if (self.textrun_focus == null and self.selection.end >= self.bytes_seen and self.selection.end <= self.bytes_seen + rtxt.len) {
+                            self.textrun_focus = .{ .node_id = text_run_widget.data().id, .pos = self.selection.end - self.bytes_seen };
+                        }
+                        if (self.textrun_cursor == null and self.selection.cursor >= self.bytes_seen and self.selection.cursor <= self.bytes_seen + rtxt.len) {
+                            self.textrun_cursor = .{ .node_id = text_run_widget.data().id, .pos = self.selection.cursor - self.bytes_seen };
+                        }
+                        break :info .{
+                            .node_id = text_run_widget.data().id,
+                            .node_parent_id = self.textrun_parent orelse self.data().id,
+                            .char_offset = self.bytes_seen,
+                            .text = txt[0..end],
+                        };
+                    }
+                }
+                break :info null;
+            };
 
             dvui.renderText(.{
                 .font = options.fontGet(),
@@ -1445,6 +1499,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 .sel_color = (dvui.themeGet().text_select orelse dvui.themeGet().color(.highlight, .fill)).opacity(0.75),
                 .kerning = self.kerning,
                 .kern_in = &kern_buf,
+                .ak_opts = textrun_info,
             }) catch |err| {
                 dvui.logError(@src(), err, "Failed to render text: {s}", .{rtxt});
             };
@@ -1503,12 +1558,12 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         }
 
         // move insert_pt to next line if we have more text
-        if (newline or txt.len > 0) {
+        if (self.newline or txt.len > 0) {
             self.insert_pt.y += self.current_line_height;
             self.insert_pt.x = 0;
             self.current_line_height = 0;
 
-            if (newline) {
+            if (self.newline) {
                 const newline_size = self.data().options.padSize(.{ .w = self.current_line_width, .h = self.insert_pt.y + s.h });
                 self.data().min_size.w = @max(self.data().min_size.w, newline_size.w);
                 self.data().min_size.h = @max(self.data().min_size.h, newline_size.h);
@@ -1529,11 +1584,11 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             self.first_byte_in_line = self.bytes_seen;
         }
 
-        if (newline and (self.selection.start == self.bytes_seen)) {
+        if (self.newline and (self.selection.start == self.bytes_seen)) {
             self.sel_start_r_new = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = s.h };
         }
 
-        if (newline and (self.selection.end == self.bytes_seen)) {
+        if (self.newline and (self.selection.end == self.bytes_seen)) {
             self.sel_end_r_new = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = s.h };
         }
 
@@ -1554,26 +1609,6 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         // transitioned us into touch editing, but we don't want to transition
         // if the click happened on clickable text
         self.touch_editing = false;
-    }
-
-    // TODO: This only shows the currently visible text. What behavior do we actually want here?
-    if (self.data().accesskit_node()) |ak_node| {
-        const ak_value = dvui.AccessKit.nodeValue(ak_node);
-        if (ak_value != 0) {
-            defer dvui.AccessKit.stringFree(ak_value);
-            const current_value = std.mem.span(ak_value);
-            allocate_new: {
-                var new_value = cw.arena().allocWithOptions(u8, current_value.len + txt.len, null, 0) catch break :allocate_new;
-                @memcpy(new_value[0..current_value.len], current_value);
-                @memcpy(new_value[current_value.len .. current_value.len + txt.len], txt);
-
-                dvui.AccessKit.nodeSetValue(ak_node, new_value);
-            }
-        } else {
-            const str = cw.arena().dupeZ(u8, txt) catch "";
-            defer cw.arena().free(str);
-            dvui.AccessKit.nodeSetValue(ak_node, str);
-        }
     }
 
     return ret;
@@ -1745,6 +1780,49 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
             dvui.refresh(null, @src(), self.data().id);
         }
     }
+
+    if (dvui.accesskit_enabled) {
+        if (self.textrunParentNode()) |parent_node| {
+            if (self.bytes_seen == 0 or self.newline) {
+                // No empty text run was created as no text was rendered. Create one here.
+                var vp = dvui.virtualParent(@src(), .{ .role = .text_run, .ak_node_parent = parent_node });
+                defer vp.deinit();
+                var text_info: std.MultiArrayList(AccessKit.CharPositionInfo) = .empty;
+                text_info.append(dvui.currentWindow().arena(), .{
+                    .l = 0,
+                    .w = 0,
+                    .x = 0,
+                }) catch {};
+                dvui.currentWindow().accesskit.textRunPopulate(.{
+                    .node_id = vp.data().id,
+                    .node_parent_id = self.textrun_parent orelse self.data().id,
+                    .char_offset = 0,
+                    .text = "",
+                }, &text_info, self.data().contentRectScale().r);
+            }
+            if (self.textrun_anchor == null or self.textrun_focus == null) {
+                if (self.textrun_cursor) |cursor| {
+                    AccessKit.nodeSetTextSelection(parent_node, .{
+                        .anchor = .{ .node = cursor.node_id.asU64(), .character_index = cursor.pos },
+                        .focus = .{ .node = cursor.node_id.asU64(), .character_index = cursor.pos },
+                    });
+                }
+            } else {
+                // Both optionals are non-null here.
+                AccessKit.nodeSetTextSelection(parent_node, .{
+                    .anchor = .{ .node = self.textrun_anchor.?.node_id.asU64(), .character_index = self.textrun_anchor.?.pos },
+                    .focus = .{ .node = self.textrun_focus.?.node_id.asU64(), .character_index = self.textrun_focus.?.pos },
+                });
+            }
+        }
+    }
+}
+
+fn textrunParentNode(self: *TextLayoutWidget) ?*AccessKit.Node {
+    if (self.textrun_parent) |parent_id| {
+        return dvui.currentWindow().accesskit.nodes.get(parent_id) orelse self.data().accesskit_node();
+    }
+    return self.data().accesskit_node();
 }
 
 pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
@@ -2092,6 +2170,16 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                 e.handle(@src(), self.data());
                 self.selection.selectAll();
                 break :blk;
+            }
+        },
+        .text => |te| {
+            switch (te.action) {
+                .selection => |sel| {
+                    self.selection.moveCursor(sel.start, false);
+                    self.selection.moveCursor(sel.end, true);
+                    self.scroll_to_cursor = true;
+                },
+                else => {},
             }
         },
         else => {},
