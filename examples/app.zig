@@ -118,6 +118,41 @@ const tsQueryCursorCaptureIterator = struct {
     }
 };
 
+fn dump_tree(tree: *dvui.c.TSTree) void {
+    const root = dvui.c.ts_tree_root_node(tree);
+    var cursor = dvui.c.ts_tree_cursor_new(root);
+    defer dvui.c.ts_tree_cursor_delete(&cursor);
+
+    loop: while (true) {
+        if (dvui.c.ts_tree_cursor_goto_first_child(&cursor)) {
+            // went to a child
+            continue :loop;
+        }
+
+        // got to leaf node
+        const node = dvui.c.ts_tree_cursor_current_node(&cursor);
+        const missing = dvui.c.ts_node_is_missing(node);
+        std.debug.print("leaf node{s}:{s} {d} {s}\n", .{ if (missing) " M" else "", dvui.c.ts_node_string(node), dvui.c.ts_node_symbol(node), dvui.c.ts_node_type(node) });
+        if (dvui.c.ts_tree_cursor_goto_next_sibling(&cursor)) {
+            // went to a sibling
+            continue :loop;
+        }
+
+        // no child or sibling, go back up until we can get to a sibling
+        while (true) {
+            if (!dvui.c.ts_tree_cursor_goto_parent(&cursor)) {
+                // back at root
+                break :loop;
+            }
+
+            if (dvui.c.ts_tree_cursor_goto_next_sibling(&cursor)) {
+                // successfully got to a sibling of a parent, start outer loop again
+                continue :loop;
+            }
+        }
+    }
+}
+
 var show_text_entry: bool = true;
 
 pub fn frame() !dvui.App.Result {
@@ -307,15 +342,15 @@ pub fn frame() !dvui.App.Result {
             pub fn deinit(ptr: *anyopaque) void {
                 const self: *@This() = @ptrCast(@alignCast(ptr));
 
-                std.debug.print("freeing parser\n", .{});
+                //std.debug.print("freeing parser\n", .{});
                 dvui.c.ts_query_delete(self.query);
                 dvui.c.ts_tree_delete(self.tree);
                 dvui.c.ts_parser_delete(self.parser);
             }
         };
 
-        const parser = dvui.dataGet(null, te.data().id, "parser", Parser) orelse blk: {
-            std.debug.print("new parser\n", .{});
+        var parser = dvui.dataGetPtr(null, te.data().id, "parser", Parser) orelse blk: {
+            //std.debug.print("new parser\n", .{});
             const p = dvui.c.ts_parser_new();
             _ = dvui.c.ts_parser_set_language(p, tree_sitter_c());
             const tree = dvui.c.ts_parser_parse_string(p, null, text.ptr, @intCast(text.len));
@@ -327,11 +362,43 @@ pub fn frame() !dvui.App.Result {
             const parser: Parser = .{ .parser = p.?, .tree = tree.?, .query = query.? };
             dvui.dataSet(null, te.data().id, "parser", parser);
             dvui.dataSetDeinitFunction(null, te.data().id, "parser", &Parser.deinit);
-            break :blk parser;
+            break :blk dvui.dataGetPtr(null, te.data().id, "parser", Parser).?;
         };
 
+        if (te.text_changed and !dvui.firstFrame(te.data().id)) {
+            //std.debug.print("text changed {d} {d} {d}\n", .{ te.text_changed_start, te.text_changed_end, te.text_changed_added });
+            var edit: dvui.c.TSInputEdit = undefined;
+            edit.start_byte = @intCast(te.text_changed_start);
+            edit.old_end_byte = @intCast(te.text_changed_end);
+            edit.new_end_byte = @intCast(@as(i64, @intCast(te.text_changed_end)) + te.text_changed_added);
+
+            edit.start_point = .{ .row = 0, .column = 0 };
+            edit.old_end_point = .{ .row = 0, .column = 0 };
+            edit.new_end_point = .{ .row = 0, .column = 0 };
+
+            //const srow = std.mem.count(u8, text[0..te.text_changed_start], "\n");
+            //const snl = std.mem.lastIndexOfScalar(u8, text[0..te.text_changed_start], '\n') orelse 0;
+            //const scol = te.text_changed_start - snl;
+
+            //edit.start_point = .{ .row = @intCast(srow), .column = @intCast(scol) };
+            //const oldcol = scol + te.text_changed_end - te.text_changed_start;
+            //edit.old_end_point = .{ .row = @intCast(srow), .column = @intCast(oldcol) };
+            //edit.new_end_point = .{ .row = @intCast(srow), .column = @intCast(@as(i64, @intCast(oldcol)) + te.text_changed_added) };
+            //std.debug.print("start point {d} {d}\n", .{ edit.start_point.row, edit.start_point.column });
+            //std.debug.print("old   point {d} {d}\n", .{ edit.old_end_point.row, edit.old_end_point.column });
+            //std.debug.print("new   point {d} {d}\n", .{ edit.new_end_point.row, edit.new_end_point.column });
+            dvui.c.ts_tree_edit(parser.tree, &edit);
+
+            const tree = dvui.c.ts_parser_parse_string(parser.parser, parser.tree, text.ptr, @intCast(text.len));
+            //std.debug.print("old tree:\n", .{});
+            //dump_tree(parser.tree);
+            //std.debug.print("new tree:\n", .{});
+            //dump_tree(tree.?);
+            dvui.c.ts_tree_delete(parser.tree);
+            parser.tree = tree.?;
+        }
+
         // parsing
-        // TODO: set byte range for parsing
         const root = dvui.c.ts_tree_root_node(parser.tree);
 
         // queries
@@ -373,13 +440,13 @@ pub fn frame() !dvui.App.Result {
                 opts.color_text = dvui.Color.yellow.lighten(-30);
             }
 
-            //std.debug.print("  \"{s}\"\n", .{source[nstart..nend]});
             te.textLayout.format("{s}", .{text[nstart..nend]}, opts);
 
             start = nend;
         }
 
         if (start < text.len) {
+            // any leftover non highlighted text
             te.textLayout.format("{s}", .{text[start..text.len]}, .{});
         }
         te.textLayout.addTextDone(.{});
