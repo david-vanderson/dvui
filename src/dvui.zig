@@ -3743,10 +3743,15 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
                     }
                 }
             },
-            .text => |te| blk: {
-                e.handle(@src(), b.data());
-                const value: f32 = std.fmt.parseFloat(f32, te.txt) catch break :blk;
-                init_opts.fraction.* = std.math.clamp(value, 0.0, 1.0);
+            .text => |te| {
+                switch (te.action) {
+                    .value => |set| blk: {
+                        e.handle(@src(), b.data());
+                        const value: f32 = std.fmt.parseFloat(f32, set.txt) catch break :blk;
+                        init_opts.fraction.* = std.math.clamp(value, 0.0, 1.0);
+                    },
+                    else => {},
+                }
             },
             else => {},
         }
@@ -4105,11 +4110,16 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                     }
                 },
                 .text => |te| {
-                    e.handle(@src(), b.data());
-                    var value = std.fmt.parseFloat(f32, te.txt) catch init_opts.min orelse 0;
-                    if (init_opts.min) |min| value = @max(min, value);
-                    if (init_opts.max) |max| value = @min(max, value);
-                    init_opts.value.* = value;
+                    switch (te.action) {
+                        .value => |set| {
+                            e.handle(@src(), b.data());
+                            var value = std.fmt.parseFloat(f32, set.txt) catch init_opts.min orelse 0;
+                            if (init_opts.min) |min| value = @max(min, value);
+                            if (init_opts.max) |max| value = @min(max, value);
+                            init_opts.value.* = value;
+                        },
+                        else => {},
+                    }
                 },
                 else => {},
             }
