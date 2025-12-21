@@ -204,7 +204,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         .cache_layout = self.init_opts.cache_layout,
         .focused = self.data().id == dvui.focusedWidgetId(),
         .show_touch_draggables = (self.len > 0),
-    }, self.data().options.strip().override(.{ .role = .none, .expand = .both, .padding = self.padding }));
+    }, self.data().options.strip().override(.{ .role = .text_run, .expand = .both, .padding = self.padding }));
 
     // if textLayout forced cache_layout to false, we need to honor that
     self.init_opts.cache_layout = self.textLayout.cache_layout;
@@ -271,12 +271,13 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     if (self.data().accesskit_node()) |ak_node| {
         dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
         dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_value);
+        // TODO: Disable text runs for password input
         if (self.data().options.role != .password_input) {
             const str = dvui.currentWindow().arena().dupeZ(u8, self.text) catch "";
             defer dvui.currentWindow().arena().free(str);
             // TODO: We don't want to always push large amounts of text each frame. So we either need to look at pushing
             // only chunks of text, ot only pushing when the text has actually changed since last frame.
-            dvui.AccessKit.nodeSetValue(ak_node, str);
+            //dvui.AccessKit.nodeSetValue(ak_node, str); // TODO: Disabled as using text_run instead.
         }
     }
 }

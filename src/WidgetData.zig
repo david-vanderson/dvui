@@ -75,7 +75,7 @@ pub fn register(self: *WidgetData) void {
     }
 
     if (self.options.role) |role| {
-        _ = dvui.currentWindow().accesskit.nodeCreate(self, role);
+        _ = dvui.currentWindow().accesskit.nodeCreate(self, role, null);
     }
 
     if (self.options.data_out) |do| {
