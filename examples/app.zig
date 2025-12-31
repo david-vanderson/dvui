@@ -65,7 +65,7 @@ pub fn AppFrame() !dvui.App.Result {
     return frame();
 }
 
-extern fn tree_sitter_c() callconv(.c) *dvui.c.TSLanguage;
+extern fn tree_sitter_zig() callconv(.c) *dvui.c.TSLanguage;
 
 const tsQueryCursorCaptureIterator = struct {
     pub const Match = struct {
@@ -186,102 +186,8 @@ pub fn frame() !dvui.App.Result {
     //tl2.deinit();
 
     if (show_text_entry) {
-        //const source = @embedFile("query.c");
-        const source =
-            \\int main() {
-            \\// Create a parser.
-            \\TSParser *parser = ts_parser_new();
-            \\
-            \\// Set the parser's language (JSON in this case).
-            \\ts_parser_set_language(parser, tree_sitter_json());
-            \\
-            \\// Build a syntax tree based on source code stored in a string.
-            \\const char *source_code = "[1, null]";
-        ;
-
-        const queries =
-            \\(identifier) @variable
-            \\
-            \\((identifier) @constant
-            \\ (#match? @constant "^[A-Z][A-Z\\d_]*$"))
-            \\
-            \\"break" @keyword
-            \\"case" @keyword
-            \\"const" @keyword
-            \\"continue" @keyword
-            \\"default" @keyword
-            \\"do" @keyword
-            \\"else" @keyword
-            \\"enum" @keyword
-            \\"extern" @keyword
-            \\"for" @keyword
-            \\"if" @keyword
-            \\"inline" @keyword
-            \\"return" @keyword
-            \\"sizeof" @keyword
-            \\"static" @keyword
-            \\"struct" @keyword
-            \\"switch" @keyword
-            \\"typedef" @keyword
-            \\"union" @keyword
-            \\"volatile" @keyword
-            \\"while" @keyword
-            \\
-            \\"#define" @keyword
-            \\"#elif" @keyword
-            \\"#else" @keyword
-            \\"#endif" @keyword
-            \\"#if" @keyword
-            \\"#ifdef" @keyword
-            \\"#ifndef" @keyword
-            \\"#include" @keyword
-            \\(preproc_directive) @keyword
-            \\
-            \\"--" @operator
-            \\"-" @operator
-            \\"-=" @operator
-            \\"->" @operator
-            \\"=" @operator
-            \\"!=" @operator
-            \\"*" @operator
-            \\"&" @operator
-            \\"&&" @operator
-            \\"+" @operator
-            \\"++" @operator
-            \\"+=" @operator
-            \\"<" @operator
-            \\"==" @operator
-            \\">" @operator
-            \\"||" @operator
-            \\
-            \\"." @delimiter
-            \\";" @delimiter
-            \\
-            \\(string_literal) @string
-            \\(system_lib_string) @string
-            \\
-            \\(null) @constant
-            \\(number_literal) @number
-            \\(char_literal) @number
-            \\
-            \\(field_identifier) @property
-            \\(statement_identifier) @label
-            \\(type_identifier) @type
-            \\(primitive_type) @type
-            \\(sized_type_specifier) @type
-            \\
-            \\(call_expression
-            \\  function: (identifier) @function)
-            \\(call_expression
-            \\  function: (field_expression
-            \\    field: (field_identifier) @function))
-            \\(function_declarator
-            \\  declarator: (identifier) @function)
-            \\(preproc_function_def
-            \\  name: (identifier) @function.special)
-            \\
-            \\(comment) @comment
-        ;
+        const source = @embedFile("sdl-standalone.zig");
+        const queries = @embedFile("tree_sitter_zig_queries.scm");
 
         var te: dvui.TextEntryWidget = undefined;
         te.init(@src(), .{ .multiline = true, .cache_layout = true, .text = .{ .internal = .{ .limit = 1_000_000 } } }, .{ .expand = .horizontal, .min_size_content = .height(300) });
@@ -315,12 +221,12 @@ pub fn frame() !dvui.App.Result {
 
         var parser = dvui.dataGetPtr(null, te.data().id, "parser", Parser) orelse blk: {
             const p = dvui.c.ts_parser_new();
-            _ = dvui.c.ts_parser_set_language(p, tree_sitter_c());
+            _ = dvui.c.ts_parser_set_language(p, tree_sitter_zig());
             const tree = dvui.c.ts_parser_parse_string(p, null, text.ptr, @intCast(text.len));
 
             var errorOffset: u32 = undefined;
             var errorType: dvui.c.TSQueryError = undefined;
-            const query = dvui.c.ts_query_new(tree_sitter_c(), queries.ptr, queries.len, &errorOffset, &errorType);
+            const query = dvui.c.ts_query_new(tree_sitter_zig(), queries.ptr, queries.len, &errorOffset, &errorType);
 
             const parser: Parser = .{ .parser = p.?, .tree = tree.?, .query = query.? };
             dvui.dataSet(null, te.data().id, "parser", parser);
@@ -365,20 +271,24 @@ pub fn frame() !dvui.App.Result {
             if (start < nstart) {
                 // render non highlighted text up to this node
                 te.textLayout.format("{s}", .{text[start..nstart]}, .{});
+            } else if (nstart < start) {
+                // this match is inside (or overlapping) the previous match
+                // maybe we could be smarter here, but for now drop it
+                continue;
             }
 
             var opts: dvui.Options = .{};
-            if (std.mem.eql(u8, match.captureName(parser.query), "variable")) {
+            if (std.mem.startsWith(u8, match.captureName(parser.query), "variable")) {
                 opts.color_text = .aqua;
             } else if (std.mem.eql(u8, match.captureName(parser.query), "constant")) {
                 opts.color_text = .blue;
-            } else if (std.mem.eql(u8, match.captureName(parser.query), "keyword")) {
+            } else if (std.mem.startsWith(u8, match.captureName(parser.query), "keyword")) {
                 opts.color_text = .purple;
             } else if (std.mem.eql(u8, match.captureName(parser.query), "operator")) {
                 opts.color_text = .silver;
             } else if (std.mem.eql(u8, match.captureName(parser.query), "string")) {
                 opts.color_text = .maroon;
-            } else if (std.mem.eql(u8, match.captureName(parser.query), "number")) {
+            } else if (std.mem.eql(u8, match.captureName(parser.query), "escape_sequence")) {
                 opts.color_text = .teal;
             } else if (std.mem.eql(u8, match.captureName(parser.query), "comment")) {
                 opts.color_text = .green;

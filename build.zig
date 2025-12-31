@@ -858,11 +858,11 @@ pub fn addDvuiModule(
         dvui_mod.linkLibrary(tsd.artifact("tree-sitter"));
     }
 
-    const tree_sitter_c_dep = b.lazyDependency("tree_sitter_c", .{
+    const tree_sitter_zig_dep = b.lazyDependency("tree_sitter_zig", .{
         .target = target,
         .optimize = optimize,
     });
-    if (tree_sitter_c_dep) |tsc| {
+    if (tree_sitter_zig_dep) |tsc| {
         dvui_mod.addIncludePath(tsc.path("src"));
         dvui_mod.addCSourceFiles(.{
             .root = tsc.path(""),
