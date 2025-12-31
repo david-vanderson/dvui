@@ -118,7 +118,7 @@ const tsQueryCursorCaptureIterator = struct {
     }
 };
 
-var show_text_entry: bool = true;
+var show_text_entry: bool = false;
 
 pub fn frame() !dvui.App.Result {
     var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
