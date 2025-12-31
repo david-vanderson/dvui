@@ -253,6 +253,7 @@ pub const dialogNativeFolderSelect = native_dialogs.Native.folderSelect;
 pub const useLibc = @import("default_options").libc;
 pub const useFreeType = @import("default_options").freetype;
 pub const useTinyFileDialogs = @import("default_options").tiny_file_dialogs;
+pub const useTreeSitter = @import("default_options").tree_sitter;
 
 /// The amount of physical pixels to scroll per "tick" of the scroll wheel
 pub var scroll_speed: f32 = 20;
@@ -301,7 +302,9 @@ pub const c = @cImport({
         @cInclude("tinyfiledialogs.h");
     }
 
-    @cInclude("tree_sitter/api.h");
+    if (useTreeSitter) {
+        @cInclude("tree_sitter/api.h");
+    }
 });
 
 pub var ft2lib: if (useFreeType) c.FT_Library else void = undefined;

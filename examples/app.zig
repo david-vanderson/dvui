@@ -135,10 +135,6 @@ pub fn frame() !dvui.App.Result {
             var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
 
-            if (dvui.menuItemLabel(@src(), "Toggle TextEntry", .{}, .{ .expand = .horizontal }) != null) {
-                show_text_entry = !show_text_entry;
-            }
-
             if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
                 m.close();
             }
@@ -154,159 +150,165 @@ pub fn frame() !dvui.App.Result {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
     defer scroll.deinit();
 
-    //var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
-    //const lorem = "This is a dvui.App example that can compile on multiple backends.";
-    //tl.addText(lorem, .{});
-    //tl.addText("\n", .{});
-    //tl.format("Current backend: {s}", .{@tagName(dvui.backend.kind)}, .{});
-    //if (dvui.backend.kind == .web) {
-    //    tl.format(" : {s}", .{if (dvui.backend.wasm.wasm_about_webgl2() == 1) "webgl2" else "webgl (no mipmaps)"}, .{});
-    //}
-    //tl.deinit();
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
+    const lorem = "This is a dvui.App example that can compile on multiple backends.";
+    tl.addText(lorem, .{});
+    tl.addText("\n", .{});
+    tl.format("Current backend: {s}", .{@tagName(dvui.backend.kind)}, .{});
+    if (dvui.backend.kind == .web) {
+        tl.format(" : {s}", .{if (dvui.backend.wasm.wasm_about_webgl2() == 1) "webgl2" else "webgl (no mipmaps)"}, .{});
+    }
+    tl.deinit();
 
-    //var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    //tl2.addText(
-    //    \\DVUI
-    //    \\- paints the entire window
-    //    \\- can show floating windows and dialogs
-    //    \\- rest of the window is a scroll area
-    //, .{});
-    //tl2.addText("\n\n", .{});
-    //tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
-    //tl2.addText("\n\n", .{});
-    //tl2.addText("Framerate is capped by vsync.", .{});
-    //tl2.addText("\n\n", .{});
-    //tl2.addText("Cursor is always being set by dvui.", .{});
-    //tl2.addText("\n\n", .{});
-    //if (dvui.useFreeType) {
-    //    tl2.addText("Fonts are being rendered by FreeType 2.", .{});
-    //} else {
-    //    tl2.addText("Fonts are being rendered by stb_truetype.", .{});
-    //}
-    //tl2.deinit();
+    var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+    tl2.addText(
+        \\DVUI
+        \\- paints the entire window
+        \\- can show floating windows and dialogs
+        \\- rest of the window is a scroll area
+    , .{});
+    tl2.addText("\n\n", .{});
+    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
+    tl2.addText("\n\n", .{});
+    tl2.addText("Framerate is capped by vsync.", .{});
+    tl2.addText("\n\n", .{});
+    tl2.addText("Cursor is always being set by dvui.", .{});
+    tl2.addText("\n\n", .{});
+    if (dvui.useFreeType) {
+        tl2.addText("Fonts are being rendered by FreeType 2.", .{});
+    } else {
+        tl2.addText("Fonts are being rendered by stb_truetype.", .{});
+    }
+    tl2.deinit();
 
-    if (show_text_entry) {
-        const source = @embedFile("sdl-standalone.zig");
-        const queries = @embedFile("tree_sitter_zig_queries.scm");
-
-        var te: dvui.TextEntryWidget = undefined;
-        te.init(@src(), .{ .multiline = true, .cache_layout = true, .text = .{ .internal = .{ .limit = 1_000_000 } } }, .{ .expand = .horizontal, .min_size_content = .height(300) });
-        defer te.deinit();
-
-        if (dvui.firstFrame(te.data().id)) {
-            te.textSet(source, false);
+    if (dvui.useTreeSitter) {
+        if (dvui.button(@src(), "Show Highlighted Code", .{}, .{})) {
+            show_text_entry = !show_text_entry;
         }
 
-        te.processEvents();
-        te.drawBeforeText();
+        if (show_text_entry) {
+            const source = @embedFile("app.zig");
+            const queries = @embedFile("tree_sitter_zig_queries.scm");
 
-        const text = te.textGet();
+            var te: dvui.TextEntryWidget = undefined;
+            te.init(@src(), .{ .multiline = true, .cache_layout = true, .text = .{ .internal = .{ .limit = 1_000_000 } } }, .{ .expand = .horizontal, .min_size_content = .height(300) });
+            defer te.deinit();
 
-        // used to output text that's not highlighted
-        var start: usize = 0;
-
-        const Parser = struct {
-            parser: *dvui.c.TSParser,
-            tree: *dvui.c.TSTree,
-            query: *dvui.c.TSQuery,
-
-            pub fn deinit(ptr: *anyopaque) void {
-                const self: *@This() = @ptrCast(@alignCast(ptr));
-
-                dvui.c.ts_query_delete(self.query);
-                dvui.c.ts_tree_delete(self.tree);
-                dvui.c.ts_parser_delete(self.parser);
-            }
-        };
-
-        var parser = dvui.dataGetPtr(null, te.data().id, "parser", Parser) orelse blk: {
-            const p = dvui.c.ts_parser_new();
-            _ = dvui.c.ts_parser_set_language(p, tree_sitter_zig());
-            const tree = dvui.c.ts_parser_parse_string(p, null, text.ptr, @intCast(text.len));
-
-            var errorOffset: u32 = undefined;
-            var errorType: dvui.c.TSQueryError = undefined;
-            const query = dvui.c.ts_query_new(tree_sitter_zig(), queries.ptr, queries.len, &errorOffset, &errorType);
-
-            const parser: Parser = .{ .parser = p.?, .tree = tree.?, .query = query.? };
-            dvui.dataSet(null, te.data().id, "parser", parser);
-            dvui.dataSetDeinitFunction(null, te.data().id, "parser", &Parser.deinit);
-            break :blk dvui.dataGetPtr(null, te.data().id, "parser", Parser).?;
-        };
-
-        if (te.text_changed and !dvui.firstFrame(te.data().id)) {
-            var edit: dvui.c.TSInputEdit = undefined;
-            edit.start_byte = @intCast(te.text_changed_start);
-            edit.old_end_byte = @intCast(te.text_changed_end);
-            edit.new_end_byte = @intCast(@as(i64, @intCast(te.text_changed_end)) + te.text_changed_added);
-
-            edit.start_point = .{ .row = 0, .column = 0 };
-            edit.old_end_point = .{ .row = 0, .column = 0 };
-            edit.new_end_point = .{ .row = 0, .column = 0 };
-
-            dvui.c.ts_tree_edit(parser.tree, &edit);
-
-            const tree = dvui.c.ts_parser_parse_string(parser.parser, parser.tree, text.ptr, @intCast(text.len));
-            dvui.c.ts_tree_delete(parser.tree);
-            parser.tree = tree.?;
-        }
-
-        // parsing
-        const root = dvui.c.ts_tree_root_node(parser.tree);
-
-        // queries
-        const qc = dvui.c.ts_query_cursor_new();
-        defer dvui.c.ts_query_cursor_delete(qc);
-
-        if (te.textLayout.cache_layout_bytes) |clb| {
-            _ = dvui.c.ts_query_cursor_set_byte_range(qc, @intCast(clb.start), @intCast(clb.end));
-        }
-
-        dvui.c.ts_query_cursor_exec(qc, parser.query, root);
-
-        var iter: tsQueryCursorCaptureIterator = .init(qc.?);
-        while (iter.next()) |match| {
-            const nstart = dvui.c.ts_node_start_byte(match.node);
-            const nend = dvui.c.ts_node_end_byte(match.node);
-            if (start < nstart) {
-                // render non highlighted text up to this node
-                te.textLayout.format("{s}", .{text[start..nstart]}, .{});
-            } else if (nstart < start) {
-                // this match is inside (or overlapping) the previous match
-                // maybe we could be smarter here, but for now drop it
-                continue;
+            if (dvui.firstFrame(te.data().id)) {
+                te.textSet(source, false);
             }
 
-            var opts: dvui.Options = .{};
-            if (std.mem.startsWith(u8, match.captureName(parser.query), "variable")) {
-                opts.color_text = .aqua;
-            } else if (std.mem.eql(u8, match.captureName(parser.query), "constant")) {
-                opts.color_text = .blue;
-            } else if (std.mem.startsWith(u8, match.captureName(parser.query), "keyword")) {
-                opts.color_text = .purple;
-            } else if (std.mem.eql(u8, match.captureName(parser.query), "operator")) {
-                opts.color_text = .silver;
-            } else if (std.mem.eql(u8, match.captureName(parser.query), "string")) {
-                opts.color_text = .maroon;
-            } else if (std.mem.eql(u8, match.captureName(parser.query), "escape_sequence")) {
-                opts.color_text = .teal;
-            } else if (std.mem.eql(u8, match.captureName(parser.query), "comment")) {
-                opts.color_text = .green;
-            } else if (std.mem.eql(u8, match.captureName(parser.query), "function")) {
-                opts.color_text = dvui.Color.yellow.lighten(-30);
+            te.processEvents();
+            te.drawBeforeText();
+
+            const text = te.textGet();
+
+            // used to output text that's not highlighted
+            var start: usize = 0;
+
+            const Parser = struct {
+                parser: *dvui.c.TSParser,
+                tree: *dvui.c.TSTree,
+                query: *dvui.c.TSQuery,
+
+                pub fn deinit(ptr: *anyopaque) void {
+                    const self: *@This() = @ptrCast(@alignCast(ptr));
+
+                    dvui.c.ts_query_delete(self.query);
+                    dvui.c.ts_tree_delete(self.tree);
+                    dvui.c.ts_parser_delete(self.parser);
+                }
+            };
+
+            var parser = dvui.dataGetPtr(null, te.data().id, "parser", Parser) orelse blk: {
+                const p = dvui.c.ts_parser_new();
+                _ = dvui.c.ts_parser_set_language(p, tree_sitter_zig());
+                const tree = dvui.c.ts_parser_parse_string(p, null, text.ptr, @intCast(text.len));
+
+                var errorOffset: u32 = undefined;
+                var errorType: dvui.c.TSQueryError = undefined;
+                const query = dvui.c.ts_query_new(tree_sitter_zig(), queries.ptr, queries.len, &errorOffset, &errorType);
+
+                const parser: Parser = .{ .parser = p.?, .tree = tree.?, .query = query.? };
+                dvui.dataSet(null, te.data().id, "parser", parser);
+                dvui.dataSetDeinitFunction(null, te.data().id, "parser", &Parser.deinit);
+                break :blk dvui.dataGetPtr(null, te.data().id, "parser", Parser).?;
+            };
+
+            if (te.text_changed and !dvui.firstFrame(te.data().id)) {
+                var edit: dvui.c.TSInputEdit = undefined;
+                edit.start_byte = @intCast(te.text_changed_start);
+                edit.old_end_byte = @intCast(te.text_changed_end);
+                edit.new_end_byte = @intCast(@as(i64, @intCast(te.text_changed_end)) + te.text_changed_added);
+
+                edit.start_point = .{ .row = 0, .column = 0 };
+                edit.old_end_point = .{ .row = 0, .column = 0 };
+                edit.new_end_point = .{ .row = 0, .column = 0 };
+
+                dvui.c.ts_tree_edit(parser.tree, &edit);
+
+                const tree = dvui.c.ts_parser_parse_string(parser.parser, parser.tree, text.ptr, @intCast(text.len));
+                dvui.c.ts_tree_delete(parser.tree);
+                parser.tree = tree.?;
             }
 
-            te.textLayout.format("{s}", .{text[nstart..nend]}, opts);
+            // parsing
+            const root = dvui.c.ts_tree_root_node(parser.tree);
 
-            start = nend;
-        }
+            // queries
+            const qc = dvui.c.ts_query_cursor_new();
+            defer dvui.c.ts_query_cursor_delete(qc);
 
-        if (start < text.len) {
-            // any leftover non highlighted text
-            te.textLayout.format("{s}", .{text[start..text.len]}, .{});
+            if (te.textLayout.cache_layout_bytes) |clb| {
+                _ = dvui.c.ts_query_cursor_set_byte_range(qc, @intCast(clb.start), @intCast(clb.end));
+            }
+
+            dvui.c.ts_query_cursor_exec(qc, parser.query, root);
+
+            var iter: tsQueryCursorCaptureIterator = .init(qc.?);
+            while (iter.next()) |match| {
+                const nstart = dvui.c.ts_node_start_byte(match.node);
+                const nend = dvui.c.ts_node_end_byte(match.node);
+                if (start < nstart) {
+                    // render non highlighted text up to this node
+                    te.textLayout.format("{s}", .{text[start..nstart]}, .{});
+                } else if (nstart < start) {
+                    // this match is inside (or overlapping) the previous match
+                    // maybe we could be smarter here, but for now drop it
+                    continue;
+                }
+
+                var opts: dvui.Options = .{};
+                if (std.mem.startsWith(u8, match.captureName(parser.query), "variable")) {
+                    opts.color_text = .aqua;
+                } else if (std.mem.startsWith(u8, match.captureName(parser.query), "type")) {
+                    opts.color_text = .blue;
+                } else if (std.mem.startsWith(u8, match.captureName(parser.query), "keyword")) {
+                    opts.color_text = .purple;
+                } else if (std.mem.eql(u8, match.captureName(parser.query), "operator")) {
+                    opts.color_text = .silver;
+                } else if (std.mem.eql(u8, match.captureName(parser.query), "string")) {
+                    opts.color_text = .maroon;
+                } else if (std.mem.eql(u8, match.captureName(parser.query), "escape_sequence")) {
+                    opts.color_text = .teal;
+                } else if (std.mem.eql(u8, match.captureName(parser.query), "comment")) {
+                    opts.color_text = .green;
+                } else if (std.mem.startsWith(u8, match.captureName(parser.query), "function")) {
+                    opts.color_text = dvui.Color.yellow.lighten(-30);
+                }
+
+                te.textLayout.format("{s}", .{text[nstart..nend]}, opts);
+
+                start = nend;
+            }
+
+            if (start < text.len) {
+                // any leftover non highlighted text
+                te.textLayout.format("{s}", .{text[start..text.len]}, .{});
+            }
+            te.textLayout.addTextDone(.{});
+            te.drawAfterText();
         }
-        te.textLayout.addTextDone(.{});
-        te.drawAfterText();
     }
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
