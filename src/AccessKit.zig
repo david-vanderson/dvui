@@ -149,13 +149,13 @@ fn macOSWinPtr(window: *dvui.Window) *anyopaque {
 
 pub const nodeCreate = if (dvui.accesskit_enabled) nodeCreateReal else nodeCreateFake;
 
-inline fn nodeCreateFake(_: *AccessKit, _: *dvui.WidgetData, _: Role, _: ?usize) ?*Node {
+inline fn nodeCreateFake(_: *AccessKit, _: *dvui.WidgetData, _: Role) ?*Node {
     return null;
 }
 
 /// Create a new Node for AccessKit
 /// Returns null if no accessibility information is required for this widget.
-pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role, id_extra: ?usize) ?*Node {
+pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node {
     if (!wd.visible() and wd.id != dvui.focusedWidgetId()) return null;
     if (wd.options.role == .none) return null;
 
@@ -174,10 +174,8 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role, id_ext
         .on => {},
     }
 
-    const wid: dvui.Id = if (id_extra) |extra| wd.parent.extendId(@src(), extra) else wd.id;
-
     if (debug_node_tree)
-        std.debug.print("Creating Node for {x} with role {?t} at {s}:{d}\n", .{ wid, wd.options.role, wd.src.file, wd.src.line });
+        std.debug.print("Creating Node for {x}:{d} with role {?t} at {s}:{d}\n", .{ wd.id, wd.id, wd.options.role, wd.src.file, wd.src.line });
 
     const ak_node = nodeNew(role.asU8()) orelse return null;
     wd.ak_node = ak_node;
@@ -185,11 +183,15 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role, id_ext
     nodeSetBounds(ak_node, .{ .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
 
     if (!wd.isRoot()) {
-        const parent_node: *Node = nodeParent(wd);
+        if (wd.options.ak_node_parent) |np| {
+            if (debug_node_tree)
+                std.debug.print("Setting node parent from options {x}:{d}\n", .{ self.nodeIdFromNode(np).?.asU64(), self.nodeIdFromNode(np).?.asU64() });
+        }
+        const parent_node: *Node = wd.options.ak_node_parent orelse nodeParent(wd);
 
-        nodePushChild(parent_node, wid.asU64());
-        if (wid == dvui.focusedWidgetId() orelse dvui.focusedSubwindowId()) {
-            self.focused_id = wid.asU64();
+        nodePushChild(parent_node, wd.id.asU64());
+        if (wd.id == dvui.focusedWidgetId() orelse dvui.focusedSubwindowId()) {
+            self.focused_id = wd.id.asU64();
         }
     }
 
@@ -203,12 +205,12 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role, id_ext
                     log.debug("label.for_id {x} is not a valid acesskit node", .{id});
                     break :blk;
                 };
-                AccessKit.nodePushLabelledBy(for_node, wid.asU64());
+                AccessKit.nodePushLabelledBy(for_node, wd.id.asU64());
             },
             .label_widget => |direction| {
                 switch (direction) {
                     .next => {
-                        self.node_to_label = wid;
+                        self.node_to_label = wd.id;
                         self.node_waiting_label = true;
                     },
                     .prev => {
@@ -231,18 +233,18 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role, id_ext
             } else {
                 // If the labelled node is no longer visible, it will not be found.
                 if (self.nodes.get(self.node_to_label)) |for_node| {
-                    nodePushLabelledBy(for_node, wid.asU64());
+                    nodePushLabelledBy(for_node, wd.id.asU64());
                     self.node_waiting_label = false;
                     self.node_to_label = .zero;
                 }
             }
         }
-        self.prev_label_id = wid;
+        self.prev_label_id = wd.id;
     }
 
-    std.debug.assert(!self.nodes.contains(wid));
+    std.debug.assert(!self.nodes.contains(wd.id));
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
-    self.nodes.put(window.gpa, wid, ak_node) catch |err| {
+    self.nodes.put(window.gpa, wd.id, ak_node) catch |err| {
         dvui.logError(@src(), err, "AccessKit: unable to add node", .{});
         nodeFree(ak_node);
         return null;
@@ -265,6 +267,17 @@ pub fn nodeParent(wd_in: *dvui.WidgetData) *Node {
     unreachable;
 }
 
+///
+///
+/// Note: Assumes mutex is held.
+pub fn nodeIdFromNode(self: *AccessKit, node: *Node) ?dvui.Id {
+    var itr = self.nodes.iterator();
+    while (itr.next()) |entry| {
+        if (entry.value_ptr.* == node) return entry.key_ptr.*;
+    }
+    return null;
+}
+
 /// Character positions and lengths of rendered text.
 pub const TextRunInfo = struct {
     l: u8, // length (height)
@@ -273,23 +286,30 @@ pub const TextRunInfo = struct {
     c: u21, // utf8 character
 };
 
+pub const TextRunOptions = struct {
+    node_id: dvui.Id,
+    parent_node: *Node,
+};
+
+var boink: bool = false;
+
 /// Populate the text_run node with character heights, positions,
-pub fn textRunPopulate(self: *AccessKit, ak_node: *Node, text_info: *std.MultiArrayList(TextRunInfo), text: []const u8, r: dvui.Rect.Physical) void {
+pub fn textRunPopulate(self: *AccessKit, opts: TextRunOptions, text_info: *std.MultiArrayList(TextRunInfo), text: []const u8, r: dvui.Rect.Physical) void {
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
     var word_lengths: std.ArrayList(u8) = .empty;
     var len: u8 = 0;
     for (text_info.items(.c), 0..) |ch, j| {
         len +|= 1;
         if (std.mem.indexOfScalar(u21, &dvui.TextLayoutWidget.word_breaks_codepoints, ch) != null or j == text_info.len -| 1) {
-            //if (ch == 0x20 or j == text_info.len -| 1) { // TODO: This needs to be more than just space. Check how textEntry breaks words..
-            word_lengths.append(window.arena(), len) catch {}; // TODO Log Error
+            word_lengths.append(window.arena(), len) catch {};
             len = 0;
         }
     }
     const str = window.arena().dupeZ(u8, text) catch "";
     defer window.arena().free(str);
-    //TODO: AccessKit.nodeAddAction(node, AccessKit.Action.set_text_selection);
+
     // TODO: Check if the text is visible. If not, then use the position of the last char / word as the position for all future words.
+    const ak_node = self.nodes.get(opts.node_id) orelse @panic("TODO: Missing node");
     AccessKit.nodeSetBounds(ak_node, .{ .x0 = r.x, .y0 = r.y, .x1 = r.x + r.w, .y1 = r.y + r.h });
     AccessKit.nodeSetValue(ak_node, str);
     AccessKit.nodeSetCharacterLengths(ak_node, text_info.len, text_info.items(.l).ptr);
@@ -355,6 +375,14 @@ fn processActions(self: *AccessKit) void {
 
                     _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target), .replace = true }) catch |err| logEventAddError(@src(), err);
                 }
+            },
+            Action.set_text_selection => {
+                const anchor: TextPosition = request.data.value.unnamed_0.unnamed_7.set_text_selection.anchor;
+                const focus: TextPosition = request.data.value.unnamed_0.unnamed_7.set_text_selection.focus;
+                std.debug.print("SET_TEXT_SELECTION: {any}:{any}\n", .{ anchor, focus });
+            },
+            Action.replace_selected_text => {
+                std.debug.print("REPLACE_SELECTED_TEXT\n", .{});
             },
             else => {},
         }

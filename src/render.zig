@@ -120,7 +120,7 @@ pub const TextOptions = struct {
     debug: bool = false,
     kerning: ?bool = null,
     kern_in: ?[]u32 = null,
-    ak_node: ?*AccessKit.Node = null,
+    ak_opts: ?AccessKit.TextRunOptions = null,
 };
 
 /// Only renders a single line of text
@@ -133,8 +133,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     if (opts.rs.s == 0) return;
     if (opts.text.len == 0) return;
     if (dvui.clipGet().intersect(opts.rs.r).empty()) return;
-    // Ensure ak_node is null at comptime if accesskit is not enabled.
-    const ak_node = if (dvui.accesskit_enabled) opts.ak_node else null;
+
     // Record character heights and positions for AccessKit text_run role.
     var text_info: std.MultiArrayList(AccessKit.TextRunInfo) = .empty;
 
@@ -275,13 +274,15 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
                 sel_end_x = nextx;
             }
         }
-        if (ak_node) |_| {
-            text_info.append(cw.arena(), .{
-                .l = cplen,
-                .w = gi.w,
-                .x = x - start.x,
-                .c = codepoint,
-            }) catch {}; // TODO Log error
+        if (dvui.accesskit_enabled) {
+            if (opts.ak_opts) |_| {
+                text_info.append(cw.arena(), .{
+                    .l = cplen,
+                    .w = gi.w,
+                    .x = x - start.x,
+                    .c = codepoint,
+                }) catch {}; // TODO Log error
+            }
         }
 
         // don't output triangles for a zero-width glyph (space seems to be the only one)
@@ -351,8 +352,8 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
     try renderTriangles(tri, texture_atlas);
 
-    if (ak_node) |node| {
-        cw.accesskit.textRunPopulate(node, &text_info, opts.text, opts.rs.r);
+    if (dvui.accesskit_enabled and opts.ak_opts != null) {
+        cw.accesskit.textRunPopulate(opts.ak_opts.?, &text_info, opts.text, opts.rs.r);
     }
 }
 

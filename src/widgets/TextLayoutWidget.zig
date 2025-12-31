@@ -11,6 +11,7 @@ const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
 const FloatingWidget = dvui.FloatingWidget;
+const AccessKit = dvui.AccessKit;
 
 const TextLayoutWidget = @This();
 
@@ -40,15 +41,18 @@ pub const InitOptions = struct {
     /// and only process what is needed for visibility (and copy).
     cache_layout: bool = false,
 
-    // Whether to enter touch editing mode on a touch-release (no drag) if we
-    // were not focused before the touch.
+    /// Whether to enter touch editing mode on a touch-release (no drag) if we
+    /// were not focused before the touch.
     touch_edit_just_focused: bool = true,
 
-    // If non null, overrides `Window.kerning` setting.
+    /// If non null, overrides `Window.kerning` setting.
     kerning: ?bool = null,
 
     focused: ?bool = null,
     show_touch_draggables: bool = true,
+
+    /// Overrides the parent widget for any text runs created within by this widget.
+    ak_text_parent: ?*AccessKit.Node = null,
 };
 
 pub const Selection = struct {
@@ -106,6 +110,13 @@ pub const Selection = struct {
             self.end = tmp;
         }
     }
+};
+
+// Provide text selection information to accesskit.
+// Anchor is start of selection. Focus is end of selection.
+const TextRunSelectionInfo = struct {
+    node_id: dvui.Id,
+    pos: usize,
 };
 
 /// This is used for word selection - 2 clicks and ctrl+left/right - everything
@@ -235,6 +246,12 @@ byte_heights: []ByteHeight = &.{}, // from last frame
 byte_heights_new: std.ArrayList(ByteHeight) = .empty, // creating this frame
 byte_height_after_idx: ?usize = null,
 byte_height_edit_idx: ?usize = null,
+ak_textrun_parent: ?*AccessKit.Node = null,
+
+// Accesskit selection information.
+textrun_anchor: ?TextRunSelectionInfo = null,
+textrun_focus: ?TextRunSelectionInfo = null,
+textrun_cursor: ?TextRunSelectionInfo = null,
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
@@ -245,6 +262,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
         .cache_layout = init_opts.cache_layout,
         .kerning = init_opts.kerning,
         .touch_edit_just_focused = init_opts.touch_edit_just_focused,
+        .ak_textrun_parent = init_opts.ak_text_parent,
 
         // SAFETY: set bellow
         .selection = undefined,
@@ -473,8 +491,16 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
             fc.deinit();
         }
     }
+    // TODO:!!!!!!!!! This totally relies on textrun fucntionality at the moment.
     if (self.data().accesskit_node()) |ak_node| {
-        dvui.AccessKit.nodeSetReadOnly(ak_node); // TODO:
+        _ = ak_node;
+        // TODO: Respect non-selectable text. Respect read-only
+        //        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_text_selection);
+        //        dvui.AccessKit.nodeSetTextSelection(ak_node, .{
+        //            .anchor = .{ .node = self.data().id.asU64(), .character_index = 2 },
+        //            .focus = .{ .node = self.data().id.asU64(), .character_index = 4 },
+        //        });
+        //        //dvui.AccessKit.nodeSetReadOnly(ak_node); // TODO:
     }
 }
 
@@ -1441,20 +1467,33 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 rtxt = std.mem.concat(cw.lifo(), u8, &.{ rtxt, " " }) catch txt;
             }
             defer if (txt.ptr != rtxt.ptr) cw.lifo().free(rtxt);
-
-            // TODO: Clean this up
-            var ak_node: ?*dvui.AccessKit.Node = null;
-            if (self.data().accesskit_node()) |node| {
-                if (self.data().options.role == .text_run) {
-                    if (line_nr > 0) {
-                        ak_node = cw.accesskit.nodeCreate(self.data(), .text_run, line_nr);
-                    } else {
-                        ak_node = node;
+            const textrun_info: ?AccessKit.TextRunOptions = info: {
+                if (dvui.accesskit_enabled) {
+                    const ak_parent_node = self.ak_textrun_parent orelse self.data().accesskit_node() orelse null;
+                    if (ak_parent_node) |parent_node| {
+                        var text_run_widget = dvui.virtualParent(@src(), .{
+                            .role = .text_run,
+                            .id_extra = self.bytes_seen,
+                            // Text run needs to be parented to the containing widget.
+                            .ak_node_parent = parent_node,
+                        });
+                        defer text_run_widget.deinit();
+                        if (self.textrun_anchor == null and self.selection.start >= self.bytes_seen and self.selection.start < self.bytes_seen + rtxt.len) {
+                            self.textrun_anchor = .{ .node_id = text_run_widget.data().id, .pos = self.selection.start - self.bytes_seen };
+                        }
+                        if (self.textrun_focus == null and self.selection.end >= self.bytes_seen and self.selection.end < self.bytes_seen + rtxt.len) {
+                            self.textrun_focus = .{ .node_id = text_run_widget.data().id, .pos = self.selection.end - self.bytes_seen };
+                        }
+                        if (self.textrun_cursor == null and self.selection.cursor >= self.bytes_seen and self.selection.cursor < self.bytes_seen + rtxt.len) {
+                            self.textrun_cursor = .{ .node_id = text_run_widget.data().id, .pos = self.selection.cursor - self.bytes_seen };
+                        }
+                        // Text run needs to be parented to the containing widget.
+                        //dvui.currentWindow().accesskit.nodeReparent(text_run_widget.data(), parent_node);
+                        break :info .{ .node_id = text_run_widget.data().id, .parent_node = parent_node };
                     }
-                } else {
-                    ak_node = null;
                 }
-            }
+                break :info null;
+            };
 
             dvui.renderText(.{
                 .font = options.fontGet(),
@@ -1468,7 +1507,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 .sel_color = (dvui.themeGet().text_select orelse dvui.themeGet().color(.highlight, .fill)).opacity(0.75),
                 .kerning = self.kerning,
                 .kern_in = &kern_buf,
-                .ak_node = ak_node,
+                .ak_opts = textrun_info,
             }) catch |err| {
                 dvui.logError(@src(), err, "Failed to render text: {s}", .{rtxt});
             };
@@ -1774,6 +1813,28 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
         self.sel_end_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = text_height };
         if (self.selection.end > self.bytes_seen) {
             dvui.refresh(null, @src(), self.data().id);
+        }
+    }
+
+    if (dvui.accesskit_enabled) {
+        const ak_parent_node = self.ak_textrun_parent orelse self.data().accesskit_node() orelse null;
+        if (ak_parent_node) |parent_node| {
+            if (self.textrun_anchor == null or self.textrun_focus == null) {
+                if (self.textrun_cursor) |cursor| {
+                    AccessKit.nodeSetTextSelection(parent_node, .{
+                        .anchor = .{ .node = cursor.node_id.asU64(), .character_index = cursor.pos },
+                        .focus = .{ .node = cursor.node_id.asU64(), .character_index = cursor.pos },
+                    });
+                    std.debug.print("Setting selection to: {}\n", .{AccessKit.nodeTextSelection(parent_node)});
+                }
+            } else {
+                // Both optionals are non-null here.
+                AccessKit.nodeSetTextSelection(parent_node, .{
+                    .anchor = .{ .node = self.textrun_anchor.?.node_id.asU64(), .character_index = self.textrun_anchor.?.pos },
+                    .focus = .{ .node = self.textrun_focus.?.node_id.asU64(), .character_index = self.textrun_focus.?.pos },
+                });
+                std.debug.print("Setting selection to: {}\n", .{AccessKit.nodeTextSelection(parent_node)});
+            }
         }
     }
 }

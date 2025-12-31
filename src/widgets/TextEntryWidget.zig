@@ -12,6 +12,7 @@ const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
 const TextLayoutWidget = dvui.TextLayoutWidget;
+const AccessKit = dvui.AccessKit;
 
 const TextEntryWidget = @This();
 
@@ -204,7 +205,12 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         .cache_layout = self.init_opts.cache_layout,
         .focused = self.data().id == dvui.focusedWidgetId(),
         .show_touch_draggables = (self.len > 0),
-    }, self.data().options.strip().override(.{ .role = .text_run, .expand = .both, .padding = self.padding }));
+        .ak_text_parent = self.data().accesskit_node(),
+    }, self.data().options.strip().override(.{
+        .role = .none,
+        .expand = .both,
+        .padding = self.padding,
+    }));
 
     // if textLayout forced cache_layout to false, we need to honor that
     self.init_opts.cache_layout = self.textLayout.cache_layout;
@@ -269,15 +275,18 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     // textLayout clips to its content, but we need to get events out to our border
     dvui.clipSet(borderClip);
     if (self.data().accesskit_node()) |ak_node| {
-        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
-        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_value);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_text_selection);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.replace_selected_text);
+
         // TODO: Disable text runs for password input
         if (self.data().options.role != .password_input) {
-            const str = dvui.currentWindow().arena().dupeZ(u8, self.text) catch "";
+            const str = dvui.currentWindow().arena().dupeZ(u8, self.text[0..self.len]) catch "";
             defer dvui.currentWindow().arena().free(str);
             // TODO: We don't want to always push large amounts of text each frame. So we either need to look at pushing
             // only chunks of text, ot only pushing when the text has actually changed since last frame.
-            //dvui.AccessKit.nodeSetValue(ak_node, str); // TODO: Disabled as using text_run instead.
+            AccessKit.nodeSetValue(ak_node, str);
         }
     }
 }
