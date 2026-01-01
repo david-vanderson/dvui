@@ -1645,7 +1645,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     const contentMinSize = self.data().min_size.padNeg(os.paddingGet()).padNeg(os.borderGet()).padNeg(os.marginGet());
     self.byte_heights_new.append(dvui.currentWindow().arena(), .{ .byte = self.bytes_seen, .height = contentMinSize.h }) catch {};
 
-    if (self.cache_layout) {
+    if (self.cache_layout and self.byte_heights.len > 0) {
         // sanity check
         const old = self.byte_heights[self.byte_heights.len - 1].height;
         const new = self.byte_heights_new.items[self.byte_heights_new.items.len - 1].height;

@@ -67,57 +67,6 @@ pub fn AppFrame() !dvui.App.Result {
 
 extern fn tree_sitter_zig() callconv(.c) *dvui.c.TSLanguage;
 
-const tsQueryCursorCaptureIterator = struct {
-    pub const Match = struct {
-        node: dvui.c.TSNode,
-        capture_index: u32,
-
-        pub fn captureName(self: *const Match, query: *const dvui.c.TSQuery) []const u8 {
-            var len: u32 = undefined;
-            const name = dvui.c.ts_query_capture_name_for_id(query, self.capture_index, &len);
-            return name[0..len];
-        }
-    };
-
-    query_cursor: *dvui.c.TSQueryCursor,
-    prev_match: ?Match,
-
-    pub fn init(qc: *dvui.c.TSQueryCursor) tsQueryCursorCaptureIterator {
-        return .{
-            .query_cursor = qc,
-            .prev_match = null,
-        };
-    }
-
-    pub fn next(self: *tsQueryCursorCaptureIterator) ?Match {
-        var match: dvui.c.TSQueryMatch = undefined;
-        var captureIdx: u32 = undefined;
-        loop: while (dvui.c.ts_query_cursor_next_capture(self.query_cursor, &match, &captureIdx)) {
-            const capture = match.captures[captureIdx];
-            if (self.prev_match) |pm| {
-                if (dvui.c.ts_node_eq(pm.node, capture.node)) {
-                    // same node as previous
-                    self.prev_match = .{ .node = capture.node, .capture_index = capture.index };
-                    continue :loop;
-                }
-
-                // not the same
-                const ret = self.prev_match;
-                self.prev_match = .{ .node = capture.node, .capture_index = capture.index };
-                return ret;
-            } else {
-                // first time
-                self.prev_match = .{ .node = capture.node, .capture_index = capture.index };
-                continue :loop;
-            }
-        }
-
-        const ret = self.prev_match;
-        self.prev_match = null;
-        return ret;
-    }
-};
-
 var show_text_entry: bool = false;
 
 pub fn frame() !dvui.App.Result {
@@ -189,125 +138,37 @@ pub fn frame() !dvui.App.Result {
         if (show_text_entry) {
             const source = @embedFile("app.zig");
             const queries = @embedFile("tree_sitter_zig_queries.scm");
+            const highlights: []const dvui.TextEntryWidget.SyntaxHighlight = &.{
+                .{ .name = "keyword", .opts = .{ .color_text = .fromHex("87d75f") } },
+                .{ .name = "operator", .opts = .{ .color_text = .fromHex("87afd7") } },
+                .{ .name = "type", .opts = .{ .color_text = .fromHex("87afd7") } },
+                .{ .name = "function", .opts = .{ .color_text = .fromHex("87afd7") } },
+                .{ .name = "string", .opts = .{ .color_text = .fromHex("d7af5f") } },
+                .{ .name = "comment", .opts = .{ .color_text = .fromHex("af87d7") } },
+                .{ .name = "boolean", .opts = .{ .color_text = .fromHex("d75f5f") } },
+                .{ .name = "number", .opts = .{ .color_text = .fromHex("d75f5f") } },
+            };
 
             var te: dvui.TextEntryWidget = undefined;
-            te.init(@src(), .{ .multiline = true, .cache_layout = true, .text = .{ .internal = .{ .limit = 1_000_000 } } }, .{ .expand = .horizontal, .min_size_content = .height(300) });
+            te.init(@src(), .{
+                .multiline = true,
+                .cache_layout = true,
+                .text = .{ .internal = .{ .limit = 1_000_000 } },
+                .tree_sitter = .{
+                    .language = tree_sitter_zig(),
+                    .queries = queries,
+                    .highlights = highlights,
+                },
+            }, .{ .expand = .horizontal, .min_size_content = .height(300) });
             defer te.deinit();
 
             if (dvui.firstFrame(te.data().id)) {
                 te.textSet(source, false);
+                te.textLayout.selection.moveCursor(0, false); // keep from scrolling to the bottom
             }
 
             te.processEvents();
-            te.drawBeforeText();
-
-            const text = te.textGet();
-
-            // used to output text that's not highlighted
-            var start: usize = 0;
-
-            const Parser = struct {
-                parser: *dvui.c.TSParser,
-                tree: *dvui.c.TSTree,
-                query: *dvui.c.TSQuery,
-
-                pub fn deinit(ptr: *anyopaque) void {
-                    const self: *@This() = @ptrCast(@alignCast(ptr));
-
-                    dvui.c.ts_query_delete(self.query);
-                    dvui.c.ts_tree_delete(self.tree);
-                    dvui.c.ts_parser_delete(self.parser);
-                }
-            };
-
-            var parser = dvui.dataGetPtr(null, te.data().id, "parser", Parser) orelse blk: {
-                const p = dvui.c.ts_parser_new();
-                _ = dvui.c.ts_parser_set_language(p, tree_sitter_zig());
-                const tree = dvui.c.ts_parser_parse_string(p, null, text.ptr, @intCast(text.len));
-
-                var errorOffset: u32 = undefined;
-                var errorType: dvui.c.TSQueryError = undefined;
-                const query = dvui.c.ts_query_new(tree_sitter_zig(), queries.ptr, queries.len, &errorOffset, &errorType);
-
-                const parser: Parser = .{ .parser = p.?, .tree = tree.?, .query = query.? };
-                dvui.dataSet(null, te.data().id, "parser", parser);
-                dvui.dataSetDeinitFunction(null, te.data().id, "parser", &Parser.deinit);
-                break :blk dvui.dataGetPtr(null, te.data().id, "parser", Parser).?;
-            };
-
-            if (te.text_changed and !dvui.firstFrame(te.data().id)) {
-                var edit: dvui.c.TSInputEdit = undefined;
-                edit.start_byte = @intCast(te.text_changed_start);
-                edit.old_end_byte = @intCast(te.text_changed_end);
-                edit.new_end_byte = @intCast(@as(i64, @intCast(te.text_changed_end)) + te.text_changed_added);
-
-                edit.start_point = .{ .row = 0, .column = 0 };
-                edit.old_end_point = .{ .row = 0, .column = 0 };
-                edit.new_end_point = .{ .row = 0, .column = 0 };
-
-                dvui.c.ts_tree_edit(parser.tree, &edit);
-
-                const tree = dvui.c.ts_parser_parse_string(parser.parser, parser.tree, text.ptr, @intCast(text.len));
-                dvui.c.ts_tree_delete(parser.tree);
-                parser.tree = tree.?;
-            }
-
-            // parsing
-            const root = dvui.c.ts_tree_root_node(parser.tree);
-
-            // queries
-            const qc = dvui.c.ts_query_cursor_new();
-            defer dvui.c.ts_query_cursor_delete(qc);
-
-            if (te.textLayout.cache_layout_bytes) |clb| {
-                _ = dvui.c.ts_query_cursor_set_byte_range(qc, @intCast(clb.start), @intCast(clb.end));
-            }
-
-            dvui.c.ts_query_cursor_exec(qc, parser.query, root);
-
-            var iter: tsQueryCursorCaptureIterator = .init(qc.?);
-            while (iter.next()) |match| {
-                const nstart = dvui.c.ts_node_start_byte(match.node);
-                const nend = dvui.c.ts_node_end_byte(match.node);
-                if (start < nstart) {
-                    // render non highlighted text up to this node
-                    te.textLayout.format("{s}", .{text[start..nstart]}, .{});
-                } else if (nstart < start) {
-                    // this match is inside (or overlapping) the previous match
-                    // maybe we could be smarter here, but for now drop it
-                    continue;
-                }
-
-                var opts: dvui.Options = .{};
-                if (std.mem.startsWith(u8, match.captureName(parser.query), "variable")) {
-                    opts.color_text = .aqua;
-                } else if (std.mem.startsWith(u8, match.captureName(parser.query), "type")) {
-                    opts.color_text = .blue;
-                } else if (std.mem.startsWith(u8, match.captureName(parser.query), "keyword")) {
-                    opts.color_text = .purple;
-                } else if (std.mem.eql(u8, match.captureName(parser.query), "operator")) {
-                    opts.color_text = .silver;
-                } else if (std.mem.eql(u8, match.captureName(parser.query), "string")) {
-                    opts.color_text = .maroon;
-                } else if (std.mem.eql(u8, match.captureName(parser.query), "escape_sequence")) {
-                    opts.color_text = .teal;
-                } else if (std.mem.eql(u8, match.captureName(parser.query), "comment")) {
-                    opts.color_text = .green;
-                } else if (std.mem.startsWith(u8, match.captureName(parser.query), "function")) {
-                    opts.color_text = dvui.Color.yellow.lighten(-30);
-                }
-
-                te.textLayout.format("{s}", .{text[nstart..nend]}, opts);
-
-                start = nend;
-            }
-
-            if (start < text.len) {
-                // any leftover non highlighted text
-                te.textLayout.format("{s}", .{text[start..text.len]}, .{});
-            }
-            te.textLayout.addTextDone(.{});
-            te.drawAfterText();
+            te.draw();
         }
     }
 
