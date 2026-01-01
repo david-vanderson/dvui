@@ -65,6 +65,10 @@ pub fn AppFrame() !dvui.App.Result {
     return frame();
 }
 
+extern fn tree_sitter_zig() callconv(.c) *dvui.c.TSLanguage;
+
+var show_text_entry: bool = false;
+
 pub fn frame() !dvui.App.Result {
     var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
     scaler.deinit();
@@ -125,6 +129,48 @@ pub fn frame() !dvui.App.Result {
         tl2.addText("Fonts are being rendered by stb_truetype.", .{});
     }
     tl2.deinit();
+
+    if (dvui.useTreeSitter) {
+        if (dvui.button(@src(), "Show Highlighted Code", .{}, .{})) {
+            show_text_entry = !show_text_entry;
+        }
+
+        if (show_text_entry) {
+            const source = @embedFile("app.zig");
+            const queries = @embedFile("tree_sitter_zig_queries.scm");
+            const highlights: []const dvui.TextEntryWidget.SyntaxHighlight = &.{
+                .{ .name = "keyword", .opts = .{ .color_text = .fromHex("87d75f") } },
+                .{ .name = "operator", .opts = .{ .color_text = .fromHex("87afd7") } },
+                .{ .name = "type", .opts = .{ .color_text = .fromHex("87afd7") } },
+                .{ .name = "function", .opts = .{ .color_text = .fromHex("87afd7") } },
+                .{ .name = "string", .opts = .{ .color_text = .fromHex("d7af5f") } },
+                .{ .name = "comment", .opts = .{ .color_text = .fromHex("af87d7") } },
+                .{ .name = "boolean", .opts = .{ .color_text = .fromHex("d75f5f") } },
+                .{ .name = "number", .opts = .{ .color_text = .fromHex("d75f5f") } },
+            };
+
+            var te: dvui.TextEntryWidget = undefined;
+            te.init(@src(), .{
+                .multiline = true,
+                .cache_layout = true,
+                .text = .{ .internal = .{ .limit = 1_000_000 } },
+                .tree_sitter = .{
+                    .language = tree_sitter_zig(),
+                    .queries = queries,
+                    .highlights = highlights,
+                },
+            }, .{ .expand = .horizontal, .min_size_content = .height(300) });
+            defer te.deinit();
+
+            if (dvui.firstFrame(te.data().id)) {
+                te.textSet(source, false);
+                te.textLayout.selection.moveCursor(0, false); // keep from scrolling to the bottom
+            }
+
+            te.processEvents();
+            te.draw();
+        }
+    }
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
     if (dvui.button(@src(), label, .{}, .{ .tag = "show-demo-btn" })) {

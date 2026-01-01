@@ -1052,7 +1052,7 @@ pub fn bytesNeeded(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, 
     // if we are moving the cursor, need to process the text around where we are moving it
     switch (self.sel_move) {
         .none => {},
-        .mouse => {}, // all in visible region
+        .mouse => {}, // all in visible region, excepted below
         .expand_pt => |*ep| {
             switch (ep.which) {
                 .word, .line => {}, // all in visible region
@@ -1073,7 +1073,7 @@ pub fn bytesNeeded(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, 
         .word_left_right => include_cursor = true,
     }
 
-    if (include_cursor) {
+    if (include_cursor and self.sel_move != .mouse) {
         context.byte = @min(context.byte, self.selection.cursor);
         sel_end = @max(sel_end, self.selection.cursor);
     }
@@ -1580,6 +1580,10 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
 }
 
 pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
+    if (self.add_text_done) {
+        dvui.log.debug("TextLayoutWidget addTextDone() called multiple times", .{});
+    }
+
     self.add_text_done = true;
 
     if (self.cache_layout and self.byte_heights.len > 0) {
@@ -1641,7 +1645,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     const contentMinSize = self.data().min_size.padNeg(os.paddingGet()).padNeg(os.borderGet()).padNeg(os.marginGet());
     self.byte_heights_new.append(dvui.currentWindow().arena(), .{ .byte = self.bytes_seen, .height = contentMinSize.h }) catch {};
 
-    if (self.cache_layout) {
+    if (self.cache_layout and self.byte_heights.len > 0) {
         // sanity check
         const old = self.byte_heights[self.byte_heights.len - 1].height;
         const new = self.byte_heights_new.items[self.byte_heights_new.items.len - 1].height;
