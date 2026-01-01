@@ -253,6 +253,7 @@ pub const dialogNativeFolderSelect = native_dialogs.Native.folderSelect;
 pub const useLibc = @import("default_options").libc;
 pub const useFreeType = @import("default_options").freetype;
 pub const useTinyFileDialogs = @import("default_options").tiny_file_dialogs;
+pub const useTreeSitter = @import("default_options").tree_sitter;
 
 /// The amount of physical pixels to scroll per "tick" of the scroll wheel
 pub var scroll_speed: f32 = 20;
@@ -299,6 +300,10 @@ pub const c = @cImport({
     // Used by native dialogs
     if (useTinyFileDialogs) {
         @cInclude("tinyfiledialogs.h");
+    }
+
+    if (useTreeSitter) {
+        @cInclude("tree_sitter/api.h");
     }
 });
 
@@ -1152,7 +1157,7 @@ pub const hashIdKey = void;
 
 // Used for all the data functions
 fn currentOverrideOrPanic(win: ?*Window) *Window {
-    return win orelse current_window orelse @panic("dataSet current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
+    return win orelse current_window orelse @panic("current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
 }
 
 /// Set key/value pair for given id.
@@ -1173,6 +1178,21 @@ pub fn dataSet(win: ?*Window, id: Id, key: []const u8, data: anytype) void {
     (w.data_store.set(w.gpa, id.update(key), data)) catch |err| {
         dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
     };
+}
+
+/// Set a deinit function for data stored under id/key.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
+/// pass a pointer to the `Window` you want to add the data to.
+///
+/// When data for this id/key is about to be freed by dvui, it will first call
+/// the passed function.  This is useful for cases where data for a widget
+/// allocates memory outside of your control.
+pub fn dataSetDeinitFunction(win: ?*Window, id: Id, key: []const u8, func: Data.DeinitFunction) void {
+    const w = currentOverrideOrPanic(win);
+    w.data_store.setDeinitFunction(id.update(key), func);
 }
 
 /// Set key/value pair for given id, copying the slice contents. Can be passed
