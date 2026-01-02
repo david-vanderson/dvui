@@ -112,8 +112,7 @@ pub const Selection = struct {
     }
 };
 
-// Provide text selection information to accesskit.
-// Anchor is start of selection. Focus is end of selection.
+// Text selection information for accesskit.
 const TextRunSelectionInfo = struct {
     node_id: dvui.Id,
     pos: usize,
@@ -121,7 +120,7 @@ const TextRunSelectionInfo = struct {
 
 /// This is used for word selection - 2 clicks and ctrl+left/right - everything
 /// here is not a word, and everything else is.
-pub const word_breaks = " \n!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+pub const word_breaks = " \n!\"#$%&()*+,-./:;<=>?@[\\]^_`{|}~";
 pub const word_breaks_codepoints: [word_breaks.len]u21 = init: {
     var result: [word_breaks.len]u21 = undefined;
     for (word_breaks, &result) |in, *out| {
