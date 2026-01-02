@@ -205,7 +205,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         .cache_layout = self.init_opts.cache_layout,
         .focused = self.data().id == dvui.focusedWidgetId(),
         .show_touch_draggables = (self.len > 0),
-        .ak_text_parent = self.data().accesskit_node(),
+        .ak_text_parent = if (self.data().accesskit_node()) |_| self.data().id else null,
     }, self.data().options.strip().override(.{
         .role = .none,
         .expand = .both,
@@ -307,6 +307,18 @@ pub fn processEvents(self: *TextEntryWidget) void {
             continue;
 
         self.processEvent(e);
+    }
+    // Accesskit selection handling.
+    // TODO: Turn this into a proper event?
+    if (dvui.currentWindow().accesskit.text_selection) |selection| {
+        std.debug.print("Checking {x} vs {x}\n", .{ self.data().id, selection.node_id });
+        if (self.data().id == selection.node_id) {
+            self.textLayout.selection.start = selection.sel_start;
+            self.textLayout.selection.end = selection.sel_end;
+            self.textLayout.selection.cursor = selection.cursor;
+            std.debug.print("+++Settings selection for {x} to {d}, {d}, {d}\n", .{ selection.node_id, selection.sel_start, selection.sel_end, selection.cursor });
+            dvui.currentWindow().accesskit.text_selection = null;
+        }
     }
 }
 

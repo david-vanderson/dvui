@@ -23,6 +23,9 @@ nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node) = .empty,
 // Note: Any access to `action_requests` must be protected by `mutex`.
 action_requests: std.ArrayList(ActionRequest) = .empty,
 
+text_runs: std.ArrayList(TextRunOptions) = .empty,
+text_selection: ?struct { node_id: dvui.Id, sel_start: usize, sel_end: usize, cursor: usize } = null,
+
 // The last seen node with `role = .label`
 prev_label_id: dvui.Id = .zero,
 
@@ -279,7 +282,7 @@ pub fn nodeIdFromNode(self: *AccessKit, node: *Node) ?dvui.Id {
 }
 
 /// Character positions and lengths of rendered text.
-pub const TextRunInfo = struct {
+pub const CharPositionInfo = struct {
     l: u8, // length (height)
     w: f32, // width
     x: f32, // x pos
@@ -288,13 +291,12 @@ pub const TextRunInfo = struct {
 
 pub const TextRunOptions = struct {
     node_id: dvui.Id,
-    parent_node: *Node,
+    node_parent_id: dvui.Id,
+    char_offset: usize,
 };
 
-var boink: bool = false;
-
 /// Populate the text_run node with character heights, positions,
-pub fn textRunPopulate(self: *AccessKit, opts: TextRunOptions, text_info: *std.MultiArrayList(TextRunInfo), text: []const u8, r: dvui.Rect.Physical) void {
+pub fn textRunPopulate(self: *AccessKit, opts: TextRunOptions, text_info: *std.MultiArrayList(CharPositionInfo), text: []const u8, r: dvui.Rect.Physical) void {
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
     var word_lengths: std.ArrayList(u8) = .empty;
     var len: u8 = 0;
@@ -308,7 +310,6 @@ pub fn textRunPopulate(self: *AccessKit, opts: TextRunOptions, text_info: *std.M
     const str = window.arena().dupeZ(u8, text) catch "";
     defer window.arena().free(str);
 
-    // TODO: Check if the text is visible. If not, then use the position of the last char / word as the position for all future words.
     const ak_node = self.nodes.get(opts.node_id) orelse @panic("TODO: Missing node");
     AccessKit.nodeSetBounds(ak_node, .{ .x0 = r.x, .y0 = r.y, .x1 = r.x + r.w, .y1 = r.y + r.h });
     AccessKit.nodeSetValue(ak_node, str);
@@ -317,12 +318,14 @@ pub fn textRunPopulate(self: *AccessKit, opts: TextRunOptions, text_info: *std.M
     AccessKit.nodeSetCharacterPositions(ak_node, text_info.len, text_info.items(.x).ptr);
     AccessKit.nodeSetWordLengths(ak_node, word_lengths.items.len, word_lengths.items.ptr);
     AccessKit.nodeSetTextDirection(ak_node, AccessKit.TextDirection.left_to_right);
+    self.text_runs.append(window.gpa, opts) catch {}; // If text run can't be added, selection actions will fail this frame.
 }
 
 /// Convert any actions during the frame into events to be processed next frame
 /// Note: Assumes `mutex` is already held.
 fn processActions(self: *AccessKit) void {
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
+
     for (self.action_requests.items) |request| {
         switch (request.action) {
             Action.click => {
@@ -377,20 +380,53 @@ fn processActions(self: *AccessKit) void {
                 }
             },
             Action.set_text_selection => {
+                std.debug.assert(request.data.has_value);
+                std.debug.assert(request.data.value.tag == ActionData.set_text_selection);
+
                 const anchor: TextPosition = request.data.value.unnamed_0.unnamed_7.set_text_selection.anchor;
                 const focus: TextPosition = request.data.value.unnamed_0.unnamed_7.set_text_selection.focus;
-                std.debug.print("SET_TEXT_SELECTION: {any}:{any}\n", .{ anchor, focus });
+                var anchor_run: ?TextRunOptions = null;
+                var focus_run: ?TextRunOptions = null;
+                for (self.text_runs.items) |run| {
+                    if (run.node_id.asU64() == anchor.node) {
+                        anchor_run = run;
+                    }
+                    if (run.node_id.asU64() == focus.node) {
+                        focus_run = run;
+                    }
+                    if (anchor_run != null and focus_run != null) break;
+                }
+                if (anchor_run) |a| if (focus_run) |f| {
+                    self.text_selection = .{
+                        .node_id = a.node_parent_id,
+                        .sel_start = a.char_offset + anchor.character_index,
+                        .sel_end = f.char_offset + focus.character_index,
+                        .cursor = f.char_offset + focus.character_index,
+                    };
+                    std.debug.print("SET_TEXT_SELECTION: {},{}: {?}\n", .{ a, f, self.text_selection });
+                };
+                if (anchor_run == null or focus_run == null) {
+                    log.debug("Action set_text_selection received for unknown text_run id {x}.", .{anchor.node});
+                }
             },
             Action.replace_selected_text => {
                 std.debug.print("REPLACE_SELECTED_TEXT\n", .{});
             },
-            else => {},
+            Action.scroll_into_view => {
+                if (request.data.has_value) std.debug.assert(request.data.value.tag == ActionData.scroll_hint);
+                std.debug.print("SCROLL_INTO_VIEW with tag and value {d}:{d}\n", .{ request.data.value.tag, request.data.value.unnamed_0.unnamed_4.scroll_hint });
+            },
+            else => |action| {
+                // TODO:
+                log.debug("Recieved unknown action {d}\n", .{action});
+            },
         }
     }
     if (self.action_requests.items.len > 0) {
-        self.action_requests.clearAndFree(window.gpa);
+        self.action_requests.clearRetainingCapacity();
         dvui.refresh(window, @src(), null);
     }
+    self.text_runs.clearAndFree(window.gpa);
 }
 
 fn logEventAddError(src: std.builtin.SourceLocation, err: anyerror) void {
@@ -452,6 +488,8 @@ pub fn deinit(self: *AccessKit) void {
 
     self.action_requests.clearAndFree(window.gpa);
     self.nodes.clearAndFree(window.gpa);
+    self.text_runs.clearAndFree(window.gpa);
+
     if (builtin.os.tag == .windows)
         if (dvui.backend.kind == .dx11) {
             c.accesskit_windows_adapter_free(self.adapter.?);

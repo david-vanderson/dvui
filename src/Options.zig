@@ -107,7 +107,7 @@ box_shadow: ?BoxShadow = null,
 
 /// Overrides the default accesskit parent node.
 /// Use when the accesskit node tree is different to the widget tree.
-ak_node_parent: if (dvui.accesskit_enabled) ?*dvui.AccessKit.Node else void = if (dvui.accesskit_enabled) null else {},
+ak_node_parent: ?*dvui.AccessKit.Node = null,
 
 pub const LabelOpts = union(enum) {
     /// Use the label from a different widget.  This is preferred if there is a

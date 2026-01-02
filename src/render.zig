@@ -135,7 +135,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     if (dvui.clipGet().intersect(opts.rs.r).empty()) return;
 
     // Record character heights and positions for AccessKit text_run role.
-    var text_info: std.MultiArrayList(AccessKit.TextRunInfo) = .empty;
+    var text_info: std.MultiArrayList(AccessKit.CharPositionInfo) = .empty;
 
     var cw = dvui.currentWindow();
     const utf8_text = try dvui.toUtf8(cw.lifo(), opts.text);
