@@ -47,27 +47,41 @@ pub const TreeSitterParser = if (dvui.useTreeSitter) struct {
         dvui.c.ts_parser_delete(self.parser);
     }
 
+    pub fn queryCursorCaptureIterator(self: *const TreeSitterParser, qc: *dvui.c.TSQueryCursor, text: []const u8) QueryCursorCaptureIterator {
+        return .{
+            .query_cursor = qc,
+            .prev_match = null,
+            .query = self.query,
+            .text = text,
+        };
+    }
+
     pub const QueryCursorCaptureIterator = struct {
         pub const Match = struct {
+            iter: *const QueryCursorCaptureIterator,
             node: dvui.c.TSNode,
             capture_index: u32,
 
-            pub fn captureName(self: *const Match, query: *const dvui.c.TSQuery) []const u8 {
+            pub fn captureName(self: *const Match) []const u8 {
                 var len: u32 = undefined;
-                const name = dvui.c.ts_query_capture_name_for_id(query, self.capture_index, &len);
+                const name = dvui.c.ts_query_capture_name_for_id(self.iter.query, self.capture_index, &len);
                 return name[0..len];
+            }
+
+            pub fn debugLog(self: *const Match, comptime kind: []const u8) void {
+                const start = dvui.c.ts_node_start_byte(self.node);
+                const end = dvui.c.ts_node_end_byte(self.node);
+                dvui.log.debug(kind ++ " capture @{s} : {s}", .{ self.captureName(), self.iter.text[start..end] });
             }
         };
 
         query_cursor: *dvui.c.TSQueryCursor,
         prev_match: ?Match,
 
-        pub fn init(qc: *dvui.c.TSQueryCursor) QueryCursorCaptureIterator {
-            return .{
-                .query_cursor = qc,
-                .prev_match = null,
-            };
-        }
+        // used for debugging
+        debug: bool = false,
+        query: *dvui.c.TSQuery,
+        text: []const u8,
 
         pub fn next(self: *QueryCursorCaptureIterator) ?Match {
             var match: dvui.c.TSQueryMatch = undefined;
@@ -77,22 +91,28 @@ pub const TreeSitterParser = if (dvui.useTreeSitter) struct {
                 if (self.prev_match) |pm| {
                     if (dvui.c.ts_node_eq(pm.node, capture.node)) {
                         // same node as previous
-                        self.prev_match = .{ .node = capture.node, .capture_index = capture.index };
+                        self.prev_match = .{ .iter = self, .node = capture.node, .capture_index = capture.index };
+                        if (self.debug) self.prev_match.?.debugLog("ts same ");
                         continue :loop;
                     }
 
                     // not the same
                     const ret = self.prev_match;
-                    self.prev_match = .{ .node = capture.node, .capture_index = capture.index };
+                    self.prev_match = .{ .iter = self, .node = capture.node, .capture_index = capture.index };
+                    if (self.debug) self.prev_match.?.debugLog("ts new  ");
                     return ret;
                 } else {
                     // first time
-                    self.prev_match = .{ .node = capture.node, .capture_index = capture.index };
+                    self.prev_match = .{ .iter = self, .node = capture.node, .capture_index = capture.index };
+                    if (self.debug) self.prev_match.?.debugLog("ts first");
                     continue :loop;
                 }
             }
 
             const ret = self.prev_match;
+            if (ret) |r| {
+                if (self.debug) r.debugLog("ts last ");
+            }
             self.prev_match = null;
             return ret;
         }
@@ -131,6 +151,8 @@ pub const InitOptions = struct {
         language: *dvui.c.TSLanguage,
         queries: []const u8,
         highlights: []const SyntaxHighlight,
+        /// If true dump all captures to dvui.log.debug
+        log_captures: bool = false,
     } else void;
 
     text: TextOption = .{ .internal = .{} },
@@ -517,7 +539,8 @@ pub fn draw(self: *TextEntryWidget) void {
 
             dvui.c.ts_query_cursor_exec(qc, parser.query, root);
 
-            var iter: TreeSitterParser.QueryCursorCaptureIterator = .init(qc.?);
+            var iter = parser.queryCursorCaptureIterator(qc.?, self.text);
+            iter.debug = ts.log_captures;
             while (iter.next()) |match| {
                 const nstart = dvui.c.ts_node_start_byte(match.node);
                 const nend = dvui.c.ts_node_end_byte(match.node);
@@ -531,8 +554,9 @@ pub fn draw(self: *TextEntryWidget) void {
                 }
 
                 var opts: dvui.Options = .{};
-                const capture_name = match.captureName(parser.query);
-                for (ts.highlights) |sh| {
+                const capture_name = match.captureName();
+                for (0..ts.highlights.len) |i| {
+                    const sh = ts.highlights[ts.highlights.len - i - 1];
                     if (std.mem.startsWith(u8, capture_name, sh.name)) {
                         opts = sh.opts;
                         break;

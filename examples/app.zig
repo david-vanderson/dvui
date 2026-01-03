@@ -65,7 +65,7 @@ pub fn AppFrame() !dvui.App.Result {
     return frame();
 }
 
-extern fn tree_sitter_zig() callconv(.c) *dvui.c.TSLanguage;
+extern fn tree_sitter_json() callconv(.c) *dvui.c.TSLanguage;
 
 var show_text_entry: bool = false;
 
@@ -131,21 +131,62 @@ pub fn frame() !dvui.App.Result {
     tl2.deinit();
 
     if (dvui.useTreeSitter) {
-        if (dvui.button(@src(), "Show Highlighted Code", .{}, .{})) {
-            show_text_entry = !show_text_entry;
+        var log_captures = false;
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            defer hbox.deinit();
+
+            if (dvui.button(@src(), "Show Highlighted Code", .{}, .{})) {
+                show_text_entry = !show_text_entry;
+            }
+
+            if (show_text_entry) {
+                if (dvui.button(@src(), "Log Captures", .{}, .{})) {
+                    log_captures = true;
+                }
+            }
         }
 
         if (show_text_entry) {
-            const source = @embedFile("app.zig");
-            const queries = @embedFile("tree_sitter_zig_queries.scm");
+            const source =
+                \\{ "name"   : "John Smith",
+                \\  "array"  : [true, false, null, { "sku" : 123 }],
+                \\  // comments are not part of base json, but supported by this parser
+                \\  "price"  : 23.95,
+                \\  /* block comment */
+                \\  "shipTo" : { "name" : "Jane Smith",
+                \\               "address" : "123 Maple Street" },
+                \\}
+            ;
+
+            // If multiple queries match, we use the last
+            // If a query matches inside another query, we drop it (like
+            // escape_sequence which is inside string)
+            const queries =
+                \\(string) @string
+                \\
+                \\(pair
+                \\  key: (_) @string.special.key)
+                \\
+                \\(number) @number
+                \\
+                \\[
+                \\  (null)
+                \\  (true)
+                \\  (false)
+                \\] @constant.builtin
+                \\
+                \\(escape_sequence) @escape
+                \\
+                \\(comment) @comment
+            ;
+
+            // If multiple highlights match, we use the last
             const highlights: []const dvui.TextEntryWidget.SyntaxHighlight = &.{
-                .{ .name = "keyword", .opts = .{ .color_text = .fromHex("87d75f") } },
-                .{ .name = "operator", .opts = .{ .color_text = .fromHex("87afd7") } },
-                .{ .name = "type", .opts = .{ .color_text = .fromHex("87afd7") } },
-                .{ .name = "function", .opts = .{ .color_text = .fromHex("87afd7") } },
+                .{ .name = "constant", .opts = .{ .color_text = .fromHex("87d75f") } },
                 .{ .name = "string", .opts = .{ .color_text = .fromHex("d7af5f") } },
+                .{ .name = "string.special.key", .opts = .{ .color_text = .fromHex("87afd7") } },
                 .{ .name = "comment", .opts = .{ .color_text = .fromHex("af87d7") } },
-                .{ .name = "boolean", .opts = .{ .color_text = .fromHex("d75f5f") } },
                 .{ .name = "number", .opts = .{ .color_text = .fromHex("d75f5f") } },
             };
 
@@ -155,9 +196,10 @@ pub fn frame() !dvui.App.Result {
                 .cache_layout = true,
                 .text = .{ .internal = .{ .limit = 1_000_000 } },
                 .tree_sitter = .{
-                    .language = tree_sitter_zig(),
+                    .language = tree_sitter_json(),
                     .queries = queries,
                     .highlights = highlights,
+                    .log_captures = log_captures,
                 },
             }, .{ .expand = .horizontal, .min_size_content = .height(300) });
             defer te.deinit();
