@@ -65,10 +65,6 @@ pub fn AppFrame() !dvui.App.Result {
     return frame();
 }
 
-extern fn tree_sitter_json() callconv(.c) *dvui.c.TSLanguage;
-
-var show_text_entry: bool = false;
-
 pub fn frame() !dvui.App.Result {
     var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
     scaler.deinit();
@@ -129,90 +125,6 @@ pub fn frame() !dvui.App.Result {
         tl2.addText("Fonts are being rendered by stb_truetype.", .{});
     }
     tl2.deinit();
-
-    if (dvui.useTreeSitter) {
-        var log_captures = false;
-        {
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-            defer hbox.deinit();
-
-            if (dvui.button(@src(), "Show Highlighted Code", .{}, .{})) {
-                show_text_entry = !show_text_entry;
-            }
-
-            if (show_text_entry) {
-                if (dvui.button(@src(), "Log Captures", .{}, .{})) {
-                    log_captures = true;
-                }
-            }
-        }
-
-        if (show_text_entry) {
-            const source =
-                \\{ "name"   : "John Smith",
-                \\  "array"  : [true, false, null, { "sku" : 123 }],
-                \\  // comments are not part of base json, but supported by this parser
-                \\  "price"  : 23.95,
-                \\  /* block comment */
-                \\  "shipTo" : { "name" : "Jane Smith",
-                \\               "address" : "123 Maple Street" },
-                \\}
-            ;
-
-            // If multiple queries match, we use the last
-            // If a query matches inside another query, we drop it (like
-            // escape_sequence which is inside string)
-            const queries =
-                \\(string) @string
-                \\
-                \\(pair
-                \\  key: (_) @string.special.key)
-                \\
-                \\(number) @number
-                \\
-                \\[
-                \\  (null)
-                \\  (true)
-                \\  (false)
-                \\] @constant.builtin
-                \\
-                \\(escape_sequence) @escape
-                \\
-                \\(comment) @comment
-            ;
-
-            // If multiple highlights match, we use the last
-            const highlights: []const dvui.TextEntryWidget.SyntaxHighlight = &.{
-                .{ .name = "constant", .opts = .{ .color_text = .fromHex("87d75f") } },
-                .{ .name = "string", .opts = .{ .color_text = .fromHex("d7af5f") } },
-                .{ .name = "string.special.key", .opts = .{ .color_text = .fromHex("87afd7") } },
-                .{ .name = "comment", .opts = .{ .color_text = .fromHex("af87d7") } },
-                .{ .name = "number", .opts = .{ .color_text = .fromHex("d75f5f") } },
-            };
-
-            var te: dvui.TextEntryWidget = undefined;
-            te.init(@src(), .{
-                .multiline = true,
-                .cache_layout = true,
-                .text = .{ .internal = .{ .limit = 1_000_000 } },
-                .tree_sitter = .{
-                    .language = tree_sitter_json(),
-                    .queries = queries,
-                    .highlights = highlights,
-                    .log_captures = log_captures,
-                },
-            }, .{ .expand = .horizontal, .min_size_content = .height(300) });
-            defer te.deinit();
-
-            if (dvui.firstFrame(te.data().id)) {
-                te.textSet(source, false);
-                te.textLayout.selection.moveCursor(0, false); // keep from scrolling to the bottom
-            }
-
-            te.processEvents();
-            te.draw();
-        }
-    }
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
     if (dvui.button(@src(), label, .{}, .{ .tag = "show-demo-btn" })) {
