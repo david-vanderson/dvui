@@ -446,7 +446,6 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
             },
         }, .{
             .expand = .horizontal,
-            .max_size_content = .height(1000), // otherwise it uses min_size
         });
         defer te.deinit();
 
