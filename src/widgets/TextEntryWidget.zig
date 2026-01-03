@@ -216,15 +216,6 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
 
     options = options.override(opts);
 
-    if (options.max_size_content == null) {
-        // max size not given, so default to the same as min size for direction
-        // we can scroll in
-        const ms = options.min_size_contentGet();
-        const maxw = if (scroll_init_opts.horizontal == .auto) ms.w else dvui.max_float_safe;
-        const maxh = if (scroll_init_opts.vertical == .auto) ms.h else dvui.max_float_safe;
-        options = options.override(.{ .max_size_content = .{ .w = maxw, .h = maxh } });
-    }
-
     // padding is interpreted as the padding for the TextLayoutWidget, but
     // we also need to add it to content size because TextLayoutWidget is
     // inside the scroll area
@@ -232,8 +223,10 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     options.padding = null;
     options.min_size_content.?.w += padding.x + padding.w;
     options.min_size_content.?.h += padding.y + padding.h;
-    options.max_size_content.?.w += padding.x + padding.w;
-    options.max_size_content.?.h += padding.y + padding.h;
+    if (options.max_size_content != null) {
+        options.max_size_content.?.w += padding.x + padding.w;
+        options.max_size_content.?.h += padding.y + padding.h;
+    }
 
     const wd = WidgetData.init(src, .{}, options);
     scroll_init_opts.focus_id = wd.id;
