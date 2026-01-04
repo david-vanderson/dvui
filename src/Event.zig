@@ -53,22 +53,16 @@ pub const Text = struct {
     pub const Selection = struct {
         start: usize,
         end: usize,
-
-        pub const all: Selection = .{ .start = 0, .end = std.math.maxInt(usize) };
-        pub const none: Selection = .{ .start = 0, .end = 0 };
     };
 
-    txt: []u8,
-    selection: Selection,
-    replace: bool = false,
-
-    pub fn selectedAll(self: Text) bool {
-        return self.selection.start == 0 and self.selection.end == std.math.maxInt(usize);
-    }
-
-    pub fn selectedNone(self: Text) bool {
-        return self.selection.start == self.selection.end;
-    }
+    pub const Action = union(enum) {
+        set: struct {
+            txt: []u8,
+            selected: bool,
+        },
+        select: Selection,
+    };
+    action: Action,
 };
 
 pub const Key = struct {

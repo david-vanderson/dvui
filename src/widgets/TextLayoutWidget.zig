@@ -25,7 +25,7 @@ const TextLayoutWidget = @This();
 /// 500 if our min width is zero).
 pub var defaults: Options = .{
     .name = "TextLayout",
-    .role = .label, // TODO: Use labels until can support .text_run
+    .role = .label,
     .padding = Rect.all(6),
     .background = true,
     .style = .content,
@@ -51,7 +51,8 @@ pub const InitOptions = struct {
     focused: ?bool = null,
     show_touch_draggables: bool = true,
 
-    /// Overrides the parent widget for any text runs created within by this widget.
+    /// If non null, overrides the parent widget for any accesskit text runs created
+    /// by this widget.
     ak_text_parent: ?dvui.Id = null,
 };
 
@@ -1822,9 +1823,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
     if (dvui.accesskit_enabled) {
         if (self.textrunParentNode()) |parent_node| {
-            std.debug.print("has parent node\n", .{});
             if (self.textrun_anchor == null or self.textrun_focus == null) {
-                std.debug.print("both null\n", .{});
                 if (self.textrun_cursor) |cursor| {
                     AccessKit.nodeSetTextSelection(parent_node, .{
                         .anchor = .{ .node = cursor.node_id.asU64(), .character_index = cursor.pos },
@@ -2196,6 +2195,17 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                 e.handle(@src(), self.data());
                 self.selection.selectAll();
                 break :blk;
+            }
+        },
+        .text => |te| {
+            switch (te.action) {
+                .select => |sel| {
+                    self.selection.start = sel.start;
+                    self.selection.end = sel.end;
+                    self.selection.cursor = sel.end;
+                    self.selection.order();
+                },
+                else => {},
             }
         },
         else => {},

@@ -127,7 +127,6 @@ pub const TextOptions = struct {
 ///
 /// Selection will be colored with the current themes accent color,
 /// with the text color being set to the themes fill color.
-/// Returns: true if any text was rendered.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn renderText(opts: TextOptions) Backend.GenericError!void {

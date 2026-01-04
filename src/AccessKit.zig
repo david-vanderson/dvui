@@ -384,8 +384,8 @@ fn processActions(self: *AccessKit) void {
                             },
                         }
                     };
-
-                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target), .replace = true }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventTextSelect(.{ .start = 0, .end = std.math.maxInt(usize), .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
                 }
             },
             Action.set_text_selection => {
@@ -412,14 +412,9 @@ fn processActions(self: *AccessKit) void {
                     if (anchor_run != null and focus_run != null) break;
                 }
                 if (anchor_run) |a| if (focus_run) |f| {
-                    _ = window.addEventText(.{
-                        .text = "",
-                        .replace = false,
-                        .target_id = a.node_parent_id,
-                        .selection = .{
-                            .start = a.char_offset + anchor.character_index,
-                            .end = f.char_offset + focus.character_index,
-                        },
+                    _ = window.addEventTextSelect(.{
+                        .start = a.char_offset + anchor.character_index,
+                        .end = f.char_offset + focus.character_index,
                     }) catch |err| {
                         switch (err) {
                             error.OutOfMemory => {},
