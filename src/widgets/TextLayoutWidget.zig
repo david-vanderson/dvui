@@ -11,6 +11,7 @@ const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
 const FloatingWidget = dvui.FloatingWidget;
+const AccessKit = dvui.AccessKit;
 
 const TextLayoutWidget = @This();
 
@@ -24,7 +25,7 @@ const TextLayoutWidget = @This();
 /// 500 if our min width is zero).
 pub var defaults: Options = .{
     .name = "TextLayout",
-    .role = .label, // TODO: Use labels until can support .text_run
+    .role = .label,
     .padding = Rect.all(6),
     .background = true,
     .style = .content,
@@ -40,15 +41,19 @@ pub const InitOptions = struct {
     /// and only process what is needed for visibility (and copy).
     cache_layout: bool = false,
 
-    // Whether to enter touch editing mode on a touch-release (no drag) if we
-    // were not focused before the touch.
+    /// Whether to enter touch editing mode on a touch-release (no drag) if we
+    /// were not focused before the touch.
     touch_edit_just_focused: bool = true,
 
-    // If non null, overrides `Window.kerning` setting.
+    /// If non null, overrides `Window.kerning` setting.
     kerning: ?bool = null,
 
     focused: ?bool = null,
     show_touch_draggables: bool = true,
+
+    /// If non null, overrides the parent widget for any accesskit text runs created
+    /// by this widget.
+    ak_text_parent: ?dvui.Id = null,
 };
 
 pub const Selection = struct {
@@ -108,9 +113,22 @@ pub const Selection = struct {
     }
 };
 
+// Text selection information for accesskit.
+const TextRunSelectionInfo = struct {
+    node_id: dvui.Id,
+    pos: usize,
+};
+
 /// This is used for word selection - 2 clicks and ctrl+left/right - everything
 /// here is not a word, and everything else is.
-pub const word_breaks = " \n!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+pub const word_breaks = " \n!\"#$%&()*+,-./:;<=>?@[\\]^_`{|}~";
+pub const word_breaks_codepoints: [word_breaks.len]u21 = init: {
+    var result: [word_breaks.len]u21 = undefined;
+    for (word_breaks, &result) |in, *out| {
+        out.* = in;
+    }
+    break :init result;
+};
 
 wd: WidgetData,
 corners: [4]?Rect = [_]?Rect{null} ** 4,
@@ -229,6 +247,12 @@ byte_heights_new: std.ArrayList(ByteHeight) = .empty, // creating this frame
 byte_height_after_idx: ?usize = null,
 byte_height_edit_idx: ?usize = null,
 
+// AccessKit text reading / selection
+textrun_parent: ?dvui.Id = null,
+textrun_anchor: ?TextRunSelectionInfo = null,
+textrun_focus: ?TextRunSelectionInfo = null,
+textrun_cursor: ?TextRunSelectionInfo = null,
+
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const options = defaults.override(opts);
@@ -238,6 +262,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
         .cache_layout = init_opts.cache_layout,
         .kerning = init_opts.kerning,
         .touch_edit_just_focused = init_opts.touch_edit_just_focused,
+        .textrun_parent = init_opts.ak_text_parent,
 
         // SAFETY: set bellow
         .selection = undefined,
@@ -466,8 +491,16 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
             fc.deinit();
         }
     }
+    // TODO:!!!!!!!!! This totally relies on textrun fucntionality at the moment.
     if (self.data().accesskit_node()) |ak_node| {
-        dvui.AccessKit.nodeSetReadOnly(ak_node);
+        _ = ak_node;
+        // TODO: Respect non-selectable text. Respect read-only
+        //        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_text_selection);
+        //        dvui.AccessKit.nodeSetTextSelection(ak_node, .{
+        //            .anchor = .{ .node = self.data().id.asU64(), .character_index = 2 },
+        //            .focus = .{ .node = self.data().id.asU64(), .character_index = 4 },
+        //        });
+        //        //dvui.AccessKit.nodeSetReadOnly(ak_node); // TODO:
     }
 }
 
@@ -1164,6 +1197,7 @@ const AddTextExAction = enum {
 fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) ?dvui.Event.EventTypes {
     var ret: ?dvui.Event.EventTypes = null;
     const cw = dvui.currentWindow();
+    var line_nr: usize = 0;
 
     // clip to content rect for all text
     _ = dvui.clip(self.data().contentRectScale().r);
@@ -1210,6 +1244,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
     }
 
     text_loop: while (txt.len > 0) {
+        defer line_nr += 1;
         if (self.byte_height_ready) |bhr| {
             //std.debug.print("byte_height_new append {d} {d}\n", .{ bhr.byte, bhr.height });
             self.byte_heights_new.append(cw.arena(), bhr) catch {};
@@ -1432,6 +1467,37 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 rtxt = std.mem.concat(cw.lifo(), u8, &.{ rtxt, " " }) catch txt;
             }
             defer if (txt.ptr != rtxt.ptr) cw.lifo().free(rtxt);
+            const textrun_info: ?AccessKit.TextRunOptions = info: {
+                if (dvui.accesskit_enabled) {
+                    if (self.textrunParentNode()) |parent_node| {
+                        var text_run_widget = dvui.virtualParent(@src(), .{
+                            .role = .text_run,
+                            .id_extra = self.bytes_seen,
+                            // Text run needs to be parented to the containing widget.
+                            .ak_node_parent = parent_node,
+                        });
+                        defer text_run_widget.deinit();
+                        if (self.textrun_anchor == null and self.selection.start >= self.bytes_seen and self.selection.start < self.bytes_seen + rtxt.len) {
+                            self.textrun_anchor = .{
+                                .node_id = text_run_widget.data().id,
+                                .pos = self.selection.start - self.bytes_seen,
+                            };
+                        }
+                        if (self.textrun_focus == null and self.selection.end > self.bytes_seen and self.selection.end <= self.bytes_seen + rtxt.len) {
+                            self.textrun_focus = .{ .node_id = text_run_widget.data().id, .pos = self.selection.end - self.bytes_seen };
+                        }
+                        if (self.textrun_cursor == null and self.selection.cursor > self.bytes_seen and self.selection.cursor <= self.bytes_seen + rtxt.len) {
+                            self.textrun_cursor = .{ .node_id = text_run_widget.data().id, .pos = self.selection.cursor - self.bytes_seen };
+                        }
+                        break :info .{
+                            .node_id = text_run_widget.data().id,
+                            .node_parent_id = self.textrun_parent orelse self.data().id,
+                            .char_offset = self.bytes_seen,
+                        };
+                    }
+                }
+                break :info null;
+            };
 
             dvui.renderText(.{
                 .font = options.fontGet(),
@@ -1445,6 +1511,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 .sel_color = (dvui.themeGet().text_select orelse dvui.themeGet().color(.highlight, .fill)).opacity(0.75),
                 .kerning = self.kerning,
                 .kern_in = &kern_buf,
+                .ak_opts = textrun_info,
             }) catch |err| {
                 dvui.logError(@src(), err, "Failed to render text: {s}", .{rtxt});
             };
@@ -1556,23 +1623,31 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         self.touch_editing = false;
     }
 
-    // TODO: This only shows the currently visible text. What behavior do we actually want here?
+    // TODO: Try and simplify this.
+    // If we don't have the text_run role, then append this string's value to the
+    // current ak_node's value.
+    // If it is a text run and the node doesn't have a value (e.g. addText was called with no renderable text)
+    // Set the text_run's value to empty string.
     if (self.data().accesskit_node()) |ak_node| {
-        const ak_value = dvui.AccessKit.nodeValue(ak_node);
-        if (ak_value != 0) {
-            defer dvui.AccessKit.stringFree(ak_value);
-            const current_value = std.mem.span(ak_value);
-            allocate_new: {
-                var new_value = cw.arena().allocWithOptions(u8, current_value.len + txt.len, null, 0) catch break :allocate_new;
-                @memcpy(new_value[0..current_value.len], current_value);
-                @memcpy(new_value[current_value.len .. current_value.len + txt.len], txt);
-
-                dvui.AccessKit.nodeSetValue(ak_node, new_value);
+        if (self.data().options.role != .text_run) {
+            const ak_value = dvui.AccessKit.nodeValue(ak_node);
+            if (ak_value != 0) {
+                defer dvui.AccessKit.stringFree(ak_value);
+                const current_value = std.mem.span(ak_value);
+                allocate_new: {
+                    const new_value = std.mem.concatWithSentinel(cw.arena(), u8, &.{ current_value, text_in }, 0) catch break :allocate_new;
+                    dvui.AccessKit.nodeSetValue(ak_node, new_value);
+                }
+            } else {
+                const str = cw.arena().dupeZ(u8, text_in) catch "";
+                defer cw.arena().free(str);
+                dvui.AccessKit.nodeSetValue(ak_node, str);
             }
         } else {
-            const str = cw.arena().dupeZ(u8, txt) catch "";
-            defer cw.arena().free(str);
-            dvui.AccessKit.nodeSetValue(ak_node, str);
+            // TODO: What should really happen here with this?
+            if (dvui.AccessKit.nodeValue(ak_node) == 0) {
+                dvui.AccessKit.nodeSetValue(ak_node, "");
+            }
         }
     }
 
@@ -1749,6 +1824,34 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
             dvui.refresh(null, @src(), self.data().id);
         }
     }
+
+    if (dvui.accesskit_enabled) {
+        if (self.textrunParentNode()) |parent_node| {
+            if (self.textrun_anchor == null or self.textrun_focus == null) {
+                if (self.textrun_cursor) |cursor| {
+                    AccessKit.nodeSetTextSelection(parent_node, .{
+                        .anchor = .{ .node = cursor.node_id.asU64(), .character_index = cursor.pos },
+                        .focus = .{ .node = cursor.node_id.asU64(), .character_index = cursor.pos },
+                    });
+                    std.debug.print("Setting selection to: {}\n", .{AccessKit.nodeTextSelection(parent_node)});
+                }
+            } else {
+                // Both optionals are non-null here.
+                AccessKit.nodeSetTextSelection(parent_node, .{
+                    .anchor = .{ .node = self.textrun_anchor.?.node_id.asU64(), .character_index = self.textrun_anchor.?.pos },
+                    .focus = .{ .node = self.textrun_focus.?.node_id.asU64(), .character_index = self.textrun_focus.?.pos },
+                });
+                std.debug.print("Setting selection to: {}\n", .{AccessKit.nodeTextSelection(parent_node)});
+            }
+        }
+    }
+}
+
+fn textrunParentNode(self: *TextLayoutWidget) ?*AccessKit.Node {
+    if (self.textrun_parent) |parent_id| {
+        return dvui.currentWindow().accesskit.nodes.get(parent_id) orelse self.data().accesskit_node();
+    }
+    return self.data().accesskit_node();
 }
 
 pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
@@ -2096,6 +2199,17 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                 e.handle(@src(), self.data());
                 self.selection.selectAll();
                 break :blk;
+            }
+        },
+        .text => |te| {
+            switch (te.action) {
+                .select => |sel| {
+                    self.selection.start = sel.start;
+                    self.selection.end = sel.end;
+                    self.selection.cursor = sel.end;
+                    self.selection.order();
+                },
+                else => {},
             }
         },
         else => {},

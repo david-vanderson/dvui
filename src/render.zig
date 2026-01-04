@@ -120,6 +120,7 @@ pub const TextOptions = struct {
     debug: bool = false,
     kerning: ?bool = null,
     kern_in: ?[]u32 = null,
+    ak_opts: ?AccessKit.TextRunOptions = null,
 };
 
 /// Only renders a single line of text
@@ -129,11 +130,21 @@ pub const TextOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn renderText(opts: TextOptions) Backend.GenericError!void {
-    if (opts.rs.s == 0) return;
-    if (opts.text.len == 0) return;
-    if (dvui.clipGet().intersect(opts.rs.r).empty()) return;
-
     var cw = dvui.currentWindow();
+
+    // Record character heights and positions for AccessKit text_run role.
+    var text_info: std.MultiArrayList(AccessKit.CharPositionInfo) = .empty;
+
+    if (opts.rs.s == 0 or
+        opts.text.len == 0 or
+        dvui.clipGet().intersect(opts.rs.r).empty())
+    {
+        // If text isn't rendered, create an empty text run.
+        if (dvui.accesskit_enabled) if (opts.ak_opts) |ak_opts|
+            cw.accesskit.textRunPopulate(ak_opts, &text_info, "", opts.rs.r);
+        return;
+    }
+
     const utf8_text = try dvui.toUtf8(cw.lifo(), opts.text);
     defer if (opts.text.ptr != utf8_text.ptr) cw.lifo().free(utf8_text);
 
@@ -270,6 +281,16 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
                 sel_end_x = nextx;
             }
         }
+        if (dvui.accesskit_enabled) {
+            if (opts.ak_opts) |_| {
+                text_info.append(cw.arena(), .{
+                    .l = cplen,
+                    .w = gi.w,
+                    .x = x - start.x,
+                    .c = codepoint,
+                }) catch {}; // TODO Log error
+            }
+        }
 
         // don't output triangles for a zero-width glyph (space seems to be the only one)
         if (gi.w > 0) {
@@ -337,6 +358,10 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     tri.rotate(.{ .x = start.x, .y = start.y }, opts.rotation);
 
     try renderTriangles(tri, texture_atlas);
+
+    if (dvui.accesskit_enabled and opts.ak_opts != null) {
+        cw.accesskit.textRunPopulate(opts.ak_opts.?, &text_info, opts.text, opts.rs.r);
+    }
 }
 
 pub const TextureOptions = struct {
@@ -686,7 +711,7 @@ const Path = dvui.Path;
 const Texture = dvui.Texture;
 const Vertex = dvui.Vertex;
 const ImageSource = dvui.ImageSource;
-
+const AccessKit = dvui.AccessKit;
 const StbImageError = dvui.StbImageError;
 const IconRenderOptions = dvui.IconRenderOptions;
 

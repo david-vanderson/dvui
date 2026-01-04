@@ -12,6 +12,7 @@ const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
 const TextLayoutWidget = dvui.TextLayoutWidget;
+const AccessKit = dvui.AccessKit;
 
 const TextEntryWidget = @This();
 
@@ -305,7 +306,12 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         .cache_layout = self.init_opts.cache_layout,
         .focused = self.data().id == dvui.focusedWidgetId(),
         .show_touch_draggables = (self.len > 0),
-    }, self.data().options.strip().override(.{ .role = .none, .expand = .both, .padding = self.padding }));
+        .ak_text_parent = if (self.data().accesskit_node()) |_| self.data().id else null,
+    }, self.data().options.strip().override(.{
+        .role = .none,
+        .expand = .both,
+        .padding = self.padding,
+    }));
 
     // if textLayout forced cache_layout to false, we need to honor that
     self.init_opts.cache_layout = self.textLayout.cache_layout;
@@ -370,14 +376,18 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     // textLayout clips to its content, but we need to get events out to our border
     dvui.clipSet(borderClip);
     if (self.data().accesskit_node()) |ak_node| {
-        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
-        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_value);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_text_selection);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.replace_selected_text);
+
+        // TODO: Disable text runs for password input
         if (self.data().options.role != .password_input) {
-            const str = dvui.currentWindow().arena().dupeZ(u8, self.text) catch "";
+            const str = dvui.currentWindow().arena().dupeZ(u8, self.text[0..self.len]) catch "";
             defer dvui.currentWindow().arena().free(str);
             // TODO: We don't want to always push large amounts of text each frame. So we either need to look at pushing
-            // only chunks of text, ot only pushing when the text has actually changed since last frame.
-            dvui.AccessKit.nodeSetValue(ak_node, str);
+            // only chunks of text, or only pushing when the text has actually changed since last frame.
+            AccessKit.nodeSetValue(ak_node, str);
         }
     }
 }
@@ -393,6 +403,7 @@ pub fn matchEvent(self: *TextEntryWidget, e: *Event) bool {
 
 pub fn processEvents(self: *TextEntryWidget) void {
     const evts = dvui.events();
+    //std.debug.print("EVTS = {any}\n", .{evts});
     for (evts) |*e| {
         if (!self.matchEvent(e))
             continue;
@@ -1190,24 +1201,26 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
             }
         },
         .text => |te| {
-            e.handle(@src(), self.data());
-            var new = std.mem.sliceTo(te.txt, 0);
-            if (te.replace) {
-                self.textLayout.selection.selectAll();
-            }
-            if (self.init_opts.multiline) {
-                self.textTyped(new, te.selected);
-            } else {
-                var i: usize = 0;
-                while (i < new.len) {
-                    if (std.mem.indexOfScalar(u8, new[i..], '\n')) |idx| {
-                        self.textTyped(new[i..][0..idx], te.selected);
-                        i += idx + 1;
+            switch (te.action) {
+                .set => |set| {
+                    e.handle(@src(), self.data());
+                    var new = std.mem.sliceTo(set.txt, 0);
+                    if (self.init_opts.multiline) {
+                        self.textTyped(new, set.selected);
                     } else {
-                        self.textTyped(new[i..], te.selected);
-                        break;
+                        var i: usize = 0;
+                        while (i < new.len) {
+                            if (std.mem.indexOfScalar(u8, new[i..], '\n')) |idx| {
+                                self.textTyped(new[i..][0..idx], set.selected);
+                                i += idx + 1;
+                            } else {
+                                self.textTyped(new[i..], set.selected);
+                                break;
+                            }
+                        }
                     }
-                }
+                },
+                else => {},
             }
         },
         .mouse => |me| {

@@ -23,6 +23,9 @@ nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node) = .empty,
 // Note: Any access to `action_requests` must be protected by `mutex`.
 action_requests: std.ArrayList(ActionRequest) = .empty,
 
+text_runs: std.ArrayList(TextRunOptions) = .empty,
+text_selection: ?struct { node_id: dvui.Id, sel_start: usize, sel_end: usize, cursor: usize } = null,
+
 // The last seen node with `role = .label`
 prev_label_id: dvui.Id = .zero,
 
@@ -175,7 +178,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     }
 
     if (debug_node_tree)
-        std.debug.print("Creating Node for {x} with role {?t} at {s}:{d}\n", .{ wd.id, wd.options.role, wd.src.file, wd.src.line });
+        std.debug.print("Creating Node for {x}:{d} with role {?t} at {s}:{d}\n", .{ wd.id, wd.id, wd.options.role, wd.src.file, wd.src.line });
 
     const ak_node = nodeNew(role.asU8()) orelse return null;
     wd.ak_node = ak_node;
@@ -183,7 +186,12 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     nodeSetBounds(ak_node, .{ .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
 
     if (!wd.isRoot()) {
-        const parent_node: *Node = nodeParent(wd);
+        if (wd.options.ak_node_parent) |np| {
+            if (debug_node_tree)
+                std.debug.print("Setting node parent from options {x}:{d}\n", .{ self.nodeIdFromNode(np).?.asU64(), self.nodeIdFromNode(np).?.asU64() });
+        }
+        const parent_node: *Node = wd.options.ak_node_parent orelse nodeParent(wd);
+
         nodePushChild(parent_node, wd.id.asU64());
         if (wd.id == dvui.focusedWidgetId() orelse dvui.focusedSubwindowId()) {
             self.focused_id = wd.id.asU64();
@@ -237,6 +245,12 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
         self.prev_label_id = wd.id;
     }
 
+    // TODO: Safety in case text run info fails to populate.
+    // TODO: Should we set value for other controls as well to be safe?
+    //if (role == .text_run) {
+    //    nodeSetValue(ak_node, "");
+    //}
+
     std.debug.assert(!self.nodes.contains(wd.id));
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
     self.nodes.put(window.gpa, wd.id, ak_node) catch |err| {
@@ -262,10 +276,65 @@ pub fn nodeParent(wd_in: *dvui.WidgetData) *Node {
     unreachable;
 }
 
+/// Convert a node pointer into a node id.
+///
+/// Note: Assumes mutex is held and performs a linear search of nodes.
+pub fn nodeIdFromNode(self: *AccessKit, node: *Node) ?dvui.Id {
+    var itr = self.nodes.iterator();
+    while (itr.next()) |entry| {
+        if (entry.value_ptr.* == node) return entry.key_ptr.*;
+    }
+    return null;
+}
+
+/// Character positions and lengths of rendered text.
+pub const CharPositionInfo = struct {
+    l: u8, // length (height)
+    w: f32, // width
+    x: f32, // x pos
+    c: u21, // utf8 character
+};
+
+pub const TextRunOptions = struct {
+    /// id of the text run's widget
+    node_id: dvui.Id,
+    /// id of the controlling widget (e.g. text entry or text layout)
+    node_parent_id: dvui.Id,
+    /// starting character offset
+    char_offset: usize,
+};
+
+/// Populate the text_run node with character heights, positions,
+pub fn textRunPopulate(self: *AccessKit, opts: TextRunOptions, text_info: *std.MultiArrayList(CharPositionInfo), text: []const u8, r: dvui.Rect.Physical) void {
+    const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
+    var word_lengths: std.ArrayList(u8) = .empty;
+    var len: u8 = 0;
+    for (text_info.items(.c), 0..) |ch, j| {
+        len +|= 1;
+        if (std.mem.indexOfScalar(u21, &dvui.TextLayoutWidget.word_breaks_codepoints, ch) != null or j == text_info.len -| 1) {
+            word_lengths.append(window.arena(), len) catch {};
+            len = 0;
+        }
+    }
+    const str = window.arena().dupeZ(u8, text) catch "";
+    defer window.arena().free(str);
+
+    const ak_node = self.nodes.get(opts.node_id) orelse @panic("TODO: Missing node");
+    AccessKit.nodeSetBounds(ak_node, .{ .x0 = r.x, .y0 = r.y, .x1 = r.x + r.w, .y1 = r.y + r.h });
+    AccessKit.nodeSetValue(ak_node, str);
+    AccessKit.nodeSetCharacterLengths(ak_node, text_info.len, text_info.items(.l).ptr);
+    AccessKit.nodeSetCharacterWidths(ak_node, text_info.len, text_info.items(.w).ptr);
+    AccessKit.nodeSetCharacterPositions(ak_node, text_info.len, text_info.items(.x).ptr);
+    AccessKit.nodeSetWordLengths(ak_node, word_lengths.items.len, word_lengths.items.ptr);
+    AccessKit.nodeSetTextDirection(ak_node, AccessKit.TextDirection.left_to_right);
+    self.text_runs.append(window.gpa, opts) catch {}; // If text run can't be added, selection actions will fail this frame.
+}
+
 /// Convert any actions during the frame into events to be processed next frame
 /// Note: Assumes `mutex` is already held.
 fn processActions(self: *AccessKit) void {
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
+
     for (self.action_requests.items) |request| {
         switch (request.action) {
             Action.click => {
@@ -315,17 +384,65 @@ fn processActions(self: *AccessKit) void {
                             },
                         }
                     };
-
-                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target), .replace = true }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventTextSelect(.{ .start = 0, .end = std.math.maxInt(usize), .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
                 }
             },
-            else => {},
+            Action.set_text_selection => {
+                if (!request.data.has_value or request.data.value.tag != ActionData.set_text_selection) {
+                    log.debug("Action set_text_selection has invalid data. Expect true, {}; Received has_value = {}, tag = {}\n", .{
+                        ActionData.set_text_selection,
+                        request.data.has_value,
+                        request.data.value.tag,
+                    });
+                    return;
+                }
+                // Anchor is the 'start' or non-moving part of the selection. Focus is the 'end' or moving part.
+                const anchor: TextPosition = request.data.value.unnamed_0.unnamed_7.set_text_selection.anchor;
+                const focus: TextPosition = request.data.value.unnamed_0.unnamed_7.set_text_selection.focus;
+                var anchor_run: ?TextRunOptions = null;
+                var focus_run: ?TextRunOptions = null;
+                for (self.text_runs.items) |run| {
+                    if (run.node_id.asU64() == anchor.node) {
+                        anchor_run = run;
+                    }
+                    if (run.node_id.asU64() == focus.node) {
+                        focus_run = run;
+                    }
+                    if (anchor_run != null and focus_run != null) break;
+                }
+                if (anchor_run) |a| if (focus_run) |f| {
+                    _ = window.addEventTextSelect(.{
+                        .start = a.char_offset + anchor.character_index,
+                        .end = f.char_offset + focus.character_index,
+                    }) catch |err| {
+                        switch (err) {
+                            error.OutOfMemory => {},
+                        }
+                    };
+                };
+                if (anchor_run == null or focus_run == null) {
+                    log.debug("Action set_text_selection received for unknown text_run id {x}.", .{anchor.node});
+                }
+            },
+            Action.replace_selected_text => {
+                std.debug.print("REPLACE_SELECTED_TEXT\n", .{});
+            },
+            Action.scroll_into_view => {
+                if (request.data.has_value) std.debug.assert(request.data.value.tag == ActionData.scroll_hint);
+                std.debug.print("SCROLL_INTO_VIEW with tag and value {d}:{d}\n", .{ request.data.value.tag, request.data.value.unnamed_0.unnamed_4.scroll_hint });
+            },
+            else => |action| {
+                // TODO:
+                log.debug("Recieved unknown action {d}\n", .{action});
+            },
         }
     }
     if (self.action_requests.items.len > 0) {
-        self.action_requests.clearAndFree(window.gpa);
+        self.action_requests.clearRetainingCapacity();
         dvui.refresh(window, @src(), null);
     }
+    self.text_runs.clearAndFree(window.gpa);
 }
 
 fn logEventAddError(src: std.builtin.SourceLocation, err: anyerror) void {
@@ -348,6 +465,20 @@ pub fn pushUpdates(self: *AccessKit) void {
     // Take any actions from this frame and create events for them.
     // Created events will not be processed until the start of the next frame.
     self.processActions();
+
+    {
+        if (debug_node_tree) {
+            // Almost all nodes should have a value.
+            var itr = self.nodes.iterator();
+            while (itr.next()) |entry| {
+                const role = nodeRole(entry.value_ptr.*);
+                const value = nodeValue(entry.value_ptr.*);
+                if (value == 0) {
+                    std.debug.print("Node {x} with role {t} has null value\n", .{ entry.key_ptr.*, @as(AccessKit.Role, @enumFromInt(role)) });
+                }
+            }
+        }
+    }
 
     if (builtin.os.tag == .windows) {
         if (dvui.backend.kind == .dx11) {
@@ -387,6 +518,8 @@ pub fn deinit(self: *AccessKit) void {
 
     self.action_requests.clearAndFree(window.gpa);
     self.nodes.clearAndFree(window.gpa);
+    self.text_runs.clearAndFree(window.gpa);
+
     if (builtin.os.tag == .windows)
         if (dvui.backend.kind == .dx11) {
             c.accesskit_windows_adapter_free(self.adapter.?);
