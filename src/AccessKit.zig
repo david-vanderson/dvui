@@ -245,6 +245,12 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
         self.prev_label_id = wd.id;
     }
 
+    // TODO: Safety in case text run info fails to populate.
+    // TODO: Should we set value for other controls as well to be safe?
+    //if (role == .text_run) {
+    //    nodeSetValue(ak_node, "");
+    //}
+
     std.debug.assert(!self.nodes.contains(wd.id));
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
     self.nodes.put(window.gpa, wd.id, ak_node) catch |err| {
@@ -270,9 +276,9 @@ pub fn nodeParent(wd_in: *dvui.WidgetData) *Node {
     unreachable;
 }
 
+/// Convert a node pointer into a node id.
 ///
-///
-/// Note: Assumes mutex is held.
+/// Note: Assumes mutex is held and performs a linear search of nodes.
 pub fn nodeIdFromNode(self: *AccessKit, node: *Node) ?dvui.Id {
     var itr = self.nodes.iterator();
     while (itr.next()) |entry| {
@@ -290,8 +296,11 @@ pub const CharPositionInfo = struct {
 };
 
 pub const TextRunOptions = struct {
+    /// id of the text run's widget
     node_id: dvui.Id,
+    /// id of the controlling widget (e.g. text entry or text layout)
     node_parent_id: dvui.Id,
+    /// starting character offset
     char_offset: usize,
 };
 
@@ -380,9 +389,15 @@ fn processActions(self: *AccessKit) void {
                 }
             },
             Action.set_text_selection => {
-                std.debug.assert(request.data.has_value);
-                std.debug.assert(request.data.value.tag == ActionData.set_text_selection);
-
+                if (!request.data.has_value or request.data.value.tag != ActionData.set_text_selection) {
+                    log.debug("Action set_text_selection has invalid data. Expect true, {}; Received has_value = {}, tag = {}\n", .{
+                        ActionData.set_text_selection,
+                        request.data.has_value,
+                        request.data.value.tag,
+                    });
+                    return;
+                }
+                // Anchor is the 'start' or non-moving part of the selection. Focus is the 'end' or moving part.
                 const anchor: TextPosition = request.data.value.unnamed_0.unnamed_7.set_text_selection.anchor;
                 const focus: TextPosition = request.data.value.unnamed_0.unnamed_7.set_text_selection.focus;
                 var anchor_run: ?TextRunOptions = null;
@@ -397,13 +412,19 @@ fn processActions(self: *AccessKit) void {
                     if (anchor_run != null and focus_run != null) break;
                 }
                 if (anchor_run) |a| if (focus_run) |f| {
-                    self.text_selection = .{
-                        .node_id = a.node_parent_id,
-                        .sel_start = a.char_offset + anchor.character_index,
-                        .sel_end = f.char_offset + focus.character_index,
-                        .cursor = f.char_offset + focus.character_index,
+                    _ = window.addEventText(.{
+                        .text = "",
+                        .replace = false,
+                        .target_id = a.node_parent_id,
+                        .selection = .{
+                            .start = a.char_offset + anchor.character_index,
+                            .end = f.char_offset + focus.character_index,
+                        },
+                    }) catch |err| {
+                        switch (err) {
+                            error.OutOfMemory => {},
+                        }
                     };
-                    std.debug.print("SET_TEXT_SELECTION: {},{}: {?}\n", .{ a, f, self.text_selection });
                 };
                 if (anchor_run == null or focus_run == null) {
                     log.debug("Action set_text_selection received for unknown text_run id {x}.", .{anchor.node});
@@ -449,6 +470,20 @@ pub fn pushUpdates(self: *AccessKit) void {
     // Take any actions from this frame and create events for them.
     // Created events will not be processed until the start of the next frame.
     self.processActions();
+
+    {
+        if (debug_node_tree) {
+            // Almost all nodes should have a value.
+            var itr = self.nodes.iterator();
+            while (itr.next()) |entry| {
+                const role = nodeRole(entry.value_ptr.*);
+                const value = nodeValue(entry.value_ptr.*);
+                if (value == 0) {
+                    std.debug.print("Node {x} with role {t} has null value\n", .{ entry.key_ptr.*, @as(AccessKit.Role, @enumFromInt(role)) });
+                }
+            }
+        }
+    }
 
     if (builtin.os.tag == .windows) {
         if (dvui.backend.kind == .dx11) {

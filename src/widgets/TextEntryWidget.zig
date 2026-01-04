@@ -285,7 +285,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
             const str = dvui.currentWindow().arena().dupeZ(u8, self.text[0..self.len]) catch "";
             defer dvui.currentWindow().arena().free(str);
             // TODO: We don't want to always push large amounts of text each frame. So we either need to look at pushing
-            // only chunks of text, ot only pushing when the text has actually changed since last frame.
+            // only chunks of text, or only pushing when the text has actually changed since last frame.
             AccessKit.nodeSetValue(ak_node, str);
         }
     }
@@ -302,6 +302,7 @@ pub fn matchEvent(self: *TextEntryWidget, e: *Event) bool {
 
 pub fn processEvents(self: *TextEntryWidget) void {
     const evts = dvui.events();
+    //std.debug.print("EVTS = {any}\n", .{evts});
     for (evts) |*e| {
         if (!self.matchEvent(e))
             continue;
@@ -310,16 +311,16 @@ pub fn processEvents(self: *TextEntryWidget) void {
     }
     // Accesskit selection handling.
     // TODO: Turn this into a proper event?
-    if (dvui.currentWindow().accesskit.text_selection) |selection| {
-        std.debug.print("Checking {x} vs {x}\n", .{ self.data().id, selection.node_id });
-        if (self.data().id == selection.node_id) {
-            self.textLayout.selection.start = selection.sel_start;
-            self.textLayout.selection.end = selection.sel_end;
-            self.textLayout.selection.cursor = selection.cursor;
-            std.debug.print("+++Settings selection for {x} to {d}, {d}, {d}\n", .{ selection.node_id, selection.sel_start, selection.sel_end, selection.cursor });
-            dvui.currentWindow().accesskit.text_selection = null;
-        }
-    }
+    //if (dvui.currentWindow().accesskit.text_selection) |selection| {
+    //    std.debug.print("Checking {x} vs {x}\n", .{ self.data().id, selection.node_id });
+    //    if (self.data().id == selection.node_id) {
+    //        self.textLayout.selection.start = selection.sel_start;
+    //        self.textLayout.selection.end = selection.sel_end;
+    //        self.textLayout.selection.cursor = selection.cursor;
+    //        std.debug.print("+++Settings selection for {x} to {d}, {d}, {d}\n", .{ selection.node_id, selection.sel_start, selection.sel_end, selection.cursor });
+    //        dvui.currentWindow().accesskit.text_selection = null;
+    //    }
+    //}
 }
 
 pub fn draw(self: *TextEntryWidget) void {
@@ -993,25 +994,35 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
             }
         },
         .text => |te| {
+            std.debug.print("TEXT START\n", .{});
             e.handle(@src(), self.data());
             var new = std.mem.sliceTo(te.txt, 0);
             if (te.replace) {
                 self.textLayout.selection.selectAll();
             }
-            if (self.init_opts.multiline) {
-                self.textTyped(new, te.selected);
+            // TODO: !!!
+            if (!te.selectedAll() and !te.selectedNone()) {
+                self.textLayout.selection.start = te.selection.start;
+                self.textLayout.selection.end = te.selection.end;
+                self.textLayout.selection.cursor = te.selection.end;
+            }
+            if (self.init_opts.multiline and new.len > 0) {
+                self.textTyped(new, te.selectedAll());
             } else {
                 var i: usize = 0;
                 while (i < new.len) {
                     if (std.mem.indexOfScalar(u8, new[i..], '\n')) |idx| {
-                        self.textTyped(new[i..][0..idx], te.selected);
+                        self.textTyped(new[i..][0..idx], te.selectedAll());
                         i += idx + 1;
                     } else {
-                        self.textTyped(new[i..], te.selected);
+                        self.textTyped(new[i..], te.selectedAll());
                         break;
                     }
                 }
             }
+            std.debug.print("Got text event with selection {}\n", .{te.selection});
+
+            std.debug.print("TEXT END\n", .{});
         },
         .mouse => |me| {
             if (me.action == .focus) {

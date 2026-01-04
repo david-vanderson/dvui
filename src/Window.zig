@@ -542,7 +542,7 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
 
 pub const AddEventTextOptions = struct {
     text: []const u8,
-    selected: bool = false,
+    selection: Event.Text.Selection = .none,
     replace: bool = false,
     target_id: ?dvui.Id = null,
 };
@@ -563,7 +563,7 @@ pub fn addEventText(self: *Self, opts: AddEventTextOptions) std.mem.Allocator.Er
         .evt = .{
             .text = .{
                 .txt = try self.arena().dupe(u8, opts.text),
-                .selected = opts.selected,
+                .selection = opts.selection,
                 .replace = opts.replace,
             },
         },

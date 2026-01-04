@@ -127,17 +127,25 @@ pub const TextOptions = struct {
 ///
 /// Selection will be colored with the current themes accent color,
 /// with the text color being set to the themes fill color.
+/// Returns: true if any text was rendered.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn renderText(opts: TextOptions) Backend.GenericError!void {
-    if (opts.rs.s == 0) return;
-    if (opts.text.len == 0) return;
-    if (dvui.clipGet().intersect(opts.rs.r).empty()) return;
+    var cw = dvui.currentWindow();
 
     // Record character heights and positions for AccessKit text_run role.
     var text_info: std.MultiArrayList(AccessKit.CharPositionInfo) = .empty;
 
-    var cw = dvui.currentWindow();
+    if (opts.rs.s == 0 or
+        opts.text.len == 0 or
+        dvui.clipGet().intersect(opts.rs.r).empty())
+    {
+        // If text isn't rendered, create an empty text run.
+        if (dvui.accesskit_enabled) if (opts.ak_opts) |ak_opts|
+            cw.accesskit.textRunPopulate(ak_opts, &text_info, "", opts.rs.r);
+        return;
+    }
+
     const utf8_text = try dvui.toUtf8(cw.lifo(), opts.text);
     defer if (opts.text.ptr != utf8_text.ptr) cw.lifo().free(utf8_text);
 

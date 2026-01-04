@@ -1467,7 +1467,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             }
             defer if (txt.ptr != rtxt.ptr) cw.lifo().free(rtxt);
             const textrun_info: ?AccessKit.TextRunOptions = info: {
-                if (dvui.accesskit_enabled and rtxt.len > 0) {
+                if (dvui.accesskit_enabled) {
                     if (self.textrunParentNode()) |parent_node| {
                         var text_run_widget = dvui.virtualParent(@src(), .{
                             .role = .text_run,
@@ -1482,14 +1482,12 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                                 .pos = self.selection.start - self.bytes_seen,
                             };
                         }
-                        if (self.textrun_focus == null and self.selection.end >= self.bytes_seen and self.selection.end < self.bytes_seen + rtxt.len) {
+                        if (self.textrun_focus == null and self.selection.end > self.bytes_seen and self.selection.end <= self.bytes_seen + rtxt.len) {
                             self.textrun_focus = .{ .node_id = text_run_widget.data().id, .pos = self.selection.end - self.bytes_seen };
                         }
-                        if (self.textrun_cursor == null and self.selection.cursor >= self.bytes_seen and self.selection.cursor < self.bytes_seen + rtxt.len) {
+                        if (self.textrun_cursor == null and self.selection.cursor > self.bytes_seen and self.selection.cursor <= self.bytes_seen + rtxt.len) {
                             self.textrun_cursor = .{ .node_id = text_run_widget.data().id, .pos = self.selection.cursor - self.bytes_seen };
                         }
-                        // Text run needs to be parented to the containing widget.
-                        //dvui.currentWindow().accesskit.nodeReparent(text_run_widget.data(), parent_node);
                         break :info .{
                             .node_id = text_run_widget.data().id,
                             .node_parent_id = self.textrun_parent orelse self.data().id,
@@ -1645,6 +1643,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 dvui.AccessKit.nodeSetValue(ak_node, str);
             }
         } else {
+            // TODO: What should really happen here with this?
             if (dvui.AccessKit.nodeValue(ak_node) == 0) {
                 dvui.AccessKit.nodeSetValue(ak_node, "");
             }
@@ -1823,7 +1822,9 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
     if (dvui.accesskit_enabled) {
         if (self.textrunParentNode()) |parent_node| {
+            std.debug.print("has parent node\n", .{});
             if (self.textrun_anchor == null or self.textrun_focus == null) {
+                std.debug.print("both null\n", .{});
                 if (self.textrun_cursor) |cursor| {
                     AccessKit.nodeSetTextSelection(parent_node, .{
                         .anchor = .{ .node = cursor.node_id.asU64(), .character_index = cursor.pos },
