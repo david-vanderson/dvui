@@ -76,6 +76,11 @@ pub const demoKind = enum {
 pub var demo_active: demoKind = .basic_widgets;
 pub const demo_window_tag = "dvui_example_window";
 
+pub fn floatRetainClear(ptr: *anyopaque) void {
+    const id: dvui.Id = @as(*dvui.Id, @ptrCast(@alignCast(ptr))).*;
+    dvui.retainClear(id);
+}
+
 pub fn demo() void {
     if (!show_demo_window) {
         return;
@@ -85,6 +90,11 @@ pub fn demo() void {
 
     var float = dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .width(width), .tag = demo_window_tag });
     defer float.deinit();
+
+    _ = dvui.dataGet(null, float.data().id, "retain", dvui.Id) orelse {
+        dvui.dataSet(null, float.data().id, "retain", float.data().id);
+        dvui.dataSetDeinitFunction(null, float.data().id, "retain", &floatRetainClear);
+    };
 
     // pad the fps label so that it doesn't trigger refresh when the number
     // changes widths
@@ -152,7 +162,7 @@ pub fn demo() void {
             const use_cache = true;
             var cache: *dvui.CacheWidget = undefined;
             if (use_cache) {
-                cache = dvui.cache(@src(), .{ .invalidate = invalidate }, .{ .expand = .both });
+                cache = dvui.cache(@src(), .{ .invalidate = invalidate, .retain = float.data().id }, .{ .expand = .both });
             }
             if (!use_cache or cache.uncached()) {
                 const box = dvui.box(@src(), .{}, .{ .expand = .both });

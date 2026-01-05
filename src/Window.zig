@@ -70,13 +70,13 @@ theme: Theme,
 button_order: dvui.enums.DialogButtonOrder = .cancel_ok,
 
 /// Uses `gpa` allocator
-min_sizes: dvui.TrackingAutoHashMap(Id, Size, .put_only) = .empty,
+min_sizes: dvui.TrackingAutoHashMap(Id, Size, .put_only, void) = .empty,
 /// Uses `gpa` allocator
-tags: dvui.TrackingAutoHashMap([]const u8, dvui.TagData, .put_only) = .empty,
+tags: dvui.TrackingAutoHashMap([]const u8, dvui.TagData, .put_only, void) = .empty,
 /// Uses `gpa` allocator
 data_store: dvui.Data = .{},
 /// Uses `gpa` allocator
-animations: dvui.TrackingAutoHashMap(Id, Animation, .get_and_put) = .empty,
+animations: dvui.TrackingAutoHashMap(Id, Animation, .get_and_put, void) = .empty,
 /// Uses `gpa` allocator
 tab_index_prev: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
@@ -350,6 +350,11 @@ pub fn themeSet(self: *Self, theme: Theme) void {
 }
 
 pub fn deinit(self: *Self) void {
+    // Make ourselves the current window to support data deinit functions.
+    const prev_window = dvui.current_window;
+    dvui.current_window = self;
+    defer dvui.current_window = prev_window;
+
     if (dvui.accesskit_enabled) self.accesskit.deinit();
 
     self.data_store.deinit(self.gpa);

@@ -6,7 +6,7 @@ pub const Data = @This();
 
 pub const Key = dvui.Id;
 
-pub const Storage = dvui.TrackingAutoHashMap(Key, SavedData, .get_and_put);
+pub const Storage = dvui.TrackingAutoHashMap(Key, SavedData, .get_and_put, dvui.Id);
 pub const Trash = std.ArrayListUnmanaged(SavedData);
 
 pub const DeinitFunction = *const fn (*anyopaque) void;
@@ -41,10 +41,10 @@ const SavedData = struct {
     } else void;
 
     pub fn free(self: *const SavedData, gpa: std.mem.Allocator) void {
+        if (self.deinit) |func| {
+            func(self.data.ptr);
+        }
         if (self.data.len != 0) {
-            if (self.deinit) |func| {
-                func(self.data.ptr);
-            }
             gpa.rawFree(
                 self.data,
                 std.mem.Alignment.fromByteUnits(self.alignment),
@@ -204,6 +204,20 @@ pub fn setDeinitFunction(self: *Data, key: Key, func: DeinitFunction) void {
     }
 }
 
+pub fn retain(self: *Data, gpa: std.mem.Allocator, key: Key, retain_key: ?dvui.Id) std.mem.Allocator.Error!void {
+    self.mutex.lock();
+    defer self.mutex.unlock();
+
+    try self.storage.retain(gpa, key, retain_key);
+}
+
+pub fn retainClear(self: *Data, retain_key: dvui.Id) void {
+    self.mutex.lock();
+    defer self.mutex.unlock();
+
+    self.storage.retainClear(retain_key);
+}
+
 pub fn remove(self: *Data, gpa: std.mem.Allocator, key: Key) std.mem.Allocator.Error!void {
     self.mutex.lock();
     defer self.mutex.unlock();
@@ -214,19 +228,42 @@ pub fn remove(self: *Data, gpa: std.mem.Allocator, key: Key) std.mem.Allocator.E
     }
 }
 
-/// Destroys all unused and trashed textures since the last
-/// call to `reset`
+/// Destroys all unused and trashed datas since the last call to `reset`
 pub fn reset(self: *Data, gpa: std.mem.Allocator) void {
-    self.mutex.lock();
-    defer self.mutex.unlock();
-    var it = self.storage.iterator();
-    while (it.next_resetting()) |kv| {
-        kv.value.free(gpa);
+    var temp: std.ArrayList(SavedData) = .empty;
+    defer temp.deinit(gpa);
+
+    {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        var it = self.storage.iterator();
+        while (it.next_resetting()) |kv| {
+            if (kv.value.deinit) |_| {
+                temp.append(gpa, kv.value) catch |err| {
+                    dvui.logError(@src(), err, "data with key {x} failed to call deinit function", .{kv.key});
+                };
+            } else {
+                kv.value.free(gpa);
+            }
+        }
+        for (self.trash.items) |sd| {
+            if (sd.deinit) |_| {
+                temp.append(gpa, sd) catch |err| {
+                    dvui.logError(@src(), err, "trash data failed to call deinit function", .{});
+                };
+            } else {
+                sd.free(gpa);
+            }
+        }
+        self.trash.clearRetainingCapacity();
     }
-    for (self.trash.items) |sd| {
+
+    // We need to not be holding the mutex when these run their deinit
+    // functions, because those functions might call data stuff like
+    // `retainClear`
+    for (temp.items) |sd| {
         sd.free(gpa);
     }
-    self.trash.clearRetainingCapacity();
 }
 
 pub fn deinit(self: *Data, gpa: std.mem.Allocator) void {

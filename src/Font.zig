@@ -302,7 +302,7 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
 
 pub const Cache = struct {
     database: std.ArrayList(Source) = .empty,
-    cache: dvui.TrackingAutoHashMap(u64, Entry, .get_and_put) = .empty,
+    cache: dvui.TrackingAutoHashMap(u64, Entry, .get_and_put, void) = .empty,
 
     pub fn deinit(self: *Cache, gpa: std.mem.Allocator, backend: Backend) void {
         defer self.* = undefined;
