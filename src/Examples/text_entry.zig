@@ -394,7 +394,8 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
         const source =
             \\{ "name"   : "John Smith",
             \\  "array"  : [true, false, null, { "sku" : 123 }],
-            \\  // comments are not part of base json, but supported by this parser
+            \\  // comments are not part of base json
+            \\  // but supported by this parser
             \\  "price"  : 23.95,
             \\  /* block comment */
             \\  "shipTo" : { "name" : "Jane Smith",
