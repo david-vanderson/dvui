@@ -1115,6 +1115,8 @@ pub fn begin(
     self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
 
     {
+        // update animations and remove dead ones
+        // animations are checked in `end()` to affect waiting time
         const micros: i32 = if (micros_since_last > math.maxInt(i32)) math.maxInt(i32) else @as(i32, @intCast(micros_since_last));
         var it = self.animations.iterator();
         while (it.next_used()) |kv| {
@@ -1123,9 +1125,6 @@ pub fn begin(
             } else {
                 kv.value_ptr.start_time -|= micros;
                 kv.value_ptr.end_time -|= micros;
-                if (kv.value_ptr.start_time <= 0 and kv.value_ptr.end_time > 0) {
-                    self.refreshWindow(@src(), null);
-                }
             }
         }
         self.animations.reset();
