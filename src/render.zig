@@ -189,6 +189,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
     var x = start.x;
     var max_x = start.x;
+    var max_above_y: f32 = 0;
 
     if (opts.debug) {
         dvui.log.debug("renderText {f}\n", .{start});
@@ -254,6 +255,23 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
                 const nextx = x + gi.advance * target_fraction;
                 const leftx = x + gi.leftBearing * target_fraction;
+
+                const top = gi.topBearing * target_fraction;
+                if (top < max_above_y) {
+                    // Glyph extends above everything so far.
+                    //
+                    // Shift the whole line up.  textSize() includes this extra
+                    // space.
+
+                    const diff = top - max_above_y;
+                    start.y -= diff;
+                    max_above_y += diff;
+
+                    // adjust all previous vertices
+                    for (builder.vertexes.items) |*v| {
+                        v.pos.y -= diff;
+                    }
+                }
 
                 //if (sel) {
                 //    bytes_seen += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
@@ -361,6 +379,23 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
             const nextx = x + gi.advance * target_fraction;
             const leftx = x + gi.leftBearing * target_fraction;
+
+            const top = gi.topBearing * target_fraction;
+            if (top < max_above_y) {
+                // Glyph extends above everything so far.
+                //
+                // Shift the whole line up.  textSize() includes this extra
+                // space.
+
+                const diff = top - max_above_y;
+                start.y -= diff;
+                max_above_y += diff;
+
+                // adjust all previous vertices
+                for (builder.vertexes.items) |*v| {
+                    v.pos.y -= diff;
+                }
+            }
 
             if (sel) {
                 bytes_seen += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;

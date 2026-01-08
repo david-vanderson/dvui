@@ -765,6 +765,8 @@ pub const Cache = struct {
 
             dvui.c.kbts_ShapeBegin(Context, dvui.c.KBTS_DIRECTION_DONT_KNOW, dvui.c.KBTS_LANGUAGE_DONT_KNOW);
 
+            var newline: ?usize = null;
+
             // TODO: When no newline, we want to process just enough text to go over max width.
             // Ligatures can mean adding another codepoint reduces the length
             // of the shaped text.  Is there a way to check periodically?
@@ -772,15 +774,15 @@ pub const Cache = struct {
             while (i < @min(text.len, 1000)) {
                 const cplen = std.unicode.utf8ByteSequenceLength(text[i]) catch unreachable;
                 const codepoint = std.unicode.utf8Decode(text[i..][0..cplen]) catch unreachable;
-                if (codepoint == '\n') {
-                    // newlines always terminate, and don't use any space
-                    i += cplen;
-                    break;
-                }
 
                 dvui.c.kbts_ShapeCodepointWithUserId(Context, codepoint, @intCast(i));
-
                 i += cplen;
+
+                if (codepoint == '\n') {
+                    // newlines always terminate, and don't use any space
+                    newline = i;
+                    break;
+                }
             }
 
             dvui.c.kbts_ShapeEnd(Context);
@@ -803,7 +805,7 @@ pub const Cache = struct {
                     const gi = try self.glyphInfoGetOrReplacement(gpa, g.*.Id);
                     const gx = x + @as(f32, @floatFromInt(g.*.OffsetX)) * self.scaleFactor;
                     const advance = @as(f32, @floatFromInt(g.*.AdvanceX)) * self.scaleFactor;
-                    //std.debug.print("  kb {d} {d}\n", .{ g.*.Id, advance });
+                    //std.debug.print("  kb {d} {d} {d}\n", .{ g.*.Id, self.height, gi.topBearing });
 
                     minx = @min(minx, gx + gi.leftBearing);
                     maxx = @max(maxx, gx + gi.leftBearing + gi.w);
@@ -817,12 +819,6 @@ pub const Cache = struct {
                     ei = @intCast(shape_codepoint.UserId);
 
                     if (nearest_break) break :loop;
-
-                    if (g.*.Codepoint == '\n') {
-                        // newlines always terminate, and don't use any space
-                        ei += 1; // must point to next codepoint
-                        break :loop;
-                    }
 
                     if ((maxx - minx) > mwidth) {
                         switch (opts.end_metric) {
@@ -845,7 +841,7 @@ pub const Cache = struct {
                 }
             } else {
                 // ran out of glyphs
-                ei = text.len;
+                ei = newline orelse text.len;
             }
 
             // TODO: xstart and ystart
