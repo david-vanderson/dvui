@@ -188,22 +188,26 @@ pub fn frame() !dvui.App.Result {
         const bytes = dvui.Font.alignEmbedded(@embedFile("linja pona 3.6.otf"));
         try dvui.addFont("linja", bytes, null);
 
-        //const bytes2 = dvui.Font.alignEmbedded(@embedFile("Neptunian Shpre.ttf"));
-        //try dvui.addFont("neptunian", bytes2, null);
+        const bytes2 = dvui.Font.alignEmbedded(@embedFile("Neptunian Shpre.ttf"));
+        try dvui.addFont("neptunian", bytes2, null);
     }
 
     {
         const font: dvui.Font = .find(.{ .family = "linja" });
         dvui.label(@src(), "toki", .{}, .{ .font = font });
         var te = dvui.textEntry(@src(), .{ .multiline = true }, .{ .font = font, .min_size_content = font.sizeM(15, 5) });
+        const txt = te.textGet();
         te.deinit();
+        dvui.label(@src(), "{s}", .{txt}, .{});
     }
 
-    //{
-    //    const font: dvui.Font = .find(.{ .family = "neptunian" });
-    //    var te = dvui.textEntry(@src(), .{ .multiline = true }, .{ .font = font, .min_size_content = font.sizeM(15, 5) });
-    //    te.deinit();
-    //}
+    {
+        const font: dvui.Font = .find(.{ .family = "neptunian" });
+        var te = dvui.textEntry(@src(), .{ .multiline = true }, .{ .font = font, .min_size_content = font.sizeM(15, 5) });
+        const txt = te.textGet();
+        te.deinit();
+        dvui.label(@src(), "{s}", .{txt}, .{});
+    }
 
     dvui.debugFontAtlases(@src(), .{});
     //{

@@ -27989,7 +27989,7 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
         if(Length >= 68)
         {
           kbts__ByteSwapArray16Unchecked(&Os2->Version, 16);
-          kbts__ByteSwapArray32Unchecked(Os2->UnicodeRange, 4);
+          //kbts__ByteSwapArray32Unchecked(Os2->UnicodeRange, 4);
           kbts__ByteSwapArray16Unchecked(&Os2->Selection, 3);
 
           kbts_un Version = Os2->Version;
@@ -28002,7 +28002,7 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
             {
               if(Length >= 86)
               {
-                kbts__ByteSwapArray32Unchecked(Os2->CodePageRange, 2);
+                //kbts__ByteSwapArray32Unchecked(Os2->CodePageRange, 2);
 
                 if(Version >= 2)
                 {
