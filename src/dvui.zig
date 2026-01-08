@@ -286,6 +286,8 @@ pub const useFreeType = @import("default_options").freetype;
 pub const useTinyFileDialogs = @import("default_options").tiny_file_dialogs;
 pub const useTreeSitter = @import("default_options").tree_sitter;
 
+pub const useKBTS = true;
+
 /// The amount of physical pixels to scroll per "tick" of the scroll wheel
 pub var scroll_speed: f32 = 20;
 
@@ -319,6 +321,8 @@ pub const c = @cImport({
     } else {
         @cInclude("stb_truetype.h");
     }
+
+    @cInclude("kb_text_shape.h");
 
     if (!useLibc) {
         @cDefine("STBI_NO_STDIO", "1");
@@ -551,7 +555,7 @@ pub fn frameTimeNS() i128 {
 /// `Window.deinit`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?std.mem.Allocator) (std.mem.Allocator.Error || FontError)!void {
+pub fn addFont(name: []const u8, ttf_bytes: []align(4) const u8, ttf_bytes_allocator: ?std.mem.Allocator) (std.mem.Allocator.Error || FontError)!void {
     try currentWindow().addFont(name, ttf_bytes, ttf_bytes_allocator);
 }
 

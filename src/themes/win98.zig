@@ -50,23 +50,23 @@ pub const sunken = dvui.Ninepatch{
 pub const fonts: []const Font.Source = &.{
     .{
         .family = Font.array("Aleo"),
-        .bytes = @embedFile("../fonts/Aleo/static/Aleo-Regular.ttf"),
+        .bytes = Font.alignEmbedded(@embedFile("../fonts/Aleo/static/Aleo-Regular.ttf")),
     },
     .{
         .family = Font.array("Aleo"),
         .weight = .bold,
-        .bytes = @embedFile("../fonts/Aleo/static/Aleo-Bold.ttf"),
+        .bytes = Font.alignEmbedded(@embedFile("../fonts/Aleo/static/Aleo-Bold.ttf")),
     },
     .{
         .family = Font.array("Aleo"),
         .style = .italic,
-        .bytes = @embedFile("../fonts/Aleo/static/Aleo-Italic.ttf"),
+        .bytes = Font.alignEmbedded(@embedFile("../fonts/Aleo/static/Aleo-Italic.ttf")),
     },
     .{
         .family = Font.array("Aleo"),
         .weight = .bold,
         .style = .italic,
-        .bytes = @embedFile("../fonts/Aleo/static/Aleo-BoldItalic.ttf"),
+        .bytes = Font.alignEmbedded(@embedFile("../fonts/Aleo/static/Aleo-BoldItalic.ttf")),
     },
 };
 

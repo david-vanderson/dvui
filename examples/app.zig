@@ -69,115 +69,179 @@ pub fn frame() !dvui.App.Result {
     var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
     scaler.deinit();
 
-    {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal });
-        defer hbox.deinit();
+    //{
+    //    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal });
+    //    defer hbox.deinit();
 
-        var m = dvui.menu(@src(), .horizontal, .{});
-        defer m.deinit();
+    //    var m = dvui.menu(@src(), .horizontal, .{});
+    //    defer m.deinit();
 
-        if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .tag = "first-focusable" })) |r| {
-            var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
-            defer fw.deinit();
+    //    if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .tag = "first-focusable" })) |r| {
+    //        var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+    //        defer fw.deinit();
 
-            if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
-                m.close();
-            }
+    //        if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
+    //            m.close();
+    //        }
 
-            if (dvui.backend.kind != .web) {
-                if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
-                    return .close;
-                }
-            }
-        }
-    }
+    //        if (dvui.backend.kind != .web) {
+    //            if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
+    //                return .close;
+    //            }
+    //        }
+    //    }
+    //}
 
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
     defer scroll.deinit();
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
-    const lorem = "This is a dvui.App example that can compile on multiple backends.";
-    tl.addText(lorem, .{});
-    tl.addText("\n", .{});
-    tl.format("Current backend: {s}", .{@tagName(dvui.backend.kind)}, .{});
-    if (dvui.backend.kind == .web) {
-        tl.format(" : {s}", .{if (dvui.backend.wasm.wasm_about_webgl2() == 1) "webgl2" else "webgl (no mipmaps)"}, .{});
-    }
-    tl.deinit();
+    //var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
+    //const lorem = "This is a dvui.App example that can compile on multiple backends.";
+    //tl.addText(lorem, .{});
+    //tl.addText("\n", .{});
+    //tl.format("Current backend: {s}", .{@tagName(dvui.backend.kind)}, .{});
+    //if (dvui.backend.kind == .web) {
+    //    tl.format(" : {s}", .{if (dvui.backend.wasm.wasm_about_webgl2() == 1) "webgl2" else "webgl (no mipmaps)"}, .{});
+    //}
+    //tl.deinit();
 
-    var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    tl2.addText(
-        \\DVUI
-        \\- paints the entire window
-        \\- can show floating windows and dialogs
-        \\- rest of the window is a scroll area
-    , .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is capped by vsync.", .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Cursor is always being set by dvui.", .{});
-    tl2.addText("\n\n", .{});
-    if (dvui.useFreeType) {
-        tl2.addText("Fonts are being rendered by FreeType 2.", .{});
-    } else {
-        tl2.addText("Fonts are being rendered by stb_truetype.", .{});
-    }
-    tl2.deinit();
+    //var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+    //tl2.addText(
+    //    \\DVUI
+    //    \\- paints the entire window
+    //    \\- can show floating windows and dialogs
+    //    \\- rest of the window is a scroll area
+    //, .{});
+    //tl2.addText("\n\n", .{});
+    //tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
+    //tl2.addText("\n\n", .{});
+    //tl2.addText("Framerate is capped by vsync.", .{});
+    //tl2.addText("\n\n", .{});
+    //tl2.addText("Cursor is always being set by dvui.", .{});
+    //tl2.addText("\n\n", .{});
+    //if (dvui.useFreeType) {
+    //    tl2.addText("Fonts are being rendered by FreeType 2.", .{});
+    //} else {
+    //    tl2.addText("Fonts are being rendered by stb_truetype.", .{});
+    //}
+    //tl2.deinit();
 
-    const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
-    if (dvui.button(@src(), label, .{}, .{ .tag = "show-demo-btn" })) {
-        dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
-    }
+    //const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
+    //if (dvui.button(@src(), label, .{}, .{ .tag = "show-demo-btn" })) {
+    //    dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
+    //}
 
-    if (dvui.button(@src(), "Debug Window", .{}, .{})) {
-        dvui.toggleDebugWindow();
+    //if (dvui.button(@src(), "Debug Window", .{}, .{})) {
+    //    dvui.toggleDebugWindow();
+    //}
+
+    //{
+    //    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+    //    defer hbox.deinit();
+    //    dvui.label(@src(), "Pinch Zoom or Scale", .{}, .{});
+    //    if (dvui.buttonIcon(@src(), "plus", dvui.entypo.plus, .{}, .{}, .{})) {
+    //        dvui.currentWindow().content_scale *= 1.1;
+    //    }
+
+    //    if (dvui.buttonIcon(@src(), "minus", dvui.entypo.minus, .{}, .{}, .{})) {
+    //        dvui.currentWindow().content_scale /= 1.1;
+    //    }
+
+    //    if (dvui.currentWindow().content_scale != orig_content_scale) {
+    //        if (dvui.button(@src(), "Reset Scale", .{}, .{})) {
+    //            dvui.currentWindow().content_scale = orig_content_scale;
+    //        }
+    //    }
+    //}
+
+    //if (dvui.backend.kind != .web) {
+    //    _ = dvui.checkbox(@src(), &warn_on_quit, "Warn on Quit", .{});
+
+    //    if (warn_on_quit) {
+    //        if (warn_on_quit_closing) return .close;
+
+    //        const wd = dvui.currentWindow().data();
+    //        for (dvui.events()) |*e| {
+    //            if (!dvui.eventMatchSimple(e, wd)) continue;
+
+    //            if ((e.evt == .window and e.evt.window.action == .close) or (e.evt == .app and e.evt.app.action == .quit)) {
+    //                e.handle(@src(), wd);
+
+    //                const warnAfter: dvui.DialogCallAfterFn = struct {
+    //                    fn warnAfter(_: dvui.Id, response: dvui.enums.DialogResponse) !void {
+    //                        if (response == .ok) warn_on_quit_closing = true;
+    //                    }
+    //                }.warnAfter;
+
+    //                dvui.dialog(@src(), .{}, .{ .message = "Really Quit?", .cancel_label = "Cancel", .callafterFn = warnAfter });
+    //            }
+    //        }
+    //    }
+    //}
+
+    //std.debug.print("frame\n", .{});
+    const g = struct {
+        var first = true;
+    };
+    if (g.first) {
+        g.first = false;
+        const bytes = dvui.Font.alignEmbedded(@embedFile("linja pona 3.6.otf"));
+        try dvui.addFont("linja", bytes, null);
+
+        //const bytes2 = dvui.Font.alignEmbedded(@embedFile("Neptunian Shpre.ttf"));
+        //try dvui.addFont("neptunian", bytes2, null);
     }
 
     {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-        defer hbox.deinit();
-        dvui.label(@src(), "Pinch Zoom or Scale", .{}, .{});
-        if (dvui.buttonIcon(@src(), "plus", dvui.entypo.plus, .{}, .{}, .{})) {
-            dvui.currentWindow().content_scale *= 1.1;
-        }
-
-        if (dvui.buttonIcon(@src(), "minus", dvui.entypo.minus, .{}, .{}, .{})) {
-            dvui.currentWindow().content_scale /= 1.1;
-        }
-
-        if (dvui.currentWindow().content_scale != orig_content_scale) {
-            if (dvui.button(@src(), "Reset Scale", .{}, .{})) {
-                dvui.currentWindow().content_scale = orig_content_scale;
-            }
-        }
+        const font: dvui.Font = .find(.{ .family = "linja" });
+        dvui.label(@src(), "toki", .{}, .{ .font = font });
+        var te = dvui.textEntry(@src(), .{ .multiline = true }, .{ .font = font, .min_size_content = font.sizeM(15, 5) });
+        te.deinit();
     }
 
-    if (dvui.backend.kind != .web) {
-        _ = dvui.checkbox(@src(), &warn_on_quit, "Warn on Quit", .{});
+    //{
+    //    const font: dvui.Font = .find(.{ .family = "neptunian" });
+    //    var te = dvui.textEntry(@src(), .{ .multiline = true }, .{ .font = font, .min_size_content = font.sizeM(15, 5) });
+    //    te.deinit();
+    //}
 
-        if (warn_on_quit) {
-            if (warn_on_quit_closing) return .close;
+    dvui.debugFontAtlases(@src(), .{});
+    //{
+    //    std.debug.print("frame\n", .{});
+    //    const Context = dvui.c.kbts_CreateShapeContext(null, null);
+    //    dvui.c.kbts_ShapePushFeature(Context, dvui.c.KBTS_FEATURE_TAG_kern, 1);
+    //    defer dvui.c.kbts_DestroyShapeContext(Context);
 
-            const wd = dvui.currentWindow().data();
-            for (dvui.events()) |*e| {
-                if (!dvui.eventMatchSimple(e, wd)) continue;
+    //    //if (dvui.c.kbts_ShapePushFontFromFile(Context, "linja pona 3.6.otf", 0) == null) {
+    //    if (dvui.c.kbts_ShapePushFontFromFile(Context, "Vera.ttf", 0) == null) {
+    //        @panic("bad font"); //a
+    //    }
+    //    dvui.c.kbts_ShapeBegin(Context, dvui.c.KBTS_DIRECTION_DONT_KNOW, dvui.c.KBTS_LANGUAGE_DONT_KNOW);
+    //    //const str = "T.T.\n"; //abc
+    //    //for (str) |ch| {
+    //    //    dvui.c.kbts_ShapeCodepoint(Context, ch);
+    //    //}
+    //    dvui.c.kbts_ShapeUtf8(Context, "T.", "T.".len, dvui.c.KBTS_USER_ID_GENERATION_MODE_CODEPOINT_INDEX);
+    //    dvui.c.kbts_ShapeEnd(Context);
 
-                if ((e.evt == .window and e.evt.window.action == .close) or (e.evt == .app and e.evt.app.action == .quit)) {
-                    e.handle(@src(), wd);
+    //    // Layout runs naively left to right.
+    //    var Run: dvui.c.kbts_run = undefined;
+    //    var x: c_int = 0;
+    //    var y: c_int = 0;
+    //    while (dvui.c.kbts_ShapeRun(Context, &Run) != 0) {
+    //        //float Scale = stbtt_ScaleForPixelHeight(StbttFont, (float)FontPixelHeight);
+    //        std.debug.print("run\n", .{});
+    //        var g: [*c]dvui.c.kbts_glyph = undefined;
+    //        while (dvui.c.kbts_GlyphIteratorNext(&Run.Glyphs, &g) != 0) {
+    //            const gx = x + g.*.OffsetX;
 
-                    const warnAfter: dvui.DialogCallAfterFn = struct {
-                        fn warnAfter(_: dvui.Id, response: dvui.enums.DialogResponse) !void {
-                            if (response == .ok) warn_on_quit_closing = true;
-                        }
-                    }.warnAfter;
+    //            std.debug.print("glyph {c} {d} from {d} offset {d} at {d} advance {d}\n", .{ @as(u8, @intCast(g.*.Codepoint)), g.*.Id, x, g.*.OffsetX, gx, g.*.AdvanceX });
 
-                    dvui.dialog(@src(), .{}, .{ .message = "Really Quit?", .cancel_label = "Cancel", .callafterFn = warnAfter });
-                }
-            }
-        }
-    }
+    //            x += g.*.AdvanceX;
+    //            y += g.*.AdvanceY;
+    //        }
+    //    }
+    //}
 
     // look at demo() for examples of dvui widgets, shows in a floating window
     dvui.Examples.demo();

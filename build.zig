@@ -812,6 +812,11 @@ pub fn addDvuiModule(
         }
     }
 
+    dvui_mod.addIncludePath(b.path("vendor/kb/"));
+    dvui_mod.addCSourceFiles(.{
+        .files = &.{"vendor/kb/kb_text_shape_impl.c"},
+    });
+
     const stb_source = "vendor/stb/";
     dvui_mod.addIncludePath(b.path(stb_source));
 

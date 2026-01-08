@@ -353,7 +353,8 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
                 }
 
                 if (bytes) |b| {
-                    dvui.addFont(name, b, dvui.currentWindow().gpa) catch |err| switch (err) {
+                    // TODO: read bytes into a properly aligned address
+                    dvui.addFont(name, @alignCast(b), dvui.currentWindow().gpa) catch |err| switch (err) {
                         error.OutOfMemory => @panic("OOM"),
                         error.FontError => {
                             dvui.currentWindow().gpa.free(b);
