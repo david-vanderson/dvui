@@ -296,11 +296,14 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     }
     options.kerning = opts.kerning orelse cw.kerning;
 
-    var s = if (dvui.useKBTS)
-        fce.textSizeRawKB(cw.gpa, text, options) catch return .{ .w = 10, .h = 10 }
-    else
-        fce.textSizeRaw(cw.gpa, text, options) catch return .{ .w = 10, .h = 10 };
-    //std.debug.print("textSizeEx {s} s {d}x{d} kbs {d}x{d}\n", .{ text, s.w, s.h, kbs.w, kbs.h });
+    var s: Size = undefined;
+    if (dvui.useKBTS) {
+        s = fce.textSizeRawKB(cw.gpa, text, options) catch return .{ .w = 10, .h = 10 };
+        //const oldsize = fce.textSizeRaw(cw.gpa, text, options) catch return .{ .w = 10, .h = 10 };
+        //std.debug.print("textSizeEx {s} s {d}x{d} kbs {d}x{d}\n", .{ text, oldsize.w, oldsize.h, s.w, s.h });
+    } else {
+        s = fce.textSizeRaw(cw.gpa, text, options) catch return .{ .w = 10, .h = 10 };
+    }
 
     // do this check after calling textSizeRaw so that end_idx is set
     if (ask_size == 0.0) return Size{};
@@ -804,12 +807,12 @@ pub const Cache = struct {
                 while (dvui.c.kbts_GlyphIteratorNext(&Run.Glyphs, &g) != 0) {
                     const gi = try self.glyphInfoGetOrReplacement(gpa, g.*.Id);
                     const gx = x + @as(f32, @floatFromInt(g.*.OffsetX)) * self.scaleFactor;
-                    const advance = @as(f32, @floatFromInt(g.*.AdvanceX)) * self.scaleFactor;
+                    //const advance = @as(f32, @floatFromInt(g.*.AdvanceX)) * self.scaleFactor;
                     //std.debug.print("  kb {d} {d} {d}\n", .{ g.*.Id, self.height, gi.topBearing });
 
                     minx = @min(minx, gx + gi.leftBearing);
                     maxx = @max(maxx, gx + gi.leftBearing + gi.w);
-                    maxx = @max(maxx, x + advance);
+                    maxx = @max(maxx, x + gi.advance);
 
                     miny = @min(miny, gi.topBearing);
                     maxy = @max(maxy, gi.topBearing + gi.h);
@@ -837,7 +840,7 @@ pub const Cache = struct {
                     // update space taken by glyph
                     tw = maxx - minx;
                     th = maxy - miny;
-                    x += advance;
+                    x += gi.advance;
                 }
             } else {
                 // ran out of glyphs
