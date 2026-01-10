@@ -24,11 +24,19 @@ pub var defaults: Options = .{
     .style = .window,
 };
 
+pub const Resize = enum {
+    none,
+    all,
+};
+
 pub const InitOptions = struct {
     modal: bool = false,
     rect: ?*Rect = null,
     center_on: ?Rect.Natural = null,
     open_flag: ?*bool = null,
+
+    /// Whether to allow resizing the window by dragging the edges/corners.
+    resize: Resize = .all,
     process_events_in_deinit: bool = true,
     stay_above_parent_window: bool = false,
     window_avoid: enum {
@@ -397,7 +405,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
                 }
             }
 
-            if (dragPart(me, rs) == .bottom_right) {
+            if (self.init_options.resize == .all and dragPart(me, rs) == .bottom_right) {
                 if (me.action == .press and me.button.pointer()) {
                     // capture and start drag
                     dvui.captureMouse(self.data(), e.num);
@@ -447,8 +455,10 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                     .press => {
                         if (me.button.pointer()) {
                             const dp = dragPart(me, rs);
-                            if (dp == .middle and !self.drag_area.contains(me.p)) {
-                                continue;
+                            if (dp == .middle) {
+                                if (!self.drag_area.contains(me.p)) continue;
+                            } else {
+                                if (self.init_options.resize == .none) continue;
                             }
                             e.handle(@src(), self.data());
                             // capture and start drag
@@ -478,8 +488,10 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                     },
                     .position => {
                         const dp = dragPart(me, rs);
-                        if (dp == .middle and !self.drag_area.contains(me.p)) {
-                            continue;
+                        if (dp == .middle) {
+                            if (!self.drag_area.contains(me.p)) continue;
+                        } else {
+                            if (self.init_options.resize == .none) continue;
                         }
                         dvui.cursorSet(dp.cursor());
                     },
