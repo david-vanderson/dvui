@@ -94,7 +94,7 @@ pub fn initialize(self: *AccessKit) void {
 
 fn windowsHWND(window: *dvui.Window) c.HWND {
     switch (dvui.backend.kind) {
-        .sdl3 => {
+        .sdl3, .sdl3gpu => {
             const SDLBackend = dvui.backend;
             const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.impl.window);
             const hwnd = SDLBackend.c.SDL_GetPointerProperty(
