@@ -513,6 +513,12 @@ pub fn autoSize(self: *FloatingWindowWidget) void {
     self.auto_size = true;
 }
 
+/// Request that the window center itself on its parent (or
+/// InitOptions.center_on). This takes effect next frame.
+pub fn autoPosition(self: *FloatingWindowWidget) void {
+    self.auto_pos = true;
+}
+
 pub fn close(self: *FloatingWindowWidget) void {
     if (self.init_options.open_flag) |of| {
         of.* = false;
