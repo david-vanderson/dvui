@@ -1,4 +1,4 @@
-/*  kb_text_shape - v2.07 - text segmentation and shaping
+/*  kb_text_shape - v2.09 - text segmentation and shaping
     by Jimmy Lefevre
 
     SECURITY
@@ -662,16 +662,20 @@
             returned by kbts_FontFromFile), frees all of [Font]'s buffers.
             Otherwise, does nothing.
 
-          :kbts_GetFontInfo
-          :GetFontInfo
-          void kbts_GetFontInfo(kbts_font *Font, kbts_font_info *Info)
+          :kbts_GetFontInfo2
+          :GetFontInfo2
+          void kbts_GetFontInfo2(kbts_font *Font, kbts_font_info2 *Info)
             Writes a bunch of useful metadata about [Font] into [Info].
-            You can use this function to extract styling, name and licensing information
-            from a font.
 
-            We use a simplified representation for font weight and width that is fine for
-            classic font selection, e.g. "I need a bold font". OpenType fonts may feature
-            finer-grained metrics, and we currently do not expose/support those.
+            Before calling this function, you must fill out [Info].Size to be
+            sizeof([Info]).
+
+            [Info] can be one of several types:
+            - kbts_font_info2 describes styling, name and licensing information.
+              We use a simplified representation for font weight and width that is fine for
+              classic font selection, e.g. "I need a bold font". OpenType fonts may feature
+              finer-grained metrics, and we currently do not expose/support those.
+            - kbts_font_info2_1 also includes metrics and bounding box information.
 
             :kbts_font_style_flags
             :font_style_flags
@@ -683,7 +687,14 @@
             A given font can be bold and italic at the same time, but probably not regular
             and bold and probably not regular and italic.
 
-            If [Font] is not a valid font, then [Info] will be zeroed.
+            If [Font] is not a valid font, or some information could not be found in the
+            font, then the respective members will be zeroed (except Size).
+
+          :kbts_GetFontInfo
+          :GetFontInfo
+          void kbts_GetFontInfo(kbts_font *Font, kbts_font_info *Info)
+            Equivalent to calling kbts_GetFontInfo2 with an Info struct of type
+            kbts_font_info2.
 
         DIRECT:SHAPE CONFIG
           :kbts_SizeOfShapeConfig
@@ -1277,6 +1288,11 @@
      See https://unicode.org/reports/tr9 for more information.
 
    VERSION HISTORY
+     2.09  - Fix use-after-free when a shape_scratchpad was freed after its respective shape_config.
+             Extended the GetFontInfo API to include metrics and bounding box information.
+               New types: kbts_font_info2, kbts_font_info2_1.
+               New function: kbts_GetFontInfo2().
+     2.08  - Fix some UB.
      2.07  - Performance improvements.
              API CHANGES:
              Struct layout changes for internal use: kbts_glyph, kbts_glyph_parent.
@@ -1448,9 +1464,11 @@
 #  if KB_TEXT_SHAPE_POINTER_SIZE == 4
 #    define kbts_un kbts_u32
 #    define kbts_sn kbts_s32
+#    define kbts_uptr kbts_u32
 #  else
 #    define kbts_un kbts_u64
 #    define kbts_sn kbts_s64
+#    define kbts_uptr kbts_u64
 #  endif
 
 #  ifdef __has_attribute
@@ -1493,7 +1511,7 @@
 #    define KBTS_INLINE static inline
 #  endif
 
-#  define KBTS_FOURCC(A, B, C, D) ((A) | ((B) << 8) | ((C) << 16) | ((D) << 24))
+#  define KBTS_FOURCC(A, B, C, D) ((kbts_u32)(A) | ((kbts_u32)(B) << 8) | ((kbts_u32)(C) << 16) | ((kbts_u32)(D) << 24))
 
 typedef kbts_u32 kbts_language;
 enum kbts_language_enum
@@ -2361,8 +2379,9 @@ enum kbts_blob_version_enum
 {
   KBTS_BLOB_VERSION_INVALID,
   KBTS_BLOB_VERSION_INITIAL,
+  KBTS_BLOB_VERSION_REMOVED_SUBTABLE_INFOS_ALIGNED_TABLES,
 
-  KBTS_BLOB_VERSION_CURRENT = KBTS_BLOB_VERSION_INITIAL,
+  KBTS_BLOB_VERSION_CURRENT = KBTS_BLOB_VERSION_REMOVED_SUBTABLE_INFOS_ALIGNED_TABLES,
 };
 
 typedef kbts_u32 kbts_font_style_flags;
@@ -2451,9 +2470,6 @@ enum kbts_glyph_flags_enum
 
   KBTS_GLYPH_FLAG_LIGATURE = (1 << 28),
   KBTS_GLYPH_FLAG_MULTIPLE_SUBSTITUTION = (1 << 29),
-
-  KBTS_GLYPH_FLAG_ZWNJ = (1 << 30),
-  KBTS_GLYPH_FLAG_ZWJ = (1 << 31),
 };
 
 typedef kbts_u8 kbts_joining_feature;
@@ -3339,12 +3355,6 @@ typedef struct kbts_allocator_op
 
 typedef void kbts_allocator_function(void *Data, kbts_allocator_op *Op);
 
-typedef struct kbts_lookup_subtable_info
-{
-  kbts_u16 MinimumBacktrackPlusOne;
-  kbts_u16 MinimumFollowupPlusOne;
-} kbts_lookup_subtable_info;
-
 typedef struct kbts_blob_table
 {
   kbts_u32 OffsetFromStartOfFile;
@@ -3411,6 +3421,34 @@ typedef struct kbts_font_info
   kbts_font_weight Weight;
   kbts_font_width Width;
 } kbts_font_info;
+
+typedef struct kbts_font_info2
+{
+  kbts_u32 Size;
+
+  char *Strings[KBTS_FONT_INFO_STRING_ID_COUNT];
+  kbts_u16 StringLengths[KBTS_FONT_INFO_STRING_ID_COUNT];
+
+  kbts_font_style_flags StyleFlags;
+  kbts_font_weight Weight;
+  kbts_font_width Width;
+} kbts_font_info2;
+
+typedef struct kbts_font_info2_1
+{
+  kbts_font_info2 Base;
+
+  kbts_u16 UnitsPerEm;
+
+  kbts_s16 XMin;
+  kbts_s16 YMin;
+  kbts_s16 XMax;
+  kbts_s16 YMax;
+
+  kbts_s16 Ascent;
+  kbts_s16 Descent;
+  kbts_s16 LineGap;
+} kbts_font_info2_1;
 
 typedef struct kbts_feature_override
 {
@@ -3748,6 +3786,7 @@ KBTS_EXPORT int kbts_FontIsValid(kbts_font *Font);
 KBTS_EXPORT kbts_load_font_error kbts_LoadFont(kbts_font *Font, kbts_load_font_state *State, void *FontData, int FontDataSize, int FontIndex, int *ScratchSize_, int *OutputSize_);
 KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_state *State, void *ScratchMemory, void *OutputMemory);
 KBTS_EXPORT void kbts_GetFontInfo(kbts_font *Font, kbts_font_info *Info);
+KBTS_EXPORT void kbts_GetFontInfo2(kbts_font *Font, kbts_font_info2 *Info);
 
 // A shape_config is a bag of pre-computed data for a specific shaping setup.
 KBTS_EXPORT int kbts_SizeOfShapeConfig(kbts_font *Font, kbts_script Script, kbts_language Language);
@@ -15578,6 +15617,7 @@ typedef struct kbts_shape_scratchpad
   kbts_u32 GlyphIdCount;
   kbts_u32 LookupSubtableCount;
   kbts_u32 GposLookupIndexOffset;
+  kbts_u32 SequentialLookupCount;
 
   kbts__bucketed_glyph_block_header *LookupGlyphBuckets;
   kbts__bucketed_glyph_block_header FreeBucketedBlockSentinel;
@@ -15884,10 +15924,43 @@ static int kbts__ByteSwapArray16(kbts_u16 *Array, kbts_un Count, char *End)
 
 static void kbts__ByteSwapArray32Unchecked(kbts_u32 *Array, kbts_un Count)
 {
-  KBTS__FOR(It, 0, Count)
+  // This is doing byte iteration to work with unaligned arrays.
+  char *At = (char *)Array;
+  KBTS__FOR(WordIndex, 0, Count)
   {
-    Array[It] = kbts__ByteSwap32(Array[It]);
+    char Byte0 = At[0];
+    char Byte1 = At[1];
+    char Byte2 = At[2];
+    char Byte3 = At[3];
+
+    At[0] = Byte3;
+    At[1] = Byte2;
+    At[2] = Byte1;
+    At[3] = Byte0;
+
+    At += sizeof(kbts_u32);
   }
+}
+
+KBTS_INLINE kbts_u32 kbts__ReadU32Unaligned(kbts_u32 *Data)
+{
+  kbts_u32 Result;
+  KBTS_MEMCPY(&Result, (void *)Data, sizeof(kbts_u32));
+  return Result;
+}
+KBTS_INLINE kbts_u16 kbts__ReadU16Unaligned(kbts_u16 *Data)
+{
+  kbts_u16 Result;
+  KBTS_MEMCPY(&Result, (void *)Data, sizeof(kbts_u16));
+  return Result;
+}
+KBTS_INLINE void kbts__WriteU32Unaligned(kbts_u32 *Dest, kbts_u32 Value)
+{
+  KBTS_MEMCPY((void *)Dest, &Value, sizeof(kbts_u32));
+}
+KBTS_INLINE void kbts__WriteU16Unaligned(kbts_u16 *Dest, kbts_u16 Value)
+{
+  KBTS_MEMCPY((void *)Dest, &Value, sizeof(kbts_u16));
 }
 
 static int kbts__ByteSwapArray32(kbts_u32 *Array, kbts_un Count, char *End)
@@ -16742,17 +16815,17 @@ typedef struct kbts__os2
   kbts_s16 StrikeoutSize;
   kbts_s16 StrikeoutPosition;
   kbts_s16 FamilyClass;
-  kbts_u8 Panose[10];
-  kbts_u32 UnicodeRange[4];
-  kbts_u32 VendorId;
-  kbts_u16 Selection;
-  kbts_u16 FirstCharacterIndex;
-  kbts_u16 LastCharacterIndex;
+  kbts_u8 Panose[10]; // 32
+  kbts_u32 UnicodeRange[4]; // 42
+  kbts_u32 VendorId; // 58
+  kbts_u16 Selection; // 62
+  kbts_u16 FirstCharacterIndex; // 64
+  kbts_u16 LastCharacterIndex; // 66
 
   // Some version 0 fonts support this, others do not.
-  kbts_s16 TypoAscender;
-  kbts_s16 TypoDescender;
-  kbts_s16 TypoLineGap;
+  kbts_s16 TypoAscender; // 68
+  kbts_s16 TypoDescender; // 70
+  kbts_s16 TypoLineGap; // 72
   kbts_u16 WinAscent;
   kbts_u16 WinDescent;
 
@@ -17103,7 +17176,8 @@ static kbts__unpacked_lookup kbts__UnpackLookup(kbts__gdef *Gdef, kbts__lookup *
       if(MarkGlyphSets->MarkGlyphSetCount > MarkFilteringSetIndex)
       {
         kbts_u32 *CoverageOffsets = KBTS__POINTER_AFTER(kbts_u32, MarkGlyphSets);
-        Result.MarkFilteringSet = KBTS__POINTER_OFFSET(kbts__coverage, MarkGlyphSets, CoverageOffsets[MarkFilteringSetIndex]);
+        kbts_un CoverageOffset = kbts__ReadU32Unaligned(&CoverageOffsets[MarkFilteringSetIndex]);
+        Result.MarkFilteringSet = KBTS__POINTER_OFFSET(kbts__coverage, MarkGlyphSets, CoverageOffset);
       }
     }
   }
@@ -18284,7 +18358,7 @@ static kbts_b32 kbts__GlyphIncludedInLookupSubtable(kbts_shape_scratchpad *Scrat
     if(Id < GlyphCount)
     {
       kbts__matrix_index MatrixIndex = kbts__GlyphLookupSubtableMatrixIndex(FlatSubtableIndex, SubtableCount, Id, GlyphCount);
-      if(!(GlyphLookupSubtableMatrix[MatrixIndex.WordIndex] & (1 << MatrixIndex.BitIndex)))
+      if(!(GlyphLookupSubtableMatrix[MatrixIndex.WordIndex] & (1u << MatrixIndex.BitIndex)))
       {
         Result = 0;
       }
@@ -18960,7 +19034,8 @@ KBTS_EXPORT int kbts_CodepointToGlyphId(kbts_font *Font, int ICodepoint)
   kbts_u16 *CmapBase = Font->Cmap;
   if(CmapBase)
   {
-    switch(*CmapBase)
+    kbts_u16 CmapFormat = kbts__ReadU16Unaligned(CmapBase);
+    switch(CmapFormat)
     {
     case 0:
     {
@@ -19115,9 +19190,6 @@ KBTS_EXPORT kbts_glyph kbts_CodepointToGlyph(kbts_font *Font, int ICodepoint, kb
   Result.UseClass = kbts__GetUnicodeUseClass(Codepoint);
   Result.ParentInfo = kbts__GetUnicodeParentInfo(Codepoint);
 
-  if(Codepoint == 0x200C) {Result.Flags = KBTS_GLYPH_FLAG_ZWNJ;}
-  else if(Codepoint == 0x200D) {Result.Flags = KBTS_GLYPH_FLAG_ZWJ;}
-
   Result.Id = (kbts_u16)kbts_CodepointToGlyphId(Font, ICodepoint);
 
   if(Font->Blob->Tables[KBTS_BLOB_TABLE_ID_GDEF].Length)
@@ -19226,7 +19298,7 @@ static kbts_b32 kbts__NextFeature(kbts__iterate_features *It)
         It->CurrentFeatureTag = Feature.Tag;
         if(FeatureId && (FeatureId <= 32))
         {
-          It->CurrentFeatureFlag = (1 << (FeatureId - 1)) & KBTS__GLYPH_FEATURE_MASK;
+          It->CurrentFeatureFlag = (1u << (FeatureId - 1)) & KBTS__GLYPH_FEATURE_MASK;
         }
         Result = 1;
 
@@ -19376,17 +19448,24 @@ typedef struct kbts__gsub_frame
   kbts_u16 RecordIndex;
 } kbts__gsub_frame;
 
-static void *kbts__PointerPush(char **Pointer, kbts_un Size, kbts_un Align)
+typedef struct kbts__pointer_bump_allocator
 {
-  char *At = *Pointer;
-  char *Aligned = KBTS__ALIGN_POINTER(char, At, Align);
-  if (Aligned) {
-      *Pointer = Aligned + Size;
-  } else {
-      *Pointer = (char*) Size;
-  }
+  kbts_uptr At;
+} kbts__pointer_bump_allocator;
 
-  void *Result = Aligned;
+static kbts__pointer_bump_allocator kbts__PointerBumpAllocator(void *Pointer)
+{
+  kbts__pointer_bump_allocator Result;
+  Result.At = (kbts_uptr)Pointer;
+  return Result;
+}
+
+static void *kbts__PointerPush(kbts__pointer_bump_allocator *Alloc, kbts_un Size, kbts_un Align)
+{
+  kbts_uptr Aligned = (Alloc->At + (Align - 1)) & ~(Align - 1);
+  Alloc->At = Aligned + Size;
+
+  void *Result = (void *)Aligned;
   return Result;
 }
 #define kbts__PointerPushType(Pointer, Type) (Type *)kbts__PointerPush((Pointer), sizeof(Type), KBTS_ALIGNOF(Type))
@@ -19737,14 +19816,23 @@ KBTS_EXPORT kbts_un kbts_SizeOfShapeScratchpad(kbts_shape_config *Config)
   kbts_un DecompositionSize = sizeof(kbts_glyph) * KBTS__MAXIMUM_DECOMPOSITION_CODEPOINTS;
   kbts_un GsubSize = sizeof(kbts__gsub_frame) * KBTS_LOOKUP_STACK_SIZE;
   kbts_un ScratchSize = KBTS__MAX(DecompositionSize, GsubSize);
-  kbts_un BucketHeadersSize = sizeof(kbts__bucketed_glyph_block_header) * kbts__SequentialLookupCount(Config);
-  kbts_un Result = sizeof(kbts_shape_scratchpad) + ScratchSize + BucketHeadersSize;
+
+  kbts_un Result = sizeof(kbts_shape_scratchpad) + ScratchSize;
+
+  if(Config)
+  {
+    kbts_un BucketHeadersSize = sizeof(kbts__bucketed_glyph_block_header) * kbts__SequentialLookupCount(Config);
+
+    Result += BucketHeadersSize;
+  }
+
   return Result;
 }
 
 KBTS_EXPORT kbts_shape_scratchpad *kbts_PlaceShapeScratchpad(kbts_shape_config *Config, void *Memory, kbts_allocator_function *Allocator, void *AllocatorData)
 {
-  kbts_shape_scratchpad *Result = (kbts_shape_scratchpad *)Memory;
+  kbts__pointer_bump_allocator Bump = kbts__PointerBumpAllocator(Memory);
+  kbts_shape_scratchpad *Result = kbts__PointerPushType(&Bump, kbts_shape_scratchpad);
   KBTS_MEMSET(Result, 0, sizeof(*Result));
 
   if(!Allocator)
@@ -19756,40 +19844,44 @@ KBTS_EXPORT kbts_shape_scratchpad *kbts_PlaceShapeScratchpad(kbts_shape_config *
   Result->AllocatorData = AllocatorData;
   Result->Config = Config;
 
-  char *MemoryAt = KBTS__POINTER_AFTER(char, Result);
-
   // @Duplication with SizeOfShapeScratchpad().
   kbts_un DecompositionSize = sizeof(kbts_glyph) * KBTS__MAXIMUM_DECOMPOSITION_CODEPOINTS;
   kbts_un GsubSize = sizeof(kbts__gsub_frame) * KBTS_LOOKUP_STACK_SIZE;
   kbts_un ScratchSize = KBTS__MAX(DecompositionSize, GsubSize);
 
-  Result->ScratchMemory = kbts__PointerPush(&MemoryAt, ScratchSize, 1);
-  kbts_un SequentialLookupCount = kbts__SequentialLookupCount(Config);
-  Result->LookupGlyphBuckets = kbts__PointerPushArray(&MemoryAt, kbts__bucketed_glyph_block_header, SequentialLookupCount);
+  Result->ScratchMemory = kbts__PointerPush(&Bump, ScratchSize, 1);
 
+  if(Config)
   {
-    kbts_blob_header *Blob = Config->Font->Blob;
+    kbts_un SequentialLookupCount = kbts__SequentialLookupCount(Config);
+    Result->LookupGlyphBuckets = kbts__PointerPushArray(&Bump, kbts__bucketed_glyph_block_header, SequentialLookupCount);
 
-    Result->GlyphIdCount = Blob->GlyphCount;
-    Result->LookupSubtableCount = Blob->LookupSubtableCount;
-    Result->GposLookupIndexOffset = Blob->GposLookupIndexOffset;
-
-    if(Blob->GlyphLookupSubtableMatrixOffsetFromStartOfFile)
     {
-      Result->GlyphLookupSubtableMatrix = KBTS__POINTER_OFFSET(kbts_u32, Blob, Blob->GlyphLookupSubtableMatrixOffsetFromStartOfFile);
+      kbts_blob_header *Blob = Config->Font->Blob;
+
+      Result->GlyphIdCount = Blob->GlyphCount;
+      Result->LookupSubtableCount = Blob->LookupSubtableCount;
+      Result->GposLookupIndexOffset = Blob->GposLookupIndexOffset;
+
+      if(Blob->GlyphLookupSubtableMatrixOffsetFromStartOfFile)
+      {
+        Result->GlyphLookupSubtableMatrix = KBTS__POINTER_OFFSET(kbts_u32, Blob, Blob->GlyphLookupSubtableMatrixOffsetFromStartOfFile);
+      }
+
+      if(Blob->LookupSubtableIndexOffsetsOffsetFromStartOfFile)
+      {
+        Result->LookupSubtableIndexOffsets = KBTS__POINTER_OFFSET(kbts_u32, Blob, Blob->LookupSubtableIndexOffsetsOffsetFromStartOfFile);
+      }
     }
 
-    if(Blob->LookupSubtableIndexOffsetsOffsetFromStartOfFile)
+    KBTS__FOR(LookupIndex, 0, SequentialLookupCount)
     {
-      Result->LookupSubtableIndexOffsets = KBTS__POINTER_OFFSET(kbts_u32, Blob, Blob->LookupSubtableIndexOffsetsOffsetFromStartOfFile);
+      kbts__bucketed_glyph_block_header *Sentinel = &Result->LookupGlyphBuckets[LookupIndex];
+
+      KBTS__DLLIST_SENTINEL_INIT(Sentinel);
     }
-  }
 
-  KBTS__FOR(LookupIndex, 0, SequentialLookupCount)
-  {
-    kbts__bucketed_glyph_block_header *Sentinel = &Result->LookupGlyphBuckets[LookupIndex];
-
-    KBTS__DLLIST_SENTINEL_INIT(Sentinel);
+    Result->SequentialLookupCount = (kbts_u32)SequentialLookupCount;
   }
 
   KBTS__DLLIST_SENTINEL_INIT(&Result->FreeBucketedBlockSentinel);
@@ -19938,7 +20030,7 @@ static kbts_b32 kbts__BucketGlyph(kbts_shape_scratchpad *Scratchpad, kbts_glyph 
         kbts__matrix_index MatrixIndex = kbts__IdSequentialLookupMatrixIndex(MinimumSequentialLookupIndex, Glyph->Id, SequentialLookupCount);
         kbts_u32 *At = &IdSequentialLookupMatrix[MatrixIndex.WordIndex];
         // Mask out lookups < MinimumSequentialLookupIndex.
-        kbts_u32 BeforeFirstMask = ((1 << MatrixIndex.BitIndex) - 1);
+        kbts_u32 BeforeFirstMask = ((1u << MatrixIndex.BitIndex) - 1);
         kbts_u32 Bits = *At++ & ~BeforeFirstMask;
         kbts_un SequentialLookupIndexOffset = 0;
 
@@ -19971,7 +20063,7 @@ static kbts_b32 kbts__BucketGlyph(kbts_shape_scratchpad *Scratchpad, kbts_glyph 
         kbts_u32 *AtDisabled = &GlyphConfig->DisabledLookupBits[RowIndex.WordIndex];
 
         // Mask out lookups < MinimumSequentialLookupIndex.
-        kbts_u32 BeforeFirstMask = ((1 << MatrixIndex.BitIndex) - 1);
+        kbts_u32 BeforeFirstMask = ((1u << MatrixIndex.BitIndex) - 1);
 
         kbts_u32 Bits = ((*At++ | *AtEnabled++) & ~(*AtDisabled++)) & ~BeforeFirstMask;
         kbts_un SequentialLookupIndexOffset = 0;
@@ -22506,7 +22598,7 @@ static void kbts__ExecuteOp(kbts_shape_scratchpad *Scratchpad, kbts_glyph_storag
               {
                 kbts_u16 ParentId = LastBaseParentIds[ParentIndex];
 
-                if(!(LastBaseParentsLoaded & (1 << ParentIndex)))
+                if(!(LastBaseParentsLoaded & (1u << ParentIndex)))
                 {
                   ParentId = (kbts_u16)kbts_CodepointToGlyphId(Font, (int)Parent->Codepoint);
                   LastBaseParentIds[ParentIndex] = ParentId;
@@ -22534,8 +22626,8 @@ static void kbts__ExecuteOp(kbts_shape_scratchpad *Scratchpad, kbts_glyph_storag
                   // This glyph is never good. Forget it.
                   LastBaseParents[ParentIndex] = LastBaseParents[LastBaseParentCount - 1];
                   LastBaseParentIds[ParentIndex] = LastBaseParentIds[LastBaseParentCount - 1];
-                  LastBaseParentsLoaded &= ~(1 << ParentIndex);
-                  LastBaseParentsLoaded |= (LastBaseParentsLoaded & (1 << (LastBaseParentCount - 1))) >> (LastBaseParentCount - 1 - ParentIndex);
+                  LastBaseParentsLoaded &= ~(1u << ParentIndex);
+                  LastBaseParentsLoaded |= (LastBaseParentsLoaded & (1u << (LastBaseParentCount - 1))) >> (LastBaseParentCount - 1 - ParentIndex);
                   
                   LastBaseParentCount -= 1;
                   DoubleRecompositionCount -= 1;
@@ -25190,11 +25282,11 @@ static kbts_shape_config *kbts__PlaceShapeConfig(kbts_font *Font, kbts_script Sc
 {
   kbts_shape_config *Result = 0;
   kbts_shape_config DummyConfig;
-  char *MemoryAt = (char *)Memory;
+  kbts__pointer_bump_allocator Bump = kbts__PointerBumpAllocator(Memory);
 
   if(Font)
   {
-    Result = kbts__PointerPushType(&MemoryAt, kbts_shape_config);
+    Result = kbts__PointerPushType(&Bump, kbts_shape_config);
     if(!Memory)
     {
       Result = &DummyConfig;
@@ -25335,7 +25427,7 @@ static kbts_shape_config *kbts__PlaceShapeConfig(kbts_font *Font, kbts_script Sc
     Result->DottedCircle = kbts_CodepointToGlyph(Font, 0x25CC, 0, 0);
     Result->Whitespace = kbts_CodepointToGlyph(Font, ' ', 0, 0);
 
-    kbts_u16 *FeatureStageFirstLookupIndices = kbts__PointerPushArray(&MemoryAt, kbts_u16, Result->OpList.FeatureStageCount + 1);
+    kbts_u16 *FeatureStageFirstLookupIndices = kbts__PointerPushArray(&Bump, kbts_u16, Result->OpList.FeatureStageCount + 1);
     if(Memory)
     {
       KBTS__FOR(FeatureStageIndex, 0, Result->OpList.FeatureStageCount + 1)
@@ -25456,7 +25548,7 @@ static kbts_shape_config *kbts__PlaceShapeConfig(kbts_font *Font, kbts_script Sc
                   if((Result->Shaper != KBTS_SHAPER_MYANMAR) && (FeatureId >= 1) && (FeatureId <= 32))
                   {
                     // These must properly map KBTS__FEATURE_ID to kbts_glyph_flags!
-                    BakedFeature.GlyphFilter = (1 << (FeatureId - 1)) & KBTS__GLYPH_FEATURE_MASK;
+                    BakedFeature.GlyphFilter = (1u << (FeatureId - 1)) & KBTS__GLYPH_FEATURE_MASK;
                   }
 
                   BakedFeatures[BakedFeatureCount] = BakedFeature;
@@ -25535,10 +25627,10 @@ static kbts_shape_config *kbts__PlaceShapeConfig(kbts_font *Font, kbts_script Sc
                     KBTS__FOR(GlyphIndex, 0, GlyphCount)
                     {
                       kbts__matrix_index MatrixIndex = kbts__GlyphLookupMatrixIndex(FlatLookupIndex, GlyphIndex, GlyphCount);
-                      if(GlyphLookupMatrix[MatrixIndex.WordIndex] & (((kbts_u32)1) << MatrixIndex.BitIndex))
+                      if(GlyphLookupMatrix[MatrixIndex.WordIndex] & (1u << MatrixIndex.BitIndex))
                       {
                         kbts__matrix_index SequentialMatrixIndex = kbts__IdSequentialLookupMatrixIndex(ThisSequentialLookupCount, GlyphIndex, SequentialLookupCount);
-                        IdSequentialLookupMatrix[SequentialMatrixIndex.WordIndex] |= 1 << SequentialMatrixIndex.BitIndex;
+                        IdSequentialLookupMatrix[SequentialMatrixIndex.WordIndex] |= 1u << SequentialMatrixIndex.BitIndex;
                       }
                     }
                   }
@@ -25577,7 +25669,7 @@ static kbts_shape_config *kbts__PlaceShapeConfig(kbts_font *Font, kbts_script Sc
         {
           // We have the sequential lookup count. We can allocate our stuff.
           SequentialLookupCount = ThisSequentialLookupCount;
-          SequentialLookups = kbts__PointerPushArray(&MemoryAt, kbts__sequential_lookup, SequentialLookupCount);
+          SequentialLookups = kbts__PointerPushArray(&Bump, kbts__sequential_lookup, SequentialLookupCount);
 
           kbts_un LastSequentialLookupIndex = 0;
           if(SequentialLookupCount)
@@ -25593,7 +25685,7 @@ static kbts_shape_config *kbts__PlaceShapeConfig(kbts_font *Font, kbts_script Sc
           kbts__matrix_index LastMatrixIndex = kbts__IdSequentialLookupMatrixIndex(LastSequentialLookupIndex, LastGlyphIndex, SequentialLookupCount);
           kbts_un IdSequentialLookupMatrixSizeInWords = LastMatrixIndex.WordIndex + 1;
           kbts_un IdSequentialLookupMatrixSizeInBytes = sizeof(kbts_u32) * IdSequentialLookupMatrixSizeInWords;
-          IdSequentialLookupMatrix = (kbts_u32 *)kbts__PointerPush(&MemoryAt, IdSequentialLookupMatrixSizeInBytes, KBTS_ALIGNOF(kbts_u32));
+          IdSequentialLookupMatrix = (kbts_u32 *)kbts__PointerPush(&Bump, IdSequentialLookupMatrixSizeInBytes, KBTS_ALIGNOF(kbts_u32));
           if(Memory)
           {
             KBTS_MEMSET(IdSequentialLookupMatrix, 0, IdSequentialLookupMatrixSizeInBytes);
@@ -25618,7 +25710,8 @@ static kbts_shape_config *kbts__PlaceShapeConfig(kbts_font *Font, kbts_script Sc
 
   if(!Memory)
   {
-    *Size = (kbts_un)(MemoryAt - (char *)Memory) + KBTS_ALIGNOF(kbts_shape_config);
+    // We add the align, just to make sure we can accept any incoming pointer.
+    *Size = (Bump.At - (kbts_uptr)(void *)0) + KBTS_ALIGNOF(kbts_shape_config);
     Result = 0;
   }
 
@@ -26014,8 +26107,8 @@ KBTS_EXPORT int kbts_SizeOfGlyphConfig(kbts_shape_config *ShapeConfig, kbts_feat
 
 KBTS_EXPORT kbts_glyph_config *kbts_PlaceGlyphConfig(kbts_shape_config *ShapeConfig, kbts_feature_override *Overrides, int OverrideCount, void *Memory)
 {
-  char *MemoryAt = (char *)Memory;
-  kbts_glyph_config *Result = kbts__PointerPushType(&MemoryAt, kbts_glyph_config);
+  kbts__pointer_bump_allocator Bump = kbts__PointerBumpAllocator(Memory);
+  kbts_glyph_config *Result = kbts__PointerPushType(&Bump, kbts_glyph_config);
 
   if(Memory)
   {
@@ -26025,9 +26118,9 @@ KBTS_EXPORT kbts_glyph_config *kbts_PlaceGlyphConfig(kbts_shape_config *ShapeCon
     kbts_un LastSequentialLookupIndex = (SequentialLookupCount) ? (SequentialLookupCount - 1) : 0;
     kbts__matrix_index LastRowEntryMatrixIndex = kbts__IdSequentialLookupMatrixIndex(LastSequentialLookupIndex, 0, SequentialLookupCount);
     kbts_un MatrixRowSizeInBytes = sizeof(kbts_u32) * (LastRowEntryMatrixIndex.WordIndex + 1);
-    kbts_u32 *EnabledLookupBits = (kbts_u32 *)kbts__PointerPush(&MemoryAt, MatrixRowSizeInBytes, KBTS_ALIGNOF(kbts_u32));
+    kbts_u32 *EnabledLookupBits = (kbts_u32 *)kbts__PointerPush(&Bump, MatrixRowSizeInBytes, KBTS_ALIGNOF(kbts_u32));
     KBTS_MEMSET(EnabledLookupBits, 0, MatrixRowSizeInBytes);
-    kbts_u32 *DisabledLookupBits = (kbts_u32 *)kbts__PointerPush(&MemoryAt, MatrixRowSizeInBytes, KBTS_ALIGNOF(kbts_u32));
+    kbts_u32 *DisabledLookupBits = (kbts_u32 *)kbts__PointerPush(&Bump, MatrixRowSizeInBytes, KBTS_ALIGNOF(kbts_u32));
     KBTS_MEMSET(DisabledLookupBits, 0, MatrixRowSizeInBytes);
 
     kbts__enabled_lookup NonBinaryEnabledLookups[KBTS_MAX_SIMULTANEOUS_FEATURES];
@@ -26106,7 +26199,7 @@ KBTS_EXPORT kbts_glyph_config *kbts_PlaceGlyphConfig(kbts_shape_config *ShapeCon
               kbts__matrix_index SequentialMatrixIndex = kbts__IdSequentialLookupMatrixIndex(FoundSequentialLookupIndex, 0, SequentialLookupCount);
               if(FoundOverride->Value)
               {
-                EnabledLookupBits[SequentialMatrixIndex.WordIndex] |= 1 << SequentialMatrixIndex.BitIndex;
+                EnabledLookupBits[SequentialMatrixIndex.WordIndex] |= 1u << SequentialMatrixIndex.BitIndex;
 
                 if((FoundOverride->Value > 1) &&
                    (NonBinaryEnabledLookupCount < KBTS_MAX_SIMULTANEOUS_FEATURES))
@@ -26118,7 +26211,7 @@ KBTS_EXPORT kbts_glyph_config *kbts_PlaceGlyphConfig(kbts_shape_config *ShapeCon
               }
               else
               {
-                DisabledLookupBits[SequentialMatrixIndex.WordIndex] |= 1 << SequentialMatrixIndex.BitIndex;
+                DisabledLookupBits[SequentialMatrixIndex.WordIndex] |= 1u << SequentialMatrixIndex.BitIndex;
               }
             }
           }
@@ -26129,7 +26222,7 @@ KBTS_EXPORT kbts_glyph_config *kbts_PlaceGlyphConfig(kbts_shape_config *ShapeCon
     kbts__enabled_lookup *OutNonBinaryEnabledLookups = 0;
     if(NonBinaryEnabledLookupCount)
     {
-      OutNonBinaryEnabledLookups = kbts__PointerPushArray(&MemoryAt, kbts__enabled_lookup, NonBinaryEnabledLookupCount);
+      OutNonBinaryEnabledLookups = kbts__PointerPushArray(&Bump, kbts__enabled_lookup, NonBinaryEnabledLookupCount);
       KBTS_MEMCPY(OutNonBinaryEnabledLookups, NonBinaryEnabledLookups, sizeof(*NonBinaryEnabledLookups) * NonBinaryEnabledLookupCount);
     }
 
@@ -26225,13 +26318,13 @@ static kbts__input_codepoint_index kbts__InputCodepointIndex(kbts_un FlatCodepoi
   {
     Result.BlockIndex = 0;
     Result.CodepointIndex = (kbts_u32)FlatCodepointIndex;
-    Result.BlockCodepointCount = 1 << (KBTS__INPUT_CODEPOINT_FIRST_BLOCK_MSB + 1);
+    Result.BlockCodepointCount = 1u << (KBTS__INPUT_CODEPOINT_FIRST_BLOCK_MSB + 1);
   }
   else
   {
     Result.BlockIndex = (kbts_u32)(MsbPosition - KBTS__INPUT_CODEPOINT_FIRST_BLOCK_MSB);
-    Result.CodepointIndex = (kbts_u32)(FlatCodepointIndex & ~(1 << MsbPosition));
-    Result.BlockCodepointCount = (kbts_u32)(1 << MsbPosition);
+    Result.CodepointIndex = (kbts_u32)(FlatCodepointIndex & ~(1u << MsbPosition));
+    Result.BlockCodepointCount = (kbts_u32)(1u << MsbPosition);
   }
 
   return Result;
@@ -26302,7 +26395,7 @@ static int kbts__NextInputCodepoint(kbts_shape_codepoint_iterator *It, int *Code
   {
     It->BlockIndex += 1;
     It->CodepointIndex = 0;
-    It->CurrentBlockCodepointCount = (It->BlockIndex == It->EndBlockIndex) ? It->OnePastLastCodepointIndex : (1 << (It->BlockIndex + KBTS__INPUT_CODEPOINT_FIRST_BLOCK_MSB));
+    It->CurrentBlockCodepointCount = (It->BlockIndex == It->EndBlockIndex) ? It->OnePastLastCodepointIndex : (1u << (It->BlockIndex + KBTS__INPUT_CODEPOINT_FIRST_BLOCK_MSB));
   }
 
   if(It->BlockIndex <= It->EndBlockIndex)
@@ -26736,6 +26829,8 @@ static void kbts__ShapeDirect(kbts_shape_scratchpad *Scratchpad, kbts_glyph_stor
     Scratchpad->FeatureStagesRead = 0;
     Scratchpad->OpKind = 0;
     Scratchpad->RunDirection = RunDirection;
+    Scratchpad->NextGlyphUid = 0;
+    Scratchpad->SequentialLookupIndexIndex = 0;
 
     { // @Cleanup @Speed
       kbts_un SequentialLookupCount = kbts__SequentialLookupCount(Scratchpad->Config);
@@ -26867,37 +26962,18 @@ KBTS_EXPORT void kbts_DestroyShapeScratchpad(kbts_shape_scratchpad *Scratchpad)
     kbts_allocator_function *Allocator = Scratchpad->Allocator;
     void *AllocatorData = Scratchpad->AllocatorData;
 
-    if(Scratchpad->Config)
+    // We cannot just free the blocks inline, because freeing a start-of-allocation block will
+    // invalidate a bunch of other, unrelated blocks.
+    // We first store all of the start-of-allocation blocks in this list, and we then free them all at the end.
+    kbts__bucketed_glyph_block_header StartOfAllocationSentinel;
+    KBTS__DLLIST_SENTINEL_INIT(&StartOfAllocationSentinel);
+
+    kbts_un SequentialLookupCount = Scratchpad->SequentialLookupCount;
+    KBTS__FOR(LookupIndex, 0, SequentialLookupCount)
     {
-      // We cannot just free the blocks inline, because freeing a start-of-allocation block will
-      // invalidate a bunch of other, unrelated blocks.
-      // We first store all of the start-of-allocation blocks in this list, and we then free them all at the end.
-      kbts__bucketed_glyph_block_header StartOfAllocationSentinel;
-      KBTS__DLLIST_SENTINEL_INIT(&StartOfAllocationSentinel);
-
-      kbts_un SequentialLookupCount = kbts__SequentialLookupCount(Scratchpad->Config);
-      KBTS__FOR(LookupIndex, 0, SequentialLookupCount)
-      {
-        kbts__bucketed_glyph_block_header *Sentinel = &Scratchpad->LookupGlyphBuckets[LookupIndex];
-        for(kbts__bucketed_glyph_block_header *Header = Sentinel->Next;
-            Header != Sentinel;
-            )
-        {
-          kbts__bucketed_glyph_block_header *Next = Header->Next;
-
-          kbts__bucketed_glyph_block *Block = (kbts__bucketed_glyph_block *)Header;
-          if(Block->StartOfAllocation)
-          {
-            KBTS__DLLIST_REMOVE(&Block->Header);
-            KBTS__DLLIST_INSERT_BEFORE(&Block->Header, &StartOfAllocationSentinel);
-          }
-
-          Header = Next;
-        }
-      }
-
-      for(kbts__bucketed_glyph_block_header *Header = Scratchpad->FreeBucketedBlockSentinel.Next;
-          Header != &Scratchpad->FreeBucketedBlockSentinel;
+      kbts__bucketed_glyph_block_header *Sentinel = &Scratchpad->LookupGlyphBuckets[LookupIndex];
+      for(kbts__bucketed_glyph_block_header *Header = Sentinel->Next;
+          Header != Sentinel;
           )
       {
         kbts__bucketed_glyph_block_header *Next = Header->Next;
@@ -26911,17 +26987,33 @@ KBTS_EXPORT void kbts_DestroyShapeScratchpad(kbts_shape_scratchpad *Scratchpad)
 
         Header = Next;
       }
+    }
 
-      for(kbts__bucketed_glyph_block_header *Header = StartOfAllocationSentinel.Next;
-          Header != &StartOfAllocationSentinel;
-          )
+    for(kbts__bucketed_glyph_block_header *Header = Scratchpad->FreeBucketedBlockSentinel.Next;
+        Header != &Scratchpad->FreeBucketedBlockSentinel;
+        )
+    {
+      kbts__bucketed_glyph_block_header *Next = Header->Next;
+
+      kbts__bucketed_glyph_block *Block = (kbts__bucketed_glyph_block *)Header;
+      if(Block->StartOfAllocation)
       {
-        kbts__bucketed_glyph_block_header *Next = Header->Next;
-
-        kbts__AllocatorFree(Allocator, AllocatorData, Header);
-
-        Header = Next;
+        KBTS__DLLIST_REMOVE(&Block->Header);
+        KBTS__DLLIST_INSERT_BEFORE(&Block->Header, &StartOfAllocationSentinel);
       }
+
+      Header = Next;
+    }
+
+    for(kbts__bucketed_glyph_block_header *Header = StartOfAllocationSentinel.Next;
+        Header != &StartOfAllocationSentinel;
+        )
+    {
+      kbts__bucketed_glyph_block_header *Next = Header->Next;
+
+      kbts__AllocatorFree(Allocator, AllocatorData, Header);
+
+      Header = Next;
     }
 
     if(Scratchpad->SelfAllocated)
@@ -27149,7 +27241,7 @@ KBTS_EXPORT int kbts_ShapeRun(kbts_shape_context *Context, kbts_run *Run)
             if(!It->CodepointIndex)
             {
               It->BlockIndex -= 1;
-              It->CodepointIndex = (1 << (It->BlockIndex + KBTS__INPUT_CODEPOINT_FIRST_BLOCK_MSB)) - 1;
+              It->CodepointIndex = (1u << (It->BlockIndex + KBTS__INPUT_CODEPOINT_FIRST_BLOCK_MSB)) - 1;
             }
             else
             {
@@ -27310,7 +27402,7 @@ static kbts__cmap_subtable_pointer kbts__SelectCmapSubtable(kbts_blob_header *He
       kbts__cmap_subtable_pointer Subtable = kbts__GetCmapSubtable(Cmap, It);
       if((char *)(Subtable.Subtable + 1) <= TableEnd)
       {
-        kbts_u16 Format = *Subtable.Subtable;
+        kbts_u16 Format = kbts__ReadU16Unaligned(Subtable.Subtable);
 
         // This is kind of iffy, but the statelessness is useful for selecting
         // the cmap from an already-prepared blob without having to deal with
@@ -27319,7 +27411,7 @@ static kbts__cmap_subtable_pointer kbts__SelectCmapSubtable(kbts_blob_header *He
            ((Format >> 8) <= 14))
         {
           Format = kbts__ByteSwap16(Format);
-          *Subtable.Subtable = Format;
+          kbts__WriteU16Unaligned(Subtable.Subtable, Format);
         }
 
         if(Format == 14)
@@ -27360,8 +27452,6 @@ static kbts__cmap_subtable_pointer kbts__SelectCmapSubtable(kbts_blob_header *He
 KBTS_EXPORT kbts_load_font_error kbts_LoadFont(kbts_font *Font, kbts_load_font_state *State, void *FontData, int FontDataSize, int FontIndex, int *ScratchSize_, int *OutputSize_)
 {
   kbts_load_font_error Result = 0;
-  kbts_un ScratchSize = 0;
-  kbts_un OutputSize = 0;
 
   if(FontDataSize >= 4)
   {
@@ -27488,36 +27578,48 @@ KBTS_EXPORT kbts_load_font_error kbts_LoadFont(kbts_font *Font, kbts_load_font_s
         State->GlyphCount = (kbts_u32)GlyphCount;
       }
 
-      ScratchSize = (State->Tables[KBTS_BLOB_TABLE_ID_GSUB].Length +
-                     State->Tables[KBTS_BLOB_TABLE_ID_GPOS].Length +
-                     State->Tables[KBTS_BLOB_TABLE_ID_GDEF].Length) * sizeof(kbts_u32) / 2;
+      kbts_un ScratchSize = (State->Tables[KBTS_BLOB_TABLE_ID_GSUB].Length +
+                             State->Tables[KBTS_BLOB_TABLE_ID_GPOS].Length +
+                             State->Tables[KBTS_BLOB_TABLE_ID_GDEF].Length) * sizeof(kbts_u32) / 2;
 
-      kbts_un GlyphLookupMatrixSizeInBytes = 0;
+      kbts_un GlyphLookupMatrixSizeInWords = 0;
       if(State->LookupCount &&
          State->GlyphCount)
       {
         kbts__matrix_index LastIndex = kbts__GlyphLookupMatrixIndex(State->LookupCount - 1, State->GlyphCount - 1, State->GlyphCount);
-        GlyphLookupMatrixSizeInBytes = LastIndex.WordIndex * sizeof(kbts_u32);
+        GlyphLookupMatrixSizeInWords = LastIndex.WordIndex + 1;
       }
-      kbts_un GlyphLookupSubtableMatrixSizeInBytes = ((((State->LookupSubtableCount * State->GlyphCount) + 7) / 8) + 3) & ~3u;
-      OutputSize = sizeof(kbts_blob_header) +
-                   sizeof(kbts_blob_table) * KBTS_BLOB_TABLE_ID_COUNT +
-                   GlyphLookupMatrixSizeInBytes +
-                   GlyphLookupSubtableMatrixSizeInBytes +
-                   sizeof(kbts_u32) * State->LookupCount +
-                   sizeof(kbts_lookup_subtable_info) * State->LookupSubtableCount;
+
+      kbts_un GlyphLookupSubtableMatrixSizeInWords = 0;
+      if(State->LookupSubtableCount &&
+         State->GlyphCount)
+      {
+        kbts__matrix_index LastIndex = kbts__GlyphLookupSubtableMatrixIndex(State->LookupSubtableCount - 1, State->LookupSubtableCount, State->GlyphCount - 1, State->GlyphCount);
+        GlyphLookupSubtableMatrixSizeInWords = LastIndex.WordIndex + 1;
+      }
+
+      kbts__pointer_bump_allocator Bump = kbts__PointerBumpAllocator(0);
+
+      kbts__PointerPushType(&Bump, kbts_blob_header);
 
       KBTS__FOR(TableId, 0, KBTS_BLOB_TABLE_ID_COUNT)
       {
-        OutputSize += State->Tables[TableId].Length;
+        kbts__PointerPush(&Bump, State->Tables[TableId].Length, 4);
       }
+
+      kbts__PointerPushArray(&Bump, kbts_u32, GlyphLookupMatrixSizeInWords);
+      kbts__PointerPushArray(&Bump, kbts_u32, GlyphLookupSubtableMatrixSizeInWords);
+      kbts__PointerPushArray(&Bump, kbts_u32, State->LookupCount);
+
+      // Add the align just to make sure we can accept any pointer.
+      kbts_un OutputSize = Bump.At + KBTS_ALIGNOF(kbts_blob_header);
 
       *ScratchSize_ = (int)ScratchSize;
       *OutputSize_ = (int)OutputSize;
 
       State->ScratchSize = (kbts_u32)ScratchSize;
-      State->GlyphLookupMatrixSizeInBytes = (kbts_u32)GlyphLookupMatrixSizeInBytes;
-      State->GlyphLookupSubtableMatrixSizeInBytes = (kbts_u32)GlyphLookupSubtableMatrixSizeInBytes;
+      State->GlyphLookupMatrixSizeInBytes = (kbts_u32)(GlyphLookupMatrixSizeInWords * sizeof(kbts_u32));
+      State->GlyphLookupSubtableMatrixSizeInBytes = (kbts_u32)(GlyphLookupSubtableMatrixSizeInWords * sizeof(kbts_u32));
       State->TotalSize = (kbts_u32)OutputSize;
     }
     else if(Magic == KBTS_FOURCC('k', 'b', 't', 's'))
@@ -27563,7 +27665,7 @@ static void kbts__MarkMatrixCoverage(kbts_u32 *Matrix, kbts_un TableIndex, kbts_
 
         if(GlyphId < GlyphCount)
         {
-          Matrix[MatrixIndex.WordIndex] |= 1 << MatrixIndex.BitIndex;
+          Matrix[MatrixIndex.WordIndex] |= 1u << MatrixIndex.BitIndex;
         }
       }
     }
@@ -27582,7 +27684,7 @@ static void kbts__MarkMatrixCoverage(kbts_u32 *Matrix, kbts_un TableIndex, kbts_
 
           if(GlyphId < GlyphCount)
           {
-            Matrix[MatrixIndex.WordIndex] |= 1 << MatrixIndex.BitIndex;
+            Matrix[MatrixIndex.WordIndex] |= 1u << MatrixIndex.BitIndex;
           }
         }
       }
@@ -27608,7 +27710,7 @@ static void kbts__MarkMatrixClassDef(kbts_u32 *Matrix, kbts_un SubtableIndex, kb
            (ClassesIncluded[GlyphClass / 64] & (1ull << (GlyphClass % 64))))
         {
           kbts__matrix_index SubtableMatrixIndex = kbts__GlyphLookupSubtableMatrixIndex(SubtableIndex, SubtableCount, GlyphId, GlyphCount);
-          Matrix[SubtableMatrixIndex.WordIndex] |= 1 << SubtableMatrixIndex.BitIndex;
+          Matrix[SubtableMatrixIndex.WordIndex] |= 1u << SubtableMatrixIndex.BitIndex;
         }
       }
     }
@@ -27634,7 +27736,7 @@ static void kbts__MarkMatrixClassDef(kbts_u32 *Matrix, kbts_un SubtableIndex, kb
           KBTS__FOR(GlyphId, Range->StartGlyphId, OnePastLastGlyphId)
           {
             kbts__matrix_index SubtableMatrixIndex = kbts__GlyphLookupSubtableMatrixIndex(SubtableIndex, SubtableCount, GlyphId, GlyphCount);
-            Matrix[SubtableMatrixIndex.WordIndex] |= 1 << SubtableMatrixIndex.BitIndex;
+            Matrix[SubtableMatrixIndex.WordIndex] |= 1u << SubtableMatrixIndex.BitIndex;
           }
         }
       }
@@ -27658,30 +27760,28 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
 
   if(Result == KBTS_LOAD_FONT_ERROR_NONE)
   {
-    kbts_blob_header *Header = (kbts_blob_header *)OutputMemory;
+    kbts__pointer_bump_allocator Bump = kbts__PointerBumpAllocator(OutputMemory);
+
+    kbts_blob_header *Header = kbts__PointerPushType(&Bump, kbts_blob_header);
     *Header = KBTS__ZERO_TYPE(kbts_blob_header);
     Header->Magic = KBTS_FOURCC('k', 'b', 't', 's');
-    Header->Version = 1;
+    Header->Version = KBTS_BLOB_VERSION_CURRENT;
     Header->LookupCount = State->LookupCount;
     Header->LookupSubtableCount = State->LookupSubtableCount;
 
     // Stamp packed font data.
-    char *OutData = KBTS__POINTER_AFTER(char, Header);
     KBTS__FOR(TableId, 0, KBTS_BLOB_TABLE_ID_COUNT)
     {
       kbts_blob_table InTable = State->Tables[TableId];
       kbts_blob_table *OutTable = &Header->Tables[TableId];
 
-      OutTable->OffsetFromStartOfFile = KBTS__POINTER_DIFF32(OutData, Header);
+      char *TableBase = (char *)kbts__PointerPush(&Bump, InTable.Length, 4);
+      OutTable->OffsetFromStartOfFile = KBTS__POINTER_DIFF32(TableBase, Header);
       OutTable->Length = InTable.Length;
 
       void *InData = KBTS__POINTER_OFFSET(void, State->FontData, InTable.OffsetFromStartOfFile);
-      KBTS_MEMCPY(OutData, InData, InTable.Length);
-
-      OutData += InTable.Length;
+      KBTS_MEMCPY(TableBase, InData, InTable.Length);
     }
-
-    OutData = KBTS__ALIGN_POINTER(char, OutData, KBTS_ALIGNOF(kbts_u32));
 
     // Byteswap it.
 
@@ -27740,7 +27840,8 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
             kbts__cmap_subtable_pointer PreferredSubtable = kbts__SelectCmapSubtable(Header, CmapTable, &Font->Cmap14, &PreferredFormat);
             if(PreferredSubtable.Subtable)
             {
-              switch(*PreferredSubtable.Subtable)
+              kbts_u16 SubtableFormat = kbts__ReadU16Unaligned(PreferredSubtable.Subtable);
+              switch(SubtableFormat)
               {
               case 0:
               {
@@ -27989,7 +28090,7 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
         if(Length >= 68)
         {
           kbts__ByteSwapArray16Unchecked(&Os2->Version, 16);
-          //kbts__ByteSwapArray32Unchecked(Os2->UnicodeRange, 4);
+          kbts__ByteSwapArray32Unchecked(Os2->UnicodeRange, 4);
           kbts__ByteSwapArray16Unchecked(&Os2->Selection, 3);
 
           kbts_un Version = Os2->Version;
@@ -28002,7 +28103,7 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
             {
               if(Length >= 86)
               {
-                //kbts__ByteSwapArray32Unchecked(Os2->CodePageRange, 2);
+                kbts__ByteSwapArray32Unchecked(Os2->CodePageRange, 2);
 
                 if(Version >= 2)
                 {
@@ -28100,7 +28201,8 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
 
           KBTS__FOR(MarkGlyphSetIndex, 0, MarkGlyphSets->MarkGlyphSetCount)
           {
-            kbts__coverage *Coverage = KBTS__POINTER_OFFSET(kbts__coverage, MarkGlyphSets, CoverageOffsets[MarkGlyphSetIndex]);
+            kbts_un CoverageOffset = kbts__ReadU32Unaligned(&CoverageOffsets[MarkGlyphSetIndex]);
+            kbts__coverage *Coverage = KBTS__POINTER_OFFSET(kbts__coverage, MarkGlyphSets, CoverageOffset);
             kbts__ByteSwapCoverage(&ByteSwapContext, Coverage);
           }
         }
@@ -28184,16 +28286,13 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
       kbts_un LookupCount = Header->LookupCount;
       kbts_un SubtableCount = Header->LookupSubtableCount;
 
-      kbts_u32 *GlyphLookupMatrix = (kbts_u32 *)OutData;
-      kbts_u32 *GlyphLookupSubtableMatrix = KBTS__POINTER_OFFSET(kbts_u32, GlyphLookupMatrix, State->GlyphLookupMatrixSizeInBytes);
+      kbts_u32 *GlyphLookupMatrix = kbts__PointerPushArray(&Bump, kbts_u32, State->GlyphLookupMatrixSizeInBytes / sizeof(kbts_u32));
+      kbts_u32 *GlyphLookupSubtableMatrix = kbts__PointerPushArray(&Bump, kbts_u32, State->GlyphLookupSubtableMatrixSizeInBytes / sizeof(kbts_u32));
+      kbts_u32 *LookupSubtableIndexOffsets = kbts__PointerPushArray(&Bump, kbts_u32, State->LookupCount);
 
-      kbts_u32 *LookupSubtableIndexOffsets = KBTS__POINTER_OFFSET(kbts_u32, GlyphLookupSubtableMatrix, State->GlyphLookupSubtableMatrixSizeInBytes);
-      kbts_lookup_subtable_info *SubtableInfos = KBTS__POINTER_OFFSET(kbts_lookup_subtable_info, LookupSubtableIndexOffsets, sizeof(kbts_u32) * Header->LookupCount);
-
-      KBTS_MEMSET(GlyphLookupMatrix, 0, State->GlyphLookupMatrixSizeInBytes +
-                                        State->GlyphLookupSubtableMatrixSizeInBytes +
-                                        sizeof(kbts_u32) * Header->LookupCount +
-                                        sizeof(kbts_lookup_subtable_info) * Header->LookupSubtableCount);
+      KBTS_MEMSET(GlyphLookupMatrix, 0, State->GlyphLookupMatrixSizeInBytes);
+      KBTS_MEMSET(GlyphLookupSubtableMatrix, 0, State->GlyphLookupSubtableMatrixSizeInBytes);
+      KBTS_MEMSET(LookupSubtableIndexOffsets, 0, sizeof(kbts_u32) * State->LookupCount);
 
       kbts_un GposLookupIndexOffset = 0;
       kbts_un RunningLookupIndex = 0;
@@ -28223,7 +28322,6 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
 
               KBTS__FOR(SubtableIndex, 0, Lookup.SubtableCount)
               {
-                kbts_lookup_subtable_info SubtableInfo = KBTS__ZERO;
                 kbts_u16 LookupType = Lookup.Type;
                 kbts_u16 *Base = KBTS__POINTER_OFFSET(kbts_u16, PackedLookup, Lookup.SubtableOffsets[SubtableIndex]);
 
@@ -28261,10 +28359,8 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
                         kbts_un GlyphId = Ids[IdIndex - 1];
 
                         kbts__matrix_index SubtableMatrixIndex = kbts__GlyphLookupSubtableMatrixIndex(RunningSubtableIndex, SubtableCount, GlyphId, GlyphCount);
-                        GlyphLookupSubtableMatrix[SubtableMatrixIndex.WordIndex] |= 1 << SubtableMatrixIndex.BitIndex;
+                        GlyphLookupSubtableMatrix[SubtableMatrixIndex.WordIndex] |= 1u << SubtableMatrixIndex.BitIndex;
                       }
-
-                      SubtableInfo.MinimumFollowupPlusOne = KBTS__MIN(SubtableInfo.MinimumFollowupPlusOne - 1, Ligature->ComponentCount - 1) + 1;
                     }
                   }
                 }
@@ -28285,7 +28381,6 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
                         KBTS__FOR(RuleIndex, 0, Set->Count)
                         {
                           kbts__sequence_rule *Rule = kbts__GetSequenceRule(Set, RuleIndex);
-                          SubtableInfo.MinimumFollowupPlusOne = KBTS__MIN(SubtableInfo.MinimumFollowupPlusOne - 1, Rule->GlyphCount - 1) + 1;
 
                           kbts_u16 *SequenceGlyphIds = KBTS__POINTER_AFTER(kbts_u16, Rule);
                           KBTS__FOR(InputIndex, 1, Rule->GlyphCount)
@@ -28293,7 +28388,7 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
                             kbts_un GlyphId = SequenceGlyphIds[InputIndex - 1];
 
                             kbts__matrix_index SubtableMatrixIndex = kbts__GlyphLookupSubtableMatrixIndex(RunningSubtableIndex, SubtableCount, GlyphId, GlyphCount);
-                            GlyphLookupSubtableMatrix[SubtableMatrixIndex.WordIndex] |= 1 << SubtableMatrixIndex.BitIndex;
+                            GlyphLookupSubtableMatrix[SubtableMatrixIndex.WordIndex] |= 1u << SubtableMatrixIndex.BitIndex;
                           }
                         }
                       }
@@ -28317,8 +28412,6 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
                           kbts__class_sequence_rule *Rule = kbts__GetClassSequenceRule(Set, RuleIndex);
                           kbts_u16 *SequenceClasses = KBTS__POINTER_AFTER(kbts_u16, Rule);
 
-                          SubtableInfo.MinimumFollowupPlusOne = KBTS__MIN(SubtableInfo.MinimumFollowupPlusOne - 1, Rule->GlyphCount - 1) + 1;
-
                           KBTS__FOR(SequenceIndex, 1, Rule->GlyphCount)
                           {
                             kbts_un Class = SequenceClasses[SequenceIndex - 1];
@@ -28339,8 +28432,6 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
                   {
                     kbts__sequence_context_3 *Subst = (kbts__sequence_context_3 *)Base;
                     kbts_u16 *CoverageOffsets = KBTS__POINTER_AFTER(kbts_u16, Subst);
-
-                    SubtableInfo.MinimumFollowupPlusOne = KBTS__MIN(SubtableInfo.MinimumFollowupPlusOne - 1, Subst->GlyphCount - 1) + 1;
 
                     KBTS__FOR(CoverageIndex, 1, Subst->GlyphCount)
                     {
@@ -28371,28 +28462,25 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
                         kbts__chained_sequence_rule *Rule = kbts__GetChainedClassSequenceRule(Set, RuleIndex);
                         kbts__unpacked_chained_sequence_rule Unpacked = kbts__UnpackChainedSequenceRule(Rule, 0);
 
-                        SubtableInfo.MinimumBacktrackPlusOne = KBTS__MIN(SubtableInfo.MinimumBacktrackPlusOne - 1, Unpacked.BacktrackCount) + 1;
-                        SubtableInfo.MinimumFollowupPlusOne = KBTS__MIN(SubtableInfo.MinimumFollowupPlusOne - 1, Unpacked.InputCount - 1 + Unpacked.LookaheadCount) + 1;
-
                         KBTS__FOR(BacktrackIndex, 0, Unpacked.BacktrackCount)
                         {
                           kbts_un GlyphId = Unpacked.Backtrack[BacktrackIndex];
                           kbts__matrix_index SubtableMatrixIndex = kbts__GlyphLookupSubtableMatrixIndex(RunningSubtableIndex, SubtableCount, GlyphId, GlyphCount);
-                          GlyphLookupSubtableMatrix[SubtableMatrixIndex.WordIndex] |= 1 << SubtableMatrixIndex.BitIndex;
+                          GlyphLookupSubtableMatrix[SubtableMatrixIndex.WordIndex] |= 1u << SubtableMatrixIndex.BitIndex;
                         }
 
                         KBTS__FOR(InputIndex, 1, Unpacked.InputCount)
                         {
                           kbts_un GlyphId = Unpacked.Input[InputIndex - 1];
                           kbts__matrix_index SubtableMatrixIndex = kbts__GlyphLookupSubtableMatrixIndex(RunningSubtableIndex, SubtableCount, GlyphId, GlyphCount);
-                          GlyphLookupSubtableMatrix[SubtableMatrixIndex.WordIndex] |= 1 << SubtableMatrixIndex.BitIndex;
+                          GlyphLookupSubtableMatrix[SubtableMatrixIndex.WordIndex] |= 1u << SubtableMatrixIndex.BitIndex;
                         }
 
                         KBTS__FOR(LookaheadIndex, 0, Unpacked.LookaheadCount)
                         {
                           kbts_un GlyphId = Unpacked.Lookahead[LookaheadIndex];
                           kbts__matrix_index SubtableMatrixIndex = kbts__GlyphLookupSubtableMatrixIndex(RunningSubtableIndex, SubtableCount, GlyphId, GlyphCount);
-                          GlyphLookupSubtableMatrix[SubtableMatrixIndex.WordIndex] |= 1 << SubtableMatrixIndex.BitIndex;
+                          GlyphLookupSubtableMatrix[SubtableMatrixIndex.WordIndex] |= 1u << SubtableMatrixIndex.BitIndex;
                         }
                       }
                     }
@@ -28433,9 +28521,6 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
                         {
                           kbts__chained_sequence_rule *Rule = kbts__GetChainedSequenceRule(Set, RuleIndex);
                           kbts__unpacked_chained_sequence_rule Unpacked = kbts__UnpackChainedSequenceRule(Rule, 0);
-
-                          SubtableInfo.MinimumBacktrackPlusOne = KBTS__MIN(SubtableInfo.MinimumBacktrackPlusOne - 1, Unpacked.BacktrackCount) + 1;
-                          SubtableInfo.MinimumFollowupPlusOne = KBTS__MIN(SubtableInfo.MinimumFollowupPlusOne - 1, Unpacked.InputCount - 1 + Unpacked.LookaheadCount) + 1;
 
                           KBTS__FOR(BacktrackIndex, 0, Unpacked.BacktrackCount)
                           {
@@ -28479,9 +28564,6 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
 
                     Coverage = KBTS__POINTER_OFFSET(kbts__coverage, Subst, Unpacked.InputCoverageOffsets[0]);
 
-                    SubtableInfo.MinimumBacktrackPlusOne = KBTS__MIN(SubtableInfo.MinimumBacktrackPlusOne - 1, Unpacked.BacktrackCount) + 1;
-                    SubtableInfo.MinimumFollowupPlusOne = KBTS__MIN(SubtableInfo.MinimumFollowupPlusOne - 1, Unpacked.InputCount - 1 + Unpacked.LookaheadCount) + 1;
-
                     KBTS__FOR(BacktrackCoverageIndex, 0, Unpacked.BacktrackCount)
                     {
                       kbts__coverage *SubCoverage = KBTS__POINTER_OFFSET(kbts__coverage, Subst, Unpacked.BacktrackCoverageOffsets[BacktrackCoverageIndex]);
@@ -28507,8 +28589,6 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
                 {
                   kbts__reverse_chain_substitution *Subst = (kbts__reverse_chain_substitution *)Base;
                   kbts__unpacked_reverse_chain_substitution Unpacked = kbts__UnpackReverseChainSubstitution(Subst, 0);
-                  SubtableInfo.MinimumBacktrackPlusOne = KBTS__MIN(SubtableInfo.MinimumBacktrackPlusOne - 1, Unpacked.BacktrackCount) + 1;
-                  SubtableInfo.MinimumFollowupPlusOne = KBTS__MIN(SubtableInfo.MinimumFollowupPlusOne - 1, Unpacked.LookaheadCount) + 1;
 
                   KBTS__FOR(BacktrackIndex, 0, Unpacked.BacktrackCount)
                   {
@@ -28526,7 +28606,6 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
                 kbts__MarkMatrixCoverage(GlyphLookupMatrix, RunningLookupIndex, LookupCount, GlyphCount, Coverage, 0);
                 kbts__MarkMatrixCoverage(GlyphLookupSubtableMatrix, RunningSubtableIndex, SubtableCount, GlyphCount, Coverage, 1);
 
-                SubtableInfos[RunningSubtableIndex] = SubtableInfo;
                 RunningSubtableIndex += 1;
               }
 
@@ -28545,7 +28624,6 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
       Header->GlyphLookupMatrixOffsetFromStartOfFile = KBTS__POINTER_DIFF32(GlyphLookupMatrix, Header);
       Header->GlyphLookupSubtableMatrixOffsetFromStartOfFile = KBTS__POINTER_DIFF32(GlyphLookupSubtableMatrix, Header);
       Header->LookupSubtableIndexOffsetsOffsetFromStartOfFile = KBTS__POINTER_DIFF32(LookupSubtableIndexOffsets, Header);
-      Header->SubtableInfosOffsetFromStartOfFile = KBTS__POINTER_DIFF32(SubtableInfos, Header);
     }
   }
 
@@ -28558,119 +28636,169 @@ KBTS_EXPORT kbts_load_font_error kbts_PlaceBlob(kbts_font *Font, kbts_load_font_
   return Result;
 }
 
-KBTS_EXPORT void kbts_GetFontInfo(kbts_font *Font, kbts_font_info *Info)
+KBTS_EXPORT void kbts_GetFontInfo2(kbts_font *Font, kbts_font_info2 *Info)
 {
-  KBTS_MEMSET(Info, 0, sizeof(*Info));
-  kbts_blob_header *Blob = Font->Blob;
-
-  if(kbts_FontIsValid(Font) && Blob)
+  if(Info && Info->Size)
   {
-    kbts_blob_table *NameTable = &Blob->Tables[KBTS_BLOB_TABLE_ID_NAME];
+    kbts_un InfoSize = Info->Size;
+    KBTS_MEMSET(Info, 0, sizeof(*Info));
+    Info->Size = (kbts_u32)InfoSize;
 
-    if(NameTable->Length)
+    kbts_blob_header *Blob = Font->Blob;
+
+    if(Font && kbts_FontIsValid(Font) && Blob)
     {
-      kbts__name *Name = KBTS__POINTER_OFFSET(kbts__name, Blob, NameTable->OffsetFromStartOfFile);
-      kbts__name_record *Records = KBTS__POINTER_AFTER(kbts__name_record, Name);
-      char *StringBase = KBTS__POINTER_OFFSET(char, Name, Name->StringStorageOffset);
+      kbts__name *Name = kbts__BlobTableDataType(Blob, KBTS_BLOB_TABLE_ID_NAME, kbts__name);
+      kbts__os2 *Os2 = kbts__BlobTableDataType(Blob, KBTS_BLOB_TABLE_ID_OS2, kbts__os2);
+      // @Incomplete: Support vhea, too.
+      kbts__hea *Hhea = kbts__BlobTableDataType(Blob, KBTS_BLOB_TABLE_ID_HHEA, kbts__hea);
+      kbts__head *Head = kbts__BlobTableDataType(Blob, KBTS_BLOB_TABLE_ID_HEAD, kbts__head);
 
-      KBTS__FOR(RecordIndex, 0, Name->Count)
+      switch(InfoSize)
       {
-        kbts__name_record *Record = &Records[RecordIndex];
+      case sizeof(kbts_font_info2_1):
+      {
+        kbts_font_info2_1 *Info2_1 = (kbts_font_info2_1 *)Info;
 
-        if(!Record->LanguageId)
+        if(Os2)
         {
-          kbts_font_info_string_id Id = KBTS_FONT_INFO_STRING_ID_NONE;
+          Info2_1->Ascent = Os2->TypoAscender;
+          Info2_1->Descent = Os2->TypoDescender;
+          Info2_1->LineGap = Os2->TypoLineGap;
+        }
+        else if(Hhea)
+        {
+          Info2_1->Ascent = Hhea->Ascent;
+          Info2_1->Descent = Hhea->Descent;
+          Info2_1->LineGap = Hhea->LineGap;
+        }
 
-          switch(Record->NameId)
+        if(Head)
+        {
+          Info2_1->UnitsPerEm = Head->UnitsPerEm;
+
+          Info2_1->XMin = Head->XMin;
+          Info2_1->YMin = Head->YMin;
+          Info2_1->XMax = Head->XMax;
+          Info2_1->YMax = Head->YMax;
+        }
+      } // Fallthrough
+
+      case sizeof(kbts_font_info2):
+      {
+        if(Name)
+        {
+          kbts__name_record *Records = KBTS__POINTER_AFTER(kbts__name_record, Name);
+          char *StringBase = KBTS__POINTER_OFFSET(char, Name, Name->StringStorageOffset);
+
+          KBTS__FOR(RecordIndex, 0, Name->Count)
           {
-          case 0: Id = KBTS_FONT_INFO_STRING_ID_COPYRIGHT; break;
-          case 1: Id = KBTS_FONT_INFO_STRING_ID_FAMILY; break;
-          case 2: Id = KBTS_FONT_INFO_STRING_ID_SUBFAMILY; break;
-          case 3: Id = KBTS_FONT_INFO_STRING_ID_UID; break;
-          case 4: Id = KBTS_FONT_INFO_STRING_ID_FULL_NAME; break;
-          case 5: Id = KBTS_FONT_INFO_STRING_ID_VERSION; break;
-          case 6: Id = KBTS_FONT_INFO_STRING_ID_POSTSCRIPT_NAME; break;
-          case 7: Id = KBTS_FONT_INFO_STRING_ID_TRADEMARK; break;
-          case 8: Id = KBTS_FONT_INFO_STRING_ID_MANUFACTURER; break;
-          case 9: Id = KBTS_FONT_INFO_STRING_ID_DESIGNER; break;
-          case 10: Id = KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_FAMILY; break;
-          case 11: Id = KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_SUBFAMILY; break;
+            kbts__name_record *Record = &Records[RecordIndex];
+
+            if(!Record->LanguageId)
+            {
+              kbts_font_info_string_id Id = KBTS_FONT_INFO_STRING_ID_NONE;
+
+              switch(Record->NameId)
+              {
+              case 0: Id = KBTS_FONT_INFO_STRING_ID_COPYRIGHT; break;
+              case 1: Id = KBTS_FONT_INFO_STRING_ID_FAMILY; break;
+              case 2: Id = KBTS_FONT_INFO_STRING_ID_SUBFAMILY; break;
+              case 3: Id = KBTS_FONT_INFO_STRING_ID_UID; break;
+              case 4: Id = KBTS_FONT_INFO_STRING_ID_FULL_NAME; break;
+              case 5: Id = KBTS_FONT_INFO_STRING_ID_VERSION; break;
+              case 6: Id = KBTS_FONT_INFO_STRING_ID_POSTSCRIPT_NAME; break;
+              case 7: Id = KBTS_FONT_INFO_STRING_ID_TRADEMARK; break;
+              case 8: Id = KBTS_FONT_INFO_STRING_ID_MANUFACTURER; break;
+              case 9: Id = KBTS_FONT_INFO_STRING_ID_DESIGNER; break;
+              case 10: Id = KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_FAMILY; break;
+              case 11: Id = KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_SUBFAMILY; break;
+              }
+
+              if(Id)
+              {
+                Info->Strings[Id] = KBTS__POINTER_OFFSET(char, StringBase, Record->StringOffset);
+                Info->StringLengths[Id] = Record->Length;
+              }
+            }
           }
 
-          if(Id)
+          if(!Info->Strings[KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_FAMILY])
           {
-            Info->Strings[Id] = KBTS__POINTER_OFFSET(char, StringBase, Record->StringOffset);
-            Info->StringLengths[Id] = Record->Length;
+            Info->Strings[KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_FAMILY] = Info->Strings[KBTS_FONT_INFO_STRING_ID_FAMILY];
+            Info->StringLengths[KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_FAMILY] = Info->StringLengths[KBTS_FONT_INFO_STRING_ID_FAMILY];
+          }
+
+          if(!Info->Strings[KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_SUBFAMILY])
+          {
+            Info->Strings[KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_SUBFAMILY] = Info->Strings[KBTS_FONT_INFO_STRING_ID_SUBFAMILY];
+            Info->StringLengths[KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_SUBFAMILY] = Info->StringLengths[KBTS_FONT_INFO_STRING_ID_SUBFAMILY];
           }
         }
-      }
 
-      if(!Info->Strings[KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_FAMILY])
-      {
-        Info->Strings[KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_FAMILY] = Info->Strings[KBTS_FONT_INFO_STRING_ID_FAMILY];
-        Info->StringLengths[KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_FAMILY] = Info->StringLengths[KBTS_FONT_INFO_STRING_ID_FAMILY];
-      }
+        if(Os2)
+        {
+          kbts_font_weight Weight = KBTS_FONT_WEIGHT_UNKNOWN;
+          kbts_font_width Width = KBTS_FONT_WIDTH_UNKNOWN;
+          kbts_font_style_flags StyleFlags = KBTS_FONT_STYLE_FLAG_NONE;
 
-      if(!Info->Strings[KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_SUBFAMILY])
-      {
-        Info->Strings[KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_SUBFAMILY] = Info->Strings[KBTS_FONT_INFO_STRING_ID_SUBFAMILY];
-        Info->StringLengths[KBTS_FONT_INFO_STRING_ID_TYPOGRAPHIC_SUBFAMILY] = Info->StringLengths[KBTS_FONT_INFO_STRING_ID_SUBFAMILY];
-      }
-    }
+          switch(Os2->WeightClass)
+          {
+          case 100: Weight = KBTS_FONT_WEIGHT_THIN; break;
+          case 200: Weight = KBTS_FONT_WEIGHT_EXTRA_LIGHT; break;
+          case 300: Weight = KBTS_FONT_WEIGHT_LIGHT; break;
+          case 400: Weight = KBTS_FONT_WEIGHT_NORMAL; break;
+          case 500: Weight = KBTS_FONT_WEIGHT_MEDIUM; break;
+          case 600: Weight = KBTS_FONT_WEIGHT_SEMI_BOLD; break;
+          case 700: Weight = KBTS_FONT_WEIGHT_BOLD; break;
+          case 800: Weight = KBTS_FONT_WEIGHT_EXTRA_BOLD; break;
+          case 900: Weight = KBTS_FONT_WEIGHT_BLACK; break;
+          }
 
-    kbts_blob_table *Os2Table = &Blob->Tables[KBTS_BLOB_TABLE_ID_OS2];
+          switch(Os2->WidthClass)
+          {
+          case 1: Width = KBTS_FONT_WIDTH_ULTRA_CONDENSED; break;
+          case 2: Width = KBTS_FONT_WIDTH_EXTRA_CONDENSED; break;
+          case 3: Width = KBTS_FONT_WIDTH_CONDENSED; break;
+          case 4: Width = KBTS_FONT_WIDTH_SEMI_CONDENSED; break;
+          case 5: Width = KBTS_FONT_WIDTH_NORMAL; break;
+          case 6: Width = KBTS_FONT_WIDTH_SEMI_EXPANDED; break;
+          case 7: Width = KBTS_FONT_WIDTH_EXPANDED; break;
+          case 8: Width = KBTS_FONT_WIDTH_EXTRA_EXPANDED; break;
+          case 9: Width = KBTS_FONT_WIDTH_ULTRA_EXPANDED; break;
+          }
 
-    if(Os2Table->Length)
-    {
-      kbts__os2 *Os2 = KBTS__POINTER_OFFSET(kbts__os2, Blob, Os2Table->OffsetFromStartOfFile);
-      kbts_font_weight Weight = KBTS_FONT_WEIGHT_UNKNOWN;
-      kbts_font_width Width = KBTS_FONT_WIDTH_UNKNOWN;
-      kbts_font_style_flags StyleFlags = KBTS_FONT_STYLE_FLAG_NONE;
+          if(Os2->Selection & (KBTS__OS2_SELECTION_FLAG_ITALIC | KBTS__OS2_SELECTION_FLAG_OBLIQUE))
+          {
+            StyleFlags |= KBTS_FONT_STYLE_FLAG_ITALIC;
+          }
+          if(Os2->Selection & KBTS__OS2_SELECTION_FLAG_BOLD)
+          {
+            StyleFlags |= KBTS_FONT_STYLE_FLAG_BOLD;
+          }
+          if(Os2->Selection & KBTS__OS2_SELECTION_FLAG_REGULAR)
+          {
+            StyleFlags |= KBTS_FONT_STYLE_FLAG_REGULAR;        
+          }
 
-      switch(Os2->WeightClass)
-      {
-      case 100: Weight = KBTS_FONT_WEIGHT_THIN; break;
-      case 200: Weight = KBTS_FONT_WEIGHT_EXTRA_LIGHT; break;
-      case 300: Weight = KBTS_FONT_WEIGHT_LIGHT; break;
-      case 400: Weight = KBTS_FONT_WEIGHT_NORMAL; break;
-      case 500: Weight = KBTS_FONT_WEIGHT_MEDIUM; break;
-      case 600: Weight = KBTS_FONT_WEIGHT_SEMI_BOLD; break;
-      case 700: Weight = KBTS_FONT_WEIGHT_BOLD; break;
-      case 800: Weight = KBTS_FONT_WEIGHT_EXTRA_BOLD; break;
-      case 900: Weight = KBTS_FONT_WEIGHT_BLACK; break;
+          Info->Weight = Weight;
+          Info->Width = Width;
+          Info->StyleFlags = StyleFlags;
+        }
+      } break;
       }
-
-      switch(Os2->WidthClass)
-      {
-      case 1: Width = KBTS_FONT_WIDTH_ULTRA_CONDENSED; break;
-      case 2: Width = KBTS_FONT_WIDTH_EXTRA_CONDENSED; break;
-      case 3: Width = KBTS_FONT_WIDTH_CONDENSED; break;
-      case 4: Width = KBTS_FONT_WIDTH_SEMI_CONDENSED; break;
-      case 5: Width = KBTS_FONT_WIDTH_NORMAL; break;
-      case 6: Width = KBTS_FONT_WIDTH_SEMI_EXPANDED; break;
-      case 7: Width = KBTS_FONT_WIDTH_EXPANDED; break;
-      case 8: Width = KBTS_FONT_WIDTH_EXTRA_EXPANDED; break;
-      case 9: Width = KBTS_FONT_WIDTH_ULTRA_EXPANDED; break;
-      }
-
-      if(Os2->Selection & (KBTS__OS2_SELECTION_FLAG_ITALIC | KBTS__OS2_SELECTION_FLAG_OBLIQUE))
-      {
-        StyleFlags |= KBTS_FONT_STYLE_FLAG_ITALIC;
-      }
-      if(Os2->Selection & KBTS__OS2_SELECTION_FLAG_BOLD)
-      {
-        StyleFlags |= KBTS_FONT_STYLE_FLAG_BOLD;
-      }
-      if(Os2->Selection & KBTS__OS2_SELECTION_FLAG_REGULAR)
-      {
-        StyleFlags |= KBTS_FONT_STYLE_FLAG_REGULAR;        
-      }
-
-      Info->Weight = Weight;
-      Info->Width = Width;
-      Info->StyleFlags = StyleFlags;
     }
   }
+}
+
+KBTS_EXPORT void kbts_GetFontInfo(kbts_font *Font, kbts_font_info *Info)
+{
+  kbts_font_info2 Info2;
+  Info2.Size = sizeof(Info2);
+
+  kbts_GetFontInfo2(Font, &Info2);
+
+  KBTS_MEMCPY(Info, Info2.Strings, sizeof(*Info));
 }
 
 KBTS_EXPORT kbts_font kbts_FontFromMemory(void *FileData, int FileSize, int FontIndex, kbts_allocator_function *Allocator, void *AllocatorData)
@@ -29429,7 +29557,7 @@ static void kbts__BreakAddCodepoint(kbts_break_state *State, kbts_u32 Codepoint,
   // Word breaks.
   // We buffer 3 characters for word breaks.
   // Each character gets 3 bits (padded to 4) representing 3 levels of priority.
-  #define KBTS_WORD_BREAK_BITS(Priority, Position) (((1 << ((Priority) + 1)) - 1) << ((Position) * 4))
+  #define KBTS_WORD_BREAK_BITS(Priority, Position) (((1u << ((Priority) + 1)) - 1) << ((Position) * 4))
   #define KBTS_C2(A, B) case (KBTS_WORD_BREAK_CLASS_##A << 8) | (KBTS_WORD_BREAK_CLASS_##B)
   #define KBTS_C3(A, B, C) case (KBTS_WORD_BREAK_CLASS_##A << 16) | (KBTS_WORD_BREAK_CLASS_##B << 8) | (KBTS_WORD_BREAK_CLASS_##C)
 
