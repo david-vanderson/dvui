@@ -278,7 +278,10 @@ pub fn demo() void {
 }
 
 pub fn dialogDirect() void {
-    var dialog_win = dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = &show_dialog }, .{ .max_size_content = .width(500), .background = false, .border = .all(0) });
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+    const allow_resize = dvui.dataGetPtrDefault(null, uniqueId, "allow_resize", bool, true);
+
+    var dialog_win = dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = &show_dialog, .resize = if (allow_resize.*) .all else .none }, .{ .max_size_content = .width(500), .background = false, .border = .all(0) });
     defer dialog_win.deinit();
 
     const extra_stuff: *bool = dvui.dataGetPtrDefault(null, dialog_win.data().id, "extra_stuff", bool, false);
@@ -295,12 +298,14 @@ pub fn dialogDirect() void {
     }
 
     // background for dialog_win (since it has background false)
-    var back = dvui.box(@src(), .{}, .{ .expand = .both, .style = .window, .background = true, .border = .all(1) });
+    var back = dvui.box(@src(), .{}, .{ .expand = .both, .style = .window, .background = true, .border = .all(1), .corner_radius = .all(5) });
     defer back.deinit();
 
     dialog_win.dragAreaSet(dvui.windowHeader("Dialog", "", &show_dialog));
     dvui.label(@src(), "Asking a Question", .{}, .{ .font = .theme(.title), .gravity_x = 0.5 });
     dvui.label(@src(), "This dialog is directly called by user code.", .{}, .{ .gravity_x = 0.5 });
+
+    _ = dvui.checkbox(@src(), allow_resize, "Allow Resizing", .{});
 
     {
         var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
