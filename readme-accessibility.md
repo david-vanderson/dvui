@@ -196,6 +196,18 @@ DVUI offers the following labeling options:
 
 Alternatively, you can also use the `AccessKit.nodeSetLabel` and `AccessKit.nodeSetLabeledBy` functions.
 
+#### Text
+Text created through the TextLayoutWidget will make the text accessibile to the screen reader through a text_run role. This is true for any widget that uses TextLayoutWidget to create text, e.g. TextEntryWidget.
+
+Each call to add_text creates a new text_run for each line or partial line of text added. 
+
+To make your text compatible with text_runs, you should:
+1) If there are no font/style changes, use addText() to add one or more full lines, including any trailing newline.
+2) If there are fonts/styles changes, use a different addText() for each font/style change.
+3) Do not call addText() just to add a newline, unless it is for a blank line, only containing a newline.
+
+Ignoring these rules will not break anything, but will make it harder for accessiblilty users to correctly navigate such text in their screen reader.
+
 ## Current State of Accessibility in DVUI
 
 * A role of `null` means the widget will not be added to the accessibility tree, unless the user passes a `role` for that widget via Options.
@@ -226,8 +238,8 @@ Alternatively, you can also use the `AccessKit.nodeSetLabel` and `AccessKit.node
 | ScrollBarWidget | scroll_bar | Y *| N* | Y | Due to bug in AccessKit, is set to read-only and cannot interact. Actual values displayed may not be accurate | 
 | SuggestionsWidget | suggestion, list_item | Y | Y | N | 
 | TabsWidget | .tab_panel, .tab | Y | Y | N | Sets active tabs and allows tab selection |
-| TextEntryWidget | text_input, multiline_text_input | Y* | N* | Y | Text entry should work for "reasonable" amounts of text. SetValue will replace all text. Needs to implement the .text_run role to properly allow users to fully perform text entry and editing. |
-| TextLayoutWidget | label | Y* | N/A | Y | Currently displays only visible text (TBC). Works OK for "reasonable" amounts of text. Does not support sending of formatting information | 
+| TextEntryWidget | text_input, multiline_text_input | Y* | N* | Y | TextRun support implemented for text. Allows selection and navigation. Scrolling for off-screen text requires improvement. Cached layouts needs more investigation. |
+| TextLayoutWidget | label | Y* | N/A | Y | Most features supported. Needs to implement the text_replace action. | 
 | TreeWidget | tree, tree_item | Y* | Y | Y | Adds tree and nodes. Implement expand / collapse when supported by AccessKit | 
 | windowHeader | label, button | Y | Y | N | |
 | dialogs | window | Y | Y | Y | All dialogs are displayed as windows, rather than dialogs and modal state is not displayed in accessibility insights. AccessKit currently has limted support for dialogs, so leaving as window until the situation changes and can revisit. |
@@ -241,6 +253,6 @@ Alternatively, you can also use the `AccessKit.nodeSetLabel` and `AccessKit.node
 | slider | slider | Y | Y | N | Fully supported |
 | progress | progress_indicator | Y | N/A  | N | Fully supported |
 | checkbox | check_box | Y | Y | N | Fully supported |
-| radio | radio_button | Y* | Y | N | Best practice: Create a radio group with a surrounding box|
+| radio | radio_button | Y* | Y | N | Best practice: Create a radio group with a surrounding radio group widget|
 | textEntryNumber | number_input | Y | Y | N | Fully supported. Supports min, max and valid/invalid. |
 

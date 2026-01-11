@@ -145,12 +145,9 @@ fn dvuiStuff() void {
     tl.deinit();
 
     var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    tl2.addText("The dvui is painting only floating windows and dialogs.", .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is managed by the application (in this demo capped at vsync).", .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Cursor is only being set by dvui for floating windows.", .{});
-    tl2.addText("\n\n", .{});
+    tl2.addText("The dvui is painting only floating windows and dialogs.\n\n", .{});
+    tl2.addText("Framerate is managed by the application (in this demo capped at vsync).\n\n", .{});
+    tl2.addText("Cursor is only being set by dvui for floating windows.\n\n", .{});
     if (dvui.useFreeType) {
         tl2.addText("Fonts are being rendered by FreeType 2.", .{});
     } else {
