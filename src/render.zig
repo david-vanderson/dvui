@@ -155,13 +155,13 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     const target_fraction = if (cw.snap_to_pixels) 1.0 else target_size / fce.height;
 
     // make sure the cache has all the glyphs we need
-    if (opts.kern_in == null) {
-        // if kern_in is given, assume we already did this when measuring the text
-        var utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
-        while (utf8it.nextCodepoint()) |codepoint| {
-            _ = try fce.glyphInfoGetOrReplacement(cw.gpa, codepoint);
-        }
-    }
+    //if (opts.kern_in == null) {
+    //    // if kern_in is given, assume we already did this when measuring the text
+    //    var utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
+    //    while (utf8it.nextCodepoint()) |codepoint| {
+    //        _ = try fce.glyphInfoGetOrReplacement(cw.gpa, codepoint);
+    //    }
+    //}
 
     // Generate new texture atlas if needed to update glyph uv coords
     const texture_atlas = fce.getTextureAtlas(cw.gpa, cw.backend) catch |err| switch (err) {
@@ -189,6 +189,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
     var x = start.x;
     var max_x = start.x;
+    var max_above_y: f32 = 0;
 
     if (opts.debug) {
         dvui.log.debug("renderText {f}\n", .{start});
@@ -210,109 +211,252 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     var bytes_seen: usize = 0;
     var last_codepoint: u32 = 0;
 
-    const kerning: bool = opts.kerning orelse cw.kerning;
-    var next_kern_idx: u32 = 0;
-    var next_kern_byte: u32 = 0;
-    if (opts.kern_in) |ki| {
-        next_kern_byte = ki[next_kern_idx];
-        next_kern_idx += 1;
-    }
+    if (dvui.useKBTS) {
+        const Context = dvui.c.kbts_CreateShapeContext(null, null);
+        //dvui.c.kbts_ShapePushFeature(Context, dvui.c.KBTS_FEATURE_TAG_kern, 1);
+        defer dvui.c.kbts_DestroyShapeContext(Context);
 
-    var i: usize = 0;
-    while (i < opts.text.len) {
-        const cplen = std.unicode.utf8ByteSequenceLength(opts.text[i]) catch unreachable;
-        const codepoint = std.unicode.utf8Decode(opts.text[i..][0..cplen]) catch unreachable;
-        const gi = try fce.glyphInfoGetOrReplacement(cw.gpa, codepoint);
+        _ = dvui.c.kbts_ShapePushFont(Context, &fce.kb_font);
 
-        if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
-            const kk = fce.kern(last_codepoint, codepoint);
-            x += kk;
+        dvui.c.kbts_ShapeBegin(Context, dvui.c.KBTS_DIRECTION_DONT_KNOW, dvui.c.KBTS_LANGUAGE_DONT_KNOW);
 
-            if (opts.kern_in) |ki| {
-                if (next_kern_idx < ki.len) {
-                    next_kern_byte = ki[next_kern_idx];
-                    next_kern_idx += 1;
+        var i: usize = 0;
+        while (i < opts.text.len) {
+            const cplen = std.unicode.utf8ByteSequenceLength(opts.text[i]) catch unreachable;
+            const codepoint = std.unicode.utf8Decode(opts.text[i..][0..cplen]) catch unreachable;
+            dvui.c.kbts_ShapeCodepointWithUserId(Context, codepoint, @intCast(i));
+
+            i += cplen;
+        }
+
+        dvui.c.kbts_ShapeEnd(Context);
+
+        var Run: dvui.c.kbts_run = undefined;
+        while (dvui.c.kbts_ShapeRun(Context, &Run) != 0) {
+            var g: [*c]dvui.c.kbts_glyph = undefined;
+            while (dvui.c.kbts_GlyphIteratorNext(&Run.Glyphs, &g) != 0) {
+                const gi = try fce.glyphInfoGetOrReplacement(cw.gpa, g.*.Id);
+                //const gi = try fce.glyphInfoGetOrReplacement(cw.gpa, g.*.Id);
+                //const gx = x + @as(f32, @floatFromInt(g.*.OffsetX)) * fce.scaleFactor;
+                //const advance = @as(f32, @floatFromInt(g.*.AdvanceX)) * fce.scaleFactor;
+                //std.debug.print("render  kb {d} {d} {d} {d}\n", .{ g.*.Codepoint, advance, g.*.OffsetX, g.*.OffsetY });
+
+                if (x + gi.leftBearing * target_fraction < start.x) {
+                    // Glyph extends left of the start, like the first letter being
+                    // "j", which has a negative left bearing.
+                    //
+                    // Shift the whole line over so it starts at x_start.  textSize()
+                    // includes this extra space.
+
+                    //std.debug.print("moving x from {d} to {d}\n", .{ x, x_start - gi.leftBearing * target_fraction });
+                    start.x -= gi.leftBearing * target_fraction;
+                    x = start.x;
+                }
+
+                const nextx = x + gi.advance * target_fraction;
+                const leftx = x + gi.leftBearing * target_fraction;
+
+                const top = gi.topBearing * target_fraction;
+                if (top < max_above_y) {
+                    // Glyph extends above everything so far.
+                    //
+                    // Shift the whole line up.  textSize() includes this extra
+                    // space.
+
+                    const diff = top - max_above_y;
+                    start.y -= diff;
+                    max_above_y += diff;
+
+                    // adjust all previous vertices
+                    for (builder.vertexes.items) |*v| {
+                        v.pos.y -= diff;
+                    }
+                }
+
+                //if (sel) {
+                //    bytes_seen += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+                //    if (!sel_in and bytes_seen > sel_start and bytes_seen <= sel_end) {
+                //        // entering selection
+                //        sel_in = true;
+                //        sel_start_x = @min(x, leftx);
+                //    } else if (sel_in and bytes_seen > sel_end) {
+                //        // leaving selection
+                //        sel_in = false;
+                //    }
+
+                //    if (sel_in) {
+                //        // update selection
+                //        sel_end_x = nextx;
+                //    }
+                //}
+
+                // don't output triangles for a zero-width glyph (space seems to be the only one)
+                if (gi.w > 0) {
+                    const vtx_offset: u16 = @intCast(builder.vertexes.items.len);
+                    var v: Vertex = undefined;
+
+                    v.pos.x = leftx;
+                    v.pos.y = start.y + gi.topBearing * target_fraction;
+                    v.col = col;
+                    v.uv = gi.uv;
+                    builder.appendVertex(v);
+
+                    if (opts.debug) {
+                        dvui.log.debug(" - x {d} y {d}", .{ v.pos.x, v.pos.y });
+                    }
+
+                    if (opts.debug) {
+                        //log.debug("{d} pad {d} minx {d} maxx {d} miny {d} maxy {d} x {d} y {d}", .{ bytes_seen, pad, gi.minx, gi.maxx, gi.miny, gi.maxy, v.pos.x, v.pos.y });
+                        //log.debug("{d} pad {d} left {d} top {d} w {d} h {d} advance {d}", .{ bytes_seen, pad, gi.f2_leftBearing, gi.f2_topBearing, gi.f2_w, gi.f2_h, gi.f2_advance });
+                    }
+
+                    v.pos.x = x + (gi.leftBearing + gi.w) * target_fraction;
+                    max_x = v.pos.x;
+                    v.uv[0] = gi.uv[0] + gi.w / atlas_size.w;
+                    builder.appendVertex(v);
+
+                    v.pos.y = start.y + (gi.topBearing + gi.h) * target_fraction;
+                    sel_max_y = @max(sel_max_y, v.pos.y);
+                    v.uv[1] = gi.uv[1] + gi.h / atlas_size.h;
+                    builder.appendVertex(v);
+
+                    v.pos.x = leftx;
+                    v.uv[0] = gi.uv[0];
+                    builder.appendVertex(v);
+
+                    // triangles must be counter-clockwise (y going down) to avoid backface culling
+                    builder.appendTriangles(&.{
+                        vtx_offset + 0, vtx_offset + 2, vtx_offset + 1,
+                        vtx_offset + 0, vtx_offset + 3, vtx_offset + 2,
+                    });
+                }
+
+                x = nextx;
+            }
+        }
+    } else {
+        const kerning: bool = opts.kerning orelse cw.kerning;
+        var next_kern_idx: u32 = 0;
+        var next_kern_byte: u32 = 0;
+        if (opts.kern_in) |ki| {
+            next_kern_byte = ki[next_kern_idx];
+            next_kern_idx += 1;
+        }
+
+        var i: usize = 0;
+        while (i < opts.text.len) {
+            const cplen = std.unicode.utf8ByteSequenceLength(opts.text[i]) catch unreachable;
+            const codepoint = std.unicode.utf8Decode(opts.text[i..][0..cplen]) catch unreachable;
+            const gi = try fce.glyphInfoGetOrReplacement(cw.gpa, fce.glyphIdForCodepoint(codepoint));
+            //std.debug.print("render  ft {s} {d}\n", .{ opts.text[i..][0..cplen], gi.advance });
+
+            if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
+                const kk = fce.kern(last_codepoint, codepoint);
+                x += kk;
+
+                if (opts.kern_in) |ki| {
+                    if (next_kern_idx < ki.len) {
+                        next_kern_byte = ki[next_kern_idx];
+                        next_kern_idx += 1;
+                    }
                 }
             }
-        }
 
-        i += cplen;
-        last_codepoint = codepoint;
+            i += cplen;
+            last_codepoint = codepoint;
 
-        if (x + gi.leftBearing * target_fraction < start.x) {
-            // Glyph extends left of the start, like the first letter being
-            // "j", which has a negative left bearing.
-            //
-            // Shift the whole line over so it starts at x_start.  textSize()
-            // includes this extra space.
+            if (x + gi.leftBearing * target_fraction < start.x) {
+                // Glyph extends left of the start, like the first letter being
+                // "j", which has a negative left bearing.
+                //
+                // Shift the whole line over so it starts at x_start.  textSize()
+                // includes this extra space.
 
-            //std.debug.print("moving x from {d} to {d}\n", .{ x, x_start - gi.leftBearing * target_fraction });
-            start.x -= gi.leftBearing * target_fraction;
-            x = start.x;
-        }
-
-        const nextx = x + gi.advance * target_fraction;
-        const leftx = x + gi.leftBearing * target_fraction;
-
-        if (sel) {
-            bytes_seen += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
-            if (!sel_in and bytes_seen > sel_start and bytes_seen <= sel_end) {
-                // entering selection
-                sel_in = true;
-                sel_start_x = @min(x, leftx);
-            } else if (sel_in and bytes_seen > sel_end) {
-                // leaving selection
-                sel_in = false;
+                //std.debug.print("moving x from {d} to {d}\n", .{ x, x_start - gi.leftBearing * target_fraction });
+                start.x -= gi.leftBearing * target_fraction;
+                x = start.x;
             }
 
-            if (sel_in) {
-                // update selection
-                sel_end_x = nextx;
+            const nextx = x + gi.advance * target_fraction;
+            const leftx = x + gi.leftBearing * target_fraction;
+
+            const top = gi.topBearing * target_fraction;
+            if (top < max_above_y) {
+                // Glyph extends above everything so far.
+                //
+                // Shift the whole line up.  textSize() includes this extra
+                // space.
+
+                const diff = top - max_above_y;
+                start.y -= diff;
+                max_above_y += diff;
+
+                // adjust all previous vertices
+                for (builder.vertexes.items) |*v| {
+                    v.pos.y -= diff;
+                }
             }
+
+            if (sel) {
+                bytes_seen += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+                if (!sel_in and bytes_seen > sel_start and bytes_seen <= sel_end) {
+                    // entering selection
+                    sel_in = true;
+                    sel_start_x = @min(x, leftx);
+                } else if (sel_in and bytes_seen > sel_end) {
+                    // leaving selection
+                    sel_in = false;
+                }
+
+                if (sel_in) {
+                    // update selection
+                    sel_end_x = nextx;
+                }
+            }
+
+            // don't output triangles for a zero-width glyph (space seems to be the only one)
+            if (gi.w > 0) {
+                const vtx_offset: u16 = @intCast(builder.vertexes.items.len);
+                var v: Vertex = undefined;
+
+                v.pos.x = leftx;
+                v.pos.y = start.y + gi.topBearing * target_fraction;
+                v.col = col;
+                v.uv = gi.uv;
+                builder.appendVertex(v);
+
+                if (opts.debug) {
+                    dvui.log.debug(" - x {d} y {d}", .{ v.pos.x, v.pos.y });
+                }
+
+                if (opts.debug) {
+                    //log.debug("{d} pad {d} minx {d} maxx {d} miny {d} maxy {d} x {d} y {d}", .{ bytes_seen, pad, gi.minx, gi.maxx, gi.miny, gi.maxy, v.pos.x, v.pos.y });
+                    //log.debug("{d} pad {d} left {d} top {d} w {d} h {d} advance {d}", .{ bytes_seen, pad, gi.f2_leftBearing, gi.f2_topBearing, gi.f2_w, gi.f2_h, gi.f2_advance });
+                }
+
+                v.pos.x = x + (gi.leftBearing + gi.w) * target_fraction;
+                max_x = v.pos.x;
+                v.uv[0] = gi.uv[0] + gi.w / atlas_size.w;
+                builder.appendVertex(v);
+
+                v.pos.y = start.y + (gi.topBearing + gi.h) * target_fraction;
+                sel_max_y = @max(sel_max_y, v.pos.y);
+                v.uv[1] = gi.uv[1] + gi.h / atlas_size.h;
+                builder.appendVertex(v);
+
+                v.pos.x = leftx;
+                v.uv[0] = gi.uv[0];
+                builder.appendVertex(v);
+
+                // triangles must be counter-clockwise (y going down) to avoid backface culling
+                builder.appendTriangles(&.{
+                    vtx_offset + 0, vtx_offset + 2, vtx_offset + 1,
+                    vtx_offset + 0, vtx_offset + 3, vtx_offset + 2,
+                });
+            }
+
+            x = nextx;
         }
-
-        // don't output triangles for a zero-width glyph (space seems to be the only one)
-        if (gi.w > 0) {
-            const vtx_offset: u16 = @intCast(builder.vertexes.items.len);
-            var v: Vertex = undefined;
-
-            v.pos.x = leftx;
-            v.pos.y = start.y + gi.topBearing * target_fraction;
-            v.col = col;
-            v.uv = gi.uv;
-            builder.appendVertex(v);
-
-            if (opts.debug) {
-                dvui.log.debug(" - x {d} y {d}", .{ v.pos.x, v.pos.y });
-            }
-
-            if (opts.debug) {
-                //log.debug("{d} pad {d} minx {d} maxx {d} miny {d} maxy {d} x {d} y {d}", .{ bytes_seen, pad, gi.minx, gi.maxx, gi.miny, gi.maxy, v.pos.x, v.pos.y });
-                //log.debug("{d} pad {d} left {d} top {d} w {d} h {d} advance {d}", .{ bytes_seen, pad, gi.f2_leftBearing, gi.f2_topBearing, gi.f2_w, gi.f2_h, gi.f2_advance });
-            }
-
-            v.pos.x = x + (gi.leftBearing + gi.w) * target_fraction;
-            max_x = v.pos.x;
-            v.uv[0] = gi.uv[0] + gi.w / atlas_size.w;
-            builder.appendVertex(v);
-
-            v.pos.y = start.y + (gi.topBearing + gi.h) * target_fraction;
-            sel_max_y = @max(sel_max_y, v.pos.y);
-            v.uv[1] = gi.uv[1] + gi.h / atlas_size.h;
-            builder.appendVertex(v);
-
-            v.pos.x = leftx;
-            v.uv[0] = gi.uv[0];
-            builder.appendVertex(v);
-
-            // triangles must be counter-clockwise (y going down) to avoid backface culling
-            builder.appendTriangles(&.{
-                vtx_offset + 0, vtx_offset + 2, vtx_offset + 1,
-                vtx_offset + 0, vtx_offset + 3, vtx_offset + 2,
-            });
-        }
-
-        x = nextx;
     }
 
     if (opts.background_color) |bgcol| {

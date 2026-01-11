@@ -160,6 +160,11 @@ pub fn findSource(self: *const Font) ?Source {
     return cw.fonts.findSource(self.*).@"0";
 }
 
+pub fn alignEmbedded(comptime bytes: anytype) []align(4) const u8 {
+    const f align(4) = bytes.*;
+    return &f;
+}
+
 pub const Source = struct {
     family: [NAME_MAX_LEN:0]u8 = @splat(0),
     size: f32 = 0, // zero means this source can be any size
@@ -167,7 +172,7 @@ pub const Source = struct {
     style: Style = .normal,
 
     // currently we assume that a single ttf only produces one
-    bytes: []const u8, // points to ttf bytes
+    bytes: []align(4) const u8, // points to ttf bytes
     /// If not null, this will be used to free ttf_bytes.
     allocator: ?std.mem.Allocator = null,
 
@@ -205,7 +210,7 @@ pub const Source = struct {
 
     pub const fallback = Source{
         .family = array("Vera"),
-        .bytes = @embedFile("fonts/bitstream-vera/Vera.ttf"),
+        .bytes = Font.alignEmbedded(@embedFile("fonts/bitstream-vera/Vera.ttf")),
     };
 };
 
@@ -291,7 +296,14 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     }
     options.kerning = opts.kerning orelse cw.kerning;
 
-    var s = fce.textSizeRaw(cw.gpa, text, options) catch return .{ .w = 10, .h = 10 };
+    var s: Size = undefined;
+    if (dvui.useKBTS) {
+        s = fce.textSizeRawKB(cw.gpa, text, options) catch return .{ .w = 10, .h = 10 };
+        //const oldsize = fce.textSizeRaw(cw.gpa, text, options) catch return .{ .w = 10, .h = 10 };
+        //std.debug.print("textSizeEx {s} s {d}x{d} kbs {d}x{d}\n", .{ text, oldsize.w, oldsize.h, s.w, s.h });
+    } else {
+        s = fce.textSizeRaw(cw.gpa, text, options) catch return .{ .w = 10, .h = 10 };
+    }
 
     // do this check after calling textSizeRaw so that end_idx is set
     if (ask_size == 0.0) return Size{};
@@ -389,16 +401,13 @@ pub const Cache = struct {
 
     pub const Entry = struct {
         face: if (impl == .FreeType) c.FT_Face else c.stbtt_fontinfo,
+        kb_font: dvui.c.kbts_font,
         name: []const u8, // gpa
         scaleFactor: f32,
         height: f32,
         ascent: f32,
         glyph_info: std.AutoHashMapUnmanaged(u32, GlyphInfo) = .empty,
-        glyph_info_ascii: [ascii_size - ascii_start]GlyphInfo,
         texture_atlas_cache: ?Texture = null,
-
-        const ascii_size = 127;
-        const ascii_start = 32;
 
         const GlyphInfo = struct {
             advance: f32, // horizontal distance to move the pen
@@ -416,7 +425,10 @@ pub const Cache = struct {
             const fname = font.name(gpa);
             errdefer gpa.free(fname);
 
-            var self: Entry = if (impl == .FreeType) blk: {
+            var kbf = dvui.c.kbts_FontFromMemory(@constCast(ttf_bytes.ptr), @intCast(ttf_bytes.len), 0, null, null);
+            if (dvui.c.kbts_FontIsValid(&kbf) == 0) @panic("kbf bad");
+
+            const self: Entry = if (impl == .FreeType) blk: {
                 var face: c.FT_Face = undefined;
                 var args: c.FT_Open_Args = undefined;
                 args.flags = @as(u32, @bitCast(FreeType.OpenFlags{ .memory = true }));
@@ -430,6 +442,7 @@ pub const Cache = struct {
                 // "pixel size" for freetype doesn't actually mean you'll get that height, it's more like using pts
                 // so we search for a font that has a height <= font.size
                 var pixel_size = @as(u32, @intFromFloat(@max(min_pixel_size, @floor(font.size))));
+                const SF: f32 = @as(f32, @floatFromInt(pixel_size)) / @as(f32, @floatFromInt(face.*.ascender - face.*.descender));
 
                 while (true) : (pixel_size -= 1) {
                     FreeType.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
@@ -447,11 +460,11 @@ pub const Cache = struct {
                     if (height <= font.size or pixel_size == min_pixel_size) {
                         break :blk .{
                             .face = face,
+                            .kb_font = kbf,
                             .name = fname,
-                            .scaleFactor = 1.0, // not used with freetype
+                            .scaleFactor = SF, // not used with freetype
                             .height = @ceil(height),
                             .ascent = @floor(ascent),
-                            .glyph_info_ascii = undefined,
                         };
                     }
                 }
@@ -479,18 +492,13 @@ pub const Cache = struct {
 
                 break :blk .{
                     .face = face,
+                    .kb_font = kbf,
                     .name = fname,
                     .scaleFactor = SF,
                     .height = @ceil(height),
                     .ascent = @floor(ascent),
-                    .glyph_info_ascii = undefined,
                 };
             };
-
-            // Pre-generate the ascii glyphs
-            for (0..self.glyph_info_ascii.len) |i| {
-                self.glyph_info_ascii[i] = try self.glyphInfoGenerate(@intCast(i + ascii_start));
-            }
 
             return self;
         }
@@ -520,7 +528,7 @@ pub const Cache = struct {
             // number of extra pixels to add on each side of each glyph
             const pad = 1;
 
-            const total = self.glyph_info_ascii.len + self.glyph_info.count();
+            const total = self.glyph_info.count();
             const row_glyphs = @as(u32, @intFromFloat(@ceil(@sqrt(@as(f32, @floatFromInt(total))))));
 
             var s = Size{};
@@ -529,12 +537,8 @@ pub const Cache = struct {
                 var row: Size = .{};
                 var it = self.glyph_info.iterator();
 
-                while (i < total) {
-                    const gi, const codepoint = if (i < self.glyph_info_ascii.len) .{ &self.glyph_info_ascii[i], i + ascii_start } else blk: {
-                        const e = it.next().?;
-                        break :blk .{ e.value_ptr, e.key_ptr.* };
-                    };
-                    _ = codepoint;
+                while (it.next()) |e| {
+                    const gi = e.value_ptr;
 
                     row.w += gi.w + 2 * pad;
                     row.h = @max(row.h, gi.h + 2 * pad);
@@ -570,25 +574,23 @@ pub const Cache = struct {
             var it = self.glyph_info.iterator();
             var row_height: u32 = 0;
             var i: u32 = 0;
-            while (i < total) {
-                var gi, const codepoint = if (i < self.glyph_info_ascii.len) .{ &self.glyph_info_ascii[i], i + ascii_start } else blk: {
-                    const e = it.next().?;
-                    break :blk .{ e.value_ptr, e.key_ptr.* };
-                };
+            while (it.next()) |e| {
+                var gi = e.value_ptr;
+                const id = e.key_ptr.*;
 
                 gi.uv[0] = @as(f32, @floatFromInt(x + pad)) / s.w;
                 gi.uv[1] = @as(f32, @floatFromInt(y + pad)) / s.h;
 
                 if (impl == .FreeType) blk: {
-                    FreeType.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(FreeType.LoadFlags{ .render = true })))) catch |err| {
-                        dvui.log.warn("renderText: freetype error {any} trying to FT_Load_Char codepoint {d}", .{ err, codepoint });
+                    FreeType.intToError(c.FT_Load_Glyph(self.face, id, @as(i32, @bitCast(FreeType.LoadFlags{ .render = true })))) catch |err| {
+                        dvui.log.warn("renderText: freetype error {any} trying to FT_Load_Glyph iid {d}", .{ err, id });
                         break :blk; // will skip the failing glyph
                     };
 
                     // https://freetype.org/freetype2/docs/tutorial/step1.html#section-6
                     if (self.face.*.glyph.*.format != c.FT_GLYPH_FORMAT_BITMAP) {
                         FreeType.intToError(c.FT_Render_Glyph(self.face.*.glyph, c.FT_RENDER_MODE_NORMAL)) catch |err| {
-                            dvui.log.warn("renderText freetype error {any} trying to FT_Render_Glyph codepoint {d}", .{ err, codepoint });
+                            dvui.log.warn("renderText freetype error {any} trying to FT_Render_Glyph id {d}", .{ err, id });
                             break :blk; // will skip the failing glyph
                         };
                     }
@@ -609,6 +611,8 @@ pub const Cache = struct {
                         }
                     }
                 } else {
+                    if (true) @panic("todo");
+                    const codepoint = id;
                     const out_w: u32 = @intFromFloat(gi.w);
                     const out_h: u32 = @intFromFloat(gi.h);
                     row_height = @max(row_height, out_h);
@@ -648,35 +652,41 @@ pub const Cache = struct {
             return self.texture_atlas_cache.?;
         }
 
+        pub fn glyphIdForCodepoint(self: *Entry, codepoint: u32) u32 {
+            if (impl == .FreeType) {
+                return c.FT_Get_Char_Index(self.face, codepoint);
+            } else {
+                @panic("todo");
+            }
+        }
+
         /// If a codepoint is missing in the font it gets the glyph for
         /// `std.unicode.replacement_character`
-        pub fn glyphInfoGetOrReplacement(self: *Entry, gpa: std.mem.Allocator, codepoint: u32) std.mem.Allocator.Error!GlyphInfo {
-            return self.glyphInfoGet(gpa, codepoint) catch |err| switch (err) {
-                Error.FontError => self.glyphInfoGet(gpa, std.unicode.replacement_character) catch unreachable,
+        pub fn glyphInfoGetOrReplacement(self: *Entry, gpa: std.mem.Allocator, id: u32) std.mem.Allocator.Error!GlyphInfo {
+            return self.glyphInfoGet(gpa, id) catch |err| switch (err) {
+                Error.FontError => self.glyphInfoGet(gpa, self.glyphIdForCodepoint(std.unicode.replacement_character)) catch unreachable,
                 else => |e| e,
             };
         }
 
-        pub fn glyphInfoGet(self: *Entry, gpa: std.mem.Allocator, codepoint: u32) (std.mem.Allocator.Error || Error)!GlyphInfo {
-            if (ascii_start <= codepoint and codepoint < ascii_size)
-                return self.glyph_info_ascii[codepoint - ascii_start];
+        pub fn glyphInfoGet(self: *Entry, gpa: std.mem.Allocator, id: u32) (std.mem.Allocator.Error || Error)!GlyphInfo {
+            if (self.glyph_info.get(id)) |gi| return gi;
 
-            if (self.glyph_info.get(codepoint)) |gi| return gi;
-
-            const gi = try self.glyphInfoGenerate(codepoint);
+            const gi = try self.glyphInfoGenerate(id);
 
             // new glyph, need to regen texture atlas on next render
-            //std.debug.print("new glyph {}\n", .{codepoint});
+            //std.debug.print("new glyph {}\n", .{id});
             self.invalidateTextureAtlas();
 
-            try self.glyph_info.put(gpa, codepoint, gi);
+            try self.glyph_info.put(gpa, id, gi);
             return gi;
         }
 
-        pub fn glyphInfoGenerate(self: *Entry, codepoint: u32) Error!GlyphInfo {
+        pub fn glyphInfoGenerate(self: *Entry, id: u32) Error!GlyphInfo {
+            std.debug.print("glyphInfoGenerate id {d}\n", .{id});
             const gi: GlyphInfo = if (impl == .FreeType) blk: {
-                FreeType.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(FreeType.LoadFlags{ .render = false })))) catch |err| {
-                    dvui.log.warn("glyphInfoGet freetype error {any} font {s} codepoint {d}\n", .{ err, self.name, codepoint });
+                FreeType.intToError(c.FT_Load_Glyph(self.face, id, @as(i32, @bitCast(FreeType.LoadFlags{ .render = false })))) catch |err| {
+                    dvui.log.warn("glyphInfoGet freetype error {any} font {s} id {d}\n", .{ err, self.name, id });
                     return Error.FontError;
                 };
 
@@ -693,6 +703,9 @@ pub const Cache = struct {
                     .uv = .{ 0, 0 },
                 };
             } else blk: {
+                if (true) @panic("todo");
+                const codepoint = id;
+
                 var advanceWidth: c_int = undefined;
                 var leftSideBearing: c_int = undefined;
                 c.stbtt_GetCodepointHMetrics(&self.face, @as(c_int, @intCast(codepoint)), &advanceWidth, &leftSideBearing);
@@ -739,6 +752,111 @@ pub const Cache = struct {
             }
         }
 
+        pub fn textSizeRawKB(
+            self: *Entry,
+            gpa: std.mem.Allocator,
+            text: []const u8,
+            opts: Font.TextSizeOptions,
+        ) std.mem.Allocator.Error!Size {
+            const mwidth = opts.max_width orelse dvui.max_float_safe;
+
+            const Context = dvui.c.kbts_CreateShapeContext(null, null);
+            //dvui.c.kbts_ShapePushFeature(Context, dvui.c.KBTS_FEATURE_TAG_kern, 1);
+            defer dvui.c.kbts_DestroyShapeContext(Context);
+
+            _ = dvui.c.kbts_ShapePushFont(Context, &self.kb_font);
+
+            dvui.c.kbts_ShapeBegin(Context, dvui.c.KBTS_DIRECTION_DONT_KNOW, dvui.c.KBTS_LANGUAGE_DONT_KNOW);
+
+            var newline: ?usize = null;
+
+            // TODO: When no newline, we want to process just enough text to go over max width.
+            // Ligatures can mean adding another codepoint reduces the length
+            // of the shaped text.  Is there a way to check periodically?
+            var i: usize = 0;
+            while (i < @min(text.len, 1000)) {
+                const cplen = std.unicode.utf8ByteSequenceLength(text[i]) catch unreachable;
+                const codepoint = std.unicode.utf8Decode(text[i..][0..cplen]) catch unreachable;
+
+                dvui.c.kbts_ShapeCodepointWithUserId(Context, codepoint, @intCast(i));
+                i += cplen;
+
+                if (codepoint == '\n') {
+                    // newlines always terminate, and don't use any space
+                    newline = i;
+                    break;
+                }
+            }
+
+            dvui.c.kbts_ShapeEnd(Context);
+
+            var x: f32 = 0;
+            var minx: f32 = 0;
+            var maxx: f32 = 0;
+            var miny: f32 = 0;
+            var maxy: f32 = self.height;
+            var tw: f32 = 0;
+            var th: f32 = self.height;
+
+            var ei: usize = 0;
+            var nearest_break: bool = false;
+
+            var Run: dvui.c.kbts_run = undefined;
+            loop: while (dvui.c.kbts_ShapeRun(Context, &Run) != 0) {
+                var g: [*c]dvui.c.kbts_glyph = undefined;
+                while (dvui.c.kbts_GlyphIteratorNext(&Run.Glyphs, &g) != 0) {
+                    const gi = try self.glyphInfoGetOrReplacement(gpa, g.*.Id);
+                    const gx = x + @as(f32, @floatFromInt(g.*.OffsetX)) * self.scaleFactor;
+                    //const advance = @as(f32, @floatFromInt(g.*.AdvanceX)) * self.scaleFactor;
+                    //std.debug.print("  kb {d} {d} {d}\n", .{ g.*.Id, self.height, gi.topBearing });
+
+                    minx = @min(minx, gx + gi.leftBearing);
+                    maxx = @max(maxx, gx + gi.leftBearing + gi.w);
+                    maxx = @max(maxx, x + gi.advance);
+
+                    miny = @min(miny, gi.topBearing);
+                    maxy = @max(maxy, gi.topBearing + gi.h);
+
+                    var shape_codepoint: dvui.c.kbts_shape_codepoint = undefined;
+                    _ = dvui.c.kbts_ShapeGetShapeCodepoint(Context, g.*.UserIdOrCodepointIndex, &shape_codepoint);
+                    ei = @intCast(shape_codepoint.UserId);
+
+                    if (nearest_break) break :loop;
+
+                    if ((maxx - minx) > mwidth) {
+                        switch (opts.end_metric) {
+                            .before => break :loop, // went too far
+                            .nearest => {
+                                if ((maxx - minx) - mwidth >= mwidth - tw) {
+                                    break :loop; // current one is closest
+                                } else {
+                                    // get the next glyph and then break
+                                    nearest_break = true;
+                                }
+                            },
+                        }
+                    }
+
+                    // update space taken by glyph
+                    tw = maxx - minx;
+                    th = maxy - miny;
+                    x += gi.advance;
+                }
+            } else {
+                // ran out of glyphs
+                ei = newline orelse text.len;
+            }
+
+            // TODO: xstart and ystart
+
+            if (opts.end_idx) |endout| {
+                endout.* = ei;
+            }
+
+            //std.debug.print("textSizeRaw size {d} for \"{s}\" {d}x{d} {d}\n", .{ self.size, text, tw, th, ei });
+            return Size{ .w = tw, .h = th };
+        }
+
         /// Doesn't scale the font or max_width, always stops at newlines
         ///
         /// Assumes the text is valid utf8. Will exit early with non-full
@@ -775,7 +893,8 @@ pub const Cache = struct {
             while (i < text.len) {
                 const cplen = std.unicode.utf8ByteSequenceLength(text[i]) catch unreachable;
                 const codepoint = std.unicode.utf8Decode(text[i..][0..cplen]) catch unreachable;
-                const gi = try self.glyphInfoGetOrReplacement(gpa, codepoint);
+                const gi = try self.glyphInfoGetOrReplacement(gpa, self.glyphIdForCodepoint(codepoint));
+                //std.debug.print("size  ft {s} {d}\n", .{ text[i..][0..cplen], gi.advance });
 
                 if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
                     const kk = self.kern(last_codepoint, codepoint);

@@ -258,10 +258,10 @@ pub fn picker(src: std.builtin.SourceLocation, themes: []const Theme, opts: Opti
 pub const builtin = struct {
     pub const adwaita_light = @import("themes/Adwaita.zig").light;
     pub const adwaita_dark = @import("themes/Adwaita.zig").dark;
-    pub const dracula = @import("themes/Dracula.zig").theme;
-    pub const gruvbox = @import("themes/Gruvbox.zig").theme;
-    pub const jungle = @import("themes/Jungle.zig").theme;
-    pub const opendyslexic = @import("themes/OpenDyslexic.zig").theme;
+    //pub const dracula = @import("themes/Dracula.zig").theme;
+    //pub const gruvbox = @import("themes/Gruvbox.zig").theme;
+    //pub const jungle = @import("themes/Jungle.zig").theme;
+    //pub const opendyslexic = @import("themes/OpenDyslexic.zig").theme;
     pub const win98 = @import("themes/win98.zig").light;
 
     test {

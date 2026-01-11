@@ -25,52 +25,52 @@ const light_err_border = err_hsl.lighten(-20).color();
 const fonts: []const Font.Source = &.{
     .{
         .family = Font.array("Vera Sans"),
-        .bytes = @embedFile("../fonts/bitstream-vera/Vera.ttf"),
+        .bytes = Font.alignEmbedded(@embedFile("../fonts/bitstream-vera/Vera.ttf")),
     },
     .{
         .family = Font.array("Vera Sans"),
         .weight = .bold,
-        .bytes = @embedFile("../fonts/bitstream-vera/VeraBd.ttf"),
+        .bytes = Font.alignEmbedded(@embedFile("../fonts/bitstream-vera/VeraBd.ttf")),
     },
     .{
         .family = Font.array("Vera Sans"),
         .style = .italic,
-        .bytes = @embedFile("../fonts/bitstream-vera/VeraIt.ttf"),
+        .bytes = Font.alignEmbedded(@embedFile("../fonts/bitstream-vera/VeraIt.ttf")),
     },
     .{
         .family = Font.array("Vera Sans"),
         .weight = .bold,
         .style = .italic,
-        .bytes = @embedFile("../fonts/bitstream-vera/VeraBI.ttf"),
+        .bytes = Font.alignEmbedded(@embedFile("../fonts/bitstream-vera/VeraBI.ttf")),
     },
     .{
         .family = Font.array("Vera Sans Mono"),
-        .bytes = @embedFile("../fonts/bitstream-vera/VeraMono.ttf"),
-    },
-    .{
-        .family = Font.array("Vera Sans Mono"),
-        .weight = .bold,
-        .bytes = @embedFile("../fonts/bitstream-vera/VeraMoBd.ttf"),
-    },
-    .{
-        .family = Font.array("Vera Sans Mono"),
-        .style = .italic,
-        .bytes = @embedFile("../fonts/bitstream-vera/VeraMoIt.ttf"),
+        .bytes = Font.alignEmbedded(@embedFile("../fonts/bitstream-vera/VeraMono.ttf")),
     },
     .{
         .family = Font.array("Vera Sans Mono"),
         .weight = .bold,
+        .bytes = Font.alignEmbedded(@embedFile("../fonts/bitstream-vera/VeraMoBd.ttf")),
+    },
+    .{
+        .family = Font.array("Vera Sans Mono"),
         .style = .italic,
-        .bytes = @embedFile("../fonts/bitstream-vera/VeraMoBI.ttf"),
+        .bytes = Font.alignEmbedded(@embedFile("../fonts/bitstream-vera/VeraMoIt.ttf")),
+    },
+    .{
+        .family = Font.array("Vera Sans Mono"),
+        .weight = .bold,
+        .style = .italic,
+        .bytes = Font.alignEmbedded(@embedFile("../fonts/bitstream-vera/VeraMoBI.ttf")),
     },
     .{
         .family = Font.array("Vera Serif"),
-        .bytes = @embedFile("../fonts/bitstream-vera/VeraSe.ttf"),
+        .bytes = Font.alignEmbedded(@embedFile("../fonts/bitstream-vera/VeraSe.ttf")),
     },
     .{
         .family = Font.array("Vera Serif"),
         .weight = .bold,
-        .bytes = @embedFile("../fonts/bitstream-vera/VeraSeBd.ttf"),
+        .bytes = Font.alignEmbedded(@embedFile("../fonts/bitstream-vera/VeraSeBd.ttf")),
     },
 };
 
