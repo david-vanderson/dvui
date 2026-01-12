@@ -23,6 +23,8 @@ nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node) = .empty,
 // Note: Any access to `action_requests` must be protected by `mutex`.
 action_requests: std.ArrayList(ActionRequest) = .empty,
 
+// null means don't add text runs
+text_run_parent: ?dvui.Id = null,
 text_runs: std.ArrayList(TextRunOptions) = .empty,
 
 // The last seen node with `role = .label`
@@ -162,6 +164,11 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     // text runs are created even if not visible.
     if (!wd.visible() and wd.id != dvui.focusedWidgetId() and role != .text_run) return null;
 
+    if (role == .text_run and self.text_run_parent == null) {
+        log.debug("skipping ak text run for widget {x}, text_run_parent null", .{wd.id});
+        return null;
+    }
+
     self.mutex.lock();
     defer self.mutex.unlock();
 
@@ -186,13 +193,17 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     nodeSetBounds(ak_node, .{ .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
 
     if (!wd.isRoot()) {
-        if (wd.options.ak_node_parent) |np| {
-            if (debug_node_tree)
-                std.debug.print("Setting node parent from options {x}:{d}\n", .{ self.nodeIdFromNode(np).?.asU64(), self.nodeIdFromNode(np).?.asU64() });
+        if (role == .text_run) {
+            // if self.text_run_parent is null, we bailed out above
+            if (self.nodes.get(self.text_run_parent.?)) |node| {
+                nodePushChild(node, wd.id.asU64());
+            } else {
+                log.debug("text_run_parent node null for widget {x}", .{wd.id});
+            }
+        } else {
+            nodePushChild(nodeParent(wd), wd.id.asU64());
         }
-        const parent_node: *Node = wd.options.ak_node_parent orelse nodeParent(wd);
 
-        nodePushChild(parent_node, wd.id.asU64());
         if (wd.id == dvui.focusedWidgetId() orelse dvui.focusedSubwindowId()) {
             self.focused_id = wd.id.asU64();
         }

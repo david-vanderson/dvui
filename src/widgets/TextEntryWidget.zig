@@ -205,7 +205,6 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         .cache_layout = self.init_opts.cache_layout,
         .focused = self.data().id == dvui.focusedWidgetId(),
         .show_touch_draggables = (self.len > 0),
-        .ak_text_parent = if (self.data().accesskit_node()) |_| self.data().id else null,
     }, self.data().options.strip().override(.{
         .role = .none,
         .expand = .both,
@@ -216,12 +215,6 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     self.init_opts.cache_layout = self.textLayout.cache_layout;
 
     self.textClip = dvui.clipGet();
-
-    if (self.len == 0) {
-        if (self.init_opts.placeholder) |placeholder| {
-            self.textLayout.addText(placeholder, .{ .color_text = self.textLayout.data().options.color(.text).opacity(0.65) });
-        }
-    }
 
     if (self.textLayout.touchEditing()) |floating_widget| {
         defer floating_widget.deinit();
@@ -319,6 +312,25 @@ pub fn draw(self: *TextEntryWidget) void {
 
     // set clip back to what textLayout had, so we don't draw over the scrollbars
     dvui.clipSet(self.textClip);
+
+    if (self.len == 0) {
+        if (self.init_opts.placeholder) |placeholder| {
+            if (self.data().accesskit_node()) |ak_node| {
+                const str = dvui.currentWindow().arena().dupeZ(u8, placeholder) catch "";
+                defer dvui.currentWindow().arena().free(str);
+                AccessKit.nodeSetPlaceholder(ak_node, str);
+
+                // prevent textLayout from making a text run for the placeholder text
+                dvui.currentWindow().accesskit.text_run_parent = null;
+            }
+            self.textLayout.addText(placeholder, .{ .color_text = self.textLayout.data().options.color(.text).opacity(0.65) });
+        }
+    }
+
+    if (dvui.accesskit_enabled) {
+        // parent text runs to us
+        dvui.currentWindow().accesskit.text_run_parent = self.data().id;
+    }
 
     if (self.init_opts.password_char) |pc| {
         // adjust selection for obfuscation

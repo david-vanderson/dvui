@@ -50,10 +50,6 @@ pub const InitOptions = struct {
 
     focused: ?bool = null,
     show_touch_draggables: bool = true,
-
-    /// If non null, overrides the parent widget for any accesskit text runs created
-    /// by this widget.
-    ak_text_parent: ?dvui.Id = null,
 };
 
 pub const Selection = struct {
@@ -241,7 +237,7 @@ byte_height_after_idx: ?usize = null,
 byte_height_edit_idx: ?usize = null,
 
 // AccessKit text reading / selection
-textrun_parent: ?dvui.Id = null,
+textrun_parent_old: ?dvui.Id = null,
 textrun_anchor: ?TextRunSelectionInfo = null,
 textrun_focus: ?TextRunSelectionInfo = null,
 textrun_cursor: ?TextRunSelectionInfo = null,
@@ -257,7 +253,6 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
         .cache_layout = init_opts.cache_layout,
         .kerning = init_opts.kerning,
         .touch_edit_just_focused = init_opts.touch_edit_just_focused,
-        .textrun_parent = init_opts.ak_text_parent,
 
         // SAFETY: set bellow
         .selection = undefined,
@@ -489,6 +484,10 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
 
     if (self.data().accesskit_node()) |ak_node| {
         dvui.AccessKit.nodeSetReadOnly(ak_node);
+    }
+    if (dvui.accesskit_enabled) {
+        self.textrun_parent_old = dvui.currentWindow().accesskit.text_run_parent;
+        dvui.currentWindow().accesskit.text_run_parent = self.data().id;
     }
 }
 
@@ -1456,14 +1455,12 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             }
             defer if (txt.ptr != rtxt.ptr) cw.lifo().free(rtxt);
             const textrun_info: ?AccessKit.TextRunOptions = info: {
-                if (dvui.accesskit_enabled) {
-                    if (self.textrunParentNode()) |parent_node| {
+                if (dvui.accesskit_enabled and cw.accesskit.text_run_parent != null) {
+                    if (cw.accesskit.nodes.get(cw.accesskit.text_run_parent.?)) |_| {
                         var text_run_widget = dvui.overlay(@src(), .{
                             .name = "Text Run",
                             .role = .text_run,
                             .id_extra = self.bytes_seen,
-                            // Text run needs to be parented to the containing widget.
-                            .ak_node_parent = parent_node,
                             .rect = r,
                         });
                         defer text_run_widget.deinit();
@@ -1481,7 +1478,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                         }
                         break :info .{
                             .node_id = text_run_widget.data().id,
-                            .node_parent_id = self.textrun_parent orelse self.data().id,
+                            .node_parent_id = cw.accesskit.text_run_parent.?,
                             .char_offset = self.bytes_seen,
                             .text = txt[0..end],
                         };
@@ -1784,13 +1781,14 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
         }
     }
 
-    if (dvui.accesskit_enabled) {
-        if (self.textrunParentNode()) |parent_node| {
+    const cw = dvui.currentWindow();
+    if (dvui.accesskit_enabled and cw.accesskit.text_run_parent != null) {
+        if (cw.accesskit.nodes.get(cw.accesskit.text_run_parent.?)) |parent_node| {
             if (self.bytes_seen == 0 or self.newline) {
                 // No empty text run was created as no text was rendered. Create one here.
                 const crect = self.data().contentRect();
                 const empty_space: Rect = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = @max(0, @min(text_height, crect.h - self.insert_pt.y)) };
-                var vp = dvui.overlay(@src(), .{ .name = "Text Run", .role = .text_run, .ak_node_parent = parent_node, .rect = empty_space });
+                var vp = dvui.overlay(@src(), .{ .name = "Text Run", .role = .text_run, .rect = empty_space });
                 defer vp.deinit();
                 var text_info: std.MultiArrayList(AccessKit.CharPositionInfo) = .empty;
                 text_info.append(dvui.currentWindow().arena(), .{
@@ -1800,11 +1798,12 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
                 }) catch {};
                 dvui.currentWindow().accesskit.textRunPopulate(.{
                     .node_id = vp.data().id,
-                    .node_parent_id = self.textrun_parent orelse self.data().id,
+                    .node_parent_id = cw.accesskit.text_run_parent.?,
                     .char_offset = 0,
                     .text = "",
                 }, &text_info, self.data().contentRectScale().rectToPhysical(empty_space));
             }
+
             if (self.textrun_anchor == null or self.textrun_focus == null) {
                 if (self.textrun_cursor) |cursor| {
                     AccessKit.nodeSetTextSelection(parent_node, .{
@@ -1821,13 +1820,6 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
             }
         }
     }
-}
-
-fn textrunParentNode(self: *TextLayoutWidget) ?*AccessKit.Node {
-    if (self.textrun_parent) |parent_id| {
-        return dvui.currentWindow().accesskit.nodes.get(parent_id) orelse self.data().accesskit_node();
-    }
-    return self.data().accesskit_node();
 }
 
 pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
@@ -2247,6 +2239,10 @@ pub fn deinit(self: *TextLayoutWidget) void {
         dvui.dataSet(null, self.data().id, "_click_num_pt", self.click_num_pt);
     }
     dvui.clipSet(self.prevClip);
+
+    if (dvui.accesskit_enabled) {
+        dvui.currentWindow().accesskit.text_run_parent = self.textrun_parent_old;
+    }
 
     // check if the widgets are taller than the text
     const left_height = (self.corners_min_size[0] orelse Size{}).h + (self.corners_min_size[2] orelse Size{}).h;
