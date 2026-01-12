@@ -3,12 +3,10 @@
   "version": "1.0.0",
   "description": "Zig GUI toolkit for whole applications or debugging windows in existing applications. * [Homepage](https://david-vanderson.github.io) * [Online Demo](https://david-vanderson.github.io/demo) * [Devlog](https://david-vanderson.github.io/log/2026)",
   "main": "src/backends/web.js",
+  "module": "src/backends/web.js",
   "types": "src/backends/web.d.ts",
-  "directories": {
-    "doc": "docs",
-    "example": "examples"
-  },
   "scripts": {
+    "postinstall": "zig build web-app",
     "test": "echo \"Error: no test specified\" && exit 1",
     "typecheck": "tsc -p ./tsconfig.json"
   },
