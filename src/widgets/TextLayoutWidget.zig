@@ -1440,7 +1440,8 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         }
 
         { // Scope here is for deallocating rtxt before handling copying to clipboard on the arena
-            const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = @min(s.h, self.data().contentRect().h - self.insert_pt.y) });
+            const r: Rect = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = @min(s.h, self.data().contentRect().h - self.insert_pt.y) };
+            const rs = self.screenRectScale(r);
             //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
             var rtxt = if (self.newline) txt[0 .. end - 1] else txt[0..end];
 
@@ -1457,11 +1458,13 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             const textrun_info: ?AccessKit.TextRunOptions = info: {
                 if (dvui.accesskit_enabled) {
                     if (self.textrunParentNode()) |parent_node| {
-                        var text_run_widget = dvui.virtualParent(@src(), .{
+                        var text_run_widget = dvui.overlay(@src(), .{
+                            .name = "Text Run",
                             .role = .text_run,
                             .id_extra = self.bytes_seen,
                             // Text run needs to be parented to the containing widget.
                             .ak_node_parent = parent_node,
+                            .rect = r,
                         });
                         defer text_run_widget.deinit();
                         if (self.textrun_anchor == null and self.selection.start >= self.bytes_seen and self.selection.start <= self.bytes_seen + rtxt.len) {
@@ -1785,7 +1788,9 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
         if (self.textrunParentNode()) |parent_node| {
             if (self.bytes_seen == 0 or self.newline) {
                 // No empty text run was created as no text was rendered. Create one here.
-                var vp = dvui.virtualParent(@src(), .{ .role = .text_run, .ak_node_parent = parent_node });
+                const crect = self.data().contentRect();
+                const empty_space: Rect = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = @max(0, @min(text_height, crect.h - self.insert_pt.y)) };
+                var vp = dvui.overlay(@src(), .{ .name = "Text Run", .role = .text_run, .ak_node_parent = parent_node, .rect = empty_space });
                 defer vp.deinit();
                 var text_info: std.MultiArrayList(AccessKit.CharPositionInfo) = .empty;
                 text_info.append(dvui.currentWindow().arena(), .{
@@ -1798,7 +1803,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
                     .node_parent_id = self.textrun_parent orelse self.data().id,
                     .char_offset = 0,
                     .text = "",
-                }, &text_info, self.data().contentRectScale().r);
+                }, &text_info, self.data().contentRectScale().rectToPhysical(empty_space));
             }
             if (self.textrun_anchor == null or self.textrun_focus == null) {
                 if (self.textrun_cursor) |cursor| {
