@@ -9,7 +9,7 @@ async function dvui_sleep(ms) {
 
 /**
  * @param {string} url
- * @returns {Uint8Array}
+ * @returns {Promise<Uint8Array>}
  */
 async function dvui_fetch(url) {
     let x = await fetch(url);
