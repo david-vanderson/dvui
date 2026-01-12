@@ -1,0 +1,23 @@
+{
+  "name": "dvui",
+  "version": "1.0.0",
+  "description": "Zig GUI toolkit for whole applications or debugging windows in existing applications. * [Homepage](https://david-vanderson.github.io) * [Online Demo](https://david-vanderson.github.io/demo) * [Devlog](https://david-vanderson.github.io/log/2026)",
+  "main": "src/backend/web.js",
+  "directories": {
+    "doc": "docs",
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/david-vanderson/dvui.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/david-vanderson/dvui/issues"
+  },
+  "homepage": "https://github.com/david-vanderson/dvui#readme"
+}
