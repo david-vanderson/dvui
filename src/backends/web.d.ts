@@ -1,6 +1,4 @@
-type Id = bigint;
-
-type WasmArg =
+export type WasmArg =
     | string
     | WebAssembly.WebAssemblyInstantiatedSource
     | Promise<WebAssembly.WebAssemblyInstantiatedSource>
@@ -15,5 +13,4 @@ export function dvui(
     wasmRef: WasmArg
 ): Dvui;
 
-interface Dvui {
-}
+export interface Dvui {}
