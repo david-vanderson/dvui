@@ -4,3 +4,12 @@ zig-cache
 .zig-cache
 zig-out
 *.swp
+
+# javascript development
+node_modules
+# requiring pinned versions for now so ignore lockfiles
+# also no intention to make use of much javascript at all
+package-lock.json
+bun.lock
+bun.lockb
+pnpm-lock.yaml
