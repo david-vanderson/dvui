@@ -18,6 +18,7 @@
     <script type="module">
       // TEMPLATE_HASH replaced by build.zig
       import { dvui } from "./web.js?cache-buster=TEMPLATE_HASH_WITH_PADDING__ITS_64_BYTES_LONG_THE_SAME_AS_SHA256";
+      // when using vite, this can be 'node_modules/dvui/zig-out/bin/web-app/'
       dvui("#dvui-canvas", "web.wasm?cache-buster=TEMPLATE_HASH_WITH_PADDING__ITS_64_BYTES_LONG_THE_SAME_AS_SHA256");
     </script>
   </body>
