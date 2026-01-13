@@ -137,23 +137,9 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
     // If accessibility is enabled, we still need create the associated text_run
     // even when the text is blank or not visible.
-    if (opts.ak_opts) |ak_opts| {
-        if (dvui.accesskit_enabled and opts.text.len == 0) {
-            if (ak_opts.text[ak_opts.text.len - 1] == '\n') {
-                text_info.append(cw.arena(), .{
-                    .l = 1,
-                    .w = 1,
-                    .x = if (text_info.len > 0) text_info.items(.x)[text_info.len - 1] else 0,
-                }) catch {};
-            }
-            cw.accesskit.textRunPopulate(ak_opts, &text_info, opts.rs.r);
-            return;
-        }
-    } else {
-        if (opts.text.len == 0) return;
-        if (opts.rs.s == 0) return;
-        if (clipped_rect.empty() and opts.ak_opts == null) return;
-    }
+    if (opts.text.len == 0) return;
+    if (opts.rs.s == 0) return;
+    if (clipped_rect.empty() and opts.ak_opts == null) return;
 
     const utf8_text = try dvui.toUtf8(cw.lifo(), opts.text);
     defer if (opts.text.ptr != utf8_text.ptr) cw.lifo().free(utf8_text);
@@ -161,9 +147,6 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     if (!cw.render_target.rendering) {
         var opts_copy = opts;
         opts_copy.text = try cw.arena().dupe(u8, utf8_text);
-        if (opts.ak_opts) |ak_opts| {
-            opts_copy.ak_opts.?.text = cw.arena().dupe(u8, ak_opts.text) catch "";
-        }
         if (opts.kern_in) |ki| opts_copy.kern_in = try cw.arena().dupe(u32, ki);
         cw.addRenderCommand(.{ .text = opts_copy }, false);
         return;
@@ -245,7 +228,14 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     var i: usize = 0;
     while (i < opts.text.len) {
         const cplen = std.unicode.utf8ByteSequenceLength(opts.text[i]) catch unreachable;
-        const codepoint = std.unicode.utf8Decode(opts.text[i..][0..cplen]) catch unreachable;
+        var codepoint = std.unicode.utf8Decode(opts.text[i..][0..cplen]) catch unreachable;
+
+        // Render newlines as spaces.  That way if they are part of the
+        // selection, you can see it. This matches Chrome's behavior, although
+        // this is not a universal - Firefox doesn't do this.  Since this is
+        // inside rendering, it doesn't affect text sizing.
+        if (codepoint == '\n') codepoint = ' ';
+
         const gi = try fce.glyphInfoGetOrReplacement(cw.gpa, codepoint);
 
         if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
@@ -372,15 +362,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     try renderTriangles(tri, texture_atlas);
 
     if (dvui.accesskit_enabled) if (opts.ak_opts) |ak_opts| {
-        // Newlines aren't rendered, so add one if required.
-        if (ak_opts.text[ak_opts.text.len - 1] == '\n') {
-            text_info.append(cw.arena(), .{
-                .l = 1,
-                .w = 1,
-                .x = std.math.clamp(x - clipped_rect.x, 0, clipped_rect.w),
-            }) catch {};
-        }
-        cw.accesskit.textRunPopulate(ak_opts, &text_info, clipped_rect);
+        cw.accesskit.textRunPopulate(opts.text, ak_opts, &text_info, clipped_rect);
     };
 }
 

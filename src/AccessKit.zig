@@ -306,13 +306,12 @@ pub const TextRunOptions = struct {
     node_parent_id: dvui.Id,
     /// starting character offset
     char_offset: usize,
-    /// Text, including any newline
-    text: []const u8,
 };
 
 /// Populate the text_run node with character position and word length details.
 pub fn textRunPopulate(
     self: *AccessKit,
+    text: []const u8,
     opts: TextRunOptions,
     text_info: *std.MultiArrayList(CharPositionInfo),
     r: dvui.Rect.Physical,
@@ -323,7 +322,7 @@ pub fn textRunPopulate(
     var word_lengths: std.ArrayList(u8) = .empty;
     var word_len: u8 = 0;
     var prev_char_wordbreak: bool = false;
-    for (opts.text) |ch| {
+    for (text) |ch| {
         if (std.mem.indexOfScalar(u8, dvui.TextLayoutWidget.word_breaks, ch) == null) {
             if (prev_char_wordbreak) {
                 word_lengths.append(window.arena(), word_len) catch {};
@@ -337,7 +336,7 @@ pub fn textRunPopulate(
     }
     word_lengths.append(window.arena(), word_len) catch {};
 
-    const str = window.arena().dupeZ(u8, opts.text) catch "";
+    const str = window.arena().dupeZ(u8, text) catch "";
     defer window.arena().free(str);
 
     const ak_node = self.nodes.get(opts.node_id) orelse {
