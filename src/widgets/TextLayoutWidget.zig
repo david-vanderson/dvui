@@ -1442,18 +1442,8 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             const r: Rect = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = @min(s.h, self.data().contentRect().h - self.insert_pt.y) };
             const rs = self.screenRectScale(r);
             //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
-            var rtxt = if (self.newline) txt[0 .. end - 1] else txt[0..end];
+            const rtxt = txt[0..end];
 
-            // If the newline is part of the selection, then render it as a
-            // selected space.  This matches Chrome's behavior, although this is
-            // not a universal - Firefox doesn't do this.
-            if (self.newline and
-                (self.selection.start -| self.bytes_seen -| rtxt.len) == 0 and
-                (self.selection.end -| self.bytes_seen -| rtxt.len) > 0)
-            {
-                rtxt = std.mem.concat(cw.lifo(), u8, &.{ rtxt, " " }) catch txt;
-            }
-            defer if (txt.ptr != rtxt.ptr) cw.lifo().free(rtxt);
             const textrun_info: ?AccessKit.TextRunOptions = info: {
                 if (dvui.accesskit_enabled and cw.accesskit.text_run_parent != null) {
                     if (cw.accesskit.nodes.get(cw.accesskit.text_run_parent.?)) |_| {
@@ -1480,7 +1470,6 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                             .node_id = text_run_widget.data().id,
                             .node_parent_id = cw.accesskit.text_run_parent.?,
                             .char_offset = self.bytes_seen,
-                            .text = txt[0..end],
                         };
                     }
                 }
@@ -1796,11 +1785,11 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
                     .w = 0,
                     .x = 0,
                 }) catch {};
-                dvui.currentWindow().accesskit.textRunPopulate(.{
+                dvui.currentWindow().accesskit.textRunPopulate("",
+                    .{
                     .node_id = vp.data().id,
                     .node_parent_id = cw.accesskit.text_run_parent.?,
                     .char_offset = 0,
-                    .text = "",
                 }, &text_info, self.data().contentRectScale().rectToPhysical(empty_space));
             }
 
