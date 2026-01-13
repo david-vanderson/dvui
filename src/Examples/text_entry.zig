@@ -374,6 +374,95 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
 
     _ = dvui.spacer(@src(), .{ .min_size_content = .height(10) });
 
+    if (dvui.useTreeSitter) {
+        const global = struct {
+            extern fn tree_sitter_json() callconv(.c) *dvui.c.TSLanguage;
+        };
+
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
+        dvui.label(@src(), "Syntax\nHighlight", .{}, .{ .gravity_y = 0.5 });
+
+        var log_captures = false;
+        if (dvui.button(@src(), "Log Captures", .{}, .{ .gravity_y = 0.5, .gravity_x = 1.0 })) {
+            log_captures = true;
+        }
+
+        left_alignment.spacer(@src(), 0);
+
+        const source =
+            \\{ "name"   : "John Smith",
+            \\  "array"  : [true, false, null, { "sku" : 123 }],
+            \\  // comments are not part of base json
+            \\  // but supported by this parser
+            \\  "price"  : 23.95,
+            \\  /* block comment */
+            \\  "shipTo" : { "name" : "Jane Smith",
+            \\               "address" : "123 Maple Street" },
+            \\}
+        ;
+
+        // If multiple queries match, we use the last
+        // If a query matches inside another query, we drop it (like
+        // escape_sequence which is inside string)
+        const queries =
+            \\(string) @string
+            \\
+            \\(pair
+            \\  key: (_) @string.special.key)
+            \\
+            \\(number) @number
+            \\
+            \\[
+            \\  (null)
+            \\  (true)
+            \\  (false)
+            \\] @constant.builtin
+            \\
+            \\(escape_sequence) @escape
+            \\
+            \\(comment) @comment
+        ;
+
+        // If multiple highlights match, we use the last
+        const highlights: []const dvui.TextEntryWidget.SyntaxHighlight = &.{
+            .{ .name = "constant", .opts = .{ .color_text = .fromHex("87d75f") } },
+            .{ .name = "string", .opts = .{ .color_text = .fromHex("d7af5f") } },
+            .{ .name = "string.special.key", .opts = .{ .color_text = .fromHex("87afd7") } },
+            .{ .name = "comment", .opts = .{ .color_text = .fromHex("af87d7") } },
+            .{ .name = "number", .opts = .{ .color_text = .fromHex("d75f5f") } },
+        };
+
+        var te: dvui.TextEntryWidget = undefined;
+        te.init(@src(), .{
+            .multiline = true,
+            .cache_layout = true,
+            .text = .{ .internal = .{ .limit = 1_000_000 } },
+            .tree_sitter = .{
+                .language = global.tree_sitter_json(),
+                .queries = queries,
+                .highlights = highlights,
+                .log_captures = log_captures,
+            },
+        }, .{
+            .expand = .horizontal,
+        });
+        defer te.deinit();
+
+        if (dvui.firstFrame(te.data().id)) {
+            te.textSet(source, false);
+            te.textLayout.selection.moveCursor(0, false); // keep from scrolling to the bottom
+        }
+
+        te.processEvents();
+        te.draw();
+    } else {
+        dvui.label(@src(), "Syntax highlight disabled (not yet available in on web)", .{}, .{});
+    }
+
+    _ = dvui.spacer(@src(), .{ .min_size_content = .height(10) });
+
     // Combobox
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});

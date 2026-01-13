@@ -152,22 +152,53 @@ pub const textureDestroyLater = Texture.destroyLater;
 ///     break :blk texture;
 /// }
 /// ```
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn textureGetCached(key: Texture.Cache.Key) ?Texture {
     return currentWindow().texture_cache.get(key);
 }
+
 /// See `Texture.Cache.add`
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn textureAddToCache(key: Texture.Cache.Key, texture: Texture) void {
     currentWindow().texture_cache.add(currentWindow().gpa, key, texture) catch |err| {
         dvui.logError(@src(), err, "Could not add texture with key {x} to cache", .{key});
         return;
     };
 }
+
 /// See `Texture.Cache.invalidate`
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn textureInvalidateCache(key: Texture.Cache.Key) void {
     currentWindow().texture_cache.invalidate(currentWindow().gpa, key) catch |err| {
         dvui.logError(@src(), err, "Could not invalidate texture with key {x}", .{key});
         return;
     };
+}
+
+/// Set retain key for this texture key.  null means remove retain key.
+///
+/// While a texture key has retain dvui will not free its texture.  To free it
+/// you must call either this with null, or `retainClear`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn textureRetain(key: Texture.Cache.Key, retain_key: ?Id) void {
+    currentWindow().texture_cache.retain(currentWindow().gpa, key, retain_key) catch |err| {
+        dvui.logError(@src(), err, "Could not retain texture with key {x}", .{key});
+        return;
+    };
+}
+
+/// Clear retain for all textures and datas with this retain key.
+///
+/// Use to clear related datas/textures, maybe from a data's deinitfunction.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn retainClear(retain_key: Id) void {
+    currentWindow().texture_cache.retainClear(retain_key);
+    currentWindow().data_store.retainClear(retain_key);
 }
 
 pub const Dragging = @import("Dragging.zig");
@@ -253,6 +284,7 @@ pub const dialogNativeFolderSelect = native_dialogs.Native.folderSelect;
 pub const useLibc = @import("default_options").libc;
 pub const useFreeType = @import("default_options").freetype;
 pub const useTinyFileDialogs = @import("default_options").tiny_file_dialogs;
+pub const useTreeSitter = @import("default_options").tree_sitter;
 
 /// The amount of physical pixels to scroll per "tick" of the scroll wheel
 pub var scroll_speed: f32 = 20;
@@ -299,6 +331,10 @@ pub const c = @cImport({
     // Used by native dialogs
     if (useTinyFileDialogs) {
         @cInclude("tinyfiledialogs.h");
+    }
+
+    if (useTreeSitter) {
+        @cInclude("tree_sitter/api.h");
     }
 });
 
@@ -1152,7 +1188,7 @@ pub const hashIdKey = void;
 
 // Used for all the data functions
 fn currentOverrideOrPanic(win: ?*Window) *Window {
-    return win orelse current_window orelse @panic("dataSet current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
+    return win orelse current_window orelse @panic("current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
 }
 
 /// Set key/value pair for given id.
@@ -1170,7 +1206,38 @@ fn currentOverrideOrPanic(win: ?*Window) *Window {
 /// If you want to store the contents of a slice, use `dataSetSlice`.
 pub fn dataSet(win: ?*Window, id: Id, key: []const u8, data: anytype) void {
     const w = currentOverrideOrPanic(win);
-    (w.data_store.set(w.gpa, id.update(key), data)) catch |err| {
+    w.data_store.set(w.gpa, id.update(key), data) catch |err| {
+        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+    };
+}
+
+/// Set a deinit function for data stored under id/key.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
+/// pass a pointer to the `Window` you want to add the data to.
+///
+/// When data for this id/key is about to be freed by dvui, it will first call
+/// the passed function.  This is useful for cases where data for a widget
+/// allocates memory outside of your control.
+pub fn dataSetDeinitFunction(win: ?*Window, id: Id, key: []const u8, func: Data.DeinitFunction) void {
+    const w = currentOverrideOrPanic(win);
+    w.data_store.setDeinitFunction(id.update(key), func);
+}
+
+/// Set retain key for this id/key.  null means remove retain key.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
+/// pass a pointer to the `Window` you want to add the data to.
+///
+/// While an id/key has retain dvui will not free its data.  To free it you
+/// must call either this with null, `dataRemove`, or `retainClear`.
+pub fn dataRetain(win: ?*Window, id: Id, key: []const u8, retain_key: ?Id) void {
+    const w = currentOverrideOrPanic(win);
+    w.data_store.retain(w.gpa, id.update(key), retain_key) catch |err| {
         dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
     };
 }
