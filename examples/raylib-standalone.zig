@@ -139,18 +139,17 @@ fn dvui_frame() bool {
         \\- can show floating windows and dialogs
         \\- example menu at the top of the window
         \\- rest of the window is a scroll area
+        \\
+        \\
     , .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is set by Raylib (C api).", .{});
-    tl2.addText("\n\n", .{});
+    tl2.addText("Framerate is set by Raylib (C api).\n\n", .{});
     if (vsync) {
-        tl2.addText("Framerate is capped by vsync.", .{});
+        tl2.addText("Framerate is capped by vsync.\n", .{});
     } else {
-        tl2.addText("Framerate is uncapped.", .{});
+        tl2.addText("Framerate is uncapped.\n", .{});
     }
-    tl2.addText("\n\n", .{});
-    tl2.addText("Cursor is always being set by dvui.", .{});
-    tl2.addText("\n\n", .{});
+    tl2.addText("\n", .{});
+    tl2.addText("Cursor is always being set by dvui.\n\n", .{});
     if (dvui.useFreeType) {
         tl2.addText("Fonts are being rendered by FreeType 2.", .{});
     } else {

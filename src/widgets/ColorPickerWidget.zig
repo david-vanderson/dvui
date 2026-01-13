@@ -284,9 +284,14 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
                 }
             },
             .text => |te| {
-                const new_hue = std.fmt.parseFloat(f32, te.txt) catch hue.*;
-                if (new_hue >= 0 and new_hue < 360) {
-                    hue.* = new_hue;
+                switch (te.action) {
+                    .value => |set| {
+                        const new_hue = std.fmt.parseFloat(f32, set.txt) catch hue.*;
+                        if (new_hue >= 0 and new_hue < 360) {
+                            hue.* = new_hue;
+                        }
+                    },
+                    else => {},
                 }
             },
             else => {},

@@ -982,6 +982,7 @@ pub fn ZigCodeFormatter(comptime T: type) type {
                         try writer.writeAll(" }");
                     },
                 },
+                .void => {},
                 else => @compileError("Unhandled field type: " ++ @typeName(T)),
             }
         }
