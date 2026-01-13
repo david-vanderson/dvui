@@ -3,7 +3,7 @@
 Zig GUI toolkit for whole applications or debugging windows in existing applications.
 * [Homepage](https://david-vanderson.github.io)
 * [Online Demo](https://david-vanderson.github.io/demo)
-* [Devlog](https://david-vanderson.github.io/log/2025)
+* [Devlog](https://david-vanderson.github.io/log/2026)
 
 Tested with [Zig](https://ziglang.org/) 0.15.2 (use tag v0.3.0 for zig 0.14.1)
 

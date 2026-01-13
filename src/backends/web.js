@@ -606,7 +606,7 @@ class Dvui {
                 this.gl.bufferData(
                     this.gl.ELEMENT_ARRAY_BUFFER,
                     indices,
-                    this.gl.STATIC_DRAW,
+                    this.gl.DYNAMIC_DRAW,
                 );
 
                 this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
@@ -618,7 +618,7 @@ class Dvui {
                 this.gl.bufferData(
                     this.gl.ARRAY_BUFFER,
                     vertexes,
-                    this.gl.STATIC_DRAW,
+                    this.gl.DYNAMIC_DRAW,
                 );
 
                 let matrix = new Float32Array(16);

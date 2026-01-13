@@ -1595,6 +1595,7 @@ fn convertVKeyToDvuiKey(vkey: win32.VIRTUAL_KEY) dvui.enums.Key {
     };
 }
 
+/// This is what is run if you are using `dvui.App` with this backend.
 pub fn main() !void {
     dvui.Backend.Common.windowsAttachConsole() catch {};
 

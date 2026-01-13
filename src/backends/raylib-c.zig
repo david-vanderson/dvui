@@ -217,13 +217,17 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
 
     if (clipr_in) |clip_rect| {
         if (self.fb_width == null) {
+            // clip_rect is in pixels, but raylib multiplies by GetWindowScaleDPI(), so we
+            // have to divide by that here
+            const clipr = dvuiRectToRaylib(clip_rect);
             c.BeginScissorMode(
-                @intFromFloat(clip_rect.x),
-                @intFromFloat(clip_rect.y),
-                @intFromFloat(clip_rect.w),
-                @intFromFloat(clip_rect.h),
+                @intFromFloat(clipr.x),
+                @intFromFloat(clipr.y),
+                @intFromFloat(clipr.width),
+                @intFromFloat(clipr.height),
             );
         } else {
+            // raylib does NOT multiply by the window scale when targeting a texture
             // need to swap y
             c.BeginScissorMode(
                 @intFromFloat(clip_rect.x),
@@ -861,6 +865,34 @@ pub fn dvuiColorToRaylib(color: dvui.Color) c.Color {
     return c.Color{ .r = @intCast(color.r), .b = @intCast(color.b), .g = @intCast(color.g), .a = @intCast(color.a) };
 }
 
+/// Divides by the scaling of the monitor, only needed when rendering to
+/// the main render target. No conversion is needed when rendering to
+/// textures.
+pub fn dvuiRectToRaylib(rect: dvui.Rect.Physical) c.Rectangle {
+    // We have to check this flag, because GetWindowScaleDPI() will report 1.25
+    // (if the display scale is 125%), but the flag determines whether raylib
+    // multiplies by it internally.
+    if (c.IsWindowState(c.FLAG_WINDOW_HIGHDPI)) {
+        // raylib multiplies everything internally by the monitor scale, so we
+        // have to divide by that
+        const s = c.GetWindowScaleDPI();
+        return c.Rectangle{
+            .x = rect.x / s.x,
+            .y = rect.y / s.y,
+            .width = rect.w / s.x,
+            .height = rect.h / s.y,
+        };
+    } else {
+        // In this case raylib does no changes.
+        return c.Rectangle{
+            .x = rect.x,
+            .y = rect.y,
+            .width = rect.w,
+            .height = rect.h,
+        };
+    }
+}
+
 pub fn EndDrawingWaitEventTimeout(_: *RaylibBackend, timeout_micros: u32) void {
     if (timeout_micros == std.math.maxInt(u32)) {
         // wait no timeout
@@ -946,6 +978,7 @@ pub fn enableRaylibLogging() void {
     c.SetTraceLogLevel(level);
 }
 
+/// This is what is run if you are using `dvui.App` with this backend.
 pub fn main() !void {
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
     enableRaylibLogging();

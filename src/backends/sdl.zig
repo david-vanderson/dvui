@@ -1457,7 +1457,7 @@ pub fn enableSDLLogging() void {
     }
 }
 
-// This must be exposed in the app's root source file.
+/// This is what is run if you are using `dvui.App` with this backend.
 pub fn main() !u8 {
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 

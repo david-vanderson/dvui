@@ -76,6 +76,11 @@ pub const demoKind = enum {
 pub var demo_active: demoKind = .basic_widgets;
 pub const demo_window_tag = "dvui_example_window";
 
+pub fn floatRetainClear(ptr: *anyopaque) void {
+    const id: dvui.Id = @as(*dvui.Id, @ptrCast(@alignCast(ptr))).*;
+    dvui.retainClear(id);
+}
+
 pub fn demo() void {
     if (!show_demo_window) {
         return;
@@ -85,6 +90,11 @@ pub fn demo() void {
 
     var float = dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .width(width), .tag = demo_window_tag });
     defer float.deinit();
+
+    _ = dvui.dataGet(null, float.data().id, "retain", dvui.Id) orelse {
+        dvui.dataSet(null, float.data().id, "retain", float.data().id);
+        dvui.dataSetDeinitFunction(null, float.data().id, "retain", &floatRetainClear);
+    };
 
     // pad the fps label so that it doesn't trigger refresh when the number
     // changes widths
@@ -152,7 +162,7 @@ pub fn demo() void {
             const use_cache = true;
             var cache: *dvui.CacheWidget = undefined;
             if (use_cache) {
-                cache = dvui.cache(@src(), .{ .invalidate = invalidate }, .{ .expand = .both });
+                cache = dvui.cache(@src(), .{ .invalidate = invalidate, .retain = float.data().id }, .{ .expand = .both });
             }
             if (!use_cache or cache.uncached()) {
                 const box = dvui.box(@src(), .{}, .{ .expand = .both });
@@ -268,7 +278,10 @@ pub fn demo() void {
 }
 
 pub fn dialogDirect() void {
-    var dialog_win = dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = &show_dialog }, .{ .max_size_content = .width(500), .background = false, .border = .all(0) });
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+    const allow_resize = dvui.dataGetPtrDefault(null, uniqueId, "allow_resize", bool, true);
+
+    var dialog_win = dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = &show_dialog, .resize = if (allow_resize.*) .all else .none }, .{ .max_size_content = .width(500), .background = false, .border = .all(0) });
     defer dialog_win.deinit();
 
     const extra_stuff: *bool = dvui.dataGetPtrDefault(null, dialog_win.data().id, "extra_stuff", bool, false);
@@ -285,12 +298,14 @@ pub fn dialogDirect() void {
     }
 
     // background for dialog_win (since it has background false)
-    var back = dvui.box(@src(), .{}, .{ .expand = .both, .style = .window, .background = true, .border = .all(1) });
+    var back = dvui.box(@src(), .{}, .{ .expand = .both, .style = .window, .background = true, .border = .all(1), .corner_radius = .all(5) });
     defer back.deinit();
 
     dialog_win.dragAreaSet(dvui.windowHeader("Dialog", "", &show_dialog));
     dvui.label(@src(), "Asking a Question", .{}, .{ .font = .theme(.title), .gravity_x = 0.5 });
     dvui.label(@src(), "This dialog is directly called by user code.", .{}, .{ .gravity_x = 0.5 });
+
+    _ = dvui.checkbox(@src(), allow_resize, "Allow Resizing", .{});
 
     {
         var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});

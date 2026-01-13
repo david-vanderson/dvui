@@ -11,7 +11,11 @@ const RectScale = dvui.RectScale;
 const CacheWidget = @This();
 
 pub const InitOptions = struct {
+    /// Regenerate the texture even if it was already cached.
     invalidate: bool = false,
+    /// If not null, retain the texture and associated data until this retain
+    /// key.  See `dvui.retainClear`.
+    retain: ?dvui.Id = null,
 };
 
 wd: WidgetData,
@@ -65,7 +69,7 @@ pub fn init(self: *CacheWidget, src: std.builtin.SourceLocation, init_opts: Init
     if (dvui.textureGetCached(self.hash)) |t| {
         // successful cache, draw texture and enforce min size
         self.drawCachedTexture(t);
-        self.data().minSizeMax(self.data().rect.size());
+        self.data().minSizeMax(self.data().options.padSize(.{ .w = @floatFromInt(t.width), .h = @floatFromInt(t.height) }));
     } else {
 
         // we need to cache, but only do it if we didn't have any refreshes from last frame
@@ -118,7 +122,7 @@ fn drawCachedTexture(self: *CacheWidget, t: dvui.Texture) void {
         dvui.logError(@src(), err, "Could not render texture", .{});
     };
     //if (self.data().options.debugGet()) {
-    //    dvui.log.debug("drawing {d} {d} {d}x{d} {d}x{d} {d} {d}", .{ rs.r.x, rs.r.y, rs.r.w, rs.r.h, t.texture.width, t.texture.height, self.tex_uv.w, self.tex_uv.h });
+    //dvui.log.debug("drawing {d} {d} {d}x{d} {d}x{d} {d} {d}", .{ rs.r.x, rs.r.y, rs.r.w, rs.r.h, t.width, t.height, self.tex_uv.w, self.tex_uv.h });
     //}
 }
 
@@ -175,10 +179,12 @@ pub fn deinit(self: *CacheWidget) void {
             break :blk;
         };
         dvui.textureAddToCache(self.hash, texture);
+        dvui.textureRetain(self.hash, self.init_opts.retain);
         // draw texture so we see it this frame
         self.drawCachedTexture(texture);
 
         dvui.dataSet(null, self.data().id, "_tex_uv", self.tex_uv);
+        dvui.dataRetain(null, self.data().id, "_tex_uv", self.init_opts.retain);
         dvui.dataRemove(null, self.data().id, "_cache_now");
     }
     self.data().minSizeSetAndRefresh();
