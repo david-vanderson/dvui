@@ -123,7 +123,7 @@ pub const TextOptions = struct {
     ak_opts: ?AccessKit.TextRunOptions = null,
 };
 
-/// Only renders a single line of text
+/// Only renders a single line of text.  Newlines are rendered as spaces.
 ///
 /// Selection will be colored with the current themes accent color,
 /// with the text color being set to the themes fill color.
