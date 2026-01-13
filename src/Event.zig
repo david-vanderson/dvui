@@ -50,9 +50,19 @@ pub fn handle(self: *Event, src: std.builtin.SourceLocation, wd: *const dvui.Wid
 }
 
 pub const Text = struct {
-    txt: []u8,
-    selected: bool = false,
-    replace: bool = false,
+    pub const Selection = struct {
+        start: usize,
+        end: usize,
+    };
+
+    pub const Action = union(enum) {
+        value: struct {
+            txt: []u8,
+            selected: bool,
+        },
+        selection: Selection,
+    };
+    action: Action,
 };
 
 pub const Key = struct {

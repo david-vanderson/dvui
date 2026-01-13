@@ -96,9 +96,8 @@ pub fn frame() !dvui.App.Result {
     defer scroll.deinit();
 
     var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
-    const lorem = "This is a dvui.App example that can compile on multiple backends.";
+    const lorem = "This is a dvui.App example that can compile on multiple backends.\n";
     tl.addText(lorem, .{});
-    tl.addText("\n", .{});
     tl.format("Current backend: {s}", .{@tagName(dvui.backend.kind)}, .{});
     if (dvui.backend.kind == .web) {
         tl.format(" : {s}", .{if (dvui.backend.wasm.wasm_about_webgl2() == 1) "webgl2" else "webgl (no mipmaps)"}, .{});
@@ -111,14 +110,12 @@ pub fn frame() !dvui.App.Result {
         \\- paints the entire window
         \\- can show floating windows and dialogs
         \\- rest of the window is a scroll area
+        \\
+        \\
     , .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is capped by vsync.", .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Cursor is always being set by dvui.", .{});
-    tl2.addText("\n\n", .{});
+    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.\n\n", .{});
+    tl2.addText("Framerate is capped by vsync.\n\n", .{});
+    tl2.addText("Cursor is always being set by dvui.\n\n", .{});
     if (dvui.useFreeType) {
         tl2.addText("Fonts are being rendered by FreeType 2.", .{});
     } else {

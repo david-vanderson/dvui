@@ -12,6 +12,7 @@ const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
 const TextLayoutWidget = dvui.TextLayoutWidget;
+const AccessKit = dvui.AccessKit;
 
 const TextEntryWidget = @This();
 
@@ -305,18 +306,16 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         .cache_layout = self.init_opts.cache_layout,
         .focused = self.data().id == dvui.focusedWidgetId(),
         .show_touch_draggables = (self.len > 0),
-    }, self.data().options.strip().override(.{ .role = .none, .expand = .both, .padding = self.padding }));
+    }, self.data().options.strip().override(.{
+        .role = .none,
+        .expand = .both,
+        .padding = self.padding,
+    }));
 
     // if textLayout forced cache_layout to false, we need to honor that
     self.init_opts.cache_layout = self.textLayout.cache_layout;
 
     self.textClip = dvui.clipGet();
-
-    if (self.len == 0) {
-        if (self.init_opts.placeholder) |placeholder| {
-            self.textLayout.addText(placeholder, .{ .color_text = self.textLayout.data().options.color(.text).opacity(0.65) });
-        }
-    }
 
     if (self.textLayout.touchEditing()) |floating_widget| {
         defer floating_widget.deinit();
@@ -370,14 +369,17 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     // textLayout clips to its content, but we need to get events out to our border
     dvui.clipSet(borderClip);
     if (self.data().accesskit_node()) |ak_node| {
-        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
-        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_value);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_text_selection);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.replace_selected_text);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.scroll_into_view); // AK TODO - not yet implemented
+        AccessKit.nodeSetClipsChildren(ak_node); // AK TODO: Check this is correct?
+
         if (self.data().options.role != .password_input) {
-            const str = dvui.currentWindow().arena().dupeZ(u8, self.text) catch "";
+            const str = dvui.currentWindow().arena().dupeZ(u8, self.text[0..self.len]) catch "";
             defer dvui.currentWindow().arena().free(str);
-            // TODO: We don't want to always push large amounts of text each frame. So we either need to look at pushing
-            // only chunks of text, ot only pushing when the text has actually changed since last frame.
-            dvui.AccessKit.nodeSetValue(ak_node, str);
+            AccessKit.nodeSetValue(ak_node, str);
         }
     }
 }
@@ -393,6 +395,7 @@ pub fn matchEvent(self: *TextEntryWidget, e: *Event) bool {
 
 pub fn processEvents(self: *TextEntryWidget) void {
     const evts = dvui.events();
+    //std.debug.print("EVTS = {any}\n", .{evts});
     for (evts) |*e| {
         if (!self.matchEvent(e))
             continue;
@@ -403,6 +406,25 @@ pub fn processEvents(self: *TextEntryWidget) void {
 
 pub fn draw(self: *TextEntryWidget) void {
     self.drawBeforeText();
+
+    if (self.len == 0) {
+        if (self.init_opts.placeholder) |placeholder| {
+            if (self.data().accesskit_node()) |ak_node| {
+                const str = dvui.currentWindow().arena().dupeZ(u8, placeholder) catch "";
+                defer dvui.currentWindow().arena().free(str);
+                AccessKit.nodeSetPlaceholder(ak_node, str);
+
+                // prevent textLayout from making a text run for the placeholder text
+                dvui.currentWindow().accesskit.text_run_parent = null;
+            }
+            self.textLayout.addText(placeholder, .{ .color_text = self.textLayout.data().options.color(.text).opacity(0.65) });
+        }
+    }
+
+    if (dvui.accesskit_enabled) {
+        // parent text runs to us
+        dvui.currentWindow().accesskit.text_run_parent = self.data().id;
+    }
 
     if (self.init_opts.password_char) |pc| {
         {
@@ -1190,24 +1212,26 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
             }
         },
         .text => |te| {
-            e.handle(@src(), self.data());
-            var new = std.mem.sliceTo(te.txt, 0);
-            if (te.replace) {
-                self.textLayout.selection.selectAll();
-            }
-            if (self.init_opts.multiline) {
-                self.textTyped(new, te.selected);
-            } else {
-                var i: usize = 0;
-                while (i < new.len) {
-                    if (std.mem.indexOfScalar(u8, new[i..], '\n')) |idx| {
-                        self.textTyped(new[i..][0..idx], te.selected);
-                        i += idx + 1;
+            switch (te.action) {
+                .value => |set| {
+                    e.handle(@src(), self.data());
+                    var new = std.mem.sliceTo(set.txt, 0);
+                    if (self.init_opts.multiline) {
+                        self.textTyped(new, set.selected);
                     } else {
-                        self.textTyped(new[i..], te.selected);
-                        break;
+                        var i: usize = 0;
+                        while (i < new.len) {
+                            if (std.mem.indexOfScalar(u8, new[i..], '\n')) |idx| {
+                                self.textTyped(new[i..][0..idx], set.selected);
+                                i += idx + 1;
+                            } else {
+                                self.textTyped(new[i..], set.selected);
+                                break;
+                            }
+                        }
                     }
-                }
+                },
+                else => {},
             }
         },
         .mouse => |me| {

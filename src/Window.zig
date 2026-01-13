@@ -548,7 +548,6 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
 pub const AddEventTextOptions = struct {
     text: []const u8,
     selected: bool = false,
-    replace: bool = false,
     target_id: ?dvui.Id = null,
 };
 
@@ -566,11 +565,42 @@ pub fn addEventText(self: *Self, opts: AddEventTextOptions) std.mem.Allocator.Er
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
         .evt = .{
-            .text = .{
+            .text = .{ .action = .{ .value = .{
                 .txt = try self.arena().dupe(u8, opts.text),
                 .selected = opts.selected,
-                .replace = opts.replace,
-            },
+            } } },
+        },
+        .target_windowId = self.subwindows.focused_id,
+        .target_widgetId = opts.target_id orelse if (self.subwindows.focused()) |sw| sw.focused_widget_id else null,
+    });
+
+    const ret = (self.data().id != self.subwindows.focused_id);
+    try self.positionMouseEventAdd();
+    return ret;
+}
+
+pub const AddEventTextSelectOptions = struct {
+    start: usize,
+    end: usize,
+    target_id: ?dvui.Id = null,
+};
+
+/// Add an event that represents text being selected.
+///
+/// This can be called outside begin/end.  You should add all the events
+/// for a frame either before begin() or just after begin() and before
+/// calling normal dvui widgets.  end() clears the event list.
+pub fn addEventTextSelect(self: *Self, opts: AddEventTextSelectOptions) std.mem.Allocator.Error!bool {
+    self.positionMouseEventRemove();
+
+    self.event_num += 1;
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .evt = .{
+            .text = .{ .action = .{ .selection = .{
+                .start = opts.start,
+                .end = opts.end,
+            } } },
         },
         .target_windowId = self.subwindows.focused_id,
         .target_widgetId = opts.target_id orelse if (self.subwindows.focused()) |sw| sw.focused_widget_id else null,
