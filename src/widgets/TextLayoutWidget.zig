@@ -241,6 +241,7 @@ textrun_parent_old: ?dvui.Id = null,
 textrun_anchor: ?TextRunSelectionInfo = null,
 textrun_focus: ?TextRunSelectionInfo = null,
 textrun_cursor: ?TextRunSelectionInfo = null,
+textrun_last: ?TextRunSelectionInfo = null,
 // Did the last textAdd end with a newline?
 newline: bool = false,
 
@@ -1454,14 +1455,17 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                             .rect = r,
                         });
                         defer text_run_widget.deinit();
-                        if (self.textrun_anchor == null and self.selection.start >= self.bytes_seen and self.selection.start < self.bytes_seen + rtxt.len) {
-                            self.textrun_anchor = .{
-                                .node_id = text_run_widget.data().id,
-                                .pos = self.selection.start - self.bytes_seen,
-                            };
-                        }
-                        if (self.textrun_focus == null and self.selection.end >= self.bytes_seen and self.selection.end < self.bytes_seen + rtxt.len) {
-                            self.textrun_focus = .{ .node_id = text_run_widget.data().id, .pos = self.selection.end - self.bytes_seen };
+                        self.textrun_last = .{ .node_id = text_run_widget.data().id, .pos = self.bytes_seen + end };
+                        if (!self.selection.empty()) {
+                            if (self.textrun_focus == null and self.selection.cursor >= self.bytes_seen and self.selection.cursor < self.bytes_seen + rtxt.len) {
+                                self.textrun_focus = .{ .node_id = text_run_widget.data().id, .pos = self.selection.cursor - self.bytes_seen };
+                            }
+                            if (self.textrun_anchor == null) {
+                                const anchor = if (self.selection.cursor == self.selection.start) self.selection.end else self.selection.start;
+                                if (anchor >= self.bytes_seen and anchor < self.bytes_seen + rtxt.len) {
+                                    self.textrun_anchor = .{ .node_id = text_run_widget.data().id, .pos = anchor - self.bytes_seen };
+                                }
+                            }
                         }
                         if (self.textrun_cursor == null and self.selection.cursor >= self.bytes_seen and self.selection.cursor < self.bytes_seen + rtxt.len) {
                             self.textrun_cursor = .{ .node_id = text_run_widget.data().id, .pos = self.selection.cursor - self.bytes_seen };
@@ -1783,6 +1787,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
                 const empty_space: Rect = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = @max(0, @min(text_height, crect.h - self.insert_pt.y)) };
                 var vp = dvui.overlay(@src(), .{ .name = "Text Run", .role = .text_run, .rect = empty_space });
                 defer vp.deinit();
+                self.textrun_last = .{ .node_id = vp.data().id, .pos = if (self.newline) self.bytes_seen + 1 else self.bytes_seen };
                 var text_info: std.MultiArrayList(AccessKit.CharPositionInfo) = .empty;
                 text_info.append(dvui.currentWindow().arena(), .{
                     .l = 0,
@@ -1797,19 +1802,26 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
                 }, &text_info, self.data().contentRectScale().rectToPhysical(empty_space));
             }
 
-            if (self.textrun_anchor == null or self.textrun_focus == null) {
-                if (self.textrun_cursor) |cursor| {
+            if (!self.selection.empty()) {
+                self.textrun_anchor = self.textrun_anchor orelse self.textrun_last;
+                self.textrun_focus = self.textrun_focus orelse self.textrun_last;
+
+                if (self.textrun_anchor) |anchor| {
+                    if (self.textrun_focus) |focus| {
+                        AccessKit.nodeSetTextSelection(parent_node, .{
+                            .anchor = .{ .node = anchor.node_id.asU64(), .character_index = anchor.pos },
+                            .focus = .{ .node = focus.node_id.asU64(), .character_index = focus.pos },
+                        });
+                    }
+                }
+            } else {
+                // if we didn't find the cursor, it must be at the end
+                if (self.textrun_cursor orelse self.textrun_last) |cursor| {
                     AccessKit.nodeSetTextSelection(parent_node, .{
                         .anchor = .{ .node = cursor.node_id.asU64(), .character_index = cursor.pos },
                         .focus = .{ .node = cursor.node_id.asU64(), .character_index = cursor.pos },
                     });
                 }
-            } else {
-                // Both optionals are non-null here.
-                AccessKit.nodeSetTextSelection(parent_node, .{
-                    .anchor = .{ .node = self.textrun_anchor.?.node_id.asU64(), .character_index = self.textrun_anchor.?.pos },
-                    .focus = .{ .node = self.textrun_focus.?.node_id.asU64(), .character_index = self.textrun_focus.?.pos },
-                });
             }
         }
     }
