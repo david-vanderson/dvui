@@ -360,7 +360,7 @@ pub fn textRunPopulate(
         std.debug.print("TEXT_RUN [{x}:{x}]: widths = {any}\n", .{ opts.node_id, opts.node_parent_id, text_info.items(.w) });
         std.debug.print("TEXT_RUN [{x}:{x}]: positions = {any}\n", .{ opts.node_id, opts.node_parent_id, text_info.items(.x) });
         std.debug.print("TEXT_RUN [{x}:{x}]: word_lens = {any}\n", .{ opts.node_id, opts.node_parent_id, word_lengths.items });
-        std.debug.print("TEXT_RUN [{x}:{x}]: text = {s}\n", .{ opts.node_id, opts.node_parent_id, opts.text });
+        std.debug.print("TEXT_RUN [{x}:{x}]: text = {s}\n", .{ opts.node_id, opts.node_parent_id, text });
     }
 }
 

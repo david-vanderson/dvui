@@ -1454,16 +1454,16 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                             .rect = r,
                         });
                         defer text_run_widget.deinit();
-                        if (self.textrun_anchor == null and self.selection.start >= self.bytes_seen and self.selection.start <= self.bytes_seen + rtxt.len) {
+                        if (self.textrun_anchor == null and self.selection.start >= self.bytes_seen and self.selection.start < self.bytes_seen + rtxt.len) {
                             self.textrun_anchor = .{
                                 .node_id = text_run_widget.data().id,
                                 .pos = self.selection.start - self.bytes_seen,
                             };
                         }
-                        if (self.textrun_focus == null and self.selection.end >= self.bytes_seen and self.selection.end <= self.bytes_seen + rtxt.len) {
+                        if (self.textrun_focus == null and self.selection.end >= self.bytes_seen and self.selection.end < self.bytes_seen + rtxt.len) {
                             self.textrun_focus = .{ .node_id = text_run_widget.data().id, .pos = self.selection.end - self.bytes_seen };
                         }
-                        if (self.textrun_cursor == null and self.selection.cursor >= self.bytes_seen and self.selection.cursor <= self.bytes_seen + rtxt.len) {
+                        if (self.textrun_cursor == null and self.selection.cursor >= self.bytes_seen and self.selection.cursor < self.bytes_seen + rtxt.len) {
                             self.textrun_cursor = .{ .node_id = text_run_widget.data().id, .pos = self.selection.cursor - self.bytes_seen };
                         }
                         break :info .{
