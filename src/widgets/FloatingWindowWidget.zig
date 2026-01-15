@@ -500,12 +500,12 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
             },
             .key => |ke| {
                 // catch any tabs that weren't handled by widgets
-                if (ke.action == .down and ke.matchBind("next_widget")) {
+                if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("next_widget")) {
                     e.handle(@src(), self.data());
                     dvui.tabIndexNext(e.num);
                 }
 
-                if (ke.action == .down and ke.matchBind("prev_widget")) {
+                if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("prev_widget")) {
                     e.handle(@src(), self.data());
                     dvui.tabIndexPrev(e.num);
                 }
