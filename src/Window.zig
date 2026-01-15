@@ -63,23 +63,20 @@ secs_since_last_frame: f32 = 0,
 extra_frames_needed: u8 = 0,
 clipRect: dvui.Rect.Physical = .{},
 
-/// The currently active theme where colors and fonts will be sourced.
-/// This field is intended to be assigned to directly.
-///
-/// See `dvui.themeSet`
+/// Active theme for colors and fonts. Set with `dvui.themeSet` or `themeSet`.
 theme: Theme,
 
 /// Used by `dvui.dialog` for button order of Ok and Cancel.
 button_order: dvui.enums.DialogButtonOrder = .cancel_ok,
 
 /// Uses `gpa` allocator
-min_sizes: dvui.TrackingAutoHashMap(Id, Size, .put_only) = .empty,
+min_sizes: dvui.TrackingAutoHashMap(Id, Size, .put_only, void) = .empty,
 /// Uses `gpa` allocator
-tags: dvui.TrackingAutoHashMap([]const u8, dvui.TagData, .put_only) = .empty,
+tags: dvui.TrackingAutoHashMap([]const u8, dvui.TagData, .put_only, void) = .empty,
 /// Uses `gpa` allocator
 data_store: dvui.Data = .{},
 /// Uses `gpa` allocator
-animations: dvui.TrackingAutoHashMap(Id, Animation, .get_and_put) = .empty,
+animations: dvui.TrackingAutoHashMap(Id, Animation, .get_and_put, void) = .empty,
 /// Uses `gpa` allocator
 tab_index_prev: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
@@ -170,13 +167,17 @@ pub fn init(
         },
         // Set in `begin`
         .current_parent = undefined,
+        .theme = undefined, // set below
         .backend = backend_ctx,
-        .theme = if (init_opts.theme) |t| t else switch (init_opts.color_scheme orelse backend_ctx.preferredColorScheme() orelse .light) {
-            .light => Theme.builtin.adwaita_light,
-            .dark => Theme.builtin.adwaita_dark,
-        },
         .accesskit = .{},
     };
+
+    if (init_opts.theme) |t| {
+        self.themeSet(t);
+    } else switch (init_opts.color_scheme orelse backend_ctx.preferredColorScheme() orelse .light) {
+        .light => self.themeSet(Theme.builtin.adwaita_light),
+        .dark => self.themeSet(Theme.builtin.adwaita_dark),
+    }
 
     try self.initEvents();
 
@@ -313,7 +314,50 @@ pub fn init(
     return self;
 }
 
+pub fn addFont(self: *Self, name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?std.mem.Allocator) (std.mem.Allocator.Error || dvui.Font.Error)!void {
+    try self.fonts.database.ensureUnusedCapacity(self.gpa, 1);
+    // TODO: try to get this info from the ttf file, and also add override options
+    const font: dvui.Font = .find(.{ .family = name });
+    // Test if we can successfully open this font
+    // TODO: Find some more elegant way of validating ttf files
+    var entry = try dvui.Font.Cache.Entry.init(self.gpa, ttf_bytes, font);
+    // Try and cache the entry since the work is already done
+    self.fonts.cache.put(self.gpa, font.hash(), entry) catch entry.deinit(self.gpa, self.backend);
+    self.fonts.database.appendAssumeCapacity(.{
+        .family = dvui.Font.array(name),
+        .bytes = ttf_bytes,
+        .allocator = ttf_bytes_allocator,
+    });
+}
+
+pub fn addEmbeddedFontsFromTheme(self: *Self, theme: *const Theme) void {
+    // load any embedded fonts we haven't yet
+    loop: for (theme.embedded_fonts) |fs| {
+        for (self.fonts.database.items) |dbs| {
+            if (dbs.bytes.ptr == fs.bytes.ptr) continue :loop;
+        }
+
+        const name = fs.name(self.arena());
+        defer self.arena().free(name);
+
+        dvui.log.debug("adding embedded font {s}", .{name});
+        self.fonts.database.append(self.gpa, fs) catch |err| {
+            dvui.logError(@src(), err, "trying to add embedded font {s}", .{name});
+        };
+    }
+}
+
+pub fn themeSet(self: *Self, theme: Theme) void {
+    self.theme = theme;
+    self.addEmbeddedFontsFromTheme(&theme);
+}
+
 pub fn deinit(self: *Self) void {
+    // Make ourselves the current window to support data deinit functions.
+    const prev_window = dvui.current_window;
+    dvui.current_window = self;
+    defer dvui.current_window = prev_window;
+
     if (dvui.accesskit_enabled) self.accesskit.deinit();
 
     self.data_store.deinit(self.gpa);
@@ -507,7 +551,6 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
 pub const AddEventTextOptions = struct {
     text: []const u8,
     selected: bool = false,
-    replace: bool = false,
     target_id: ?dvui.Id = null,
 };
 
@@ -525,11 +568,42 @@ pub fn addEventText(self: *Self, opts: AddEventTextOptions) std.mem.Allocator.Er
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
         .evt = .{
-            .text = .{
+            .text = .{ .action = .{ .value = .{
                 .txt = try self.arena().dupe(u8, opts.text),
                 .selected = opts.selected,
-                .replace = opts.replace,
-            },
+            } } },
+        },
+        .target_windowId = self.subwindows.focused_id,
+        .target_widgetId = opts.target_id orelse if (self.subwindows.focused()) |sw| sw.focused_widget_id else null,
+    });
+
+    const ret = (self.data().id != self.subwindows.focused_id);
+    try self.positionMouseEventAdd();
+    return ret;
+}
+
+pub const AddEventTextSelectOptions = struct {
+    start: usize,
+    end: usize,
+    target_id: ?dvui.Id = null,
+};
+
+/// Add an event that represents text being selected.
+///
+/// This can be called outside begin/end.  You should add all the events
+/// for a frame either before begin() or just after begin() and before
+/// calling normal dvui widgets.  end() clears the event list.
+pub fn addEventTextSelect(self: *Self, opts: AddEventTextSelectOptions) std.mem.Allocator.Error!bool {
+    self.positionMouseEventRemove();
+
+    self.event_num += 1;
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .evt = .{
+            .text = .{ .action = .{ .selection = .{
+                .start = opts.start,
+                .end = opts.end,
+            } } },
         },
         .target_windowId = self.subwindows.focused_id,
         .target_widgetId = opts.target_id orelse if (self.subwindows.focused()) |sw| sw.focused_widget_id else null,
@@ -1079,6 +1153,8 @@ pub fn begin(
     self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
 
     {
+        // update animations and remove dead ones
+        // animations are checked in `end()` to affect waiting time
         const micros: i32 = if (micros_since_last > math.maxInt(i32)) math.maxInt(i32) else @as(i32, @intCast(micros_since_last));
         var it = self.animations.iterator();
         while (it.next_used()) |kv| {
@@ -1087,9 +1163,6 @@ pub fn begin(
             } else {
                 kv.value_ptr.start_time -|= micros;
                 kv.value_ptr.end_time -|= micros;
-                if (kv.value_ptr.start_time <= 0 and kv.value_ptr.end_time > 0) {
-                    self.refreshWindow(@src(), null);
-                }
             }
         }
         self.animations.reset();
@@ -1267,9 +1340,9 @@ pub fn toastsShow(self: *Self, subwindow_id: ?Id, rect: Rect.Natural) void {
     toast_win.init(@src(), .{ .stay_above_parent_window = subwindow_id != null, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
     defer toast_win.deinit();
 
-    toast_win.data().rect = dvui.placeIn(.cast(rect), toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
+    toast_win.data().rectSet(dvui.placeIn(.cast(rect), toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 }));
     toast_win.drawBackground();
-    toast_win.autoSize(); // affects next frame TODO: probably don't need?
+    toast_win.autoSize(); // affects next frame, always need as toasts can come and go
 
     var vbox = dvui.box(@src(), .{}, .{});
     defer vbox.deinit();
@@ -1354,12 +1427,12 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
                 self.focusWidget(null, null, null);
             }
         } else if (e.evt == .key) {
-            if (e.evt.key.action == .down and e.evt.key.matchBind("next_widget")) {
+            if ((e.evt.key.action == .down or e.evt.key.action == .repeat) and e.evt.key.matchBind("next_widget")) {
                 e.handle(@src(), self.data());
                 dvui.tabIndexNext(e.num);
             }
 
-            if (e.evt.key.action == .down and e.evt.key.matchBind("prev_widget")) {
+            if ((e.evt.key.action == .down or e.evt.key.action == .repeat) and e.evt.key.matchBind("prev_widget")) {
                 e.handle(@src(), self.data());
                 dvui.tabIndexPrev(e.num);
             }

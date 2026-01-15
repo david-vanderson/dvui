@@ -24,11 +24,19 @@ pub var defaults: Options = .{
     .style = .window,
 };
 
+pub const Resize = enum {
+    none,
+    all,
+};
+
 pub const InitOptions = struct {
     modal: bool = false,
     rect: ?*Rect = null,
     center_on: ?Rect.Natural = null,
     open_flag: ?*bool = null,
+
+    /// Whether to allow resizing the window by dragging the edges/corners.
+    resize: Resize = .all,
     process_events_in_deinit: bool = true,
     stay_above_parent_window: bool = false,
     window_avoid: enum {
@@ -88,7 +96,7 @@ drag_part: ?DragPart = null,
 drag_area: Rect.Physical = undefined,
 
 pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const options = defaults.themeOverride().override(opts);
+    const options = defaults.themeOverride(opts.theme).override(opts);
     var box_options = options;
     box_options.role = null;
     box_options.label = null;
@@ -397,7 +405,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
                 }
             }
 
-            if (dragPart(me, rs) == .bottom_right) {
+            if (self.init_options.resize == .all and dragPart(me, rs) == .bottom_right) {
                 if (me.action == .press and me.button.pointer()) {
                     // capture and start drag
                     dvui.captureMouse(self.data(), e.num);
@@ -447,8 +455,10 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                     .press => {
                         if (me.button.pointer()) {
                             const dp = dragPart(me, rs);
-                            if (dp == .middle and !self.drag_area.contains(me.p)) {
-                                continue;
+                            if (dp == .middle) {
+                                if (!self.drag_area.contains(me.p)) continue;
+                            } else {
+                                if (self.init_options.resize == .none) continue;
                             }
                             e.handle(@src(), self.data());
                             // capture and start drag
@@ -478,8 +488,10 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                     },
                     .position => {
                         const dp = dragPart(me, rs);
-                        if (dp == .middle and !self.drag_area.contains(me.p)) {
-                            continue;
+                        if (dp == .middle) {
+                            if (!self.drag_area.contains(me.p)) continue;
+                        } else {
+                            if (self.init_options.resize == .none) continue;
                         }
                         dvui.cursorSet(dp.cursor());
                     },
@@ -488,12 +500,12 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
             },
             .key => |ke| {
                 // catch any tabs that weren't handled by widgets
-                if (ke.action == .down and ke.matchBind("next_widget")) {
+                if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("next_widget")) {
                     e.handle(@src(), self.data());
                     dvui.tabIndexNext(e.num);
                 }
 
-                if (ke.action == .down and ke.matchBind("prev_widget")) {
+                if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("prev_widget")) {
                     e.handle(@src(), self.data());
                     dvui.tabIndexPrev(e.num);
                 }
@@ -511,6 +523,12 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
 /// This might take 2 frames if there is a textLayout with break_lines.
 pub fn autoSize(self: *FloatingWindowWidget) void {
     self.auto_size = true;
+}
+
+/// Request that the window center itself on its parent (or
+/// InitOptions.center_on). This takes effect next frame.
+pub fn autoPosition(self: *FloatingWindowWidget) void {
+    self.auto_pos = true;
 }
 
 pub fn close(self: *FloatingWindowWidget) void {

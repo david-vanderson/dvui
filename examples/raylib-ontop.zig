@@ -24,6 +24,7 @@ pub fn main() !void {
 
     // create OS window directly with raylib
     ray.SetConfigFlags(ray.FLAG_WINDOW_RESIZABLE);
+    ray.SetConfigFlags(ray.FLAG_WINDOW_HIGHDPI);
     ray.SetConfigFlags(ray.FLAG_VSYNC_HINT);
     ray.InitWindow(800, 600, "DVUI Raylib Ontop Example");
     defer ray.CloseWindow();
@@ -38,7 +39,6 @@ pub fn main() !void {
     // OS window is managed by raylib, not dvui
     var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
     defer win.deinit();
-    try win.fonts.addBuiltinFontsForTheme(win.gpa, dvui.Theme.builtin.adwaita_light);
 
     var selected_color: dvui.Color = dvui.Color.white;
 
@@ -60,7 +60,7 @@ pub fn main() !void {
         }
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        ray.ClearBackground(RaylibBackend.dvuiColorToRaylib(dvui.Color.black));
+        ray.ClearBackground(RaylibBackend.dvuiColorToRaylib(dvui.Color.gray));
 
         {
             var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
@@ -104,15 +104,9 @@ fn colorPicker(result: *dvui.Color) void {
         var overlay = dvui.overlay(@src(), .{ .min_size_content = .{ .w = 100, .h = 100 } });
         defer overlay.deinit();
 
-        const bounds = overlay.data().contentRectScale().r;
-        const ray_bounds: ray.Rectangle = .{
-            .x = bounds.x,
-            .y = bounds.y,
-            .width = bounds.w,
-            .height = bounds.h,
-        };
+        const bounds = RaylibBackend.dvuiRectToRaylib(overlay.data().contentRectScale().r);
         var c_color: ray.Color = RaylibBackend.dvuiColorToRaylib(result.*);
-        _ = ray.GuiColorPicker(ray_bounds, "Pick Color", &c_color);
+        _ = ray.GuiColorPicker(bounds, "Pick Color", &c_color);
         result.* = RaylibBackend.raylibColorToDvui(c_color);
     }
 
@@ -145,18 +139,15 @@ fn dvuiStuff() void {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
     const lorem = "This example shows how to use dvui for floating windows on top of an existing application.";
     tl.addText(lorem, .{});
     tl.deinit();
 
     var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    tl2.addText("The dvui is painting only floating windows and dialogs.", .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is managed by the application (in this demo capped at vsync).", .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Cursor is only being set by dvui for floating windows.", .{});
-    tl2.addText("\n\n", .{});
+    tl2.addText("The dvui is painting only floating windows and dialogs.\n\n", .{});
+    tl2.addText("Framerate is managed by the application (in this demo capped at vsync).\n\n", .{});
+    tl2.addText("Cursor is only being set by dvui for floating windows.\n\n", .{});
     if (dvui.useFreeType) {
         tl2.addText("Fonts are being rendered by FreeType 2.", .{});
     } else {

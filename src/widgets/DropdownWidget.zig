@@ -54,7 +54,7 @@ pub fn wrapInner(opts: Options) Options {
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const options = defaults.themeOverride().override(opts);
+    const options = defaults.themeOverride(opts.theme).override(opts);
     self.* = .{
         .options = options,
         .init_options = init_opts,

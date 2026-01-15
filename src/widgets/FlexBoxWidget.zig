@@ -13,6 +13,11 @@ const FlexBoxWidget = @This();
 pub const InitOptions = struct {
     /// Imitates `justify-content` in CSS Flexbox
     justify_content: ContentPosition = .center,
+
+    /// Use to overlap widgets to collapse their borders or margins. If a
+    /// widget is not the first in a row, push left by x.  If not in the first
+    /// row, push up by y.
+    border_collapse: dvui.Point = .{},
 };
 
 pub const ContentPosition = enum { start, center };
@@ -25,6 +30,11 @@ row_size: Size = .{},
 max_row_width: f32 = 0.0,
 max_row_width_prev: f32 = 0.0,
 width_nobreak: f32 = 0.0, // width if all children were on one row
+
+// used by children to know what row and col (how many children so far in this
+// row)
+row: usize = 0,
+col: usize = 0,
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *FlexBoxWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
@@ -79,8 +89,10 @@ pub fn rectFor(self: *FlexBoxWidget, id: dvui.Id, min_size: Size, e: Options.Exp
     if (self.insert_pt.x > 0 and self.insert_pt.x + min_size.w > container_width) {
         // we ran off the end and didn't start at the left edge, break
         self.insert_pt.x = 0;
-        self.insert_pt.y += self.row_size.h;
+        self.insert_pt.y += self.row_size.h - self.init_options.border_collapse.y;
         self.row_size = .{ .w = 0, .h = min_size.h };
+        self.row += 1;
+        self.col = 0;
     } else {
         self.row_size.h = @max(self.row_size.h, min_size.h);
     }
@@ -91,7 +103,7 @@ pub fn rectFor(self: *FlexBoxWidget, id: dvui.Id, min_size: Size, e: Options.Exp
         .center => ret.x += (self.data().contentRect().w - self.max_row_width_prev) / 2,
     }
 
-    self.insert_pt.x += min_size.w;
+    self.insert_pt.x += min_size.w - self.init_options.border_collapse.x;
 
     return ret;
 }
@@ -105,6 +117,8 @@ pub fn minSizeForChild(self: *FlexBoxWidget, s: Size) void {
     self.max_row_width = @max(self.max_row_width, self.row_size.w);
     self.width_nobreak += s.w;
     self.data().min_size = self.data().options.padSize(.{ .w = self.width_nobreak, .h = self.insert_pt.y + self.row_size.h });
+
+    self.col += 1;
 }
 
 pub fn deinit(self: *FlexBoxWidget) void {

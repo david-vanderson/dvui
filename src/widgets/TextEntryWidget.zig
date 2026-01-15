@@ -12,6 +12,7 @@ const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
 const TextLayoutWidget = dvui.TextLayoutWidget;
+const AccessKit = dvui.AccessKit;
 
 const TextEntryWidget = @This();
 
@@ -28,6 +29,96 @@ pub var defaults: Options = .{
 };
 
 const realloc_bin_size = 100;
+
+pub const SyntaxHighlight = struct {
+    name: []const u8,
+    opts: dvui.Options,
+};
+
+pub const TreeSitterParser = if (dvui.useTreeSitter) struct {
+    parser: *dvui.c.TSParser,
+    tree: *dvui.c.TSTree,
+    query: *dvui.c.TSQuery,
+
+    pub fn deinit(ptr: *anyopaque) void {
+        const self: *@This() = @ptrCast(@alignCast(ptr));
+
+        dvui.c.ts_query_delete(self.query);
+        dvui.c.ts_tree_delete(self.tree);
+        dvui.c.ts_parser_delete(self.parser);
+    }
+
+    pub fn queryCursorCaptureIterator(self: *const TreeSitterParser, qc: *dvui.c.TSQueryCursor, text: []const u8) QueryCursorCaptureIterator {
+        return .{
+            .query_cursor = qc,
+            .prev_match = null,
+            .query = self.query,
+            .text = text,
+        };
+    }
+
+    pub const QueryCursorCaptureIterator = struct {
+        pub const Match = struct {
+            iter: *const QueryCursorCaptureIterator,
+            node: dvui.c.TSNode,
+            capture_index: u32,
+
+            pub fn captureName(self: *const Match) []const u8 {
+                var len: u32 = undefined;
+                const name = dvui.c.ts_query_capture_name_for_id(self.iter.query, self.capture_index, &len);
+                return name[0..len];
+            }
+
+            pub fn debugLog(self: *const Match, comptime kind: []const u8) void {
+                const start = dvui.c.ts_node_start_byte(self.node);
+                const end = dvui.c.ts_node_end_byte(self.node);
+                dvui.log.debug(kind ++ " capture @{s} : {s}", .{ self.captureName(), self.iter.text[start..end] });
+            }
+        };
+
+        query_cursor: *dvui.c.TSQueryCursor,
+        prev_match: ?Match,
+
+        // used for debugging
+        debug: bool = false,
+        query: *dvui.c.TSQuery,
+        text: []const u8,
+
+        pub fn next(self: *QueryCursorCaptureIterator) ?Match {
+            var match: dvui.c.TSQueryMatch = undefined;
+            var captureIdx: u32 = undefined;
+            loop: while (dvui.c.ts_query_cursor_next_capture(self.query_cursor, &match, &captureIdx)) {
+                const capture = match.captures[captureIdx];
+                if (self.prev_match) |pm| {
+                    if (dvui.c.ts_node_eq(pm.node, capture.node)) {
+                        // same node as previous
+                        self.prev_match = .{ .iter = self, .node = capture.node, .capture_index = capture.index };
+                        if (self.debug) self.prev_match.?.debugLog("ts same ");
+                        continue :loop;
+                    }
+
+                    // not the same
+                    const ret = self.prev_match;
+                    self.prev_match = .{ .iter = self, .node = capture.node, .capture_index = capture.index };
+                    if (self.debug) self.prev_match.?.debugLog("ts new  ");
+                    return ret;
+                } else {
+                    // first time
+                    self.prev_match = .{ .iter = self, .node = capture.node, .capture_index = capture.index };
+                    if (self.debug) self.prev_match.?.debugLog("ts first");
+                    continue :loop;
+                }
+            }
+
+            const ret = self.prev_match;
+            if (ret) |r| {
+                if (self.debug) r.debugLog("ts last ");
+            }
+            self.prev_match = null;
+            return ret;
+        }
+    };
+} else void;
 
 pub const InitOptions = struct {
     pub const TextOption = union(enum) {
@@ -57,7 +148,16 @@ pub const InitOptions = struct {
         },
     };
 
+    pub const TreeSitterOption = if (dvui.useTreeSitter) struct {
+        language: *dvui.c.TSLanguage,
+        queries: []const u8,
+        highlights: []const SyntaxHighlight,
+        /// If true dump all captures to dvui.log.debug
+        log_captures: bool = false,
+    } else void;
+
     text: TextOption = .{ .internal = .{} },
+    tree_sitter: ?TreeSitterOption = null,
     /// Faded text shown when the textEntry is empty
     placeholder: ?[]const u8 = null,
 
@@ -96,6 +196,7 @@ text_changed: bool = false,
 text_changed_start: usize = std.math.maxInt(usize),
 text_changed_end: usize = 0, // index of bytes before edits (so matches previous frame)
 text_changed_added: i64 = 0, // bytes added
+edited_outside_last_frame: *bool = undefined,
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
@@ -106,7 +207,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         .horizontal_bar = init_opts.scroll_horizontal_bar orelse (if (init_opts.multiline) .auto else .hide),
     };
 
-    var options = defaults.themeOverride().min_sizeM(14, 1);
+    var options = defaults.themeOverride(opts.theme).min_sizeM(14, 1);
 
     if (init_opts.password_char != null) {
         options.role = .password_input;
@@ -116,15 +217,6 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
 
     options = options.override(opts);
 
-    if (options.max_size_content == null) {
-        // max size not given, so default to the same as min size for direction
-        // we can scroll in
-        const ms = options.min_size_contentGet();
-        const maxw = if (scroll_init_opts.horizontal == .auto) ms.w else dvui.max_float_safe;
-        const maxh = if (scroll_init_opts.vertical == .auto) ms.h else dvui.max_float_safe;
-        options = options.override(.{ .max_size_content = .{ .w = maxw, .h = maxh } });
-    }
-
     // padding is interpreted as the padding for the TextLayoutWidget, but
     // we also need to add it to content size because TextLayoutWidget is
     // inside the scroll area
@@ -132,8 +224,10 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     options.padding = null;
     options.min_size_content.?.w += padding.x + padding.w;
     options.min_size_content.?.h += padding.y + padding.h;
-    options.max_size_content.?.w += padding.x + padding.w;
-    options.max_size_content.?.h += padding.y + padding.h;
+    if (options.max_size_content != null) {
+        options.max_size_content.?.w += padding.x + padding.w;
+        options.max_size_content.?.h += padding.y + padding.h;
+    }
 
     const wd = WidgetData.init(src, .{}, options);
     scroll_init_opts.focus_id = wd.id;
@@ -197,6 +291,14 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
 
     self.scrollClip = dvui.clipGet();
 
+    self.edited_outside_last_frame = dvui.dataGetPtrDefault(null, self.data().id, "_edited_outside", bool, false);
+    if (self.init_opts.cache_layout and self.edited_outside_last_frame.*) {
+        dvui.log.debug("TextEntryWidget forcing cache_layout false due to text being edited after drawing last frame", .{});
+        self.init_opts.cache_layout = false;
+        self.edited_outside_last_frame.* = false;
+        self.text_changed = true; // trigger tree_sitter full reparse
+    }
+
     self.textLayout.init(@src(), .{
         .break_lines = self.init_opts.break_lines,
         .kerning = self.init_opts.kerning,
@@ -204,24 +306,22 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         .cache_layout = self.init_opts.cache_layout,
         .focused = self.data().id == dvui.focusedWidgetId(),
         .show_touch_draggables = (self.len > 0),
-    }, self.data().options.strip().override(.{ .role = .none, .expand = .both, .padding = self.padding }));
+    }, self.data().options.strip().override(.{
+        .role = .none,
+        .expand = .both,
+        .padding = self.padding,
+    }));
 
     // if textLayout forced cache_layout to false, we need to honor that
     self.init_opts.cache_layout = self.textLayout.cache_layout;
 
     self.textClip = dvui.clipGet();
 
-    if (self.len == 0) {
-        if (self.init_opts.placeholder) |placeholder| {
-            self.textLayout.addText(placeholder, .{ .color_text = self.textLayout.data().options.color(.text).opacity(0.65) });
-        }
-    }
-
     if (self.textLayout.touchEditing()) |floating_widget| {
         defer floating_widget.deinit();
 
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
-            .corner_radius = dvui.ButtonWidget.defaults.themeOverride().corner_radiusGet(),
+            .corner_radius = dvui.ButtonWidget.defaults.themeOverride(opts.theme).corner_radiusGet(),
             .background = true,
             .border = dvui.Rect.all(1),
         });
@@ -269,14 +369,17 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     // textLayout clips to its content, but we need to get events out to our border
     dvui.clipSet(borderClip);
     if (self.data().accesskit_node()) |ak_node| {
-        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
-        dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_value);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_text_selection);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.replace_selected_text);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.scroll_into_view); // AK TODO - not yet implemented
+        AccessKit.nodeSetClipsChildren(ak_node); // AK TODO: Check this is correct?
+
         if (self.data().options.role != .password_input) {
-            const str = dvui.currentWindow().arena().dupeZ(u8, self.text) catch "";
+            const str = dvui.currentWindow().arena().dupeZ(u8, self.text[0..self.len]) catch "";
             defer dvui.currentWindow().arena().free(str);
-            // TODO: We don't want to always push large amounts of text each frame. So we either need to look at pushing
-            // only chunks of text, ot only pushing when the text has actually changed since last frame.
-            dvui.AccessKit.nodeSetValue(ak_node, str);
+            AccessKit.nodeSetValue(ak_node, str);
         }
     }
 }
@@ -292,6 +395,7 @@ pub fn matchEvent(self: *TextEntryWidget, e: *Event) bool {
 
 pub fn processEvents(self: *TextEntryWidget) void {
     const evts = dvui.events();
+    //std.debug.print("EVTS = {any}\n", .{evts});
     for (evts) |*e| {
         if (!self.matchEvent(e))
             continue;
@@ -301,6 +405,203 @@ pub fn processEvents(self: *TextEntryWidget) void {
 }
 
 pub fn draw(self: *TextEntryWidget) void {
+    self.drawBeforeText();
+
+    if (self.len == 0) {
+        if (self.init_opts.placeholder) |placeholder| {
+            if (self.data().accesskit_node()) |ak_node| {
+                const str = dvui.currentWindow().arena().dupeZ(u8, placeholder) catch "";
+                defer dvui.currentWindow().arena().free(str);
+                AccessKit.nodeSetPlaceholder(ak_node, str);
+
+                // prevent textLayout from making a text run for the placeholder text
+                dvui.currentWindow().accesskit.text_run_parent = null;
+            }
+            self.textLayout.addText(placeholder, .{ .color_text = self.textLayout.data().options.color(.text).opacity(0.65) });
+        }
+    }
+
+    if (dvui.accesskit_enabled) {
+        // parent text runs to us
+        dvui.currentWindow().accesskit.text_run_parent = self.data().id;
+    }
+
+    if (self.init_opts.password_char) |pc| {
+        {
+            // adjust selection for obfuscation
+            var count: usize = 0;
+            var bytes: usize = 0;
+            var sel = self.textLayout.selection;
+            var sstart: ?usize = null;
+            var scursor: ?usize = null;
+            var send: ?usize = null;
+            var utf8it = (std.unicode.Utf8View.initUnchecked(self.text[0..self.len])).iterator();
+            while (utf8it.nextCodepoint()) |codepoint| {
+                if (sstart == null and sel.start == bytes) sstart = count * pc.len;
+                if (scursor == null and sel.cursor == bytes) scursor = count * pc.len;
+                if (send == null and sel.end == bytes) send = count * pc.len;
+                count += 1;
+                bytes += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+            } else {
+                if (sstart == null and sel.start >= bytes) sstart = count * pc.len;
+                if (scursor == null and sel.cursor >= bytes) scursor = count * pc.len;
+                if (send == null and sel.end >= bytes) send = count * pc.len;
+            }
+            sel.start = sstart.?;
+            sel.cursor = scursor.?;
+            sel.end = send.?;
+            const password_str: ?[]u8 = dvui.currentWindow().lifo().alloc(u8, count * pc.len) catch null;
+            if (password_str) |pstr| {
+                defer dvui.currentWindow().lifo().free(pstr);
+                for (0..count) |i| {
+                    for (0..pc.len) |pci| {
+                        pstr[i * pc.len + pci] = pc[pci];
+                    }
+                }
+                self.textLayout.addText(pstr, self.data().options.strip());
+            } else {
+                dvui.log.warn("Could not allocate password_str, falling back to one single password_str", .{});
+                self.textLayout.addText(pc, self.data().options.strip());
+            }
+        }
+
+        self.textLayout.addTextDone(self.data().options.strip());
+
+        {
+            // reset selection
+            var count: usize = 0;
+            var bytes: usize = 0;
+            var sel = self.textLayout.selection;
+            var sstart: ?usize = null;
+            var scursor: ?usize = null;
+            var send: ?usize = null;
+            // NOTE: We assume that all text in the area it valid utf8, loop with exit early on invalid utf8
+            var utf8it = (std.unicode.Utf8View.initUnchecked(self.text[0..self.len])).iterator();
+            while (utf8it.nextCodepoint()) |codepoint| {
+                if (sstart == null and sel.start == count * pc.len) sstart = bytes;
+                if (scursor == null and sel.cursor == count * pc.len) scursor = bytes;
+                if (send == null and sel.end == count * pc.len) send = bytes;
+                count += 1;
+                bytes += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+            } else {
+                if (sstart == null and sel.start >= count * pc.len) sstart = bytes;
+                if (scursor == null and sel.cursor >= count * pc.len) scursor = bytes;
+                if (send == null and sel.end >= count * pc.len) send = bytes;
+            }
+            sel.start = sstart.?;
+            sel.cursor = scursor.?;
+            sel.end = send.?;
+        }
+
+        self.drawAfterText();
+        return;
+    }
+
+    if (dvui.useTreeSitter) {
+        if (self.init_opts.tree_sitter) |ts| {
+            // syntax highlighting
+            var parser = dvui.dataGetPtr(null, self.data().id, "parser", TreeSitterParser) orelse blk: {
+                const p = dvui.c.ts_parser_new();
+                _ = dvui.c.ts_parser_set_language(p, ts.language);
+                const tree = dvui.c.ts_parser_parse_string(p, null, self.text.ptr, @intCast(self.len));
+
+                var errorOffset: u32 = undefined;
+                var errorType: dvui.c.TSQueryError = undefined;
+                const query = dvui.c.ts_query_new(ts.language, ts.queries.ptr, @intCast(ts.queries.len), &errorOffset, &errorType);
+
+                const parser: TreeSitterParser = .{ .parser = p.?, .tree = tree.?, .query = query.? };
+                dvui.dataSet(null, self.data().id, "parser", parser);
+                dvui.dataSetDeinitFunction(null, self.data().id, "parser", &TreeSitterParser.deinit);
+                break :blk dvui.dataGetPtr(null, self.data().id, "parser", TreeSitterParser).?;
+            };
+
+            // used to output text that's not highlighted
+            var start: usize = 0;
+
+            if (self.text_changed and !dvui.firstFrame(self.data().id)) {
+                if (self.init_opts.cache_layout) {
+                    var edit: dvui.c.TSInputEdit = undefined;
+                    edit.start_byte = @intCast(self.text_changed_start);
+                    edit.old_end_byte = @intCast(self.text_changed_end);
+                    edit.new_end_byte = @intCast(@as(i64, @intCast(self.text_changed_end)) + self.text_changed_added);
+
+                    edit.start_point = .{ .row = 0, .column = 0 };
+                    edit.old_end_point = .{ .row = 0, .column = 0 };
+                    edit.new_end_point = .{ .row = 0, .column = 0 };
+
+                    dvui.c.ts_tree_edit(parser.tree, &edit);
+
+                    const tree = dvui.c.ts_parser_parse_string(parser.parser, parser.tree, self.text.ptr, @intCast(self.len));
+                    dvui.c.ts_tree_delete(parser.tree);
+                    parser.tree = tree.?;
+                } else {
+                    const tree = dvui.c.ts_parser_parse_string(parser.parser, null, self.text.ptr, @intCast(self.len));
+                    dvui.c.ts_tree_delete(parser.tree);
+                    parser.tree = tree.?;
+                }
+            }
+
+            // parsing
+            const root = dvui.c.ts_tree_root_node(parser.tree);
+
+            // queries
+            const qc = dvui.c.ts_query_cursor_new();
+            defer dvui.c.ts_query_cursor_delete(qc);
+
+            if (self.textLayout.cache_layout_bytes) |clb| {
+                _ = dvui.c.ts_query_cursor_set_byte_range(qc, @intCast(clb.start), @intCast(clb.end));
+            }
+
+            dvui.c.ts_query_cursor_exec(qc, parser.query, root);
+
+            var iter = parser.queryCursorCaptureIterator(qc.?, self.text);
+            iter.debug = ts.log_captures;
+            while (iter.next()) |match| {
+                const nstart = dvui.c.ts_node_start_byte(match.node);
+                const nend = dvui.c.ts_node_end_byte(match.node);
+                if (start < nstart) {
+                    // render non highlighted text up to this node
+                    self.textLayout.addText(self.text[start..nstart], .{});
+                } else if (nstart < start) {
+                    // this match is inside (or overlapping) the previous match
+                    // maybe we could be smarter here, but for now drop it
+                    continue;
+                }
+
+                var opts: dvui.Options = .{};
+                const capture_name = match.captureName();
+                for (0..ts.highlights.len) |i| {
+                    const sh = ts.highlights[ts.highlights.len - i - 1];
+                    if (std.mem.startsWith(u8, capture_name, sh.name)) {
+                        opts = sh.opts;
+                        break;
+                    }
+                }
+
+                self.textLayout.addText(self.text[nstart..nend], opts);
+
+                start = nend;
+            }
+
+            if (start < self.len) {
+                // any leftover non highlighted text
+                self.textLayout.addText(self.text[start..self.len], .{});
+            }
+
+            self.textLayout.addTextDone(self.data().options.strip());
+            self.drawAfterText();
+            return;
+        }
+    }
+
+    // simple text
+    self.textLayout.addText(self.text[0..self.len], self.data().options.strip());
+    self.textLayout.addTextDone(self.data().options.strip());
+
+    self.drawAfterText();
+}
+
+pub fn drawBeforeText(self: *TextEntryWidget) void {
     const focused = (self.data().id == dvui.focusedWidgetId());
 
     if (focused) {
@@ -310,81 +611,17 @@ pub fn draw(self: *TextEntryWidget) void {
     // set clip back to what textLayout had, so we don't draw over the scrollbars
     dvui.clipSet(self.textClip);
 
-    if (self.init_opts.password_char) |pc| {
-        // adjust selection for obfuscation
-        var count: usize = 0;
-        var bytes: usize = 0;
-        var sel = self.textLayout.selection;
-        var sstart: ?usize = null;
-        var scursor: ?usize = null;
-        var send: ?usize = null;
-        var utf8it = (std.unicode.Utf8View.initUnchecked(self.text[0..self.len])).iterator();
-        while (utf8it.nextCodepoint()) |codepoint| {
-            if (sstart == null and sel.start == bytes) sstart = count * pc.len;
-            if (scursor == null and sel.cursor == bytes) scursor = count * pc.len;
-            if (send == null and sel.end == bytes) send = count * pc.len;
-            count += 1;
-            bytes += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
-        } else {
-            if (sstart == null and sel.start >= bytes) sstart = count * pc.len;
-            if (scursor == null and sel.cursor >= bytes) scursor = count * pc.len;
-            if (send == null and sel.end >= bytes) send = count * pc.len;
-        }
-        sel.start = sstart.?;
-        sel.cursor = scursor.?;
-        sel.end = send.?;
-        const password_str: ?[]u8 = dvui.currentWindow().lifo().alloc(u8, count * pc.len) catch null;
-        if (password_str) |pstr| {
-            defer dvui.currentWindow().lifo().free(pstr);
-            for (0..count) |i| {
-                for (0..pc.len) |pci| {
-                    pstr[i * pc.len + pci] = pc[pci];
-                }
-            }
-            self.textLayout.addText(pstr, self.data().options.strip());
-        } else {
-            dvui.log.warn("Could not allocate password_str, falling back to one single password_str", .{});
-            self.textLayout.addText(pc, self.data().options.strip());
-        }
-    } else {
-        if (self.init_opts.cache_layout) {
-            self.textLayout.cache_layout_bytes = self.textLayout.bytesNeeded(
-                self.text_changed_start,
-                self.text_changed_end,
-                self.text_changed_added,
-            );
-        }
-        self.textLayout.addText(self.text[0..self.len], self.data().options.strip());
+    if (self.init_opts.cache_layout) {
+        self.textLayout.cache_layout_bytes = self.textLayout.bytesNeeded(
+            self.text_changed_start,
+            self.text_changed_end,
+            self.text_changed_added,
+        );
     }
+}
 
-    self.textLayout.addTextDone(self.data().options.strip());
-
-    if (self.init_opts.password_char) |pc| {
-        // reset selection
-        var count: usize = 0;
-        var bytes: usize = 0;
-        var sel = self.textLayout.selection;
-        var sstart: ?usize = null;
-        var scursor: ?usize = null;
-        var send: ?usize = null;
-        // NOTE: We assume that all text in the area it valid utf8, loop with exit early on invalid utf8
-        var utf8it = (std.unicode.Utf8View.initUnchecked(self.text[0..self.len])).iterator();
-        while (utf8it.nextCodepoint()) |codepoint| {
-            if (sstart == null and sel.start == count * pc.len) sstart = bytes;
-            if (scursor == null and sel.cursor == count * pc.len) scursor = bytes;
-            if (send == null and sel.end == count * pc.len) send = bytes;
-            count += 1;
-            bytes += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
-        } else {
-            if (sstart == null and sel.start >= count * pc.len) sstart = bytes;
-            if (scursor == null and sel.cursor >= count * pc.len) scursor = bytes;
-            if (send == null and sel.end >= count * pc.len) send = bytes;
-        }
-        sel.start = sstart.?;
-        sel.cursor = scursor.?;
-        sel.end = send.?;
-    }
-
+pub fn drawAfterText(self: *TextEntryWidget) void {
+    const focused = (self.data().id == dvui.focusedWidgetId());
     if (focused) {
         self.drawCursor();
     }
@@ -464,6 +701,10 @@ pub fn textChanged(self: *TextEntryWidget, start: usize, end: usize, added: i64)
     // if we are before the previous updates then the indexing is the same
     self.text_changed_start = @min(self.text_changed_start, start);
     self.text_changed_added += added;
+
+    if (self.textLayout.add_text_done) {
+        self.edited_outside_last_frame.* = true;
+    }
 
     //std.debug.print("textChanged {d} {d} {d}\n", .{ self.text_changed_start, self.text_changed_end, self.text_changed_added });
 }
@@ -713,13 +954,13 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
 
     switch (e.evt) {
         .key => |ke| blk: {
-            if (ke.action == .down and ke.matchBind("next_widget")) {
+            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("next_widget")) {
                 e.handle(@src(), self.data());
                 dvui.tabIndexNext(e.num);
                 break :blk;
             }
 
-            if (ke.action == .down and ke.matchBind("prev_widget")) {
+            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("prev_widget")) {
                 e.handle(@src(), self.data());
                 dvui.tabIndexPrev(e.num);
                 break :blk;
@@ -971,24 +1212,26 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
             }
         },
         .text => |te| {
-            e.handle(@src(), self.data());
-            var new = std.mem.sliceTo(te.txt, 0);
-            if (te.replace) {
-                self.textLayout.selection.selectAll();
-            }
-            if (self.init_opts.multiline) {
-                self.textTyped(new, te.selected);
-            } else {
-                var i: usize = 0;
-                while (i < new.len) {
-                    if (std.mem.indexOfScalar(u8, new[i..], '\n')) |idx| {
-                        self.textTyped(new[i..][0..idx], te.selected);
-                        i += idx + 1;
+            switch (te.action) {
+                .value => |set| {
+                    e.handle(@src(), self.data());
+                    var new = std.mem.sliceTo(set.txt, 0);
+                    if (self.init_opts.multiline) {
+                        self.textTyped(new, set.selected);
                     } else {
-                        self.textTyped(new[i..], te.selected);
-                        break;
+                        var i: usize = 0;
+                        while (i < new.len) {
+                            if (std.mem.indexOfScalar(u8, new[i..], '\n')) |idx| {
+                                self.textTyped(new[i..][0..idx], set.selected);
+                                i += idx + 1;
+                            } else {
+                                self.textTyped(new[i..], set.selected);
+                                break;
+                            }
+                        }
                     }
-                }
+                },
+                else => {},
             }
         },
         .mouse => |me| {

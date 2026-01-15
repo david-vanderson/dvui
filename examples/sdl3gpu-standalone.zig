@@ -51,7 +51,6 @@ pub fn main() !void {
         },
     });
     defer win.deinit();
-    try win.fonts.addBuiltinFontsForTheme(win.gpa, dvui.Theme.builtin.adwaita_light);
 
     var interrupted = false;
 
@@ -140,7 +139,7 @@ fn gui_frame() bool {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
     const lorem = "This example shows how to use dvui in a standalone application with SDL3 GPU.";
     tl.addText(lorem, .{});
     tl.deinit();
@@ -153,18 +152,17 @@ fn gui_frame() bool {
         \\- Efficient texture uploads via transfer buffers
         \\- Render passes for structured GPU work
         \\- Supports multiple shader formats (SPIR-V, DXIL, MSL)
+        \\
+        \\
     , .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
-    tl2.addText("\n\n", .{});
+    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.\n\n", .{});
     if (vsync) {
-        tl2.addText("Framerate is capped by vsync (PRESENTMODE_VSYNC).", .{});
+        tl2.addText("Framerate is capped by vsync (PRESENTMODE_VSYNC).\n", .{});
     } else {
-        tl2.addText("Framerate is uncapped (PRESENTMODE_IMMEDIATE).", .{});
+        tl2.addText("Framerate is uncapped (PRESENTMODE_IMMEDIATE).\n", .{});
     }
-    tl2.addText("\n\n", .{});
-    tl2.addText("Cursor is always being set by dvui.", .{});
-    tl2.addText("\n\n", .{});
+    tl2.addText("\n", .{});
+    tl2.addText("Cursor is always being set by dvui.\n\n", .{});
     if (dvui.useFreeType) {
         tl2.addText("Fonts are being rendered by FreeType 2.", .{});
     } else {

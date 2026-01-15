@@ -606,7 +606,7 @@ class Dvui {
                 this.gl.bufferData(
                     this.gl.ELEMENT_ARRAY_BUFFER,
                     indices,
-                    this.gl.STATIC_DRAW,
+                    this.gl.DYNAMIC_DRAW,
                 );
 
                 this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
@@ -618,7 +618,7 @@ class Dvui {
                 this.gl.bufferData(
                     this.gl.ARRAY_BUFFER,
                     vertexes,
-                    this.gl.STATIC_DRAW,
+                    this.gl.DYNAMIC_DRAW,
                 );
 
                 let matrix = new Float32Array(16);
@@ -1251,6 +1251,13 @@ class Dvui {
 
         let keydown = (ev) => {
             if (ev.key == "Tab") {
+
+                // In most browsers we don't even see a control-tab, the
+                // browser uses it to switch tabs.  But Vivaldi sends it to us
+                // first, so bail (before preventDefault) so that Vivaldi
+                // switches tabs and we don't do anything.
+                if (ev.ctrlKey) return;
+
                 // stop tab from tabbing away from the canvas
                 ev.preventDefault();
             }

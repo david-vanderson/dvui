@@ -47,8 +47,9 @@ pub fn animations() void {
             defer button_wiggle.deinit();
 
             if (dvui.animationGet(button_wiggle.data().id, "xoffset")) |a| {
-                button_wiggle.data().rect.x += 20 * (1.0 - a.value()) * (1.0 - a.value()) * @sin(a.value() * std.math.pi * 50);
-                button_wiggle.data().rectChanged();
+                var r = button_wiggle.data().rect;
+                r.x += 20 * (1.0 - a.value()) * (1.0 - a.value()) * @sin(a.value() * std.math.pi * 50);
+                button_wiggle.data().rectSet(r);
             }
 
             button_wiggle.processEvents();

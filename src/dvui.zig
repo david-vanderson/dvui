@@ -152,22 +152,53 @@ pub const textureDestroyLater = Texture.destroyLater;
 ///     break :blk texture;
 /// }
 /// ```
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn textureGetCached(key: Texture.Cache.Key) ?Texture {
     return currentWindow().texture_cache.get(key);
 }
+
 /// See `Texture.Cache.add`
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn textureAddToCache(key: Texture.Cache.Key, texture: Texture) void {
     currentWindow().texture_cache.add(currentWindow().gpa, key, texture) catch |err| {
         dvui.logError(@src(), err, "Could not add texture with key {x} to cache", .{key});
         return;
     };
 }
+
 /// See `Texture.Cache.invalidate`
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn textureInvalidateCache(key: Texture.Cache.Key) void {
     currentWindow().texture_cache.invalidate(currentWindow().gpa, key) catch |err| {
         dvui.logError(@src(), err, "Could not invalidate texture with key {x}", .{key});
         return;
     };
+}
+
+/// Set retain key for this texture key.  null means remove retain key.
+///
+/// While a texture key has retain dvui will not free its texture.  To free it
+/// you must call either this with null, or `retainClear`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn textureRetain(key: Texture.Cache.Key, retain_key: ?Id) void {
+    currentWindow().texture_cache.retain(currentWindow().gpa, key, retain_key) catch |err| {
+        dvui.logError(@src(), err, "Could not retain texture with key {x}", .{key});
+        return;
+    };
+}
+
+/// Clear retain for all textures and datas with this retain key.
+///
+/// Use to clear related datas/textures, maybe from a data's deinitfunction.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn retainClear(retain_key: Id) void {
+    currentWindow().texture_cache.retainClear(retain_key);
+    currentWindow().data_store.retainClear(retain_key);
 }
 
 pub const Dragging = @import("Dragging.zig");
@@ -253,6 +284,7 @@ pub const dialogNativeFolderSelect = native_dialogs.Native.folderSelect;
 pub const useLibc = @import("default_options").libc;
 pub const useFreeType = @import("default_options").freetype;
 pub const useTinyFileDialogs = @import("default_options").tiny_file_dialogs;
+pub const useTreeSitter = @import("default_options").tree_sitter;
 
 /// The amount of physical pixels to scroll per "tick" of the scroll wheel
 pub var scroll_speed: f32 = 20;
@@ -299,6 +331,10 @@ pub const c = @cImport({
     // Used by native dialogs
     if (useTinyFileDialogs) {
         @cInclude("tinyfiledialogs.h");
+    }
+
+    if (useTreeSitter) {
+        @cInclude("tree_sitter/api.h");
     }
 });
 
@@ -463,7 +499,7 @@ pub fn themeGet() Theme {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn themeSet(theme: Theme) void {
-    currentWindow().theme = theme;
+    currentWindow().themeSet(theme);
 }
 
 /// Toggle showing the debug window (run during `Window.end`).
@@ -519,11 +555,6 @@ pub fn frameTimeNS() i128 {
     return currentWindow().frame_time_ns;
 }
 
-/// DEPRECATED: Use `Font.Cache.TTFEntry` directly
-///
-/// The bytes of a truetype font file and whether to free it.
-pub const FontBytesEntry = Font.Cache.TTFEntry;
-
 /// Add font to be referenced later by name.
 ///
 /// ttf_bytes are the bytes of the ttf file
@@ -533,33 +564,13 @@ pub const FontBytesEntry = Font.Cache.TTFEntry;
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?std.mem.Allocator) (std.mem.Allocator.Error || FontError)!void {
-    var cw = currentWindow();
-    try cw.fonts.database.ensureUnusedCapacity(cw.gpa, 1);
-    // Test if we can successfully open this font
-    // TODO: Find some more elegant way of validating ttf files
-    const font = Font{ .id = .fromName(name), .size = 14 };
-    var entry = try Font.Cache.Entry.init(ttf_bytes, font, name);
-    // Try and cache the entry since the work is already done
-    cw.fonts.cache.put(cw.gpa, font.hash(), entry) catch entry.deinit(cw.gpa, cw.backend);
-    cw.fonts.database.putAssumeCapacity(font.id, .{
-        .name = name,
-        .bytes = ttf_bytes,
-        .allocator = ttf_bytes_allocator,
-    });
+    try currentWindow().addFont(name, ttf_bytes, ttf_bytes_allocator);
 }
-
-/// DEPRECATED: Use `Font.Cache.Entry` directly
-pub const FontCacheEntry = Font.Cache.Entry;
 
 // Get or load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
 pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*Font.Cache.Entry {
     const cw = currentWindow();
     return cw.fonts.getOrCreate(cw.gpa, font);
-}
-
-// Load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
-pub fn fontCacheInit(ttf_bytes: []const u8, font: Font, name: []const u8) FontError!Font.Cache.Entry {
-    return Font.Cache.Entry.init(ttf_bytes, font, name);
 }
 
 /// Takes in svg bytes and returns a tvg bytes that can be used
@@ -953,7 +964,7 @@ pub fn kerningSet(kern: bool) bool {
 /// frame).
 ///
 /// src and id are for debugging, which is enabled by calling
-/// `Window.debugRefresh(true)`.  The debug window has a toggle button for this.
+/// `Window.debug.logRefresh(true)`.  The debug window has a toggle button for this.
 ///
 /// Can be called from any thread.
 ///
@@ -1189,7 +1200,7 @@ pub const hashIdKey = void;
 
 // Used for all the data functions
 fn currentOverrideOrPanic(win: ?*Window) *Window {
-    return win orelse current_window orelse @panic("dataSet current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
+    return win orelse current_window orelse @panic("current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
 }
 
 /// Set key/value pair for given id.
@@ -1207,7 +1218,38 @@ fn currentOverrideOrPanic(win: ?*Window) *Window {
 /// If you want to store the contents of a slice, use `dataSetSlice`.
 pub fn dataSet(win: ?*Window, id: Id, key: []const u8, data: anytype) void {
     const w = currentOverrideOrPanic(win);
-    (w.data_store.set(w.gpa, id.update(key), data)) catch |err| {
+    w.data_store.set(w.gpa, id.update(key), data) catch |err| {
+        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+    };
+}
+
+/// Set a deinit function for data stored under id/key.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
+/// pass a pointer to the `Window` you want to add the data to.
+///
+/// When data for this id/key is about to be freed by dvui, it will first call
+/// the passed function.  This is useful for cases where data for a widget
+/// allocates memory outside of your control.
+pub fn dataSetDeinitFunction(win: ?*Window, id: Id, key: []const u8, func: Data.DeinitFunction) void {
+    const w = currentOverrideOrPanic(win);
+    w.data_store.setDeinitFunction(id.update(key), func);
+}
+
+/// Set retain key for this id/key.  null means remove retain key.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
+/// pass a pointer to the `Window` you want to add the data to.
+///
+/// While an id/key has retain dvui will not free its data.  To free it you
+/// must call either this with null, `dataRemove`, or `retainClear`.
+pub fn dataRetain(win: ?*Window, id: Id, key: []const u8, retain_key: ?Id) void {
+    const w = currentOverrideOrPanic(win);
+    w.data_store.retain(w.gpa, id.update(key), retain_key) catch |err| {
         dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
     };
 }
@@ -2120,19 +2162,20 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
 
     dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{
         .expand = .horizontal,
-        .font_style = .heading,
+        .font = .theme(.heading),
         .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 },
         .label = .{ .for_id = dvui.subwindowCurrentId() },
     });
 
     if (openflag) |of| {
+        const opts: Options = .{ .font = .theme(.heading), .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio };
         if (dvui.buttonIcon(
             @src(),
             "close",
             entypo.cross,
             .{},
             .{},
-            .{ .font_style = .heading, .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio },
+            opts.themeOverride(null),
         )) {
             of.* = false;
         }
@@ -2449,7 +2492,7 @@ pub fn toastDisplay(id: Id) !void {
         return;
     };
 
-    var animator = dvui.animate(@src(), .{ .kind = .alpha, .duration = 500_000 }, .{ .id_extra = id.asUsize() });
+    var animator = dvui.animate(@src(), .{ .kind = .alpha, .duration = 500_000 }, .{ .id_extra = id.asUsize(), .gravity_x = 0.5 });
     defer animator.deinit();
     var label_wd: WidgetData = undefined;
     dvui.labelNoFmt(@src(), message, .{}, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 }, .data_out = &label_wd });
@@ -2462,6 +2505,9 @@ pub fn toastDisplay(id: Id) !void {
 
     if (animator.end()) {
         dvui.toastRemove(id);
+
+        // this informs our parent that we don't need any space next frame
+        animator.data().min_size = .{};
     }
 }
 
@@ -2713,7 +2759,6 @@ pub var expander_defaults: Options = .{
     .name = "Expander",
     .role = .group,
     .padding = Rect.all(4),
-    .font_style = .heading,
 };
 
 pub const ExpanderOptions = struct {
@@ -2726,7 +2771,7 @@ pub const ExpanderOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ExpanderOptions, opts: Options) bool {
-    const options = expander_defaults.override(opts);
+    const options = expander_defaults.override(.{ .font = opts.themeGet().font_heading }).override(opts);
 
     var b = box(src, .{ .dir = .horizontal }, options);
     defer b.deinit();
@@ -3777,10 +3822,15 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
                     }
                 }
             },
-            .text => |te| blk: {
-                e.handle(@src(), b.data());
-                const value: f32 = std.fmt.parseFloat(f32, te.txt) catch break :blk;
-                init_opts.fraction.* = std.math.clamp(value, 0.0, 1.0);
+            .text => |te| {
+                switch (te.action) {
+                    .value => |set| blk: {
+                        e.handle(@src(), b.data());
+                        const value: f32 = std.fmt.parseFloat(f32, set.txt) catch break :blk;
+                        init_opts.fraction.* = std.math.clamp(value, 0.0, 1.0);
+                    },
+                    else => {},
+                }
             },
             else => {},
         }
@@ -3877,7 +3927,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     const exp_stretch = 0.02;
     const key_percentage = 0.05;
 
-    var options = slider_entry_defaults.themeOverride().min_sizeM(10, 1).override(opts);
+    var options = slider_entry_defaults.themeOverride(opts.theme).min_sizeM(10, 1).override(opts);
 
     var ret = false;
     var hover = false;
@@ -4139,11 +4189,16 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                     }
                 },
                 .text => |te| {
-                    e.handle(@src(), b.data());
-                    var value = std.fmt.parseFloat(f32, te.txt) catch init_opts.min orelse 0;
-                    if (init_opts.min) |min| value = @max(min, value);
-                    if (init_opts.max) |max| value = @min(max, value);
-                    init_opts.value.* = value;
+                    switch (te.action) {
+                        .value => |set| {
+                            e.handle(@src(), b.data());
+                            var value = std.fmt.parseFloat(f32, set.txt) catch init_opts.min orelse 0;
+                            if (init_opts.min) |min| value = @max(min, value);
+                            if (init_opts.max) |max| value = @min(max, value);
+                            init_opts.value.* = value;
+                        },
+                        else => {},
+                    }
                 },
                 else => {},
             }
@@ -4314,7 +4369,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 }
 
 pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, sel_opts: selection.SelectOptions, opts: Options) bool {
-    const options = checkbox_defaults.themeOverride().override(opts);
+    const options = checkbox_defaults.themeOverride(opts.theme).override(opts);
     var ret = false;
 
     var b = box(src, .{ .dir = .horizontal }, options);
@@ -4408,7 +4463,7 @@ pub var radio_defaults: Options = .{
 };
 
 pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const u8, opts: Options) bool {
-    const options = radio_defaults.themeOverride().override(opts);
+    const options = radio_defaults.themeOverride(opts.theme).override(opts);
     var ret = false;
 
     var b = box(src, .{ .dir = .horizontal }, options);

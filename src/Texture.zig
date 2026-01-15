@@ -28,7 +28,7 @@ pub const Cache = struct {
     /// Used to defer destroying textures until the next call to `reset` or `deinit`
     trash: Trash = .empty,
 
-    pub const Storage = dvui.TrackingAutoHashMap(Key, Texture, .get_and_put);
+    pub const Storage = dvui.TrackingAutoHashMap(Key, Texture, .get_and_put, dvui.Id);
     pub const Trash = std.ArrayListUnmanaged(dvui.Texture);
 
     pub const Key = u64;
@@ -47,6 +47,14 @@ pub const Cache = struct {
         if (prev) |kv| {
             self.trash.appendAssumeCapacity(kv.value);
         }
+    }
+
+    pub fn retain(self: *Cache, gpa: std.mem.Allocator, key: Key, retain_key: ?dvui.Id) std.mem.Allocator.Error!void {
+        try self.cache.retain(gpa, key, retain_key);
+    }
+
+    pub fn retainClear(self: *Cache, retain_key: dvui.Id) void {
+        self.cache.retainClear(retain_key);
     }
 
     /// Remove a key from the cache. This can force the re-creation

@@ -22,15 +22,18 @@ pub fn TrackingAutoHashMap(
     comptime K: type,
     comptime V: type,
     comptime tracking: TrackingKind,
+    comptime retainId: type,
 ) type {
     return struct {
         map: HashMap = .empty,
+        retain_map: RetainHashMap = .empty,
 
         pub const empty = Self{};
 
         const Self = @This();
 
         pub const HashMap = std.HashMapUnmanaged(K, Tracked(V), if (K == []const u8) std.hash_map.StringContext else std.hash_map.AutoContext(K), std.hash_map.default_max_load_percentage);
+        pub const RetainHashMap = std.HashMapUnmanaged(K, retainId, if (K == []const u8) std.hash_map.StringContext else std.hash_map.AutoContext(K), std.hash_map.default_max_load_percentage);
 
         pub const Entry = struct {
             key_ptr: *K,
@@ -55,6 +58,7 @@ pub fn TrackingAutoHashMap(
             // The current std hashmap can remove keys without invalidating
             // the iterator or any pointers, which is used by this iterator
             map: *HashMap,
+            retain_map: *RetainHashMap,
 
             /// Sets each entry as used if get tracking is enabled
             pub fn next(it: *Iterator) ?Entry {
@@ -84,7 +88,7 @@ pub fn TrackingAutoHashMap(
                 it.map.lockPointers();
                 defer it.map.unlockPointers();
                 var entry = it.map_it.next() orelse return null;
-                while (entry.value_ptr.used) {
+                while (entry.value_ptr.used or it.retain_map.contains(entry.key_ptr.*)) {
                     entry.value_ptr.used = false;
                     entry = it.map_it.next() orelse return null;
                 }
@@ -96,6 +100,7 @@ pub fn TrackingAutoHashMap(
         /// See `HashMap.deinit`
         pub fn deinit(self: *Self, allocator: Allocator) void {
             self.map.deinit(allocator);
+            self.retain_map.deinit(allocator);
             self.* = undefined;
         }
 
@@ -106,7 +111,7 @@ pub fn TrackingAutoHashMap(
 
         /// See `HashMap.iterator`
         pub fn iterator(self: *Self) Iterator {
-            return .{ .map_it = self.map.iterator(), .map = &self.map };
+            return .{ .map_it = self.map.iterator(), .map = &self.map, .retain_map = &self.retain_map };
         }
 
         /// See `HashMap.put`
@@ -150,8 +155,28 @@ pub fn TrackingAutoHashMap(
             };
         }
 
+        pub fn retain(self: *Self, allocator: Allocator, key: K, retain_id: ?retainId) Allocator.Error!void {
+            if (retain_id) |r| {
+                try self.retain_map.put(allocator, key, r);
+            } else {
+                _ = self.retain_map.remove(key);
+            }
+        }
+
+        pub fn retainClear(self: *Self, retain_id: retainId) void {
+            self.retain_map.lockPointers();
+            defer self.retain_map.unlockPointers();
+            var it = self.retain_map.iterator();
+            while (it.next()) |entry| {
+                if (entry.value_ptr.* == retain_id) {
+                    self.retain_map.removeByPtr(entry.key_ptr);
+                }
+            }
+        }
+
         /// See `HashMap.remove`
         pub fn remove(self: *Self, key: K) bool {
+            _ = self.retain_map.remove(key);
             return self.map.remove(key);
         }
 
@@ -159,12 +184,12 @@ pub fn TrackingAutoHashMap(
         ///
         /// Additionally contains `KV.used` to indicate if the value was used before the fetch
         pub fn fetchRemove(self: *Self, key: K) ?KV {
+            _ = self.retain_map.remove(key);
             const kv = self.map.fetchRemove(key) orelse return null;
             return .{ .key = kv.key, .value = kv.value.inner, .used = kv.value.used };
         }
 
-        /// Takes a `value_ptr` from and iterator `Entry` or from `getPtr`and sets the used
-        /// state to the value provided.
+        /// Set used for a `value_ptr` from an iterator `Entry` or `getPtr`.
         pub fn setUsed(value_ptr: *V, used: bool) void {
             const tracked: *Tracked(V) = @fieldParentPtr("inner", value_ptr);
             tracked.used = used;
@@ -180,7 +205,7 @@ pub fn TrackingAutoHashMap(
 }
 
 test TrackingAutoHashMap {
-    var map = TrackingAutoHashMap(u32, u32, .get_and_put).empty;
+    var map = TrackingAutoHashMap(u32, u32, .get_and_put, u8).empty;
     defer map.deinit(std.testing.allocator);
     try std.testing.expectEqual(0, map.count());
 
@@ -192,7 +217,11 @@ test TrackingAutoHashMap {
 
     map.reset();
 
+    // all entries were used before reset
+    try std.testing.expectEqual(3, map.count());
+
     try map.put(std.testing.allocator, 4, 44);
+    try map.retain(std.testing.allocator, 4, 123);
     const prev = try map.fetchPut(std.testing.allocator, 3, 333);
     try std.testing.expect(prev != null);
     try std.testing.expectEqual(false, prev.?.used);
@@ -200,12 +229,13 @@ test TrackingAutoHashMap {
 
     try std.testing.expectEqual(4, map.count());
 
-    // key 2 is set to used because of `.get_and_put`. With `.put_only`
-    // it would not be
-    const get = map.get(2);
-    try std.testing.expectEqual(22, get);
+    map.reset();
+
+    try std.testing.expectEqual(2, map.count());
 
     map.reset();
+
+    try std.testing.expectEqual(1, map.count());
 }
 
 const std = @import("std");

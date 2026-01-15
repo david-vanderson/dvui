@@ -16,10 +16,8 @@ If you want to support child widgets, then you'll need to implement the Widget i
 ```zig
 pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) bool {
     // initialize widget and get rectangle from parent
-    var bw = ButtonWidget.init(src, .{}, opts);
-
-    // make ourselves the new parent
-    bw.install();
+    var bw: ButtonWidget = undefined;
+    bw.init(src, .{}, opts);
 
     // process events (mouse and keyboard)
     bw.processEvents();
@@ -79,11 +77,6 @@ Generally it follows this pattern:
     * `Rect` is a rectangle in the parent's coordinate space
     * pass to `parent.screenRectScale()` to get a `RectScale` which is a screen (physical pixel) rectangle plus scale from logical pixels to physical pixels
   * `dataGet()` load persisted data from last frame
-  * note: during `init()` the struct is in temporary memory, so you can't take the address of it or any field yet (including calling `widget()`)
-
-Here the widget has a rectangle, but hasn't drawn anything.  Animations (fading in, sliding, growing/shrinking) would be applied here and could adjust the rectangle (see the animations section of the demo).
-
-* `install()`
   * `parentSet()` set this widget as the new parent
   * `register()` provides debugging information
   * some widgets set the clipping rectangle (sometimes called scissor rectangle) to prevent drawing outside its given space
@@ -125,7 +118,7 @@ There is always a single parent widget.  `parentSet()` is how a widget sets itse
 * child (in deinit - minSizeReportToParent): `parent.minSizeForChild()` send our min size for this frame to parent
   * parent uses this to calculate it's own min size for this frame
   * except when `Options.rect` is set - see below
-* child (in deinit): `parentSet()` install previous parent
+* child (in deinit): `parentReset()` install previous parent
 
 Each widget keeps a pointer to its parent widget, which forms a chain going back to `dvui.Window` which is the original parent.  This chain is used for:
 * `parent.screenRectScale()` translate from our child Rect (in our parent's coordinate space) to a RectScale (in screen coordinates).
@@ -187,7 +180,7 @@ pub fn frame() void {
 
 ## Event Handling
 
-DVUI provides a time-ordered array of all events since last frame (`events()`).  Intead of trying to route events to widgets, the widgets are responsible for choosing which events in the array to process.  The function `eventMatch()` provides the normal logic widgets will use.
+DVUI provides a time-ordered array of all events since last frame (`events()`).  Instead of trying to route events to widgets, the widgets are responsible for choosing which events in the array to process.  The function `eventMatch()` provides the normal logic widgets will use.
 
 Most events are either mouse (includes touch) or keyboard:
 * Mouse Events
@@ -215,7 +208,7 @@ Special Events
 
 Sometimes a widget will just want to observe events but not mark them as processed.  An example is how to differentiate a click while holding a non-modifier key (like "a") from normal click.  In a low framerate situation, we can't rely on checking the current keyboard state when the click happens. This way the widget can watch all keyboard events and keep track of the key state properly interleaved with mouse events.
 
-`Window.debugHandleEvents()` and `Window.debugUnhandledEvents()` can be used to make dvui log events for debugging.
+`Window.debug.logEvents()` can be used to make dvui log events for debugging.
 
 ## Min Size and Layout
 A widget receives its position and size from its parent.  The widget sends these data to the parent:
@@ -235,7 +228,7 @@ A widget receives its position and size from its parent.  The widget sends these
 - `refresh(window, ...)` is used outside the frame or from another thread
   - useful when a background thread needs to wake up the gui thread
 
-If you are getting unexpected frames, you can turn on refresh logging.  Either using the button in the DVUI Debug window, or calling `Window.debugRefresh(true)`.  When on, DVUI will log calls to `refresh` along with src info and widget ids to help debug where the extra frames are coming from.
+If you are getting unexpected frames, you can turn on refresh logging.  Either using the button in the DVUI Debug window, or calling `Window.debug.logRefresh(true)`.  When on, DVUI will log calls to `refresh` along with src info and widget ids to help debug where the extra frames are coming from.
 
 ## Animations
 `animation()` associates a value changing over time (represented by an `Animation` struct) with a widget id and key string.  `animationGet()` retrieves one if present.  `Animation.start_time` and `Animation.end_time` are offsets from the current frame time, and are updated each frame.

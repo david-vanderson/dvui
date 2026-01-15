@@ -228,7 +228,7 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, cols: WidthsOrNu
         .scroll = undefined,
     };
 
-    self.vbox.init(src, .{ .dir = .vertical }, defaults.themeOverride().override(opts));
+    self.vbox.init(src, .{ .dir = .vertical }, defaults.themeOverride(opts.theme).override(opts));
     self.vbox.drawBackground();
 
     if (dvui.dataGet(null, self.data().id, "_resizing", bool)) |resizing| {

@@ -62,12 +62,17 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
     };
 }
 
-pub fn rectChanged(self: *WidgetData) void {
+pub fn rectSet(self: *WidgetData, r: Rect) void {
+    self.rect = r;
     self.rect_scale = self.rectScaleFromParent();
 }
 
 pub fn register(self: *WidgetData) void {
-    self.rectChanged();
+    self.rectSet(self.rect);
+
+    if (self.options.theme) |t| {
+        dvui.currentWindow().addEmbeddedFontsFromTheme(t);
+    }
 
     if (self.options.role) |role| {
         _ = dvui.currentWindow().accesskit.nodeCreate(self, role);
@@ -233,19 +238,21 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
         }
     }
 
+    const ninepatch = opts.ninepatch orelse self.options.ninepatch(.fill);
+
     if (bg) {
         const rs = self.backgroundRectScale();
         if (!rs.r.empty()) {
             const fill = opts.fill_color orelse self.options.color(.fill);
             rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{
                 .color = fill,
-                .fade = if (self.rectScale().s >= 2.0) 0.0 else 1.0,
+                .fade = if (ninepatch != null or self.rectScale().s >= 2.0) 0.0 else 1.0,
             });
         }
     }
 
     // can draw a ninepatch without a background, some of it could be transparent
-    if (opts.ninepatch orelse self.options.ninepatch(.fill)) |np| {
+    if (ninepatch) |np| {
         const rs = self.backgroundRectScale();
         dvui.renderNinepatch(np.*, rs, .{}) catch |err| {
             dvui.log.err("while drawing ninepatch: {}, {}", .{ err, rs });
