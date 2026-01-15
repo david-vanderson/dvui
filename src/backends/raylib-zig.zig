@@ -957,6 +957,7 @@ pub fn enableRaylibLogging() void {
     raylib.setTraceLogLevel(level);
 }
 
+/// This is what is run if you are using `dvui.App` with this backend.
 pub fn main() !void {
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
     enableRaylibLogging();

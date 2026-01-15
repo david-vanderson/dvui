@@ -192,8 +192,18 @@ export fn dvui_c_pow(x: f64, y: f64) f64 {
     return @exp(@log(x) * y);
 }
 
-export fn dvui_c_ldexp(x: f64, n: c_int) f64 {
+fn dvui_c_ldexp(x: f64, n: c_int) callconv(.c) f64 {
     return x * @exp2(@as(f64, @floatFromInt(n)));
+}
+
+// See https://github.com/ziglang/zig/issues/23358
+comptime {
+    switch (builtin.mode) {
+        .Debug => {
+            @export(&dvui_c_ldexp, .{ .name = "dvui_c_ldexp" });
+        },
+        else => {},
+    }
 }
 
 export fn dvui_c_floor(x: f64) f64 {
@@ -240,7 +250,7 @@ export fn arena_u8(len: usize) [*c]u8 {
 
 export fn new_font(ptr: [*c]u8, len: usize) void {
     if (win_ok) {
-        win.fonts.database.put(win.gpa, .Noto, .{ .name = @tagName(dvui.Font.FontId.Noto), .bytes = ptr[0..len], .allocator = gpa }) catch unreachable;
+        win.addFont("Noto", ptr[0..len], gpa) catch unreachable;
     }
 }
 

@@ -120,20 +120,27 @@ pub const TextOptions = struct {
     debug: bool = false,
     kerning: ?bool = null,
     kern_in: ?[]u32 = null,
+    ak_opts: ?AccessKit.TextRunOptions = null,
 };
 
-/// Only renders a single line of text
+/// Only renders a single line of text.  Newlines are rendered as spaces.
 ///
 /// Selection will be colored with the current themes accent color,
 /// with the text color being set to the themes fill color.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn renderText(opts: TextOptions) Backend.GenericError!void {
-    if (opts.rs.s == 0) return;
-    if (opts.text.len == 0) return;
-    if (dvui.clipGet().intersect(opts.rs.r).empty()) return;
-
     var cw = dvui.currentWindow();
+    // Record character heights and positions for AccessKit text_run role.
+    var text_info: std.MultiArrayList(AccessKit.CharPositionInfo) = .empty;
+    const clipped_rect = dvui.clipGet().intersect(opts.rs.r);
+
+    // If accessibility is enabled, we still need create the associated text_run
+    // even when the text is blank or not visible.
+    if (opts.text.len == 0) return;
+    if (opts.rs.s == 0) return;
+    if (clipped_rect.empty() and opts.ak_opts == null) return;
+
     const utf8_text = try dvui.toUtf8(cw.lifo(), opts.text);
     defer if (opts.text.ptr != utf8_text.ptr) cw.lifo().free(utf8_text);
 
@@ -146,7 +153,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     }
 
     const target_size = opts.font.size * opts.rs.s;
-    const sized_font = opts.font.resize(target_size);
+    const sized_font = opts.font.withSize(target_size);
 
     // might get a slightly smaller font
     var fce = try cw.fonts.getOrCreate(cw.gpa, sized_font);
@@ -167,7 +174,9 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     const texture_atlas = fce.getTextureAtlas(cw.gpa, cw.backend) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
-            dvui.log.err("Could not get texture atlas for font {f}, text area marked in magenta, to display '{s}'", .{ opts.font.id, opts.text });
+            const fname = opts.font.name(cw.arena());
+            defer cw.arena().free(fname);
+            dvui.log.err("Could not get texture atlas for font {s}, text area marked in magenta, to display '{s}'", .{ fname, opts.text });
             opts.rs.r.fill(.{}, .{ .color = .magenta });
             return;
         },
@@ -219,7 +228,14 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     var i: usize = 0;
     while (i < opts.text.len) {
         const cplen = std.unicode.utf8ByteSequenceLength(opts.text[i]) catch unreachable;
-        const codepoint = std.unicode.utf8Decode(opts.text[i..][0..cplen]) catch unreachable;
+        var codepoint = std.unicode.utf8Decode(opts.text[i..][0..cplen]) catch unreachable;
+
+        // Render newlines as spaces.  That way if they are part of the
+        // selection, you can see it. This matches Chrome's behavior, although
+        // this is not a universal - Firefox doesn't do this.  Since this is
+        // inside rendering, it doesn't affect text sizing.
+        if (codepoint == '\n') codepoint = ' ';
+
         const gi = try fce.glyphInfoGetOrReplacement(cw.gpa, codepoint);
 
         if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
@@ -266,6 +282,15 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
             if (sel_in) {
                 // update selection
                 sel_end_x = nextx;
+            }
+        }
+        if (dvui.accesskit_enabled) {
+            if (opts.ak_opts) |_| {
+                text_info.append(cw.arena(), .{
+                    .l = cplen,
+                    .w = if (gi.w == 0) nextx - x else gi.w,
+                    .x = std.math.clamp(x - clipped_rect.x, 0, clipped_rect.w),
+                }) catch {};
             }
         }
 
@@ -335,6 +360,10 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     tri.rotate(.{ .x = start.x, .y = start.y }, opts.rotation);
 
     try renderTriangles(tri, texture_atlas);
+
+    if (dvui.accesskit_enabled) if (opts.ak_opts) |ak_opts| {
+        cw.accesskit.textRunPopulate(opts.text, ak_opts, &text_info, clipped_rect);
+    };
 }
 
 pub const TextureOptions = struct {
@@ -684,7 +713,7 @@ const Path = dvui.Path;
 const Texture = dvui.Texture;
 const Vertex = dvui.Vertex;
 const ImageSource = dvui.ImageSource;
-
+const AccessKit = dvui.AccessKit;
 const StbImageError = dvui.StbImageError;
 const IconRenderOptions = dvui.IconRenderOptions;
 

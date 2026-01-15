@@ -277,6 +277,8 @@ pub fn plots() void {
         dvui.label(@src(), "Number of Points", .{}, .{});
         const npoints_res = dvui.textEntryNumber(@src(), u32, .{
             .value = &S.npoints,
+            .min = 1,
+            .max = 100_000,
         }, .{});
 
         const valid = s_res.value == .Valid and m_res.value == .Valid and seed_res.value == .Valid and npoints_res.value == .Valid;

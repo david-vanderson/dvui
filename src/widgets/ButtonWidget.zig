@@ -36,7 +36,7 @@ click: bool = false,
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *ButtonWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
     self.* = .{
-        .wd = .init(src, .{}, defaults.themeOverride().override(opts)),
+        .wd = .init(src, .{}, defaults.themeOverride(opts.theme).override(opts)),
         .init_options = init_options,
     };
     self.data().register();

@@ -3,44 +3,45 @@
 Zig GUI toolkit for whole applications or debugging windows in existing applications.
 * [Homepage](https://david-vanderson.github.io)
 * [Online Demo](https://david-vanderson.github.io/demo)
-* [Devlog](https://david-vanderson.github.io/log/2025)
+* [Devlog](https://david-vanderson.github.io/log/2026)
 
 Tested with [Zig](https://ziglang.org/) 0.15.2 (use tag v0.3.0 for zig 0.14.1)
 
 How to run the built-in examples:
 
+- If unsure, start with ```zig build sdl3-app```
 - SDL3
   - ```zig build sdl3-standalone```
-  - ```zig build sdl3-ontop```  
-  - ```zig build sdl3-app```
+  - ```zig build sdl3-ontop```
+  - ```zig build sdl3-app``` [examples/app.zig](examples/app.zig)
 - SDL3GPU (uses sdlgpu for rendering)
   - ```zig build sdl3gpu-standalone```
   - ```zig build sdl3gpu-ontop```
 - SDL2
   - ```zig build sdl2-standalone```
   - ```zig build sdl2-ontop```
-  - ```zig build sdl2-app```
+  - ```zig build sdl2-app``` [examples/app.zig](examples/app.zig)
 - Raylib (C api)
   - if you encounter error `No Wayland` also add flag `-Dlinux_display_backend=X11`
   - ```zig build raylib-standalone```
   - ```zig build raylib-ontop```
-  - ```zig build raylib-app```
+  - ```zig build raylib-app``` [examples/app.zig](examples/app.zig)
 - Raylib (raylib-zig)
   - if you encounter error `No Wayland` also add flag `-Dlinux_display_backend=X11`
   - ```zig build raylib-zig-standalone```
   - ```zig build raylib-zig-ontop```
-  - ```zig build raylib-zig-app```
+  - ```zig build raylib-zig-app``` [examples/app.zig](examples/app.zig)
 - Dx11
   - ```zig build dx11-standalone```
   - ```zig build dx11-ontop```
-  - ```zig build dx11-app```
+  - ```zig build dx11-app``` [examples/app.zig](examples/app.zig)
 - Web
   - to load web examples you need so serve the files through a local web server
     - `python -m http.server -d zig-out/bin/EXAMPLE_NAME`
     - `caddy file-server --root zig-out/bin/EXAMPLE_NAME --listen :8000`
   - ```zig build web-test```
     - then load `zig-out/bin/web-test/index.html`
-  - ```zig build web-app```
+  - ```zig build web-app``` [examples/app.zig](examples/app.zig)
     - then load `zig-out/bin/web-app/index.html`
     - [online demo](https://david-vanderson.github.io/demo)
 - Docs
@@ -54,7 +55,7 @@ This document is a broad overview.  See [implementation details](readme-implemen
 
 Online discussion happens in #gui-dev on the zig discord server: https://discord.gg/eJgXXTtVzA or in IRC (Libera) channel #dvui
 
-Below is a screenshot of the demo window, whose source code can be found at `src/Examples.zig`.
+Below is a screenshot of the demo window, whose source code can be found at [src/Examples.zig](src/Examples.zig).
 
 ![Screenshot of DVUI Standalone Example (Application Window)](/screenshot_demo.png?raw=true)
 
@@ -280,7 +281,7 @@ If you want to only render frames when needed, add `dvui.Window.beginWait()` at 
 The estimate is visible in the demo window Animations > Clock > "Estimate of frame overhead".  The estimate is only updated on frames caused by a timer expiring (like the clock example), and it starts at 1ms.
 
 ### Widget init and deinit
-The easiest way to use widgets is through the high-level functions that create and install them:
+The easiest way to use widgets is through the high-level functions that create them:
 ```zig
 {
     var box = dvui.box(@src(), .{}, .{.expand = .both});
@@ -294,10 +295,8 @@ These functions allocate memory for the widget onto an internal arena allocator 
 Instead you can allocate the widget on the stack using the lower-level functions:
 ```zig
 {
-    var box = BoxWidget.init(@src(), .{}, .{.expand = .both});
-    // box now has an id, can look up animations/timers
-
-    box.install();
+    var box: BoxWidget = undefined;
+    box.init(@src(), .{}, .{.expand = .both});
     // box is now parent widget
 
     box.drawBackground();
@@ -350,10 +349,11 @@ Each widget has the following options that can be changed through the Options st
   - color_text_hover
   - color_text_press
   - color_border
-- font_style (use theme's fonts)
-  - or directly set font:
-    - font
+- font (directly specify)
+  - can reference theme fonts via `Font.theme(.body)` (or `.heading`, `.title`, `.mono`)
 - theme (use a separate theme altogether)
+- ninepatch_fill (also _hover and _press)
+  - draw an image over the background
 
 Each widget has its own default options.  These can be changed directly:
 ```zig
@@ -363,14 +363,14 @@ dvui.ButtonWidget.defaults.background = false;
 Themes can be changed between frames or even within a frame.  The theme controls the fonts and colors referenced by font_style and named colors.
 ```zig
 if (theme_dark) {
-    win.theme = dvui.Theme.builtin.adwaita_dark;
+    dvui.themeSet(dvui.Theme.builtin.adwaita_dark);
 } else {
-    win.theme = dvui.Theme.builtin.adwaita_light;
+    dvui.themeSet(dvui.Theme.builtin.adwaita_light);
 }
 ```
-The theme's color_accent is also used to show keyboard focus.
+The theme's `focus` color is used to show keyboard focus.
 
-The default theme will attempt to follow the system dark or light mode, or it can be set in the `Window` init options or by setting the `Window.theme` field directly. See the app and standalone examples for how to set the default theme. 
+The default theme will attempt to follow the system dark or light mode, or it can be set in the `Window` init options or by calling `dvui.themeSet()`. See the app and standalone examples for how to set the default theme. 
 
 ### Accessibility
 

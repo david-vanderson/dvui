@@ -192,7 +192,7 @@ pub fn layout() void {
         }
     }
 
-    dvui.label(@src(), "margin/border/padding", .{}, .{ .font_style = .heading });
+    dvui.label(@src(), "margin/border/padding", .{}, .{ .font = .theme(.heading) });
     {
         var vbox = dvui.box(@src(), .{}, .{});
         defer vbox.deinit();
@@ -240,7 +240,7 @@ pub fn layout() void {
         }
     }
 
-    dvui.label(@src(), "Boxes", .{}, .{ .font_style = .heading });
+    dvui.label(@src(), "Boxes", .{}, .{ .font = .theme(.heading) });
     {
         const opts: Options = .{ .expand = .both, .border = Rect.all(1), .background = true, .style = .content };
 
@@ -291,6 +291,7 @@ pub fn layout() void {
         }
     }
     {
+        _ = dvui.spacer(@src(), .{ .min_size_content = .height(12) });
         {
             var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox2.deinit();
@@ -301,8 +302,13 @@ pub fn layout() void {
                 }
             }
         }
+        dvui.label(@src(), "Uses flexbox border_collapse and row/col.", .{}, .{});
         {
-            var fbox = dvui.flexbox(@src(), .{ .justify_content = layout_flex_content_justify }, .{
+            const border: Rect = .all(1);
+            var fbox = dvui.flexbox(@src(), .{
+                .justify_content = layout_flex_content_justify,
+                .border_collapse = border.topLeft(),
+            }, .{
                 .border = dvui.Rect.all(1),
                 .background = true,
                 .padding = .{ .w = 4, .h = 4 },
@@ -310,19 +316,17 @@ pub fn layout() void {
             });
             defer fbox.deinit();
 
-            for (0..11) |i| {
-                var labelbox = dvui.box(@src(), .{}, .{ .id_extra = i, .margin = .{ .x = 4, .y = 4 }, .border = dvui.Rect.all(1), .background = true });
-                defer labelbox.deinit();
+            for (0..20) |i| {
+                // container must run first so fbox updates row/col
+                var container = dvui.box(@src(), .{}, .{ .id_extra = i });
+                defer container.deinit();
 
-                if (i % 2 == 0) {
-                    dvui.label(@src(), "Box {d}", .{i}, .{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 });
-                } else {
-                    dvui.label(@src(), "Large\nBox {d}", .{i}, .{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 });
-                }
+                // now fbox.row/col are correct
+                dvui.label(@src(), "Box {d}\n({d}, {d})", .{ i, fbox.row, fbox.col }, .{ .border = border, .background = true, .min_size_content = .{ .w = 70, .h = 40 }, .style = if ((fbox.col + fbox.row) % 2 == 0) .content else .window });
             }
         }
     }
-    dvui.label(@src(), "Collapsible Pane with Draggable Sash", .{}, .{ .font_style = .heading });
+    dvui.label(@src(), "Collapsible Pane with Draggable Sash", .{}, .{ .font = .theme(.heading) });
     {
         var paned = dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = paned_collapsed_width, .handle_margin = 4 }, .{ .expand = .horizontal, .background = false, .min_size_content = .{ .h = 130 } });
         defer paned.deinit();
@@ -351,7 +355,7 @@ pub fn layout() void {
     }
     _ = dvui.sliderEntry(@src(), "collapse under {d:0.0}", .{ .value = &paned_collapsed_width, .min = 100, .max = 600, .interval = 10 }, .{});
 
-    dvui.label(@src(), "Auto-Fit Panes", .{}, .{ .font_style = .heading });
+    dvui.label(@src(), "Auto-Fit Panes", .{}, .{ .font = .theme(.heading) });
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();

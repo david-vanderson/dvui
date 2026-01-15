@@ -361,7 +361,7 @@ pub fn show(self: *Debug) void {
                 defer stack.deinit();
 
                 dvui.label(@src(), "{x} {s} (+{d})", .{ id, options.name orelse "???", options.idExtra() }, .{ .padding = .all(1) });
-                dvui.label(@src(), "{s}:{d}", .{ src.file, src.line }, .{ .font_style = .caption, .padding = .all(1) });
+                dvui.label(@src(), "{s}:{d}", .{ src.file, src.line }, .{ .font = dvui.themeGet().font_body.larger(-3), .padding = .all(1) });
             }
         }
         if (remove_override_id) |id| {
@@ -833,30 +833,6 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
     var changed = false;
 
     var row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-    {
-        dvui.label(@src(), "Font Style", .{}, .{ .gravity_y = 0.5 });
-        const styles = std.meta.tags(dvui.Theme.Style.Name);
-        var dd: dvui.DropdownWidget = undefined;
-        dd.init(@src(), .{
-            .label = if (self.style) |style| @tagName(style) else "null",
-        }, .{
-            .min_size_content = .{ .w = 150 },
-            .gravity_y = 0.5,
-        });
-        defer dd.deinit();
-        if (dd.dropped()) {
-            if (dd.addChoiceLabel("Set to null")) {
-                self.font_style = null;
-                changed = true;
-            }
-            for (styles) |style| {
-                if (dd.addChoiceLabel(@tagName(style))) {
-                    self.style = style;
-                    changed = true;
-                }
-            }
-        }
-    }
 
     var background = self.backgroundGet();
     if (dvui.checkbox(@src(), &background, "background", .{ .gravity_y = 0.5 })) {
@@ -1006,6 +982,7 @@ pub fn ZigCodeFormatter(comptime T: type) type {
                         try writer.writeAll(" }");
                     },
                 },
+                .void => {},
                 else => @compileError("Unhandled field type: " ++ @typeName(T)),
             }
         }

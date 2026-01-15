@@ -148,23 +148,21 @@ fn dvui_floating_stuff() void {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
     const lorem = "This example shows how to use dvui for floating windows on top of an existing application.";
     tl.addText(lorem, .{});
     tl.deinit();
 
     var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    tl2.addText("The dvui is painting only floating windows and dialogs.", .{});
-    tl2.addText("\n\n", .{});
+    tl2.addText("The dvui is painting only floating windows and dialogs.\n\n", .{});
     tl2.addText("Framerate is managed by the application", .{});
     if (vsync) {
-        tl2.addText(" (capped at vsync)", .{});
+        tl2.addText(" (capped at vsync)\n", .{});
     } else {
-        tl2.addText(" (uncapped - no vsync)", .{});
+        tl2.addText(" (uncapped - no vsync)\n", .{});
     }
-    tl2.addText("\n\n", .{});
-    tl2.addText("Cursor is only being set by dvui for floating windows.", .{});
-    tl2.addText("\n\n", .{});
+    tl2.addText("\n", .{});
+    tl2.addText("Cursor is only being set by dvui for floating windows.\n\n", .{});
     if (dvui.useFreeType) {
         tl2.addText("Fonts are being rendered by FreeType 2.", .{});
     } else {

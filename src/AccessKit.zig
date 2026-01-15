@@ -23,6 +23,10 @@ nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node) = .empty,
 // Note: Any access to `action_requests` must be protected by `mutex`.
 action_requests: std.ArrayList(ActionRequest) = .empty,
 
+// null means don't add text runs
+text_run_parent: ?dvui.Id = null,
+text_runs: std.ArrayList(TextRunOptions) = .empty,
+
 // The last seen node with `role = .label`
 prev_label_id: dvui.Id = .zero,
 
@@ -92,7 +96,7 @@ pub fn initialize(self: *AccessKit) void {
 
 fn windowsHWND(window: *dvui.Window) c.HWND {
     switch (dvui.backend.kind) {
-        .sdl3 => {
+        .sdl3, .sdl3gpu => {
             const SDLBackend = dvui.backend;
             const properties: SDLBackend.c.SDL_PropertiesID = SDLBackend.c.SDL_GetWindowProperties(window.backend.impl.window);
             const hwnd = SDLBackend.c.SDL_GetPointerProperty(
@@ -156,8 +160,14 @@ inline fn nodeCreateFake(_: *AccessKit, _: *dvui.WidgetData, _: Role) ?*Node {
 /// Create a new Node for AccessKit
 /// Returns null if no accessibility information is required for this widget.
 pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node {
-    if (!wd.visible() and wd.id != dvui.focusedWidgetId()) return null;
     if (wd.options.role == .none) return null;
+    // text runs are created even if not visible.
+    if (!wd.visible() and wd.id != dvui.focusedWidgetId() and role != .text_run) return null;
+
+    if (role == .text_run and self.text_run_parent == null) {
+        log.debug("skipping ak text run for widget {x}, text_run_parent null", .{wd.id});
+        return null;
+    }
 
     self.mutex.lock();
     defer self.mutex.unlock();
@@ -175,7 +185,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     }
 
     if (debug_node_tree)
-        std.debug.print("Creating Node for {x} with role {?t} at {s}:{d}\n", .{ wd.id, wd.options.role, wd.src.file, wd.src.line });
+        std.debug.print("Creating Node for {x}:{d} with role {?t} at {s}:{d}\n", .{ wd.id, wd.id, wd.options.role, wd.src.file, wd.src.line });
 
     const ak_node = nodeNew(role.asU8()) orelse return null;
     wd.ak_node = ak_node;
@@ -183,8 +193,17 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     nodeSetBounds(ak_node, .{ .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
 
     if (!wd.isRoot()) {
-        const parent_node: *Node = nodeParent(wd);
-        nodePushChild(parent_node, wd.id.asU64());
+        if (role == .text_run) {
+            // if self.text_run_parent is null, we bailed out above
+            if (self.nodes.get(self.text_run_parent.?)) |node| {
+                nodePushChild(node, wd.id.asU64());
+            } else {
+                log.debug("text_run_parent node null for widget {x}", .{wd.id});
+            }
+        } else {
+            nodePushChild(nodeParent(wd), wd.id.asU64());
+        }
+
         if (wd.id == dvui.focusedWidgetId() orelse dvui.focusedSubwindowId()) {
             self.focused_id = wd.id.asU64();
         }
@@ -262,10 +281,94 @@ pub fn nodeParent(wd_in: *dvui.WidgetData) *Node {
     unreachable;
 }
 
+/// Convert a node pointer into a node id.
+///
+/// Note: Assumes mutex is held and performs a linear search of nodes.
+pub fn nodeIdFromNode(self: *AccessKit, node: *Node) ?dvui.Id {
+    var itr = self.nodes.iterator();
+    while (itr.next()) |entry| {
+        if (entry.value_ptr.* == node) return entry.key_ptr.*;
+    }
+    return null;
+}
+
+/// Character positions and lengths of rendered text.
+pub const CharPositionInfo = struct {
+    l: u8, // length (height)
+    w: f32, // width
+    x: f32, // x pos
+};
+
+pub const TextRunOptions = struct {
+    /// id of the text run's widget
+    node_id: dvui.Id,
+    /// id of the controlling widget (e.g. text entry or text layout)
+    node_parent_id: dvui.Id,
+    /// starting character offset
+    char_offset: usize,
+};
+
+/// Populate the text_run node with character position and word length details.
+pub fn textRunPopulate(
+    self: *AccessKit,
+    text: []const u8,
+    opts: TextRunOptions,
+    text_info: *std.MultiArrayList(CharPositionInfo),
+    r: dvui.Rect.Physical,
+) void {
+    const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
+
+    // Word lengths include all punctuation for the word. e.g. `abc"$.` has a length of 6.
+    var word_lengths: std.ArrayList(u8) = .empty;
+    var word_len: u8 = 0;
+    var prev_char_wordbreak: bool = false;
+    for (text) |ch| {
+        if (std.mem.indexOfScalar(u8, dvui.TextLayoutWidget.word_breaks, ch) == null) {
+            if (prev_char_wordbreak) {
+                word_lengths.append(window.arena(), word_len) catch {};
+                word_len = 0;
+            }
+            prev_char_wordbreak = false;
+        } else {
+            prev_char_wordbreak = true;
+        }
+        word_len +|= 1;
+    }
+    word_lengths.append(window.arena(), word_len) catch {};
+
+    const str = window.arena().dupeZ(u8, text) catch "";
+    defer window.arena().free(str);
+
+    const ak_node = self.nodes.get(opts.node_id) orelse {
+        log.debug("textRunPopulate called for non-existent node_id {x}:{d} with parent {x}:{d}\n", .{ opts.node_id, opts.node_id, opts.node_parent_id, opts.node_parent_id });
+        return;
+    };
+    AccessKit.nodeSetRole(ak_node, Role.text_run.asU8());
+    // Make sure text run is at least 1 pixel wide to cater for newlines.
+    AccessKit.nodeSetBounds(ak_node, .{ .x0 = r.x, .y0 = r.y, .x1 = r.x + @max(r.w, 1), .y1 = r.y + r.h });
+    AccessKit.nodeSetValue(ak_node, str);
+    AccessKit.nodeSetCharacterLengths(ak_node, text_info.len, text_info.items(.l).ptr);
+    AccessKit.nodeSetCharacterWidths(ak_node, text_info.len, text_info.items(.w).ptr);
+    AccessKit.nodeSetCharacterPositions(ak_node, text_info.len, text_info.items(.x).ptr);
+    AccessKit.nodeSetWordLengths(ak_node, word_lengths.items.len, word_lengths.items.ptr);
+    AccessKit.nodeSetTextDirection(ak_node, AccessKit.TextDirection.left_to_right);
+    self.text_runs.append(window.gpa, opts) catch {}; // If text run can't be added, selection actions will fail this frame.
+
+    if (debug_textruns) {
+        std.debug.print("TEXT_RUN [{x}:{x}]: bounds = {f}\n", .{ opts.node_id, opts.node_parent_id, r });
+        std.debug.print("TEXT_RUN [{x}:{x}]: lengths = {x}\n", .{ opts.node_id, opts.node_parent_id, text_info.items(.l) });
+        std.debug.print("TEXT_RUN [{x}:{x}]: widths = {any}\n", .{ opts.node_id, opts.node_parent_id, text_info.items(.w) });
+        std.debug.print("TEXT_RUN [{x}:{x}]: positions = {any}\n", .{ opts.node_id, opts.node_parent_id, text_info.items(.x) });
+        std.debug.print("TEXT_RUN [{x}:{x}]: word_lens = {any}\n", .{ opts.node_id, opts.node_parent_id, word_lengths.items });
+        std.debug.print("TEXT_RUN [{x}:{x}]: text = {s}\n", .{ opts.node_id, opts.node_parent_id, text });
+    }
+}
+
 /// Convert any actions during the frame into events to be processed next frame
 /// Note: Assumes `mutex` is already held.
 fn processActions(self: *AccessKit) void {
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
+
     for (self.action_requests.items) |request| {
         switch (request.action) {
             Action.click => {
@@ -315,17 +418,65 @@ fn processActions(self: *AccessKit) void {
                             },
                         }
                     };
-
-                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target), .replace = true }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventTextSelect(.{ .start = 0, .end = std.math.maxInt(usize), .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
                 }
             },
-            else => {},
+            Action.set_text_selection => {
+                if (!request.data.has_value or request.data.value.tag != ActionData.set_text_selection) {
+                    log.debug("Action set_text_selection has invalid data. Expected has_value = true, tag = {}; Received {}, {}\n", .{
+                        ActionData.set_text_selection,
+                        request.data.has_value,
+                        request.data.value.tag,
+                    });
+                    return;
+                }
+                // Anchor is the 'start' or non-moving part of the selection. Focus is the 'end' or moving part.
+                const anchor: TextPosition = request.data.value.unnamed_0.unnamed_7.set_text_selection.anchor;
+                const focus: TextPosition = request.data.value.unnamed_0.unnamed_7.set_text_selection.focus;
+                var anchor_run: ?TextRunOptions = null;
+                var focus_run: ?TextRunOptions = null;
+                // AK TODO: Consider making this a AutoArrayHashMap or similar to make this more scalable.
+                for (self.text_runs.items) |run| {
+                    if (run.node_id.asU64() == anchor.node) {
+                        anchor_run = run;
+                    }
+                    if (run.node_id.asU64() == focus.node) {
+                        focus_run = run;
+                    }
+                    if (anchor_run != null and focus_run != null) break;
+                }
+
+                if (anchor_run) |a| if (focus_run) |f| {
+                    _ = window.addEventTextSelect(.{
+                        .start = a.char_offset + anchor.character_index,
+                        .end = f.char_offset + focus.character_index,
+                    }) catch |err| {
+                        switch (err) {
+                            error.OutOfMemory => {},
+                        }
+                    };
+                };
+                if (anchor_run == null or focus_run == null) {
+                    log.debug("Action set_text_selection received for unknown text_run id {x}.", .{anchor.node});
+                }
+            },
+            Action.replace_selected_text => {
+                // TODO:
+            },
+            Action.scroll_into_view => {
+                // TODO:
+            },
+            else => |action| {
+                log.debug("Recieved unknown action {d}\n", .{action});
+            },
         }
     }
     if (self.action_requests.items.len > 0) {
-        self.action_requests.clearAndFree(window.gpa);
+        self.action_requests.clearRetainingCapacity();
         dvui.refresh(window, @src(), null);
     }
+    self.text_runs.clearAndFree(window.gpa);
 }
 
 fn logEventAddError(src: std.builtin.SourceLocation, err: anyerror) void {
@@ -387,6 +538,8 @@ pub fn deinit(self: *AccessKit) void {
 
     self.action_requests.clearAndFree(window.gpa);
     self.nodes.clearAndFree(window.gpa);
+    self.text_runs.clearAndFree(window.gpa);
+
     if (builtin.os.tag == .windows)
         if (dvui.backend.kind == .dx11) {
             c.accesskit_windows_adapter_free(self.adapter.?);
@@ -1459,3 +1612,4 @@ pub const RoleNoAccessKit = enum {
 };
 
 const debug_node_tree = false;
+const debug_textruns: bool = false;

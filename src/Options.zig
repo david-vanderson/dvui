@@ -71,7 +71,7 @@ style: ?Theme.Style.Name = null,
 // If not null, source colors from here instead of the global theme.
 theme: ?*const Theme = null,
 
-// use to override font_style
+// Use specified font
 font: ?Font = null,
 
 // only used for icons/images, rotates around center, radians clockwise
@@ -101,9 +101,6 @@ max_size_content: ?MaxSize = null,
 
 // whether to fill the background
 background: ?bool = null,
-
-// use to pick a font from the theme
-font_style: ?FontStyle = null,
 
 /// Render a box shadow in `WidgetData.borderAndBackground`.
 box_shadow: ?BoxShadow = null,
@@ -153,18 +150,6 @@ pub const Gravity = struct {
     // wraps Options.gravity_x and Options.gravity_y
     x: f32,
     y: f32,
-};
-
-pub const FontStyle = enum {
-    body,
-    heading,
-    caption,
-    caption_heading,
-    title,
-    title_1,
-    title_2,
-    title_3,
-    title_4,
 };
 
 pub const MaxSize = struct {
@@ -237,7 +222,7 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
     } orelse self.themeGet().color(self.styleGet(), ask);
 }
 
-/// All the colors you can ask Options for
+/// Kinds of Ninepatch you can ask Options for.
 pub const NinepatchAsk = enum {
     fill,
     hover,
@@ -256,21 +241,7 @@ pub fn ninepatch(self: *const Options, ask: NinepatchAsk) ?*const Ninepatch {
 }
 
 pub fn fontGet(self: *const Options) Font {
-    if (self.font) |ff| {
-        return ff;
-    }
-
-    return switch (self.font_style orelse .body) {
-        .body => self.themeGet().font_body,
-        .heading => self.themeGet().font_heading,
-        .caption => self.themeGet().font_caption,
-        .caption_heading => self.themeGet().font_caption_heading,
-        .title => self.themeGet().font_title,
-        .title_1 => self.themeGet().font_title_1,
-        .title_2 => self.themeGet().font_title_2,
-        .title_3 => self.themeGet().font_title_3,
-        .title_4 => self.themeGet().font_title_4,
-    };
+    return self.font orelse self.themeGet().font_body;
 }
 
 pub fn idExtra(self: *const Options) usize {
@@ -353,7 +324,6 @@ pub fn styleOnly(self: *const Options) Options {
         .color_border = self.color_border,
 
         .font = self.font,
-        .font_style = self.font_style,
     };
 }
 
@@ -418,7 +388,6 @@ pub fn strip(self: *const Options) Options {
         .color_border = self.color_border,
 
         .font = self.font,
-        .font_style = self.font_style,
 
         .rotation = self.rotation,
     };
@@ -436,9 +405,13 @@ pub fn override(self: *const Options, over: Options) Options {
     return ret;
 }
 
-pub fn themeOverride(self: *const Options) Options {
+/// Override corner_radius with maximum from theme.
+/// Pass null to use theme from this Options.
+/// If about to override with passed Options, use that Options.theme.
+pub fn themeOverride(self: *const Options, theme: ?*const Theme) Options {
     var ret = self.*;
-    if (ret.themeGet().max_default_corner_radius) |mdcr| {
+    const t: *const Theme = theme orelse self.themeGet();
+    if (t.max_default_corner_radius) |mdcr| {
         if (ret.corner_radius != null) {
             ret.corner_radius.?.x = @min(ret.corner_radius.?.x, mdcr);
             ret.corner_radius.?.y = @min(ret.corner_radius.?.y, mdcr);
@@ -495,12 +468,8 @@ pub fn hash(self: *const Options) u64 {
     if (self.color_text_press) |col| hasher.update(asBytes(&col));
     if (self.color_border) |col| hasher.update(asBytes(&col));
 
-    const fontStyle: FontStyle = self.font_style orelse .body;
-    hasher.update(asBytes(&fontStyle));
     const font = self.fontGet();
-    hasher.update(asBytes(&font.id));
-    hasher.update(asBytes(&font.line_height_factor));
-    hasher.update(asBytes(&font.size));
+    hasher.update(asBytes(&font.hash()));
 
     if (self.tab_index) |ti| hasher.update(asBytes(&ti));
     hasher.update(asBytes(&self.idExtra()));

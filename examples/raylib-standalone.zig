@@ -49,7 +49,6 @@ pub fn main() !void {
         },
     });
     defer win.deinit();
-    try win.fonts.addBuiltinFontsForTheme(win.gpa, dvui.Theme.builtin.adwaita_light);
 
     main_loop: while (true) {
         c.BeginDrawing();
@@ -128,7 +127,7 @@ fn dvui_frame() bool {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
 
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
     const lorem = "This example shows how to use dvui in a normal application.";
     tl.addText(lorem, .{});
     tl.deinit();
@@ -140,18 +139,17 @@ fn dvui_frame() bool {
         \\- can show floating windows and dialogs
         \\- example menu at the top of the window
         \\- rest of the window is a scroll area
+        \\
+        \\
     , .{});
-    tl2.addText("\n\n", .{});
-    tl2.addText("Framerate is set by Raylib (C api).", .{});
-    tl2.addText("\n\n", .{});
+    tl2.addText("Framerate is set by Raylib (C api).\n\n", .{});
     if (vsync) {
-        tl2.addText("Framerate is capped by vsync.", .{});
+        tl2.addText("Framerate is capped by vsync.\n", .{});
     } else {
-        tl2.addText("Framerate is uncapped.", .{});
+        tl2.addText("Framerate is uncapped.\n", .{});
     }
-    tl2.addText("\n\n", .{});
-    tl2.addText("Cursor is always being set by dvui.", .{});
-    tl2.addText("\n\n", .{});
+    tl2.addText("\n", .{});
+    tl2.addText("Cursor is always being set by dvui.\n\n", .{});
     if (dvui.useFreeType) {
         tl2.addText("Fonts are being rendered by FreeType 2.", .{});
     } else {
@@ -200,7 +198,9 @@ fn dvui_frame() bool {
 
         // rs.r is the pixel rectangle, rs.s is the scale factor (like for
         // hidpi screens or display scaling)
-        const r = rs.r;
+        // raylib multiplies everything internally by the monitor scale, so we
+        // have to divide by that
+        const r = RaylibBackend.dvuiRectToRaylib(rs.r);
         const s = rs.s / dvui.windowNaturalScale();
         c.DrawText("Congrats! You created your first window!", @intFromFloat(r.x + 10 * s), @intFromFloat(r.y + 10 * s), @intFromFloat(20 * s), c.LIGHTGRAY);
     }

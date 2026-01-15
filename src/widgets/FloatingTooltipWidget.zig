@@ -91,7 +91,7 @@ pub fn init(self: *FloatingTooltipWidget, src: std.builtin.SourceLocation, init_
         })),
         // get scale from parent
         .scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale(),
-        .options = defaults.themeOverride().override(opts_in),
+        .options = defaults.themeOverride(opts_in.theme).override(opts_in),
         .init_options = init_opts,
     };
 

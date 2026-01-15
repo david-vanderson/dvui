@@ -38,7 +38,7 @@ mouse_over: bool = false,
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *MenuItemWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const options = defaults.themeOverride().override(opts);
+    const options = defaults.themeOverride(opts.theme).override(opts);
     const wd = WidgetData.init(src, .{}, options);
 
     self.* = .{

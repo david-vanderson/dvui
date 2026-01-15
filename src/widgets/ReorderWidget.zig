@@ -51,7 +51,7 @@ fn dragging(self: *ReorderWidget) bool {
 }
 
 pub fn needFinalSlot(self: *ReorderWidget) bool {
-    if (self.dragging() and self.data().borderRectScale().r.contains(dvui.currentWindow().mouse_pt)) {
+    if (self.dragging()) {
         return !self.found_slot;
     }
 

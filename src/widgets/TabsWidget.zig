@@ -99,7 +99,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
 
     if (selected) {
         tab_defaults.style = .window;
-        tab_defaults.font_style = .heading;
+        tab_defaults.font = opts.fontGet().withWeight(.bold);
         tab_defaults.border = switch (self.init_options.dir) {
             .horizontal => .{ .x = 1, .y = 1, .w = 1 },
             .vertical => .{ .x = 1, .y = 1, .h = 1 },
@@ -116,7 +116,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
         .vertical => tab_defaults.gravity_x = 1.0,
     }
 
-    const options = tab_defaults.themeOverride().override(opts);
+    const options = tab_defaults.themeOverride(opts.theme).override(opts);
 
     self.tab_button.init(@src(), .{}, options);
     self.tab_button.processEvents();

@@ -150,31 +150,30 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
         dvui.label(@src(), "(limit {d})", .{text_entry_password_buf.len}, .{ .gravity_y = 0.5 });
     }
 
-    const Sfont = struct {
-        var dropdown: usize = 0;
-
-        const FontNameId = struct { []const u8, ?dvui.Font.FontId };
-
-        pub fn compare(_: void, lhs: FontNameId, rhs: FontNameId) bool {
-            return std.mem.order(u8, lhs.@"0", rhs.@"0").compare(std.math.CompareOperator.lt);
-        }
+    const FontEntry = struct {
+        idx: usize,
+        name: []const u8,
     };
 
-    var font_entries: []Sfont.FontNameId = dvui.currentWindow().lifo().alloc(Sfont.FontNameId, dvui.currentWindow().fonts.database.count() + 1) catch &.{};
+    var font_entries: []FontEntry = dvui.currentWindow().lifo().alloc(FontEntry, dvui.currentWindow().fonts.database.items.len + 1) catch &.{};
     defer dvui.currentWindow().lifo().free(font_entries);
+
     if (font_entries.len > 0) {
-        font_entries[0] = .{ "Theme Body", null };
-        var it = dvui.currentWindow().fonts.database.iterator();
-        var i: usize = 0;
-        while (it.next()) |entry| {
-            i += 1;
-            font_entries[i] = .{ entry.value_ptr.name, entry.key_ptr.* };
+        font_entries[0] = .{ .idx = 0, .name = "Theme Body" };
+        for (dvui.currentWindow().fonts.database.items, 1..) |*dbs, i| {
+            font_entries[i] = .{ .idx = i, .name = dbs.name(dvui.currentWindow().arena()) };
         }
 
-        std.mem.sort(Sfont.FontNameId, font_entries[1..], {}, Sfont.compare);
-
-        Sfont.dropdown = @min(Sfont.dropdown, font_entries.len - 1);
+        std.mem.sort(FontEntry, font_entries[1..], {}, struct {
+            fn less(_: void, lhs: FontEntry, rhs: FontEntry) bool {
+                return std.mem.order(u8, lhs.name, rhs.name) == .lt;
+            }
+        }.less);
     }
+
+    const Sfont = struct {
+        var dropdown: usize = 0;
+    };
 
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
@@ -191,11 +190,9 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
 
         left_alignment.spacer(@src(), 0);
 
-        var font = dvui.themeGet().font_body;
+        var font = dvui.Font.theme(.body);
         if (Sfont.dropdown > 0) {
-            if (font_entries[Sfont.dropdown].@"1") |id| {
-                font.id = id;
-            }
+            font = dvui.currentWindow().fonts.database.items[font_entries[Sfont.dropdown].idx - 1].font();
         }
 
         var te_opts: dvui.TextEntryWidget.InitOptions = .{ .multiline = true, .text = .{ .buffer_dynamic = .{
@@ -237,11 +234,11 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
         left_alignment.spacer(@src(), 0);
 
         var dd: dvui.DropdownWidget = undefined;
-        dd.init(@src(), .{ .selected_index = Sfont.dropdown, .label = font_entries[Sfont.dropdown].@"0" }, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5 });
+        dd.init(@src(), .{ .selected_index = Sfont.dropdown, .label = font_entries[Sfont.dropdown].name }, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5 });
         defer dd.deinit();
         if (dd.dropped()) {
-            for (font_entries, 0..) |e, i| {
-                if (dd.addChoiceLabel(e.@"0")) {
+            for (font_entries, 0..) |fe, i| {
+                if (dd.addChoiceLabel(fe.name)) {
                     Sfont.dropdown = i;
                 }
             }
@@ -318,57 +315,153 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
             te_file.deinit();
             hbox3.deinit();
 
-            if (dvui.button(@src(), "Add Font", .{}, .{})) {
+            if (dvui.button(@src(), "Add Font", .{}, .{})) blk: {
                 if (name.len == 0) {
                     dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Add a Name" });
                     name_error.* = true;
-                } else if (dvui.currentWindow().fonts.database.contains(.fromName(name))) {
-                    const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Already have font named \"{s}\"", .{name}) catch name;
-                    defer dvui.currentWindow().lifo().free(msg);
-                    dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = msg });
-                    name_error.* = true;
-                } else {
-                    var bytes: ?[]u8 = null;
-                    if (!std.fs.path.isAbsolute(filename)) {
-                        file_error.* = true;
-                        const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Could not open \"{s}\"", .{filename}) catch filename;
-                        defer dvui.currentWindow().lifo().free(msg);
-                        dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = msg });
-                    } else {
-                        const file = std.fs.openFileAbsolute(filename, .{}) catch blk: {
-                            file_error.* = true;
-                            const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Could not open \"{s}\"", .{filename}) catch filename;
-                            defer dvui.currentWindow().lifo().free(msg);
-                            dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = msg });
-                            break :blk null;
-                        };
-                        if (file) |f| {
-                            var buf: [500]u8 = undefined;
-                            var reader = f.reader(dvui.currentWindow().io, &buf);
-                            var iface = &reader.interface;
-                            bytes = iface.allocRemaining(dvui.currentWindow().gpa, .limited(30_000_000)) catch null;
-                        }
-                    }
+                    break :blk;
+                }
 
-                    if (bytes) |b| blk: {
-                        dvui.addFont(name, b, dvui.currentWindow().gpa) catch |err| switch (err) {
-                            error.OutOfMemory => @panic("OOM"),
-                            error.FontError => {
-                                dvui.currentWindow().gpa.free(b);
-                                const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "\"{s}\" is not a valid font", .{filename}) catch filename;
-                                defer dvui.currentWindow().lifo().free(msg);
-                                dvui.dialog(@src(), .{}, .{ .title = "Bad Font", .message = msg });
-                                break :blk;
-                            },
-                        };
-
-                        const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Added font named \"{s}\"", .{name}) catch name;
+                for (dvui.currentWindow().fonts.database.items) |*dbs| {
+                    if (std.mem.eql(u8, dbs.familyName(), name)) {
+                        const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Already have font named \"{s}\"", .{name}) catch name;
                         defer dvui.currentWindow().lifo().free(msg);
                         dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = msg });
+                        name_error.* = true;
+                        break :blk;
                     }
+                }
+
+                var bytes: ?[]u8 = null;
+                if (!std.fs.path.isAbsolute(filename)) {
+                    file_error.* = true;
+                    const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Could not open \"{s}\"", .{filename}) catch filename;
+                    defer dvui.currentWindow().lifo().free(msg);
+                    dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = msg });
+                    break :blk;
+                }
+
+                const file = std.fs.openFileAbsolute(filename, .{}) catch blk_open: {
+                    file_error.* = true;
+                    const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Could not open \"{s}\"", .{filename}) catch filename;
+                    defer dvui.currentWindow().lifo().free(msg);
+                    dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = msg });
+                    break :blk_open null;
+                };
+                if (file) |f| {
+                    var buf: [500]u8 = undefined;
+                    var reader = f.reader(dvui.currentWindow().io, &buf);
+                    var iface = &reader.interface;
+                    bytes = iface.allocRemaining(dvui.currentWindow().gpa, .limited(30_000_000)) catch null;
+                }
+
+                if (bytes) |b| {
+                    dvui.addFont(name, b, dvui.currentWindow().gpa) catch |err| switch (err) {
+                        error.OutOfMemory => @panic("OOM"),
+                        error.FontError => {
+                            dvui.currentWindow().gpa.free(b);
+                            const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "\"{s}\" is not a valid font", .{filename}) catch filename;
+                            defer dvui.currentWindow().lifo().free(msg);
+                            dvui.dialog(@src(), .{}, .{ .title = "Bad Font", .message = msg });
+                            break :blk;
+                        },
+                    };
+
+                    const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Added font named \"{s}\"", .{name}) catch name;
+                    defer dvui.currentWindow().lifo().free(msg);
+                    dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = msg });
                 }
             }
         }
+    }
+
+    _ = dvui.spacer(@src(), .{ .min_size_content = .height(10) });
+
+    if (dvui.useTreeSitter) {
+        const global = struct {
+            extern fn tree_sitter_json() callconv(.c) *dvui.c.TSLanguage;
+        };
+
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
+        dvui.label(@src(), "Syntax\nHighlight", .{}, .{ .gravity_y = 0.5 });
+
+        var log_captures = false;
+        if (dvui.button(@src(), "Log Captures", .{}, .{ .gravity_y = 0.5, .gravity_x = 1.0 })) {
+            log_captures = true;
+        }
+
+        left_alignment.spacer(@src(), 0);
+
+        const source =
+            \\{ "name"   : "John Smith",
+            \\  "array"  : [true, false, null, { "sku" : 123 }],
+            \\  // comments are not part of base json
+            \\  // but supported by this parser
+            \\  "price"  : 23.95,
+            \\  /* block comment */
+            \\  "shipTo" : { "name" : "Jane Smith",
+            \\               "address" : "123 Maple Street" },
+            \\}
+        ;
+
+        // If multiple queries match, we use the last
+        // If a query matches inside another query, we drop it (like
+        // escape_sequence which is inside string)
+        const queries =
+            \\(string) @string
+            \\
+            \\(pair
+            \\  key: (_) @string.special.key)
+            \\
+            \\(number) @number
+            \\
+            \\[
+            \\  (null)
+            \\  (true)
+            \\  (false)
+            \\] @constant.builtin
+            \\
+            \\(escape_sequence) @escape
+            \\
+            \\(comment) @comment
+        ;
+
+        // If multiple highlights match, we use the last
+        const highlights: []const dvui.TextEntryWidget.SyntaxHighlight = &.{
+            .{ .name = "constant", .opts = .{ .color_text = .fromHex("87d75f") } },
+            .{ .name = "string", .opts = .{ .color_text = .fromHex("d7af5f") } },
+            .{ .name = "string.special.key", .opts = .{ .color_text = .fromHex("87afd7") } },
+            .{ .name = "comment", .opts = .{ .color_text = .fromHex("af87d7") } },
+            .{ .name = "number", .opts = .{ .color_text = .fromHex("d75f5f") } },
+        };
+
+        var te: dvui.TextEntryWidget = undefined;
+        te.init(@src(), .{
+            .multiline = true,
+            .cache_layout = true,
+            .text = .{ .internal = .{ .limit = 1_000_000 } },
+            .tree_sitter = .{
+                .language = global.tree_sitter_json(),
+                .queries = queries,
+                .highlights = highlights,
+                .log_captures = log_captures,
+            },
+        }, .{
+            .expand = .horizontal,
+        });
+        defer te.deinit();
+
+        if (dvui.firstFrame(te.data().id)) {
+            te.textSet(source, false);
+            te.textLayout.selection.moveCursor(0, false); // keep from scrolling to the bottom
+        }
+
+        te.processEvents();
+        te.draw();
+    } else {
+        dvui.label(@src(), "Syntax highlight disabled (not yet available in on web)", .{}, .{});
     }
 
     _ = dvui.spacer(@src(), .{ .min_size_content = .height(10) });
