@@ -1424,12 +1424,12 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
                 self.focusWidget(null, null, null);
             }
         } else if (e.evt == .key) {
-            if (e.evt.key.action == .down and e.evt.key.matchBind("next_widget")) {
+            if ((e.evt.key.action == .down or e.evt.key.action == .repeat) and e.evt.key.matchBind("next_widget")) {
                 e.handle(@src(), self.data());
                 dvui.tabIndexNext(e.num);
             }
 
-            if (e.evt.key.action == .down and e.evt.key.matchBind("prev_widget")) {
+            if ((e.evt.key.action == .down or e.evt.key.action == .repeat) and e.evt.key.matchBind("prev_widget")) {
                 e.handle(@src(), self.data());
                 dvui.tabIndexPrev(e.num);
             }
