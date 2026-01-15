@@ -10,37 +10,37 @@ Tested with [Zig](https://ziglang.org/) 0.15.2 (use tag v0.3.0 for zig 0.14.1)
 How to run the built-in examples:
 
 - SDL3
-  - ```zig build sdl3-standalone```
-  - ```zig build sdl3-ontop```  
-  - ```zig build sdl3-app```
+  - ```zig build sdl3-standalone``` [examples/sdl-standalone.zig](examples/sdl-standalone.zig)
+  - ```zig build sdl3-ontop``` [examples/sdl-ontop.zig](examples/sdl-ontop.zig)
+  - ```zig build sdl3-app``` [examples/app.zig](examples/app.zig)
 - SDL3GPU (uses sdlgpu for rendering)
   - ```zig build sdl3gpu-standalone```
   - ```zig build sdl3gpu-ontop```
 - SDL2
   - ```zig build sdl2-standalone```
   - ```zig build sdl2-ontop```
-  - ```zig build sdl2-app```
+  - ```zig build sdl2-app``` [examples/app.zig](examples/app.zig)
 - Raylib (C api)
   - if you encounter error `No Wayland` also add flag `-Dlinux_display_backend=X11`
   - ```zig build raylib-standalone```
   - ```zig build raylib-ontop```
-  - ```zig build raylib-app```
+  - ```zig build raylib-app``` [examples/app.zig](examples/app.zig)
 - Raylib (raylib-zig)
   - if you encounter error `No Wayland` also add flag `-Dlinux_display_backend=X11`
   - ```zig build raylib-zig-standalone```
   - ```zig build raylib-zig-ontop```
-  - ```zig build raylib-zig-app```
+  - ```zig build raylib-zig-app``` [examples/app.zig](examples/app.zig)
 - Dx11
   - ```zig build dx11-standalone```
   - ```zig build dx11-ontop```
-  - ```zig build dx11-app```
+  - ```zig build dx11-app``` [examples/app.zig](examples/app.zig)
 - Web
   - to load web examples you need so serve the files through a local web server
     - `python -m http.server -d zig-out/bin/EXAMPLE_NAME`
     - `caddy file-server --root zig-out/bin/EXAMPLE_NAME --listen :8000`
   - ```zig build web-test```
     - then load `zig-out/bin/web-test/index.html`
-  - ```zig build web-app```
+  - ```zig build web-app``` [examples/app.zig](examples/app.zig)
     - then load `zig-out/bin/web-app/index.html`
     - [online demo](https://david-vanderson.github.io/demo)
 - Docs
@@ -54,7 +54,7 @@ This document is a broad overview.  See [implementation details](readme-implemen
 
 Online discussion happens in #gui-dev on the zig discord server: https://discord.gg/eJgXXTtVzA or in IRC (Libera) channel #dvui
 
-Below is a screenshot of the demo window, whose source code can be found at `src/Examples.zig`.
+Below is a screenshot of the demo window, whose source code can be found at [src/Examples.zig](src/Examples.zig).
 
 ![Screenshot of DVUI Standalone Example (Application Window)](/screenshot_demo.png?raw=true)
 
