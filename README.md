@@ -9,11 +9,12 @@ Tested with [Zig](https://ziglang.org/) 0.15.2 (use tag v0.3.0 for zig 0.14.1)
 
 How to run the built-in examples:
 
+- If unsure, start with ```zig build sdl3-app```
+
 - SDL3
   - ```zig build sdl3-standalone```
   - ```zig build sdl3-ontop```
   - ```zig build sdl3-app``` [examples/app.zig](examples/app.zig)
-    - If unsure, start here!
 - SDL3GPU (uses sdlgpu for rendering)
   - ```zig build sdl3gpu-standalone```
   - ```zig build sdl3gpu-ontop```
