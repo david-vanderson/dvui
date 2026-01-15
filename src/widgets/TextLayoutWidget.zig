@@ -1615,8 +1615,6 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     self.add_text_done = true;
 
     if (self.cache_layout and self.byte_heights.len > 0) {
-        // sanity check
-        std.debug.assert(self.cache_layout_bytes != null);
 
         var edit_height: f32 = undefined;
         if (self.byte_height_after_idx) |i| {
