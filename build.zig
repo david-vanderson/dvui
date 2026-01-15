@@ -77,16 +77,8 @@ pub fn build(b: *std.Build) !void {
     var linux_display_backend: ?LinuxDisplayBackend = null;
     if (back_to_build == null or back_to_build.? == .raylib or back_to_build.? == .raylib_zig) {
         linux_display_backend = b.option(LinuxDisplayBackend, "linux_display_backend", "If using raylib, which linux display?") orelse blk: {
-            _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
-                error.EnvironmentVariableNotFound => break :blk .X11,
-                else => @panic("Unknown error checking for WAYLAND_DISPLAY environment variable"),
-            };
-
-            _ = std.process.getEnvVarOwned(b.allocator, "DISPLAY") catch |err| switch (err) {
-                error.EnvironmentVariableNotFound => break :blk .Wayland,
-                else => @panic("Unknown error checking for DISPLAY environment variable"),
-            };
-
+            if (b.graph.environ_map.get("WAYLAND_DISPLAY") == null) break :blk .X11;
+            if (b.graph.environ_map.get("DISPLAY") == null) break :blk .Wayland;
             break :blk .Both;
         };
     }
