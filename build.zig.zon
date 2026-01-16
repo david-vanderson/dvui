@@ -21,8 +21,8 @@
             .lazy = true,
         },
         .raylib = .{
-            .url = "git+https://github.com/raysan5/raylib?ref=master#720dd22491cdc4a29ec0ea87b572d9380872198c",
-            .hash = "raylib-5.6.0-dev-whq8uMVQCgVTgRxG3REWgBBSi2BR-nf4bq6eqANxImt7",
+            .url = "git+https://github.com/kristoff-it/raylib?ref=zig-0.16#68eff3f612091d9e713d2229b4f840582dbfc28f",
+            .hash = "raylib-5.6.0-dev-whq8uLAJDQXCUoWbI50KR2RX8f1NhyzmklCim1bT2EH2",
             .lazy = true,
         },
         //used in the raylib-ontop example
@@ -49,13 +49,13 @@
 
         // Experimental zig bindings, any zig based backend will be located here
         .raylib_zig = .{
-            .url = "git+https://github.com/raylib-zig/raylib-zig?ref=devel#3cd4d3179d967fc8b931514603fdbc4a43a1d771",
-            .hash = "raylib_zig-5.6.0-dev-KE8REE1LBQCL7lia-DwUkusWI1G4kJmhtatLh2kNsuiE",
+            .url = "git+https://github.com/kristoff-it/raylib-zig?ref=zig-0.16#726be415fcff4b96e6a9684c48f17bbe494d64a7",
+            .hash = "raylib_zig-5.6.0-dev-KE8REIFNBQDiMLazOzPK8E2cdRvcgI7m9mRvLAi3y4y9",
             .lazy = true,
         },
         .zglfw = .{
-            .url = "git+https://github.com/zig-gamedev/zglfw.git#6034a5623312c58bf5e64c1a2b686691c28575f4",
-            .hash = "zglfw-0.10.0-dev-zgVDNPKyIQCBi-wv_vxkvIQq1u0bP4D56Wszx_2mszc7",
+            .url = "git+https://github.com/zig-gamedev/zglfw.git#d9c06187e8b23e91b2ba6865d265e4213e5e7d09",
+            .hash = "zglfw-0.10.0-dev-zgVDNC64IQCeL-_eVOA27Wa50WVitrJswOZVvgcXmIsy",
             .lazy = true,
         },
         .tree_sitter = .{
