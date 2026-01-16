@@ -91,6 +91,12 @@ pub const StartOptions = struct {
     /// be used for all backends and platforms, meaning the platform
     /// defaults will be overrulled.
     window_init_options: dvui.Window.InitOptions = .{},
+    /// General purpose allocator.  If null, dvui picks a reasonable default.
+    /// Use dvui.App.config.startFn to initialize this non-statically
+    gpa: ?std.mem.Allocator = null,
+    /// Io implementation.  If null, dvui picks a reasonable default.
+    /// Use dvui.App.config.startFn to initialize this non-statically
+    io: ?std.Io = null,
 };
 
 pub const Result = enum {
@@ -118,7 +124,14 @@ pub fn get() ?App {
     return root.dvui_app;
 }
 
+pub const ReleaseAllocator = blk: {
+    if (builtin.target.cpu.arch.isWasm()) break :blk std.heap.wasm_allocator;
+    if (builtin.single_threaded) break :blk std.heap.c_allocator;
+    break :blk std.heap.smp_allocator;
+};
+
 const std = @import("std");
+const builtin = @import("builtin");
 const dvui = @import("dvui.zig");
 
 test {

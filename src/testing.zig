@@ -1,3 +1,4 @@
+io: std.Io,
 allocator: std.mem.Allocator,
 backend: *Backend,
 window: *Window,
@@ -106,7 +107,7 @@ pub fn init(options: InitOptions) !Self {
     if (should_write_snapshots()) {
         // ensure snapshot directory exists
         // NOTE: do fs operation through cwd to handle relative and absolute paths
-        std.fs.cwd().makeDir(options.snapshot_dir) catch |err| switch (err) {
+        std.Io.Dir.cwd().makeDir(options.snapshot_dir) catch |err| switch (err) {
             error.PathAlreadyExists => {},
             else => return err,
         };
@@ -236,7 +237,7 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     const filename = try std.fmt.allocPrint(self.allocator, "{s}-{s}-{d}", .{ src.file, src.fn_name, self.snapshot_index });
     defer self.allocator.free(filename);
     // NOTE: do fs operation through cwd to handle relative and absolute paths
-    var dir = std.fs.cwd().openDir(self.snapshot_dir, .{}) catch |err| switch (err) {
+    var dir = std.Io.Dir.cwd().openDir(self.snapshot_dir, .{}) catch |err| switch (err) {
         error.FileNotFound => {
             std.debug.print("{s}:{d}:{d}: Snapshot directory did not exist! Run the test with DVUI_SNAPSHOT_WRITE to create all snapshot files\n", .{ src.file, src.line, src.column });
             return error.MissingSnapshotFile;
@@ -332,7 +333,7 @@ pub fn saveImage(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.Ph
         return;
     }
 
-    var dir = try std.fs.cwd().makeOpenPath(self.image_dir.?, .{});
+    var dir = try std.Io.Dir.cwd().makeOpenPath(self.image_dir.?, .{});
     defer dir.close();
     const file = try dir.createFile(filename, .{});
     defer file.close();
