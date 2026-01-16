@@ -30,7 +30,7 @@ pub fn main() !void {
     // app_init is a stand-in for what your application is already doing to set things up
     try app_init();
 
-    var io: std.Io.Threaded = .init(gpa);
+    var io: std.Io.Threaded = .init(gpa, .{});
     defer io.deinit();
 
     // create SDL backend using existing window and renderer, app still owns the window/renderer
