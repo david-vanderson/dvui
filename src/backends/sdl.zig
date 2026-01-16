@@ -1461,7 +1461,7 @@ pub fn enableSDLLogging() void {
 }
 
 /// This is what is run if you are using `dvui.App` with this backend.
-pub fn main() !u8 {
+pub fn main(main_init: std.process.Init) !u8 {
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
     if (builtin.os.tag == .windows) { // optional
@@ -1472,6 +1472,11 @@ pub fn main() !u8 {
 
     if (sdl3 and (sdl_options.callbacks orelse true) and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows)) {
         // We are using sdl's callbacks to support rendering during OS resizing
+
+        const init_opts = app.config.get();
+
+        appState.gpa = init_opts.gpa orelse main_init.gpa;
+        appState.io = init_opts.io orelse main_init.io;
 
         // For programs that provide their own entry points instead of relying on SDL's main function
         // macro magic, 'SDL_SetMainReady()' should be called before calling 'SDL_Init()'.
@@ -1487,25 +1492,10 @@ pub fn main() !u8 {
 
     const init_opts = app.config.get();
 
-    var debug_instance: std.heap.DebugAllocator(.{}) = .init;
-    defer if (debug_instance.deinit() != .ok) @panic("Memory leak on exit!");
-
-    const gpa = init_opts.gpa orelse switch (builtin.mode) {
-        .Debug => debug_instance.allocator(),
-        else => dvui.App.ReleaseAllocator,
-    };
-
-    var threaded_io: ?std.Io.Threaded = null;
-    const io = init_opts.io orelse blk: {
-        threaded_io = .init(gpa);
-        break :blk threaded_io.?.io();
-    };
-    defer if (threaded_io) |*to| to.deinit();
-
     // init SDL backend (creates and owns OS window)
     var back = try initWindow(.{
-        .io = io,
-        .allocator = gpa,
+        .io = init_opts.io orelse main_init.io,
+        .allocator = init_opts.gpa orelse main_init.gpa,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
         .max_size = init_opts.max_size,
@@ -1523,7 +1513,7 @@ pub fn main() !u8 {
     }
 
     //// init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, io, back.backend(), init_opts.window_init_options);
+    var win = try dvui.Window.init(@src(), main_init.gpa, main_init.io, back.backend(), init_opts.window_init_options);
     defer win.deinit();
 
     if (app.initFn) |initFn| {
@@ -1606,16 +1596,6 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
     log.info("version: {f} callbacks", .{getSDLVersion()});
 
     const init_opts = app.config.get();
-
-    appState.gpa = init_opts.gpa orelse switch (builtin.mode) {
-        .Debug => CallbackState.debug_allocator.allocator(),
-        else => dvui.App.ReleaseAllocator,
-    };
-
-    appState.io = init_opts.io orelse blk: {
-        CallbackState.threaded_io = .init(appState.gpa);
-        break :blk CallbackState.threaded_io.?.io();
-    };
 
     // init SDL backend (creates and owns OS window)
     appState.back = initWindow(.{

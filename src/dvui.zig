@@ -476,10 +476,8 @@ pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []
     log.err("{s}:{d}:{d}: {s} got {s}: " ++ fmt, combined_args);
     if (err_trace_enabled) {
         if (@errorReturnTrace()) |t| {
-            const stderr, const tty_config = std.debug.lockStderrWriter(&.{});
-            defer std.debug.unlockStderrWriter();
-            stderr.writeAll("error return context:\n") catch {};
-            std.debug.writeStackTrace(t, stderr, tty_config) catch {};
+            std.debug.print("error return context:\n", .{});
+            std.debug.dumpStackTrace(t);
         }
     }
     if (!builtin.strip_debug_info) {

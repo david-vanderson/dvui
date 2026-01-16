@@ -341,7 +341,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
                     break :blk;
                 }
 
-                const file = std.fs.openFileAbsolute(filename, .{}) catch blk_open: {
+                const file = std.Io.Dir.openFileAbsolute(dvui.currentWindow().io, filename, .{}) catch blk_open: {
                     file_error.* = true;
                     const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Could not open \"{s}\"", .{filename}) catch filename;
                     defer dvui.currentWindow().lifo().free(msg);
