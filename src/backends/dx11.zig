@@ -679,7 +679,28 @@ pub fn textureCreate(self: Context, pixels: [*]const u8, width: u32, height: u32
 
     try state.texture_interpolation.put(state.dvui_window.gpa, texture, interpolation);
 
+    log.info("created texture @0x{x}", .{@intFromPtr(texture)});
+
     return dvui.Texture{ .ptr = texture, .width = width, .height = height };
+}
+
+pub fn textureUpdate(
+    self: Context,
+    texture: dvui.Texture,
+    pixels: [*]const u8,
+) dvui.Backend.TextureError!void {
+    const state = stateFromHwnd(hwndFromContext(self));
+    // cast to resource to please the compiler god
+    const tex: *win32.ID3D11Resource = @ptrCast(@alignCast(texture.ptr));
+
+    state.device_context.UpdateSubresource(
+        tex,
+        0, // subresource
+        null, // full region
+        pixels,
+        texture.width * 4,
+        0,
+    );
 }
 
 pub fn textureCreateTarget(self: Context, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
@@ -758,10 +779,14 @@ pub fn textureReadTarget(self: Context, texture: dvui.TextureTarget, pixels_out:
 }
 
 pub fn textureDestroy(self: Context, texture: dvui.Texture) void {
+    log.info("Destroying texture @0x{x}", .{@intFromPtr(texture.ptr)});
     const state = stateFromHwnd(hwndFromContext(self));
     const tex: *win32.ID3D11Texture2D = @ptrCast(@alignCast(texture.ptr));
     if (!state.texture_interpolation.remove(texture.ptr)) {
-        log.err("Destroyed texture that did not have a stored interpolation", .{});
+        log.err(
+            "Destroyed texture @0x{x} that did not have a stored interpolation",
+            .{@intFromPtr(texture.ptr)},
+        );
     }
     _ = tex.IUnknown.Release();
 }
@@ -775,9 +800,13 @@ pub fn textureFromTarget(self: Context, texture: dvui.TextureTarget) !dvui.Textu
     defer state.arena.free(pixels);
     try self.textureReadTarget(texture, pixels.ptr);
 
+    log.info("Destroying texture @0x{x}", .{@intFromPtr(texture.ptr)});
     const tex: *win32.ID3D11Texture2D = @ptrCast(@alignCast(texture.ptr));
     const interpolation = if (state.texture_interpolation.fetchRemove(texture.ptr)) |kv| kv.value else blk: {
-        log.err("Target texture destroyed that did not have a stored interpolation", .{});
+        log.err(
+            "Destroyed texture @0x{x} that did not have a stored interpolation",
+            .{@intFromPtr(texture.ptr)},
+        );
         break :blk .linear;
     };
     _ = tex.IUnknown.Release();
@@ -1603,7 +1632,7 @@ pub fn main() !void {
 
     const window_class = win32.L("DvuiWindow");
 
-    var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa_instance: std.heap.DebugAllocator(.{}) = .init;
     const gpa = gpa_instance.allocator();
     defer _ = gpa_instance.deinit();
 
