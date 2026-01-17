@@ -2327,7 +2327,7 @@ pub fn dialogDisplay(id: Id) !void {
 
     const maxSize = dvui.dataGet(null, id, "_max_size", Options.MaxSize);
 
-    var win = floatingWindow(@src(), .{ .modal = modal, .center_on = center_on, .window_avoid = .nudge }, .{ .id_extra = id.asUsize(), .max_size_content = maxSize });
+    var win = floatingWindow(@src(), .{ .modal = modal, .center_on = center_on, .window_avoid = .nudge }, .{ .role = .dialog, .id_extra = id.asUsize(), .max_size_content = maxSize });
     defer win.deinit();
 
     var header_openflag = true;

@@ -27,6 +27,8 @@ pub const WindowState = struct {
 
     render_target: ?*win32.ID3D11RenderTargetView = null,
     dx_options: DirectxOptions = .{},
+    /// Should windows events be processed?
+    event_processing: bool = true,
 
     // TODO: Implement touch events
     //   might require help with that,
@@ -51,6 +53,7 @@ pub const WindowState = struct {
         _ = state.swap_chain.IUnknown.Release();
         state.dx_options.deinit();
         state.* = undefined;
+        state.event_processing = false;
     }
 };
 
@@ -1133,6 +1136,9 @@ pub fn attach(
         .device_context = dx_options.device_context,
         .swap_chain = dx_options.swap_chain,
     };
+    if (dvui.accesskit_enabled) {
+        window_state.dvui_window.accesskit.initialize();
+    }
 
     std.debug.assert(stateFromHwnd(hwnd) == window_state);
     return contextFromHwnd(hwnd);
@@ -1145,6 +1151,11 @@ pub fn wndProc(
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
 ) callconv(.winapi) win32.LRESULT {
+    const state = stateFromHwnd(hwnd);
+
+    if (!state.event_processing)
+        return win32.DefWindowProcW(hwnd, umsg, wparam, lparam);
+
     switch (umsg) {
         win32.WM_CREATE => {
             const create_struct: *win32.CREATESTRUCTW = @ptrFromInt(@as(usize, @bitCast(lparam)));
@@ -1164,14 +1175,12 @@ pub fn wndProc(
             return 0;
         },
         win32.WM_DESTROY => {
-            const state = stateFromHwnd(hwnd);
             state.deinit();
             return 0;
         },
         win32.WM_CLOSE => {
             // important not call DefWindowProc here because that will destroy the window
             // without notifying the app
-            const state = stateFromHwnd(hwnd);
             state.dvui_window.addEventWindow(.{ .action = .close }) catch {};
             return 0;
         },
@@ -1293,7 +1302,6 @@ pub fn wndProc(
 
                 const code = convertVKeyToDvuiKey(as_vkey);
 
-                const state = stateFromHwnd(hwnd);
                 _ = state.dvui_window.addEventKey(.{
                     .code = code,
                     .action = switch (msg) {
@@ -1320,7 +1328,6 @@ pub fn wndProc(
             };
         },
         win32.WM_CHAR => {
-            const state = stateFromHwnd(hwnd);
             const ascii_char: u8 = @truncate(wparam);
             if (std.ascii.isPrint(ascii_char)) {
                 const string: []const u8 = &.{ascii_char};
@@ -1348,18 +1355,19 @@ pub fn wndProc(
         },
         win32.WM_GETOBJECT => {
             if (dvui.accesskit_enabled) {
-                const state = stateFromHwnd(hwnd);
                 const ak = state.dvui_window.accesskit;
-                const result = dvui.AccessKit.c.accesskit_windows_adapter_handle_wm_getobject(
-                    ak.adapter,
-                    wparam,
-                    lparam,
-                    if (ak.status != .on) dvui.AccessKit.initialTreeUpdate else dvui.AccessKit.frameTreeUpdate,
-                    &stateFromHwnd(hwnd).dvui_window.accesskit,
-                );
-                if (result.has_value) {
-                    return result.value;
-                }
+                if (ak.status == .on) if (ak.adapter) |adapter| {
+                    const result = dvui.AccessKit.c.accesskit_windows_adapter_handle_wm_getobject(
+                        adapter,
+                        wparam,
+                        lparam,
+                        if (ak.status != .on) dvui.AccessKit.initialTreeUpdate else dvui.AccessKit.frameTreeUpdate,
+                        &state.dvui_window.accesskit,
+                    );
+                    if (result.has_value) {
+                        return result.value;
+                    }
+                };
             }
             return win32.DefWindowProcW(hwnd, umsg, wparam, lparam);
         },
