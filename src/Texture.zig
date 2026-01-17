@@ -214,6 +214,9 @@ pub const ImageSource = union(enum) {
             if (invalidate == .always) {
                 var tex_mut = cached_texture;
                 try tex_mut.updateImageSource(self);
+                // if you don't add this to the cache, then it will never clean up the prev texture
+                // (it also won't cache this new texture, either, causing it to get it again from the cache, and try to double-free it)
+                dvui.textureAddToCache(key, tex_mut);
                 return tex_mut;
             } else return cached_texture;
         } else {
@@ -340,7 +343,6 @@ pub fn update(tex: *Texture, pma: []const Color.PMA, interpolation: TextureInter
         // texture update not supported by backend, destroy and create texture
         if (err == TextureError.NotImplemented) {
             const new_tex = try create(pma, tex.width, tex.height, interpolation);
-            destroyLater(tex.*);
             tex.* = new_tex;
         } else {
             return err;
