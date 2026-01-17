@@ -1777,27 +1777,11 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     }
 
     const cw = dvui.currentWindow();
-    if (dvui.accesskit_enabled and cw.accesskit.text_run_parent != null) {
-        if (cw.accesskit.nodes.get(cw.accesskit.text_run_parent.?)) |parent_node| {
+    if (dvui.accesskit_enabled) if (cw.accesskit.text_run_parent) |text_run_parent| {
+        if (cw.accesskit.nodes.get(text_run_parent)) |parent_node| {
             if (self.bytes_seen == 0 or self.newline) {
                 // No empty text run was created as no text was rendered. Create one here.
-                const crect = self.data().contentRect();
-                const empty_space: Rect = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = @max(0, @min(text_height, crect.h - self.insert_pt.y)) };
-                var vp = dvui.overlay(@src(), .{ .name = "Text Run", .role = .text_run, .rect = empty_space });
-                defer vp.deinit();
-                self.textrun_last = .{ .node_id = vp.data().id, .pos = if (self.newline) self.bytes_seen + 1 else self.bytes_seen };
-                var text_info: std.MultiArrayList(AccessKit.CharPositionInfo) = .empty;
-                text_info.append(dvui.currentWindow().arena(), .{
-                    .l = 0,
-                    .w = 0,
-                    .x = 0,
-                }) catch {};
-                dvui.currentWindow().accesskit.textRunPopulate("",
-                    .{
-                    .node_id = vp.data().id,
-                    .node_parent_id = cw.accesskit.text_run_parent.?,
-                    .char_offset = 0,
-                }, &text_info, self.data().contentRectScale().rectToPhysical(empty_space));
+                self.textRunCreateEmpty();
             }
 
             if (!self.selection.empty()) {
@@ -1822,7 +1806,20 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
                 }
             }
         }
-    }
+    };
+}
+
+/// Creates an empty text run
+/// make sure to set accesskit.text_run_parent before calling.
+pub fn textRunCreateEmpty(self: *TextLayoutWidget) void {
+    const text_height = self.data().options.fontGet().textHeight();
+
+    const crect = self.data().contentRect();
+    const empty_space: Rect = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = @max(0, @min(text_height, crect.h - self.insert_pt.y)) };
+    var vp = dvui.overlay(@src(), .{ .name = "Text Run", .role = .text_run, .rect = empty_space });
+    defer vp.deinit();
+    self.textrun_last = .{ .node_id = vp.data().id, .pos = if (self.newline) self.bytes_seen + 1 else self.bytes_seen };
+    dvui.currentWindow().accesskit.textRunCreateEmpty(vp.data().id, self.data().contentRectScale().rectToPhysical(empty_space));
 }
 
 pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
