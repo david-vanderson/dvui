@@ -8,6 +8,7 @@ const ScrollInfo = dvui.ScrollInfo;
 const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
+const AccessKit = dvui.AccessKit;
 
 const enums = dvui.enums;
 
@@ -61,38 +62,36 @@ pub fn init(self: *ScrollBarWidget, src: std.builtin.SourceLocation, init_opts: 
     const grabrs = self.data().parent.screenRectScale(self.grabRect);
     self.processEvents(grabrs.r);
 
-    // Accessibility TODO: Setting value to viewport.x is not correct as it will always show position
-    // as being hte top of the viewport and can't hit 100%.
     if (self.data().accesskit_node()) |ak_node| {
         switch (self.dir) {
             .horizontal => {
-                dvui.AccessKit.nodeSetLabel(ak_node, "Horizontal");
-                dvui.AccessKit.nodeSetOrientation(ak_node, dvui.AccessKit.Orientation.horizontal);
-                dvui.AccessKit.nodeSetNumericValue(ak_node, self.si.viewport.x);
-                dvui.AccessKit.nodeSetMinNumericValue(ak_node, 0);
-                dvui.AccessKit.nodeSetMaxNumericValue(ak_node, self.si.virtual_size.w);
-                dvui.AccessKit.nodeSetNumericValueStep(ak_node, 1);
-                dvui.AccessKit.nodeSetNumericValueJump(ak_node, 100);
+                AccessKit.nodeSetLabel(ak_node, "Horizontal");
+                AccessKit.nodeSetOrientation(ak_node, AccessKit.Orientation.horizontal);
+                AccessKit.nodeSetNumericValue(ak_node, self.si.viewport.x);
+                AccessKit.nodeSetMinNumericValue(ak_node, 0);
+                AccessKit.nodeSetMaxNumericValue(ak_node, self.si.virtual_size.w - self.si.viewport.w);
+                AccessKit.nodeSetNumericValueStep(ak_node, 1); // AK TODO: What should these steps be?
+                AccessKit.nodeSetNumericValueJump(ak_node, 100);
 
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.click);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.scroll_to_point);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_value);
+                AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
+                AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+                AccessKit.nodeAddAction(ak_node, AccessKit.Action.scroll_to_point); // AK TODO: Not implemented
+                AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
             },
 
             .vertical => {
-                dvui.AccessKit.nodeSetLabel(ak_node, "Vertical");
-                dvui.AccessKit.nodeSetOrientation(ak_node, dvui.AccessKit.Orientation.vertical);
-                dvui.AccessKit.nodeSetNumericValue(ak_node, self.si.viewport.x);
-                dvui.AccessKit.nodeSetMinNumericValue(ak_node, 0);
-                dvui.AccessKit.nodeSetMaxNumericValue(ak_node, self.si.virtual_size.w);
-                dvui.AccessKit.nodeSetNumericValueStep(ak_node, 1);
-                dvui.AccessKit.nodeSetNumericValueJump(ak_node, 100);
+                AccessKit.nodeSetLabel(ak_node, "Vertical");
+                AccessKit.nodeSetOrientation(ak_node, AccessKit.Orientation.vertical);
+                AccessKit.nodeSetNumericValue(ak_node, self.si.viewport.y);
+                AccessKit.nodeSetMinNumericValue(ak_node, 0);
+                AccessKit.nodeSetMaxNumericValue(ak_node, self.si.virtual_size.h - self.si.viewport.h);
+                AccessKit.nodeSetNumericValueStep(ak_node, 1);
+                AccessKit.nodeSetNumericValueJump(ak_node, 100);
 
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.click);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.scroll_to_point);
-                dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.set_value);
+                AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
+                AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+                AccessKit.nodeAddAction(ak_node, AccessKit.Action.scroll_to_point); // AK TODO: Not implemented
+                AccessKit.nodeAddAction(ak_node, AccessKit.Action.set_value);
             },
         }
     }

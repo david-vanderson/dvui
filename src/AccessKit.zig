@@ -116,6 +116,9 @@ fn windowsHWND(window: *dvui.Window) c.HWND {
         .raylib => {
             return @intFromPtr(dvui.backend.c.GetWindowHandle());
         },
+        .raylib_zig => {
+            return @intFromPtr(dvui.backend.raylib.getWindowHandle());
+        },
         .dx11 => {
             return @intFromPtr(window.backend.impl.hwndFromContext());
         },
@@ -234,9 +237,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
                 }
             },
             .text => |txt| {
-                const str = dvui.currentWindow().arena().dupeZ(u8, txt) catch "";
-                defer dvui.currentWindow().arena().free(str);
-                nodeSetLabel(ak_node, str);
+                nodeSetLabelWithLength(ak_node, txt.ptr, txt.len);
             },
         }
     }
@@ -319,25 +320,23 @@ pub fn textRunPopulate(
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
 
     // Word lengths include all punctuation for the word. e.g. `abc"$.` has a length of 6.
-    var word_lengths: std.ArrayList(u8) = .empty;
-    var word_len: u8 = 0;
+    var word_starts: std.ArrayList(u8) = .empty;
     var prev_char_wordbreak: bool = false;
-    for (text) |ch| {
+    for (text, 0..) |ch, i| {
         if (std.mem.indexOfScalar(u8, dvui.TextLayoutWidget.word_breaks, ch) == null) {
             if (prev_char_wordbreak) {
-                word_lengths.append(window.arena(), word_len) catch {};
-                word_len = 0;
+                // AK TODO: If a line is more than 255 characters, then it needs to be broken up into 2 text runs?
+                word_starts.append(window.arena(), @min(i, std.math.maxInt(u8))) catch {};
+                prev_char_wordbreak = false;
             }
-            prev_char_wordbreak = false;
         } else {
             prev_char_wordbreak = true;
         }
-        word_len +|= 1;
     }
-    word_lengths.append(window.arena(), word_len) catch {};
-
-    const str = window.arena().dupeZ(u8, text) catch "";
-    defer window.arena().free(str);
+    defer word_starts.deinit(window.arena());
+    if (word_starts.items.len == 0) {
+        word_starts.append(window.arena(), 0) catch {};
+    }
 
     const ak_node = self.nodes.get(opts.node_id) orelse {
         log.debug("textRunPopulate called for non-existent node_id {x}:{d} with parent {x}:{d}\n", .{ opts.node_id, opts.node_id, opts.node_parent_id, opts.node_parent_id });
@@ -345,23 +344,63 @@ pub fn textRunPopulate(
     };
     AccessKit.nodeSetRole(ak_node, Role.text_run.asU8());
     // Make sure text run is at least 1 pixel wide to cater for newlines.
-    AccessKit.nodeSetBounds(ak_node, .{ .x0 = r.x, .y0 = r.y, .x1 = r.x + @max(r.w, 1), .y1 = r.y + r.h });
-    AccessKit.nodeSetValue(ak_node, str);
-    AccessKit.nodeSetCharacterLengths(ak_node, text_info.len, text_info.items(.l).ptr);
-    AccessKit.nodeSetCharacterWidths(ak_node, text_info.len, text_info.items(.w).ptr);
-    AccessKit.nodeSetCharacterPositions(ak_node, text_info.len, text_info.items(.x).ptr);
-    AccessKit.nodeSetWordLengths(ak_node, word_lengths.items.len, word_lengths.items.ptr);
-    AccessKit.nodeSetTextDirection(ak_node, AccessKit.TextDirection.left_to_right);
-    self.text_runs.append(window.gpa, opts) catch {}; // If text run can't be added, selection actions will fail this frame.
+    nodeSetBounds(ak_node, .{ .x0 = r.x, .y0 = r.y, .x1 = r.x + @max(r.w, 1), .y1 = r.y + r.h });
+    nodeSetValueWithLength(ak_node, text.ptr, text.len);
+    nodeSetCharacterLengths(ak_node, text_info.len, text_info.items(.l).ptr);
+    nodeSetCharacterWidths(ak_node, text_info.len, text_info.items(.w).ptr);
+    nodeSetCharacterPositions(ak_node, text_info.len, text_info.items(.x).ptr);
+    nodeSetWordStarts(ak_node, word_starts.items.len, word_starts.items.ptr);
+    nodeSetTextDirection(ak_node, AccessKit.TextDirection.left_to_right);
+    if (self.text_runs.items.len > 0) {
+        const prev_run = self.text_runs.items[self.text_runs.items.len - 1];
+        const prev_node = self.nodes.get(prev_run.node_id) orelse unreachable;
+        const prev_bounds = nodeBounds(prev_node);
+        std.debug.assert(prev_bounds.has_value);
 
-    if (debug_textruns) {
-        std.debug.print("TEXT_RUN [{x}:{x}]: bounds = {f}\n", .{ opts.node_id, opts.node_parent_id, r });
-        std.debug.print("TEXT_RUN [{x}:{x}]: lengths = {x}\n", .{ opts.node_id, opts.node_parent_id, text_info.items(.l) });
-        std.debug.print("TEXT_RUN [{x}:{x}]: widths = {any}\n", .{ opts.node_id, opts.node_parent_id, text_info.items(.w) });
-        std.debug.print("TEXT_RUN [{x}:{x}]: positions = {any}\n", .{ opts.node_id, opts.node_parent_id, text_info.items(.x) });
-        std.debug.print("TEXT_RUN [{x}:{x}]: word_lens = {any}\n", .{ opts.node_id, opts.node_parent_id, word_lengths.items });
-        std.debug.print("TEXT_RUN [{x}:{x}]: text = {s}\n", .{ opts.node_id, opts.node_parent_id, text });
+        // text_runs on the same line should be linked together.
+        if (prev_run.node_parent_id == opts.node_parent_id and
+            std.math.approxEqAbs(f64, prev_bounds.value.y1, r.y + r.h, 0.01))
+        {
+            nodeSetPreviousOnLine(ak_node, prev_run.node_id.asU64());
+            nodeSetNextOnLine(prev_node, opts.node_id.asU64());
+        }
     }
+    self.text_runs.append(window.gpa, opts) catch {}; // If text run can't be added, selection actions will fail this frame.
+}
+
+/// Creates and empty text run
+/// make sure to set accesskit.text_run_parent before calling.
+pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, r: dvui.Rect.Physical) void {
+    if (!dvui.accesskit_enabled) return; // Required to defeat @refAllDecls
+
+    const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
+
+    var text_info: std.MultiArrayList(AccessKit.CharPositionInfo) = .empty;
+    text_info.append(window.arena(), .{
+        .l = 0,
+        .w = 0,
+        .x = 0,
+    }) catch return;
+
+    self.textRunPopulate("", .{
+        .node_id = node_id,
+        .node_parent_id = self.text_run_parent.?,
+        .char_offset = 0,
+    }, &text_info, r);
+}
+
+/// Returns a point in the middle of the access kit's node's bounds (i.e. the widget's bounds)
+fn boundsMidPoint(ak_node: *Node, request: ActionRequest) error{UnknownBounds}!dvui.Point.Physical {
+    const bounds = blk: {
+        const bounds_maybe = nodeBounds(ak_node);
+        if (bounds_maybe.has_value) {
+            break :blk bounds_maybe.value;
+        } else {
+            log.debug("Action {d} received for a target {x} without node bounds.", .{ request.action, request.target });
+            return error.UnknownBounds;
+        }
+    };
+    return .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
 }
 
 /// Convert any actions during the frame into events to be processed next frame
@@ -389,6 +428,9 @@ fn processActions(self: *AccessKit) void {
                 // sending a left press also sends a focus event
                 _ = window.addEventPointer(.{ .button = .left, .action = .press, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
                 _ = window.addEventPointer(.{ .button = .left, .action = .release, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
+            },
+            Action.focus => {
+                // AK TODO:
             },
             Action.set_value => {
                 const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
@@ -496,6 +538,48 @@ pub fn pushUpdates(self: *AccessKit) void {
         return;
     }
 
+    const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
+
+    if (debug_textruns) {
+        var current_parent: dvui.Id = .zero;
+        for (self.text_runs.items) |run| {
+            std.debug.print("---------------------------------\n", .{});
+            const ak_node = self.nodes.get(run.node_id) orelse unreachable;
+            const char_lengths = nodeCharacterLengths(ak_node);
+            const char_widths = nodeCharacterWidths(ak_node);
+            const char_pos = nodeCharacterPositions(ak_node);
+            const word_starts = nodeWordStarts(ak_node);
+
+            std.debug.print("TEXT_RUN [{x}:{x}]: value = `{s}`\n", .{ run.node_parent_id, run.node_id, std.mem.span(nodeValue(ak_node)) });
+            std.debug.print("TEXT_RUN [{x}:{x}]: bounds = {any}\n", .{ run.node_parent_id, run.node_id, nodeBounds(ak_node) });
+            std.debug.print("TEXT_RUN [{x}:{x}]: lengths = {s}\n", .{ run.node_parent_id, run.node_id, fmtSlice(window.arena(), char_lengths.values[0..char_lengths.length]) });
+            std.debug.print("TEXT_RUN [{x}:{x}]: positions = {any}\n", .{ run.node_parent_id, run.node_id, char_pos.values[0..char_pos.length] });
+            std.debug.print("TEXT_RUN [{x}:{x}]: widths = {any}\n", .{ run.node_parent_id, run.node_id, char_widths.values[0..char_widths.length] });
+            std.debug.print("TEXT_RUN [{x}:{x}]: word_starts = {any}\n", .{ run.node_parent_id, run.node_id, word_starts.values[0..word_starts.length] });
+            std.debug.print("TEXT_RUN [{x}:{x}]: prev_on_line = {?x}\n", .{ run.node_parent_id, run.node_id, fmtOptional(nodePreviousOnLine(ak_node)) });
+            std.debug.print("TEXT_RUN [{x}:{x}]: next_on_line = {?x}\n", .{ run.node_parent_id, run.node_id, fmtOptional(nodeNextOnLine(ak_node)) });
+            if (current_parent != run.node_parent_id) {
+                const ak_node_parent = self.nodes.get(run.node_parent_id) orelse unreachable;
+                const parent_val = nodeValue(ak_node);
+                if (parent_val != null)
+                    std.debug.print("TEXT_RUN [{x}:{x}]: parent_value = `{s}`\n", .{ run.node_parent_id, run.node_id, std.mem.span(parent_val) })
+                else
+                    std.debug.print("TEXT_RUN [{x}:{x}]: parent_value = null\n", .{ run.node_parent_id, run.node_id });
+
+                const sel = nodeTextSelection(ak_node_parent);
+                if (!sel.has_value) {
+                    std.debug.print("TEXT_RUN [{x}:{x}]: text_selection = null\n", .{ run.node_parent_id, run.node_id });
+                } else {
+                    std.debug.print(
+                        "TEXT_RUN [{x}:{x}]: text_selection = {{ anchor = {{ node = {x}, character_index = {} }}, focus = {{ node = {x}, character_index = {} }} }}\n",
+                        .{ run.node_parent_id, run.node_id, sel.value.anchor.node, sel.value.anchor.character_index, sel.value.focus.node, sel.value.focus.character_index },
+                    );
+                }
+                current_parent = run.node_parent_id;
+            }
+        }
+    }
+
     // Take any actions from this frame and create events for them.
     // Created events will not be processed until the start of the next frame.
     self.processActions();
@@ -521,9 +605,25 @@ pub fn pushUpdates(self: *AccessKit) void {
         c.accesskit_unix_adapter_update_if_active(self.adapter.?, frameTreeUpdate, self);
     }
 
-    const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
     self.nodes.clearAndFree(window.gpa);
     self.focused_id = 0;
+}
+
+// For debugging only
+fn fmtOptional(opt: anytype) ?@TypeOf(opt.value) {
+    return if (opt.has_value) opt.value else null;
+}
+
+// For debugging only
+fn fmtSlice(allocator: std.mem.Allocator, slice: anytype) []const u8 {
+    if (slice.len == 0) return &"{ }".*;
+    var result: std.io.Writer.Allocating = .init(allocator);
+    result.writer.print("{{ ", .{}) catch {};
+    for (slice[0 .. slice.len - 1]) |val| {
+        result.writer.print("{d}, ", .{val}) catch {};
+    }
+    result.writer.print("{d} }}", .{slice[slice.len - 1]}) catch {};
+    return result.toOwnedSlice() catch return &.{};
 }
 
 pub fn deinit(self: *AccessKit) void {
@@ -695,11 +795,8 @@ pub const RoleAccessKit = enum(u8) {
     content_info = c.ACCESSKIT_ROLE_CONTENT_INFO,
     definition = c.ACCESSKIT_ROLE_DEFINITION,
     description_list = c.ACCESSKIT_ROLE_DESCRIPTION_LIST,
-    description_list_detail = c.ACCESSKIT_ROLE_DESCRIPTION_LIST_DETAIL,
-    description_list_term = c.ACCESSKIT_ROLE_DESCRIPTION_LIST_TERM,
     details = c.ACCESSKIT_ROLE_DETAILS,
     dialog = c.ACCESSKIT_ROLE_DIALOG,
-    directory = c.ACCESSKIT_ROLE_DIRECTORY,
     disclosure_triangle = c.ACCESSKIT_ROLE_DISCLOSURE_TRIANGLE,
     document = c.ACCESSKIT_ROLE_DOCUMENT,
     embedded_object = c.ACCESSKIT_ROLE_EMBEDDED_OBJECT,
@@ -708,12 +805,11 @@ pub const RoleAccessKit = enum(u8) {
     figure_caption = c.ACCESSKIT_ROLE_FIGURE_CAPTION,
     figure = c.ACCESSKIT_ROLE_FIGURE,
     footer = c.ACCESSKIT_ROLE_FOOTER,
-    footer_as_non_landmark = c.ACCESSKIT_ROLE_FOOTER_AS_NON_LANDMARK,
     form = c.ACCESSKIT_ROLE_FORM,
     grid = c.ACCESSKIT_ROLE_GRID,
+    grid_cell = c.ACCESSKIT_ROLE_GRID_CELL,
     group = c.ACCESSKIT_ROLE_GROUP,
     header = c.ACCESSKIT_ROLE_HEADER,
-    header_as_non_landmark = c.ACCESSKIT_ROLE_HEADER_AS_NON_LANDMARK,
     heading = c.ACCESSKIT_ROLE_HEADING,
     iframe = c.ACCESSKIT_ROLE_IFRAME,
     iframe_presentational = c.ACCESSKIT_ROLE_IFRAME_PRESENTATIONAL,
@@ -735,8 +831,6 @@ pub const RoleAccessKit = enum(u8) {
     navigation = c.ACCESSKIT_ROLE_NAVIGATION,
     note = c.ACCESSKIT_ROLE_NOTE,
     plugin_object = c.ACCESSKIT_ROLE_PLUGIN_OBJECT,
-    portal = c.ACCESSKIT_ROLE_PORTAL,
-    pre = c.ACCESSKIT_ROLE_PRE,
     progress_indicator = c.ACCESSKIT_ROLE_PROGRESS_INDICATOR,
     radio_group = c.ACCESSKIT_ROLE_RADIO_GROUP,
     region = c.ACCESSKIT_ROLE_REGION,
@@ -747,6 +841,8 @@ pub const RoleAccessKit = enum(u8) {
     scroll_view = c.ACCESSKIT_ROLE_SCROLL_VIEW,
     search = c.ACCESSKIT_ROLE_SEARCH,
     section = c.ACCESSKIT_ROLE_SECTION,
+    section_footer = c.ACCESSKIT_ROLE_SECTION_FOOTER,
+    section_header = c.ACCESSKIT_ROLE_SECTION_HEADER,
     slider = c.ACCESSKIT_ROLE_SLIDER,
     spin_button = c.ACCESSKIT_ROLE_SPIN_BUTTON,
     splitter = c.ACCESSKIT_ROLE_SPLITTER,
@@ -959,6 +1055,7 @@ pub const ActionData = struct {
 };
 
 // Mappings
+pub const CustomAction = c.accesskit_custom_action;
 pub const MacosAdapter = c.accesskit_macos_adapter;
 pub const MacosQueuedEvents = c.accesskit_macos_queued_events;
 pub const MacosSubclassingAdapter = c.accesskit_macos_subclassing_adapter;
@@ -973,7 +1070,9 @@ pub const NodeId = c.accesskit_node_id;
 pub const NodeIds = c.accesskit_node_ids;
 pub const OptNodeId = c.accesskit_opt_node_id;
 pub const OptDouble = c.accesskit_opt_double;
+pub const OptFloat = c.accesskit_opt_float;
 pub const OptIndex = c.accesskit_opt_index;
+pub const Color = c.accesskit_color;
 pub const OptColor = c.accesskit_opt_color;
 pub const OptTextDecoration = c.accesskit_opt_text_decoration;
 pub const Lengths = c.accesskit_lengths;
@@ -997,7 +1096,6 @@ pub const OptRect = c.accesskit_opt_rect;
 pub const TextPosition = c.accesskit_text_position;
 pub const TextSelection = c.accesskit_text_selection;
 pub const OptTextSelection = c.accesskit_opt_text_selection;
-pub const CustomAction = c.accesskit_custom_action;
 pub const CustomActions = c.accesskit_custom_actions;
 pub const Point = c.accesskit_point;
 pub const ActionDataTag = c.accesskit_action_data_Tag;
@@ -1051,9 +1149,6 @@ pub const nodeClearReadOnly = c.accesskit_node_clear_read_only;
 pub const nodeIsDisabled = c.accesskit_node_is_disabled;
 pub const nodeSetDisabled = c.accesskit_node_set_disabled;
 pub const nodeClearDisabled = c.accesskit_node_clear_disabled;
-pub const nodeIsBold = c.accesskit_node_is_bold;
-pub const nodeSetBold = c.accesskit_node_set_bold;
-pub const nodeClearBold = c.accesskit_node_clear_bold;
 pub const nodeIsItalic = c.accesskit_node_is_italic;
 pub const nodeSetItalic = c.accesskit_node_set_italic;
 pub const nodeClearItalic = c.accesskit_node_clear_italic;
@@ -1134,58 +1229,84 @@ pub const nodeClearPopupFor = c.accesskit_node_clear_popup_for;
 pub const stringFree = c.accesskit_string_free;
 pub const nodeLabel = c.accesskit_node_label;
 pub const nodeSetLabel = c.accesskit_node_set_label;
+pub const nodeSetLabelWithLength = c.accesskit_node_set_label_with_length;
 pub const nodeClearLabel = c.accesskit_node_clear_label;
 pub const nodeDescription = c.accesskit_node_description;
 pub const nodeSetDescription = c.accesskit_node_set_description;
+pub const nodeSetDescriptionWithLength = c.accesskit_node_set_description_with_length;
 pub const nodeClearDescription = c.accesskit_node_clear_description;
 pub const nodeValue = c.accesskit_node_value;
 pub const nodeSetValue = c.accesskit_node_set_value;
+pub const nodeSetValueWithLength = c.accesskit_node_set_value_with_length;
 pub const nodeClearValue = c.accesskit_node_clear_value;
 pub const nodeAccessKey = c.accesskit_node_access_key;
 pub const nodeSetAccessKey = c.accesskit_node_set_access_key;
+pub const nodeSetAccessKeyWithLength = c.accesskit_node_set_access_key_with_length;
 pub const nodeClearAccessKey = c.accesskit_node_clear_access_key;
 pub const nodeAuthorId = c.accesskit_node_author_id;
 pub const nodeSetAuthorId = c.accesskit_node_set_author_id;
+pub const nodeSetAuthorIdWithLength = c.accesskit_node_set_author_id_with_length;
 pub const nodeClearAuthorId = c.accesskit_node_clear_author_id;
 pub const nodeClassName = c.accesskit_node_class_name;
 pub const nodeSetClassName = c.accesskit_node_set_class_name;
+pub const nodeSetClassNameWithLength = c.accesskit_node_set_class_name_with_length;
 pub const nodeClearClassName = c.accesskit_node_clear_class_name;
 pub const nodeFontFamily = c.accesskit_node_font_family;
 pub const nodeSetFontFamily = c.accesskit_node_set_font_family;
+pub const nodeSetFontFamilyWithLength = c.accesskit_node_set_font_family_with_length;
 pub const nodeClearFontFamily = c.accesskit_node_clear_font_family;
 pub const nodeHtmlTag = c.accesskit_node_html_tag;
 pub const nodeSetHtmlTag = c.accesskit_node_set_html_tag;
+pub const nodeSetHtmlTagWithLength = c.accesskit_node_set_html_tag_with_length;
 pub const nodeClearHtmlTag = c.accesskit_node_clear_html_tag;
 pub const nodeInnerHtml = c.accesskit_node_inner_html;
 pub const nodeSetInnerHtml = c.accesskit_node_set_inner_html;
+pub const nodeSetInnerHtmlWithLength = c.accesskit_node_set_inner_html_with_length;
 pub const nodeClearInnerHtml = c.accesskit_node_clear_inner_html;
 pub const nodeKeyboardShortcut = c.accesskit_node_keyboard_shortcut;
 pub const nodeSetKeyboardShortcut = c.accesskit_node_set_keyboard_shortcut;
+pub const nodeSetKeyboardShortcutWithLength = c.accesskit_node_set_keyboard_shortcut_with_length;
 pub const nodeClearKeyboardShortcut = c.accesskit_node_clear_keyboard_shortcut;
 pub const nodeLanguage = c.accesskit_node_language;
 pub const nodeSetLanguage = c.accesskit_node_set_language;
+pub const nodeSetLanguageWithLength = c.accesskit_node_set_language_with_length;
 pub const nodeClearLanguage = c.accesskit_node_clear_language;
 pub const nodePlaceholder = c.accesskit_node_placeholder;
 pub const nodeSetPlaceholder = c.accesskit_node_set_placeholder;
+pub const nodeSetPlaceholderWithLength = c.accesskit_node_set_placeholder_with_length;
 pub const nodeClearPlaceholder = c.accesskit_node_clear_placeholder;
 pub const nodeRoleDescription = c.accesskit_node_role_description;
 pub const nodeSetRoleDescription = c.accesskit_node_set_role_description;
+pub const nodeSetRoleDescriptionWithLength = c.accesskit_node_set_role_description_with_length;
 pub const nodeClearRoleDescription = c.accesskit_node_clear_role_description;
 pub const nodeStateDescription = c.accesskit_node_state_description;
 pub const nodeSetStateDescription = c.accesskit_node_set_state_description;
+pub const nodeSetStateDescriptionWithLength = c.accesskit_node_set_state_description_with_length;
 pub const nodeClearStateDescription = c.accesskit_node_clear_state_description;
 pub const nodeTooltip = c.accesskit_node_tooltip;
 pub const nodeSetTooltip = c.accesskit_node_set_tooltip;
+pub const nodeSetTooltipWithLength = c.accesskit_node_set_tooltip_with_length;
 pub const nodeClearTooltip = c.accesskit_node_clear_tooltip;
 pub const nodeUrl = c.accesskit_node_url;
 pub const nodeSetUrl = c.accesskit_node_set_url;
+pub const nodeSetUrlWithLength = c.accesskit_node_set_url_with_length;
 pub const nodeClearUrl = c.accesskit_node_clear_url;
 pub const nodeRowIndexText = c.accesskit_node_row_index_text;
 pub const nodeSetRowIndexText = c.accesskit_node_set_row_index_text;
+pub const nodeSetRowIndexTextWithLength = c.accesskit_node_set_row_index_text_with_length;
 pub const nodeClearRowIndexText = c.accesskit_node_clear_row_index_text;
 pub const nodeColumnIndexText = c.accesskit_node_column_index_text;
 pub const nodeSetColumnIndexText = c.accesskit_node_set_column_index_text;
+pub const nodeSetColumnIndexTextWithLength = c.accesskit_node_set_column_index_text_with_length;
 pub const nodeClearColumnIndexText = c.accesskit_node_clear_column_index_text;
+pub const nodeBrailleLabel = c.accesskit_node_braille_label;
+pub const nodeSetBrailleLabel = c.accesskit_node_set_braille_label;
+pub const nodeSetBrailleLabelWithLength = c.accesskit_node_set_braille_label_with_length;
+pub const nodeClearBrailleLabel = c.accesskit_node_clear_braille_label;
+pub const nodeBrailleRoleDescription = c.accesskit_node_braille_role_description;
+pub const nodeSetBrailleRoleDescription = c.accesskit_node_set_braille_role_description;
+pub const nodeSetBrailleRoleDescriptionWithLength = c.accesskit_node_set_braille_role_description_with_length;
+pub const nodeClearBrailleRoleDescription = c.accesskit_node_clear_braille_role_description;
 pub const nodeScrollX = c.accesskit_node_scroll_x;
 pub const nodeSetScrollX = c.accesskit_node_set_scroll_x;
 pub const nodeClearScrollX = c.accesskit_node_clear_scroll_x;
@@ -1273,9 +1394,9 @@ pub const nodeClearUnderline = c.accesskit_node_clear_underline;
 pub const nodeCharacterLengths = c.accesskit_node_character_lengths;
 pub const nodeSetCharacterLengths = c.accesskit_node_set_character_lengths;
 pub const nodeClearCharacterLengths = c.accesskit_node_clear_character_lengths;
-pub const nodeWordLengths = c.accesskit_node_word_lengths;
-pub const nodeSetWordLengths = c.accesskit_node_set_word_lengths;
-pub const nodeClearWordLengths = c.accesskit_node_clear_word_lengths;
+pub const nodeWordStarts = c.accesskit_node_word_starts;
+pub const nodeSetWordStarts = c.accesskit_node_set_word_starts;
+pub const nodeClearWordStarts = c.accesskit_node_clear_word_starts;
 pub const nodeCharacterPositions = c.accesskit_node_character_positions;
 pub const nodeSetCharacterPositions = c.accesskit_node_set_character_positions;
 pub const nodeClearCharacterPositions = c.accesskit_node_clear_character_positions;
@@ -1334,6 +1455,12 @@ pub const nodeTextSelection = c.accesskit_node_text_selection;
 pub const nodeSetTextSelection = c.accesskit_node_set_text_selection;
 pub const nodeClearTextSelection = c.accesskit_node_clear_text_selection;
 pub const customActionNew = c.accesskit_custom_action_new;
+pub const customActionFree = c.accesskit_custom_action_free;
+pub const customActionId = c.accesskit_custom_action_id;
+pub const customActionSetId = c.accesskit_custom_action_set_id;
+pub const customActionDescription = c.accesskit_custom_action_description;
+pub const customActionSetDescription = c.accesskit_custom_action_set_description;
+pub const customActionSetDescriptionWithLength = c.accesskit_custom_action_set_description_with_length;
 pub const customActionsFree = c.accesskit_custom_actions_free;
 pub const nodeCustomActions = c.accesskit_node_custom_actions;
 pub const nodeSetCustomActions = c.accesskit_node_set_custom_actions;
@@ -1341,14 +1468,18 @@ pub const nodePushCustomAction = c.accesskit_node_push_custom_action;
 pub const nodeClearCustomActions = c.accesskit_node_clear_custom_actions;
 pub const nodeNew = c.accesskit_node_new;
 pub const nodeFree = c.accesskit_node_free;
+pub const nodeDebug = c.accesskit_node_debug;
 pub const treeNew = c.accesskit_tree_new;
 pub const treeFree = c.accesskit_tree_free;
 pub const treeGetToolkitName = c.accesskit_tree_get_toolkit_name;
 pub const treeSetToolkitName = c.accesskit_tree_set_toolkit_name;
+pub const treeSetToolkitNameWithLength = c.accesskit_tree_set_toolkit_name_with_length;
 pub const treeClearToolkitName = c.accesskit_tree_clear_toolkit_name;
 pub const treeGetToolkitVersion = c.accesskit_tree_get_toolkit_version;
 pub const treeSetToolkitVersion = c.accesskit_tree_set_toolkit_version;
+pub const treeSetToolkitVersionWithLength = c.accesskit_tree_set_toolkit_version_with_length;
 pub const treeClearToolkitVersion = c.accesskit_tree_clear_toolkit_version;
+pub const treeDebug = c.accesskit_tree_debug;
 pub const treeUpdateWithFocus = c.accesskit_tree_update_with_focus;
 pub const treeUpdateWithCapacityAndFocus = c.accesskit_tree_update_with_capacity_and_focus;
 pub const treeUpdateFree = c.accesskit_tree_update_free;
@@ -1356,6 +1487,7 @@ pub const treeUpdatePushNode = c.accesskit_tree_update_push_node;
 pub const treeUpdateSetTree = c.accesskit_tree_update_set_tree;
 pub const treeUpdateClearTree = c.accesskit_tree_update_clear_tree;
 pub const treeUpdateSetFocus = c.accesskit_tree_update_set_focus;
+pub const treeUpdateDebug = c.accesskit_tree_update_debug;
 pub const actionRequestFree = c.accesskit_action_request_free;
 pub const affineIdentity = c.accesskit_affine_identity;
 pub const affineFlipY = c.accesskit_affine_flip_y;
@@ -1369,7 +1501,13 @@ pub const affineInverse = c.accesskit_affine_inverse;
 pub const affineTransformRectBbox = c.accesskit_affine_transform_rect_bbox;
 pub const affineIsFinite = c.accesskit_affine_is_finite;
 pub const affineIsNan = c.accesskit_affine_is_nan;
+pub const affineMul = c.accesskit_affine_mul;
+pub const affineTransformPoint = c.accesskit_affine_transform_point;
 pub const pointToVec2 = c.accesskit_point_to_vec2;
+pub const pointAddVec2 = c.accesskit_point_add_vec2;
+pub const pointSubVec2 = c.accesskit_point_sub_vec2;
+pub const pointSubPoint = c.accesskit_point_sub_point;
+pub const rectNew = c.accesskit_rect_new;
 pub const rectFromPoints = c.accesskit_rect_from_points;
 pub const rectFromOriginSize = c.accesskit_rect_from_origin_size;
 pub const rectWithOrigin = c.accesskit_rect_with_origin;
@@ -1389,9 +1527,17 @@ pub const rectContains = c.accesskit_rect_contains;
 pub const rectUnion = c.accesskit_rect_union;
 pub const rectUnionPt = c.accesskit_rect_union_pt;
 pub const rectIntersect = c.accesskit_rect_intersect;
+pub const rectTranslate = c.accesskit_rect_translate;
 pub const sizeToVec2 = c.accesskit_size_to_vec2;
+pub const sizeScale = c.accesskit_size_scale;
+pub const sizeAdd = c.accesskit_size_add;
+pub const sizeSub = c.accesskit_size_sub;
 pub const vec2ToPoint = c.accesskit_vec2_to_point;
 pub const vec2ToSize = c.accesskit_vec2_to_size;
+pub const vec2Add = c.accesskit_vec2_add;
+pub const vec2Sub = c.accesskit_vec2_sub;
+pub const vec2Scale = c.accesskit_vec2_scale;
+pub const vec2Neg = c.accesskit_vec2_neg;
 pub const macosQueuedEventsRaise = c.accesskit_macos_queued_events_raise;
 pub const macosAdapterNew = c.accesskit_macos_adapter_new;
 pub const macosAdapterFree = c.accesskit_macos_adapter_free;
@@ -1400,23 +1546,27 @@ pub const macosAdapterUpdateViewFocusState = c.accesskit_macos_adapter_update_vi
 pub const macosAdapterViewChildren = c.accesskit_macos_adapter_view_children;
 pub const macosAdapterFocus = c.accesskit_macos_adapter_focus;
 pub const macosAdapterHitTest = c.accesskit_macos_adapter_hit_test;
+pub const macosAdapterDebug = c.accesskit_macos_adapter_debug;
 pub const macosSubclassingAdapterNew = c.accesskit_macos_subclassing_adapter_new;
 pub const macosSubclassingAdapterForWindow = c.accesskit_macos_subclassing_adapter_for_window;
 pub const macosSubclassingAdapterFree = c.accesskit_macos_subclassing_adapter_free;
 pub const macosSubclassingAdapterUpdateIfActive = c.accesskit_macos_subclassing_adapter_update_if_active;
 pub const macosSubclassingAdapterUpdateViewFocusState = c.accesskit_macos_subclassing_adapter_update_view_focus_state;
 pub const macosAddFocusForwarderToWindowClass = c.accesskit_macos_add_focus_forwarder_to_window_class;
+pub const macosAddFocusForwarderToWindowClassWithLength = c.accesskit_macos_add_focus_forwarder_to_window_class_with_length;
 pub const unixAdapterNew = c.accesskit_unix_adapter_new;
 pub const unixAdapterFree = c.accesskit_unix_adapter_free;
 pub const unixAdapterSetRootWindowBounds = c.accesskit_unix_adapter_set_root_window_bounds;
 pub const unixAdapterUpdateIfActive = c.accesskit_unix_adapter_update_if_active;
 pub const unixAdapterUpdateWindowFocusState = c.accesskit_unix_adapter_update_window_focus_state;
+pub const unixAdapterDebug = c.accesskit_unix_adapter_debug;
 pub const windowsQueuedEventsRaise = c.accesskit_windows_queued_events_raise;
 pub const windowsAdapterNew = c.accesskit_windows_adapter_new;
 pub const windowsAdapterFree = c.accesskit_windows_adapter_free;
 pub const windowsAdapterUpdateIfActive = c.accesskit_windows_adapter_update_if_active;
 pub const windowsAdapterUpdateWindowFocusState = c.accesskit_windows_adapter_update_window_focus_state;
 pub const windowsAdapterHandleWmGetobject = c.accesskit_windows_adapter_handle_wm_getobject;
+pub const windowsAdapterDebug = c.accesskit_windows_adapter_debug;
 pub const windowsSubclassingAdapterNew = c.accesskit_windows_subclassing_adapter_new;
 pub const windowsSubclassingAdapterFree = c.accesskit_windows_subclassing_adapter_free;
 pub const windowsSubclassingAdapterUpdateIfActive = c.accesskit_windows_subclassing_adapter_update_if_active;
@@ -1488,11 +1638,8 @@ pub const RoleNoAccessKit = enum {
     content_info,
     definition,
     description_list,
-    description_list_detail,
-    description_list_term,
     details,
     dialog,
-    directory,
     disclosure_triangle,
     document,
     embedded_object,
@@ -1501,12 +1648,11 @@ pub const RoleNoAccessKit = enum {
     figure_caption,
     figure,
     footer,
-    footer_as_non_landmark,
     form,
     grid,
+    grid_cell,
     group,
     header,
-    header_as_non_landmark,
     heading,
     iframe,
     iframe_presentational,
@@ -1528,8 +1674,6 @@ pub const RoleNoAccessKit = enum {
     navigation,
     note,
     plugin_object,
-    portal,
-    pre,
     progress_indicator,
     radio_group,
     region,
@@ -1540,6 +1684,8 @@ pub const RoleNoAccessKit = enum {
     scroll_view,
     search,
     section,
+    section_footer,
+    section_header,
     slider,
     spin_button,
     splitter,
@@ -1612,4 +1758,4 @@ pub const RoleNoAccessKit = enum {
 };
 
 const debug_node_tree = false;
-const debug_textruns: bool = false;
+const debug_textruns = false;
