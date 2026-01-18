@@ -352,7 +352,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
             .min_size_content = .{ .h = 20 },
             .margin = Rect.all(2),
         })) {
-            self.textLayout.copy();
+            self.copy();
         }
     }
 
@@ -978,6 +978,12 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                 break :blk;
             }
 
+            if (ke.action == .down and ke.matchBind("copy")) {
+                e.handle(@src(), self.data());
+                self.copy();
+                break :blk;
+            }
+
             if (ke.action == .down and ke.matchBind("text_start")) {
                 e.handle(@src(), self.data());
                 self.textLayout.selection.moveCursor(0, false);
@@ -1292,6 +1298,16 @@ pub fn cut(self: *TextEntryWidget) void {
         sel.end = sel.start;
         sel.cursor = sel.start;
         self.textLayout.scroll_to_cursor = true;
+    }
+}
+
+/// This could use textLayout.copy(), but that doesn't work if we have a masked
+/// password field (textLayout only sees the password char).
+pub fn copy(self: *TextEntryWidget) void {
+    var sel = self.textLayout.selectionGet(self.len);
+    if (!sel.empty()) {
+        // copy selection to clipboard
+        dvui.clipboardTextSet(self.text[sel.start..sel.end]);
     }
 }
 
