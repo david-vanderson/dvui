@@ -15,8 +15,8 @@ const dvui = @import("dvui.zig");
 const log = std.log.scoped(.AccessKit);
 
 adapter: ?AdapterType() = null,
-// The ak_node id for the widget which last had focus this frame.
-focused_id: usize = 0,
+// The ak_node id for the widget which had focus last frame
+prev_focused_id: dvui.Id = .zero,
 // Note: Access to `nodes` must be protected by `mutex`.
 // Safe for read-only access from gui-thread, without mutex.
 nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node) = .empty,
@@ -26,6 +26,12 @@ action_requests: std.ArrayList(ActionRequest) = .empty,
 // null means don't add text runs
 text_run_parent: ?dvui.Id = null,
 text_runs: std.ArrayList(TextRunOptions) = .empty,
+// Id of the previously processed text_run
+text_run_prev_parent_id: dvui.Id = .zero,
+// Did the previous textrun end on a word_break?
+text_run_prev_wordbreak: bool = true,
+// The node id of the row containing the current grid cell.
+grid_cell_row: dvui.Id = .zero,
 
 // The last seen node with `role = .label`
 prev_label_id: dvui.Id = .zero,
@@ -166,7 +172,6 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     if (wd.options.role == .none) return null;
     // text runs are created even if not visible.
     if (!wd.visible() and wd.id != dvui.focusedWidgetId() and role != .text_run) return null;
-
     if (role == .text_run and self.text_run_parent == null) {
         log.debug("skipping ak text run for widget {x}, text_run_parent null", .{wd.id});
         return null;
@@ -194,21 +199,25 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     wd.ak_node = ak_node;
     const border_rect = dvui.clipGet().intersect(wd.borderRectScale().r);
     nodeSetBounds(ak_node, .{ .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
+    if (debug_node_tree)
+        std.debug.print("Bounds for {[id]x}:{[id]d} {{ {[x0]}, {[y0]}, {[x1]}, {[y1]} }}\n", .{ .id = wd.id, .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
 
     if (!wd.isRoot()) {
         if (role == .text_run) {
             // if self.text_run_parent is null, we bailed out above
             if (self.nodes.get(self.text_run_parent.?)) |node| {
                 nodePushChild(node, wd.id.asU64());
+                if (debug_node_tree)
+                    std.debug.print("text_run parent node is {x}\n", .{self.text_run_parent.?});
             } else {
                 log.debug("text_run_parent node null for widget {x}", .{wd.id});
             }
+        } else if (role == .grid_cell and self.grid_cell_row != .zero) {
+            if (self.nodes.get(self.grid_cell_row)) |row_node| {
+                nodePushChild(row_node, wd.id.asU64());
+            }
         } else {
             nodePushChild(nodeParent(wd), wd.id.asU64());
-        }
-
-        if (wd.id == dvui.focusedWidgetId() orelse dvui.focusedSubwindowId()) {
-            self.focused_id = wd.id.asU64();
         }
     }
 
@@ -300,16 +309,23 @@ pub const CharPositionInfo = struct {
     x: f32, // x pos
 };
 
+/// Created for each text run
+// AK TODO: node_parent_id is not actually required anymore (it can be replaced by controlling_widget_id).
+// However it seems a very useful id to have, even if just for debugging. So I've not removed it for now.
 pub const TextRunOptions = struct {
     /// id of the text run's widget
     node_id: dvui.Id,
-    /// id of the controlling widget (e.g. text entry or text layout)
+    /// id of the ak_node for the parent text entry, label or document.
     node_parent_id: dvui.Id,
+    /// id of the widget that handles actions/events.
+    controlling_widget_id: dvui.Id,
     /// starting character offset
     char_offset: usize,
 };
 
 /// Populate the text_run node with character position and word length details.
+// SAFETY: This can be called from renderText() outside of window.start() / window.end()
+// text_run_parent will not be set when this happens.
 pub fn textRunPopulate(
     self: *AccessKit,
     text: []const u8,
@@ -321,11 +337,13 @@ pub fn textRunPopulate(
 
     // Word lengths include all punctuation for the word. e.g. `abc"$.` has a length of 6.
     var word_starts: std.ArrayList(u8) = .empty;
-    var prev_char_wordbreak: bool = false;
+    defer word_starts.deinit(window.arena());
+
+    var prev_char_wordbreak: bool = self.text_run_prev_wordbreak and opts.node_parent_id == self.text_run_prev_parent_id;
     for (text, 0..) |ch, i| {
         if (std.mem.indexOfScalar(u8, dvui.TextLayoutWidget.word_breaks, ch) == null) {
             if (prev_char_wordbreak) {
-                // AK TODO: If a line is more than 255 characters, then it needs to be broken up into 2 text runs?
+                // AK TODO: If a line is more than 255 characters, then it needs to be broken up into 2 text runs.
                 word_starts.append(window.arena(), @min(i, std.math.maxInt(u8))) catch {};
                 prev_char_wordbreak = false;
             }
@@ -333,10 +351,8 @@ pub fn textRunPopulate(
             prev_char_wordbreak = true;
         }
     }
-    defer word_starts.deinit(window.arena());
-    if (word_starts.items.len == 0) {
-        word_starts.append(window.arena(), 0) catch {};
-    }
+    self.text_run_prev_wordbreak = prev_char_wordbreak;
+    self.text_run_prev_parent_id = opts.node_parent_id;
 
     const ak_node = self.nodes.get(opts.node_id) orelse {
         log.debug("textRunPopulate called for non-existent node_id {x}:{d} with parent {x}:{d}\n", .{ opts.node_id, opts.node_id, opts.node_parent_id, opts.node_parent_id });
@@ -359,7 +375,7 @@ pub fn textRunPopulate(
 
         // text_runs on the same line should be linked together.
         if (prev_run.node_parent_id == opts.node_parent_id and
-            std.math.approxEqAbs(f64, prev_bounds.value.y1, r.y + r.h, 0.01))
+            std.math.approxEqAbs(f64, prev_bounds.value.y0, r.y, 0.01))
         {
             nodeSetPreviousOnLine(ak_node, prev_run.node_id.asU64());
             nodeSetNextOnLine(prev_node, opts.node_id.asU64());
@@ -368,9 +384,9 @@ pub fn textRunPopulate(
     self.text_runs.append(window.gpa, opts) catch {}; // If text run can't be added, selection actions will fail this frame.
 }
 
-/// Creates and empty text run
+/// Creates an empty text run
 /// make sure to set accesskit.text_run_parent before calling.
-pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, r: dvui.Rect.Physical) void {
+pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, controlling_widget: dvui.Id, r: dvui.Rect.Physical) void {
     if (!dvui.accesskit_enabled) return; // Required to defeat @refAllDecls
 
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
@@ -385,6 +401,7 @@ pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, r: dvui.Rect.Physi
     self.textRunPopulate("", .{
         .node_id = node_id,
         .node_parent_id = self.text_run_parent.?,
+        .controlling_widget_id = controlling_widget, // This is not correct, but
         .char_offset = 0,
     }, &text_info, r);
 }
@@ -411,41 +428,41 @@ fn processActions(self: *AccessKit) void {
     for (self.action_requests.items) |request| {
         switch (request.action) {
             Action.click => {
-                const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
-                    log.debug("Action {d} received for a target {x} without a node.", .{ request.action, request.target });
+                const ak_node = self.nodes.get(@enumFromInt(request.target_node)) orelse {
+                    log.debug("Action {d} received for a target {x} without a node.", .{ request.action, request.target_node });
                     return;
                 };
                 const bounds = blk: {
                     const bounds_maybe = nodeBounds(ak_node);
                     if (bounds_maybe.has_value) break :blk bounds_maybe.value;
-                    log.debug("Action {d} received for a target {x} without node bounds.", .{ request.action, request.target });
+                    log.debug("Action {d} received for a target {x} without node bounds.", .{ request.action, request.target_node });
                     return;
                 };
                 const click_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
 
-                _ = window.addEventMouseMotion(.{ .pt = click_point, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
+                _ = window.addEventMouseMotion(.{ .pt = click_point, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
 
                 // sending a left press also sends a focus event
-                _ = window.addEventPointer(.{ .button = .left, .action = .press, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
-                _ = window.addEventPointer(.{ .button = .left, .action = .release, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
+                _ = window.addEventPointer(.{ .button = .left, .action = .press, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
+                _ = window.addEventPointer(.{ .button = .left, .action = .release, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
             },
             Action.focus => {
                 // AK TODO:
             },
             Action.set_value => {
-                const ak_node = self.nodes.get(@enumFromInt(request.target)) orelse {
-                    log.debug("Action {d} received for a target {x} without a node.", .{ request.action, request.target });
+                const ak_node = self.nodes.get(@enumFromInt(request.target_node)) orelse {
+                    log.debug("Action {d} received for a target {x} without a node.", .{ request.action, request.target_node });
                     return;
                 };
                 if (request.data.has_value) {
                     const bounds = _: {
                         const bounds_maybe = nodeBounds(ak_node);
                         if (bounds_maybe.has_value) break :_ bounds_maybe.value;
-                        log.debug("Action {d} received for a target {x} without node bounds.", .{ request.action, request.target });
+                        log.debug("Action {d} received for a target {x} without node bounds.", .{ request.action, request.target_node });
                         return;
                     };
                     const mid_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
-                    _ = window.addEventFocus(.{ .pt = mid_point, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventFocus(.{ .pt = mid_point, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
 
                     const text_value: []const u8 = value: {
                         switch (request.data.value.tag) {
@@ -460,8 +477,8 @@ fn processActions(self: *AccessKit) void {
                             },
                         }
                     };
-                    _ = window.addEventTextSelect(.{ .start = 0, .end = std.math.maxInt(usize), .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
-                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target) }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventTextSelect(.{ .start = 0, .end = std.math.maxInt(usize), .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
                 }
             },
             Action.set_text_selection => {
@@ -478,7 +495,7 @@ fn processActions(self: *AccessKit) void {
                 const focus: TextPosition = request.data.value.unnamed_0.unnamed_7.set_text_selection.focus;
                 var anchor_run: ?TextRunOptions = null;
                 var focus_run: ?TextRunOptions = null;
-                // AK TODO: Consider making this a AutoArrayHashMap or similar to make this more scalable.
+
                 for (self.text_runs.items) |run| {
                     if (run.node_id.asU64() == anchor.node) {
                         anchor_run = run;
@@ -489,15 +506,12 @@ fn processActions(self: *AccessKit) void {
                     if (anchor_run != null and focus_run != null) break;
                 }
 
-                if (anchor_run) |a| if (focus_run) |f| {
+                if (anchor_run) |a_run| if (focus_run) |f_run| {
                     _ = window.addEventTextSelect(.{
-                        .start = a.char_offset + anchor.character_index,
-                        .end = f.char_offset + focus.character_index,
-                    }) catch |err| {
-                        switch (err) {
-                            error.OutOfMemory => {},
-                        }
-                    };
+                        .start = a_run.char_offset + anchor.character_index,
+                        .end = f_run.char_offset + focus.character_index,
+                        .target_id = a_run.controlling_widget_id,
+                    }) catch |err| logEventAddError(@src(), err);
                 };
                 if (anchor_run == null or focus_run == null) {
                     log.debug("Action set_text_selection received for unknown text_run id {x}.", .{anchor.node});
@@ -552,6 +566,7 @@ pub fn pushUpdates(self: *AccessKit) void {
 
             std.debug.print("TEXT_RUN [{x}:{x}]: value = `{s}`\n", .{ run.node_parent_id, run.node_id, std.mem.span(nodeValue(ak_node)) });
             std.debug.print("TEXT_RUN [{x}:{x}]: bounds = {any}\n", .{ run.node_parent_id, run.node_id, nodeBounds(ak_node) });
+            std.debug.print("TEXT_RUN [{x}:{x}]: controlling_widget = {x}\n", .{ run.node_parent_id, run.node_id, run.controlling_widget_id });
             std.debug.print("TEXT_RUN [{x}:{x}]: lengths = {s}\n", .{ run.node_parent_id, run.node_id, fmtSlice(window.arena(), char_lengths.values[0..char_lengths.length]) });
             std.debug.print("TEXT_RUN [{x}:{x}]: positions = {any}\n", .{ run.node_parent_id, run.node_id, char_pos.values[0..char_pos.length] });
             std.debug.print("TEXT_RUN [{x}:{x}]: widths = {any}\n", .{ run.node_parent_id, run.node_id, char_widths.values[0..char_widths.length] });
@@ -606,7 +621,6 @@ pub fn pushUpdates(self: *AccessKit) void {
     }
 
     self.nodes.clearAndFree(window.gpa);
-    self.focused_id = 0;
 }
 
 // For debugging only
@@ -660,8 +674,27 @@ pub fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
 
     const tree = treeNew(window.wd.id.asU64()) orelse @panic("null");
-    if (self.focused_id == 0) self.focused_id = window.data().id.asU64();
-    const result = treeUpdateWithCapacityAndFocus(self.nodes.count(), self.focused_id);
+
+    // Try and set focus to either focussed widget or sub window. If focus is with a widget without an
+    // AccessKit node, default focus to whatever had focus in the previous frame, otherwise to the main window.
+    var focused_id: dvui.Id = .zero;
+    if (dvui.focusedWidgetId()) |wid| {
+        if (self.nodes.contains(wid)) {
+            focused_id = dvui.focusedWidgetId().?;
+        }
+    }
+    if (focused_id == .zero) {
+        if (self.nodes.contains(dvui.focusedSubwindowId())) {
+            focused_id = dvui.focusedSubwindowId();
+        } else if (self.nodes.contains(self.prev_focused_id)) {
+            focused_id = self.prev_focused_id;
+        } else {
+            focused_id = window.data().id;
+        }
+    }
+    self.prev_focused_id = focused_id;
+
+    const result = treeUpdateWithCapacityAndFocus(self.nodes.count(), focused_id.asU64());
     treeUpdateSetTree(result, tree);
     var itr = self.nodes.iterator();
     while (itr.next()) |item| {
@@ -1018,11 +1051,11 @@ pub const TextAlign = struct {
 };
 
 pub const TextDecoration = struct {
-    pub const solid = c.ACCESSKIT_TEXT_DECORATION_SOLID;
-    pub const dotted = c.ACCESSKIT_TEXT_DECORATION_DOTTED;
-    pub const dashed = c.ACCESSKIT_TEXT_DECORATION_DASHED;
-    pub const double = c.ACCESSKIT_TEXT_DECORATION_DOUBLE;
-    pub const wavy = c.ACCESSKIT_TEXT_DECORATION_WAVY;
+    pub const style_solid = c.ACCESSKIT_TEXT_DECORATION_STYLE_SOLID;
+    pub const style_dotted = c.ACCESSKIT_TEXT_DECORATION_STYLE_DOTTED;
+    pub const style_dashed = c.ACCESSKIT_TEXT_DECORATION_STYLE_DASHED;
+    pub const style_double = c.ACCESSKIT_TEXT_DECORATION_STYLE_DOUBLE;
+    pub const style_wavy = c.ACCESSKIT_TEXT_DECORATION_STYLE_WAVY;
 };
 
 pub const TextDirection = struct {
@@ -1055,6 +1088,7 @@ pub const ActionData = struct {
 };
 
 // Mappings
+pub const textDecorationStyle = c.accesskit_text_decoration_style;
 pub const CustomAction = c.accesskit_custom_action;
 pub const MacosAdapter = c.accesskit_macos_adapter;
 pub const MacosQueuedEvents = c.accesskit_macos_queued_events;
@@ -1069,6 +1103,8 @@ pub const WindowsSubclassingAdapter = c.accesskit_windows_subclassing_adapter;
 pub const NodeId = c.accesskit_node_id;
 pub const NodeIds = c.accesskit_node_ids;
 pub const OptNodeId = c.accesskit_opt_node_id;
+pub const TreeId = c.accesskit_tree_id;
+pub const OptTreeId = c.accesskit_opt_tree_id;
 pub const OptDouble = c.accesskit_opt_double;
 pub const OptFloat = c.accesskit_opt_float;
 pub const OptIndex = c.accesskit_opt_index;
@@ -1226,6 +1262,9 @@ pub const nodeClearPreviousOnLine = c.accesskit_node_clear_previous_on_line;
 pub const nodePopupFor = c.accesskit_node_popup_for;
 pub const nodeSetPopupFor = c.accesskit_node_set_popup_for;
 pub const nodeClearPopupFor = c.accesskit_node_clear_popup_for;
+pub const nodeTreeId = c.accesskit_node_tree_id;
+pub const nodeSetTreeId = c.accesskit_node_set_tree_id;
+pub const nodeClearTreeId = c.accesskit_node_clear_tree_id;
 pub const stringFree = c.accesskit_string_free;
 pub const nodeLabel = c.accesskit_node_label;
 pub const nodeSetLabel = c.accesskit_node_set_label;
@@ -1487,6 +1526,8 @@ pub const treeUpdatePushNode = c.accesskit_tree_update_push_node;
 pub const treeUpdateSetTree = c.accesskit_tree_update_set_tree;
 pub const treeUpdateClearTree = c.accesskit_tree_update_clear_tree;
 pub const treeUpdateSetFocus = c.accesskit_tree_update_set_focus;
+pub const treeUpdateGetTreeId = c.accesskit_tree_update_get_tree_id;
+pub const treeUpdateSetTreeId = c.accesskit_tree_update_set_tree_id;
 pub const treeUpdateDebug = c.accesskit_tree_update_debug;
 pub const actionRequestFree = c.accesskit_action_request_free;
 pub const affineIdentity = c.accesskit_affine_identity;

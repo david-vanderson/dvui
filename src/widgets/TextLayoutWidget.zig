@@ -25,7 +25,7 @@ const TextLayoutWidget = @This();
 /// 500 if our min width is zero).
 pub var defaults: Options = .{
     .name = "TextLayout",
-    .role = .label,
+    .role = .group,
     .padding = Rect.all(6),
     .background = true,
     .style = .content,
@@ -237,7 +237,7 @@ byte_height_after_idx: ?usize = null,
 byte_height_edit_idx: ?usize = null,
 
 // AccessKit text reading / selection
-textrun_parent_old: ?dvui.Id = null,
+textrun_parent_prev: ?dvui.Id = null,
 textrun_anchor: ?TextRunSelectionInfo = null,
 textrun_focus: ?TextRunSelectionInfo = null,
 textrun_cursor: ?TextRunSelectionInfo = null,
@@ -248,6 +248,7 @@ newline: bool = false,
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const options = defaults.override(opts);
+
     self.* = .{
         .wd = WidgetData.init(src, .{}, options),
         .break_lines = init_opts.break_lines,
@@ -486,9 +487,13 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
     if (self.data().accesskit_node()) |ak_node| {
         dvui.AccessKit.nodeSetReadOnly(ak_node);
     }
-    if (dvui.accesskit_enabled) {
-        self.textrun_parent_old = dvui.currentWindow().accesskit.text_run_parent;
-        dvui.currentWindow().accesskit.text_run_parent = self.data().id;
+
+    if (dvui.accesskit_enabled and options.role.? != .none) {
+        var vp = dvui.virtualParent(@src(), .{ .role = .label });
+        defer vp.deinit();
+        var cw = dvui.currentWindow();
+        self.textrun_parent_prev = cw.accesskit.text_run_parent;
+        cw.accesskit.text_run_parent = vp.data().id;
     }
 }
 
@@ -1473,6 +1478,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                         break :info .{
                             .node_id = text_run_widget.data().id,
                             .node_parent_id = cw.accesskit.text_run_parent.?,
+                            .controlling_widget_id = if (self.data().options.role.? == .none) cw.accesskit.text_run_parent.? else self.data().id,
                             .char_offset = self.bytes_seen,
                         };
                     }
@@ -1615,7 +1621,6 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     self.add_text_done = true;
 
     if (self.cache_layout and self.byte_heights.len > 0) {
-
         var edit_height: f32 = undefined;
         if (self.byte_height_after_idx) |i| {
             // this is not the final one
@@ -1781,7 +1786,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
         if (cw.accesskit.nodes.get(text_run_parent)) |parent_node| {
             if (self.bytes_seen == 0 or self.newline) {
                 // No empty text run was created as no text was rendered. Create one here.
-                self.textRunCreateEmpty();
+                self.textRunCreateEmpty(if (self.data().options.role.? == .none) cw.accesskit.text_run_parent.? else self.data().id);
             }
 
             if (!self.selection.empty()) {
@@ -1811,7 +1816,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
 /// Creates an empty text run
 /// make sure to set accesskit.text_run_parent before calling.
-pub fn textRunCreateEmpty(self: *TextLayoutWidget) void {
+pub fn textRunCreateEmpty(self: *TextLayoutWidget, controlling_widget: dvui.Id) void {
     const text_height = self.data().options.fontGet().textHeight();
 
     const crect = self.data().contentRect();
@@ -1819,7 +1824,11 @@ pub fn textRunCreateEmpty(self: *TextLayoutWidget) void {
     var vp = dvui.overlay(@src(), .{ .name = "Text Run", .role = .text_run, .rect = empty_space });
     defer vp.deinit();
     self.textrun_last = .{ .node_id = vp.data().id, .pos = if (self.newline) self.bytes_seen + 1 else self.bytes_seen };
-    dvui.currentWindow().accesskit.textRunCreateEmpty(vp.data().id, self.data().contentRectScale().rectToPhysical(empty_space));
+    dvui.currentWindow().accesskit.textRunCreateEmpty(
+        vp.data().id,
+        controlling_widget,
+        self.data().contentRectScale().rectToPhysical(empty_space),
+    );
 }
 
 pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
@@ -2207,6 +2216,11 @@ pub fn deinit(self: *TextLayoutWidget) void {
         }
     }
 
+    if (dvui.accesskit_enabled) {
+        const cw = dvui.currentWindow();
+        cw.accesskit.text_run_parent = self.textrun_parent_prev;
+    }
+
     dvui.dataSet(null, self.data().id, "_touch_editing", self.touch_editing);
     dvui.dataSet(null, self.data().id, "_te_first", self.te_first);
     dvui.dataSet(null, self.data().id, "_te_show_draggables", self.te_show_draggables);
@@ -2239,10 +2253,6 @@ pub fn deinit(self: *TextLayoutWidget) void {
         dvui.dataSet(null, self.data().id, "_click_num_pt", self.click_num_pt);
     }
     dvui.clipSet(self.prevClip);
-
-    if (dvui.accesskit_enabled) {
-        dvui.currentWindow().accesskit.text_run_parent = self.textrun_parent_old;
-    }
 
     // check if the widgets are taller than the text
     const left_height = (self.corners_min_size[0] orelse Size{}).h + (self.corners_min_size[2] orelse Size{}).h;
