@@ -62,10 +62,14 @@ pub fn init(self: *MenuItemWidget, src: std.builtin.SourceLocation, init_opts: I
 pub fn drawBackground(self: *MenuItemWidget) void {
     var focused: bool = self.data().id == dvui.focusedWidgetId();
 
+    if (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) {
+        menu().?.focused_menuItem_this_frame = true;
+    }
+
     if (focused and menu().?.mouse_over and !self.mouse_over and (menu().?.submenus_activated or menu().?.floating())) {
         // our menu got a mouse over but we didn't even though we were focused
         focused = false;
-        dvui.focusWidget(menu().?.data().id, null, null);
+        dvui.focusWidget(menu().?.group.data().id, null, null);
     }
 
     if (focused or ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) and self.highlight)) {
@@ -231,7 +235,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                 // focus the menu item under the mouse even if it's not
                 // moving then it breaks keyboard navigation.
                 if (dvui.mouseTotalMotion().nonZero()) {
-                    if (menu().?.has_focused_child or menu().?.submenus_activated or menu().?.floating()) {
+                    if (menu().?.focused_menuItem or menu().?.submenus_activated) {
                         // we shouldn't have gotten this event if the motion
                         // was towards a submenu (caught in MenuWidget)
                         dvui.focusSubwindow(null, null); // focuses the window we are in
