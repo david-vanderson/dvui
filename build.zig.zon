@@ -43,8 +43,8 @@
             .hash = "svg2tvg-0.0.0-HpMZuWZ3BgApRrFbd9CxtabLoXEA5odBFUDFrDqno8Ih",
         },
         .accesskit = .{
-            .url = "https://github.com/AccessKit/accesskit-c/releases/download/0.19.0/accesskit-c-0.19.0.zip",
-            .hash = "N-V-__8AAMnMRQu3EtJ1QgonwvPKhD8L4BUHBUDiVfyLoSr4",
+            .url = "https://github.com/AccessKit/accesskit-c/releases/download/0.20.0/accesskit-c-0.20.0.zip",
+            .hash = "N-V-__8AAPwQuguI8Jsun6Omu2HHb9EADaaP8Yn2TxYplJtC",
         },
 
         // Experimental zig bindings, any zig based backend will be located here

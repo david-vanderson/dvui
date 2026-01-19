@@ -441,9 +441,7 @@ pub const Branch = struct {
 
         if (self.expanded) {
             // Always expand the inner box to fill the animation
-            const expander_opts = dvui.Options{
-                .expand = .both,
-            };
+            const expander_opts = dvui.Options{ .expand = .both };
 
             self.expander_vbox.init(src, .{ .dir = .vertical }, expander_opts.override(opts.strip()));
             self.expander_vbox.drawBackground();

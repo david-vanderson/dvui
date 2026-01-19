@@ -113,11 +113,15 @@ pub fn layoutText() void {
         }
         cbox.deinit();
 
-        cbox = dvui.box(@src(), .{}, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .style = .window, .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
-        dvui.icon(@src(), "aircraft", entypo.aircraft, .{}, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 });
-        dvui.label(@src(), "Caption Heading", .{}, .{ .font = dvui.Font.theme(.body).larger(-3).withWeight(.bold).withLineHeight(1.1), .gravity_x = 0.5 });
+        cbox = dvui.box(@src(), .{}, .{ .role = .group, .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .style = .window, .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
         var tl_caption = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
-        tl_caption.addText("Here is some caption text that is in it's own text layout.", .{ .font = dvui.Font.theme(.body).larger(-3).withLineHeight(1.1) });
+        {
+            var inner_box = dvui.box(@src(), .{}, .{ .expand = .horizontal });
+            defer inner_box.deinit();
+            dvui.icon(@src(), "aircraft", entypo.aircraft, .{}, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 });
+            dvui.label(@src(), "Caption Heading", .{}, .{ .font = dvui.Font.theme(.body).larger(-3).withWeight(.bold).withLineHeight(1.1), .gravity_x = 0.5 });
+            tl_caption.addText("Here is some caption text that is in it's own text layout.", .{ .font = dvui.Font.theme(.body).larger(-3).withLineHeight(1.1) });
+        }
         tl_caption.deinit();
         cbox.deinit();
 
