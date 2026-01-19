@@ -71,7 +71,6 @@ init_opts: InitOptions,
 winId: dvui.Id,
 parentMenu: ?*MenuWidget = null,
 last_focus: dvui.Id,
-last_focus_in_subwindow: dvui.Id,
 /// SAFETY: Set in `install`
 group: dvui.FocusGroupWidget = undefined,
 /// SAFETY: Set in `install`
@@ -79,8 +78,12 @@ box: BoxWidget = undefined,
 
 // whether submenus should be open
 submenus_activated: bool = false,
-// includes menu itself
-has_focused_child: bool = false,
+
+// Includes menu/group itself, this is used to know if hovering the mouse over
+// a menuItem should focus it.  If there is a non-menItem widget in the menu,
+// then if that has focus we don't want to focus menuItems on mouse over.
+focused_menuItem: bool = false,
+focused_menuItem_this_frame: bool = false,
 
 mouse_over: bool = false,
 
@@ -99,17 +102,13 @@ pub fn init(self: *MenuWidget, src: std.builtin.SourceLocation, init_opts: InitO
         .init_opts = init_opts,
         .winId = dvui.subwindowCurrentId(),
         .last_focus = dvui.lastFocusedIdInFrame(),
-        .last_focus_in_subwindow = dvui.lastFocusedIdInSubwindow(),
     };
 
     if (dvui.dataGet(null, self.wd.id, "_sub_act", bool)) |a| {
         self.submenus_activated = a;
     }
 
-    self.has_focused_child = dvui.dataGet(null, self.wd.id, "_has_focused_child", bool) orelse false;
-    if (self.init_opts.close_without_focused_child and !self.has_focused_child) {
-        self.submenus_activated = false;
-    }
+    self.focused_menuItem = dvui.dataGet(null, self.wd.id, "_has_focused_menuItem", bool) orelse false;
 
     // keep this alive if it was set in MenuItemWidget
     _ = dvui.dataGet(null, self.wd.id, "_submenus_activating", void);
@@ -139,7 +138,7 @@ pub fn init(self: *MenuWidget, src: std.builtin.SourceLocation, init_opts: InitO
 
     // a floating menu could have been opened by mouse, but then a key is
     // pressed, so focus the group which will focus the first thing in the menu
-    if (!self.mouse_mode and self.floating() and dvui.focusedWidgetIdInCurrentSubwindow() == null) {
+    if (self.floating() and dvui.focusedWidgetIdInCurrentSubwindow() == null) {
         dvui.focusWidget(self.group.data().id, null, null);
     }
 
@@ -283,6 +282,18 @@ pub fn processEventsAfter(self: *MenuWidget) void {
 pub fn deinit(self: *MenuWidget) void {
     self.processEventsAfter();
 
+    if (self.group.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) {
+        self.focused_menuItem_this_frame = true;
+    }
+
+    // This prevents the following:
+    // * click to open a menu
+    // * click outside the menu, it closes
+    // * hover back over a menu item (the menu should not reappear without clicking)
+    if (self.init_opts.close_without_focused_child and !self.focused_menuItem_this_frame) {
+        self.submenus_activated = false;
+    }
+
     const should_free = self.data().was_allocated_on_widget_stack;
     defer if (should_free) dvui.widgetFree(self);
     defer self.* = undefined;
@@ -290,7 +301,7 @@ pub fn deinit(self: *MenuWidget) void {
     self.group.deinit();
     dvui.dataSet(null, self.data().id, "_mouse_mode", self.mouse_mode);
     dvui.dataSet(null, self.data().id, "_sub_act", self.submenus_activated);
-    dvui.dataSet(null, self.data().id, "_has_focused_child", self.last_focus_in_subwindow != dvui.lastFocusedIdInSubwindow());
+    dvui.dataSet(null, self.data().id, "_has_focused_menuItem", self.focused_menuItem_this_frame);
     // always overwrite with value from this frame to prevent saving stale value
     dvui.dataSet(null, self.data().id, "_child_popup", self.child_popup_rect);
     self.data().minSizeSetAndRefresh();
