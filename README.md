@@ -113,8 +113,6 @@ const dvui_dep = b.dependency("dvui", .{ .target = target, .optimize = optimize,
 exe.root_module.addImport("dvui", dvui_dep.module("dvui_sdl3"));
 ```
 
-If you are starting a new project, copy the [app example](/examples/app.zig).
-
 [DVUI Demo](https://github.com/david-vanderson/dvui-demo) is a template project you can use as a starting point.
 - build.zig and build.zig.zon show how to reference dvui as a zig dependency
 - for applications, you can use the dvui.App layer to have dvui manage the mainloop for you
