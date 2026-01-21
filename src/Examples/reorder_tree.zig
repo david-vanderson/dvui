@@ -176,7 +176,7 @@ pub fn reorderListsSimple(lay: reorderLayout, cross_drag: bool) void {
     for (g.strings[0..g.strings.len], 0..) |s, i| {
 
         // make a reorderable for each entry in the list
-        var reorderable = reorder.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal, .min_size_content = dvui.Options.sizeM(8, 1) });
+        var reorderable = reorder.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal, .min_size_content = .sizeM(8, 1) });
         defer reorderable.deinit();
 
         if (reorderable.floating()) {
