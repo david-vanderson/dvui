@@ -90,7 +90,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
 
         left_alignment.spacer(@src(), 0);
 
-        var te = dvui.textEntry(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{ .max_size_content = .size(dvui.Options.sizeM(20, 1)) });
+        var te = dvui.textEntry(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{ .max_size_content = .sizeM(20, 1) });
         enter_pressed = te.enter_pressed;
         te.deinit();
 
@@ -209,8 +209,8 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
             @src(),
             te_opts,
             .{
-                .min_size_content = .{ .w = 160, .h = 80 },
-                .max_size_content = .{ .w = 160, .h = 80 },
+                .min_size_content = .sizeM(15, 5),
+                .max_size_content = .sizeM(15, 5),
                 .font = font,
             },
         );
@@ -509,7 +509,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
         left_alignment.spacer(@src(), 0);
 
         var te: dvui.TextEntryWidget = undefined;
-        te.init(@src(), .{}, .{ .max_size_content = .size(dvui.Options.sizeM(20, 1)) });
+        te.init(@src(), .{}, .{});
 
         const entries: []const []const u8 = &.{
             "one", "two", "three", "four", "five", "six",

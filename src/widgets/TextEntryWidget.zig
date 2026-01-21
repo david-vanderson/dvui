@@ -16,6 +16,10 @@ const AccessKit = dvui.AccessKit;
 
 const TextEntryWidget = @This();
 
+/// If min_size_content is not given, use Font.sizeM(defaultMWidth, 1).
+/// If multiline is false and max_size_content is not given, use min_size_content.
+pub var defaultMWidth: f32 = 14;
+
 pub var defaults: Options = .{
     .name = "TextEntry",
     .role = .text_input, // can change to multiline in init
@@ -207,7 +211,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         .horizontal_bar = init_opts.scroll_horizontal_bar orelse (if (init_opts.multiline) .auto else .hide),
     };
 
-    var options = defaults.themeOverride(opts.theme).min_sizeM(14, 1);
+    var options = defaults.themeOverride(opts.theme).min_sizeM(defaultMWidth, 1);
 
     if (init_opts.password_char != null) {
         options.role = .password_input;
@@ -216,6 +220,9 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     }
 
     options = options.override(opts);
+    if (!init_opts.multiline and options.max_size_content == null) {
+        options = options.override(.{ .max_size_content = .size(options.min_size_contentGet()) });
+    }
 
     // padding is interpreted as the padding for the TextLayoutWidget, but
     // we also need to add it to content size because TextLayoutWidget is
