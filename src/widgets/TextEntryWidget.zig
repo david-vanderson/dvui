@@ -1215,7 +1215,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                         e.handle(@src(), self.data());
                         if (self.init_opts.multiline) {
                             self.textTyped("\n", false);
-                        } else {
+                        } else if (ke.action == .down) {
                             self.enter_pressed = true;
                             dvui.refresh(null, @src(), self.data().id);
                         }
