@@ -575,6 +575,48 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 addExample("dx11-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
             }
         },
+        .glfw_opengl3 => {
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .stb_image = true, .tiny_file_dialogs = true, .tree_sitter = true });
+
+            const glfw_opengl3_mod = b.addModule("glfw_opengl3", .{
+                .root_source_file = b.path("src/backends/glfw_opengl3.zig"),
+                .target = target,
+                .optimize = optimize,
+                .link_libc = true,
+            });
+            const maybe_zgl = b.lazyDependency("zgl", .{
+                .target = target,
+                .optimize = optimize,
+            });
+
+            if (maybe_zgl) |zgl| {
+                glfw_opengl3_mod.addImport("zgl", zgl.module("zgl"));
+                glfw_opengl3_mod.linkSystemLibrary("GL", .{});
+            }
+
+            const maybe_glfw = b.lazyDependency(
+                "zglfw",
+                .{
+                    .target = target,
+                    .optimize = optimize,
+                },
+            );
+
+            if (maybe_glfw) |glfw| {
+                glfw_opengl3_mod.addImport("zglfw", glfw.module("root"));
+                glfw_opengl3_mod.linkLibrary(glfw.artifact("glfw"));
+            }
+
+            const dvui_glfw_opengl3 = addDvuiModule("dvui_glfw_opengl3", dvui_opts);
+            linkBackend(dvui_glfw_opengl3, glfw_opengl3_mod);
+
+            const example_opts: ExampleOptions = .{
+                .dvui_mod = dvui_glfw_opengl3,
+                .backend_name = "glfw-opengl-backend",
+                .backend_mod = glfw_opengl3_mod,
+            };
+            addExample("glfw-opengl-ontop", b.path("examples/glfw_opengl.zig"), test_dvui_and_app, example_opts, dvui_opts);
+        },
         .web => {
             dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = false });
             const export_symbol_names = &[_][]const u8{
