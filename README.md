@@ -7,6 +7,8 @@ Zig GUI toolkit for whole applications or debugging windows in existing applicat
 
 Tested with [Zig](https://ziglang.org/) 0.15.2 (use tag v0.3.0 for zig 0.14.1)
 
+![Screenshot of DVUI Standalone Example (Application Window)](/screenshot_demo.png?raw=true)
+
 How to run the built-in examples:
 
 - If unsure, start with ```zig build sdl3-app```
@@ -54,10 +56,6 @@ How to run the built-in examples:
 This document is a broad overview.  See [implementation details](readme-implementation.md) for how to write and modify container widgets.
 
 Online discussion happens in #gui-dev on the zig discord server: https://discord.gg/eJgXXTtVzA or in IRC (Libera) channel #dvui
-
-Below is a screenshot of the demo window, whose source code can be found at [src/Examples.zig](src/Examples.zig).
-
-![Screenshot of DVUI Standalone Example (Application Window)](/screenshot_demo.png?raw=true)
 
 ### Projects using DVUI
 
@@ -112,8 +110,6 @@ Add build.zig logic (here using sdl3 backend):
 const dvui_dep = b.dependency("dvui", .{ .target = target, .optimize = optimize, .backend = .sdl3 });
 exe.root_module.addImport("dvui", dvui_dep.module("dvui_sdl3"));
 ```
-
-If you are starting a new project, copy the [app example](/examples/app.zig).
 
 [DVUI Demo](https://github.com/david-vanderson/dvui-demo) is a template project you can use as a starting point.
 - build.zig and build.zig.zon show how to reference dvui as a zig dependency

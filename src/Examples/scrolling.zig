@@ -50,7 +50,7 @@ pub fn scrolling() void {
             _ = dvui.spacer(@src(), .{ .expand = .vertical });
 
             dvui.label(@src(), "Scroll to msg:", .{}, .{});
-            const result = dvui.textEntryNumber(@src(), usize, .{ .min = Data.msg_start, .max = Data.msg_end }, .{ .min_size_content = dvui.Options.sizeM(8, 1) });
+            const result = dvui.textEntryNumber(@src(), usize, .{ .min = Data.msg_start, .max = Data.msg_end }, .{ .min_size_content = .sizeM(8, 1) });
             const label = switch (result.value) {
                 .TooBig => "Too Big",
                 .TooSmall => "Too Small",
