@@ -1462,6 +1462,7 @@ pub fn enableSDLLogging() void {
 
 /// This is what is run if you are using `dvui.App` with this backend.
 pub fn main(main_init: std.process.Init) !u8 {
+    dvui.App.main_init = main_init;
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
     if (builtin.os.tag == .windows) { // optional

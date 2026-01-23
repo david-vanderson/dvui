@@ -30,6 +30,9 @@ deinitFn: ?fn () void = null,
 /// Returns whether the app should continue running or close.
 frameFn: frameFunction,
 
+/// The init arg passed into main.  null if not available (like on web).
+pub var main_init: ?std.process.Init = null;
+
 pub const frameFunction = fn () anyerror!Result;
 
 fn nop_main() !void {}
