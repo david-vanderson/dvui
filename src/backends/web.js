@@ -1114,8 +1114,9 @@ class Dvui {
     }
 
     render() {
-        if (this.stopped) return;
         this.renderRequested = false;
+
+        if (this.stopped) return;
 
         // if the canvas changed size, adjust the backing buffer
         const w = this.gl.canvas.clientWidth;
