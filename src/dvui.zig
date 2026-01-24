@@ -2,13 +2,13 @@
 //!
 //! ![<Examples-demo.png>](Examples-demo.png)
 //!
-//! `dvui` module contains all the top level declarations provide all declarations required by client code. - i.e. `const dvui = @import("dvui");` is the only required import.
+//! `dvui` module has everything required by client code. `const dvui = @import("dvui");` is the only required import.
 //!
-//! Most UI element are expected to be created via high level function like `dvui.button`, which instantiate the corresponding lower level `dvui.ButtonWidget` for you.
+//! Most UI widgets can be created via high level functions like `dvui.button`, which create the underlying `dvui.ButtonWidget` for you, process events, and draw the widget.
 //!
-//! Custom widget can be done for simple cases my combining different high level function. For more advance usages, the user is expected to copy-paste the content of the high level functions as a starting point to combine the widgets on the lower level. More informations is available in the [project's readme](https://github.com/david-vanderson/dvui/blob/main/README.md).
+//! For more control over a widget's lifetime, event processing, or drawing, start by copying the body of the high level function.  More informations is available in the [project's readme](https://github.com/david-vanderson/dvui/blob/main/README.md).
 //!
-//! A complete list of available widgets can be found under `dvui.widgets`.
+//! A complete list of available widgets can be found under `dvui.widgets`.  The demo includes examples of all widgets.
 //!
 //! ## Backends
 //! - [SDL](#dvui.backends.sdl)
