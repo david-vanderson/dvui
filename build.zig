@@ -919,10 +919,6 @@ fn addExample(
     if (opts.target.result.os.tag == .windows) {
         exe.win32_manifest = b.path("./src/main.manifest");
         exe.subsystem = .Windows;
-        // TODO: This may just be only used for directx
-        if (b.lazyDependency("win32", .{})) |zigwin32| {
-            mod.addImport("win32", zigwin32.module("win32"));
-        }
 
         if (opts.accesskit.enabled()) {
             mod.linkSystemLibrary("ws2_32", .{});
