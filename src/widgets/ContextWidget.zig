@@ -29,7 +29,7 @@ activePt: Point.Natural = .{},
 pub fn init(self: *ContextWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const defaults = Options{ .name = "Context" };
     self.* = .{
-        .wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .rect = dvui.parentGet().data().rectScale().rectFromPhysical(init_opts.rect) })),
+        .wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .rect = dvui.parentGet().data().contentRectScale().rectFromPhysical(init_opts.rect) })),
         .init_options = init_opts,
         .winId = dvui.subwindowCurrentId(),
     };
