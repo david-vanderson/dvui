@@ -1151,11 +1151,6 @@ pub fn wndProc(
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
 ) callconv(.winapi) win32.LRESULT {
-    const state = stateFromHwnd(hwnd);
-
-    if (!state.event_processing)
-        return win32.DefWindowProcW(hwnd, umsg, wparam, lparam);
-
     switch (umsg) {
         win32.WM_CREATE => {
             const create_struct: *win32.CREATESTRUCTW = @ptrFromInt(@as(usize, @bitCast(lparam)));
@@ -1165,6 +1160,7 @@ pub fn wndProc(
                 return -1;
             };
             errdefer dx_options.deinit();
+            // This call is what initializes window_state
             _ = attach(hwnd, args.window_state, args.dvui_gpa, dx_options, .{
                 .vsync = args.vsync,
                 .window_init_opts = args.dvui_window_init_options,
@@ -1175,10 +1171,14 @@ pub fn wndProc(
             return 0;
         },
         win32.WM_DESTROY => {
+            const state = stateFromHwnd(hwnd);
+            if (!state.event_processing) return win32.DefWindowProcW(hwnd, umsg, wparam, lparam);
+
             state.deinit();
             return 0;
         },
         win32.WM_CLOSE => {
+            const state = stateFromHwnd(hwnd);
             // important not call DefWindowProc here because that will destroy the window
             // without notifying the app
             state.dvui_window.addEventWindow(.{ .action = .close }) catch {};
@@ -1264,6 +1264,9 @@ pub fn wndProc(
         win32.WM_KEYDOWN,
         win32.WM_SYSKEYDOWN,
         => |msg| {
+            const state = stateFromHwnd(hwnd);
+            if (!state.event_processing) return win32.DefWindowProcW(hwnd, umsg, wparam, lparam);
+
             // https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#keystroke-message-flags
             const KeystrokeMessageFlags = packed struct(u32) {
                 /// The repeat count for the current message. The value is the number of times
@@ -1328,6 +1331,9 @@ pub fn wndProc(
             };
         },
         win32.WM_CHAR => {
+            const state = stateFromHwnd(hwnd);
+            if (!state.event_processing) return win32.DefWindowProcW(hwnd, umsg, wparam, lparam);
+
             const ascii_char: u8 = @truncate(wparam);
             if (std.ascii.isPrint(ascii_char)) {
                 const string: []const u8 = &.{ascii_char};
@@ -1354,6 +1360,9 @@ pub fn wndProc(
             return 0;
         },
         win32.WM_GETOBJECT => {
+            const state = stateFromHwnd(hwnd);
+            if (!state.event_processing) return win32.DefWindowProcW(hwnd, umsg, wparam, lparam);
+
             if (dvui.accesskit_enabled) {
                 const ak = state.dvui_window.accesskit;
                 if (ak.status == .on) if (ak.adapter) |adapter| {
