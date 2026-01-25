@@ -141,23 +141,25 @@ const fragmentShaderSource_webgl2 = `# version 300 es
 /**
  * @param {string | HTMLCanvasElement} canvas - A canvas element or string id of one
  * @param {WasmArg} wasmRef - The url to the wasm file, to be used in `fetch`
+ * @resturns {Promise<Dvui>}
  */
 export function dvui(canvas, wasmRef) {
     const dvui = new Dvui();
     const wasmPromise = typeof wasmRef === "string"
         ? WebAssembly.instantiateStreaming(fetch(wasmRef), { dvui: dvui.imports })
         : Promise.resolve(wasmRef);
-    wasmPromise.then((result) => {
+    return wasmPromise.then((result) => {
         dvui.setInstance(result.instance);
         dvui.setCanvas(canvas);
         dvui.run();
+        return dvui;
     });
 }
 
 const utf8decoder = new TextDecoder();
 const utf8encoder = new TextEncoder();
 
-class Dvui {
+export class Dvui {
     /** @type {WebGL2RenderingContext | WebGLRenderingContext} */
     gl;
     /** @type {WebGLBuffer} */
@@ -188,6 +190,9 @@ class Dvui {
 
     renderRequested = false;
     renderTimeoutId = 0;
+
+    /** @type {WebAssembly.ModuleImports} */
+    imports;
 
     /** @type {WebAssembly.Instance} */
     instance;
