@@ -2327,7 +2327,7 @@ pub fn dialogDisplay(id: Id) !void {
 
     const maxSize = dvui.dataGet(null, id, "_max_size", Options.MaxSize);
 
-    var win = floatingWindow(@src(), .{ .modal = modal, .center_on = center_on, .window_avoid = .nudge }, .{ .id_extra = id.asUsize(), .max_size_content = maxSize });
+    var win = floatingWindow(@src(), .{ .modal = modal, .center_on = center_on, .window_avoid = .nudge }, .{ .role = .dialog, .id_extra = id.asUsize(), .max_size_content = maxSize });
     defer win.deinit();
 
     var header_openflag = true;
@@ -3404,6 +3404,10 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
         lw.data().focusBorder();
     }
 
+    if (lw.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
+    }
+
     // done with lw, have it report min size to parent
     lw.deinit();
 
@@ -3724,6 +3728,8 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         AccessKit.nodeSetNumericValue(ak_node, init_opts.fraction.*);
         AccessKit.nodeSetMinNumericValue(ak_node, 0);
         AccessKit.nodeSetMaxNumericValue(ak_node, 1);
+        AccessKit.nodeSetNumericValueStep(ak_node, 0.01);
+        AccessKit.nodeSetNumericValueJump(ak_node, 0.10);
     }
 
     tabIndexSet(b.data().id, options.tab_index);
@@ -3930,6 +3936,15 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         AccessKit.nodeSetOrientation(ak_node, AccessKit.Orientation.horizontal);
         if (init_opts.min) |min| AccessKit.nodeSetMinNumericValue(ak_node, min);
         if (init_opts.max) |max| AccessKit.nodeSetMaxNumericValue(ak_node, max);
+
+        if (init_opts.min != null and init_opts.max != null) {
+            const delta = init_opts.max.? - init_opts.min.?;
+            AccessKit.nodeSetNumericValueStep(ak_node, delta / 100);
+            AccessKit.nodeSetNumericValueJump(ak_node, delta / 10);
+        } else {
+            AccessKit.nodeSetNumericValueStep(ak_node, 1);
+            AccessKit.nodeSetNumericValueJump(ak_node, 10);
+        }
     }
 
     tabIndexSet(b.data().id, options.tab_index);

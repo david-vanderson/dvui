@@ -384,9 +384,8 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         AccessKit.nodeSetClipsChildren(ak_node); // AK TODO: Check this is correct?
 
         if (self.data().options.role != .password_input) {
-            const str = dvui.currentWindow().arena().dupeZ(u8, self.text[0..self.len]) catch "";
-            defer dvui.currentWindow().arena().free(str);
-            AccessKit.nodeSetValue(ak_node, str);
+            const str = self.text[0..self.len];
+            AccessKit.nodeSetValueWithLength(ak_node, str.ptr, str.len);
         }
     }
 }
@@ -402,7 +401,6 @@ pub fn matchEvent(self: *TextEntryWidget, e: *Event) bool {
 
 pub fn processEvents(self: *TextEntryWidget) void {
     const evts = dvui.events();
-    //std.debug.print("EVTS = {any}\n", .{evts});
     for (evts) |*e| {
         if (!self.matchEvent(e))
             continue;
@@ -417,10 +415,11 @@ pub fn draw(self: *TextEntryWidget) void {
     if (self.len == 0) {
         if (self.init_opts.placeholder) |placeholder| {
             if (self.data().accesskit_node()) |ak_node| {
-                const str = dvui.currentWindow().arena().dupeZ(u8, placeholder) catch "";
-                defer dvui.currentWindow().arena().free(str);
-                AccessKit.nodeSetPlaceholder(ak_node, str);
+                AccessKit.nodeSetPlaceholderWithLength(ak_node, placeholder.ptr, placeholder.len);
 
+                // Create an empty text run for the empty text entry.
+                dvui.currentWindow().accesskit.text_run_parent = self.data().id;
+                self.textLayout.textRunCreateEmpty(self.data().id);
                 // prevent textLayout from making a text run for the placeholder text
                 dvui.currentWindow().accesskit.text_run_parent = null;
             }
