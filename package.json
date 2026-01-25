@@ -6,7 +6,7 @@
   "module": "src/backends/web.js",
   "types": "src/backends/web.d.ts",
   "scripts": {
-    "postinstall": "zig build web-app",
+    "build-web-app": "zig build web-app",
     "test": "echo \"Error: no test specified\" && exit 1",
     "typecheck": "tsc -p ./tsconfig.json"
   },
