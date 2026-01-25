@@ -201,6 +201,7 @@ pub fn basicWidgets() void {
             .gravity_y = 0.5,
             .min_size_content = .{ .w = imgsize.w + icon_image_size_extra, .h = imgsize.h + icon_image_size_extra },
             .rotation = icon_image_rotation,
+            .label = .{ .text = image_source.imageFile.name },
         });
     }
 
@@ -378,7 +379,12 @@ pub fn dropdownAdvanced() void {
 
             const opts: Options = mi.data().options.strip().override(mi.style());
 
-            _ = dvui.image(@src(), .{ .source = .{ .imageFile = .{ .bytes = zig_favicon, .name = "zig favicon" } } }, opts.override(.{ .gravity_x = 0.5 }));
+            _ = dvui.image(@src(), .{ .source = .{
+                .imageFile = .{ .bytes = zig_favicon, .name = "zig favicon" },
+            } }, opts.override(.{
+                .gravity_x = 0.5,
+                .label = .{ .text = "zig favicon" },
+            }));
             dvui.labelNoFmt(@src(), "image above text", .{}, opts.override(.{ .gravity_x = 0.5, .padding = .{} }));
 
             if (mi.activeRect()) |_| {

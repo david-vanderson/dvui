@@ -229,8 +229,6 @@ pub const Branch = struct {
         ret.padding = Rect{};
         ret.margin = .{};
         ret.background = false;
-        ret.role = .none;
-        ret.label = null;
         return ret;
     }
 
@@ -238,6 +236,8 @@ pub const Branch = struct {
         var ret = opts;
         ret.name = null;
         ret.expand = .horizontal;
+        ret.role = null;
+        ret.label = null;
         return ret;
     }
 
