@@ -401,7 +401,7 @@ pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, controlling_widget
     self.textRunPopulate("", .{
         .node_id = node_id,
         .node_parent_id = self.text_run_parent.?,
-        .controlling_widget_id = controlling_widget, // This is not correct, but
+        .controlling_widget_id = controlling_widget,
         .char_offset = 0,
     }, &text_info, r);
 }
