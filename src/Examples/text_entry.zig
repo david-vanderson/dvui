@@ -341,7 +341,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
                     break :blk;
                 }
 
-                const file = std.fs.openFileAbsolute(filename, .{}) catch blk_open: {
+                const file = std.Io.Dir.openFileAbsolute(dvui.currentWindow().io, filename, .{}) catch blk_open: {
                     file_error.* = true;
                     const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Could not open \"{s}\"", .{filename}) catch filename;
                     defer dvui.currentWindow().lifo().free(msg);
@@ -349,7 +349,10 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
                     break :blk_open null;
                 };
                 if (file) |f| {
-                    bytes = f.deprecatedReader().readAllAlloc(dvui.currentWindow().gpa, 30_000_000) catch null;
+                    var buf: [500]u8 = undefined;
+                    var reader = f.reader(dvui.currentWindow().io, &buf);
+                    var iface = &reader.interface;
+                    bytes = iface.allocRemaining(dvui.currentWindow().gpa, .limited(30_000_000)) catch null;
                 }
 
                 if (bytes) |b| {

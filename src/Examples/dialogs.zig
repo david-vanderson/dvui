@@ -225,12 +225,12 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
 }
 
 fn background_dialog(win: *dvui.Window, delay_ns: u64) void {
-    std.Thread.sleep(delay_ns);
+    win.backend.sleep(delay_ns);
     dvui.dialog(@src(), .{}, .{ .window = win, .modal = false, .title = "Background Dialog", .message = "This non modal dialog was added from a non-GUI thread." });
 }
 
 fn background_toast(win: *dvui.Window, delay_ns: u64, subwindow_id: ?dvui.Id) void {
-    std.Thread.sleep(delay_ns);
+    win.backend.sleep(delay_ns);
     dvui.refresh(win, @src(), null);
     dvui.toast(@src(), .{ .window = win, .subwindow_id = subwindow_id, .message = "Toast came from a non-GUI thread" });
 }
@@ -239,7 +239,7 @@ fn background_progress(win: *dvui.Window, delay_ns: u64) void {
     const interval: u64 = 10_000_000;
     var total_sleep: u64 = 0;
     while (total_sleep < delay_ns) : (total_sleep += interval) {
-        std.Thread.sleep(interval);
+        win.backend.sleep(interval);
         progress_mutex.lock();
         progress_val = @as(f32, @floatFromInt(total_sleep)) / @as(f32, @floatFromInt(delay_ns));
         progress_mutex.unlock();
