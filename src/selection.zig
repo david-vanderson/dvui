@@ -1,7 +1,7 @@
 //! Helpers for Multi and Single selection
 //! Implements an event queue for selections.
 //! Selectable objects can optionally raise selection events which
-//! are the processed by these helpers
+//! are processed by these helpers
 
 const std = @import("std");
 const dvui = @import("dvui.zig");

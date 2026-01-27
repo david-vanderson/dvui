@@ -225,7 +225,7 @@ pub fn demo() void {
             var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();
 
-            if (paned.collapsed() and dvui.button(@src(), "Back to Demos", .{}, .{ .min_size_content = .{ .h = 30 }, .tag = "dvui_demo_window_back" })) {
+            if (paned.collapsed() and dvui.button(@src(), "Back to Demos", .{}, .{ .min_size_content = .{ .h = 30 }, .tag = "dvui_demo_window_back", .tab_index = 1 })) {
                 paned.animateSplit(1.0);
             }
 
@@ -428,7 +428,7 @@ pub fn grids() void {
     var tbox = dvui.box(@src(), .{}, .{ .border = Rect.all(1), .expand = .both });
     defer tbox.deinit();
     {
-        var tabs = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        var tabs = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .tab_index = 2 });
         defer tabs.deinit();
         for (0..GridType.num_grids) |tab_num| {
             const this_tab: GridType = @enumFromInt(tab_num);
@@ -512,7 +512,7 @@ const debuggingErrors = @import("Examples/debugging.zig").debuggingErrors;
 const icon_browser = @import("Examples/icon_browser.zig").iconBrowser;
 
 const grid_examples = @import("Examples/grid.zig");
-const gridStyling = grid_examples.gridStyling;
+pub const gridStyling = grid_examples.gridStyling;
 const gridLayouts = grid_examples.gridLayouts;
 const gridVirtualScrolling = grid_examples.gridVirtualScrolling;
 const gridVariableRowHeights = grid_examples.gridVariableRowHeights;
