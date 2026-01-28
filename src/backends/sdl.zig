@@ -71,9 +71,17 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     // if (options.hidden) _ = c.SDL_SetHint(c.SDL_HINT_VIDEODRIVER, "offscreen");
 
     // use the string version instead of the #define so we compile with SDL < 2.24
-
     _ = c.SDL_SetHint("SDL_HINT_WINDOWS_DPI_SCALING", "1");
+
+    // makes mac scrolling better
     if (sdl3) _ = c.SDL_SetHint(c.SDL_HINT_MAC_SCROLL_MOMENTUM, "1");
+
+    // prevents some bad performance in certain wayland compositors (sway) under some conditions
+    if (sdl3) {
+        if (c.SDL_SetHint(c.SDL_HINT_VIDEO_WAYLAND_PREFER_LIBDECOR, "1") != SDL_SUCCESS) {
+            log.err("failed to set libdecor hint", .{});
+        }
+    }
 
     try toErr(c.SDL_Init(c.SDL_INIT_VIDEO | c.SDL_INIT_EVENTS), "SDL_Init in initWindow");
 
