@@ -250,6 +250,8 @@ The first parameter to these functions can be null during a frame (between `Wind
 
 If a stored data is not used (`dataSet()` or `dataGet()`) for a frame, it will be automatically removed.  If you only want to store something for one frame, you can `dataSet()`, then next frame when `dataGet()` returns it, use `dataRemove()`.
 
+If you need a unique id separate from a widget, use `const uniqueId = dvui.parentGet().extendId(@src(), 0);`
+
 ## Tab Index
 Pressing tab will cycle keyboard focus (keyboard navigate) through all the widgets that have called `tabIndexSet()`.  Widgets will call it with the passed in `Options.tab_index`.  The order is:
 * lower tab_index values come first
