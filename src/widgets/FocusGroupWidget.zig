@@ -35,7 +35,7 @@ pub const InitOptions = struct {
 pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const id = dvui.parentGet().extendId(src, opts.idExtra());
     const rect = dvui.dataGet(null, id, "_rect", Rect);
-    const defaults = Options{ .name = "Focus Group", .rect = rect orelse .{}};
+    const defaults = Options{ .name = "Focus Group", .rect = rect orelse .{}, .expand = .both };
     self.* = .{
         .init_opts = init_opts,
         .wd = WidgetData.init(src, .{}, defaults.override(opts)),
