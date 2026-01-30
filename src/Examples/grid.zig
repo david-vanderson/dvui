@@ -98,6 +98,7 @@ pub fn gridStyling() void {
         }, .{
             .expand = .both,
             .border = Rect.all(1),
+            .tab_index = 3,
         });
         defer grid.deinit();
 
@@ -141,7 +142,6 @@ pub fn gridStyling() void {
                 .color_fill = if (local.banding != .none) dvui.themeGet().color(.control, .fill_press) else null,
             },
         };
-
         if (dvui.gridHeadingSortable(@src(), grid, 0, "Celcius", &local.sort_dir, .fixed, .{})) {
             grid.colSortSet(0, current_sort_dir.reverse());
         }
@@ -398,6 +398,7 @@ pub fn gridLayouts() void {
             .expand = .both,
             .background = true,
             .border = Rect.all(2),
+            .tab_index = 1,
         });
         defer grid.deinit();
         local.resize_rows = false;
@@ -673,6 +674,18 @@ pub fn gridSelection() void {
         var selection_info: dvui.selection.SelectionInfo = .{};
         var selections: std.StaticBitSet(directory_examples.len) = .initEmpty();
         var highlight_style: CellStyle.HoveredRow = .{ .cell_opts = .{ .color_fill_hover = .gray, .background = true } };
+        var tab_index: u16 = 0;
+
+        pub fn tabIndex() u16 {
+            defer tab_index += 1;
+            return tab_index;
+        }
+
+        pub fn tabIndexCellStyle() CellStyle {
+            return .{
+                .opts = .{ .tab_index = tabIndex() },
+            };
+        }
 
         pub fn isFiltered(entry: *const DirEntry) bool {
             if (filename_filter.len > 0) {
@@ -769,10 +782,11 @@ pub fn gridSelection() void {
         }
     }
     {
-        // This is sort of subtle. We need to reset the kb select before the grid is created, so that grid focus is included in select all
+        // We need to reset the kb select before the grid is created, so that grid focus is included in select all
         local.kb_select.reset();
+        local.tab_index = 0;
 
-        var grid = dvui.grid(@src(), .numCols(6), .{ .scroll_opts = .{ .horizontal_bar = .auto } }, .{ .expand = .both, .background = true });
+        var grid = dvui.grid(@src(), .numCols(6), .{ .scroll_opts = .{ .horizontal_bar = .auto } }, .{ .expand = .both, .background = true, .tab_index = local.tabIndex() });
         defer grid.deinit();
         if (!local.initialized) {
             dvui.focusWidget(grid.data().id, null, null);
@@ -793,14 +807,12 @@ pub fn gridSelection() void {
             }
             break :blk null;
         };
-
         local.selection_info.reset();
 
-        // Note: The extra check here is because I've chosen to unselect anything that was filtered.
-        // If we were just doing selection it just needs multi_select.selectionChanged();
-        // OR user might prefer to check if everything in the current filter is selected and
-        // set the select_all state based on that. So this gives quite a bit more flexibility
-        // than previous.
+        // We've chosen not to check-mark select all if either the filtering changes
+        // or a manual selection/unselection is made.
+        // Alternate approaches, such as check-marking select-all if everything within
+        // the current filter is selected, could also be implemented depending on user preference.
         if (local.filtering_changed or local.multi_select.selectionChanged()) {
             local.select_all_state = .select_none;
         }
@@ -809,11 +821,11 @@ pub fn gridSelection() void {
                 local.selectAll(local.select_all_state);
             }
         }
-        dvui.gridHeading(@src(), grid, 1, "Name", .fixed, .{});
-        dvui.gridHeading(@src(), grid, 2, "Kind", .fixed, .{});
-        dvui.gridHeading(@src(), grid, 3, "Size", .fixed, .{});
-        dvui.gridHeading(@src(), grid, 4, "Mode", .fixed, .{});
-        dvui.gridHeading(@src(), grid, 5, "MTime", .fixed, .{});
+        dvui.gridHeading(@src(), grid, 1, "Name", .fixed, local.tabIndexCellStyle());
+        dvui.gridHeading(@src(), grid, 2, "Kind", .fixed, local.tabIndexCellStyle());
+        dvui.gridHeading(@src(), grid, 3, "Size", .fixed, local.tabIndexCellStyle());
+        dvui.gridHeading(@src(), grid, 4, "Mode", .fixed, local.tabIndexCellStyle());
+        dvui.gridHeading(@src(), grid, 5, "MTime", .fixed, local.tabIndexCellStyle());
 
         if (local.row_select)
             local.highlight_style.processEvents(grid);
