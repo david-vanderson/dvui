@@ -1615,7 +1615,6 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     self.add_text_done = true;
 
     if (self.cache_layout and self.byte_heights.len > 0) {
-
         var edit_height: f32 = undefined;
         if (self.byte_height_after_idx) |i| {
             // this is not the final one
@@ -1697,7 +1696,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     self.selection.end = @min(self.selection.end, self.bytes_seen);
 
     const options = self.data().options.override(opts);
-    const text_height = options.fontGet().textHeight();
+    const text_height = if (self.current_line_height > 0) self.current_line_height else options.fontGet().textHeight();
 
     if (!self.cursor_seen) {
         self.cursor_rect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = text_height };
@@ -1792,8 +1791,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
                     .w = 0,
                     .x = 0,
                 }) catch {};
-                dvui.currentWindow().accesskit.textRunPopulate("",
-                    .{
+                dvui.currentWindow().accesskit.textRunPopulate("", .{
                     .node_id = vp.data().id,
                     .node_parent_id = cw.accesskit.text_run_parent.?,
                     .char_offset = 0,
