@@ -364,6 +364,9 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             dvui_opts.addTests(sdl_mod, "sdl3gpu-backend");
 
             const sdl3_options = b.addOptions();
+            // Option to use 32-bit indices for larger vertex buffers (default 16-bit)
+            const sdl3gpu_index_bits = b.option(u8, "sdl3gpu-index-bits", "Index buffer bit size (16 or 32, default 16)") orelse 16;
+            sdl3_options.addOption(u8, "index_bits", sdl3gpu_index_bits);
             // sdl3_options.addOption(
             //     ?bool,
             //     "callbacks",
