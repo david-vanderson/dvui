@@ -9,7 +9,7 @@ const Backend = @This();
 pub const Common = @import("backends/common.zig");
 
 /// Index type used by the current backend implementation (u16 or u32)
-pub const IndexType = Implementation.IndexType;
+pub const IndexType = if (@hasDecl(Implementation, "IndexType")) Implementation.IndexType else u16;
 
 pub const GenericError = std.mem.Allocator.Error || error{BackendError};
 pub const TextureError = GenericError || error{ TextureCreate, TextureRead, TextureUpdate, NotImplemented };
