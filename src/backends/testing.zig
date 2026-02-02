@@ -81,7 +81,7 @@ pub fn contentScale(_: *TestingBackend) f32 {
 /// clipped to to clipr (if given).  Vertex positions and clipr are in
 /// physical pixels.  If texture is given, the vertexes uv coords are
 /// normalized (0-1).
-pub fn drawClippedTriangles(_: *TestingBackend, _: ?dvui.Texture, _: []const dvui.Vertex, _: []const u16, _: ?dvui.Rect.Physical) !void {}
+pub fn drawClippedTriangles(_: *TestingBackend, _: ?dvui.Texture, _: []const dvui.Vertex, _: []const dvui.Vertex.Index, _: ?dvui.Rect.Physical) !void {}
 
 /// Create a texture from the given pixels in RGBA.  The returned
 /// pointer is what will later be passed to drawClippedTriangles.

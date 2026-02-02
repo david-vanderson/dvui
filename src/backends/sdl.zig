@@ -685,7 +685,7 @@ pub fn contentScale(self: *SDLBackend) f32 {
     return self.initial_scale;
 }
 
-pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect.Physical) !void {
+pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, maybe_clipr: ?dvui.Rect.Physical) !void {
     //std.debug.print("drawClippedTriangles:\n", .{});
     //for (vtx) |v, i| {
     //  std.debug.print("  {d} vertex {}\n", .{i, v});
@@ -754,7 +754,7 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
             @as(c_int, @intCast(vtx.len)),
             idx.ptr,
             @as(c_int, @intCast(idx.len)),
-            @sizeOf(u16),
+            @sizeOf(dvui.Vertex.Index),
         ), "SDL_RenderGeometryRaw, in drawClippedTriangles");
     } else {
         try toErr(c.SDL_RenderGeometryRaw(
@@ -769,7 +769,7 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
             @as(c_int, @intCast(vtx.len)),
             idx.ptr,
             @as(c_int, @intCast(idx.len)),
-            @sizeOf(u16),
+            @sizeOf(dvui.Vertex.Index),
         ), "SDL_RenderGeometryRaw in drawClippedTriangles");
     }
 

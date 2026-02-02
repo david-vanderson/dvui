@@ -65,7 +65,7 @@ pub fn contentScale(self: Backend) f32 {
 /// clipped to to `clipr` (if given).  Vertex positions and `clipr` are in
 /// physical pixels.  If `texture` is given, the vertexes uv coords are
 /// normalized (0-1). `clipr` (if given) has whole pixel values.
-pub fn drawClippedTriangles(self: Backend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr: ?dvui.Rect.Physical) GenericError!void {
+pub fn drawClippedTriangles(self: Backend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, clipr: ?dvui.Rect.Physical) GenericError!void {
     return self.impl.drawClippedTriangles(texture, vtx, idx, clipr);
 }
 
