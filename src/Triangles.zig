@@ -1,5 +1,5 @@
 vertexes: []Vertex,
-indices: []dvui.backend.IndexType,
+indices: []Vertex.Index,
 bounds: Rect.Physical,
 
 pub const Triangles = @This();
@@ -14,7 +14,7 @@ pub const empty = Triangles{
 /// vertexes and indices is known
 pub const Builder = struct {
     vertexes: std.ArrayListUnmanaged(Vertex),
-    indices: std.ArrayListUnmanaged(dvui.backend.IndexType),
+    indices: std.ArrayListUnmanaged(Vertex.Index),
     /// w and h is max_x and max_y
     bounds: Rect.Physical = .{
         .x = math.floatMax(f32),
@@ -53,7 +53,7 @@ pub const Builder = struct {
     /// Triangles must be counter-clockwise (y going down) to avoid backface culling
     ///
     /// Asserts that points is a multiple of 3
-    pub fn appendTriangles(self: *Builder, points: []const dvui.backend.IndexType) void {
+    pub fn appendTriangles(self: *Builder, points: []const Vertex.Index) void {
         std.debug.assert(points.len % 3 == 0);
         self.indices.appendSliceAssumeCapacity(points);
     }
@@ -90,7 +90,7 @@ pub fn dupe(self: *const Triangles, allocator: std.mem.Allocator) std.mem.Alloca
     errdefer allocator.free(vtx);
     return .{
         .vertexes = vtx,
-        .indices = try allocator.dupe(dvui.backend.IndexType, self.indices),
+        .indices = try allocator.dupe(Vertex.Index, self.indices),
         .bounds = self.bounds,
     };
 }

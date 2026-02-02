@@ -8,9 +8,6 @@ const Backend = @This();
 
 pub const Common = @import("backends/common.zig");
 
-/// Index type used by the current backend implementation (u16 or u32)
-pub const IndexType = if (@hasDecl(Implementation, "IndexType")) Implementation.IndexType else u16;
-
 pub const GenericError = std.mem.Allocator.Error || error{BackendError};
 pub const TextureError = GenericError || error{ TextureCreate, TextureRead, TextureUpdate, NotImplemented };
 
@@ -68,7 +65,7 @@ pub fn contentScale(self: Backend) f32 {
 /// clipped to to `clipr` (if given).  Vertex positions and `clipr` are in
 /// physical pixels.  If `texture` is given, the vertexes uv coords are
 /// normalized (0-1). `clipr` (if given) has whole pixel values.
-pub fn drawClippedTriangles(self: Backend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const IndexType, clipr: ?dvui.Rect.Physical) GenericError!void {
+pub fn drawClippedTriangles(self: Backend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, clipr: ?dvui.Rect.Physical) GenericError!void {
     return self.impl.drawClippedTriangles(texture, vtx, idx, clipr);
 }
 

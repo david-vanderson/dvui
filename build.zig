@@ -20,6 +20,11 @@ pub const AccesskitOptions = enum {
     }
 };
 
+pub const VertexIndex = enum {
+    u16,
+    u32,
+};
+
 const CommonSdl = struct {
     mod: *std.Build.Module,
     options: *std.Build.Step.Options,
@@ -116,6 +121,13 @@ pub fn build(b: *std.Build) !void {
         b.option(bool, "log-error-trace", "If error logs should include the error return trace (automatically enabled with log stack traces)"),
     );
 
+    const vertex_index = b.option(VertexIndex, "vertex-index", "Vertex index type (default u16)") orelse .u16;
+    build_options.addOption(
+        VertexIndex,
+        "vertex_index",
+        vertex_index,
+    );
+
     const accesskit = b.option(AccesskitOptions, "accesskit", "Build with AccessKit support") orelse .off;
 
     build_options.addOption(
@@ -134,6 +146,7 @@ pub fn build(b: *std.Build) !void {
         .use_lld = use_lld,
         .accesskit = accesskit,
         .build_options = build_options,
+        .vertex_index = vertex_index,
         .libc = libc_option,
         .freetype = freetype_option,
         .tiny_file_dialogs = tiny_file_dialogs_option,
@@ -143,7 +156,7 @@ pub fn build(b: *std.Build) !void {
     };
 
     if (back_to_build) |backend| {
-        buildBackend(backend, true, dvui_opts);
+        try buildBackend(backend, true, dvui_opts);
     } else {
         for (std.meta.tags(enums_backend.Backend)) |backend| {
             switch (backend) {
@@ -153,7 +166,7 @@ pub fn build(b: *std.Build) !void {
             }
             // if we are building all the backends, here's where we do dvui tests
             const test_dvui_and_app = backend == .sdl3;
-            buildBackend(backend, test_dvui_and_app, dvui_opts);
+            try buildBackend(backend, test_dvui_and_app, dvui_opts);
         }
     }
 
@@ -212,7 +225,7 @@ pub fn build(b: *std.Build) !void {
     }
 }
 
-pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvui_opts_in: DvuiModuleOptions) void {
+pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvui_opts_in: DvuiModuleOptions) !void {
     var dvui_opts = dvui_opts_in;
     const b = dvui_opts.b;
     const target = dvui_opts.target;
@@ -364,9 +377,6 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             dvui_opts.addTests(sdl_mod, "sdl3gpu-backend");
 
             const sdl3_options = b.addOptions();
-            // Option to use 32-bit indices for larger vertex buffers (default 16-bit)
-            const sdl3gpu_index_bits = b.option(u8, "sdl3gpu-index-bits", "Index buffer bit size (16 or 32, default 16)") orelse 16;
-            sdl3_options.addOption(u8, "index_bits", sdl3gpu_index_bits);
             // sdl3_options.addOption(
             //     ?bool,
             //     "callbacks",
@@ -427,6 +437,11 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("sdl3-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .raylib => {
+            if (dvui_opts.vertex_index != .u16) {
+                std.log.err("Raylib backend requires u16 vertex index", .{});
+                return error.IncompatibleVertexIndex;
+            }
+
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true });
 
             const raylib_backend_mod = b.addModule("raylib", .{
@@ -492,6 +507,11 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("raylib-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .raylib_zig => {
+            if (dvui_opts.vertex_index != .u16) {
+                std.log.err("Raylib-zig backend requires u16 vertex index", .{});
+                return error.IncompatibleVertexIndex;
+            }
+
             dvui_opts.setDefaults(.{ .libc = dvui_opts_in.libc orelse true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true });
 
             const raylib_backend_mod = b.addModule("raylib_zig", .{
@@ -546,6 +566,11 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("raylib-zig-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .dx11 => {
+            if (dvui_opts.vertex_index != .u16) {
+                std.log.err("dx11 backend currently requires u16 vertex index", .{});
+                return error.IncompatibleVertexIndex;
+            }
+
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
             if (target.result.os.tag == .windows) {
                 const dx11_mod = b.addModule("dx11", .{
@@ -579,6 +604,11 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             }
         },
         .web => {
+            if (dvui_opts.vertex_index != .u16) {
+                std.log.err("web backend currently requires u16 vertex index", .{});
+                return error.IncompatibleVertexIndex;
+            }
+
             dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = false });
             const export_symbol_names = &[_][]const u8{
                 "dvui_init",
@@ -619,6 +649,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                     }),
                     .optimize = optimize,
                     .build_options = dvui_opts.build_options,
+                    .vertex_index = .u16,
                     .test_filters = dvui_opts.test_filters,
                     .accesskit = .off,
                     .libc = false,
@@ -665,6 +696,7 @@ const DvuiModuleOptions = struct {
     use_lld: ?bool = null,
     accesskit: AccesskitOptions = .off,
     build_options: *std.Build.Step.Options,
+    vertex_index: VertexIndex,
     libc: ?bool,
     tiny_file_dialogs: ?bool,
     freetype: ?bool,

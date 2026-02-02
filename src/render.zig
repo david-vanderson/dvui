@@ -296,7 +296,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
         // don't output triangles for a zero-width glyph (space seems to be the only one)
         if (gi.w > 0) {
-            const vtx_offset: dvui.backend.IndexType = @intCast(builder.vertexes.items.len);
+            const vtx_offset: dvui.Vertex.Index = @intCast(builder.vertexes.items.len);
             var v: Vertex = undefined;
 
             v.pos.x = leftx;
