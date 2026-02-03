@@ -1833,7 +1833,11 @@ pub fn textRunCreateEmpty(self: *TextLayoutWidget, controlling_widget: dvui.Id) 
 
 pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
     if (self.touch_editing and self.te_show_context_menu and self.focus_at_start and self.data().visible()) {
-        self.te_floating.init(@src(), .{ .from = self.data().rectScale().r.toNatural() }, .{});
+        self.te_floating.init(@src(), .{
+            .from = self.data().rectScale().r.topRight(),
+            .from_gravity_x = 0,
+            .from_gravity_y = 0,
+        }, .{});
         return &self.te_floating;
     }
 

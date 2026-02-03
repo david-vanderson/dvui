@@ -20,9 +20,11 @@ pub const InitOptions = struct {
     /// image (so the mouse release will match the window under this).
     mouse_events: bool = true,
 
-    /// If not null, intersect with the clipping rect, then move floating
-    /// widget above the top-right of it.
-    from: ?Rect.Natural = null,
+    /// If not null, get min size and position according to from_gravity.
+    /// If you know the size already, leave this null and use Options.rect.
+    from: ?dvui.Point.Physical = null,
+    from_gravity_x: f32 = 0.5,
+    from_gravity_y: f32 = 0.5,
 };
 
 init_opts: InitOptions,
@@ -60,15 +62,14 @@ pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: I
         })),
     };
 
-    if (init_opts.from) |f| {
+    if (init_opts.from) |pt| {
         if (dvui.minSizeGet(self.data().id)) |_| {
             const ms = dvui.minSize(self.data().id, opts.min_sizeGet());
-            const clip = dvui.windowRectScale().rectFromPhysical(dvui.clipGet());
-            const clipped = Rect.Natural.cast(clip).intersect(f);
-            var start: Rect = .fromPoint(.cast(clipped.topRight()));
+            const npt = dvui.windowRectScale().pointFromPhysical(pt);
+            var start: Rect = .fromPoint(.cast(npt));
             start = start.toSize(ms);
-            start.x -= start.w;
-            start.y -= start.h + 2;
+            start.x -= start.w * (1.0 - init_opts.from_gravity_x);
+            start.y -= start.h * (1.0 - init_opts.from_gravity_y);
             self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), .{}, .none, .cast(start)));
         } else {
             // need another frame to get our min size
