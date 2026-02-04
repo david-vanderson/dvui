@@ -10,13 +10,14 @@ const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
 const BoxWidget = dvui.BoxWidget;
+const AccessKit = dvui.AccessKit;
 
 const FloatingWindowWidget = @This();
 
 /// Defaults is for the embedded box widget
 pub var defaults: Options = .{
     .name = "Window",
-    .role = .window,
+    .role = .dialog,
     .corner_radius = Rect.all(5),
     .margin = Rect.all(2),
     .border = Rect.all(1),
@@ -259,9 +260,10 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
 
     if (self.data().accesskit_node()) |ak_node| {
         if (self.init_options.modal)
-            dvui.AccessKit.nodeSetModal(ak_node)
+            AccessKit.nodeSetModal(ak_node)
         else
-            dvui.AccessKit.nodeClearModal(ak_node);
+            AccessKit.nodeClearModal(ak_node);
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
     }
 }
 

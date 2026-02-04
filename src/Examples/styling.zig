@@ -122,8 +122,6 @@ pub fn styling() void {
         const offset = dvui.dataGetPtrDefault(null, hbox.data().id, "offset", dvui.Point, .{ .x = 1, .y = 1 });
         const alpha = dvui.dataGetPtrDefault(null, hbox.data().id, "alpha", f32, 0.5);
 
-        // We are using two boxes here so the box shadow can have different corner_radius values.
-
         {
             var vbox = dvui.box(@src(), .{}, .{ .margin = dvui.Rect.all(30), .min_size_content = .{ .w = 200, .h = 100 }, .corner_radius = dvui.Rect.all(5), .background = true, .border = if (border.*) dvui.Rect.all(1) else null, .box_shadow = .{ .color = backbox_color, .corner_radius = dvui.Rect.all(radius.*), .shrink = shrink.*, .offset = offset.*, .fade = fade.*, .alpha = alpha.* } });
             defer vbox.deinit();

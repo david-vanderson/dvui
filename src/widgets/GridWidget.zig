@@ -111,7 +111,7 @@ pub const CellOptions = struct {
             .background = self.background,
             .color_fill = self.color_fill,
             .color_border = self.color_border,
-            .role = .cell,
+            .role = .grid_cell,
         };
     }
 
@@ -203,6 +203,9 @@ rows_y_offset: f32 = 0, // y value to offset rendering of the first body cell
 next_row_y: f32 = 0, // Next y position for laying out rows with variable heights
 this_row_y: f32 = 0, // This y position for laying out rows with variable heights
 last_header_height: f32 = 0, // Height of header last frame
+
+// AccessKit support
+rows: std.AutoArrayHashMapUnmanaged(usize, dvui.Id) = .empty,
 
 // Options
 init_opts: InitOpts,
@@ -327,6 +330,7 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, cols: WidthsOrNu
         scroll_opts,
         .{
             .name = "GridWidgetScrollArea",
+            .role = .none,
             .expand = .both,
             .background = false,
         },
@@ -487,6 +491,25 @@ pub fn bodyCell(self: *GridWidget, src: std.builtin.SourceLocation, cell: Cell, 
     // To support being called in a loop, combine col and row numbers as id_extra.
     // 9_223_372_036_854_775K cols should be enough for anybody.
     cell_opts.id_extra = (cell.col_num << @bitSizeOf(usize) / 2) | cell.row_num;
+
+    defer dvui.currentWindow().accesskit.grid_cell_row = .zero;
+    if (dvui.accesskit_enabled) {
+        // If this is a new row, then create an accessible row node to parent all the cells
+        // grid_cell_row must be set before the cell's box widget is created.
+        if (self.rows.get(cell.row_num)) |row_id| {
+            dvui.currentWindow().accesskit.grid_cell_row = row_id;
+        } else {
+            var vp = dvui.overlay(@src(), .{ .role = .row, .name = "GridWidgetRow", .id_extra = cell.row_num, .rect = cell_opts.rect.? });
+            defer vp.deinit();
+            if (vp.data().accesskit_node()) |_| {
+                self.rows.put(dvui.currentWindow().arena(), cell.row_num, vp.data().id) catch {};
+                dvui.currentWindow().accesskit.grid_cell_row = vp.data().id;
+            } else {
+                self.rows.put(dvui.currentWindow().arena(), cell.row_num, .zero) catch {};
+                dvui.currentWindow().accesskit.grid_cell_row = .zero;
+            }
+        }
+    }
 
     var cell_box = dvui.box(src, .{ .dir = .horizontal }, cell_opts);
     const first_frame = dvui.firstFrame(cell_box.data().id);

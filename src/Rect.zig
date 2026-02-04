@@ -195,6 +195,22 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             try writer.print("{s}{{ {d} {d} {d} {d} }}", .{ type_name, self.x, self.y, self.w, self.h });
         }
 
+        pub const Modify = struct {
+            x: ?f32 = null,
+            y: ?f32 = null,
+            w: ?f32 = null,
+            h: ?f32 = null,
+        };
+
+        pub fn modify(base: Self, mod: Modify) Self {
+            return .{
+                .x = mod.x orelse base.x,
+                .y = mod.y orelse base.y,
+                .w = mod.w orelse base.w,
+                .h = mod.h orelse base.h,
+            };
+        }
+
         /// True if the rect intersects the current clipping rectangle.
         ///
         /// Only valid between dvui.Window.begin() and end().
@@ -248,6 +264,14 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         /// Only valid between `dvui.Window.begin`and `dvui.Window.end`.
         pub fn toNatural(self: Rect.Physical) Rect.Natural {
             return self.scale(1 / dvui.windowNaturalScale(), Rect.Natural);
+        }
+
+        test modify {
+            const b = Rect{ .x = 1, .y = 1, .w = 1, .h = 1 };
+            try std.testing.expectEqual(0, b.modify(.{ .x = 0 }).x);
+            try std.testing.expectEqual(0, b.modify(.{ .y = 0 }).y);
+            try std.testing.expectEqual(0, b.modify(.{ .w = 0 }).w);
+            try std.testing.expectEqual(0, b.modify(.{ .h = 0 }).h);
         }
 
         test scale {

@@ -9,7 +9,7 @@ async function dvui_sleep(ms) {
 
 /**
  * @param {string} url
- * @returns {Uint8Array}
+ * @returns {Promise<Uint8Array>}
  */
 async function dvui_fetch(url) {
     let x = await fetch(url);
@@ -131,24 +131,35 @@ const fragmentShaderSource_webgl2 = `# version 300 es
     }
 `;
 
+/** @typedef {string | WebAssembly.WebAssemblyInstantiatedSource | Promise<WebAssembly.WebAssemblyInstantiatedSource} WasmArg */
+
 /**
- * @param {string} canvasId
- * @param {string} wasmFile The url to the wasm file, to be used in `fetch`
+ * @typedef {object} DvuiOptions
+ * @property {WebAssembly.Imports | undefined} wasmImportsExtra
  */
-function dvui(canvasId, wasmFile) {
+
+/**
+ * @param {string | HTMLCanvasElement} canvas - A canvas element or string id of one
+ * @param {WasmArg} wasmRef - The url to the wasm file, to be used in `fetch`
+ * @resturns {Promise<Dvui>}
+ */
+export function dvui(canvas, wasmRef) {
     const dvui = new Dvui();
-    WebAssembly.instantiateStreaming(fetch(wasmFile), { dvui: dvui.imports })
-        .then((result) => {
-            dvui.setInstance(result.instance);
-            dvui.setCanvas(canvasId);
-            dvui.run();
-        });
+    const wasmPromise = typeof wasmRef === "string"
+        ? WebAssembly.instantiateStreaming(fetch(wasmRef), { dvui: dvui.imports })
+        : Promise.resolve(wasmRef);
+    return wasmPromise.then((result) => {
+        dvui.setInstance(result.instance);
+        dvui.setCanvas(canvas);
+        dvui.run();
+        return dvui;
+    });
 }
 
 const utf8decoder = new TextDecoder();
 const utf8encoder = new TextEncoder();
 
-class Dvui {
+export class Dvui {
     /** @type {WebGL2RenderingContext | WebGLRenderingContext} */
     gl;
     /** @type {WebGLBuffer} */
@@ -179,6 +190,9 @@ class Dvui {
 
     renderRequested = false;
     renderTimeoutId = 0;
+
+    /** @type {WebAssembly.ModuleImports} */
+    imports;
 
     /** @type {WebAssembly.Instance} */
     instance;
@@ -279,7 +293,7 @@ class Dvui {
                 }
             },
             wasm_panic: (ptr, len) => {
-                this.stopped = true;
+                this.stop();
                 let msg = utf8decoder.decode(
                     new Uint8Array(
                         this.instance.exports.memory.buffer,
@@ -1098,6 +1112,8 @@ class Dvui {
     }
 
     requestRender() {
+        if (this.stopped) return;
+
         if (this.renderTimeoutId > 0) {
             // we got called before the timeout happened
             clearTimeout(this.renderTimeoutId);
@@ -1113,8 +1129,29 @@ class Dvui {
         }
     }
 
+    // For debugging.  Turns off dvui rendering (zig code stops running).
+    stop() {
+        if (this.renderTimeoutId > 0) {
+            clearTimeout(this.renderTimeoutId);
+            this.renderTimeoutId = 0;
+        }
+
+        this.renderRequested = false;
+        this.stopped = true;
+    }
+
+    // For debugging.  Turn back on dvui rendering (zig code starts running).
+    restart() {
+        if (!this.stopped) {
+            console.log("dvui.restart() called when not stopped");
+        }
+        this.stopped = false;
+        this.requestRender();
+    }
+
     render() {
         if (this.stopped) return;
+
         this.renderRequested = false;
 
         // if the canvas changed size, adjust the backing buffer
@@ -1158,7 +1195,7 @@ class Dvui {
         this.filesCacheModified = false;
 
         if (millis_to_wait < 0) {
-            this.stopped = true;
+            this.stop();
         } else if (millis_to_wait == 0) {
             this.requestRender();
         } else if (millis_to_wait > 0) {
@@ -1199,6 +1236,7 @@ class Dvui {
             resizeObserver.observe(this.gl.canvas);
         }
         this.gl.canvas.addEventListener("mousemove", (ev) => {
+            if (this.stopped) return;
             let rect = this.gl.canvas.getBoundingClientRect();
             let x = (ev.clientX - rect.left) / (rect.right - rect.left) *
                 this.gl.drawingBufferWidth;
@@ -1208,15 +1246,18 @@ class Dvui {
             this.requestRender();
         });
         this.gl.canvas.addEventListener("mousedown", (ev) => {
+            if (this.stopped) return;
             this.instance.exports.add_event(2, ev.button, 0, 0, 0);
             this.requestRender();
         });
         this.gl.canvas.addEventListener("mouseup", (ev) => {
+            if (this.stopped) return;
             this.instance.exports.add_event(3, ev.button, 0, 0, 0);
             this.need_oskCheck = true;
             this.requestRender();
         });
         this.gl.canvas.addEventListener("wheel", (ev) => {
+            if (this.stopped) return;
             ev.preventDefault();
             if (ev.deltaX != 0) {
                 const min = Math.min(
@@ -1250,6 +1291,7 @@ class Dvui {
         });
 
         let keydown = (ev) => {
+            if (this.stopped) return;
             if (ev.key == "Tab") {
 
                 // In most browsers we don't even see a control-tab, the
@@ -1288,6 +1330,7 @@ class Dvui {
         this.hidden_input.addEventListener("keydown", keydown.bind(this));
 
         let keyup = (ev) => {
+            if (this.stopped) return;
             const str = utf8encoder.encode(ev.key);
             const ptr = this.instance.exports.arena_u8(str.length);
             var dest = new Uint8Array(
@@ -1311,6 +1354,7 @@ class Dvui {
         this.hidden_input.addEventListener("keyup", keyup.bind(this));
 
         this.hidden_input.addEventListener("beforeinput", (ev) => {
+            if (this.stopped) return;
             ev.preventDefault();
             if (ev.data && !ev.isComposing) {
                 const str = utf8encoder.encode(ev.data);
@@ -1334,6 +1378,7 @@ class Dvui {
             }
         });
         this.hidden_input.addEventListener("compositionend", (ev) => {
+            if (this.stopped) return;
             if (ev.data) {
                 const str = utf8encoder.encode(ev.data);
                 const ptr = this.instance.exports.arena_u8(
@@ -1358,6 +1403,7 @@ class Dvui {
             ev.target.value = "";
         });
         this.gl.canvas.addEventListener("touchstart", (ev) => {
+            if (this.stopped) return;
             ev.preventDefault();
             let rect = this.gl.canvas.getBoundingClientRect();
             for (let i = 0; i < ev.changedTouches.length; i++) {
@@ -1378,6 +1424,7 @@ class Dvui {
             this.requestRender();
         });
         this.gl.canvas.addEventListener("touchend", (ev) => {
+            if (this.stopped) return;
             ev.preventDefault();
             let rect = this.gl.canvas.getBoundingClientRect();
             for (let i = 0; i < ev.changedTouches.length; i++) {
@@ -1402,6 +1449,7 @@ class Dvui {
             this.requestRender();
         });
         this.gl.canvas.addEventListener("touchmove", (ev) => {
+            if (this.stopped) return;
             ev.preventDefault();
             let rect = this.gl.canvas.getBoundingClientRect();
             for (let i = 0; i < ev.changedTouches.length; i++) {

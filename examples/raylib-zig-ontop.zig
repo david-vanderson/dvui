@@ -28,6 +28,8 @@ pub fn main() !void {
     raylib.setConfigFlags(.{
         .window_resizable = true,
         .vsync_hint = true,
+        // Window must initially be created hidden if accesskit is used.
+        .window_hidden = dvui.accesskit_enabled,
     });
     raylib.initWindow(800, 600, "DVUI Raylib Ontop Example");
     defer raylib.closeWindow();

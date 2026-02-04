@@ -21,7 +21,7 @@ The primary benefit is making your appliation useable by a wider array of users.
 
 Incorporating accessibility makes your UI application scriptable. Each widget that has a node in the accessibility tree publishes its current value along with the set of actions it can perform. By using your platform's accessibility API, you can write automated tests as well as allowing your users to script common tasks.
 
-Outside of the additional executable size from including the AccessKit library, there is very little performance impact from supporting AccessKit. (Essentially, two additional if statements per widget) 
+Outside of the additional executable size from including the library, enabling AccessKit support has very little impact on runtime performance or memory requirements. 
 
 The overhead of creating AccessKit nodes is only incurred when the operating system's accessibility API is activated by a screen reader or similar application.
 
@@ -35,31 +35,22 @@ Not all combinations of backends and operating systems are currently supported.
 - MacOS - Supports all backends in for shared and static libraries. SDL2, SDL3 and Raylib.
 - Web - Not currently supported by AccessKit but it is planned. 
 
-When you compile you application with AccessKit enabled, most of the accessibility work is taken care of for you and your users will gain most of the benefits of accessibility support. However, DVUI doesn't know your application's intent or any semantic details about the UX, so it is not possible to automate everything. 
+When you compile you application with AccessKit enabled, most of the work is taken care of for you and your users will gain most of the benefits of accessibility support. However, DVUI doesn't know your application's intent or any semantic details about the UX, so it is not possible to automate everything. 
 
-As an example, you may have a set of radio buttons, but DVUI has no way to know if those radio buttons all belong to the same radio group.
-
-For the radio button example, you can give DVUI and AccessKit some additional information by setting the 
-role option on the box surrounding the radio buttons to `.role = .radio_group`.  This will let AccessKit know that all child radio buttons within the box all belong to the same radio group. You might also choose to supply a `.label` to give the user more information about the meaning of the radio group.
+As examples, any images should be given an accessible label by passing the .label option. When placing radio button in a radio group it is also helpful to supply a label to the group.
 
 There are other AccessKit APIs that let you provide more details to the accessibility API. See [Widget users](#widget-users) for more details on how to use the AccessKit API.
 
+Example of setting a label for an image:
 ```
-{
-    var hbox = dvui.box(@src(), 
-        .{ .dir = .horizontal }, 
-        .role = .radio_group, 
-        .label = . { .text = "Make a choice"} },
-    );
-    defer hbox.deinit();
-    
-    if (dvui.radio(@src(), radio_choice == choice1), "Choice 1", .{ .id_extra = i })) {
-        radio_choice = choice1;
-    }
-    if (dvui.radio(@src(), radio_choice == choice2), "Choice 2", .{ .id_extra = i })) {
-        radio_choice = choice2;
-    }
-}
+    const image_source: dvui.ImageSource = .{ .imageFile = .{ .bytes = zig_favicon, .name = "zig favicon" } };
+    const imgsize = dvui.imageSize(image_source) catch dvui.Size.all(50);
+    _ = dvui.image(@src(), .{ .source = image_source }, .{
+        .gravity_y = 0.5,
+        .min_size_content = .{ .w = imgsize.w + icon_image_size_extra, .h = imgsize.h + icon_image_size_extra },
+        .rotation = icon_image_rotation,
+        .label = .{ .text = image_source.imageFile.name },
+    });
 ```
 
 ## Testing for accessibility
@@ -218,13 +209,13 @@ Ignoring these rules will not break anything, but will make it harder for access
 | BoxWidget | null | Basic | N/A | N | User can pass .role and .label via options |
 | ButtonWidget | button | Yes | Yes | N | Focus and Click actions supported |
 | ColorPickerWidget | slider x 4 | Partial | Partial | Y | AccessKit does not currently support 2d-sliders. Other sliders are supported. |
-| DropDownWidget | combo_box / list_item | N | Y | Y | more testing required |
+| DropDownWidget | combo_box / list_item | N | Y | Y | Supported. Add expand/collapse when supported by accesskit |
 | FlexBoxWidget | null | Basic | N/A | N | User can pass .role and .label via options |
-| FloatingMenuWidget | none | N/A | N/A | N | Accessibility Handled by Menu / MenuItem|
+| FloatingMenuWidget | none | N/A | N/A | N | Accessibility Handled by Menu / MenuItem |
 | FloatingToolTipWidget | tooltip | Y* | N | N | Tooltips are added only when shown. No support for showing / hiding tooltips |
 | FloatingWidget | N/A | N/A | N/A | N | |
-| FloatingWindowWidget | window | Y | Y | N | Can close via close button. |
-| GridWidget | grid, header, cell | Y? | N/A | Y | Needs more real-world testing. Setting row and col numbers doesn't appear to do anything |
+| FloatingWindowWidget | dialog | Y | Y | N | Defaults to .dialog. User should override with .window if more appropriate. |
+| GridWidget | grid, header, row, cell | Y | N/A | N? | Needs more real-world testing.  |
 | IconWidget | image |  Y | N/A | N | |
 | LabelWidget | label |  Y | N/A | N | | 
 | MenuItemWidget | menu_item | Y | Y | Y | Add keyboard shortcuts when supported by dvui | 
@@ -235,19 +226,19 @@ Ignoring these rules will not break anything, but will make it harder for access
 | ReorderWidget | null | N | N | Y | Not currently supported. Unlikely that interaction will work? | 
 | ScaleWidget | null | N/A | N/A | N | Not required |
 | ScrollAreaWidget | scroll_view | Y | N | N | Appears as a pane |
-| ScrollBarWidget | scroll_bar | Y *| N* | Y | Due to bug in AccessKit, is set to read-only and cannot interact. Actual values displayed may not be accurate | 
+| ScrollBarWidget | scroll_bar | Y| N* | Y | Due to bug in AccessKit, is set to read-only and cannot interact.  | 
 | SuggestionsWidget | suggestion, list_item | Y | Y | N | 
 | TabsWidget | .tab_panel, .tab | Y | Y | N | Sets active tabs and allows tab selection |
-| TextEntryWidget | text_input, multiline_text_input | Y* | N* | Y | TextRun support implemented for text. Allows selection and navigation. Scrolling for off-screen text requires improvement. Cached layouts needs more investigation. |
-| TextLayoutWidget | label | Y* | N/A | Y | Most features supported. Needs to implement the text_replace action. | 
+| TextEntryWidget | text_input, multiline_text_input | Y* | N* | Y |  Allows selection and navigation. Cached layouts needs more investigation. Needs to implement the text_replace action. Scrolling for off-screen text requires improvement. |
+| TextLayoutWidget | label | Y* | N/A | Y | Most features supported. TextRun support implemented for text. Scrolling for off-screen text requires improvement. Needs to split lines of more than 255 chars into multiple text runs | 
 | TreeWidget | tree, tree_item | Y* | Y | Y | Adds tree and nodes. Implement expand / collapse when supported by AccessKit | 
 | windowHeader | label, button | Y | Y | N | |
-| dialogs | window | Y | Y | Y | All dialogs are displayed as windows, rather than dialogs and modal state is not displayed in accessibility insights. AccessKit currently has limted support for dialogs, so leaving as window until the situation changes and can revisit. |
-| toasts | label | Y? | N/A | ? | These are set as polite annoucements via node_set_live but have not seen this cause anything to be read from the reader. |
-| comboBox | combo_box | Y | Y | N | Displays as combo box and shows list items when dropped |
+| dialogs | window | Y | Y | N | Same as floating window |
+| toasts | label | Y | N/A | N | These are set as polite annoucements. |
+| comboBox | combo_box | Y | Y | Y | Displays as combo box and shows list items when dropped. Add expand / collapse when supported by accesskit |
 | expander | group | Y* | Y* | Y | AccessKit does not currently support expand / collapse |
 | context | ? | ? | ? | ? | Will need to implement "show context menu" action. Which will be mapped to right-click. |
-| gridHeadingSortable | button | Y* | Y | Y | Sets sort state of asc/desc if sorted, but does not come through in accessibility insights. further investigation required |
+| gridHeadingSortable | button | Y* | Y | Y | Sets sort state of asc/desc if sorted, but does not come through in accessibility insights. requires accesskit support. |
 | gridHeadingCheckbox | button | Y | Y | N| Labels checkbox as select all / select none. |
 | image | image | Y* | N/A | N | Requires user to label the image with .label |
 | slider | slider | Y | Y | N | Fully supported |
