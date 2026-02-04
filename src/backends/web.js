@@ -159,7 +159,6 @@ export function dvui(canvas, wasmRef) {
 const utf8decoder = new TextDecoder();
 const utf8encoder = new TextEncoder();
 
-
 export class Dvui {
     /** @type {WebGL2RenderingContext | WebGLRenderingContext} */
     gl;
@@ -803,6 +802,7 @@ export class Dvui {
                 dl.href = fileURL;
                 dl.download = name;
                 dl.click();
+                dl.remove();
                 URL.revokeObjectURL(fileURL);
             },
             wasm_open_file_picker: (id, accept_ptr, accept_len, multiple) => {
