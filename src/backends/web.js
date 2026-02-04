@@ -817,14 +817,12 @@ export class Dvui {
                     data_ptr,
                     data_len,
                 );
-                const blob = new Blob([data], { type: "octet/stream" });
+                const blob = new Blob([data], { type: "application/octet-stream" });
                 const fileURL = URL.createObjectURL(blob);
                 const dl = document.createElement("a");
                 dl.href = fileURL;
                 dl.download = name;
-                document.body.appendChild(dl);
                 dl.click();
-                document.body.removeChild(dl);
                 URL.revokeObjectURL(fileURL);
             },
             wasm_open_file_picker: (id, accept_ptr, accept_len, multiple) => {
