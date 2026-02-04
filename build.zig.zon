@@ -11,8 +11,8 @@
             .lazy = true,
         },
         .sdl3 = .{
-            .url = "git+https://github.com/david-vanderson/SDL#2c5bd165a7bd647639cbf5f7edb899410d27b695",
-            .hash = "sdl-0.2.6+3.2.20-7uIn9FAjfwGon7V_xiNW1BXyq5ZzTOgPJSbRbybb-Fwz",
+            .url = "git+https://github.com/castholm/SDL#887fa805e40d5c7bb3955ae69b89ed566c6a0471",
+            .hash = "sdl-0.4.0+3.4.0-SDL--rq2owEZsySGuHCuVJ9naEvH3i3e_pyUIjziBtJ-",
             .lazy = true,
         },
         .freetype = .{
@@ -43,8 +43,8 @@
             .hash = "svg2tvg-0.0.0-HpMZubl3BgCSsad-KGvsPcSaiL8JmlgWEPr7KgGMk65y",
         },
         .accesskit = .{
-            .url = "https://github.com/AccessKit/accesskit-c/releases/download/0.17.1/accesskit-c-0.17.1.zip",
-            .hash = "N-V-__8AAJ37FAuEZXG593uEuYETrkoxDz78QLL32k0GkaYG",
+            .url = "https://github.com/AccessKit/accesskit-c/releases/download/0.20.0/accesskit-c-0.20.0.zip",
+            .hash = "N-V-__8AAPwQuguI8Jsun6Omu2HHb9EADaaP8Yn2TxYplJtC",
         },
 
         // Experimental zig bindings, any zig based backend will be located here
