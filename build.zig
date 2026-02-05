@@ -834,16 +834,17 @@ pub fn addDvuiModule(
     // it to be displayed in the build help
     const accesskit_from_system = b.systemIntegrationOption("accesskit", .{});
     if (opts.accesskit.enabled()) {
-        const ak_dep = b.dependency("accesskit", .{});
-        dvui_mod.addIncludePath(ak_dep.path("include"));
+        if (b.lazyDependency("accesskit", .{})) |ak_dep| {
+            dvui_mod.addIncludePath(ak_dep.path("include"));
 
-        if (!accesskit_from_system) {
-            dvui_mod.addLibraryPath(accessKitPath(b, target, ak_dep, opts.accesskit, false));
-        }
-        dvui_mod.linkSystemLibrary("accesskit", .{});
+            if (!accesskit_from_system) {
+                dvui_mod.addLibraryPath(accessKitPath(b, target, ak_dep, opts.accesskit, false));
+            }
+            dvui_mod.linkSystemLibrary("accesskit", .{});
 
-        if (target.result.os.tag == .linux) {
-            dvui_mod.linkSystemLibrary("unwind", .{});
+            if (target.result.os.tag == .linux) {
+                dvui_mod.linkSystemLibrary("unwind", .{});
+            }
         }
     }
 
@@ -984,7 +985,7 @@ fn addExample(
         compile_step.dependOn(&b.addInstallFileWithDir(accessKitPath(
             b,
             opts.target,
-            b.dependency("accesskit", .{}),
+            b.lazyDependency("accesskit", .{}).?,
             opts.accesskit,
             true,
         ), .bin, accessKitLibName(opts.target)).step);
