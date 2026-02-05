@@ -45,6 +45,7 @@
         .accesskit = .{
             .url = "https://github.com/AccessKit/accesskit-c/releases/download/0.20.0/accesskit-c-0.20.0.zip",
             .hash = "N-V-__8AAPwQuguI8Jsun6Omu2HHb9EADaaP8Yn2TxYplJtC",
+            .lazy = true,
         },
 
         // Experimental zig bindings, any zig based backend will be located here
