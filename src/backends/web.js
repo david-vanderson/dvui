@@ -1,3 +1,5 @@
+/// <reference path="./web.d.ts" />
+
 /**@typedef {BigInt} Id */
 
 /**
@@ -131,17 +133,10 @@ const fragmentShaderSource_webgl2 = `# version 300 es
     }
 `;
 
-/** @typedef {string | WebAssembly.WebAssemblyInstantiatedSource | Promise<WebAssembly.WebAssemblyInstantiatedSource>} WasmArg */
-
-/**
- * @typedef {object} DvuiOptions
- * @property {WebAssembly.Imports | undefined} wasmImportsExtra
- */
-
 /**
  * @param {string | HTMLCanvasElement} canvas - A canvas element or string id of one
- * @param {WasmArg} wasmRef - The url to the wasm file, to be used in `fetch`
- * @resturns {Promise<Dvui>}
+ * @param {DVUI.WasmArg} wasmRef - The url to the wasm file, to be used in `fetch`
+ * @returns {Promise<Dvui>}
  */
 export function dvui(canvas, wasmRef) {
     const dvui = new Dvui();
@@ -270,30 +265,84 @@ export class Dvui {
         return idx;
     }
 
+    /**
+     * @param {DVUI.AllocatorFunction} allocFn 
+     * @param {number} len 
+     * @returns {[pointer: number, slice: Uint8Array]}
+     */
+    genericAlloc(allocFn, len) {
+        const pointer = allocFn(len);
+        const slice = new Uint8Array(
+            this.instance.exports.memory.buffer,
+            pointer,
+            len
+        );
+
+        return [pointer, slice];
+    }
+
+    /**
+     * @param {DVUI.AllocatorFunction} allocFn 
+     * @param {ArrayLike<number>} bytes 
+     * @returns {number} pointer
+     */
+    allocBuffer(allocFn, bytes) {
+        const [pointer, slice] = this.genericAlloc(allocFn, bytes.length);
+        slice.set(bytes);
+        return pointer;
+    }
+
+    /**
+     * @param {DVUI.AllocatorFunction} allocFn 
+     * @param {ArrayLike<number>} bytes 
+     * @param {number} sentinel 
+     * @returns {number} pointer
+     */
+    allocBufferZ(allocFn, bytes, sentinel = 0) {
+        const [pointer, slice] = this.genericAlloc(allocFn, bytes.length + 1);
+        slice.set(bytes);
+        slice[bytes.length] = sentinel;
+        return pointer;
+    }
+
+    /**
+     * @param {DVUI.AllocatorFunction} allocFn 
+     * @param {string} string 
+     * @returns 
+     */
+    allocString(allocFn, string) {
+        const buffer = utf8encoder.encode(string);
+        return this.allocBuffer(allocFn, buffer);
+    };
+
+    /**
+     * @param {DVUI.AllocatorFunction} allocFn 
+     * @param {string} string 
+     * @param {number} sentinel 
+     * @returns {number} pointer
+     */
+    allocStringZ(allocFn, string, sentinel) {
+        const buffer = utf8encoder.encode(string);
+        return this.allocBufferZ(allocFn, buffer, sentinel);
+    };
+
+    /**
+     * @param {number} ptr 
+     * @param {number} length 
+     * @returns {string}
+     */
     stringFromPointer(ptr, length) {
         return utf8decoder.decode(this.bytesFromPointer(ptr, length));
     }
 
+    /**
+     * @param {number} ptr 
+     * @param {number} length 
+     * @returns {Uint8Array}
+     */
     bytesFromPointer(ptr, length) {
-        return new Uint8Array(this.instance.exports.memory.buffer, ptr, Number(length))
+        return new Uint8Array(this.instance.exports.memory.buffer, ptr, length)
     }
-
-    bytesToPointer(allocator, bytes) {
-        const pointer = allocator(bytes.length + 1);
-        const slice = new Uint8Array(
-            this.instance.exports.memory.buffer,
-            pointer,
-            bytes.length + 1
-        );
-        slice.set(bytes);
-        slice[bytes.length] = 0;
-        return pointer;
-    }
-
-    stringToPointer(allocator, string) {
-        const buffer = utf8encoder.encode(string);
-        return this.bytesToPointer(allocator, buffer);
-    };
 
     constructor() {
         this.hidden_input = document.createElement("input");
@@ -838,7 +887,7 @@ export class Dvui {
                 const cached = this.filesCache.get(id);
                 if (!cached || cached.files.length <= file_index) return;
 
-                return this.stringToPointer(this.instance.exports.arena_u8, cached.files[file_index].name);
+                return this.allocStringZ(this.instance.exports.arena_u8, cached.files[file_index].name);
             },
             wasm_read_file_data: (id, file_index, data_ptr) => {
                 const cached = this.filesCache.get(id);
@@ -873,7 +922,7 @@ export class Dvui {
             wasm_add_noto_font: () => {
                 dvui_fetch("NotoSansKR-Regular.ttf").then((bytes) => {
                     //console.log("bytes len " + bytes.length);
-                    const ptr = this.bytesToPointer(this.instance.exports.gpa_u8, bytes)
+                    const ptr = this.allocBuffer(this.instance.exports.gpa_u8, bytes)
                     this.instance.exports.new_font(
                         ptr,
                         bytes.length,
@@ -1028,12 +1077,12 @@ export class Dvui {
         let dvui_init_return = 0;
         let str = utf8encoder.encode(navigator.platform);
         if (str.length > 0) {
-            const ptr = this.bytesToPointer(this.instance.exports.gpa_u8, str);
+            const ptr = this.allocBuffer(this.instance.exports.gpa_u8, str);
             dvui_init_return = this.instance.exports.dvui_init(
                 ptr,
                 str.length,
             );
-            this.instance.exports.gpa_free(ptr, str.length + 1);
+            this.instance.exports.gpa_free(ptr, str.length);
         } else {
             dvui_init_return = this.instance.exports.dvui_init(
                 0,
@@ -1241,7 +1290,7 @@ export class Dvui {
 
             let str = utf8encoder.encode(ev.key);
             if (str.length > 0) {
-                const ptr = this.bytesToPointer(this.instance.exports.arena_u8, str)
+                const ptr = this.allocBuffer(this.instance.exports.arena_u8, str)
                 this.instance.exports.add_event(
                     5,
                     ptr,
@@ -1258,10 +1307,11 @@ export class Dvui {
 
         let keyup = (ev) => {
             if (this.stopped) return;
-            const str = this.stringToPointer(this.instance.exports.arena_u8, ev.key);
+            const str = utf8encoder.encode(ev.key);
+            const ptr = this.allocBuffer(this.instance.exports.arena_u8, str);
             this.instance.exports.add_event(
                 6,
-                str,
+                ptr,
                 str.length,
                 0,
                 (ev.metaKey << 3) + (ev.altKey << 2) + (ev.ctrlKey << 1) +
@@ -1277,11 +1327,12 @@ export class Dvui {
             if (this.stopped) return;
             ev.preventDefault();
             if (ev.data && !ev.isComposing) {
-                const str = this.stringToPointer(this.instance.exports.arena_u8, ev.data);
+                const str = utf8encoder.encode(ev.data);
+                const ptr = this.allocBuffer(this.instance.exports.arena_u8, str);
                 this.instance.exports.add_event(
                     7,
-                    str,
-                    str.length - 1,
+                    ptr,
+                    str.length,
                     0,
                     0,
                 );
@@ -1291,11 +1342,12 @@ export class Dvui {
         this.hidden_input.addEventListener("compositionend", (ev) => {
             if (this.stopped) return;
             if (ev.data) {
-                const str = this.stringToPointer(this.instance.exports.arena_u8, ev.data);
+                const str = utf8encoder.encode(ev.data);
+                const ptr = this.allocBuffer(this.instance.exports.arena_u8, str);
                 this.instance.exports.add_event(
                     7,
-                    str,
-                    str.length - 1,
+                    ptr,
+                    str.length,
                     0,
                     0,
                 );
