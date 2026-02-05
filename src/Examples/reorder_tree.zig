@@ -405,13 +405,6 @@ pub fn reorderTree(uniqueId: dvui.Id) void {
         .{
             .border = .{ .x = 1 },
             .corner_radius = dvui.Rect.all(4),
-            .box_shadow = .{
-                .color = .black,
-                .offset = .{ .x = -5, .y = 5 },
-                .shrink = 5,
-                .fade = 10,
-                .alpha = 0.15,
-            },
         },
     ) catch std.debug.panic("Failed to recurse files", .{});
 }
@@ -586,7 +579,6 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
 
         var branch_opts_override = dvui.Options{
             .id_extra = id_extra,
-            .expand = .horizontal,
         };
 
         // Check our branch id, which is updated from our entry name making it a stable ID
