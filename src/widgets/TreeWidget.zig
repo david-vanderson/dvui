@@ -235,7 +235,6 @@ pub const Branch = struct {
     pub fn wrapInner(opts: Options) Options {
         var ret = opts;
         ret.name = null;
-        ret.expand = .horizontal;
         ret.role = null;
         ret.label = null;
         return ret;
@@ -323,7 +322,7 @@ pub const Branch = struct {
             dvui.parentSet(self.widget());
         }
 
-        self.button.init(@src(), .{}, wrapInner(self.options));
+        self.button.init(@src(), .{}, wrapInner(self.options).override(.{ .expand = self.options.expand }));
         self.button.processEvents();
         self.button.drawBackground();
         self.button.drawFocus();
