@@ -427,10 +427,7 @@ pub fn currentWindow() *Window {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetAlloc(comptime T: type) *T {
-    const cw = currentWindow();
-    const alloc = cw._widget_stack.allocator();
-    const ptr = alloc.create(T) catch @panic("OOM");
-    return ptr;
+    return dvui.currentWindow()._widget_stack.create(T);
 }
 
 /// Pops a widget off the alloc stack, if it was allocated there.
@@ -440,8 +437,14 @@ pub fn widgetAlloc(comptime T: type) *T {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetFree(ptr: anytype) void {
-    const ws = &currentWindow()._widget_stack;
-    ws.allocator().destroy(ptr);
+    dvui.currentWindow()._widget_stack.destroy(ptr);
+}
+
+/// Returns whether the widget was created with widgetAlloc.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn widgetIsAllocated(ptr: anytype) bool {
+    return dvui.currentWindow()._widget_stack.created(ptr);
 }
 
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {
