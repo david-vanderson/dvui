@@ -19,7 +19,6 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     rs: RectScale,
     text_entry_id: dvui.Id,
-    was_allocated_on_widget_stack: bool = false,
 };
 
 /// It's expected to call this when `self` is `undefined`
@@ -116,8 +115,7 @@ pub fn addChoice(self: *SuggestionWidget) *MenuItemWidget {
 }
 
 pub fn deinit(self: *SuggestionWidget) void {
-    const should_free = self.init_options.was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
     if (self.selected_index > (self.drop_mi_index -| 1)) {
         self.selected_index = self.drop_mi_index -| 1;

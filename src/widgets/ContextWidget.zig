@@ -130,8 +130,7 @@ pub fn processEvent(self: *ContextWidget, e: *Event) void {
 }
 
 pub fn deinit(self: *ContextWidget) void {
-    const should_free = self.data().was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
     if (self.focused) {
         dvui.dataSet(null, self.data().id, "_activePt", self.activePt);

@@ -249,8 +249,7 @@ pub fn minSizeForChild(self: *BoxWidget, s: Size) void {
 }
 
 pub fn deinit(self: *BoxWidget) void {
-    const should_free = self.data().was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
     const extra_space = (if (self.init_opts.dir == .horizontal) self.child_rect.w else self.child_rect.h) > 0.001;
     const ms: Size = if (self.init_opts.dir == .horizontal) .{

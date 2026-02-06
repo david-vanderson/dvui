@@ -1318,8 +1318,7 @@ pub fn copy(self: *TextEntryWidget) void {
 }
 
 pub fn deinit(self: *TextEntryWidget) void {
-    const should_free = self.data().was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
 
     self.textLayout.deinit();

@@ -155,8 +155,7 @@ pub fn minSizeForChild(self: *CacheWidget, s: Size) void {
 /// This deinit function returns an error because of the additional
 /// texture handling it requires.
 pub fn deinit(self: *CacheWidget) void {
-    const should_free = self.data().was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
     const cw = dvui.currentWindow();
     if (self.state == .ok and self.uncached()) {
