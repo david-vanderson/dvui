@@ -151,8 +151,6 @@ pub const InitOpts = struct {
     // If var row heights is set to false, size.h is ignored.
     // When using var row heights row_nr must be populated sequentially for each column when creating bodyCells.
     row_height_variable: bool = false,
-
-    was_allocated_on_widget_stack: bool = false,
 };
 
 pub const WidthsOrNum = union(enum) {
@@ -338,8 +336,7 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, cols: WidthsOrNu
 }
 
 pub fn deinit(self: *GridWidget) void {
-    const should_free = self.init_opts.was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
 
     if (self.data().accesskit_node()) |ak_node| {

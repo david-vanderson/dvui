@@ -24,7 +24,6 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     dir: dvui.enums.Direction = .horizontal,
     draw_focus: bool = true,
-    was_allocated_on_widget_stack: bool = false,
 };
 
 /// It's expected to call this when `self` is `undefined`
@@ -170,8 +169,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
 }
 
 pub fn deinit(self: *TabsWidget) void {
-    const should_free = self.init_options.was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
     self.box.deinit();
     self.group.deinit();
