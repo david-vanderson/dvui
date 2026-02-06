@@ -2789,6 +2789,92 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     return expanded;
 }
 
+var group_box_defaults: dvui.Options = .{
+    .name = "GroupBox",
+    .border = Rect.all(1),
+    .padding = Rect.all(6),
+    .margin = Rect.all(6),
+    .corner_radius = .{ .x = 3, .y = 3, .w = 3, .h = 3 },
+    .role = .group,
+};
+
+/// A bordered box with a heading, used to group related widgets,
+/// also known as a fieldset.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) *BoxWidget {
+    var options = group_box_defaults.override(.{
+        .label = .{ .text = label_str },
+    }).override(opts);
+
+    const text_size = options.fontGet().textSize(label_str);
+
+    // Offset top margin and padding to account for label
+    options.margin.?.y += text_size.h / 2;
+    options.padding.?.y += text_size.h / 2;
+
+    const b = widgetAlloc(BoxWidget);
+    b.init(src, .{}, options);
+
+    const border = options.borderGet();
+    if (border.x != border.y or border.y != border.w or border.w != border.h) {
+        options.border = Rect.all(@max(border.x, border.y, border.w, border.h));
+        b.data().options.border = options.border;
+        dvui.log.debug("groupBox {x} requires uniform borders, border width set to {d}", .{ b.data().id, options.border.?.x });
+        dvui.currentWindow().debug.widget_id = b.data().id;
+    }
+    if (options.backgroundGet()) {
+        b.drawBackground();
+    }
+
+    const label_padding: Rect = .{ .x = LabelWidget.defaults.paddingGet().x, .w = LabelWidget.defaults.paddingGet().w, .y = 0, .h = 0 };
+    labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, options.strip().override(.{
+        .rect = .{
+            .x = 0, // Starts at padding.
+            .y = -options.paddingGet().y - border.y / 2 - text_size.h / 2,
+            .w = @min(text_size.w + label_padding.x + label_padding.w, b.data().contentRect().w),
+            .h = text_size.h,
+        },
+        .background = options.background,
+        .corner_radius = options.corner_radius,
+        .padding = label_padding,
+    }));
+
+    // draw the border
+    if (b.data().visible() and options.borderGet().nonZero()) {
+        const wd = b.data();
+        const rs = wd.rectScale().s;
+        var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
+        defer path.deinit();
+
+        const r = wd.borderRectScale().r.insetAll(border.x / 2 * rs);
+        const cr = options.corner_radiusGet().scale(rs, Rect.Physical);
+        const left_x = r.x + (options.paddingGet().x + border.x / 2) * rs;
+        const right_x = @min(
+            left_x + text_size.scale(rs, Rect.Physical).w + (label_padding.x + label_padding.w) * rs,
+            wd.contentRectScale().r.x + wd.contentRectScale().r.w,
+        );
+        path.addPoint(.{ .x = left_x, .y = r.y }); // left edge of label
+
+        const tl = dvui.Point.Physical{ .x = r.x + cr.x, .y = r.y + cr.x };
+        path.addArc(tl, cr.x, std.math.pi * 1.5, std.math.pi, false);
+
+        const bl = dvui.Point.Physical{ .x = r.x + cr.x, .y = r.y + r.h - cr.x };
+        path.addArc(bl, cr.x, std.math.pi, std.math.pi * 0.5, false);
+
+        const br = dvui.Point.Physical{ .x = r.x + r.w - cr.x, .y = r.y + r.h - cr.x };
+        path.addArc(br, cr.x, std.math.pi * 0.5, 0, false);
+
+        const tr = dvui.Point.Physical{ .x = r.x + r.w - cr.x, .y = r.y + cr.x };
+        path.addArc(tr, cr.x, std.math.pi * 2, std.math.pi * 1.5, false);
+
+        path.addPoint(.{ .x = right_x, .y = r.y }); // right edge of label
+
+        path.build().stroke(.{ .thickness = border.x * rs, .color = dvui.themeGet().border });
+    }
+    return b;
+}
+
 /// Splits area in two with a user-moveable sash between.
 ///
 /// Automatically collapses (only shows one of the two sides) when it has less
