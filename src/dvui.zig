@@ -464,17 +464,7 @@ pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []
         .{ "\nStack trace: {f}", stack_trace }
     else
         .{ "{s}", "" }; // Needed to keep the arg count the sames
-
-    // There is no nice way to combine a comptime tuple and a runtime tuple
-    const combined_args = switch (std.meta.fields(@TypeOf(args)).len) {
-        0 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), err_trace_arg, trace_arg },
-        1 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], err_trace_arg, trace_arg },
-        2 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], err_trace_arg, trace_arg },
-        3 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], err_trace_arg, trace_arg },
-        4 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], args[3], err_trace_arg, trace_arg },
-        5 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], args[3], args[4], err_trace_arg, trace_arg },
-        else => @compileError("Too many arguments"),
-    };
+    const combined_args = .{ src.file, src.line, src.column, src.fn_name, @errorName(err) } ++ args ++ .{ err_trace_arg, trace_arg };
     log.err("{s}:{d}:{d}: {s} got {s}: " ++ fmt ++ error_trace_fmt ++ stack_trace_fmt, combined_args);
 }
 
