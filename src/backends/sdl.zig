@@ -1450,7 +1450,7 @@ pub fn enableSDLLogging() void {
     });
     inline for (categories) |category_data| {
         const category, const scope = category_data;
-        for (std.options.log_scope_levels) |scope_level| {
+        inline for (std.options.log_scope_levels) |scope_level| {
             if (scope_level.scope == scope) {
                 const log_level: c.SDL_LogPriority = switch (scope_level.level) {
                     .debug => c.SDL_LOG_PRIORITY_VERBOSE,
