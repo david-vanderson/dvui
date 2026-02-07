@@ -228,8 +228,7 @@ pub fn matchEvent(self: *LabelWidget, e: *Event) bool {
 }
 
 pub fn deinit(self: *LabelWidget) void {
-    const should_free = self.data().was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
     if (self.allocator) |alloc| alloc.free(self.label_str);
     self.data().minSizeSetAndRefresh();

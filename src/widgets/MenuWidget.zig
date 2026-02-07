@@ -294,8 +294,7 @@ pub fn deinit(self: *MenuWidget) void {
         self.submenus_activated = false;
     }
 
-    const should_free = self.data().was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
     self.box.deinit();
     self.group.deinit();

@@ -96,8 +96,7 @@ pub fn minSizeForChild(self: *FocusGroupWidget, s: Size) void {
 }
 
 pub fn deinit(self: *FocusGroupWidget) void {
-    const should_free = self.data().was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
 
     const cw = dvui.currentWindow();

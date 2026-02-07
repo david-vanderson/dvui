@@ -422,15 +422,11 @@ pub fn currentWindow() *Window {
 /// if the stack overflows.
 ///
 /// The caller is responsible for ensuring that the widget calls
-/// `dvui.widgetFree` in it's `deinit`. Usually this is done by
-/// setting `dvui.WidgetData.was_allocated_on_widget_stack` to true
+/// `dvui.widgetFree` in it's `deinit`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetAlloc(comptime T: type) *T {
-    const cw = currentWindow();
-    const alloc = cw._widget_stack.allocator();
-    const ptr = alloc.create(T) catch @panic("OOM");
-    return ptr;
+    return dvui.currentWindow()._widget_stack.create(T);
 }
 
 /// Pops a widget off the alloc stack, if it was allocated there.
@@ -440,8 +436,14 @@ pub fn widgetAlloc(comptime T: type) *T {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetFree(ptr: anytype) void {
-    const ws = &currentWindow()._widget_stack;
-    ws.allocator().destroy(ptr);
+    dvui.currentWindow()._widget_stack.destroy(ptr);
+}
+
+/// Returns whether the widget was created with widgetAlloc.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn widgetIsAllocated(ptr: anytype) bool {
+    return dvui.currentWindow()._widget_stack.created(ptr);
 }
 
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {
@@ -462,17 +464,7 @@ pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []
         .{ "\nStack trace: {f}", stack_trace }
     else
         .{ "{s}", "" }; // Needed to keep the arg count the sames
-
-    // There is no nice way to combine a comptime tuple and a runtime tuple
-    const combined_args = switch (std.meta.fields(@TypeOf(args)).len) {
-        0 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), err_trace_arg, trace_arg },
-        1 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], err_trace_arg, trace_arg },
-        2 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], err_trace_arg, trace_arg },
-        3 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], err_trace_arg, trace_arg },
-        4 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], args[3], err_trace_arg, trace_arg },
-        5 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], args[3], args[4], err_trace_arg, trace_arg },
-        else => @compileError("Too many arguments"),
-    };
+    const combined_args = .{ src.file, src.line, src.column, src.fn_name, @errorName(err) } ++ args ++ .{ err_trace_arg, trace_arg };
     log.err("{s}:{d}:{d}: {s} got {s}: " ++ fmt ++ error_trace_fmt ++ stack_trace_fmt, combined_args);
 }
 
@@ -2117,7 +2109,6 @@ pub fn wantTextInput(r: Rect.Natural) void {
 pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) *FloatingMenuWidget {
     var ret = widgetAlloc(FloatingMenuWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     return ret;
 }
 
@@ -2130,7 +2121,6 @@ pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidg
 pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) *FloatingWindowWidget {
     var ret = widgetAlloc(FloatingWindowWidget);
     ret.init(src, floating_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.processEventsBefore();
     ret.drawBackground();
     return ret;
@@ -2521,7 +2511,6 @@ pub fn toastsShow(id: ?Id, rect: Rect.Natural) void {
 pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) *AnimateWidget {
     var ret = widgetAlloc(AnimateWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     return ret;
 }
 
@@ -2612,7 +2601,6 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
 
     var sug = widgetAlloc(SuggestionWidget);
     sug.init(@src(), .{
-        .was_allocated_on_widget_stack = true,
         .rs = te.data().borderRectScale(),
         .text_entry_id = te.data().id,
     }, .{ .label = .{ .text = te.getText() }, .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
@@ -2695,7 +2683,6 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
 pub const ComboBox = struct {
     te: *TextEntryWidget = undefined,
     sug: *SuggestionWidget = undefined,
-    was_allocated_on_widget_stack: bool = false,
 
     /// Returns index of entry if one was selected
     pub fn entries(self: *ComboBox, items: []const []const u8) ?usize {
@@ -2711,8 +2698,7 @@ pub const ComboBox = struct {
     }
 
     pub fn deinit(self: *ComboBox) void {
-        const should_free = self.was_allocated_on_widget_stack;
-        defer if (should_free) dvui.widgetFree(self);
+        defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
         defer self.* = undefined;
         self.sug.deinit();
         self.te.deinit();
@@ -2726,10 +2712,8 @@ pub const ComboBox = struct {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) *ComboBox {
     const combo = widgetAlloc(ComboBox);
-    combo.was_allocated_on_widget_stack = true;
     combo.te = widgetAlloc(TextEntryWidget);
     combo.te.init(src, init_opts, opts);
-    combo.te.data().was_allocated_on_widget_stack = true;
 
     if (combo.te.data().accesskit_node()) |ak_node| {
         AccessKit.nodeSetRole(ak_node, AccessKit.Role.editable_combo_box.asU8());
@@ -2814,7 +2798,6 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
 pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: Options) *PanedWidget {
     var ret = widgetAlloc(PanedWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.processEvents();
     return ret;
 }
@@ -2828,7 +2811,6 @@ pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions
 pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.InitOptions, opts: Options) *TextLayoutWidget {
     var ret = widgetAlloc(TextLayoutWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
 
     // can install corner widgets here
     //_ = dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
@@ -2856,7 +2838,6 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
 pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: Options) *ContextWidget {
     var ret = widgetAlloc(ContextWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.processEvents();
     return ret;
 }
@@ -2897,7 +2878,6 @@ pub fn focusGroup(src: std.builtin.SourceLocation, init_opts: FocusGroupWidget.I
     const defaults: Options = .{ .role = .group };
     var ret = widgetAlloc(FocusGroupWidget);
     ret.init(src, init_opts, defaults.override(opts));
-    ret.data().was_allocated_on_widget_stack = true;
     return ret;
 }
 
@@ -2916,7 +2896,6 @@ pub fn radioGroup(src: std.builtin.SourceLocation, init_opts: FocusGroupWidget.I
 pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) *VirtualParentWidget {
     var ret = widgetAlloc(VirtualParentWidget);
     ret.init(src, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     return ret;
 }
 
@@ -2929,7 +2908,6 @@ pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) *VirtualPar
 pub fn overlay(src: std.builtin.SourceLocation, opts: Options) *OverlayWidget {
     var ret = widgetAlloc(OverlayWidget);
     ret.init(src, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.drawBackground();
     return ret;
 }
@@ -2954,7 +2932,6 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) *OverlayWidget {
 pub fn box(src: std.builtin.SourceLocation, init_opts: BoxWidget.InitOptions, opts: Options) *BoxWidget {
     var ret = widgetAlloc(BoxWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.drawBackground();
     return ret;
 }
@@ -2967,7 +2944,6 @@ pub fn box(src: std.builtin.SourceLocation, init_opts: BoxWidget.InitOptions, op
 pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) *FlexBoxWidget {
     var ret = widgetAlloc(FlexBoxWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.drawBackground();
     return ret;
 }
@@ -2975,14 +2951,12 @@ pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOpt
 pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) *CacheWidget {
     var ret = widgetAlloc(CacheWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     return ret;
 }
 
 pub fn reorder(src: std.builtin.SourceLocation, init_opts: ReorderWidget.InitOptions, opts: Options) *ReorderWidget {
     var ret = widgetAlloc(ReorderWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.processEvents();
     return ret;
 }
@@ -2990,14 +2964,12 @@ pub fn reorder(src: std.builtin.SourceLocation, init_opts: ReorderWidget.InitOpt
 pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) *ScrollAreaWidget {
     var ret = widgetAlloc(ScrollAreaWidget);
     ret.init(src, init_opts, opts);
-    ret.init_opts.was_allocated_on_widget_stack = true;
     return ret;
 }
 
 pub fn grid(src: std.builtin.SourceLocation, cols: GridWidget.WidthsOrNum, init_opts: GridWidget.InitOpts, opts: Options) *GridWidget {
     const ret = widgetAlloc(GridWidget);
     ret.init(src, cols, init_opts, opts);
-    ret.init_opts.was_allocated_on_widget_stack = true;
     return ret;
 }
 
@@ -3285,7 +3257,6 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
 pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) *ScaleWidget {
     var ret = widgetAlloc(ScaleWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.processEvents();
     return ret;
 }
@@ -3293,14 +3264,12 @@ pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions
 pub fn tabs(src: std.builtin.SourceLocation, init_opts: TabsWidget.InitOptions, opts: Options) *TabsWidget {
     var ret = widgetAlloc(TabsWidget);
     ret.init(src, init_opts, opts);
-    ret.init_options.was_allocated_on_widget_stack = true;
     return ret;
 }
 
 pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) *MenuWidget {
     var ret = widgetAlloc(MenuWidget);
     ret.init(src, .{ .dir = dir }, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     return ret;
 }
 
@@ -3351,7 +3320,6 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
 pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitOptions, opts: Options) *MenuItemWidget {
     var ret = widgetAlloc(MenuItemWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.processEvents();
     ret.drawBackground();
     return ret;
@@ -4599,7 +4567,6 @@ pub fn findUtf8Start(text: []const u8, pos: usize) usize {
 pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) *TextEntryWidget {
     var ret = widgetAlloc(TextEntryWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     // can install corner widgets here
     //_ = dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
     ret.processEvents();
@@ -5039,7 +5006,6 @@ pub const Picture = struct {
 pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, opts: Options) *PlotWidget {
     var ret = widgetAlloc(PlotWidget);
     ret.init(src, plot_opts, opts);
-    ret.init_options.was_allocated_on_widget_stack = true;
     return ret;
 }
 

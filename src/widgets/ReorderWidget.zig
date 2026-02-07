@@ -135,8 +135,7 @@ pub fn processEvent(self: *ReorderWidget, e: *dvui.Event) void {
 }
 
 pub fn deinit(self: *ReorderWidget) void {
-    const should_free = self.data().was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
     if (self.drag_ending) {
         self.id_reorderable = null;
@@ -221,7 +220,6 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
 pub fn reorderable(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: Reorderable.InitOptions, opts: Options) *Reorderable {
     const ret = dvui.widgetAlloc(Reorderable);
     ret.init(src, self, init_opts, opts);
-    ret.init_options.was_allocated_on_widget_stack = true;
     ret.install();
     return ret;
 }
@@ -242,8 +240,6 @@ pub const Reorderable = struct {
 
         // if false, caller responsible for calling reinstall() when targetRectScale() returns true
         reinstall: bool = true,
-
-        was_allocated_on_widget_stack: bool = false,
     };
 
     wd: WidgetData,
@@ -388,8 +384,7 @@ pub const Reorderable = struct {
     }
 
     pub fn deinit(self: *Reorderable) void {
-        const should_free = self.init_options.was_allocated_on_widget_stack;
-        defer if (should_free) dvui.widgetFree(self);
+        defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
         defer self.* = undefined;
         if (self.floating_widget) |*fw| {
             self.data().minSizeMax(fw.data().min_size);

@@ -112,7 +112,7 @@ gpa: std.mem.Allocator,
 _arena: std.heap.ArenaAllocator,
 _lifo_arena: std.heap.ArenaAllocator,
 /// Used to allocate widgets with a fixed location
-_widget_stack: std.heap.ArenaAllocator,
+_widget_stack: WidgetStack,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
@@ -1480,7 +1480,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     }
 
     {
-        const cap = self._widget_stack.queryCapacity();
+        const cap = self._widget_stack.arena.queryCapacity();
         //std.log.debug("_widget_stack capacity {d}", .{cap});
         _ = self._widget_stack.reset(.{ .retain_with_limit = cap - @divTrunc(cap, 10) });
     }
@@ -1557,6 +1557,8 @@ pub fn minSizeForChild(self: *Self, s: Size) void {
     _ = self;
     _ = s;
 }
+
+const WidgetStack = @import("WidgetStack.zig");
 
 const Options = dvui.Options;
 const Rect = dvui.Rect;
