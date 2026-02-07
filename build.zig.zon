@@ -2,7 +2,7 @@
     .name = .dvui,
     .fingerprint = 0xa35affe599490101,
     .version = "0.4.0-dev",
-    .minimum_zig_version = "0.15.1",
+    .minimum_zig_version = "0.16.0-dev.2534+12cb5b928",
     .paths = .{""},
     .dependencies = .{
         .sdl = .{

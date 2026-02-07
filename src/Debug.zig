@@ -18,7 +18,7 @@ under_mouse_stack: std.ArrayListUnmanaged(struct { id: dvui.Id, name: []const u8
 /// Uses `gpa` allocator
 options_override: std.AutoHashMapUnmanaged(dvui.Id, struct { Options, std.builtin.SourceLocation }) = .empty,
 
-toggle_mutex: std.Thread.Mutex = .{},
+toggle_mutex: Io.Mutex = .init,
 log_refresh: bool = false,
 log_events: bool = false,
 
@@ -65,8 +65,9 @@ pub fn deinit(self: *Debug, gpa: std.mem.Allocator) void {
 ///
 /// called from any thread
 pub fn logEvents(self: *Debug, val: ?bool) bool {
-    self.toggle_mutex.lock();
-    defer self.toggle_mutex.unlock();
+    const io = dvui.io;
+    self.toggle_mutex.lockUncancelable(io);
+    defer self.toggle_mutex.unlock(io);
 
     const previous = self.log_events;
     if (val) |v| {
@@ -80,8 +81,9 @@ pub fn logEvents(self: *Debug, val: ?bool) bool {
 ///
 /// called from any thread
 pub fn logRefresh(self: *Debug, val: ?bool) bool {
-    self.toggle_mutex.lock();
-    defer self.toggle_mutex.unlock();
+    const io = dvui.io;
+    self.toggle_mutex.lockUncancelable(io);
+    defer self.toggle_mutex.unlock(io);
 
     const previous = self.log_refresh;
     if (val) |v| {
@@ -1088,4 +1090,5 @@ const Options = dvui.Options;
 const Rect = dvui.Rect;
 
 const std = @import("std");
+const Io = std.Io;
 const dvui = @import("dvui.zig");
