@@ -1,4 +1,4 @@
-mutex: std.Thread.Mutex = .{},
+mutex: Io.Mutex = .init,
 stack: std.ArrayListUnmanaged(Dialog) = .empty,
 
 const Dialogs = @This();
@@ -14,7 +14,7 @@ pub const Dialog = struct {
 
 pub const IdMutex = struct {
     id: Id,
-    mutex: *std.Thread.Mutex,
+    mutex: *Io.Mutex,
 };
 
 /// Add a dialog to be displayed on the GUI thread during `Window.end`.
@@ -24,9 +24,10 @@ pub const IdMutex = struct {
 /// data is available before the dialog is displayed.
 ///
 /// Can be called from any thread.
-pub fn add(self: *Dialogs, gpa: std.mem.Allocator, dialog: Dialog) !*std.Thread.Mutex {
-    self.mutex.lock();
-    errdefer self.mutex.unlock();
+pub fn add(self: *Dialogs, gpa: std.mem.Allocator, dialog: Dialog) !*Io.Mutex {
+    const io = dvui.io;
+    self.mutex.lockUncancelable(io);
+    errdefer self.mutex.unlock(io);
     for (self.stack.items) |*d| {
         if (d.id == dialog.id) {
             d.* = dialog;
@@ -40,8 +41,9 @@ pub fn add(self: *Dialogs, gpa: std.mem.Allocator, dialog: Dialog) !*std.Thread.
 
 /// Only called from gui thread.
 pub fn remove(self: *Dialogs, id: Id) void {
-    self.mutex.lock();
-    defer self.mutex.unlock();
+    const io = dvui.io;
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
     for (self.stack.items, 0..) |*d, i| {
         if (d.id == id) {
@@ -58,8 +60,9 @@ pub const Iterator = struct {
     last_id: Id = .zero,
 
     pub fn next(self: *Iterator) ?Dialog {
-        self.dialogs.mutex.lock();
-        defer self.dialogs.mutex.unlock();
+        const io = dvui.io;
+        self.dialogs.mutex.lockUncancelable(io);
+        defer self.dialogs.mutex.unlock(io);
 
         // have to deal with toasts possibly removing themselves inbetween
         // calls to next()
@@ -89,8 +92,9 @@ pub fn iterator(self: *Dialogs, subwindow_id: ?Id) Iterator {
 
 /// Finds the index of the first dialog with the specific subwindow_id, or null if none exists
 pub fn indexOfSubwindow(self: *Dialogs, subwindow_id: ?Id) ?usize {
-    self.mutex.lock();
-    defer self.mutex.unlock();
+    const io = dvui.io;
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
     for (self.stack.items, 0..) |dialog, i| {
         if (dialog.subwindow_id == subwindow_id) return i;
     }
@@ -99,10 +103,11 @@ pub fn indexOfSubwindow(self: *Dialogs, subwindow_id: ?Id) ?usize {
 
 /// Runs the display function for all the current dialogs
 pub fn show(self: *Dialogs) void {
+    const io = dvui.io;
     var i: usize = 0;
     var dia: ?Dialog = null;
     while (true) {
-        self.mutex.lock();
+        self.mutex.lockUncancelable(io);
         if (i < self.stack.items.len and
             dia != null and
             dia.?.id == self.stack.items[i].id)
@@ -116,7 +121,7 @@ pub fn show(self: *Dialogs) void {
         } else {
             dia = null;
         }
-        self.mutex.unlock();
+        self.mutex.unlock(io);
 
         if (dia) |d| {
             d.display(d.id) catch |err| {
@@ -134,6 +139,7 @@ pub fn deinit(self: *Dialogs, gpa: std.mem.Allocator) void {
 }
 
 const std = @import("std");
+const Io = std.Io;
 const dvui = @import("./dvui.zig");
 
 const Id = dvui.Id;

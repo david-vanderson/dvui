@@ -19,6 +19,7 @@
 //!
 const builtin = @import("builtin");
 const std = @import("std");
+const Io = std.Io;
 /// Using this in application code will hinder ZLS from referencing the correct backend.
 /// To avoid this import the backend directly from the applications build.zig
 ///
@@ -409,6 +410,7 @@ pub const Id = enum(u64) {
 /// Current `Window` (i.e. the one that widgets will be added to).
 /// Managed by `Window.begin` / `Window.end`
 pub var current_window: ?*Window = null;
+pub var io: Io = undefined;
 
 /// Get the current `dvui.Window` which corresponds to the OS window we are
 /// currently adding widgets to.
@@ -2209,7 +2211,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
 
 pub const IdMutex = struct {
     id: Id,
-    mutex: *std.Thread.Mutex,
+    mutex: *Io.Mutex,
 };
 
 /// Add a dialog to be displayed on the GUI thread during `Window.end`.
@@ -2233,7 +2235,7 @@ pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize
     };
     const mutex = w.dialogs.add(w.gpa, .{ .id = id, .display = display }) catch |err| {
         logError(@src(), err, "failed to add dialog", .{});
-        w.dialogs.mutex.lock();
+        w.dialogs.mutex.lockUncancelable(io);
         return .{ .id = .zero, .mutex = &w.dialogs.mutex };
     };
     refresh(win, @src(), id);
@@ -2300,7 +2302,7 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
         }
     }
 
-    id_mutex.mutex.unlock();
+    id_mutex.mutex.unlock(io);
 }
 
 pub fn dialogDisplay(id: Id) !void {
@@ -2425,7 +2427,7 @@ pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize,
     };
     const mutex = w.toasts.add(w.gpa, .{ .id = id, .subwindow_id = subwindow_id, .display = display }) catch |err| {
         logError(@src(), err, "failed to add toast", .{});
-        w.toasts.mutex.lock();
+        w.toasts.mutex.lockUncancelable(io);
         return .{ .id = .zero, .mutex = &w.toasts.mutex };
     };
     refresh(win, @src(), id);
@@ -2480,7 +2482,7 @@ pub fn toast(src: std.builtin.SourceLocation, opts: ToastOptions) void {
     const id_mutex = dvui.toastAdd(opts.window, src, opts.id_extra, opts.subwindow_id, opts.displayFn, opts.timeout);
     const id = id_mutex.id;
     dvui.dataSetSlice(opts.window, id, "_message", opts.message);
-    id_mutex.mutex.unlock();
+    id_mutex.mutex.unlock(io);
 }
 
 pub fn toastDisplay(id: Id) !void {

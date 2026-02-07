@@ -587,7 +587,7 @@ pub fn backend(self: *SDLBackend) dvui.Backend {
 }
 
 pub fn nanoTime(self: *SDLBackend) i128 {
-    const ret = std.Io.Clock.boot.now(self.io) catch @panic("Unsupported Clock");
+    const ret = std.Io.Clock.boot.now(self.io);
     return ret.nanoseconds;
 }
 
@@ -1470,6 +1470,7 @@ pub fn enableSDLLogging() void {
 
 /// This is what is run if you are using `dvui.App` with this backend.
 pub fn main(main_init: std.process.Init) !u8 {
+    dvui.io = main_init.io;
     dvui.App.main_init = main_init;
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
@@ -1522,7 +1523,7 @@ pub fn main(main_init: std.process.Init) !u8 {
     }
 
     //// init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), main_init.gpa, main_init.io, back.backend(), init_opts.window_init_options);
+    var win = try dvui.Window.init(@src(), main_init.gpa, back.backend(), init_opts.window_init_options);
     defer win.deinit();
 
     if (app.initFn) |initFn| {
@@ -1665,7 +1666,6 @@ fn appQuit(_: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
     appState.back.deinit();
     if (CallbackState.threaded_io) |*to| to.deinit();
     if (CallbackState.debug_allocator.deinit() != .ok) @panic("Memory leak on exit!");
-
 
     // SDL will clean up the window/renderer for us.
 }

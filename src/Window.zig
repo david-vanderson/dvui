@@ -109,7 +109,6 @@ capture: ?dvui.CaptureMouse = null,
 captured_last_frame: bool = false,
 
 gpa: std.mem.Allocator,
-io: std.Io,
 _arena: std.heap.ArenaAllocator,
 _lifo_arena: std.heap.ArenaAllocator,
 /// Used to allocate widgets with a fixed location
@@ -141,7 +140,6 @@ pub const InitOptions = struct {
 pub fn init(
     src: std.builtin.SourceLocation,
     gpa: std.mem.Allocator,
-    io: std.Io,
     backend_ctx: dvui.Backend,
     init_opts: InitOptions,
 ) !Self {
@@ -149,7 +147,6 @@ pub fn init(
 
     var self = Self{
         .gpa = gpa,
-        .io = io,
         ._arena = if (init_opts.arena) |a| a else .init(gpa),
         ._lifo_arena = .init(gpa),
         ._widget_stack = .init(gpa),
