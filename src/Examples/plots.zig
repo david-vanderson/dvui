@@ -121,15 +121,15 @@ pub fn plots() void {
                 if (maybe_path) |path| blk: {
                     defer dvui.currentWindow().lifo().free(path);
 
-                    var file = std.fs.createFileAbsoluteZ(path, .{}) catch |err| {
+                    var file = std.Io.Dir.createFileAbsolute(dvui.currentWindow().io, path, .{}) catch |err| {
                         dvui.log.debug("Failed to create file {s}, got {any}", .{ path, err });
                         dvui.toast(@src(), .{ .message = "Failed to create file" });
                         break :blk;
                     };
-                    defer file.close();
+                    defer file.close(dvui.currentWindow().io);
 
                     var buffer: [256]u8 = undefined;
-                    var writer = file.writer(&buffer);
+                    var writer = file.writer(dvui.currentWindow().io, &buffer);
 
                     (switch (save.?) {
                         .png => p.png(&writer.interface),

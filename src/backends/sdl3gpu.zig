@@ -1800,7 +1800,7 @@ fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: c_uint, mess
     }
 }
 
-fn sdlLog(comptime category: @Type(.enum_literal), priority: c_uint, message: [*c]const u8) void {
+fn sdlLog(comptime category: @EnumLiteral(), priority: c_uint, message: [*c]const u8) void {
     const logger = std.log.scoped(category);
     switch (priority) {
         c.SDL_LOG_PRIORITY_VERBOSE => logger.debug("VERBOSE: {s}", .{message}),
@@ -1832,7 +1832,7 @@ pub fn enableSDLLogging() void {
 
     c.SDL_SetLogPriorities(default_log_level);
 
-    const categories = [_]struct { c_uint, @Type(.enum_literal) }{
+    const categories = [_]struct { c_uint, @EnumLiteral() }{
         .{ c.SDL_LOG_CATEGORY_APPLICATION, .SDL_APPLICATION },
         .{ c.SDL_LOG_CATEGORY_ERROR, .SDL_ERROR },
         .{ c.SDL_LOG_CATEGORY_ASSERT, .SDL_ASSERT },

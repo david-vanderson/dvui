@@ -1702,7 +1702,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     self.selection.end = @min(self.selection.end, self.bytes_seen);
 
     const options = self.data().options.override(opts);
-    const text_height = options.fontGet().textHeight();
+    const text_height = if (self.current_line_height > 0) self.current_line_height else options.fontGet().textHeight();
 
     if (!self.cursor_seen) {
         self.cursor_rect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = text_height };

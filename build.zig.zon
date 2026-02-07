@@ -6,8 +6,8 @@
     .paths = .{""},
     .dependencies = .{
         .sdl = .{
-            .url = "git+https://github.com/allyourcodebase/SDL#d29847ebcb6da34dec466a06163431982500a092",
-            .hash = "SDL-2.32.6-JToi38aTEgECY2mV9iUG7dNouCbarfJ1mkzjjm53gC80",
+            .url = "git+https://github.com/david-vanderson/SDL#0a3a406bedafd98c7b5b31a445da78087e249536",
+            .hash = "SDL-2.32.10-JToi38y3EgFPWSo1bTIayzJ_NsXqafXRvWRFK55WaCLL",
             .lazy = true,
         },
         .sdl3 = .{
@@ -16,13 +16,13 @@
             .lazy = true,
         },
         .freetype = .{
-            .url = "git+https://github.com/david-vanderson/freetype#153f45bf550d54c902c2e6233c1c0554f067028c",
-            .hash = "freetype-2.14.1-alzUkTaBqgBs62EIZtayIBpFnCaZmSh8Qy6QNF2BUE3E",
+            .url = "git+https://github.com/david-vanderson/freetype#cd981cdea11ddd82b89975bb673f25ac069ffc09",
+            .hash = "freetype-2.14.1-alzUkTyBqgBwke4Jsot997WYSpl207Ij9oO-2QOvGrOi",
             .lazy = true,
         },
         .raylib = .{
-            .url = "git+https://github.com/raysan5/raylib?ref=master#720dd22491cdc4a29ec0ea87b572d9380872198c",
-            .hash = "raylib-5.6.0-dev-whq8uMVQCgVTgRxG3REWgBBSi2BR-nf4bq6eqANxImt7",
+            .url = "git+https://github.com/kristoff-it/raylib?ref=zig-0.16#68eff3f612091d9e713d2229b4f840582dbfc28f",
+            .hash = "raylib-5.6.0-dev-whq8uLAJDQXCUoWbI50KR2RX8f1NhyzmklCim1bT2EH2",
             .lazy = true,
         },
         //used in the raylib-ontop example
@@ -33,14 +33,14 @@
         },
         // required for the directx11 backend
         .win32 = .{
-            .url = "git+https://github.com/marlersoft/zigwin32#5587b16fa040573846a6bf531301f6206d31a6bf",
-            .hash = "zigwin32-25.0.28-preview-AAAAAICM5AMResOGQnQ85mfe60TTOQeMtt7GRATUOKoP",
+            .url = "git+https://github.com/kristoff-it/zigwin32.git?ref=fix/zig16#1102e9b82e8bd50913b6a78035bfb399ebd8cf97",
+            .hash = "zigwin32-25.0.28-preview-6BfVhYKN5AOvXPVJq4bGZ7C5dM3PbUra4xhKAKOFJGcF",
             .lazy = true,
         },
         // for rendering tvg icons
         .svg2tvg = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-svg2tvg#78797970be3d676a9087696ec36d6f29a522b580",
-            .hash = "svg2tvg-0.0.0-HpMZuWZ3BgApRrFbd9CxtabLoXEA5odBFUDFrDqno8Ih",
+            .url = "git+https://github.com/nat3Github/zig-lib-svg2tvg#7b382a8d3e48c84d806962513b4b7fa116683a3e",
+            .hash = "svg2tvg-0.0.0-HpMZubl3BgCSsad-KGvsPcSaiL8JmlgWEPr7KgGMk65y",
         },
         .accesskit = .{
             .url = "https://github.com/AccessKit/accesskit-c/releases/download/0.20.0/accesskit-c-0.20.0.zip",
@@ -50,18 +50,18 @@
 
         // Experimental zig bindings, any zig based backend will be located here
         .raylib_zig = .{
-            .url = "git+https://github.com/raylib-zig/raylib-zig?ref=devel#3cd4d3179d967fc8b931514603fdbc4a43a1d771",
-            .hash = "raylib_zig-5.6.0-dev-KE8REE1LBQCL7lia-DwUkusWI1G4kJmhtatLh2kNsuiE",
+            .url = "git+https://github.com/kristoff-it/raylib-zig?ref=zig-0.16#726be415fcff4b96e6a9684c48f17bbe494d64a7",
+            .hash = "raylib_zig-5.6.0-dev-KE8REIFNBQDiMLazOzPK8E2cdRvcgI7m9mRvLAi3y4y9",
             .lazy = true,
         },
         .zglfw = .{
-            .url = "git+https://github.com/zig-gamedev/zglfw.git#6034a5623312c58bf5e64c1a2b686691c28575f4",
-            .hash = "zglfw-0.10.0-dev-zgVDNPKyIQCBi-wv_vxkvIQq1u0bP4D56Wszx_2mszc7",
+            .url = "git+https://github.com/zig-gamedev/zglfw.git#d9c06187e8b23e91b2ba6865d265e4213e5e7d09",
+            .hash = "zglfw-0.10.0-dev-zgVDNC64IQCeL-_eVOA27Wa50WVitrJswOZVvgcXmIsy",
             .lazy = true,
         },
         .tree_sitter = .{
-            .url = "git+https://github.com/tree-sitter/tree-sitter#eacb95c85da15005f091729f3225609d0db67963",
-            .hash = "tree_sitter-0.27.0-Tw2sRwKWCwCqwcmq1ZXGlBVEa1887b3t2RwZdmIRrX3Z",
+            .url = "git+https://github.com/david-vanderson/tree-sitter#c8cad6e16017a6bb6eb8a61fb1c1e7f23c552b4f",
+            .hash = "tree_sitter-0.27.0-Tw2sR72eCwCRZKEZND6TJIgdWq9ZnPV9g_syCHLyNEGe",
             .lazy = true,
         },
         .tree_sitter_json = .{

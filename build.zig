@@ -82,16 +82,8 @@ pub fn build(b: *std.Build) !void {
     var linux_display_backend: ?LinuxDisplayBackend = null;
     if (back_to_build == null or back_to_build.? == .raylib or back_to_build.? == .raylib_zig) {
         linux_display_backend = b.option(LinuxDisplayBackend, "linux_display_backend", "If using raylib, which linux display?") orelse blk: {
-            _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
-                error.EnvironmentVariableNotFound => break :blk .X11,
-                else => @panic("Unknown error checking for WAYLAND_DISPLAY environment variable"),
-            };
-
-            _ = std.process.getEnvVarOwned(b.allocator, "DISPLAY") catch |err| switch (err) {
-                error.EnvironmentVariableNotFound => break :blk .Wayland,
-                else => @panic("Unknown error checking for DISPLAY environment variable"),
-            };
-
+            if (b.graph.environ_map.get("WAYLAND_DISPLAY") == null) break :blk .X11;
+            if (b.graph.environ_map.get("DISPLAY") == null) break :blk .Wayland;
             break :blk .Both;
         };
     }
@@ -220,7 +212,7 @@ pub fn build(b: *std.Build) !void {
         run_add_logo.addFileArg(b.path("docs/index.html"));
         run_add_logo.addFileArg(b.path("docs/favicon.svg"));
         run_add_logo.addFileArg(b.path("docs/logo.svg"));
-        const indexhtml_file = run_add_logo.captureStdOut();
+        const indexhtml_file = run_add_logo.captureStdOut(.{});
         docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
     }
 }
@@ -342,7 +334,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                         .optimize = optimize,
                     }),
                 });
-                lib.addCSourceFile(.{
+                lib.root_module.addCSourceFile(.{
                     .file = objc_file,
                     .language = .objective_c,
                 });
@@ -437,133 +429,133 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("sdl3-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .raylib => {
-            if (dvui_opts.vertex_index != .u16) {
-                std.log.err("Raylib backend requires u16 vertex index", .{});
-                return error.IncompatibleVertexIndex;
-            }
+        //    if (dvui_opts.vertex_index != .u16) {
+        //        std.log.err("Raylib backend requires u16 vertex index", .{});
+        //        return error.IncompatibleVertexIndex;
+        //    }
 
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true });
+        //    dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true });
 
-            const raylib_backend_mod = b.addModule("raylib", .{
-                .root_source_file = b.path("src/backends/raylib-c.zig"),
-                .target = target,
-                .optimize = optimize,
-                .link_libc = true,
-            });
-            dvui_opts.addChecks(raylib_backend_mod, "raylib-backend");
-            dvui_opts.addTests(raylib_backend_mod, "raylib-backend");
+        //    const raylib_backend_mod = b.addModule("raylib", .{
+        //        .root_source_file = b.path("src/backends/raylib-c.zig"),
+        //        .target = target,
+        //        .optimize = optimize,
+        //        .link_libc = true,
+        //    });
+        //    dvui_opts.addChecks(raylib_backend_mod, "raylib-backend");
+        //    dvui_opts.addTests(raylib_backend_mod, "raylib-backend");
 
-            const maybe_ray = b.lazyDependency(
-                "raylib",
-                .{
-                    .target = target,
-                    .optimize = optimize,
-                    .linux_display_backend = dvui_opts.linux_display_backend.?,
-                },
-            );
-            if (maybe_ray) |ray| {
-                raylib_backend_mod.linkLibrary(ray.artifact("raylib"));
+        //    const maybe_ray = b.lazyDependency(
+        //        "raylib",
+        //        .{
+        //            .target = target,
+        //            .optimize = optimize,
+        //            .linux_display_backend = dvui_opts.linux_display_backend.?,
+        //        },
+        //    );
+        //    if (maybe_ray) |ray| {
+        //        raylib_backend_mod.linkLibrary(ray.artifact("raylib"));
 
-                // This is to support variable framerate
-                raylib_backend_mod.addIncludePath(ray.path("src/external/glfw/include/GLFW"));
+        //        // This is to support variable framerate
+        //        raylib_backend_mod.addIncludePath(ray.path("src/external/glfw/include/GLFW"));
 
-                // This seems wonky to me, but is copied from raylib's src/build.zig
-                if (b.lazyDependency("raygui", .{})) |raygui_dep| {
-                    if (b.lazyImport(@This(), "raylib")) |_| {
-                        // we want to write this:
-                        //raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
-                        // but that causes a second invocation of the raylib dependency but without our linux_display_backend
-                        // so it defaults to .Both which causes an error if there is no wayland-scanner
+        //        // This seems wonky to me, but is copied from raylib's src/build.zig
+        //        if (b.lazyDependency("raygui", .{})) |raygui_dep| {
+        //            if (b.lazyImport(@This(), "raylib")) |_| {
+        //                // we want to write this:
+        //                //raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
+        //                // but that causes a second invocation of the raylib dependency but without our linux_display_backend
+        //                // so it defaults to .Both which causes an error if there is no wayland-scanner
 
-                        const raylib = ray.artifact("raylib");
-                        var gen_step = b.addWriteFiles();
-                        raylib.step.dependOn(&gen_step.step);
+        //                const raylib = ray.artifact("raylib");
+        //                var gen_step = b.addWriteFiles();
+        //                raylib.step.dependOn(&gen_step.step);
 
-                        const raygui_c_path = gen_step.add("raygui.c", "#define RAYGUI_IMPLEMENTATION\n#include \"raygui.h\"\n");
-                        raylib.addCSourceFile(.{ .file = raygui_c_path });
-                        raylib.addIncludePath(raygui_dep.path("src"));
-                        raylib.addIncludePath(ray.path("src"));
+        //                const raygui_c_path = gen_step.add("raygui.c", "#define RAYGUI_IMPLEMENTATION\n#include \"raygui.h\"\n");
+        //                raylib.addCSourceFile(.{ .file = raygui_c_path });
+        //                raylib.addIncludePath(raygui_dep.path("src"));
+        //                raylib.addIncludePath(ray.path("src"));
 
-                        raylib.installHeader(raygui_dep.path("src/raygui.h"), "raygui.h");
-                    }
-                }
-            }
+        //                raylib.installHeader(raygui_dep.path("src/raygui.h"), "raygui.h");
+        //            }
+        //        }
+        //    }
 
-            const dvui_raylib = addDvuiModule("dvui_raylib", dvui_opts);
-            dvui_opts.addChecks(dvui_raylib, "dvui_raylib");
-            if (test_dvui_and_app) {
-                dvui_opts.addTests(dvui_raylib, "dvui_raylib");
-            }
+        //    const dvui_raylib = addDvuiModule("dvui_raylib", dvui_opts);
+        //    dvui_opts.addChecks(dvui_raylib, "dvui_raylib");
+        //    if (test_dvui_and_app) {
+        //        dvui_opts.addTests(dvui_raylib, "dvui_raylib");
+        //    }
 
-            linkBackend(dvui_raylib, raylib_backend_mod);
-            const example_opts: ExampleOptions = .{
-                .dvui_mod = dvui_raylib,
-                .backend_name = "raylib-backend",
-                .backend_mod = raylib_backend_mod,
-            };
+        //    linkBackend(dvui_raylib, raylib_backend_mod);
+        //    const example_opts: ExampleOptions = .{
+        //        .dvui_mod = dvui_raylib,
+        //        .backend_name = "raylib-backend",
+        //        .backend_mod = raylib_backend_mod,
+        //    };
 
-            addExample("raylib-standalone", b.path("examples/raylib-standalone.zig"), true, example_opts, dvui_opts);
-            addExample("raylib-ontop", b.path("examples/raylib-ontop.zig"), true, example_opts, dvui_opts);
-            addExample("raylib-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
+        //    addExample("raylib-standalone", b.path("examples/raylib-standalone.zig"), true, example_opts, dvui_opts);
+        //    addExample("raylib-ontop", b.path("examples/raylib-ontop.zig"), true, example_opts, dvui_opts);
+        //    addExample("raylib-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .raylib_zig => {
-            if (dvui_opts.vertex_index != .u16) {
-                std.log.err("Raylib-zig backend requires u16 vertex index", .{});
-                return error.IncompatibleVertexIndex;
-            }
+        //    if (dvui_opts.vertex_index != .u16) {
+        //        std.log.err("Raylib-zig backend requires u16 vertex index", .{});
+        //        return error.IncompatibleVertexIndex;
+        //    }
 
-            dvui_opts.setDefaults(.{ .libc = dvui_opts_in.libc orelse true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true });
+        //    dvui_opts.setDefaults(.{ .libc = dvui_opts_in.libc orelse true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true });
 
-            const raylib_backend_mod = b.addModule("raylib_zig", .{
-                .root_source_file = b.path("src/backends/raylib-zig.zig"),
-                .target = target,
-                .optimize = optimize,
-                .link_libc = true,
-            });
-            dvui_opts.addChecks(raylib_backend_mod, "raylib-zig-backend");
-            dvui_opts.addTests(raylib_backend_mod, "raylib-zig-backend");
+        //    const raylib_backend_mod = b.addModule("raylib_zig", .{
+        //        .root_source_file = b.path("src/backends/raylib-zig.zig"),
+        //        .target = target,
+        //        .optimize = optimize,
+        //        .link_libc = true,
+        //    });
+        //    dvui_opts.addChecks(raylib_backend_mod, "raylib-zig-backend");
+        //    dvui_opts.addTests(raylib_backend_mod, "raylib-zig-backend");
 
-            const maybe_ray = b.lazyDependency(
-                "raylib_zig",
-                .{
-                    .target = target,
-                    .optimize = optimize,
-                    .linux_display_backend = dvui_opts.linux_display_backend.?,
-                },
-            );
-            if (maybe_ray) |ray| {
-                raylib_backend_mod.linkLibrary(ray.artifact("raylib"));
-                raylib_backend_mod.addImport("raylib", ray.module("raylib"));
-                raylib_backend_mod.addImport("raygui", ray.module("raygui"));
-            }
+        //    const maybe_ray = b.lazyDependency(
+        //        "raylib_zig",
+        //        .{
+        //            .target = target,
+        //            .optimize = optimize,
+        //            .linux_display_backend = dvui_opts.linux_display_backend.?,
+        //        },
+        //    );
+        //    if (maybe_ray) |ray| {
+        //        raylib_backend_mod.linkLibrary(ray.artifact("raylib"));
+        //        raylib_backend_mod.addImport("raylib", ray.module("raylib"));
+        //        raylib_backend_mod.addImport("raygui", ray.module("raygui"));
+        //    }
 
-            const maybe_glfw = b.lazyDependency(
-                "zglfw",
-                .{
-                    .target = target,
-                    .optimize = optimize,
-                },
-            );
-            if (maybe_glfw) |glfw| {
-                raylib_backend_mod.addImport("zglfw", glfw.module("root"));
-            }
+        //    const maybe_glfw = b.lazyDependency(
+        //        "zglfw",
+        //        .{
+        //            .target = target,
+        //            .optimize = optimize,
+        //        },
+        //    );
+        //    if (maybe_glfw) |glfw| {
+        //        raylib_backend_mod.addImport("zglfw", glfw.module("root"));
+        //    }
 
-            const dvui_raylib = addDvuiModule("dvui_raylib_zig", dvui_opts);
-            dvui_opts.addChecks(dvui_raylib, "dvui_raylib_zig");
-            if (test_dvui_and_app) {
-                dvui_opts.addTests(dvui_raylib, "dvui_raylib_zig");
-            }
+        //    const dvui_raylib = addDvuiModule("dvui_raylib_zig", dvui_opts);
+        //    dvui_opts.addChecks(dvui_raylib, "dvui_raylib_zig");
+        //    if (test_dvui_and_app) {
+        //        dvui_opts.addTests(dvui_raylib, "dvui_raylib_zig");
+        //    }
 
-            linkBackend(dvui_raylib, raylib_backend_mod);
-            const example_opts: ExampleOptions = .{
-                .dvui_mod = dvui_raylib,
-                .backend_name = "raylib-zig-backend",
-                .backend_mod = raylib_backend_mod,
-            };
+        //    linkBackend(dvui_raylib, raylib_backend_mod);
+        //    const example_opts: ExampleOptions = .{
+        //        .dvui_mod = dvui_raylib,
+        //        .backend_name = "raylib-zig-backend",
+        //        .backend_mod = raylib_backend_mod,
+        //    };
 
-            addExample("raylib-zig-standalone", b.path("examples/raylib-zig-standalone.zig"), true, example_opts, dvui_opts);
-            addExample("raylib-zig-ontop", b.path("examples/raylib-zig-ontop.zig"), true, example_opts, dvui_opts);
-            addExample("raylib-zig-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
+        //    addExample("raylib-zig-standalone", b.path("examples/raylib-zig-standalone.zig"), true, example_opts, dvui_opts);
+        //    addExample("raylib-zig-ontop", b.path("examples/raylib-zig-ontop.zig"), true, example_opts, dvui_opts);
+        //    addExample("raylib-zig-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .dx11 => {
             if (dvui_opts.vertex_index != .u16) {
@@ -1043,7 +1035,7 @@ fn addWebExample(
     cb_run.addFileArg(b.path("src/backends/index.html"));
     cb_run.addFileArg(b.path("src/backends/web.js"));
     cb_run.addFileArg(web_test.getEmittedBin());
-    const output = cb_run.captureStdOut();
+    const output = cb_run.captureStdOut(.{});
 
     const install_noto = b.addInstallFileWithDir(b.path("src/fonts/NotoSansKR-Regular.ttf"), install_dir, "NotoSansKR-Regular.ttf");
 
