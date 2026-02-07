@@ -3,7 +3,19 @@
     .fingerprint = 0xa35affe599490101,
     .version = "0.4.0-dev",
     .minimum_zig_version = "0.16.0-dev.2534+12cb5b928",
-    .paths = .{""},
+    .paths = .{
+        "LICENSE",
+        "README.md",
+        "build.zig",
+        "build.zig.zon",
+        "docs",
+        "examples",
+        "readme-accessibility.md",
+        "readme-implementation.md",
+        "src",
+        "tools",
+        "vendor",
+    },
     .dependencies = .{
         .sdl = .{
             .url = "git+https://github.com/david-vanderson/SDL#0a3a406bedafd98c7b5b31a445da78087e249536",
