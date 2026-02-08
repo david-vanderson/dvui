@@ -2810,28 +2810,30 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
     const text_size = options.fontGet().textSize(label_str);
 
     // Offset top margin and padding to account for label
-    options.margin.?.y += text_size.h / 2;
-    options.padding.?.y += text_size.h / 2;
+    options.margin.?.y += @max(text_size.h / 2 - options.borderGet().y / 2, 0);
+    options.padding.?.y += @max(text_size.h / 2 - options.borderGet().y / 2, 0);
 
     const b = widgetAlloc(BoxWidget);
     b.init(src, .{}, options);
 
-    const border = options.borderGet();
-    if (border.x != border.y or border.y != border.w or border.w != border.h) {
-        options.border = Rect.all(@max(border.x, border.y, border.w, border.h));
-        b.data().options.border = options.border;
-        dvui.log.debug("groupBox {x} requires uniform borders, border width set to {d}", .{ b.data().id, options.border.?.x });
-        dvui.currentWindow().debug.widget_id = b.data().id;
+    {
+        const border = options.borderGet();
+        if (border.x != border.y or border.y != border.w or border.w != border.h) {
+            options.border = Rect.all(@max(border.x, border.y, border.w, border.h));
+            b.data().options.border = options.border;
+            dvui.log.debug("groupBox {x} requires uniform borders, border width set to {d}", .{ b.data().id, options.border.?.x });
+            dvui.currentWindow().debug.widget_id = b.data().id;
+        }
     }
+
     if (options.backgroundGet()) {
         b.drawBackground();
     }
-
     const label_padding: Rect = .{ .x = LabelWidget.defaults.paddingGet().x, .w = LabelWidget.defaults.paddingGet().w, .y = 0, .h = 0 };
     labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, options.strip().override(.{
         .rect = .{
             .x = 0, // Starts at padding.
-            .y = -options.paddingGet().y - border.y / 2 - text_size.h / 2,
+            .y = -options.paddingGet().y - options.borderGet().y / 2 - text_size.h / 2,
             .w = @min(text_size.w + label_padding.x + label_padding.w, b.data().contentRect().w),
             .h = text_size.h,
         },
@@ -2847,9 +2849,9 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
         var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
         defer path.deinit();
 
-        const r = wd.borderRectScale().r.insetAll(border.x / 2 * rs);
+        const r = wd.borderRectScale().r.insetAll(options.borderGet().x / 2 * rs);
         const cr = options.corner_radiusGet().scale(rs, Rect.Physical);
-        const left_x = r.x + (options.paddingGet().x + border.x / 2) * rs;
+        const left_x = r.x + (options.paddingGet().x + options.borderGet().x / 2) * rs;
         const right_x = @min(
             left_x + text_size.scale(rs, Rect.Physical).w + (label_padding.x + label_padding.w) * rs,
             wd.contentRectScale().r.x + wd.contentRectScale().r.w,
@@ -2870,7 +2872,7 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
 
         path.addPoint(.{ .x = right_x, .y = r.y }); // right edge of label
 
-        path.build().stroke(.{ .thickness = border.x * rs, .color = dvui.themeGet().border });
+        path.build().stroke(.{ .thickness = options.borderGet().x * rs, .color = dvui.themeGet().border });
     }
     return b;
 }
