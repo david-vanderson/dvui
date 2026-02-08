@@ -130,63 +130,66 @@ pub fn basicWidgets() void {
 
         dropdownAdvanced();
     }
-
     {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
-        defer hbox.deinit();
+        var gbox = dvui.groupBox(@src(), "Slider examples in a group box", .{ .expand = .horizontal });
+        defer gbox.deinit();
 
-        dvui.label(@src(), "Sliders", .{}, .{ .gravity_y = 0.5 });
-        _ = dvui.slider(@src(), .{ .fraction = &slider_val }, .{
-            .expand = .horizontal,
-            .gravity_y = 0.5,
-            .corner_radius = dvui.Rect.all(100),
-            .label = .{ .text = "Sliders1" },
-        });
-        _ = dvui.slider(@src(), .{ .dir = .vertical, .fraction = &slider_val }, .{
-            .expand = .vertical,
-            .min_size_content = .{ .w = 10 },
-            .corner_radius = dvui.Rect.all(100),
-            .label = .{ .text = "Sliders2" },
-        });
-        dvui.label(@src(), "Value: {d:2.2}", .{slider_val}, .{ .gravity_y = 0.5 });
-    }
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
+            defer hbox.deinit();
 
-    {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-        defer hbox.deinit();
+            dvui.label(@src(), "Sliders", .{}, .{ .gravity_y = 0.5 });
+            _ = dvui.slider(@src(), .{ .fraction = &slider_val }, .{
+                .expand = .horizontal,
+                .gravity_y = 0.5,
+                .corner_radius = dvui.Rect.all(100),
+                .label = .{ .text = "Sliders1" },
+            });
+            _ = dvui.slider(@src(), .{ .dir = .vertical, .fraction = &slider_val }, .{
+                .expand = .vertical,
+                .min_size_content = .{ .w = 10 },
+                .corner_radius = dvui.Rect.all(100),
+                .label = .{ .text = "Sliders2" },
+            });
+            dvui.label(@src(), "Value: {d:2.2}", .{slider_val}, .{ .gravity_y = 0.5 });
+        }
 
-        dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
-        if (!slider_entry_vector) {
-            var custom_label: ?[]u8 = null;
-            if (slider_entry_label) {
-                const whole = @round(slider_entry_val);
-                const part = @round((slider_entry_val - whole) * 100);
-                custom_label = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d} and {d}p", .{ whole, part }) catch null;
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            defer hbox.deinit();
+
+            dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
+            if (!slider_entry_vector) {
+                var custom_label: ?[]u8 = null;
+                if (slider_entry_label) {
+                    const whole = @round(slider_entry_val);
+                    const part = @round((slider_entry_val - whole) * 100);
+                    custom_label = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d} and {d}p", .{ whole, part }) catch null;
+                }
+                defer if (custom_label) |cl| dvui.currentWindow().lifo().free(cl);
+                _ = dvui.sliderEntry(
+                    @src(),
+                    "val: {d:0.3}",
+                    .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null), .label = custom_label },
+                    .{ .gravity_y = 0.5 },
+                );
+                dvui.label(@src(), "(enter, ctrl-click or touch-tap)", .{}, .{ .gravity_y = 0.5 });
+            } else {
+                _ = dvui.sliderVector(@src(), "{d:0.2}", 3, &slider_vector_array, .{ .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) }, .{});
             }
-            defer if (custom_label) |cl| dvui.currentWindow().lifo().free(cl);
-            _ = dvui.sliderEntry(
-                @src(),
-                "val: {d:0.3}",
-                .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null), .label = custom_label },
-                .{ .gravity_y = 0.5 },
-            );
-            dvui.label(@src(), "(enter, ctrl-click or touch-tap)", .{}, .{ .gravity_y = 0.5 });
-        } else {
-            _ = dvui.sliderVector(@src(), "{d:0.2}", 3, &slider_vector_array, .{ .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) }, .{});
+        }
+
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .padding = .{ .x = 10 } });
+            defer hbox.deinit();
+
+            _ = dvui.checkbox(@src(), &slider_entry_min, "Min", .{});
+            _ = dvui.checkbox(@src(), &slider_entry_max, "Max", .{});
+            _ = dvui.checkbox(@src(), &slider_entry_interval, "Interval", .{});
+            _ = dvui.checkbox(@src(), &slider_entry_vector, "Vector", .{});
+            _ = dvui.checkbox(@src(), &slider_entry_label, "Custom Label", .{});
         }
     }
-
-    {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .padding = .{ .x = 10 } });
-        defer hbox.deinit();
-
-        _ = dvui.checkbox(@src(), &slider_entry_min, "Min", .{});
-        _ = dvui.checkbox(@src(), &slider_entry_max, "Max", .{});
-        _ = dvui.checkbox(@src(), &slider_entry_interval, "Interval", .{});
-        _ = dvui.checkbox(@src(), &slider_entry_vector, "Vector", .{});
-        _ = dvui.checkbox(@src(), &slider_entry_label, "Custom Label", .{});
-    }
-
     _ = dvui.spacer(@src(), .{ .min_size_content = .height(4) });
 
     {
