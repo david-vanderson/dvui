@@ -2539,30 +2539,62 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
     return ret;
 }
 
+pub const DropdownEnumInitOptions = struct {
+    // Text to be shown when there is no selection (for optional enums only)
+    placeholder: ?[]const u8 = null,
+    // Can the user select a null value? (for optional enums only)
+    disable_null_selection: bool = false,
+};
+
 /// Show @tagName of choice, and click to display all tags in that enum in a floating menu.
+/// - supports display and setting of null values when T is an optional enum (?enum).
+/// - must pass the placeholder init_option when displaying an optional enum.
 ///
 /// Returns true if any enum value was selected (even the already chosen one).
 ///
 /// See `DropdownWidget` for more advanced usage.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: *T, opts: Options) bool {
-    if (@typeInfo(T) != .@"enum") @compileError("Expected enum, found '" ++ @typeName(T) ++ "'");
+pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: *T, init_opts: DropdownEnumInitOptions, opts: Options) bool {
+    const EnumT = switch (@typeInfo(T)) {
+        .@"enum" => T,
+        .optional => |opt| if (@typeInfo(opt.child) == .@"enum") opt.child else @compileError("Expected ?enum, found '" ++ @typeName(T) ++ "'"),
+        else => @compileError("Expected enum or ?enum, found '" ++ @typeName(T) ++ "'"),
+    };
 
     var dd: dvui.DropdownWidget = undefined;
-    dd.init(src, .{ .selected_index = @intFromEnum(choice.*), .label = @tagName(choice.*) }, opts);
+    dd.init(
+        src,
+        if (@typeInfo(T) == .@"enum")
+            .{ .selected_index = @intFromEnum(choice.*), .label = @tagName(choice.*) }
+        else if (@typeInfo(T) == .optional and choice.* != null)
+            .{ .selected_index = @intFromEnum(choice.*.?), .label = @tagName(choice.*.?) }
+        else
+            .{ .placeholder = init_opts.placeholder },
+        opts,
+    );
+    defer dd.deinit();
+    if (@typeInfo(T) == .optional and init_opts.placeholder == null) {
+        dvui.log.debug("dropdownEnum {x} displaying an optional enum requires the placeholder init_option to be supplied", .{dd.data().id});
+        dvui.currentWindow().debug.widget_id = dd.data().id;
+    }
 
     var ret = false;
     if (dd.dropped()) {
-        inline for (@typeInfo(T).@"enum".fields) |e| {
+        if (@typeInfo(T) == .optional and !init_opts.disable_null_selection) {
+            if (dd.addChoiceLabel("")) {
+                choice.* = null;
+                ret = true;
+            }
+        }
+        inline for (@typeInfo(EnumT).@"enum".fields) |e| {
             if (dd.addChoiceLabel(e.name)) {
-                choice.* = @field(T, e.name);
+                choice.* = @field(EnumT, e.name);
                 ret = true;
             }
         }
     }
 
-    dd.deinit();
     return ret;
 }
 
