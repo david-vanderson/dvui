@@ -2830,17 +2830,21 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
         b.drawBackground();
     }
     const label_padding: Rect = .{ .x = LabelWidget.defaults.paddingGet().x, .w = LabelWidget.defaults.paddingGet().w, .y = 0, .h = 0 };
-    labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, options.strip().override(.{
-        .rect = .{
-            .x = 0, // Starts at padding.
-            .y = -options.paddingGet().y - options.borderGet().y / 2 - text_size.h / 2,
-            .w = @min(text_size.w + label_padding.x + label_padding.w, b.data().contentRect().w),
-            .h = text_size.h,
-        },
-        .background = options.background,
-        .corner_radius = options.corner_radius,
-        .padding = label_padding,
-    }));
+    const label_rect: Rect = .{
+        .x = 0, // Starts at padding.
+        .y = -options.paddingGet().y - options.borderGet().y / 2 - text_size.h / 2,
+        .w = @min(text_size.w + label_padding.x + label_padding.w, b.data().contentRect().w),
+        .h = text_size.h,
+    };
+
+    if (!label_rect.empty()) {
+        labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, options.strip().override(.{
+            .rect = label_rect,
+            .background = options.background,
+            .corner_radius = options.corner_radius,
+            .padding = label_padding,
+        }));
+    }
 
     // draw the border
     if (b.data().visible() and options.borderGet().nonZero()) {
