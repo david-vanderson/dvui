@@ -54,7 +54,7 @@ pub fn layoutText() void {
                     cache_ok = false;
                 }
 
-                if (dvui.dropdown(@src(), &.{ "Kern null", "Kern true", "Kern false" }, kerning, .{ .gravity_y = 0.5, .min_size_content = .width(120) })) {
+                if (dvui.dropdown(@src(), &.{ "Kern null", "Kern true", "Kern false" }, .{ .choice = kerning }, .{}, .{ .gravity_y = 0.5, .min_size_content = .width(120) })) {
                     cache_ok = false;
                 }
 
