@@ -159,7 +159,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     var fce = try cw.fonts.getOrCreate(cw.gpa, sized_font);
 
     // this must be synced with Font.textSizeEx()
-    const target_fraction = if (cw.snap_to_pixels) 1.0 else target_size / fce.height;
+    const target_fraction = if (cw.snap_to_pixels) 1.0 else target_size / fce.em_height;
 
     // make sure the cache has all the glyphs we need
     if (opts.kern_in == null) {
