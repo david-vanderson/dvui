@@ -37,7 +37,7 @@ pub fn layout() void {
 
                 dvui.label(@src(), "(debug) change the dialog button order:", .{}, .{ .gravity_y = 0.5 });
 
-                _ = dvui.dropdownEnum(@src(), dvui.enums.DialogButtonOrder, &dvui.currentWindow().button_order, .{}, .{});
+                _ = dvui.dropdownEnum(@src(), dvui.enums.DialogButtonOrder, .{ .choice = &dvui.currentWindow().button_order }, .{}, .{});
             }
 
             {
