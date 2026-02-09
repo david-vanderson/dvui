@@ -35,10 +35,10 @@ pub const theme: dvui.Theme = blk: {
 
         .embedded_fonts = fonts,
 
-        .font_body = .find(.{ .family = "OpenDyslexic", .size = 18 }),
-        .font_heading = .find(.{ .family = "OpenDyslexic", .size = 18, .weight = .bold }),
-        .font_title = .find(.{ .family = "OpenDyslexic", .size = 22 }),
-        .font_mono = .find(.{ .family = "None", .size = 18 }),
+        .font_body = .find(.{ .family = "OpenDyslexic", .size = 9 }),
+        .font_heading = .find(.{ .family = "OpenDyslexic", .size = 9, .weight = .bold }),
+        .font_title = .find(.{ .family = "OpenDyslexic", .size = 11 }),
+        .font_mono = .find(.{ .family = "None" }),
 
         .focus = .fromHex("#3584e4"),
         .fill = fill,
