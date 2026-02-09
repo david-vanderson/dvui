@@ -240,7 +240,7 @@ pub fn textSize(self: Font, text: []const u8) Size {
 
     var ret = Size{};
 
-    var line_height_adj: f32 = undefined;
+    var line_height_adj: f32 = 0.0;
     var end: usize = 0;
     while (end < text.len) {
         if (end > 0) {
@@ -248,8 +248,12 @@ pub fn textSize(self: Font, text: []const u8) Size {
         }
 
         var end_idx: usize = undefined;
-        const s = self.textSizeEx(text[end..], .{ .end_idx = &end_idx, .end_metric = .before });
-        line_height_adj = s.h * (self.line_height_factor - 1.0);
+        var s = self.textSizeEx(text[end..], .{ .end_idx = &end_idx, .end_metric = .before });
+        if (self.line_height_factor >= 1.0) {
+            line_height_adj = s.h * (self.line_height_factor - 1.0);
+        } else {
+            s.h *= self.line_height_factor;
+        }
         ret.h += s.h;
         ret.w = @max(ret.w, s.w);
 
@@ -411,7 +415,7 @@ pub const Cache = struct {
         const GlyphInfo = struct {
             advance: f32, // horizontal distance to move the pen
             leftBearing: f32, // horizontal distance from pen to bounding box left edge
-            topBearing: f32, // vertical distance from font ascent to bounding box top edge
+            topBearing: f32, // vertical distance from pen to bounding box top edge
             w: f32, // width of bounding box
             h: f32, // height of bounding box
             uv: @Vector(2, f32),
@@ -723,7 +727,7 @@ pub const Cache = struct {
 
                 const m = self.face.*.glyph.*.metrics;
                 const minx = @as(f32, @floatFromInt(m.horiBearingX)) / 64.0;
-                const miny = self.ascent - @as(f32, @floatFromInt(m.horiBearingY)) / 64.0;
+                const miny = @as(f32, @floatFromInt(m.horiBearingY)) / 64.0;
 
                 //const hx = @as(f32, @floatFromInt(m.horiBearingX)) / 64.0;
                 //const w = @as(f32, @floatFromInt(m.width)) / 64.0;
@@ -767,7 +771,7 @@ pub const Cache = struct {
                 break :blk .{
                     .advance = @round(adv),
                     .leftBearing = @floor(x0),
-                    .topBearing = self.ascent - @ceil(y1),
+                    .topBearing = @ceil(y1),
                     .w = @ceil(x1) - @floor(x0),
                     .h = @ceil(y1) - @floor(y0),
                     .uv = .{ 0, 0 },
@@ -871,8 +875,8 @@ pub const Cache = struct {
                 maxx = @max(maxx, x + gi.leftBearing + gi.w);
                 maxx = @max(maxx, x + gi.advance);
 
-                miny = @min(miny, gi.topBearing);
-                maxy = @max(maxy, gi.topBearing + gi.h);
+                miny = @min(miny, self.ascent - gi.topBearing);
+                maxy = @max(maxy, self.ascent - gi.topBearing + gi.h);
 
                 if ((maxx - minx) > mwidth) {
                     switch (opts.end_metric) {

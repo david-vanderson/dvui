@@ -157,6 +157,10 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
     // might get a slightly smaller font
     var fce = try cw.fonts.getOrCreate(cw.gpa, sized_font);
+    var fce_ascent = fce.ascent;
+    if (opts.font.line_height_factor < 1.0) {
+        fce_ascent = @round(fce_ascent * opts.font.line_height_factor);
+    }
 
     // this must be synced with Font.textSizeEx()
     const target_fraction = if (cw.snap_to_pixels) 1.0 else target_size / fce.em_height;
@@ -300,7 +304,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
             var v: Vertex = undefined;
 
             v.pos.x = leftx;
-            v.pos.y = start.y + gi.topBearing * target_fraction;
+            v.pos.y = start.y + (fce_ascent - gi.topBearing) * target_fraction;
             v.col = col;
             v.uv = gi.uv;
             builder.appendVertex(v);
@@ -319,7 +323,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
             v.uv[0] = gi.uv[0] + gi.w / atlas_size.w;
             builder.appendVertex(v);
 
-            v.pos.y = start.y + (gi.topBearing + gi.h) * target_fraction;
+            v.pos.y = start.y + (fce_ascent - gi.topBearing + gi.h) * target_fraction;
             sel_max_y = @max(sel_max_y, v.pos.y);
             v.uv[1] = gi.uv[1] + gi.h / atlas_size.h;
             builder.appendVertex(v);
