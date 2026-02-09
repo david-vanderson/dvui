@@ -456,7 +456,7 @@ pub const Cache = struct {
                         .face = face,
                         .name = fname,
                         .scaleFactor = 1.0, // not used with freetype
-                        .height = @trunc(ascent) - @trunc(descent), // cheat descent a bit
+                        .height = @trunc(ascent - descent), // cheat total a bit
                         .ascent = @trunc(ascent), // cheat ascent a bit
                         .em_height = undefined, // below
                         .glyph_info_ascii = undefined,
@@ -509,7 +509,7 @@ pub const Cache = struct {
                 const ascender = entry.scaleFactor * @as(f32, @floatFromInt(face_ascent));
                 const descender = entry.scaleFactor * @as(f32, @floatFromInt(face_descent));
                 entry.ascent = @trunc(ascender); // cheat the ascent a bit
-                entry.height = entry.ascent - @trunc(descender); // cheat the desecnt a bit
+                entry.height = @trunc(ascender - descender); // cheat total a bit
                 entry.em_height = entry.scaleFactor * M.h;
 
                 //std.debug.print("{s} ascent {d} descent {d} computed ascent {d} height {d}\n", .{fname, ascender, descender, entry.ascent, entry.height});
