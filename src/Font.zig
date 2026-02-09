@@ -831,6 +831,13 @@ pub const Cache = struct {
             while (i < text.len) {
                 const cplen = std.unicode.utf8ByteSequenceLength(text[i]) catch unreachable;
                 const codepoint = std.unicode.utf8Decode(text[i..][0..cplen]) catch unreachable;
+
+                if (codepoint == '\n') {
+                    // newlines always terminate, and don't use any space
+                    ei += 1;
+                    break;
+                }
+
                 const gi = try self.glyphInfoGetOrReplacement(gpa, codepoint);
 
                 if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
@@ -866,12 +873,6 @@ pub const Cache = struct {
 
                 miny = @min(miny, gi.topBearing);
                 maxy = @max(maxy, gi.topBearing + gi.h);
-
-                if (codepoint == '\n') {
-                    // newlines always terminate, and don't use any space
-                    ei += 1;
-                    break;
-                }
 
                 if ((maxx - minx) > mwidth) {
                     switch (opts.end_metric) {
