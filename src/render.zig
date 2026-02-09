@@ -166,7 +166,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         // if kern_in is given, assume we already did this when measuring the text
         var utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
         while (utf8it.nextCodepoint()) |codepoint| {
-            _ = try fce.glyphInfoGetOrReplacement(cw.gpa, codepoint);
+            if (codepoint != '\n') _ = try fce.glyphInfoGetOrReplacement(cw.gpa, codepoint);
         }
     }
 
