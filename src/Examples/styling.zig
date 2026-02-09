@@ -144,7 +144,7 @@ pub fn styling() void {
                 var gbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
                 defer gbox.deinit();
                 dvui.label(@src(), "Gradient", .{}, .{ .gravity_y = 0.5 });
-                _ = dvui.dropdown(@src(), &.{ "flat", "horizontal", "vertical", "radial" }, gradient, .{});
+                _ = dvui.dropdown(@src(), &.{ "flat", "horizontal", "vertical", "radial" }, .{ .choice = gradient }, .{}, .{});
             }
 
             var drawBox = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 200, .h = 100 } });

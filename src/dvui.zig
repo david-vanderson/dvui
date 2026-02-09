@@ -2514,6 +2514,18 @@ pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOpt
     return ret;
 }
 
+pub const DropdownInitOptions = struct {
+    // Text to be shown when there is no selection (for optional enums only)
+    placeholder: ?[]const u8 = null,
+    // Can the user select a null value? (for optional enums only)
+    disable_null_selection: bool = false,
+};
+
+pub const DropdownChoice = union(enum) {
+    choice: *usize,
+    choice_nullable: *?usize,
+};
+
 /// Show chosen entry, and click to display all entries in a floating menu.
 ///
 /// Returns true if any entry was selected (even the already chosen one).
@@ -2521,15 +2533,33 @@ pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOpt
 /// See `DropdownWidget` for more advanced usage.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: *usize, opts: Options) bool {
+pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: DropdownChoice, init_opts: DropdownInitOptions, opts: Options) bool {
     var dd: dvui.DropdownWidget = undefined;
-    dd.init(src, .{ .selected_index = choice.*, .label = entries[choice.*] }, opts);
+    dd.init(
+        src,
+        switch (choice) {
+            .choice => |ch| .{ .selected_index = ch.*, .label = entries[ch.*] },
+            .choice_nullable => |ch| if (ch.* == null)
+                .{ .selected_index = null, .placeholder = init_opts.placeholder }
+            else
+                .{ .selected_index = ch.*, .label = entries[ch.*.?] },
+        },
+        opts,
+    );
 
     var ret = false;
     if (dd.dropped()) {
+        if (choice == .choice_nullable and !init_opts.disable_null_selection) {
+            if (dd.addChoiceLabel("")) {
+                choice.choice_nullable.* = null;
+                ret = true;
+            }
+        }
         for (entries, 0..) |e, i| {
             if (dd.addChoiceLabel(e)) {
-                choice.* = i;
+                switch (choice) {
+                    inline else => |ch| ch.* = i,
+                }
                 ret = true;
             }
         }
@@ -2538,13 +2568,6 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
     dd.deinit();
     return ret;
 }
-
-pub const DropdownEnumInitOptions = struct {
-    // Text to be shown when there is no selection (for optional enums only)
-    placeholder: ?[]const u8 = null,
-    // Can the user select a null value? (for optional enums only)
-    disable_null_selection: bool = false,
-};
 
 /// Show @tagName of choice, and click to display all tags in that enum in a floating menu.
 /// - supports display and setting of null values when T is an optional enum (?enum).
@@ -2555,7 +2578,7 @@ pub const DropdownEnumInitOptions = struct {
 /// See `DropdownWidget` for more advanced usage.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: *T, init_opts: DropdownEnumInitOptions, opts: Options) bool {
+pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: *T, init_opts: DropdownInitOptions, opts: Options) bool {
     const EnumT = switch (@typeInfo(T)) {
         .@"enum" => T,
         .optional => |opt| if (@typeInfo(opt.child) == .@"enum") opt.child else @compileError("Expected ?enum, found '" ++ @typeName(T) ++ "'"),

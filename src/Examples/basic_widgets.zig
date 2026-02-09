@@ -18,7 +18,7 @@ const RadioChoice = enum(u8) {
     _,
 };
 var radio_choice: RadioChoice = @enumFromInt(0);
-var dropdown_val: usize = 1;
+var dropdown_val: ?usize = null;
 
 /// ![image](Examples-basic_widgets.png)
 pub fn basicWidgets() void {
@@ -126,7 +126,7 @@ pub fn basicWidgets() void {
 
         const entries = [_][]const u8{ "First", "Second", "Third is a really long one that doesn't fit" };
 
-        _ = dvui.dropdown(@src(), &entries, &dropdown_val, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5, .max_size_content = .width(200) });
+        _ = dvui.dropdown(@src(), &entries, .{ .choice_nullable = &dropdown_val }, .{ .placeholder = "Choose..." }, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5, .max_size_content = .width(200) });
 
         dropdownAdvanced();
     }
