@@ -1,8 +1,8 @@
-//! A wrapper around an arena allocator that enforces that
+//! A wrapper around an arena allocator which enforces that
 //! memory is freed like a stack. i.e. in LIFO order
 //!
 //! The widget stack can be queried to determine if any
-//! pointer is an element of the stack.
+//! pointer is an element of the stack using `created()`.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -78,10 +78,9 @@ pub fn destroy(self: *WidgetStack, ptr: anytype) void {
 /// Returns whether this pointer belongs to a widget created by
 /// the widget stack.
 pub fn created(self: *const WidgetStack, ptr: *anyopaque) bool {
-    if (self.allocations.items.len == 0) return false;
-    var idx: usize = self.allocations.items.len;
-    while (idx > 0) : (idx -= 1) {
-        if (self.allocations.items[idx - 1].ptr == ptr) return true;
+    var itr = std.mem.reverseIterator(self.allocations.items);
+    while (itr.next()) |alloc_ptr| {
+        if (alloc_ptr.ptr == ptr) return true;
     }
     return false;
 }
