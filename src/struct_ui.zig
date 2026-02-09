@@ -350,7 +350,7 @@ pub fn enumFieldWidget(
         const choices = std.meta.FieldEnum(T);
         const entries = std.meta.fieldNames(choices);
         var choice: usize = @intFromEnum(std.meta.stringToEnum(std.meta.FieldEnum(T), @tagName(field_value_ptr.*)).?);
-        _ = dvui.dropdown(@src(), entries, &choice, .{});
+        _ = dvui.dropdown(@src(), entries, .{ .choice = &choice }, .{}, .{});
 
         field_value_ptr.* = std.meta.stringToEnum(T, @tagName(@as(std.meta.FieldEnum(T), @enumFromInt(choice)))).?;
     }
@@ -381,7 +381,7 @@ pub fn boolFieldWidget(
     } else {
         const entries = .{ "false", "true" };
         var choice: usize = if (field_value_ptr.* == false) 0 else 1;
-        _ = dvui.dropdown(@src(), &entries, &choice, .{});
+        _ = dvui.dropdown(@src(), &entries, .{ .choice = &choice }, .{}, .{});
         field_value_ptr.* = if (choice == 0) false else true;
     }
 }
@@ -539,7 +539,7 @@ pub fn unionFieldWidget(
         if (read_only) {
             dvui.labelNoFmt(@src(), @tagName(active_tag), .{}, .{});
         } else {
-            if (dvui.dropdown(@src(), choice_names, &active_choice_num, .{})) {
+            if (dvui.dropdown(@src(), choice_names, .{ .choice = &active_choice_num }, .{}, .{})) {
                 active_tag = std.meta.stringToEnum(@TypeOf(active_tag), choice_names[active_choice_num]).?; // This should never fail.
             }
         }
@@ -569,7 +569,7 @@ pub fn optionalFieldWidget(
         alignment.record(hbox.data().id, hbox_aligned.data());
 
         if (!read_only) {
-            _ = dvui.dropdown(@src(), &.{ "Null", "Not Null" }, &choice, .{});
+            _ = dvui.dropdown(@src(), &.{ "Null", "Not Null" }, .{ .choice = &choice }, .{}, .{});
         } else {
             dvui.labelNoFmt(@src(), if (choice == 0) "Null" else "Not Null", .{}, .{});
         }

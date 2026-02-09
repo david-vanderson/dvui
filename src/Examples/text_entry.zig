@@ -580,7 +580,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
 
         dvui.label(@src(), "Parse", .{}, .{ .gravity_y = 0.5 });
 
-        _ = dvui.dropdown(@src(), &parse_typenames, &S.type_dropdown_val, .{ .min_size_content = .{ .w = 20 }, .gravity_y = 0.5 });
+        _ = dvui.dropdown(@src(), &parse_typenames, .{ .choice = &S.type_dropdown_val }, .{}, .{ .min_size_content = .{ .w = 20 }, .gravity_y = 0.5 });
 
         left_alignment.spacer(@src(), 0);
 
