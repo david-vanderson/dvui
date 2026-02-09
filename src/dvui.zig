@@ -2518,7 +2518,7 @@ pub const DropdownInitOptions = struct {
     // Text to be shown when there is no selection (for nullable choices only)
     placeholder: ?[]const u8 = null,
     // Can the user select a null value? (for nullable choices only)
-    disable_null_selection: bool = false,
+    null_selectable: bool = true,
 };
 
 pub fn DropdownChoice(T: type) type {
@@ -2528,6 +2528,7 @@ pub fn DropdownChoice(T: type) type {
         choice_nullable: *?T,
     };
 }
+const dropdown_placeholder_default = "Select ...";
 
 /// Show chosen entry, and click to display all entries in a floating menu.
 ///
@@ -2543,7 +2544,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
         switch (choice) {
             .choice => |ch| .{ .selected_index = ch.*, .label = entries[ch.*] },
             .choice_nullable => |ch| if (ch.* == null)
-                .{ .placeholder = init_opts.placeholder orelse "Select ..." }
+                .{ .placeholder = init_opts.placeholder orelse dropdown_placeholder_default }
             else
                 .{ .selected_index = ch.*, .label = entries[ch.*.?] },
         },
@@ -2552,8 +2553,15 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 
     var ret = false;
     if (dd.dropped()) {
-        if (choice == .choice_nullable and !init_opts.disable_null_selection) {
-            if (dd.addChoiceLabel("")) {
+        if (choice == .choice_nullable and init_opts.null_selectable) {
+            var mi = dd.addChoice();
+            defer mi.deinit();
+            dvui.labelNoFmt(@src(), init_opts.placeholder orelse dropdown_placeholder_default, .{}, opts.strip().override(.{
+                .gravity_y = 0.5,
+                .color_text = opts.color(.text).opacity(0.65),
+            }));
+            if (mi.activeRect()) |_| {
+                dd.close();
                 choice.choice_nullable.* = null;
                 ret = true;
             }
@@ -2588,7 +2596,7 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
         switch (choice) {
             .choice => |ch| .{ .selected_index = @intFromEnum(ch.*), .label = @tagName(ch.*) },
             .choice_nullable => |ch| if (ch.* == null)
-                .{ .placeholder = init_opts.placeholder orelse "Select ..." }
+                .{ .placeholder = init_opts.placeholder orelse dropdown_placeholder_default }
             else
                 .{ .selected_index = @intFromEnum(ch.*.?), .label = @tagName(ch.*.?) },
         },
@@ -2598,8 +2606,15 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
 
     var ret = false;
     if (dd.dropped()) {
-        if (choice == .choice_nullable and !init_opts.disable_null_selection) {
-            if (dd.addChoiceLabel("")) {
+        if (choice == .choice_nullable and init_opts.null_selectable) {
+            var mi = dd.addChoice();
+            defer mi.deinit();
+            dvui.labelNoFmt(@src(), init_opts.placeholder orelse dropdown_placeholder_default, .{}, opts.strip().override(.{
+                .gravity_y = 0.5,
+                .color_text = opts.color(.text).opacity(0.65),
+            }));
+            if (mi.activeRect()) |_| {
+                dd.close();
                 choice.choice_nullable.* = null;
                 ret = true;
             }
