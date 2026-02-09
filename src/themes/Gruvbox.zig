@@ -38,7 +38,7 @@ pub const theme: dvui.Theme = blk: {
 
         .font_body = .find(.{ .family = "Aleo" }),
         .font_heading = .find(.{ .family = "Aleo", .weight = .bold }),
-        .font_title = .find(.{ .family = "Aleo", .size = 20 }),
+        .font_title = .find(.{ .family = "Aleo", .size = dvui.Font.DefaultSize + 2 }),
         .font_mono = .find(.{ .family = "None" }),
 
         .focus = .fromHex("#fe8019"),

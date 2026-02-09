@@ -26,7 +26,7 @@ pub const theme: dvui.Theme = blk: {
 
         .font_body = .find(.{ .family = "Pixelify Sans" }),
         .font_heading = .find(.{ .family = "Pixelify Sans", .weight = .bold }),
-        .font_title = .find(.{ .family = "Pixelify Sans", .size = 20 }),
+        .font_title = .find(.{ .family = "Pixelify Sans", .size = dvui.Font.DefaultSize + 2 }),
         .font_mono = .find(.{ .family = "None" }),
 
         .focus = .fromHex("#638465"),
