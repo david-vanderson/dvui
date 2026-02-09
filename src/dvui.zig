@@ -2514,6 +2514,22 @@ pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOpt
     return ret;
 }
 
+pub const DropdownInitOptions = struct {
+    // Text to be shown when there is no selection (for nullable choices only)
+    placeholder: ?[]const u8 = null,
+    // Can the user select a null value? (for nullable choices only)
+    null_selectable: bool = true,
+};
+
+pub fn DropdownChoice(T: type) type {
+    return union(enum) {
+        choice: *T,
+        // Will display placeholder text when null.
+        choice_nullable: *?T,
+    };
+}
+const dropdown_placeholder_default = "Select ...";
+
 /// Show chosen entry, and click to display all entries in a floating menu.
 ///
 /// Returns true if any entry was selected (even the already chosen one).
@@ -2521,15 +2537,40 @@ pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOpt
 /// See `DropdownWidget` for more advanced usage.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: *usize, opts: Options) bool {
+pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: DropdownChoice(usize), init_opts: DropdownInitOptions, opts: Options) bool {
     var dd: dvui.DropdownWidget = undefined;
-    dd.init(src, .{ .selected_index = choice.*, .label = entries[choice.*] }, opts);
+    dd.init(
+        src,
+        switch (choice) {
+            .choice => |ch| .{ .selected_index = ch.*, .label = entries[ch.*] },
+            .choice_nullable => |ch| if (ch.* == null)
+                .{ .placeholder = init_opts.placeholder orelse dropdown_placeholder_default }
+            else
+                .{ .selected_index = ch.*, .label = entries[ch.*.?] },
+        },
+        opts,
+    );
 
     var ret = false;
     if (dd.dropped()) {
+        if (choice == .choice_nullable and init_opts.null_selectable) {
+            var mi = dd.addChoice();
+            defer mi.deinit();
+            dvui.labelNoFmt(@src(), init_opts.placeholder orelse dropdown_placeholder_default, .{}, opts.strip().override(.{
+                .gravity_y = 0.5,
+                .color_text = opts.color(.text).opacity(0.65),
+            }));
+            if (mi.activeRect()) |_| {
+                dd.close();
+                choice.choice_nullable.* = null;
+                ret = true;
+            }
+        }
         for (entries, 0..) |e, i| {
             if (dd.addChoiceLabel(e)) {
-                choice.* = i;
+                switch (choice) {
+                    inline else => |ch| ch.* = i,
+                }
                 ret = true;
             }
         }
@@ -2546,23 +2587,50 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 /// See `DropdownWidget` for more advanced usage.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: *T, opts: Options) bool {
+pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownChoice(T), init_opts: DropdownInitOptions, opts: Options) bool {
     if (@typeInfo(T) != .@"enum") @compileError("Expected enum, found '" ++ @typeName(T) ++ "'");
 
     var dd: dvui.DropdownWidget = undefined;
-    dd.init(src, .{ .selected_index = @intFromEnum(choice.*), .label = @tagName(choice.*) }, opts);
+    dd.init(
+        src,
+        switch (choice) {
+            .choice => |ch| .{ .selected_index = @intFromEnum(ch.*), .label = @tagName(ch.*) },
+            .choice_nullable => |ch| if (ch.* == null)
+                .{ .placeholder = init_opts.placeholder orelse dropdown_placeholder_default }
+            else
+                .{ .selected_index = @intFromEnum(ch.*.?), .label = @tagName(ch.*.?) },
+        },
+        opts,
+    );
+    defer dd.deinit();
 
     var ret = false;
     if (dd.dropped()) {
+        if (choice == .choice_nullable and init_opts.null_selectable) {
+            var mi = dd.addChoice();
+            defer mi.deinit();
+            dvui.labelNoFmt(@src(), init_opts.placeholder orelse dropdown_placeholder_default, .{}, opts.strip().override(.{
+                .gravity_y = 0.5,
+                .color_text = opts.color(.text).opacity(0.65),
+            }));
+            if (mi.activeRect()) |_| {
+                dd.close();
+                choice.choice_nullable.* = null;
+                ret = true;
+            }
+        }
         inline for (@typeInfo(T).@"enum".fields) |e| {
             if (dd.addChoiceLabel(e.name)) {
-                choice.* = @field(T, e.name);
-                ret = true;
+                switch (choice) {
+                    inline else => |ch| {
+                        ch.* = @field(T, e.name);
+                        ret = true;
+                    },
+                }
             }
         }
     }
 
-    dd.deinit();
     return ret;
 }
 

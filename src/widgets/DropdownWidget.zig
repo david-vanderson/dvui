@@ -24,6 +24,7 @@ pub var defaults: Options = .{
 
 pub const InitOptions = struct {
     label: ?[]const u8 = null,
+    placeholder: ?[]const u8 = null,
     selected_index: ?usize = null,
 };
 
@@ -70,12 +71,27 @@ pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: I
 
     if (dvui.dataGet(null, self.data().id, "_drop_adjust", f32)) |adjust| self.drop_adjust = adjust;
 
-    if (self.init_options.label) |ll| {
+    const label_text: ?[]const u8 = blk: {
+        if (self.init_options.selected_index == null) {
+            if (self.init_options.placeholder) |placeholder| {
+                break :blk placeholder;
+            }
+        }
+        if (self.init_options.label) |label| {
+            break :blk label;
+        } else {
+            break :blk null;
+        }
+    };
+    if (label_text) |ll| {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
         defer hbox.deinit();
 
         var lw: LabelWidget = undefined;
-        lw.initNoFmt(@src(), ll, .{}, self.options.strip().override(.{ .gravity_y = 0.5 }));
+        lw.initNoFmt(@src(), ll, .{}, self.options.strip().override(.{
+            .gravity_y = 0.5,
+            .color_text = if (self.init_options.selected_index == null and self.init_options.placeholder != null) self.data().options.color(.text).opacity(0.65) else null,
+        }));
         lw.draw();
         lw.deinit();
         _ = dvui.spacer(@src(), .{ .min_size_content = .width(6) });
@@ -90,7 +106,11 @@ pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: I
     if (self.menuItem.data().accesskit_node()) |ak_node| {
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
-        //TODO: Potential case for supporting expand.
+        if (self.init_options.selected_index == null)
+            if (self.init_options.placeholder) |placeholder| {
+                AccessKit.nodeSetPlaceholderWithLength(ak_node, placeholder.ptr, placeholder.len);
+            };
+        // AK TODO: Potential case for supporting expand, when supported by accesskit.
         //AccessKit.nodeAddAction(ak_node, AccessKit.Action.expand);
     }
 }
