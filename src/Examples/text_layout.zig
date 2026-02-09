@@ -119,8 +119,8 @@ pub fn layoutText() void {
             var inner_box = dvui.box(@src(), .{}, .{ .expand = .horizontal });
             defer inner_box.deinit();
             dvui.icon(@src(), "aircraft", entypo.aircraft, .{}, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 });
-            dvui.label(@src(), "Caption Heading", .{}, .{ .font = dvui.Font.theme(.body).larger(-3).withWeight(.bold).withLineHeight(1.1), .gravity_x = 0.5 });
-            tl_caption.addText("Here is some caption text that is in it's own text layout.", .{ .font = dvui.Font.theme(.body).larger(-3).withLineHeight(1.1) });
+            dvui.label(@src(), "Caption Heading", .{}, .{ .font = dvui.Font.theme(.body).larger(-2).withWeight(.bold).withLineHeight(1.1), .gravity_x = 0.5 });
+            tl_caption.addText("Here is some caption text that is in it's own text layout.", .{ .font = dvui.Font.theme(.body).larger(-2).withLineHeight(1.1) });
         }
         tl_caption.deinit();
         cbox.deinit();
@@ -180,7 +180,7 @@ pub fn layoutText() void {
         tl.addText("Here ", .{ .font = dvui.Font.theme(.body).withWeight(.bold).withStyle(.italic).larger(12), .color_text = .{ .r = 100, .b = 100 } });
         tl.addText("is some ", .{ .font = dvui.Font.theme(.body).larger(6), .color_text = .{ .b = 100, .g = 100 }, .color_fill = .green });
         tl.addText("ugly text ", .{ .font = dvui.Font.theme(.body).larger(8), .color_text = .{ .r = 100, .g = 100 }, .color_fill = .teal });
-        tl.addText("that shows styling.", .{ .font = dvui.Font.theme(.body).larger(-3), .color_text = .{ .r = 100, .g = 50, .b = 50 } });
+        tl.addText("that shows styling.", .{ .font = dvui.Font.theme(.body).larger(-2), .color_text = .{ .r = 100, .g = 50, .b = 50 } });
     }
 }
 
