@@ -2,7 +2,7 @@
 pub fn scrolling() void {
     const Data1 = struct {
         msg_start: usize = 100,
-        msg_end: usize = 100,
+        msg_end: usize = 110,
 
         dynamic: bool = true,
         remove_top: ?usize = null,
@@ -19,7 +19,7 @@ pub fn scrolling() void {
         var scroll_to_msg: ?usize = null;
         var scroll_lock_visible = false;
 
-        // scroll to the bottom if we started there and new stuff was added
+        // scroll to the bottom if we started there and new stuff was added and the user did not scroll up
         const stick_to_bottom = Data.scroll_info.offsetFromMax(.vertical) <= 0;
         var new_bottom_stuff = false;
 
@@ -136,6 +136,9 @@ pub fn scrolling() void {
                 }
             }
         }
+
+        var user_scroll: dvui.Point = undefined;
+
         {
             var vbox = dvui.box(@src(), .{}, .{ .expand = .horizontal });
             defer vbox.deinit();
@@ -143,7 +146,7 @@ pub fn scrolling() void {
             dvui.label(@src(), "{d:0>4.2}% visible, offset {d:0>.1} frac {d:0>4.2} sticky-bot {any}", .{ Data.scroll_info.visibleFraction(.vertical) * 100.0, Data.scroll_info.viewport.y, Data.scroll_info.offsetFraction(.vertical), stick_to_bottom }, .{});
 
             var scrollData: dvui.WidgetData = undefined;
-            var scroll = dvui.scrollArea(@src(), .{ .scroll_info = &Data.scroll_info, .lock_visible = scroll_lock_visible }, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 }, .max_size_content = .height(250), .style = .content, .data_out = &scrollData });
+            var scroll = dvui.scrollArea(@src(), .{ .scroll_info = &Data.scroll_info, .lock_visible = scroll_lock_visible, .user_scroll = &user_scroll }, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 }, .max_size_content = .height(250), .style = .content, .data_out = &scrollData });
 
             for (Data.msg_start..Data.msg_end) |i| {
                 {
@@ -180,7 +183,7 @@ pub fn scrolling() void {
             _ = dvui.checkbox(@src(), &Data.auto_add, "Add Msg 1/s", .{});
         }
 
-        if (new_bottom_stuff and stick_to_bottom) {
+        if (new_bottom_stuff and stick_to_bottom and user_scroll.y >= 0) {
             // do this after scrollArea has given scroll_info the new size
             Data.scroll_info.scrollToOffset(.vertical, std.math.floatMax(f32));
         }

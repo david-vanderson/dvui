@@ -38,6 +38,11 @@ pub const InitOpts = struct {
     lock_visible: bool = false,
     process_events_after: bool = true,
     container: bool = true,
+
+    /// If non null scrollArea will write the total amount of scrolling that /
+    /// came from user events.  Many events are processed in deinit(), so run
+    /// that before using this value.
+    user_scroll: ?*dvui.Point = null,
 };
 
 hbox: BoxWidget,
@@ -46,38 +51,36 @@ vbar_grab: ?ScrollBarWidget.Grab = null,
 vbox: BoxWidget = undefined,
 hbar: ?ScrollBarWidget = null,
 hbar_grab: ?ScrollBarWidget.Grab = null,
-init_opts: InitOpts,
 si: *ScrollInfo = undefined,
 scroll: ?ScrollContainerWidget = null,
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) void {
     self.* = .{
-        .init_opts = init_opts,
         .hbox = undefined, // set below
     };
 
     self.hbox.init(src, .{ .dir = .horizontal }, defaults.themeOverride(opts.theme).override(opts));
 
-    if (self.init_opts.scroll_info) |si| {
+    if (init_opts.scroll_info) |si| {
         self.si = si;
-        if (self.init_opts.vertical != null) {
-            dvui.log.debug("ScrollAreaWidget {x} init_opts.vertical .{s} overridden by init_opts.scroll_info.vertical .{s}\n", .{ self.hbox.data().id, @tagName(self.init_opts.vertical.?), @tagName(si.vertical) });
+        if (init_opts.vertical != null) {
+            dvui.log.debug("ScrollAreaWidget {x} init_opts.vertical .{s} overridden by init_opts.scroll_info.vertical .{s}\n", .{ self.hbox.data().id, @tagName(init_opts.vertical.?), @tagName(si.vertical) });
         }
-        if (self.init_opts.horizontal != null) {
-            dvui.log.debug("ScrollAreaWidget {x} init_opts.horizontal .{s} overridden by init_opts.scroll_info.horizontal .{s}\n", .{ self.hbox.data().id, @tagName(self.init_opts.horizontal.?), @tagName(si.horizontal) });
+        if (init_opts.horizontal != null) {
+            dvui.log.debug("ScrollAreaWidget {x} init_opts.horizontal .{s} overridden by init_opts.scroll_info.horizontal .{s}\n", .{ self.hbox.data().id, @tagName(init_opts.horizontal.?), @tagName(si.horizontal) });
         }
     } else {
         self.si = dvui.dataGetPtrDefault(null, self.hbox.data().id, "_scroll_info", ScrollInfo, .{});
 
         // outside code might have changed what direction we scroll in
-        self.si.vertical = self.init_opts.vertical orelse .auto;
-        self.si.horizontal = self.init_opts.horizontal orelse .none;
+        self.si.vertical = init_opts.vertical orelse .auto;
+        self.si.horizontal = init_opts.horizontal orelse .none;
     }
 
     self.hbox.drawBackground();
 
-    const focus_target = self.init_opts.focus_id orelse dvui.dataGet(null, self.hbox.data().id, "_scroll_id", dvui.Id);
+    const focus_target = init_opts.focus_id orelse dvui.dataGet(null, self.hbox.data().id, "_scroll_id", dvui.Id);
 
     const crect = self.hbox.data().contentRect();
 
@@ -98,18 +101,18 @@ pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts:
     var do_vbar = false;
     var do_hbar = false;
     if (self.si.vertical != .none) {
-        if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar.autoAny() and (self.si.virtual_size.h > (self.si.viewport.h + 0.001)))) {
+        if (init_opts.vertical_bar == .show or (init_opts.vertical_bar.autoAny() and (self.si.virtual_size.h > (self.si.viewport.h + 0.001)))) {
             do_vbar = true;
-            if (self.init_opts.vertical_bar != .auto_overlay) {
+            if (init_opts.vertical_bar != .auto_overlay) {
                 self.si.viewport.w -= ScrollBarWidget.defaults.min_sizeGet().w;
             }
         }
     }
 
     if (self.si.horizontal != .none) {
-        if (self.init_opts.horizontal_bar == .show or (self.init_opts.horizontal_bar.autoAny() and (self.si.virtual_size.w > (self.si.viewport.w + 0.001)))) {
+        if (init_opts.horizontal_bar == .show or (init_opts.horizontal_bar.autoAny() and (self.si.virtual_size.w > (self.si.viewport.w + 0.001)))) {
             do_hbar = true;
-            if (self.init_opts.horizontal_bar != .auto_overlay) {
+            if (init_opts.horizontal_bar != .auto_overlay) {
                 self.si.viewport.h -= ScrollBarWidget.defaults.min_sizeGet().h;
             }
         }
@@ -117,9 +120,9 @@ pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts:
 
     // test for vbar again because hbar might have removed some of our room
     if (!do_vbar and do_hbar and self.si.vertical != .none) {
-        if (self.init_opts.vertical_bar.autoAny() and (self.si.virtual_size.h > (self.si.viewport.h + 0.001))) {
+        if (init_opts.vertical_bar.autoAny() and (self.si.virtual_size.h > (self.si.viewport.h + 0.001))) {
             do_vbar = true;
-            if (self.init_opts.vertical_bar != .auto_overlay) {
+            if (init_opts.vertical_bar != .auto_overlay) {
                 self.si.viewport.w -= ScrollBarWidget.defaults.min_sizeGet().w;
             }
         }
@@ -127,7 +130,7 @@ pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts:
 
     if (do_vbar) {
         // do the scrollbars first so that they still appear even if there's not enough space
-        const overlay = self.init_opts.vertical_bar == .auto_overlay;
+        const overlay = init_opts.vertical_bar == .auto_overlay;
         self.vbar = @as(ScrollBarWidget, undefined); // Must be a non-null value for `.?` bellow
         self.vbar.?.init(
             @src(),
@@ -146,7 +149,7 @@ pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts:
     self.vbox.drawBackground();
 
     if (do_hbar) {
-        const overlay = self.init_opts.horizontal_bar == .auto_overlay;
+        const overlay = init_opts.horizontal_bar == .auto_overlay;
         self.hbar = @as(ScrollBarWidget, undefined); // Must be a non-null value for `.?` bellow
         self.hbar.?.init(
             @src(),
@@ -164,7 +167,7 @@ pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts:
     if (init_opts.container) {
         const container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
         self.scroll = @as(ScrollContainerWidget, undefined);
-        self.scroll.?.init(@src(), self.si, .{ .scroll_area = self, .lock_visible = self.init_opts.lock_visible, .frame_viewport = self.init_opts.frame_viewport, .process_events_after = self.init_opts.process_events_after }, container_opts);
+        self.scroll.?.init(@src(), self.si, .{ .scroll_area = self, .lock_visible = init_opts.lock_visible, .user_scroll = init_opts.user_scroll, .frame_viewport = init_opts.frame_viewport, .process_events_after = init_opts.process_events_after }, container_opts);
 
         self.scroll.?.processEvents();
         self.scroll.?.processVelocity();
