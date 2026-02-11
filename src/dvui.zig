@@ -4740,6 +4740,8 @@ pub fn TextEntryNumberInitOptions(comptime T: type) type {
         max: ?T = null,
         value: ?*T = null,
         show_min_max: bool = false,
+        // Display this text instead of value until a key is pressed.
+        text: ?[]const u8 = null,
     };
 }
 
@@ -4778,9 +4780,16 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     const id = dvui.parentGet().extendId(src, opts.idExtra()).update(@typeName(T));
 
     const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 32);
+    var text_mode = dataGetDefault(null, id, "text_mode", bool, false);
 
-    //initialize with input number
-    if (init_opts.value) |num| {
+    //initialize with text or value
+    if (init_opts.text) |text| {
+        // Note max needs to be less or equal the default buffer size
+        const text_len = @min(text.len, 32);
+        @memset(buffer, 0); // clear out anything that was there before
+        @memcpy(buffer[0..text_len], text[0..text_len]);
+        text_mode = true;
+    } else if (init_opts.value) |num| {
         const old_value = dataGet(null, id, "value", T);
         if (old_value == null or old_value.? != num.*) {
             dataSet(null, id, "value", num.*);
@@ -4791,12 +4800,29 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     var te: TextEntryWidget = undefined;
     te.init(src, .{ .text = .{ .buffer = buffer } }, default_opts.override(opts));
+
+    if (text_mode)
+        for (dvui.events()) |*evt| {
+            if (dvui.eventMatchSimple(evt, te.data())) {
+                if (evt.evt == .key and evt.evt.key.action == .down) {
+                    // As soon as user types, revert to numeric mode
+                    text_mode = false;
+                    te.textSet("", false);
+                }
+            }
+        };
+
+    if (init_opts.text != null) {
+        te.textLayout.selection.moveCursor(0, false);
+    }
     te.processEvents();
 
-    var result: TextEntryNumberResult(T) = .{ .enter_pressed = te.enter_pressed };
+    if (!text_mode) {
+        // filter before drawing
+        te.filterIn(filter);
+    }
 
-    // filter before drawing
-    te.filterIn(filter);
+    var result: TextEntryNumberResult(T) = .{ .enter_pressed = te.enter_pressed };
 
     // validation
     const text = te.getText();
@@ -4828,7 +4854,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     te.draw();
 
-    if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
+    if (!text_mode and result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
         rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
@@ -4865,7 +4891,11 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
             AccessKit.nodeSetInvalid(ak_node, AccessKit.Invalid.ak_true);
             AccessKit.nodeSetNumericValue(ak_node, 0);
         }
+        if (text_mode) {
+            AccessKit.nodeSetPlaceholderWithLength(ak_node, te.textGet().ptr, te.textGet().len);
+        }
     }
+    dvui.dataSet(null, id, "text_mode", text_mode);
 
     te.deinit();
 
