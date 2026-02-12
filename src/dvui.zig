@@ -4780,16 +4780,9 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     const id = dvui.parentGet().extendId(src, opts.idExtra()).update(@typeName(T));
 
     const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 32);
-    var text_mode = dataGetDefault(null, id, "text_mode", bool, false);
 
-    //initialize with text or value
-    if (init_opts.text) |text| {
-        // Note max needs to be less or equal the default buffer size
-        const text_len = @min(text.len, 32);
-        @memset(buffer, 0); // clear out anything that was there before
-        @memcpy(buffer[0..text_len], text[0..text_len]);
-        text_mode = true;
-    } else if (init_opts.value) |num| {
+    // always initialize with value so we do the dataGet
+    if (init_opts.value) |num| {
         const old_value = dataGet(null, id, "value", T);
         if (old_value == null or old_value.? != num.*) {
             dataSet(null, id, "value", num.*);
@@ -4798,29 +4791,31 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         }
     }
 
-    var te: TextEntryWidget = undefined;
-    te.init(src, .{ .text = .{ .buffer = buffer } }, default_opts.override(opts));
-
-    if (text_mode)
-        for (dvui.events()) |*evt| {
-            if (dvui.eventMatchSimple(evt, te.data())) {
-                if (evt.evt == .key and evt.evt.key.action == .down) {
-                    // As soon as user types, revert to numeric mode
-                    text_mode = false;
-                    te.textSet("", false);
-                }
-            }
-        };
-
-    if (init_opts.text != null) {
-        te.textLayout.selection.moveCursor(0, false);
+    // display min/max
+    var minmax_buffer: [64]u8 = undefined;
+    var minmax_text: []const u8 = "";
+    if (init_opts.show_min_max) {
+        if (init_opts.min != null and init_opts.max != null) {
+            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(min: {d}, max: {d})", .{ init_opts.min.?, init_opts.max.? }) catch unreachable;
+        } else if (init_opts.min != null) {
+            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(min: {d})", .{init_opts.min.?}) catch unreachable;
+        } else if (init_opts.max != null) {
+            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(max: {d})", .{init_opts.max.?}) catch unreachable;
+        }
     }
+
+    var te: TextEntryWidget = undefined;
+    te.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = if (init_opts.show_min_max) minmax_text else null }, default_opts.override(opts));
+
+    // if text was given, act like the user deleted everything and typed this
+    if (init_opts.text) |text| {
+        te.textSet(text, false);
+    }
+
     te.processEvents();
 
-    if (!text_mode) {
-        // filter before drawing
-        te.filterIn(filter);
-    }
+    // filter before drawing
+    te.filterIn(filter);
 
     var result: TextEntryNumberResult(T) = .{ .enter_pressed = te.enter_pressed };
 
@@ -4854,24 +4849,11 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     te.draw();
 
-    if (!text_mode and result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
+    if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
         rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
 
-    // display min/max
-    if (te.getText().len == 0 and init_opts.show_min_max) {
-        var minmax_buffer: [64]u8 = undefined;
-        var minmax_text: []const u8 = "";
-        if (init_opts.min != null and init_opts.max != null) {
-            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(min: {d}, max: {d})", .{ init_opts.min.?, init_opts.max.? }) catch unreachable;
-        } else if (init_opts.min != null) {
-            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(min: {d})", .{init_opts.min.?}) catch unreachable;
-        } else if (init_opts.max != null) {
-            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(max: {d})", .{init_opts.max.?}) catch unreachable;
-        }
-        te.textLayout.addText(minmax_text, .{ .color_text = opts.color(.fill_hover) });
-    }
     if (te.data().accesskit_node()) |ak_node| {
         AccessKit.nodeClearValue(ak_node); // Only set a numberic value
         if (@typeInfo(T) == .float) {
@@ -4891,11 +4873,10 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
             AccessKit.nodeSetInvalid(ak_node, AccessKit.Invalid.ak_true);
             AccessKit.nodeSetNumericValue(ak_node, 0);
         }
-        if (text_mode) {
+        if (false) {
             AccessKit.nodeSetPlaceholderWithLength(ak_node, te.textGet().ptr, te.textGet().len);
         }
     }
-    dvui.dataSet(null, id, "text_mode", text_mode);
 
     te.deinit();
 
