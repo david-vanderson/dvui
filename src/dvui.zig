@@ -4740,8 +4740,8 @@ pub fn TextEntryNumberInitOptions(comptime T: type) type {
         max: ?T = null,
         value: ?*T = null,
         show_min_max: bool = false,
-        // Display this text instead of value until a key is pressed.
         text: ?[]const u8 = null,
+        placeholder: ?[]const u8 = null,
     };
 }
 
@@ -4805,7 +4805,10 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     }
 
     var te: TextEntryWidget = undefined;
-    te.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = if (init_opts.show_min_max) minmax_text else null }, default_opts.override(opts));
+    te.init(src, .{
+        .text = .{ .buffer = buffer },
+        .placeholder = init_opts.placeholder orelse if (init_opts.show_min_max) minmax_text else null,
+    }, default_opts.override(opts));
 
     // if text was given, act like the user deleted everything and typed this
     if (init_opts.text) |text| {
