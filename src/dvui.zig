@@ -4876,9 +4876,6 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
             AccessKit.nodeSetInvalid(ak_node, AccessKit.Invalid.ak_true);
             AccessKit.nodeSetNumericValue(ak_node, 0);
         }
-        if (false) {
-            AccessKit.nodeSetPlaceholderWithLength(ak_node, te.textGet().ptr, te.textGet().len);
-        }
     }
 
     te.deinit();
