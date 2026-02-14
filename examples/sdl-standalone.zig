@@ -103,152 +103,183 @@ pub fn main() !void {
     }
 }
 
+const NumberType = i64;
+var init_opts: dvui.TextEntryNumberInitOptions(NumberType) = .{};
+var value: NumberType = -789;
+
+const init_opts_defaults: dvui.TextEntryNumberInitOptions(NumberType) = .{ .value = &value, .placeholder = "Enter a number", .text = "a123b", .min = -100, .max = 100 };
 // both dvui and SDL drawing
 // return false if user wants to exit the app
 fn gui_frame() bool {
-    const backend = g_backend orelse return false;
-
-    {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal, .name = "main" });
-        defer hbox.deinit();
-
-        var m = dvui.menu(@src(), .horizontal, .{});
-        defer m.deinit();
-
-        if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
-            var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
-            defer fw.deinit();
-
-            if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
-                m.close();
-            }
-
-            if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
-                return false;
-            }
+    dvui.struct_ui.defaults.display_expanded = true;
+    if (true) {
+        var vbox = dvui.box(@src(), .{}, .{});
+        defer vbox.deinit();
+        {
+            var gbox = dvui.groupBox(@src(), "textEntryNumber()", .{});
+            defer gbox.deinit();
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            const result = dvui.textEntryNumber(@src(), NumberType, init_opts, .{ .gravity_y = 0.5 });
+            dvui.structUI(@src(), "result", &result, 99, .{
+                dvui.struct_ui.StructOptions(dvui.TextEntryNumberResult(NumberType)).initWithDefaults(.{
+                    .changed = .{ .boolean = .{ .manual_reset = true } },
+                    .enter_pressed = .{ .boolean = .{ .manual_reset = true } },
+                }, null),
+            });
         }
-
-        if (dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{})) |r| {
-            var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
-            defer fw.deinit();
-            _ = dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
-            _ = dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
-            _ = dvui.menuItemLabel(@src(), "Dummy Super Long", .{}, .{ .expand = .horizontal });
-        }
-    }
-
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
-    defer scroll.deinit();
-
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
-    const lorem = "This example shows how to use dvui in a normal application.";
-    tl.addText(lorem, .{});
-    tl.deinit();
-
-    var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    tl2.addText(
-        \\DVUI
-        \\- paints the entire window
-        \\- can show floating windows and dialogs
-        \\- example menu at the top of the window
-        \\- rest of the window is a scroll area
-        \\
-        \\
-    , .{});
-    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.\n\n", .{});
-    if (vsync) {
-        tl2.addText("Framerate is capped by vsync.\n", .{});
+        var box = dvui.box(@src(), .{}, .{ .corner_radius = dvui.Rect.all(3), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(6), .expand = .horizontal, .margin = dvui.Rect.all(6) });
+        defer box.deinit();
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{
+            dvui.struct_ui.StructOptions(dvui.TextEntryNumberInitOptions(NumberType)).initWithDefaults(.{
+                .text = .{ .text = .{ .display = .read_write } },
+                .placeholder = .{ .text = .{ .display = .read_write } },
+            }, init_opts_defaults),
+        });
     } else {
-        tl2.addText("Framerate is uncapped.\n", .{});
-    }
-    tl2.addText("\n", .{});
-    tl2.addText("Cursor is always being set by dvui.\n\n", .{});
-    if (dvui.useFreeType) {
-        tl2.addText("Fonts are being rendered by FreeType 2.", .{});
-    } else {
-        tl2.addText("Fonts are being rendered by stb_truetype.", .{});
-    }
-    tl2.deinit();
-
-    const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
-    if (dvui.button(@src(), label, .{}, .{})) {
-        dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
-    }
-
-    if (dvui.button(@src(), "Debug Window", .{}, .{})) {
-        dvui.toggleDebugWindow();
-    }
-
-    {
-        var scaler = dvui.scale(@src(), .{ .scale = &scale_val }, .{ .expand = .horizontal });
-        defer scaler.deinit();
+        const backend = g_backend orelse return false;
 
         {
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal, .name = "main" });
             defer hbox.deinit();
 
-            if (dvui.button(@src(), "Zoom In", .{}, .{})) {
-                scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
+            var m = dvui.menu(@src(), .horizontal, .{});
+            defer m.deinit();
+
+            if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
+                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+                defer fw.deinit();
+
+                if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
+                    m.close();
+                }
+
+                if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
+                    return false;
+                }
             }
 
-            if (dvui.button(@src(), "Zoom Out", .{}, .{})) {
-                scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
+            if (dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{})) |r| {
+                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+                defer fw.deinit();
+                _ = dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
+                _ = dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
+                _ = dvui.menuItemLabel(@src(), "Dummy Super Long", .{}, .{ .expand = .horizontal });
             }
         }
 
-        dvui.labelNoFmt(@src(), "Below is drawn directly by the backend, not going through DVUI.", .{}, .{ .margin = .{ .x = 4 } });
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+        defer scroll.deinit();
 
-        var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
-        defer box.deinit();
+        var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
+        const lorem = "This example shows how to use dvui in a normal application.";
+        tl.addText(lorem, .{});
+        tl.deinit();
 
-        // Here is some arbitrary drawing that doesn't have to go through DVUI.
-        // It can be interleaved with DVUI drawing.
-        // NOTE: This only works in the main window (not floating subwindows
-        // like dialogs).
+        var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+        tl2.addText(
+            \\DVUI
+            \\- paints the entire window
+            \\- can show floating windows and dialogs
+            \\- example menu at the top of the window
+            \\- rest of the window is a scroll area
+            \\
+            \\
+        , .{});
+        tl2.addText("Framerate is variable and adjusts as needed for input events and animations.\n\n", .{});
+        if (vsync) {
+            tl2.addText("Framerate is capped by vsync.\n", .{});
+        } else {
+            tl2.addText("Framerate is uncapped.\n", .{});
+        }
+        tl2.addText("\n", .{});
+        tl2.addText("Cursor is always being set by dvui.\n\n", .{});
+        if (dvui.useFreeType) {
+            tl2.addText("Fonts are being rendered by FreeType 2.", .{});
+        } else {
+            tl2.addText("Fonts are being rendered by stb_truetype.", .{});
+        }
+        tl2.deinit();
 
-        // get the screen rectangle for the box
-        const rs = box.data().contentRectScale();
+        const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
+        if (dvui.button(@src(), label, .{}, .{})) {
+            dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
+        }
 
-        // rs.r is the pixel rectangle, rs.s is the scale factor (like for
-        // hidpi screens or display scaling)
-        var rect: if (SDLBackend.sdl3) SDLBackend.c.SDL_FRect else SDLBackend.c.SDL_Rect = undefined;
-        if (SDLBackend.sdl3) rect = .{
-            .x = (rs.r.x + 4 * rs.s),
-            .y = (rs.r.y + 4 * rs.s),
-            .w = (20 * rs.s),
-            .h = (20 * rs.s),
-        } else rect = .{
-            .x = @intFromFloat(rs.r.x + 4 * rs.s),
-            .y = @intFromFloat(rs.r.y + 4 * rs.s),
-            .w = @intFromFloat(20 * rs.s),
-            .h = @intFromFloat(20 * rs.s),
-        };
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 0, 255);
-        _ = SDLBackend.c.SDL_RenderFillRect(backend.renderer, &rect);
+        if (dvui.button(@src(), "Debug Window", .{}, .{})) {
+            dvui.toggleDebugWindow();
+        }
 
-        rect.x += if (SDLBackend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 255, 0, 255);
-        _ = SDLBackend.c.SDL_RenderFillRect(backend.renderer, &rect);
+        {
+            var scaler = dvui.scale(@src(), .{ .scale = &scale_val }, .{ .expand = .horizontal });
+            defer scaler.deinit();
 
-        rect.x += if (SDLBackend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 255, 255);
-        _ = SDLBackend.c.SDL_RenderFillRect(backend.renderer, &rect);
+            {
+                var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+                defer hbox.deinit();
 
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 255, 255);
+                if (dvui.button(@src(), "Zoom In", .{}, .{})) {
+                    scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
+                }
 
-        if (SDLBackend.sdl3)
-            _ = SDLBackend.c.SDL_RenderLine(backend.renderer, (rs.r.x + 4 * rs.s), (rs.r.y + 30 * rs.s), (rs.r.x + rs.r.w - 8 * rs.s), (rs.r.y + 30 * rs.s))
-        else
-            _ = SDLBackend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(rs.r.x + 4 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s), @intFromFloat(rs.r.x + rs.r.w - 8 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s));
+                if (dvui.button(@src(), "Zoom Out", .{}, .{})) {
+                    scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
+                }
+            }
+
+            dvui.labelNoFmt(@src(), "Below is drawn directly by the backend, not going through DVUI.", .{}, .{ .margin = .{ .x = 4 } });
+
+            var box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
+            defer box.deinit();
+
+            // Here is some arbitrary drawing that doesn't have to go through DVUI.
+            // It can be interleaved with DVUI drawing.
+            // NOTE: This only works in the main window (not floating subwindows
+            // like dialogs).
+
+            // get the screen rectangle for the box
+            const rs = box.data().contentRectScale();
+
+            // rs.r is the pixel rectangle, rs.s is the scale factor (like for
+            // hidpi screens or display scaling)
+            var rect: if (SDLBackend.sdl3) SDLBackend.c.SDL_FRect else SDLBackend.c.SDL_Rect = undefined;
+            if (SDLBackend.sdl3) rect = .{
+                .x = (rs.r.x + 4 * rs.s),
+                .y = (rs.r.y + 4 * rs.s),
+                .w = (20 * rs.s),
+                .h = (20 * rs.s),
+            } else rect = .{
+                .x = @intFromFloat(rs.r.x + 4 * rs.s),
+                .y = @intFromFloat(rs.r.y + 4 * rs.s),
+                .w = @intFromFloat(20 * rs.s),
+                .h = @intFromFloat(20 * rs.s),
+            };
+            _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 0, 255);
+            _ = SDLBackend.c.SDL_RenderFillRect(backend.renderer, &rect);
+
+            rect.x += if (SDLBackend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
+            _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 255, 0, 255);
+            _ = SDLBackend.c.SDL_RenderFillRect(backend.renderer, &rect);
+
+            rect.x += if (SDLBackend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
+            _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 255, 255);
+            _ = SDLBackend.c.SDL_RenderFillRect(backend.renderer, &rect);
+
+            _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 255, 255);
+
+            if (SDLBackend.sdl3)
+                _ = SDLBackend.c.SDL_RenderLine(backend.renderer, (rs.r.x + 4 * rs.s), (rs.r.y + 30 * rs.s), (rs.r.x + rs.r.w - 8 * rs.s), (rs.r.y + 30 * rs.s))
+            else
+                _ = SDLBackend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(rs.r.x + 4 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s), @intFromFloat(rs.r.x + rs.r.w - 8 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s));
+        }
+
+        if (dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
+            show_dialog_outside_frame = true;
+        }
+
+        // look at demo() for examples of dvui widgets, shows in a floating window
+        dvui.Examples.demo();
     }
-
-    if (dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
-        show_dialog_outside_frame = true;
-    }
-
-    // look at demo() for examples of dvui widgets, shows in a floating window
-    dvui.Examples.demo();
-
     // check for quitting
     for (dvui.events()) |*e| {
         // assume we only have a single window
