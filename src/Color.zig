@@ -34,7 +34,7 @@ pub const purple = Color{ .r = 0x80, .g = 0x00, .b = 0x80 };
 // https://en.wikipedia.org/wiki/Web_colors#Extended_colors
 pub const cyan = aqua;
 pub const magenta = fuchsia;
-pub const darl_cyan = teal;
+pub const dark_cyan = teal;
 pub const dark_magenta = purple;
 
 pub const transparent = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
