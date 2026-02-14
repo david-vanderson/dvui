@@ -798,8 +798,8 @@ pub fn displayUnion(
             switch (new_choice) {
                 inline else => |choice| {
                     const default_value = defaultValue(
-                        UnionT,
                         @FieldType(UnionT, @tagName(choice)),
+                        UnionT,
                         field_name,
                         options,
                     );
@@ -1007,7 +1007,6 @@ pub fn defaultValue(T: type, ContainerT: ?type, comptime field_name: []const u8,
     // If the containing struct has a default value, get the field's default value from
     // the field within the struct's default value.
     if (ContainerT) |CT| {
-        std.debug.print("ContainerT = {s}\n", .{@typeName(CT)});
         inline for (struct_options) |option| {
             if (@TypeOf(option).StructT == CT) {
                 if (option.default_value) |default_value| {
@@ -1015,7 +1014,7 @@ pub fn defaultValue(T: type, ContainerT: ?type, comptime field_name: []const u8,
                         if (@field(default_value, field_name) != null) {
                             return @field(default_value, field_name);
                         } else {
-                            dvui.log.debug("struct_ui.StructOptions({s}) does not provide a default values for optional field {s}. ", .{ @typeName(CT), field_name });
+                            dvui.log.debug("struct_ui.StructOptions({s}) does not provide a default value for optional field {s}. ", .{ @typeName(CT), field_name });
                         }
                     } else {
                         return @field(default_value, field_name);

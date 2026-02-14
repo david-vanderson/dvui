@@ -128,8 +128,8 @@ fn gui_frame() bool {
                 }, null),
             });
         }
-        var box = dvui.box(@src(), .{}, .{ .corner_radius = dvui.Rect.all(3), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(6), .expand = .horizontal, .margin = dvui.Rect.all(6) });
-        defer box.deinit();
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .corner_radius = dvui.Rect.all(3), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(6), .expand = .horizontal, .margin = dvui.Rect.all(6), .background = false });
+        defer scroll.deinit();
         dvui.structUI(@src(), "init_opts", &init_opts, 1, .{
             dvui.struct_ui.StructOptions(dvui.TextEntryNumberInitOptions(NumberType)).initWithDefaults(.{
                 .text = .{ .text = .{ .display = .read_write } },
