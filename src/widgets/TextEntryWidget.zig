@@ -419,7 +419,7 @@ pub fn draw(self: *TextEntryWidget) void {
 
                 // Create an empty text run for the empty text entry.
                 dvui.currentWindow().accesskit.text_run_parent = self.data().id;
-                self.textLayout.textRunCreateEmpty(self.data().id);
+                self.textLayout.textRunCreateEmpty(self.data().id, true);
                 // prevent textLayout from making a text run for the placeholder text
                 dvui.currentWindow().accesskit.text_run_parent = null;
             }
