@@ -1453,7 +1453,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             const textrun_info: ?AccessKit.TextRunOptions = info: {
                 if (dvui.accesskit_enabled and cw.accesskit.text_run_parent != null) {
                     if (cw.accesskit.nodes.get(cw.accesskit.text_run_parent.?)) |_| {
-                        var text_run_widget = dvui.overlay(@src(), .{
+                        var text_run_widget = dvui.overlay(textRunSrc(), .{
                             .name = "Text Run",
                             .role = .text_run,
                             .id_extra = self.bytes_seen,
@@ -1786,7 +1786,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
         if (cw.accesskit.nodes.get(text_run_parent)) |parent_node| {
             if (self.bytes_seen == 0 or self.newline) {
                 // No empty text run was created as no text was rendered. Create one here.
-                self.textRunCreateEmpty(if (self.data().options.role.? == .none) cw.accesskit.text_run_parent.? else self.data().id);
+                self.textRunCreateEmpty(if (self.data().options.role.? == .none) cw.accesskit.text_run_parent.? else self.data().id, self.bytes_seen == 0);
             }
 
             if (!self.selection.empty()) {
@@ -1816,12 +1816,12 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
 /// Creates an empty text run
 /// make sure to set accesskit.text_run_parent before calling.
-pub fn textRunCreateEmpty(self: *TextLayoutWidget, controlling_widget: dvui.Id) void {
+pub fn textRunCreateEmpty(self: *TextLayoutWidget, controlling_widget: dvui.Id, first_line: bool) void {
     const text_height = self.data().options.fontGet().textHeight();
 
     const crect = self.data().contentRect();
     const empty_space: Rect = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = @max(0, @min(text_height, crect.h - self.insert_pt.y)) };
-    var vp = dvui.overlay(@src(), .{ .name = "Text Run", .role = .text_run, .rect = empty_space });
+    var vp = dvui.overlay(if (first_line) textRunSrc() else @src(), .{ .name = "Text Run", .role = .text_run, .rect = empty_space });
     defer vp.deinit();
     self.textrun_last = .{ .node_id = vp.data().id, .pos = if (self.newline) self.bytes_seen + 1 else self.bytes_seen };
     dvui.currentWindow().accesskit.textRunCreateEmpty(
@@ -2267,6 +2267,11 @@ pub fn deinit(self: *TextLayoutWidget) void {
     self.data().minSizeSetAndRefresh();
     self.data().minSizeReportToParent();
     dvui.parentReset(self.data().id, self.data().parent);
+}
+
+// used to make sure the text run's id doesn't change between empty, non-empty and placeholder.
+fn textRunSrc() std.builtin.SourceLocation {
+    return @src();
 }
 
 test {
