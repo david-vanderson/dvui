@@ -159,7 +159,7 @@ pub fn StructOptions(Struct: type) type {
                 else
                     defaultFieldOption(ptr.child),
                 .optional => |opt| defaultFieldOption(opt.child),
-                .array => |arr| defaultFieldOption(arr.child),
+                .array => |arr| if (arr.child == u8) .{ .text = .{ .display = .read_only } } else defaultFieldOption(arr.child),
                 else => .{ .standard = .{} },
             };
         }
@@ -574,7 +574,8 @@ pub fn optionalFieldWidget(
 ) bool {
     validateFieldPtrType(null, &.{.optional}, "optionalFieldWidget", @TypeOf(field_value_ptr));
 
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opts.displayMode() == .read_only;
+    // Display mode is ignored. It controls whether the optional value is read_only, not the optional itself.
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
 
     var choice: usize = if (field_value_ptr.* == null) 0 else 1; // 0 = Null, 1 = Not Null
 
@@ -622,17 +623,18 @@ pub fn displayField(
                 .array => |arr| {
                     // Array of u8 is only displayed as text if it has a text field option.
                     if (arr.child == u8 and field_option == .text) {
-                        const slice: []const u8 = &field_value_ptr.*; // Arrays can only currently be shown as const strings.
+                        // Arrays can only currently be shown as const strings. (Don't know why std.mem.span won't work here?)
+                        const slice: []const u8 = if (arr.sentinel() != null) field_value_ptr[0..std.mem.indexOfSentinel(u8, arr.sentinel().?, &field_value_ptr.*)] else &field_value_ptr.*;
                         displayString(src, field_name, &slice, field_option, al);
                     } else {
-                        displayArray(src, field_name, field_value_ptr, depth, field_option, options);
+                        displayArray(src, ContainerT, field_name, field_value_ptr, depth, field_option, options);
                     }
                 },
                 .pointer => |ptr| {
                     if (ptr.size == .slice and ptr.child == u8 and field_option == .text) {
                         displayString(src, field_name, field_value_ptr, field_option, al);
                     } else {
-                        displayPointer(src, field_name, field_value_ptr, depth, field_option, options, al);
+                        displayPointer(src, ContainerT, field_name, field_value_ptr, depth, field_option, options, al);
                     }
                 },
                 .optional => {
@@ -707,6 +709,7 @@ pub fn displayBool(comptime src: std.builtin.SourceLocation, comptime field_name
 
 pub fn displayArray(
     comptime src: std.builtin.SourceLocation,
+    comptime ContainerT: ?type,
     comptime field_name: []const u8,
     field_value_ptr: anytype,
     comptime depth: usize,
@@ -729,13 +732,14 @@ pub fn displayArray(
             const field_name_str = std.fmt.bufPrint(&field_name_buf, "{d}:", .{i}) catch "#";
             element_field_option.labelSet(field_name_str);
 
-            displayField(@src(), field_name, val, depth, element_field_option, options, &alignment);
+            displayField(@src(), ContainerT, field_name, val, depth, element_field_option, options, &alignment);
         }
     }
 }
 
 pub fn displaySlice(
     comptime src: std.builtin.SourceLocation,
+    comptime ContainerT: ?type,
     comptime field_name: []const u8,
     field_value_ptr: anytype,
     comptime depth: usize,
@@ -760,8 +764,7 @@ pub fn displaySlice(
             var field_name_buf: [21]u8 = undefined; // 20 chars = u64 + ':'
             const field_name_str = std.fmt.bufPrint(&field_name_buf, "{d}:", .{i}) catch "#";
             element_field_option.labelSet(field_name_str);
-            // TODO: Validate this should be null?
-            displayField(@src(), null, field_name, val, depth, element_field_option, options, &alignment);
+            displayField(@src(), ContainerT, field_name, val, depth, element_field_option, options, &alignment);
         }
     }
 }
@@ -858,7 +861,8 @@ pub fn displayOptional(
     if (field_option.displayMode() == .none) return;
 
     const optional = @typeInfo(@TypeOf(field_value_ptr.*)).optional;
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
+    // Display mode is ignored. It controls whether the optional value is read_only, not the optional itself.
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
 
     if (optionalFieldWidget(src, field_name, field_value_ptr, field_option, al)) {
         if (!read_only) {
@@ -882,6 +886,7 @@ pub fn displayOptional(
 
 pub fn displayPointer(
     comptime src: std.builtin.SourceLocation,
+    comptime ContainerT: ?type,
     comptime field_name: []const u8,
     field_value_ptr: anytype,
     comptime depth: usize,
@@ -895,11 +900,10 @@ pub fn displayPointer(
     const ptr = @typeInfo(@TypeOf(field_value_ptr.*)).pointer;
     if (ptr.size == .one) {
         if (canDisplayPtr(ptr))
-            // TODO: Work out how to get the container here.
-            displayField(src, null, field_name, field_value_ptr.*, depth, field_option, options, al);
+            displayField(src, ContainerT, field_name, field_value_ptr.*, depth, field_option, options, al);
     } else if (ptr.size == .slice) {
         if (canDisplayPtr(ptr))
-            displaySlice(src, field_name, &field_value_ptr.*, depth, field_option, options);
+            displaySlice(src, ContainerT, field_name, &field_value_ptr.*, depth, field_option, options);
     } else {
         @compileError(std.fmt.comptimePrint("C-style and many item pointers not supported for {s}.{s}\n", .{ @typeName(@TypeOf(field_value_ptr.*)), field_name }));
     }
@@ -1036,12 +1040,10 @@ pub fn defaultValue(T: type, ContainerT: ?type, comptime field_name: []const u8,
             comptime var default_found = false;
             inline for (struct_options) |opt| {
                 if (@TypeOf(opt).StructT == T) {
-                    std.debug.print("default found\n", .{});
                     default_found = true;
                     return opt.default_value;
                 }
             }
-            std.debug.print("default found = {}\n", .{});
 
             if (!default_found) {
                 inline for (si.fields) |field| {

@@ -112,7 +112,8 @@ const init_opts_defaults: dvui.TextEntryNumberInitOptions(NumberType) = .{ .valu
 // return false if user wants to exit the app
 fn gui_frame() bool {
     dvui.struct_ui.defaults.display_expanded = true;
-    if (true) {
+
+    if (false) {
         var vbox = dvui.box(@src(), .{}, .{});
         defer vbox.deinit();
         {
