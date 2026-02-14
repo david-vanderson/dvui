@@ -339,7 +339,7 @@ pub fn textRunPopulate(
     var word_starts: std.ArrayList(u8) = .empty;
     defer word_starts.deinit(window.arena());
 
-    var prev_char_wordbreak: bool = self.text_run_prev_wordbreak and opts.node_parent_id == self.text_run_prev_parent_id;
+    var prev_char_wordbreak: bool = self.text_run_prev_wordbreak or opts.node_parent_id != self.text_run_prev_parent_id;
     for (text, 0..) |ch, i| {
         if (std.mem.indexOfScalar(u8, dvui.TextLayoutWidget.word_breaks, ch) == null) {
             if (prev_char_wordbreak) {
@@ -389,14 +389,7 @@ pub fn textRunPopulate(
 pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, controlling_widget: dvui.Id, r: dvui.Rect.Physical) void {
     if (!dvui.accesskit_enabled) return; // Required to defeat @refAllDecls
 
-    const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
-
     var text_info: std.MultiArrayList(AccessKit.CharPositionInfo) = .empty;
-    text_info.append(window.arena(), .{
-        .l = 0,
-        .w = 0,
-        .x = 0,
-    }) catch return;
 
     self.textRunPopulate("", .{
         .node_id = node_id,
@@ -533,6 +526,8 @@ fn processActions(self: *AccessKit) void {
         dvui.refresh(window, @src(), null);
     }
     self.text_runs.clearAndFree(window.gpa);
+    self.text_run_prev_parent_id = .zero;
+    self.text_run_prev_wordbreak = true;
 }
 
 fn logEventAddError(src: std.builtin.SourceLocation, err: anyerror) void {
