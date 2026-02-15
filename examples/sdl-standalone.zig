@@ -470,27 +470,25 @@ const widget_hierarchy = [_]WidgetHeirachy{
 };
 
 const basic_options: dvui.struct_ui.StructOptions(dvui.Options) = .init(.{
-    .min_size_content = .{ .standard = .{} },
-    .max_size_content = .{ .standard = .{} },
-    .expand = .{ .standard = .{} },
-    .gravity_x = .{ .number = .{} },
-    .gravity_y = .{ .number = .{} },
-    .box_shadow = .{ .standard = .{} },
-    .margin = .{ .standard = .{} },
-    .border = .{ .standard = .{} },
-    .padding = .{ .standard = .{} },
-    .corner_radius = .{ .standard = .{} },
-    .background = .{ .boolean = .{} },
-    //    .color_fill = .{ .standard = .{ .customDisplayFn = displayOptionColors } },
+    .min_size_content = .default,
+    .max_size_content = .default,
+    .expand = .default,
+    .gravity_x = .default,
+    .gravity_y = .default,
+    .box_shadow = .default,
+    .margin = .default,
+    .border = .default,
+    .padding = .default,
+    .corner_radius = .default,
+    .background = .default,
     .color_fill = .default,
     .color_border = .default,
-}, null);
-// .{
-//    .min_size_content = .{ .w = 100, .h = 100 },
-//    .max_size_content = .{ .w = 100, .h = 100 },
-//    .border = dvui.Rect.all(1),
-//    .background = true,
-//});
+}, .{
+    .min_size_content = .{ .w = 100, .h = 100 },
+    .max_size_content = .{ .w = 100, .h = 100 },
+    .border = dvui.Rect.all(1),
+    .background = true,
+});
 
 const color_options: dvui.struct_ui.StructOptions(dvui.Color) = .initWithDisplayFn(displayOptionColors, .{ .a = 255, .r = 128, .g = 128, .b = 128 });
 

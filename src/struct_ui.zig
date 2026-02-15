@@ -32,6 +32,49 @@ pub const FieldOptions = union(enum) {
 
     pub const default: FieldOptions = .{ .standard = .{} };
 
+    pub fn standardOption(self: FieldOptions) error{InvalidOptionType}!StandardFieldOptions {
+        return switch (self) {
+            .standard => |fo| fo,
+            else => error.InvalidOptionType,
+        };
+    }
+
+    pub fn numberOption(self: FieldOptions) error{InvalidOptionType}!NumberFieldOptions {
+        return switch (self) {
+            .number => |fo| fo,
+            .standard => |fo| .{
+                .label = fo.label,
+                .display = fo.display,
+                .customDisplayFn = fo.customDisplayFn,
+            },
+            else => error.InvalidOptionType,
+        };
+    }
+
+    pub fn textOption(self: FieldOptions) error{InvalidOptionType}!TextFieldOptions {
+        return switch (self) {
+            .text => |fo| fo,
+            .standard => |fo| .{
+                .label = fo.label,
+                .display = fo.display,
+                .customDisplayFn = fo.customDisplayFn,
+            },
+            else => error.InvalidOptionType,
+        };
+    }
+
+    pub fn boolOption(self: FieldOptions) error{InvalidOptionType}!BoolFieldOptions {
+        return switch (self) {
+            .boolean => |fo| fo,
+            .standard => |fo| .{
+                .label = fo.label,
+                .display = fo.display,
+                .customDisplayFn = fo.customDisplayFn,
+            },
+            else => error.InvalidOptionType,
+        };
+    }
+
     pub fn displayMode(self: FieldOptions) DisplayMode {
         return switch (self) {
             inline else => |fo| fo.display,
@@ -729,17 +772,28 @@ pub fn displayField(
     }
 }
 
+const msg_invalid_opt_type = "invalid field option type {t} used for field {s}. Using default options.";
+
 /// Display numeric fields, ints and floats.
 pub fn displayNumber(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrType(field_name, &.{ .int, .float }, "displayEnum", @TypeOf(field_value_ptr));
-    if (!validFieldOptionsType(field_name, field_option, .number)) return;
-    numberFieldWidget(src, field_name, field_value_ptr, field_option.number, al);
+
+    const number_option = field_option.numberOption() catch |err| blk: {
+        std.debug.assert(err == error.InvalidOptionType);
+        log.debug(msg_invalid_opt_type, .{ field_option, field_name });
+        break :blk NumberFieldOptions{};
+    };
+    numberFieldWidget(src, field_name, field_value_ptr, number_option, al);
 }
 
 pub fn displayEnum(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrType(field_name, &.{.@"enum"}, "displayEnum", @TypeOf(field_value_ptr));
-    if (!validFieldOptionsType(field_name, field_option, .standard)) return;
-    enumFieldWidget(src, field_name, field_value_ptr, field_option.standard, al);
+    const std_option = field_option.standardOption() catch |err| blk: {
+        std.debug.assert(err == error.InvalidOptionType);
+        log.debug(msg_invalid_opt_type, .{ field_option, field_name });
+        break :blk StandardFieldOptions{};
+    };
+    enumFieldWidget(src, field_name, field_value_ptr, std_option, al);
 }
 
 /// Display []u8, []const u8 and arrays of u8 and const u8.
@@ -748,20 +802,34 @@ pub fn displayEnum(comptime src: std.builtin.SourceLocation, comptime field_name
 pub fn displayString(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrTypeString(field_name, "displayString", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .text)) return;
-    textFieldWidget(src, field_name, field_value_ptr, field_option.text, al, stringBackingAllocator());
+    const text_option = field_option.textOption() catch |err| blk: {
+        std.debug.assert(err == error.InvalidOptionType);
+        log.debug(msg_invalid_opt_type, .{ field_option, field_name });
+        break :blk TextFieldOptions{};
+    };
+    textFieldWidget(src, field_name, field_value_ptr, text_option, al, stringBackingAllocator());
 }
 
 /// Same as displayString, but uses a user-supplied buffer, rather than a dynamically allocated buffer.
 pub fn displayStringBuf(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment, buffer: []u8) void {
     validateFieldPtrTypeString(field_name, "displayString", @TypeOf(field_value_ptr));
-    if (!validFieldOptionsType(field_name, field_option, .text)) return;
-    textFieldWidget(src, field_name, field_value_ptr, field_option.text, al, .{ .buffer = buffer });
+    const text_option = field_option.textOption() catch |err| blk: {
+        std.debug.assert(err == error.InvalidOptionType);
+        log.debug(msg_invalid_opt_type, .{ field_option, field_name });
+        break :blk TextFieldOptions{};
+    };
+
+    textFieldWidget(src, field_name, field_value_ptr, text_option, al, .{ .buffer = buffer });
 }
 
 pub fn displayBool(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrType(field_name, &.{.bool}, "displayBool", @TypeOf(field_value_ptr));
-    if (!validFieldOptionsType(field_name, field_option, .boolean)) return;
-    boolFieldWidget(src, field_name, field_value_ptr, field_option.boolean, al);
+    const bool_option = field_option.boolOption() catch |err| blk: {
+        std.debug.assert(err == error.InvalidOptionType);
+        log.debug(msg_invalid_opt_type, .{ field_option, field_name });
+        break :blk BoolFieldOptions{};
+    };
+    boolFieldWidget(src, field_name, field_value_ptr, bool_option, al);
 }
 
 pub fn displayArray(
@@ -1082,12 +1150,9 @@ pub fn defaultValue(T: type, ContainerT: type, comptime field_name: []const u8, 
     inline for (struct_options) |option| {
         if (@TypeOf(option).StructT == ContainerT) {
             if (option.default_value) |default_value| {
-                // TODO: Can tighten up teh logic here?
                 if (@typeInfo(@FieldType(ContainerT, field_name)) == .optional) {
                     if (@field(default_value, field_name) != null) {
                         return @field(default_value, field_name);
-                    } else {
-                        log.debug("struct_ui.StructOptions({s}) does not provide a default value for optional field {s}. ", .{ @typeName(ContainerT), field_name });
                     }
                 } else {
                     return @field(default_value, field_name);
