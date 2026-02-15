@@ -48,6 +48,17 @@ pub const FieldOptions = union(enum) {
             inline else => |*fo| fo.label = field_label,
         }
     }
+
+    pub fn hasCustomDisplayFn(self: FieldOptions) bool {
+        switch (self) {
+            inline else => |fo| return fo.customDisplayFn != null,
+        }
+    }
+    pub fn customDisplayFn(self: FieldOptions, field_name: []const u8, field_value_ptr: *anyopaque, read_only: bool, alignment: *dvui.Alignment) void {
+        switch (self) {
+            inline else => |fo| if (fo.customDisplayFn) |displayFn| displayFn(field_name, field_value_ptr, read_only, alignment),
+        }
+    }
 };
 
 /// Standard field options allow control of the display mode and
@@ -55,6 +66,8 @@ pub const FieldOptions = union(enum) {
 /// All FieldOption types must support the display and label fields.
 pub const StandardFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
+    // Display the field using this function, instead of the defautl struct_ui function.
+    customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
 
     label: ?[]const u8 = null,
 };
@@ -80,7 +93,8 @@ pub fn StructOptions(Struct: type) type {
         field_options: StructOptionsT,
         // A default value to be used whenever an instance of this type is created
         default_value: ?StructT = null,
-
+        // Display the struct using this function, instead of the default struct_ui function.
+        customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
         /// Initialize and display only the fields provided.
         /// options: field options for all the fields to be displayed.
         /// default_value: An optional default value to be used whenever an instance
@@ -145,6 +159,18 @@ pub fn StructOptions(Struct: type) type {
             };
         }
 
+        pub fn initWithDisplayFn(
+            // Display the struct using this function, instead of the default struct_ui function.
+            customDisplayFn: *const fn (field_name: []const u8, field_value_ptr: *anyopaque, read_only: bool, *dvui.Alignment) void,
+            comptime default_value: ?StructT,
+        ) Self {
+            return .{
+                .field_options = .init(.{}),
+                .customDisplayFn = customDisplayFn,
+                .default_value = default_value,
+            };
+        }
+
         /// Return a default value for a field if not default field has been supplied through
         /// StructOptions.
         pub fn defaultFieldOption(FieldType: type) FieldOptions {
@@ -172,6 +198,7 @@ pub fn StructOptions(Struct: type) type {
 pub const NumberFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
     label: ?[]const u8 = null,
+    customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
 
     /// For .read_write, display as either a text entry box or as a slider.
     widget_type: enum { number_entry, slider } = .number_entry,
@@ -193,7 +220,7 @@ pub const NumberFieldOptions = struct {
     pub fn minValue(self: *const NumberFieldOptions, T: type) T {
         return switch (@typeInfo(T)) {
             .int => @intFromFloat(self.min orelse @max(std.math.minInt(T), std.math.minInt(i52))),
-            .float => @floatCast(self.min orelse std.math.floatMin(T)),
+            .float => @floatCast(self.min orelse -std.math.floatMax(T)),
             else => unreachable,
         };
     }
@@ -362,6 +389,7 @@ pub fn enumFieldWidget(
 pub const BoolFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
     label: ?[]const u8 = null,
+    customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
 
     // Does the user have to manually reset from true to false?
     // Only applies to read-only booleans.
@@ -408,6 +436,7 @@ pub fn boolFieldWidget(
 pub const TextFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
     label: ?[]const u8 = null,
+    customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
 
     /// Set to true if the string is heap allocated and should be
     /// freed before a new string is allocated.
@@ -565,6 +594,8 @@ pub fn unionFieldWidget(
     return active_tag;
 }
 
+/// Display an optional
+/// returns true if optional is not null
 pub fn optionalFieldWidget(
     comptime src: std.builtin.SourceLocation,
     field_name: []const u8,
@@ -613,6 +644,13 @@ pub fn displayField(
     const PtrT = @TypeOf(field_value_ptr);
     if (@typeInfo(PtrT) != .pointer) {
         @compileError(std.fmt.comptimePrint("field_value_ptr for field {s} must be a pointer to a field. It is a {s}", .{ field_name, @typeName(PtrT) }));
+    }
+
+    if (field_option.hasCustomDisplayFn()) {
+        const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
+        // It is up to the implementer of the display function to cast back to const based on read-only.
+        field_option.customDisplayFn(field_name, @ptrCast(@constCast(field_value_ptr)), read_only, al);
+        return;
     }
     switch (@typeInfo(@TypeOf(field_value_ptr))) {
         .pointer => |top_ptr| {
@@ -964,6 +1002,15 @@ pub fn displayStruct(
         defer struct_alignment.deinit();
         const alignment = al orelse &struct_alignment;
 
+        if (struct_options.customDisplayFn) |customDisplayFn| {
+            const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
+            // It is up to the implementer of the display function to cast back to const based on read-only.
+            customDisplayFn(field_name, @ptrCast(@constCast(field_value_ptr)), read_only, alignment);
+            // TODO: Think about allowing this to fall through? Could just so some of the fields custom?
+            // But is that getting too complicated?
+            return vbox;
+        }
+
         inline for (0..struct_options.field_options.values.len) |field_num| {
             const field = comptime @TypeOf(struct_options.field_options).Indexer.keyForIndex(field_num);
             if (struct_options.field_options.contains(field)) {
@@ -1009,7 +1056,7 @@ pub fn displayContainer(comptime src: std.builtin.SourceLocation, field_name: []
 /// Create a default value for a field from either default field initialization values or from struct_options
 pub fn defaultValue(T: type, ContainerT: ?type, comptime field_name: []const u8, struct_options: anytype) ?T {
     // If the containing struct has a default value, get the field's default value from
-    // the field within the struct's default value.
+    // the corresponding field within the struct's default value.
     if (ContainerT) |CT| {
         inline for (struct_options) |option| {
             if (@TypeOf(option).StructT == CT) {
@@ -1069,7 +1116,6 @@ pub fn defaultValue(T: type, ContainerT: ?type, comptime field_name: []const u8,
             comptime var default_found = false;
             inline for (struct_options) |opt| {
                 if (@TypeOf(opt).StructT == T) {
-                    std.debug.print("found default\n", .{});
                     default_found = true;
                     return null;
                 }

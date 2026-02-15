@@ -112,6 +112,75 @@ const init_opts_defaults: dvui.TextEntryNumberInitOptions(NumberType) = .{ .valu
 // return false if user wants to exit the app
 fn gui_frame() bool {
     dvui.struct_ui.defaults.display_expanded = true;
+    if (true) {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+        {
+            var scroll = dvui.scrollArea(@src(), .{}, .{});
+            defer scroll.deinit();
+            var tree = dvui.TreeWidget.tree(@src(), .{ .enable_reordering = false }, .{});
+            defer tree.deinit();
+            for (widget_hierarchy, 0..) |widget, i| {
+                const branch = tree.branch(@src(), .{ .expanded = true }, .{ .id_extra = i, .expand = .horizontal });
+                defer branch.deinit();
+                dvui.label(@src(), "{s}", .{widget.name}, .{ .expand = .horizontal });
+
+                if (widget.children != null) {
+                    _ = dvui.icon(
+                        @src(),
+                        "DropIcon",
+                        if (branch.expanded) dvui.entypo.triangle_down else dvui.entypo.triangle_right,
+                        .{},
+                        .{
+                            .gravity_y = 0.5,
+                            .gravity_x = 1.0,
+                        },
+                    );
+                } else if (branch.button.clicked()) {
+                    currentDisplayFn = widget.displayFn;
+                }
+
+                if (branch.expander(@src(), .{ .indent = 30 }, .{ .expand = .horizontal })) {
+                    if (widget.children) |children| {
+                        for (children, 0..) |child, j| {
+                            const branch_child = tree.branch(@src(), .{ .expanded = true }, .{ .id_extra = j, .expand = .horizontal });
+                            defer branch_child.deinit();
+                            dvui.labelNoFmt(@src(), child.name, .{}, .{ .expand = .horizontal });
+                            if (branch_child.button.clicked()) {
+                                currentDisplayFn = child.displayFn;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        currentDisplayFn();
+        if (false) {
+            var vbox = dvui.box(@src(), .{}, .{});
+            defer vbox.deinit();
+            {
+                var gbox = dvui.groupBox(@src(), "textEntryNumber()", .{});
+                defer gbox.deinit();
+                var hhbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+                defer hhbox.deinit();
+                const result = dvui.textEntryNumber(@src(), NumberType, init_opts, .{ .gravity_y = 0.5 });
+                dvui.structUI(@src(), "result", &result, 99, .{
+                    dvui.struct_ui.StructOptions(dvui.TextEntryNumberResult(NumberType)).initWithDefaults(.{
+                        .changed = .{ .boolean = .{ .manual_reset = true } },
+                        .enter_pressed = .{ .boolean = .{ .manual_reset = true } },
+                    }, null),
+                });
+            }
+            var scroll = dvui.scrollArea(@src(), .{}, .{ .corner_radius = dvui.Rect.all(3), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(6), .expand = .horizontal, .margin = dvui.Rect.all(6), .background = false });
+            defer scroll.deinit();
+            dvui.structUI(@src(), "init_opts", &init_opts, 1, .{
+                dvui.struct_ui.StructOptions(dvui.TextEntryNumberInitOptions(NumberType)).initWithDefaults(.{
+                    .text = .{ .text = .{ .display = .read_write } },
+                    .placeholder = .{ .text = .{ .display = .read_write } },
+                }, init_opts_defaults),
+            });
+        }
+    }
 
     if (false) {
         var vbox = dvui.box(@src(), .{}, .{});
@@ -137,7 +206,8 @@ fn gui_frame() bool {
                 .placeholder = .{ .text = .{ .display = .read_write } },
             }, init_opts_defaults),
         });
-    } else {
+    }
+    if (true) {
         const backend = g_backend orelse return false;
 
         {
@@ -289,4 +359,214 @@ fn gui_frame() bool {
     }
 
     return true;
+}
+
+const WidgetHeirachy = struct {
+    name: []const u8,
+    children: ?[]const WidgetHeirachy,
+    displayFn: *const fn () void,
+};
+
+fn displayEmpty() void {
+    std.debug.print("DisplayFN called\n", .{});
+}
+
+var currentDisplayFn: *const fn () void = displayBox;
+
+const widget_hierarchy = [_]WidgetHeirachy{
+    .{ .name = "animate", .displayFn = displayEmpty, .children = null },
+    .{ .name = "box", .displayFn = displayBox, .children = null },
+
+    .{ .name = "button", .displayFn = displayEmpty, .children = &.{
+        .{ .name = "button", .displayFn = displayEmpty, .children = null },
+        .{ .name = "buttonIcon", .displayFn = displayEmpty, .children = null },
+        .{ .name = "buttonLabelAndIcon", .displayFn = displayEmpty, .children = null },
+    } },
+
+    .{ .name = "cache", .displayFn = displayEmpty, .children = null },
+    .{ .name = "checkbox", .displayFn = displayEmpty, .children = null },
+    .{ .name = "colorPicker", .displayFn = displayEmpty, .children = null },
+    .{ .name = "comboBox", .displayFn = displayEmpty, .children = null },
+    .{ .name = "context", .displayFn = displayEmpty, .children = null },
+    .{ .name = "dialog", .displayFn = displayEmpty, .children = null },
+    .{ .name = "dropdown", .displayFn = displayEmpty, .children = null },
+    .{ .name = "dropdownEnum", .displayFn = displayEmpty, .children = null },
+    .{ .name = "expander", .displayFn = displayEmpty, .children = null },
+    .{ .name = "flexbox", .displayFn = displayEmpty, .children = null },
+    .{ .name = "floatingMenu", .displayFn = displayEmpty, .children = null },
+
+    .{ .name = "floatingWindow", .displayFn = displayEmpty, .children = &.{
+        .{ .name = "floatingWindow", .displayFn = displayEmpty, .children = null },
+        .{ .name = "windowHeader", .displayFn = displayEmpty, .children = null },
+    } },
+
+    .{ .name = "focusGroup", .displayFn = displayEmpty, .children = null },
+
+    .{ .name = "grid", .displayFn = displayEmpty, .children = &.{
+        .{ .name = "grid", .displayFn = displayEmpty, .children = null },
+        .{ .name = "gridHeading", .displayFn = displayEmpty, .children = null },
+        .{ .name = "columnLayoutProportional", .displayFn = displayEmpty, .children = null },
+        .{ .name = "gridHeadingCheckbox", .displayFn = displayEmpty, .children = null },
+        .{ .name = "gridHeadingSeparator", .displayFn = displayEmpty, .children = null },
+        .{ .name = "gridHeadingSortable", .displayFn = displayEmpty, .children = null },
+    } },
+
+    .{ .name = "groupBox", .displayFn = displayEmpty, .children = null },
+    .{ .name = "icon", .displayFn = displayEmpty, .children = null },
+    .{ .name = "image", .displayFn = displayEmpty, .children = null },
+
+    .{ .name = "label", .displayFn = displayEmpty, .children = &.{
+        .{ .name = "label", .displayFn = displayEmpty, .children = null },
+        .{ .name = "labelClick", .displayFn = displayEmpty, .children = null },
+        .{ .name = "labelEx", .displayFn = displayEmpty, .children = null },
+        .{ .name = "labelNoFmt", .displayFn = displayEmpty, .children = null },
+    } },
+
+    .{ .name = "link", .displayFn = displayEmpty, .children = null },
+
+    .{ .name = "menu", .displayFn = displayEmpty, .children = &.{
+        .{ .name = "menu", .displayFn = displayEmpty, .children = null },
+        .{ .name = "menuItem", .displayFn = displayEmpty, .children = null },
+        .{ .name = "menuItemIcon", .displayFn = displayEmpty, .children = null },
+        .{ .name = "menuItemLabel", .displayFn = displayEmpty, .children = null },
+    } },
+
+    .{ .name = "paned", .displayFn = displayEmpty, .children = null },
+
+    .{ .name = "plot", .displayFn = displayEmpty, .children = &.{
+        .{ .name = "plot", .displayFn = displayEmpty, .children = null },
+        .{ .name = "plotXY", .displayFn = displayEmpty, .children = null },
+    } },
+
+    .{ .name = "progress", .displayFn = displayEmpty, .children = null },
+    .{ .name = "radio", .displayFn = displayEmpty, .children = null },
+    .{ .name = "radioGroup", .displayFn = displayEmpty, .children = null },
+    .{ .name = "reorder", .displayFn = displayEmpty, .children = null },
+    .{ .name = "scale", .displayFn = displayEmpty, .children = null },
+    .{ .name = "scrollArea", .displayFn = displayEmpty, .children = null },
+    .{ .name = "separator", .displayFn = displayEmpty, .children = null },
+
+    .{ .name = "slider", .displayFn = displayEmpty, .children = &.{
+        .{ .name = "slider", .displayFn = displayEmpty, .children = null },
+        .{ .name = "sliderEntry", .displayFn = displayEmpty, .children = null },
+        .{ .name = "sliderVector", .displayFn = displayEmpty, .children = null },
+    } },
+
+    .{ .name = "spacer", .displayFn = displayEmpty, .children = null },
+    .{ .name = "spinner", .displayFn = displayEmpty, .children = null },
+    .{ .name = "suggestion", .displayFn = displayEmpty, .children = null },
+    .{ .name = "tabs", .displayFn = displayEmpty, .children = null },
+
+    .{ .name = "textEntry", .displayFn = displayEmpty, .children = &.{
+        .{ .name = "textEntry", .displayFn = displayEmpty, .children = null },
+        .{ .name = "textEntryColor", .displayFn = displayEmpty, .children = null },
+        .{ .name = "textEntryNumber", .displayFn = displayTextEntryNumber, .children = null },
+    } },
+
+    .{ .name = "textLayout", .displayFn = displayEmpty, .children = null },
+    .{ .name = "toast", .displayFn = displayEmpty, .children = null },
+    .{ .name = "tooltip", .displayFn = displayEmpty, .children = null },
+    .{ .name = "windowHeader", .displayFn = displayEmpty, .children = null },
+};
+
+const basic_options: dvui.struct_ui.StructOptions(dvui.Options) = .init(.{
+    .min_size_content = .{ .standard = .{} },
+    .max_size_content = .{ .standard = .{} },
+    .expand = .{ .standard = .{} },
+    .gravity_x = .{ .number = .{} },
+    .gravity_y = .{ .number = .{} },
+    .box_shadow = .{ .standard = .{} },
+    .margin = .{ .standard = .{} },
+    .border = .{ .standard = .{} },
+    .padding = .{ .standard = .{} },
+    .corner_radius = .{ .standard = .{} },
+    .background = .{ .boolean = .{} },
+    //    .color_fill = .{ .standard = .{ .customDisplayFn = displayOptionColors } },
+    .color_fill = .{ .standard = .{ .customDisplayFn = displayOptionColors } },
+    .color_border = .{ .standard = .{ .customDisplayFn = displayOptionColors } },
+}, .{
+    .min_size_content = .{ .w = 100, .h = 100 },
+    .max_size_content = .{ .w = 100, .h = 100 },
+    .border = dvui.Rect.all(1),
+    .background = true,
+});
+
+const color_options: dvui.struct_ui.StructOptions(dvui.Color) = .initWithDisplayFn(displayOptionColors, .{ .a = 255, .r = 128, .g = 128, .b = 128 });
+
+fn displayOptionColors(field_name: []const u8, ptr: *anyopaque, read_only: bool, alignment: *dvui.Alignment) void {
+    if (read_only) return;
+    const field_value_ptr: *?dvui.Color = @ptrCast(@alignCast(ptr));
+
+    if (dvui.struct_ui.optionalFieldWidget(@src(), field_name, field_value_ptr, .{ .standard = .{} }, alignment)) {
+        var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer box.deinit();
+
+        dvui.label(@src(), "{s}", .{field_name}, .{});
+        var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
+        defer hbox_aligned.deinit();
+        alignment.record(box.data().id, hbox_aligned.data());
+
+        var hsv_color: dvui.Color.HSV = if (field_value_ptr.*) |color| .fromColor(color) else .{ .h = 180, .s = 0.5, .v = 0.5, .a = 1.0 };
+        _ = dvui.colorPicker(@src(), .{ .hsv = &hsv_color }, .{});
+        field_value_ptr.* = hsv_color.toColor();
+    } else {
+        field_value_ptr.* = null;
+    }
+}
+
+pub fn displayBox() void {
+    const state = struct {
+        var test_options: struct {
+            nr_boxes: usize = 10,
+            expand: bool = false,
+        } = .{};
+        var init_opts: dvui.BoxWidget.InitOptions = .{};
+        var options: dvui.Options = .{};
+    };
+    var vbox = dvui.box(@src(), .{}, .{});
+    defer vbox.deinit();
+    {
+        var gbox = dvui.groupBox(@src(), "box()", .{});
+        defer gbox.deinit();
+        var box = dvui.box(@src(), state.init_opts, state.options);
+        defer box.deinit();
+        for (0..state.test_options.nr_boxes) |i| {
+            var b = dvui.box(@src(), .{}, .{ .min_size_content = .{ .h = 10, .w = 10 }, .border = dvui.Rect.all(1), .id_extra = i, .expand = if (state.test_options.expand) .both else null });
+            b.deinit();
+        }
+    }
+    var scroll = dvui.scrollArea(@src(), .{}, .{});
+    defer scroll.deinit();
+    dvui.structUI(@src(), "test options", &state.test_options, 1, .{});
+    dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{});
+    dvui.structUI(@src(), "options", &state.options, 2, .{ basic_options, color_options });
+}
+
+pub fn displayTextEntryNumber() void {
+    const state = struct {
+        var init_opts: dvui.TextEntryNumberInitOptions(NumberType) = .{};
+    };
+    var vbox = dvui.box(@src(), .{}, .{});
+    defer vbox.deinit();
+    {
+        var gbox = dvui.groupBox(@src(), "textEntryNumber()", .{});
+        defer gbox.deinit();
+        var hhbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        defer hhbox.deinit();
+        const result = dvui.textEntryNumber(@src(), NumberType, state.init_opts, .{ .gravity_y = 0.5 });
+        dvui.structUI(@src(), "result", &result, 99, .{
+            dvui.struct_ui.StructOptions(dvui.TextEntryNumberResult(NumberType)).initWithDefaults(.{
+                .changed = .{ .boolean = .{ .manual_reset = true } },
+                .enter_pressed = .{ .boolean = .{ .manual_reset = true } },
+            }, null),
+        });
+    }
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .corner_radius = dvui.Rect.all(3), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(6), .expand = .horizontal, .margin = dvui.Rect.all(6), .background = false });
+    defer scroll.deinit();
+    dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{
+        dvui.struct_ui.StructOptions(dvui.TextEntryNumberInitOptions(NumberType)).initWithDefaults(.{
+            .text = .{ .text = .{ .display = .read_write } },
+            .placeholder = .{ .text = .{ .display = .read_write } },
+        }, init_opts_defaults),
+    });
 }
