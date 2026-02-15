@@ -22,6 +22,7 @@ const log = std.log.scoped(.struct_ui);
 /// All FieldOptions types must provide:
 /// - display: DisplayMode
 /// - label: ?[]const u8
+/// - customDisplayFn: ?*const fn(field_name: []const u8, field_value_ptr: *anyopaque, read_only: bool, al: *dvui.Alignment)
 pub const FieldOptions = union(enum) {
     /// Control if the field should be displayed and if it is editable.
     const DisplayMode = enum { none, read_only, read_write };
@@ -30,7 +31,13 @@ pub const FieldOptions = union(enum) {
     text: TextFieldOptions,
     boolean: BoolFieldOptions,
 
+    /// All field can use `default` standard field option, however using the correct field
+    /// option will ensure the field is displayed correctly.
+    /// e.g. a slice of u8 will only be displayed as a "string" when using TextFieldOptions
     pub const default: FieldOptions = .{ .standard = .{} };
+    pub const defaultNumber: FieldOptions = .{ .number = .{} };
+    pub const defaultText: FieldOptions = .{ .text = .{} };
+    pub const defaultBool: FieldOptions = .{ .boolean = .{} };
 
     pub fn standardOption(self: FieldOptions) error{InvalidOptionType}!StandardFieldOptions {
         return switch (self) {
