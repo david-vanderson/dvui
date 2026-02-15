@@ -199,22 +199,21 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     wd.ak_node = ak_node;
     const border_rect = dvui.clipGet().intersect(wd.borderRectScale().r);
     nodeSetBounds(ak_node, .{ .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
-    if (debug_node_tree)
-        std.debug.print("Bounds for {[id]x}:{[id]d} {{ {[x0]}, {[y0]}, {[x1]}, {[y1]} }}\n", .{ .id = wd.id, .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
+    if (debug_node_tree) std.debug.print("Bounds for {[id]x}:{[id]d} {{ {[x0]}, {[y0]}, {[x1]}, {[y1]} }}\n", .{ .id = wd.id, .x0 = border_rect.x, .y0 = border_rect.y, .x1 = border_rect.bottomRight().x, .y1 = border_rect.bottomRight().y });
 
     if (!wd.isRoot()) {
         if (role == .text_run) {
             // if self.text_run_parent is null, we bailed out above
             if (self.nodes.get(self.text_run_parent.?)) |node| {
                 nodePushChild(node, wd.id.asU64());
-                if (debug_node_tree)
-                    std.debug.print("text_run parent node is {x}\n", .{self.text_run_parent.?});
+                if (debug_node_tree) std.debug.print("text_run parent node is {x}\n", .{self.text_run_parent.?});
             } else {
                 log.debug("text_run_parent node null for widget {x}", .{wd.id});
             }
         } else if (role == .grid_cell and self.grid_cell_row != .zero) {
             if (self.nodes.get(self.grid_cell_row)) |row_node| {
                 nodePushChild(row_node, wd.id.asU64());
+                if (debug_node_tree) std.debug.print("grid cell parent node is {x}\n", .{self.grid_cell_row});
             }
         } else {
             nodePushChild(nodeParent(wd), wd.id.asU64());
@@ -440,7 +439,22 @@ fn processActions(self: *AccessKit) void {
                 _ = window.addEventPointer(.{ .button = .left, .action = .release, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
             },
             Action.focus => {
-                // AK TODO:
+                std.debug.print("AccessKit: Focus action received for {x}\n", .{request.target_node});
+                const ak_node = self.nodes.get(@enumFromInt(request.target_node)) orelse {
+                    log.debug("Action `focus` received for a target {x} without a node.", .{request.target_node});
+                    return;
+                };
+                const bounds = _: {
+                    const bounds_maybe = nodeBounds(ak_node);
+                    if (bounds_maybe.has_value) break :_ bounds_maybe.value;
+                    log.debug("Action {d} received for a target {x} without node bounds.", .{ request.action, request.target_node });
+                    return;
+                };
+
+                const mid_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
+                _ = window.addEventFocus(.{ .button = .none, .pt = mid_point, .target_id = @enumFromInt(request.target_node) }) catch |err| {
+                    logEventAddError(@src(), err);
+                };
             },
             Action.set_value => {
                 const ak_node = self.nodes.get(@enumFromInt(request.target_node)) orelse {
@@ -687,6 +701,16 @@ pub fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
             focused_id = window.data().id;
         }
     }
+    if (debug_focus) std.debug.print("FWID: {?f} = {}, FSWID: {f} = {}, WID: {f} = {}, PREV_ID = {f}\n", .{
+        dvui.focusedWidgetId(),
+        self.nodes.contains(dvui.focusedWidgetId() orelse .zero),
+        dvui.focusedSubwindowId(),
+        self.nodes.contains(dvui.focusedSubwindowId()),
+        window.data().id,
+        focused_id == window.data().id,
+        self.prev_focused_id,
+    });
+
     self.prev_focused_id = focused_id;
 
     const result = treeUpdateWithCapacityAndFocus(self.nodes.count(), focused_id.asU64());
@@ -1795,3 +1819,4 @@ pub const RoleNoAccessKit = enum {
 
 const debug_node_tree = false;
 const debug_textruns = false;
+const debug_focus = false;
