@@ -12,6 +12,7 @@
 // If you want to use a different allocator, you can set it here.
 pub var string_allocator: ?std.mem.Allocator = null;
 
+const log = std.log.scoped(.struct_ui);
 /// Field options control whether and how fields are displayed.
 ///
 /// Use TextFieldOptions for any array or slice of u8 you want ot display as a string.
@@ -476,12 +477,12 @@ pub fn textFieldWidget(
     if (opt.display == .read_write and read_only) {
         // Note all string arrays are currently treated as read-only, even if they are var.
         // It would be possible to support in-place editing, preferably by implementing a new display option.
-        dvui.log.debug("struct_ui: field {s} display option is set to read_write for read_only string or an array. Displaying as read_only.", .{field_name});
+        log.debug("field {s} display option is set to read_write for read_only string or an array. Displaying as read_only.", .{field_name});
         read_only = true;
     } else if (opt.display == .read_write and sentinel_terminated) {
         // Sentinel terminated strings cannot be edited.
         // Would require keeping 2 string maps, for sentinel vs non-sentinel strings.
-        dvui.log.debug("struct_ui: field {s} display option is set to read_write for sentinel terminated string or an array. Displaying as read_only.", .{field_name});
+        log.debug("field {s} display option is set to read_write for sentinel terminated string or an array. Displaying as read_only.", .{field_name});
         read_only = true;
     }
 
@@ -648,10 +649,24 @@ pub fn displayField(
 
     if (field_option.hasCustomDisplayFn()) {
         const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
-        // It is up to the implementer of the display function to cast back to const based on read-only.
         field_option.customDisplayFn(field_name, @ptrCast(@constCast(field_value_ptr)), read_only, al);
         return;
     }
+
+    switch (@typeInfo(@typeInfo(PtrT).pointer.child)) {
+        .@"struct", .@"union" => {
+            const struct_options = findMatchingStructOption(@TypeOf(field_value_ptr.*), options);
+            if (struct_options) |so| {
+                if (so.customDisplayFn) |displayFn| {
+                    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
+                    displayFn(field_name, @ptrCast(@constCast(field_value_ptr)), read_only, al);
+                    return;
+                }
+            }
+        },
+        else => {},
+    }
+
     switch (@typeInfo(@TypeOf(field_value_ptr))) {
         .pointer => |top_ptr| {
             switch (@typeInfo(top_ptr.child)) {
@@ -848,8 +863,8 @@ pub fn displayUnion(
                         if (default_value) |default| {
                             field_value_ptr.* = @unionInit(UnionT, @tagName(choice), default);
                         } else {
-                            dvui.log.debug(
-                                "struct_ui: Union field {s}.{s} cannot be selected as no default value is provided. Use struct_ui.StructOptions({s}) to provide a default.",
+                            log.debug(
+                                "Union field {s}.{s} cannot be selected as no default value is provided. Use struct_ui.StructOptions({s}) to provide a default.",
                                 .{ field_name, @tagName(choice), @typeName(@FieldType(UnionT, @tagName(choice))) },
                             );
                             return;
@@ -912,9 +927,11 @@ pub fn displayOptional(
         if (field_value_ptr.*) |*val| {
             displayField(@src(), ContainerT, field_name, val, depth, field_option, options, al);
         } else {
-            dvui.log.debug("struct_ui: Optional field {s} cannot be selected as no default value is provided. Use struct_ui.StructOptions({s}) to provide a default.", .{
+            log.debug("Optional field {s} cannot be selected as no default value is provided. Use struct_ui.StructOptions({s}) or StructOptions({s}) with a default value for {s}.", .{
                 field_name,
                 @typeName(optional.child),
+                @typeName(ContainerT),
+                field_name,
             });
         }
     } else if (!read_only) {
@@ -1002,14 +1019,15 @@ pub fn displayStruct(
         defer struct_alignment.deinit();
         const alignment = al orelse &struct_alignment;
 
-        if (struct_options.customDisplayFn) |customDisplayFn| {
-            const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
-            // It is up to the implementer of the display function to cast back to const based on read-only.
-            customDisplayFn(field_name, @ptrCast(@constCast(field_value_ptr)), read_only, alignment);
-            // TODO: Think about allowing this to fall through? Could just so some of the fields custom?
-            // But is that getting too complicated?
-            return vbox;
-        }
+        if (false)
+            if (struct_options.customDisplayFn) |customDisplayFn| {
+                const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
+                // It is up to the implementer of the display function to cast back to const based on read-only.
+                customDisplayFn(field_name, @ptrCast(@constCast(field_value_ptr)), read_only, alignment);
+                // TODO: Think about allowing this to fall through? Could just so some of the fields custom?
+                // But is that getting too complicated?
+                return vbox;
+            };
 
         inline for (0..struct_options.field_options.values.len) |field_num| {
             const field = comptime @TypeOf(struct_options.field_options).Indexer.keyForIndex(field_num);
@@ -1065,7 +1083,7 @@ pub fn defaultValue(T: type, ContainerT: ?type, comptime field_name: []const u8,
                         if (@field(default_value, field_name) != null) {
                             return @field(default_value, field_name);
                         } else {
-                            dvui.log.debug("struct_ui.StructOptions({s}) does not provide a default value for optional field {s}. ", .{ @typeName(CT), field_name });
+                            log.debug("struct_ui.StructOptions({s}) does not provide a default value for optional field {s}. ", .{ @typeName(CT), field_name });
                         }
                     } else {
                         return @field(default_value, field_name);
@@ -1128,7 +1146,7 @@ pub fn defaultValue(T: type, ContainerT: ?type, comptime field_name: []const u8,
 /// Return true if the field_option is valiud for this type of field.
 pub fn validFieldOptionsType(field_name: []const u8, field_option: FieldOptions, required_tag: @typeInfo(FieldOptions).@"union".tag_type.?) bool {
     if (field_option != required_tag) {
-        dvui.log.debug("struct_ui: Field {s} has FieldOption type {s} but needs {s}. Field will not be displayed\n", .{
+        log.debug("Field {s} has FieldOption type {s} but needs {s}. Field will not be displayed\n", .{
             field_name,
             @tagName(field_option),
             @tagName(required_tag),

@@ -482,22 +482,25 @@ const basic_options: dvui.struct_ui.StructOptions(dvui.Options) = .init(.{
     .corner_radius = .{ .standard = .{} },
     .background = .{ .boolean = .{} },
     //    .color_fill = .{ .standard = .{ .customDisplayFn = displayOptionColors } },
-    .color_fill = .{ .standard = .{ .customDisplayFn = displayOptionColors } },
-    .color_border = .{ .standard = .{ .customDisplayFn = displayOptionColors } },
-}, .{
-    .min_size_content = .{ .w = 100, .h = 100 },
-    .max_size_content = .{ .w = 100, .h = 100 },
-    .border = dvui.Rect.all(1),
-    .background = true,
-});
+    .color_fill = .default,
+    .color_border = .default,
+}, null);
+// .{
+//    .min_size_content = .{ .w = 100, .h = 100 },
+//    .max_size_content = .{ .w = 100, .h = 100 },
+//    .border = dvui.Rect.all(1),
+//    .background = true,
+//});
 
 const color_options: dvui.struct_ui.StructOptions(dvui.Color) = .initWithDisplayFn(displayOptionColors, .{ .a = 255, .r = 128, .g = 128, .b = 128 });
 
+// If set at type level, then don't need to deal with displaying the optional
+const type_level = true;
 fn displayOptionColors(field_name: []const u8, ptr: *anyopaque, read_only: bool, alignment: *dvui.Alignment) void {
     if (read_only) return;
     const field_value_ptr: *?dvui.Color = @ptrCast(@alignCast(ptr));
 
-    if (dvui.struct_ui.optionalFieldWidget(@src(), field_name, field_value_ptr, .{ .standard = .{} }, alignment)) {
+    if (type_level or dvui.struct_ui.optionalFieldWidget(@src(), field_name, field_value_ptr, .{ .standard = .{} }, alignment)) {
         var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer box.deinit();
 
