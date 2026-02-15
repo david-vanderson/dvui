@@ -633,7 +633,7 @@ pub fn optionalFieldWidget(
 /// it will call the correct display function based on the type of the field.
 pub fn displayField(
     comptime src: std.builtin.SourceLocation,
-    comptime ContainerT: ?type,
+    comptime ContainerT: type,
     comptime field_name: []const u8,
     field_value_ptr: anytype,
     comptime depth: usize,
@@ -646,6 +646,10 @@ pub fn displayField(
     if (@typeInfo(PtrT) != .pointer) {
         @compileError(std.fmt.comptimePrint("field_value_ptr for field {s} must be a pointer to a field. It is a {s}", .{ field_name, @typeName(PtrT) }));
     }
+
+    // 1. Display using the field's custom display function if set.
+    // 2. Display using the type's custom display function if set. (For Structs and Unions)
+    // 3. Display using the default display functions.
 
     if (field_option.hasCustomDisplayFn()) {
         const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
@@ -762,7 +766,7 @@ pub fn displayBool(comptime src: std.builtin.SourceLocation, comptime field_name
 
 pub fn displayArray(
     comptime src: std.builtin.SourceLocation,
-    comptime ContainerT: ?type,
+    comptime ContainerT: type,
     comptime field_name: []const u8,
     field_value_ptr: anytype,
     comptime depth: usize,
@@ -792,7 +796,7 @@ pub fn displayArray(
 
 pub fn displaySlice(
     comptime src: std.builtin.SourceLocation,
-    comptime ContainerT: ?type,
+    comptime ContainerT: type,
     comptime field_name: []const u8,
     field_value_ptr: anytype,
     comptime depth: usize,
@@ -901,7 +905,7 @@ pub fn displayUnion(
 ///   are per-type, not per field.
 pub fn displayOptional(
     comptime src: std.builtin.SourceLocation,
-    comptime ContainerT: ?type,
+    comptime ContainerT: type,
     comptime field_name: []const u8,
     field_value_ptr: anytype,
     comptime depth: usize,
@@ -927,7 +931,7 @@ pub fn displayOptional(
         if (field_value_ptr.*) |*val| {
             displayField(@src(), ContainerT, field_name, val, depth, field_option, options, al);
         } else {
-            log.debug("Optional field {s} cannot be selected as no default value is provided. Use struct_ui.StructOptions({s}) or StructOptions({s}) with a default value for {s}.", .{
+            log.debug("Optional field {s} cannot be selected as no default value is provided. Use struct_ui.StructOptions({s}) with a default or StructOptions({s}) with a default, setting a value for {s}.", .{
                 field_name,
                 @typeName(optional.child),
                 @typeName(ContainerT),
@@ -941,7 +945,7 @@ pub fn displayOptional(
 
 pub fn displayPointer(
     comptime src: std.builtin.SourceLocation,
-    comptime ContainerT: ?type,
+    comptime ContainerT: type,
     comptime field_name: []const u8,
     field_value_ptr: anytype,
     comptime depth: usize,
@@ -1072,22 +1076,21 @@ pub fn displayContainer(comptime src: std.builtin.SourceLocation, field_name: []
 }
 
 /// Create a default value for a field from either default field initialization values or from struct_options
-pub fn defaultValue(T: type, ContainerT: ?type, comptime field_name: []const u8, struct_options: anytype) ?T {
+pub fn defaultValue(T: type, ContainerT: type, comptime field_name: []const u8, struct_options: anytype) ?T {
     // If the containing struct has a default value, get the field's default value from
     // the corresponding field within the struct's default value.
-    if (ContainerT) |CT| {
-        inline for (struct_options) |option| {
-            if (@TypeOf(option).StructT == CT) {
-                if (option.default_value) |default_value| {
-                    if (@typeInfo(@FieldType(CT, field_name)) == .optional) {
-                        if (@field(default_value, field_name) != null) {
-                            return @field(default_value, field_name);
-                        } else {
-                            log.debug("struct_ui.StructOptions({s}) does not provide a default value for optional field {s}. ", .{ @typeName(CT), field_name });
-                        }
-                    } else {
+    inline for (struct_options) |option| {
+        if (@TypeOf(option).StructT == ContainerT) {
+            if (option.default_value) |default_value| {
+                // TODO: Can tighten up teh logic here?
+                if (@typeInfo(@FieldType(ContainerT, field_name)) == .optional) {
+                    if (@field(default_value, field_name) != null) {
                         return @field(default_value, field_name);
+                    } else {
+                        log.debug("struct_ui.StructOptions({s}) does not provide a default value for optional field {s}. ", .{ @typeName(ContainerT), field_name });
                     }
+                } else {
+                    return @field(default_value, field_name);
                 }
             }
         }
