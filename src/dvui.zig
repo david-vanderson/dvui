@@ -2538,6 +2538,15 @@ const dropdown_placeholder_default = "Select ...";
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: DropdownChoice(usize), init_opts: DropdownInitOptions, opts: Options) bool {
+    // Adjust selected index by 1 if the placeholder is showing
+    const selected_index: ?usize = switch (choice) {
+        .choice => |ch| ch.*,
+        .choice_nullable => |ch| if (ch.*) |_|
+            if (init_opts.null_selectable) ch.*.? + 1 else ch.*.?
+        else
+            null,
+    };
+
     var dd: dvui.DropdownWidget = undefined;
     dd.init(
         src,
@@ -2546,7 +2555,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
             .choice_nullable => |ch| if (ch.* == null)
                 .{ .placeholder = init_opts.placeholder orelse dropdown_placeholder_default }
             else
-                .{ .selected_index = ch.*, .label = entries[ch.*.?] },
+                .{ .selected_index = selected_index, .label = entries[ch.*.?] },
         },
         opts,
     );
@@ -2590,6 +2599,15 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownChoice(T), init_opts: DropdownInitOptions, opts: Options) bool {
     if (@typeInfo(T) != .@"enum") @compileError("Expected enum, found '" ++ @typeName(T) ++ "'");
 
+    // Adjust selected index by 1 if the placeholder is showing
+    const selected_index: ?usize = switch (choice) {
+        .choice => |ch| @intFromEnum(ch.*),
+        .choice_nullable => |ch| if (ch.*) |_|
+            if (init_opts.null_selectable) @intFromEnum(ch.*.?) + 1 else @intFromEnum(ch.*.?)
+        else
+            null,
+    };
+
     var dd: dvui.DropdownWidget = undefined;
     dd.init(
         src,
@@ -2598,7 +2616,7 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
             .choice_nullable => |ch| if (ch.* == null)
                 .{ .placeholder = init_opts.placeholder orelse dropdown_placeholder_default }
             else
-                .{ .selected_index = @intFromEnum(ch.*.?), .label = @tagName(ch.*.?) },
+                .{ .selected_index = selected_index, .label = @tagName(ch.*.?) },
         },
         opts,
     );
