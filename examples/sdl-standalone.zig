@@ -363,15 +363,15 @@ fn gui_frame() bool {
 
 const WidgetHeirachy = struct {
     name: []const u8,
-    children: ?[]const WidgetHeirachy,
+    children: ?[]const WidgetHeirachy = null,
     displayFn: *const fn () void,
 };
+
+var currentDisplayFn: *const fn () void = displayDropDownEnum;
 
 fn displayEmpty() void {
     std.debug.print("DisplayFN called\n", .{});
 }
-
-var currentDisplayFn: *const fn () void = displayBox;
 
 const widget_hierarchy = [_]WidgetHeirachy{
     .{ .name = "animate", .displayFn = displayEmpty, .children = null },
@@ -390,7 +390,7 @@ const widget_hierarchy = [_]WidgetHeirachy{
     .{ .name = "context", .displayFn = displayEmpty, .children = null },
     .{ .name = "dialog", .displayFn = displayEmpty, .children = null },
     .{ .name = "dropdown", .displayFn = displayEmpty, .children = null },
-    .{ .name = "dropdownEnum", .displayFn = displayEmpty, .children = null },
+    .{ .name = "dropdownEnum", .displayFn = displayDropDownEnum, .children = null },
     .{ .name = "expander", .displayFn = displayEmpty, .children = null },
     .{ .name = "flexbox", .displayFn = displayEmpty, .children = null },
     .{ .name = "floatingMenu", .displayFn = displayEmpty, .children = null },
@@ -466,7 +466,6 @@ const widget_hierarchy = [_]WidgetHeirachy{
     .{ .name = "textLayout", .displayFn = displayEmpty, .children = null },
     .{ .name = "toast", .displayFn = displayEmpty, .children = null },
     .{ .name = "tooltip", .displayFn = displayEmpty, .children = null },
-    .{ .name = "windowHeader", .displayFn = displayEmpty, .children = null },
 };
 
 const basic_options: dvui.struct_ui.StructOptions(dvui.Options) = .init(.{
@@ -568,4 +567,49 @@ pub fn displayTextEntryNumber() void {
             .placeholder = .{ .text = .{ .display = .read_write } },
         }, init_opts_defaults),
     });
+}
+
+pub fn displayDropDownEnum() void {
+    const state = struct {
+        var init_opts: dvui.DropdownInitOptions = .{};
+        var options: dvui.Options = .{};
+        var choice: dvui.DropdownChoice(dvui.Options.Expand) = .{ .choice = &expand };
+        var expand: dvui.Options.Expand = .none;
+        var expand_maybe: ?dvui.Options.Expand = null;
+
+        const default_init_opts: dvui.DropdownInitOptions = .{
+            .null_selectable = false,
+            .placeholder = "Select something",
+        };
+
+        var test_options: struct {
+            nullable: bool = false,
+        } = .{};
+    };
+    var vbox = dvui.box(@src(), .{}, .{});
+    defer vbox.deinit();
+    {
+        var gbox = dvui.groupBox(@src(), "dropDownEnum()", .{});
+        defer gbox.deinit();
+        var hhbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        defer hhbox.deinit();
+        const result = dvui.dropdownEnum(@src(), dvui.Options.Expand, state.choice, state.init_opts, state.options);
+        var al = dvui.Alignment.init(@src(), 0);
+        dvui.struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
+        al.deinit();
+    }
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .corner_radius = dvui.Rect.all(3), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(6), .expand = .horizontal, .margin = dvui.Rect.all(6), .background = false });
+    defer scroll.deinit();
+    dvui.structUI(@src(), "test_options", &state.test_options, 1, .{});
+    if (state.test_options.nullable) {
+        if (state.choice != .choice_nullable) {
+            state.choice = .{ .choice_nullable = &state.expand_maybe };
+        }
+    } else if (state.choice != .choice) {
+        state.choice = .{ .choice = &state.expand };
+    }
+
+    dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{dvui.struct_ui.StructOptions(dvui.DropdownInitOptions).initWithDefaults(.{
+        .placeholder = .defaultText,
+    }, null)});
 }

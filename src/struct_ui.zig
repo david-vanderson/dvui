@@ -471,7 +471,13 @@ pub fn boolFieldWidget(
         if (opt.manual_reset) {
             const prev_state = dvui.dataGetDefault(null, box.data().id, "bool", bool, false);
             var state = prev_state or field_value_ptr.*;
-            _ = dvui.checkbox(@src(), &state, "", .{});
+            var data_out: dvui.WidgetData = undefined;
+            _ = dvui.checkbox(@src(), &state, "", .{ .data_out = &data_out });
+            if (state)
+                dvui.tooltip(@src(), .{ .active_rect = data_out.borderRectScale().r }, "Value was set to true since last manual reset.", .{}, .{})
+            else
+                dvui.tooltip(@src(), .{ .active_rect = data_out.borderRectScale().r }, "Value was not set to true since last manual reset", .{}, .{});
+
             dvui.dataSet(null, box.data().id, "bool", state);
         }
         dvui.label(@src(), "{}", .{field_value_ptr.*}, .{});
