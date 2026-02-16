@@ -589,13 +589,16 @@ pub fn displayDropDownEnum() void {
     var vbox = dvui.box(@src(), .{}, .{});
     defer vbox.deinit();
     {
-        var gbox = dvui.groupBox(@src(), "dropDownEnum()", .{});
+        var gbox = dvui.groupBox(@src(), "dropDownEnum()", .{ .min_size_content = .{ .h = 250 } });
         defer gbox.deinit();
-        var hhbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        var hhbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .gravity_y = 0.5 });
         defer hhbox.deinit();
         const result = dvui.dropdownEnum(@src(), dvui.Options.Expand, state.choice, state.init_opts, state.options);
         var al = dvui.Alignment.init(@src(), 0);
         dvui.struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
+        const choice = state.choice;
+        // TODO: This should make it read-only since choice is const! Why not.
+        dvui.struct_ui.displayUnion(@src(), "choice", &choice, 2, .default, .{});
         al.deinit();
     }
     var scroll = dvui.scrollArea(@src(), .{}, .{ .corner_radius = dvui.Rect.all(3), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(6), .expand = .horizontal, .margin = dvui.Rect.all(6), .background = false });
