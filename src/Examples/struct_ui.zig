@@ -57,7 +57,7 @@ pub fn structUI() void {
         defer b2.deinit();
 
         // Simple display of struct with no options.
-        dvui.structUI(@src(), "rect", &rect, 0, .{});
+        dvui.structUI(@src(), "rect", &rect, 0, .{}, .{});
     }
     // Customized, complex struct display
     //
@@ -119,11 +119,11 @@ pub fn structUI() void {
             .static_str = .{ .text = .{ .display = .read_only } },
             .var_str = .{ .text = .{ .display = .read_only } },
         }, .{});
-        dvui.structUI(@src(), "dynamic_strings", &StringDemo.ss_1, 0, .{dynamic_read_only_options});
+        dvui.structUI(@src(), "dynamic_strings", &StringDemo.ss_1, 0, .{dynamic_read_only_options}, .{});
         if (dvui.button(@src(), "Edit", .{}, .{})) {
             StringDemo.editing_dynamic = true;
         }
-        dvui.structUI(@src(), "buffered_strings", &StringDemo.ss_2, 0, .{buffered_read_only_options});
+        dvui.structUI(@src(), "buffered_strings", &StringDemo.ss_2, 0, .{buffered_read_only_options}, .{});
         if (dvui.button(@src(), "Edit", .{}, .{})) {
             StringDemo.editing_buffer = true;
         }
@@ -169,7 +169,7 @@ pub fn editStringStuctDynamic(comptime field_name: []const u8, ss: *StringStruct
         .static_str = .{ .text = .{ .display = .read_write } },
     }, null);
     options.field_options.remove(.raw_buffer);
-    dvui.structUI(@src(), field_name, ss, 0, .{options});
+    dvui.structUI(@src(), field_name, ss, 0, .{options}, .{});
 }
 
 pub fn editStringStructBuffered(comptime field_name: []const u8, ss: *StringStruct) void {

@@ -466,7 +466,7 @@ pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
 
     switch (active_tab.*) {
         .layout => {
-            if (layoutPage(self, vbox.data().id)) changed = true;
+            if (layoutPage(self, vbox.data().id, wd)) changed = true;
         },
         .style => {
             if (stylePage(self, vbox.data().id)) changed = true;
@@ -490,36 +490,42 @@ fn copyOptionsToClipboard(src: std.builtin.SourceLocation, id: dvui.Id, options:
     dvui.clipboardTextSet(aw.written());
 }
 
-fn layoutPage(self: *Options, id: dvui.Id) bool {
+fn sliderRectOptional(src: std.builtin.SourceLocation, comptime label: []const u8, rect: *?Rect, comptime field: std.meta.FieldEnum(dvui.Rect), link_all: bool, default: dvui.Rect) bool {
+    var changed: bool = false;
+    var hbox = dvui.box(src, .{ .dir = .horizontal }, .{ .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
+    defer hbox.deinit();
+    var value_set: bool = rect.* != null;
+
+    if (dvui.checkbox(
+        @src(),
+        &value_set,
+        if (value_set) "" else label,
+        .{ .padding = .{ .x = 6, .y = 6, .h = 6, .w = 0 } },
+    )) {
+        changed = true;
+        if (value_set)
+            rect.* = default
+        else
+            rect.* = null;
+    }
+    if (value_set) {
+        if (dvui.sliderEntry(
+            @src(),
+            label ++ ": {d:0.0}",
+            .{ .value = &@field(rect.*.?, @tagName(field)), .min = 0, .max = 20.0, .interval = 1 },
+            .{ .margin = .{ .x = 0, .y = 4, .w = 4, .h = 4 } },
+        )) {
+            changed = true;
+            if (link_all) {
+                rect.* = .all(@field(rect.*.?, @tagName(field)));
+            }
+        }
+    }
+    return changed;
+}
+
+fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
     var changed = false;
-
-    const corner_radius_was_null = self.corner_radius == null;
-    self.corner_radius = self.corner_radiusGet();
-    defer if (corner_radius_was_null and !changed) {
-        self.corner_radius = null;
-    };
-    const corner_radius = &self.corner_radius.?;
-
-    const margin_was_null = self.margin == null;
-    self.margin = self.marginGet();
-    defer if (margin_was_null and !changed) {
-        self.margin = null;
-    };
-    const margin = &self.margin.?;
-
-    const border_was_null = self.border == null;
-    self.border = self.borderGet();
-    defer if (border_was_null and !changed) {
-        self.border = null;
-    };
-    const border = &self.border.?;
-
-    const padding_was_null = self.padding == null;
-    self.padding = self.paddingGet();
-    defer if (padding_was_null and !changed) {
-        self.padding = null;
-    };
-    const padding = &self.padding.?;
 
     const gravity_y_was_null = self.gravity_y == null;
     self.gravity_y = self.gravityGet().y;
@@ -578,7 +584,7 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
         if (dvui.sliderEntry(@src(), "rotation: {d:0.2}", .{
             .min = std.math.pi * -2,
             .max = std.math.pi * 2,
-            .interval = @as(f32, std.math.pi) / 100,
+            .interval = @as(f32, 0.5 / std.math.pi),
             .value = rotation,
         }, .{ .gravity_y = 0.5 })) {
             changed = true;
@@ -639,47 +645,21 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
         { // Top Left
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
-
-            if (dvui.sliderEntry(@src(), "radius: {d:0}", .{ .value = &corner_radius.x, .min = 0, .max = 200, .interval = 1 }, .{ .gravity_y = 0.5 })) {
-                changed = true;
-                if (link_radius.*) {
-                    corner_radius.* = .all(corner_radius.x);
-                }
-            }
+            changed = sliderRectOptional(@src(), "radius", &self.corner_radius, .x, link_radius.*, wd.options.corner_radiusGet()) or changed;
         }
         { // Top Center
             var col = dvui.box(@src(), .{}, .{ .border = .all(1) });
             defer col.deinit();
-
-            if (dvui.sliderEntry(@src(), "margin: {d:0.0}", .{ .value = &margin.y, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_margin.*) {
-                    margin.* = .all(margin.y);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "border: {d:0.0}", .{ .value = &border.y, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_border.*) {
-                    border.* = .all(border.y);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "padding: {d:0.0}", .{ .value = &padding.y, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_padding.*) {
-                    padding.* = .all(padding.y);
-                }
-            }
+            changed = sliderRectOptional(@src(), "margin", &self.margin, .y, link_margin.*, wd.options.marginGet()) or changed;
+            changed = sliderRectOptional(@src(), "border", &self.border, .y, link_border.*, wd.options.borderGet()) or changed;
+            changed = sliderRectOptional(@src(), "padding", &self.padding, .y, link_padding.*, wd.options.paddingGet()) or changed;
+            std.debug.print("default pad = {f}", .{wd.options.paddingGet()});
         }
         { // Top Right
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
 
-            if (dvui.sliderEntry(@src(), "radius: {d:0}", .{ .value = &corner_radius.y, .min = 0, .max = 200, .interval = 1 }, .{ .gravity_y = 0.5 })) {
-                changed = true;
-                if (link_radius.*) {
-                    corner_radius.* = .all(corner_radius.y);
-                }
-            }
+            changed = sliderRectOptional(@src(), "radius", &self.corner_radius, .y, link_radius.*, wd.options.corner_radiusGet()) or changed;
         }
     }
 
@@ -689,25 +669,9 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
         { // Middle Left
             var col = dvui.box(@src(), .{}, .{ .border = .all(1) });
             defer col.deinit();
-
-            if (dvui.sliderEntry(@src(), "margin: {d:0.0}", .{ .value = &margin.x, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_margin.*) {
-                    margin.* = .all(margin.x);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "border: {d:0.0}", .{ .value = &border.x, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_border.*) {
-                    border.* = .all(border.x);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "padding: {d:0.0}", .{ .value = &padding.x, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_padding.*) {
-                    padding.* = .all(padding.x);
-                }
-            }
+            changed = sliderRectOptional(@src(), "margin", &self.margin, .x, link_margin.*, wd.options.marginGet()) or changed;
+            changed = sliderRectOptional(@src(), "border", &self.border, .x, link_border.*, wd.options.borderGet()) or changed;
+            changed = sliderRectOptional(@src(), "padding", &self.padding, .x, link_padding.*, wd.options.paddingGet()) or changed;
         }
         { // Middle Center
             var col = dvui.box(@src(), .{ .dir = .horizontal }, .{ .border = .all(1), .expand = .both });
@@ -730,25 +694,9 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
         { // Middle Right
             var col = dvui.box(@src(), .{}, .{ .border = .all(1) });
             defer col.deinit();
-
-            if (dvui.sliderEntry(@src(), "margin: {d:0.0}", .{ .value = &margin.w, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_margin.*) {
-                    margin.* = .all(margin.w);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "border: {d:0.0}", .{ .value = &border.w, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_border.*) {
-                    border.* = .all(border.w);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "padding: {d:0.0}", .{ .value = &padding.w, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_padding.*) {
-                    padding.* = .all(padding.w);
-                }
-            }
+            changed = sliderRectOptional(@src(), "margin", &self.margin, .w, link_margin.*, wd.options.marginGet()) or changed;
+            changed = sliderRectOptional(@src(), "border", &self.border, .w, link_border.*, wd.options.borderGet()) or changed;
+            changed = sliderRectOptional(@src(), "padding", &self.padding, .w, link_padding.*, wd.options.paddingGet()) or changed;
         }
     }
 
@@ -759,46 +707,20 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
 
-            if (dvui.sliderEntry(@src(), "radius: {d:0}", .{ .value = &corner_radius.h, .min = 0, .max = 200, .interval = 1 }, .{ .gravity_y = 0.5 })) {
-                changed = true;
-                if (link_radius.*) {
-                    corner_radius.* = .all(corner_radius.h);
-                }
-            }
+            changed = sliderRectOptional(@src(), "radius", &self.corner_radius, .h, link_radius.*, wd.options.corner_radiusGet()) or changed;
         }
         { // Bottom Center
             var col = dvui.box(@src(), .{}, .{ .border = .all(1) });
             defer col.deinit();
-
-            if (dvui.sliderEntry(@src(), "margin: {d:0.0}", .{ .value = &margin.h, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_margin.*) {
-                    margin.* = .all(margin.h);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "border: {d:0.0}", .{ .value = &border.h, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_border.*) {
-                    border.* = .all(border.h);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "padding: {d:0.0}", .{ .value = &padding.h, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_padding.*) {
-                    padding.* = .all(padding.h);
-                }
-            }
+            changed = sliderRectOptional(@src(), "margin", &self.margin, .h, link_margin.*, wd.options.marginGet()) or changed;
+            changed = sliderRectOptional(@src(), "border", &self.border, .h, link_border.*, wd.options.borderGet()) or changed;
+            changed = sliderRectOptional(@src(), "padding", &self.padding, .h, link_padding.*, wd.options.paddingGet()) or changed;
         }
         { // Bottom Right
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
 
-            if (dvui.sliderEntry(@src(), "radius: {d:0}", .{ .value = &corner_radius.w, .min = 0, .max = 200, .interval = 1 }, .{ .gravity_y = 0.5 })) {
-                changed = true;
-                if (link_radius.*) {
-                    corner_radius.* = .all(corner_radius.w);
-                }
-            }
+            changed = sliderRectOptional(@src(), "radius", &self.corner_radius, .w, link_radius.*, wd.options.corner_radiusGet()) or changed;
         }
     }
 
@@ -809,20 +731,28 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
         dvui.labelNoFmt(@src(), "Link: ", .{}, .{});
 
         if (dvui.checkbox(@src(), link_margin, "margin", .{})) {
-            margin.* = .all(margin.x);
-            changed = true;
+            if (self.margin) |*margin| {
+                margin.* = .all(margin.x);
+                changed = true;
+            }
         }
         if (dvui.checkbox(@src(), link_border, "border", .{})) {
-            border.* = .all(border.x);
-            changed = true;
+            if (self.border) |*border| {
+                border.* = .all(border.x);
+                changed = true;
+            }
         }
         if (dvui.checkbox(@src(), link_padding, "padding", .{})) {
-            padding.* = .all(padding.x);
-            changed = true;
+            if (self.padding) |*padding| {
+                padding.* = .all(padding.x);
+                changed = true;
+            }
         }
         if (dvui.checkbox(@src(), link_radius, "radius", .{})) {
-            corner_radius.* = .all(corner_radius.x);
-            changed = true;
+            if (self.corner_radius) |*radius| {
+                radius.* = .all(radius.x);
+                changed = true;
+            }
         }
     }
 
