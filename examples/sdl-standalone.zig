@@ -176,9 +176,9 @@ fn gui_frame() bool {
         if (dvui.button(@src(), demo_label, .{}, .{})) {
             dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
         }
-        const widgepedia_label = if (dvui.Examples.show_widgepedia_window) "Hide Widgepedia" else "Show Widgepedia";
-        if (dvui.button(@src(), widgepedia_label, .{}, .{})) {
-            dvui.Examples.show_widgepedia_window = !dvui.Examples.show_widgepedia_window;
+        const widgetpedia_label = if (dvui.Examples.show_widgetpedia_window) "Hide Widgetpedia" else "Show Widgetpedia";
+        if (dvui.button(@src(), widgetpedia_label, .{}, .{})) {
+            dvui.Examples.show_widgetpedia_window = !dvui.Examples.show_widgetpedia_window;
         }
     }
 
@@ -255,7 +255,7 @@ fn gui_frame() bool {
 
     // look at demo() for examples of dvui widgets, shows in a floating window
     dvui.Examples.demo();
-    dvui.Examples.widgepedia();
+    dvui.Examples.widgetpedia();
 
     // check for quitting
     for (dvui.events()) |*e| {

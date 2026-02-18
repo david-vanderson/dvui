@@ -4,17 +4,17 @@ const Examples = dvui.Examples;
 
 var reset_widget: bool = false;
 
-pub fn widgepedia() void {
-    if (!Examples.show_widgepedia_window) {
+pub fn widgetpedia() void {
+    if (!Examples.show_widgetpedia_window) {
         return;
     }
     dvui.struct_ui.defaults.display_expanded = true;
 
     const width = 750;
 
-    var float = dvui.floatingWindow(@src(), .{ .open_flag = &Examples.show_widgepedia_window }, .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .width(width) });
+    var float = dvui.floatingWindow(@src(), .{ .open_flag = &Examples.show_widgetpedia_window }, .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .width(width) });
     defer float.deinit();
-    float.dragAreaSet(dvui.windowHeader("Widgepedia", "", &Examples.show_widgepedia_window));
+    float.dragAreaSet(dvui.windowHeader("Widgetpedia", "", &Examples.show_widgetpedia_window));
 
     var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .background = true });
     defer hbox.deinit();
@@ -83,7 +83,7 @@ const WidgetHeirachy = struct {
     displayFn: *const fn () void,
 };
 
-var current_widget: WidgetHeirachy = widget_hierarchy[1];
+var current_widget: WidgetHeirachy = widget_hierarchy[0];
 //var currentDisplayFn: *const fn () void = displayDropDownEnum;
 
 fn displayEmpty() void {
@@ -95,7 +95,6 @@ fn displayEmpty() void {
     defer vbox.deinit();
     dvui.icon(@src(), "under construction", dvui.entypo.hour_glass, .{}, .{ .gravity_x = 0.5, .min_size_content = .{ .h = 50, .w = 50 } });
     dvui.labelNoFmt(@src(), "Under construction", .{ .align_x = 0.5 }, .{});
-    defaultDisplay();
 }
 
 const Easing = enum {
@@ -220,9 +219,14 @@ pub fn displayAnimate() void {
     }
     var scroll = dvui.scrollArea(@src(), .{}, .{});
     defer scroll.deinit();
-    if (dvui.expander(@src(), "test_options", .{ .default_expanded = true }, .{})) {
-        if (dvui.button(@src(), "Restart animation", .{}, .{})) {
-            state.test_options.restart_animation = true;
+    {
+        var box = dvui.box(@src(), .{}, .{ .expand = .horizontal });
+        defer box.deinit();
+        if (dvui.struct_ui.displayContainer(@src(), "test_options")) |container| {
+            defer container.deinit();
+            if (dvui.button(@src(), "Restart animation", .{}, .{})) {
+                state.test_options.restart_animation = true;
+            }
         }
     }
     dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{
@@ -250,7 +254,7 @@ fn selectEasing(field_name: []const u8, _: *anyopaque, read_only: bool, alignmen
 
 pub fn displayBox() void {
     const defaults = struct {
-        const nr_boxes = 10;
+        const nr_boxes = 5;
         const expand: dvui.Options.Expand = .none;
         const init_opts: dvui.BoxWidget.InitOptions = .{};
         const options: dvui.Options = .{ .expand = .both };
@@ -287,7 +291,7 @@ pub fn displayBox() void {
         defer box.deinit();
         for (0..state.test_options.nr_boxes) |i| {
             var b = dvui.box(@src(), .{}, .{
-                .min_size_content = .{ .h = 10, .w = 10 },
+                .min_size_content = .{ .h = 30, .w = 30 },
                 .border = dvui.Rect.all(1),
                 .id_extra = i,
                 .expand = state.test_options.expand,
@@ -571,78 +575,4 @@ const widget_hierarchy = [_]WidgetHeirachy{
     .{ .name = "textLayout", .displayFn = displayEmpty, .children = null },
     .{ .name = "toast", .displayFn = displayEmpty, .children = null },
     .{ .name = "tooltip", .displayFn = displayEmpty, .children = null },
-};
-
-fn defaultDisplay() void {
-    switch (std.meta.stringToEnum(WidgetList, current_widget.name) orelse return) {
-        .animate => {
-            var a = dvui.animate(@src(), .{ .kind = .alpha, .duration = 5_000_000 }, .{});
-            defer a.deinit();
-            dvui.labelNoFmt(@src(), "Some text", .{}, .{});
-        },
-        else => {},
-    }
-}
-
-const WidgetList = enum {
-    // Top‑level widgets with no children
-    animate,
-    box,
-    checkbox,
-    colorPicker,
-    comboBox,
-    context,
-    dialog,
-    expander,
-    flexbox,
-    floatingMenu,
-    focusGroup,
-    groupBox,
-    icon,
-    image,
-    link,
-    paned,
-    progress,
-    radio,
-    radioGroup,
-    reorder,
-    scale,
-    scrollArea,
-    separator,
-    spacer,
-    spinner,
-    suggestion,
-    tabs,
-    textLayout,
-    toast,
-    tooltip,
-    button,
-    buttonIcon,
-    buttonLabelAndIcon,
-    dropdown,
-    dropdownEnum,
-    floatingWindow,
-    windowHeader,
-    grid,
-    gridHeading,
-    columnLayoutProportional,
-    gridHeadingCheckbox,
-    gridHeadingSeparator,
-    gridHeadingSortable,
-    label,
-    labelClick,
-    labelEx,
-    labelNoFmt,
-    menu,
-    menuItem,
-    menuItemIcon,
-    menuItemLabel,
-    plot,
-    plotXY,
-    slider,
-    sliderEntry,
-    sliderVector,
-    textEntry,
-    textEntryColor,
-    textEntryNumber,
 };

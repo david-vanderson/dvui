@@ -4,7 +4,7 @@ pub const zig_favicon = @embedFile("zig-favicon.png");
 pub const zig_svg = @embedFile("zig-mark.svg");
 
 pub var show_demo_window: bool = false;
-pub var show_widgepedia_window: bool = false;
+pub var show_widgetpedia_window: bool = false;
 pub var icon_browser_show: bool = false;
 var frame_counter: u64 = 0;
 pub var show_dialog: bool = false;
@@ -519,4 +519,4 @@ const gridVirtualScrolling = grid_examples.gridVirtualScrolling;
 const gridVariableRowHeights = grid_examples.gridVariableRowHeights;
 const gridSelection = grid_examples.gridSelection;
 const gridNavigation = grid_examples.gridNavigation;
-pub const widgepedia = @import("Examples/widgepedia.zig").widgepedia;
+pub const widgetpedia = @import("Examples/widgetpedia.zig").widgetpedia;
