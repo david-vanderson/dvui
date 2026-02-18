@@ -103,11 +103,6 @@ pub fn main() !void {
     }
 }
 
-const NumberType = i64;
-var init_opts: dvui.TextEntryNumberInitOptions(NumberType) = .{};
-var value: NumberType = -789;
-
-const init_opts_defaults: dvui.TextEntryNumberInitOptions(NumberType) = .{ .value = &value, .placeholder = "Enter a number", .text = "a123b", .min = -100, .max = 100 };
 // both dvui and SDL drawing
 // return false if user wants to exit the app
 fn gui_frame() bool {
@@ -163,57 +158,6 @@ fn gui_frame() bool {
             currentDisplayFn();
             reset_widget = false;
         }
-        if (false) {
-            var vbox = dvui.box(@src(), .{}, .{});
-            defer vbox.deinit();
-            {
-                var gbox = dvui.groupBox(@src(), "textEntryNumber()", .{});
-                defer gbox.deinit();
-                var hhbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-                defer hhbox.deinit();
-                const result = dvui.textEntryNumber(@src(), NumberType, init_opts, .{ .gravity_y = 0.5 });
-                dvui.structUI(@src(), "result", &result, 99, .{
-                    dvui.struct_ui.StructOptions(dvui.TextEntryNumberResult(NumberType)).initWithDefaults(.{
-                        .changed = .{ .boolean = .{ .manual_reset = true } },
-                        .enter_pressed = .{ .boolean = .{ .manual_reset = true } },
-                    }, null),
-                });
-            }
-            var scroll = dvui.scrollArea(@src(), .{}, .{ .corner_radius = dvui.Rect.all(3), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(6), .expand = .horizontal, .margin = dvui.Rect.all(6), .background = false });
-            defer scroll.deinit();
-            dvui.structUI(@src(), "init_opts", &init_opts, 1, .{
-                dvui.struct_ui.StructOptions(dvui.TextEntryNumberInitOptions(NumberType)).initWithDefaults(.{
-                    .text = .{ .text = .{ .display = .read_write } },
-                    .placeholder = .{ .text = .{ .display = .read_write } },
-                }, init_opts_defaults),
-            });
-        }
-    }
-
-    if (false) {
-        var vbox = dvui.box(@src(), .{}, .{});
-        defer vbox.deinit();
-        {
-            var gbox = dvui.groupBox(@src(), "textEntryNumber()", .{});
-            defer gbox.deinit();
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-            defer hbox.deinit();
-            const result = dvui.textEntryNumber(@src(), NumberType, init_opts, .{ .gravity_y = 0.5 });
-            dvui.structUI(@src(), "result", &result, 99, .{
-                dvui.struct_ui.StructOptions(dvui.TextEntryNumberResult(NumberType)).initWithDefaults(.{
-                    .changed = .{ .boolean = .{ .manual_reset = true } },
-                    .enter_pressed = .{ .boolean = .{ .manual_reset = true } },
-                }, null),
-            });
-        }
-        var scroll = dvui.scrollArea(@src(), .{}, .{ .corner_radius = dvui.Rect.all(3), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(6), .expand = .horizontal, .margin = dvui.Rect.all(6), .background = false });
-        defer scroll.deinit();
-        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{
-            dvui.struct_ui.StructOptions(dvui.TextEntryNumberInitOptions(NumberType)).initWithDefaults(.{
-                .text = .{ .text = .{ .display = .read_write } },
-                .placeholder = .{ .text = .{ .display = .read_write } },
-            }, init_opts_defaults),
-        });
     }
     if (false) {
         const backend = g_backend orelse return false;
@@ -419,7 +363,7 @@ const widget_hierarchy = [_]WidgetHeirachy{
         .{ .name = "gridHeadingSortable", .displayFn = displayEmpty, .children = null },
     } },
 
-    .{ .name = "groupBox", .displayFn = displayEmpty, .children = null },
+    .{ .name = "groupBox", .displayFn = displayGroupBox, .children = null },
     .{ .name = "icon", .displayFn = displayEmpty, .children = null },
     .{ .name = "image", .displayFn = displayEmpty, .children = null },
 
@@ -580,10 +524,15 @@ pub fn displayBox() void {
 }
 
 pub fn displayTextEntryNumber() void {
+    const NumberType = i64;
+
     const state = struct {
         var init_opts: dvui.TextEntryNumberInitOptions(NumberType) = .{};
         var options: dvui.Options = .{ .gravity_y = 0.5 };
+        var value: NumberType = -789;
     };
+    const init_opts_defaults: dvui.TextEntryNumberInitOptions(NumberType) = .{ .value = &state.value, .placeholder = "Enter a number", .text = "", .min = -100, .max = 100 };
+
     const size_content: dvui.Size = .{ .w = 250, .h = 250 };
     var gbox = dvui.groupBox(@src(), "textEntryNumber()", .{ .expand = .both });
     defer gbox.deinit();
@@ -687,6 +636,57 @@ pub fn displayDropDownEnum() void {
 
         if (dvui.expander(@src(), "Options editor", .{}, .{ .expand = .horizontal })) {
             _ = dvui.Debug.optionsEditor(&state.options, &dropdown_wd);
+        }
+    }
+}
+
+pub fn displayGroupBox() void {
+    const defaults = struct {
+        const options: dvui.Options = .{ .expand = .both };
+        const label_short = "Shipping:";
+        const label_long = "This is a really long label that will get truncated if it is long enough to span the width of the groupbox.";
+    };
+    const state = struct {
+        var options: dvui.Options = defaults.options;
+        var label = defaults.label_short;
+        var test_options: struct {
+            long_label: bool = false,
+        } = .{};
+    };
+
+    if (reset_widget) {
+        state.options = defaults.options;
+        state.test_options.long_label = false;
+    }
+
+    const size_content: dvui.Size = .{ .w = 250, .h = 250 };
+    var gbox = dvui.groupBox(@src(), "dropDownEnum()", .{ .expand = .both });
+    defer gbox.deinit();
+    var wd: dvui.WidgetData = undefined;
+    {
+        var outer_hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
+            .expand = .horizontal,
+            .margin = dvui.Rect.all(6),
+            .min_size_content = .cast(size_content),
+            .max_size_content = .cast(size_content),
+        });
+        defer outer_hbox.deinit();
+        var test_box = dvui.groupBox(@src(), if (state.test_options.long_label) defaults.label_long else defaults.label_short, state.options.override(.{ .data_out = &wd }));
+        defer test_box.deinit();
+        dvui.labelNoFmt(@src(), "Name:", .{}, .{});
+        var te = dvui.textEntry(@src(), .{}, .{});
+        te.deinit();
+        dvui.labelNoFmt(@src(), "Address:", .{}, .{});
+        te = dvui.textEntry(@src(), .{}, .{});
+        te.deinit();
+    }
+    {
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .corner_radius = dvui.Rect.all(3), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(6), .expand = .horizontal, .margin = dvui.Rect.all(6), .background = false });
+        defer scroll.deinit();
+        dvui.structUI(@src(), "test_options", &state.test_options, 1, .{}, .{});
+
+        if (dvui.expander(@src(), "Options editor", .{}, .{ .expand = .horizontal })) {
+            _ = dvui.Debug.optionsEditor(&state.options, &wd);
         }
     }
 }
