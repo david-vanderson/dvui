@@ -1123,14 +1123,6 @@ pub fn displayStruct(
         defer struct_alignment.deinit();
         const alignment = al orelse &struct_alignment;
 
-        if (false)
-            if (struct_options.customDisplayFn) |customDisplayFn| {
-                const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
-                // It is up to the implementer of the display function to cast back to const based on read-only.
-                customDisplayFn(field_name, @ptrCast(@constCast(field_value_ptr)), read_only, alignment);
-                return vbox;
-            };
-
         inline for (0..struct_options.field_options.values.len) |field_num| {
             const field = comptime @TypeOf(struct_options.field_options).Indexer.keyForIndex(field_num);
             if (struct_options.field_options.contains(field)) {

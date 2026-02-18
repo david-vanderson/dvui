@@ -170,7 +170,7 @@ pub fn displayAnimate() void {
 
     const defaults = struct {
         const init_opts: dvui.AnimateWidget.InitOptions = .{ .kind = .alpha, .duration = 5_000_000 };
-        const options: dvui.Options = .{ .expand = .both };
+        const options: dvui.Options = .{ .expand = .both, .background = true, .color_fill = .navy };
     };
     const state = struct {
         var init_opts: dvui.AnimateWidget.InitOptions = defaults.init_opts;
@@ -393,6 +393,7 @@ pub fn displayGroupBox() void {
         var test_options: struct {
             long_label: bool = false,
             big_font: bool = false,
+            background: bool = false,
         } = .{};
     };
 
@@ -400,14 +401,23 @@ pub fn displayGroupBox() void {
         state.options = defaults.options;
         state.test_options.long_label = false;
         state.test_options.big_font = false;
+        state.test_options.background = false;
     }
 
     if (state.test_options.big_font) {
         state.options.font = state.options.fontGet().withSize(18);
     }
+    if (state.test_options.background) {
+        state.options.background = true;
+        if (state.options.color_fill == null) {
+            state.options.color_fill = .red;
+        }
+    } else {
+        state.options.background = false;
+    }
 
     const size_content: dvui.Size = .{ .w = 250, .h = 250 };
-    var gbox = dvui.groupBox(@src(), "dropDownEnum()", .{ .expand = .both });
+    var gbox = dvui.groupBox(@src(), "groupBox()", .{ .expand = .both });
     defer gbox.deinit();
     var wd: dvui.WidgetData = undefined;
     {
