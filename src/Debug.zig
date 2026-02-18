@@ -653,7 +653,6 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
             changed = sliderRectOptional(@src(), "margin", &self.margin, .y, link_margin.*, wd.options.marginGet()) or changed;
             changed = sliderRectOptional(@src(), "border", &self.border, .y, link_border.*, wd.options.borderGet()) or changed;
             changed = sliderRectOptional(@src(), "padding", &self.padding, .y, link_padding.*, wd.options.paddingGet()) or changed;
-            std.debug.print("default pad = {f}", .{wd.options.paddingGet()});
         }
         { // Top Right
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });

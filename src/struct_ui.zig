@@ -41,14 +41,14 @@ pub const FieldOptions = union(enum) {
     pub const defaultText: FieldOptions = .{ .text = .{} };
     pub const defaultBool: FieldOptions = .{ .boolean = .{} };
 
-    pub fn standardOption(self: FieldOptions) error{InvalidOptionType}!StandardFieldOptions {
+    pub fn optionStandard(self: FieldOptions) error{InvalidOptionType}!StandardFieldOptions {
         return switch (self) {
             .standard => |fo| fo,
             else => error.InvalidOptionType,
         };
     }
 
-    pub fn numberOption(self: FieldOptions) error{InvalidOptionType}!NumberFieldOptions {
+    pub fn optionNumber(self: FieldOptions) error{InvalidOptionType}!NumberFieldOptions {
         return switch (self) {
             .number => |fo| fo,
             .standard => |fo| .{
@@ -60,7 +60,7 @@ pub const FieldOptions = union(enum) {
         };
     }
 
-    pub fn textOption(self: FieldOptions) error{InvalidOptionType}!TextFieldOptions {
+    pub fn optionText(self: FieldOptions) error{InvalidOptionType}!TextFieldOptions {
         return switch (self) {
             .text => |fo| fo,
             .standard => |fo| .{
@@ -72,7 +72,7 @@ pub const FieldOptions = union(enum) {
         };
     }
 
-    pub fn boolOption(self: FieldOptions) error{InvalidOptionType}!BoolFieldOptions {
+    pub fn optionBool(self: FieldOptions) error{InvalidOptionType}!BoolFieldOptions {
         return switch (self) {
             .boolean => |fo| fo,
             .standard => |fo| .{
@@ -423,7 +423,6 @@ pub fn enumFieldWidget(
 
     const T = @TypeOf(field_value_ptr.*);
     const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.display == .read_only;
-    std.debug.print("enum field widget readonly {} {}\n", .{ @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const, opt.display == .read_only });
     var box = dvui.box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
     defer box.deinit();
 
@@ -672,7 +671,6 @@ pub fn optionalFieldWidget(
 
     // Display mode is ignored. It controls whether the optional value is read_only, not the optional itself.
     const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opts.displayMode() == .read_only;
-    std.debug.print("OFW RO = {}\n", .{read_only});
 
     var choice: usize = if (field_value_ptr.* == null) 0 else 1; // 0 = Null, 1 = Not Null
 
@@ -711,10 +709,7 @@ pub fn displayField(
     if (@typeInfo(PtrT) != .pointer) {
         @compileError(std.fmt.comptimePrint("field_value_ptr for field {s} must be a pointer to a field. It is a {s}", .{ field_name, @typeName(PtrT) }));
     }
-    {
-        const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
-        std.debug.print("display Field: {s} - {s} = {}, {}\n", .{ field_name, @typeName(@TypeOf(field_value_ptr)), read_only, field_option.displayMode() == .read_only });
-    }
+
     // 1. Display using the field's custom display function if set.
     // 2. Display using the type's custom display function if set. (For Structs and Unions)
     // 3. Display using the default display functions.
@@ -801,10 +796,9 @@ const msg_invalid_opt_type = "invalid field option type {t} used for field {s}. 
 
 /// Display numeric fields, ints and floats.
 pub fn displayNumber(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
-    std.debug.print("display number\n", .{});
     validateFieldPtrType(field_name, &.{ .int, .float }, "displayEnum", @TypeOf(field_value_ptr));
 
-    const number_option = field_option.numberOption() catch |err| blk: {
+    const number_option = field_option.optionNumber() catch |err| blk: {
         std.debug.assert(err == error.InvalidOptionType);
         log.debug(msg_invalid_opt_type, .{ field_option, field_name });
         break :blk NumberFieldOptions{};
@@ -813,10 +807,8 @@ pub fn displayNumber(comptime src: std.builtin.SourceLocation, comptime field_na
 }
 
 pub fn displayEnum(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
-    std.debug.print("display enum\n", .{});
-
     validateFieldPtrType(field_name, &.{.@"enum"}, "displayEnum", @TypeOf(field_value_ptr));
-    const std_option = field_option.standardOption() catch |err| blk: {
+    const std_option = field_option.optionStandard() catch |err| blk: {
         std.debug.assert(err == error.InvalidOptionType);
         log.debug(msg_invalid_opt_type, .{ field_option, field_name });
         break :blk StandardFieldOptions{};
@@ -828,11 +820,8 @@ pub fn displayEnum(comptime src: std.builtin.SourceLocation, comptime field_name
 /// Arrays are always treated as read-only. In future this could be enhanced to support in-place editing.
 /// When strings are modified, they are assigned to a duplicated version of the text widget's buffer.
 pub fn displayString(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
-    std.debug.print("display string\n", .{});
-
     validateFieldPtrTypeString(field_name, "displayString", @TypeOf(field_value_ptr));
-    if (!validFieldOptionsType(field_name, field_option, .text)) return;
-    const text_option = field_option.textOption() catch |err| blk: {
+    const text_option = field_option.optionText() catch |err| blk: {
         std.debug.assert(err == error.InvalidOptionType);
         log.debug(msg_invalid_opt_type, .{ field_option, field_name });
         break :blk TextFieldOptions{};
@@ -843,7 +832,7 @@ pub fn displayString(comptime src: std.builtin.SourceLocation, comptime field_na
 /// Same as displayString, but uses a user-supplied buffer, rather than a dynamically allocated buffer.
 pub fn displayStringBuf(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment, buffer: []u8) void {
     validateFieldPtrTypeString(field_name, "displayString", @TypeOf(field_value_ptr));
-    const text_option = field_option.textOption() catch |err| blk: {
+    const text_option = field_option.optionText() catch |err| blk: {
         std.debug.assert(err == error.InvalidOptionType);
         log.debug(msg_invalid_opt_type, .{ field_option, field_name });
         break :blk TextFieldOptions{};
@@ -853,10 +842,8 @@ pub fn displayStringBuf(comptime src: std.builtin.SourceLocation, comptime field
 }
 
 pub fn displayBool(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
-    std.debug.print("display bool\n", .{});
-
     validateFieldPtrType(field_name, &.{.bool}, "displayBool", @TypeOf(field_value_ptr));
-    const bool_option = field_option.boolOption() catch |err| blk: {
+    const bool_option = field_option.optionBool() catch |err| blk: {
         std.debug.assert(err == error.InvalidOptionType);
         log.debug(msg_invalid_opt_type, .{ field_option, field_name });
         break :blk BoolFieldOptions{};
@@ -873,8 +860,6 @@ pub fn displayArray(
     field_option: FieldOptions,
     options: anytype,
 ) void {
-    std.debug.print("display array\n", .{});
-
     validateFieldPtrType(field_name, &.{.array}, "displayArray", @TypeOf(field_value_ptr));
     if (field_option.displayMode() == .none) return;
 
@@ -905,8 +890,6 @@ pub fn displaySlice(
     field_option: FieldOptions,
     options: anytype,
 ) void {
-    std.debug.print("display slice\n", .{});
-
     validateFieldPtrTypeSlice(field_name, "displaySlice", @TypeOf(field_value_ptr));
     if (field_option.displayMode() == .none) return;
 
@@ -943,8 +926,6 @@ pub fn displayUnion(
     field_option: FieldOptions,
     options: anytype,
 ) void {
-    std.debug.print("display union\n", .{});
-
     validateFieldPtrType(field_name, &.{.@"union"}, "displayUnion", @TypeOf(field_value_ptr));
     if (field_option.displayMode() == .none) return;
 
@@ -1020,16 +1001,14 @@ pub fn displayOptional(
     al: *dvui.Alignment,
     default_value: ?@TypeOf(field_value_ptr.*),
 ) void {
-    std.debug.print("display optional\n", .{});
-
     validateFieldPtrType(field_name, &.{.optional}, "displayOptional", @TypeOf(field_value_ptr));
     if (field_option.displayMode() == .none) return;
 
     const optional = @typeInfo(@TypeOf(field_value_ptr.*)).optional;
-    // Display mode is ignored. It controls whether the optional value is read_only, not the optional itself.
-    // TODO: Sort this out. Why did I make the above change?
+
+    // TODO: A change was made to ignore display_mode read_only here and only apply it to the value field, not the optional.
+    // Work out why that was changed.
     const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
-    std.debug.print("DO RO = {}\n", .{read_only});
     if (optionalFieldWidget(src, field_name, field_value_ptr, field_option, al)) {
         if (!read_only) {
             if (field_value_ptr.* == null) {
@@ -1062,10 +1041,9 @@ pub fn displayPointer(
     options: anytype,
     al: *dvui.Alignment,
 ) void {
-    std.debug.print("display pointer\n", .{});
     validateFieldPtrType(field_name, &.{.pointer}, "displayPointer", @TypeOf(field_value_ptr));
 
-    // TODO: Need a better way of propagating constness.
+    // TODO: Need a better way of propagating constness. Currently we are just updating the field_option to be .read_only.
     const field_option = blk: {
         const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
         if (read_only and field_option_.displayMode() == .read_write) {
@@ -1131,8 +1109,6 @@ pub fn displayStruct(
     options: anytype,
     al: ?*dvui.Alignment,
 ) ?*dvui.BoxWidget {
-    std.debug.print("display struct\n", .{});
-
     validateFieldPtrType(field_name, &.{.@"struct"}, "displayStruct", @TypeOf(field_value_ptr));
     if (!validFieldOptionsType(field_name, field_option, .standard)) return null;
     if (field_option.standard.display == .none) return null;
@@ -1152,8 +1128,6 @@ pub fn displayStruct(
                 const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
                 // It is up to the implementer of the display function to cast back to const based on read-only.
                 customDisplayFn(field_name, @ptrCast(@constCast(field_value_ptr)), read_only, alignment);
-                // TODO: Think about allowing this to fall through? Could just so some of the fields custom?
-                // But is that getting too complicated?
                 return vbox;
             };
 

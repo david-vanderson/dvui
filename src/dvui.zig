@@ -2622,7 +2622,6 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
         opts,
     );
     defer dd.deinit();
-    std.debug.print("dd padding is {?f} opts is {?f}\n", .{ dd.data().options.padding, opts.padding });
 
     var ret = false;
     if (dd.dropped()) {
