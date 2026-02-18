@@ -8,6 +8,7 @@ pub fn widgepedia() void {
     if (!Examples.show_widgepedia_window) {
         return;
     }
+    dvui.struct_ui.defaults.display_expanded = true;
 
     const width = 750;
 
@@ -73,6 +74,7 @@ pub fn widgepedia() void {
         current_widget.displayFn();
         reset_widget = false;
     }
+    dvui.struct_ui.defaults.display_expanded = false;
 }
 
 const WidgetHeirachy = struct {
