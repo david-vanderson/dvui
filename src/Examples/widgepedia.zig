@@ -87,12 +87,165 @@ var current_widget: WidgetHeirachy = widget_hierarchy[1];
 //var currentDisplayFn: *const fn () void = displayDropDownEnum;
 
 fn displayEmpty() void {
-    var gbox = dvui.groupBox(@src(), current_widget.name, .{ .expand = .both });
+    var label_str = std.Io.Writer.Allocating.initCapacity(dvui.currentWindow().arena(), current_widget.name.len + 2) catch return;
+    label_str.writer.print("{s}()", .{current_widget.name}) catch unreachable;
+    var gbox = dvui.groupBox(@src(), label_str.written(), .{ .expand = .both });
     defer gbox.deinit();
     var vbox = dvui.box(@src(), .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
     defer vbox.deinit();
     dvui.icon(@src(), "under construction", dvui.entypo.hour_glass, .{}, .{ .gravity_x = 0.5, .min_size_content = .{ .h = 50, .w = 50 } });
     dvui.labelNoFmt(@src(), "Under construction", .{ .align_x = 0.5 }, .{});
+    defaultDisplay();
+}
+
+const Easing = enum {
+    linear,
+    inQuad,
+    outQuad,
+    inOutQuad,
+    inCubic,
+    outCubic,
+    inOutCubic,
+    inQuart,
+    outQuart,
+    inOutQuart,
+    inQuint,
+    outQuint,
+    inOutQuint,
+    inSine,
+    outSine,
+    inOutSine,
+    inExpo,
+    outExpo,
+    inOutExpo,
+    inCirc,
+    outCirc,
+    inOutCirc,
+    inElastic,
+    outElastic,
+    inOutElastic,
+    inBack,
+    outBack,
+    inOutBack,
+    inBounce,
+    outBounce,
+    inOutBounce,
+};
+
+var animate_easing: ?Easing = null;
+
+pub fn displayAnimate() void {
+    const easing_functions: std.EnumArray(Easing, *const dvui.easing.EasingFn) = .init(.{
+        .linear = dvui.easing.linear,
+        .inQuad = dvui.easing.inQuad,
+        .outQuad = dvui.easing.outQuad,
+        .inOutQuad = dvui.easing.inOutQuad,
+        .inCubic = dvui.easing.inCubic,
+        .outCubic = dvui.easing.outCubic,
+        .inOutCubic = dvui.easing.inOutCubic,
+        .inQuart = dvui.easing.inQuart,
+        .outQuart = dvui.easing.outQuart,
+        .inOutQuart = dvui.easing.inOutQuart,
+        .inQuint = dvui.easing.inQuint,
+        .outQuint = dvui.easing.outQuint,
+        .inOutQuint = dvui.easing.inOutQuint,
+        .inSine = dvui.easing.inSine,
+        .outSine = dvui.easing.outSine,
+        .inOutSine = dvui.easing.inOutSine,
+        .inExpo = dvui.easing.inExpo,
+        .outExpo = dvui.easing.outExpo,
+        .inOutExpo = dvui.easing.inOutExpo,
+        .inCirc = dvui.easing.inCirc,
+        .outCirc = dvui.easing.outCirc,
+        .inOutCirc = dvui.easing.inOutCirc,
+        .inElastic = dvui.easing.inElastic,
+        .outElastic = dvui.easing.outElastic,
+        .inOutElastic = dvui.easing.inOutElastic,
+        .inBack = dvui.easing.inBack,
+        .outBack = dvui.easing.outBack,
+        .inOutBack = dvui.easing.inOutBack,
+        .inBounce = dvui.easing.inBounce,
+        .outBounce = dvui.easing.outBounce,
+        .inOutBounce = dvui.easing.inOutBounce,
+    });
+
+    const defaults = struct {
+        const init_opts: dvui.AnimateWidget.InitOptions = .{ .kind = .alpha, .duration = 5_000_000 };
+        const options: dvui.Options = .{ .expand = .both };
+    };
+    const state = struct {
+        var init_opts: dvui.AnimateWidget.InitOptions = defaults.init_opts;
+        var options: dvui.Options = defaults.options;
+
+        const test_options = struct {
+            var restart_animation: bool = false;
+        };
+    };
+    const default_init_opts: dvui.AnimateWidget.InitOptions = .{
+        .duration = defaults.init_opts.duration,
+        .kind = defaults.init_opts.kind,
+        .easing = &dvui.easing.linear,
+    };
+
+    if (reset_widget) {
+        state.init_opts = defaults.init_opts;
+        state.options = defaults.options;
+    }
+    const size_content: dvui.Size = .{ .w = 250, .h = 250 };
+    var gbox = dvui.groupBox(@src(), "animate()", .{ .expand = .both });
+    defer gbox.deinit();
+    var wd: dvui.WidgetData = undefined;
+    {
+        if (animate_easing) |easing| {
+            state.init_opts.easing = easing_functions.get(easing);
+        } else {
+            state.init_opts.easing = null;
+        }
+
+        var outer_hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
+            .expand = .horizontal,
+            .min_size_content = .cast(size_content),
+            .max_size_content = .cast(size_content),
+            .border = dvui.Rect.all(1),
+            .corner_radius = dvui.Rect.all(3),
+        });
+        defer outer_hbox.deinit();
+        var animate = dvui.animate(@src(), state.init_opts, state.options);
+        defer animate.deinit();
+        if (state.test_options.restart_animation) {
+            animate.start();
+            state.test_options.restart_animation = false;
+        }
+        dvui.labelNoFmt(@src(), "Some text", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+    }
+    var scroll = dvui.scrollArea(@src(), .{}, .{});
+    defer scroll.deinit();
+    if (dvui.expander(@src(), "test_options", .{ .default_expanded = true }, .{})) {
+        if (dvui.button(@src(), "Restart animation", .{}, .{})) {
+            state.test_options.restart_animation = true;
+        }
+    }
+    dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{
+        dvui.struct_ui.StructOptions(dvui.AnimateWidget.InitOptions).initWithDefaults(.{
+            .easing = .{ .standard = .{ .customDisplayFn = selectEasing } },
+        }, default_init_opts),
+    }, .{});
+    if (dvui.expander(@src(), "Options editor", .{}, .{ .expand = .horizontal })) {
+        _ = dvui.Debug.optionsEditor(&state.options, &wd);
+    }
+}
+
+fn selectEasing(field_name: []const u8, _: *anyopaque, read_only: bool, alignment: *dvui.Alignment) void {
+    if (read_only) return;
+    var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+    defer box.deinit();
+
+    dvui.labelNoFmt(@src(), field_name, .{}, .{});
+
+    var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
+    defer hbox_aligned.deinit();
+    alignment.record(box.data().id, hbox_aligned.data());
+    _ = dvui.dropdownEnum(@src(), Easing, .{ .choice_nullable = &animate_easing }, .{}, .{});
 }
 
 pub fn displayBox() void {
@@ -325,7 +478,7 @@ pub fn displayTextEntryNumber() void {
 }
 
 const widget_hierarchy = [_]WidgetHeirachy{
-    .{ .name = "animate", .displayFn = displayEmpty, .children = null },
+    .{ .name = "animate", .displayFn = displayAnimate, .children = null },
     .{ .name = "box", .displayFn = displayBox, .children = null },
 
     .{ .name = "buttons", .displayFn = displayEmpty, .children = &.{
@@ -418,4 +571,78 @@ const widget_hierarchy = [_]WidgetHeirachy{
     .{ .name = "textLayout", .displayFn = displayEmpty, .children = null },
     .{ .name = "toast", .displayFn = displayEmpty, .children = null },
     .{ .name = "tooltip", .displayFn = displayEmpty, .children = null },
+};
+
+fn defaultDisplay() void {
+    switch (std.meta.stringToEnum(WidgetList, current_widget.name) orelse return) {
+        .animate => {
+            var a = dvui.animate(@src(), .{ .kind = .alpha, .duration = 5_000_000 }, .{});
+            defer a.deinit();
+            dvui.labelNoFmt(@src(), "Some text", .{}, .{});
+        },
+        else => {},
+    }
+}
+
+const WidgetList = enum {
+    // Top‑level widgets with no children
+    animate,
+    box,
+    checkbox,
+    colorPicker,
+    comboBox,
+    context,
+    dialog,
+    expander,
+    flexbox,
+    floatingMenu,
+    focusGroup,
+    groupBox,
+    icon,
+    image,
+    link,
+    paned,
+    progress,
+    radio,
+    radioGroup,
+    reorder,
+    scale,
+    scrollArea,
+    separator,
+    spacer,
+    spinner,
+    suggestion,
+    tabs,
+    textLayout,
+    toast,
+    tooltip,
+    button,
+    buttonIcon,
+    buttonLabelAndIcon,
+    dropdown,
+    dropdownEnum,
+    floatingWindow,
+    windowHeader,
+    grid,
+    gridHeading,
+    columnLayoutProportional,
+    gridHeadingCheckbox,
+    gridHeadingSeparator,
+    gridHeadingSortable,
+    label,
+    labelClick,
+    labelEx,
+    labelNoFmt,
+    menu,
+    menuItem,
+    menuItemIcon,
+    menuItemLabel,
+    plot,
+    plotXY,
+    slider,
+    sliderEntry,
+    sliderVector,
+    textEntry,
+    textEntryColor,
+    textEntryNumber,
 };
