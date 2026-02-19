@@ -28,6 +28,45 @@ pub const TextureInterpolation = enum {
     linear,
 };
 
+pub const TexturePixelFormat = enum {
+    packed_xrgb_8_8_8_8,
+    packed_rgbx_8_8_8_8,
+    packed_xbgr_8_8_8_8,
+    packed_bgrx_8_8_8_8,
+    packed_argb_8_8_8_8,
+    packed_rgba_8_8_8_8,
+    packed_abgr_8_8_8_8,
+    packed_bgra_8_8_8_8,
+    fourcc_yv12,
+    fourcc_iyuv,
+    fourcc_yuy2,
+    fourcc_uyvy,
+    fourcc_yvyu,
+
+    pub fn bytesPerPixel(self: TexturePixelFormat) u32 {
+        return switch (self) {
+            .packed_xrgb_8_8_8_8,
+            .packed_rgbx_8_8_8_8,
+            .packed_xbgr_8_8_8_8,
+            .packed_bgrx_8_8_8_8,
+            .packed_argb_8_8_8_8,
+            .packed_rgba_8_8_8_8,
+            .packed_abgr_8_8_8_8,
+            .packed_bgra_8_8_8_8,
+            => 4,
+
+            .fourcc_yv12,
+            .fourcc_iyuv,
+            => 1,
+
+            .fourcc_yuy2,
+            .fourcc_uyvy,
+            .fourcc_yvyu,
+            => 2,
+        };
+    }
+};
+
 pub const Button = enum {
     // used for mouse motion/wheel/position events, but never for press/release
     none,

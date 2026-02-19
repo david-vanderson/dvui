@@ -468,7 +468,7 @@ pub const Cache = struct {
 
                     const M = try entry.glyphInfoGenerate('M');
                     if (M.h <= 0) {
-                        dvui.log.warn("Font.Cache.Entry.init() freetype error getting M font {s} size {d}\n", .{fname, font.size});
+                        dvui.log.warn("Font.Cache.Entry.init() freetype error getting M font {s} size {d}\n", .{ fname, font.size });
                         return error.FontError;
                     }
 
@@ -506,7 +506,7 @@ pub const Cache = struct {
 
                 const M = try entry.glyphInfoGenerate('M');
                 if (M.h <= 0) {
-                    dvui.log.warn("Font.Cache.Entry.init() stbtt error getting M font {s} size {d}\n", .{fname, font.size});
+                    dvui.log.warn("Font.Cache.Entry.init() stbtt error getting M font {s} size {d}\n", .{ fname, font.size });
                     return error.FontError;
                 }
                 entry.scaleFactor = @max(min_pixel_size, @floor(font.size)) / M.h;
@@ -689,7 +689,7 @@ pub const Cache = struct {
                 }
             }
 
-            self.texture_atlas_cache = try backend.textureCreate(@ptrCast(pixels.ptr), @as(u32, @intFromFloat(s.w)), @as(u32, @intFromFloat(s.h)), .linear);
+            self.texture_atlas_cache = try backend.textureCreate(@ptrCast(pixels.ptr), @as(u32, @intFromFloat(s.w)), @as(u32, @intFromFloat(s.h)), .linear, .packed_rgba_8_8_8_8);
             return self.texture_atlas_cache.?;
         }
 

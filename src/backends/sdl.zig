@@ -788,19 +788,44 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
     }
 }
 
-pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
+pub fn pixelFormatToSdl(format: dvui.enums.TexturePixelFormat) ?u32 {
+    return switch (format) {
+        .packed_xrgb_8_8_8_8 => c.SDL_PIXELFORMAT_XRGB32,
+        .packed_rgbx_8_8_8_8 => c.SDL_PIXELFORMAT_RGBX32,
+        .packed_xbgr_8_8_8_8 => c.SDL_PIXELFORMAT_XBGR32,
+        .packed_bgrx_8_8_8_8 => c.SDL_PIXELFORMAT_BGRX32,
+        .packed_argb_8_8_8_8 => c.SDL_PIXELFORMAT_ARGB32,
+        .packed_rgba_8_8_8_8 => c.SDL_PIXELFORMAT_RGBA32,
+        .packed_abgr_8_8_8_8 => c.SDL_PIXELFORMAT_ABGR32,
+        .packed_bgra_8_8_8_8 => c.SDL_PIXELFORMAT_BGRA32,
+
+        .fourcc_yv12 => c.SDL_PIXELFORMAT_YV12,
+        .fourcc_iyuv => c.SDL_PIXELFORMAT_IYUV,
+        .fourcc_yuy2 => c.SDL_PIXELFORMAT_YUY2,
+        .fourcc_uyvy => c.SDL_PIXELFORMAT_UYVY,
+        .fourcc_yvyu => c.SDL_PIXELFORMAT_YVYU,
+        // else => null,
+    };
+}
+
+pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
     if (!sdl3) switch (interpolation) {
         .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
         .linear => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear"),
+    };
+
+    const sdl_format = pixelFormatToSdl(format) orelse {
+        log.err("pixel format {} not supported", .{format});
+        return dvui.Backend.TextureError.NotImplemented;
     };
 
     const surface = if (sdl3)
         c.SDL_CreateSurfaceFrom(
             @as(c_int, @intCast(width)),
             @as(c_int, @intCast(height)),
-            c.SDL_PIXELFORMAT_ABGR8888,
+            sdl_format,
             @constCast(pixels),
-            @as(c_int, @intCast(4 * width)),
+            @as(c_int, @intCast(width * format.bytesPerPixel())),
         ) orelse return logErr("SDL_CreateSurfaceFrom in textureCreate")
     else
         c.SDL_CreateRGBSurfaceWithFormatFrom(
@@ -808,8 +833,8 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
             @as(c_int, @intCast(width)),
             @as(c_int, @intCast(height)),
             32,
-            @as(c_int, @intCast(4 * width)),
-            c.SDL_PIXELFORMAT_ABGR8888,
+            @as(c_int, @intCast(width * format.bytesPerPixel())),
+            sdl_format,
         ) orelse return logErr("SDL_CreateRGBSurfaceWithFormatFrom in textureCreate");
 
     defer if (sdl3) c.SDL_DestroySurface(surface) else c.SDL_FreeSurface(surface);
@@ -824,7 +849,7 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
 
     const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
     try toErr(c.SDL_SetTextureBlendMode(texture, pma_blend), "SDL_SetTextureBlendMode in textureCreate");
-    return dvui.Texture{ .ptr = texture, .width = width, .height = height };
+    return dvui.Texture{ .ptr = texture, .width = width, .height = height, .format = format };
 }
 
 pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8) !void {
@@ -836,15 +861,20 @@ pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8)
     }
 }
 
-pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
+pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
     if (!sdl3) switch (interpolation) {
         .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
         .linear => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear"),
     };
 
+    const sdl_format = pixelFormatToSdl(format) orelse {
+        log.err("pixel format {} not supported", .{format});
+        return dvui.Backend.TextureError.NotImplemented;
+    };
+
     const texture = c.SDL_CreateTexture(
         self.renderer,
-        c.SDL_PIXELFORMAT_ABGR8888,
+        sdl_format,
         c.SDL_TEXTUREACCESS_TARGET,
         @intCast(width),
         @intCast(height),
@@ -898,7 +928,7 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
         "SDL_RenderFillRect in textureCreateTarget",
     );
 
-    return dvui.TextureTarget{ .ptr = texture, .width = width, .height = height };
+    return dvui.TextureTarget{ .ptr = texture, .width = width, .height = height, .format = format };
 }
 
 pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
@@ -988,7 +1018,7 @@ pub fn textureFromTarget(self: *SDLBackend, texture: dvui.TextureTarget) !dvui.T
 
     c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(@alignCast(texture.ptr))));
 
-    return self.textureCreate(pixels.ptr, texture.width, texture.height, .linear);
+    return self.textureCreate(pixels.ptr, texture.width, texture.height, .linear, texture.format);
 }
 
 pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
