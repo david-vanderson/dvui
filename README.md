@@ -294,14 +294,14 @@ if (dvui.button(@src(), "Ok", .{}, .{})) {
 For an intro to immediate-mode GUIs (IMGUIs), see [this respective section from Dear ImGui](https://github.com/ocornut/imgui/wiki#about-the-imgui-paradigm).
 
 #### Advantages
-* Reducing widget state:
-  * For example, a checkbox which directly uses your app's bool
-* Reducing GUI state:
-  * The widgets shown each frame directly reflect the code run each frame
-  * Harder to be in a state where the GUI is showing one thing but the app thinks it's showing something else
-  * Don't have to clean up widgets that aren't needed anymore
-* Functions are the composable building blocks of the GUI:
-  * Since running a widget is a function, you can wrap a widget easily:
+- Reducing widget state:
+  - For example, a checkbox which directly uses your app's bool
+- Reducing GUI state:
+  - The widgets shown each frame directly reflect the code run each frame
+  - Harder to be in a state where the GUI is showing one thing but the app thinks it's showing something else
+  - Don't have to clean up widgets that aren't needed anymore
+- Functions are the composable building blocks of the GUI:
+  - Since running a widget is a function, you can wrap a widget easily:
     ```zig
     // Let's wrap the sliderEntry widget so we have 3 that represent a Color
     pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) void {
@@ -323,12 +323,12 @@ For an intro to immediate-mode GUIs (IMGUIs), see [this respective section from 
     ```
 
 #### Drawbacks
-* Hard to do fire-and-forget:
-  * For example, showing a dialog with an error message from code that won't be run next frame
-  * DVUI includes a retained mode space for dialogs and toasts for this
-* Hard to do dialog sequence:
-  * Retained mode GUIs can run a modal dialog recursively so that dialog code can only exist in a single function
-  * DVUI's retained dialogs can be chained together for this
+- Hard to do fire-and-forget:
+  - For example, showing a dialog with an error message from code that won't be run next frame
+  - DVUI includes a retained mode space for dialogs and toasts for this
+- Hard to do dialog sequence:
+  - Retained mode GUIs can run a modal dialog recursively so that dialog code can only exist in a single function
+  - DVUI's retained dialogs can be chained together for this
 
 ### Handling All Events
 
