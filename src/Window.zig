@@ -311,6 +311,16 @@ pub fn init(
     return self;
 }
 
+pub const Native = switch (builtin.os.tag) {
+    .windows => struct { hwnd: ?*anyopaque },
+    .macos => struct { cocoa_window: ?*anyopaque },
+    else => void,
+};
+
+pub fn native(self: *Self) Native {
+    return self.backend.native(self);
+}
+
 pub fn addFont(self: *Self, name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?std.mem.Allocator) (std.mem.Allocator.Error || dvui.Font.Error)!void {
     try self.fonts.database.ensureUnusedCapacity(self.gpa, 1);
     // TODO: try to get this info from the ttf file, and also add override options
