@@ -1,5 +1,4 @@
 const std = @import("std");
-
 const dvui = @import("dvui");
 pub const zgl = @import("zgl");
 pub const zglfw = @import("zglfw");
@@ -7,6 +6,9 @@ pub const zglfw = @import("zglfw");
 pub const kind: dvui.enums.Backend = .glfw_opengl3;
 
 const log = std.log.scoped(.glfw_opengl3Backend);
+
+// Create a singleton for this backend
+var events: ?std.array_list.Managed(GlfwEvent) = null;
 
 vsync: bool,
 
@@ -78,6 +80,15 @@ pub const State = struct {
     }
 };
 
+const GlfwEvent = union(enum) {
+    KeyFn: struct { *zglfw.Window, zglfw.Key, c_int, zglfw.Action, zglfw.Mods },
+    CharFn: struct { *zglfw.Window, u32 },
+    MouseButtonFn: struct { *zglfw.Window, zglfw.MouseButton, zglfw.Action, zglfw.Mods },
+    CursorPosFn: struct { *zglfw.Window, f64, f64 },
+    FrameBufferSizeFn: struct { *zglfw.Window, c_int, c_int },
+    ScrollFn: struct { *zglfw.Window, f64, f64 },
+};
+
 pub const InitOptions = struct {
     /// allocator used for general backend bookkeeping
     gpa: std.mem.Allocator,
@@ -133,6 +144,7 @@ pub fn init(gpa: std.mem.Allocator, window_: *anyopaque) @This() {
     program.attach(f_shader);
 
     program.link();
+    events = .init(gpa);
 
     return .{
         .vsync = false,
@@ -161,6 +173,7 @@ pub fn deinit(ctx: *@This()) void {
     ctx.program.delete();
     ctx.vtx_buf.delete();
     ctx.el_buf.delete();
+    if (ctx.cursor) |cur| cur.destroy();
     var it = ctx.framebuf_map.iterator();
     while (it.next()) |kv| {
         kv.key_ptr.delete();
@@ -168,6 +181,7 @@ pub fn deinit(ctx: *@This()) void {
     }
     ctx.framebuf_map.clearAndFree(ctx.gpa);
     ctx.arena.deinit();
+    if (events) |_events| _events.deinit();
 }
 
 pub fn begin(ctx: *@This(), _: std.mem.Allocator) !void {
@@ -180,6 +194,22 @@ pub fn end(ctx: *@This()) !void {
     } else {
         log.err("Begin has not been called before end!", .{});
         return error.BackendError;
+    }
+}
+
+pub fn addAllEvents(_: *@This(), win: *dvui.Window) void {
+    if (events) |*ev| {
+        for (ev.items) |event| {
+            switch (event) {
+                .KeyFn => |v| handleKeyEvent(win, v[0], v[1], v[2], v[3], v[4]),
+                .CharFn => |v| handleCharEvent(win, v[0], v[1]),
+                .MouseButtonFn => |v| handleMouseButtonEvent(win, v[0], v[1], v[2], v[3]),
+                .CursorPosFn => |v| handleCursorPosEvent(win, v[0], v[1], v[2]),
+                .FrameBufferSizeFn => |v| handleFramebufferSizeEvent(win, v[0], v[1], v[2]),
+                .ScrollFn => |v| handleScrollEvent(win, v[0], v[1], v[2]),
+            }
+        }
+        ev.clearRetainingCapacity();
     }
 }
 
@@ -569,14 +599,26 @@ pub fn glfwCodeToDvuiCode(key: zglfw.Key) dvui.enums.Key {
     };
 }
 
-pub fn glfwKeyCallback(
+fn glfwKeyCallback(
     window: *zglfw.Window,
     key: zglfw.Key,
     scancode: c_int,
     action: zglfw.Action,
     mods: zglfw.Mods,
 ) callconv(.c) void {
-    const dvui_window = dvui.currentWindow();
+    if (events) |*ev| {
+        ev.append(.{ .KeyFn = .{ window, key, scancode, action, mods } }) catch @panic("OOM");
+    } else unreachable;
+}
+
+fn handleKeyEvent(
+    dvui_window: *dvui.Window,
+    window: *zglfw.Window,
+    key: zglfw.Key,
+    scancode: c_int,
+    action: zglfw.Action,
+    mods: zglfw.Mods,
+) callconv(.c) void {
     const ctx: *@This() = dvui_window.backend.impl;
     const dvui_action: @FieldType(dvui.Event.Key, "action") = switch (action) {
         .press => .down,
@@ -601,8 +643,13 @@ pub fn glfwKeyCallback(
     }
 }
 
-pub fn glfwCharCallback(window: *zglfw.Window, codepoint: u32) callconv(.c) void {
-    const dvui_window = dvui.currentWindow();
+fn glfwCharCallback(window: *zglfw.Window, codepoint: u32) callconv(.c) void {
+    if (events) |*ev| {
+        ev.append(.{ .CharFn = .{ window, codepoint } }) catch @panic("OOM");
+    } else unreachable;
+}
+
+fn handleCharEvent(dvui_window: *dvui.Window, window: *zglfw.Window, codepoint: u32) void {
     const ctx: *@This() = dvui_window.backend.impl;
     if (!(dvui_window.addEventText(.{ .text = @as([4]u8, @bitCast(codepoint))[0..] }) catch |err| {
         log.err("Encountered error when adding event! Err: {}", .{err});
@@ -613,8 +660,13 @@ pub fn glfwCharCallback(window: *zglfw.Window, codepoint: u32) callconv(.c) void
     }
 }
 
-pub fn glfwCursorPosCallback(window: *zglfw.Window, xpos: f64, ypos: f64) callconv(.c) void {
-    const dvui_window = dvui.currentWindow();
+fn glfwCursorPosCallback(window: *zglfw.Window, xpos: f64, ypos: f64) callconv(.c) void {
+    if (events) |*ev| {
+        ev.append(.{ .CursorPosFn = .{ window, xpos, ypos } }) catch @panic("OOM");
+    } else unreachable;
+}
+
+fn handleCursorPosEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xpos: f64, ypos: f64) void {
     const ctx: *@This() = dvui_window.backend.impl;
     const scale = ctx.window.getContentScale();
 
@@ -632,13 +684,24 @@ pub fn glfwCursorPosCallback(window: *zglfw.Window, xpos: f64, ypos: f64) callco
     }
 }
 
-pub fn glfwMouseButtonCallback(
+fn glfwMouseButtonCallback(
     window: *zglfw.Window,
     button: zglfw.MouseButton,
     action: zglfw.Action,
     mods: zglfw.Mods,
 ) callconv(.c) void {
-    const dvui_window = dvui.currentWindow();
+    if (events) |*ev| {
+        ev.append(.{ .MouseButtonFn = .{ window, button, action, mods } }) catch @panic("OOM");
+    } else unreachable;
+}
+
+fn handleMouseButtonEvent(
+    dvui_window: *dvui.Window,
+    window: *zglfw.Window,
+    button: zglfw.MouseButton,
+    action: zglfw.Action,
+    mods: zglfw.Mods,
+) void {
     const ctx: *@This() = dvui_window.backend.impl;
     const dvui_button: dvui.enums.Button = switch (button) {
         .left => .left,
@@ -663,9 +726,13 @@ pub fn glfwMouseButtonCallback(
         if (ctx.userMouseButtonCallback) |callback| callback(window, button, action, mods);
     }
 }
+fn glfwScrollCallback(window: *zglfw.Window, xrel: f64, yrel: f64) callconv(.c) void {
+    if (events) |*ev| {
+        ev.append(.{ .ScrollFn = .{ window, xrel, yrel } }) catch @panic("OOM");
+    } else unreachable;
+}
 
-pub fn glfwScrollCallback(window: *zglfw.Window, xrel: f64, yrel: f64) callconv(.c) void {
-    const dvui_window = dvui.currentWindow();
+fn handleScrollEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xrel: f64, yrel: f64) void {
     const ctx: *@This() = dvui_window.backend.impl;
     const scrollx: f32 = @floatCast(-xrel * dvui.scroll_speed);
     const scrolly: f32 = @floatCast(yrel * dvui.scroll_speed);
@@ -688,10 +755,24 @@ pub fn glfwScrollCallback(window: *zglfw.Window, xrel: f64, yrel: f64) callconv(
         );
     }
 }
-pub fn glfwFramebufferSizeCallback(
-    _: *zglfw.Window,
+
+fn glfwFramebufferSizeCallback(
+    window: *zglfw.Window,
     width: c_int,
     height: c_int,
 ) callconv(.c) void {
+    if (events) |*ev| {
+        ev.append(.{ .FrameBufferSizeFn = .{ window, height, width } }) catch @panic("OOM");
+    } else unreachable;
+}
+
+fn handleFramebufferSizeEvent(
+    dvui_window: *dvui.Window,
+    window: *zglfw.Window,
+    width: c_int,
+    height: c_int,
+) void {
     zgl.viewport(0, 0, @intCast(width), @intCast(height));
+    const ctx: *@This() = dvui_window.backend.impl;
+    if (ctx.userFramebufferSizeCallback) |callback| callback(window, width, height);
 }
