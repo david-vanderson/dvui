@@ -84,7 +84,7 @@ pub const light = light: {
 
         .font_body = .find(.{ .family = "Vera Sans" }),
         .font_heading = .find(.{ .family = "Vera Sans", .weight = .bold }),
-        .font_title = .find(.{ .family = "Vera Sans", .size = 20 }),
+        .font_title = .find(.{ .family = "Vera Sans", .size = dvui.Font.DefaultSize + 2 }),
         .font_mono = .find(.{ .family = "Vera Sans Mono" }),
 
         .focus = accent,
@@ -148,7 +148,7 @@ pub const dark = dark: {
 
         .font_body = .find(.{ .family = "Vera Sans" }),
         .font_heading = .find(.{ .family = "Vera Sans", .weight = .bold }),
-        .font_title = .find(.{ .family = "Vera Sans", .size = 20 }),
+        .font_title = .find(.{ .family = "Vera Sans", .size = dvui.Font.DefaultSize + 2 }),
         .font_mono = .find(.{ .family = "Vera Sans Mono" }),
 
         .focus = accent,

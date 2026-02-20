@@ -419,7 +419,7 @@ pub fn draw(self: *TextEntryWidget) void {
 
                 // Create an empty text run for the empty text entry.
                 dvui.currentWindow().accesskit.text_run_parent = self.data().id;
-                self.textLayout.textRunCreateEmpty(self.data().id);
+                self.textLayout.textRunCreateEmpty(self.data().id, true);
                 // prevent textLayout from making a text run for the placeholder text
                 dvui.currentWindow().accesskit.text_run_parent = null;
             }
@@ -1318,8 +1318,7 @@ pub fn copy(self: *TextEntryWidget) void {
 }
 
 pub fn deinit(self: *TextEntryWidget) void {
-    const should_free = self.data().was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
 
     self.textLayout.deinit();

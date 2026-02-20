@@ -12,12 +12,14 @@ const Backend = dvui.Backend;
 /// internal fallback font.
 ///
 /// Usually specified with `find`:
-/// const f: Font = .find(.{ .family = "Vera", .size = 20 });
+/// const f: Font = .find(.{ .family = "Vera", .size = 12 });
 ///
 /// To source a Font from the theme, use `theme`:
 /// const f: Font = .theme(.mono);
 /// const f = Font.theme(mono).larger(2);
 const Font = @This();
+
+pub const DefaultSize = 10;
 
 const impl: enum { FreeType, STB } = if (dvui.useFreeType) .FreeType else .STB;
 pub const Error = error{FontError};
@@ -45,7 +47,10 @@ pub const Style = enum {
 
 /// Changing any of these might query for a font.
 family: [NAME_MAX_LEN:0]u8 = @splat(0),
-size: f32 = 16,
+
+/// Height of a capital M in logical pixels.  After converting to physical
+/// pixels, the font will have an integer M height <= size.
+size: f32 = DefaultSize,
 weight: Weight = .normal,
 style: Style = .normal,
 
@@ -54,7 +59,9 @@ line_height_factor: f32 = 1.2,
 
 pub const FindOptions = struct {
     family: []const u8,
-    size: f32 = 16,
+
+    /// Height of capital M in logical pixels.
+    size: f32 = DefaultSize,
     weight: Weight = .normal,
     style: Style = .normal,
     line_height_factor: f32 = 1.2,
@@ -233,7 +240,7 @@ pub fn textSize(self: Font, text: []const u8) Size {
 
     var ret = Size{};
 
-    var line_height_adj: f32 = undefined;
+    var line_height_adj: f32 = 0.0;
     var end: usize = 0;
     while (end < text.len) {
         if (end > 0) {
@@ -241,8 +248,12 @@ pub fn textSize(self: Font, text: []const u8) Size {
         }
 
         var end_idx: usize = undefined;
-        const s = self.textSizeEx(text[end..], .{ .end_idx = &end_idx, .end_metric = .before });
-        line_height_adj = s.h * (self.line_height_factor - 1.0);
+        var s = self.textSizeEx(text[end..], .{ .end_idx = &end_idx, .end_metric = .before });
+        if (self.line_height_factor >= 1.0) {
+            line_height_adj = s.h * (self.line_height_factor - 1.0);
+        } else {
+            s.h *= self.line_height_factor;
+        }
         ret.h += s.h;
         ret.w = @max(ret.w, s.w);
 
@@ -282,7 +293,7 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     const fce = dvui.fontCacheGet(sized_font) catch return .{ .w = 10, .h = 10 };
 
     // this must be synced with dvui.renderText()
-    const target_fraction = if (cw.snap_to_pixels) 1.0 / ss else self.size / fce.height;
+    const target_fraction = if (cw.snap_to_pixels) 1.0 / ss else self.size / fce.em_height;
 
     var options = opts;
     if (opts.max_width) |mwidth| {
@@ -391,8 +402,9 @@ pub const Cache = struct {
         face: if (impl == .FreeType) c.FT_Face else c.stbtt_fontinfo,
         name: []const u8, // gpa
         scaleFactor: f32,
-        height: f32,
-        ascent: f32,
+        height: f32, // ascender - descender
+        ascent: f32, // ascender
+        em_height: f32, // height of M
         glyph_info: std.AutoHashMapUnmanaged(u32, GlyphInfo) = .empty,
         glyph_info_ascii: [ascii_size - ascii_start]GlyphInfo,
         texture_atlas_cache: ?Texture = null,
@@ -403,7 +415,7 @@ pub const Cache = struct {
         const GlyphInfo = struct {
             advance: f32, // horizontal distance to move the pen
             leftBearing: f32, // horizontal distance from pen to bounding box left edge
-            topBearing: f32, // vertical distance from font ascent to bounding box top edge
+            topBearing: f32, // vertical distance from pen to bounding box top edge
             w: f32, // width of bounding box
             h: f32, // height of bounding box
             uv: @Vector(2, f32),
@@ -430,6 +442,7 @@ pub const Cache = struct {
                 // "pixel size" for freetype doesn't actually mean you'll get that height, it's more like using pts
                 // so we search for a font that has a height <= font.size
                 var pixel_size = @as(u32, @intFromFloat(@max(min_pixel_size, @floor(font.size))));
+                pixel_size += 20;
 
                 while (true) : (pixel_size -= 1) {
                     FreeType.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
@@ -440,19 +453,29 @@ pub const Cache = struct {
                     const ascender = @as(f32, @floatFromInt(face.*.ascender)) / 64.0;
                     const ss = @as(f32, @floatFromInt(face.*.size.*.metrics.y_scale)) / 0x10000;
                     const ascent = ascender * ss;
-                    const height = @as(f32, @floatFromInt(face.*.size.*.metrics.height)) / 64.0;
+                    const descender = @as(f32, @floatFromInt(face.*.descender)) / 64.0;
+                    const descent = descender * ss;
 
-                    //std.debug.print("height {d} -> pixel_size {d}\n", .{ height, pixel_size });
+                    var entry: Entry = .{
+                        .face = face,
+                        .name = fname,
+                        .scaleFactor = 1.0, // not used with freetype
+                        .height = @trunc(ascent - descent), // cheat total a bit
+                        .ascent = @trunc(ascent), // cheat ascent a bit
+                        .em_height = undefined, // below
+                        .glyph_info_ascii = undefined,
+                    };
 
-                    if (height <= font.size or pixel_size == min_pixel_size) {
-                        break :blk .{
-                            .face = face,
-                            .name = fname,
-                            .scaleFactor = 1.0, // not used with freetype
-                            .height = @ceil(height),
-                            .ascent = @floor(ascent),
-                            .glyph_info_ascii = undefined,
-                        };
+                    const M = try entry.glyphInfoGenerate('M');
+                    if (M.h <= 0) {
+                        dvui.log.warn("Font.Cache.Entry.init() freetype error getting M font {s} size {d}\n", .{fname, font.size});
+                        return error.FontError;
+                    }
+
+                    if (M.h <= font.size or pixel_size == min_pixel_size) {
+                        //std.debug.print("{s} pixel_size {d} ascent {d} descent {d} height {d}\n", .{fname, pixel_size, ascent, descent, ascent - descent});
+                        entry.em_height = M.h;
+                        break :blk entry;
                     }
                 }
             } else blk: {
@@ -466,31 +489,45 @@ pub const Cache = struct {
                     dvui.log.warn("Font.Cache.Entry.init() stbtt error when calling stbtt_InitFont font {s}\n", .{fname});
                     return Error.FontError;
                 }
-                const SF: f32 = c.stbtt_ScaleForPixelHeight(&face, @max(min_pixel_size, @floor(font.size)));
 
-                var face2_ascent: c_int = undefined;
-                var face2_descent: c_int = undefined;
-                var face2_linegap: c_int = undefined;
-                c.stbtt_GetFontVMetrics(&face, &face2_ascent, &face2_descent, &face2_linegap);
-                const ascent = SF * @as(f32, @floatFromInt(face2_ascent));
-                const f2_descent = SF * @as(f32, @floatFromInt(face2_descent));
-                const f2_linegap = SF * @as(f32, @floatFromInt(face2_linegap));
-                const height = ascent - f2_descent + f2_linegap;
+                var face_ascent: c_int = undefined;
+                var face_descent: c_int = undefined;
+                c.stbtt_GetFontVMetrics(&face, &face_ascent, &face_descent, null);
 
-                break :blk .{
+                var entry: Entry = .{
                     .face = face,
                     .name = fname,
-                    .scaleFactor = SF,
-                    .height = @ceil(height),
-                    .ascent = @floor(ascent),
+                    .scaleFactor = 1.0, // adjusted below
+                    .height = 1.0, // adjusted below
+                    .ascent = 1.0, // adjusted below
+                    .em_height = undefined, // below
                     .glyph_info_ascii = undefined,
                 };
+
+                const M = try entry.glyphInfoGenerate('M');
+                if (M.h <= 0) {
+                    dvui.log.warn("Font.Cache.Entry.init() stbtt error getting M font {s} size {d}\n", .{fname, font.size});
+                    return error.FontError;
+                }
+                entry.scaleFactor = @max(min_pixel_size, @floor(font.size)) / M.h;
+                const ascender = entry.scaleFactor * @as(f32, @floatFromInt(face_ascent));
+                const descender = entry.scaleFactor * @as(f32, @floatFromInt(face_descent));
+                entry.ascent = @trunc(ascender); // cheat the ascent a bit
+                entry.height = @trunc(ascender - descender); // cheat total a bit
+                entry.em_height = entry.scaleFactor * M.h;
+
+                //std.debug.print("{s} ascent {d} descent {d} computed ascent {d} height {d}\n", .{fname, ascender, descender, entry.ascent, entry.height});
+                break :blk entry;
             };
 
             // Pre-generate the ascii glyphs
+            //std.debug.print("char,codepoint,hx,w,hy,h,adv\n", .{});
             for (0..self.glyph_info_ascii.len) |i| {
                 self.glyph_info_ascii[i] = try self.glyphInfoGenerate(@intCast(i + ascii_start));
             }
+
+            //const gi = self.glyph_info_ascii['M' - ascii_start];
+            //std.debug.print("{s} size {d} height {d} M left {d} top {d} wxh {d}x{d}\n", .{ fname, font.size, self.height, gi.leftBearing, gi.topBearing, gi.w, gi.h});
 
             return self;
         }
@@ -594,6 +631,7 @@ pub const Cache = struct {
                     }
 
                     const bitmap = self.face.*.glyph.*.bitmap;
+                    //std.debug.print("bitmap,{d},{d},{d}\n", .{codepoint, bitmap.width, bitmap.rows});
                     row_height = @max(row_height, bitmap.rows);
                     var row: i32 = 0;
                     while (row < bitmap.rows) : (row += 1) {
@@ -609,6 +647,13 @@ pub const Cache = struct {
                         }
                     }
                 } else {
+                    //var ow: c_int = undefined;
+                    //var oh: c_int = undefined;
+                    //const bm = c.stbtt_GetCodepointBitmap(&self.face, self.scaleFactor, self.scaleFactor, @as(c_int, @intCast(codepoint)), &ow, &oh, null, null);
+                    //std.debug.print("bitmap,{d},{d},{d}\n", .{codepoint, ow, oh});
+
+                    //c.stbtt_FreeBitmap(bm, null);
+
                     const out_w: u32 = @intFromFloat(gi.w);
                     const out_h: u32 = @intFromFloat(gi.h);
                     row_height = @max(row_height, out_h);
@@ -682,10 +727,20 @@ pub const Cache = struct {
 
                 const m = self.face.*.glyph.*.metrics;
                 const minx = @as(f32, @floatFromInt(m.horiBearingX)) / 64.0;
-                const miny = self.ascent - @as(f32, @floatFromInt(m.horiBearingY)) / 64.0;
+                const miny = @as(f32, @floatFromInt(m.horiBearingY)) / 64.0;
+
+                //const hx = @as(f32, @floatFromInt(m.horiBearingX)) / 64.0;
+                //const w = @as(f32, @floatFromInt(m.width)) / 64.0;
+                //const hy = @as(f32, @floatFromInt(m.horiBearingY)) / 64.0;
+                //const h = @as(f32, @floatFromInt(m.height)) / 64.0;
+                const adv = @as(f32, @floatFromInt(m.horiAdvance)) / 64.0;
+                //std.debug.print("{c},{d},{d},{d},{d},{d},{d}\n", .{@as(u8, @intCast(codepoint)), codepoint, hx, w, hy, h, adv});
+
+                // All these values should be integers, but just in case.
+                // bitmap assumes pen position is at a pixel boundary.
 
                 break :blk .{
-                    .advance = @ceil(@as(f32, @floatFromInt(m.horiAdvance)) / 64.0),
+                    .advance = @round(adv),
                     .leftBearing = @floor(minx),
                     .topBearing = @floor(miny),
                     .w = @ceil(minx + @as(f32, @floatFromInt(m.width)) / 64.0) - @floor(minx),
@@ -694,8 +749,7 @@ pub const Cache = struct {
                 };
             } else blk: {
                 var advanceWidth: c_int = undefined;
-                var leftSideBearing: c_int = undefined;
-                c.stbtt_GetCodepointHMetrics(&self.face, @as(c_int, @intCast(codepoint)), &advanceWidth, &leftSideBearing);
+                c.stbtt_GetCodepointHMetrics(&self.face, @as(c_int, @intCast(codepoint)), &advanceWidth, null);
                 var ix0: c_int = undefined;
                 var iy0: c_int = undefined;
                 var ix1: c_int = undefined;
@@ -705,13 +759,19 @@ pub const Cache = struct {
                 const y0: f32 = if (ret == 0) 0 else self.scaleFactor * @as(f32, @floatFromInt(iy0));
                 const x1: f32 = if (ret == 0) 0 else self.scaleFactor * @as(f32, @floatFromInt(ix1));
                 const y1: f32 = if (ret == 0) 0 else self.scaleFactor * @as(f32, @floatFromInt(iy1));
+                const adv: f32 = self.scaleFactor * @as(f32, @floatFromInt(advanceWidth));
 
+                //std.debug.print("{c},{d},{d},{d},{d},{d},{d}\n", .{@as(u8, @intCast(codepoint)), codepoint, x0, x1, y0, y1, adv});
                 //std.debug.print("{d} codepoint {d} stbtt x0 {d} {d} x1 {d} {d} y0 {d} {d} y1 {d} {d}\n", .{ self.ascent, codepoint, ix0, x0, ix1, x1, iy0, y0, iy1, y1 });
 
+                // bitmap assumes pen position is at a pixel boundary, so we
+                // extend the box in each direction to a full pixel (so floor
+                // x0/y0, and ceil x1/y1)
+
                 break :blk .{
-                    .advance = self.scaleFactor * @as(f32, @floatFromInt(advanceWidth)),
+                    .advance = @round(adv),
                     .leftBearing = @floor(x0),
-                    .topBearing = self.ascent - @ceil(y1),
+                    .topBearing = @ceil(y1),
                     .w = @ceil(x1) - @floor(x0),
                     .h = @ceil(y1) - @floor(y0),
                     .uv = .{ 0, 0 },
@@ -732,10 +792,10 @@ pub const Cache = struct {
                     k.y = 0;
                 };
 
-                return @as(f32, @floatFromInt(k.x)) / 64.0;
+                return @round(@as(f32, @floatFromInt(k.x)) / 64.0);
             } else {
                 const kern_adv: c_int = c.stbtt_GetCodepointKernAdvance(&fce.face, @as(c_int, @intCast(codepoint1)), @as(c_int, @intCast(codepoint2)));
-                return fce.scaleFactor * @as(f32, @floatFromInt(kern_adv));
+                return @round(fce.scaleFactor * @as(f32, @floatFromInt(kern_adv)));
             }
         }
 
@@ -775,6 +835,13 @@ pub const Cache = struct {
             while (i < text.len) {
                 const cplen = std.unicode.utf8ByteSequenceLength(text[i]) catch unreachable;
                 const codepoint = std.unicode.utf8Decode(text[i..][0..cplen]) catch unreachable;
+
+                if (codepoint == '\n') {
+                    // newlines always terminate, and don't use any space
+                    ei += 1;
+                    break;
+                }
+
                 const gi = try self.glyphInfoGetOrReplacement(gpa, codepoint);
 
                 if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
@@ -808,14 +875,8 @@ pub const Cache = struct {
                 maxx = @max(maxx, x + gi.leftBearing + gi.w);
                 maxx = @max(maxx, x + gi.advance);
 
-                miny = @min(miny, gi.topBearing);
-                maxy = @max(maxy, gi.topBearing + gi.h);
-
-                if (codepoint == '\n') {
-                    // newlines always terminate, and don't use any space
-                    ei += 1;
-                    break;
-                }
+                miny = @min(miny, self.ascent - gi.topBearing);
+                maxy = @max(maxy, self.ascent - gi.topBearing + gi.h);
 
                 if ((maxx - minx) > mwidth) {
                     switch (opts.end_metric) {
