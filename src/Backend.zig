@@ -1,6 +1,7 @@
 //! Provides a consistent API for interacting with the backend
 
 const std = @import("std");
+const builtin = @import("builtin");
 const dvui = @import("dvui.zig");
 
 const Implementation = @import("backend");
@@ -151,6 +152,18 @@ pub fn accessKitInitInBegin(self: Backend, accessKit: *dvui.AccessKit) GenericEr
     if (self.impl.accessKitShouldInitialize()) {
         accessKit.initialize();
         try self.impl.accessKitInitInBegin();
+    }
+}
+
+pub fn native(self: Backend, window: *dvui.Window) dvui.Window.Native {
+    if (comptime !@hasDecl(Implementation, "native")) {
+        return switch (builtin.os.tag) {
+            .windows => .{ .hwnd = null },
+            .macos => .{ .cocoa_window = null },
+            else => {},
+        };
+    } else {
+        return self.impl.native(window);
     }
 }
 
