@@ -107,10 +107,10 @@ Tested with [Zig](https://ziglang.org/) v0.15.2 (for Zig v0.14.1, use DVUI [tag 
   <b>Don't know where to start?</b> Build SDL3 × As app, then start altering the contents of <code>frame()</code> inside <code>app.zig</code>.
 </sub>
 
-### Troubleshooting Raylib:
+### Troubleshooting Raylib
 - If you encounter error `No Wayland`, then also add flag `-Dlinux_display_backend=X11`
 
-### Troubleshooting Web:
+### Troubleshooting Web
 - To load examples for this backend, they must first be served through a (local) web server using:
   - Python `python -m http.server -d ./zig-out/bin/<example>`
   - Caddy `caddy file-server --root ./zig-out/bin/<example> --listen :8000`
@@ -293,7 +293,7 @@ if (dvui.button(@src(), "Ok", .{}, .{})) {
 
 For an intro to immediate-mode GUIs (IMGUIs), see [this respective section from Dear ImGui](https://github.com/ocornut/imgui/wiki#about-the-imgui-paradigm).
 
-Advantages of IMGUIs:
+#### Advantages
 * Reducing widget state:
   * For example, a checkbox which directly uses your app's bool
 * Reducing GUI state:
@@ -322,7 +322,7 @@ Advantages of IMGUIs:
     }
     ```
 
-Drawbacks of IMGUIs:
+#### Drawbacks
 * Hard to do fire-and-forget:
   * For example, showing a dialog with an error message from code that won't be run next frame
   * DVUI includes a retained mode space for dialogs and toasts for this
