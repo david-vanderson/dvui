@@ -117,11 +117,10 @@ If you are unsure, start with `sdl3-app`, then try altering the contents of <cod
 
 ### Troubleshooting Web
 - To load examples for this backend, they must first be served through a (local) web server using:
-  - Python `python -m http.server -d ./zig-out/bin/<example>`
-  - Caddy `caddy file-server --root ./zig-out/bin/<example> --listen :8000`
+  - Python `python -m http.server -d ./zig-out/bin/web-app`
+  - Caddy `caddy file-server --root ./zig-out/bin/web-app --listen :8000`
   - Any other web server
-- To validate your setup, optionally run `zig build web-test`
-- Outputs are stored as `./zig-out/bin/example/index.html`
+- Outputs are stored in `./zig-out/bin/web-app/`
 
 ## Featured Projects
 
@@ -205,7 +204,7 @@ Further reading:
 - Using a version of `raylib-zig` that's not bundled with DVUI:
   - [`raylib_zig_custom.md`](raylib_zig_custom.md)
 
-## Frequently Asked Questions:
+## Frequently Asked Questions
 
 <!-- TODO due to use of HTML, syntax highlighting is disabled here -->
 
@@ -289,13 +288,13 @@ if (dvui.button(@src(), "Ok", .{}, .{})) {
 For an intro to immediate-mode GUIs (IMGUIs), see [this respective section from Dear ImGui](https://github.com/ocornut/imgui/wiki#about-the-imgui-paradigm).
 
 #### Advantages
-- Reducing widget state:
+- Reducing widget state
   - For example, a checkbox which directly uses your app's bool
-- Reducing GUI state:
+- Reducing GUI state
   - The widgets shown each frame directly reflect the code run each frame
   - Harder to be in a state where the GUI is showing one thing but the app thinks it's showing something else
   - Don't have to clean up widgets that aren't needed anymore
-- Functions are the composable building blocks of the GUI:
+- Functions are the composable building blocks of the GUI
   - Since running a widget is a function, you can wrap a widget easily:
     ```zig
     // Let's wrap the sliderEntry widget so we have 3 that represent a Color
@@ -318,10 +317,10 @@ For an intro to immediate-mode GUIs (IMGUIs), see [this respective section from 
     ```
 
 #### Drawbacks
-- Hard to do fire-and-forget:
+- Hard to do fire-and-forget
   - For example, showing a dialog with an error message from code that won't be run next frame
   - DVUI includes a retained mode space for dialogs and toasts for this
-- Hard to do dialog sequence:
+- Hard to do dialog sequence
   - Retained mode GUIs can run a modal dialog recursively so that dialog code can only exist in a single function
   - DVUI's retained dialogs can be chained together for this
 
@@ -415,6 +414,8 @@ If parent is not `expand`ed, the intent is to pack as tightly as possible, so it
 If parent has more space than the children need, it will lay them out using the hints:
 - `expand` — whether this child should take more space or not
 - `gravity` — if not `expand`ed, where to position child in larger space
+
+See [readme-implementation](readme-implementation.md) for more information.
 
 ### Appearance
 
