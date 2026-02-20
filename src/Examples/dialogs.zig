@@ -1,4 +1,4 @@
-var progress_mutex = std.Thread.Mutex{};
+var progress_mutex: std.Io.Mutex = .init;
 var progress_val: f32 = 0.0;
 
 /// ![image](Examples-dialogs.png)
@@ -103,19 +103,19 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer hbox.deinit();
 
-        if (dvui.button(@src(), "Show Progress from another Thread", .{}, .{})) {
-            progress_mutex.lock();
-            progress_val = 0;
-            progress_mutex.unlock();
-            if (!builtin.single_threaded) blk: {
-                const bg_thread = std.Thread.spawn(.{}, background_progress, .{ dvui.currentWindow(), 2_000_000_000 }) catch |err| {
-                    dvui.log.debug("Failed to spawn background thread for delayed action, got {any}", .{err});
-                    break :blk;
-                };
-                bg_thread.detach();
-            } else {
-                dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in single-threaded" });
-            }
+        if (dvui.button(@src(), "TODO: Show Progress from another Thread", .{}, .{})) {
+            //progress_mutex.lock();
+            //progress_val = 0;
+            //progress_mutex.unlock();
+            //if (!builtin.single_threaded) blk: {
+            //    const bg_thread = std.Thread.spawn(.{}, background_progress, .{ dvui.currentWindow(), 2_000_000_000 }) catch |err| {
+            //        dvui.log.debug("Failed to spawn background thread for delayed action, got {any}", .{err});
+            //        break :blk;
+            //    };
+            //    bg_thread.detach();
+            //} else {
+            //    dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in single-threaded" });
+            //}
         }
 
         dvui.progress(@src(), .{ .percent = progress_val }, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
