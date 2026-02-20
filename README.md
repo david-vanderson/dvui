@@ -1,10 +1,10 @@
 # DVUI — Immediate Zig GUI for Apps and Games
 
-[Zig](https://ziglang.org) GUI toolkit for whole applications or debugging windows in existing applications.
+[Zig](https://ziglang.org) GUI toolkit for whole applications or debugging windows in existing apps/games.
 
 Tested with Zig v0.15.2 (for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.com/david-vanderson/dvui/releases/tag/v0.3.0)).
 
-[Homepage](https://david-vanderson.github.io) | [Demo](https://david-vanderson.github.io/demo) · [Docs](https://david-vanderson.github.io/docs/) · [Devlog](https://david-vanderson.github.io/log/2026)
+[Homepage](https://david-vanderson.github.io) · [Demo](https://david-vanderson.github.io/demo) · [Docs](https://david-vanderson.github.io/docs/) · [Devlog](https://david-vanderson.github.io/log/2026)
 
 ![Screenshot of DVUI Standalone Example (Application Window)](/screenshot_demo.png?raw=true)
 
@@ -13,7 +13,7 @@ Tested with Zig v0.15.2 (for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.c
 `zig build sdl3-app`
 * sdl3 backend, dvui handles main loop
 
-If you are unsure, start with `sdl3-app`, then try altering the contents of <code>frame()</code> inside <code>app.zig</code>.
+If you are unsure, start with `sdl3-app`, then try altering the contents of <code>frame()</code> inside <code>examples/app.zig</code>.
 
 <table>
   <thead>
@@ -34,7 +34,7 @@ If you are unsure, start with `sdl3-app`, then try altering the contents of <cod
         <sub>
           you control main loop
           <br>
-          Sourced from <a href="https://github.com/david-vanderson/dvui-demo/blob/main/examples"><code>*-standalone.zig</code></a>
+          <a href="https://github.com/david-vanderson/dvui-demo/blob/main/examples"><code>*-standalone.zig</code></a>
         </sub>
       </th>
       <th>
@@ -43,7 +43,7 @@ If you are unsure, start with `sdl3-app`, then try altering the contents of <cod
         <sub>
           debug HUD on existing app/game
           <br>
-          Sourced from <a href="https://github.com/david-vanderson/dvui-demo/blob/main/examples"><code>*-ontop.zig</code></a>
+          <a href="https://github.com/david-vanderson/dvui-demo/blob/main/examples"><code>*-ontop.zig</code></a>
         </sub>
       </th>
     </tr>
@@ -106,6 +106,12 @@ If you are unsure, start with `sdl3-app`, then try altering the contents of <cod
   </tbody>
 </table>
 
+### Docs
+
+- `zig build docs -Dgenerate-images`
+- Load `./zig-out/docs/index.html`
+- [Online Docs](https://david-vanderson.github.io/docs/)
+
 ### Troubleshooting Raylib
 - If you encounter error `No Wayland`, then also add flag `-Dlinux_display_backend=X11`
 
@@ -116,14 +122,6 @@ If you are unsure, start with `sdl3-app`, then try altering the contents of <cod
   - Any other web server
 - To validate your setup, optionally run `zig build web-test`
 - Outputs are stored as `./zig-out/bin/example/index.html`
-
-### Examples Repository
-
-The [`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) examples repository aims to provide the minimal required setup and serves a simplified `build.zig`. All examples residing there are generally the same as ones found here in the `dvui` repository. It's therefore recommended you start out by cloning files from `dvui-demo`.
-
-To generate documentation in the said repository:
-- Run `zig build docs` and add flag `-Dgenerate-images` to include images
-- Outputs are stored as `./zig-out/docs/index.html`
 
 ## Featured Projects
 
@@ -146,43 +144,41 @@ Discuss yours on:
 
 ## Feature Overview
 
-DVUI is characterized by:
-- [Immediate-mode interface](https://en.wikipedia.org/wiki/Immediate_mode_(computer_graphics)):
-  - See more in section about [Design](#Design)
-- Processsing every input event:
-  - Suitable for low frame rate situations
-- Being appropriate for:
-  - Whole UI
-  - Debugging on top of existing application
-  - See more in section about [Floating Windows](#Floating Windows)
-- Support for:
-  - Many backends:
-    - [SDL2 and SDL3](https://libsdl.org/)
-    - [Web](https://david-vanderson.github.io/demo)
-    - [Raylib (C)](https://www.raylib.com/)
-    - [Raylib (Zig)](https://github.com/raylib-zig/raylib-zig)
-    - [DX11](https://learn.microsoft.com/en-us/windows/win32/direct3d11/atoc-dx-graphics-direct3d-11)
-  - [TinyVG](https://tinyvg.tech/) icons:
-    - Via [`zig-lib-svg2tvg`](https://github.com/nat3Github/zig-lib-svg2tvg)
-    - More icons at [`zig-lib-icons`](https://github.com/nat3Github/zig-lib-icons)
-  - Raster images:
-    - Via [`stb_image`](https://github.com/nothings/stb)
-  - Fonts:
-    - [FreeType](https://github.com/david-vanderson/freetype/tree/zig-pkg)
-    - [`stb_truetype`](https://github.com/nothings/stb)
-  - Touch:
-    - Selection draggables in text entries
-    - Pinch-zoom scaling
-  - Accessibility:
-    - Via [AccessKit](https://accesskit.dev/), enabled by adding flag `-Daccesskit` to `zig build`
-    - See more in section about [Accessibility](#Accessibility)
-  - Native file dialogs:
-    - Via [`tinyfiledialogs`](https://sourceforge.net/projects/tinyfiledialogs)
-  - Animations
-  - Themes
-  - FPS throttling:
-    - See more in section about [FPS Throttling](#FPS Throttling)
-  - TODO more?
+- [Immediate-mode API](https://en.wikipedia.org/wiki/Immediate_mode_(computer_graphics)):
+  - see [Design](#Design)
+- Processs every input event
+  - suitable for low frame rate situations
+- Appropriate for
+  - whole UI (`*-app` examples)
+  - debugging on top of existing application
+  - see [Ontop-Floating-Windows](#Ontop-Floating-Windows)
+- Backends
+  - [SDL2 and SDL3](https://libsdl.org/)
+  - [Web](https://david-vanderson.github.io/demo)
+  - [Raylib (C)](https://www.raylib.com/)
+  - [Raylib (Zig)](https://github.com/raylib-zig/raylib-zig)
+  - [DX11](https://learn.microsoft.com/en-us/windows/win32/direct3d11/atoc-dx-graphics-direct3d-11)
+- [TinyVG](https://tinyvg.tech/) icons
+  - [`zig-lib-svg2tvg`](https://github.com/nat3Github/zig-lib-svg2tvg)
+  - more icons at [`zig-lib-icons`](https://github.com/nat3Github/zig-lib-icons)
+- Raster images
+  - [`stb_image`](https://github.com/nothings/stb)
+- Fonts
+  - [FreeType](https://github.com/david-vanderson/freetype/tree/zig-pkg)
+  - [`stb_truetype`](https://github.com/nothings/stb)
+- Touch
+  - selection draggables in text entries
+  - pinch-zoom scaling
+- Accessibility:
+  - [AccessKit](https://accesskit.dev/), enabled by adding flag `-Daccesskit` to `zig build`
+  - see [Accessibility](#Accessibility)
+- Native file dialogs
+  - [`tinyfiledialogs`](https://sourceforge.net/projects/tinyfiledialogs)
+- Animations
+- Themes
+- FPS throttling
+  - see [FPS-Throttling](#FPS-Throttling)
+- TODO more?
 
 Further reading:
 - Implementation details for how to write and modify container widgets:
@@ -190,9 +186,9 @@ Further reading:
 
 ## Getting Started
 
-The aforementioned template project [`dvui-demo`](https://github.com/david-vanderson/dvui-demo) is a great starting point: <!-- TODO remove these couple of points? -->
-- Files `build.zig` and `build.zig.zon` show how to reference DVUI as a Zig dependency
-- For applications, you can use the `dvui.App` layer to have DVUI manage the mainloop for you
+[`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) is a template repository:
+* `build.zig` and `build.zig.zon` reference DVUI as a zig dependency
+* includes all the same examples
 
 Alternatively:
 1. Add DVUI as a dependency:
@@ -340,7 +336,7 @@ In the same frame, these can all happen:
 
 Because everything is in a single pass, this works in the normal case where widget A is run before widget B.  It doesn't work in the opposite order (widget B receives a tab that moves focus to A) because A ran before it got focus.
 
-### Floating Windows
+### Ontop-Floating-Windows
 
 This library can be used in 2 ways:
 - As the GUI for the whole application, drawing over the entire OS window
@@ -351,7 +347,7 @@ This library can be used in 2 ways:
 
 Floating windows and popups are handled by deferring their rendering so that they render properly on top of windows below them. Rendering of all floating windows and popups happens during `dvui.Window.end()`.
 
-### FPS Throttling
+### FPS-Throttling
 
 If your app is running at a fixed framerate, use `dvui.Window.begin()` and `dvui.Window.end()` which handle bookkeeping and rendering.
 
