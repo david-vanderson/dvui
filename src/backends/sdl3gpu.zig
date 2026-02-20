@@ -880,6 +880,15 @@ pub fn cursorShow(_: *SDLBackend, value: ?bool) !bool {
     return prev;
 }
 
+pub fn native(self: *SDLBackend, _: *dvui.Window) dvui.Window.Native {
+    const props: c.SDL_PropertiesID = c.SDL_GetWindowProperties(self.window);
+    switch (builtin.os.tag) {
+        .windows => return .{ .hwnd = c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_WIN32_HWND_POINTER, null) },
+        .macos => return .{ .cocoa_window = c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, null) },
+        else => return {},
+    }
+}
+
 pub fn refresh(_: *SDLBackend) void {
     var ue = std.mem.zeroes(c.SDL_Event);
     ue.type = c.SDL_EVENT_USER;
