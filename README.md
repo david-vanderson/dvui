@@ -1,8 +1,8 @@
 # DVUI — Immediate Zig GUI for Apps and Games
 
-Zig GUI toolkit for whole applications or debugging windows in existing applications.
+[Zig](https://ziglang.org) GUI toolkit for whole applications or debugging windows in existing applications.
 
-Tested with [Zig](https://ziglang.org/) v0.15.2 (for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.com/david-vanderson/dvui/releases/tag/v0.3.0)).
+Tested with Zig v0.15.2 (for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.com/david-vanderson/dvui/releases/tag/v0.3.0)).
 
 [Homepage](https://david-vanderson.github.io) | [Demo](https://david-vanderson.github.io/demo) · [Docs](https://david-vanderson.github.io/docs/) · [Devlog](https://david-vanderson.github.io/log/2026)
 
@@ -80,7 +80,7 @@ Tested with [Zig](https://ziglang.org/) v0.15.2 (for Zig v0.14.1, use DVUI [tag 
       <td>
         <strong>Raylib</strong>
         <br>
-        <sub>Zig binding <a href="https://github.com/raylib-zig/raylib-zig"><code>raylib-zig</code></a></sub>
+        <sub>Bindings <a href="https://github.com/raylib-zig/raylib-zig"><code>raylib-zig</code></a></sub>
       </td>
       <td><code>zig build raylib-zig-standalone</code></td>
       <td><code>zig build raylib-zig-ontop</code></td>
@@ -471,7 +471,7 @@ The default theme will attempt to follow the system dark or light mode, or it ca
 
 TODO add open issue links?
 
-DVUI has varying support for different kinds of accessibility infrastructure. The current state, including areas commonly tied to accessibility is:
+DVUI has varying support for different kinds of accessibility infrastructure. The current state, including areas commonly tied to accessibility, is:
 - Keyboard navigation:
   - Most widgets support keyboard navigation
 - Language support:
