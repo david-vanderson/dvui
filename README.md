@@ -10,15 +10,29 @@ Tested with Zig v0.15.2 (for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.c
 
 ## Examples
 
+`zig build sdl3-app`
+* sdl3 backend, dvui handles main loop
+
+If you are unsure, start with `sdl3-app`, then try altering the contents of <code>frame()</code> inside <code>app.zig</code>.
+
 <table>
   <thead>
     <tr>
-      <th>Backend/Purpose</th>
+      <th>Backend</th>
+      <th>
+        As app
+        <br>
+        <sub>
+          dvui handles main loop
+          <br>
+          <a href="https://github.com/david-vanderson/dvui-demo/blob/main/examples/app.zig">app.zig</a>
+        </sub>
+      </th>
       <th>
         Standalone
         <br>
         <sub>
-          Directly interface the backend
+          you control main loop
           <br>
           Sourced from <a href="https://github.com/david-vanderson/dvui-demo/blob/main/examples"><code>*-standalone.zig</code></a>
         </sub>
@@ -27,18 +41,9 @@ Tested with Zig v0.15.2 (for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.c
         On top
         <br>
         <sub>
-          Use as a debug HUD
+          debug HUD on existing app/game
           <br>
           Sourced from <a href="https://github.com/david-vanderson/dvui-demo/blob/main/examples"><code>*-ontop.zig</code></a>
-        </sub>
-      </th>
-      <th>
-        As app
-        <br>
-        <sub>
-        Leverage DVUI functions
-          <br>
-          <a href="https://github.com/david-vanderson/dvui-demo/blob/main/examples/app.zig">Cross-compilable source file</a>
         </sub>
       </th>
     </tr>
@@ -46,9 +51,9 @@ Tested with Zig v0.15.2 (for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.c
   <tbody>
     <tr>
       <td><strong>SDL3</strong></td>
-      <td><code>zig build sdl3-standalone</code></td>
-      <td><code>zig build sdl3-ontop</code></td>
-      <td><code>zig build sdl3-app</code></td>
+      <td><code>sdl3-app</code></td>
+      <td><code>sdl3-standalone</code></td>
+      <td><code>sdl3-ontop</code></td>
     </tr>
     <tr>
       <td>
@@ -56,15 +61,15 @@ Tested with Zig v0.15.2 (for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.c
         <br>
         <sub>Rendering via SDL GPU</sub>
       </td>
-      <td><code>zig build sdl3gpu-standalone</code></td>
-      <td><code>zig build sdl3gpu-ontop</code></td>
-      <td>None</td>
+      <td>Todo</td>
+      <td><code>sdl3gpu-ontop</code></td>
+      <td><code>sdl3gpu-standalone</code></td>
     </tr>
     <tr>
       <td><strong>SDL2</strong></td>
-      <td><code>zig build sdl2-standalone</code></td>
-      <td><code>zig build sdl2-ontop</code></td>
-      <td><code>zig build sdl2-app</code></td>
+      <td><code>sdl2-app</code></td>
+      <td><code>sdl2-standalone</code></td>
+      <td><code>sdl2-ontop</code></td>
     </tr>
     <tr>
       <td>
@@ -72,9 +77,9 @@ Tested with Zig v0.15.2 (for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.c
         <br>
         <sub>C API</sub>
       </td>
-      <td><code>zig build raylib-standalone</code></td>
-      <td><code>zig build raylib-ontop</code></td>
-      <td><code>zig build raylib-app</code></td>
+      <td><code>raylib-app</code></td>
+      <td><code>raylib-standalone</code></td>
+      <td><code>raylib-ontop</code></td>
     </tr>
     <tr>
       <td>
@@ -82,30 +87,24 @@ Tested with Zig v0.15.2 (for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.c
         <br>
         <sub>Bindings <a href="https://github.com/raylib-zig/raylib-zig"><code>raylib-zig</code></a></sub>
       </td>
-      <td><code>zig build raylib-zig-standalone</code></td>
-      <td><code>zig build raylib-zig-ontop</code></td>
-      <td><code>zig build raylib-zig-app</code></td>
+      <td><code>raylib-zig-app</code></td>
+      <td><code>raylib-zig-standalone</code></td>
+      <td><code>raylib-zig-ontop</code></td>
     </tr>
     <tr>
       <td><strong>DX11</strong></td>
-      <td><code>zig build dx11-standalone</code></td>
-      <td><code>zig build dx11-ontop</code></td>
-      <td><code>zig build dx11-app</code></td>
+      <td><code>dx11-app</code></td>
+      <td><code>dx11-standalone</code></td>
+      <td><code>dx11-ontop</code></td>
     </tr>
     <tr>
       <td><strong>Web</strong></td>
+      <td><code>web-app</code></td>
       <td>None</td>
       <td>None</td>
-      <td><code>zig build web-app</code></td>
     </tr>
   </tbody>
 </table>
-
-<sub>
-  <b>Table too packed?</b> For a better view of this table on mobile devices, enter landscape orientation and enable <em>Desktop site</em> in the top-right overflow menu.
-  <br>
-  <b>Don't know where to start?</b> Build SDL3 × As app, then start altering the contents of <code>frame()</code> inside <code>app.zig</code>.
-</sub>
 
 ### Troubleshooting Raylib
 - If you encounter error `No Wayland`, then also add flag `-Dlinux_display_backend=X11`
