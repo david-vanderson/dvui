@@ -488,10 +488,34 @@ pub fn widgetOptionsScrollArea(src: std.builtin.SourceLocation, opts: dvui.Optio
     return dvui.scrollArea(src, .{}, defaults.override(opts));
 }
 
+pub fn widgetShowSetOptionsTooltip(src: std.builtin.SourceLocation, rect: dvui.Rect.Physical, opts: dvui.Options) void {
+    var tt: dvui.FloatingTooltipWidget = undefined;
+    tt.init(src, .{ .active_rect = rect, .interactive = true, .position = .vertical }, .{ .role = .tooltip });
+    defer tt.deinit();
+    if (tt.shown()) {
+        var tl = dvui.textLayout(@src(), .{}, .{});
+        defer tl.deinit();
+        tl.addText("Configured options:", .{});
+        var has_options: bool = false;
+        inline for (std.meta.fields(@TypeOf(opts))) |field| {
+            if (@typeInfo(@FieldType(dvui.Options, field.name)) == .optional and @field(opts, field.name) != null) {
+                tl.addText("\n  • ", .{ .color_text = .green });
+                tl.addText(field.name, .{});
+                has_options = true;
+            }
+        }
+        if (!has_options) {
+            tl.addText("\n  • none", .{});
+        }
+    }
+}
+
 pub fn widgetOptionsEditor(src: std.builtin.SourceLocation, edit_opts: *dvui.Options, wd: *dvui.WidgetData) void {
-    if (dvui.expander(src, "Options editor", .{}, .{ .expand = .horizontal })) {
+    var expander_wd: dvui.WidgetData = undefined;
+    if (dvui.expander(src, "Options editor", .{}, .{ .expand = .horizontal, .data_out = &expander_wd })) {
         _ = dvui.Debug.optionsEditor(edit_opts, wd);
     }
+    widgetShowSetOptionsTooltip(@src(), expander_wd.borderRectScale().r, edit_opts.*);
 }
 
 pub fn displayDropDownEnum() void {
