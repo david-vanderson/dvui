@@ -246,6 +246,7 @@ pub fn addChoice(self: *DropdownWidget) *MenuItemWidget {
             }
         } else if (self.drop_mi_index == 0) {
             dvui.focusWidget(self.drop_mi.data().id, null, null);
+            dvui.dataSet(null, self.data().id, "_drop_adjust", self.drop_height);
         }
     }
     self.drop_mi_index += 1;
