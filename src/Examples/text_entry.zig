@@ -450,6 +450,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
             },
         }, .{
             .expand = .horizontal,
+            .font = .theme(.mono),
         });
         defer te.deinit();
 
@@ -575,6 +576,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
         var min: bool = false;
         var max: bool = false;
         var value: f64 = 0;
+        var clear: bool = false;
     };
 
     {
@@ -583,7 +585,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
 
         dvui.label(@src(), "Parse", .{}, .{ .gravity_y = 0.5 });
 
-        _ = dvui.dropdown(@src(), &parse_typenames, &S.type_dropdown_val, .{ .min_size_content = .{ .w = 20 }, .gravity_y = 0.5 });
+        _ = dvui.dropdown(@src(), &parse_typenames, .{ .choice = &S.type_dropdown_val }, .{}, .{ .min_size_content = .{ .w = 20 }, .gravity_y = 0.5 });
 
         left_alignment.spacer(@src(), 0);
 
@@ -597,7 +599,8 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
                 } else {
                     value = @floatCast(S.value);
                 }
-                const result = dvui.textEntryNumber(@src(), T, .{ .value = &value, .min = if (S.min) 0 else null, .max = if (S.max) 100 else null, .show_min_max = true }, .{ .id_extra = i });
+                const result = dvui.textEntryNumber(@src(), T, .{ .value = &value, .min = if (S.min) 0 else null, .max = if (S.max) 100 else null, .show_min_max = true, .text = if (S.clear) "" else null }, .{ .id_extra = i });
+                if (S.clear) S.clear = false;
                 displayTextEntryNumberResult(result);
 
                 if (result.changed) {
@@ -626,6 +629,9 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
 
         _ = dvui.checkbox(@src(), &S.min, "Min", .{});
         _ = dvui.checkbox(@src(), &S.max, "Max", .{});
+        if (dvui.button(@src(), "Clear", .{}, .{})) {
+            S.clear = true;
+        }
         _ = dvui.label(@src(), "Stored {d}", .{S.value}, .{});
     }
 

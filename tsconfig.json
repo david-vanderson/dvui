@@ -2,7 +2,7 @@
   // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
     "noEmit": true,
-    "module": "nodenext",
+    "module": "esnext",
     "target": "esnext",
     "checkJs": true,
     "noUncheckedIndexedAccess": true,
@@ -15,6 +15,6 @@
     "skipLibCheck": true,
   },
   "files": [
-    "./src/backends/web.js"
+    "./src/backends/web.js",
   ]
 }
