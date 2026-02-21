@@ -157,16 +157,20 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
     // might get a slightly smaller font
     var fce = try cw.fonts.getOrCreate(cw.gpa, sized_font);
+    var fce_ascent = fce.ascent;
+    if (opts.font.line_height_factor < 1.0) {
+        fce_ascent = @round(fce_ascent * opts.font.line_height_factor);
+    }
 
     // this must be synced with Font.textSizeEx()
-    const target_fraction = if (cw.snap_to_pixels) 1.0 else target_size / fce.height;
+    const target_fraction = if (cw.snap_to_pixels) 1.0 else target_size / fce.em_height;
 
     // make sure the cache has all the glyphs we need
     if (opts.kern_in == null) {
         // if kern_in is given, assume we already did this when measuring the text
         var utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
         while (utf8it.nextCodepoint()) |codepoint| {
-            _ = try fce.glyphInfoGetOrReplacement(cw.gpa, codepoint);
+            if (codepoint != '\n') _ = try fce.glyphInfoGetOrReplacement(cw.gpa, codepoint);
         }
     }
 
@@ -296,11 +300,11 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
         // don't output triangles for a zero-width glyph (space seems to be the only one)
         if (gi.w > 0) {
-            const vtx_offset: u16 = @intCast(builder.vertexes.items.len);
+            const vtx_offset: dvui.Vertex.Index = @intCast(builder.vertexes.items.len);
             var v: Vertex = undefined;
 
             v.pos.x = leftx;
-            v.pos.y = start.y + gi.topBearing * target_fraction;
+            v.pos.y = start.y + (fce_ascent - gi.topBearing) * target_fraction;
             v.col = col;
             v.uv = gi.uv;
             builder.appendVertex(v);
@@ -319,7 +323,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
             v.uv[0] = gi.uv[0] + gi.w / atlas_size.w;
             builder.appendVertex(v);
 
-            v.pos.y = start.y + (gi.topBearing + gi.h) * target_fraction;
+            v.pos.y = start.y + (fce_ascent - gi.topBearing + gi.h) * target_fraction;
             sel_max_y = @max(sel_max_y, v.pos.y);
             v.uv[1] = gi.uv[1] + gi.h / atlas_size.h;
             builder.appendVertex(v);

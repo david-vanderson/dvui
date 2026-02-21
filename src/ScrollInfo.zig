@@ -84,6 +84,10 @@ pub fn offset(self: ScrollInfo, dir: enums.Direction) f32 {
     };
 }
 
+pub fn offsetFromMax(self: ScrollInfo, dir: enums.Direction) f32 {
+    return self.scrollMax(dir) - self.offset(dir);
+}
+
 pub fn offsetFraction(self: ScrollInfo, dir: enums.Direction) f32 {
     const viewport_start = switch (dir) {
         .vertical => self.viewport.y,

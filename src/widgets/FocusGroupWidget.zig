@@ -34,8 +34,8 @@ pub const InitOptions = struct {
 
 pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const id = dvui.parentGet().extendId(src, opts.idExtra());
-    const rect = dvui.dataGet(null, id, "_rect", Rect);
-    const defaults = Options{ .name = "Focus Group", .rect = rect orelse .{}, .expand = .both };
+    const rect: Rect = dvui.dataGet(null, id, "_rect", Rect) orelse .{};
+    const defaults = Options{ .name = "Focus Group", .rect = rect, .expand = if (rect.empty()) .both else .none };
     self.* = .{
         .init_opts = init_opts,
         .wd = WidgetData.init(src, .{}, defaults.override(opts)),
@@ -96,8 +96,7 @@ pub fn minSizeForChild(self: *FocusGroupWidget, s: Size) void {
 }
 
 pub fn deinit(self: *FocusGroupWidget) void {
-    const should_free = self.data().was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
 
     const cw = dvui.currentWindow();

@@ -26,6 +26,8 @@ pub fn main() !void {
     ray.SetConfigFlags(ray.FLAG_WINDOW_RESIZABLE);
     ray.SetConfigFlags(ray.FLAG_WINDOW_HIGHDPI);
     ray.SetConfigFlags(ray.FLAG_VSYNC_HINT);
+    if (dvui.accesskit_enabled)
+        ray.SetConfigFlags(ray.FLAG_WINDOW_HIDDEN);
     ray.InitWindow(800, 600, "DVUI Raylib Ontop Example");
     defer ray.CloseWindow();
 

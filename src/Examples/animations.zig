@@ -97,7 +97,7 @@ pub fn animations() void {
 
             dvui.labelNoFmt(@src(), "Animate", .{}, .{ .gravity_y = 0.5 });
 
-            _ = dvui.dropdown(@src(), &.{ "alpha", "horizontal", "vertical", "none" }, &global.animation_choice, .{});
+            _ = dvui.dropdown(@src(), &.{ "alpha", "horizontal", "vertical", "none" }, .{ .choice = &global.animation_choice }, .{}, .{});
 
             dvui.labelNoFmt(@src(), "easing", .{}, .{ .gravity_y = 0.5 });
 
@@ -106,7 +106,7 @@ pub fn animations() void {
                 recalc = true;
             }
 
-            if (dvui.dropdown(@src(), &easing_names, &global.easing_choice, .{})) {
+            if (dvui.dropdown(@src(), &easing_names, .{ .choice = &global.easing_choice }, .{}, .{})) {
                 global.easing = easing_fns[global.easing_choice];
                 recalc = true;
             }

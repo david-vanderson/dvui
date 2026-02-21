@@ -40,6 +40,11 @@ pub const InitOptions = struct {
     lock_visible: bool = false,
     event_rect: ?Rect.Physical = null,
     process_events_after: bool = true,
+
+    /// If non null scrollContainer will write the total amount of scrolling
+    /// that came from user events.  Many events are processed in deinit(),
+    /// so run that before using this value.
+    user_scroll: ?*dvui.Point = null,
 };
 
 wd: WidgetData,
@@ -58,8 +63,10 @@ prevClip: Rect.Physical = .{},
 nextVirtualSize: Size = Size{},
 seen_expanded_child: bool = false,
 
+lock_visible: bool = false,
 first_visible_id: dvui.Id = .zero,
 first_visible_offset: Point = Point{}, // offset of top left of first visible widget from viewport
+first_visible_viewport: Point = Point{}, // viewport from previous frame
 
 seen_scroll_drag: bool = false,
 
@@ -75,6 +82,8 @@ pub fn init(self: *ScrollContainerWidget, src: std.builtin.SourceLocation, io_sc
         .last_focus = dvui.lastFocusedIdInFrame(),
         .subwindowId = dvui.subwindowCurrentId(),
     };
+
+    if (self.init_opts.user_scroll) |us| us.* = .{};
 
     if (dvui.dataGet(null, self.data().id, "_finger_down", bool)) |down| self.finger_down = down;
 
@@ -104,11 +113,16 @@ pub fn init(self: *ScrollContainerWidget, src: std.builtin.SourceLocation, io_sc
     self.prevClip = dvui.clip(self.data().contentRectScale().r);
 
     self.frame_viewport = self.init_opts.frame_viewport orelse self.si.viewport.topLeft();
-    if (self.init_opts.lock_visible) {
-        // we don't want to see anything until we find first_visible_id
-        self.first_visible_id = dvui.dataGet(null, self.data().id, "_fv_id", dvui.Id) orelse .zero;
+
+    self.lock_visible = self.init_opts.lock_visible;
+    if (self.lock_visible) {
+        self.first_visible_id = dvui.dataGet(null, self.data().id, "_fv_id", dvui.Id) orelse blk: {
+            dvui.log.debug("ScrollContainerWidget forcing lock_visible false due to not having a first visible widget\n", .{});
+            self.lock_visible = false;
+            break :blk .zero;
+        };
         self.first_visible_offset = dvui.dataGet(null, self.data().id, "_fv_offset", Point) orelse .{};
-        self.frame_viewport = .{ .x = -10000, .y = -10000 };
+        self.first_visible_viewport = dvui.dataGet(null, self.data().id, "_fv_viewport", Point) orelse .{};
     }
 
     dvui.parentSet(self.widget());
@@ -137,9 +151,6 @@ pub fn processEvents(self: *ScrollContainerWidget) void {
 
     // might have changed from events
     self.frame_viewport = self.init_opts.frame_viewport orelse self.si.viewport.topLeft();
-    if (self.init_opts.lock_visible) {
-        self.frame_viewport = .{ .x = -10000, .y = -10000 };
-    }
 }
 
 pub fn processVelocity(self: *ScrollContainerWidget) void {
@@ -149,6 +160,7 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
     // exponential decay: v *= damping^secs_since
     // tweak the damping so we brake harder as the velocity slows down
     if (!self.finger_down) {
+        const before = self.si.viewport.topLeft();
         {
             const damping = 0.0001 + @min(1.0, @abs(self.si.velocity.x) / 50.0) * (0.7 - 0.0001);
             self.si.velocity.x *= @exp(@log(damping) * dvui.secondsSinceLastFrame());
@@ -172,9 +184,12 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
                 self.si.velocity.y = 0;
             }
         }
+
+        if (self.init_opts.user_scroll) |us| us.* = us.*.plus(self.si.viewport.topLeft().diff(before));
     }
 
     // bounce back if we went too far
+    // bounce back does not count for user_scroll
     {
         const max_scroll = self.si.scrollMax(.horizontal);
         if (self.si.viewport.x < 0) {
@@ -212,9 +227,6 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
 
     // might have changed
     self.frame_viewport = self.init_opts.frame_viewport orelse self.si.viewport.topLeft();
-    if (self.init_opts.lock_visible) {
-        self.frame_viewport = .{ .x = -10000, .y = -10000 };
-    }
 }
 
 pub fn widget(self: *ScrollContainerWidget) Widget {
@@ -276,16 +288,25 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Opt
     const rect = Rect{ .x = 0, .y = y, .w = maxw, .h = h };
     const ret = dvui.placeIn(rect, min_size, e, g);
 
-    if (self.init_opts.lock_visible and self.first_visible_id == id) {
+    if (self.lock_visible and self.first_visible_id == id) {
+        self.first_visible_id = .zero;
+        self.lock_visible = false;
+
+        const scroll_since_last_frame = self.frame_viewport.diff(self.first_visible_viewport);
+
         self.frame_viewport.x = 0; // todo
-        self.frame_viewport.y = y + self.first_visible_offset.y;
+        self.frame_viewport.y = y + self.first_visible_offset.y + scroll_since_last_frame.y;
         self.si.viewport.x = self.frame_viewport.x;
         self.si.viewport.y = self.frame_viewport.y;
     }
 
-    if (ret.y <= self.frame_viewport.y and self.frame_viewport.y < (ret.y + ret.h)) {
+    if (!self.lock_visible and self.first_visible_id == .zero and self.frame_viewport.y < (ret.y + ret.h)) {
         self.first_visible_id = id;
         self.first_visible_offset = Point.diff(self.frame_viewport, ret.topLeft());
+
+        // record where the viewport was, so that if we do lock_visible next
+        // frame we can tell how much scrolling happened
+        self.first_visible_viewport = self.frame_viewport;
     }
 
     return ret;
@@ -293,8 +314,14 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Opt
 
 pub fn screenRectScale(self: *ScrollContainerWidget, rect: Rect) RectScale {
     var r = rect;
-    r.y -= self.frame_viewport.y;
-    r.x -= self.frame_viewport.x;
+    if (self.lock_visible) {
+        // haven't found the first visible yet, put offscreen
+        r.x = 10000;
+        r.y = 10000;
+    } else {
+        r.y -= self.frame_viewport.y;
+        r.x -= self.frame_viewport.x;
+    }
 
     return self.data().contentRectScale().rectToRectScale(r);
 }
@@ -358,6 +385,8 @@ pub fn processScrollDrag(
         scrollx = if (!self.seen_scroll_drag) 200 * dvui.secondsSinceLastFrame() else 5;
     }
 
+    const before = self.si.viewport.topLeft();
+
     if (scrolly != 0 or scrollx != 0) {
         if (scrolly != 0) {
             self.si.scrollByOffset(.vertical, scrolly);
@@ -373,6 +402,8 @@ pub fn processScrollDrag(
         dvui.currentWindow().inject_motion_event = true;
     }
 
+    if (self.init_opts.user_scroll) |us| us.* = us.*.plus(self.si.viewport.topLeft().diff(before));
+
     self.seen_scroll_drag = true;
 }
 
@@ -380,6 +411,8 @@ pub fn processScrollTo(
     self: *ScrollContainerWidget,
     st: dvui.ScrollToOptions,
 ) void {
+    const before = self.si.viewport.topLeft();
+
     const rs = self.data().contentRectScale();
 
     if (self.si.vertical != .none) {
@@ -427,6 +460,8 @@ pub fn processScrollTo(
             dvui.refresh(null, @src(), self.data().id);
         }
     }
+
+    if (self.init_opts.user_scroll) |us| us.* = us.*.plus(self.si.viewport.topLeft().diff(before));
 }
 
 pub fn processMotionScroll(self: *ScrollContainerWidget, motion: dvui.Point.Physical) void {
@@ -459,6 +494,7 @@ pub fn processMotionScroll(self: *ScrollContainerWidget, motion: dvui.Point.Phys
         {
             // can scroll in that direction or no parent, so scroll anyway (might bump past the limit)
             self.si.viewport.y -= motion.y / rs.s;
+            if (self.init_opts.user_scroll) |us| us.*.y -= motion.y / rs.s;
             self.si.velocity.y = -motion.y / rs.s;
             dvui.refresh(null, @src(), self.data().id);
         } else if (@abs(motion.y) > @abs(motion.x)) {
@@ -472,6 +508,7 @@ pub fn processMotionScroll(self: *ScrollContainerWidget, motion: dvui.Point.Phys
             (motion.x < 0 and self.si.viewport.x < self.si.scrollMax(.horizontal)))
         {
             self.si.viewport.x -= motion.x / rs.s;
+            if (self.init_opts.user_scroll) |us| us.*.x -= motion.x / rs.s;
             self.si.velocity.x = -motion.x / rs.s;
             dvui.refresh(null, @src(), self.data().id);
         } else if (@abs(motion.x) > @abs(motion.y)) {
@@ -517,6 +554,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                         } else {
                             e.handle(@src(), self.data());
                             self.si.scrollByOffset(.horizontal, me.action.wheel_x);
+                            if (self.init_opts.user_scroll) |us| us.*.x += me.action.wheel_x;
                             dvui.refresh(null, @src(), self.data().id);
                         }
                     }
@@ -532,6 +570,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                         } else {
                             e.handle(@src(), self.data());
                             self.si.scrollByOffset(.vertical, -me.action.wheel_y);
+                            if (self.init_opts.user_scroll) |us| us.*.y -= me.action.wheel_y;
                             dvui.refresh(null, @src(), self.data().id);
                         }
                     } else if (self.si.scrollMax(.horizontal) > 0) {
@@ -540,6 +579,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                         } else {
                             e.handle(@src(), self.data());
                             self.si.scrollByOffset(.horizontal, -me.action.wheel_y);
+                            if (self.init_opts.user_scroll) |us| us.*.x -= me.action.wheel_y;
                             dvui.refresh(null, @src(), self.data().id);
                         }
                     }
@@ -578,33 +618,41 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     e.handle(@src(), self.data());
                     if (self.si.vertical != .none) {
                         self.si.scrollByOffset(.vertical, -10);
+                        if (self.init_opts.user_scroll) |us| us.*.y -= 10;
                     }
                     dvui.refresh(null, @src(), self.data().id);
                 } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
                     e.handle(@src(), self.data());
                     if (self.si.vertical != .none) {
                         self.si.scrollByOffset(.vertical, 10);
+                        if (self.init_opts.user_scroll) |us| us.*.y += 10;
                     }
                     dvui.refresh(null, @src(), self.data().id);
                 } else if (ke.code == .left and (ke.action == .down or ke.action == .repeat)) {
                     e.handle(@src(), self.data());
                     if (self.si.horizontal != .none) {
                         self.si.scrollByOffset(.horizontal, -10);
+                        if (self.init_opts.user_scroll) |us| us.*.x -= 10;
                     }
                     dvui.refresh(null, @src(), self.data().id);
                 } else if (ke.code == .right and (ke.action == .down or ke.action == .repeat)) {
                     e.handle(@src(), self.data());
                     if (self.si.horizontal != .none) {
                         self.si.scrollByOffset(.horizontal, 10);
+                        if (self.init_opts.user_scroll) |us| us.*.x += 10;
                     }
                     dvui.refresh(null, @src(), self.data().id);
                 } else if (ke.code == .page_up and (ke.action == .down or ke.action == .repeat)) {
                     e.handle(@src(), self.data());
+                    const before = self.si.viewport.topLeft();
                     self.si.scrollPageUp(.vertical);
+                    if (self.init_opts.user_scroll) |us| us.* = us.*.plus(self.si.viewport.topLeft().diff(before));
                     dvui.refresh(null, @src(), self.data().id);
                 } else if (ke.code == .page_down and (ke.action == .down or ke.action == .repeat)) {
                     e.handle(@src(), self.data());
+                    const before = self.si.viewport.topLeft();
                     self.si.scrollPageDown(.vertical);
+                    if (self.init_opts.user_scroll) |us| us.* = us.*.plus(self.si.viewport.topLeft().diff(before));
                     dvui.refresh(null, @src(), self.data().id);
                 }
             },
@@ -614,8 +662,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
 }
 
 pub fn deinit(self: *ScrollContainerWidget) void {
-    const should_free = self.data().was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
 
     // need to reset clip before processEventsAfter, event_rect could be
@@ -628,6 +675,7 @@ pub fn deinit(self: *ScrollContainerWidget) void {
 
     dvui.dataSet(null, self.data().id, "_fv_id", self.first_visible_id);
     dvui.dataSet(null, self.data().id, "_fv_offset", self.first_visible_offset);
+    dvui.dataSet(null, self.data().id, "_fv_viewport", self.first_visible_viewport);
     dvui.dataSet(null, self.data().id, "_finger_down", self.finger_down);
 
     const padded = self.data().options.padSize(self.nextVirtualSize);

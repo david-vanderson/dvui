@@ -2,13 +2,13 @@
 //!
 //! ![<Examples-demo.png>](Examples-demo.png)
 //!
-//! `dvui` module contains all the top level declarations provide all declarations required by client code. - i.e. `const dvui = @import("dvui");` is the only required import.
+//! `dvui` module has everything required by client code. `const dvui = @import("dvui");` is the only required import.
 //!
-//! Most UI element are expected to be created via high level function like `dvui.button`, which instantiate the corresponding lower level `dvui.ButtonWidget` for you.
+//! Most UI widgets can be created via high level functions like `dvui.button`, which create the underlying `dvui.ButtonWidget` for you, process events, and draw the widget.
 //!
-//! Custom widget can be done for simple cases my combining different high level function. For more advance usages, the user is expected to copy-paste the content of the high level functions as a starting point to combine the widgets on the lower level. More informations is available in the [project's readme](https://github.com/david-vanderson/dvui/blob/main/README.md).
+//! For more control over a widget's lifetime, event processing, or drawing, start by copying the body of the high level function.  More informations is available in the [project's readme](https://github.com/david-vanderson/dvui/blob/main/README.md).
 //!
-//! A complete list of available widgets can be found under `dvui.widgets`.
+//! A complete list of available widgets can be found under `dvui.widgets`.  The demo includes examples of all widgets.
 //!
 //! ## Backends
 //! - [SDL](#dvui.backends.sdl)
@@ -422,15 +422,11 @@ pub fn currentWindow() *Window {
 /// if the stack overflows.
 ///
 /// The caller is responsible for ensuring that the widget calls
-/// `dvui.widgetFree` in it's `deinit`. Usually this is done by
-/// setting `dvui.WidgetData.was_allocated_on_widget_stack` to true
+/// `dvui.widgetFree` in it's `deinit`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetAlloc(comptime T: type) *T {
-    const cw = currentWindow();
-    const alloc = cw._widget_stack.allocator();
-    const ptr = alloc.create(T) catch @panic("OOM");
-    return ptr;
+    return dvui.currentWindow()._widget_stack.create(T);
 }
 
 /// Pops a widget off the alloc stack, if it was allocated there.
@@ -440,8 +436,14 @@ pub fn widgetAlloc(comptime T: type) *T {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn widgetFree(ptr: anytype) void {
-    const ws = &currentWindow()._widget_stack;
-    ws.allocator().destroy(ptr);
+    dvui.currentWindow()._widget_stack.destroy(ptr);
+}
+
+/// Returns whether the widget was created with widgetAlloc.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn widgetIsAllocated(ptr: anytype) bool {
+    return dvui.currentWindow()._widget_stack.created(ptr);
 }
 
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {
@@ -462,17 +464,7 @@ pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []
         .{ "\nStack trace: {f}", stack_trace }
     else
         .{ "{s}", "" }; // Needed to keep the arg count the sames
-
-    // There is no nice way to combine a comptime tuple and a runtime tuple
-    const combined_args = switch (std.meta.fields(@TypeOf(args)).len) {
-        0 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), err_trace_arg, trace_arg },
-        1 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], err_trace_arg, trace_arg },
-        2 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], err_trace_arg, trace_arg },
-        3 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], err_trace_arg, trace_arg },
-        4 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], args[3], err_trace_arg, trace_arg },
-        5 => .{ src.file, src.line, src.column, src.fn_name, @errorName(err), args[0], args[1], args[2], args[3], args[4], err_trace_arg, trace_arg },
-        else => @compileError("Too many arguments"),
-    };
+    const combined_args = .{ src.file, src.line, src.column, src.fn_name, @errorName(err) } ++ args ++ .{ err_trace_arg, trace_arg };
     log.err("{s}:{d}:{d}: {s} got {s}: " ++ fmt ++ error_trace_fmt ++ stack_trace_fmt, combined_args);
 }
 
@@ -2117,7 +2109,6 @@ pub fn wantTextInput(r: Rect.Natural) void {
 pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) *FloatingMenuWidget {
     var ret = widgetAlloc(FloatingMenuWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     return ret;
 }
 
@@ -2130,7 +2121,6 @@ pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidg
 pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) *FloatingWindowWidget {
     var ret = widgetAlloc(FloatingWindowWidget);
     ret.init(src, floating_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.processEventsBefore();
     ret.drawBackground();
     return ret;
@@ -2327,7 +2317,7 @@ pub fn dialogDisplay(id: Id) !void {
 
     const maxSize = dvui.dataGet(null, id, "_max_size", Options.MaxSize);
 
-    var win = floatingWindow(@src(), .{ .modal = modal, .center_on = center_on, .window_avoid = .nudge }, .{ .id_extra = id.asUsize(), .max_size_content = maxSize });
+    var win = floatingWindow(@src(), .{ .modal = modal, .center_on = center_on, .window_avoid = .nudge }, .{ .role = .dialog, .id_extra = id.asUsize(), .max_size_content = maxSize });
     defer win.deinit();
 
     var header_openflag = true;
@@ -2521,9 +2511,24 @@ pub fn toastsShow(id: ?Id, rect: Rect.Natural) void {
 pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) *AnimateWidget {
     var ret = widgetAlloc(AnimateWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     return ret;
 }
+
+pub const DropdownInitOptions = struct {
+    // Text to be shown when there is no selection (for nullable choices only)
+    placeholder: ?[]const u8 = null,
+    // Can the user select a null value? (for nullable choices only)
+    null_selectable: bool = true,
+};
+
+pub fn DropdownChoice(T: type) type {
+    return union(enum) {
+        choice: *T,
+        // Will display placeholder text when null.
+        choice_nullable: *?T,
+    };
+}
+const dropdown_placeholder_default = "Select ...";
 
 /// Show chosen entry, and click to display all entries in a floating menu.
 ///
@@ -2532,15 +2537,49 @@ pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOpt
 /// See `DropdownWidget` for more advanced usage.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: *usize, opts: Options) bool {
+pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: DropdownChoice(usize), init_opts: DropdownInitOptions, opts: Options) bool {
+    // Adjust selected index by 1 if the placeholder is showing
+    const selected_index: ?usize = switch (choice) {
+        .choice => |ch| ch.*,
+        .choice_nullable => |ch| if (ch.*) |_|
+            if (init_opts.null_selectable) ch.*.? + 1 else ch.*.?
+        else
+            null,
+    };
+
     var dd: dvui.DropdownWidget = undefined;
-    dd.init(src, .{ .selected_index = choice.*, .label = entries[choice.*] }, opts);
+    dd.init(
+        src,
+        switch (choice) {
+            .choice => |ch| .{ .selected_index = ch.*, .label = entries[ch.*] },
+            .choice_nullable => |ch| if (ch.* == null)
+                .{ .placeholder = init_opts.placeholder orelse dropdown_placeholder_default }
+            else
+                .{ .selected_index = selected_index, .label = entries[ch.*.?] },
+        },
+        opts,
+    );
 
     var ret = false;
     if (dd.dropped()) {
+        if (choice == .choice_nullable and init_opts.null_selectable) {
+            var mi = dd.addChoice();
+            defer mi.deinit();
+            dvui.labelNoFmt(@src(), init_opts.placeholder orelse dropdown_placeholder_default, .{}, opts.strip().override(.{
+                .gravity_y = 0.5,
+                .color_text = opts.color(.text).opacity(0.65),
+            }));
+            if (mi.activeRect()) |_| {
+                dd.close();
+                choice.choice_nullable.* = null;
+                ret = true;
+            }
+        }
         for (entries, 0..) |e, i| {
             if (dd.addChoiceLabel(e)) {
-                choice.* = i;
+                switch (choice) {
+                    inline else => |ch| ch.* = i,
+                }
                 ret = true;
             }
         }
@@ -2557,23 +2596,59 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 /// See `DropdownWidget` for more advanced usage.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: *T, opts: Options) bool {
+pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownChoice(T), init_opts: DropdownInitOptions, opts: Options) bool {
     if (@typeInfo(T) != .@"enum") @compileError("Expected enum, found '" ++ @typeName(T) ++ "'");
 
+    // Adjust selected index by 1 if the placeholder is showing
+    const selected_index: ?usize = switch (choice) {
+        .choice => |ch| @intFromEnum(ch.*),
+        .choice_nullable => |ch| if (ch.*) |_|
+            if (init_opts.null_selectable) @intFromEnum(ch.*.?) + 1 else @intFromEnum(ch.*.?)
+        else
+            null,
+    };
+
     var dd: dvui.DropdownWidget = undefined;
-    dd.init(src, .{ .selected_index = @intFromEnum(choice.*), .label = @tagName(choice.*) }, opts);
+    dd.init(
+        src,
+        switch (choice) {
+            .choice => |ch| .{ .selected_index = @intFromEnum(ch.*), .label = @tagName(ch.*) },
+            .choice_nullable => |ch| if (ch.* == null)
+                .{ .placeholder = init_opts.placeholder orelse dropdown_placeholder_default }
+            else
+                .{ .selected_index = selected_index, .label = @tagName(ch.*.?) },
+        },
+        opts,
+    );
+    defer dd.deinit();
 
     var ret = false;
     if (dd.dropped()) {
+        if (choice == .choice_nullable and init_opts.null_selectable) {
+            var mi = dd.addChoice();
+            defer mi.deinit();
+            dvui.labelNoFmt(@src(), init_opts.placeholder orelse dropdown_placeholder_default, .{}, opts.strip().override(.{
+                .gravity_y = 0.5,
+                .color_text = opts.color(.text).opacity(0.65),
+            }));
+            if (mi.activeRect()) |_| {
+                dd.close();
+                choice.choice_nullable.* = null;
+                ret = true;
+            }
+        }
         inline for (@typeInfo(T).@"enum".fields) |e| {
             if (dd.addChoiceLabel(e.name)) {
-                choice.* = @field(T, e.name);
-                ret = true;
+                switch (choice) {
+                    inline else => |ch| {
+                        ch.* = @field(T, e.name);
+                        ret = true;
+                    },
+                }
             }
         }
     }
 
-    dd.deinit();
     return ret;
 }
 
@@ -2612,7 +2687,6 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
 
     var sug = widgetAlloc(SuggestionWidget);
     sug.init(@src(), .{
-        .was_allocated_on_widget_stack = true,
         .rs = te.data().borderRectScale(),
         .text_entry_id = te.data().id,
     }, .{ .label = .{ .text = te.getText() }, .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
@@ -2695,7 +2769,6 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
 pub const ComboBox = struct {
     te: *TextEntryWidget = undefined,
     sug: *SuggestionWidget = undefined,
-    was_allocated_on_widget_stack: bool = false,
 
     /// Returns index of entry if one was selected
     pub fn entries(self: *ComboBox, items: []const []const u8) ?usize {
@@ -2711,8 +2784,7 @@ pub const ComboBox = struct {
     }
 
     pub fn deinit(self: *ComboBox) void {
-        const should_free = self.was_allocated_on_widget_stack;
-        defer if (should_free) dvui.widgetFree(self);
+        defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
         defer self.* = undefined;
         self.sug.deinit();
         self.te.deinit();
@@ -2726,10 +2798,8 @@ pub const ComboBox = struct {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) *ComboBox {
     const combo = widgetAlloc(ComboBox);
-    combo.was_allocated_on_widget_stack = true;
     combo.te = widgetAlloc(TextEntryWidget);
     combo.te.init(src, init_opts, opts);
-    combo.te.data().was_allocated_on_widget_stack = true;
 
     if (combo.te.data().accesskit_node()) |ak_node| {
         AccessKit.nodeSetRole(ak_node, AccessKit.Role.editable_combo_box.asU8());
@@ -2805,6 +2875,98 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     return expanded;
 }
 
+var group_box_defaults: dvui.Options = .{
+    .name = "GroupBox",
+    .border = Rect.all(1),
+    .padding = Rect.all(6),
+    .margin = Rect.all(6),
+    .corner_radius = .{ .x = 3, .y = 3, .w = 3, .h = 3 },
+    .role = .group,
+};
+
+/// A bordered box with a heading, used to group related widgets,
+/// also known as a fieldset.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) *BoxWidget {
+    var options = group_box_defaults.override(.{
+        .label = .{ .text = label_str },
+    }).override(opts);
+
+    const text_size = options.fontGet().textSize(label_str);
+
+    // Offset top margin and padding to account for label
+    options.margin.?.y += @max(text_size.h / 2 - options.borderGet().y / 2, 0);
+    options.padding.?.y += @max(text_size.h / 2 - options.borderGet().y / 2, 0);
+
+    const b = widgetAlloc(BoxWidget);
+    b.init(src, .{}, options);
+
+    {
+        const border = options.borderGet();
+        if (border.x != border.y or border.y != border.w or border.w != border.h) {
+            options.border = Rect.all(@max(border.x, border.y, border.w, border.h));
+            b.data().options.border = options.border;
+            dvui.log.debug("groupBox {x} requires uniform borders, border width set to {d}", .{ b.data().id, options.border.?.x });
+            dvui.currentWindow().debug.widget_id = b.data().id;
+        }
+    }
+
+    if (options.backgroundGet()) {
+        b.drawBackground();
+    }
+    const label_padding: Rect = .{ .x = LabelWidget.defaults.paddingGet().x, .w = LabelWidget.defaults.paddingGet().w, .y = 0, .h = 0 };
+    const label_rect: Rect = .{
+        .x = 0, // Starts at padding.
+        .y = -options.paddingGet().y - options.borderGet().y / 2 - text_size.h / 2,
+        .w = @min(text_size.w + label_padding.x + label_padding.w, b.data().contentRect().w),
+        .h = text_size.h,
+    };
+
+    if (!label_rect.empty()) {
+        labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, options.strip().override(.{
+            .rect = label_rect,
+            .background = options.background,
+            .corner_radius = options.corner_radius,
+            .padding = label_padding,
+        }));
+    }
+
+    // draw the border
+    if (b.data().visible() and options.borderGet().nonZero()) {
+        const wd = b.data();
+        const rs = wd.rectScale().s;
+        var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
+        defer path.deinit();
+
+        const r = wd.borderRectScale().r.insetAll(options.borderGet().x / 2 * rs);
+        const cr = options.corner_radiusGet().scale(rs, Rect.Physical);
+        const left_x = r.x + (options.paddingGet().x + options.borderGet().x / 2) * rs;
+        const right_x = @min(
+            left_x + text_size.scale(rs, Rect.Physical).w + (label_padding.x + label_padding.w) * rs,
+            wd.contentRectScale().r.x + wd.contentRectScale().r.w,
+        );
+        path.addPoint(.{ .x = left_x, .y = r.y }); // left edge of label
+
+        const tl = dvui.Point.Physical{ .x = r.x + cr.x, .y = r.y + cr.x };
+        path.addArc(tl, cr.x, std.math.pi * 1.5, std.math.pi, false);
+
+        const bl = dvui.Point.Physical{ .x = r.x + cr.x, .y = r.y + r.h - cr.x };
+        path.addArc(bl, cr.x, std.math.pi, std.math.pi * 0.5, false);
+
+        const br = dvui.Point.Physical{ .x = r.x + r.w - cr.x, .y = r.y + r.h - cr.x };
+        path.addArc(br, cr.x, std.math.pi * 0.5, 0, false);
+
+        const tr = dvui.Point.Physical{ .x = r.x + r.w - cr.x, .y = r.y + cr.x };
+        path.addArc(tr, cr.x, std.math.pi * 2, std.math.pi * 1.5, false);
+
+        path.addPoint(.{ .x = right_x, .y = r.y }); // right edge of label
+
+        path.build().stroke(.{ .thickness = options.borderGet().x * rs, .color = dvui.themeGet().border });
+    }
+    return b;
+}
+
 /// Splits area in two with a user-moveable sash between.
 ///
 /// Automatically collapses (only shows one of the two sides) when it has less
@@ -2814,7 +2976,6 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
 pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: Options) *PanedWidget {
     var ret = widgetAlloc(PanedWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.processEvents();
     return ret;
 }
@@ -2828,7 +2989,6 @@ pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions
 pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.InitOptions, opts: Options) *TextLayoutWidget {
     var ret = widgetAlloc(TextLayoutWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
 
     // can install corner widgets here
     //_ = dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
@@ -2856,7 +3016,6 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
 pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: Options) *ContextWidget {
     var ret = widgetAlloc(ContextWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.processEvents();
     return ret;
 }
@@ -2897,7 +3056,6 @@ pub fn focusGroup(src: std.builtin.SourceLocation, init_opts: FocusGroupWidget.I
     const defaults: Options = .{ .role = .group };
     var ret = widgetAlloc(FocusGroupWidget);
     ret.init(src, init_opts, defaults.override(opts));
-    ret.data().was_allocated_on_widget_stack = true;
     return ret;
 }
 
@@ -2916,7 +3074,6 @@ pub fn radioGroup(src: std.builtin.SourceLocation, init_opts: FocusGroupWidget.I
 pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) *VirtualParentWidget {
     var ret = widgetAlloc(VirtualParentWidget);
     ret.init(src, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     return ret;
 }
 
@@ -2929,7 +3086,6 @@ pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) *VirtualPar
 pub fn overlay(src: std.builtin.SourceLocation, opts: Options) *OverlayWidget {
     var ret = widgetAlloc(OverlayWidget);
     ret.init(src, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.drawBackground();
     return ret;
 }
@@ -2954,7 +3110,6 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) *OverlayWidget {
 pub fn box(src: std.builtin.SourceLocation, init_opts: BoxWidget.InitOptions, opts: Options) *BoxWidget {
     var ret = widgetAlloc(BoxWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.drawBackground();
     return ret;
 }
@@ -2967,7 +3122,6 @@ pub fn box(src: std.builtin.SourceLocation, init_opts: BoxWidget.InitOptions, op
 pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) *FlexBoxWidget {
     var ret = widgetAlloc(FlexBoxWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.drawBackground();
     return ret;
 }
@@ -2975,14 +3129,12 @@ pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOpt
 pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) *CacheWidget {
     var ret = widgetAlloc(CacheWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     return ret;
 }
 
 pub fn reorder(src: std.builtin.SourceLocation, init_opts: ReorderWidget.InitOptions, opts: Options) *ReorderWidget {
     var ret = widgetAlloc(ReorderWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.processEvents();
     return ret;
 }
@@ -2990,14 +3142,12 @@ pub fn reorder(src: std.builtin.SourceLocation, init_opts: ReorderWidget.InitOpt
 pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) *ScrollAreaWidget {
     var ret = widgetAlloc(ScrollAreaWidget);
     ret.init(src, init_opts, opts);
-    ret.init_opts.was_allocated_on_widget_stack = true;
     return ret;
 }
 
 pub fn grid(src: std.builtin.SourceLocation, cols: GridWidget.WidthsOrNum, init_opts: GridWidget.InitOpts, opts: Options) *GridWidget {
     const ret = widgetAlloc(GridWidget);
     ret.init(src, cols, init_opts, opts);
-    ret.init_opts.was_allocated_on_widget_stack = true;
     return ret;
 }
 
@@ -3285,7 +3435,6 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
 pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) *ScaleWidget {
     var ret = widgetAlloc(ScaleWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.processEvents();
     return ret;
 }
@@ -3293,14 +3442,12 @@ pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions
 pub fn tabs(src: std.builtin.SourceLocation, init_opts: TabsWidget.InitOptions, opts: Options) *TabsWidget {
     var ret = widgetAlloc(TabsWidget);
     ret.init(src, init_opts, opts);
-    ret.init_options.was_allocated_on_widget_stack = true;
     return ret;
 }
 
 pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) *MenuWidget {
     var ret = widgetAlloc(MenuWidget);
     ret.init(src, .{ .dir = dir }, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     return ret;
 }
 
@@ -3351,7 +3498,6 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
 pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitOptions, opts: Options) *MenuItemWidget {
     var ret = widgetAlloc(MenuItemWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     ret.processEvents();
     ret.drawBackground();
     return ret;
@@ -3402,6 +3548,10 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
     // draw an accent border if we are focused
     if (lw.data().id == dvui.focusedWidgetId()) {
         lw.data().focusBorder();
+    }
+
+    if (lw.data().accesskit_node()) |ak_node| {
+        AccessKit.nodeAddAction(ak_node, AccessKit.Action.click);
     }
 
     // done with lw, have it report min size to parent
@@ -3724,6 +3874,8 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         AccessKit.nodeSetNumericValue(ak_node, init_opts.fraction.*);
         AccessKit.nodeSetMinNumericValue(ak_node, 0);
         AccessKit.nodeSetMaxNumericValue(ak_node, 1);
+        AccessKit.nodeSetNumericValueStep(ak_node, 0.01);
+        AccessKit.nodeSetNumericValueJump(ak_node, 0.10);
     }
 
     tabIndexSet(b.data().id, options.tab_index);
@@ -3930,6 +4082,15 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         AccessKit.nodeSetOrientation(ak_node, AccessKit.Orientation.horizontal);
         if (init_opts.min) |min| AccessKit.nodeSetMinNumericValue(ak_node, min);
         if (init_opts.max) |max| AccessKit.nodeSetMaxNumericValue(ak_node, max);
+
+        if (init_opts.min != null and init_opts.max != null) {
+            const delta = init_opts.max.? - init_opts.min.?;
+            AccessKit.nodeSetNumericValueStep(ak_node, delta / 100);
+            AccessKit.nodeSetNumericValueJump(ak_node, delta / 10);
+        } else {
+            AccessKit.nodeSetNumericValueStep(ak_node, 1);
+            AccessKit.nodeSetNumericValueJump(ak_node, 10);
+        }
     }
 
     tabIndexSet(b.data().id, options.tab_index);
@@ -4584,7 +4745,6 @@ pub fn findUtf8Start(text: []const u8, pos: usize) usize {
 pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) *TextEntryWidget {
     var ret = widgetAlloc(TextEntryWidget);
     ret.init(src, init_opts, opts);
-    ret.data().was_allocated_on_widget_stack = true;
     // can install corner widgets here
     //_ = dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
     ret.processEvents();
@@ -4598,6 +4758,8 @@ pub fn TextEntryNumberInitOptions(comptime T: type) type {
         max: ?T = null,
         value: ?*T = null,
         show_min_max: bool = false,
+        text: ?[]const u8 = null,
+        placeholder: ?[]const u8 = null,
     };
 }
 
@@ -4637,7 +4799,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 32);
 
-    //initialize with input number
+    // always initialize with value so we do the dataGet
     if (init_opts.value) |num| {
         const old_value = dataGet(null, id, "value", T);
         if (old_value == null or old_value.? != num.*) {
@@ -4647,14 +4809,36 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         }
     }
 
-    var te: TextEntryWidget = undefined;
-    te.init(src, .{ .text = .{ .buffer = buffer } }, default_opts.override(opts));
-    te.processEvents();
+    // display min/max
+    var minmax_buffer: [64]u8 = undefined;
+    var minmax_text: []const u8 = "";
+    if (init_opts.show_min_max) {
+        if (init_opts.min != null and init_opts.max != null) {
+            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(min: {d}, max: {d})", .{ init_opts.min.?, init_opts.max.? }) catch unreachable;
+        } else if (init_opts.min != null) {
+            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(min: {d})", .{init_opts.min.?}) catch unreachable;
+        } else if (init_opts.max != null) {
+            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(max: {d})", .{init_opts.max.?}) catch unreachable;
+        }
+    }
 
-    var result: TextEntryNumberResult(T) = .{ .enter_pressed = te.enter_pressed };
+    var te: TextEntryWidget = undefined;
+    te.init(src, .{
+        .text = .{ .buffer = buffer },
+        .placeholder = init_opts.placeholder orelse if (init_opts.show_min_max) minmax_text else null,
+    }, default_opts.override(opts));
+
+    // if text was given, act like the user deleted everything and typed this
+    if (init_opts.text) |text| {
+        te.textSet(text, false);
+    }
+
+    te.processEvents();
 
     // filter before drawing
     te.filterIn(filter);
+
+    var result: TextEntryNumberResult(T) = .{ .enter_pressed = te.enter_pressed };
 
     // validation
     const text = te.getText();
@@ -4691,19 +4875,6 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
 
-    // display min/max
-    if (te.getText().len == 0 and init_opts.show_min_max) {
-        var minmax_buffer: [64]u8 = undefined;
-        var minmax_text: []const u8 = "";
-        if (init_opts.min != null and init_opts.max != null) {
-            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(min: {d}, max: {d})", .{ init_opts.min.?, init_opts.max.? }) catch unreachable;
-        } else if (init_opts.min != null) {
-            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(min: {d})", .{init_opts.min.?}) catch unreachable;
-        } else if (init_opts.max != null) {
-            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(max: {d})", .{init_opts.max.?}) catch unreachable;
-        }
-        te.textLayout.addText(minmax_text, .{ .color_text = opts.color(.fill_hover) });
-    }
     if (te.data().accesskit_node()) |ak_node| {
         AccessKit.nodeClearValue(ak_node); // Only set a numberic value
         if (@typeInfo(T) == .float) {
@@ -5024,7 +5195,6 @@ pub const Picture = struct {
 pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, opts: Options) *PlotWidget {
     var ret = widgetAlloc(PlotWidget);
     ret.init(src, plot_opts, opts);
-    ret.init_options.was_allocated_on_widget_stack = true;
     return ret;
 }
 

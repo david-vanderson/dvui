@@ -157,8 +157,7 @@ pub fn minSizeForChild(self: *ScaleWidget, s: Size) void {
 }
 
 pub fn deinit(self: *ScaleWidget) void {
-    const should_free = self.data().was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
     dvui.dataSet(null, self.data().id, "_scale", self.scale.*);
     self.data().minSizeSetAndRefresh();

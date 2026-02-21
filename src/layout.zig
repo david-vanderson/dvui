@@ -126,6 +126,12 @@ pub const Alignment = struct {
     /// Record where this widget ended up so we can align it next frame.
     pub fn record(self: *Alignment, id: Id, wd: *WidgetData) void {
         const x = wd.rectScale().r.x;
+        if (dvui.dataGet(null, id, "_align", f32)) |old| {
+            if (x != old) {
+                // this widget moved, need to realign
+                dvui.refresh(null, @src(), self.id);
+            }
+        }
         dvui.dataSet(null, id, "_align", x);
         self.next = @max(self.next, x);
     }
@@ -138,6 +144,9 @@ pub const Alignment = struct {
                 // something changed
                 dvui.refresh(null, @src(), self.id);
             }
+        } else {
+            // must have been the first frame
+            dvui.refresh(null, @src(), self.id);
         }
     }
 };

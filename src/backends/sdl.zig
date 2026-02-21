@@ -71,9 +71,17 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     // if (options.hidden) _ = c.SDL_SetHint(c.SDL_HINT_VIDEODRIVER, "offscreen");
 
     // use the string version instead of the #define so we compile with SDL < 2.24
-
     _ = c.SDL_SetHint("SDL_HINT_WINDOWS_DPI_SCALING", "1");
+
+    // makes mac scrolling better
     if (sdl3) _ = c.SDL_SetHint(c.SDL_HINT_MAC_SCROLL_MOMENTUM, "1");
+
+    // prevents some bad performance in certain wayland compositors (sway) under some conditions
+    if (sdl3) {
+        if (c.SDL_SetHint(c.SDL_HINT_VIDEO_WAYLAND_PREFER_LIBDECOR, "1") != SDL_SUCCESS) {
+            log.err("failed to set libdecor hint", .{});
+        }
+    }
 
     try toErr(c.SDL_Init(c.SDL_INIT_VIDEO | c.SDL_INIT_EVENTS), "SDL_Init in initWindow");
 
@@ -423,6 +431,23 @@ pub fn cursorShow(_: *SDLBackend, value: ?bool) !bool {
     }
 }
 
+pub fn native(self: *SDLBackend, _: *dvui.Window) dvui.Window.Native {
+    if (sdl3) {
+        const props = c.SDL_GetWindowProperties(self.window);
+        switch (builtin.os.tag) {
+            .windows => return .{ .hwnd = c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_WIN32_HWND_POINTER, null) },
+            .macos => return .{ .cocoa_window = c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, null) },
+            else => return {},
+        }
+    } else {
+        switch (builtin.os.tag) {
+            .windows => return .{ .hwnd = null },
+            .macos => return .{ .cocoa_window = null },
+            else => return {},
+        }
+    }
+}
+
 pub fn refresh(_: *SDLBackend) void {
     var ue = std.mem.zeroes(c.SDL_Event);
     ue.type = if (sdl3) c.SDL_EVENT_USER else c.SDL_USEREVENT;
@@ -677,7 +702,7 @@ pub fn contentScale(self: *SDLBackend) f32 {
     return self.initial_scale;
 }
 
-pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect.Physical) !void {
+pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, maybe_clipr: ?dvui.Rect.Physical) !void {
     //std.debug.print("drawClippedTriangles:\n", .{});
     //for (vtx) |v, i| {
     //  std.debug.print("  {d} vertex {}\n", .{i, v});
@@ -746,7 +771,7 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
             @as(c_int, @intCast(vtx.len)),
             idx.ptr,
             @as(c_int, @intCast(idx.len)),
-            @sizeOf(u16),
+            @sizeOf(dvui.Vertex.Index),
         ), "SDL_RenderGeometryRaw, in drawClippedTriangles");
     } else {
         try toErr(c.SDL_RenderGeometryRaw(
@@ -761,7 +786,7 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
             @as(c_int, @intCast(vtx.len)),
             idx.ptr,
             @as(c_int, @intCast(idx.len)),
-            @sizeOf(u16),
+            @sizeOf(dvui.Vertex.Index),
         ), "SDL_RenderGeometryRaw in drawClippedTriangles");
     }
 
@@ -1442,7 +1467,7 @@ pub fn enableSDLLogging() void {
     });
     inline for (categories) |category_data| {
         const category, const scope = category_data;
-        for (std.options.log_scope_levels) |scope_level| {
+        inline for (std.options.log_scope_levels) |scope_level| {
             if (scope_level.scope == scope) {
                 const log_level: c.SDL_LogPriority = switch (scope_level.level) {
                     .debug => c.SDL_LOG_PRIORITY_VERBOSE,
