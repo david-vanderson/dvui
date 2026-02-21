@@ -80,7 +80,7 @@ pub const light = light: {
 
         .font_body = .find(.{ .family = "Aleo" }),
         .font_heading = .find(.{ .family = "Aleo", .weight = .bold }),
-        .font_title = .find(.{ .family = "Aleo", .size = 20 }),
+        .font_title = .find(.{ .family = "Aleo", .size = dvui.Font.DefaultSize + 2 }),
         .font_mono = .find(.{ .family = "None" }),
 
         .text_select = dialog_blue_light,

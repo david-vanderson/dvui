@@ -1,8 +1,7 @@
 const std = @import("std");
 const dvui = @import("dvui");
 const Backend = @import("dx11-backend");
-
-const win32 = @import("win32").everything;
+const win32 = Backend.win32;
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();

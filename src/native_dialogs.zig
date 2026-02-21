@@ -6,7 +6,7 @@ pub const Wasm = struct {
         accept: ?[]const u8 = null,
     };
 
-    const File = struct {
+    pub const File = struct {
         id: dvui.Id,
         index: usize,
         /// The size of the data in bytes
@@ -14,7 +14,7 @@ pub const Wasm = struct {
         /// The filename of the uploaded file. Does not include the path of the file
         name: [:0]const u8,
 
-        pub fn readData(self: *File, allocator: std.mem.Allocator) std.mem.Allocator.Error![]u8 {
+        pub fn readData(self: *const File, allocator: std.mem.Allocator) std.mem.Allocator.Error![]u8 {
             std.debug.assert(dvui.backend.kind == .web); // WasmFile shouldn't be used outside wasm builds
             const data = try allocator.alloc(u8, self.size);
             dvui.backend.readFileData(self.id, self.index, data.ptr);

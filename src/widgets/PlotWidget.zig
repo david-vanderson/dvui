@@ -32,7 +32,6 @@ pub const InitOptions = struct {
     border_thick: ?f32 = null,
     spine_color: ?dvui.Color = null,
     mouse_hover: bool = false,
-    was_allocated_on_widget_stack: bool = false,
 };
 
 pub const Axis = struct {
@@ -806,8 +805,7 @@ pub fn bar(self: *PlotWidget, opts: BarOptions) void {
 }
 
 pub fn deinit(self: *PlotWidget) void {
-    const should_free = self.init_options.was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
     dvui.clipSet(self.old_clip);
 

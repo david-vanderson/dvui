@@ -76,8 +76,7 @@ pub fn draw(self: *IconWidget) void {
 }
 
 pub fn deinit(self: *IconWidget) void {
-    const should_free = self.data().was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
     self.data().minSizeSetAndRefresh();
     self.data().minSizeReportToParent();

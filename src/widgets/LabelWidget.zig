@@ -109,11 +109,9 @@ pub fn initNoFmtAllocator(self: *LabelWidget, src: std.builtin.SourceLocation, l
     self.data().borderAndBackground(.{});
 
     if (self.data().accesskit_node()) |ak_node| {
-        const str = dvui.currentWindow().arena().dupeZ(u8, self.label_str) catch "";
-        defer dvui.currentWindow().arena().free(str);
-        dvui.AccessKit.nodeSetValue(ak_node, str);
+        dvui.AccessKit.nodeSetValueWithLength(ak_node, self.label_str.ptr, self.label_str.len);
         if (self.data().options.label == null) {
-            dvui.AccessKit.nodeSetLabel(ak_node, str);
+            dvui.AccessKit.nodeSetLabelWithLength(ak_node, self.label_str.ptr, self.label_str.len);
         }
     }
 }
@@ -230,8 +228,7 @@ pub fn matchEvent(self: *LabelWidget, e: *Event) bool {
 }
 
 pub fn deinit(self: *LabelWidget) void {
-    const should_free = self.data().was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
     if (self.allocator) |alloc| alloc.free(self.label_str);
     self.data().minSizeSetAndRefresh();

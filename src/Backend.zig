@@ -1,6 +1,7 @@
 //! Provides a consistent API for interacting with the backend
 
 const std = @import("std");
+const builtin = @import("builtin");
 const dvui = @import("dvui.zig");
 
 const Implementation = @import("backend");
@@ -65,7 +66,7 @@ pub fn contentScale(self: Backend) f32 {
 /// clipped to to `clipr` (if given).  Vertex positions and `clipr` are in
 /// physical pixels.  If `texture` is given, the vertexes uv coords are
 /// normalized (0-1). `clipr` (if given) has whole pixel values.
-pub fn drawClippedTriangles(self: Backend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr: ?dvui.Rect.Physical) GenericError!void {
+pub fn drawClippedTriangles(self: Backend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, clipr: ?dvui.Rect.Physical) GenericError!void {
     return self.impl.drawClippedTriangles(texture, vtx, idx, clipr);
 }
 
@@ -151,6 +152,18 @@ pub fn accessKitInitInBegin(self: Backend, accessKit: *dvui.AccessKit) GenericEr
     if (self.impl.accessKitShouldInitialize()) {
         accessKit.initialize();
         try self.impl.accessKitInitInBegin();
+    }
+}
+
+pub fn native(self: Backend, window: *dvui.Window) dvui.Window.Native {
+    if (comptime !@hasDecl(Implementation, "native")) {
+        return switch (builtin.os.tag) {
+            .windows => .{ .hwnd = null },
+            .macos => .{ .cocoa_window = null },
+            else => {},
+        };
+    } else {
+        return self.impl.native(window);
     }
 }
 

@@ -112,7 +112,7 @@ gpa: std.mem.Allocator,
 _arena: std.heap.ArenaAllocator,
 _lifo_arena: std.heap.ArenaAllocator,
 /// Used to allocate widgets with a fixed location
-_widget_stack: std.heap.ArenaAllocator,
+_widget_stack: WidgetStack,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
@@ -309,6 +309,16 @@ pub fn init(
     }
 
     return self;
+}
+
+pub const Native = switch (builtin.os.tag) {
+    .windows => struct { hwnd: ?*anyopaque },
+    .macos => struct { cocoa_window: ?*anyopaque },
+    else => void,
+};
+
+pub fn native(self: *Self) Native {
+    return self.backend.native(self);
 }
 
 pub fn addFont(self: *Self, name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?std.mem.Allocator) (std.mem.Allocator.Error || dvui.Font.Error)!void {
@@ -1334,7 +1344,7 @@ pub fn toastsShow(self: *Self, subwindow_id: ?Id, rect: Rect.Natural) void {
     var it = self.toasts.iterator(subwindow_id);
     it.i = self.toasts.indexOfSubwindow(subwindow_id) orelse return;
     var toast_win: dvui.FloatingWindowWidget = undefined;
-    toast_win.init(@src(), .{ .stay_above_parent_window = subwindow_id != null, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
+    toast_win.init(@src(), .{ .stay_above_parent_window = subwindow_id != null, .process_events_in_deinit = false }, .{ .role = .status, .background = false, .border = .{}, .label = .{ .label_widget = .next } });
     defer toast_win.deinit();
 
     toast_win.data().rectSet(dvui.placeIn(.cast(rect), toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 }));
@@ -1480,7 +1490,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     }
 
     {
-        const cap = self._widget_stack.queryCapacity();
+        const cap = self._widget_stack.arena.queryCapacity();
         //std.log.debug("_widget_stack capacity {d}", .{cap});
         _ = self._widget_stack.reset(.{ .retain_with_limit = cap - @divTrunc(cap, 10) });
     }
@@ -1557,6 +1567,8 @@ pub fn minSizeForChild(self: *Self, s: Size) void {
     _ = self;
     _ = s;
 }
+
+const WidgetStack = @import("WidgetStack.zig");
 
 const Options = dvui.Options;
 const Rect = dvui.Rect;

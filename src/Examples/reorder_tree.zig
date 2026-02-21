@@ -176,7 +176,7 @@ pub fn reorderListsSimple(lay: reorderLayout, cross_drag: bool) void {
     for (g.strings[0..g.strings.len], 0..) |s, i| {
 
         // make a reorderable for each entry in the list
-        var reorderable = reorder.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal, .min_size_content = dvui.Options.sizeM(8, 1) });
+        var reorderable = reorder.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal, .min_size_content = .sizeM(8, 1) });
         defer reorderable.deinit();
 
         if (reorderable.floating()) {
@@ -405,13 +405,6 @@ pub fn reorderTree(uniqueId: dvui.Id) void {
         .{
             .border = .{ .x = 1 },
             .corner_radius = dvui.Rect.all(4),
-            .box_shadow = .{
-                .color = .black,
-                .offset = .{ .x = -5, .y = 5 },
-                .shrink = 5,
-                .fade = 10,
-                .alpha = 0.15,
-            },
         },
     ) catch std.debug.panic("Failed to recurse files", .{});
 }
@@ -586,7 +579,6 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
 
         var branch_opts_override = dvui.Options{
             .id_extra = id_extra,
-            .expand = .horizontal,
         };
 
         // Check our branch id, which is updated from our entry name making it a stable ID

@@ -16,6 +16,10 @@ const AccessKit = dvui.AccessKit;
 
 const TextEntryWidget = @This();
 
+/// If min_size_content is not given, use Font.sizeM(defaultMWidth, 1).
+/// If multiline is false and max_size_content is not given, use min_size_content.
+pub var defaultMWidth: f32 = 14;
+
 pub var defaults: Options = .{
     .name = "TextEntry",
     .role = .text_input, // can change to multiline in init
@@ -207,7 +211,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         .horizontal_bar = init_opts.scroll_horizontal_bar orelse (if (init_opts.multiline) .auto else .hide),
     };
 
-    var options = defaults.themeOverride(opts.theme).min_sizeM(14, 1);
+    var options = defaults.themeOverride(opts.theme).min_sizeM(defaultMWidth, 1);
 
     if (init_opts.password_char != null) {
         options.role = .password_input;
@@ -216,6 +220,9 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     }
 
     options = options.override(opts);
+    if (!init_opts.multiline and options.max_size_content == null) {
+        options = options.override(.{ .max_size_content = .size(options.min_size_contentGet()) });
+    }
 
     // padding is interpreted as the padding for the TextLayoutWidget, but
     // we also need to add it to content size because TextLayoutWidget is
@@ -377,9 +384,8 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         AccessKit.nodeSetClipsChildren(ak_node); // AK TODO: Check this is correct?
 
         if (self.data().options.role != .password_input) {
-            const str = dvui.currentWindow().arena().dupeZ(u8, self.text[0..self.len]) catch "";
-            defer dvui.currentWindow().arena().free(str);
-            AccessKit.nodeSetValue(ak_node, str);
+            const str = self.text[0..self.len];
+            AccessKit.nodeSetValueWithLength(ak_node, str.ptr, str.len);
         }
     }
 }
@@ -395,7 +401,6 @@ pub fn matchEvent(self: *TextEntryWidget, e: *Event) bool {
 
 pub fn processEvents(self: *TextEntryWidget) void {
     const evts = dvui.events();
-    //std.debug.print("EVTS = {any}\n", .{evts});
     for (evts) |*e| {
         if (!self.matchEvent(e))
             continue;
@@ -410,10 +415,11 @@ pub fn draw(self: *TextEntryWidget) void {
     if (self.len == 0) {
         if (self.init_opts.placeholder) |placeholder| {
             if (self.data().accesskit_node()) |ak_node| {
-                const str = dvui.currentWindow().arena().dupeZ(u8, placeholder) catch "";
-                defer dvui.currentWindow().arena().free(str);
-                AccessKit.nodeSetPlaceholder(ak_node, str);
+                AccessKit.nodeSetPlaceholderWithLength(ak_node, placeholder.ptr, placeholder.len);
 
+                // Create an empty text run for the empty text entry.
+                dvui.currentWindow().accesskit.text_run_parent = self.data().id;
+                self.textLayout.textRunCreateEmpty(self.data().id, true);
                 // prevent textLayout from making a text run for the placeholder text
                 dvui.currentWindow().accesskit.text_run_parent = null;
             }
@@ -1208,7 +1214,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                         e.handle(@src(), self.data());
                         if (self.init_opts.multiline) {
                             self.textTyped("\n", false);
-                        } else {
+                        } else if (ke.action == .down) {
                             self.enter_pressed = true;
                             dvui.refresh(null, @src(), self.data().id);
                         }
@@ -1312,10 +1318,12 @@ pub fn copy(self: *TextEntryWidget) void {
 }
 
 pub fn deinit(self: *TextEntryWidget) void {
-    const should_free = self.data().was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
 
+    // set clip back to what textLayout had, because it might need it to set
+    // the mouse cursor
+    dvui.clipSet(self.textClip);
     self.textLayout.deinit();
     self.scroll.deinit();
 

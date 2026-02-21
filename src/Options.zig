@@ -87,7 +87,7 @@ padding: ?Rect = null,
 // x topleft, y topright, w botright, h botleft
 corner_radius: ?Rect = null,
 
-/// Widget min size will be at least this much.
+/// Widget min size will be at least this, unless max_size_content is smaller.
 ///
 /// padding/border/margin will be added to this.
 min_size_content: ?Size = null,
@@ -172,6 +172,11 @@ pub const MaxSize = struct {
 
     pub fn all(v: f32) MaxSize {
         return .{ .w = v, .h = v };
+    }
+
+    /// Size of "M" characters in current theme body font.
+    pub fn sizeM(wide: f32, tall: f32) MaxSize {
+        return .size(dvui.Font.theme(.body).sizeM(wide, tall));
     }
 };
 
@@ -427,8 +432,8 @@ pub fn min_sizeM(self: *const Options, wide: f32, tall: f32) Options {
     return self.override(.{ .min_size_content = self.fontGet().sizeM(wide, tall) });
 }
 
-pub fn sizeM(wide: f32, tall: f32) Size {
-    return (Options{}).fontGet().sizeM(wide, tall);
+pub fn max_sizeM(self: *const Options, wide: f32, tall: f32) Options {
+    return self.override(.{ .max_size_content = .size(self.fontGet().sizeM(wide, tall)) });
 }
 
 pub fn padSize(self: *const Options, s: Size) Size {

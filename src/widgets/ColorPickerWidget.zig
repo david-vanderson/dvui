@@ -16,7 +16,6 @@ box: dvui.BoxWidget = undefined,
 pub const InitOptions = struct {
     hsv: *Color.HSV,
     dir: dvui.enums.Direction = .horizontal,
-    was_allocated_on_widget_stack: bool = false,
 };
 
 pub var defaults = Options{
@@ -46,8 +45,7 @@ pub fn init(self: *ColorPickerWidget, src: std.builtin.SourceLocation, init_opts
 }
 
 pub fn deinit(self: *ColorPickerWidget) void {
-    const should_free = self.init_opts.was_allocated_on_widget_stack;
-    defer if (should_free) dvui.widgetFree(self);
+    defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
     self.box.deinit();
 }

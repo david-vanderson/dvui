@@ -1,3 +1,5 @@
+/// <reference path="./web.d.ts" />
+
 /**@typedef {BigInt} Id */
 
 /**
@@ -9,7 +11,7 @@ async function dvui_sleep(ms) {
 
 /**
  * @param {string} url
- * @returns {Uint8Array}
+ * @returns {Promise<Uint8Array>}
  */
 async function dvui_fetch(url) {
     let x = await fetch(url);
@@ -132,23 +134,27 @@ const fragmentShaderSource_webgl2 = `# version 300 es
 `;
 
 /**
- * @param {string} canvasId
- * @param {string} wasmFile The url to the wasm file, to be used in `fetch`
+ * @param {string | HTMLCanvasElement} canvas - A canvas element or string id of one
+ * @param {DVUI.WasmArg} wasmRef - The url to the wasm file, to be used in `fetch`
+ * @returns {Promise<Dvui>}
  */
-function dvui(canvasId, wasmFile) {
+export function dvui(canvas, wasmRef) {
     const dvui = new Dvui();
-    WebAssembly.instantiateStreaming(fetch(wasmFile), { dvui: dvui.imports })
-        .then((result) => {
-            dvui.setInstance(result.instance);
-            dvui.setCanvas(canvasId);
-            dvui.run();
-        });
+    const wasmPromise = typeof wasmRef === "string"
+        ? WebAssembly.instantiateStreaming(fetch(wasmRef), { dvui: dvui.imports })
+        : Promise.resolve(wasmRef);
+    return wasmPromise.then((result) => {
+        dvui.setInstance(result.instance);
+        dvui.setCanvas(canvas);
+        dvui.run();
+        return dvui;
+    });
 }
 
 const utf8decoder = new TextDecoder();
 const utf8encoder = new TextEncoder();
 
-class Dvui {
+export class Dvui {
     /** @type {WebGL2RenderingContext | WebGLRenderingContext} */
     gl;
     /** @type {WebGLBuffer} */
@@ -179,6 +185,9 @@ class Dvui {
 
     renderRequested = false;
     renderTimeoutId = 0;
+
+    /** @type {WebAssembly.ModuleImports} */
+    imports;
 
     /** @type {WebAssembly.Instance} */
     instance;
@@ -256,6 +265,85 @@ class Dvui {
         return idx;
     }
 
+    /**
+     * @param {DVUI.AllocatorFunction} allocFn 
+     * @param {number} len 
+     * @returns {[pointer: number, slice: Uint8Array]}
+     */
+    genericAlloc(allocFn, len) {
+        const pointer = allocFn(len);
+        const slice = new Uint8Array(
+            this.instance.exports.memory.buffer,
+            pointer,
+            len
+        );
+
+        return [pointer, slice];
+    }
+
+    /**
+     * @param {DVUI.AllocatorFunction} allocFn 
+     * @param {ArrayLike<number>} bytes 
+     * @returns {number} pointer
+     */
+    allocBuffer(allocFn, bytes) {
+        const [pointer, slice] = this.genericAlloc(allocFn, bytes.length);
+        slice.set(bytes);
+        return pointer;
+    }
+
+    /**
+     * @param {DVUI.AllocatorFunction} allocFn 
+     * @param {ArrayLike<number>} bytes 
+     * @param {number} sentinel 
+     * @returns {number} pointer
+     */
+    allocBufferZ(allocFn, bytes, sentinel = 0) {
+        const [pointer, slice] = this.genericAlloc(allocFn, bytes.length + 1);
+        slice.set(bytes);
+        slice[bytes.length] = sentinel;
+        return pointer;
+    }
+
+    /**
+     * @param {DVUI.AllocatorFunction} allocFn 
+     * @param {string} string 
+     * @returns 
+     */
+    allocString(allocFn, string) {
+        const buffer = utf8encoder.encode(string);
+        return this.allocBuffer(allocFn, buffer);
+    };
+
+    /**
+     * @param {DVUI.AllocatorFunction} allocFn 
+     * @param {string} string 
+     * @param {number} sentinel 
+     * @returns {number} pointer
+     */
+    allocStringZ(allocFn, string, sentinel) {
+        const buffer = utf8encoder.encode(string);
+        return this.allocBufferZ(allocFn, buffer, sentinel);
+    };
+
+    /**
+     * @param {number} ptr 
+     * @param {number} length 
+     * @returns {string}
+     */
+    stringFromPointer(ptr, length) {
+        return utf8decoder.decode(this.bytesFromPointer(ptr, length));
+    }
+
+    /**
+     * @param {number} ptr 
+     * @param {number} length 
+     * @returns {Uint8Array}
+     */
+    bytesFromPointer(ptr, length) {
+        return new Uint8Array(this.instance.exports.memory.buffer, ptr, length)
+    }
+
     constructor() {
         this.hidden_input = document.createElement("input");
         this.hidden_input.setAttribute("autocapitalize", "none");
@@ -279,25 +367,13 @@ class Dvui {
                 }
             },
             wasm_panic: (ptr, len) => {
-                this.stopped = true;
-                let msg = utf8decoder.decode(
-                    new Uint8Array(
-                        this.instance.exports.memory.buffer,
-                        ptr,
-                        len,
-                    ),
-                );
+                this.stop();
+                const msg = this.stringFromPointer(ptr, len);
                 console.error("PANIC:", msg);
                 alert(msg);
             },
             wasm_console_drain: (ptr, len) => {
-                this.console_string += utf8decoder.decode(
-                    new Uint8Array(
-                        this.instance.exports.memory.buffer,
-                        ptr,
-                        len,
-                    ),
-                );
+                this.console_string += this.stringFromPointer(ptr, len);
             },
             wasm_console_flush: (level) => {
                 switch (level) {
@@ -348,11 +424,7 @@ class Dvui {
                 return this.gl.canvas.clientHeight;
             },
             wasm_textureCreate: (pixels, width, height, interp) => {
-                const pixelData = new Uint8Array(
-                    this.instance.exports.memory.buffer,
-                    pixels,
-                    width * height * 4,
-                );
+                const pixelData = this.bytesFromPointer(pixels, width * height * 4);
 
                 const texture = this.gl.createTexture();
                 const id = this.newTextureId;
@@ -491,11 +563,7 @@ class Dvui {
                     0,
                 );
 
-                var dest = new Uint8Array(
-                    this.instance.exports.memory.buffer,
-                    pixels_out,
-                    width * height * 4,
-                );
+                var dest = this.bytesFromPointer(pixels_out, width * height * 4);
                 this.gl.readPixels(
                     0,
                     0,
@@ -610,11 +678,7 @@ class Dvui {
                 );
 
                 this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
-                const vertexes = new Uint8Array(
-                    this.instance.exports.memory.buffer,
-                    vertex_ptr,
-                    vertex_len,
-                );
+                const vertexes = this.bytesFromPointer(vertex_ptr, vertex_len)
                 this.gl.bufferData(
                     this.gl.ARRAY_BUFFER,
                     vertexes,
@@ -741,13 +805,7 @@ class Dvui {
                 }
             },
             wasm_cursor: (name_ptr, name_len) => {
-                let cursor_name = utf8decoder.decode(
-                    new Uint8Array(
-                        this.instance.exports.memory.buffer,
-                        name_ptr,
-                        name_len,
-                    ),
-                );
+                const cursor_name = this.stringFromPointer(name_ptr, name_len);
                 this.gl.canvas.style.cursor = cursor_name;
             },
             wasm_text_input: (x, y, w, h) => {
@@ -758,13 +816,7 @@ class Dvui {
                 }
             },
             wasm_open_url: (ptr, len, new_win) => {
-                let url = utf8decoder.decode(
-                    new Uint8Array(
-                        this.instance.exports.memory.buffer,
-                        ptr,
-                        len,
-                    ),
-                );
+                const url = this.stringFromPointer(ptr, len);
 
                 if (new_win) {
                     window.open(url);
@@ -791,36 +843,19 @@ class Dvui {
                 data_ptr,
                 data_len,
             ) => {
-                const name = utf8decoder.decode(
-                    new Uint8Array(
-                        this.instance.exports.memory.buffer,
-                        name_ptr,
-                        name_len,
-                    ),
-                );
-                const data = new Uint8Array(
-                    this.instance.exports.memory.buffer,
-                    data_ptr,
-                    data_len,
-                );
-                const blob = new Blob([data], { type: "octet/stream" });
+                const name = this.stringFromPointer(name_ptr, name_len);
+                const data = this.bytesFromPointer(data_ptr, data_len);
+                const blob = new Blob([data], { type: "application/octet-stream" });
                 const fileURL = URL.createObjectURL(blob);
                 const dl = document.createElement("a");
                 dl.href = fileURL;
                 dl.download = name;
-                document.body.appendChild(dl);
                 dl.click();
-                document.body.removeChild(dl);
+                dl.remove();
                 URL.revokeObjectURL(fileURL);
             },
             wasm_open_file_picker: (id, accept_ptr, accept_len, multiple) => {
-                let accept = utf8decoder.decode(
-                    new Uint8Array(
-                        this.instance.exports.memory.buffer,
-                        accept_ptr,
-                        accept_len,
-                    ),
-                );
+                const accept = this.stringFromPointer(accept_ptr, accept_len);
                 // console.log("Open picker", accept_ptr, accept_len, accept, multiple);
                 dvui_open_file_picker(accept, multiple).then((filelist) => {
                     let files = [];
@@ -851,20 +886,8 @@ class Dvui {
             wasm_get_file_name: (id, file_index) => {
                 const cached = this.filesCache.get(id);
                 if (!cached || cached.files.length <= file_index) return;
-                const name = utf8encoder.encode(
-                    cached.files[file_index].name,
-                );
-                const ptr = this.instance.exports.arena_u8(
-                    name.length + 1,
-                );
-                var dest = new Uint8Array(
-                    this.instance.exports.memory.buffer,
-                    ptr,
-                    name.length + 1,
-                );
-                dest.set(name);
-                dest.set([0], name.length);
-                return ptr;
+
+                return this.allocStringZ(this.instance.exports.arena_u8, cached.files[file_index].name);
             },
             wasm_read_file_data: (id, file_index, data_ptr) => {
                 const cached = this.filesCache.get(id);
@@ -885,13 +908,7 @@ class Dvui {
                     return;
                 }
 
-                let msg = utf8decoder.decode(
-                    new Uint8Array(
-                        this.instance.exports.memory.buffer,
-                        ptr,
-                        len,
-                    ),
-                );
+                const msg = this.stringFromPointer(ptr, len)
                 if (navigator.clipboard) {
                     navigator.clipboard.writeText(msg);
                 } else {
@@ -905,15 +922,7 @@ class Dvui {
             wasm_add_noto_font: () => {
                 dvui_fetch("NotoSansKR-Regular.ttf").then((bytes) => {
                     //console.log("bytes len " + bytes.length);
-                    const ptr = this.instance.exports.gpa_u8(
-                        bytes.length,
-                    );
-                    var dest = new Uint8Array(
-                        this.instance.exports.memory.buffer,
-                        ptr,
-                        bytes.length,
-                    );
-                    dest.set(bytes);
+                    const ptr = this.allocBuffer(this.instance.exports.gpa_u8, bytes)
                     this.instance.exports.new_font(
                         ptr,
                         bytes.length,
@@ -976,8 +985,7 @@ class Dvui {
         this.gl.compileShader(vertexShader);
         if (!this.gl.getShaderParameter(vertexShader, this.gl.COMPILE_STATUS)) {
             alert(
-                `Error compiling vertex shader: ${
-                    this.gl.getShaderInfoLog(vertexShader)
+                `Error compiling vertex shader: ${this.gl.getShaderInfoLog(vertexShader)
                 }`,
             );
             this.gl.deleteShader(vertexShader);
@@ -995,8 +1003,7 @@ class Dvui {
             !this.gl.getShaderParameter(fragmentShader, this.gl.COMPILE_STATUS)
         ) {
             alert(
-                `Error compiling fragment shader: ${
-                    this.gl.getShaderInfoLog(fragmentShader)
+                `Error compiling fragment shader: ${this.gl.getShaderInfoLog(fragmentShader)
                 }`,
             );
             this.gl.deleteShader(fragmentShader);
@@ -1015,8 +1022,7 @@ class Dvui {
             )
         ) {
             alert(
-                `Error initializing shader program: ${
-                    this.gl.getProgramInfoLog(this.shaderProgram)
+                `Error initializing shader program: ${this.gl.getProgramInfoLog(this.shaderProgram)
                 }`,
             );
             return null;
@@ -1071,15 +1077,7 @@ class Dvui {
         let dvui_init_return = 0;
         let str = utf8encoder.encode(navigator.platform);
         if (str.length > 0) {
-            const ptr = this.instance.exports.gpa_u8(
-                str.length,
-            );
-            var dest = new Uint8Array(
-                this.instance.exports.memory.buffer,
-                ptr,
-                str.length,
-            );
-            dest.set(str);
+            const ptr = this.allocBuffer(this.instance.exports.gpa_u8, str);
             dvui_init_return = this.instance.exports.dvui_init(
                 ptr,
                 str.length,
@@ -1098,6 +1096,8 @@ class Dvui {
     }
 
     requestRender() {
+        if (this.stopped) return;
+
         if (this.renderTimeoutId > 0) {
             // we got called before the timeout happened
             clearTimeout(this.renderTimeoutId);
@@ -1113,8 +1113,29 @@ class Dvui {
         }
     }
 
+    // For debugging.  Turns off dvui rendering (zig code stops running).
+    stop() {
+        if (this.renderTimeoutId > 0) {
+            clearTimeout(this.renderTimeoutId);
+            this.renderTimeoutId = 0;
+        }
+
+        this.renderRequested = false;
+        this.stopped = true;
+    }
+
+    // For debugging.  Turn back on dvui rendering (zig code starts running).
+    restart() {
+        if (!this.stopped) {
+            console.log("dvui.restart() called when not stopped");
+        }
+        this.stopped = false;
+        this.requestRender();
+    }
+
     render() {
         if (this.stopped) return;
+
         this.renderRequested = false;
 
         // if the canvas changed size, adjust the backing buffer
@@ -1158,7 +1179,7 @@ class Dvui {
         this.filesCacheModified = false;
 
         if (millis_to_wait < 0) {
-            this.stopped = true;
+            this.stop();
         } else if (millis_to_wait == 0) {
             this.requestRender();
         } else if (millis_to_wait > 0) {
@@ -1199,6 +1220,7 @@ class Dvui {
             resizeObserver.observe(this.gl.canvas);
         }
         this.gl.canvas.addEventListener("mousemove", (ev) => {
+            if (this.stopped) return;
             let rect = this.gl.canvas.getBoundingClientRect();
             let x = (ev.clientX - rect.left) / (rect.right - rect.left) *
                 this.gl.drawingBufferWidth;
@@ -1208,15 +1230,18 @@ class Dvui {
             this.requestRender();
         });
         this.gl.canvas.addEventListener("mousedown", (ev) => {
+            if (this.stopped) return;
             this.instance.exports.add_event(2, ev.button, 0, 0, 0);
             this.requestRender();
         });
         this.gl.canvas.addEventListener("mouseup", (ev) => {
+            if (this.stopped) return;
             this.instance.exports.add_event(3, ev.button, 0, 0, 0);
             this.need_oskCheck = true;
             this.requestRender();
         });
         this.gl.canvas.addEventListener("wheel", (ev) => {
+            if (this.stopped) return;
             ev.preventDefault();
             if (ev.deltaX != 0) {
                 const min = Math.min(
@@ -1250,6 +1275,7 @@ class Dvui {
         });
 
         let keydown = (ev) => {
+            if (this.stopped) return;
             if (ev.key == "Tab") {
 
                 // In most browsers we don't even see a control-tab, the
@@ -1264,22 +1290,14 @@ class Dvui {
 
             let str = utf8encoder.encode(ev.key);
             if (str.length > 0) {
-                const ptr = this.instance.exports.arena_u8(
-                    str.length,
-                );
-                var dest = new Uint8Array(
-                    this.instance.exports.memory.buffer,
-                    ptr,
-                    str.length,
-                );
-                dest.set(str);
+                const ptr = this.allocBuffer(this.instance.exports.arena_u8, str)
                 this.instance.exports.add_event(
                     5,
                     ptr,
                     str.length,
                     ev.repeat,
                     (ev.metaKey << 3) + (ev.altKey << 2) +
-                        (ev.ctrlKey << 1) + (ev.shiftKey << 0),
+                    (ev.ctrlKey << 1) + (ev.shiftKey << 0),
                 );
                 this.requestRender();
             }
@@ -1288,21 +1306,16 @@ class Dvui {
         this.hidden_input.addEventListener("keydown", keydown.bind(this));
 
         let keyup = (ev) => {
+            if (this.stopped) return;
             const str = utf8encoder.encode(ev.key);
-            const ptr = this.instance.exports.arena_u8(str.length);
-            var dest = new Uint8Array(
-                this.instance.exports.memory.buffer,
-                ptr,
-                str.length,
-            );
-            dest.set(str);
+            const ptr = this.allocBuffer(this.instance.exports.arena_u8, str);
             this.instance.exports.add_event(
                 6,
                 ptr,
                 str.length,
                 0,
                 (ev.metaKey << 3) + (ev.altKey << 2) + (ev.ctrlKey << 1) +
-                    (ev.shiftKey << 0),
+                (ev.shiftKey << 0),
             );
             this.need_oskCheck = true;
             this.requestRender();
@@ -1311,18 +1324,11 @@ class Dvui {
         this.hidden_input.addEventListener("keyup", keyup.bind(this));
 
         this.hidden_input.addEventListener("beforeinput", (ev) => {
+            if (this.stopped) return;
             ev.preventDefault();
             if (ev.data && !ev.isComposing) {
                 const str = utf8encoder.encode(ev.data);
-                const ptr = this.instance.exports.arena_u8(
-                    str.length,
-                );
-                var dest = new Uint8Array(
-                    this.instance.exports.memory.buffer,
-                    ptr,
-                    str.length,
-                );
-                dest.set(str);
+                const ptr = this.allocBuffer(this.instance.exports.arena_u8, str);
                 this.instance.exports.add_event(
                     7,
                     ptr,
@@ -1334,17 +1340,10 @@ class Dvui {
             }
         });
         this.hidden_input.addEventListener("compositionend", (ev) => {
+            if (this.stopped) return;
             if (ev.data) {
                 const str = utf8encoder.encode(ev.data);
-                const ptr = this.instance.exports.arena_u8(
-                    str.length,
-                );
-                var dest = new Uint8Array(
-                    this.instance.exports.memory.buffer,
-                    ptr,
-                    str.length,
-                );
-                dest.set(str);
+                const ptr = this.allocBuffer(this.instance.exports.arena_u8, str);
                 this.instance.exports.add_event(
                     7,
                     ptr,
@@ -1358,6 +1357,7 @@ class Dvui {
             ev.target.value = "";
         });
         this.gl.canvas.addEventListener("touchstart", (ev) => {
+            if (this.stopped) return;
             ev.preventDefault();
             let rect = this.gl.canvas.getBoundingClientRect();
             for (let i = 0; i < ev.changedTouches.length; i++) {
@@ -1378,6 +1378,7 @@ class Dvui {
             this.requestRender();
         });
         this.gl.canvas.addEventListener("touchend", (ev) => {
+            if (this.stopped) return;
             ev.preventDefault();
             let rect = this.gl.canvas.getBoundingClientRect();
             for (let i = 0; i < ev.changedTouches.length; i++) {
@@ -1402,6 +1403,7 @@ class Dvui {
             this.requestRender();
         });
         this.gl.canvas.addEventListener("touchmove", (ev) => {
+            if (this.stopped) return;
             ev.preventDefault();
             let rect = this.gl.canvas.getBoundingClientRect();
             for (let i = 0; i < ev.changedTouches.length; i++) {

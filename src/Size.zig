@@ -20,6 +20,11 @@ pub fn SizeType(comptime units: dvui.enums.Units) type {
             return .{ .h = h };
         }
 
+        /// Size of "M" characters in current theme body font.
+        pub fn sizeM(wide: f32, tall: f32) Self {
+            return dvui.Font.theme(.body).sizeM(wide, tall);
+        }
+
         /// Natural pixels is the unit for subwindows. It differs from
         /// physical pixels on hidpi screens or with content scaling.
         pub const Natural = if (units == .none) SizeType(.natural) else @compileError("tried to nest Size.Natural");
