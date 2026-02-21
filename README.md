@@ -81,6 +81,7 @@ Online discussion happens in #gui-dev on the zig discord server: https://discord
   - [Raylib](https://www.raylib.com/)
   - [Raylib-zig](https://github.com/raylib-zig/raylib-zig)
   - [Dx11](https://learn.microsoft.com/en-us/windows/win32/direct3d11/atoc-dx-graphics-direct3d-11)
+  - [OpenGL+GLFW](https://www.glfw.org/)
 - [TinyVG](https://tinyvg.tech/) icon support via [zig-lib-svg2tvg](https://github.com/nat3Github/zig-lib-svg2tvg)
   - more icons at [zig-lib-icons](https://github.com/nat3Github/zig-lib-icons)
 - Raster image support via [stb_image](https://github.com/nothings/stb)
