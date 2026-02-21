@@ -578,8 +578,8 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
         .glfw_opengl3 => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .stb_image = true, .tiny_file_dialogs = true, .tree_sitter = true });
 
-            const glfw_opengl3_mod = b.addModule("glfw_opengl3", .{
-                .root_source_file = b.path("src/backends/glfw_opengl3.zig"),
+            const glfw_opengl_mod = b.addModule("glfw-opengl", .{
+                .root_source_file = b.path("src/backends/glfw-opengl.zig"),
                 .target = target,
                 .optimize = optimize,
                 .link_libc = true,
@@ -590,8 +590,8 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             });
 
             if (maybe_zgl) |zgl| {
-                glfw_opengl3_mod.addImport("zgl", zgl.module("zgl"));
-                glfw_opengl3_mod.linkSystemLibrary("GL", .{});
+                glfw_opengl_mod.addImport("zgl", zgl.module("zgl"));
+                glfw_opengl_mod.linkSystemLibrary("GL", .{});
             }
 
             const maybe_glfw = b.lazyDependency(
@@ -603,19 +603,20 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             );
 
             if (maybe_glfw) |glfw| {
-                glfw_opengl3_mod.addImport("zglfw", glfw.module("root"));
-                glfw_opengl3_mod.linkLibrary(glfw.artifact("glfw"));
+                glfw_opengl_mod.addImport("zglfw", glfw.module("root"));
+                glfw_opengl_mod.linkLibrary(glfw.artifact("glfw"));
             }
 
-            const dvui_glfw_opengl3 = addDvuiModule("dvui_glfw_opengl3", dvui_opts);
-            linkBackend(dvui_glfw_opengl3, glfw_opengl3_mod);
+            const dvui_glfw_opengl = addDvuiModule("dvui-glfw-opengl", dvui_opts);
+            linkBackend(dvui_glfw_opengl, glfw_opengl_mod);
 
             const example_opts: ExampleOptions = .{
-                .dvui_mod = dvui_glfw_opengl3,
+                .dvui_mod = dvui_glfw_opengl,
                 .backend_name = "glfw-opengl-backend",
-                .backend_mod = glfw_opengl3_mod,
+                .backend_mod = glfw_opengl_mod,
             };
-            addExample("glfw-opengl-ontop", b.path("examples/glfw_opengl.zig"), test_dvui_and_app, example_opts, dvui_opts);
+            addExample("glfw-opengl-ontop", b.path("examples/glfw-opengl-ontop.zig"), test_dvui_and_app, example_opts, dvui_opts);
+            addExample("glfw-opengl-standalone", b.path("examples/glfw-opengl-standalone.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .web => {
             dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = false });
