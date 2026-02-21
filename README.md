@@ -10,10 +10,12 @@ Tested with Zig v0.15.2 (for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.c
 
 ## Examples
 
-`zig build sdl3-app`
-* sdl3 backend, dvui handles main loop
+No prebuilt binaries are provided, so run `zig build <backend>-<purpose>` from source:
+* For example, `zig build sdl3-app` for SDL3 backend, where DVUI handles mainloop
 
-If you are unsure, start with `sdl3-app`, then try altering the contents of <code>frame()</code> inside <code>examples/app.zig</code>.
+If you are unsure where to start, choose `sdl3-app`, then try altering the contents of <code>frame()</code> inside <code>./examples/app.zig</code>.
+
+The [`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) examples repository aims to provide the minimal required setup and serves a simplified `build.zig`. All examples residing there are generally the same as ones found here in the `dvui` repository. It's therefore recommended you start out by cloning files from `dvui-demo`.
 
 <table>
   <thead>
@@ -25,7 +27,7 @@ If you are unsure, start with `sdl3-app`, then try altering the contents of <cod
         <sub>
           dvui handles main loop
           <br>
-          <a href="https://github.com/david-vanderson/dvui-demo/blob/main/examples/app.zig">app.zig</a>
+          <a href="https://github.com/david-vanderson/dvui-demo/blob/main/examples/app.zig"><code>app.zig</code></a>
         </sub>
       </th>
       <th>
@@ -61,9 +63,9 @@ If you are unsure, start with `sdl3-app`, then try altering the contents of <cod
         <br>
         <sub>Rendering via SDL GPU</sub>
       </td>
-      <td>Todo</td>
-      <td><code>sdl3gpu-ontop</code></td>
+      <td>TODO</td>
       <td><code>sdl3gpu-standalone</code></td>
+      <td><code>sdl3gpu-ontop</code></td>
     </tr>
     <tr>
       <td><strong>SDL2</strong></td>
@@ -102,6 +104,12 @@ If you are unsure, start with `sdl3-app`, then try altering the contents of <cod
       <td><code>web-app</code></td>
       <td>None</td>
       <td>None</td>
+    </tr>
+    <tr>
+      <td><strong>OpenGL + GLFW</strong></td>
+      <td>TODO</td>
+      <td>TODO</td>
+      <td>TODO</td>
     </tr>
   </tbody>
 </table>
@@ -157,6 +165,7 @@ Discuss yours on:
   - [Raylib (C)](https://www.raylib.com/)
   - [Raylib (Zig)](https://github.com/raylib-zig/raylib-zig)
   - [DX11](https://learn.microsoft.com/en-us/windows/win32/direct3d11/atoc-dx-graphics-direct3d-11)
+  - [OpenGL + GLFW](https://www.glfw.org/)
 - [TinyVG](https://tinyvg.tech/) icons
   - [`zig-lib-svg2tvg`](https://github.com/nat3Github/zig-lib-svg2tvg)
   - more icons at [`zig-lib-icons`](https://github.com/nat3Github/zig-lib-icons)
@@ -185,7 +194,7 @@ Further reading:
 
 ## Getting Started
 
-[`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) is a template repository:
+[`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) is a template repository: <!-- TODO relate to the mention in Examples? -->
 * `build.zig` and `build.zig.zon` reference DVUI as a zig dependency
 * includes all the same examples
 
@@ -202,7 +211,7 @@ Alternatively:
 
 Further reading:
 - Using a version of `raylib-zig` that's not bundled with DVUI:
-  - [`raylib_zig_custom.md`](raylib_zig_custom.md)
+  - [`readme-raylib-zig-custom.md`](readme-raylib-zig-custom.md)
 
 ## Frequently Asked Questions
 
@@ -440,7 +449,7 @@ Each widget has the following options that can be changed through the `Options` 
 - `font` (directly specify):
   - Can reference theme fonts via `Font.theme(.body)` (or `.heading`, `.title`, `.mono`)
 - `theme` (use a separate theme altogether)
-- `ninepatch_fill` (also _hover and _press):
+- `ninepatch_fill` (also `_hover` and `_press`):
   - Draws an image over the background
 
 TODO add image showcasing all these features?
