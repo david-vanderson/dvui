@@ -7,6 +7,8 @@ pub const kind: dvui.enums.Backend = .glfw_opengl3;
 
 const log = std.log.scoped(.glfw_opengl3Backend);
 
+const BYTES_PER_VERTEX = 20;
+
 // Create a singleton for this backend
 var events: ?std.array_list.Managed(GlfwEvent) = null;
 
@@ -116,10 +118,10 @@ pub fn init(gpa: std.mem.Allocator, window_: *anyopaque) @This() {
     zgl.enableVertexAttribArray(0);
     zgl.enableVertexAttribArray(1);
     zgl.enableVertexAttribArray(2);
-    zgl.vertexAttribPointer(0, 2, .float, false, 20, 0);
-    zgl.vertexAttribPointer(1, 2, .float, false, 20, 8);
-    zgl.vertexAttribPointer(2, 4, .unsigned_byte, false, 20, 16);
-    const el_buf = zgl.Buffer.create();
+    zgl.vertexAttribPointer(0, 2, .float, false, BYTES_PER_VERTEX, 0);
+    zgl.vertexAttribPointer(1, 2, .float, false, BYTES_PER_VERTEX, 8);
+    zgl.vertexAttribPointer(2, 4, .unsigned_byte, false, BYTES_PER_VERTEX, 16);
+    const el_buf = zgl.Buffer.gen();
     el_buf.bind(.element_array_buffer);
 
     // Don't want our state changed by external code
@@ -177,6 +179,12 @@ pub fn deinit(ctx: *@This()) void {
     ctx.framebuf_map.clearAndFree(ctx.gpa);
     ctx.arena.deinit();
     if (events) |_events| _events.deinit();
+    _ = ctx.window.setKeyCallback(ctx.userKeyCallback);
+    _ = ctx.window.setCharCallback(ctx.userCharCallback);
+    _ = ctx.window.setMouseButtonCallback(ctx.userMouseButtonCallback);
+    _ = ctx.window.setCursorPosCallback(ctx.userCursorPosCallback);
+    _ = ctx.window.setFramebufferSizeCallback(ctx.userFramebufferSizeCallback);
+    _ = ctx.window.setScrollCallback(ctx.userScrollCallback);
 }
 
 pub fn begin(ctx: *@This(), _: std.mem.Allocator) !void {
@@ -253,7 +261,6 @@ pub fn drawClippedTriangles(
     zgl.enable(.blend);
     const aa = ctx.arena.allocator();
 
-    const BYTES_PER_VERTEX = 20;
     const vertex_buffer = try aa.alloc(u8, BYTES_PER_VERTEX * vtx.len);
     defer aa.free(vertex_buffer);
     for (vtx, 0..) |v, index| {
@@ -600,7 +607,7 @@ fn glfwKeyCallback(
 ) callconv(.c) void {
     if (events) |*ev| {
         ev.append(.{ .KeyFn = .{ window, key, scancode, action, mods } }) catch @panic("OOM");
-    } else unreachable;
+    } else log.warn("Events are currently not implemented!", .{});
 }
 
 fn handleKeyEvent(
@@ -638,7 +645,7 @@ fn handleKeyEvent(
 fn glfwCharCallback(window: *zglfw.Window, codepoint: u32) callconv(.c) void {
     if (events) |*ev| {
         ev.append(.{ .CharFn = .{ window, codepoint } }) catch @panic("OOM");
-    } else unreachable;
+    } else log.warn("Events are currently not implemented!", .{});
 }
 
 fn handleCharEvent(dvui_window: *dvui.Window, window: *zglfw.Window, codepoint: u32) void {
@@ -655,7 +662,7 @@ fn handleCharEvent(dvui_window: *dvui.Window, window: *zglfw.Window, codepoint: 
 fn glfwCursorPosCallback(window: *zglfw.Window, xpos: f64, ypos: f64) callconv(.c) void {
     if (events) |*ev| {
         ev.append(.{ .CursorPosFn = .{ window, xpos, ypos } }) catch @panic("OOM");
-    } else unreachable;
+    } else log.warn("Events are currently not implemented!", .{});
 }
 
 fn handleCursorPosEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xpos: f64, ypos: f64) void {
@@ -683,7 +690,7 @@ fn glfwMouseButtonCallback(
 ) callconv(.c) void {
     if (events) |*ev| {
         ev.append(.{ .MouseButtonFn = .{ window, button, action, mods } }) catch @panic("OOM");
-    } else unreachable;
+    } else log.warn("Events are currently not implemented!", .{});
 }
 
 fn handleMouseButtonEvent(
@@ -720,7 +727,7 @@ fn handleMouseButtonEvent(
 fn glfwScrollCallback(window: *zglfw.Window, xrel: f64, yrel: f64) callconv(.c) void {
     if (events) |*ev| {
         ev.append(.{ .ScrollFn = .{ window, xrel, yrel } }) catch @panic("OOM");
-    } else unreachable;
+    } else log.warn("Events are currently not implemented!", .{});
 }
 
 fn handleScrollEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xrel: f64, yrel: f64) void {
@@ -754,7 +761,7 @@ fn glfwFramebufferSizeCallback(
 ) callconv(.c) void {
     if (events) |*ev| {
         ev.append(.{ .FrameBufferSizeFn = .{ window, width, height } }) catch @panic("OOM");
-    } else unreachable;
+    } else log.warn("Events are currently not implemented!", .{});
 }
 
 fn handleFramebufferSizeEvent(
