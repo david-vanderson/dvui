@@ -337,6 +337,112 @@ pub fn displayButton() void {
     }
 }
 
+pub fn displayCheckbox() void {
+    const state = struct {
+        var init_opts: dvui.ButtonWidget.InitOptions = undefined;
+        var options: dvui.Options = undefined;
+        var test_options: struct {
+            checked: bool,
+            label_str: []const u8,
+        } = undefined;
+    };
+
+    if (reset_widget) {
+        state.init_opts = .{};
+        state.options = .{};
+        state.test_options.checked = false;
+        state.test_options = .{
+            .label_str = "checkbox label",
+            .checked = false,
+        };
+    }
+
+    var wd: dvui.WidgetData = undefined;
+    {
+        var gbox = widgetGroupBox(@src(), "checkbox()", .{});
+        defer gbox.deinit();
+        var outer_box = widgetTextingBoxWithResults(@src(), .{});
+        defer outer_box.deinit();
+        var widget_box = widgetTestingBox(@src(), null, .{});
+        const result = dvui.checkbox(@src(), &state.test_options.checked, state.test_options.label_str, .{});
+        widget_box.deinit();
+        var result_box = widgetResultsBox(@src(), .{});
+        defer result_box.deinit();
+        var al = dvui.Alignment.init(@src(), 0);
+        defer al.deinit();
+        dvui.struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
+    }
+    {
+        var scroll = widgetOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        dvui.structUI(
+            @src(),
+            test_options_label,
+            &state.test_options,
+            1,
+            .{dvui.struct_ui.StructOptions(@TypeOf(state.test_options)).initWithDefaults(.{
+                .label_str = .{ .text = .{ .display = .read_write } },
+            }, null)},
+            .{},
+        );
+        widgetOptionsEditor(@src(), &state.options, &wd);
+    }
+}
+
+pub fn displayColorPicker() void {
+    const state = struct {
+        var init_opts: dvui.ColorPickerInitOptions = undefined;
+        var options: dvui.Options = undefined;
+        var hsv: dvui.Color.HSV = undefined;
+    };
+
+    if (reset_widget) {
+        state.init_opts = .{ .hsv = &state.hsv };
+        state.options = .{};
+        state.hsv = .fromColor(.white);
+    }
+
+    var wd: dvui.WidgetData = undefined;
+    {
+        var gbox = widgetGroupBox(@src(), "colorPicker()", .{});
+        defer gbox.deinit();
+        var outer_box = widgetTextingBoxWithResults(@src(), .{});
+        defer outer_box.deinit();
+        var widget_box = widgetTestingBox(@src(), null, .{});
+        const result = dvui.colorPicker(@src(), state.init_opts, state.options);
+        widget_box.deinit();
+        var result_box = widgetResultsBox(@src(), .{});
+        defer result_box.deinit();
+        var al = dvui.Alignment.init(@src(), 0);
+        defer al.deinit();
+        dvui.struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
+    }
+    {
+        var scroll = widgetOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        if (state.init_opts.alpha) {
+            dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{struct_options_hsva}, .{});
+        } else {
+            dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{struct_options_hsv}, .{});
+        }
+        widgetOptionsEditor(@src(), &state.options, &wd);
+    }
+}
+
+const struct_options_hsva: dvui.struct_ui.StructOptions(dvui.Color.HSV) = .init(.{
+    .h = .{ .number = .{ .min = 0, .max = 359.99 } },
+    .s = .{ .number = .{ .min = 0, .max = 1 } },
+    .v = .{ .number = .{ .min = 0, .max = 1 } },
+    .a = .{ .number = .{ .min = 0, .max = 1 } },
+}, .fromColor(.white));
+
+const struct_options_hsv: dvui.struct_ui.StructOptions(dvui.Color.HSV) = .init(.{
+    .h = .{ .number = .{ .min = 0, .max = 359.99 } },
+    .s = .{ .number = .{ .min = 0, .max = 1 } },
+    .v = .{ .number = .{ .min = 0, .max = 1 } },
+    .a = .{ .number = .{ .min = 0, .max = 1, .display = .read_only } },
+}, .fromColor(.white));
+
 pub fn displayButtonIcon() void {
     const state = struct {
         var init_opts: dvui.ButtonWidget.InitOptions = undefined;
@@ -722,8 +828,8 @@ const widget_hierarchy = [_]WidgetHeirachy{
         .{ .name = "buttonLabelAndIcon", .displayFn = displayButtonLabelAndIcon, .children = null },
     } },
 
-    .{ .name = "checkbox", .displayFn = displayEmpty, .children = null },
-    .{ .name = "colorPicker", .displayFn = displayEmpty, .children = null },
+    .{ .name = "checkbox", .displayFn = displayCheckbox, .children = null },
+    .{ .name = "colorPicker", .displayFn = displayColorPicker, .children = null },
     .{ .name = "comboBox", .displayFn = displayEmpty, .children = null },
     .{ .name = "context", .displayFn = displayEmpty, .children = null },
     .{ .name = "dialog", .displayFn = displayEmpty, .children = null },
