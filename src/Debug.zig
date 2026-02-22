@@ -686,7 +686,7 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
             var side = dvui.box(@src(), .{}, .{ .expand = .both });
             defer side.deinit();
 
-            _ = dvui.checkbox(@src(), &gravity_set, "gravity", .{ .gravity_y = 0.5 });
+            changed = dvui.checkbox(@src(), &gravity_set, "gravity", .{ .gravity_y = 0.5 }) or changed;
 
             if (gravity_set) {
                 if (dvui.slider(@src(), .{ .fraction = &gravity.x }, .{ .expand = .horizontal, .gravity_y = 1 })) {
