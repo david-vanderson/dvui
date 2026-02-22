@@ -65,7 +65,7 @@ pub fn widgetpedia() void {
                     }
                 }
 
-                if (branch.expander(@src(), .{ .indent = 15 }, .{ .expand = .horizontal })) {
+                if (branch.expander(@src(), .{ .indent = 30 }, .{ .expand = .horizontal })) {
                     if (widget.children) |children| {
                         for (children, 0..) |child, j| {
                             const branch_child = tree.branch(@src(), .{ .expanded = true }, .{ .id_extra = j, .expand = .horizontal, .color_fill = if (child.displayFn == displayEmpty) .gray else null });
@@ -597,7 +597,7 @@ pub fn widgetGroupBox(src: std.builtin.SourceLocation, label_str: []const u8, op
 }
 
 pub fn widgetTestingBox(src: std.builtin.SourceLocation, size_content_opt: ?dvui.Size, opts: dvui.Options) *dvui.BoxWidget {
-    const size_content: dvui.Size = size_content_opt orelse .{ .w = 250, .h = 250 };
+    const size_content: dvui.Size = size_content_opt orelse .{ .w = 300, .h = 250 };
     const border_defaults: dvui.Options = if (dvui.parentGet().data().options.border == null) .{
         .border = dvui.Rect.all(1),
         .corner_radius = dvui.Rect.all(3),
