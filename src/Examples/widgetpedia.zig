@@ -710,34 +710,32 @@ pub fn displayCombobox() void {
         var init_opts: dvui.TextEntryWidget.InitOptions = undefined;
         var options: dvui.Options = undefined;
         var test_options: struct {
-            checked: bool,
-            label_str: []const u8,
+            choice: usize,
+            entries: []const []const u8,
         } = undefined;
     };
 
     if (reset_widget) {
         state.init_opts = .{};
         state.options = .{};
-        state.test_options.checked = false;
         state.test_options = .{
-            .label_str = "checkbox label",
-            .checked = false,
+            .choice = 0,
+            .entries = &.{ "one", "two", "three", "four", "five" },
         };
     }
 
     var wd: dvui.WidgetData = undefined;
     {
-        var gbox = widgetGroupBox(@src(), "checkbox()", .{});
+        var gbox = widgetGroupBox(@src(), "comboBox()", .{});
         defer gbox.deinit();
         {
             var widget_box = gbox.widgetTestingBox(@src(), null, .{});
-            const result = dvui.checkbox(@src(), &state.test_options.checked, state.test_options.label_str, .{});
-            widget_box.deinit();
-            var result_box = widget_box.resultsBox(@src(), .{});
-            defer result_box.deinit();
-            var al = dvui.Alignment.init(@src(), 0);
-            defer al.deinit();
-            dvui.struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
+            defer widget_box.deinit();
+            var combo = dvui.comboBox(@src(), state.init_opts, state.options);
+            defer combo.deinit();
+            if (combo.entries(state.test_options.entries)) |index| {
+                state.test_options.choice = index;
+            }
         }
         gbox.optionsEditor(@src(), &state.options, &wd);
     }
@@ -749,11 +747,17 @@ pub fn displayCombobox() void {
             test_options_label,
             &state.test_options,
             1,
-            .{dvui.struct_ui.StructOptions(@TypeOf(state.test_options)).initWithDefaults(.{
-                .label_str = .{ .text = .{ .display = .read_write } },
-            }, null)},
+            .{},
             .{},
         );
+        dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{dvui.struct_ui.StructOptions(dvui.TextEntryWidget.InitOptions).initWithDefaults(.{
+            .placeholder = .defaultTextRW,
+            .password_char = .defaultTextRW,
+            .tree_sitter = .defaultHidden,
+        }, .{
+            .placeholder = "Placeholder",
+            .password_char = "*",
+        })}, .{});
     }
 }
 
@@ -976,7 +980,7 @@ const widget_hierarchy = [_]WidgetHeirachy{
 
     .{ .name = "checkbox", .displayFn = displayCheckbox, .children = null },
     .{ .name = "colorPicker", .displayFn = displayColorPicker, .children = null },
-    .{ .name = "comboBox", .displayFn = displayEmpty, .children = null },
+    .{ .name = "comboBox", .displayFn = displayCombobox, .children = null },
     .{ .name = "context", .displayFn = displayEmpty, .children = null },
     .{ .name = "dialog", .displayFn = displayEmpty, .children = null },
     .{ .name = "dropdowns", .displayFn = displayEmpty, .children = &.{

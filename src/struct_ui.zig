@@ -39,7 +39,9 @@ pub const FieldOptions = union(enum) {
     pub const default: FieldOptions = .{ .standard = .{} };
     pub const defaultNumber: FieldOptions = .{ .number = .{} };
     pub const defaultText: FieldOptions = .{ .text = .{} };
+    pub const defaultTextRW: FieldOptions = .{ .text = .{ .display = .read_write } };
     pub const defaultBool: FieldOptions = .{ .boolean = .{} };
+    pub const defaultHidden: FieldOptions = .{ .standard = .{ .display = .none } };
 
     pub fn optionStandard(self: FieldOptions) error{InvalidOptionType}!StandardFieldOptions {
         return switch (self) {
