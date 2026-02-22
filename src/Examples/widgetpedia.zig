@@ -31,7 +31,7 @@ pub fn widgetpedia() void {
         var tt: dvui.FloatingTooltipWidget = undefined;
         tt.init(@src(), .{ .active_rect = tab.data().borderRectScale().r, .interactive = true, .position = .absolute }, .{});
         if (tt.shown()) {
-            var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .vertical });
+            var scroll = dvui.scrollArea(@src(), .{}, .{ .max_size_content = .height(hbox.data().contentRect().h) });
             defer scroll.deinit();
             var tree = dvui.TreeWidget.tree(@src(), .{ .enable_reordering = false }, .{});
             defer tree.deinit();
