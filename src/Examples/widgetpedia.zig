@@ -22,54 +22,65 @@ pub fn widgetpedia() void {
     var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .background = true });
     defer hbox.deinit();
     {
-        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .vertical });
-        defer scroll.deinit();
-        var tree = dvui.TreeWidget.tree(@src(), .{ .enable_reordering = false }, .{});
-        defer tree.deinit();
-        for (widget_hierarchy, 0..) |widget, i| {
-            const color_fill: ?dvui.Color = blk: {
-                if (widget.children) |children|
-                    for (children) |child| {
-                        if (child.displayFn != displayEmpty) break :blk null;
-                    };
-                break :blk if (widget.displayFn == displayEmpty) .gray else null;
-            };
-            const branch = tree.branch(@src(), .{ .expanded = false }, .{ .id_extra = i, .expand = .horizontal, .color_fill = color_fill });
-            defer branch.deinit();
-            dvui.label(@src(), "{s}", .{widget.name}, .{ .expand = .horizontal });
+        var tabs = dvui.tabs(@src(), .{ .dir = .vertical }, .{});
+        defer tabs.deinit();
+        var tab = tabs.addTab(false, .{});
+        defer tab.deinit();
 
-            if (widget.children != null) {
-                _ = dvui.icon(
-                    @src(),
-                    "DropIcon",
-                    if (branch.expanded) dvui.entypo.triangle_down else dvui.entypo.triangle_right,
-                    .{},
-                    .{
-                        .gravity_y = 0.5,
-                        .gravity_x = 1.0,
-                    },
-                );
-            } else if (branch.button.clicked()) {
-                if (widget.children == null) {
-                    current_widget = widget;
-                    reset_widget = true;
+        dvui.labelNoFmt(@src(), "Widgets", .{}, .{ .rotation = std.math.pi * 1.5, .color_text = if (dvui.captured(tab.data().id)) dvui.themeGet().color(.control, .text_press) else null });
+        var tt: dvui.FloatingTooltipWidget = undefined;
+        tt.init(@src(), .{ .active_rect = tab.data().borderRectScale().r, .interactive = true, .position = .absolute }, .{});
+        if (tt.shown()) {
+            var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .vertical });
+            defer scroll.deinit();
+            var tree = dvui.TreeWidget.tree(@src(), .{ .enable_reordering = false }, .{});
+            defer tree.deinit();
+            for (widget_hierarchy, 0..) |widget, i| {
+                const color_fill: ?dvui.Color = blk: {
+                    if (widget.children) |children|
+                        for (children) |child| {
+                            if (child.displayFn != displayEmpty) break :blk null;
+                        };
+                    break :blk if (widget.displayFn == displayEmpty) .gray else null;
+                };
+                const branch = tree.branch(@src(), .{ .expanded = false }, .{ .id_extra = i, .expand = .horizontal, .color_fill = color_fill });
+                defer branch.deinit();
+                dvui.label(@src(), "{s}", .{widget.name}, .{ .expand = .horizontal });
+
+                if (widget.children != null) {
+                    _ = dvui.icon(
+                        @src(),
+                        "DropIcon",
+                        if (branch.expanded) dvui.entypo.triangle_down else dvui.entypo.triangle_right,
+                        .{},
+                        .{
+                            .gravity_y = 0.5,
+                            .gravity_x = 1.0,
+                        },
+                    );
+                } else if (branch.button.clicked()) {
+                    if (widget.children == null) {
+                        current_widget = widget;
+                        reset_widget = true;
+                    }
                 }
-            }
 
-            if (branch.expander(@src(), .{ .indent = 15 }, .{ .expand = .horizontal })) {
-                if (widget.children) |children| {
-                    for (children, 0..) |child, j| {
-                        const branch_child = tree.branch(@src(), .{ .expanded = true }, .{ .id_extra = j, .expand = .horizontal, .color_fill = if (child.displayFn == displayEmpty) .gray else null });
-                        defer branch_child.deinit();
-                        dvui.labelNoFmt(@src(), child.name, .{}, .{ .expand = .horizontal });
-                        if (branch_child.button.clicked()) {
-                            current_widget = child;
-                            reset_widget = true;
+                if (branch.expander(@src(), .{ .indent = 15 }, .{ .expand = .horizontal })) {
+                    if (widget.children) |children| {
+                        for (children, 0..) |child, j| {
+                            const branch_child = tree.branch(@src(), .{ .expanded = true }, .{ .id_extra = j, .expand = .horizontal, .color_fill = if (child.displayFn == displayEmpty) .gray else null });
+                            defer branch_child.deinit();
+                            dvui.labelNoFmt(@src(), child.name, .{}, .{ .expand = .horizontal });
+                            if (branch_child.button.clicked()) {
+                                current_widget = child;
+                                reset_widget = true;
+                            }
                         }
                     }
                 }
             }
         }
+        tt.deinit();
     }
     {
         var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .padding = dvui.Rect.all(6) });
