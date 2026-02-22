@@ -106,7 +106,7 @@ Tested with Zig v0.15.2 (for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.c
   </tbody>
 </table>
 
-[`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) is a template repository with these examples.  See [Getting Started](#getting-started).
+[`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) is a template repository that also includes these examples.  See [Getting Started](#getting-started).
 
 ### Docs
 
