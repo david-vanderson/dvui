@@ -491,6 +491,10 @@ fn copyOptionsToClipboard(src: std.builtin.SourceLocation, id: dvui.Id, options:
 }
 
 fn sliderRectOptional(src: std.builtin.SourceLocation, comptime label: []const u8, rect: *?Rect, comptime field: std.meta.FieldEnum(dvui.Rect), link_all: bool, default: dvui.Rect) bool {
+    return sliderRectOptionalWithInitOpts(src, label, rect, field, link_all, default, null);
+}
+
+fn sliderRectOptionalWithInitOpts(src: std.builtin.SourceLocation, comptime label: []const u8, rect: *?Rect, comptime field: std.meta.FieldEnum(dvui.Rect), link_all: bool, default: dvui.Rect, init_opts: ?dvui.SliderEntryInitOptions) bool {
     var changed: bool = false;
     var hbox = dvui.box(src, .{ .dir = .horizontal }, .{ .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
     defer hbox.deinit();
@@ -500,7 +504,7 @@ fn sliderRectOptional(src: std.builtin.SourceLocation, comptime label: []const u
         @src(),
         &value_set,
         if (value_set) "" else label,
-        .{ .padding = .{ .x = 6, .y = 6, .h = 6, .w = 0 } },
+        .{ .padding = .{ .x = 6, .y = 6, .h = 6, .w = 0 }, .gravity_y = 0.5 },
     )) {
         changed = true;
         if (value_set)
@@ -509,11 +513,18 @@ fn sliderRectOptional(src: std.builtin.SourceLocation, comptime label: []const u
             rect.* = null;
     }
     if (value_set) {
+        const slider_init_opts: dvui.SliderEntryInitOptions = .{
+            .value = &@field(rect.*.?, @tagName(field)),
+            .min = if (init_opts) |opts| (opts.min orelse 0.0) else 0.0,
+            .max = if (init_opts) |opts| (opts.max orelse 32.0) else 32.0,
+            .interval = if (init_opts) |opts| (opts.interval orelse 1.0) else 1.0,
+        };
+
         if (dvui.sliderEntry(
             @src(),
             label ++ ": {d:0.0}",
-            .{ .value = &@field(rect.*.?, @tagName(field)), .min = 0, .max = 20.0, .interval = 1 },
-            .{ .margin = .{ .x = 0, .y = 4, .w = 4, .h = 4 } },
+            slider_init_opts,
+            .{ .margin = .{ .x = 0, .y = 4, .w = 4, .h = 4 }, .gravity_y = 0.5 },
         )) {
             changed = true;
             if (link_all) {
@@ -527,28 +538,6 @@ fn sliderRectOptional(src: std.builtin.SourceLocation, comptime label: []const u
 fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
     var changed = false;
 
-    const gravity_y_was_null = self.gravity_y == null;
-    self.gravity_y = self.gravityGet().y;
-    defer if (gravity_y_was_null and !changed) {
-        self.gravity_y = null;
-    };
-    var grav_y_inv = 1.0 - self.gravity_y.?;
-    const gravity_y = &grav_y_inv;
-
-    const gravity_x_was_null = self.gravity_x == null;
-    self.gravity_x = self.gravityGet().x;
-    defer if (gravity_x_was_null and !changed) {
-        self.gravity_x = null;
-    };
-    const gravity_x = &self.gravity_x.?;
-
-    const rotation_was_null = self.rotation == null;
-    self.rotation = self.rotationGet();
-    defer if (rotation_was_null and !changed) {
-        self.rotation = null;
-    };
-    const rotation = &self.rotation.?;
-
     const link_margin = dvui.dataGetPtrDefault(null, id, "link_margin", bool, true);
     const link_border = dvui.dataGetPtrDefault(null, id, "link_border", bool, true);
     const link_padding = dvui.dataGetPtrDefault(null, id, "link_padding", bool, true);
@@ -560,35 +549,43 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
 
         {
             dvui.labelNoFmt(@src(), "expand", .{}, .{ .gravity_y = 0.5 });
-            const expands = std.meta.tags(Options.Expand);
-            var dd: dvui.DropdownWidget = undefined;
-            dd.init(@src(), .{
-                .label = @tagName(self.expandGet()),
-                .selected_index = std.mem.indexOfScalar(Options.Expand, expands, self.expandGet()).?,
-            }, .{
+            _ = dvui.dropdownEnum(@src(), Options.Expand, .{ .choice_nullable = &self.expand }, .{ .placeholder = "null" }, .{
                 .expand = .horizontal,
                 .min_size_content = .{ .w = 110 },
                 .gravity_y = 0.5,
             });
-            defer dd.deinit();
-            if (dd.dropped()) {
-                for (expands) |new| {
-                    if (dd.addChoiceLabel(@tagName(new))) {
-                        self.expand = new;
-                        changed = true;
-                    }
-                }
-            }
+        }
+        var rot_rect: ?dvui.Rect = if (self.rotation) |rot| .{ .x = rot } else null;
+        var dummy: f32 = 0;
+        changed = sliderRectOptionalWithInitOpts(
+            @src(),
+            "rotation",
+            &rot_rect,
+            .x,
+            false,
+            .all(wd.options.rotationGet()),
+            .{
+                .value = &dummy,
+                .min = std.math.pi * -2,
+                .max = std.math.pi * 2,
+                .interval = @as(f32, 0.5 / std.math.pi),
+            },
+        ) or changed;
+
+        if (rot_rect) |rr| {
+            self.rotation = rr.x;
+        } else {
+            self.rotation = null;
         }
 
-        if (dvui.sliderEntry(@src(), "rotation: {d:0.2}", .{
-            .min = std.math.pi * -2,
-            .max = std.math.pi * 2,
-            .interval = @as(f32, 0.5 / std.math.pi),
-            .value = rotation,
-        }, .{ .gravity_y = 0.5 })) {
-            changed = true;
-        }
+        //        if (dvui.sliderEntry(@src(), "rotation: {d:0.2}", .{
+        //            .min = std.math.pi * -2,
+        //            .max = std.math.pi * 2,
+        //            .interval = @as(f32, 0.5 / std.math.pi),
+        //            .value = rotation,
+        //        }, .{ .gravity_y = 0.5 })) {
+        //            changed = true;
+        //        }
     }
 
     { // Min size
@@ -676,18 +673,30 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
             var col = dvui.box(@src(), .{ .dir = .horizontal }, .{ .border = .all(1), .expand = .both });
             defer col.deinit();
 
-            if (dvui.slider(@src(), .{ .dir = .vertical, .fraction = gravity_y }, .{ .expand = .vertical })) {
-                self.gravity_y.? = 1.0 - gravity_y.*;
-                changed = true;
-            }
+            var gravity_set: bool = self.gravity_y != null or self.gravity_y != null;
+            var gravity = self.gravityGet();
+            gravity.y = 1 - gravity.y;
+
+            if (gravity_set)
+                if (dvui.slider(@src(), .{ .dir = .vertical, .fraction = &gravity.y }, .{ .expand = .vertical })) {
+                    //                self.gravity_y.? = 1.0 - gravity_y.*;
+                    changed = true;
+                };
 
             var side = dvui.box(@src(), .{}, .{ .expand = .both });
             defer side.deinit();
 
-            dvui.labelNoFmt(@src(), "gravity", .{}, .{ .gravity_y = 0.5 });
+            _ = dvui.checkbox(@src(), &gravity_set, "gravity", .{ .gravity_y = 0.5 });
 
-            if (dvui.slider(@src(), .{ .fraction = gravity_x }, .{ .expand = .horizontal, .gravity_y = 1 })) {
-                changed = true;
+            if (gravity_set) {
+                if (dvui.slider(@src(), .{ .fraction = &gravity.x }, .{ .expand = .horizontal, .gravity_y = 1 })) {
+                    changed = true;
+                }
+                self.gravity_x = gravity.x;
+                self.gravity_y = 1 - gravity.y;
+            } else {
+                self.gravity_x = null;
+                self.gravity_y = null;
             }
         }
         { // Middle Right
@@ -766,7 +775,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
     var background = self.backgroundGet();
     if (dvui.checkbox(@src(), &background, "background", .{ .gravity_y = 0.5 })) {
         changed = true;
-        self.background = background;
+        self.background = if (background) background else null;
     }
 
     row.deinit();

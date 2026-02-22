@@ -22,6 +22,8 @@ pub fn widgetpedia() void {
     var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .background = true });
     defer hbox.deinit();
     {
+        //        var box = dvui.box(@src(), .{}, .{ .gravity_x = 1.0 });
+        //        defer box.deinit();
         var tabs = dvui.tabs(@src(), .{ .dir = .vertical }, .{});
         defer tabs.deinit();
         var tab = tabs.addTab(false, .{});
@@ -29,7 +31,7 @@ pub fn widgetpedia() void {
 
         dvui.labelNoFmt(@src(), "Widgets", .{}, .{ .rotation = std.math.pi * 1.5, .color_text = if (dvui.captured(tab.data().id)) dvui.themeGet().color(.control, .text_press) else null });
         var tt: dvui.FloatingTooltipWidget = undefined;
-        tt.init(@src(), .{ .active_rect = tab.data().borderRectScale().r, .interactive = true, .position = .absolute }, .{});
+        tt.init(@src(), .{ .active_rect = tab.data().borderRectScale().r, .interactive = true, .position = .horizontal }, .{});
         if (tt.shown()) {
             var scroll = dvui.scrollArea(@src(), .{}, .{ .max_size_content = .height(hbox.data().contentRect().h) });
             defer scroll.deinit();
@@ -714,14 +716,10 @@ pub fn widgetShowSetOptionsTooltip(src: std.builtin.SourceLocation, rect: dvui.R
 }
 
 pub fn widgetOptionsEditor(src: std.builtin.SourceLocation, edit_opts: *dvui.Options, wd: *dvui.WidgetData) void {
-    _ = src;
-    //    var expander_wd: dvui.WidgetData = undefined;
-    //    var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
-    //    defer vbox.deinit();
-    //    if (dvui.expander(src, "Options editor", .{}, .{ .expand = .horizontal, .data_out = &expander_wd })) {
+    var vbox = dvui.box(src, .{}, .{ .expand = .both });
+    defer vbox.deinit();
     _ = dvui.Debug.optionsEditor(edit_opts, wd);
-    //    }
-    //    widgetShowSetOptionsTooltip(@src(), expander_wd.borderRectScale().r, edit_opts.*);
+    widgetShowSetOptionsTooltip(@src(), vbox.data().borderRectScale().r, edit_opts.*);
 }
 
 pub fn displayDropDownEnum() void {
