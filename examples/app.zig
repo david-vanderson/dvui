@@ -46,15 +46,12 @@ pub fn appInit(win: *dvui.Window) !void {
     // Add your own bundled font files...:
     // try dvui.addFont("NOTO", @embedFile("../src/fonts/NotoSansKR-Regular.ttf"), null);
 
-    if (false) {
-        // If you need to set a theme based on the users preferred color scheme, do it here
-        const theme = switch (win.backend.preferredColorScheme() orelse .light) {
-            .light => dvui.Theme.builtin.adwaita_light,
-            .dark => dvui.Theme.builtin.adwaita_dark,
-        };
-
-        win.themeSet(theme);
-    }
+    // If you want a custom theme use something like this:
+    // const theme = switch (win.backend.preferredColorScheme() orelse .light) {
+    //     .light => dvui.Theme.builtin.adwaita_light,
+    //     .dark => dvui.Theme.builtin.adwaita_dark,
+    // };
+    // win.themeSet(theme);
 }
 
 // Run as app is shutting down before dvui.Window.deinit()
