@@ -10,12 +10,10 @@ Tested with Zig v0.15.2 (for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.c
 
 ## Examples
 
-No prebuilt binaries are provided, so run `zig build <backend>-<purpose>` from source:
-* For example, `zig build sdl3-app` for SDL3 backend, where DVUI handles mainloop
-
-If you are unsure where to start, choose `sdl3-app`, then try altering the contents of <code>frame()</code> inside <code>./examples/app.zig</code>.
-
-The [`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) examples repository aims to provide the minimal required setup and serves a simplified `build.zig`. All examples residing there are generally the same as ones found here in the `dvui` repository. It's therefore recommended you start out by cloning files from `dvui-demo`.
+`zig build sdl3-app`
+* sdl3 backend, dvui handles mainloop
+* good place to start, try changing <code>frame()</code> inside <code>./examples/app.zig</code>
+* see [Getting Started](#getting-started)
 
 <table>
   <thead>
@@ -27,7 +25,7 @@ The [`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) examples reposi
         <sub>
           dvui handles main loop
           <br>
-          <a href="https://github.com/david-vanderson/dvui-demo/blob/main/examples/app.zig"><code>app.zig</code></a>
+          <a href="https://github.com/david-vanderson/dvui/blob/main/examples/app.zig"><code>app.zig</code></a>
         </sub>
       </th>
       <th>
@@ -36,7 +34,7 @@ The [`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) examples reposi
         <sub>
           you control main loop
           <br>
-          <a href="https://github.com/david-vanderson/dvui-demo/blob/main/examples"><code>*-standalone.zig</code></a>
+          <a href="https://github.com/david-vanderson/dvui/blob/main/examples"><code>*-standalone.zig</code></a>
         </sub>
       </th>
       <th>
@@ -45,7 +43,7 @@ The [`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) examples reposi
         <sub>
           debug HUD on existing app/game
           <br>
-          <a href="https://github.com/david-vanderson/dvui-demo/blob/main/examples"><code>*-ontop.zig</code></a>
+          <a href="https://github.com/david-vanderson/dvui/blob/main/examples"><code>*-ontop.zig</code></a>
         </sub>
       </th>
     </tr>
@@ -63,7 +61,7 @@ The [`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) examples reposi
         <br>
         <sub>Rendering via SDL GPU</sub>
       </td>
-      <td>TODO</td>
+      <td>todo</td>
       <td><code>sdl3gpu-standalone</code></td>
       <td><code>sdl3gpu-ontop</code></td>
     </tr>
@@ -102,17 +100,13 @@ The [`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) examples reposi
     <tr>
       <td><strong>Web</strong></td>
       <td><code>web-app</code></td>
-      <td>None</td>
-      <td>None</td>
-    </tr>
-    <tr>
-      <td><strong>OpenGL + GLFW</strong></td>
-      <td>TODO</td>
-      <td>TODO</td>
-      <td>TODO</td>
+      <td>none</td>
+      <td>none</td>
     </tr>
   </tbody>
 </table>
+
+[`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) is a template repository with these examples.  See [Getting Started](#getting-started).
 
 ### Docs
 
@@ -146,7 +140,7 @@ The following projects use DVUI:
 
 Discuss yours on:
 - Zig Discord [`#gui-dev`](https://discord.gg/eJgXXTtVzA)
-- Zig Libera IRC [`#dvui`](TODO)
+- Zig Libera IRC `#dvui`
 - [DVUI GitHub Discussions](https://github.com/david-vanderson/dvui/discussions)
 
 ## Feature Overview
@@ -186,17 +180,16 @@ Discuss yours on:
 - Themes
 - FPS throttling
   - see [FPS-Throttling](#FPS-Throttling)
-- TODO more?
 
 Further reading:
 - Implementation details for how to write and modify container widgets:
   - [`readme-implementation.md`](readme-implementation.md)
 
-## Getting Started
+## [Getting Started](#getting-started)
 
-[`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) is a template repository: <!-- TODO relate to the mention in Examples? -->
-* `build.zig` and `build.zig.zon` reference DVUI as a zig dependency
-* includes all the same examples
+[`dvui-demo`](https://github.com/david-vanderson/dvui-demo/) is a template repository
+* `build.zig` and `build.zig.zon` reference dvui as a zig dependency
+* includes all the examples
 
 Alternatively:
 1. Add DVUI as a dependency:
@@ -274,13 +267,9 @@ Widgets implemented so far:
   - Drag to reorder/remove/add
 - Data grid
 - Group box (fieldset)
-- TODO more?
 
 Widgets to be implemented:
 - Docking
-- TODO more? See open issues
-
-TODO should all above widgets be as `WidgetName`?
 
 ## Design
 
@@ -452,8 +441,6 @@ Each widget has the following options that can be changed through the `Options` 
 - `ninepatch_fill` (also `_hover` and `_press`):
   - Draws an image over the background
 
-TODO add image showcasing all these features?
-
 Each widget has its own default options. These can be changed directly:
 ```zig
 dvui.ButtonWidget.defaults.background = false;
@@ -468,13 +455,11 @@ if (theme_dark) {
 }
 ```
 
-The theme's `focus` color is used to show keyboard focus. TODO is this the only special one?
+The theme's `focus` color is used to show keyboard focus.
 
-The default theme will attempt to follow the system dark or light mode, or it can be set in the `Window` init options or by calling `dvui.themeSet()`. See the `*-app` and `*-standalone` examples for how to set the default theme. TODO raylib versus SDL?
+If no theme is passed to `Window.init()` the default theme will attempt to follow the system dark or light mode.
 
 ### Accessibility
-
-TODO add open issue links?
 
 DVUI has varying support for different kinds of accessibility infrastructure. The current state, including areas commonly tied to accessibility, is:
 - Keyboard navigation:
@@ -484,13 +469,12 @@ DVUI has varying support for different kinds of accessibility infrastructure. Th
   - Grapheme clusters currently unsupported
   - No right-to-left or mixed text direction
 - Language input:
-  - IME (input method editor) works in SDL and web backends (TODO why plural, so far it's been `Web` only?)
+  - IME (input method editor) works in SDL and web backends
 - High-contrast themes:
   - DVUI's themes can support this
   - No current OS integration
 - Screen reading and alternate input:
   - Uses `Options.role` and `Options.label` from AccessKit integration
-  <!-- TODO remove these couple of follow-ups as they're already mentioned in features -->
   - [AccessKit](https://accesskit.dev/) integration
   - Add `-Daccesskit` to `zig build`
 
