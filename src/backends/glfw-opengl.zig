@@ -804,7 +804,6 @@ fn glfwFramebufferSizeCallback(
         if (ev.items.len > MAX_EVENT_BUFFER_SIZE)
             return log.warn("Max event buffer size exceeded! Dropping event!", .{});
         std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
-        std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
         ev.appendAssumeCapacity(.{ .FrameBufferSizeFn = .{ window, width, height } });
     } else log.warn("Events are currently not implemented!", .{});
 }
