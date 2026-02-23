@@ -72,6 +72,7 @@
         .zgl = .{
             .url = "git+https://github.com/ziglibs/zgl#6ee54c287f3c4f176bd05a92746828bb791a1ad0",
             .hash = "zgl-1.1.0-p_NpAJNECgCzUGx0aF5KFsmD5VOwfw8LaOsN0fcoU2bi",
+            .lazy = true,
         },
     },
 }

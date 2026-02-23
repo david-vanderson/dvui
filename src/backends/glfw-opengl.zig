@@ -3,14 +3,16 @@ const dvui = @import("dvui");
 pub const zgl = @import("zgl");
 pub const zglfw = @import("zglfw");
 
-pub const kind: dvui.enums.Backend = .glfw_opengl3;
+pub const kind: dvui.enums.Backend = .glfw_opengl;
 
-const log = std.log.scoped(.glfw_opengl3Backend);
+const log = std.log.scoped(.glfw_opengl_backend);
 
 const BYTES_PER_VERTEX = 20;
+// Max events we can process one frame
+const MAX_EVENT_BUFFER_SIZE = 100;
 
-// Create a singleton for this backend
-var events: ?std.array_list.Managed(GlfwEvent) = null;
+// Create a singleton for events
+var events: ?std.ArrayList(GlfwEvent) = null;
 
 vsync: bool,
 
@@ -111,6 +113,21 @@ pub const InitOptions = struct {
 /// Pass the window handle (pointer) to the glfw window
 pub fn init(gpa: std.mem.Allocator, window_: *anyopaque) @This() {
     const window: *zglfw.Window = @ptrCast(window_);
+
+    // Make sure that OpenGL functions are loaded,
+    // shouldn't matter if it's loaded twice.
+    const fns = struct {
+        pub fn glGetProcAddress(p: zglfw.GlProc, proc: [:0]const u8) ?zgl.binding.FunctionPointer {
+            _ = p;
+            return @alignCast(zglfw.getProcAddress(proc));
+        }
+    };
+    const proc: zglfw.GlProc = undefined;
+    zgl.loadExtensions(proc, fns.glGetProcAddress) catch |err| {
+        log.err("Loading error: {}", .{err});
+        @panic("No OpenGL context!");
+    };
+
     const vao = zgl.VertexArray.create();
     vao.bind();
     const vtx_buf = zgl.Buffer.gen();
@@ -141,7 +158,7 @@ pub fn init(gpa: std.mem.Allocator, window_: *anyopaque) @This() {
     program.attach(f_shader);
 
     program.link();
-    events = .init(gpa);
+    events = std.ArrayList(GlfwEvent).initCapacity(gpa, MAX_EVENT_BUFFER_SIZE) catch @panic("OOM");
 
     return .{
         .vsync = false,
@@ -178,7 +195,7 @@ pub fn deinit(ctx: *@This()) void {
     }
     ctx.framebuf_map.clearAndFree(ctx.gpa);
     ctx.arena.deinit();
-    if (events) |_events| _events.deinit();
+    if (events) |*_events| _events.deinit(ctx.gpa);
     _ = ctx.window.setKeyCallback(ctx.userKeyCallback);
     _ = ctx.window.setCharCallback(ctx.userCharCallback);
     _ = ctx.window.setMouseButtonCallback(ctx.userMouseButtonCallback);
@@ -243,7 +260,7 @@ pub fn drawClippedTriangles(
     ctx: *@This(),
     texture: ?dvui.Texture,
     vtx: []const dvui.Vertex,
-    idx: []const u16,
+    idx: []const dvui.Vertex.Index,
     clipr_in: ?dvui.Rect.Physical,
 ) !void {
     if (clipr_in) |clip_rect| {
@@ -299,7 +316,11 @@ pub fn drawClippedTriangles(
     const mat_loc = ctx.program.uniformLocation("mvp");
     ctx.program.uniformMatrix4(mat_loc, false, &.{mat});
     ctx.program.use();
-    zgl.drawElements(.triangles, idx.len, .unsigned_short, 0);
+    zgl.drawElements(.triangles, idx.len, switch (dvui.Vertex.Index) {
+        u16 => .unsigned_short,
+        u32 => .unsigned_int,
+        else => @compileError("Critical change in dvui internal API, notify maintainer."),
+    }, 0);
     zgl.disable(.scissor_test);
 }
 
@@ -450,6 +471,11 @@ pub fn setCursor(ctx: *@This(), cursor: dvui.enums.Cursor) void {
 /// Get the preferredColorScheme if available
 pub fn preferredColorScheme(_: *@This()) ?dvui.enums.ColorScheme {
     return null;
+}
+
+pub fn pollEventsTimeout(_: *@This(), win: *dvui.Window, end_time: ?u32) void {
+    const wt = win.waitTime(end_time);
+    zglfw.waitEventsTimeout(@max(@as(f64, @floatFromInt(wt)) / std.time.ns_per_s, 0));
 }
 
 pub fn nanoTime(_: *@This()) i128 {
@@ -606,7 +632,10 @@ fn glfwKeyCallback(
     mods: zglfw.Mods,
 ) callconv(.c) void {
     if (events) |*ev| {
-        ev.append(.{ .KeyFn = .{ window, key, scancode, action, mods } }) catch @panic("OOM");
+        if (ev.items.len > MAX_EVENT_BUFFER_SIZE)
+            return log.warn("Max event buffer size exceeded! Dropping event!", .{});
+        std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
+        ev.appendAssumeCapacity(.{ .KeyFn = .{ window, key, scancode, action, mods } });
     } else log.warn("Events are currently not implemented!", .{});
 }
 
@@ -644,7 +673,10 @@ fn handleKeyEvent(
 
 fn glfwCharCallback(window: *zglfw.Window, codepoint: u32) callconv(.c) void {
     if (events) |*ev| {
-        ev.append(.{ .CharFn = .{ window, codepoint } }) catch @panic("OOM");
+        if (ev.items.len > MAX_EVENT_BUFFER_SIZE)
+            return log.warn("Max event buffer size exceeded! Dropping event!", .{});
+        std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
+        ev.appendAssumeCapacity(.{ .CharFn = .{ window, codepoint } });
     } else log.warn("Events are currently not implemented!", .{});
 }
 
@@ -661,7 +693,10 @@ fn handleCharEvent(dvui_window: *dvui.Window, window: *zglfw.Window, codepoint: 
 
 fn glfwCursorPosCallback(window: *zglfw.Window, xpos: f64, ypos: f64) callconv(.c) void {
     if (events) |*ev| {
-        ev.append(.{ .CursorPosFn = .{ window, xpos, ypos } }) catch @panic("OOM");
+        if (ev.items.len > MAX_EVENT_BUFFER_SIZE)
+            return log.warn("Max event buffer size exceeded! Dropping event!", .{});
+        std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
+        ev.appendAssumeCapacity(.{ .CursorPosFn = .{ window, xpos, ypos } });
     } else log.warn("Events are currently not implemented!", .{});
 }
 
@@ -689,7 +724,10 @@ fn glfwMouseButtonCallback(
     mods: zglfw.Mods,
 ) callconv(.c) void {
     if (events) |*ev| {
-        ev.append(.{ .MouseButtonFn = .{ window, button, action, mods } }) catch @panic("OOM");
+        if (ev.items.len > MAX_EVENT_BUFFER_SIZE)
+            return log.warn("Max event buffer size exceeded! Dropping event!", .{});
+        std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
+        ev.appendAssumeCapacity(.{ .MouseButtonFn = .{ window, button, action, mods } });
     } else log.warn("Events are currently not implemented!", .{});
 }
 
@@ -726,7 +764,10 @@ fn handleMouseButtonEvent(
 }
 fn glfwScrollCallback(window: *zglfw.Window, xrel: f64, yrel: f64) callconv(.c) void {
     if (events) |*ev| {
-        ev.append(.{ .ScrollFn = .{ window, xrel, yrel } }) catch @panic("OOM");
+        if (ev.items.len > MAX_EVENT_BUFFER_SIZE)
+            return log.warn("Max event buffer size exceeded! Dropping event!", .{});
+        std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
+        ev.appendAssumeCapacity(.{ .ScrollFn = .{ window, xrel, yrel } });
     } else log.warn("Events are currently not implemented!", .{});
 }
 
@@ -760,7 +801,11 @@ fn glfwFramebufferSizeCallback(
     height: c_int,
 ) callconv(.c) void {
     if (events) |*ev| {
-        ev.append(.{ .FrameBufferSizeFn = .{ window, width, height } }) catch @panic("OOM");
+        if (ev.items.len > MAX_EVENT_BUFFER_SIZE)
+            return log.warn("Max event buffer size exceeded! Dropping event!", .{});
+        std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
+        std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
+        ev.appendAssumeCapacity(.{ .FrameBufferSizeFn = .{ window, width, height } });
     } else log.warn("Events are currently not implemented!", .{});
 }
 
@@ -783,13 +828,6 @@ pub fn main() !void {
     const gpa = gpa_instance.allocator();
     var window: *zglfw.Window = undefined;
 
-    const fns = struct {
-        pub fn glGetProcAddress(p: zglfw.GlProc, proc: [:0]const u8) ?zgl.binding.FunctionPointer {
-            _ = p;
-            return @alignCast(zglfw.getProcAddress(proc));
-        }
-    };
-
     try zglfw.init();
 
     zglfw.windowHint(.context_version_major, 3);
@@ -805,9 +843,6 @@ pub fn main() !void {
     );
     zglfw.makeContextCurrent(window);
     if (config.vsync) zglfw.swapInterval(1) else zglfw.swapInterval(0);
-
-    const proc: zglfw.GlProc = undefined;
-    try zgl.loadExtensions(proc, fns.glGetProcAddress);
 
     var impl = init(gpa, window);
     defer impl.deinit();
@@ -831,11 +866,10 @@ pub fn main() !void {
             if (e.evt == .app and e.evt.app.action == .quit) res = .close;
         }
 
-        const endtimes = try win.end(.{});
+        const endtime = try win.end(.{});
         if (res != .ok) break;
         window.swapBuffers();
 
-        const wt = win.waitTime(endtimes);
-        zglfw.waitEventsTimeout(@as(f64, @floatFromInt(wt)) / std.time.ns_per_s);
+        impl.pollEventsTimeout(&win, endtime);
     }
 }
