@@ -22,65 +22,54 @@ pub fn widgetpedia() void {
     var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .background = true });
     defer hbox.deinit();
     {
-        var tabs = dvui.tabs(@src(), .{ .dir = .vertical }, .{});
-        defer tabs.deinit();
-        var tab = tabs.addTab(false, .{});
-        defer tab.deinit();
+        var scroll = dvui.scrollArea(@src(), .{}, .{});
+        defer scroll.deinit();
+        var tree = dvui.TreeWidget.tree(@src(), .{ .enable_reordering = false }, .{});
+        defer tree.deinit();
+        for (widget_hierarchy, 0..) |widget, i| {
+            const color_fill: ?dvui.Color = blk: {
+                if (widget.children) |children|
+                    for (children) |child| {
+                        if (child.displayFn != displayEmpty) break :blk null;
+                    };
+                break :blk if (widget.displayFn == displayEmpty) .gray else null;
+            };
+            const branch = tree.branch(@src(), .{ .expanded = false }, .{ .id_extra = i, .expand = .horizontal, .color_fill = color_fill });
+            defer branch.deinit();
+            dvui.label(@src(), "{s}", .{widget.name}, .{ .expand = .horizontal });
 
-        dvui.labelNoFmt(@src(), "Widgets", .{}, .{ .rotation = std.math.pi * 1.5, .color_text = if (dvui.captured(tab.data().id)) dvui.themeGet().color(.control, .text_press) else null });
-        var tt: dvui.FloatingTooltipWidget = undefined;
-        tt.init(@src(), .{ .active_rect = tab.data().borderRectScale().r, .interactive = true, .position = .absolute }, .{});
-        if (tt.shown()) {
-            var scroll = dvui.scrollArea(@src(), .{}, .{ .max_size_content = .height(hbox.data().contentRect().h) });
-            defer scroll.deinit();
-            var tree = dvui.TreeWidget.tree(@src(), .{ .enable_reordering = false }, .{});
-            defer tree.deinit();
-            for (widget_hierarchy, 0..) |widget, i| {
-                const color_fill: ?dvui.Color = blk: {
-                    if (widget.children) |children|
-                        for (children) |child| {
-                            if (child.displayFn != displayEmpty) break :blk null;
-                        };
-                    break :blk if (widget.displayFn == displayEmpty) .gray else null;
-                };
-                const branch = tree.branch(@src(), .{ .expanded = false }, .{ .id_extra = i, .expand = .horizontal, .color_fill = color_fill });
-                defer branch.deinit();
-                dvui.label(@src(), "{s}", .{widget.name}, .{ .expand = .horizontal });
-
-                if (widget.children != null) {
-                    _ = dvui.icon(
-                        @src(),
-                        "DropIcon",
-                        if (branch.expanded) dvui.entypo.triangle_down else dvui.entypo.triangle_right,
-                        .{},
-                        .{
-                            .gravity_y = 0.5,
-                            .gravity_x = 1.0,
-                        },
-                    );
-                } else if (branch.button.clicked()) {
-                    if (widget.children == null) {
-                        current_widget = widget;
-                        reset_widget = true;
-                    }
+            if (widget.children != null) {
+                _ = dvui.icon(
+                    @src(),
+                    "DropIcon",
+                    if (branch.expanded) dvui.entypo.triangle_down else dvui.entypo.triangle_right,
+                    .{},
+                    .{
+                        .gravity_y = 0.5,
+                        .gravity_x = 1.0,
+                    },
+                );
+            } else if (branch.button.clicked()) {
+                if (widget.children == null) {
+                    current_widget = widget;
+                    reset_widget = true;
                 }
+            }
 
-                if (branch.expander(@src(), .{ .indent = 30 }, .{ .expand = .horizontal })) {
-                    if (widget.children) |children| {
-                        for (children, 0..) |child, j| {
-                            const branch_child = tree.branch(@src(), .{ .expanded = true }, .{ .id_extra = j, .expand = .horizontal, .color_fill = if (child.displayFn == displayEmpty) .gray else null });
-                            defer branch_child.deinit();
-                            dvui.labelNoFmt(@src(), child.name, .{}, .{ .expand = .horizontal });
-                            if (branch_child.button.clicked()) {
-                                current_widget = child;
-                                reset_widget = true;
-                            }
+            if (branch.expander(@src(), .{ .indent = 10 }, .{ .expand = .horizontal })) {
+                if (widget.children) |children| {
+                    for (children, 0..) |child, j| {
+                        const branch_child = tree.branch(@src(), .{ .expanded = true }, .{ .id_extra = j, .expand = .horizontal, .color_fill = if (child.displayFn == displayEmpty) .gray else null });
+                        defer branch_child.deinit();
+                        dvui.labelNoFmt(@src(), child.name, .{}, .{ .expand = .horizontal });
+                        if (branch_child.button.clicked()) {
+                            current_widget = child;
+                            reset_widget = true;
                         }
                     }
                 }
             }
         }
-        tt.deinit();
     }
     {
         var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .padding = dvui.Rect.all(6) });
@@ -109,12 +98,22 @@ const WidgetGroupBox = struct {
         self.* = undefined;
     }
 
-    pub fn optionsEditor(self: *WidgetGroupBox, src: std.builtin.SourceLocation, edit_opts: *dvui.Options, wd: *dvui.WidgetData) void {
+    pub fn testOptionsScrollArea(self: *WidgetGroupBox, src: std.builtin.SourceLocation, opts: dvui.Options) *dvui.ScrollAreaWidget {
         if (self.gbox) |gbox| {
             gbox.deinit();
             self.gbox = null;
         }
-        widgetOptionsEditor(src, edit_opts, wd);
+
+        const defaults: dvui.Options = .{
+            .corner_radius = dvui.Rect.all(3),
+            .border = dvui.Rect.all(1),
+            .padding = dvui.Rect.all(6),
+            .expand = .vertical,
+            .margin = .{ .x = 6, .y = 12, .w = 6, .h = 6 },
+            .background = false,
+            .max_size_content = .height(300),
+        };
+        return dvui.scrollArea(src, .{}, defaults.override(opts));
     }
 
     const WidgetTestBox = struct {
@@ -148,7 +147,7 @@ const WidgetGroupBox = struct {
     pub fn widgetTestingBox(_: WidgetGroupBox, src: std.builtin.SourceLocation, size_content_opt: ?dvui.Size, opts: dvui.Options) WidgetTestBox {
         const vbox = dvui.box(src, .{ .dir = .vertical }, .{ .expand = .horizontal });
 
-        const size_content: dvui.Size = size_content_opt orelse .{ .w = 300, .h = 250 };
+        const size_content: dvui.Size = size_content_opt orelse .{ .w = 250, .h = 250 };
         const border_defaults: dvui.Options = if (dvui.parentGet().data().options.border == null) .{
             .border = dvui.Rect.all(1),
             .corner_radius = dvui.Rect.all(3),
@@ -156,7 +155,8 @@ const WidgetGroupBox = struct {
         const defaults: dvui.Options = .{
             .margin = dvui.Rect.all(6),
             .min_size_content = .cast(size_content),
-            .max_size_content = .cast(size_content),
+            .expand = .horizontal,
+            //.max_size_content = .cast(size_content),
         };
         const widget_box = dvui.box(src, .{}, defaults.override(border_defaults.override(opts)));
         return .{
@@ -185,7 +185,7 @@ pub fn widgetOptionsScrollArea(src: std.builtin.SourceLocation, opts: dvui.Optio
         .margin = dvui.Rect.all(6),
         .background = false,
     };
-    return dvui.scrollArea(src, .{}, defaults.override(opts));
+    return dvui.scrollArea(src, .{ .horizontal = .auto }, defaults.override(opts));
 }
 
 pub fn widgetShowSetOptionsTooltip(src: std.builtin.SourceLocation, rect: dvui.Rect.Physical, opts: dvui.Options) void {
@@ -211,10 +211,14 @@ pub fn widgetShowSetOptionsTooltip(src: std.builtin.SourceLocation, rect: dvui.R
 }
 
 pub fn widgetOptionsEditor(src: std.builtin.SourceLocation, edit_opts: *dvui.Options, wd: *dvui.WidgetData) void {
-    var vbox = dvui.box(src, .{}, .{ .expand = .both });
-    defer vbox.deinit();
-    _ = dvui.Debug.optionsEditor(edit_opts, wd);
-    widgetShowSetOptionsTooltip(@src(), vbox.data().borderRectScale().r, edit_opts.*);
+    var expander_wd: dvui.WidgetData = undefined;
+
+    if (dvui.expander(@src(), "Options editor", .{ .default_expanded = true }, .{ .expand = .horizontal, .data_out = &expander_wd })) {
+        var vbox = dvui.box(src, .{}, .{ .expand = .both });
+        defer vbox.deinit();
+        _ = dvui.Debug.optionsEditor(edit_opts, wd);
+    }
+    widgetShowSetOptionsTooltip(@src(), expander_wd.borderRectScale().r, edit_opts.*);
 }
 
 fn displayEmpty() void {
@@ -319,8 +323,8 @@ pub fn displayAnimate() void {
         state.test_options.restart_animation = false;
     }
 
+    var wd: dvui.WidgetData = undefined;
     {
-        var wd: dvui.WidgetData = undefined;
         {
             var gbox = widgetGroupBox(@src(), "animate()", .{ .expand = .both });
             defer gbox.deinit();
@@ -341,27 +345,30 @@ pub fn displayAnimate() void {
                 }
                 dvui.labelNoFmt(@src(), "Some text", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
             }
-            gbox.optionsEditor(@src(), &state.options, &wd);
+            //gbox.optionsEditor(@src(), &state.options, &wd);
+            var scroll = gbox.testOptionsScrollArea(@src(), .{});
+            defer scroll.deinit();
+            {
+                var box = dvui.box(@src(), .{}, .{ .expand = .horizontal });
+                defer box.deinit();
+                if (dvui.struct_ui.displayContainer(@src(), test_options_label)) |container| {
+                    defer container.deinit();
+                    container.data().options.expand = .horizontal;
+                    if (dvui.button(@src(), "Restart animation", .{}, .{})) {
+                        state.test_options.restart_animation = true;
+                    }
+                }
+            }
+            dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{
+                dvui.struct_ui.StructOptions(dvui.AnimateWidget.InitOptions).initWithDefaults(.{
+                    .easing = .{ .standard = .{ .customDisplayFn = selectEasing } },
+                }, default_init_opts),
+            }, .{});
         }
     }
     var scroll = widgetOptionsScrollArea(@src(), .{});
     defer scroll.deinit();
-    {
-        var box = dvui.box(@src(), .{}, .{ .expand = .horizontal });
-        defer box.deinit();
-        if (dvui.struct_ui.displayContainer(@src(), test_options_label)) |container| {
-            defer container.deinit();
-            container.data().options.expand = .horizontal;
-            if (dvui.button(@src(), "Restart animation", .{}, .{})) {
-                state.test_options.restart_animation = true;
-            }
-        }
-    }
-    dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{
-        dvui.struct_ui.StructOptions(dvui.AnimateWidget.InitOptions).initWithDefaults(.{
-            .easing = .{ .standard = .{ .customDisplayFn = selectEasing } },
-        }, default_init_opts),
-    }, .{});
+    widgetOptionsEditor(@src(), &state.options, &wd);
 }
 
 fn selectEasing(field_name: []const u8, _: *anyopaque, read_only: bool, alignment: *dvui.Alignment) void {
@@ -412,12 +419,14 @@ pub fn displayBox() void {
                 b.deinit();
             }
         }
-        gbox.optionsEditor(@src(), &state.options, &wd);
+        var scroll = gbox.testOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        dvui.structUI(@src(), test_options_label, &state.test_options, 1, .{}, .{});
+        dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{}, .{});
     }
     var scroll = widgetOptionsScrollArea(@src(), .{});
     defer scroll.deinit();
-    dvui.structUI(@src(), test_options_label, &state.test_options, 1, .{}, .{});
-    dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{}, .{});
+    widgetOptionsEditor(@src(), &state.options, &wd);
 }
 
 pub fn displayButton() void {
@@ -452,10 +461,7 @@ pub fn displayButton() void {
             defer al.deinit();
             dvui.struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
         }
-        gbox.optionsEditor(@src(), &state.options, &wd);
-    }
-    {
-        var scroll = widgetOptionsScrollArea(@src(), .{});
+        var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
         dvui.structUI(
             @src(),
@@ -463,10 +469,15 @@ pub fn displayButton() void {
             &state.test_options,
             1,
             .{dvui.struct_ui.StructOptions(@TypeOf(state.test_options)).initWithDefaults(.{
-                .label_str = .{ .text = .{ .display = .read_write } },
+                .label_str = .defaultTextRW,
             }, null)},
             .{},
         );
+    }
+    {
+        var scroll = widgetOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        widgetOptionsEditor(@src(), &state.options, &wd);
     }
 }
 
@@ -489,9 +500,8 @@ pub fn displayButtonIcon() void {
             .icon = dvui.entypo.aircraft,
         };
     }
-
+    var wd: dvui.WidgetData = undefined;
     {
-        var wd: dvui.WidgetData = undefined;
         var gbox = widgetGroupBox(@src(), "buttonIcon()", .{});
         defer gbox.deinit();
         {
@@ -505,10 +515,7 @@ pub fn displayButtonIcon() void {
             defer al.deinit();
             dvui.struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
         }
-        gbox.optionsEditor(@src(), &state.options, &wd);
-    }
-    {
-        var scroll = widgetOptionsScrollArea(@src(), .{});
+        var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
         dvui.structUI(
             @src(),
@@ -521,6 +528,11 @@ pub fn displayButtonIcon() void {
             .{},
         );
         dvui.structUI(@src(), "icon_opts", &state.icon_opts, 1, .{struct_opts_color}, .{});
+    }
+    {
+        var scroll = widgetOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        widgetOptionsEditor(@src(), &state.options, &wd);
     }
 }
 
@@ -554,10 +566,7 @@ pub fn displayButtonLabelAndIcon() void {
             defer al.deinit();
             dvui.struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
         }
-        gbox.optionsEditor(@src(), &state.options, &wd);
-    }
-    {
-        var scroll = widgetOptionsScrollArea(@src(), .{});
+        var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
         dvui.structUI(
             @src(),
@@ -571,6 +580,11 @@ pub fn displayButtonLabelAndIcon() void {
             .{},
         );
         dvui.structUI(@src(), "icon_opts", &state.icon_opts, 1, .{struct_opts_color}, .{});
+    }
+    {
+        var scroll = widgetOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        widgetOptionsEditor(@src(), &state.options, &wd);
     }
 }
 
@@ -609,10 +623,7 @@ pub fn displayCheckbox() void {
             defer al.deinit();
             dvui.struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
         }
-        gbox.optionsEditor(@src(), &state.options, &wd);
-    }
-    {
-        var scroll = widgetOptionsScrollArea(@src(), .{});
+        var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
         dvui.structUI(
             @src(),
@@ -624,6 +635,11 @@ pub fn displayCheckbox() void {
             }, null)},
             .{},
         );
+    }
+    {
+        var scroll = widgetOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        widgetOptionsEditor(@src(), &state.options, &wd);
     }
 }
 
@@ -678,16 +694,18 @@ pub fn displayColorPicker() void {
                 .{},
             );
         }
-        gbox.optionsEditor(@src(), &state.options, &wd);
-    }
-    {
-        var scroll = widgetOptionsScrollArea(@src(), .{});
+        var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
         if (state.init_opts.alpha) {
             dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{struct_options_hsva}, .{});
         } else {
             dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{struct_options_hsv}, .{});
         }
+    }
+    {
+        var scroll = widgetOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        widgetOptionsEditor(@src(), &state.options, &wd);
     }
 }
 
@@ -737,10 +755,7 @@ pub fn displayCombobox() void {
                 state.test_options.choice = index;
             }
         }
-        gbox.optionsEditor(@src(), &state.options, &wd);
-    }
-    {
-        var scroll = widgetOptionsScrollArea(@src(), .{});
+        var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
         dvui.structUI(
             @src(),
@@ -758,6 +773,11 @@ pub fn displayCombobox() void {
             .placeholder = "Placeholder",
             .password_char = "*",
         })}, .{});
+    }
+    {
+        var scroll = widgetOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        widgetOptionsEditor(@src(), &state.options, &wd);
     }
 }
 
@@ -814,10 +834,7 @@ pub fn displayDropDownEnum() void {
                 .choice = .default,
             }, null)}, .{});
         }
-        gbox.optionsEditor(@src(), &state.options, &wd);
-    }
-    {
-        var scroll = widgetOptionsScrollArea(@src(), .{});
+        var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
         dvui.structUI(@src(), test_options_label, &state.test_options, 1, .{}, .{});
         if (state.test_options.nullable) {
@@ -831,6 +848,11 @@ pub fn displayDropDownEnum() void {
         dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{dvui.struct_ui.StructOptions(dvui.DropdownInitOptions).initWithDefaults(.{
             .placeholder = .defaultText,
         }, state.default_init_opts)}, .{});
+    }
+    {
+        var scroll = widgetOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        widgetOptionsEditor(@src(), &state.options, &wd);
     }
 }
 
@@ -873,7 +895,7 @@ pub fn displayGroupBox() void {
         var gbox = widgetGroupBox(@src(), "groupBox()", .{});
         defer gbox.deinit();
         {
-            var widget_box = gbox.widgetTestingBox(@src(), null, .{ .expand = .horizontal });
+            var widget_box = gbox.widgetTestingBox(@src(), null, .{ .expand = .horizontal, .border = dvui.Rect.all(0) });
             defer widget_box.deinit();
 
             var test_gbox = dvui.groupBox(@src(), if (state.test_options.long_label) label_long else label_short, state.options.override(.{ .data_out = &wd }));
@@ -885,12 +907,14 @@ pub fn displayGroupBox() void {
             te = dvui.textEntry(@src(), .{}, .{});
             te.deinit();
         }
-        gbox.optionsEditor(@src(), &state.options, &wd);
+        var scroll = gbox.testOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        dvui.structUI(@src(), test_options_label, &state.test_options, 1, .{}, .{});
     }
     {
         var scroll = widgetOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
-        dvui.structUI(@src(), test_options_label, &state.test_options, 1, .{}, .{});
+        widgetOptionsEditor(@src(), &state.options, &wd);
     }
 }
 
@@ -927,16 +951,18 @@ pub fn displayTextEntryNumber() void {
                 }, null),
             }, .{ .gravity_x = 1.0 });
         }
-        gbox.optionsEditor(@src(), &state.options, &wd);
+        var scroll = gbox.testOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{
+            dvui.struct_ui.StructOptions(dvui.TextEntryNumberInitOptions(NumberType)).initWithDefaults(.{
+                .text = .{ .text = .{ .display = .read_write } },
+                .placeholder = .{ .text = .{ .display = .read_write } },
+            }, init_opts_defaults),
+        }, .{});
     }
     var scroll = widgetOptionsScrollArea(@src(), .{});
     defer scroll.deinit();
-    dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{
-        dvui.struct_ui.StructOptions(dvui.TextEntryNumberInitOptions(NumberType)).initWithDefaults(.{
-            .text = .{ .text = .{ .display = .read_write } },
-            .placeholder = .{ .text = .{ .display = .read_write } },
-        }, init_opts_defaults),
-    }, .{});
+    widgetOptionsEditor(@src(), &state.options, &wd);
 }
 
 fn structColorPicker(field_name: []const u8, ptr: *anyopaque, read_only: bool, alignment: *dvui.Alignment) void {
@@ -963,7 +989,7 @@ fn structColorPicker(field_name: []const u8, ptr: *anyopaque, read_only: bool, a
         color_box.deinit();
     } else {
         var hsv_color: dvui.Color.HSV = .fromColor(field_value_ptr.*);
-        _ = dvui.colorPicker(@src(), .{ .hsv = &hsv_color }, .{});
+        _ = dvui.colorPicker(@src(), .{ .hsv = &hsv_color, .hex_text_entry = false, .dir = .vertical }, .{});
         field_value_ptr.* = hsv_color.toColor();
     }
 }

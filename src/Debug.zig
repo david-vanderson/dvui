@@ -479,7 +479,10 @@ pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
 }
 
 fn copyOptionsToClipboard(src: std.builtin.SourceLocation, id: dvui.Id, options: Options) void {
-    dvui.log.debug("Copied Options struct for {s}:{d}", .{ src.file, src.line });
+    _ = src;
+    // TODO: This is causing an error trace to be printed in the widgetpedia.
+    // Because we edit standalone options, not widget options.
+    //dvui.log.debug("Copied Options struct for {s}:{d}", .{ src.file, src.line });
     dvui.toast(@src(), .{ .message = "Options copied to clipboard" });
 
     var aw = std.Io.Writer.Allocating.init(dvui.currentWindow().lifo());
