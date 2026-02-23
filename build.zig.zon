@@ -23,8 +23,8 @@
             .lazy = true,
         },
         .sdl3 = .{
-            .url = "git+https://github.com/castholm/SDL#887fa805e40d5c7bb3955ae69b89ed566c6a0471",
-            .hash = "sdl-0.4.0+3.4.0-SDL--rq2owEZsySGuHCuVJ9naEvH3i3e_pyUIjziBtJ-",
+            .url = "git+https://codeberg.org/brodo/SDL.git?ref=v3.4.2#50804093f262be4a8572917e9f167d1db88ee619",
+            .hash = "sdl-0.4.0+3.4.2-SDL--kUpAgD4KSzqQJ5MPxKjEdcAZXbMGvdyPqvhaXaV",
             .lazy = true,
         },
         .freetype = .{
