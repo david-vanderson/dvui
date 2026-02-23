@@ -12,7 +12,7 @@ pub const Backend = enum {
     raylib,
     raylib_zig,
     dx11,
-    glfw_opengl3,
+    glfw_opengl,
     web,
     /// Does no rendering!
     testing,

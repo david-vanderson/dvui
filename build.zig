@@ -603,7 +603,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 addExample("dx11-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
             }
         },
-        .glfw_opengl3 => {
+        .glfw_opengl => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .stb_image = true, .tiny_file_dialogs = true, .tree_sitter = true });
 
             const glfw_opengl_mod = b.addModule("glfw-opengl", .{
@@ -619,7 +619,15 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
 
             if (maybe_zgl) |zgl| {
                 glfw_opengl_mod.addImport("zgl", zgl.module("zgl"));
-                glfw_opengl_mod.linkSystemLibrary("GL", .{});
+                switch (target.result.os.tag) {
+                    .windows => glfw_opengl_mod.linkSystemLibrary("opengl32", .{}),
+                    .linux => glfw_opengl_mod.linkSystemLibrary("GL", .{}),
+                    .macos => {
+                        glfw_opengl_mod.linkSystemLibrary("OpenGL", .{});
+                        glfw_opengl_mod.linkSystemLibrary("Cocoa", .{});
+                    },
+                    else => {},
+                }
             }
 
             const maybe_glfw = b.lazyDependency(
@@ -644,7 +652,7 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 .backend_mod = glfw_opengl_mod,
             };
             addExample("glfw-opengl-ontop", b.path("examples/glfw-opengl-ontop.zig"), test_dvui_and_app, example_opts, dvui_opts);
-            addExample("glfw-opengl-standalone", b.path("examples/glfw-opengl-standalone.zig"), test_dvui_and_app, example_opts, dvui_opts);
+            addExample("glfw-opengl-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .web => {
             if (dvui_opts.vertex_index != .u16) {
