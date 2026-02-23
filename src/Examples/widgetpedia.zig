@@ -108,10 +108,11 @@ const WidgetGroupBox = struct {
             .corner_radius = dvui.Rect.all(3),
             .border = dvui.Rect.all(1),
             .padding = dvui.Rect.all(6),
-            .expand = .vertical,
+            .expand = .both,
             .margin = .{ .x = 6, .y = 6 + opts.fontGet().lineHeight() / 2 - 1, .w = 6, .h = 6 },
             .background = false,
-            .max_size_content = .height(300),
+            // TODO:
+            //.max_size_content = .height(300),
         };
         return dvui.scrollArea(src, .{}, defaults.override(opts));
     }
@@ -156,6 +157,7 @@ const WidgetGroupBox = struct {
             .margin = dvui.Rect.all(6),
             .min_size_content = .cast(size_content),
             .expand = .horizontal,
+            // TODO:
             //.max_size_content = .cast(size_content),
         };
         const widget_box = dvui.box(src, .{}, defaults.override(border_defaults.override(opts)));
@@ -168,7 +170,7 @@ const WidgetGroupBox = struct {
 
 pub fn widgetGroupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: dvui.Options) WidgetGroupBox {
     const defaults: dvui.Options = .{ .expand = .both };
-    const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+    const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
     const gbox = dvui.groupBox(src, label_str, defaults.override(opts));
     return .{
         .hbox = hbox,
