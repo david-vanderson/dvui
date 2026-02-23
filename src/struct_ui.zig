@@ -42,15 +42,19 @@ pub const FieldOptions = union(enum) {
     pub const defaultTextRW: FieldOptions = .{ .text = .{ .display = .read_write } };
     pub const defaultBool: FieldOptions = .{ .boolean = .{} };
     pub const defaultHidden: FieldOptions = .{ .standard = .{ .display = .none } };
+    pub const defaultReadOnly: FieldOptions = .{ .standard = .{ .display = .read_only } };
 
-    pub fn optionStandard(self: FieldOptions) error{InvalidOptionType}!StandardFieldOptions {
+    pub fn optionStandard(self: FieldOptions, field_name: []const u8) StandardFieldOptions {
         return switch (self) {
             .standard => |fo| fo,
-            else => error.InvalidOptionType,
+            else => {
+                log.debug(msg_invalid_opt_type, .{ self, field_name });
+                return .{};
+            },
         };
     }
 
-    pub fn optionNumber(self: FieldOptions) error{InvalidOptionType}!NumberFieldOptions {
+    pub fn optionNumber(self: FieldOptions, field_name: []const u8) NumberFieldOptions {
         return switch (self) {
             .number => |fo| fo,
             .standard => |fo| .{
@@ -58,11 +62,14 @@ pub const FieldOptions = union(enum) {
                 .display = fo.display,
                 .customDisplayFn = fo.customDisplayFn,
             },
-            else => error.InvalidOptionType,
+            else => {
+                log.debug(msg_invalid_opt_type, .{ self, field_name });
+                return .{};
+            },
         };
     }
 
-    pub fn optionText(self: FieldOptions) error{InvalidOptionType}!TextFieldOptions {
+    pub fn optionText(self: FieldOptions, field_name: []const u8) TextFieldOptions {
         return switch (self) {
             .text => |fo| fo,
             .standard => |fo| .{
@@ -70,11 +77,14 @@ pub const FieldOptions = union(enum) {
                 .display = fo.display,
                 .customDisplayFn = fo.customDisplayFn,
             },
-            else => error.InvalidOptionType,
+            else => {
+                log.debug(msg_invalid_opt_type, .{ self, field_name });
+                return .{};
+            },
         };
     }
 
-    pub fn optionBool(self: FieldOptions) error{InvalidOptionType}!BoolFieldOptions {
+    pub fn optionBool(self: FieldOptions, field_name: []const u8) BoolFieldOptions {
         return switch (self) {
             .boolean => |fo| fo,
             .standard => |fo| .{
@@ -82,7 +92,10 @@ pub const FieldOptions = union(enum) {
                 .display = fo.display,
                 .customDisplayFn = fo.customDisplayFn,
             },
-            else => error.InvalidOptionType,
+            else => {
+                log.debug(msg_invalid_opt_type, .{ self, field_name });
+                return .{};
+            },
         };
     }
 
@@ -445,6 +458,45 @@ pub fn enumFieldWidget(
     }
 }
 
+pub fn enumFieldWidgetOptional(
+    comptime src: std.builtin.SourceLocation,
+    field_name: []const u8,
+    field_value_optional_ptr: anytype,
+    opt: StandardFieldOptions,
+    alignment: *dvui.Alignment,
+) void {
+    // TODO: Work this bit out
+    //    validateFieldPtrType(null, &.{.@"enum"}, "enumFieldWidget", @TypeOf(field_value_ptr));
+    if (opt.display == .none) return;
+
+    const T = @TypeOf(field_value_optional_ptr.*.?);
+    const read_only = @typeInfo(@TypeOf(field_value_optional_ptr)).pointer.is_const or opt.display == .read_only;
+    var box = dvui.box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
+    defer box.deinit();
+
+    dvui.label(@src(), "{s}?", .{opt.label orelse field_name}, .{});
+    var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
+    defer hbox_aligned.deinit();
+    alignment.record(box.data().id, hbox_aligned.data());
+
+    if (read_only) {
+        dvui.label(@src(), "{s}", .{if (field_value_optional_ptr.*) |field_value| @tagName(field_value) else "null"}, .{});
+    } else {
+        const choices = std.meta.FieldEnum(T);
+        const entries = std.meta.fieldNames(choices);
+        var choice: ?usize = if (field_value_optional_ptr.*) |field_value|
+            @intFromEnum(std.meta.stringToEnum(std.meta.FieldEnum(T), @tagName(field_value)).?)
+        else
+            null;
+        _ = dvui.dropdown(@src(), entries, .{ .choice_nullable = &choice }, .{ .placeholder = "null" }, .{});
+
+        if (choice) |ch|
+            field_value_optional_ptr.* = std.meta.stringToEnum(T, @tagName(@as(std.meta.FieldEnum(T), @enumFromInt(ch)))).?
+        else
+            field_value_optional_ptr.* = null;
+    }
+}
+
 /// Options for displaying a text field.
 pub const BoolFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
@@ -483,9 +535,9 @@ pub fn boolFieldWidget(
             var data_out: dvui.WidgetData = undefined;
             _ = dvui.checkbox(@src(), &state, "", .{ .data_out = &data_out });
             if (state)
-                dvui.tooltip(@src(), .{ .active_rect = data_out.borderRectScale().r }, "Value was set to true since last manual reset.", .{}, .{})
+                dvui.tooltip(@src(), .{ .active_rect = data_out.borderRectScale().r, .delay = 1_000_000 }, "Value was set to true since last manual reset.", .{}, .{})
             else
-                dvui.tooltip(@src(), .{ .active_rect = data_out.borderRectScale().r }, "Value was not set to true since last manual reset", .{}, .{});
+                dvui.tooltip(@src(), .{ .active_rect = data_out.borderRectScale().r, .delay = 1_000_000 }, "Value was not set to true since last manual reset", .{}, .{});
 
             dvui.dataSet(null, box.data().id, "bool", state);
         }
@@ -495,6 +547,45 @@ pub fn boolFieldWidget(
         var choice: usize = if (field_value_ptr.* == false) 0 else 1;
         _ = dvui.dropdown(@src(), &entries, .{ .choice = &choice }, .{}, .{});
         field_value_ptr.* = if (choice == 0) false else true;
+    }
+}
+
+pub fn boolFieldWidgetOptional(
+    comptime src: std.builtin.SourceLocation,
+    field_name: []const u8,
+    field_value_optional_ptr: anytype,
+    opt: BoolFieldOptions,
+    alignment: *dvui.Alignment,
+) void {
+    // TODO: Make this work for ?bool
+    //    validateFieldPtrType(null, &.{.bool}, "boolFieldWidgetOptional", @TypeOf(field_value_ptr));
+    if (opt.display == .none) return;
+
+    const read_only = @typeInfo(@TypeOf(field_value_optional_ptr)).pointer.is_const or opt.display == .read_only;
+
+    var box = dvui.box(src, .{ .dir = .horizontal }, .{});
+    defer box.deinit();
+
+    dvui.label(@src(), "{s}?", .{opt.label orelse field_name}, .{});
+    var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
+    defer hbox_aligned.deinit();
+    alignment.record(box.data().id, hbox_aligned.data());
+
+    if (read_only) {
+        dvui.label(@src(), "{?}", .{field_value_optional_ptr.*}, .{});
+    } else {
+        const entries = .{ "null", "false", "true" };
+        var choice: usize = if (field_value_optional_ptr.*) |field_value|
+            if (field_value) 2 else 1
+        else
+            0;
+        _ = dvui.dropdown(@src(), &entries, .{ .choice = &choice }, .{}, .{});
+        field_value_optional_ptr.* = switch (choice) {
+            0 => null,
+            1 => false,
+            2 => true,
+            else => unreachable,
+        };
     }
 }
 
@@ -685,9 +776,9 @@ pub fn optionalFieldWidget(
         alignment.record(hbox.data().id, hbox_aligned.data());
 
         if (!read_only) {
-            _ = dvui.dropdown(@src(), &.{ "Null", "Not Null" }, .{ .choice = &choice }, .{}, .{});
+            _ = dvui.dropdown(@src(), &.{ "null", "not null" }, .{ .choice = &choice }, .{}, .{});
         } else {
-            dvui.labelNoFmt(@src(), if (choice == 0) "Null" else "Not Null", .{}, .{});
+            dvui.labelNoFmt(@src(), if (choice == 0) "null" else "not null", .{}, .{});
         }
     }
     return choice == 1; // Not null
@@ -799,23 +890,12 @@ const msg_invalid_opt_type = "invalid field option type {t} used for field {s}. 
 /// Display numeric fields, ints and floats.
 pub fn displayNumber(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrType(field_name, &.{ .int, .float }, "displayEnum", @TypeOf(field_value_ptr));
-
-    const number_option = field_option.optionNumber() catch |err| blk: {
-        std.debug.assert(err == error.InvalidOptionType);
-        log.debug(msg_invalid_opt_type, .{ field_option, field_name });
-        break :blk NumberFieldOptions{};
-    };
-    numberFieldWidget(src, field_name, field_value_ptr, number_option, al);
+    numberFieldWidget(src, field_name, field_value_ptr, field_option.optionNumber(field_name), al);
 }
 
 pub fn displayEnum(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrType(field_name, &.{.@"enum"}, "displayEnum", @TypeOf(field_value_ptr));
-    const std_option = field_option.optionStandard() catch |err| blk: {
-        std.debug.assert(err == error.InvalidOptionType);
-        log.debug(msg_invalid_opt_type, .{ field_option, field_name });
-        break :blk StandardFieldOptions{};
-    };
-    enumFieldWidget(src, field_name, field_value_ptr, std_option, al);
+    enumFieldWidget(src, field_name, field_value_ptr, field_option.optionStandard(field_name), al);
 }
 
 /// Display []u8, []const u8 and arrays of u8 and const u8.
@@ -823,34 +903,18 @@ pub fn displayEnum(comptime src: std.builtin.SourceLocation, comptime field_name
 /// When strings are modified, they are assigned to a duplicated version of the text widget's buffer.
 pub fn displayString(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrTypeString(field_name, "displayString", @TypeOf(field_value_ptr));
-    const text_option = field_option.optionText() catch |err| blk: {
-        std.debug.assert(err == error.InvalidOptionType);
-        log.debug(msg_invalid_opt_type, .{ field_option, field_name });
-        break :blk TextFieldOptions{};
-    };
-    textFieldWidget(src, field_name, field_value_ptr, text_option, al, stringBackingAllocator());
+    textFieldWidget(src, field_name, field_value_ptr, field_option.optionText(field_name), al, stringBackingAllocator());
 }
 
 /// Same as displayString, but uses a user-supplied buffer, rather than a dynamically allocated buffer.
 pub fn displayStringBuf(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment, buffer: []u8) void {
     validateFieldPtrTypeString(field_name, "displayString", @TypeOf(field_value_ptr));
-    const text_option = field_option.optionText() catch |err| blk: {
-        std.debug.assert(err == error.InvalidOptionType);
-        log.debug(msg_invalid_opt_type, .{ field_option, field_name });
-        break :blk TextFieldOptions{};
-    };
-
-    textFieldWidget(src, field_name, field_value_ptr, text_option, al, .{ .buffer = buffer });
+    textFieldWidget(src, field_name, field_value_ptr, field_option.optionText(field_name), al, .{ .buffer = buffer });
 }
 
 pub fn displayBool(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrType(field_name, &.{.bool}, "displayBool", @TypeOf(field_value_ptr));
-    const bool_option = field_option.optionBool() catch |err| blk: {
-        std.debug.assert(err == error.InvalidOptionType);
-        log.debug(msg_invalid_opt_type, .{ field_option, field_name });
-        break :blk BoolFieldOptions{};
-    };
-    boolFieldWidget(src, field_name, field_value_ptr, bool_option, al);
+    boolFieldWidget(src, field_name, field_value_ptr, field_option.optionBool(field_name), al);
 }
 
 pub fn displayArray(
@@ -1007,6 +1071,19 @@ pub fn displayOptional(
     if (field_option.displayMode() == .none) return;
 
     const optional = @typeInfo(@TypeOf(field_value_ptr.*)).optional;
+
+    // Shortcut some common optionals
+    switch (@typeInfo(optional.child)) {
+        .bool => {
+            boolFieldWidgetOptional(@src(), field_name, field_value_ptr, field_option.optionBool(field_name), al);
+            return;
+        },
+        .@"enum" => {
+            enumFieldWidgetOptional(@src(), field_name, field_value_ptr, field_option.optionStandard(field_name), al);
+            return;
+        },
+        else => {},
+    }
 
     // TODO: A change was made to ignore display_mode read_only here and only apply it to the value field, not the optional.
     // Work out why that was changed.

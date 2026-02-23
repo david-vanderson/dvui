@@ -109,7 +109,7 @@ const WidgetGroupBox = struct {
             .border = dvui.Rect.all(1),
             .padding = dvui.Rect.all(6),
             .expand = .vertical,
-            .margin = .{ .x = 6, .y = 12, .w = 6, .h = 6 },
+            .margin = .{ .x = 6, .y = 6 + opts.fontGet().lineHeight() / 2 - 1, .w = 6, .h = 6 },
             .background = false,
             .max_size_content = .height(300),
         };
@@ -190,7 +190,7 @@ pub fn widgetOptionsScrollArea(src: std.builtin.SourceLocation, opts: dvui.Optio
 
 pub fn widgetShowSetOptionsTooltip(src: std.builtin.SourceLocation, rect: dvui.Rect.Physical, opts: dvui.Options) void {
     var tt: dvui.FloatingTooltipWidget = undefined;
-    tt.init(src, .{ .active_rect = rect, .interactive = true, .position = .vertical }, .{ .role = .tooltip });
+    tt.init(src, .{ .active_rect = rect, .interactive = false, .position = .vertical }, .{ .role = .tooltip });
     defer tt.deinit();
     if (tt.shown()) {
         var tl = dvui.textLayout(@src(), .{}, .{});
@@ -769,6 +769,7 @@ pub fn displayCombobox() void {
             .placeholder = .defaultTextRW,
             .password_char = .defaultTextRW,
             .tree_sitter = .defaultHidden,
+            .text = .defaultReadOnly,
         }, .{
             .placeholder = "Placeholder",
             .password_char = "*",
