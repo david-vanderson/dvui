@@ -1075,6 +1075,7 @@ pub fn displayFocusGroup() void {
     const state = struct {
         var init_opts: dvui.FocusGroupWidget.InitOptions = .{};
         var options: dvui.Options = undefined;
+        var first_frame: bool = undefined;
         var test_options: struct {
             label: []const u8,
         } = undefined;
@@ -1084,11 +1085,12 @@ pub fn displayFocusGroup() void {
         state.init_opts = .{};
         state.options = .{};
         state.test_options = .{ .label = "Expander" };
+        state.first_frame = true;
     }
 
     var wd: dvui.WidgetData = undefined;
     {
-        var gbox = widgetGroupBox(@src(), "focusGroup()", .{ .border = dvui.Rect.all(0) });
+        var gbox = widgetGroupBox(@src(), "focusGroup()", .{});
         defer gbox.deinit();
         {
             var widget_box = gbox.widgetTestingBox(@src(), null, .{});
@@ -1096,26 +1098,27 @@ pub fn displayFocusGroup() void {
             var fg = dvui.focusGroup(@src(), state.init_opts, state.options.override(.{ .data_out = &wd }));
             defer fg.deinit();
             var button_wd: dvui.WidgetData = undefined;
-            _ = dvui.button(@src(), "Button 1", .{}, .{ .data_out = &button_wd });
-            if (dvui.firstFrame(button_wd.id)) {
+            {
+                var box = dvui.box(@src(), .{ .dir = state.init_opts.nav_key_dir orelse .vertical }, .{ .expand = .both });
+                defer box.deinit();
+                _ = dvui.button(@src(), "Button 1", .{}, .{ .data_out = &button_wd });
+                _ = dvui.button(@src(), "Button 2", .{}, .{});
+                _ = dvui.button(@src(), "Button 3", .{}, .{});
+            }
+            // TODO: Can;t get this to centre.
+            var tl = dvui.textLayout(@src(), .{ .break_lines = true }, .{ .expand = .horizontal });
+            tl.addText("Widgets in a focus group are navigated using arrow keys.", .{ .gravity_x = 0.5, .expand = .horizontal });
+            tl.deinit();
+            if (state.first_frame) {
+                state.first_frame = false;
                 dvui.focusWidget(button_wd.id, null, null);
             }
-            _ = dvui.button(@src(), "Button 2", .{}, .{});
-            _ = dvui.button(@src(), "Button 3", .{}, .{});
-            _ = dvui.spacer(@src(), .{ .margin = .{ .y = 6, .x = 0, .w = 0, .h = 0 } });
-            var tl = dvui.textLayout(@src(), .{ .break_lines = true }, .{});
-            tl.addText("Widgets in a focus group are navigated using arrow keys.", .{});
-            tl.deinit();
         }
         var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
         dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{}, .{});
     }
-    {
-        var scroll = widgetOptionsScrollArea(@src(), .{});
-        defer scroll.deinit();
-        widgetOptionsEditor(@src(), &state.options, &wd, true);
-    }
+    // No styling options can be applied to the focus group.
 }
 
 pub fn displayGroupBox() void {
