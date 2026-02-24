@@ -5,13 +5,40 @@ const Examples = dvui.Examples;
 var reset_widget: bool = true;
 const test_options_label = "Widget display options";
 
-const struct_opts_color: dvui.struct_ui.StructOptions(dvui.Color) = .initWithDisplayFn(structColorPicker, .white);
+const struct_options = struct {
+    const color: StructOptions(dvui.Color) = .initWithDisplayFn(structColorPicker, .white);
+    const color_hsva: StructOptions(dvui.Color.HSV) = .init(.{
+        .h = .{ .number = .{ .min = 0, .max = 359.99 } },
+        .s = .{ .number = .{ .min = 0, .max = 1 } },
+        .v = .{ .number = .{ .min = 0, .max = 1 } },
+        .a = .{ .number = .{ .min = 0, .max = 1 } },
+    }, .fromColor(.white));
+
+    const color_hsv: StructOptions(dvui.Color.HSV) = .init(.{
+        .h = .{ .number = .{ .min = 0, .max = 359.99 } },
+        .s = .{ .number = .{ .min = 0, .max = 1 } },
+        .v = .{ .number = .{ .min = 0, .max = 1 } },
+        .a = .{ .number = .{ .min = 0, .max = 1, .display = .read_only } },
+    }, .fromColor(.white));
+
+    const text_entry = struct {
+        const init_opts: StructOptions(dvui.TextEntryWidget.InitOptions) = .initWithDefaults(.{
+            .placeholder = .defaultTextRW,
+            .password_char = .defaultTextRW,
+            .tree_sitter = .defaultHidden,
+            .text = .defaultReadOnly,
+        }, .{
+            .placeholder = "Placeholder",
+            .password_char = "*",
+        });
+    };
+};
 
 pub fn widgetpedia() void {
     if (!Examples.show_widgetpedia_window) {
         return;
     }
-    dvui.struct_ui.defaults.display_expanded = true;
+    struct_ui.defaults.display_expanded = true;
 
     const width = 775;
 
@@ -77,7 +104,7 @@ pub fn widgetpedia() void {
         current_widget.displayFn();
         reset_widget = false;
     }
-    dvui.struct_ui.defaults.display_expanded = false;
+    struct_ui.defaults.display_expanded = false;
 }
 
 const WidgetHeirachy = struct {
@@ -111,6 +138,7 @@ const WidgetGroupBox = struct {
             .expand = .both,
             .margin = .{ .x = 6, .y = 6 + opts.fontGet().lineHeight() / 2 - 1, .w = 6, .h = 6 },
             .background = false,
+            .min_size_content = .{ .w = 350 },
             // TODO:
             //.max_size_content = .height(300),
         };
@@ -170,7 +198,7 @@ const WidgetGroupBox = struct {
 
 pub fn widgetGroupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: dvui.Options) WidgetGroupBox {
     const defaults: dvui.Options = .{ .expand = .both };
-    const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+    const hbox = dvui.box(@src(), .{ .dir = .horizontal, .equal_space = true }, .{ .expand = .horizontal });
     const gbox = dvui.groupBox(src, label_str, defaults.override(opts));
     return .{
         .hbox = hbox,
@@ -353,7 +381,7 @@ pub fn displayAnimate() void {
             {
                 var box = dvui.box(@src(), .{}, .{ .expand = .horizontal });
                 defer box.deinit();
-                if (dvui.struct_ui.displayContainer(@src(), test_options_label)) |container| {
+                if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
                     defer container.deinit();
                     container.data().options.expand = .horizontal;
                     if (dvui.button(@src(), "Restart animation", .{}, .{})) {
@@ -362,7 +390,7 @@ pub fn displayAnimate() void {
                 }
             }
             dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{
-                dvui.struct_ui.StructOptions(dvui.AnimateWidget.InitOptions).initWithDefaults(.{
+                StructOptions(dvui.AnimateWidget.InitOptions).initWithDefaults(.{
                     .easing = .{ .standard = .{ .customDisplayFn = selectEasing } },
                 }, default_init_opts),
             }, .{});
@@ -461,7 +489,7 @@ pub fn displayButton() void {
             defer result_box.deinit();
             var al = dvui.Alignment.init(@src(), 0);
             defer al.deinit();
-            dvui.struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
+            struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
         }
         var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
@@ -470,7 +498,7 @@ pub fn displayButton() void {
             test_options_label,
             &state.test_options,
             1,
-            .{dvui.struct_ui.StructOptions(@TypeOf(state.test_options)).initWithDefaults(.{
+            .{StructOptions(@TypeOf(state.test_options)).initWithDefaults(.{
                 .label_str = .defaultTextRW,
             }, null)},
             .{},
@@ -515,7 +543,7 @@ pub fn displayButtonIcon() void {
             defer result_box.deinit();
             var al = dvui.Alignment.init(@src(), 0);
             defer al.deinit();
-            dvui.struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
+            struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
         }
         var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
@@ -524,12 +552,12 @@ pub fn displayButtonIcon() void {
             test_options_label,
             &state.test_options,
             1,
-            .{dvui.struct_ui.StructOptions(@TypeOf(state.test_options)).initWithDefaults(.{
+            .{StructOptions(@TypeOf(state.test_options)).initWithDefaults(.{
                 .icon = .{ .standard = .{ .display = .none } },
             }, null)},
             .{},
         );
-        dvui.structUI(@src(), "icon_opts", &state.icon_opts, 1, .{struct_opts_color}, .{});
+        dvui.structUI(@src(), "icon_opts", &state.icon_opts, 1, .{struct_options.color}, .{});
     }
     {
         var scroll = widgetOptionsScrollArea(@src(), .{});
@@ -566,7 +594,7 @@ pub fn displayButtonLabelAndIcon() void {
             defer result_box.deinit();
             var al = dvui.Alignment.init(@src(), 0);
             defer al.deinit();
-            dvui.struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
+            struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
         }
         var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
@@ -575,13 +603,13 @@ pub fn displayButtonLabelAndIcon() void {
             "combined_opts",
             &state.combined_opts,
             1,
-            .{ dvui.struct_ui.StructOptions(dvui.ButtonLabelAndIconOptions).initWithDefaults(.{
+            .{ StructOptions(dvui.ButtonLabelAndIconOptions).initWithDefaults(.{
                 .label = .{ .text = .{ .display = .read_write } },
                 .tvg_bytes = .{ .standard = .{ .display = .none } },
-            }, null), struct_opts_color },
+            }, null), struct_options.color },
             .{},
         );
-        dvui.structUI(@src(), "icon_opts", &state.icon_opts, 1, .{struct_opts_color}, .{});
+        dvui.structUI(@src(), "icon_opts", &state.icon_opts, 1, .{struct_options.color}, .{});
     }
     {
         var scroll = widgetOptionsScrollArea(@src(), .{});
@@ -623,7 +651,7 @@ pub fn displayCheckbox() void {
             defer result_box.deinit();
             var al = dvui.Alignment.init(@src(), 0);
             defer al.deinit();
-            dvui.struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
+            struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
         }
         var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
@@ -632,7 +660,7 @@ pub fn displayCheckbox() void {
             test_options_label,
             &state.test_options,
             1,
-            .{dvui.struct_ui.StructOptions(@TypeOf(state.test_options)).initWithDefaults(.{
+            .{StructOptions(@TypeOf(state.test_options)).initWithDefaults(.{
                 .label_str = .{ .text = .{ .display = .read_write } },
             }, null)},
             .{},
@@ -688,7 +716,7 @@ pub fn displayColorPicker() void {
                 &state.result,
                 1,
                 .{
-                    dvui.struct_ui.StructOptions(@TypeOf(state.result)).init(.{
+                    StructOptions(@TypeOf(state.result)).init(.{
                         .return_value = .{ .boolean = .{ .manual_reset = true, .display = .read_only } },
                         .color = .{ .standard = .{ .display = .read_only, .customDisplayFn = structColorPicker } },
                     }, null),
@@ -699,9 +727,9 @@ pub fn displayColorPicker() void {
         var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
         if (state.init_opts.alpha) {
-            dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{struct_options_hsva}, .{});
+            dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{struct_options.color_hsva}, .{});
         } else {
-            dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{struct_options_hsv}, .{});
+            dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{struct_options.color_hsv}, .{});
         }
     }
     {
@@ -710,20 +738,6 @@ pub fn displayColorPicker() void {
         widgetOptionsEditor(@src(), &state.options, &wd);
     }
 }
-
-const struct_options_hsva: dvui.struct_ui.StructOptions(dvui.Color.HSV) = .init(.{
-    .h = .{ .number = .{ .min = 0, .max = 359.99 } },
-    .s = .{ .number = .{ .min = 0, .max = 1 } },
-    .v = .{ .number = .{ .min = 0, .max = 1 } },
-    .a = .{ .number = .{ .min = 0, .max = 1 } },
-}, .fromColor(.white));
-
-const struct_options_hsv: dvui.struct_ui.StructOptions(dvui.Color.HSV) = .init(.{
-    .h = .{ .number = .{ .min = 0, .max = 359.99 } },
-    .s = .{ .number = .{ .min = 0, .max = 1 } },
-    .v = .{ .number = .{ .min = 0, .max = 1 } },
-    .a = .{ .number = .{ .min = 0, .max = 1, .display = .read_only } },
-}, .fromColor(.white));
 
 pub fn displayCombobox() void {
     const state = struct {
@@ -767,15 +781,138 @@ pub fn displayCombobox() void {
             .{},
             .{},
         );
-        dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{dvui.struct_ui.StructOptions(dvui.TextEntryWidget.InitOptions).initWithDefaults(.{
-            .placeholder = .defaultTextRW,
-            .password_char = .defaultTextRW,
-            .tree_sitter = .defaultHidden,
-            .text = .defaultReadOnly,
-        }, .{
-            .placeholder = "Placeholder",
-            .password_char = "*",
-        })}, .{});
+        dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{struct_options.text_entry.init_opts}, .{});
+    }
+    {
+        var scroll = widgetOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        widgetOptionsEditor(@src(), &state.options, &wd);
+    }
+}
+
+pub fn displayContext() void {
+    const state = struct {
+        var init_opts: dvui.ContextWidget.InitOptions = undefined;
+        var options: dvui.Options = undefined;
+    };
+
+    if (reset_widget) {
+        state.options = .{};
+    }
+
+    var wd: dvui.WidgetData = undefined;
+    {
+        var gbox = widgetGroupBox(@src(), "context()", .{});
+        defer gbox.deinit();
+        {
+            var widget_box = gbox.widgetTestingBox(@src(), null, .{});
+            defer widget_box.deinit();
+
+            var label_wd: dvui.WidgetData = undefined;
+            dvui.labelNoFmt(@src(), "Right click me...", .{}, .{ .data_out = &label_wd });
+
+            const ctext = dvui.context(@src(), .{ .rect = label_wd.borderRectScale().r }, .{ .data_out = &wd });
+            defer ctext.deinit();
+
+            if (ctext.activePoint()) |cp| {
+                var fw2 = dvui.floatingMenu(@src(), .{ .from = dvui.Rect.Natural.fromPoint(cp) }, .{});
+                defer fw2.deinit();
+
+                if (dvui.menuItemLabel(@src(), "Menu Item 1", .{}, .{ .expand = .horizontal })) |_| {
+                    fw2.close();
+                }
+                if (dvui.menuItemLabel(@src(), "Menu Item 2", .{}, .{ .expand = .horizontal })) |_| {
+                    fw2.close();
+                }
+                if ((dvui.menuItemLabel(@src(), "Menu Item 3", .{}, .{ .expand = .horizontal }))) |_| {
+                    fw2.close();
+                }
+            }
+        }
+    }
+    {
+        var scroll = widgetOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        widgetOptionsEditor(@src(), &state.options, &wd);
+    }
+}
+
+pub fn displayDropdown() void {
+    const state = struct {
+        var init_opts: dvui.DropdownInitOptions = undefined;
+        var options: dvui.Options = undefined;
+        var results: struct {
+            return_value: bool,
+            choice_nullable: ?usize,
+            choice: usize,
+        } = undefined;
+        // Enum values to display
+        var expand: dvui.Options.Expand = undefined;
+        var expand_maybe: ?dvui.Options.Expand = undefined;
+
+        // Defaults for when fields are set to non-null
+        const default_init_opts: dvui.DropdownInitOptions = .{
+            .null_selectable = false,
+            .placeholder = "Select ...",
+        };
+
+        var test_options: struct {
+            nullable: bool,
+        } = undefined;
+    };
+
+    if (reset_widget) {
+        state.options = .{ .gravity_y = 0.5 };
+        state.init_opts = .{};
+        state.test_options.nullable = false;
+        state.expand_maybe = null;
+        state.results = .{
+            .return_value = false,
+            .choice_nullable = null,
+            .choice = 0,
+        };
+    }
+
+    var wd: dvui.WidgetData = undefined;
+    {
+        var gbox = widgetGroupBox(@src(), "dropDownEnum()", .{});
+        defer gbox.deinit();
+        {
+            var widget_box = gbox.widgetTestingBox(@src(), null, .{});
+            defer widget_box.deinit();
+
+            const entries = [_][]const u8{ "First", "Second", "Third is a really long one that doesn't fit" };
+
+            state.results.return_value = dvui.dropdown(
+                @src(),
+                &entries,
+                if (state.test_options.nullable) .{ .choice_nullable = &state.results.choice_nullable } else .{ .choice = &state.results.choice },
+                state.init_opts,
+                state.options.override(.{ .data_out = &wd }),
+            );
+
+            var results_box = widget_box.resultsBox(@src(), .{});
+            defer results_box.deinit();
+            // const to force read-only display.
+            const display_results = state.results;
+            if (state.test_options.nullable) {
+                dvui.structUI(@src(), "results", &display_results, 3, .{StructOptions(@TypeOf(state.results)).init(.{
+                    .return_value = .{ .boolean = .{ .manual_reset = true } },
+                    .choice_nullable = .default,
+                }, null)}, .{});
+            } else {
+                dvui.structUI(@src(), "results", &display_results, 3, .{StructOptions(@TypeOf(state.results)).init(.{
+                    .return_value = .{ .boolean = .{ .manual_reset = true } },
+                    .choice = .default,
+                }, null)}, .{});
+            }
+        }
+        var scroll = gbox.testOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        dvui.structUI(@src(), test_options_label, &state.test_options, 1, .{}, .{});
+        dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{StructOptions(dvui.DropdownInitOptions).initWithDefaults(.{
+            .placeholder = .defaultText,
+        }, state.default_init_opts)}, .{});
     }
     {
         var scroll = widgetOptionsScrollArea(@src(), .{});
@@ -830,9 +967,9 @@ pub fn displayDropDownEnum() void {
             state.results.return_value = dvui.dropdownEnum(@src(), dvui.Options.Expand, state.results.choice, state.init_opts, state.options.override(.{ .data_out = &wd }));
             var results_box = widget_box.resultsBox(@src(), .{});
             defer results_box.deinit();
-            // Display a read-only version of results.
+            // const to force read-only display.
             const display_results = state.results;
-            dvui.structUI(@src(), "results", &display_results, 3, .{dvui.struct_ui.StructOptions(@TypeOf(state.results)).init(.{
+            dvui.structUI(@src(), "results", &display_results, 3, .{StructOptions(@TypeOf(state.results)).init(.{
                 .return_value = .{ .boolean = .{ .manual_reset = true } },
                 .choice = .default,
             }, null)}, .{});
@@ -848,9 +985,107 @@ pub fn displayDropDownEnum() void {
             state.results.choice = .{ .choice = &state.expand };
         }
 
-        dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{dvui.struct_ui.StructOptions(dvui.DropdownInitOptions).initWithDefaults(.{
+        dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{StructOptions(dvui.DropdownInitOptions).initWithDefaults(.{
             .placeholder = .defaultText,
         }, state.default_init_opts)}, .{});
+    }
+    {
+        var scroll = widgetOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        widgetOptionsEditor(@src(), &state.options, &wd);
+    }
+}
+
+pub fn displayExpander() void {
+    const state = struct {
+        var init_opts: dvui.ExpanderOptions = .{};
+        var options: dvui.Options = undefined;
+        var test_options: struct {
+            label: []const u8,
+        } = undefined;
+    };
+
+    if (reset_widget) {
+        state.init_opts = .{};
+        state.options = .{};
+        state.test_options = .{ .label = "Expander" };
+    }
+
+    var wd: dvui.WidgetData = undefined;
+    {
+        var gbox = widgetGroupBox(@src(), "expander()", .{});
+        defer gbox.deinit();
+        {
+            var widget_box = gbox.widgetTestingBox(@src(), null, .{});
+            defer widget_box.deinit();
+            const result = dvui.expander(@src(), state.test_options.label, state.init_opts, state.options.override(.{ .data_out = &wd }));
+            if (result) {
+                dvui.labelNoFmt(@src(), "Widget 1 ", .{}, .{});
+                dvui.labelNoFmt(@src(), "Widget 2 ", .{}, .{});
+                dvui.labelNoFmt(@src(), "Widget 3 ", .{}, .{});
+            }
+            var result_box = widget_box.resultsBox(@src(), .{});
+
+            defer result_box.deinit();
+            var al = dvui.Alignment.init(@src(), 0);
+            defer al.deinit();
+            struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .display = .read_only } }, &al);
+        }
+        var scroll = gbox.testOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        dvui.structUI(@src(), test_options_label, &state.test_options, 2, .{
+            StructOptions(@TypeOf(state.test_options)).initWithDefaults(.{
+                .label = .defaultTextRW,
+            }, null),
+        }, .{});
+        dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{}, .{});
+    }
+    {
+        var scroll = widgetOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        widgetOptionsEditor(@src(), &state.options, &wd);
+    }
+}
+
+pub fn displayFocusGroup() void {
+    const state = struct {
+        var init_opts: dvui.FocusGroupWidget.InitOptions = .{};
+        var options: dvui.Options = undefined;
+        var test_options: struct {
+            label: []const u8,
+        } = undefined;
+    };
+
+    if (reset_widget) {
+        state.init_opts = .{};
+        state.options = .{};
+        state.test_options = .{ .label = "Expander" };
+    }
+
+    var wd: dvui.WidgetData = undefined;
+    {
+        var gbox = widgetGroupBox(@src(), "focusGroup()", .{ .border = dvui.Rect.all(0) });
+        defer gbox.deinit();
+        {
+            var widget_box = gbox.widgetTestingBox(@src(), null, .{});
+            defer widget_box.deinit();
+            var fg = dvui.focusGroup(@src(), state.init_opts, state.options.override(.{ .data_out = &wd }));
+            defer fg.deinit();
+            var button_wd: dvui.WidgetData = undefined;
+            _ = dvui.button(@src(), "Button 1", .{}, .{ .data_out = &button_wd });
+            if (dvui.firstFrame(button_wd.id)) {
+                dvui.focusWidget(button_wd.id, null, null);
+            }
+            _ = dvui.button(@src(), "Button 2", .{}, .{});
+            _ = dvui.button(@src(), "Button 3", .{}, .{});
+            _ = dvui.spacer(@src(), .{ .margin = .{ .y = 6, .x = 0, .w = 0, .h = 0 } });
+            var tl = dvui.textLayout(@src(), .{ .break_lines = true }, .{});
+            tl.addText("Widgets in a focus group are navigated using arrow keys.", .{});
+            tl.deinit();
+        }
+        var scroll = gbox.testOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{}, .{});
     }
     {
         var scroll = widgetOptionsScrollArea(@src(), .{});
@@ -948,7 +1183,7 @@ pub fn displayTextEntryNumber() void {
             var results_box = widget_box.resultsBox(@src(), .{});
             defer results_box.deinit();
             dvui.structUI(@src(), "result", &result, 99, .{
-                dvui.struct_ui.StructOptions(dvui.TextEntryNumberResult(NumberType)).initWithDefaults(.{
+                StructOptions(dvui.TextEntryNumberResult(NumberType)).initWithDefaults(.{
                     .changed = .{ .boolean = .{ .manual_reset = true } },
                     .enter_pressed = .{ .boolean = .{ .manual_reset = true } },
                 }, null),
@@ -957,7 +1192,7 @@ pub fn displayTextEntryNumber() void {
         var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
         dvui.structUI(@src(), "init_opts", &state.init_opts, 1, .{
-            dvui.struct_ui.StructOptions(dvui.TextEntryNumberInitOptions(NumberType)).initWithDefaults(.{
+            StructOptions(dvui.TextEntryNumberInitOptions(NumberType)).initWithDefaults(.{
                 .text = .{ .text = .{ .display = .read_write } },
                 .placeholder = .{ .text = .{ .display = .read_write } },
             }, init_opts_defaults),
@@ -1010,13 +1245,13 @@ const widget_hierarchy = [_]WidgetHeirachy{
     .{ .name = "checkbox", .displayFn = displayCheckbox, .children = null },
     .{ .name = "colorPicker", .displayFn = displayColorPicker, .children = null },
     .{ .name = "comboBox", .displayFn = displayCombobox, .children = null },
-    .{ .name = "context", .displayFn = displayEmpty, .children = null },
+    .{ .name = "context", .displayFn = displayContext, .children = null },
     .{ .name = "dialog", .displayFn = displayEmpty, .children = null },
     .{ .name = "dropdowns", .displayFn = displayEmpty, .children = &.{
-        .{ .name = "dropdown", .displayFn = displayEmpty, .children = null },
+        .{ .name = "dropdown", .displayFn = displayDropdown, .children = null },
         .{ .name = "dropdownEnum", .displayFn = displayDropDownEnum, .children = null },
     } },
-    .{ .name = "expander", .displayFn = displayEmpty, .children = null },
+    .{ .name = "expander", .displayFn = displayExpander, .children = null },
     .{ .name = "flexbox", .displayFn = displayEmpty, .children = null },
     .{ .name = "floatingMenu", .displayFn = displayEmpty, .children = null },
 
@@ -1025,7 +1260,7 @@ const widget_hierarchy = [_]WidgetHeirachy{
         .{ .name = "windowHeader", .displayFn = displayEmpty, .children = null },
     } },
 
-    .{ .name = "focusGroup", .displayFn = displayEmpty, .children = null },
+    .{ .name = "focusGroup", .displayFn = displayFocusGroup, .children = null },
 
     .{ .name = "grid", .displayFn = displayEmpty, .children = &.{
         .{ .name = "grid", .displayFn = displayEmpty, .children = null },
@@ -1092,3 +1327,6 @@ const widget_hierarchy = [_]WidgetHeirachy{
     .{ .name = "toast", .displayFn = displayEmpty, .children = null },
     .{ .name = "tooltip", .displayFn = displayEmpty, .children = null },
 };
+
+const struct_ui = dvui.struct_ui;
+const StructOptions = struct_ui.StructOptions;
