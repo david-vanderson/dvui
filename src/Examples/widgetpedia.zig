@@ -353,9 +353,12 @@ pub fn displayAnimate() void {
         state.test_options.restart_animation = false;
     }
 
+    var paned = dvui.paned(@src(), .{ .direction = .vertical, .collapsed_size = 0 }, .{ .expand = .both });
+    defer paned.deinit();
+
     var wd: dvui.WidgetData = undefined;
     {
-        {
+        if (paned.showFirst()) {
             var gbox = widgetGroupBox(@src(), "animate()", .{ .expand = .both });
             defer gbox.deinit();
 
@@ -396,9 +399,11 @@ pub fn displayAnimate() void {
             }, .{});
         }
     }
-    var scroll = widgetOptionsScrollArea(@src(), .{});
-    defer scroll.deinit();
-    widgetOptionsEditor(@src(), &state.options, &wd);
+    if (paned.showSecond()) {
+        var scroll = widgetOptionsScrollArea(@src(), .{});
+        defer scroll.deinit();
+        widgetOptionsEditor(@src(), &state.options, &wd);
+    }
 }
 
 fn selectEasing(field_name: []const u8, _: *anyopaque, read_only: bool, alignment: *dvui.Alignment) void {
@@ -1118,6 +1123,8 @@ pub fn displayGroupBox() void {
 
     if (state.test_options.big_font) {
         state.options.font = state.options.fontGet().withSize(18);
+    } else {
+        state.options.font = null;
     }
     if (state.test_options.background) {
         state.options.background = true;
