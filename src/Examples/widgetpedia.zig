@@ -198,7 +198,7 @@ const WidgetGroupBox = struct {
 
 pub fn widgetGroupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: dvui.Options) WidgetGroupBox {
     const defaults: dvui.Options = .{ .expand = .both };
-    const hbox = dvui.box(@src(), .{ .dir = .horizontal, .equal_space = true }, .{ .expand = .horizontal });
+    const hbox = dvui.box(@src(), .{ .dir = .horizontal, .equal_space = true }, .{ .expand = .both });
     const gbox = dvui.groupBox(src, label_str, defaults.override(opts));
     return .{
         .hbox = hbox,
@@ -214,6 +214,7 @@ pub fn widgetOptionsScrollArea(src: std.builtin.SourceLocation, opts: dvui.Optio
         .expand = .both,
         .margin = dvui.Rect.all(6),
         .background = false,
+        .min_size_content = .{ .h = 40 },
     };
     return dvui.scrollArea(src, .{ .horizontal = .auto }, defaults.override(opts));
 }
@@ -240,10 +241,10 @@ pub fn widgetShowSetOptionsTooltip(src: std.builtin.SourceLocation, rect: dvui.R
     }
 }
 
-pub fn widgetOptionsEditor(src: std.builtin.SourceLocation, edit_opts: *dvui.Options, wd: *dvui.WidgetData) void {
+pub fn widgetOptionsEditor(src: std.builtin.SourceLocation, edit_opts: *dvui.Options, wd: *dvui.WidgetData, expanded: bool) void {
     var expander_wd: dvui.WidgetData = undefined;
 
-    if (dvui.expander(@src(), "Options editor", .{ .default_expanded = true }, .{ .expand = .horizontal, .data_out = &expander_wd })) {
+    if (dvui.expander(@src(), "Options editor", .{ .default_expanded = expanded }, .{ .expand = .horizontal, .data_out = &expander_wd })) {
         var vbox = dvui.box(src, .{}, .{ .expand = .both });
         defer vbox.deinit();
         _ = dvui.Debug.optionsEditor(edit_opts, wd);
@@ -353,7 +354,7 @@ pub fn displayAnimate() void {
         state.test_options.restart_animation = false;
     }
 
-    var paned = dvui.paned(@src(), .{ .direction = .vertical, .collapsed_size = 0 }, .{ .expand = .both });
+    var paned = dvui.paned(@src(), .{ .direction = .vertical, .collapsed_size = 0, .autofit_first = .{ .min_size = 300 } }, .{ .expand = .both });
     defer paned.deinit();
 
     var wd: dvui.WidgetData = undefined;
@@ -402,7 +403,7 @@ pub fn displayAnimate() void {
     if (paned.showSecond()) {
         var scroll = widgetOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
-        widgetOptionsEditor(@src(), &state.options, &wd);
+        widgetOptionsEditor(@src(), &state.options, &wd, true);
     }
 }
 
@@ -461,7 +462,7 @@ pub fn displayBox() void {
     }
     var scroll = widgetOptionsScrollArea(@src(), .{});
     defer scroll.deinit();
-    widgetOptionsEditor(@src(), &state.options, &wd);
+    widgetOptionsEditor(@src(), &state.options, &wd, true);
 }
 
 pub fn displayButton() void {
@@ -512,7 +513,7 @@ pub fn displayButton() void {
     {
         var scroll = widgetOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
-        widgetOptionsEditor(@src(), &state.options, &wd);
+        widgetOptionsEditor(@src(), &state.options, &wd, true);
     }
 }
 
@@ -567,7 +568,7 @@ pub fn displayButtonIcon() void {
     {
         var scroll = widgetOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
-        widgetOptionsEditor(@src(), &state.options, &wd);
+        widgetOptionsEditor(@src(), &state.options, &wd, true);
     }
 }
 
@@ -619,7 +620,7 @@ pub fn displayButtonLabelAndIcon() void {
     {
         var scroll = widgetOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
-        widgetOptionsEditor(@src(), &state.options, &wd);
+        widgetOptionsEditor(@src(), &state.options, &wd, true);
     }
 }
 
@@ -674,7 +675,7 @@ pub fn displayCheckbox() void {
     {
         var scroll = widgetOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
-        widgetOptionsEditor(@src(), &state.options, &wd);
+        widgetOptionsEditor(@src(), &state.options, &wd, true);
     }
 }
 
@@ -699,9 +700,11 @@ pub fn displayColorPicker() void {
             .color = .white,
         };
     }
+    var paned = dvui.paned(@src(), .{ .direction = .vertical, .collapsed_size = 0, .autofit_first = .{ .min_size = 300 } }, .{ .expand = .both });
+    defer paned.deinit();
 
     var wd: dvui.WidgetData = undefined;
-    {
+    if (paned.showFirst()) {
         var gbox = widgetGroupBox(@src(), "colorPicker()", .{});
         defer gbox.deinit();
         {
@@ -737,10 +740,10 @@ pub fn displayColorPicker() void {
             dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{struct_options.color_hsv}, .{});
         }
     }
-    {
+    if (paned.showSecond()) {
         var scroll = widgetOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
-        widgetOptionsEditor(@src(), &state.options, &wd);
+        widgetOptionsEditor(@src(), &state.options, &wd, true);
     }
 }
 
@@ -763,8 +766,12 @@ pub fn displayCombobox() void {
         };
     }
 
+    var paned = dvui.paned(@src(), .{ .direction = .vertical, .collapsed_size = 400, .autofit_first = .{ .min_size = 300 }, .uncollapse_ratio = 0.8 }, .{ .expand = .both });
+    defer paned.deinit();
+
+    // TODO: If not showfirst then this will be undefined. So need to sort that.
     var wd: dvui.WidgetData = undefined;
-    {
+    if (paned.showFirst()) {
         var gbox = widgetGroupBox(@src(), "comboBox()", .{});
         defer gbox.deinit();
         {
@@ -788,10 +795,22 @@ pub fn displayCombobox() void {
         );
         dvui.structUI(@src(), "init_opts", &state.init_opts, 2, .{struct_options.text_entry.init_opts}, .{});
     }
-    {
+    if (paned.showSecond()) {
         var scroll = widgetOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
-        widgetOptionsEditor(@src(), &state.options, &wd);
+        // TODO: Try and get collapsed working.
+        //        if (paned.collapsed()) {
+        //            dvui.label(@src(), "Right Side", .{}, .{});
+        //            widgetOptionsEditor(@src(), &state.options, &wd, false);
+        //            paned.animateSplit(1.0);
+        //        } else {
+        //            widgetOptionsEditor(@src(), &state.options, &wd, true);
+        //        }
+        widgetOptionsEditor(@src(), &state.options, &wd, true);
+        if (paned.collapsed()) {
+            std.debug.print("here!\n", .{});
+            paned.animateSplit(0.8);
+        }
     }
 }
 
@@ -838,7 +857,7 @@ pub fn displayContext() void {
     {
         var scroll = widgetOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
-        widgetOptionsEditor(@src(), &state.options, &wd);
+        widgetOptionsEditor(@src(), &state.options, &wd, true);
     }
 }
 
@@ -922,7 +941,7 @@ pub fn displayDropdown() void {
     {
         var scroll = widgetOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
-        widgetOptionsEditor(@src(), &state.options, &wd);
+        widgetOptionsEditor(@src(), &state.options, &wd, true);
     }
 }
 
@@ -997,7 +1016,7 @@ pub fn displayDropDownEnum() void {
     {
         var scroll = widgetOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
-        widgetOptionsEditor(@src(), &state.options, &wd);
+        widgetOptionsEditor(@src(), &state.options, &wd, true);
     }
 }
 
@@ -1048,7 +1067,7 @@ pub fn displayExpander() void {
     {
         var scroll = widgetOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
-        widgetOptionsEditor(@src(), &state.options, &wd);
+        widgetOptionsEditor(@src(), &state.options, &wd, true);
     }
 }
 
@@ -1095,7 +1114,7 @@ pub fn displayFocusGroup() void {
     {
         var scroll = widgetOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
-        widgetOptionsEditor(@src(), &state.options, &wd);
+        widgetOptionsEditor(@src(), &state.options, &wd, true);
     }
 }
 
@@ -1159,7 +1178,7 @@ pub fn displayGroupBox() void {
     {
         var scroll = widgetOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
-        widgetOptionsEditor(@src(), &state.options, &wd);
+        widgetOptionsEditor(@src(), &state.options, &wd, true);
     }
 }
 
@@ -1207,7 +1226,7 @@ pub fn displayTextEntryNumber() void {
     }
     var scroll = widgetOptionsScrollArea(@src(), .{});
     defer scroll.deinit();
-    widgetOptionsEditor(@src(), &state.options, &wd);
+    widgetOptionsEditor(@src(), &state.options, &wd, true);
 }
 
 fn structColorPicker(field_name: []const u8, ptr: *anyopaque, read_only: bool, alignment: *dvui.Alignment) void {
