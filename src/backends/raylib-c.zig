@@ -306,7 +306,12 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
     }
 }
 
-pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
+pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
+    if (format != .rgba_32) {
+        log.err("textureCreate currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
+
     const texid = c.rlLoadTexture(pixels, @intCast(width), @intCast(height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
     if (texid <= 0) return dvui.Backend.TextureError.TextureCreate;
 
@@ -324,10 +329,15 @@ pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, width: u32, height:
     c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_S, c.RL_TEXTURE_WRAP_CLAMP);
     c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_T, c.RL_TEXTURE_WRAP_CLAMP);
 
-    return dvui.Texture{ .ptr = @ptrFromInt(texid), .width = width, .height = height };
+    return dvui.Texture{ .ptr = @ptrFromInt(texid), .width = width, .height = height, .format = format };
 }
 
-pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
+pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
+    if (format != .rgba_32) {
+        log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
+
     const id = c.rlLoadFramebuffer(); // Load an empty framebuffer
     if (id <= 0) {
         log.debug("textureCreateTarget: rlLoadFramebuffer() failed\n", .{});
@@ -364,7 +374,7 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
 
     try self.frame_buffers.put(texid, id);
 
-    const ret = dvui.TextureTarget{ .ptr = @ptrFromInt(texid), .width = width, .height = height };
+    const ret = dvui.TextureTarget{ .ptr = @ptrFromInt(texid), .width = width, .height = height, .format = format };
 
     try self.renderTarget(ret);
     c.ClearBackground(c.BLANK);
@@ -374,7 +384,7 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
 }
 
 pub fn textureFromTarget(_: *RaylibBackend, texture: dvui.TextureTarget) dvui.Texture {
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height };
+    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
 }
 
 /// Render future drawClippedTriangles() to the passed texture (or screen
