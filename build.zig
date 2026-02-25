@@ -623,8 +623,8 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                     .windows => glfw_opengl_mod.linkSystemLibrary("opengl32", .{}),
                     .linux => glfw_opengl_mod.linkSystemLibrary("GL", .{}),
                     .macos => {
-                        glfw_opengl_mod.linkSystemLibrary("OpenGL", .{});
-                        glfw_opengl_mod.linkSystemLibrary("Cocoa", .{});
+                        glfw_opengl_mod.linkFramework("OpenGL", .{});
+                        glfw_opengl_mod.linkFramework("Cocoa", .{});
                     },
                     else => {},
                 }
