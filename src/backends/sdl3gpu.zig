@@ -574,7 +574,7 @@ pub fn init(window: *c.SDL_Window, device: *c.SDL_GPUDevice, allocator: std.mem.
 }
 
 fn createWhiteTexture(self: *SDLBackend) !void {
-    self.white_texture = @ptrCast(@alignCast((self.textureCreate(&.{ 255, 255, 255, 255 }, 1, 1, .linear, .packed_rgba_8_8_8_8) catch return error.BackendError).ptr));
+    self.white_texture = @ptrCast(@alignCast((self.textureCreate(&.{ 255, 255, 255, 255 }, 1, 1, .linear, .rgba_32) catch return error.BackendError).ptr));
 }
 
 fn detectShaderFormat(self: *SDLBackend) void {
@@ -1242,7 +1242,10 @@ pub fn createTextureTransferBuffer(self: *SDLBackend) !void {
 }
 
 pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
-    if (format != .packed_rgba_8_8_8_8) return dvui.Backend.TextureError.TextureCreate;
+    if (format != .rgba_32) {
+        log.err("textureCreate currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
 
     // 1. Create GPU texture
     const texture = c.SDL_CreateGPUTexture(
@@ -1352,7 +1355,10 @@ const BackendTextureTarget = struct {
 };
 
 pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
-    if (format != .packed_rgba_8_8_8_8) return dvui.Backend.TextureError.TextureCreate;
+    if (format != .rgba_32) {
+        log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
 
     // 1. Create GPU texture
     const texture = c.SDL_CreateGPUTexture(

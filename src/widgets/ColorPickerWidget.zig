@@ -352,7 +352,7 @@ pub fn getHueSelectorTexture(dir: dvui.enums.Direction) dvui.Backend.TextureErro
             .horizontal => .{ hue_selector_colors.len, 1 },
             .vertical => .{ 1, hue_selector_colors.len },
         };
-        const texture = try dvui.textureCreate(&hue_selector_colors, width, height, .linear, .packed_rgba_8_8_8_8);
+        const texture = try dvui.textureCreate(&hue_selector_colors, width, height, .linear, .rgba_32);
         dvui.textureAddToCache(id, texture);
         return texture;
     }
@@ -366,7 +366,7 @@ pub fn getValueSaturationTexture(hue: f32) dvui.Backend.TextureError!dvui.Textur
     if (dvui.textureGetCached(id)) |cached| return cached else {
         var pixels: [4]Color.PMA = .{ .white, .cast(Color.HSV.toColor(.{ .h = hue })), .black, .black };
         // set top right corner to the max value of that hue
-        const texture = try dvui.textureCreate(&pixels, 2, 2, .linear, .packed_rgba_8_8_8_8);
+        const texture = try dvui.textureCreate(&pixels, 2, 2, .linear, .rgba_32);
         dvui.textureAddToCache(id, texture);
         return texture;
     }

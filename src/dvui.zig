@@ -5131,7 +5131,7 @@ pub const Picture = struct {
         r.y = y_start;
         r.h = @round(y_end - y_start);
 
-        const texture = dvui.textureCreateTarget(@intFromFloat(r.w), @intFromFloat(r.h), .linear, .packed_rgba_8_8_8_8) catch return null;
+        const texture = dvui.textureCreateTarget(@intFromFloat(r.w), @intFromFloat(r.h), .linear, .rgba_32) catch return null;
         const target = dvui.renderTarget(.{ .texture = texture, .offset = r.topLeft() });
 
         return .{

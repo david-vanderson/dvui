@@ -79,7 +79,7 @@ pub fn init(self: *CacheWidget, src: std.builtin.SourceLocation, init_opts: Init
             const h: u32 = @intFromFloat(@ceil(rs.r.h));
             self.tex_uv = .{ .w = rs.r.w / @ceil(rs.r.w), .h = rs.r.h / @ceil(rs.r.h) };
 
-            self.caching_tex = dvui.textureCreateTarget(w, h, .linear, .packed_rgba_8_8_8_8) catch |err| blk: switch (err) {
+            self.caching_tex = dvui.textureCreateTarget(w, h, .linear, .rgba_32) catch |err| blk: switch (err) {
                 error.TextureCreate => {
                     self.state = .texture_create_error;
                     if (dvui.dataGet(null, self.data().id, "_texture_create_error", bool) orelse false) {

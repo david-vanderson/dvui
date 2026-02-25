@@ -790,21 +790,31 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
 
 pub fn pixelFormatToSdl(format: dvui.enums.TexturePixelFormat) ?u32 {
     return switch (format) {
-        .packed_xrgb_8_8_8_8 => c.SDL_PIXELFORMAT_XRGB32,
-        .packed_rgbx_8_8_8_8 => c.SDL_PIXELFORMAT_RGBX32,
-        .packed_xbgr_8_8_8_8 => c.SDL_PIXELFORMAT_XBGR32,
-        .packed_bgrx_8_8_8_8 => c.SDL_PIXELFORMAT_BGRX32,
-        .packed_argb_8_8_8_8 => c.SDL_PIXELFORMAT_ARGB32,
-        .packed_rgba_8_8_8_8 => c.SDL_PIXELFORMAT_RGBA32,
-        .packed_abgr_8_8_8_8 => c.SDL_PIXELFORMAT_ABGR32,
-        .packed_bgra_8_8_8_8 => c.SDL_PIXELFORMAT_BGRA32,
+        .rgba_32 => c.SDL_PIXELFORMAT_RGBA32,
+        .argb_32 => c.SDL_PIXELFORMAT_ARGB32,
+        .bgra_32 => c.SDL_PIXELFORMAT_BGRA32,
+        .abgr_32 => c.SDL_PIXELFORMAT_ABGR32,
+
+        .rgbx_32 => c.SDL_PIXELFORMAT_RGBX32,
+        .xrgb_32 => c.SDL_PIXELFORMAT_XRGB32,
+        .bgrx_32 => c.SDL_PIXELFORMAT_BGRX32,
+        .xbgr_32 => c.SDL_PIXELFORMAT_XBGR32,
+
+        .rgba_8_8_8_8 => c.SDL_PIXELFORMAT_RGBA8888,
+        .argb_8_8_8_8 => c.SDL_PIXELFORMAT_ARGB8888,
+        .bgra_8_8_8_8 => c.SDL_PIXELFORMAT_BGRA8888,
+        .abgr_8_8_8_8 => c.SDL_PIXELFORMAT_ABGR8888,
+
+        .rgbx_8_8_8_8 => c.SDL_PIXELFORMAT_RGBX8888,
+        .xrgb_8_8_8_8 => c.SDL_PIXELFORMAT_XRGB8888,
+        .bgrx_8_8_8_8 => c.SDL_PIXELFORMAT_BGRX8888,
+        .xbgr_8_8_8_8 => c.SDL_PIXELFORMAT_XBGR8888,
 
         .fourcc_yv12 => c.SDL_PIXELFORMAT_YV12,
         .fourcc_iyuv => c.SDL_PIXELFORMAT_IYUV,
         .fourcc_yuy2 => c.SDL_PIXELFORMAT_YUY2,
         .fourcc_uyvy => c.SDL_PIXELFORMAT_UYVY,
         .fourcc_yvyu => c.SDL_PIXELFORMAT_YVYU,
-        // else => null,
     };
 }
 

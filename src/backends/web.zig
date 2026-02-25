@@ -616,7 +616,10 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const
 }
 
 pub fn textureCreate(_: *WebBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
-    if (format != .packed_rgba_8_8_8_8) return dvui.Backend.TextureError.TextureCreate; // TODO
+    if (format != .rgba_32) {
+        log.err("textureCreate currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
 
     const wasm_interp: u8 = switch (interpolation) {
         .nearest => 0,
@@ -628,7 +631,10 @@ pub fn textureCreate(_: *WebBackend, pixels: [*]const u8, width: u32, height: u3
 }
 
 pub fn textureCreateTarget(_: *WebBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
-    if (format != .packed_rgba_8_8_8_8) return dvui.Backend.TextureError.TextureCreate; // TODO
+    if (format != .rgba_32) {
+        log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
 
     const wasm_interp: u8 = switch (interpolation) {
         .nearest => 0,

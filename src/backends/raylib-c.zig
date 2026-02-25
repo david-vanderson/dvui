@@ -307,7 +307,10 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
 }
 
 pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
-    if (format != .packed_rgba_8_8_8_8) return dvui.Backend.TextureError.TextureCreate; // TODO
+    if (format != .rgba_32) {
+        log.err("textureCreate currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
 
     const texid = c.rlLoadTexture(pixels, @intCast(width), @intCast(height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
     if (texid <= 0) return dvui.Backend.TextureError.TextureCreate;
@@ -330,7 +333,10 @@ pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, width: u32, height:
 }
 
 pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
-    if (format != .packed_rgba_8_8_8_8) return dvui.Backend.TextureError.TextureCreate; // TODO
+    if (format != .rgba_32) {
+        log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
 
     const id = c.rlLoadFramebuffer(); // Load an empty framebuffer
     if (id <= 0) {

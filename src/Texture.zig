@@ -301,11 +301,11 @@ pub fn fromImageSource(source: ImageSource) !Texture {
 pub fn fromImageFile(name: []const u8, image_bytes: []const u8, interpolation: TextureInterpolation) (TextureError || StbImageError)!Texture {
     const img = Color.PMAImage.fromImageFile(name, dvui.currentWindow().arena(), image_bytes) catch return StbImageError.stbImageError;
     defer dvui.currentWindow().arena().free(img.pma);
-    return try create(img.pma, img.width, img.height, interpolation, .packed_rgba_8_8_8_8);
+    return try create(img.pma, img.width, img.height, interpolation, .rgba_32);
 }
 
 pub fn fromPixelsPMA(pma: []const Color.PMA, width: u32, height: u32, interpolation: TextureInterpolation) TextureError!Texture {
-    return try dvui.textureCreate(pma, width, height, interpolation, .packed_rgba_8_8_8_8);
+    return try dvui.textureCreate(pma, width, height, interpolation, .rgba_32);
 }
 
 /// Render `tvg_bytes` at `height` into a `Texture`.  Name is for debugging.
@@ -315,7 +315,7 @@ pub fn fromTvgFile(name: []const u8, tvg_bytes: []const u8, height: u32, icon_op
     const cw = dvui.currentWindow();
     const img = Color.PMAImage.fromTvgFile(name, cw.lifo(), cw.arena(), tvg_bytes, height, icon_opts) catch return TvgError.tvgError;
     defer cw.lifo().free(img.pma);
-    return try create(img.pma, img.width, img.height, .linear, .packed_rgba_8_8_8_8);
+    return try create(img.pma, img.width, img.height, .linear, .rgba_32);
 }
 
 /// Create a texture that can be rendered with `renderTexture`.
