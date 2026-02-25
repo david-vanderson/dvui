@@ -274,7 +274,7 @@ pub fn drawClippedTriangles(
             @intFromFloat(clip_rect.h),
         );
     }
-    zgl.blendFunc(.src_alpha, .one_minus_src_alpha);
+    zgl.blendFunc(.one, .one_minus_src_alpha);
     zgl.enable(.blend);
     const aa = ctx.arena.allocator();
 
