@@ -104,7 +104,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
             options.title,
             @as(c_int, @intFromFloat(options.size.w)),
             @as(c_int, @intFromFloat(options.size.h)),
-            @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | hidden_flag | fullscreen_flag | c.SDL_WINDOW_TRANSPARENT),
+            @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | c.SDL_WINDOW_TRANSPARENT | hidden_flag | fullscreen_flag),
         ) orelse return logErr("SDL_CreateWindow in initWindow")
     else
         c.SDL_CreateWindow(
