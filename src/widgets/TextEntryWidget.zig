@@ -419,7 +419,7 @@ pub fn draw(self: *TextEntryWidget) void {
 
                 // Create an empty text run for the empty text entry.
                 dvui.currentWindow().accesskit.text_run_parent = self.data().id;
-                self.textLayout.textRunCreateEmpty(self.data().id);
+                self.textLayout.textRunCreateEmpty(self.data().id, true);
                 // prevent textLayout from making a text run for the placeholder text
                 dvui.currentWindow().accesskit.text_run_parent = null;
             }
@@ -1321,6 +1321,9 @@ pub fn deinit(self: *TextEntryWidget) void {
     defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
 
+    // set clip back to what textLayout had, because it might need it to set
+    // the mouse cursor
+    dvui.clipSet(self.textClip);
     self.textLayout.deinit();
     self.scroll.deinit();
 

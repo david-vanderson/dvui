@@ -650,7 +650,12 @@ fn createBuffer(state: *WindowState, bind_type: anytype, comptime InitialType: t
 }
 
 // ############ Satisfy DVUI interfaces ############
-pub fn textureCreate(self: Context, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
+pub fn textureCreate(self: Context, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
+    if (format != .rgba_32) {
+        log.err("textureCreate currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
+
     const state = stateFromHwnd(hwndFromContext(self));
 
     var texture: *win32.ID3D11Texture2D = undefined;
@@ -682,10 +687,15 @@ pub fn textureCreate(self: Context, pixels: [*]const u8, width: u32, height: u32
 
     try state.texture_interpolation.put(state.dvui_window.gpa, texture, interpolation);
 
-    return dvui.Texture{ .ptr = texture, .width = width, .height = height };
+    return dvui.Texture{ .ptr = texture, .width = width, .height = height, .format = .rgba_32 };
 }
 
-pub fn textureCreateTarget(self: Context, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
+pub fn textureCreateTarget(self: Context, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
+    if (format != .rgba_32) {
+        log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
+
     const state = stateFromHwnd(hwndFromContext(self));
 
     const texture_desc = win32.D3D11_TEXTURE2D_DESC{
@@ -711,7 +721,7 @@ pub fn textureCreateTarget(self: Context, width: u32, height: u32, interpolation
     errdefer _ = texture.IUnknown.Release();
 
     try state.texture_interpolation.put(state.dvui_window.gpa, texture, interpolation);
-    return .{ .ptr = @ptrCast(texture), .width = width, .height = height };
+    return .{ .ptr = @ptrCast(texture), .width = width, .height = height, .format = .rgba_32 };
 }
 
 pub fn textureReadTarget(self: Context, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
@@ -785,7 +795,7 @@ pub fn textureFromTarget(self: Context, texture: dvui.TextureTarget) !dvui.Textu
     };
     _ = tex.IUnknown.Release();
 
-    return self.textureCreate(pixels.ptr, texture.width, texture.height, interpolation);
+    return self.textureCreate(pixels.ptr, texture.width, texture.height, interpolation, .rgba_32);
 }
 
 pub fn renderTarget(self: Context, texture: ?dvui.TextureTarget) !void {

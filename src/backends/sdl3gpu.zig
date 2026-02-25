@@ -574,7 +574,7 @@ pub fn init(window: *c.SDL_Window, device: *c.SDL_GPUDevice, allocator: std.mem.
 }
 
 fn createWhiteTexture(self: *SDLBackend) !void {
-    self.white_texture = @ptrCast(@alignCast((self.textureCreate(&.{ 255, 255, 255, 255 }, 1, 1, .linear) catch return error.BackendError).ptr));
+    self.white_texture = @ptrCast(@alignCast((self.textureCreate(&.{ 255, 255, 255, 255 }, 1, 1, .linear, .rgba_32) catch return error.BackendError).ptr));
 }
 
 fn detectShaderFormat(self: *SDLBackend) void {
@@ -878,6 +878,15 @@ pub fn cursorShow(_: *SDLBackend, value: ?bool) !bool {
         }
     }
     return prev;
+}
+
+pub fn native(self: *SDLBackend, _: *dvui.Window) dvui.Window.Native {
+    const props: c.SDL_PropertiesID = c.SDL_GetWindowProperties(self.window);
+    switch (builtin.os.tag) {
+        .windows => return .{ .hwnd = c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_WIN32_HWND_POINTER, null) },
+        .macos => return .{ .cocoa_window = c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, null) },
+        else => return {},
+    }
 }
 
 pub fn refresh(_: *SDLBackend) void {
@@ -1241,7 +1250,11 @@ pub fn createTextureTransferBuffer(self: *SDLBackend) !void {
     log.info("Transfer buffer created: {} bytes", .{self.texture_transfer_buffer_size});
 }
 
-pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
+pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
+    if (format != .rgba_32) {
+        log.err("textureCreate currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
 
     // 1. Create GPU texture
     const texture = c.SDL_CreateGPUTexture(
@@ -1340,6 +1353,7 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
         .ptr = backendTexture,
         .width = width,
         .height = height,
+        .format = format,
     };
 }
 
@@ -1349,7 +1363,12 @@ const BackendTextureTarget = struct {
     sampler: *c.SDL_GPUSampler, // points to either linear_sampler or nearest_sampler
 };
 
-pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
+pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
+    if (format != .rgba_32) {
+        log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
+
     // 1. Create GPU texture
     const texture = c.SDL_CreateGPUTexture(
         self.device,
@@ -1385,6 +1404,7 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
         .ptr = backendTexture,
         .width = width,
         .height = height,
+        .format = format,
     };
 }
 
@@ -1422,7 +1442,7 @@ pub fn textureDestroy(self: *SDLBackend, texture: dvui.Texture) void {
 }
 
 pub fn textureFromTarget(_: *SDLBackend, texture: dvui.TextureTarget) !dvui.Texture {
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height };
+    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
 }
 
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {

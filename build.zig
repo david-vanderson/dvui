@@ -408,8 +408,8 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 .link_libc = true,
             });
 
-            dvui_opts.addChecks(sdl_mod, "sdl3gpu-backend");
-            dvui_opts.addTests(sdl_mod, "sdl3gpu-backend");
+            dvui_opts.addChecks(sdl_mod, "sdl3-backend");
+            dvui_opts.addTests(sdl_mod, "sdl3-backend");
 
             const sdl3_options = b.addOptions();
             sdl3_options.addOption(

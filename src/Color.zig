@@ -276,7 +276,8 @@ pub fn average(self: Color, other: Color) Color {
 /// This also means `@ptrCast` of `[]Color.PMA` to and from `[]u8` is safe,
 /// as long as the length is a multiple of `@sizeOf(Color.PMA)`.
 ///
-/// The pixel format will always be RGBA.
+/// The pixel format will always be .rgba_32, but the byte order depends on the
+/// endianness of the target.
 pub const PMA = extern struct {
     r: u8 = 0xff,
     g: u8 = 0xff,

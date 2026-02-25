@@ -2538,6 +2538,15 @@ const dropdown_placeholder_default = "Select ...";
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: DropdownChoice(usize), init_opts: DropdownInitOptions, opts: Options) bool {
+    // Adjust selected index by 1 if the placeholder is showing
+    const selected_index: ?usize = switch (choice) {
+        .choice => |ch| ch.*,
+        .choice_nullable => |ch| if (ch.*) |_|
+            if (init_opts.null_selectable) ch.*.? + 1 else ch.*.?
+        else
+            null,
+    };
+
     var dd: dvui.DropdownWidget = undefined;
     dd.init(
         src,
@@ -2546,7 +2555,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
             .choice_nullable => |ch| if (ch.* == null)
                 .{ .placeholder = init_opts.placeholder orelse dropdown_placeholder_default }
             else
-                .{ .selected_index = ch.*, .label = entries[ch.*.?] },
+                .{ .selected_index = selected_index, .label = entries[ch.*.?] },
         },
         opts,
     );
@@ -2590,6 +2599,15 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownChoice(T), init_opts: DropdownInitOptions, opts: Options) bool {
     if (@typeInfo(T) != .@"enum") @compileError("Expected enum, found '" ++ @typeName(T) ++ "'");
 
+    // Adjust selected index by 1 if the placeholder is showing
+    const selected_index: ?usize = switch (choice) {
+        .choice => |ch| @intFromEnum(ch.*),
+        .choice_nullable => |ch| if (ch.*) |_|
+            if (init_opts.null_selectable) @intFromEnum(ch.*.?) + 1 else @intFromEnum(ch.*.?)
+        else
+            null,
+    };
+
     var dd: dvui.DropdownWidget = undefined;
     dd.init(
         src,
@@ -2598,7 +2616,7 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
             .choice_nullable => |ch| if (ch.* == null)
                 .{ .placeholder = init_opts.placeholder orelse dropdown_placeholder_default }
             else
-                .{ .selected_index = @intFromEnum(ch.*.?), .label = @tagName(ch.*.?) },
+                .{ .selected_index = selected_index, .label = @tagName(ch.*.?) },
         },
         opts,
     );
@@ -4740,6 +4758,8 @@ pub fn TextEntryNumberInitOptions(comptime T: type) type {
         max: ?T = null,
         value: ?*T = null,
         show_min_max: bool = false,
+        text: ?[]const u8 = null,
+        placeholder: ?[]const u8 = null,
     };
 }
 
@@ -4779,7 +4799,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 32);
 
-    //initialize with input number
+    // always initialize with value so we do the dataGet
     if (init_opts.value) |num| {
         const old_value = dataGet(null, id, "value", T);
         if (old_value == null or old_value.? != num.*) {
@@ -4789,14 +4809,36 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         }
     }
 
-    var te: TextEntryWidget = undefined;
-    te.init(src, .{ .text = .{ .buffer = buffer } }, default_opts.override(opts));
-    te.processEvents();
+    // display min/max
+    var minmax_buffer: [64]u8 = undefined;
+    var minmax_text: []const u8 = "";
+    if (init_opts.show_min_max) {
+        if (init_opts.min != null and init_opts.max != null) {
+            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(min: {d}, max: {d})", .{ init_opts.min.?, init_opts.max.? }) catch unreachable;
+        } else if (init_opts.min != null) {
+            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(min: {d})", .{init_opts.min.?}) catch unreachable;
+        } else if (init_opts.max != null) {
+            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(max: {d})", .{init_opts.max.?}) catch unreachable;
+        }
+    }
 
-    var result: TextEntryNumberResult(T) = .{ .enter_pressed = te.enter_pressed };
+    var te: TextEntryWidget = undefined;
+    te.init(src, .{
+        .text = .{ .buffer = buffer },
+        .placeholder = init_opts.placeholder orelse if (init_opts.show_min_max) minmax_text else null,
+    }, default_opts.override(opts));
+
+    // if text was given, act like the user deleted everything and typed this
+    if (init_opts.text) |text| {
+        te.textSet(text, false);
+    }
+
+    te.processEvents();
 
     // filter before drawing
     te.filterIn(filter);
+
+    var result: TextEntryNumberResult(T) = .{ .enter_pressed = te.enter_pressed };
 
     // validation
     const text = te.getText();
@@ -4833,19 +4875,6 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
 
-    // display min/max
-    if (te.getText().len == 0 and init_opts.show_min_max) {
-        var minmax_buffer: [64]u8 = undefined;
-        var minmax_text: []const u8 = "";
-        if (init_opts.min != null and init_opts.max != null) {
-            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(min: {d}, max: {d})", .{ init_opts.min.?, init_opts.max.? }) catch unreachable;
-        } else if (init_opts.min != null) {
-            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(min: {d})", .{init_opts.min.?}) catch unreachable;
-        } else if (init_opts.max != null) {
-            minmax_text = std.fmt.bufPrint(&minmax_buffer, "(max: {d})", .{init_opts.max.?}) catch unreachable;
-        }
-        te.textLayout.addText(minmax_text, .{ .color_text = opts.color(.fill_hover) });
-    }
     if (te.data().accesskit_node()) |ak_node| {
         AccessKit.nodeClearValue(ak_node); // Only set a numberic value
         if (@typeInfo(T) == .float) {
@@ -5120,7 +5149,7 @@ pub const Picture = struct {
         r.y = y_start;
         r.h = @round(y_end - y_start);
 
-        const texture = dvui.textureCreateTarget(@intFromFloat(r.w), @intFromFloat(r.h), .linear) catch return null;
+        const texture = dvui.textureCreateTarget(@intFromFloat(r.w), @intFromFloat(r.h), .linear, .rgba_32) catch return null;
         const target = dvui.renderTarget(.{ .texture = texture, .offset = r.topLeft() });
 
         return .{

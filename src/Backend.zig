@@ -1,6 +1,7 @@
 //! Provides a consistent API for interacting with the backend
 
 const std = @import("std");
+const builtin = @import("builtin");
 const dvui = @import("dvui.zig");
 
 const Implementation = @import("backend");
@@ -71,8 +72,8 @@ pub fn drawClippedTriangles(self: Backend, texture: ?dvui.Texture, vtx: []const 
 
 /// Create a `dvui.Texture` from premultiplied alpha `pixels` in RGBA.  The
 /// returned pointer is what will later be passed to `drawClippedTriangles`.
-pub fn textureCreate(self: Backend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) TextureError!dvui.Texture {
-    return self.impl.textureCreate(pixels, width, height, interpolation);
+pub fn textureCreate(self: Backend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) TextureError!dvui.Texture {
+    return self.impl.textureCreate(pixels, width, height, interpolation, format);
 }
 
 /// Update a `dvui.Texture` from premultiplied alpha `pixels` in RGBA.  The
@@ -93,8 +94,8 @@ pub fn textureDestroy(self: Backend, texture: dvui.Texture) void {
 
 /// Create a `dvui.Texture` that can be rendered to with `renderTarget`.  The
 /// returned pointer is what will later be passed to `drawClippedTriangles`.
-pub fn textureCreateTarget(self: Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) TextureError!dvui.TextureTarget {
-    return self.impl.textureCreateTarget(width, height, interpolation);
+pub fn textureCreateTarget(self: Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) TextureError!dvui.TextureTarget {
+    return self.impl.textureCreateTarget(width, height, interpolation, format);
 }
 
 /// Read pixel data (RGBA) from `texture` into `pixels_out`.
@@ -151,6 +152,18 @@ pub fn accessKitInitInBegin(self: Backend, accessKit: *dvui.AccessKit) GenericEr
     if (self.impl.accessKitShouldInitialize()) {
         accessKit.initialize();
         try self.impl.accessKitInitInBegin();
+    }
+}
+
+pub fn native(self: Backend, window: *dvui.Window) dvui.Window.Native {
+    if (comptime !@hasDecl(Implementation, "native")) {
+        return switch (builtin.os.tag) {
+            .windows => .{ .hwnd = null },
+            .macos => .{ .cocoa_window = null },
+            else => {},
+        };
+    } else {
+        return self.impl.native(window);
     }
 }
 
