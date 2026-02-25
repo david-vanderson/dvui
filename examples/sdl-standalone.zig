@@ -74,7 +74,7 @@ pub fn main() !void {
 
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 255);
+        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 0);
         _ = SDLBackend.c.SDL_RenderClear(backend.renderer);
 
         const keep_running = gui_frame();

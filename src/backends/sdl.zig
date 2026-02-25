@@ -104,7 +104,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
             options.title,
             @as(c_int, @intFromFloat(options.size.w)),
             @as(c_int, @intFromFloat(options.size.h)),
-            @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | hidden_flag | fullscreen_flag),
+            @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | c.SDL_WINDOW_TRANSPARENT | hidden_flag | fullscreen_flag),
         ) orelse return logErr("SDL_CreateWindow in initWindow")
     else
         c.SDL_CreateWindow(
@@ -1598,7 +1598,7 @@ pub fn main() !u8 {
 
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        try toErr(c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 255), "SDL_SetRenderDrawColor in sdl main");
+        try toErr(c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in sdl main");
         try toErr(c.SDL_RenderClear(back.renderer), "SDL_RenderClear in sdl main");
 
         var res = try app.frameFn();
@@ -1759,7 +1759,7 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
 
     // if dvui widgets might not cover the whole window, then need to clear
     // the previous frame's render
-    toErr(c.SDL_SetRenderDrawColor(appState.back.renderer, 0, 0, 0, 255), "SDL_SetRenderDrawColor in sdl main") catch return c.SDL_APP_FAILURE;
+    toErr(c.SDL_SetRenderDrawColor(appState.back.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in sdl main") catch return c.SDL_APP_FAILURE;
     toErr(c.SDL_RenderClear(appState.back.renderer), "SDL_RenderClear in sdl main") catch return c.SDL_APP_FAILURE;
 
     const app = dvui.App.get() orelse unreachable;
