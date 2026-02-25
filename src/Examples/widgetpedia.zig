@@ -3,7 +3,7 @@ const dvui = @import("../dvui.zig");
 const Examples = dvui.Examples;
 
 var reset_widget: bool = true;
-const test_options_label = "Widget display options";
+const test_options_label = "Controls";
 
 const struct_options = struct {
     const color: StructOptions(dvui.Color) = .initWithDisplayFn(structColorPicker, .white);
@@ -262,6 +262,124 @@ fn displayEmpty() void {
     dvui.icon(@src(), "under construction", dvui.entypo.hour_glass, .{}, .{ .gravity_x = 0.5, .min_size_content = .{ .h = 50, .w = 50 } });
     dvui.labelNoFmt(@src(), "Under construction", .{ .align_x = 0.5 }, .{});
 }
+
+pub fn displayWidgetTemplate(widget_display: type) void {
+    //    const min_height = 300;
+    const state = struct {
+        var split_ratio: f32 = 0.9;
+        var options_expander_rect: dvui.Rect = undefined;
+    };
+
+    var paned = dvui.paned(@src(), .{
+        .direction = .vertical,
+        .split_ratio = &state.split_ratio,
+        .collapsed_size = 0,
+        // Guess at split
+    }, .{ .expand = .both });
+    defer paned.deinit();
+
+    //    if (reset_widget) {
+    //        state.split_ratio = 0.9;
+    //    }
+    if (paned.showFirst()) {
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal, .equal_space = true }, .{ .expand = .both });
+            defer hbox.deinit();
+            {
+                var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
+                defer vbox.deinit();
+                {
+                    var gbox = dvui.groupBox(@src(), widget_display.name, .{ .expand = .both });
+                    defer gbox.deinit();
+                    widget_display.layoutWidget();
+                }
+                if (std.meta.hasFn(widget_display, "layoutResults")) {
+                    var gbox = dvui.groupBox(@src(), "Results", .{ .expand = .horizontal });
+                    defer gbox.deinit();
+                    widget_display.layoutResults();
+                }
+            }
+            var scroll = dvui.scrollArea(@src(), .{}, .{
+                .corner_radius = dvui.Rect.all(3),
+                .border = dvui.Rect.all(1),
+                .padding = dvui.Rect.all(6),
+                .expand = .both,
+                .margin = .{ .x = 6, .y = 6 + dvui.themeGet().font_body.lineHeight() / 2 - 1, .w = 6, .h = 6 },
+                .background = false,
+                .min_size_content = .{ .w = 350 },
+            });
+            defer scroll.deinit();
+            widget_display.layoutWidgetControls();
+        }
+    }
+    if (paned.showSecond()) {
+        var expander_wd: dvui.WidgetData = undefined;
+        var scroll_wd: dvui.WidgetData = undefined;
+
+        var scroll = widgetOptionsScrollArea(@src(), .{ .data_out = &scroll_wd });
+        defer scroll.deinit();
+
+        if (dvui.expander(@src(), "Options editor", .{ .default_expanded = false }, .{ .expand = .horizontal, .data_out = &expander_wd })) {
+            var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
+            defer vbox.deinit();
+            _ = dvui.Debug.optionsEditor(&widget_display.state.options, &widget_display.state.wd);
+        }
+        widgetShowSetOptionsTooltip(@src(), expander_wd.borderRectScale().r, widget_display.state.options);
+
+        if (state.split_ratio == 0.9 and !dvui.firstFrame(paned.data().id)) {
+            state.split_ratio = 1 - scroll_wd.rect.h / paned.data().contentRect().h;
+            std.debug.print("scroll: {d}, ,paned: {d}, ratio: {d}\n", .{ scroll_wd.contentRect().h, paned.data().contentRect().h, 1 - scroll_wd.contentRect().h / paned.data().contentRect().h });
+        }
+    }
+}
+
+const DisplayButton = struct {
+    const name = "displayButton()";
+    const state = struct {
+        var init_opts: dvui.ButtonWidget.InitOptions = undefined;
+        var options: dvui.Options = undefined;
+        var wd: dvui.WidgetData = undefined;
+        var result: bool = undefined;
+        var test_options: struct {
+            label_str: []const u8,
+        } = undefined;
+    };
+
+    pub fn displayFn() void {
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn layoutWidget() void {
+        if (reset_widget) {
+            state.init_opts = .{};
+            state.options = .{};
+            state.test_options = .{
+                .label_str = "Button",
+            };
+        }
+
+        state.result = dvui.button(@src(), state.test_options.label_str, state.init_opts, state.options);
+    }
+
+    pub fn layoutResults() void {
+        var al = dvui.Alignment.init(@src(), 0);
+        defer al.deinit();
+        struct_ui.displayBool(@src(), "return_value", &state.result, .{ .boolean = .{ .display = .read_only, .trigger_on = true } }, &al);
+    }
+
+    pub fn layoutWidgetControls() void {
+        dvui.structUI(
+            @src(),
+            test_options_label,
+            &state.test_options,
+            1,
+            .{StructOptions(@TypeOf(state.test_options)).initWithDefaults(.{
+                .label_str = .defaultTextRW,
+            }, null)},
+            .{},
+        );
+    }
+};
 
 const Easing = enum {
     linear,
@@ -1266,7 +1384,7 @@ const widget_hierarchy = [_]WidgetHeirachy{
     .{ .name = "box", .displayFn = displayBox, .children = null },
 
     .{ .name = "buttons", .displayFn = displayEmpty, .children = &.{
-        .{ .name = "button", .displayFn = displayButton, .children = null },
+        .{ .name = "button", .displayFn = DisplayButton.displayFn, .children = null },
         .{ .name = "buttonIcon", .displayFn = displayButtonIcon, .children = null },
         .{ .name = "buttonLabelAndIcon", .displayFn = displayButtonLabelAndIcon, .children = null },
     } },

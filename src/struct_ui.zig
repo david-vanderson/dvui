@@ -9,6 +9,8 @@
 //! These are automatically cleaned up during Window.deinit().
 
 // TODO: Improve message for when struct_options are not passed as a tuple.
+// TODO: The global var for expand / collapse doesn't really work. It would be better just to take a parameter or init_opt as it is only the top-level container that should default.
+// TODO: Implement a global "narrow mode" that gets rid of number labels on number entries etc.
 
 // By default struct_ui will use the gpa passed to the dvui window.
 // If you want to use a different allocator, you can set it here.
@@ -506,6 +508,7 @@ pub const BoolFieldOptions = struct {
     // Does the user have to manually reset from true to false?
     // Only applies to read-only booleans.
     manual_reset: bool = false,
+    trigger_on: ?bool = null,
 };
 
 pub fn boolFieldWidget(
@@ -540,14 +543,49 @@ pub fn boolFieldWidget(
                 dvui.tooltip(@src(), .{ .active_rect = data_out.borderRectScale().r, .delay = 1_000_000 }, "Value was not set to true since last manual reset", .{}, .{});
 
             dvui.dataSet(null, box.data().id, "bool", state);
+        } else if (opt.trigger_on != null) {
+            if (opt.trigger_on.? == field_value_ptr.*) {
+                std.debug.print("triggered\n", .{});
+                dvui.animation(box.data().id, "trigger", .{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 1_000_000, .easing = easing });
+            }
+            if (dvui.animationGet(box.data().id, "trigger")) |a| {
+                const prev_alpha = dvui.alpha(a.value());
+                defer dvui.alphaSet(prev_alpha);
+                dvui.label(@src(), "{}", .{opt.trigger_on.?}, .{});
+                if (a.value() == a.end_val) {
+                    dvui.refresh(null, @src(), null);
+                }
+            } else {
+                dvui.label(@src(), "{}", .{field_value_ptr.*}, .{});
+            }
+        } else {
+            dvui.label(@src(), "{}", .{field_value_ptr.*}, .{});
         }
-        dvui.label(@src(), "{}", .{field_value_ptr.*}, .{});
+
+        //        const animate: ?*dvui.AnimateWidget = if (opt.trigger_on) |trigger|
+        //            if (trigger == field_value_ptr.*) dvui.animate(@src(), .{ .kind = .alpha, .duration = 2_000_000 }, .{}) else null
+        //        else
+        //            null;
+        //        dvui.label(@src(), "{}", .{field_value_ptr.*}, .{});
+        //        if (animate) |anim| anim.deinit();
     } else {
         const entries = .{ "false", "true" };
         var choice: usize = if (field_value_ptr.* == false) 0 else 1;
         _ = dvui.dropdown(@src(), &entries, .{ .choice = &choice }, .{}, .{});
         field_value_ptr.* = if (choice == 0) false else true;
     }
+}
+
+pub fn easing(t: f32) f32 {
+    const result = easing2(t);
+    std.debug.print("{d}\n", .{result});
+    return 1 - result;
+}
+pub fn easing2(t: f32) f32 {
+    if (t < 0.2) return t;
+    if (t >= 0.2 and t < 0.8) return 1;
+    if (t >= 0.8) return (1 - t) / 0.2;
+    unreachable;
 }
 
 pub fn boolFieldWidgetOptional(
