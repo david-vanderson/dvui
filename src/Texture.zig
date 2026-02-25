@@ -3,6 +3,7 @@
 ptr: *anyopaque,
 width: u32,
 height: u32,
+format: TexturePixelFormat,
 
 const Texture = @This();
 
@@ -11,6 +12,7 @@ pub const Target = struct {
     ptr: *anyopaque,
     width: u32,
     height: u32,
+    format: TexturePixelFormat,
 
     /// Create a texture that can be rendered with `renderTexture` and drawn to
     /// with `renderTarget`.  Starts transparent (all zero).
@@ -18,8 +20,8 @@ pub const Target = struct {
     /// Remember to destroy the texture at some point, see `destroyLater`.
     ///
     /// Only valid between `Window.begin`and `Window.end`.
-    pub fn create(width: u32, height: u32, interpolation: TextureInterpolation) TextureError!Target {
-        return try dvui.currentWindow().backend.textureCreateTarget(width, height, interpolation);
+    pub fn create(width: u32, height: u32, interpolation: TextureInterpolation, format: TexturePixelFormat) TextureError!Target {
+        return try dvui.currentWindow().backend.textureCreateTarget(width, height, interpolation, format);
     }
 };
 
@@ -299,11 +301,11 @@ pub fn fromImageSource(source: ImageSource) !Texture {
 pub fn fromImageFile(name: []const u8, image_bytes: []const u8, interpolation: TextureInterpolation) (TextureError || StbImageError)!Texture {
     const img = Color.PMAImage.fromImageFile(name, dvui.currentWindow().arena(), image_bytes) catch return StbImageError.stbImageError;
     defer dvui.currentWindow().arena().free(img.pma);
-    return try create(img.pma, img.width, img.height, interpolation);
+    return try create(img.pma, img.width, img.height, interpolation, .rgba_32);
 }
 
 pub fn fromPixelsPMA(pma: []const Color.PMA, width: u32, height: u32, interpolation: TextureInterpolation) TextureError!Texture {
-    return try dvui.textureCreate(pma, width, height, interpolation);
+    return try dvui.textureCreate(pma, width, height, interpolation, .rgba_32);
 }
 
 /// Render `tvg_bytes` at `height` into a `Texture`.  Name is for debugging.
@@ -313,7 +315,7 @@ pub fn fromTvgFile(name: []const u8, tvg_bytes: []const u8, height: u32, icon_op
     const cw = dvui.currentWindow();
     const img = Color.PMAImage.fromTvgFile(name, cw.lifo(), cw.arena(), tvg_bytes, height, icon_opts) catch return TvgError.tvgError;
     defer cw.lifo().free(img.pma);
-    return try create(img.pma, img.width, img.height, .linear);
+    return try create(img.pma, img.width, img.height, .linear, .rgba_32);
 }
 
 /// Create a texture that can be rendered with `renderTexture`.
@@ -321,11 +323,11 @@ pub fn fromTvgFile(name: []const u8, tvg_bytes: []const u8, height: u32, icon_op
 /// Remember to destroy the texture at some point, see `destroyLater`.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn create(pixels: []const Color.PMA, width: u32, height: u32, interpolation: TextureInterpolation) TextureError!Texture {
+pub fn create(pixels: []const Color.PMA, width: u32, height: u32, interpolation: TextureInterpolation, format: TexturePixelFormat) TextureError!Texture {
     if (pixels.len != width * height) {
         dvui.log.err("Texture was created with an incorrect amount of pixels, expected {d} but got {d} (w: {d}, h: {d})", .{ pixels.len, width * height, width, height });
     }
-    return dvui.currentWindow().backend.textureCreate(@ptrCast(pixels.ptr), width, height, interpolation);
+    return dvui.currentWindow().backend.textureCreate(@ptrCast(pixels.ptr), width, height, interpolation, format);
 }
 
 /// Update a texture that was created with `textureCreate`.
@@ -339,7 +341,7 @@ pub fn update(tex: *Texture, pma: []const Color.PMA, interpolation: TextureInter
     dvui.currentWindow().backend.textureUpdate(tex.*, @ptrCast(pma.ptr)) catch |err| {
         // texture update not supported by backend, destroy and create texture
         if (err == TextureError.NotImplemented) {
-            const new_tex = try create(pma, tex.width, tex.height, interpolation);
+            const new_tex = try create(pma, tex.width, tex.height, interpolation, tex.format);
             destroyLater(tex.*);
             tex.* = new_tex;
         } else {
@@ -391,6 +393,7 @@ const Size = dvui.Size;
 const Color = dvui.Color;
 const IconRenderOptions = dvui.IconRenderOptions;
 const TextureInterpolation = dvui.enums.TextureInterpolation;
+const TexturePixelFormat = dvui.enums.TexturePixelFormat;
 
 const TextureError = dvui.Backend.TextureError;
 const StbImageError = dvui.StbImageError;

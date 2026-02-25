@@ -615,28 +615,38 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const
     );
 }
 
-pub fn textureCreate(_: *WebBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
+pub fn textureCreate(_: *WebBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
+    if (format != .rgba_32) {
+        log.err("textureCreate currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
+
     const wasm_interp: u8 = switch (interpolation) {
         .nearest => 0,
         .linear => 1,
     };
 
     const id = wasm.wasm_textureCreate(pixels, width, height, wasm_interp);
-    return dvui.Texture{ .ptr = @ptrFromInt(id), .width = width, .height = height };
+    return dvui.Texture{ .ptr = @ptrFromInt(id), .width = width, .height = height, .format = format };
 }
 
-pub fn textureCreateTarget(_: *WebBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
+pub fn textureCreateTarget(_: *WebBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
+    if (format != .rgba_32) {
+        log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
+
     const wasm_interp: u8 = switch (interpolation) {
         .nearest => 0,
         .linear => 1,
     };
 
     const id = wasm.wasm_textureCreateTarget(width, height, wasm_interp);
-    return dvui.TextureTarget{ .ptr = @ptrFromInt(id), .width = width, .height = height };
+    return dvui.TextureTarget{ .ptr = @ptrFromInt(id), .width = width, .height = height, .format = format };
 }
 
 pub fn textureFromTarget(_: *WebBackend, texture: dvui.TextureTarget) !dvui.Texture {
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height };
+    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
 }
 
 pub fn renderTarget(_: *WebBackend, texture: ?dvui.TextureTarget) !void {

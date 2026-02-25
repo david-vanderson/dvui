@@ -1321,6 +1321,9 @@ pub fn deinit(self: *TextEntryWidget) void {
     defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
 
+    // set clip back to what textLayout had, because it might need it to set
+    // the mouse cursor
+    dvui.clipSet(self.textClip);
     self.textLayout.deinit();
     self.scroll.deinit();
 

@@ -28,6 +28,63 @@ pub const TextureInterpolation = enum {
     linear,
 };
 
+pub const TexturePixelFormat = enum {
+    /// This is the native format of Color.PMA.  On little endian this is the
+    /// same as abgr_8_8_8_8, on big endian it is rgba_8_8_8_8.
+    rgba_32,
+    argb_32,
+    bgra_32,
+    abgr_32,
+    rgbx_32,
+    xrgb_32,
+    bgrx_32,
+    xbgr_32,
+    rgba_8_8_8_8,
+    argb_8_8_8_8,
+    bgra_8_8_8_8,
+    abgr_8_8_8_8,
+    rgbx_8_8_8_8,
+    xrgb_8_8_8_8,
+    bgrx_8_8_8_8,
+    xbgr_8_8_8_8,
+    fourcc_yv12,
+    fourcc_iyuv,
+    fourcc_yuy2,
+    fourcc_uyvy,
+    fourcc_yvyu,
+
+    pub fn bytesPerPixel(self: TexturePixelFormat) u32 {
+        return switch (self) {
+            .rgba_32,
+            .argb_32,
+            .bgra_32,
+            .abgr_32,
+            .rgbx_32,
+            .xrgb_32,
+            .bgrx_32,
+            .xbgr_32,
+            .rgba_8_8_8_8,
+            .argb_8_8_8_8,
+            .bgra_8_8_8_8,
+            .abgr_8_8_8_8,
+            .rgbx_8_8_8_8,
+            .xrgb_8_8_8_8,
+            .bgrx_8_8_8_8,
+            .xbgr_8_8_8_8,
+            => 4,
+
+            .fourcc_yv12,
+            .fourcc_iyuv,
+            => 1,
+
+            .fourcc_yuy2,
+            .fourcc_uyvy,
+            .fourcc_yvyu,
+            => 2,
+        };
+    }
+};
+
 pub const Button = enum {
     // used for mouse motion/wheel/position events, but never for press/release
     none,

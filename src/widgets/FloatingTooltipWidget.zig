@@ -47,6 +47,9 @@ pub const InitOptions = struct {
 
     /// Is true if the user should be able to hover the tooltips content without it disappearing
     interactive: bool = false,
+
+    // delay the tooltip display for `delay` microseconds. Tooltip will fade in after 80% of `delay`
+    delay: ?i32 = null,
 };
 
 parent_tooltip: ?*FloatingTooltipWidget = null,
@@ -60,6 +63,7 @@ prevClip: Rect.Physical = undefined,
 scale_val: f32,
 /// SAFETY: Set by `install`, so is only valid if `installed` is true
 scaler: dvui.ScaleWidget = undefined,
+animate: ?dvui.AnimateWidget = null,
 options: Options,
 init_options: InitOptions,
 showing: bool = false,
@@ -190,6 +194,10 @@ pub fn install(self: *FloatingTooltipWidget) void {
     self.prevClip = dvui.clipGet();
     dvui.clipSet(dvui.windowRectPixels());
 
+    if (self.init_options.delay) |delay| {
+        self.animate = @as(?dvui.AnimateWidget, undefined);
+        self.animate.?.init(@src(), .{ .duration = delay, .kind = .alpha, .easing = easing }, .{});
+    }
     // scaler is what is drawing our background/border/box_shadow
     self.scaler.init(@src(), .{ .scale = &self.scale_val }, self.options.override(.{ .expand = .both }));
 
@@ -240,6 +248,9 @@ pub fn deinit(self: *FloatingTooltipWidget) void {
     }
 
     self.scaler.deinit();
+    if (self.animate) |*animate| {
+        animate.deinit();
+    }
     self.data().minSizeSetAndRefresh();
 
     // outside normal layout, don't call minSizeForChild or self.data().minSizeReportToParent();
@@ -249,6 +260,11 @@ pub fn deinit(self: *FloatingTooltipWidget) void {
     _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
     dvui.clipSet(self.prevClip);
     _ = dvui.renderingSet(self.prev_rendering);
+}
+
+// Return 0 until 80% of time then fade in remaining 20% linearly.
+pub fn easing(t: f32) f32 {
+    return @max(0, (t - 0.8) / 0.2);
 }
 
 test {
