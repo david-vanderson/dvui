@@ -85,6 +85,8 @@ pub const StartOptions = struct {
     icon: ?[]const u8 = null,
     /// use when running tests
     hidden: bool = false,
+    /// Set the window to be transparent
+    transparent: bool = false,
     /// Will be passed to `dvui.Window.init`
     ///
     /// Options like `keybinds` should be used with care as it will

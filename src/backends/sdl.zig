@@ -62,6 +62,7 @@ pub const InitOptions = struct {
     /// use when running tests
     hidden: bool = false,
     fullscreen: bool = false,
+    transparent: bool = false,
 };
 
 pub fn initWindow(options: InitOptions) !SDLBackend {
@@ -99,12 +100,13 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
 
     const hidden_flag = if (hidden) c.SDL_WINDOW_HIDDEN else 0;
     const fullscreen_flag = if (options.fullscreen) c.SDL_WINDOW_FULLSCREEN else 0;
+    const transparent_flag = if (options.transparent) c.SDL_WINDOW_TRANSPARENT else 0;
     const window: *c.SDL_Window = if (sdl3)
         c.SDL_CreateWindow(
             options.title,
             @as(c_int, @intFromFloat(options.size.w)),
             @as(c_int, @intFromFloat(options.size.h)),
-            @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | c.SDL_WINDOW_TRANSPARENT | hidden_flag | fullscreen_flag),
+            @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | transparent_flag | hidden_flag | fullscreen_flag),
         ) orelse return logErr("SDL_CreateWindow in initWindow")
     else
         c.SDL_CreateWindow(
@@ -1563,6 +1565,7 @@ pub fn main() !u8 {
         .title = init_opts.title,
         .icon = init_opts.icon,
         .hidden = init_opts.hidden,
+        .transparent = init_opts.transparent,
     });
     defer back.deinit();
 
@@ -1665,6 +1668,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
         .title = init_opts.title,
         .icon = init_opts.icon,
         .hidden = init_opts.hidden,
+        .transparent = init_opts.transparent,
     }) catch |err| {
         log.err("initWindow failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
