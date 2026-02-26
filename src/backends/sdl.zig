@@ -1039,15 +1039,9 @@ pub fn textureDestroy(_: *SDLBackend, texture: dvui.Texture) void {
     c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(@alignCast(texture.ptr))));
 }
 
-pub fn textureFromTarget(self: *SDLBackend, texture: dvui.TextureTarget) !dvui.Texture {
-    // SDL can't read from non-target textures, so read all the pixels and make a new texture
-    const pixels = try self.arena.alloc(u8, texture.width * texture.height * 4);
-    defer self.arena.free(pixels);
-    try self.textureReadTarget(texture, pixels.ptr);
-
-    c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(@alignCast(texture.ptr))));
-
-    return self.textureCreate(pixels.ptr, texture.width, texture.height, .linear, texture.format);
+pub fn textureFromTarget(_: *SDLBackend, texture: dvui.TextureTarget) !dvui.Texture {
+    // SDL can't read from non-target textures, but we are enforcing that through zig types
+    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
 }
 
 pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
