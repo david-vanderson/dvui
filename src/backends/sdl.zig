@@ -100,7 +100,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
 
     const hidden_flag = if (hidden) c.SDL_WINDOW_HIDDEN else 0;
     const fullscreen_flag = if (options.fullscreen) c.SDL_WINDOW_FULLSCREEN else 0;
-    const transparent_flag = if (options.transparent) c.SDL_WINDOW_TRANSPARENT else 0;
+    const transparent_flag = if (options.transparent and sdl3) c.SDL_WINDOW_TRANSPARENT else 0;
     const window: *c.SDL_Window = if (sdl3)
         c.SDL_CreateWindow(
             options.title,
