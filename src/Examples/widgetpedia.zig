@@ -264,7 +264,8 @@ fn displayEmpty(_: bool) void {
 }
 
 pub fn displayWidgetTemplate(widget_display: type) void {
-    const min_options_editor_height = 300;
+    const default_options_editor_height = 300;
+    const min_widget_display_height = 200;
     const state = struct {
         var split_ratio: f32 = 0.9;
         var split_ratio_open: f32 = undefined;
@@ -281,9 +282,10 @@ pub fn displayWidgetTemplate(widget_display: type) void {
     }, .{ .expand = .both });
     defer paned.deinit();
 
-    //    if (reset_widget) {
-    //        state.split_ratio = 0.9;
-    //    }
+    if (state.paned_content_height != 0) {
+        state.split_ratio = std.math.clamp(state.split_ratio, min_widget_display_height / state.paned_content_height, 1);
+    }
+
     if (paned.showFirst()) {
         {
             var hbox = dvui.box(@src(), .{ .dir = .horizontal, .equal_space = true }, .{ .expand = .both });
@@ -315,6 +317,7 @@ pub fn displayWidgetTemplate(widget_display: type) void {
             widget_display.layoutWidgetControls();
         }
     }
+
     if (paned.showSecond()) {
         var expander_wd: dvui.WidgetData = undefined;
         var scroll_wd: dvui.WidgetData = undefined;
@@ -340,7 +343,7 @@ pub fn displayWidgetTemplate(widget_display: type) void {
             state.paned_content_height = paned.data().contentRect().h;
             state.split_ratio = 1 - scroll_wd.rect.h / state.paned_content_height;
             state.split_ratio_closed = 1 - scroll_wd.rect.h / state.paned_content_height;
-            state.split_ratio_open = 1 - min_options_editor_height / state.paned_content_height;
+            state.split_ratio_open = 1 - default_options_editor_height / state.paned_content_height;
         }
     }
 }
