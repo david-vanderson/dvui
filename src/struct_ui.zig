@@ -545,7 +545,6 @@ pub fn boolFieldWidget(
             dvui.dataSet(null, box.data().id, "bool", state);
         } else if (opt.trigger_on != null) {
             if (opt.trigger_on.? == field_value_ptr.*) {
-                std.debug.print("triggered\n", .{});
                 dvui.animation(box.data().id, "trigger", .{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 1_000_000, .easing = easing });
             }
             if (dvui.animationGet(box.data().id, "trigger")) |a| {
@@ -561,13 +560,6 @@ pub fn boolFieldWidget(
         } else {
             dvui.label(@src(), "{}", .{field_value_ptr.*}, .{});
         }
-
-        //        const animate: ?*dvui.AnimateWidget = if (opt.trigger_on) |trigger|
-        //            if (trigger == field_value_ptr.*) dvui.animate(@src(), .{ .kind = .alpha, .duration = 2_000_000 }, .{}) else null
-        //        else
-        //            null;
-        //        dvui.label(@src(), "{}", .{field_value_ptr.*}, .{});
-        //        if (animate) |anim| anim.deinit();
     } else {
         const entries = .{ "false", "true" };
         var choice: usize = if (field_value_ptr.* == false) 0 else 1;
@@ -576,16 +568,13 @@ pub fn boolFieldWidget(
     }
 }
 
+// Bring in immediately, hold, then smoothstep fade.
+// Return 1 if t < 0.4 and smoothstep to 0 for remainder
+// TODO: This is currently inverted to what it should be. TBC with DV.
 pub fn easing(t: f32) f32 {
-    const result = easing2(t);
-    std.debug.print("{d}\n", .{result});
-    return 1 - result;
-}
-pub fn easing2(t: f32) f32 {
-    if (t < 0.2) return t;
-    if (t >= 0.2 and t < 0.8) return 1;
-    if (t >= 0.8) return (1 - t) / 0.2;
-    unreachable;
+    if (t < 0.4) return 0;
+    const u = (t - 0.4) / 0.6;
+    return u * u * (3 - 2 * u);
 }
 
 pub fn boolFieldWidgetOptional(
