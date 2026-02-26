@@ -721,7 +721,7 @@ pub fn displayButtonIcon(_: bool) void {
             defer result_box.deinit();
             var al = dvui.Alignment.init(@src(), 0);
             defer al.deinit();
-            struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
+            struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .trigger_on = true } }, &al);
         }
         var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
@@ -772,7 +772,7 @@ pub fn displayButtonLabelAndIcon(_: bool) void {
             defer result_box.deinit();
             var al = dvui.Alignment.init(@src(), 0);
             defer al.deinit();
-            struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
+            struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .trigger_on = true } }, &al);
         }
         var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
@@ -829,7 +829,7 @@ pub fn displayCheckbox(_: bool) void {
             defer result_box.deinit();
             var al = dvui.Alignment.init(@src(), 0);
             defer al.deinit();
-            struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .manual_reset = true } }, &al);
+            struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .trigger_on = true } }, &al);
         }
         var scroll = gbox.testOptionsScrollArea(@src(), .{});
         defer scroll.deinit();
@@ -897,7 +897,7 @@ const DisplayColorPicker = struct {
             1,
             .{
                 StructOptions(@TypeOf(result)).init(.{
-                    .return_value = .{ .boolean = .{ .manual_reset = true, .display = .read_only } },
+                    .return_value = .{ .boolean = .{ .trigger_on = true, .display = .read_only } },
                     .color = .{ .standard = .{ .display = .read_only, .customDisplayFn = structColorPicker } },
                 }, null),
             },
@@ -1156,12 +1156,12 @@ pub fn displayDropdown(_: bool) void {
             const display_results = state.results;
             if (state.test_options.nullable) {
                 dvui.structUI(@src(), "results", &display_results, 3, .{StructOptions(@TypeOf(state.results)).init(.{
-                    .return_value = .{ .boolean = .{ .manual_reset = true } },
+                    .return_value = .{ .boolean = .{ .trigger_on = true } },
                     .choice_nullable = .default,
                 }, null)}, .{});
             } else {
                 dvui.structUI(@src(), "results", &display_results, 3, .{StructOptions(@TypeOf(state.results)).init(.{
-                    .return_value = .{ .boolean = .{ .manual_reset = true } },
+                    .return_value = .{ .boolean = .{ .trigger_on = true } },
                     .choice = .default,
                 }, null)}, .{});
             }
@@ -1229,7 +1229,7 @@ pub fn displayDropDownEnum(_: bool) void {
             // const to force read-only display.
             const display_results = state.results;
             dvui.structUI(@src(), "results", &display_results, 3, .{StructOptions(@TypeOf(state.results)).init(.{
-                .return_value = .{ .boolean = .{ .manual_reset = true } },
+                .return_value = .{ .boolean = .{ .trigger_on = true } },
                 .choice = .default,
             }, null)}, .{});
         }
@@ -1448,8 +1448,8 @@ pub fn displayTextEntryNumber(_: bool) void {
             defer results_box.deinit();
             dvui.structUI(@src(), "result", &result, 99, .{
                 StructOptions(dvui.TextEntryNumberResult(NumberType)).initWithDefaults(.{
-                    .changed = .{ .boolean = .{ .manual_reset = true } },
-                    .enter_pressed = .{ .boolean = .{ .manual_reset = true } },
+                    .changed = .{ .boolean = .{ .trigger_on = true } },
+                    .enter_pressed = .{ .boolean = .{ .trigger_on = true } },
                 }, null),
             }, .{ .gravity_x = 1.0 });
         }
