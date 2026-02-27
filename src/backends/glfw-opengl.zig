@@ -9,7 +9,7 @@ const log = std.log.scoped(.glfw_opengl_backend);
 
 const BYTES_PER_VERTEX = 20;
 // Max events we can process one frame
-const MAX_EVENT_BUFFER_SIZE = 100;
+const MAX_EVENT_BUFFER_SIZE = 512;
 
 // Create a singleton for events
 var events: ?std.ArrayList(GlfwEvent) = null;
@@ -123,15 +123,18 @@ pub fn init(gpa: std.mem.Allocator, window_: *anyopaque) @This() {
         }
     };
     const proc: zglfw.GlProc = undefined;
+    // This is not necessarily an error. Since the `zgl` version is
+    // 4.6, but we only require 3.3, some functions won't be loaded
+    // in case the machine doesn't support 4.6.
     zgl.loadExtensions(proc, fns.glGetProcAddress) catch |err| {
-        log.err("Loading error: {}", .{err});
-        @panic("No OpenGL context!");
+        log.warn("Not all functions were loaded. This is not necessarily a problem. Err: {}", .{err});
     };
 
     const vao = zgl.VertexArray.gen();
-    vao.bind();
     const vtx_buf = zgl.Buffer.gen();
+    vao.bind();
     vtx_buf.bind(.array_buffer);
+
     zgl.enableVertexAttribArray(0);
     zgl.enableVertexAttribArray(1);
     zgl.enableVertexAttribArray(2);
@@ -252,8 +255,8 @@ pub fn windowSize(ctx: *@This()) dvui.Size.Natural {
     };
 }
 
-pub fn contentScale(_: *@This()) f32 {
-    return 1;
+pub fn contentScale(ctx: *@This()) f32 {
+    return ctx.window.getContentScale()[0];
 }
 
 pub fn drawClippedTriangles(
@@ -491,7 +494,7 @@ pub fn sleep(_: *@This(), ns: u64) void {
 /// are using `dvui.Window.waitTime` or some other method of waiting until
 /// a new event comes in.
 pub fn refresh(_: *@This()) void {
-    return;
+    return zglfw.postEmptyEvent();
 }
 
 pub fn glfwCodeToDvuiCode(key: zglfw.Key) dvui.enums.Key {
@@ -632,7 +635,7 @@ fn glfwKeyCallback(
     mods: zglfw.Mods,
 ) callconv(.c) void {
     if (events) |*ev| {
-        if (ev.items.len > MAX_EVENT_BUFFER_SIZE)
+        if (ev.items.len >= MAX_EVENT_BUFFER_SIZE)
             return log.warn("Max event buffer size exceeded! Dropping event!", .{});
         std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
         ev.appendAssumeCapacity(.{ .KeyFn = .{ window, key, scancode, action, mods } });
@@ -673,7 +676,7 @@ fn handleKeyEvent(
 
 fn glfwCharCallback(window: *zglfw.Window, codepoint: u32) callconv(.c) void {
     if (events) |*ev| {
-        if (ev.items.len > MAX_EVENT_BUFFER_SIZE)
+        if (ev.items.len >= MAX_EVENT_BUFFER_SIZE)
             return log.warn("Max event buffer size exceeded! Dropping event!", .{});
         std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
         ev.appendAssumeCapacity(.{ .CharFn = .{ window, codepoint } });
@@ -693,7 +696,7 @@ fn handleCharEvent(dvui_window: *dvui.Window, window: *zglfw.Window, codepoint: 
 
 fn glfwCursorPosCallback(window: *zglfw.Window, xpos: f64, ypos: f64) callconv(.c) void {
     if (events) |*ev| {
-        if (ev.items.len > MAX_EVENT_BUFFER_SIZE)
+        if (ev.items.len >= MAX_EVENT_BUFFER_SIZE)
             return log.warn("Max event buffer size exceeded! Dropping event!", .{});
         std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
         ev.appendAssumeCapacity(.{ .CursorPosFn = .{ window, xpos, ypos } });
@@ -724,7 +727,7 @@ fn glfwMouseButtonCallback(
     mods: zglfw.Mods,
 ) callconv(.c) void {
     if (events) |*ev| {
-        if (ev.items.len > MAX_EVENT_BUFFER_SIZE)
+        if (ev.items.len >= MAX_EVENT_BUFFER_SIZE)
             return log.warn("Max event buffer size exceeded! Dropping event!", .{});
         std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
         ev.appendAssumeCapacity(.{ .MouseButtonFn = .{ window, button, action, mods } });
@@ -764,7 +767,7 @@ fn handleMouseButtonEvent(
 }
 fn glfwScrollCallback(window: *zglfw.Window, xrel: f64, yrel: f64) callconv(.c) void {
     if (events) |*ev| {
-        if (ev.items.len > MAX_EVENT_BUFFER_SIZE)
+        if (ev.items.len >= MAX_EVENT_BUFFER_SIZE)
             return log.warn("Max event buffer size exceeded! Dropping event!", .{});
         std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
         ev.appendAssumeCapacity(.{ .ScrollFn = .{ window, xrel, yrel } });
@@ -801,7 +804,7 @@ fn glfwFramebufferSizeCallback(
     height: c_int,
 ) callconv(.c) void {
     if (events) |*ev| {
-        if (ev.items.len > MAX_EVENT_BUFFER_SIZE)
+        if (ev.items.len >= MAX_EVENT_BUFFER_SIZE)
             return log.warn("Max event buffer size exceeded! Dropping event!", .{});
         std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
         ev.appendAssumeCapacity(.{ .FrameBufferSizeFn = .{ window, width, height } });
