@@ -103,6 +103,18 @@ pub fn textureReadTarget(self: Backend, texture: dvui.TextureTarget, pixels_out:
     return self.impl.textureReadTarget(texture, pixels_out);
 }
 
+/// Destroy `texture` made with `Target.Create`. After this call, this texture
+/// pointer will not be used by dvui.
+pub fn textureClearTarget(self: Backend, texture: dvui.Texture.Target) void {
+    return self.impl.textureClearTarget(texture);
+}
+
+/// Destroy `texture` made with `Target.Create`. After this call, this texture
+/// pointer will not be used by dvui.
+pub fn textureDestroyTarget(self: Backend, texture: dvui.Texture.Target) void {
+    return self.impl.textureDestroyTarget(texture);
+}
+
 /// Convert texture target made with `textureCreateTarget` into return texture
 /// as if made by `textureCreate`.  After this call, texture target will not be
 /// used by dvui.

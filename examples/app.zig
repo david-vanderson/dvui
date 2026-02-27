@@ -130,6 +130,52 @@ pub fn frame() !dvui.App.Result {
     }
 
     {
+        const S = struct {
+            var tex: ?dvui.Texture.Target = null;
+        };
+        var clear = false;
+        if (dvui.button(@src(), "Clear", .{}, .{})) {
+            clear = true;
+        }
+        var destroy = false;
+        if (dvui.button(@src(), "Destroy", .{}, .{})) {
+            destroy = true;
+        }
+        const size = 200;
+        var vbox = dvui.box(@src(), .{}, .{ .min_size_content = .all(size), .border = .all(1) });
+        defer vbox.deinit();
+        const pxSize: u32 = @intFromFloat(vbox.data().contentRectScale().s * size);
+
+        if (S.tex == null) {
+            S.tex = try dvui.Texture.Target.create(pxSize, pxSize, .linear, .rgba_32);
+        }
+
+        if (clear) S.tex.?.clear();
+
+        const target = dvui.renderTarget(.{ .texture = S.tex, .offset = vbox.data().contentRectScale().r.topLeft() });
+
+        for (dvui.events()) |*e| {
+            if (!dvui.eventMatchSimple(e, vbox.data())) continue;
+            if (e.evt == .mouse and e.evt.mouse.action == .press) {
+                dvui.Path.stroke(.{ .points = &.{ e.evt.mouse.p }}, .{.thickness = 5, .color = .red});
+            }
+        }
+
+        _ = dvui.renderTarget(target);
+
+        const texture = try dvui.textureFromTarget(S.tex.?);
+        var rs = vbox.data().contentRectScale();
+        rs.r.x += @floatFromInt(pxSize);
+        rs.r.x += rs.s;
+        try dvui.renderTexture(texture, rs, .{});
+
+        if (destroy) {
+            S.tex.?.destroyLater();
+            S.tex = null;
+        }
+    }
+
+    {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
         dvui.label(@src(), "Pinch Zoom or Scale", .{}, .{});
