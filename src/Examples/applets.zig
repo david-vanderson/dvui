@@ -147,7 +147,110 @@ pub fn round(val: f64) f64 {
     return @round(val * dec_places) / dec_places;
 }
 
+const Tools = enum {
+    pencil,
+    eraser,
+};
+
 pub fn draw() void {
+    const uniqId = dvui.parentGet().extendId(@src(), 0);
+    const active_tool = dvui.dataGetPtrDefault(null, uniqId, "active_tool", Tools, .pencil);
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
+        var group = dvui.radioGroup(@src(), .{}, .{ .label = .{ .text = "Drawing Tools" } });
+        defer group.deinit();
+
+        if (dvui.radio(@src(), active_tool.* == .pencil, "Pencil", .{})) {
+            active_tool.* = .pencil;
+        }
+
+        if (dvui.radio(@src(), active_tool.* == .eraser, "Eraser", .{})) {
+            active_tool.* = .eraser;
+        }
+    }
+
+    var points: std.ArrayList(dvui.Point) = .empty;
+    if (dvui.dataGetSlice(null, uniqId, "points", []dvui.Point)) |pts| {
+        points.appendSlice(dvui.currentWindow().arena(), pts) catch @panic("OOM");
+    }
+
+    var canvas = dvui.box(@src(), .{}, .{ .expand = .both });
+    defer canvas.deinit();
+    const rs = canvas.data().contentRectScale();
+
+    const events = dvui.events();
+    for (events) |*e| {
+        if (!dvui.eventMatchSimple(e, canvas.data())) continue;
+
+        switch (e.evt) {
+            .mouse => |m| {
+                switch (m.action) {
+                    .press => {
+                        if (m.button == .left) {
+                            e.handle(@src(), canvas.data());
+                            dvui.captureMouse(canvas.data(), e.num);
+                            const newp = rs.pointFromPhysical(m.p);
+                            if (active_tool.* == .pencil) {
+                                points.append(dvui.currentWindow().arena(), newp) catch @panic("OOM");
+                                dvui.refresh(null, @src(), canvas.data().id);
+                            } else if (active_tool.* == .eraser) {
+                                var i: usize = 0;
+                                while (i < points.items.len) {
+                                    const p = points.items[i];
+                                    const dx = p.x - newp.x;
+                                    const dy = p.y - newp.y;
+                                    if ((dx * dx + dy * dy) < 5 * 5) {
+                                        _ = points.swapRemove(i);
+                                    } else {
+                                        i += 1;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    .motion => {
+                        if (dvui.captured(canvas.data().id)) {
+                            const newp = rs.pointFromPhysical(m.p);
+                            if (active_tool.* == .pencil) {
+                                points.append(dvui.currentWindow().arena(), newp) catch @panic("OOM");
+                                dvui.refresh(null, @src(), canvas.data().id);
+                            } else if (active_tool.* == .eraser) {
+                                var i: usize = 0;
+                                while (i < points.items.len) {
+                                    const p = points.items[i];
+                                    const dx = p.x - newp.x;
+                                    const dy = p.y - newp.y;
+                                    if ((dx * dx + dy * dy) < 5 * 5) {
+                                        _ = points.swapRemove(i);
+                                    } else {
+                                        i += 1;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    .release => {
+                        if (dvui.captured(canvas.data().id)) {
+                            dvui.captureMouse(null, e.num);
+                        }
+                    },
+                    else => {},
+                }
+            },
+            else => {},
+        }
+    }
+
+    for (points.items) |p| {
+        dvui.Path.stroke(.{ .points = &.{ rs.pointToPhysical(p) } }, .{
+            .color = dvui.Color{ .b = 120, .g = 12, .r = 212 },
+            .thickness = 5 * rs.s,
+        });
+    }
+
+    dvui.dataSetSlice(null, uniqId, "points", points.items);
 }
 
 test {
@@ -172,3 +275,4 @@ test "DOCIMG calculator" {
 }
 
 const dvui = @import("../dvui.zig");
+const std = @import("std");
