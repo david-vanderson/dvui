@@ -1261,7 +1261,7 @@ pub fn displayContainer(comptime src: std.builtin.SourceLocation, field_name: ?[
         .{ .expand = .horizontal },
     )) {
         vbox = dvui.box(src, .{ .dir = .vertical }, .{
-            .expand = .vertical,
+            .expand = .horizontal,
             .border = if (field_name != null) .{ .x = 1 } else null,
             .background = true,
             .margin = if (field_name != null) .{ .w = 12, .x = 12 } else null,

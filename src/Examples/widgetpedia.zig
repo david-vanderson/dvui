@@ -172,6 +172,8 @@ pub fn displayWidgetTemplate(widget_display: type) void {
     var paned = dvui.paned(@src(), state.paned_init_opts, .{ .expand = .both, .min_size_content = .{ .h = min_widget_display_height / state.split_ratio_closed } });
     defer paned.deinit();
 
+    state.split_ratio = std.math.clamp(state.split_ratio, @min(min_widget_display_height / state.paned_content_height, state.split_ratio_closed), state.split_ratio_closed);
+
     if (paned.showFirst()) {
         {
             var hbox = dvui.box(@src(), .{ .dir = .horizontal, .equal_space = true }, .{ .expand = .both });
@@ -450,6 +452,7 @@ const DisplayButton = struct {
 };
 
 const DisplayButtonIcon = struct {
+    const EntypoIcons = std.meta.DeclEnum(dvui.entypo);
     const name = "buttonIcon()";
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -459,9 +462,8 @@ const DisplayButtonIcon = struct {
 
     var icon_opts: dvui.IconRenderOptions = undefined;
 
-    var test_options: struct {
-        icon: []const u8,
-    } = undefined;
+    var icon_bytes: []const u8 = undefined;
+    var icon: EntypoIcons = undefined;
 
     pub fn displayFn(reset: bool) void {
         if (reset) resetWidget();
@@ -472,13 +474,12 @@ const DisplayButtonIcon = struct {
         init_opts = .{};
         icon_opts = .{};
         options = .{ .min_size_content = .all(50) };
-        test_options = .{
-            .icon = dvui.entypo.aircraft,
-        };
+        icon = .aircraft;
+        icon_bytes = dvui.entypo.aircraft;
     }
 
     pub fn layoutWidget() void {
-        result = dvui.buttonIcon(@src(), "icon", test_options.icon, init_opts, icon_opts, options.override(.{ .data_out = &wd }));
+        result = dvui.buttonIcon(@src(), "icon", icon_bytes, init_opts, icon_opts, options.override(.{ .data_out = &wd }));
     }
 
     pub fn layoutResults() void {
@@ -488,16 +489,14 @@ const DisplayButtonIcon = struct {
     }
 
     pub fn layoutWidgetControls() void {
-        dvui.structUI(
-            @src(),
-            test_options_label,
-            &test_options,
-            1,
-            .{StructOptions(@TypeOf(test_options)).initWithDefaults(.{
-                .icon = .{ .standard = .{ .display = .none } },
-            }, null)},
-            .{},
-        );
+        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+            defer container.deinit();
+            if (dvui.dropdownEnum(@src(), EntypoIcons, .{ .choice = &icon }, .{}, .{ .expand = .horizontal })) {
+                switch (icon) {
+                    inline else => |ch| icon_bytes = @field(dvui.entypo, @tagName(ch)),
+                }
+            }
+        }
         dvui.structUI(@src(), "icon_opts", &icon_opts, 1, .{struct_options.color}, .{});
     }
 };
