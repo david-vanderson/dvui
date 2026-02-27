@@ -364,7 +364,6 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
             addExample("sdl2-standalone", b.path("examples/sdl-standalone.zig"), true, example_opts, dvui_opts);
             addExample("sdl2-ontop", b.path("examples/sdl-ontop.zig"), true, example_opts, dvui_opts);
             addExample("sdl2-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
-            addExample("drawing-canvas", b.path("examples/drawing-canvas.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .sdl3gpu => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
