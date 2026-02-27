@@ -41,8 +41,11 @@ pub fn widgetpedia() void {
     struct_ui.defaults.display_expanded = true;
 
     const width = 775;
+    const height = 575;
 
-    var float = dvui.floatingWindow(@src(), .{ .open_flag = &Examples.show_widgetpedia_window }, .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .width(width) });
+    var float = dvui.floatingWindow(@src(), .{
+        .open_flag = &Examples.show_widgetpedia_window,
+    }, .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .{ .w = width, .h = height } });
     defer float.deinit();
     float.dragAreaSet(dvui.windowHeader("Widgetpedia", "", &Examples.show_widgetpedia_window));
 
@@ -163,24 +166,22 @@ pub fn displayWidgetTemplate(widget_display: type) void {
     const default_options_editor_height = 300;
     const min_widget_display_height = 200;
     const state = struct {
+        // Guess at initial split
         var split_ratio: f32 = 0.9;
-        var split_ratio_open: f32 = undefined;
-        var split_ratio_closed: f32 = undefined;
+        var split_ratio_open: f32 = 0.5;
+        var split_ratio_closed: f32 = 0.9;
         var options_editor_open: bool = false;
         var paned_content_height: f32 = 0;
+
+        var paned_init_opts: dvui.PanedWidget.InitOptions = .{
+            .direction = .vertical,
+            .split_ratio = &split_ratio,
+            .collapsed_size = 0,
+        };
     };
 
-    var paned = dvui.paned(@src(), .{
-        .direction = .vertical,
-        .split_ratio = &state.split_ratio,
-        .collapsed_size = 0,
-        // Guess at split
-    }, .{ .expand = .both });
+    var paned = dvui.paned(@src(), state.paned_init_opts, .{ .expand = .both, .min_size_content = .{ .h = min_widget_display_height / state.split_ratio_closed } });
     defer paned.deinit();
-
-    if (state.paned_content_height != 0) {
-        state.split_ratio = std.math.clamp(state.split_ratio, min_widget_display_height / state.paned_content_height, 1);
-    }
 
     if (paned.showFirst()) {
         {
@@ -219,8 +220,9 @@ pub fn displayWidgetTemplate(widget_display: type) void {
     if (paned.showSecond()) {
         var outer_vbox = dvui.box(@src(), .{}, .{ .expand = .horizontal, .border = Rect.all(1), .corner_radius = Rect.all(3), .min_size_content = .{ .h = state.paned_content_height } });
         defer outer_vbox.deinit();
+        var expander_wd: dvui.WidgetData = undefined;
 
-        if (dvui.expander(@src(), "Options editor", .{ .default_expanded = false }, .{ .expand = .horizontal })) {
+        if (dvui.expander(@src(), "Options editor", .{ .default_expanded = false }, .{ .expand = .horizontal, .data_out = &expander_wd })) {
             var scroll = dvui.scrollArea(@src(), .{}, .{
                 .corner_radius = Rect.all(3),
                 .border = Rect.all(1),
@@ -246,10 +248,10 @@ pub fn displayWidgetTemplate(widget_display: type) void {
         }
         widgetShowSetOptionsTooltip(@src(), outer_vbox.data().borderRectScale().r, widget_display.options);
 
-        if (!dvui.firstFrame(paned.data().id) and state.paned_content_height != paned.data().contentRect().h) {
+        if (!dvui.firstFrame(paned.data().id) and state.paned_content_height != @max(paned.data().contentRect().h, 0.01)) {
             state.paned_content_height = @max(paned.data().contentRect().h, 0.01);
             state.split_ratio_open = 1 - default_options_editor_height / state.paned_content_height;
-            state.split_ratio_closed = 1 - outer_vbox.data().rect.h / state.paned_content_height;
+            state.split_ratio_closed = (state.paned_content_height - expander_wd.rect.h - paned.handleGap()) / state.paned_content_height;
             if (!state.options_editor_open) {
                 state.split_ratio = state.split_ratio_closed;
             }
@@ -680,7 +682,7 @@ const DisplayColorPicker = struct {
     pub fn layoutResults() void {
         dvui.structUI(
             @src(),
-            "results",
+            null,
             &result,
             1,
             .{

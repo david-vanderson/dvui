@@ -1208,7 +1208,7 @@ pub const defaults = struct {
 /// The displayStringBuf() function can be used as an alternative to display strings with a user-supplied buffer.
 pub fn displayStruct(
     comptime src: std.builtin.SourceLocation,
-    comptime field_name: []const u8,
+    comptime field_name: ?[]const u8,
     field_value_ptr: anytype,
     comptime depth: usize,
     field_option: FieldOptions,
@@ -1216,14 +1216,14 @@ pub fn displayStruct(
     al: ?*dvui.Alignment,
 ) ?*dvui.BoxWidget {
     validateFieldPtrType(field_name, &.{.@"struct"}, "displayStruct", @TypeOf(field_value_ptr));
-    if (!validFieldOptionsType(field_name, field_option, .standard)) return null;
+    if (!validFieldOptionsType(field_name orelse "null", field_option, .standard)) return null;
     if (field_option.standard.display == .none) return null;
 
     const StructT = @TypeOf(field_value_ptr.*);
     const struct_options: StructOptions(StructT) = findMatchingStructOption(StructT, options) orelse .initWithDefaults(.{}, null);
 
     if (field_option.displayMode() == .none) return null;
-    const vbox: ?*dvui.BoxWidget = displayContainer(src, field_option.displayLabel(field_name));
+    const vbox: ?*dvui.BoxWidget = displayContainer(src, if (field_name) |name| field_option.displayLabel(name) else null);
     if (vbox != null) {
         var struct_alignment: dvui.Alignment = .init(@src(), depth);
         defer struct_alignment.deinit();
@@ -1252,19 +1252,19 @@ pub fn displayStruct(
 
 /// Create and expander to display a container field and indent the container's fields.
 /// can be used for the custom display of structs and unions.
-pub fn displayContainer(comptime src: std.builtin.SourceLocation, field_name: []const u8) ?*dvui.BoxWidget {
+pub fn displayContainer(comptime src: std.builtin.SourceLocation, field_name: ?[]const u8) ?*dvui.BoxWidget {
     var vbox: ?*dvui.BoxWidget = null;
-    if (dvui.expander(
+    if (field_name == null or dvui.expander(
         src,
-        field_name,
+        field_name.?,
         .{ .default_expanded = defaults.display_expanded },
         .{ .expand = .horizontal },
     )) {
         vbox = dvui.box(src, .{ .dir = .vertical }, .{
             .expand = .vertical,
-            .border = .{ .x = 1 },
+            .border = if (field_name != null) .{ .x = 1 } else null,
             .background = true,
-            .margin = .{ .w = 12, .x = 12 },
+            .margin = if (field_name != null) .{ .w = 12, .x = 12 } else null,
             .id_extra = 1,
         });
     }
