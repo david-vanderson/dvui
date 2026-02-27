@@ -240,8 +240,8 @@ pub fn draw() void {
     dvui.dataSetSlice(null, uniqId, "points", points.items);
 }
 
-pub fn texDestroy(ptr: *anyopaque) void {
-    dvui.log.debug("texDestroy()", .{});
+pub fn appletTargetDestroy(ptr: *anyopaque) void {
+    dvui.log.debug("appletTargetDestroy()", .{});
     const tt: dvui.Texture.Target = @as(*dvui.Texture.Target, @ptrCast(@alignCast(ptr))).*;
     tt.destroyLater();
 }
@@ -279,13 +279,13 @@ pub fn texture() void {
             return;
         };
         dvui.dataSet(null, hbox.data().id, "tex", t);
-        dvui.dataSetDeinitFunction(null, hbox.data().id, "tex", &texDestroy);
+        dvui.dataSetDeinitFunction(null, hbox.data().id, "tex", &appletTargetDestroy);
         break :blk t;
     };
 
     if (clear) tex.clear();
     if (destroy) {
-        // only need to dataRemove because that will run our deinit func texDestroy()
+        // only need to dataRemove because that will run our deinit func appletTargetDestroy()
         dvui.dataRemove(null, hbox.data().id, "tex");
     }
 

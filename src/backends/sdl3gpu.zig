@@ -1408,6 +1408,10 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
     };
 }
 
+pub fn textureClearTarget(_: *SDLBackend, _: dvui.TextureTarget) void {
+    log.err("textureClearTarget unimplemented", .{});
+}
+
 pub fn renderTarget(self: *SDLBackend, dvuiTarget: ?dvui.TextureTarget) !void {
     try self.finishRenderingCurrentTarget(false);
 
@@ -1441,8 +1445,27 @@ pub fn textureDestroy(self: *SDLBackend, texture: dvui.Texture) void {
     // Samplers are shared and will be released in deinit()
 }
 
-pub fn textureFromTarget(_: *SDLBackend, texture: dvui.TextureTarget) !dvui.Texture {
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
+pub fn textureDestroyTarget(self: *SDLBackend, target: dvui.Texture.Target) void {
+    const backendTexture: *BackendTexture = @ptrCast(@alignCast(target.ptr));
+    // log.info("texture destroyed {d}x{d} 0x{x}", .{
+    //     texture.width,
+    //     texture.height,
+    //     @intFromPtr(backendTexture.texture),
+    // });
+    c.SDL_ReleaseGPUTexture(self.device, backendTexture.texture);
+    // Note: backendTexture itself is allocated from textures_arena and will be freed when arena is reset/deinit
+    // Samplers are shared and will be released in deinit()
+}
+
+// as if we are destroying target and creating a new texture
+pub fn textureFromTarget(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
+    // SDL can't read from non-target textures, but we are enforcing that through zig types
+    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
+}
+
+// return is temporary, will not be destroyed
+pub fn textureFromTargetTemp(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
+    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
 }
 
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
