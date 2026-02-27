@@ -843,12 +843,12 @@ const DisplayDropDown = struct {
     pub fn layoutResults() void {
         const display_results = results;
         if (test_options.nullable) {
-            dvui.structUI(@src(), "results", &display_results, 3, .{StructOptions(@TypeOf(results)).init(.{
+            dvui.structUI(@src(), null, &display_results, 3, .{StructOptions(@TypeOf(results)).init(.{
                 .return_value = .{ .boolean = .{ .trigger_on = true } },
                 .choice_nullable = .default,
             }, null)}, .{});
         } else {
-            dvui.structUI(@src(), "results", &display_results, 3, .{StructOptions(@TypeOf(results)).init(.{
+            dvui.structUI(@src(), null, &display_results, 3, .{StructOptions(@TypeOf(results)).init(.{
                 .return_value = .{ .boolean = .{ .trigger_on = true } },
                 .choice = .default,
             }, null)}, .{});
@@ -910,7 +910,7 @@ const DisplayDropDownEnum = struct {
     pub fn layoutResults() void {
         // const to force read-only display.
         const display_results = results;
-        dvui.structUI(@src(), "results", &display_results, 3, .{StructOptions(@TypeOf(results)).init(.{
+        dvui.structUI(@src(), null, &display_results, 3, .{StructOptions(@TypeOf(results)).init(.{
             .return_value = .{ .boolean = .{ .trigger_on = true } },
             .choice = .default,
         }, null)}, .{});
@@ -1112,7 +1112,7 @@ const DisplayTextEntryNumber = struct {
     }
 
     pub fn layoutResults() void {
-        dvui.structUI(@src(), "result", &result, 99, .{
+        dvui.structUI(@src(), null, &result, 99, .{
             StructOptions(dvui.TextEntryNumberResult(NumberType)).initWithDefaults(.{
                 .changed = .{ .boolean = .{ .trigger_on = true } },
                 .enter_pressed = .{ .boolean = .{ .trigger_on = true } },
