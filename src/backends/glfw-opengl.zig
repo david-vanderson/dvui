@@ -128,7 +128,7 @@ pub fn init(gpa: std.mem.Allocator, window_: *anyopaque) @This() {
         @panic("No OpenGL context!");
     };
 
-    const vao = zgl.VertexArray.create();
+    const vao = zgl.VertexArray.gen();
     vao.bind();
     const vtx_buf = zgl.Buffer.gen();
     vtx_buf.bind(.array_buffer);
@@ -287,12 +287,13 @@ pub fn drawClippedTriangles(
         vertex_buffer[i..][8..16].* = @bitCast(v.uv);
         vertex_buffer[i..][16..20].* = @bitCast(v.col);
     }
-    ctx.vtx_buf.data(u8, vertex_buffer, .stream_draw);
-    ctx.el_buf.data(u16, idx, .stream_draw);
     ctx.vao.bind();
+    zgl.bufferData(.array_buffer, u8, vertex_buffer, .stream_draw);
+    zgl.bufferData(.element_array_buffer, dvui.Vertex.Index, idx, .stream_draw);
 
+    ctx.program.use();
     const usetex_loc = ctx.program.uniformLocation("useTex");
-    ctx.program.uniform1ui(usetex_loc, if (texture) |_| 1 else 0);
+    zgl.uniform1ui(usetex_loc, if (texture) |_| 1 else 0);
     if (texture) |tex| {
         const txt: zgl.Texture = @enumFromInt(@intFromPtr(tex.ptr));
         txt.bindTo(0);
@@ -301,7 +302,7 @@ pub fn drawClippedTriangles(
             log.err("Couldn't find uniform location!", .{});
             break :blk null;
         };
-        ctx.program.uniform1i(tex_loc, 0);
+        zgl.uniform1i(tex_loc, 0);
     }
 
     const sz: dvui.Size.Physical = if (ctx.fb) |fb_tex| .{ .h = @floatFromInt(fb_tex.height), .w = @floatFromInt(fb_tex.width) } else ctx.pixelSize();
@@ -314,8 +315,7 @@ pub fn drawClippedTriangles(
     };
 
     const mat_loc = ctx.program.uniformLocation("mvp");
-    ctx.program.uniformMatrix4(mat_loc, false, &.{mat});
-    ctx.program.use();
+    zgl.uniformMatrix4fv(mat_loc, false, &.{mat});
     zgl.drawElements(.triangles, idx.len, switch (dvui.Vertex.Index) {
         u16 => .unsigned_short,
         u32 => .unsigned_int,
@@ -331,7 +331,7 @@ pub fn textureCreate(
     height: u32,
     interpolation: dvui.enums.TextureInterpolation,
 ) !dvui.Texture {
-    const tex = zgl.Texture.create(.@"2d");
+    const tex = zgl.Texture.gen();
     tex.bind(.@"2d");
     tex.parameter(.min_filter, if (interpolation == .nearest) .nearest else .linear);
     tex.parameter(.mag_filter, if (interpolation == .nearest) .nearest else .linear);
