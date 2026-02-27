@@ -144,7 +144,8 @@ pub fn frame() !dvui.App.Result {
         const size = 200;
         var vbox = dvui.box(@src(), .{}, .{ .min_size_content = .all(size), .border = .all(1) });
         defer vbox.deinit();
-        const pxSize: u32 = @intFromFloat(vbox.data().contentRectScale().s * size);
+        const rs = vbox.data().contentRectScale();
+        const pxSize: u32 = @intFromFloat(rs.s * size);
 
         if (S.tex == null) {
             S.tex = try dvui.Texture.Target.create(pxSize, pxSize, .linear, .rgba_32);
@@ -152,7 +153,7 @@ pub fn frame() !dvui.App.Result {
 
         if (clear) S.tex.?.clear();
 
-        const target = dvui.renderTarget(.{ .texture = S.tex, .offset = vbox.data().contentRectScale().r.topLeft() });
+        const target = dvui.renderTarget(.{ .texture = S.tex, .offset = rs.r.topLeft() });
 
         for (dvui.events()) |*e| {
             if (!dvui.eventMatchSimple(e, vbox.data())) continue;
@@ -164,10 +165,10 @@ pub fn frame() !dvui.App.Result {
         _ = dvui.renderTarget(target);
 
         const texture = try dvui.textureFromTarget(S.tex.?);
-        var rs = vbox.data().contentRectScale();
-        rs.r.x += @floatFromInt(pxSize);
-        rs.r.x += rs.s;
-        try dvui.renderTexture(texture, rs, .{});
+        var r = rs.r;
+        r.x += @floatFromInt(pxSize);
+        r.x += rs.s;
+        try dvui.renderTexture(texture, .{ .r = r, .s = rs.s }, .{});
 
         if (destroy) {
             S.tex.?.destroyLater();
