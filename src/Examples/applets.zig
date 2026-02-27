@@ -13,12 +13,16 @@ pub fn applets() void {
     if (tabs.addTabLabel(active_tab.* == 1, "drawing")) {
         active_tab.* = 1;
     }
+    if (tabs.addTabLabel(active_tab.* == 2, "texture")) {
+        active_tab.* = 2;
+    }
 
     tabs.deinit();
 
     switch (active_tab.*) {
         0 => calculator(),
         1 => draw(),
+        2 => texture(),
         else => {},
     }
 }
@@ -153,6 +157,7 @@ const Tools = enum {
 };
 
 pub fn draw() void {
+    dvui.label(@src(), "Draws a slice of points every frame.", .{}, .{});
     const uniqId = dvui.parentGet().extendId(@src(), 0);
     const active_tool = dvui.dataGetPtrDefault(null, uniqId, "active_tool", Tools, .pencil);
     {
@@ -187,31 +192,13 @@ pub fn draw() void {
         switch (e.evt) {
             .mouse => |m| {
                 switch (m.action) {
-                    .press => {
-                        if (m.button == .left) {
-                            e.handle(@src(), canvas.data());
+                    .press, .motion => {
+                        if (m.action == .press and m.button == .left) {
                             dvui.captureMouse(canvas.data(), e.num);
-                            const newp = rs.pointFromPhysical(m.p);
-                            if (active_tool.* == .pencil) {
-                                points.append(dvui.currentWindow().arena(), newp) catch @panic("OOM");
-                                dvui.refresh(null, @src(), canvas.data().id);
-                            } else if (active_tool.* == .eraser) {
-                                var i: usize = 0;
-                                while (i < points.items.len) {
-                                    const p = points.items[i];
-                                    const dx = p.x - newp.x;
-                                    const dy = p.y - newp.y;
-                                    if ((dx * dx + dy * dy) < 5 * 5) {
-                                        _ = points.swapRemove(i);
-                                    } else {
-                                        i += 1;
-                                    }
-                                }
-                            }
                         }
-                    },
-                    .motion => {
+
                         if (dvui.captured(canvas.data().id)) {
+                            e.handle(@src(), canvas.data());
                             const newp = rs.pointFromPhysical(m.p);
                             if (active_tool.* == .pencil) {
                                 points.append(dvui.currentWindow().arena(), newp) catch @panic("OOM");
@@ -251,6 +238,111 @@ pub fn draw() void {
     }
 
     dvui.dataSetSlice(null, uniqId, "points", points.items);
+}
+
+pub fn texDestroy(ptr: *anyopaque) void {
+    dvui.log.debug("texDestroy()", .{});
+    const tt: dvui.Texture.Target = @as(*dvui.Texture.Target, @ptrCast(@alignCast(ptr))).*;
+    tt.destroyLater();
+}
+
+pub fn texture() void {
+    dvui.label(@src(), "Accumulates points into a target texture.", .{}, .{});
+
+    var vbox = dvui.box(@src(), .{}, .{});
+    defer vbox.deinit();
+
+    var clear = false;
+    var destroy = false;
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1 });
+        defer hbox.deinit();
+
+        if (dvui.button(@src(), "Clear", .{}, .{})) {
+            clear = true;
+        }
+
+        if (dvui.button(@src(), "Destroy", .{}, .{})) {
+            destroy = true;
+        }
+    }
+
+    const size = 200;
+    const scale: f32 = vbox.data().contentRectScale().s;
+
+    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+    defer hbox.deinit();
+
+    const tex: dvui.Texture.Target = dvui.dataGet(null, hbox.data().id, "tex", dvui.Texture.Target) orelse blk: {
+        const t = dvui.Texture.Target.create(@intFromFloat(scale * size), @intFromFloat(scale * size), .linear, .rgba_32) catch {
+            dvui.log.debug("Can't create target texture", .{});
+            return;
+        };
+        dvui.dataSet(null, hbox.data().id, "tex", t);
+        dvui.dataSetDeinitFunction(null, hbox.data().id, "tex", &texDestroy);
+        break :blk t;
+    };
+
+    if (clear) tex.clear();
+    if (destroy) {
+        // only need to dataRemove because that will run our deinit func texDestroy()
+        dvui.dataRemove(null, hbox.data().id, "tex");
+    }
+
+    {
+        var box = dvui.box(@src(), .{}, .{});
+        defer box.deinit();
+        dvui.label(@src(), "Draw Here", .{}, .{.gravity_x = 0.5});
+        var input = dvui.box(@src(), .{}, .{.min_size_content = .all(size), .border = .all(1)});
+        defer input.deinit();
+
+        if (!destroy) {
+            const target = dvui.renderTarget(.{ .texture = tex, .offset = input.data().contentRectScale().r.topLeft() });
+            defer _ = dvui.renderTarget(target);
+
+            for (dvui.events()) |*e| {
+                if (!dvui.eventMatchSimple(e, input.data())) continue;
+                switch (e.evt) {
+                    .mouse => |m| {
+                        if (m.action == .press and m.button == .left) {
+                            dvui.captureMouse(input.data(), e.num);
+                        }
+
+                        if (dvui.captured(input.data().id)) {
+                            e.handle(@src(), input.data());
+
+                            if (m.action == .release) {
+                                dvui.captureMouse(null, e.num);
+                            } else {
+                                dvui.Path.stroke(.{ .points = &.{ e.evt.mouse.p }}, .{.thickness = 5, .color = .red});
+                                dvui.refresh(null, @src(), input.data().id);
+                            }
+                        }
+                    },
+                    else => {},
+                }
+            }
+        }
+    }
+
+    _ = dvui.spacer(@src(), .{ .min_size_content = .width(6) });
+
+    {
+        var box = dvui.box(@src(), .{}, .{});
+        defer box.deinit();
+        dvui.label(@src(), "Texture", .{}, .{.gravity_x = 0.5});
+        var output = dvui.box(@src(), .{}, .{.min_size_content = .all(size), .border = .all(1)});
+        defer output.deinit();
+
+        if (!destroy) {
+            // drawable is temporary, we don't need to destroy it
+            const drawable = dvui.Texture.fromTargetTemp(tex) catch {
+                dvui.log.debug("textureFromTargetTemp errored", .{});
+                return;
+            };
+            dvui.renderTexture(drawable, output.data().contentRectScale(), .{}) catch {};
+        }
+    }
 }
 
 test {
