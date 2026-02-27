@@ -140,17 +140,6 @@ pub fn widgetShowSetOptionsTooltip(src: std.builtin.SourceLocation, rect: Rect.P
     }
 }
 
-pub fn widgetOptionsEditor(src: std.builtin.SourceLocation, edit_opts: *dvui.Options, wd: *dvui.WidgetData, expanded: bool) void {
-    var expander_wd: dvui.WidgetData = undefined;
-
-    if (dvui.expander(@src(), "Options editor", .{ .default_expanded = expanded }, .{ .expand = .horizontal, .data_out = &expander_wd })) {
-        var vbox = dvui.box(src, .{}, .{ .expand = .both });
-        defer vbox.deinit();
-        _ = dvui.Debug.optionsEditor(edit_opts, wd);
-    }
-    widgetShowSetOptionsTooltip(@src(), expander_wd.borderRectScale().r, edit_opts.*);
-}
-
 fn displayEmpty(_: bool) void {
     var label_str = std.Io.Writer.Allocating.initCapacity(dvui.currentWindow().arena(), current_widget.name.len + 2) catch return;
     label_str.writer.print("{s}()", .{current_widget.name}) catch unreachable;
@@ -218,17 +207,20 @@ pub fn displayWidgetTemplate(widget_display: type) void {
     }
 
     if (paned.showSecond()) {
-        var outer_vbox = dvui.box(@src(), .{}, .{ .expand = .horizontal, .border = Rect.all(1), .corner_radius = Rect.all(3), .min_size_content = .{ .h = state.paned_content_height } });
+        var outer_vbox = dvui.box(@src(), .{}, .{
+            .margin = .{ .x = 0, .y = 6, .h = 0, .w = 0 },
+            .expand = .horizontal,
+            .border = Rect.all(1),
+            .corner_radius = Rect.all(3),
+            .min_size_content = .{ .h = state.paned_content_height },
+        });
         defer outer_vbox.deinit();
         var expander_wd: dvui.WidgetData = undefined;
-
         if (dvui.expander(@src(), "Options editor", .{ .default_expanded = false }, .{ .expand = .horizontal, .data_out = &expander_wd })) {
             var scroll = dvui.scrollArea(@src(), .{}, .{
                 .corner_radius = Rect.all(3),
-                .border = Rect.all(1),
                 .padding = Rect.all(6),
                 .expand = .both,
-                .margin = Rect.all(6),
                 .background = false,
                 .min_size_content = .{ .h = 40 },
             });
@@ -246,12 +238,12 @@ pub fn displayWidgetTemplate(widget_display: type) void {
             paned.animateSplit(state.split_ratio_closed);
             state.options_editor_open = false;
         }
-        widgetShowSetOptionsTooltip(@src(), outer_vbox.data().borderRectScale().r, widget_display.options);
+        widgetShowSetOptionsTooltip(@src(), expander_wd.borderRectScale().r, widget_display.options);
 
         if (!dvui.firstFrame(paned.data().id) and state.paned_content_height != @max(paned.data().contentRect().h, 0.01)) {
             state.paned_content_height = @max(paned.data().contentRect().h, 0.01);
             state.split_ratio_open = 1 - default_options_editor_height / state.paned_content_height;
-            state.split_ratio_closed = (state.paned_content_height - expander_wd.rect.h - paned.handleGap()) / state.paned_content_height;
+            state.split_ratio_closed = (state.paned_content_height - expander_wd.rect.h - outer_vbox.data().options.marginGet().y - paned.handleGap()) / state.paned_content_height;
             if (!state.options_editor_open) {
                 state.split_ratio = state.split_ratio_closed;
             }
@@ -259,39 +251,7 @@ pub fn displayWidgetTemplate(widget_display: type) void {
     }
 }
 
-const Easing = enum {
-    linear,
-    inQuad,
-    outQuad,
-    inOutQuad,
-    inCubic,
-    outCubic,
-    inOutCubic,
-    inQuart,
-    outQuart,
-    inOutQuart,
-    inQuint,
-    outQuint,
-    inOutQuint,
-    inSine,
-    outSine,
-    inOutSine,
-    inExpo,
-    outExpo,
-    inOutExpo,
-    inCirc,
-    outCirc,
-    inOutCirc,
-    inElastic,
-    outElastic,
-    inOutElastic,
-    inBack,
-    outBack,
-    inOutBack,
-    inBounce,
-    outBounce,
-    inOutBounce,
-};
+const Easing = std.meta.DeclEnum(dvui.easing);
 
 var animate_easing: ?Easing = null;
 
@@ -1130,6 +1090,83 @@ const DisplayTextEntryNumber = struct {
     }
 };
 
+const DisplayIcon = struct {
+    const EntypoIcons = std.meta.DeclEnum(dvui.entypo);
+    const name = "icon()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var icon_opts: dvui.IconRenderOptions = undefined;
+    var icon_bytes: []const u8 = undefined;
+    var choice: EntypoIcons = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{ .expand = .both };
+        icon_opts = .{};
+        icon_bytes = dvui.entypo.battery;
+        choice = .battery;
+    }
+
+    pub fn layoutWidget() void {
+        dvui.icon(@src(), "demo", icon_bytes, icon_opts, options.override(.{ .data_out = &wd }));
+    }
+
+    pub fn layoutWidgetControls() void {
+        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+            defer container.deinit();
+            if (dvui.dropdownEnum(@src(), EntypoIcons, .{ .choice = &choice }, .{}, .{ .expand = .horizontal })) {
+                switch (choice) {
+                    inline else => |ch| icon_bytes = @field(dvui.entypo, @tagName(ch)),
+                }
+            }
+        }
+    }
+};
+
+const DisplayLabelEx = struct {
+    var name: []const u8 = undefined;
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.LabelWidget.InitOptions = undefined;
+    var icon_opts: dvui.IconRenderOptions = undefined;
+    var icon_bytes: []const u8 = undefined;
+    var test_opts: struct {
+        label: []const u8,
+    } = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        name = std.fmt.allocPrint(dvui.currentWindow().arena(), "{s}()", .{current_widget.name}) catch current_widget.name;
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{};
+        init_opts = .{};
+        test_opts = .{
+            .label = "Label text",
+        };
+    }
+
+    pub fn layoutWidget() void {
+        dvui.labelEx(@src(), "{s}", .{test_opts.label}, init_opts, options.override(.{ .data_out = &wd }));
+    }
+
+    pub fn layoutWidgetControls() void {
+        if (std.mem.eql(u8, current_widget.name, "labelNoFmt")) {
+            dvui.structUI(@src(), test_options_label, &test_opts, 0, .{}, .{});
+        } else {
+            dvui.structUI(@src(), test_options_label, &test_opts, 0, .{StructOptions(@TypeOf(test_opts)).initWithDefaults(.{ .label = .defaultTextRW }, null)}, .{});
+        }
+    }
+};
+
 fn structColorPicker(field_name: []const u8, ptr: *anyopaque, read_only: bool, alignment: *dvui.Alignment) void {
     const field_value_ptr: *dvui.Color = @ptrCast(@alignCast(ptr));
 
@@ -1199,14 +1236,14 @@ const widget_hierarchy = [_]WidgetHeirachy{
     } },
 
     .{ .name = "groupBox", .displayFn = DisplayGroupBox.displayFn, .children = null },
-    .{ .name = "icon", .displayFn = displayEmpty, .children = null },
+    .{ .name = "icon", .displayFn = DisplayIcon.displayFn, .children = null },
     .{ .name = "image", .displayFn = displayEmpty, .children = null },
 
     .{ .name = "labels", .displayFn = displayEmpty, .children = &.{
-        .{ .name = "label", .displayFn = displayEmpty, .children = null },
+        .{ .name = "label", .displayFn = DisplayLabelEx.displayFn, .children = null },
         .{ .name = "labelClick", .displayFn = displayEmpty, .children = null },
-        .{ .name = "labelEx", .displayFn = displayEmpty, .children = null },
-        .{ .name = "labelNoFmt", .displayFn = displayEmpty, .children = null },
+        .{ .name = "labelEx", .displayFn = DisplayLabelEx.displayFn, .children = null },
+        .{ .name = "labelNoFmt", .displayFn = DisplayLabelEx.displayFn, .children = null },
     } },
 
     .{ .name = "link", .displayFn = displayEmpty, .children = null },
