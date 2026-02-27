@@ -397,11 +397,21 @@ pub fn readTarget(arena: std.mem.Allocator, texture: Target) TextureError![]Colo
     return @ptrCast(pixels);
 }
 
-/// Convert a target texture to a normal texture.  target is destroyed.
+/// Convert a target texture to a normal texture.  target is destroyed.  See
+/// `fromTargetTemp`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn fromTarget(target: Target) TextureError!Texture {
     return dvui.currentWindow().backend.textureFromTarget(target);
+}
+
+/// Get a temporary drawable Texture from a Target, that will be automatically
+/// cleaned up at the end of the frame.  target is not destroyed.  See
+/// `fromTarget`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn fromTargetTemp(target: Target) TextureError!Texture {
+    return dvui.currentWindow().backend.textureFromTargetTemp(target);
 }
 
 /// Destroy a texture created with `textureCreate` at the end of the frame.

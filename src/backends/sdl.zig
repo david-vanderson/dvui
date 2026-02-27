@@ -1040,9 +1040,15 @@ pub fn textureDestroyTarget(_: *SDLBackend, texture: dvui.Texture.Target) void {
     c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(@alignCast(texture.ptr))));
 }
 
-pub fn textureFromTarget(_: *SDLBackend, texture: dvui.TextureTarget) !dvui.Texture {
+// as if we are destroying target and creating a new texture
+pub fn textureFromTarget(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
     // SDL can't read from non-target textures, but we are enforcing that through zig types
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
+    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
+}
+
+// return is temporary, will not be destroyed
+pub fn textureFromTargetTemp(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
+    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
 }
 
 pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
