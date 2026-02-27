@@ -1,3 +1,28 @@
+
+pub fn applets() void {
+    var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
+    defer vbox.deinit();
+
+    var tabs = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+
+    const active_tab = dvui.dataGetPtrDefault(null, vbox.data().id, "active_tab", usize, 0);
+
+    if (tabs.addTabLabel(active_tab.* == 0, "calculator")) {
+        active_tab.* = 0;
+    }
+    if (tabs.addTabLabel(active_tab.* == 1, "drawing")) {
+        active_tab.* = 1;
+    }
+
+    tabs.deinit();
+
+    switch (active_tab.*) {
+        0 => calculator(),
+        1 => draw(),
+        else => {},
+    }
+}
+
 var calculation: f64 = 0;
 var calculand: ?f64 = null;
 var active_op: ?u8 = null;
@@ -120,6 +145,9 @@ pub fn calculator() void {
 pub fn round(val: f64) f64 {
     const dec_places = 1_000_000;
     return @round(val * dec_places) / dec_places;
+}
+
+pub fn draw() void {
 }
 
 test {

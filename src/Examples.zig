@@ -11,7 +11,7 @@ var scale_val: f32 = 1.0;
 
 pub const demoKind = enum {
     basic_widgets,
-    calculator,
+    applets,
     text_entry,
     styling,
     theming,
@@ -31,7 +31,7 @@ pub const demoKind = enum {
     pub fn name(self: demoKind) []const u8 {
         return switch (self) {
             .basic_widgets => "Basic Widgets",
-            .calculator => "Calculator",
+            .applets => "Applets",
             .text_entry => "Text Entry",
             .styling => "Styling",
             .theming => "Theming",
@@ -53,7 +53,7 @@ pub const demoKind = enum {
     pub fn scaleOffset(self: demoKind) struct { scale: f32, offset: dvui.Point } {
         return switch (self) {
             .basic_widgets => .{ .scale = 0.45, .offset = .{} },
-            .calculator => .{ .scale = 0.45, .offset = .{} },
+            .applets => .{ .scale = 0.45, .offset = .{} },
             .text_entry => .{ .scale = 0.45, .offset = .{} },
             .styling => .{ .scale = 0.45, .offset = .{} },
             .theming => .{ .scale = 0.35, .offset = .{} },
@@ -185,7 +185,7 @@ pub fn demo() void {
 
                 switch (e) {
                     .basic_widgets => basicWidgets(),
-                    .calculator => calculator(),
+                    .applets => applets(),
                     .text_entry => textEntryWidgets(float.data().id),
                     .styling => styling(),
                     .theming => theming(),
@@ -243,7 +243,7 @@ pub fn demo() void {
 
         switch (demo_active) {
             .basic_widgets => basicWidgets(),
-            .calculator => calculator(),
+            .applets => applets(),
             .text_entry => textEntryWidgets(float.data().id),
             .styling => styling(),
             .theming => theming(),
@@ -494,7 +494,7 @@ const Size = dvui.Size;
 const entypo = dvui.entypo;
 
 const basicWidgets = @import("Examples/basic_widgets.zig").basicWidgets;
-const calculator = @import("Examples/calculator.zig").calculator;
+const applets = @import("Examples/applets.zig").applets;
 const textEntryWidgets = @import("Examples/text_entry.zig").textEntryWidgets;
 const styling = @import("Examples/styling.zig").styling;
 const theming = @import("Examples/theming.zig").theming;
