@@ -1201,6 +1201,7 @@ const DisplayTextEntry = struct {
         init_opts = .{};
         filter_opts = .{};
         configuration = .single_line;
+        configuration_changed = true;
     }
 
     pub fn layoutWidget() void {
@@ -1231,6 +1232,9 @@ const DisplayTextEntry = struct {
         {
             var te = dvui.textEntry(@src(), init_opts, options.override(.{ .data_out = &wd }));
             defer te.deinit();
+            if (configuration_changed) {
+                te.textSet("", false);
+            }
             switch (configuration) {
                 .single_line => {
                     if (filter_opts.filter_in) |in| te.filterIn(in);
@@ -1239,7 +1243,6 @@ const DisplayTextEntry = struct {
                 .password => {},
                 .multiline => {
                     if (configuration_changed) {
-                        te.textSet("", false);
                         for (lorem) |text| {
                             te.textTyped(text, false);
                         }
@@ -1254,9 +1257,9 @@ const DisplayTextEntry = struct {
 
     pub fn layoutWidgetControls() void {
         {
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
             defer hbox.deinit();
-            dvui.labelNoFmt(@src(), "Configuration:", .{}, .{});
+            dvui.labelNoFmt(@src(), "Configuration:", .{ .align_y = 0.5 }, .{ .expand = .vertical });
             if (dvui.dropdownEnum(@src(), Configuration, .{ .choice = &configuration }, .{}, .{ .expand = .horizontal })) {
                 configuration_changed = true;
             }
