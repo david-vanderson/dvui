@@ -16,6 +16,10 @@
 // If you want to use a different allocator, you can set it here.
 pub var string_allocator: ?std.mem.Allocator = null;
 
+pub const defaults = struct {
+    pub var display_expanded: bool = true;
+};
+
 const log = std.log.scoped(.struct_ui);
 /// Field options control whether and how fields are displayed.
 ///
@@ -509,6 +513,7 @@ pub const BoolFieldOptions = struct {
     // Only applies to read-only booleans.
     manual_reset: bool = false,
     trigger_on: ?bool = null,
+    checkbox: bool = false,
 };
 
 pub fn boolFieldWidget(
@@ -551,7 +556,7 @@ pub fn boolFieldWidget(
                 const prev_alpha = dvui.alpha(a.value());
                 defer dvui.alphaSet(prev_alpha);
                 dvui.label(@src(), "{}", .{opt.trigger_on.?}, .{});
-                if (a.value() == a.end_val) {
+                if (a.done()) {
                     dvui.refresh(null, @src(), null);
                 }
             } else {
@@ -561,10 +566,14 @@ pub fn boolFieldWidget(
             dvui.label(@src(), "{}", .{field_value_ptr.*}, .{});
         }
     } else {
-        const entries = .{ "false", "true" };
-        var choice: usize = if (field_value_ptr.* == false) 0 else 1;
-        _ = dvui.dropdown(@src(), &entries, .{ .choice = &choice }, .{}, .{});
-        field_value_ptr.* = if (choice == 0) false else true;
+        if (opt.checkbox) {
+            _ = dvui.checkbox(@src(), field_value_ptr, "", .{});
+        } else {
+            const entries = .{ "false", "true" };
+            var choice: usize = if (field_value_ptr.* == false) 0 else 1;
+            _ = dvui.dropdown(@src(), &entries, .{ .choice = &choice }, .{}, .{});
+            field_value_ptr.* = if (choice == 0) false else true;
+        }
     }
 }
 
@@ -1181,10 +1190,6 @@ fn canDisplayPtr(ptr: std.builtin.Type.Pointer) bool {
         else => false,
     };
 }
-
-pub const defaults = struct {
-    pub var display_expanded: bool = false;
-};
 
 /// Display a struct and allow the user to view and/or edit the fields.
 ///

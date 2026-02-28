@@ -27,6 +27,9 @@ const struct_options = struct {
             .password_char = .defaultTextRW,
             .tree_sitter = .defaultHidden,
             .text = .defaultReadOnly,
+            .break_lines = .{ .boolean = .{ .checkbox = true } },
+            .cache_layout = .{ .boolean = .{ .checkbox = true } },
+            .multiline = .{ .boolean = .{ .checkbox = true } },
         }, .{
             .placeholder = "Placeholder",
             .password_char = "*",
@@ -38,7 +41,9 @@ pub fn widgetpedia() void {
     if (!Examples.show_widgetpedia_window) {
         return;
     }
+    const prev_expanded = struct_ui.defaults.display_expanded;
     struct_ui.defaults.display_expanded = true;
+    defer struct_ui.defaults.display_expanded = prev_expanded;
 
     const width = 775;
     const height = 575;
@@ -107,7 +112,6 @@ pub fn widgetpedia() void {
         current_widget.displayFn(reset_widget);
         reset_widget = false;
     }
-    struct_ui.defaults.display_expanded = false;
 }
 
 const WidgetHeirachy = struct {
@@ -245,6 +249,7 @@ pub fn displayWidgetTemplate(widget_display: type) void {
         if (!dvui.firstFrame(paned.data().id) and state.paned_content_height != @max(paned.data().contentRect().h, 0.01)) {
             state.paned_content_height = @max(paned.data().contentRect().h, 0.01);
             state.split_ratio_open = 1 - default_options_editor_height / state.paned_content_height;
+            // Using height of outer_vbox doesn't work when resizing the window. The vbox gets bigger.
             state.split_ratio_closed = (state.paned_content_height - expander_wd.rect.h - outer_vbox.data().options.marginGet().y - paned.handleGap()) / state.paned_content_height;
             if (!state.options_editor_open) {
                 state.split_ratio = state.split_ratio_closed;
@@ -253,7 +258,24 @@ pub fn displayWidgetTemplate(widget_display: type) void {
     }
 }
 
-const Easing = std.meta.DeclEnum(dvui.easing);
+const Easing = DeclEnumWithSkip(dvui.easing, 1);
+
+pub fn DeclEnumWithSkip(comptime T: type, start: usize) type {
+    const fieldInfos = std.meta.declarations(T);
+    var enumDecls: [fieldInfos.len]std.builtin.Type.EnumField = undefined;
+    var decls = [_]std.builtin.Type.Declaration{};
+    inline for (fieldInfos, 0..) |field, i| {
+        enumDecls[i] = .{ .name = field.name, .value = i };
+    }
+    return @Type(.{
+        .@"enum" = .{
+            .tag_type = std.math.IntFittingRange(0, if (fieldInfos.len == 0) 0 else fieldInfos.len - 1),
+            .fields = enumDecls[start..],
+            .decls = &decls,
+            .is_exhaustive = true,
+        },
+    });
+}
 
 var animate_easing: ?Easing = null;
 
@@ -344,6 +366,13 @@ const DisplayAnimate = struct {
                 .easing = .{ .standard = .{ .customDisplayFn = selectEasing } },
             }, default_init_opts),
         }, .{});
+        if (animate_easing) |easing| {
+            switch (easing) {
+                inline else => |e| init_opts.easing = @field(dvui.easing, @tagName(e)),
+            }
+        } else {
+            init_opts.easing = null;
+        }
     }
 };
 
@@ -1163,6 +1192,105 @@ const DisplayLabelEx = struct {
         } else {
             dvui.structUI(@src(), test_options_label, &test_opts, 0, .{StructOptions(@TypeOf(test_opts)).initWithDefaults(.{ .label = .defaultTextRW }, null)}, .{});
         }
+        if (!std.mem.eql(u8, current_widget.name, "label")) {
+            dvui.structUI(@src(), "init_opts", &init_opts, 1, .{}, .{});
+        }
+    }
+};
+
+const DisplayTextEntry = struct {
+    var name: []const u8 = "textEntry()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.TextEntryWidget.InitOptions = undefined;
+
+    const Configuration = enum {
+        single_line,
+        password,
+        multiline,
+        large,
+        // TODO
+        //        highlight,
+    };
+    var configuration: Configuration = undefined;
+    var configuration_changed: bool = false;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{};
+        init_opts = .{};
+        configuration = .single_line;
+    }
+
+    pub fn layoutWidget() void {
+        if (configuration_changed) {
+            switch (configuration) {
+                .single_line => {
+                    init_opts = .{};
+                    options = .{ .expand = .horizontal };
+                },
+                .password => {
+                    init_opts = .{ .password_char = "*" };
+                    options = .{ .expand = .horizontal };
+                },
+                .multiline => {
+                    init_opts = .{
+                        .multiline = true,
+                        .break_lines = true,
+                        .scroll_horizontal = false,
+                    };
+                    options = .{ .expand = .both };
+                },
+                .large => {
+                    init_opts = .{ .multiline = true, .break_lines = true };
+                    options = .{ .expand = .both };
+                },
+            }
+        }
+        {
+            var te = dvui.textEntry(@src(), init_opts, options.override(.{ .data_out = &wd }));
+            defer te.deinit();
+            switch (configuration) {
+                .single_line, .password => {},
+                .multiline => {
+                    if (configuration_changed) {
+                        te.textSet("", false);
+                        for (lorem) |text| {
+                            te.textTyped(text, false);
+                        }
+                        te.textLayout.selection.moveCursor(0, false);
+                    }
+                },
+                .large => {},
+            }
+        }
+        configuration_changed = false;
+    }
+
+    pub fn layoutWidgetControls() void {
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            defer hbox.deinit();
+            dvui.labelNoFmt(@src(), "Configuration:", .{}, .{});
+            if (dvui.dropdownEnum(@src(), Configuration, .{ .choice = &configuration }, .{}, .{ .expand = .horizontal })) {
+                configuration_changed = true;
+            }
+        }
+        switch (configuration) {
+            .single_line => dvui.structUI(@src(), "init_opts", &init_opts, 1, .{struct_ui.StructOptions(dvui.TextEntryWidget.InitOptions).init(.{
+                .placeholder = .defaultTextRW,
+            }, null)}, .{}),
+            .password => dvui.structUI(@src(), "init_opts", &init_opts, 1, .{struct_ui.StructOptions(dvui.TextEntryWidget.InitOptions).init(.{
+                .placeholder = .defaultTextRW,
+                .password_char = .defaultTextRW,
+            }, .{ .password_char = "*" })}, .{}),
+            else => dvui.structUI(@src(), "init_opts", &init_opts, 1, .{struct_options.text_entry.init_opts}, .{}),
+        }
     }
 };
 
@@ -1281,7 +1409,7 @@ const widget_hierarchy = [_]WidgetHeirachy{
     .{ .name = "tabs", .displayFn = displayEmpty, .children = null },
 
     .{ .name = "textEntries", .displayFn = displayEmpty, .children = &.{
-        .{ .name = "textEntry", .displayFn = displayEmpty, .children = null },
+        .{ .name = "textEntry", .displayFn = DisplayTextEntry.displayFn, .children = null },
         .{ .name = "textEntryColor", .displayFn = displayEmpty, .children = null },
         .{ .name = "textEntryNumber", .displayFn = DisplayTextEntryNumber.displayFn, .children = null },
     } },
@@ -1289,6 +1417,12 @@ const widget_hierarchy = [_]WidgetHeirachy{
     .{ .name = "textLayout", .displayFn = displayEmpty, .children = null },
     .{ .name = "toast", .displayFn = displayEmpty, .children = null },
     .{ .name = "tooltip", .displayFn = displayEmpty, .children = null },
+};
+
+const lorem: []const []const u8 = &.{
+    "It was the best of times, it was the worst of times, it was the age of wisdom, `it was the age of foolishness, it was the epoch of belief, it was the epoch of incredulity, it was the season of Light, it was the season of Darkness, it was the spring of hope, it was the winter of despair, we had everything before us, we had nothing before us, we were all going direct to Heaven, we were all going direct the other way—in short, the period was so far like the present period, that some of its noisiest authorities insisted on its being received, for good or for evil, in the superlative degree of comparison only.\n\n",
+    "There were a king with a large jaw and a queen with a plain face, on the throne of England; there were a king with a large jaw and a queen with a fair face, on the throne of France. In both countries it was clearer than crystal to the lords of the State preserves of loaves and fishes, that things in general were settled for ever.\n\n",
+    "It was the year of Our Lord one thousand seven hundred and seventy-five. Spiritual revelations were conceded to England at that favoured period, as at this. Mrs. Southcott had recently attained her five-and-twentieth blessed birthday, of whom a prophetic private in the Life Guards had heralded the sublime appearance by announcing that arrangements were made for the swallowing up of London and Westminster. Even the Cock-lane ghost had been laid only a round dozen of years, after rapping out its messages, as the spirits of this very year last past (supernaturally deficient in originality) rapped out theirs. Mere messages in the earthly order of events had lately come to the English Crown and People, from a congress of British subjects in America: which, strange to relate, have proved more important to the human race than any communications yet received through any of the chickens of the Cock-lane brood.\n\n",
 };
 
 const struct_ui = dvui.struct_ui;

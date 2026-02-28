@@ -49,6 +49,9 @@ var rect: dvui.Rect = .{ .h = 100, .w = 50, .x = 0, .y = 0 };
 
 ///![image](Examples-struct_ui.png)
 pub fn structUI() void {
+    const prev_expanded = struct_ui.defaults.display_expanded;
+    struct_ui.defaults.display_expanded = false;
+    defer struct_ui.defaults.display_expanded = prev_expanded;
     var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer b.deinit();
 
