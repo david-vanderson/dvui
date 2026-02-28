@@ -258,9 +258,7 @@ pub fn displayWidgetTemplate(widget_display: type) void {
     }
 }
 
-const Easing = DeclEnumWithSkip(dvui.easing, 1);
-
-pub fn DeclEnumWithSkip(comptime T: type, start: usize) type {
+pub fn DeclEnumWithSkip(comptime T: type, start_at_decl: usize) type {
     const fieldInfos = std.meta.declarations(T);
     var enumDecls: [fieldInfos.len]std.builtin.Type.EnumField = undefined;
     var decls = [_]std.builtin.Type.Declaration{};
@@ -270,53 +268,22 @@ pub fn DeclEnumWithSkip(comptime T: type, start: usize) type {
     return @Type(.{
         .@"enum" = .{
             .tag_type = std.math.IntFittingRange(0, if (fieldInfos.len == 0) 0 else fieldInfos.len - 1),
-            .fields = enumDecls[start..],
+            .fields = enumDecls[start_at_decl..],
             .decls = &decls,
             .is_exhaustive = true,
         },
     });
 }
 
-var animate_easing: ?Easing = null;
-
 const DisplayAnimate = struct {
     const name = "animate()";
-    const easing_functions: std.EnumArray(Easing, *const dvui.easing.EasingFn) = .init(.{
-        .linear = dvui.easing.linear,
-        .inQuad = dvui.easing.inQuad,
-        .outQuad = dvui.easing.outQuad,
-        .inOutQuad = dvui.easing.inOutQuad,
-        .inCubic = dvui.easing.inCubic,
-        .outCubic = dvui.easing.outCubic,
-        .inOutCubic = dvui.easing.inOutCubic,
-        .inQuart = dvui.easing.inQuart,
-        .outQuart = dvui.easing.outQuart,
-        .inOutQuart = dvui.easing.inOutQuart,
-        .inQuint = dvui.easing.inQuint,
-        .outQuint = dvui.easing.outQuint,
-        .inOutQuint = dvui.easing.inOutQuint,
-        .inSine = dvui.easing.inSine,
-        .outSine = dvui.easing.outSine,
-        .inOutSine = dvui.easing.inOutSine,
-        .inExpo = dvui.easing.inExpo,
-        .outExpo = dvui.easing.outExpo,
-        .inOutExpo = dvui.easing.inOutExpo,
-        .inCirc = dvui.easing.inCirc,
-        .outCirc = dvui.easing.outCirc,
-        .inOutCirc = dvui.easing.inOutCirc,
-        .inElastic = dvui.easing.inElastic,
-        .outElastic = dvui.easing.outElastic,
-        .inOutElastic = dvui.easing.inOutElastic,
-        .inBack = dvui.easing.inBack,
-        .outBack = dvui.easing.outBack,
-        .inOutBack = dvui.easing.inOutBack,
-        .inBounce = dvui.easing.inBounce,
-        .outBounce = dvui.easing.outBounce,
-        .inOutBounce = dvui.easing.inOutBounce,
-    });
     var init_opts: dvui.AnimateWidget.InitOptions = undefined;
     var options: dvui.Options = undefined;
     var wd: dvui.WidgetData = undefined;
+
+    const Easing = DeclEnumWithSkip(dvui.easing, 1);
+
+    var animate_easing: ?Easing = null;
 
     const test_options = struct {
         var restart_animation: bool = undefined;
@@ -366,28 +333,31 @@ const DisplayAnimate = struct {
                 .easing = .{ .standard = .{ .customDisplayFn = selectEasing } },
             }, default_init_opts),
         }, .{});
-        if (animate_easing) |easing| {
-            switch (easing) {
-                inline else => |e| init_opts.easing = @field(dvui.easing, @tagName(e)),
+    }
+
+    fn selectEasing(field_name: []const u8, ptr: *anyopaque, read_only: bool, alignment: *dvui.Alignment) void {
+        if (read_only) return;
+
+        const field_value_ptr: *?*const dvui.easing.EasingFn = @ptrCast(@alignCast(ptr));
+        var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer box.deinit();
+
+        dvui.labelNoFmt(@src(), field_name, .{}, .{});
+
+        var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
+        defer hbox_aligned.deinit();
+        alignment.record(box.data().id, hbox_aligned.data());
+        if (dvui.dropdownEnum(@src(), Easing, .{ .choice_nullable = &animate_easing }, .{}, .{})) {
+            if (animate_easing) |easing| {
+                switch (easing) {
+                    inline else => |e| field_value_ptr.* = @field(dvui.easing, @tagName(e)),
+                }
+            } else {
+                field_value_ptr.* = null;
             }
-        } else {
-            init_opts.easing = null;
         }
     }
 };
-
-fn selectEasing(field_name: []const u8, _: *anyopaque, read_only: bool, alignment: *dvui.Alignment) void {
-    if (read_only) return;
-    var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-    defer box.deinit();
-
-    dvui.labelNoFmt(@src(), field_name, .{}, .{});
-
-    var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
-    defer hbox_aligned.deinit();
-    alignment.record(box.data().id, hbox_aligned.data());
-    _ = dvui.dropdownEnum(@src(), Easing, .{ .choice_nullable = &animate_easing }, .{}, .{});
-}
 
 const DisplayBox = struct {
     const name = "box()";
@@ -1305,7 +1275,30 @@ const DisplayTextEntry = struct {
                 .placeholder = .defaultTextRW,
                 .password_char = .defaultTextRW,
             }, .{ .password_char = "*" })}, .{}),
+            .multiline => structDisplayInitOpts(&init_opts),
             else => dvui.structUI(@src(), "init_opts", &init_opts, 1, .{struct_options.text_entry.init_opts}, .{}),
+        }
+    }
+
+    fn structDisplayInitOpts(field_value_ptr: *dvui.TextEntryWidget.InitOptions) void {
+        const T = dvui.TextEntryWidget.InitOptions;
+
+        if (struct_ui.displayContainer(@src(), "init_opts")) |container| {
+            defer container.deinit();
+            var al: dvui.Alignment = .init(@src(), 0);
+            defer al.deinit();
+
+            switch (configuration) {
+                .multiline => {
+                    struct_ui.displayBool(@src(), "multiline", &field_value_ptr.multiline, .{ .boolean = .{ .checkbox = true } }, &al);
+                    struct_ui.displayBool(@src(), "break_lines", &field_value_ptr.break_lines, .{ .boolean = .{ .checkbox = true } }, &al);
+                    struct_ui.displayOptional(@src(), T, "scroll_vertical", &field_value_ptr.scroll_vertical, 0, .{ .boolean = .{ .checkbox = true } }, .{}, &al, false);
+                    struct_ui.displayOptional(@src(), T, "scroll_vertical_bar", &field_value_ptr.scroll_vertical_bar, 0, .default, .{}, &al, .auto);
+                    struct_ui.displayOptional(@src(), T, "scroll_horizontal", &field_value_ptr.scroll_horizontal, 0, .{ .boolean = .{ .checkbox = true } }, .{}, &al, false);
+                    struct_ui.displayOptional(@src(), T, "scroll_horizontal_bar", &field_value_ptr.scroll_horizontal_bar, 0, .default, .{}, &al, .auto);
+                },
+                else => unreachable,
+            }
         }
     }
 };

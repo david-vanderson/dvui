@@ -1111,11 +1111,11 @@ pub fn displayOptional(
     // Shortcut some common optionals
     switch (@typeInfo(optional.child)) {
         .bool => {
-            boolFieldWidgetOptional(@src(), field_name, field_value_ptr, field_option.optionBool(field_name), al);
+            boolFieldWidgetOptional(src, field_name, field_value_ptr, field_option.optionBool(field_name), al);
             return;
         },
         .@"enum" => {
-            enumFieldWidgetOptional(@src(), field_name, field_value_ptr, field_option.optionStandard(field_name), al);
+            enumFieldWidgetOptional(src, field_name, field_value_ptr, field_option.optionStandard(field_name), al);
             return;
         },
         else => {},
