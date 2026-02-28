@@ -925,7 +925,7 @@ fn infoPage(self: Options) void {
                     .by_id => |id| std.fmt.allocPrint(dvui.currentWindow().arena(), "by_id = {x}", .{id}) catch "",
                     .for_id => |id| std.fmt.allocPrint(dvui.currentWindow().arena(), "for_id = {x}", .{id}) catch "",
                     .label_widget => |val| std.fmt.allocPrint(dvui.currentWindow().arena(), "label_widget = {t}", .{val}) catch "",
-                    .text => |val| std.fmt.allocPrint(dvui.currentWindow().arena(), "text = {s}", .{val}) catch "",
+                    .text => |val| std.fmt.allocPrint(dvui.currentWindow().arena(), "text = \"{s}\"", .{val}) catch "",
                 };
                 tl.addText(str, .{});
             } else {

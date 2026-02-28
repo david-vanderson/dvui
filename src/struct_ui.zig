@@ -452,7 +452,7 @@ pub fn numberFieldWidgetOptional(
             var box = dvui.box(src, .{ .dir = .horizontal }, .{});
             defer box.deinit();
 
-            dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{});
+            dvui.label(@src(), "{s}?", .{opt.label orelse field_name}, .{});
 
             var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
             defer hbox_aligned.deinit();
@@ -790,9 +790,10 @@ pub fn unionFieldWidget(
     field_value_ptr: anytype,
     opt: FieldOptions,
 ) UnionTagType(@TypeOf(field_value_ptr)) {
-    _ = field_name;
     const T = @TypeOf(field_value_ptr.*);
-    if (@typeInfo(T).@"union".tag_type == null) {}
+    if (@typeInfo(T).@"union".tag_type == null) {
+        @compileError(std.fmt.comptimePrint("union field {s}: Only tagged unions are supported", .{field_name}));
+    }
 
     if (opt.displayMode() == .none) {
         return field_value_ptr.*;
@@ -1088,8 +1089,8 @@ pub fn displayUnion(
     if (displayContainer(src, field_option.displayLabel(field_name))) |vbox| {
         defer vbox.deinit();
 
-        const new_choice = unionFieldWidget(@src(), field_name, field_value_ptr, field_option);
         const UnionT = @TypeOf(field_value_ptr.*);
+        const new_choice = unionFieldWidget(@src(), field_name, field_value_ptr, field_option);
         if (current_choice != new_choice) {
             switch (new_choice) {
                 inline else => |choice| {
