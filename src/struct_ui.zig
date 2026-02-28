@@ -825,7 +825,13 @@ pub fn unionFieldWidget(
         var hbox = dvui.box(@src(), .{}, .{});
         defer hbox.deinit();
         if (read_only) {
-            dvui.labelNoFmt(@src(), @tagName(active_tag), .{}, .{});
+            switch (active_tag) {
+                // TODO: It is not strickyl void here. It is really any type that can't be displayed by
+                // displayField(). Need to add a lookup for displayable types and use that here.
+                inline else => |t| if (@FieldType(T, @tagName(t)) == void) {
+                    dvui.labelNoFmt(@src(), @tagName(active_tag), .{}, .{});
+                },
+            }
         } else {
             if (dvui.dropdown(@src(), choice_names, .{ .choice = &active_choice_num }, .{}, .{})) {
                 active_tag = std.meta.stringToEnum(@TypeOf(active_tag), choice_names[active_choice_num]).?; // This should never fail.

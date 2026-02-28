@@ -866,7 +866,7 @@ fn infoPage(self: Options) void {
             defer hbox.deinit();
             dvui.labelNoFmt(@src(), "name: ", .{}, .{});
             al.spacer(@src(), 0);
-            var tl = dvui.textLayout(@src(), .{}, .{});
+            var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
             if (self.name) |name| {
                 tl.addText(name, .{});
             } else {
@@ -879,7 +879,7 @@ fn infoPage(self: Options) void {
             defer hbox.deinit();
             dvui.labelNoFmt(@src(), "role: ", .{}, .{});
             al.spacer(@src(), 0);
-            var tl = dvui.textLayout(@src(), .{}, .{});
+            var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
             if (self.role) |role| {
                 tl.addText(@tagName(role), .{});
             } else {
@@ -892,7 +892,7 @@ fn infoPage(self: Options) void {
             defer hbox.deinit();
             dvui.labelNoFmt(@src(), "tag: ", .{}, .{});
             al.spacer(@src(), 0);
-            var tl = dvui.textLayout(@src(), .{}, .{});
+            var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
             if (self.tag) |tag| {
                 tl.addText(tag, .{});
             } else {
@@ -905,7 +905,7 @@ fn infoPage(self: Options) void {
             defer hbox.deinit();
             dvui.labelNoFmt(@src(), "id_extra: ", .{}, .{});
             al.spacer(@src(), 0);
-            var tl = dvui.textLayout(@src(), .{}, .{});
+            var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
             if (self.id_extra) |id_extra| {
                 const str = std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{id_extra}) catch "";
                 tl.addText(str, .{});
@@ -919,7 +919,7 @@ fn infoPage(self: Options) void {
             defer hbox.deinit();
             dvui.labelNoFmt(@src(), "label: ", .{}, .{});
             al.spacer(@src(), 0);
-            var tl = dvui.textLayout(@src(), .{}, .{});
+            var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
             if (self.label) |label| {
                 const str = switch (label) {
                     .by_id => |id| std.fmt.allocPrint(dvui.currentWindow().arena(), "by_id = {x}", .{id}) catch "",
