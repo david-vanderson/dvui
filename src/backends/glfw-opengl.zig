@@ -256,7 +256,9 @@ pub fn windowSize(ctx: *@This()) dvui.Size.Natural {
 }
 
 pub fn contentScale(ctx: *@This()) f32 {
-    return ctx.window.getContentScale()[0];
+    _ = ctx;
+    // Figure out what to do here
+    return 1;
 }
 
 pub fn drawClippedTriangles(
