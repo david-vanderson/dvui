@@ -1292,9 +1292,9 @@ const DisplayTextEntry = struct {
                 .multiline => {
                     struct_ui.displayBool(@src(), "multiline", &field_value_ptr.multiline, .{ .boolean = .{ .checkbox = true } }, &al);
                     struct_ui.displayBool(@src(), "break_lines", &field_value_ptr.break_lines, .{ .boolean = .{ .checkbox = true } }, &al);
-                    struct_ui.displayOptional(@src(), T, "scroll_vertical", &field_value_ptr.scroll_vertical, 0, .{ .boolean = .{ .checkbox = true } }, .{}, &al, false);
+                    struct_ui.displayOptional(@src(), T, "scroll_vertical", &field_value_ptr.scroll_vertical, 0, .defaultBool, .{}, &al, false);
                     struct_ui.displayOptional(@src(), T, "scroll_vertical_bar", &field_value_ptr.scroll_vertical_bar, 0, .default, .{}, &al, .auto);
-                    struct_ui.displayOptional(@src(), T, "scroll_horizontal", &field_value_ptr.scroll_horizontal, 0, .{ .boolean = .{ .checkbox = true } }, .{}, &al, false);
+                    struct_ui.displayOptional(@src(), T, "scroll_horizontal", &field_value_ptr.scroll_horizontal, 0, .defaultBool, .{}, &al, false);
                     struct_ui.displayOptional(@src(), T, "scroll_horizontal_bar", &field_value_ptr.scroll_horizontal_bar, 0, .default, .{}, &al, .auto);
                 },
                 else => unreachable,
