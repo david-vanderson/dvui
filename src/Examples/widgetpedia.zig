@@ -1216,6 +1216,11 @@ const DisplayTextEntry = struct {
     var configuration: Configuration = undefined;
     var configuration_changed: bool = false;
 
+    var filter_opts: struct {
+        filter_in: ?[]const u8 = null,
+        filter_out: ?[]const u8 = null,
+    } = undefined;
+
     pub fn displayFn(reset: bool) void {
         if (reset) resetWidget();
         displayWidgetTemplate(@This());
@@ -1224,6 +1229,7 @@ const DisplayTextEntry = struct {
     pub fn resetWidget() void {
         options = .{};
         init_opts = .{};
+        filter_opts = .{};
         configuration = .single_line;
     }
 
@@ -1256,7 +1262,11 @@ const DisplayTextEntry = struct {
             var te = dvui.textEntry(@src(), init_opts, options.override(.{ .data_out = &wd }));
             defer te.deinit();
             switch (configuration) {
-                .single_line, .password => {},
+                .single_line => {
+                    if (filter_opts.filter_in) |in| te.filterIn(in);
+                    if (filter_opts.filter_out) |out| te.filterOut(out);
+                },
+                .password => {},
                 .multiline => {
                     if (configuration_changed) {
                         te.textSet("", false);
@@ -1282,9 +1292,15 @@ const DisplayTextEntry = struct {
             }
         }
         switch (configuration) {
-            .single_line => dvui.structUI(@src(), "init_opts", &init_opts, 1, .{struct_ui.StructOptions(dvui.TextEntryWidget.InitOptions).init(.{
-                .placeholder = .defaultTextRW,
-            }, null)}, .{}),
+            .single_line => {
+                dvui.structUI(@src(), "init_opts", &init_opts, 1, .{struct_ui.StructOptions(dvui.TextEntryWidget.InitOptions).init(.{
+                    .placeholder = .defaultTextRW,
+                }, null)}, .{});
+                dvui.structUI(@src(), "Filter options", &filter_opts, 1, .{StructOptions(@TypeOf(filter_opts)).init(.{
+                    .filter_in = .defaultTextRW,
+                    .filter_out = .defaultTextRW,
+                }, null)}, .{});
+            },
             .password => dvui.structUI(@src(), "init_opts", &init_opts, 1, .{struct_ui.StructOptions(dvui.TextEntryWidget.InitOptions).init(.{
                 .placeholder = .defaultTextRW,
                 .password_char = .defaultTextRW,
