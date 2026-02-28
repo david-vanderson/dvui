@@ -299,7 +299,7 @@ pub fn drawClippedTriangles(
     zgl.uniform1ui(usetex_loc, if (texture) |_| 1 else 0);
     if (texture) |tex| {
         const txt: zgl.Texture = @enumFromInt(@intFromPtr(tex.ptr));
-        txt.bindTo(0);
+        txt.bind(.@"2d");
         zgl.activeTexture(.texture_0);
         const tex_loc = ctx.program.uniformLocation("texture0") orelse blk: {
             log.err("Couldn't find uniform location!", .{});
@@ -336,9 +336,10 @@ pub fn textureCreate(
 ) !dvui.Texture {
     const tex = zgl.Texture.gen();
     tex.bind(.@"2d");
-    tex.parameter(.min_filter, if (interpolation == .nearest) .nearest else .linear);
-    tex.parameter(.mag_filter, if (interpolation == .nearest) .nearest else .linear);
+    zgl.texParameter(.@"2d", .min_filter, if (interpolation == .nearest) .nearest else .linear);
+    zgl.texParameter(.@"2d", .mag_filter, if (interpolation == .nearest) .nearest else .linear);
     zgl.textureImage2D(.@"2d", 0, .rgba8, width, height, .rgba, .unsigned_int_8_8_8_8, pixels);
+    zgl.bindTexture(.invalid, .@"2d");
     return .{
         .ptr = @ptrFromInt(@intFromEnum(tex)),
         .height = height,
@@ -348,7 +349,8 @@ pub fn textureCreate(
 
 pub fn textureUpdate(_: *@This(), texture: dvui.Texture, pixels: [*]const u8) !void {
     const tex: zgl.Texture = @enumFromInt(@intFromPtr(texture.ptr));
-    tex.subImage2D(0, 0, 0, texture.width, texture.height, .rgba, .unsigned_int_8_8_8_8, pixels);
+    tex.bind(.@"2d");
+    zgl.texSubImage2D(.@"2d", 0, 0, 0, texture.width, texture.height, .rgba, .unsigned_int_8_8_8_8, pixels);
 }
 
 pub fn textureCreateTarget(
@@ -357,12 +359,12 @@ pub fn textureCreateTarget(
     height: u32,
     interpolation: dvui.enums.TextureInterpolation,
 ) !dvui.TextureTarget {
-    const tex = zgl.Texture.create(.@"2d");
+    const tex = zgl.Texture.gen();
     tex.bind(.@"2d");
-    tex.parameter(.min_filter, if (interpolation == .nearest) .nearest else .linear);
-    tex.parameter(.mag_filter, if (interpolation == .nearest) .nearest else .linear);
-    tex.parameter(.wrap_s, .clamp_to_border);
-    tex.parameter(.wrap_t, .clamp_to_border);
+    zgl.texParameter(.@"2d", .min_filter, if (interpolation == .nearest) .nearest else .linear);
+    zgl.texParameter(.@"2d", .mag_filter, if (interpolation == .nearest) .nearest else .linear);
+    zgl.texParameter(.@"2d", .wrap_s, .clamp_to_border);
+    zgl.texParameter(.@"2d", .wrap_t, .clamp_to_border);
     zgl.textureImage2D(.@"2d", 0, .rgba8, width, height, .rgba, .unsigned_int_8_8_8_8, null);
     const framebuf = zgl.Framebuffer.gen();
     framebuf.texture2D(.draw_buffer, .color0, .@"2d", tex, 0);
