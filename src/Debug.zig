@@ -433,7 +433,7 @@ fn showFrameTimes(self: *Debug) void {
     dvui.plotXY(@src(), .{ .xs = xs, .ys = data, .plot_opts = .{ .y_axis = &yaxis } }, .{ .expand = .both, .min_size_content = .height(50), .padding = .{ .y = 10, .h = 10 } });
 }
 
-const OptionsEditorTab = enum { layout, style };
+const OptionsEditorTab = enum { layout, style, info };
 
 /// Returns true if the options was modified
 pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
@@ -462,6 +462,9 @@ pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
         if (tabs.addTabLabel(active_tab.* == .style, "Style")) {
             active_tab.* = .style;
         }
+        if (tabs.addTabLabel(active_tab.* == .info, "Info")) {
+            active_tab.* = .info;
+        }
     }
 
     switch (active_tab.*) {
@@ -471,10 +474,10 @@ pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
         .style => {
             if (stylePage(self, vbox.data().id)) changed = true;
         },
-        // NOTE: name and tag editing have been intentionally skipped as the memory
-        //       ownership would be unnecessarily complicated
+        .info => {
+            infoPage(wd.options);
+        },
     }
-
     return changed;
 }
 
@@ -850,6 +853,87 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
     }
 
     return changed;
+}
+
+fn infoPage(self: Options) void {
+    var al: dvui.Alignment = .init(@src(), 0);
+    defer al.deinit();
+    var vbox = dvui.box(@src(), .{}, .{ .expand = .horizontal });
+    defer vbox.deinit();
+    {
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            dvui.labelNoFmt(@src(), "name: ", .{}, .{});
+            al.spacer(@src(), 0);
+            var tl = dvui.textLayout(@src(), .{}, .{});
+            if (self.name) |name| {
+                tl.addText(name, .{});
+            } else {
+                tl.addText("null", .{});
+            }
+            tl.deinit();
+        }
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            dvui.labelNoFmt(@src(), "role: ", .{}, .{});
+            al.spacer(@src(), 0);
+            var tl = dvui.textLayout(@src(), .{}, .{});
+            if (self.role) |role| {
+                tl.addText(@tagName(role), .{});
+            } else {
+                tl.addText("null", .{});
+            }
+            tl.deinit();
+        }
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            dvui.labelNoFmt(@src(), "tag: ", .{}, .{});
+            al.spacer(@src(), 0);
+            var tl = dvui.textLayout(@src(), .{}, .{});
+            if (self.tag) |tag| {
+                tl.addText(tag, .{});
+            } else {
+                tl.addText("null", .{});
+            }
+            tl.deinit();
+        }
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            dvui.labelNoFmt(@src(), "id_extra: ", .{}, .{});
+            al.spacer(@src(), 0);
+            var tl = dvui.textLayout(@src(), .{}, .{});
+            if (self.id_extra) |id_extra| {
+                const str = std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{id_extra}) catch "";
+                tl.addText(str, .{});
+            } else {
+                tl.addText("null", .{});
+            }
+            tl.deinit();
+        }
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            dvui.labelNoFmt(@src(), "label: ", .{}, .{});
+            al.spacer(@src(), 0);
+            var tl = dvui.textLayout(@src(), .{}, .{});
+            if (self.label) |label| {
+                const str = switch (label) {
+                    .by_id => |id| std.fmt.allocPrint(dvui.currentWindow().arena(), "by_id = {x}", .{id}) catch "",
+                    .for_id => |id| std.fmt.allocPrint(dvui.currentWindow().arena(), "for_id = {x}", .{id}) catch "",
+                    .label_widget => |val| std.fmt.allocPrint(dvui.currentWindow().arena(), "label_widget = {t}", .{val}) catch "",
+                    .text => |val| std.fmt.allocPrint(dvui.currentWindow().arena(), "text = {s}", .{val}) catch "",
+                };
+                tl.addText(str, .{});
+            } else {
+                tl.addText("null", .{});
+            }
+            tl.deinit();
+        }
+    }
 }
 
 /// Used to copy the code for any runtime type, used to copy

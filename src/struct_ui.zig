@@ -432,6 +432,54 @@ pub fn numberFieldWidget(
     }
 }
 
+/// Display a numeric field
+pub fn numberFieldWidgetOptional(
+    comptime src: std.builtin.SourceLocation,
+    field_name: []const u8,
+    field_value_optional_ptr: anytype,
+    opt: NumberFieldOptions,
+    alignment: *dvui.Alignment,
+) void {
+    // TODO:
+    //    validateFieldPtrType(null, &.{ .float, .int }, "numberFieldWidget", @TypeOf(field_value_ptr));
+    if (opt.display == .none) return;
+
+    const T = @TypeOf(field_value_optional_ptr.*.?);
+    const read_only = @typeInfo(@TypeOf(field_value_optional_ptr)).pointer.is_const or opt.display == .read_only;
+
+    switch (opt.widget_type) {
+        .number_entry => {
+            var box = dvui.box(src, .{ .dir = .horizontal }, .{});
+            defer box.deinit();
+
+            dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{});
+
+            var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
+            defer hbox_aligned.deinit();
+            alignment.record(box.data().id, hbox_aligned.data());
+
+            if (!read_only) {
+                const maybe_num = dvui.textEntryNumber(@src(), T, .{
+                    .min = opt.minValue(T),
+                    .max = opt.maxValue(T),
+                    .value = if (field_value_optional_ptr.*) |*opt_ptr| opt_ptr else null,
+                    .show_min_max = opt.min != null and opt.max != null,
+                    .placeholder = "null",
+                }, .{});
+                if (maybe_num.value == .Valid) {
+                    field_value_optional_ptr.* = maybe_num.value.Valid;
+                } else {
+                    field_value_optional_ptr.* = null;
+                }
+            }
+            dvui.label(@src(), "{?d}", .{field_value_optional_ptr.*}, .{});
+        },
+        .slider => {
+            unreachable;
+        },
+    }
+}
+
 pub fn enumFieldWidget(
     comptime src: std.builtin.SourceLocation,
     field_name: []const u8,
@@ -550,7 +598,7 @@ pub fn boolFieldWidget(
             dvui.dataSet(null, box.data().id, "bool", state);
         } else if (opt.trigger_on != null) {
             if (opt.trigger_on.? == field_value_ptr.*) {
-                dvui.animation(box.data().id, "trigger", .{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 1_000_000, .easing = easing });
+                dvui.animation(box.data().id, "trigger", .{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 1_000_000, .easing = easing });
             }
             if (dvui.animationGet(box.data().id, "trigger")) |a| {
                 const prev_alpha = dvui.alpha(a.value());
@@ -578,12 +626,11 @@ pub fn boolFieldWidget(
 }
 
 // Bring in immediately, hold, then smoothstep fade.
-// Return 1 if t < 0.4 and smoothstep to 0 for remainder
-// TODO: This is currently inverted to what it should be. TBC with DV.
+// Return 1 if t < 0.4, then smoothstep to 0 for remainder
 pub fn easing(t: f32) f32 {
-    if (t < 0.4) return 0;
+    if (t < 0.4) return 1;
     const u = (t - 0.4) / 0.6;
-    return u * u * (3 - 2 * u);
+    return 1 - u * u * (3 - 2 * u);
 }
 
 pub fn boolFieldWidgetOptional(
@@ -1117,6 +1164,13 @@ pub fn displayOptional(
         .@"enum" => {
             enumFieldWidgetOptional(src, field_name, field_value_ptr, field_option.optionStandard(field_name), al);
             return;
+        },
+        .int, .float => {
+            const fo = field_option.optionNumber(field_name);
+            if (fo.widget_type == .number_entry) {
+                numberFieldWidgetOptional(@src(), field_name, field_value_ptr, fo, al);
+                return;
+            }
         },
         else => {},
     }

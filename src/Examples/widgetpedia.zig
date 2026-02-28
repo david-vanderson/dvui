@@ -1070,7 +1070,8 @@ const DisplayTextEntryNumber = struct {
     }
 
     pub fn layoutResults() void {
-        dvui.structUI(@src(), null, &result, 99, .{
+        const r = result;
+        dvui.structUI(@src(), null, &r, 99, .{
             StructOptions(dvui.TextEntryNumberResult(NumberType)).initWithDefaults(.{
                 .changed = .{ .boolean = .{ .trigger_on = true } },
                 .enter_pressed = .{ .boolean = .{ .trigger_on = true } },
