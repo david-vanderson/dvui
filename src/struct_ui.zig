@@ -11,21 +11,29 @@
 // TODO: Improve message for when struct_options are not passed as a tuple.
 // TODO: The global var for expand / collapse doesn't really work. It would be better just to take a parameter or init_opt as it is only the top-level container that should default.
 // TODO: Implement a global "narrow mode" that gets rid of number labels on number entries etc.
-
-// By default struct_ui will use the gpa passed to the dvui window.
-// If you want to use a different allocator, you can set it here.
-pub var string_allocator: ?std.mem.Allocator = null;
+// TODO: Standardize on widget type for field options, e.g. for the boolean option diplsyaing checkboxes etc.
+// TODO: Sort out narrow vs wide display on options editor in widgetpedia vs debug.
 
 pub const defaults = struct {
+    /// display structs and sub-structs expanded
     pub var display_expanded: bool = true;
+    /// Make display more compatible with narrow layouts
+    pub var narrow: bool = false;
+    /// By default struct_ui will use the gpa passed to the dvui window.
+    /// If you want to use a different allocator, you can set it here.
+    pub var string_allocator: ?std.mem.Allocator = null;
 };
 
 const log = std.log.scoped(.struct_ui);
+
 /// Field options control whether and how fields are displayed.
 ///
 /// Use TextFieldOptions for any array or slice of u8 you want ot display as a string.
 /// Use NumberFieldOptions for any numbers, allowing setting of min and max ranges and other options
-/// Use StandardFieldOptions (.default) for all other fields.
+/// Use BooleanFieldOptions for any bools.
+/// Use StandardFieldOptions can be used for any field to give a default layout.
+/// If a custom display function is supplied, thay will be used to display the struct instead of
+/// the struct_ui default functions.
 ///
 /// All FieldOptions types must provide:
 /// - display: DisplayMode
@@ -135,6 +143,7 @@ pub const FieldOptions = union(enum) {
     }
 
     pub fn markConst(self: *FieldOptions) void {
+        // TODO: Track const separately to read-only.
         switch (self.*) {
             inline else => |*fo| fo.display = .read_only,
         }
@@ -175,6 +184,7 @@ pub fn StructOptions(Struct: type) type {
         default_value: ?StructT = null,
         // Display the struct using this function, instead of the default struct_ui function.
         customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
+
         /// Initialize and display only the fields provided.
         /// options: field options for all the fields to be displayed.
         /// default_value: An optional default value to be used whenever an instance
@@ -251,7 +261,7 @@ pub fn StructOptions(Struct: type) type {
             };
         }
 
-        /// Return a default value for a field if not default field has been supplied through
+        /// Return a default value for a field if no default for that field has been supplied through
         /// StructOptions.
         pub fn defaultFieldOption(FieldType: type) FieldOptions {
             return switch (@typeInfo(FieldType)) {
@@ -323,7 +333,7 @@ pub const NumberFieldOptions = struct {
                 else => unreachable,
             },
             .float => switch (@typeInfo(@TypeOf(value))) {
-                .int => @intFromError(value),
+                .int => @intFromFloat(value),
                 .float => @floatCast(value),
                 else => unreachable,
             },
@@ -391,7 +401,7 @@ pub fn numberFieldWidget(
             var box = dvui.box(src, .{ .dir = .horizontal }, .{});
             defer box.deinit();
 
-            dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{});
+            dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{ .margin = .{ .y = 4 } });
 
             var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
             defer hbox_aligned.deinit();
@@ -408,13 +418,14 @@ pub fn numberFieldWidget(
                     field_value_ptr.* = maybe_num.value.Valid;
                 }
             }
-            dvui.label(@src(), "{d}", .{field_value_ptr.*}, .{});
+            if (!defaults.narrow or read_only)
+                dvui.label(@src(), "{d}", .{field_value_ptr.*}, .{ .margin = .{ .y = 4 } });
         },
         .slider => {
             var box = dvui.box(src, .{ .dir = .horizontal }, .{});
             defer box.deinit();
 
-            dvui.label(@src(), "{s}", .{field_name}, .{});
+            dvui.label(@src(), "{s}", .{field_name}, .{ .margin = .{ .y = 4 } });
             var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
@@ -427,7 +438,7 @@ pub fn numberFieldWidget(
                 });
                 field_value_ptr.* = opt.normalizedPercentToNum(T, percent);
             }
-            dvui.label(@src(), "{d}", .{field_value_ptr.*}, .{});
+            dvui.label(@src(), "{d}", .{field_value_ptr.*}, .{ .margin = .{ .y = 4 } });
         },
     }
 }
@@ -452,7 +463,7 @@ pub fn numberFieldWidgetOptional(
             var box = dvui.box(src, .{ .dir = .horizontal }, .{});
             defer box.deinit();
 
-            dvui.label(@src(), "{s}?", .{opt.label orelse field_name}, .{});
+            dvui.label(@src(), "{s}?", .{opt.label orelse field_name}, .{ .margin = .{ .y = 4 } });
 
             var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
             defer hbox_aligned.deinit();
@@ -472,7 +483,8 @@ pub fn numberFieldWidgetOptional(
                     field_value_optional_ptr.* = null;
                 }
             }
-            dvui.label(@src(), "{?d}", .{field_value_optional_ptr.*}, .{});
+            if (!defaults.narrow or read_only)
+                dvui.label(@src(), "{?d}", .{field_value_optional_ptr.*}, .{ .margin = .{ .y = 4 } });
         },
         .slider => {
             unreachable;
@@ -495,13 +507,13 @@ pub fn enumFieldWidget(
     var box = dvui.box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
     defer box.deinit();
 
-    dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{});
+    dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{ .margin = .{ .y = 4 } });
     var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
     defer hbox_aligned.deinit();
     alignment.record(box.data().id, hbox_aligned.data());
 
     if (read_only) {
-        dvui.label(@src(), "{s}", .{@tagName(field_value_ptr.*)}, .{});
+        dvui.label(@src(), "{s}", .{@tagName(field_value_ptr.*)}, .{ .margin = .{ .y = 4 } });
     } else {
         const choices = std.meta.FieldEnum(T);
         const entries = std.meta.fieldNames(choices);
@@ -528,13 +540,13 @@ pub fn enumFieldWidgetOptional(
     var box = dvui.box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
     defer box.deinit();
 
-    dvui.label(@src(), "{s}?", .{opt.label orelse field_name}, .{});
+    dvui.label(@src(), "{s}?", .{opt.label orelse field_name}, .{ .margin = .{ .y = 4 } });
     var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
     defer hbox_aligned.deinit();
     alignment.record(box.data().id, hbox_aligned.data());
 
     if (read_only) {
-        dvui.label(@src(), "{s}", .{if (field_value_optional_ptr.*) |field_value| @tagName(field_value) else "null"}, .{});
+        dvui.label(@src(), "{s}", .{if (field_value_optional_ptr.*) |field_value| @tagName(field_value) else "null"}, .{ .margin = .{ .y = 4 } });
     } else {
         const choices = std.meta.FieldEnum(T);
         const entries = std.meta.fieldNames(choices);
@@ -579,7 +591,7 @@ pub fn boolFieldWidget(
     var box = dvui.box(src, .{ .dir = .horizontal }, .{});
     defer box.deinit();
 
-    dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{});
+    dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{ .margin = .{ .y = 4 } });
     var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
     defer hbox_aligned.deinit();
     alignment.record(box.data().id, hbox_aligned.data());
@@ -589,7 +601,7 @@ pub fn boolFieldWidget(
             const prev_state = dvui.dataGetDefault(null, box.data().id, "bool", bool, false);
             var state = prev_state or field_value_ptr.*;
             var data_out: dvui.WidgetData = undefined;
-            _ = dvui.checkbox(@src(), &state, "", .{ .data_out = &data_out });
+            _ = dvui.checkbox(@src(), &state, "", .{ .data_out = &data_out, .margin = .{ .y = 4 } });
             if (state)
                 dvui.tooltip(@src(), .{ .active_rect = data_out.borderRectScale().r, .delay = 1_000_000 }, "Value was set to true since last manual reset.", .{}, .{})
             else
@@ -603,15 +615,15 @@ pub fn boolFieldWidget(
             if (dvui.animationGet(box.data().id, "trigger")) |a| {
                 const prev_alpha = dvui.alpha(a.value());
                 defer dvui.alphaSet(prev_alpha);
-                dvui.label(@src(), "{}", .{opt.trigger_on.?}, .{});
+                dvui.label(@src(), "{}", .{opt.trigger_on.?}, .{ .margin = .{ .y = 4 } });
                 if (a.done()) {
                     dvui.refresh(null, @src(), null);
                 }
             } else {
-                dvui.label(@src(), "{}", .{field_value_ptr.*}, .{});
+                dvui.label(@src(), "{}", .{field_value_ptr.*}, .{ .margin = .{ .y = 4 } });
             }
         } else {
-            dvui.label(@src(), "{}", .{field_value_ptr.*}, .{});
+            dvui.label(@src(), "{}", .{field_value_ptr.*}, .{ .margin = .{ .y = 4 } });
         }
     } else {
         if (opt.checkbox) {
@@ -649,13 +661,13 @@ pub fn boolFieldWidgetOptional(
     var box = dvui.box(src, .{ .dir = .horizontal }, .{});
     defer box.deinit();
 
-    dvui.label(@src(), "{s}?", .{opt.label orelse field_name}, .{});
+    dvui.label(@src(), "{s}?", .{opt.label orelse field_name}, .{ .margin = .{ .y = 4 } });
     var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
     defer hbox_aligned.deinit();
     alignment.record(box.data().id, hbox_aligned.data());
 
     if (read_only) {
-        dvui.label(@src(), "{?}", .{field_value_optional_ptr.*}, .{});
+        dvui.label(@src(), "{?}", .{field_value_optional_ptr.*}, .{ .margin = .{ .y = 4 } });
     } else {
         const entries = .{ "null", "false", "true" };
         var choice: usize = if (field_value_optional_ptr.*) |field_value|
@@ -725,7 +737,7 @@ pub fn textFieldWidget(
         read_only = true;
     }
 
-    dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{});
+    dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{ .margin = .{ .y = 4 } });
     if (!read_only) {
         // If the original string is heap allocated, then add it to the map so it will be freed before a new string
         // is allocated.
@@ -767,7 +779,7 @@ pub fn textFieldWidget(
         defer hbox_aligned.deinit();
         alignment.record(box.data().id, hbox_aligned.data());
 
-        dvui.label(@src(), "{s}", .{field_value_ptr.*}, .{});
+        dvui.label(@src(), "{s}", .{field_value_ptr.*}, .{ .margin = .{ .y = 4 } });
     }
 }
 
@@ -826,10 +838,11 @@ pub fn unionFieldWidget(
         defer hbox.deinit();
         if (read_only) {
             switch (active_tag) {
-                // TODO: It is not strickyl void here. It is really any type that can't be displayed by
+                // Don't display active tag, if it will be displayed as a field. i.e. it is not a void union member.
+                // TODO: It is not strictly just void here. It is really any type that can't be displayed by
                 // displayField(). Need to add a lookup for displayable types and use that here.
                 inline else => |t| if (@FieldType(T, @tagName(t)) == void) {
-                    dvui.labelNoFmt(@src(), @tagName(active_tag), .{}, .{});
+                    dvui.labelNoFmt(@src(), @tagName(active_tag), .{}, .{ .margin = .{ .y = 4 } });
                 },
             }
         } else {
@@ -859,7 +872,7 @@ pub fn optionalFieldWidget(
 
     var hbox = dvui.box(src, .{ .dir = .horizontal }, .{});
     defer hbox.deinit();
-    dvui.label(@src(), "{s}?", .{opts.displayLabel(field_name)}, .{});
+    dvui.label(@src(), "{s}?", .{opts.displayLabel(field_name)}, .{ .margin = .{ .y = 4 } });
     {
         var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(hbox.data().id) });
         defer hbox_aligned.deinit();
@@ -868,7 +881,7 @@ pub fn optionalFieldWidget(
         if (!read_only) {
             _ = dvui.dropdown(@src(), &.{ "null", "not null" }, .{ .choice = &choice }, .{}, .{});
         } else {
-            dvui.labelNoFmt(@src(), if (choice == 0) "null" else "not null", .{}, .{});
+            dvui.labelNoFmt(@src(), if (choice == 0) "null" else "not null", .{}, .{ .margin = .{ .y = 4 } });
         }
     }
     return choice == 1; // Not null
@@ -1520,7 +1533,7 @@ pub var string_map: std.AutoHashMapUnmanaged(*const []const u8, []const u8) = .e
 
 /// Returns a 'gpa' backing type with required allocator.
 pub fn stringBackingAllocator() StringBackingType {
-    return .{ .gpa = string_allocator orelse dvui.currentWindow().gpa };
+    return .{ .gpa = defaults.string_allocator orelse dvui.currentWindow().gpa };
 }
 
 /// Free any strings allocated by struct_ui.
@@ -1529,7 +1542,7 @@ pub fn stringBackingAllocator() StringBackingType {
 pub fn deinit(gpa: std.mem.Allocator) void {
     var itr = string_map.iterator();
     while (itr.next()) |entry| {
-        if (string_allocator) |string_alloc| {
+        if (defaults.string_allocator) |string_alloc| {
             string_alloc.free(entry.value_ptr.*);
         } else {
             gpa.free(entry.value_ptr.*);

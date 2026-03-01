@@ -550,16 +550,24 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
     const link_radius = dvui.dataGetPtrDefault(null, id, "link_radius", bool, true);
 
     { // First bar
-        var row = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-        defer row.deinit();
 
         {
+            var row = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            defer row.deinit();
+
             dvui.labelNoFmt(@src(), "expand", .{}, .{ .gravity_y = 0.5 });
             _ = dvui.dropdownEnum(@src(), Options.Expand, .{ .choice_nullable = &self.expand }, .{ .placeholder = "null" }, .{
                 .expand = .horizontal,
                 .min_size_content = .{ .w = 110 },
                 .gravity_y = 0.5,
             });
+            _ = dvui.spacer(@src(), .{ .min_size_content = .{ .w = 15 } });
+            dvui.labelNoFmt(@src(), "tab_index ", .{}, .{ .margin = .{ .y = 4 } });
+            const result = dvui.textEntryNumber(@src(), u16, .{ .placeholder = "null" }, .{});
+            switch (result.value) {
+                .Valid => |valid| self.tab_index = valid,
+                else => self.tab_index = null,
+            }
         }
         var rot_rect: ?dvui.Rect = if (self.rotation) |rot| .{ .x = rot } else null;
         var dummy: f32 = 0;
@@ -583,15 +591,6 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
         } else {
             self.rotation = null;
         }
-
-        //        if (dvui.sliderEntry(@src(), "rotation: {d:0.2}", .{
-        //            .min = std.math.pi * -2,
-        //            .max = std.math.pi * 2,
-        //            .interval = @as(f32, 0.5 / std.math.pi),
-        //            .value = rotation,
-        //        }, .{ .gravity_y = 0.5 })) {
-        //            changed = true;
-        //        }
     }
 
     { // Min size
@@ -775,84 +774,126 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
 
 fn stylePage(self: *Options, id: dvui.Id) bool {
     var changed = false;
+    var outer_vbox = dvui.box(@src(), .{}, .{});
+    defer outer_vbox.deinit();
+    {
+        var row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
 
-    var row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        var background = self.backgroundGet();
+        if (dvui.checkbox(@src(), &background, "background", .{ .gravity_y = 0.5 })) {
+            changed = true;
+            self.background = if (background) background else null;
+        }
 
-    var background = self.backgroundGet();
-    if (dvui.checkbox(@src(), &background, "background", .{ .gravity_y = 0.5 })) {
+        row.deinit();
+        row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .margin = .{ .y = 5 } });
+        defer row.deinit();
+
+        const OptionsColors = enum { fill, fill_hover, fill_press, text, text_hover, text_press, border };
+        const active_color = dvui.dataGetPtrDefault(null, id, "Color", OptionsColors, .fill);
+
+        {
+            const tabs = dvui.tabs(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
+            defer tabs.deinit();
+
+            const colors = comptime std.meta.tags(OptionsColors);
+            inline for (colors, 0..) |color_ask, i| {
+                const tab = tabs.addTab(active_color.* == color_ask, .{
+                    .expand = .horizontal,
+                    .padding = .all(2),
+                    .id_extra = i,
+                });
+                defer tab.deinit();
+
+                if (tab.clicked()) {
+                    active_color.* = color_ask;
+                }
+
+                var label_opts = tab.data().options.strip();
+                if (dvui.captured(tab.data().id)) {
+                    label_opts.color_text = label_opts.color(.text_press);
+                }
+
+                const field = "color_" ++ @tagName(color_ask);
+                const color = @field(self, field);
+
+                const color_indicator = dvui.overlay(@src(), .{
+                    .expand = .ratio,
+                    .min_size_content = .all(10),
+                    .corner_radius = .all(100),
+                    .border = .all(1),
+                    .background = true,
+                    .color_fill = color,
+                });
+                const color_width = color_indicator.data().rectScale().r.w;
+                if (color == null) {
+                    dvui.labelNoFmt(@src(), "?", .{}, .{ .expand = .ratio, .gravity_x = 0.5, .gravity_y = 0.5 });
+                }
+                color_indicator.deinit();
+                dvui.labelNoFmt(@src(), @tagName(color_ask), .{}, .{ .margin = .{ .x = color_width } });
+            }
+        }
+
+        {
+            var vbox = dvui.box(@src(), .{}, .{});
+            defer vbox.deinit();
+
+            const field: *?dvui.Color = switch (active_color.*) {
+                inline else => |c| &@field(self, "color_" ++ @tagName(c)),
+            };
+            var hsv = dvui.Color.HSV.fromColor(field.* orelse .white);
+            if (dvui.colorPicker(@src(), .{ .hsv = &hsv, .dir = .horizontal }, .{})) {
+                changed = true;
+                field.* = hsv.toColor();
+            }
+
+            if (field.* != null and dvui.button(@src(), "Set to null", .{}, .{})) {
+                changed = true;
+                field.* = null;
+            }
+        }
+    }
+    _ = dvui.spacer(@src(), .{ .expand = .horizontal, .margin = Rect.all(6) });
+    const box_shadow_orig = self.box_shadow;
+    const label_str = if (self.box_shadow == null) "box_shadow: null" else "box_shadow";
+    if (dvui.expander(@src(), label_str, .{ .default_expanded = self.box_shadow != null }, .{})) {
+        var al: dvui.Alignment = .init(@src(), 0);
+        defer al.deinit();
+        const T = Options.BoxShadow;
+        var box_shadow: Options.BoxShadow = self.box_shadow orelse .{};
+        quickDisplayField(@src(), T, "color", &box_shadow.color, .default, &al);
+        quickDisplayField(@src(), T, "offset", &box_shadow.offset, .default, &al);
+        quickDisplayField(@src(), T, "fade", &box_shadow.fade, .default, &al);
+        quickDisplayField(@src(), T, "alpha", &box_shadow.alpha, .default, &al);
+        quickDisplayField(@src(), T, "shrink", &box_shadow.shrink, .default, &al);
+        quickDisplayField(@src(), T, "corner_radius", &box_shadow.corner_radius, .default, &al);
+        self.box_shadow = box_shadow;
+    } else {
+        self.box_shadow = null;
+    }
+    if (box_shadow_orig == null and self.box_shadow != null or box_shadow_orig != null and self.box_shadow == null) {
         changed = true;
-        self.background = if (background) background else null;
-    }
-
-    row.deinit();
-    row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .margin = .{ .y = 5 } });
-    defer row.deinit();
-
-    const OptionsColors = enum { fill, fill_hover, fill_press, text, text_hover, text_press, border };
-    const active_color = dvui.dataGetPtrDefault(null, id, "Color", OptionsColors, .fill);
-
-    {
-        const tabs = dvui.tabs(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
-        defer tabs.deinit();
-
-        const colors = comptime std.meta.tags(OptionsColors);
-        inline for (colors, 0..) |color_ask, i| {
-            const tab = tabs.addTab(active_color.* == color_ask, .{
-                .expand = .horizontal,
-                .padding = .all(2),
-                .id_extra = i,
-            });
-            defer tab.deinit();
-
-            if (tab.clicked()) {
-                active_color.* = color_ask;
-            }
-
-            var label_opts = tab.data().options.strip();
-            if (dvui.captured(tab.data().id)) {
-                label_opts.color_text = label_opts.color(.text_press);
-            }
-
-            const field = "color_" ++ @tagName(color_ask);
-            const color = @field(self, field);
-
-            const color_indicator = dvui.overlay(@src(), .{
-                .expand = .ratio,
-                .min_size_content = .all(10),
-                .corner_radius = .all(100),
-                .border = .all(1),
-                .background = true,
-                .color_fill = color,
-            });
-            const color_width = color_indicator.data().rectScale().r.w;
-            if (color == null) {
-                dvui.labelNoFmt(@src(), "?", .{}, .{ .expand = .ratio, .gravity_x = 0.5, .gravity_y = 0.5 });
-            }
-            color_indicator.deinit();
-            dvui.labelNoFmt(@src(), @tagName(color_ask), .{}, .{ .margin = .{ .x = color_width } });
-        }
-    }
-
-    {
-        var vbox = dvui.box(@src(), .{}, .{});
-        defer vbox.deinit();
-
-        const field: *?dvui.Color = switch (active_color.*) {
-            inline else => |c| &@field(self, "color_" ++ @tagName(c)),
-        };
-        var hsv = dvui.Color.HSV.fromColor(field.* orelse .white);
-        if (dvui.colorPicker(@src(), .{ .hsv = &hsv, .dir = .horizontal }, .{})) {
-            changed = true;
-            field.* = hsv.toColor();
-        }
-
-        if (field.* != null and dvui.button(@src(), "Set to null", .{}, .{})) {
-            changed = true;
-            field.* = null;
-        }
+    } else if (box_shadow_orig != null and self.box_shadow != null) {
+        changed = !std.mem.eql(u8, std.mem.asBytes(&self.box_shadow.?), std.mem.asBytes(&box_shadow_orig.?));
     }
 
     return changed;
+}
+
+fn quickDisplayField(comptime src: std.builtin.SourceLocation, ContainerT: type, comptime field_name: []const u8, field_value_ptr: anytype, field_option: dvui.struct_ui.FieldOptions, al: *dvui.Alignment) void {
+    const rect_opts: dvui.struct_ui.StructOptions(dvui.Rect) = .init(.{
+        .x = .{ .number = .{ .min = 0, .max = 30 } },
+        .y = .{ .number = .{ .min = 0, .max = 30 } },
+        .h = .{ .number = .{ .min = 0, .max = 30 } },
+        .w = .{ .number = .{ .min = 0, .max = 30 } },
+    }, .{});
+
+    const color_opts: dvui.struct_ui.StructOptions(dvui.Color) = .init(.{
+        .r = .{ .number = .{ .widget_type = .slider, .min = 0, .max = 255 } },
+        .g = .{ .number = .{ .widget_type = .slider, .min = 0, .max = 255 } },
+        .b = .{ .number = .{ .widget_type = .slider, .min = 0, .max = 255 } },
+    }, .{});
+    dvui.struct_ui.displayField(src, ContainerT, field_name, field_value_ptr, 10, field_option, .{ rect_opts, color_opts }, al);
 }
 
 fn infoPage(self: Options) void {
@@ -927,6 +968,20 @@ fn infoPage(self: Options) void {
                     .label_widget => |val| std.fmt.allocPrint(dvui.currentWindow().arena(), "label_widget = {t}", .{val}) catch "",
                     .text => |val| std.fmt.allocPrint(dvui.currentWindow().arena(), "text = \"{s}\"", .{val}) catch "",
                 };
+                tl.addText(str, .{});
+            } else {
+                tl.addText("null", .{});
+            }
+            tl.deinit();
+        }
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            dvui.labelNoFmt(@src(), "rect: ", .{}, .{});
+            al.spacer(@src(), 0);
+            var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
+            if (self.rect) |rect| {
+                const str = std.fmt.allocPrint(dvui.currentWindow().arena(), "x = {d}, y = {d}, h = {d}, w = {d}", .{ rect.x, rect.y, rect.h, rect.w }) catch "";
                 tl.addText(str, .{});
             } else {
                 tl.addText("null", .{});

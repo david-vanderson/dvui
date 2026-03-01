@@ -41,9 +41,11 @@ pub fn widgetpedia() void {
     if (!Examples.show_widgetpedia_window) {
         return;
     }
-    const prev_expanded = struct_ui.defaults.display_expanded;
+    const prev_defaults = struct_ui.defaults;
     struct_ui.defaults.display_expanded = true;
-    defer struct_ui.defaults.display_expanded = prev_expanded;
+    struct_ui.defaults.narrow = true;
+    defer struct_ui.defaults.display_expanded = prev_defaults.display_expanded;
+    defer struct_ui.defaults.narrow = prev_defaults.narrow;
 
     const width = 775;
     const height = 575;
