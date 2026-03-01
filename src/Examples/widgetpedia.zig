@@ -1172,6 +1172,61 @@ const DisplayLabelEx = struct {
     }
 };
 
+const DisplayLabelClick = struct {
+    var name: []const u8 = "labelClick()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.LabelClickOptions = undefined;
+    var icon_opts: dvui.IconRenderOptions = undefined;
+    var icon_bytes: []const u8 = undefined;
+    var test_opts: struct {
+        label: []const u8,
+    } = undefined;
+    var result: bool = false;
+    var click_event: dvui.Event.EventTypes = undefined;
+    var click_event_valid: ?dvui.Event.EventTypes = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{};
+        init_opts = .{ .click_event = &click_event };
+        test_opts = .{
+            .label = "Label text",
+        };
+        click_event_valid = null;
+    }
+
+    pub fn layoutWidget() void {
+        result = dvui.labelClick(@src(), "{s}", .{test_opts.label}, init_opts, options.override(.{ .data_out = &wd }));
+    }
+
+    pub fn layoutResults() void {
+        var al = dvui.Alignment.init(@src(), 0);
+        defer al.deinit();
+        struct_ui.displayBool(@src(), "return_value", &result, .{ .boolean = .{ .display = .read_only, .trigger_on = true } }, &al);
+        if (result) {
+            click_event_valid = click_event;
+        }
+        if (click_event_valid) |cev| {
+            struct_ui.displayUnion(@src(), "last click_event", &cev, 1, .defaultReadOnly, .{});
+        }
+    }
+
+    pub fn layoutWidgetControls() void {
+        dvui.structUI(@src(), test_options_label, &test_opts, 1, .{StructOptions(@TypeOf(test_opts)).init(.{
+            .label = .defaultTextRW,
+        }, null)}, .{});
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{StructOptions(dvui.LabelClickOptions).initWithDefaults(.{
+            .click_event = .defaultHidden,
+        }, null)}, .{});
+    }
+};
+
 const DisplayTextEntry = struct {
     var name: []const u8 = "textEntry()";
 
@@ -1184,11 +1239,18 @@ const DisplayTextEntry = struct {
         password,
         multiline,
         large,
-        // TODO
-        //        highlight,
+        all,
+        // TODO: Syntax highlihghting
     };
     var configuration: Configuration = undefined;
     var configuration_changed: bool = false;
+    var num_done: usize = undefined;
+
+    var large_opts: struct {
+        // cache_ok: bool,
+        copies: usize,
+        refresh: bool,
+    } = undefined;
 
     var filter_opts: struct {
         filter_in: ?[]const u8 = null,
@@ -1206,12 +1268,20 @@ const DisplayTextEntry = struct {
         filter_opts = .{};
         configuration = .single_line;
         configuration_changed = true;
+        large_opts = .{
+            //            .cache_ok = false,
+            .copies = 100,
+            .refresh = false,
+        };
+        num_done = 0;
     }
 
     pub fn layoutWidget() void {
+        defer configuration_changed = false;
+
         if (configuration_changed) {
             switch (configuration) {
-                .single_line => {
+                .single_line, .all => {
                     init_opts = .{};
                     options = .{ .expand = .horizontal };
                 },
@@ -1228,19 +1298,27 @@ const DisplayTextEntry = struct {
                     options = .{ .expand = .both };
                 },
                 .large => {
-                    init_opts = .{ .multiline = true, .break_lines = true };
+                    init_opts = .{
+                        .multiline = true,
+                        .cache_layout = true,
+                        .scroll_horizontal = !init_opts.break_lines,
+                        .text = .{ .internal = .{ .limit = 2_000_000 } },
+                    };
                     options = .{ .expand = .both };
                 },
             }
         }
-        {
+
+        if (configuration == .large) {
+            return layoutWidgetLarge();
+        } else {
             var te = dvui.textEntry(@src(), init_opts, options.override(.{ .data_out = &wd }));
             defer te.deinit();
             if (configuration_changed) {
                 te.textSet("", false);
             }
             switch (configuration) {
-                .single_line => {
+                .single_line, .all => {
                     if (filter_opts.filter_in) |in| te.filterIn(in);
                     if (filter_opts.filter_out) |out| te.filterOut(out);
                 },
@@ -1253,10 +1331,43 @@ const DisplayTextEntry = struct {
                         te.textLayout.selection.moveCursor(0, false);
                     }
                 },
-                .large => {},
+                .large => unreachable,
             }
         }
-        configuration_changed = false;
+    }
+
+    fn layoutWidgetLarge() void {
+        if (large_opts.refresh) {
+            dvui.refresh(null, @src(), null);
+        }
+
+        var tl: dvui.TextEntryWidget = undefined;
+        tl.init(@src(), init_opts, options.override(.{ .data_out = &wd }));
+        defer tl.deinit();
+        tl.processEvents();
+
+        if (configuration_changed) {
+            num_done = 0;
+            tl.textSet("", false);
+        }
+
+        if (num_done < large_opts.copies) {
+            const lorem1 = "Header line with 9 indented\n";
+            const lorem2 = "    an indented line\n";
+
+            for (num_done..@min(num_done + 10, large_opts.copies)) |i| {
+                num_done += 1;
+                var buf2: [10]u8 = undefined;
+                const written = std.fmt.bufPrint(&buf2, "{d} ", .{i}) catch unreachable;
+                tl.textTyped(written, false);
+                tl.textTyped(lorem1, false);
+                for (0..9) |_| {
+                    tl.textTyped(lorem2, false);
+                }
+            }
+        }
+
+        tl.draw();
     }
 
     pub fn layoutWidgetControls() void {
@@ -1282,12 +1393,28 @@ const DisplayTextEntry = struct {
                 .placeholder = .defaultTextRW,
                 .password_char = .defaultTextRW,
             }, .{ .password_char = "*" })}, .{}),
-            .multiline => structDisplayInitOpts(&init_opts),
-            else => dvui.structUI(@src(), "init_opts", &init_opts, 1, .{struct_options.text_entry.init_opts}, .{}),
+            .multiline => structDisplayMultiLineInitOpts(&init_opts),
+            .large => {
+                const old_copies = large_opts.copies;
+                dvui.structUI(@src(), test_options_label, &large_opts, 1, .{StructOptions(@TypeOf(large_opts)).initWithDefaults(.{
+                    .refresh = .{ .boolean = .{ .checkbox = true } },
+                    .copies = .{ .number = .{ .widget_type = .slider_entry, .min = 0, .max = 1000 } },
+                }, null)}, .{});
+                if (large_opts.copies != old_copies)
+                    configuration_changed = true;
+                structDisplayMultiLineInitOpts(&init_opts);
+            },
+            .all => {
+                dvui.structUI(@src(), "Filter options", &filter_opts, 1, .{StructOptions(@TypeOf(filter_opts)).init(.{
+                    .filter_in = .defaultTextRW,
+                    .filter_out = .defaultTextRW,
+                }, null)}, .{});
+                dvui.structUI(@src(), "init_opts", &init_opts, 1, .{struct_options.text_entry.init_opts}, .{});
+            },
         }
     }
 
-    fn structDisplayInitOpts(field_value_ptr: *dvui.TextEntryWidget.InitOptions) void {
+    fn structDisplayMultiLineInitOpts(field_value_ptr: *dvui.TextEntryWidget.InitOptions) void {
         const T = dvui.TextEntryWidget.InitOptions;
 
         if (struct_ui.displayContainer(@src(), "init_opts")) |container| {
@@ -1303,6 +1430,11 @@ const DisplayTextEntry = struct {
                     struct_ui.displayOptional(@src(), T, "scroll_vertical_bar", &field_value_ptr.scroll_vertical_bar, 0, .default, .{}, &al, .auto);
                     struct_ui.displayOptional(@src(), T, "scroll_horizontal", &field_value_ptr.scroll_horizontal, 0, .defaultBool, .{}, &al, false);
                     struct_ui.displayOptional(@src(), T, "scroll_horizontal_bar", &field_value_ptr.scroll_horizontal_bar, 0, .default, .{}, &al, .auto);
+                },
+                .large => {
+                    struct_ui.displayBool(@src(), "break_lines", &field_value_ptr.break_lines, .{ .boolean = .{ .checkbox = true } }, &al);
+                    struct_ui.displayOptional(@src(), T, "kerning", &field_value_ptr.kerning, 0, .{ .boolean = .{ .checkbox = true } }, .{}, &al, null);
+                    struct_ui.displayBool(@src(), "cache_layout", &field_value_ptr.cache_layout, .{ .boolean = .{ .checkbox = true } }, &al);
                 },
                 else => unreachable,
             }
@@ -1384,7 +1516,7 @@ const widget_hierarchy = [_]WidgetHeirachy{
 
     .{ .name = "labels", .displayFn = displayEmpty, .children = &.{
         .{ .name = "label", .displayFn = DisplayLabelEx.displayFn, .children = null },
-        .{ .name = "labelClick", .displayFn = displayEmpty, .children = null },
+        .{ .name = "labelClick", .displayFn = DisplayLabelClick.displayFn, .children = null },
         .{ .name = "labelEx", .displayFn = DisplayLabelEx.displayFn, .children = null },
         .{ .name = "labelNoFmt", .displayFn = DisplayLabelEx.displayFn, .children = null },
     } },

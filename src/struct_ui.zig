@@ -531,7 +531,13 @@ pub fn enumFieldWidget(
     if (opt.display == .none) return;
 
     const T = @TypeOf(field_value_ptr.*);
+    const exhaustive = @typeInfo(T).@"enum".is_exhaustive;
     const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.display == .read_only;
+    if (!read_only and !exhaustive) {
+        // TODO: Display these as numbers and do the enum<->int conversion.
+        log.debug("non-exhaustive enum {s}.{s} can only be displayed read-only", .{ @typeName(T), field_name });
+    }
+
     var box = dvui.box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
     defer box.deinit();
 
@@ -540,8 +546,10 @@ pub fn enumFieldWidget(
     defer hbox_aligned.deinit();
     alignment.record(box.data().id, hbox_aligned.data());
 
-    if (read_only) {
+    if (read_only and exhaustive) {
         dvui.label(@src(), "{s}", .{@tagName(field_value_ptr.*)}, .{ .margin = .{ .y = 4 } });
+    } else if (!exhaustive) {
+        dvui.label(@src(), "{d}", .{@intFromEnum(field_value_ptr.*)}, .{ .margin = .{ .y = 4 } });
     } else {
         const choices = std.meta.FieldEnum(T);
         const entries = std.meta.fieldNames(choices);
