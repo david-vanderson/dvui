@@ -854,9 +854,19 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
         }
     }
     _ = dvui.spacer(@src(), .{ .expand = .horizontal, .margin = Rect.all(6) });
+    changed = fontChanger(self) or changed;
+    _ = dvui.spacer(@src(), .{ .expand = .horizontal, .margin = Rect.all(6) });
     const box_shadow_orig = self.box_shadow;
-    const label_str = if (self.box_shadow == null) "box_shadow: null" else "box_shadow";
+    const label_str = if (self.box_shadow == null) "box_shadow not set" else "box_shadow";
     if (dvui.expander(@src(), label_str, .{ .default_expanded = self.box_shadow != null }, .{})) {
+        var vbox = dvui.box(@src(), .{}, .{
+            .expand = .horizontal,
+            .border = .{ .x = 1 },
+            .background = true,
+            .margin = .{ .w = 12, .x = 12 },
+            .padding = Rect.all(6),
+        });
+        defer vbox.deinit();
         var al: dvui.Alignment = .init(@src(), 0);
         defer al.deinit();
         const T = Options.BoxShadow;
@@ -875,6 +885,63 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
         changed = true;
     } else if (box_shadow_orig != null and self.box_shadow != null) {
         changed = !std.mem.eql(u8, std.mem.asBytes(&self.box_shadow.?), std.mem.asBytes(&box_shadow_orig.?));
+    }
+
+    return changed;
+}
+
+fn fontChanger(self: *Options) bool {
+    var changed = false;
+
+    const label_str = if (self.font == null) "font not set" else "font";
+
+    if (dvui.expander(@src(), label_str, .{ .default_expanded = self.font != null }, .{})) {
+        changed = self.font == null;
+        var edited_font = self.fontGet();
+
+        var vbox = dvui.box(@src(), .{}, .{
+            .expand = .horizontal,
+            .border = .{ .x = 1 },
+            .background = true,
+            .margin = .{ .w = 12, .x = 12 },
+            .padding = Rect.all(6),
+        });
+        defer vbox.deinit();
+
+        var current_font_index: ?usize = null;
+        var current_font_name: []const u8 = "Unknown";
+        for (dvui.currentWindow().fonts.database.items, 0..) |dbs, i| {
+            if (std.mem.eql(u8, dbs.familyName(), edited_font.familyName())) {
+                current_font_index = i;
+                current_font_name = edited_font.familyName();
+            }
+        }
+
+        var dd: dvui.DropdownWidget = undefined;
+        dd.init(@src(), .{ .selected_index = current_font_index, .label = current_font_name }, .{});
+        if (dd.dropped()) {
+            for (dvui.currentWindow().fonts.database.items) |dbs| {
+                const name = dbs.name(dvui.currentWindow().lifo());
+                defer dvui.currentWindow().lifo().free(name);
+                if (dd.addChoiceLabel(name)) {
+                    edited_font = edited_font.withFamily(dbs.familyName()).withStyle(dbs.style).withWeight(dbs.weight);
+                    changed = true;
+                }
+            }
+        }
+        dd.deinit();
+        if (dvui.sliderEntry(@src(), "Size: {d:0}", .{ .min = 4, .max = 100, .interval = 1, .value = &edited_font.size }, .{})) {
+            changed = true;
+        }
+        if (dvui.sliderEntry(@src(), "Line height: {d:0.1}", .{ .min = 0, .max = 10, .interval = 0.1, .value = &edited_font.line_height_factor }, .{})) {
+            changed = true;
+        }
+
+        if (changed) {
+            self.font = edited_font;
+        }
+    } else {
+        self.font = null;
     }
 
     return changed;
