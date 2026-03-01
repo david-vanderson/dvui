@@ -94,7 +94,7 @@ fn stbi_write_jpg_callback(ctx: ?*anyopaque, data_ptr: ?*anyopaque, len: c_int) 
     const self: *JPGEncoder = @ptrCast(@alignCast(ctx.?));
     const data: []const u8 = @as([*]const u8, @ptrCast(@alignCast(data_ptr.?)))[0..@intCast(len)];
     // TODO: Maybe propagate writer error by storing it as a field?
-    self.callback(data) catch |err| dvui.logError(@src(), err, "Failed to write png data to output", .{});
+    self.callback(data) catch |err| dvui.logError(@src(), err, "Failed to write jpg data to output", .{});
 }
 
 const std = @import("std");
