@@ -858,7 +858,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
     _ = dvui.spacer(@src(), .{ .expand = .horizontal, .margin = Rect.all(6) });
     const box_shadow_orig = self.box_shadow;
     const label_str = if (self.box_shadow == null) "box_shadow not set" else "box_shadow";
-    if (dvui.expander(@src(), label_str, .{ .default_expanded = self.box_shadow != null }, .{})) {
+    if (dvui.expander(@src(), label_str, .{ .default_expanded = self.box_shadow != null }, .{ .expand = .horizontal })) {
         var vbox = dvui.box(@src(), .{}, .{
             .expand = .horizontal,
             .border = .{ .x = 1 },
@@ -895,7 +895,7 @@ fn fontChanger(self: *Options) bool {
 
     const label_str = if (self.font == null) "font not set" else "font";
 
-    if (dvui.expander(@src(), label_str, .{ .default_expanded = self.font != null }, .{})) {
+    if (dvui.expander(@src(), label_str, .{ .default_expanded = self.font != null }, .{ .expand = .horizontal })) {
         changed = self.font == null;
         var edited_font = self.fontGet();
 
@@ -949,18 +949,35 @@ fn fontChanger(self: *Options) bool {
 
 fn quickDisplayField(comptime src: std.builtin.SourceLocation, ContainerT: type, comptime field_name: []const u8, field_value_ptr: anytype, field_option: dvui.struct_ui.FieldOptions, al: *dvui.Alignment) void {
     const rect_opts: dvui.struct_ui.StructOptions(dvui.Rect) = .init(.{
-        .x = .{ .number = .{ .min = 0, .max = 30 } },
-        .y = .{ .number = .{ .min = 0, .max = 30 } },
-        .h = .{ .number = .{ .min = 0, .max = 30 } },
-        .w = .{ .number = .{ .min = 0, .max = 30 } },
+        .x = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
+        .y = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
+        .h = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
+        .w = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
+    }, .{});
+
+    const size_opts: dvui.struct_ui.StructOptions(dvui.Size) = .init(.{
+        .h = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
+        .w = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
+    }, .{});
+
+    const point_opts: dvui.struct_ui.StructOptions(dvui.Point) = .init(.{
+        .x = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
+        .y = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
     }, .{});
 
     const color_opts: dvui.struct_ui.StructOptions(dvui.Color) = .init(.{
-        .r = .{ .number = .{ .widget_type = .slider, .min = 0, .max = 255 } },
-        .g = .{ .number = .{ .widget_type = .slider, .min = 0, .max = 255 } },
-        .b = .{ .number = .{ .widget_type = .slider, .min = 0, .max = 255 } },
+        .r = .{ .number = .{ .widget_type = .slider_entry, .min = 0, .max = 255 } },
+        .g = .{ .number = .{ .widget_type = .slider_entry, .min = 0, .max = 255 } },
+        .b = .{ .number = .{ .widget_type = .slider_entry, .min = 0, .max = 255 } },
+        .a = .{ .number = .{ .widget_type = .slider_entry, .min = 0, .max = 255 } },
     }, .{});
-    dvui.struct_ui.displayField(src, ContainerT, field_name, field_value_ptr, 10, field_option, .{ rect_opts, color_opts }, al);
+
+    dvui.struct_ui.displayField(src, ContainerT, field_name, field_value_ptr, 10, field_option, .{
+        rect_opts,
+        color_opts,
+        size_opts,
+        point_opts,
+    }, al);
 }
 
 fn infoPage(self: Options) void {

@@ -449,6 +449,7 @@ const DisplayButton = struct {
             }, null)},
             .{},
         );
+        dvui.structUI(@src(), "init_opts", &init_opts, 0, .{}, .{});
     }
 };
 

@@ -291,7 +291,7 @@ pub const NumberFieldOptions = struct {
     customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
 
     /// For .read_write, display as either a text entry box or as a slider.
-    widget_type: enum { number_entry, slider } = .number_entry,
+    widget_type: enum { number_entry, slider, slider_entry } = .number_entry,
     /// Minimum value - required if widget_type is slider.
     min: ?f64 = null,
     /// Maximum value - required if widget_type is slider.
@@ -332,7 +332,7 @@ pub const NumberFieldOptions = struct {
                 .float => @floatFromInt(value),
                 else => unreachable,
             },
-            .float => switch (@typeInfo(@TypeOf(value))) {
+            .float => switch (@typeInfo(T)) {
                 .int => @intFromFloat(value),
                 .float => @floatCast(value),
                 else => unreachable,
@@ -440,6 +440,34 @@ pub fn numberFieldWidget(
             }
             dvui.label(@src(), "{d}", .{field_value_ptr.*}, .{ .margin = .{ .y = 4 } });
         },
+        .slider_entry => {
+            var box = dvui.box(src, .{ .dir = .horizontal }, .{});
+            defer box.deinit();
+            dvui.label(@src(), "{s}", .{field_name}, .{ .margin = .{ .y = 4 } });
+            var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id), .expand = .vertical });
+            defer hbox_aligned.deinit();
+            alignment.record(box.data().id, hbox_aligned.data());
+
+            if (!read_only) {
+                var se_wd: dvui.WidgetData = undefined;
+                var value: f32 = NumberFieldOptions.cast(f32, field_value_ptr.*);
+                if (dvui.sliderEntry(@src(), "{d:0.2}", .{
+                    .value = &value,
+                    .min = opt.minValue(f32),
+                    .max = opt.maxValue(f32),
+                }, .{ .data_out = &se_wd, .gravity_y = 0.5 })) {
+                    field_value_ptr.* = NumberFieldOptions.cast(T, value);
+                }
+                if (dvui.focusedWidgetId() == se_wd.id) {
+                    dvui.tooltip(@src(), .{
+                        .active_rect = se_wd.borderRectScale().r,
+                        .delay = 1_000_000,
+                    }, "Press Enter to type a value", .{}, .{});
+                }
+            } else {
+                dvui.label(@src(), "{d}", .{field_value_ptr.*}, .{ .margin = .{ .y = 4 } });
+            }
+        },
     }
 }
 
@@ -486,7 +514,7 @@ pub fn numberFieldWidgetOptional(
             if (!defaults.narrow or read_only)
                 dvui.label(@src(), "{?d}", .{field_value_optional_ptr.*}, .{ .margin = .{ .y = 4 } });
         },
-        .slider => {
+        .slider, .slider_entry => {
             unreachable;
         },
     }
