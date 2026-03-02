@@ -674,7 +674,7 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
             var col = dvui.box(@src(), .{ .dir = .horizontal }, .{ .border = .all(1), .expand = .both });
             defer col.deinit();
 
-            var gravity_set: bool = self.gravity_y != null or self.gravity_y != null;
+            var gravity_set: bool = self.gravity_x != null or self.gravity_y != null;
             var gravity = self.gravityGet();
             gravity.y = 1 - gravity.y;
 
