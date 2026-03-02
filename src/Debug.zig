@@ -337,7 +337,7 @@ pub fn show(self: *Debug) void {
                 .gravity_y = 0.5,
                 .data_out = &copy_wd,
             })) {
-                copyOptionsToClipboard(src, id, options);
+                copyOptionsToClipboard(id, options);
             }
             dvui.tooltip(@src(), .{
                 .active_rect = copy_wd.borderRectScale().r,
@@ -433,7 +433,7 @@ fn showFrameTimes(self: *Debug) void {
     dvui.plotXY(@src(), .{ .xs = xs, .ys = data, .plot_opts = .{ .y_axis = &yaxis } }, .{ .expand = .both, .min_size_content = .height(50), .padding = .{ .y = 10, .h = 10 } });
 }
 
-const OptionsEditorTab = enum { layout, style };
+const OptionsEditorTab = enum { layout, style, info };
 
 /// Returns true if the options was modified
 pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
@@ -449,7 +449,7 @@ pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
 
         var button_wd: dvui.WidgetData = undefined;
         if (dvui.buttonIcon(@src(), "Copy Options", dvui.entypo.copy, .{}, .{}, .{ .gravity_x = 1, .data_out = &button_wd })) {
-            copyOptionsToClipboard(wd.src, wd.id, self.*);
+            copyOptionsToClipboard(wd.id, self.*);
         }
         dvui.tooltip(@src(), .{
             .active_rect = button_wd.borderRectScale().r,
@@ -462,24 +462,26 @@ pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
         if (tabs.addTabLabel(active_tab.* == .style, "Style")) {
             active_tab.* = .style;
         }
+        if (tabs.addTabLabel(active_tab.* == .info, "Info")) {
+            active_tab.* = .info;
+        }
     }
 
     switch (active_tab.*) {
         .layout => {
-            if (layoutPage(self, vbox.data().id)) changed = true;
+            if (layoutPage(self, vbox.data().id, wd)) changed = true;
         },
         .style => {
             if (stylePage(self, vbox.data().id)) changed = true;
         },
-        // NOTE: name and tag editing have been intentionally skipped as the memory
-        //       ownership would be unnecessarily complicated
+        .info => {
+            infoPage(wd.options);
+        },
     }
-
     return changed;
 }
 
-fn copyOptionsToClipboard(src: std.builtin.SourceLocation, id: dvui.Id, options: Options) void {
-    dvui.log.debug("Copied Options struct for {s}:{d}", .{ src.file, src.line });
+fn copyOptionsToClipboard(id: dvui.Id, options: Options) void {
     dvui.toast(@src(), .{ .message = "Options copied to clipboard" });
 
     var aw = std.Io.Writer.Allocating.init(dvui.currentWindow().lifo());
@@ -490,58 +492,53 @@ fn copyOptionsToClipboard(src: std.builtin.SourceLocation, id: dvui.Id, options:
     dvui.clipboardTextSet(aw.written());
 }
 
-fn layoutPage(self: *Options, id: dvui.Id) bool {
+fn sliderRectOptional(src: std.builtin.SourceLocation, comptime label: []const u8, rect: *?Rect, comptime field: std.meta.FieldEnum(dvui.Rect), link_all: bool, default: dvui.Rect) bool {
+    return sliderRectOptionalWithInitOpts(src, label, rect, field, link_all, default, null);
+}
+
+fn sliderRectOptionalWithInitOpts(src: std.builtin.SourceLocation, comptime label: []const u8, rect: *?Rect, comptime field: std.meta.FieldEnum(dvui.Rect), link_all: bool, default: dvui.Rect, init_opts: ?dvui.SliderEntryInitOptions) bool {
+    var changed: bool = false;
+    var hbox = dvui.box(src, .{ .dir = .horizontal }, .{ .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
+    defer hbox.deinit();
+    var value_set: bool = rect.* != null;
+
+    if (dvui.checkbox(
+        @src(),
+        &value_set,
+        if (value_set) "" else label,
+        .{ .padding = .{ .x = 6, .y = 6, .h = 6, .w = 0 }, .gravity_y = 0.5 },
+    )) {
+        changed = true;
+        if (value_set)
+            rect.* = default
+        else
+            rect.* = null;
+    }
+    if (value_set) {
+        const slider_init_opts: dvui.SliderEntryInitOptions = .{
+            .value = &@field(rect.*.?, @tagName(field)),
+            .min = if (init_opts) |opts| (opts.min orelse 0.0) else 0.0,
+            .max = if (init_opts) |opts| (opts.max orelse 32.0) else 32.0,
+            .interval = if (init_opts) |opts| (opts.interval orelse 1.0) else 1.0,
+        };
+
+        if (dvui.sliderEntry(
+            @src(),
+            label ++ ": {d:0.0}",
+            slider_init_opts,
+            .{ .margin = .{ .x = 0, .y = 4, .w = 4, .h = 4 }, .gravity_y = 0.5 },
+        )) {
+            changed = true;
+            if (link_all) {
+                rect.* = .all(@field(rect.*.?, @tagName(field)));
+            }
+        }
+    }
+    return changed;
+}
+
+fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
     var changed = false;
-
-    const corner_radius_was_null = self.corner_radius == null;
-    self.corner_radius = self.corner_radiusGet();
-    defer if (corner_radius_was_null and !changed) {
-        self.corner_radius = null;
-    };
-    const corner_radius = &self.corner_radius.?;
-
-    const margin_was_null = self.margin == null;
-    self.margin = self.marginGet();
-    defer if (margin_was_null and !changed) {
-        self.margin = null;
-    };
-    const margin = &self.margin.?;
-
-    const border_was_null = self.border == null;
-    self.border = self.borderGet();
-    defer if (border_was_null and !changed) {
-        self.border = null;
-    };
-    const border = &self.border.?;
-
-    const padding_was_null = self.padding == null;
-    self.padding = self.paddingGet();
-    defer if (padding_was_null and !changed) {
-        self.padding = null;
-    };
-    const padding = &self.padding.?;
-
-    const gravity_y_was_null = self.gravity_y == null;
-    self.gravity_y = self.gravityGet().y;
-    defer if (gravity_y_was_null and !changed) {
-        self.gravity_y = null;
-    };
-    var grav_y_inv = 1.0 - self.gravity_y.?;
-    const gravity_y = &grav_y_inv;
-
-    const gravity_x_was_null = self.gravity_x == null;
-    self.gravity_x = self.gravityGet().x;
-    defer if (gravity_x_was_null and !changed) {
-        self.gravity_x = null;
-    };
-    const gravity_x = &self.gravity_x.?;
-
-    const rotation_was_null = self.rotation == null;
-    self.rotation = self.rotationGet();
-    defer if (rotation_was_null and !changed) {
-        self.rotation = null;
-    };
-    const rotation = &self.rotation.?;
 
     const link_margin = dvui.dataGetPtrDefault(null, id, "link_margin", bool, true);
     const link_border = dvui.dataGetPtrDefault(null, id, "link_border", bool, true);
@@ -549,39 +546,46 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
     const link_radius = dvui.dataGetPtrDefault(null, id, "link_radius", bool, true);
 
     { // First bar
-        var row = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-        defer row.deinit();
 
         {
+            var row = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            defer row.deinit();
+
             dvui.labelNoFmt(@src(), "expand", .{}, .{ .gravity_y = 0.5 });
-            const expands = std.meta.tags(Options.Expand);
-            var dd: dvui.DropdownWidget = undefined;
-            dd.init(@src(), .{
-                .label = @tagName(self.expandGet()),
-                .selected_index = std.mem.indexOfScalar(Options.Expand, expands, self.expandGet()).?,
-            }, .{
+            _ = dvui.dropdownEnum(@src(), Options.Expand, .{ .choice_nullable = &self.expand }, .{ .placeholder = "null" }, .{
                 .expand = .horizontal,
                 .min_size_content = .{ .w = 110 },
                 .gravity_y = 0.5,
             });
-            defer dd.deinit();
-            if (dd.dropped()) {
-                for (expands) |new| {
-                    if (dd.addChoiceLabel(@tagName(new))) {
-                        self.expand = new;
-                        changed = true;
-                    }
-                }
+            _ = dvui.spacer(@src(), .{ .min_size_content = .{ .w = 15 } });
+            dvui.labelNoFmt(@src(), "tab_index ", .{}, .{ .margin = .{ .y = 4 } });
+            const result = dvui.textEntryNumber(@src(), u16, .{ .placeholder = "null" }, .{});
+            switch (result.value) {
+                .Valid => |valid| self.tab_index = valid,
+                else => self.tab_index = null,
             }
         }
+        var rot_rect: ?dvui.Rect = if (self.rotation) |rot| .{ .x = rot } else null;
+        var dummy: f32 = 0;
+        changed = sliderRectOptionalWithInitOpts(
+            @src(),
+            "rotation",
+            &rot_rect,
+            .x,
+            false,
+            .all(wd.options.rotationGet()),
+            .{
+                .value = &dummy,
+                .min = std.math.pi * -2,
+                .max = std.math.pi * 2,
+                .interval = @as(f32, 0.5 / std.math.pi),
+            },
+        ) or changed;
 
-        if (dvui.sliderEntry(@src(), "rotation: {d:0.2}", .{
-            .min = std.math.pi * -2,
-            .max = std.math.pi * 2,
-            .interval = @as(f32, std.math.pi) / 100,
-            .value = rotation,
-        }, .{ .gravity_y = 0.5 })) {
-            changed = true;
+        if (rot_rect) |rr| {
+            self.rotation = rr.x;
+        } else {
+            self.rotation = null;
         }
     }
 
@@ -639,47 +643,20 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
         { // Top Left
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
-
-            if (dvui.sliderEntry(@src(), "radius: {d:0}", .{ .value = &corner_radius.x, .min = 0, .max = 200, .interval = 1 }, .{ .gravity_y = 0.5 })) {
-                changed = true;
-                if (link_radius.*) {
-                    corner_radius.* = .all(corner_radius.x);
-                }
-            }
+            changed = sliderRectOptional(@src(), "radius", &self.corner_radius, .x, link_radius.*, wd.options.corner_radiusGet()) or changed;
         }
         { // Top Center
             var col = dvui.box(@src(), .{}, .{ .border = .all(1) });
             defer col.deinit();
-
-            if (dvui.sliderEntry(@src(), "margin: {d:0.0}", .{ .value = &margin.y, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_margin.*) {
-                    margin.* = .all(margin.y);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "border: {d:0.0}", .{ .value = &border.y, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_border.*) {
-                    border.* = .all(border.y);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "padding: {d:0.0}", .{ .value = &padding.y, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_padding.*) {
-                    padding.* = .all(padding.y);
-                }
-            }
+            changed = sliderRectOptional(@src(), "margin", &self.margin, .y, link_margin.*, wd.options.marginGet()) or changed;
+            changed = sliderRectOptional(@src(), "border", &self.border, .y, link_border.*, wd.options.borderGet()) or changed;
+            changed = sliderRectOptional(@src(), "padding", &self.padding, .y, link_padding.*, wd.options.paddingGet()) or changed;
         }
         { // Top Right
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
 
-            if (dvui.sliderEntry(@src(), "radius: {d:0}", .{ .value = &corner_radius.y, .min = 0, .max = 200, .interval = 1 }, .{ .gravity_y = 0.5 })) {
-                changed = true;
-                if (link_radius.*) {
-                    corner_radius.* = .all(corner_radius.y);
-                }
-            }
+            changed = sliderRectOptional(@src(), "radius", &self.corner_radius, .y, link_radius.*, wd.options.corner_radiusGet()) or changed;
         }
     }
 
@@ -689,66 +666,46 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
         { // Middle Left
             var col = dvui.box(@src(), .{}, .{ .border = .all(1) });
             defer col.deinit();
-
-            if (dvui.sliderEntry(@src(), "margin: {d:0.0}", .{ .value = &margin.x, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_margin.*) {
-                    margin.* = .all(margin.x);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "border: {d:0.0}", .{ .value = &border.x, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_border.*) {
-                    border.* = .all(border.x);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "padding: {d:0.0}", .{ .value = &padding.x, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_padding.*) {
-                    padding.* = .all(padding.x);
-                }
-            }
+            changed = sliderRectOptional(@src(), "margin", &self.margin, .x, link_margin.*, wd.options.marginGet()) or changed;
+            changed = sliderRectOptional(@src(), "border", &self.border, .x, link_border.*, wd.options.borderGet()) or changed;
+            changed = sliderRectOptional(@src(), "padding", &self.padding, .x, link_padding.*, wd.options.paddingGet()) or changed;
         }
         { // Middle Center
             var col = dvui.box(@src(), .{ .dir = .horizontal }, .{ .border = .all(1), .expand = .both });
             defer col.deinit();
 
-            if (dvui.slider(@src(), .{ .dir = .vertical, .fraction = gravity_y }, .{ .expand = .vertical })) {
-                self.gravity_y.? = 1.0 - gravity_y.*;
-                changed = true;
-            }
+            var gravity_set: bool = self.gravity_y != null or self.gravity_y != null;
+            var gravity = self.gravityGet();
+            gravity.y = 1 - gravity.y;
+
+            if (gravity_set)
+                if (dvui.slider(@src(), .{ .dir = .vertical, .fraction = &gravity.y }, .{ .expand = .vertical })) {
+                    //                self.gravity_y.? = 1.0 - gravity_y.*;
+                    changed = true;
+                };
 
             var side = dvui.box(@src(), .{}, .{ .expand = .both });
             defer side.deinit();
 
-            dvui.labelNoFmt(@src(), "gravity", .{}, .{ .gravity_y = 0.5 });
+            changed = dvui.checkbox(@src(), &gravity_set, "gravity", .{ .gravity_y = 0.5 }) or changed;
 
-            if (dvui.slider(@src(), .{ .fraction = gravity_x }, .{ .expand = .horizontal, .gravity_y = 1 })) {
-                changed = true;
+            if (gravity_set) {
+                if (dvui.slider(@src(), .{ .fraction = &gravity.x }, .{ .expand = .horizontal, .gravity_y = 1 })) {
+                    changed = true;
+                }
+                self.gravity_x = gravity.x;
+                self.gravity_y = 1 - gravity.y;
+            } else {
+                self.gravity_x = null;
+                self.gravity_y = null;
             }
         }
         { // Middle Right
             var col = dvui.box(@src(), .{}, .{ .border = .all(1) });
             defer col.deinit();
-
-            if (dvui.sliderEntry(@src(), "margin: {d:0.0}", .{ .value = &margin.w, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_margin.*) {
-                    margin.* = .all(margin.w);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "border: {d:0.0}", .{ .value = &border.w, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_border.*) {
-                    border.* = .all(border.w);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "padding: {d:0.0}", .{ .value = &padding.w, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_padding.*) {
-                    padding.* = .all(padding.w);
-                }
-            }
+            changed = sliderRectOptional(@src(), "margin", &self.margin, .w, link_margin.*, wd.options.marginGet()) or changed;
+            changed = sliderRectOptional(@src(), "border", &self.border, .w, link_border.*, wd.options.borderGet()) or changed;
+            changed = sliderRectOptional(@src(), "padding", &self.padding, .w, link_padding.*, wd.options.paddingGet()) or changed;
         }
     }
 
@@ -759,46 +716,20 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
 
-            if (dvui.sliderEntry(@src(), "radius: {d:0}", .{ .value = &corner_radius.h, .min = 0, .max = 200, .interval = 1 }, .{ .gravity_y = 0.5 })) {
-                changed = true;
-                if (link_radius.*) {
-                    corner_radius.* = .all(corner_radius.h);
-                }
-            }
+            changed = sliderRectOptional(@src(), "radius", &self.corner_radius, .h, link_radius.*, wd.options.corner_radiusGet()) or changed;
         }
         { // Bottom Center
             var col = dvui.box(@src(), .{}, .{ .border = .all(1) });
             defer col.deinit();
-
-            if (dvui.sliderEntry(@src(), "margin: {d:0.0}", .{ .value = &margin.h, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_margin.*) {
-                    margin.* = .all(margin.h);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "border: {d:0.0}", .{ .value = &border.h, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_border.*) {
-                    border.* = .all(border.h);
-                }
-            }
-            if (dvui.sliderEntry(@src(), "padding: {d:0.0}", .{ .value = &padding.h, .min = 0, .max = 20.0, .interval = 1 }, .{})) {
-                changed = true;
-                if (link_padding.*) {
-                    padding.* = .all(padding.h);
-                }
-            }
+            changed = sliderRectOptional(@src(), "margin", &self.margin, .h, link_margin.*, wd.options.marginGet()) or changed;
+            changed = sliderRectOptional(@src(), "border", &self.border, .h, link_border.*, wd.options.borderGet()) or changed;
+            changed = sliderRectOptional(@src(), "padding", &self.padding, .h, link_padding.*, wd.options.paddingGet()) or changed;
         }
         { // Bottom Right
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
 
-            if (dvui.sliderEntry(@src(), "radius: {d:0}", .{ .value = &corner_radius.w, .min = 0, .max = 200, .interval = 1 }, .{ .gravity_y = 0.5 })) {
-                changed = true;
-                if (link_radius.*) {
-                    corner_radius.* = .all(corner_radius.w);
-                }
-            }
+            changed = sliderRectOptional(@src(), "radius", &self.corner_radius, .w, link_radius.*, wd.options.corner_radiusGet()) or changed;
         }
     }
 
@@ -809,20 +740,28 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
         dvui.labelNoFmt(@src(), "Link: ", .{}, .{});
 
         if (dvui.checkbox(@src(), link_margin, "margin", .{})) {
-            margin.* = .all(margin.x);
-            changed = true;
+            if (self.margin) |*margin| {
+                margin.* = .all(margin.x);
+                changed = true;
+            }
         }
         if (dvui.checkbox(@src(), link_border, "border", .{})) {
-            border.* = .all(border.x);
-            changed = true;
+            if (self.border) |*border| {
+                border.* = .all(border.x);
+                changed = true;
+            }
         }
         if (dvui.checkbox(@src(), link_padding, "padding", .{})) {
-            padding.* = .all(padding.x);
-            changed = true;
+            if (self.padding) |*padding| {
+                padding.* = .all(padding.x);
+                changed = true;
+            }
         }
         if (dvui.checkbox(@src(), link_radius, "radius", .{})) {
-            corner_radius.* = .all(corner_radius.x);
-            changed = true;
+            if (self.corner_radius) |*radius| {
+                radius.* = .all(radius.x);
+                changed = true;
+            }
         }
     }
 
@@ -831,84 +770,305 @@ fn layoutPage(self: *Options, id: dvui.Id) bool {
 
 fn stylePage(self: *Options, id: dvui.Id) bool {
     var changed = false;
-
-    var row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-
-    var background = self.backgroundGet();
-    if (dvui.checkbox(@src(), &background, "background", .{ .gravity_y = 0.5 })) {
-        changed = true;
-        self.background = background;
-    }
-
-    row.deinit();
-    row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .margin = .{ .y = 5 } });
-    defer row.deinit();
-
-    const OptionsColors = enum { fill, fill_hover, fill_press, text, text_hover, text_press, border };
-    const active_color = dvui.dataGetPtrDefault(null, id, "Color", OptionsColors, .fill);
-
+    var outer_vbox = dvui.box(@src(), .{}, .{});
+    defer outer_vbox.deinit();
     {
-        const tabs = dvui.tabs(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
-        defer tabs.deinit();
+        var row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
 
-        const colors = comptime std.meta.tags(OptionsColors);
-        inline for (colors, 0..) |color_ask, i| {
-            const tab = tabs.addTab(active_color.* == color_ask, .{
-                .expand = .horizontal,
-                .padding = .all(2),
-                .id_extra = i,
-            });
-            defer tab.deinit();
+        var background = self.backgroundGet();
+        if (dvui.checkbox(@src(), &background, "background", .{ .gravity_y = 0.5 })) {
+            changed = true;
+            self.background = if (background) background else null;
+        }
 
-            if (tab.clicked()) {
-                active_color.* = color_ask;
+        row.deinit();
+        row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .margin = .{ .y = 5 } });
+        defer row.deinit();
+
+        const OptionsColors = enum { fill, fill_hover, fill_press, text, text_hover, text_press, border };
+        const active_color = dvui.dataGetPtrDefault(null, id, "Color", OptionsColors, .fill);
+
+        {
+            const tabs = dvui.tabs(@src(), .{ .dir = .vertical }, .{ .expand = .vertical });
+            defer tabs.deinit();
+
+            const colors = comptime std.meta.tags(OptionsColors);
+            inline for (colors, 0..) |color_ask, i| {
+                const tab = tabs.addTab(active_color.* == color_ask, .{
+                    .expand = .horizontal,
+                    .padding = .all(2),
+                    .id_extra = i,
+                });
+                defer tab.deinit();
+
+                if (tab.clicked()) {
+                    active_color.* = color_ask;
+                }
+
+                var label_opts = tab.data().options.strip();
+                if (dvui.captured(tab.data().id)) {
+                    label_opts.color_text = label_opts.color(.text_press);
+                }
+
+                const field = "color_" ++ @tagName(color_ask);
+                const color = @field(self, field);
+
+                const color_indicator = dvui.overlay(@src(), .{
+                    .expand = .ratio,
+                    .min_size_content = .all(10),
+                    .corner_radius = .all(100),
+                    .border = .all(1),
+                    .background = true,
+                    .color_fill = color,
+                });
+                const color_width = color_indicator.data().rectScale().r.w;
+                if (color == null) {
+                    dvui.labelNoFmt(@src(), "?", .{}, .{ .expand = .ratio, .gravity_x = 0.5, .gravity_y = 0.5 });
+                }
+                color_indicator.deinit();
+                dvui.labelNoFmt(@src(), @tagName(color_ask), .{}, .{ .margin = .{ .x = color_width } });
+            }
+        }
+
+        {
+            var vbox = dvui.box(@src(), .{}, .{});
+            defer vbox.deinit();
+
+            const field: *?dvui.Color = switch (active_color.*) {
+                inline else => |c| &@field(self, "color_" ++ @tagName(c)),
+            };
+            var hsv = dvui.Color.HSV.fromColor(field.* orelse .white);
+            if (dvui.colorPicker(@src(), .{ .hsv = &hsv, .dir = .horizontal }, .{})) {
+                changed = true;
+                field.* = hsv.toColor();
             }
 
-            var label_opts = tab.data().options.strip();
-            if (dvui.captured(tab.data().id)) {
-                label_opts.color_text = label_opts.color(.text_press);
+            if (field.* != null and dvui.button(@src(), "Set to null", .{}, .{})) {
+                changed = true;
+                field.* = null;
             }
-
-            const field = "color_" ++ @tagName(color_ask);
-            const color = @field(self, field);
-
-            const color_indicator = dvui.overlay(@src(), .{
-                .expand = .ratio,
-                .min_size_content = .all(10),
-                .corner_radius = .all(100),
-                .border = .all(1),
-                .background = true,
-                .color_fill = color,
-            });
-            const color_width = color_indicator.data().rectScale().r.w;
-            if (color == null) {
-                dvui.labelNoFmt(@src(), "?", .{}, .{ .expand = .ratio, .gravity_x = 0.5, .gravity_y = 0.5 });
-            }
-            color_indicator.deinit();
-            dvui.labelNoFmt(@src(), @tagName(color_ask), .{}, .{ .margin = .{ .x = color_width } });
         }
     }
-
-    {
-        var vbox = dvui.box(@src(), .{}, .{});
+    _ = dvui.spacer(@src(), .{ .expand = .horizontal, .margin = Rect.all(6) });
+    changed = fontChanger(self) or changed;
+    _ = dvui.spacer(@src(), .{ .expand = .horizontal, .margin = Rect.all(6) });
+    const box_shadow_orig = self.box_shadow;
+    const label_str = if (self.box_shadow == null) "box_shadow not set" else "box_shadow";
+    if (dvui.expander(@src(), label_str, .{ .default_expanded = self.box_shadow != null }, .{ .expand = .horizontal })) {
+        var vbox = dvui.box(@src(), .{}, .{
+            .expand = .horizontal,
+            .border = .{ .x = 1 },
+            .background = true,
+            .margin = .{ .w = 12, .x = 12 },
+            .padding = Rect.all(6),
+        });
         defer vbox.deinit();
-
-        const field: *?dvui.Color = switch (active_color.*) {
-            inline else => |c| &@field(self, "color_" ++ @tagName(c)),
-        };
-        var hsv = dvui.Color.HSV.fromColor(field.* orelse .white);
-        if (dvui.colorPicker(@src(), .{ .hsv = &hsv, .dir = .horizontal }, .{})) {
-            changed = true;
-            field.* = hsv.toColor();
-        }
-
-        if (field.* != null and dvui.button(@src(), "Set to null", .{}, .{})) {
-            changed = true;
-            field.* = null;
-        }
+        var al: dvui.Alignment = .init(@src(), 0);
+        defer al.deinit();
+        const T = Options.BoxShadow;
+        var box_shadow: Options.BoxShadow = self.box_shadow orelse .{};
+        quickDisplayField(@src(), T, "color", &box_shadow.color, .default, &al);
+        quickDisplayField(@src(), T, "offset", &box_shadow.offset, .default, &al);
+        quickDisplayField(@src(), T, "fade", &box_shadow.fade, .default, &al);
+        quickDisplayField(@src(), T, "alpha", &box_shadow.alpha, .default, &al);
+        quickDisplayField(@src(), T, "shrink", &box_shadow.shrink, .default, &al);
+        quickDisplayField(@src(), T, "corner_radius", &box_shadow.corner_radius, .default, &al);
+        self.box_shadow = box_shadow;
+    } else {
+        self.box_shadow = null;
+    }
+    if (box_shadow_orig == null and self.box_shadow != null or box_shadow_orig != null and self.box_shadow == null) {
+        changed = true;
+    } else if (box_shadow_orig != null and self.box_shadow != null) {
+        changed = !std.mem.eql(u8, std.mem.asBytes(&self.box_shadow.?), std.mem.asBytes(&box_shadow_orig.?));
     }
 
     return changed;
+}
+
+fn fontChanger(self: *Options) bool {
+    var changed = false;
+
+    const label_str = if (self.font == null) "font not set" else "font";
+    if (dvui.expander(@src(), label_str, .{ .default_expanded = self.font != null }, .{ .expand = .horizontal })) {
+        changed = self.font == null;
+        var edited_font = self.fontGet();
+
+        var vbox = dvui.box(@src(), .{}, .{
+            .expand = .horizontal,
+            .border = .{ .x = 1 },
+            .background = true,
+            .margin = .{ .w = 12, .x = 12 },
+            .padding = Rect.all(6),
+        });
+        defer vbox.deinit();
+
+        var current_font_index: ?usize = null;
+        var current_font_name: []const u8 = "Unknown";
+        for (dvui.currentWindow().fonts.database.items, 0..) |dbs, i| {
+            if (std.mem.eql(u8, dbs.familyName(), edited_font.familyName())) {
+                current_font_index = i;
+                current_font_name = edited_font.familyName();
+            }
+        }
+
+        var dd: dvui.DropdownWidget = undefined;
+        dd.init(@src(), .{ .selected_index = current_font_index, .label = current_font_name }, .{});
+        if (dd.dropped()) {
+            for (dvui.currentWindow().fonts.database.items) |dbs| {
+                const name = dbs.name(dvui.currentWindow().lifo());
+                defer dvui.currentWindow().lifo().free(name);
+                if (dd.addChoiceLabel(name)) {
+                    edited_font = edited_font.withFamily(dbs.familyName()).withStyle(dbs.style).withWeight(dbs.weight);
+                    changed = true;
+                }
+            }
+        }
+        dd.deinit();
+        if (dvui.sliderEntry(@src(), "Size: {d:0}", .{ .min = 4, .max = 100, .interval = 1, .value = &edited_font.size }, .{})) {
+            changed = true;
+        }
+        if (dvui.sliderEntry(@src(), "Line height: {d:0.1}", .{ .min = 0, .max = 10, .interval = 0.1, .value = &edited_font.line_height_factor }, .{})) {
+            changed = true;
+        }
+
+        if (changed) {
+            self.font = edited_font;
+        }
+    } else {
+        self.font = null;
+        changed = true;
+    }
+
+    return changed;
+}
+
+fn quickDisplayField(comptime src: std.builtin.SourceLocation, ContainerT: type, comptime field_name: []const u8, field_value_ptr: anytype, field_option: dvui.struct_ui.FieldOptions, al: *dvui.Alignment) void {
+    const rect_opts: dvui.struct_ui.StructOptions(dvui.Rect) = .init(.{
+        .x = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
+        .y = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
+        .h = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
+        .w = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
+    }, .{});
+
+    const size_opts: dvui.struct_ui.StructOptions(dvui.Size) = .init(.{
+        .h = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
+        .w = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
+    }, .{});
+
+    const point_opts: dvui.struct_ui.StructOptions(dvui.Point) = .init(.{
+        .x = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
+        .y = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
+    }, .{});
+
+    const color_opts: dvui.struct_ui.StructOptions(dvui.Color) = .init(.{
+        .r = .{ .number = .{ .widget_type = .slider_entry, .min = 0, .max = 255 } },
+        .g = .{ .number = .{ .widget_type = .slider_entry, .min = 0, .max = 255 } },
+        .b = .{ .number = .{ .widget_type = .slider_entry, .min = 0, .max = 255 } },
+        .a = .{ .number = .{ .widget_type = .slider_entry, .min = 0, .max = 255 } },
+    }, .{});
+
+    dvui.struct_ui.displayField(src, ContainerT, field_name, field_value_ptr, 10, field_option, .{
+        rect_opts,
+        color_opts,
+        size_opts,
+        point_opts,
+    }, al);
+}
+
+fn infoPage(self: Options) void {
+    var al: dvui.Alignment = .init(@src(), 0);
+    defer al.deinit();
+    var vbox = dvui.box(@src(), .{}, .{ .expand = .horizontal });
+    defer vbox.deinit();
+    {
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            dvui.labelNoFmt(@src(), "name: ", .{}, .{});
+            al.spacer(@src(), 0);
+            var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
+            if (self.name) |name| {
+                tl.addText(name, .{});
+            } else {
+                tl.addText("null", .{});
+            }
+            tl.deinit();
+        }
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            dvui.labelNoFmt(@src(), "role: ", .{}, .{});
+            al.spacer(@src(), 0);
+            var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
+            if (self.role) |role| {
+                tl.addText(@tagName(role), .{});
+            } else {
+                tl.addText("null", .{});
+            }
+            tl.deinit();
+        }
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            dvui.labelNoFmt(@src(), "tag: ", .{}, .{});
+            al.spacer(@src(), 0);
+            var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
+            if (self.tag) |tag| {
+                tl.addText(tag, .{});
+            } else {
+                tl.addText("null", .{});
+            }
+            tl.deinit();
+        }
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            dvui.labelNoFmt(@src(), "id_extra: ", .{}, .{});
+            al.spacer(@src(), 0);
+            var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
+            if (self.id_extra) |id_extra| {
+                const str = std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{id_extra}) catch "";
+                tl.addText(str, .{});
+            } else {
+                tl.addText("null", .{});
+            }
+            tl.deinit();
+        }
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            dvui.labelNoFmt(@src(), "label: ", .{}, .{});
+            al.spacer(@src(), 0);
+            var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
+            if (self.label) |label| {
+                const str = switch (label) {
+                    .by_id => |id| std.fmt.allocPrint(dvui.currentWindow().arena(), "by_id = {x}", .{id}) catch "",
+                    .for_id => |id| std.fmt.allocPrint(dvui.currentWindow().arena(), "for_id = {x}", .{id}) catch "",
+                    .label_widget => |val| std.fmt.allocPrint(dvui.currentWindow().arena(), "label_widget = {t}", .{val}) catch "",
+                    .text => |val| std.fmt.allocPrint(dvui.currentWindow().arena(), "text = \"{s}\"", .{val}) catch "",
+                };
+                tl.addText(str, .{});
+            } else {
+                tl.addText("null", .{});
+            }
+            tl.deinit();
+        }
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            dvui.labelNoFmt(@src(), "rect: ", .{}, .{});
+            al.spacer(@src(), 0);
+            var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
+            if (self.rect) |rect| {
+                const str = std.fmt.allocPrint(dvui.currentWindow().arena(), "x = {d}, y = {d}, h = {d}, w = {d}", .{ rect.x, rect.y, rect.h, rect.w }) catch "";
+                tl.addText(str, .{});
+            } else {
+                tl.addText("null", .{});
+            }
+            tl.deinit();
+        }
+    }
 }
 
 /// Used to copy the code for any runtime type, used to copy
