@@ -603,6 +603,57 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 addExample("dx11-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
             }
         },
+        .glfw_opengl => {
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .stb_image = true, .tiny_file_dialogs = true, .tree_sitter = true });
+
+            const glfw_opengl_mod = b.addModule("glfw-opengl", .{
+                .root_source_file = b.path("src/backends/glfw-opengl.zig"),
+                .target = target,
+                .optimize = optimize,
+                .link_libc = true,
+            });
+            const maybe_zgl = b.lazyDependency("zgl", .{
+                .target = target,
+                .optimize = optimize,
+            });
+
+            if (maybe_zgl) |zgl| {
+                glfw_opengl_mod.addImport("zgl", zgl.module("zgl"));
+                switch (target.result.os.tag) {
+                    .windows => glfw_opengl_mod.linkSystemLibrary("opengl32", .{}),
+                    .linux => glfw_opengl_mod.linkSystemLibrary("GL", .{}),
+                    .macos => {
+                        glfw_opengl_mod.linkFramework("OpenGL", .{});
+                        glfw_opengl_mod.linkFramework("Cocoa", .{});
+                    },
+                    else => {},
+                }
+            }
+
+            const maybe_glfw = b.lazyDependency(
+                "zglfw",
+                .{
+                    .target = target,
+                    .optimize = optimize,
+                },
+            );
+
+            if (maybe_glfw) |glfw| {
+                glfw_opengl_mod.addImport("zglfw", glfw.module("root"));
+                glfw_opengl_mod.linkLibrary(glfw.artifact("glfw"));
+            }
+
+            const dvui_glfw_opengl = addDvuiModule("dvui-glfw-opengl", dvui_opts);
+            linkBackend(dvui_glfw_opengl, glfw_opengl_mod);
+
+            const example_opts: ExampleOptions = .{
+                .dvui_mod = dvui_glfw_opengl,
+                .backend_name = "glfw-opengl-backend",
+                .backend_mod = glfw_opengl_mod,
+            };
+            addExample("glfw-opengl-ontop", b.path("examples/glfw-opengl-ontop.zig"), test_dvui_and_app, example_opts, dvui_opts);
+            addExample("glfw-opengl-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
+        },
         .web => {
             if (dvui_opts.vertex_index != .u16) {
                 std.log.err("web backend currently requires u16 vertex index", .{});
