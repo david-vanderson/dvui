@@ -386,19 +386,33 @@ pub fn textureCreateTarget(
         framebuf.delete();
         return err;
     };
-    framebuf.bind(.draw_buffer);
-    zgl.clearColor(0, 0, 0, 0);
-    zgl.clear(.{ .color = true });
-    zgl.bindFramebuffer(.invalid, .draw_buffer);
-    return .{
+    const target: dvui.Texture.Target = .{
         .ptr = @ptrFromInt(@intFromEnum(tex)),
         .height = height,
         .width = width,
         .format = .rgba_32,
     };
+    ctx.textureClearTarget(target);
+    return target;
+}
+
+pub fn textureClearTarget(self: *@This(), texture: dvui.TextureTarget) void {
+    self.renderTarget(texture) catch return;
+    zgl.clearColor(0, 0, 0, 0);
+    zgl.clear(.{ .color = true });
+    self.renderTarget(null) catch return;
 }
 
 pub fn textureFromTarget(_: *@This(), texture: dvui.TextureTarget) !dvui.Texture {
+    return .{
+        .ptr = texture.ptr,
+        .height = texture.height,
+        .width = texture.width,
+        .format = texture.format,
+    };
+}
+
+pub fn textureFromTargetTemp(_: *@This(), texture: dvui.TextureTarget) !dvui.Texture {
     return .{
         .ptr = texture.ptr,
         .height = texture.height,
@@ -435,6 +449,15 @@ pub fn textureDestroy(ctx: *@This(), texture: dvui.Texture) void {
         kv.value.delete();
     }
 }
+
+pub fn textureDestroyTarget(ctx: *@This(), texture: dvui.Texture.Target) void {
+    const tex: zgl.Texture = @enumFromInt(@intFromPtr(texture.ptr));
+    tex.delete();
+    if (ctx.framebuf_map.fetchRemove(tex)) |kv| {
+        kv.value.delete();
+    }
+}
+
 /// Get clipboard content (text only)
 pub fn clipboardText(ctx: *@This()) ![]const u8 {
     const text = ctx.window.getClipboardString() orelse {
