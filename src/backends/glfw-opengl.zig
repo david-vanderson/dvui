@@ -335,7 +335,12 @@ pub fn textureCreate(
     width: u32,
     height: u32,
     interpolation: dvui.enums.TextureInterpolation,
+    format: dvui.enums.TexturePixelFormat,
 ) !dvui.Texture {
+    if (format != .rgba_32) {
+        log.err("textureCreate currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
     const tex = zgl.Texture.gen();
     tex.bind(.@"2d");
     zgl.texParameter(.@"2d", .min_filter, if (interpolation == .nearest) .nearest else .linear);
@@ -346,6 +351,7 @@ pub fn textureCreate(
         .ptr = @ptrFromInt(@intFromEnum(tex)),
         .height = height,
         .width = width,
+        .format = .rgba_32,
     };
 }
 
@@ -360,7 +366,12 @@ pub fn textureCreateTarget(
     width: u32,
     height: u32,
     interpolation: dvui.enums.TextureInterpolation,
+    format: dvui.enums.TexturePixelFormat,
 ) !dvui.TextureTarget {
+    if (format != .rgba_32) {
+        log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
+        return dvui.Backend.TextureError.TextureCreate;
+    }
     const tex = zgl.Texture.gen();
     tex.bind(.@"2d");
     zgl.texParameter(.@"2d", .min_filter, if (interpolation == .nearest) .nearest else .linear);
@@ -383,18 +394,16 @@ pub fn textureCreateTarget(
         .ptr = @ptrFromInt(@intFromEnum(tex)),
         .height = height,
         .width = width,
+        .format = .rgba_32,
     };
 }
 
-pub fn textureFromTarget(ctx: *@This(), texture: dvui.TextureTarget) !dvui.Texture {
-    const tex: zgl.Texture = @enumFromInt(@intFromPtr(texture.ptr));
-    if (ctx.framebuf_map.fetchRemove(tex)) |kv| {
-        kv.value.delete();
-    }
+pub fn textureFromTarget(_: *@This(), texture: dvui.TextureTarget) !dvui.Texture {
     return .{
         .ptr = texture.ptr,
         .height = texture.height,
         .width = texture.width,
+        .format = texture.format,
     };
 }
 
