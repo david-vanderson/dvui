@@ -1452,19 +1452,9 @@ pub fn defaultValue(T: type, ContainerT: type, comptime field_name: []const u8, 
         },
 
         inline .@"enum" => |e| return @enumFromInt(e.fields[0].value),
-        inline else => {
-            comptime var default_found = false;
-            inline for (struct_options) |opt| {
-                if (@TypeOf(opt).StructT == T) {
-                    default_found = true;
-                    return null;
-                }
-            }
-            return null;
-        },
+        inline else => return null,
     }
 }
-
 /// Return true if the field_option is valid for this type of field.
 pub fn validFieldOptionsType(field_name: []const u8, field_option: FieldOptions, required_tag: @typeInfo(FieldOptions).@"union".tag_type.?) bool {
     if (field_option != required_tag) {
