@@ -545,7 +545,15 @@ export class Dvui {
 
                 this.gl.bindTexture(this.gl.TEXTURE_2D, null);
 
+                this.imports.wasm_textureClearTarget(id);
+
                 return id;
+            },
+            wasm_textureClearTarget: (textureId) => {
+                this.imports.wasm_renderTarget(textureId);
+                this.gl.clearColor(0.0, 0.0, 0.0, 0.0); // fully transparent
+                this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+                this.imports.wasm_renderTarget(0);
             },
             wasm_textureRead: (textureId, pixels_out, width, height) => {
                 //console.log("textureRead " + textureId);
