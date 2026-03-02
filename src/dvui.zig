@@ -5237,8 +5237,9 @@ pub fn plotXY(src: std.builtin.SourceLocation, init_opts: PlotXYOptions, opts: O
 /// These allocations are automatically cleaned up when Window.deinit() is called.
 /// `struct_ui.string_map` can be used to check which strings have been modified and had memory allocated
 /// or to remove strings that should not be automatically deallocated by struct_ui.
-pub fn structUI(src: std.builtin.SourceLocation, comptime field_name: []const u8, struct_ptr: anytype, comptime depth: usize, struct_options: anytype) void {
-    var vbox = dvui.box(src, .{ .dir = .vertical }, .{ .expand = .horizontal });
+pub fn structUI(src: std.builtin.SourceLocation, comptime field_name: ?[]const u8, struct_ptr: anytype, comptime depth: usize, struct_options: anytype, opts: dvui.Options) void {
+    const default_options: dvui.Options = .{ .expand = .horizontal };
+    var vbox = dvui.box(src, .{ .dir = .vertical }, default_options.override(opts));
     defer vbox.deinit();
     const struct_box = struct_ui.displayStruct(@src(), field_name, struct_ptr, depth, .default, struct_options, null);
     if (struct_box) |b| b.deinit();
