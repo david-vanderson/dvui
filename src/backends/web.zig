@@ -50,6 +50,7 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_frame_buffer() u8;
     pub extern "dvui" fn wasm_textureCreate(pixels: [*]const u8, width: u32, height: u32, interp: u8) u32;
     pub extern "dvui" fn wasm_textureCreateTarget(width: u32, height: u32, interp: u8) u32;
+    pub extern "dvui" fn wasm_textureClearTarget(u32) void;
     pub extern "dvui" fn wasm_textureRead(texture: u32, pixels_out: [*]u8, width: u32, height: u32) void;
     pub extern "dvui" fn wasm_renderTarget(u32) void;
     pub extern "dvui" fn wasm_textureDestroy(u32) void;
@@ -107,6 +108,7 @@ pub const wasm = if (!builtin.is_test) struct {
     pub fn wasm_textureCreateTarget(_: u32, _: u32, _: u8) u32 {
         return undefined;
     }
+    pub fn wasm_textureClearTarget(_: u32) void {}
     pub fn wasm_textureRead(_: u32, _: [*]u8, _: u32, _: u32) void {}
     pub fn wasm_renderTarget(_: u32) void {}
     pub fn wasm_textureDestroy(_: u32) void {}
@@ -645,7 +647,15 @@ pub fn textureCreateTarget(_: *WebBackend, width: u32, height: u32, interpolatio
     return dvui.TextureTarget{ .ptr = @ptrFromInt(id), .width = width, .height = height, .format = format };
 }
 
+pub fn textureClearTarget(_: *WebBackend, tex: dvui.TextureTarget) void {
+    wasm.wasm_textureClearTarget(@intCast(@intFromPtr(tex.ptr)));
+}
+
 pub fn textureFromTarget(_: *WebBackend, texture: dvui.TextureTarget) !dvui.Texture {
+    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
+}
+
+pub fn textureFromTargetTemp(_: *WebBackend, texture: dvui.TextureTarget) !dvui.Texture {
     return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
 }
 
@@ -662,6 +672,10 @@ pub fn textureReadTarget(_: *WebBackend, texture: dvui.TextureTarget, pixels_out
 }
 
 pub fn textureDestroy(_: *WebBackend, texture: dvui.Texture) void {
+    wasm.wasm_textureDestroy(@intCast(@intFromPtr(texture.ptr)));
+}
+
+pub fn textureDestroyTarget(_: *WebBackend, texture: dvui.Texture.Target) void {
     wasm.wasm_textureDestroy(@intCast(@intFromPtr(texture.ptr)));
 }
 
