@@ -103,11 +103,29 @@ pub fn textureReadTarget(self: Backend, texture: dvui.TextureTarget, pixels_out:
     return self.impl.textureReadTarget(texture, pixels_out);
 }
 
-/// Convert texture target made with `textureCreateTarget` into return texture
-/// as if made by `textureCreate`.  After this call, texture target will not be
-/// used by dvui.
-pub fn textureFromTarget(self: Backend, texture: dvui.TextureTarget) TextureError!dvui.Texture {
-    return self.impl.textureFromTarget(texture);
+/// Destroy `texture` made with `Target.Create`. After this call, this texture
+/// pointer will not be used by dvui.
+pub fn textureClearTarget(self: Backend, texture: dvui.Texture.Target) void {
+    return self.impl.textureClearTarget(texture);
+}
+
+/// Destroy `texture` made with `Target.Create`. After this call, this texture
+/// pointer will not be used by dvui.
+pub fn textureDestroyTarget(self: Backend, texture: dvui.Texture.Target) void {
+    return self.impl.textureDestroyTarget(texture);
+}
+
+/// Convert `target` made with `textureCreateTarget` into return texture
+/// as if made by `textureCreate`.  target will be destroyed.
+pub fn textureFromTarget(self: Backend, target: dvui.TextureTarget) TextureError!dvui.Texture {
+    return self.impl.textureFromTarget(target);
+}
+
+/// Get a temporary drawable texture from this target, as if made by
+/// `textureCreate` and then passed to `textureDestroyLater`.  target is not
+/// destroyed.
+pub fn textureFromTargetTemp(self: Backend, target: dvui.TextureTarget) TextureError!dvui.Texture {
+    return self.impl.textureFromTargetTemp(target);
 }
 
 /// Render future `drawClippedTriangles` to the passed `texture` (or screen
