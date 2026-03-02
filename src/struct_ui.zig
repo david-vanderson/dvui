@@ -419,7 +419,7 @@ pub fn numberFieldWidget(
             var box = dvui.box(src, .{ .dir = .horizontal }, .{});
             defer box.deinit();
 
-            dvui.label(@src(), "{s}", .{field_name}, .{ .margin = .{ .y = 4 } });
+            dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{ .margin = .{ .y = 4 } });
             var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
@@ -437,7 +437,7 @@ pub fn numberFieldWidget(
         .slider_entry => {
             var box = dvui.box(src, .{ .dir = .horizontal }, .{});
             defer box.deinit();
-            dvui.label(@src(), "{s}", .{field_name}, .{ .margin = .{ .y = 4 } });
+            dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{ .margin = .{ .y = 4 } });
             var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id), .expand = .vertical });
             defer hbox_aligned.deinit();
             alignment.record(box.data().id, hbox_aligned.data());
@@ -474,7 +474,7 @@ pub fn numberFieldWidgetOptional(
     alignment: *dvui.Alignment,
 ) void {
     const type_info = @typeInfo(@TypeOf(field_value_optional_ptr));
-    if (type_info != .pointer and @typeInfo(type_info.pointer.child) != .optional) {
+    if (type_info != .pointer or @typeInfo(type_info.pointer.child) != .optional) {
         @compileError(std.fmt.comptimePrint("{s} requires a pointer to an optional, but received a {s}", .{ "numberFieldWidgetOptional", @typeName(field_value_optional_ptr.*) }));
     }
     validateFieldPtrType(null, &.{ .float, .int }, "numberFieldWidgetOptional", @TypeOf(&field_value_optional_ptr.*.?));
@@ -565,7 +565,7 @@ pub fn enumFieldWidgetOptional(
     alignment: *dvui.Alignment,
 ) void {
     const type_info = @typeInfo(@TypeOf(field_value_optional_ptr));
-    if (type_info != .pointer and @typeInfo(type_info.pointer.child) != .optional) {
+    if (type_info != .pointer or @typeInfo(type_info.pointer.child) != .optional) {
         @compileError(std.fmt.comptimePrint("{s} requires a pointer to an optional, but received a {s}", .{ "enumFieldWidgetOptional", @typeName(field_value_optional_ptr.*) }));
     }
     validateFieldPtrType(null, &.{.@"enum"}, "enumFieldWidget", @TypeOf(&field_value_optional_ptr.*.?));
@@ -693,7 +693,7 @@ pub fn boolFieldWidgetOptional(
     alignment: *dvui.Alignment,
 ) void {
     const type_info = @typeInfo(@TypeOf(field_value_optional_ptr));
-    if (type_info != .pointer and @typeInfo(type_info.pointer.child) != .optional) {
+    if (type_info != .pointer or @typeInfo(type_info.pointer.child) != .optional) {
         @compileError(std.fmt.comptimePrint("{s} requires a pointer to an optional, but received a {s}", .{ "boolFieldWidgetOptional", @typeName(field_value_optional_ptr.*) }));
     }
     validateFieldPtrType(null, &.{.bool}, "boolFieldWidgetOptional", @TypeOf(&field_value_optional_ptr.*.?));
@@ -1158,7 +1158,7 @@ pub fn displayUnion(
                 inline else => |choice| {
                     const default_value = defaultValue(
                         @FieldType(UnionT, @tagName(choice)),
-                        UnionT,
+                        @FieldType(UnionT, @tagName(choice)),
                         field_name,
                         options,
                     );

@@ -1006,7 +1006,6 @@ const DisplayGroupBox = struct {
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
-    var label = undefined;
     var test_options: struct {
         long_label: bool,
         big_font: bool,
@@ -1327,7 +1326,8 @@ const DisplayTextEntry = struct {
                     init_opts = .{
                         .multiline = true,
                         .cache_layout = true,
-                        .scroll_horizontal = !init_opts.break_lines,
+                        .scroll_horizontal = false,
+                        .break_lines = true,
                         .text = .{ .internal = .{ .limit = 2_000_000 } },
                     };
                     options = .{ .expand = .both };
