@@ -58,6 +58,7 @@ pub const Triangles = @import("Triangles.zig");
 pub const Vertex = @import("Vertex.zig");
 pub const Widget = @import("Widget.zig");
 pub const WidgetData = @import("WidgetData.zig");
+pub const Debug = @import("Debug.zig");
 
 pub const entypo = @import("icons/entypo.zig");
 
@@ -2603,7 +2604,7 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
     const selected_index: ?usize = switch (choice) {
         .choice => |ch| @intFromEnum(ch.*),
         .choice_nullable => |ch| if (ch.*) |_|
-            if (init_opts.null_selectable) @intFromEnum(ch.*.?) + 1 else @intFromEnum(ch.*.?)
+            if (init_opts.null_selectable) @as(usize, @intFromEnum(ch.*.?)) + 1 else @intFromEnum(ch.*.?)
         else
             null,
     };
