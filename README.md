@@ -101,7 +101,7 @@ Tested with Zig v0.15.2 (for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.c
       <td><strong>GLFW</strong></td>
       <td><code>glfw-opengl-app</code></td>
       <td>todo</td>
-      <td>glfw-opengl-ontop</td>
+      <td><code>glfw-opengl-ontop</code></td>
     </tr>
     <tr>
       <td><strong>Web</strong></td>
