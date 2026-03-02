@@ -23,12 +23,34 @@ pub const Target = struct {
     pub fn create(width: u32, height: u32, interpolation: TextureInterpolation, format: TexturePixelFormat) TextureError!Target {
         return try dvui.currentWindow().backend.textureCreateTarget(width, height, interpolation, format);
     }
+
+    /// Destroy target from `Target.create` at the end of the frame.
+    ///
+    /// While `Backend.textureDestroyTarget` immediately destroys the texture, this
+    /// function deferres the destruction until the end of the frame, so it is safe
+    /// to use even in a subwindow where rendering is deferred.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn destroyLater(self: Target) void {
+        const cw = dvui.currentWindow();
+        cw.texture_cache.trash_target.append(cw.gpa, self) catch |err| {
+            dvui.log.err("Texture.Target.destroyLater got {any}\n", .{err});
+        };
+    }
+
+    /// Clear to transparent (all zero).
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn clear(self: Target) void {
+        dvui.currentWindow().backend.textureClearTarget(self);
+    }
 };
 
 pub const Cache = struct {
     cache: Storage = .empty,
     /// Used to defer destroying textures until the next call to `reset` or `deinit`
     trash: Trash = .empty,
+    trash_target: std.ArrayListUnmanaged(dvui.Texture.Target) = .empty,
 
     pub const Storage = dvui.TrackingAutoHashMap(Key, Texture, .get_and_put, dvui.Id);
     pub const Trash = std.ArrayListUnmanaged(dvui.Texture);
@@ -85,6 +107,11 @@ pub const Cache = struct {
             backend.textureDestroy(tex);
         }
         self.trash.clearRetainingCapacity();
+
+        for (self.trash_target.items) |tex| {
+            backend.textureDestroyTarget(tex);
+        }
+        self.trash_target.clearRetainingCapacity();
     }
 
     /// Deallocates and destroys all stored textures
@@ -99,6 +126,11 @@ pub const Cache = struct {
             backend.textureDestroy(tex);
         }
         self.trash.deinit(gpa);
+
+        for (self.trash_target.items) |tex| {
+            backend.textureDestroyTarget(tex);
+        }
+        self.trash_target.deinit(gpa);
     }
 };
 
@@ -365,11 +397,21 @@ pub fn readTarget(arena: std.mem.Allocator, texture: Target) TextureError![]Colo
     return @ptrCast(pixels);
 }
 
-/// Convert a target texture to a normal texture.  target is destroyed.
+/// Convert a target texture to a normal texture.  target is destroyed.  See
+/// `fromTargetTemp`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn fromTarget(target: Target) TextureError!Texture {
     return dvui.currentWindow().backend.textureFromTarget(target);
+}
+
+/// Get a temporary drawable Texture from a Target, that will be automatically
+/// cleaned up at the end of the frame.  target is not destroyed.  See
+/// `fromTarget`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn fromTargetTemp(target: Target) TextureError!Texture {
+    return dvui.currentWindow().backend.textureFromTargetTemp(target);
 }
 
 /// Destroy a texture created with `textureCreate` at the end of the frame.

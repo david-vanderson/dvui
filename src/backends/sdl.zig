@@ -922,42 +922,39 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
     );
     //try toErr(c.SDL_SetTextureBlendMode(texture, c.SDL_BLENDMODE_BLEND), "SDL_SetTextureBlendMode in textureCreateTarget",);
 
-    // make sure texture starts out transparent
+    const tex = dvui.TextureTarget{ .ptr = texture, .width = width, .height = height, .format = format };
+    self.textureClearTarget(tex);
+    return tex;
+}
+
+pub fn textureClearTarget(self: *SDLBackend, texture: dvui.TextureTarget) void {
     // null is the default render target
     const old = c.SDL_GetRenderTarget(self.renderer);
-    defer toErr(
-        c.SDL_SetRenderTarget(self.renderer, old),
-        "SDL_SetRenderTarget in textureCreateTarget",
-    ) catch log.err("Could not reset render target", .{});
+    defer _ = c.SDL_SetRenderTarget(self.renderer, old);
 
     var oldBlend: c_uint = undefined;
-    try toErr(
-        c.SDL_GetRenderDrawBlendMode(self.renderer, &oldBlend),
-        "SDL_GetRenderDrawBlendMode in textureCreateTarget",
-    );
-    defer toErr(
-        c.SDL_SetRenderDrawBlendMode(self.renderer, oldBlend),
-        "SDL_SetRenderDrawBlendMode in textureCreateTarget",
-    ) catch log.err("Could not reset render blend mode", .{});
+    _ = c.SDL_GetRenderDrawBlendMode(self.renderer, &oldBlend);
+    defer _ = c.SDL_SetRenderDrawBlendMode(self.renderer, oldBlend);
 
-    try toErr(
-        c.SDL_SetRenderTarget(self.renderer, texture),
-        "SDL_SetRenderTarget in textureCreateTarget",
-    );
-    try toErr(
+    toErr(
+        c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(texture.ptr))),
+        "SDL_SetRenderTarget in textureClearTarget",
+    ) catch return;
+
+    toErr(
         c.SDL_SetRenderDrawBlendMode(self.renderer, c.SDL_BLENDMODE_NONE),
-        "SDL_SetRenderDrawBlendMode in textureCreateTarget",
-    );
-    try toErr(
-        c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0),
-        "SDL_SetRenderDrawColor in textureCreateTarget",
-    );
-    try toErr(
-        c.SDL_RenderFillRect(self.renderer, null),
-        "SDL_RenderFillRect in textureCreateTarget",
-    );
+        "SDL_SetRenderDrawBlendMode in textureClearTarget",
+    ) catch return;
 
-    return dvui.TextureTarget{ .ptr = texture, .width = width, .height = height, .format = format };
+    toErr(
+        c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0),
+        "SDL_SetRenderDrawColor in textureClearTarget",
+    ) catch return;
+
+    toErr(
+        c.SDL_RenderFillRect(self.renderer, null),
+        "SDL_RenderFillRect in textureClearTarget",
+    ) catch return;
 }
 
 pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
@@ -1039,9 +1036,19 @@ pub fn textureDestroy(_: *SDLBackend, texture: dvui.Texture) void {
     c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(@alignCast(texture.ptr))));
 }
 
-pub fn textureFromTarget(_: *SDLBackend, texture: dvui.TextureTarget) !dvui.Texture {
+pub fn textureDestroyTarget(_: *SDLBackend, texture: dvui.Texture.Target) void {
+    c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(@alignCast(texture.ptr))));
+}
+
+// as if we are destroying target and creating a new texture
+pub fn textureFromTarget(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
     // SDL can't read from non-target textures, but we are enforcing that through zig types
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
+    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
+}
+
+// return is temporary, will not be destroyed
+pub fn textureFromTargetTemp(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
+    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
 }
 
 pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
