@@ -74,7 +74,7 @@ pub fn main() !void {
 
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 0);
+        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 255);
         _ = SDLBackend.c.SDL_RenderClear(backend.renderer);
 
         const keep_running = gui_frame();
@@ -107,6 +107,7 @@ pub fn main() !void {
 // return false if user wants to exit the app
 fn gui_frame() bool {
     const backend = g_backend orelse return false;
+
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal, .name = "main" });
         defer hbox.deinit();
@@ -169,17 +170,9 @@ fn gui_frame() bool {
     }
     tl2.deinit();
 
-    {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-        defer hbox.deinit();
-        const demo_label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
-        if (dvui.button(@src(), demo_label, .{}, .{})) {
-            dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
-        }
-        const widgetpedia_label = if (dvui.Examples.show_widgetpedia_window) "Hide Widgetpedia" else "Show Widgetpedia";
-        if (dvui.button(@src(), widgetpedia_label, .{}, .{})) {
-            dvui.Examples.show_widgetpedia_window = !dvui.Examples.show_widgetpedia_window;
-        }
+    const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
+    if (dvui.button(@src(), label, .{}, .{})) {
+        dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
     if (dvui.button(@src(), "Debug Window", .{}, .{})) {
@@ -255,7 +248,6 @@ fn gui_frame() bool {
 
     // look at demo() for examples of dvui widgets, shows in a floating window
     dvui.Examples.demo();
-    dvui.Examples.widgetpedia();
 
     // check for quitting
     for (dvui.events()) |*e| {
