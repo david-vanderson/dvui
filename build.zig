@@ -1033,15 +1033,17 @@ fn addExample(
     if (opts.accesskit.enabled() and !accessKitSupported(opts.target)) {
         compile_step.dependOn(&b.addFail("Accesskit is not supported for this target. Build with -Daccesskit=off").step);
     } else if (opts.accesskit == .shared) {
-        compile_step.dependOn(&b.addInstallFileWithDir(accessKitPath(
-            b,
-            opts.target,
-            b.lazyDependency("accesskit", .{}).?,
-            opts.accesskit,
-            true,
-        ), .bin, accessKitLibName(opts.target)).step);
-        // Converts shared lib path to be relative to exe install directory.
-        exe.root_module.addRPathSpecial("$ORIGIN");
+        if (b.lazyDependency("accesskit", .{})) |ak_dep| {
+            compile_step.dependOn(&b.addInstallFileWithDir(accessKitPath(
+                b,
+                opts.target,
+                ak_dep,
+                opts.accesskit,
+                true,
+            ), .bin, accessKitLibName(opts.target)).step);
+            // Converts shared lib path to be relative to exe install directory.
+            exe.root_module.addRPathSpecial("$ORIGIN");
+        }
     }
 
     const run_step = b.step(name, "Run " ++ name);
