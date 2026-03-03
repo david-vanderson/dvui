@@ -1111,3 +1111,50 @@ fn addWebExample(
 
     b.getInstallStep().dependOn(compile_step);
 }
+
+/// Given a lazy path to an svg file, e.g. `b.path('./src/image.svg')`
+/// return a LazyPath containing the generated tvg bytes. You can use this
+/// to make icons for DVUI apps from SVGs at build time
+/// (with svg2tvg supported SVG features only).
+///
+/// Example build.zig:
+///
+/// ```zig
+/// const dvui = @import("dvui");
+/// ...
+/// const tvg_bytes_path = dvui.svgPathToTvgPath(b.path())
+/// my_exe.root_module.addAnonymousImport("image", .{ .root_source_file = tvg_bytes_path });
+/// ````
+///
+/// Example usage in dvui application code:
+///
+/// ```zig
+/// const tvg_bytes = @embedFile("image");
+/// _ = dvui.buttonIcon(@src(), "my image", tvg_bytes, .{}, .{}, .{});
+/// ```
+pub fn svgPathToTvgPath(b: *std.Build, svg_path: std.Build.LazyPath) std.Build.LazyPath {
+    // use fast and native options since this is just for building
+    const optimize: std.builtin.OptimizeMode = .ReleaseFast;
+    const target: std.Build.ResolvedTarget = b.graph.host;
+    const svg2tvg_dep = b.dependency("svg2tvg", .{ .optimize = optimize, .target = target });
+    const svg2tvg_exe = b.addExecutable(.{
+        .name = "svg2tvg",
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .root_source_file = b.path("./tools/svg2tvg.zig"),
+            .imports = &.{
+                .{
+                    .name = "svg2tvg",
+                    .module = svg2tvg_dep.module("svg2tvg"),
+                },
+            },
+        }),
+    });
+
+    const run_svg2tvg_step = b.addRunArtifact(svg2tvg_exe);
+    run_svg2tvg_step.addFileArg(svg_path);
+    run_svg2tvg_step.addArg("-o");
+    const tvg_bytes = run_svg2tvg_step.addOutputFileArg("out.tvg");
+    return tvg_bytes;
+}
