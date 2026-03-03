@@ -1649,6 +1649,35 @@ const DiplaySpacer = struct {
     }
 };
 
+const DiplaySpinner = struct {
+    var name: []const u8 = "spinner()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{ .color_text = .green };
+    }
+
+    pub fn layoutWidget() void {
+        dvui.spinner(@src(), options.override(.{ .data_out = &wd }));
+    }
+
+    pub fn layoutWidgetControls() void {
+        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+            defer container.deinit();
+            var al: dvui.Alignment = .init(@src(), 0);
+            defer al.deinit();
+            struct_ui.displayOptional(@src(), dvui.Options, "color_text", &options.color_text, 1, .default, .{struct_options.color}, &al, .green);
+        }
+    }
+};
+
 const DisplayTextEntry = struct {
     var name: []const u8 = "textEntry()";
 
@@ -1865,6 +1894,66 @@ const DisplayTextEntry = struct {
     }
 };
 
+const DiplayToolTip = struct {
+    var name: []const u8 = "spinner()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.FloatingTooltipWidget.InitOptions = undefined;
+
+    var test_options: struct {
+        text: []const u8,
+    } = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{};
+        init_opts = .{ .active_rect = Rect.Physical.all(0) };
+        test_options.text = "This is some tooltip text";
+    }
+
+    pub fn layoutWidget() void {
+        var label_wd: dvui.WidgetData = undefined;
+        dvui.labelNoFmt(@src(), "Mouse over me", .{}, .{ .border = Rect.all(1), .data_out = &label_wd, .gravity_x = 0.5, .gravity_y = 0.5 });
+        init_opts.active_rect = label_wd.borderRectScale().r;
+        dvui.tooltip(@src(), init_opts, "{s}", .{test_options.text}, options.override(.{ .data_out = &wd }));
+    }
+
+    pub fn layoutWidgetControls() void {
+        {
+            const display_opts: StructOptions(@TypeOf(test_options)) = .initWithDefaults(.{
+                .text = .{ .text = .{ .multiline = true, .display = .read_write } },
+            }, null);
+            dvui.structUI(@src(), test_options_label, &test_options, 1, .{display_opts}, .{});
+        }
+        {
+            // TODO: Annoyingly we can;t just set the field to read_only because it does not yet propagate to the children of the field.
+            // Needs an enhancement to struct_ui.
+            const display_opts: StructOptions(dvui.Rect.Physical) = .initWithDefaults(.{
+                .x = .defaultReadOnly,
+                .y = .defaultReadOnly,
+                .w = .defaultReadOnly,
+                .h = .defaultReadOnly,
+            }, null);
+            dvui.structUI(@src(), "init_opts", &init_opts, 1, .{display_opts}, .{});
+        }
+
+        if (init_opts.position == .absolute) {
+            if (options.rect == null) {
+                options.rect = .{ .x = 100, .y = 100 };
+            }
+
+            dvui.structUI(@src(), "options.rect", &options.rect.?, 1, .{}, .{});
+        } else {
+            options.rect = null;
+        }
+    }
+};
+
 fn structColorPicker(field_name: []const u8, ptr: *anyopaque, read_only: bool, alignment: *dvui.Alignment) void {
     const field_value_ptr: *dvui.Color = @ptrCast(@alignCast(ptr));
 
@@ -1975,8 +2064,8 @@ const widget_hierarchy = [_]WidgetHierarchy{
     } },
 
     .{ .name = "spacer", .displayFn = DiplaySpacer.displayFn, .children = null },
-    .{ .name = "spinner", .displayFn = displayEmpty, .children = null },
-    .{ .name = "suggestion", .displayFn = DiplaySeparator.displayFn, .children = null },
+    .{ .name = "spinner", .displayFn = DiplaySpinner.displayFn, .children = null },
+    .{ .name = "suggestion", .displayFn = displayEmpty, .children = null },
     .{ .name = "tabs", .displayFn = displayEmpty, .children = null },
 
     .{ .name = "textEntries", .displayFn = displayEmpty, .children = &.{
@@ -1987,7 +2076,7 @@ const widget_hierarchy = [_]WidgetHierarchy{
 
     .{ .name = "textLayout", .displayFn = displayEmpty, .children = null },
     .{ .name = "toast", .displayFn = displayEmpty, .children = null },
-    .{ .name = "tooltip", .displayFn = displayEmpty, .children = null },
+    .{ .name = "tooltip", .displayFn = DiplayToolTip.displayFn, .children = null },
 };
 
 const lorem: []const []const u8 = &.{

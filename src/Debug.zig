@@ -524,7 +524,7 @@ fn sliderRectOptionalWithInitOpts(src: std.builtin.SourceLocation, comptime labe
 
         if (dvui.sliderEntry(
             @src(),
-            label ++ ": {d:0.0}",
+            label ++ ": {d:0.1}",
             slider_init_opts,
             .{ .margin = .{ .x = 0, .y = 4, .w = 4, .h = 4 }, .gravity_y = 0.5 },
         )) {
@@ -770,8 +770,8 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
 
 fn stylePage(self: *Options, id: dvui.Id) bool {
     var changed = false;
-    var outer_vbox = dvui.box(@src(), .{}, .{});
-    defer outer_vbox.deinit();
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+    defer scroll.deinit();
     {
         var row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
 
