@@ -178,6 +178,10 @@ pub const MaxSize = struct {
     pub fn sizeM(wide: f32, tall: f32) MaxSize {
         return .size(dvui.Font.theme(.body).sizeM(wide, tall));
     }
+
+    pub fn cast(anysize: anytype) MaxSize {
+        return .{ .w = anysize.w, .h = anysize.h };
+    }
 };
 
 pub const BoxShadow = struct {
