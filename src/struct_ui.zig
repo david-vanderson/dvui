@@ -734,6 +734,7 @@ pub const TextFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
     label: ?[]const u8 = null,
     customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
+    multiline: bool = false,
 
     /// Set to true if the string is heap allocated and should be
     /// freed before a new string is allocated.
@@ -795,7 +796,9 @@ pub fn textFieldWidget(
         defer hbox_aligned.deinit();
         alignment.record(box.data().id, hbox_aligned.data());
 
-        const text_box = dvui.textEntry(@src(), if (backing == .buffer) .{ .text = .{ .buffer = backing.buffer } } else .{}, .{});
+        const text_box = dvui.textEntry(@src(), if (backing == .buffer) .{ .text = .{ .buffer = backing.buffer }, .multiline = opt.multiline } else .{ .multiline = opt.multiline }, .{
+            .min_size_content = if (opt.multiline) .{ .h = dvui.themeGet().font_body.lineHeight() * 2 } else null,
+        });
         defer text_box.deinit();
         if (!text_box.text_changed and !std.mem.eql(u8, text_box.getText(), field_value_ptr.*)) {
             text_box.textSet(field_value_ptr.*, false);
@@ -1346,6 +1349,8 @@ pub fn displayStruct(
         }
     }
     if (field_option.standard.display == .none) return null;
+    // TODO: If the struct field is marked read-only, then make sure all of the fields in the struct are read-only as well.
+    // Potentially introduce a "const" options that propgates read-only to all children.
 
     const StructT = @TypeOf(field_value_ptr.*);
     const struct_options: StructOptions(StructT) = findMatchingStructOption(StructT, options) orelse .initWithDefaults(.{}, null);
