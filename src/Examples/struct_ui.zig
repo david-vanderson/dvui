@@ -57,7 +57,7 @@ pub fn structUI() void {
         defer b2.deinit();
 
         // Simple display of struct with no options.
-        dvui.structUI(@src(), "rect", &rect, 0, .{});
+        dvui.structUI(@src(), "rect", &rect, 0, .{}, .{});
     }
     // Customized, complex struct display
     //
@@ -80,10 +80,10 @@ pub fn structUI() void {
             struct_ui.displayStringBuf(@src(), "array_u8_editable_1", &slice, .{ .text = .{} }, &alignment, &test_instance.array_u8);
 
             // Edit it instead as an array of ints.
-            struct_ui.displayArray(@src(), "array_u8_editable_2", &test_instance.array_u8, 0, .{ .number = .{ .min = 0, .max = 126 } }, &alignment);
+            struct_ui.displayArray(@src(), TestStruct, "array_u8_editable_2", &test_instance.array_u8, 0, .{ .number = .{ .min = 0, .max = 126 } }, &alignment);
 
             // Optional pointers need to be handled manually by passing the pointer value to be set when the optional is selected.
-            struct_ui.displayOptional(@src(), "opt_int_ptr", &test_instance.opt_int_ptr, 1, .{ .number = .{} }, .{}, &alignment, &TestStruct.ts_int);
+            struct_ui.displayOptional(@src(), TestStruct, "opt_int_ptr", &test_instance.opt_int_ptr, 1, .{ .number = .{} }, .{}, &alignment, &TestStruct.ts_int);
 
             // Union fields can also be handled manually if custom initialization is required for different cases.
             if (struct_ui.displayContainer(@src(), "union_manual")) |union_box| {
@@ -93,12 +93,12 @@ pub fn structUI() void {
                     .c1 => {
                         if (test_instance.union_manual != .c1)
                             test_instance.union_manual = .{ .c1 = .{ .value1 = 99 } };
-                        struct_ui.displayField(@src(), "c1", &test_instance.union_manual.c1, 1, .default, .{}, &alignment);
+                        struct_ui.displayField(@src(), TestUnion, "c1", &test_instance.union_manual.c1, 1, .default, .{}, &alignment);
                     },
                     .c2 => {
                         if (test_instance.union_manual != .c2)
                             test_instance.union_manual = .{ .c2 = .{ .value2 = 55 } };
-                        struct_ui.displayField(@src(), "c2", &test_instance.union_manual.c2, 1, .default, .{}, &alignment);
+                        struct_ui.displayField(@src(), TestUnion, "c2", &test_instance.union_manual.c2, 1, .default, .{}, &alignment);
                     },
                 }
             }
@@ -119,11 +119,11 @@ pub fn structUI() void {
             .static_str = .{ .text = .{ .display = .read_only } },
             .var_str = .{ .text = .{ .display = .read_only } },
         }, .{});
-        dvui.structUI(@src(), "dynamic_strings", &StringDemo.ss_1, 0, .{dynamic_read_only_options});
+        dvui.structUI(@src(), "dynamic_strings", &StringDemo.ss_1, 0, .{dynamic_read_only_options}, .{});
         if (dvui.button(@src(), "Edit", .{}, .{})) {
             StringDemo.editing_dynamic = true;
         }
-        dvui.structUI(@src(), "buffered_strings", &StringDemo.ss_2, 0, .{buffered_read_only_options});
+        dvui.structUI(@src(), "buffered_strings", &StringDemo.ss_2, 0, .{buffered_read_only_options}, .{});
         if (dvui.button(@src(), "Edit", .{}, .{})) {
             StringDemo.editing_buffer = true;
         }
@@ -169,7 +169,7 @@ pub fn editStringStuctDynamic(comptime field_name: []const u8, ss: *StringStruct
         .static_str = .{ .text = .{ .display = .read_write } },
     }, null);
     options.field_options.remove(.raw_buffer);
-    dvui.structUI(@src(), field_name, ss, 0, .{options});
+    dvui.structUI(@src(), field_name, ss, 0, .{options}, .{});
 }
 
 pub fn editStringStructBuffered(comptime field_name: []const u8, ss: *StringStruct) void {
@@ -220,7 +220,7 @@ pub fn themeEditor() void {
         @src(),
         "Theme",
         theme,
-        2,
+        3,
         .default,
         .{ color_options, font_source_options },
         null,
