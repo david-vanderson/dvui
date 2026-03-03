@@ -1,5 +1,6 @@
 const std = @import("std");
 const enums_backend = @import("src/enums_backend.zig");
+pub const Backend = enums_backend.Backend;
 const Pkg = std.Build.Pkg;
 const Compile = std.Build.Step.Compile;
 
@@ -58,7 +59,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    var back_to_build = b.option(enums_backend.Backend, "backend", "Backend to build");
+    var back_to_build = b.option(Backend, "backend", "Backend to build");
 
     const test_step = b.step("test", "Test the dvui codebase");
     const check_step = b.step("check", "Check that the entire dvui codebase has no syntax errors");
@@ -158,7 +159,7 @@ pub fn build(b: *std.Build) !void {
     if (back_to_build) |backend| {
         try buildBackend(backend, true, dvui_opts);
     } else {
-        for (std.meta.tags(enums_backend.Backend)) |backend| {
+        for (std.meta.tags(Backend)) |backend| {
             switch (backend) {
                 .custom, .sdl => continue,
                 .web, .testing => dvui_opts.accesskit = .off,
@@ -225,7 +226,7 @@ pub fn build(b: *std.Build) !void {
     }
 }
 
-pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvui_opts_in: DvuiModuleOptions) !void {
+pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: DvuiModuleOptions) !void {
     var dvui_opts = dvui_opts_in;
     const b = dvui_opts.b;
     const target = dvui_opts.target;
