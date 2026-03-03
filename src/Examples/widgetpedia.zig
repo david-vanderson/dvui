@@ -1252,6 +1252,403 @@ const DisplayLabelClick = struct {
     }
 };
 
+const DisplayLink = struct {
+    var name: []const u8 = "link()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.LinkOptions = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{};
+        init_opts = .{ .url = "https://david-vanderson.github.io/", .label = null };
+    }
+
+    pub fn layoutWidget() void {
+        dvui.link(@src(), init_opts, options.override(.{ .data_out = &wd }));
+    }
+
+    pub fn layoutWidgetControls() void {
+        const opts = StructOptions(dvui.LinkOptions).initWithDefaults(.{
+            .url = .defaultTextRW,
+            .label = .defaultTextRW,
+        }, null);
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{opts}, .{});
+    }
+};
+
+const DisplayProgress = struct {
+    var name: []const u8 = "progress()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.Progress_InitOptions = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{ .expand = .horizontal };
+        init_opts = .{ .percent = 0.5 };
+    }
+
+    pub fn layoutWidget() void {
+        dvui.progress(@src(), init_opts, options.override(.{ .data_out = &wd }));
+    }
+
+    pub fn layoutWidgetControls() void {
+        const prev_dir = init_opts.dir;
+        const display_opts: StructOptions(dvui.Progress_InitOptions) = .initWithDefaults(.{
+            .percent = .{ .number = .{ .widget_type = .slider_entry, .min = 0, .max = 1 } },
+        }, null);
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{ display_opts, struct_options.color }, .{});
+        if (prev_dir != init_opts.dir) {
+            options.expand = if (init_opts.dir == .horizontal) .horizontal else .vertical;
+        }
+    }
+};
+
+const DisplayRadio = struct {
+    var name: []const u8 = "radio()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var result: bool = false;
+    var test_options: struct {
+        active: bool,
+        label_str: []const u8,
+    } = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{};
+        test_options = .{
+            .active = false,
+            .label_str = "radio button",
+        };
+    }
+
+    pub fn layoutWidget() void {
+        result = dvui.radio(@src(), test_options.active, test_options.label_str, options.override(.{ .data_out = &wd }));
+        if (result) {
+            test_options.active = true;
+        }
+    }
+
+    pub fn layoutResults() void {
+        var al = dvui.Alignment.init(@src(), 0);
+        defer al.deinit();
+        struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .widget_type = .{ .trigger_on = true }, .display = .read_only } }, &al);
+    }
+
+    pub fn layoutWidgetControls() void {
+        const display_opts: StructOptions(@TypeOf(test_options)) = .initWithDefaults(.{
+            .active = .{ .boolean = .{ .widget_type = .checkbox } },
+            .label_str = .defaultTextRW,
+        }, null);
+        dvui.structUI(@src(), test_options_label, &test_options, 1, .{display_opts}, .{});
+    }
+};
+
+const DisplayRadioGroup = struct {
+    var name: []const u8 = "radioGroup()";
+    const nr_radio_buttons = 3;
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.FocusGroupWidget.InitOptions = undefined;
+    var result: bool = false;
+    var test_options: struct {
+        active: [nr_radio_buttons]bool,
+    } = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{};
+        init_opts = .{};
+        test_options = .{
+            .active = @splat(false),
+        };
+    }
+
+    pub fn layoutWidget() void {
+        {
+            var rgroup = dvui.radioGroup(@src(), init_opts, options.override(.{ .data_out = &wd }));
+            defer rgroup.deinit();
+
+            inline for (0..nr_radio_buttons) |i| {
+                if (dvui.radio(@src(), test_options.active[i], std.fmt.comptimePrint("radio {}", .{i}), .{ .id_extra = i })) {
+                    test_options.active = @splat(false);
+                    test_options.active[i] = true;
+                }
+            }
+        }
+        var tl = dvui.textLayout(@src(), .{ .break_lines = true }, .{ .expand = .horizontal });
+        defer tl.deinit();
+        tl.addText("Radio buttons in a radio group can be navrigated using the arrow keys", .{ .gravity_y = 1.0, .gravity_x = 0.5 });
+    }
+
+    pub fn layoutResults() void {
+        const test_options_c = test_options;
+        dvui.structUI(@src(), null, &test_options_c, 1, .{}, .{});
+    }
+
+    pub fn layoutWidgetControls() void {
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{}, .{});
+    }
+};
+
+const DiplayScale = struct {
+    var name: []const u8 = "radioGroup()";
+    const nr_radio_buttons = 3;
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.ScaleWidget.InitOptions = undefined;
+    var scale: f32 = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{};
+        init_opts = .{ .scale = &scale };
+        scale = 1.0;
+    }
+
+    pub fn layoutWidget() void {
+        var scalew = dvui.scale(@src(), init_opts, options.override(.{ .data_out = &wd, .expand = .both }));
+        defer scalew.deinit();
+        dvui.labelNoFmt(@src(), "Scalable", .{}, .{ .border = Rect.all(1), .color_border = dvui.themeGet().focus, .gravity_x = 0.5, .gravity_y = 0.5 });
+    }
+
+    pub fn layoutWidgetControls() void {
+        const display_opts = StructOptions(dvui.ScaleWidget.InitOptions).initWithDefaults(.{ .scale = .{ .number = .{ .widget_type = .slider_entry, .min = 0, .max = 10 } } }, .{ .scale = &scale });
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{display_opts}, .{});
+    }
+};
+
+const DiplaySeparator = struct {
+    var name: []const u8 = "separator()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var result: dvui.WidgetData = undefined;
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{
+            .expand = .horizontal,
+            .gravity_y = 0.5,
+        };
+    }
+
+    pub fn layoutWidget() void {
+        result = dvui.separator(@src(), options.override(.{ .data_out = &wd }));
+    }
+
+    pub fn layoutResults() void {
+        const result_c = result;
+        dvui.structUI(@src(), "rect", &result_c.rect, 1, .{}, .{});
+    }
+
+    pub fn layoutWidgetControls() void {
+        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+            defer container.deinit();
+            var al: dvui.Alignment = .init(@src(), 0);
+            defer al.deinit();
+            struct_ui.displayOptional(@src(), dvui.Options, "expand", &options.expand, 1, .default, .{}, &al, .horizontal);
+            struct_ui.displayOptional(@src(), dvui.Options, "border", &options.border, 1, .default, .{}, &al, .{});
+        }
+    }
+};
+
+const DiplaySlider = struct {
+    var name: []const u8 = "slider()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.SliderInitOptions = undefined;
+    var result: bool = undefined;
+    var fraction: f32 = undefined;
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{
+            .expand = .horizontal,
+            .gravity_y = 0.5,
+        };
+        init_opts = .{
+            .fraction = &fraction,
+        };
+    }
+
+    pub fn layoutWidget() void {
+        result = dvui.slider(@src(), init_opts, options.override(.{ .data_out = &wd }));
+    }
+
+    pub fn layoutResults() void {
+        var al = dvui.Alignment.init(@src(), 0);
+        defer al.deinit();
+        struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .display = .read_only } }, &al);
+    }
+
+    pub fn layoutWidgetControls() void {
+        const prev_dir = init_opts.dir;
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{struct_options.color}, .{});
+        if (prev_dir != init_opts.dir) {
+            options.expand = if (init_opts.dir == .horizontal) .horizontal else .vertical;
+        }
+    }
+};
+
+const DiplaySliderEntry = struct {
+    var name: []const u8 = "sliderEntry()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.SliderEntryInitOptions = undefined;
+    var result: bool = undefined;
+
+    var test_options: struct {
+        value: f32,
+        label_fmt: ?[]const u8,
+    } = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{
+            .expand = .horizontal,
+            .gravity_y = 0.5,
+        };
+        init_opts = .{
+            .value = &test_options.value,
+            .min = 0,
+            .max = 100,
+            .interval = 1,
+        };
+        test_options = .{
+            .value = 0,
+            .label_fmt = "{d:0.1}",
+        };
+    }
+
+    pub fn layoutWidget() void {
+        if (test_options.label_fmt) |_|
+            result = dvui.sliderEntry(@src(), "{d:0.1}", init_opts, options.override(.{ .data_out = &wd }))
+        else
+            result = dvui.sliderEntry(@src(), null, init_opts, options.override(.{ .data_out = &wd }));
+    }
+
+    pub fn layoutResults() void {
+        var al = dvui.Alignment.init(@src(), 0);
+        defer al.deinit();
+        struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .display = .read_only } }, &al);
+    }
+
+    pub fn layoutWidgetControls() void {
+        // TODO: StructUI needs a way to support read-write optionals to read-only text. at the moment it is tied to the field, so display
+        // sets both whether the optional can be changed and whether the value can be changed. Here we want user to set the optional to null or not
+        // buty not set label_fmt
+        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+            defer container.deinit();
+            var al: dvui.Alignment = .init(@src(), 0);
+            defer al.deinit();
+            if (struct_ui.optionalFieldWidget(@src(), "label_fmt", &test_options.label_fmt, .default, &al)) {
+                test_options.label_fmt = "{d:0.1}";
+                struct_ui.displayString(@src(), "label_fmt", &test_options.label_fmt.?, .{ .text = .{ .display = .read_only } }, &al);
+            } else {
+                test_options.label_fmt = null;
+            }
+        }
+        const display_options = StructOptions(dvui.SliderEntryInitOptions).initWithDefaults(.{
+            .label = .defaultTextRW,
+        }, .{ .label = "slider entry", .value = &test_options.value });
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{display_options}, .{});
+    }
+};
+
+const DiplaySpacer = struct {
+    var name: []const u8 = "spacer()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var result_wd: dvui.WidgetData = undefined;
+    var border: bool = false;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{ .min_size_content = .{ .h = 50, .w = 50 }, .expand = .horizontal };
+        border = false;
+    }
+
+    pub fn layoutWidget() void {
+        dvui.labelNoFmt(@src(), "Before Spacer", .{}, .{});
+        result_wd = dvui.spacer(@src(), options.override(.{ .data_out = &wd }));
+        dvui.labelNoFmt(@src(), "After Spacer", .{}, .{});
+    }
+
+    pub fn layoutResults() void {
+        const result_c = result_wd;
+        dvui.structUI(@src(), "rect", &result_c.rect, 1, .{}, .{});
+    }
+
+    pub fn layoutWidgetControls() void {
+        const display_opts = StructOptions(dvui.Options).init(.{
+            .min_size_content = .default,
+            .expand = .default,
+        }, .{ .min_size_content = .{ .h = 50, .w = 50 } });
+
+        var al: dvui.Alignment = .init(@src(), 0);
+        defer al.deinit();
+
+        if (struct_ui.displayStruct(@src(), test_options_label, &options, 1, .default, .{display_opts}, &al)) |container| {
+            defer container.deinit();
+            border = options.border != null;
+            const prev_border = border;
+            struct_ui.displayBool(@src(), "border", &border, .{ .boolean = .{ .widget_type = .checkbox } }, &al);
+            if (prev_border != border) {
+                if (border) {
+                    options.border = Rect.all(1);
+                } else {
+                    options.border = null;
+                }
+            }
+        }
+    }
+};
+
 const DisplayTextEntry = struct {
     var name: []const u8 = "textEntry()";
 
@@ -1547,7 +1944,7 @@ const widget_hierarchy = [_]WidgetHierarchy{
         .{ .name = "labelNoFmt", .displayFn = DisplayLabelEx.displayFn, .children = null },
     } },
 
-    .{ .name = "link", .displayFn = displayEmpty, .children = null },
+    .{ .name = "link", .displayFn = DisplayLink.displayFn, .children = null },
 
     .{ .name = "menus", .displayFn = displayEmpty, .children = &.{
         .{ .name = "menu", .displayFn = displayEmpty, .children = null },
@@ -1563,23 +1960,23 @@ const widget_hierarchy = [_]WidgetHierarchy{
         .{ .name = "plotXY", .displayFn = displayEmpty, .children = null },
     } },
 
-    .{ .name = "progress", .displayFn = displayEmpty, .children = null },
-    .{ .name = "radio", .displayFn = displayEmpty, .children = null },
-    .{ .name = "radioGroup", .displayFn = displayEmpty, .children = null },
+    .{ .name = "progress", .displayFn = DisplayProgress.displayFn, .children = null },
+    .{ .name = "radio", .displayFn = DisplayRadio.displayFn, .children = null },
+    .{ .name = "radioGroup", .displayFn = DisplayRadioGroup.displayFn, .children = null },
     .{ .name = "reorder", .displayFn = displayEmpty, .children = null },
-    .{ .name = "scale", .displayFn = displayEmpty, .children = null },
+    .{ .name = "scale", .displayFn = DiplayScale.displayFn, .children = null },
     .{ .name = "scrollArea", .displayFn = displayEmpty, .children = null },
-    .{ .name = "separator", .displayFn = displayEmpty, .children = null },
+    .{ .name = "separator", .displayFn = DiplaySeparator.displayFn, .children = null },
 
     .{ .name = "sliders", .displayFn = displayEmpty, .children = &.{
-        .{ .name = "slider", .displayFn = displayEmpty, .children = null },
-        .{ .name = "sliderEntry", .displayFn = displayEmpty, .children = null },
+        .{ .name = "slider", .displayFn = DiplaySlider.displayFn, .children = null },
+        .{ .name = "sliderEntry", .displayFn = DiplaySliderEntry.displayFn, .children = null },
         .{ .name = "sliderVector", .displayFn = displayEmpty, .children = null },
     } },
 
-    .{ .name = "spacer", .displayFn = displayEmpty, .children = null },
+    .{ .name = "spacer", .displayFn = DiplaySpacer.displayFn, .children = null },
     .{ .name = "spinner", .displayFn = displayEmpty, .children = null },
-    .{ .name = "suggestion", .displayFn = displayEmpty, .children = null },
+    .{ .name = "suggestion", .displayFn = DiplaySeparator.displayFn, .children = null },
     .{ .name = "tabs", .displayFn = displayEmpty, .children = null },
 
     .{ .name = "textEntries", .displayFn = displayEmpty, .children = &.{

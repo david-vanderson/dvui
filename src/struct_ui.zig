@@ -655,8 +655,10 @@ pub fn boolFieldWidget(
             if (dvui.animationGet(box.data().id, "trigger")) |a| {
                 const prev_alpha = dvui.alpha(a.value());
                 defer dvui.alphaSet(prev_alpha);
-                dvui.label(@src(), "{}", .{opt.widget_type.trigger_on}, .{ .margin = .{ .y = 4 } });
-                if (a.done()) {
+                if (!a.done()) {
+                    dvui.label(@src(), "{}", .{opt.widget_type.trigger_on}, .{ .margin = .{ .y = 4 } });
+                } else {
+                    dvui.label(@src(), "{}", .{field_value_ptr.*}, .{ .margin = .{ .y = 4 } });
                     dvui.refresh(null, @src(), null);
                 }
             } else {
