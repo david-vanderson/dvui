@@ -1400,7 +1400,7 @@ const DisplayRadioGroup = struct {
         }
         var tl = dvui.textLayout(@src(), .{ .break_lines = true }, .{ .expand = .horizontal });
         defer tl.deinit();
-        tl.addText("Radio buttons in a radio group can be navrigated using the arrow keys", .{ .gravity_y = 1.0, .gravity_x = 0.5 });
+        tl.addText("Radio buttons in a radio group can be navigated using the arrow keys", .{ .gravity_y = 1.0, .gravity_x = 0.5 });
     }
 
     pub fn layoutResults() void {
@@ -1414,7 +1414,7 @@ const DisplayRadioGroup = struct {
 };
 
 const DiplayScale = struct {
-    var name: []const u8 = "radioGroup()";
+    var name: []const u8 = "scale()";
     const nr_radio_buttons = 3;
 
     var wd: dvui.WidgetData = undefined;
@@ -1497,6 +1497,7 @@ const DiplaySlider = struct {
     }
 
     pub fn resetWidget() void {
+        fraction = 0;
         options = .{
             .expand = .horizontal,
             .gravity_y = 0.5,
@@ -1675,6 +1676,89 @@ const DiplaySpinner = struct {
             defer al.deinit();
             struct_ui.displayOptional(@src(), dvui.Options, "color_text", &options.color_text, 1, .default, .{struct_options.color}, &al, .green);
         }
+    }
+};
+
+const DiplayTabs = struct {
+    var name: []const u8 = "tabs()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.TabsWidget.InitOptions = undefined;
+
+    var active_tab: usize = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{};
+        init_opts = .{};
+        active_tab = 0;
+    }
+
+    pub fn layoutWidget() void {
+        // reverse orientation because horizontal tabs go above content
+        var tbox = dvui.box(@src(), .{ .dir = if (init_opts.dir == .vertical) .horizontal else .vertical }, .{ .expand = .both });
+        defer tbox.deinit();
+
+        {
+            var tabs = dvui.tabs(@src(), init_opts, options.override(.{ .data_out = &wd }));
+            defer tabs.deinit();
+
+            inline for (0..8) |i| {
+                const tabname = std.fmt.comptimePrint("Tab {d}", .{i});
+                if (i != 3) {
+                    // easy label only
+                    if (tabs.addTabLabel(active_tab == i, tabname)) {
+                        active_tab = i;
+                    }
+                } else {
+                    // directly put whatever in the tab
+                    var tab = tabs.addTab(active_tab == i, .{});
+                    defer tab.deinit();
+
+                    var tab_box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+                    defer tab_box.deinit();
+
+                    dvui.icon(@src(), "cycle", dvui.entypo.cycle, .{}, .{});
+
+                    _ = dvui.spacer(@src(), .{ .min_size_content = .width(4) });
+
+                    var label_opts = tab.data().options.strip();
+                    if (dvui.captured(tab.data().id)) {
+                        label_opts.color_text = (dvui.Options{}).color(.text_press);
+                    }
+
+                    dvui.labelNoFmt(@src(), tabname, .{}, label_opts);
+
+                    if (tab.clicked()) {
+                        active_tab = i;
+                    }
+                }
+            }
+        }
+
+        {
+            var border = dvui.Rect.all(1);
+            switch (init_opts.dir) {
+                .horizontal => border.y = 0,
+                .vertical => border.x = 0,
+            }
+            var vbox3 = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window, .border = border, .role = .tab_panel });
+            defer vbox3.deinit();
+
+            dvui.labelEx(@src(), "This is tab {d}", .{active_tab}, .{ .align_x = 0.5, .align_y = 0.5 }, .{ .expand = .horizontal });
+            if (active_tab == 3) {
+                dvui.icon(@src(), "icon", dvui.entypo.aircraft, .{}, .{ .min_size_content = .all(30), .gravity_x = 0.5 });
+            }
+        }
+    }
+
+    pub fn layoutWidgetControls() void {
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{}, .{});
     }
 };
 
@@ -1895,7 +1979,7 @@ const DisplayTextEntry = struct {
 };
 
 const DiplayToolTip = struct {
-    var name: []const u8 = "spinner()";
+    var name: []const u8 = "tooltip()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -2066,7 +2150,7 @@ const widget_hierarchy = [_]WidgetHierarchy{
     .{ .name = "spacer", .displayFn = DiplaySpacer.displayFn, .children = null },
     .{ .name = "spinner", .displayFn = DiplaySpinner.displayFn, .children = null },
     .{ .name = "suggestion", .displayFn = displayEmpty, .children = null },
-    .{ .name = "tabs", .displayFn = displayEmpty, .children = null },
+    .{ .name = "tabs", .displayFn = DiplayTabs.displayFn, .children = null },
 
     .{ .name = "textEntries", .displayFn = displayEmpty, .children = &.{
         .{ .name = "textEntry", .displayFn = DisplayTextEntry.displayFn, .children = null },
