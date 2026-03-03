@@ -4,6 +4,7 @@ pub const zig_favicon = @embedFile("zig-favicon.png");
 pub const zig_svg = @embedFile("zig-mark.svg");
 
 pub var show_demo_window: bool = false;
+pub var show_widgetpedia_window: bool = false;
 pub var icon_browser_show: bool = false;
 var frame_counter: u64 = 0;
 pub var show_dialog: bool = false;
@@ -123,17 +124,20 @@ pub fn demo() void {
             if (dvui.button(@src(), "Debug Window", .{}, .{})) {
                 dvui.toggleDebugWindow();
             }
+            if (dvui.button(@src(), "Widgetpedia", .{}, .{})) {
+                dvui.Examples.show_widgetpedia_window = true;
+            }
 
             if (dvui.Theme.picker(@src(), &dvui.Theme.builtins, .{})) {
                 invalidate = true;
             }
 
-            if (dvui.button(@src(), "Zoom In", .{}, .{})) {
+            dvui.labelNoFmt(@src(), "Zoom:", .{ .align_y = 0.5 }, .{ .expand = .vertical });
+            if (dvui.buttonIcon(@src(), "zoom in", dvui.entypo.plus, .{}, .{}, .{ .expand = .both })) {
                 scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
                 invalidate = true;
             }
-
-            if (dvui.button(@src(), "Zoom Out", .{}, .{})) {
+            if (dvui.buttonIcon(@src(), "Zoom out", dvui.entypo.minus, .{}, .{}, .{ .expand = .both })) {
                 scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
                 invalidate = true;
             }
@@ -271,6 +275,7 @@ pub fn demo() void {
     if (icon_browser_show) {
         icon_browser(@src(), &icon_browser_show, "entypo", entypo);
     }
+    widgetpedia();
 
     if (StrokeTest.show) {
         show_stroke_test_window();
@@ -518,3 +523,4 @@ const gridVirtualScrolling = grid_examples.gridVirtualScrolling;
 const gridVariableRowHeights = grid_examples.gridVariableRowHeights;
 const gridSelection = grid_examples.gridSelection;
 const gridNavigation = grid_examples.gridNavigation;
+pub const widgetpedia = @import("Examples/widgetpedia.zig").widgetpedia;

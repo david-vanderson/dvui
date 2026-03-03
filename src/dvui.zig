@@ -58,6 +58,7 @@ pub const Triangles = @import("Triangles.zig");
 pub const Vertex = @import("Vertex.zig");
 pub const Widget = @import("Widget.zig");
 pub const WidgetData = @import("WidgetData.zig");
+pub const Debug = @import("Debug.zig");
 
 pub const entypo = @import("icons/entypo.zig");
 
@@ -2603,7 +2604,7 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
     const selected_index: ?usize = switch (choice) {
         .choice => |ch| @intFromEnum(ch.*),
         .choice_nullable => |ch| if (ch.*) |_|
-            if (init_opts.null_selectable) @intFromEnum(ch.*.?) + 1 else @intFromEnum(ch.*.?)
+            if (init_opts.null_selectable) @as(usize, @intFromEnum(ch.*.?)) + 1 else @intFromEnum(ch.*.?)
         else
             null,
     };
@@ -5237,8 +5238,9 @@ pub fn plotXY(src: std.builtin.SourceLocation, init_opts: PlotXYOptions, opts: O
 /// These allocations are automatically cleaned up when Window.deinit() is called.
 /// `struct_ui.string_map` can be used to check which strings have been modified and had memory allocated
 /// or to remove strings that should not be automatically deallocated by struct_ui.
-pub fn structUI(src: std.builtin.SourceLocation, comptime field_name: []const u8, struct_ptr: anytype, comptime depth: usize, struct_options: anytype) void {
-    var vbox = dvui.box(src, .{ .dir = .vertical }, .{ .expand = .horizontal });
+pub fn structUI(src: std.builtin.SourceLocation, comptime field_name: ?[]const u8, struct_ptr: anytype, comptime depth: usize, struct_options: anytype, opts: dvui.Options) void {
+    const default_options: dvui.Options = .{ .expand = .horizontal };
+    var vbox = dvui.box(src, .{ .dir = .vertical }, default_options.override(opts));
     defer vbox.deinit();
     const struct_box = struct_ui.displayStruct(@src(), field_name, struct_ptr, depth, .default, struct_options, null);
     if (struct_box) |b| b.deinit();
