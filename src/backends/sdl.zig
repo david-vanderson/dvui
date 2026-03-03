@@ -1529,6 +1529,9 @@ pub fn enableSDLLogging() void {
 pub fn main() !u8 {
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
+    // You can override these by calling this function with your arguments in dvui.App.config.startFn
+    _ = c.SDL_SetAppMetadata("DVUI App Example", "0.1", "com.example.dvui.app");
+
     if (builtin.os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         dvui.Backend.Common.windowsAttachConsole() catch {};
