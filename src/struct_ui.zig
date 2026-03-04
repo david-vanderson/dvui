@@ -360,7 +360,7 @@ pub const NumberFieldOptions = struct {
         const max = self.maxValue(T);
         const input, const range, const min_f = switch (@typeInfo(@TypeOf(input_num))) {
             .int => .{
-                @as(f32, @floatFromInt(if (input_num < min) min else input_num)),
+                std.math.clamp(@as(f32, @floatFromInt(input_num)), @as(f32, @floatFromInt(min)), @as(f32, @floatFromInt(max))),
                 @as(f32, @floatFromInt(max - min)),
                 @as(f32, @floatFromInt(min)),
             },
@@ -681,7 +681,7 @@ pub fn boolFieldWidget(
 
 // Bring in immediately, hold, then smoothstep fade.
 // Return 1 if t < 0.4, then smoothstep to 0 for remainder
-pub fn easing(t: f32) f32 {
+fn easing(t: f32) f32 {
     if (t < 0.4) return 1;
     const u = (t - 0.4) / 0.6;
     return 1 - u * u * (3 - 2 * u);
@@ -768,14 +768,12 @@ pub fn textFieldWidget(
     const sentinel_terminated = @typeInfo(T).pointer.sentinel_ptr != null;
 
     var read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or
-        opt.display == .read_only or
-        sentinel_terminated;
+        opt.display == .read_only;
 
     if (opt.display == .read_write and read_only) {
         // Note all string arrays are currently treated as read-only, even if they are var.
         // It would be possible to support in-place editing, preferably by implementing a new display option.
         log.debug("field {s} display option is set to read_write for read_only string or an array. Displaying as read_only.", .{field_name});
-        read_only = true;
     } else if (opt.display == .read_write and sentinel_terminated) {
         // Sentinel terminated strings cannot be edited.
         // Would require keeping 2 string maps, for sentinel vs non-sentinel strings.
@@ -1042,7 +1040,7 @@ const msg_invalid_opt_type = "invalid field option type {t} used for field {s}. 
 
 /// Display numeric fields, ints and floats.
 pub fn displayNumber(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
-    validateFieldPtrType(field_name, &.{ .int, .float }, "displayEnum", @TypeOf(field_value_ptr));
+    validateFieldPtrType(field_name, &.{ .int, .float }, "displayNumber", @TypeOf(field_value_ptr));
     numberFieldWidget(src, field_name, field_value_ptr, field_option.optionNumber(field_name), al);
 }
 
