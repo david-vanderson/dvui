@@ -56,13 +56,17 @@ pub fn widgetpedia() void {
     const width = 775;
     const height = 575;
 
-    var float = dvui.floatingWindow(@src(), .{
+    var floating_win = dvui.floatingWindow(@src(), .{
         .open_flag = &Examples.show_widgetpedia_window,
-    }, .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .{ .w = width, .h = height } });
-    defer float.deinit();
-    float.dragAreaSet(dvui.windowHeader("Widgetpedia", "", &Examples.show_widgetpedia_window));
+    }, .{
+        .min_size_content = .{ .w = width, .h = 400 },
+        .max_size_content = .{ .w = width, .h = height },
+    });
+    defer floating_win.deinit();
 
-    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .background = true });
+    floating_win.dragAreaSet(dvui.windowHeader("Widgetpedia", "", &Examples.show_widgetpedia_window));
+
+    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .background = false });
     defer hbox.deinit();
     {
         var scroll = dvui.scrollArea(@src(), .{}, .{});
@@ -115,7 +119,7 @@ pub fn widgetpedia() void {
         }
     }
     {
-        var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .padding = Rect.all(6) });
+        var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .padding = Rect.all(6), .corner_radius = Rect.all(5), .border = Rect.all(1) });
         defer vbox.deinit();
         current_widget.displayFn(reset_widget);
         reset_widget = false;
@@ -1978,6 +1982,61 @@ const DisplayTextEntry = struct {
     }
 };
 
+const DisplayToast = struct {
+    var name: []const u8 = "toast()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.ToastOptions = undefined;
+    var selection: ?enum { @"floating window" } = null;
+    var box_id: dvui.Id = undefined;
+
+    var test_options: struct {
+        message: []const u8,
+    } = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{};
+        init_opts = .{ .message = "Toast Text" };
+    }
+
+    pub fn layoutWidget() void {
+        init_opts.subwindow_id = if (selection == .@"floating window") dvui.currentWindow().subwindows.current_id else null;
+        if (dvui.button(@src(), "Display toast", .{}, .{})) {
+            dvui.toast(@src(), init_opts);
+        }
+    }
+
+    pub fn layoutWidgetControls() void {
+        const display_opts: StructOptions(dvui.ToastOptions) = .initWithDefaults(.{
+            .window = .defaultHidden,
+            .message = .{ .text = .{ .multiline = true, .display = .read_write } },
+            .subwindow_id = .{ .standard = .{ .customDisplayFn = displaySubWindowId } },
+        }, null);
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{display_opts}, .{});
+    }
+
+    fn displaySubWindowId(field_name: []const u8, _: *anyopaque, read_only: bool, alignment: *dvui.Alignment) void {
+        if (read_only) return;
+
+        var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer box.deinit();
+        box_id = box.data().id;
+
+        dvui.label(@src(), "{s}", .{field_name}, .{});
+        var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
+        defer hbox_aligned.deinit();
+        alignment.record(box.data().id, hbox_aligned.data());
+
+        _ = dvui.dropdownEnum(@src(), @TypeOf(selection.?), .{ .choice_nullable = &selection }, .{}, .{});
+    }
+};
+
 const DiplayToolTip = struct {
     var name: []const u8 = "tooltip()";
 
@@ -1986,6 +2045,7 @@ const DiplayToolTip = struct {
     var init_opts: dvui.FloatingTooltipWidget.InitOptions = undefined;
 
     var test_options: struct {
+        scenario: enum { @"text only", @"with icon" },
         text: []const u8,
     } = undefined;
 
@@ -1997,14 +2057,32 @@ const DiplayToolTip = struct {
     pub fn resetWidget() void {
         options = .{};
         init_opts = .{ .active_rect = Rect.Physical.all(0) };
-        test_options.text = "This is some tooltip text";
+        test_options = .{
+            .text = "This is tooltip text",
+            .scenario = .@"text only",
+        };
     }
 
     pub fn layoutWidget() void {
         var label_wd: dvui.WidgetData = undefined;
         dvui.labelNoFmt(@src(), "Mouse over me", .{}, .{ .border = Rect.all(1), .data_out = &label_wd, .gravity_x = 0.5, .gravity_y = 0.5 });
         init_opts.active_rect = label_wd.borderRectScale().r;
-        dvui.tooltip(@src(), init_opts, "{s}", .{test_options.text}, options.override(.{ .data_out = &wd }));
+        switch (test_options.scenario) {
+            .@"text only" => dvui.tooltip(@src(), init_opts, "{s}", .{test_options.text}, options.override(.{ .data_out = &wd })),
+            .@"with icon" => {
+                var tt: dvui.FloatingTooltipWidget = undefined;
+                tt.init(@src(), init_opts, options.override(.{ .data_out = &wd }));
+                defer tt.deinit();
+                if (tt.shown()) {
+                    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
+                    defer hbox.deinit();
+                    dvui.icon(@src(), "warning", dvui.entypo.warning, .{}, .{ .min_size_content = .all(30), .margin = Rect.all(6) });
+                    var tl = dvui.textLayout(@src(), .{}, .{ .background = false, .gravity_y = 0.5 });
+                    tl.addText(test_options.text, .{});
+                    tl.deinit();
+                }
+            },
+        }
     }
 
     pub fn layoutWidgetControls() void {
@@ -2015,15 +2093,18 @@ const DiplayToolTip = struct {
             dvui.structUI(@src(), test_options_label, &test_options, 1, .{display_opts}, .{});
         }
         {
-            // TODO: Annoyingly we can;t just set the field to read_only because it does not yet propagate to the children of the field.
+            // TODO: Annoyingly we can't just set the field to read_only because it does not yet propagate to the children of the field.
             // Needs an enhancement to struct_ui.
-            const display_opts: StructOptions(dvui.Rect.Physical) = .initWithDefaults(.{
+            const rect_opts: StructOptions(dvui.Rect.Physical) = .initWithDefaults(.{
                 .x = .defaultReadOnly,
                 .y = .defaultReadOnly,
                 .w = .defaultReadOnly,
                 .h = .defaultReadOnly,
             }, null);
-            dvui.structUI(@src(), "init_opts", &init_opts, 1, .{display_opts}, .{});
+            const display_opts = StructOptions(dvui.FloatingTooltipWidget.InitOptions).initWithDefaults(.{
+                .delay = .{ .number = .{ .label = "delay (μs)" } },
+            }, null);
+            dvui.structUI(@src(), "init_opts", &init_opts, 1, .{ display_opts, rect_opts }, .{});
         }
 
         if (init_opts.position == .absolute) {
@@ -2159,7 +2240,7 @@ const widget_hierarchy = [_]WidgetHierarchy{
     } },
 
     .{ .name = "textLayout", .displayFn = displayEmpty, .children = null },
-    .{ .name = "toast", .displayFn = displayEmpty, .children = null },
+    .{ .name = "toast", .displayFn = DisplayToast.displayFn, .children = null },
     .{ .name = "tooltip", .displayFn = DiplayToolTip.displayFn, .children = null },
 };
 

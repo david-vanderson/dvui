@@ -83,6 +83,9 @@ pub fn floatRetainClear(ptr: *anyopaque) void {
 }
 
 pub fn demo() void {
+    if (show_widgetpedia_window) {
+        widgetpedia();
+    }
     if (!show_demo_window) {
         return;
     }
@@ -275,7 +278,6 @@ pub fn demo() void {
     if (icon_browser_show) {
         icon_browser(@src(), &icon_browser_show, "entypo", entypo);
     }
-    widgetpedia();
 
     if (StrokeTest.show) {
         show_stroke_test_window();
