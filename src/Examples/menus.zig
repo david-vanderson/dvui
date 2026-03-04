@@ -163,7 +163,7 @@ pub fn menus() void {
                 const tabname = std.fmt.comptimePrint("Tab {d}", .{i});
                 if (i != 3) {
                     // easy label only
-                    if (tabs.addTabLabel(active_tab.* == i, tabname)) {
+                    if (tabs.addTabLabel(active_tab.* == i, tabname, .{})) {
                         active_tab.* = i;
                     }
                 } else {
