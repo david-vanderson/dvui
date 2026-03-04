@@ -1,4 +1,3 @@
-
 pub fn applets() void {
     var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
     defer vbox.deinit();
@@ -7,13 +6,13 @@ pub fn applets() void {
 
     const active_tab = dvui.dataGetPtrDefault(null, vbox.data().id, "active_tab", usize, 0);
 
-    if (tabs.addTabLabel(active_tab.* == 0, "calculator")) {
+    if (tabs.addTabLabel(active_tab.* == 0, "calculator", .{})) {
         active_tab.* = 0;
     }
-    if (tabs.addTabLabel(active_tab.* == 1, "drawing")) {
+    if (tabs.addTabLabel(active_tab.* == 1, "drawing", .{})) {
         active_tab.* = 1;
     }
-    if (tabs.addTabLabel(active_tab.* == 2, "texture")) {
+    if (tabs.addTabLabel(active_tab.* == 2, "texture", .{})) {
         active_tab.* = 2;
     }
 
@@ -231,7 +230,7 @@ pub fn draw() void {
     }
 
     for (points.items) |p| {
-        dvui.Path.stroke(.{ .points = &.{ rs.pointToPhysical(p) } }, .{
+        dvui.Path.stroke(.{ .points = &.{rs.pointToPhysical(p)} }, .{
             .color = dvui.Color{ .b = 120, .g = 12, .r = 212 },
             .thickness = 5 * rs.s,
         });
@@ -292,8 +291,8 @@ pub fn texture() void {
     {
         var box = dvui.box(@src(), .{}, .{});
         defer box.deinit();
-        dvui.label(@src(), "Draw Here", .{}, .{.gravity_x = 0.5});
-        var input = dvui.box(@src(), .{}, .{.min_size_content = .all(size), .border = .all(1)});
+        dvui.label(@src(), "Draw Here", .{}, .{ .gravity_x = 0.5 });
+        var input = dvui.box(@src(), .{}, .{ .min_size_content = .all(size), .border = .all(1) });
         defer input.deinit();
 
         if (!destroy) {
@@ -314,7 +313,7 @@ pub fn texture() void {
                             if (m.action == .release) {
                                 dvui.captureMouse(null, e.num);
                             } else {
-                                dvui.Path.stroke(.{ .points = &.{ e.evt.mouse.p }}, .{.thickness = 5, .color = .red});
+                                dvui.Path.stroke(.{ .points = &.{e.evt.mouse.p} }, .{ .thickness = 5, .color = .red });
                                 dvui.refresh(null, @src(), input.data().id);
                             }
                         }
@@ -330,8 +329,8 @@ pub fn texture() void {
     {
         var box = dvui.box(@src(), .{}, .{});
         defer box.deinit();
-        dvui.label(@src(), "Texture", .{}, .{.gravity_x = 0.5});
-        var output = dvui.box(@src(), .{}, .{.min_size_content = .all(size), .border = .all(1)});
+        dvui.label(@src(), "Texture", .{}, .{ .gravity_x = 0.5 });
+        var output = dvui.box(@src(), .{}, .{ .min_size_content = .all(size), .border = .all(1) });
         defer output.deinit();
 
         if (!destroy) {
