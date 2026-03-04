@@ -796,8 +796,10 @@ pub fn textFieldWidget(
         defer hbox_aligned.deinit();
         alignment.record(box.data().id, hbox_aligned.data());
 
+        const textbox_width = dvui.themeGet().font_body.sizeM(dvui.TextEntryWidget.defaultMWidth, 1).w;
         const text_box = dvui.textEntry(@src(), if (backing == .buffer) .{ .text = .{ .buffer = backing.buffer }, .multiline = opt.multiline } else .{ .multiline = opt.multiline }, .{
-            .min_size_content = if (opt.multiline) .{ .h = dvui.themeGet().font_body.lineHeight() * 2 } else null,
+            .min_size_content = if (opt.multiline) .{ .h = dvui.themeGet().font_body.lineHeight() * 2, .w = textbox_width } else null,
+            .max_size_content = if (opt.multiline) .{ .h = dvui.themeGet().font_body.lineHeight() * 4, .w = textbox_width } else null,
         });
         defer text_box.deinit();
         if (!text_box.text_changed and !std.mem.eql(u8, text_box.getText(), field_value_ptr.*)) {
