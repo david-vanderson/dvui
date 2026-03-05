@@ -195,7 +195,7 @@ pub fn install(self: *FloatingTooltipWidget) void {
     dvui.clipSet(dvui.windowRectPixels());
 
     if (self.init_options.delay) |delay| {
-        self.animate = @as(?dvui.AnimateWidget, undefined);
+        self.animate = @as(dvui.AnimateWidget, undefined);
         self.animate.?.init(@src(), .{ .duration = delay, .kind = .alpha, .easing = easing }, .{});
     }
     // scaler is what is drawing our background/border/box_shadow

@@ -169,13 +169,13 @@ pub fn layout() void {
             if (Static.img) {
                 dvui.label(@src(), "UVs", .{}, .{});
                 if (dvui.sliderEntry(@src(), "u x: {d:0.2}", .{ .min = 0, .max = 1, .value = &Static.uv.x }, .{})) {
-                    Static.uv.w = std.math.clamp(Static.uv.w, 0.0, 1.0 - Static.uv.x);
+                    Static.uv.w = std.math.clamp(Static.uv.w, -Static.uv.x, 1.0 - Static.uv.x);
                 }
-                _ = dvui.sliderEntry(@src(), "u w: {d:0.2}", .{ .min = 0, .max = 1.0 - Static.uv.x, .value = &Static.uv.w }, .{});
+                _ = dvui.sliderEntry(@src(), "u w: {d:0.2}", .{ .min = -Static.uv.x, .max = 1.0 - Static.uv.x, .value = &Static.uv.w }, .{});
                 if (dvui.sliderEntry(@src(), "v y: {d:0.2}", .{ .min = 0, .max = 1, .value = &Static.uv.y }, .{})) {
-                    Static.uv.h = std.math.clamp(Static.uv.h, 0.0, 1.0 - Static.uv.y);
+                    Static.uv.h = std.math.clamp(Static.uv.h, -Static.uv.y, 1.0 - Static.uv.y);
                 }
-                _ = dvui.sliderEntry(@src(), "v h: {d:0.2}", .{ .min = 0, .max = 1.0 - Static.uv.y, .value = &Static.uv.h }, .{});
+                _ = dvui.sliderEntry(@src(), "v h: {d:0.2}", .{ .min = -Static.uv.y, .max = 1.0 - Static.uv.y, .value = &Static.uv.h }, .{});
             }
         }
 
