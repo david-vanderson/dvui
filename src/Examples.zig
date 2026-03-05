@@ -438,7 +438,7 @@ pub fn grids() void {
         for (0..GridType.num_grids) |tab_num| {
             const this_tab: GridType = @enumFromInt(tab_num);
 
-            if (tabs.addTabLabel(local.tabSelected(this_tab), local.tabName(this_tab))) {
+            if (tabs.addTabLabel(local.tabSelected(this_tab), local.tabName(this_tab), .{})) {
                 local.active_grid = this_tab;
             }
         }

@@ -456,13 +456,13 @@ pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
             .position = .vertical,
         }, "Copy Options struct to clipboard", .{}, .{});
 
-        if (tabs.addTabLabel(active_tab.* == .layout, "Layout")) {
+        if (tabs.addTabLabel(active_tab.* == .layout, "Layout", .{})) {
             active_tab.* = .layout;
         }
-        if (tabs.addTabLabel(active_tab.* == .style, "Style")) {
+        if (tabs.addTabLabel(active_tab.* == .style, "Style", .{})) {
             active_tab.* = .style;
         }
-        if (tabs.addTabLabel(active_tab.* == .info, "Info")) {
+        if (tabs.addTabLabel(active_tab.* == .info, "Info", .{})) {
             active_tab.* = .info;
         }
     }
