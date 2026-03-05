@@ -11,10 +11,16 @@ fn impl() !void {
     defer args.deinit();
 
     _ = args.next();
-    const input_path = args.next() orelse return error.NoInputArg;
+    const input_path = args.next() orelse {
+        std.debug.print("Usage: svg2tvg <svg file> -o <output file>\n", .{});
+        return error.NoInputArg;
+    };
     // this should be '-o' but we just ignore it
     _ = args.next() orelse return error.NoOutputFlag;
-    const output_path = args.next() orelse return error.NoOutputArg;
+    const output_path = args.next() orelse {
+        std.debug.print("Usage: svg2tvg <svg file> -o <output file>\n", .{});
+        return error.NoOutputArg;
+    };
 
     errdefer {
         var path_buf: [1024]u8 = undefined;
@@ -32,11 +38,11 @@ fn impl() !void {
     var buf: [8192]u8 = undefined;
     //var reader = input_file.reader(read_buf);
 
-    const svg_bytes = try input_file.readToEndAlloc(gpa, 1<<16);
+    const svg_bytes = try input_file.readToEndAlloc(gpa, 1 << 16);
     const tvg_bytes = try svg2tvg.tvg_from_svg(gpa, svg_bytes, .{});
 
     var writer = output_file.writer(&buf);
     try writer.interface.writeAll(tvg_bytes);
     try writer.interface.flush();
-    // REPORTME: would be nice to have a 
+    // REPORTME: would be nice to have a
 }

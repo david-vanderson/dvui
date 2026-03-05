@@ -224,6 +224,37 @@ pub fn build(b: *std.Build) !void {
         const indexhtml_file = run_add_logo.captureStdOut();
         docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
     }
+
+    // svg2tvg tool
+    // see svgPathToTvgPath below for how to run this at build time
+    {
+        const svg2tvg_dep = b.dependency("svg2tvg", .{ .optimize = optimize, .target = target });
+        const exe = b.addExecutable(.{
+            .name = "svg2tvg",
+            .root_module = b.createModule(.{
+                .target = target,
+                .optimize = optimize,
+                .root_source_file = b.path("./tools/svg2tvg.zig"),
+                .imports = &.{
+                    .{
+                        .name = "svg2tvg",
+                        .module = svg2tvg_dep.module("svg2tvg"),
+                    },
+                },
+            }),
+        });
+        const compile_step = b.step("compile-svg2tvg", "Compile svg2tvg");
+        const compile_cmd = b.addInstallArtifact(exe, .{});
+        compile_step.dependOn(&compile_cmd.step);
+
+        b.getInstallStep().dependOn(&exe.step);
+
+        const run_cmd = b.addRunArtifact(exe);
+        run_cmd.step.dependOn(compile_step);
+
+        const run_step = b.step("svg2tvg", "Run svg2tvg");
+        run_step.dependOn(&run_cmd.step);
+    }
 }
 
 pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: DvuiModuleOptions) !void {
