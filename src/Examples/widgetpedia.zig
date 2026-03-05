@@ -2006,7 +2006,7 @@ const DisplayToast = struct {
     }
 
     pub fn layoutWidget() void {
-        init_opts.subwindow_id = if (selection == .@"floating window") dvui.currentWindow().subwindows.current_id else null;
+        init_opts.subwindow_id = if (selection == .@"floating window") dvui.subwindowCurrentId() else null;
         if (dvui.button(@src(), "Display toast", .{}, .{})) {
             dvui.toast(@src(), init_opts);
         }
