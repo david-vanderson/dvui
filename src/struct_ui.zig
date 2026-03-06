@@ -1393,11 +1393,12 @@ pub fn displayContainer(comptime src: std.builtin.SourceLocation, field_name: ?[
         .{ .default_expanded = defaults.display_expanded },
         .{ .expand = .horizontal },
     )) {
+        // Use src again in case exoander is not created.
         vbox = dvui.box(src, .{ .dir = .vertical }, .{
             .expand = .horizontal,
             .border = if (field_name != null) .{ .x = 1 } else null,
             .background = true,
-            .margin = if (field_name != null) .{ .w = 12, .x = 12 } else null,
+            .margin = if (field_name != null) .{ .x = 12 } else null,
             .id_extra = 1,
         });
     }
