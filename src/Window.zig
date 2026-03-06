@@ -115,10 +115,22 @@ _lifo_arena: std.heap.ArenaAllocator,
 _widget_stack: WidgetStack,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
+triQueue: struct {
+    texture: ?dvui.Texture,
+    clipr: ?dvui.Rect.Physical,
+    vtx: std.ArrayList(dvui.Vertex), // backed by gpa
+    idx: std.ArrayList(dvui.Vertex.Index), // backed by gpa
+},
+stats: Stats,
+stats_last_frame: Stats,
 
 debug: @import("Debug.zig") = .{},
 
 accesskit: dvui.AccessKit,
+
+pub const Stats = struct {
+    draw_calls: usize = 0,
+};
 
 pub const InitOptions = struct {
     id_extra: usize = 0,
@@ -150,6 +162,14 @@ pub fn init(
         ._arena = if (init_opts.arena) |a| a else .init(gpa),
         ._lifo_arena = .init(gpa),
         ._widget_stack = .init(gpa),
+        .triQueue = .{
+            .texture = null,
+            .clipr = null,
+            .vtx = .empty,
+            .idx = .empty,
+        },
+        .stats = .{},
+        .stats_last_frame = .{},
         .wd = WidgetData{
             .src = src,
             .id = hashval,
@@ -373,6 +393,9 @@ pub fn deinit(self: *Self) void {
     self.fonts.deinit(self.gpa, self.backend);
 
     self.debug.deinit(self.gpa);
+    const tq = &self.triQueue;
+    tq.vtx.deinit(self.gpa);
+    tq.idx.deinit(self.gpa);
 
     self.subwindows.deinit(self.gpa);
     self.min_sizes.deinit(self.gpa);
@@ -1108,6 +1131,8 @@ pub fn begin(
     self.last_focused_id_in_subwindow = .zero;
 
     self.debug.reset(self.gpa);
+    self.stats_last_frame = self.stats;
+    self.stats = .{};
 
     self.data_store.reset(self.gpa);
     self.texture_cache.reset(self.backend);
@@ -1364,6 +1389,40 @@ pub fn toastsShow(self: *Self, subwindow_id: ?Id, rect: Rect.Natural) void {
     }
 }
 
+pub fn trianglesQueue(self: *Self, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, clipr: ?dvui.Rect.Physical) !void {
+    const tq = &self.triQueue;
+    //if (!std.mem.eql(u8, std.mem.asBytes(&tq.texture), std.mem.asBytes(&texture)) or
+    //    !std.mem.eql(u8, std.mem.asBytes(&tq.clipr), std.mem.asBytes(&clipr)))
+    if (true) {
+        // can't coalesce
+        try self.trianglesFlush();
+
+        tq.texture = texture;
+        tq.clipr = clipr;
+    }
+
+    const offset: dvui.Vertex.Index = @intCast(tq.vtx.items.len);
+    try tq.vtx.appendSlice(self.gpa, vtx);
+    const i = tq.idx.items.len;
+    try tq.idx.appendSlice(self.gpa, idx);
+    for (tq.idx.items[i..]) |*index| {
+        index.* += offset;
+    }
+}
+
+pub fn trianglesFlush(self: *Self) !void {
+    const tq = &self.triQueue;
+    if (tq.vtx.items.len == 0) return;
+
+    self.stats.draw_calls += 1;
+    try self.backend.drawClippedTriangles(tq.texture, tq.vtx.items, tq.idx.items, tq.clipr);
+
+    tq.vtx.clearRetainingCapacity();
+    tq.idx.clearRetainingCapacity();
+    tq.texture = null;
+    tq.clipr = null;
+}
+
 pub const endOptions = struct {
     show_toasts: bool = true,
 };
@@ -1397,6 +1456,10 @@ pub fn endRendering(self: *Self, opts: endOptions) void {
         sw.render_cmds_after = .empty;
     }
 
+    self.trianglesFlush() catch |err| {
+        dvui.logError(@src(), err, "Failed to flush queued triangles", .{});
+    };
+
     self.end_rendering_done = true;
 }
 
@@ -1411,6 +1474,10 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
     if (!self.end_rendering_done) {
         self.endRendering(opts);
+    }
+
+    if (self.debug.log_stats) {
+        log.debug("stats draw_calls {d}", .{self.stats.draw_calls});
     }
 
     // Call this before freeing data so backend can use data allocated during frame.
