@@ -1589,7 +1589,7 @@ const DisplayMenuItemLabel = struct {
         for (items.items, 0..) |menu_item, i| {
             var init_opts_submenu = init_opts;
             init_opts_submenu.submenu = init_opts.submenu and menu_item.sub_items.items.len > 0;
-            if (dvui.menuItemLabel(@src(), menu_item.label, init_opts_submenu, .{ .id_extra = i, .expand = .horizontal, .data_out = &wd })) |r| {
+            if (dvui.menuItemLabel(@src(), menu_item.label, init_opts_submenu, options.override(.{ .id_extra = i, .data_out = &wd }))) |r| {
                 var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{ .id_extra = i });
                 defer fw.deinit();
                 // If there are no sub menus to display close on click.
