@@ -110,8 +110,7 @@ pub fn widgetpedia() void {
                         defer branch_child.deinit();
                         dvui.labelNoFmt(@src(), child.name, .{}, .{ .expand = .horizontal });
                         if (branch_child.button.clicked()) {
-                            current_widget = child;
-                            reset_widget = true;
+                            setCurrentWidget(child);
                         }
                     }
                 }
@@ -126,6 +125,11 @@ pub fn widgetpedia() void {
     }
 }
 
+fn setCurrentWidget(widget: WidgetHierarchy) void {
+    current_widget = widget;
+    reset_widget = true;
+}
+
 // Only supports 2 levels, parent and children.
 const WidgetHierarchy = struct {
     name: []const u8,
@@ -133,7 +137,9 @@ const WidgetHierarchy = struct {
     displayFn: *const fn (reset_widget: bool) void,
 };
 
-var current_widget: WidgetHierarchy = widget_hierarchy[0];
+var current_widget: WidgetHierarchy = .{ .name = "menu", .displayFn = DisplayMenu.displayFn, .children = null };
+
+//widget_hierarchy[0];
 
 fn displayEmpty(_: bool) void {
     var label_str = std.Io.Writer.Allocating.initCapacity(dvui.currentWindow().arena(), current_widget.name.len + 2) catch return;
@@ -1286,6 +1292,122 @@ const DisplayLink = struct {
     }
 };
 
+const DisplayMenu = struct {
+    var name: []const u8 = "menu()";
+    var allocator_buffer: [10 * 1024]u8 = undefined;
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var test_options: struct {
+        direction: dvui.enums.Direction,
+    } = undefined;
+    var allocator: std.heap.FixedBufferAllocator = undefined;
+    //var allocator: std.heap.DebugAllocator(.{}) = .init;
+    var arena: std.heap.ArenaAllocator = undefined;
+
+    const MenuItem = struct {
+        label: []const u8,
+        sub_items: std.ArrayList(MenuItem) = .empty,
+    };
+
+    var menu_items: std.ArrayList(MenuItem) = .empty;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        allocator = .init(&allocator_buffer);
+        arena = .init(allocator.allocator());
+        menu_items = .empty;
+
+        options = .{};
+        test_options = .{ .direction = .horizontal };
+        menu_items.append(arena.allocator(), .{
+            .label = "File",
+        }) catch @panic("OOM");
+    }
+
+    pub fn layoutWidget() void {
+        var menu = dvui.menu(@src(), test_options.direction, options.override(.{ .data_out = &wd }));
+        defer menu.deinit();
+        displayMenuItems(menu, menu_items);
+    }
+
+    fn displayMenuItems(menu: *dvui.MenuWidget, items: std.ArrayList(MenuItem)) void {
+        for (items.items, 0..) |menu_item, i| {
+            if (dvui.menuItemLabel(@src(), menu_item.label, .{ .submenu = menu_item.sub_items.items.len > 0 }, .{ .id_extra = i, .expand = .horizontal })) |r| {
+                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{ .id_extra = i });
+                defer fw.deinit();
+                // If there are no sub menus to display close on click.
+                if (menu_item.sub_items.items.len == 0) {
+                    menu.close();
+                } else {
+                    displayMenuItems(menu, menu_item.sub_items);
+                }
+            }
+        }
+    }
+
+    pub fn layoutWidgetControls() void {
+        dvui.structUI(@src(), test_options_label, &test_options, 1, .{}, .{});
+        var al: dvui.Alignment = .init(@src(), 0);
+        defer al.deinit();
+        if (struct_ui.displayContainer(@src(), "Menu builder")) |container| {
+            defer container.deinit();
+            displayMenuControls(&menu_items);
+            al.spacer(@src(), 0);
+            if (dvui.buttonIcon(@src(), "add", dvui.entypo.circle_with_plus, .{}, .{}, .{})) {
+                menu_items.append(arena.allocator(), .{ .label = "Main" }) catch {};
+                dvui.refresh(null, @src(), null);
+            }
+        }
+    }
+
+    fn displayMenuControls(items: *std.ArrayList(MenuItem)) void {
+        var to_remove: std.ArrayList(usize) = .empty;
+
+        var indent = dvui.box(@src(), .{ .dir = .vertical }, .{
+            .expand = .horizontal,
+            .border = .{ .x = 1 },
+            .background = true,
+            .margin = .{ .x = 12 },
+        });
+        defer indent.deinit();
+
+        for (items.items, 0..) |*menu_item, i| {
+            var vbox = dvui.box(@src(), .{}, .{ .id_extra = i });
+            defer vbox.deinit();
+            {
+                var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+                defer hbox.deinit();
+                {
+                    const size = dvui.themeGet().font_body.sizeM(10, 1);
+                    var te = dvui.textEntry(@src(), .{}, .{ .min_size_content = size, .max_size_content = .cast(size) });
+                    defer te.deinit();
+                    if (dvui.firstFrame(te.data().id)) {
+                        te.textSet(menu_item.label, false);
+                    }
+                    menu_item.label = te.textGet();
+                }
+                if (dvui.buttonIcon(@src(), "delete", dvui.entypo.circle_with_minus, .{}, .{}, .{ .expand = .both })) {
+                    to_remove.append(arena.allocator(), i) catch {};
+                    continue;
+                }
+                if (dvui.buttonIcon(@src(), "add", dvui.entypo.circle_with_plus, .{}, .{}, .{ .expand = .both })) {
+                    menu_item.sub_items.append(arena.allocator(), .{ .label = "Sub..." }) catch {};
+                }
+            }
+            displayMenuControls(&menu_item.sub_items);
+        }
+        while (to_remove.pop()) |index| {
+            // TODO: Menu leak here when deleting branch nodes.
+            _ = items.orderedRemove(index);
+        }
+    }
+};
+
 const DisplayProgress = struct {
     var name: []const u8 = "progress()";
 
@@ -1988,7 +2110,7 @@ const DisplayToast = struct {
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
     var init_opts: dvui.ToastOptions = undefined;
-    var selection: ?enum { @"floating window" } = null;
+    var selection: ?enum { @"widgetpedia window" } = null;
     var box_id: dvui.Id = undefined;
 
     var test_options: struct {
@@ -2006,7 +2128,7 @@ const DisplayToast = struct {
     }
 
     pub fn layoutWidget() void {
-        init_opts.subwindow_id = if (selection == .@"floating window") dvui.subwindowCurrentId() else null;
+        init_opts.subwindow_id = if (selection == .@"widgetpedia window") dvui.subwindowCurrentId() else null;
         if (dvui.button(@src(), "Display toast", .{}, .{})) {
             dvui.toast(@src(), init_opts);
         }
@@ -2201,7 +2323,7 @@ const widget_hierarchy = [_]WidgetHierarchy{
     .{ .name = "link", .displayFn = DisplayLink.displayFn, .children = null },
 
     .{ .name = "menus", .displayFn = displayEmpty, .children = &.{
-        .{ .name = "menu", .displayFn = displayEmpty, .children = null },
+        .{ .name = "menu", .displayFn = DisplayMenu.displayFn, .children = null },
         .{ .name = "menuItem", .displayFn = displayEmpty, .children = null },
         .{ .name = "menuItemIcon", .displayFn = displayEmpty, .children = null },
         .{ .name = "menuItemLabel", .displayFn = displayEmpty, .children = null },
