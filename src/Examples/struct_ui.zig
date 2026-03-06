@@ -80,7 +80,7 @@ pub fn structUI() void {
             struct_ui.displayStringBuf(@src(), "array_u8_editable_1", &slice, .{ .text = .{} }, &alignment, &test_instance.array_u8);
 
             // Edit it instead as an array of ints.
-            struct_ui.displayArray(@src(), TestStruct, "array_u8_editable_2", &test_instance.array_u8, 0, .{ .number = .{ .min = 0, .max = 126 } }, &alignment);
+            struct_ui.displayArray(@src(), TestStruct, "array_u8_editable_2", &test_instance.array_u8, 0, .{ .number = .{ .min = 0, .max = 126 } }, .{});
 
             // Optional pointers need to be handled manually by passing the pointer value to be set when the optional is selected.
             struct_ui.displayOptional(@src(), TestStruct, "opt_int_ptr", &test_instance.opt_int_ptr, 1, .{ .number = .{} }, .{}, &alignment, &TestStruct.ts_int);

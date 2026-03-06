@@ -265,6 +265,8 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
             AccessKit.nodeClearModal(ak_node);
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
     }
+
+    dvui.toastsShow(self.data().id, .cast(self.data().rect));
 }
 
 pub fn drawBackground(self: *FloatingWindowWidget) void {
