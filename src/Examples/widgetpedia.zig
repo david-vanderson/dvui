@@ -1301,12 +1301,15 @@ const DisplayMenu = struct {
     var test_options: struct {
         direction: dvui.enums.Direction,
     } = undefined;
-    var allocator: std.heap.FixedBufferAllocator = undefined;
-    //var allocator: std.heap.DebugAllocator(.{}) = .init;
-    var arena: std.heap.ArenaAllocator = undefined;
+
+    var fba: std.heap.FixedBufferAllocator = undefined;
+    const allocator = fba.allocator();
+
+    var menu_id: usize = 0;
 
     const MenuItem = struct {
         label: []const u8,
+        id: usize,
         sub_items: std.ArrayList(MenuItem) = .empty,
     };
 
@@ -1317,16 +1320,22 @@ const DisplayMenu = struct {
         displayWidgetTemplate(@This());
     }
 
+    // Give each menu item a unique id as their index in the arraylist can change with deletions.
+    fn menuId() usize {
+        defer menu_id += 1;
+        return menu_id;
+    }
+
     pub fn resetWidget() void {
-        allocator = .init(&allocator_buffer);
-        arena = .init(allocator.allocator());
+        fba = .init(&allocator_buffer);
         menu_items = .empty;
 
         options = .{};
         test_options = .{ .direction = .horizontal };
-        menu_items.append(arena.allocator(), .{
-            .label = "File",
-        }) catch @panic("OOM");
+        menu_items.append(allocator, .{
+            .label = allocator.dupe(u8, "File") catch "",
+            .id = menuId(),
+        }) catch {};
     }
 
     pub fn layoutWidget() void {
@@ -1359,15 +1368,14 @@ const DisplayMenu = struct {
             displayMenuControls(&menu_items);
             al.spacer(@src(), 0);
             if (dvui.buttonIcon(@src(), "add", dvui.entypo.circle_with_plus, .{}, .{}, .{})) {
-                menu_items.append(arena.allocator(), .{ .label = "Main" }) catch {};
+                const label = std.fmt.allocPrint(allocator, "Main {}", .{menu_items.items.len + 1}) catch "";
+                menu_items.append(allocator, .{ .label = label, .id = menuId() }) catch {};
                 dvui.refresh(null, @src(), null);
             }
         }
     }
 
     fn displayMenuControls(items: *std.ArrayList(MenuItem)) void {
-        var to_remove: std.ArrayList(usize) = .empty;
-
         var indent = dvui.box(@src(), .{ .dir = .vertical }, .{
             .expand = .horizontal,
             .border = .{ .x = 1 },
@@ -1376,8 +1384,9 @@ const DisplayMenu = struct {
         });
         defer indent.deinit();
 
+        var to_remove: ?usize = null;
         for (items.items, 0..) |*menu_item, i| {
-            var vbox = dvui.box(@src(), .{}, .{ .id_extra = i });
+            var vbox = dvui.box(@src(), .{}, .{ .id_extra = menu_item.id });
             defer vbox.deinit();
             {
                 var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
@@ -1389,22 +1398,278 @@ const DisplayMenu = struct {
                     if (dvui.firstFrame(te.data().id)) {
                         te.textSet(menu_item.label, false);
                     }
+                    // FBA allocated strings are only used to initialize the text entry's value.
+                    // Once that is done, free them and set the menu item's label to the text entry's internal buffer.
+                    if (@intFromPtr(menu_item.label.ptr) >= @intFromPtr(&allocator_buffer) and @intFromPtr(menu_item.label.ptr) <= @intFromPtr(&allocator_buffer) + allocator_buffer.len) {
+                        allocator.free(menu_item.label);
+                    }
                     menu_item.label = te.textGet();
                 }
                 if (dvui.buttonIcon(@src(), "delete", dvui.entypo.circle_with_minus, .{}, .{}, .{ .expand = .both })) {
-                    to_remove.append(arena.allocator(), i) catch {};
+                    to_remove = i;
                     continue;
                 }
                 if (dvui.buttonIcon(@src(), "add", dvui.entypo.circle_with_plus, .{}, .{}, .{ .expand = .both })) {
-                    menu_item.sub_items.append(arena.allocator(), .{ .label = "Sub..." }) catch {};
+                    const label = std.fmt.allocPrint(allocator, "Sub {d}...", .{menu_item.sub_items.items.len + 1}) catch "";
+                    menu_item.sub_items.append(allocator, .{ .label = label, .id = menuId() }) catch {};
                 }
             }
             displayMenuControls(&menu_item.sub_items);
         }
-        while (to_remove.pop()) |index| {
-            // TODO: Menu leak here when deleting branch nodes.
-            _ = items.orderedRemove(index);
+        if (to_remove) |index| {
+            deinitMenuItem(items, index);
+            to_remove = null;
         }
+    }
+    pub fn deinitMenuItem(items: *std.ArrayList(MenuItem), index: usize) void {
+        while (items.items[index].sub_items.items.len > 0) {
+            // deinit from end to start
+            deinitMenuItem(&items.items[index].sub_items, items.items[index].sub_items.items.len - 1);
+        }
+        _ = items.orderedRemove(index);
+    }
+};
+
+const DisplayMenuItem = struct {
+    var name: []const u8 = "menuItem()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.MenuItemWidget.InitOptions = undefined;
+    var checked: bool = false;
+    var test_options: struct {
+        scenario: enum { @"text only", @"with icon" },
+        text: []const u8,
+    } = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{ .min_size_content = .all(30) };
+        init_opts = .{};
+        checked = false;
+    }
+
+    pub fn layoutWidget() void {
+        {
+            var menu = dvui.menu(@src(), .horizontal, .{});
+            defer menu.deinit();
+            if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
+                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+                defer fw.deinit();
+                {
+                    var mi = dvui.menuItem(@src(), init_opts, options.override(.{ .data_out = &wd }));
+                    defer mi.deinit();
+                    var vbox = dvui.box(@src(), .{}, .{});
+                    defer vbox.deinit();
+                    dvui.labelNoFmt(@src(), "Menu items can contain other widgets", .{}, .{});
+                    dvui.spinner(@src(), .{ .color_text = .green });
+                    if (mi.activeRect()) |_| {
+                        menu.close();
+                    }
+                }
+                _ = dvui.checkbox(@src(), &checked, "Checkbox outside menu item", .{});
+                if (dvui.menuItemLabel(@src(), "Standard item", .{}, .{ .expand = .horizontal })) |_| {
+                    menu.close();
+                }
+            }
+        }
+    }
+
+    pub fn layoutWidgetControls() void {
+        const display_opts = StructOptions(dvui.MenuItemWidget.InitOptions).initWithDefaults(.{
+            .submenu = .defaultReadOnly,
+        }, null);
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{display_opts}, .{});
+    }
+};
+
+const DisplayMenuItemIcon = struct {
+    var name: []const u8 = "tooltip()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.MenuItemWidget.InitOptions = undefined;
+
+    var test_options: struct {
+        scenario: enum { @"text only", @"with icon" },
+        text: []const u8,
+    } = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{ .min_size_content = .all(30) };
+        init_opts = .{};
+    }
+
+    pub fn layoutWidget() void {
+        {
+            var menu = dvui.menu(@src(), .horizontal, .{});
+            defer menu.deinit();
+            if (dvui.menuItemIcon(@src(), "chevron_thin_down", dvui.entypo.chevron_thin_down, init_opts, options.override(.{ .data_out = &wd }))) |r| {
+                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+                defer fw.deinit();
+                _ = dvui.menuItemIcon(@src(), "aircraft", dvui.entypo.aircraft, init_opts, options.override(.{ .data_out = &wd }));
+                _ = dvui.menuItemIcon(@src(), "aircraft_landing", dvui.entypo.aircraft_landing, init_opts, options.override(.{ .data_out = &wd }));
+                _ = dvui.menuItemIcon(@src(), "aircraft_take_off", dvui.entypo.aircraft_take_off, init_opts, options.override(.{ .data_out = &wd }));
+            }
+            _ = dvui.menuItemIcon(@src(), "aircraft", dvui.entypo.aircraft, init_opts, options.override(.{ .data_out = &wd }));
+            _ = dvui.menuItemIcon(@src(), "aircraft_landing", dvui.entypo.aircraft_landing, init_opts, options.override(.{ .data_out = &wd }));
+            _ = dvui.menuItemIcon(@src(), "aircraft_take_off", dvui.entypo.aircraft_take_off, init_opts, options.override(.{ .data_out = &wd }));
+        }
+        var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .gravity_y = 1.0, .gravity_x = 0.5 });
+        defer tl.deinit();
+        tl.addText("The first icon will show a submenu when submenus are enabled", .{ .expand = .horizontal, .gravity_x = 0.5 });
+    }
+
+    pub fn layoutWidgetControls() void {
+        const display_opts = StructOptions(dvui.MenuItemWidget.InitOptions).initWithDefaults(.{}, null);
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{display_opts}, .{});
+    }
+};
+
+const DisplayMenuItemLabel = struct {
+    var name: []const u8 = "menuItemLabel()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.MenuItemWidget.InitOptions = undefined;
+
+    var allocator_buffer: [10 * 1024]u8 = undefined;
+    var fba: std.heap.FixedBufferAllocator = undefined;
+    const allocator = fba.allocator();
+    var menu_id: usize = 0;
+
+    const MenuItem = struct {
+        label: []const u8,
+        id: usize,
+        sub_items: std.ArrayList(MenuItem) = .empty,
+    };
+
+    var menu_items: std.ArrayList(MenuItem) = .empty;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    fn menuId() usize {
+        defer menu_id += 1;
+        return menu_id;
+    }
+
+    pub fn resetWidget() void {
+        fba = .init(&allocator_buffer);
+        menu_items = .empty;
+
+        options = .{};
+        init_opts = .{
+            .submenu = true,
+        };
+        menu_items.append(allocator, .{
+            .label = allocator.dupe(u8, "File") catch "",
+            .id = menuId(),
+        }) catch {};
+    }
+
+    pub fn layoutWidget() void {
+        var menu = dvui.menu(@src(), .horizontal, .{});
+        defer menu.deinit();
+        displayMenuItems(menu, menu_items);
+    }
+
+    fn displayMenuItems(menu: *dvui.MenuWidget, items: std.ArrayList(MenuItem)) void {
+        for (items.items, 0..) |menu_item, i| {
+            var init_opts_submenu = init_opts;
+            init_opts_submenu.submenu = init_opts.submenu and menu_item.sub_items.items.len > 0;
+            if (dvui.menuItemLabel(@src(), menu_item.label, init_opts_submenu, .{ .id_extra = i, .expand = .horizontal, .data_out = &wd })) |r| {
+                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{ .id_extra = i });
+                defer fw.deinit();
+                // If there are no sub menus to display close on click.
+                if (menu_item.sub_items.items.len == 0) {
+                    menu.close();
+                } else {
+                    displayMenuItems(menu, menu_item.sub_items);
+                }
+            }
+        }
+    }
+
+    pub fn layoutWidgetControls() void {
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{}, .{});
+        var al: dvui.Alignment = .init(@src(), 0);
+        defer al.deinit();
+        if (struct_ui.displayContainer(@src(), "Menu builder")) |container| {
+            defer container.deinit();
+            displayMenuControls(&menu_items);
+            al.spacer(@src(), 0);
+            if (dvui.buttonIcon(@src(), "add", dvui.entypo.circle_with_plus, .{}, .{}, .{})) {
+                const label = std.fmt.allocPrint(allocator, "Main {}", .{menu_items.items.len + 1}) catch "";
+                menu_items.append(allocator, .{ .label = label, .id = menuId() }) catch {};
+                dvui.refresh(null, @src(), null);
+            }
+        }
+    }
+
+    fn displayMenuControls(items: *std.ArrayList(MenuItem)) void {
+        var indent = dvui.box(@src(), .{ .dir = .vertical }, .{
+            .expand = .horizontal,
+            .border = .{ .x = 1 },
+            .background = true,
+            .margin = .{ .x = 12 },
+        });
+        defer indent.deinit();
+
+        var to_remove: ?usize = null;
+        for (items.items, 0..) |*menu_item, i| {
+            var vbox = dvui.box(@src(), .{}, .{ .id_extra = menu_item.id });
+            defer vbox.deinit();
+            {
+                var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+                defer hbox.deinit();
+                {
+                    const size = dvui.themeGet().font_body.sizeM(10, 1);
+                    var te = dvui.textEntry(@src(), .{}, .{ .min_size_content = size, .max_size_content = .cast(size) });
+                    defer te.deinit();
+                    if (dvui.firstFrame(te.data().id)) {
+                        te.textSet(menu_item.label, false);
+                    }
+                    // FBA allocated strings are only used to initialize the text entry's value.
+                    // Once that is done, free them and set the menu item's label to the text entry's internal buffer.
+                    if (@intFromPtr(menu_item.label.ptr) >= @intFromPtr(&allocator_buffer) and @intFromPtr(menu_item.label.ptr) <= @intFromPtr(&allocator_buffer) + allocator_buffer.len) {
+                        allocator.free(menu_item.label);
+                    }
+                    menu_item.label = te.textGet();
+                }
+                if (dvui.buttonIcon(@src(), "delete", dvui.entypo.circle_with_minus, .{}, .{}, .{ .expand = .both })) {
+                    to_remove = i;
+                    continue;
+                }
+                if (dvui.buttonIcon(@src(), "add", dvui.entypo.circle_with_plus, .{}, .{}, .{ .expand = .both })) {
+                    const label = std.fmt.allocPrint(allocator, "Sub {d}...", .{menu_item.sub_items.items.len + 1}) catch "";
+                    menu_item.sub_items.append(allocator, .{ .label = label, .id = menuId() }) catch {};
+                }
+            }
+            displayMenuControls(&menu_item.sub_items);
+        }
+        if (to_remove) |index| {
+            deinitMenuItem(items, index);
+            to_remove = null;
+        }
+    }
+    pub fn deinitMenuItem(items: *std.ArrayList(MenuItem), index: usize) void {
+        while (items.items[index].sub_items.items.len > 0) {
+            // deinit from end to start
+            deinitMenuItem(&items.items[index].sub_items, items.items[index].sub_items.items.len - 1);
+        }
+        _ = items.orderedRemove(index);
     }
 };
 
@@ -2324,9 +2589,9 @@ const widget_hierarchy = [_]WidgetHierarchy{
 
     .{ .name = "menus", .displayFn = displayEmpty, .children = &.{
         .{ .name = "menu", .displayFn = DisplayMenu.displayFn, .children = null },
-        .{ .name = "menuItem", .displayFn = displayEmpty, .children = null },
-        .{ .name = "menuItemIcon", .displayFn = displayEmpty, .children = null },
-        .{ .name = "menuItemLabel", .displayFn = displayEmpty, .children = null },
+        .{ .name = "menuItem", .displayFn = DisplayMenuItem.displayFn, .children = null },
+        .{ .name = "menuItemIcon", .displayFn = DisplayMenuItemIcon.displayFn, .children = null },
+        .{ .name = "menuItemLabel", .displayFn = DisplayMenuItemLabel.displayFn, .children = null },
     } },
 
     .{ .name = "paned", .displayFn = displayEmpty, .children = null },
