@@ -2384,7 +2384,8 @@ pub fn dialogDisplay(id: Id) !void {
 /// Add a toast.  Use `toast` for a simple message.
 ///
 /// If subwindow_id is null, the toast will be shown during `Window.end`.  If
-/// subwindow_id is not null, separate code must call `toastsShow` or
+/// subwindow_id is the id of a FloatingWindowWidget, it will be shown when
+/// that widget runs init().  Otherwise separate code must call `toastsShow` or
 /// `toastsFor` with that subwindow_id to retrieve this toast and display it.
 ///
 /// Returns an id and locked mutex that must be unlocked by the caller. Caller
@@ -2451,9 +2452,10 @@ pub const ToastOptions = struct {
 /// Add a simple toast.  Use `toastAdd` for more complex toasts.
 ///
 /// If `opts.subwindow_id` is null, the toast will be shown during
-/// `Window.end`.  If `opts.subwindow_id` is not null, separate code must call
-/// `toastsShow` or `toastsFor` with that subwindow_id to retrieve this toast
-/// and display it.
+/// `Window.end`.  If `opts.subwindow_id` is the id of a FloatingWindowWidget,
+/// it will be shown when that widget runs init().  Otherwise separate code
+/// must call `toastsShow` or `toastsFor` with that subwindow_id to retrieve
+/// this toast and display it.
 ///
 /// Can be called from any thread, but if called from a non-GUI thread or
 /// outside `Window.begin`/`Window.end`, you must set `opts.window`.

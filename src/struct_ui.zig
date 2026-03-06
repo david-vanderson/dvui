@@ -360,7 +360,7 @@ pub const NumberFieldOptions = struct {
         const max = self.maxValue(T);
         const input, const range, const min_f = switch (@typeInfo(@TypeOf(input_num))) {
             .int => .{
-                @as(f32, @floatFromInt(if (input_num < min) min else input_num)),
+                std.math.clamp(@as(f32, @floatFromInt(input_num)), @as(f32, @floatFromInt(min)), @as(f32, @floatFromInt(max))),
                 @as(f32, @floatFromInt(max - min)),
                 @as(f32, @floatFromInt(min)),
             },
@@ -655,8 +655,10 @@ pub fn boolFieldWidget(
             if (dvui.animationGet(box.data().id, "trigger")) |a| {
                 const prev_alpha = dvui.alpha(a.value());
                 defer dvui.alphaSet(prev_alpha);
-                dvui.label(@src(), "{}", .{opt.widget_type.trigger_on}, .{ .margin = .{ .y = 4 } });
-                if (a.done()) {
+                if (!a.done()) {
+                    dvui.label(@src(), "{}", .{opt.widget_type.trigger_on}, .{ .margin = .{ .y = 4 } });
+                } else {
+                    dvui.label(@src(), "{}", .{field_value_ptr.*}, .{ .margin = .{ .y = 4 } });
                     dvui.refresh(null, @src(), null);
                 }
             } else {
@@ -679,7 +681,7 @@ pub fn boolFieldWidget(
 
 // Bring in immediately, hold, then smoothstep fade.
 // Return 1 if t < 0.4, then smoothstep to 0 for remainder
-pub fn easing(t: f32) f32 {
+fn easing(t: f32) f32 {
     if (t < 0.4) return 1;
     const u = (t - 0.4) / 0.6;
     return 1 - u * u * (3 - 2 * u);
@@ -732,6 +734,7 @@ pub const TextFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
     label: ?[]const u8 = null,
     customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
+    multiline: bool = false,
 
     /// Set to true if the string is heap allocated and should be
     /// freed before a new string is allocated.
@@ -765,14 +768,12 @@ pub fn textFieldWidget(
     const sentinel_terminated = @typeInfo(T).pointer.sentinel_ptr != null;
 
     var read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or
-        opt.display == .read_only or
-        sentinel_terminated;
+        opt.display == .read_only;
 
     if (opt.display == .read_write and read_only) {
         // Note all string arrays are currently treated as read-only, even if they are var.
         // It would be possible to support in-place editing, preferably by implementing a new display option.
         log.debug("field {s} display option is set to read_write for read_only string or an array. Displaying as read_only.", .{field_name});
-        read_only = true;
     } else if (opt.display == .read_write and sentinel_terminated) {
         // Sentinel terminated strings cannot be edited.
         // Would require keeping 2 string maps, for sentinel vs non-sentinel strings.
@@ -793,7 +794,11 @@ pub fn textFieldWidget(
         defer hbox_aligned.deinit();
         alignment.record(box.data().id, hbox_aligned.data());
 
-        const text_box = dvui.textEntry(@src(), if (backing == .buffer) .{ .text = .{ .buffer = backing.buffer } } else .{}, .{});
+        const textbox_width = dvui.themeGet().font_body.sizeM(dvui.TextEntryWidget.defaultMWidth, 1).w;
+        const text_box = dvui.textEntry(@src(), if (backing == .buffer) .{ .text = .{ .buffer = backing.buffer }, .multiline = opt.multiline } else .{ .multiline = opt.multiline }, .{
+            .min_size_content = if (opt.multiline) .{ .h = dvui.themeGet().font_body.lineHeight() * 2, .w = textbox_width } else null,
+            .max_size_content = if (opt.multiline) .{ .h = dvui.themeGet().font_body.lineHeight() * 4, .w = textbox_width } else null,
+        });
         defer text_box.deinit();
         if (!text_box.text_changed and !std.mem.eql(u8, text_box.getText(), field_value_ptr.*)) {
             text_box.textSet(field_value_ptr.*, false);
@@ -1035,7 +1040,7 @@ const msg_invalid_opt_type = "invalid field option type {t} used for field {s}. 
 
 /// Display numeric fields, ints and floats.
 pub fn displayNumber(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
-    validateFieldPtrType(field_name, &.{ .int, .float }, "displayEnum", @TypeOf(field_value_ptr));
+    validateFieldPtrType(field_name, &.{ .int, .float }, "displayNumber", @TypeOf(field_value_ptr));
     numberFieldWidget(src, field_name, field_value_ptr, field_option.optionNumber(field_name), al);
 }
 
@@ -1344,6 +1349,8 @@ pub fn displayStruct(
         }
     }
     if (field_option.standard.display == .none) return null;
+    // TODO: If the struct field is marked read-only, then make sure all of the fields in the struct are read-only as well.
+    // Potentially introduce a "const" options that propgates read-only to all children.
 
     const StructT = @TypeOf(field_value_ptr.*);
     const struct_options: StructOptions(StructT) = findMatchingStructOption(StructT, options) orelse .initWithDefaults(.{}, null);

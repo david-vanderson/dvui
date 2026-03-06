@@ -83,6 +83,9 @@ pub fn floatRetainClear(ptr: *anyopaque) void {
 }
 
 pub fn demo() void {
+    if (show_widgetpedia_window) {
+        widgetpedia();
+    }
     if (!show_demo_window) {
         return;
     }
@@ -103,8 +106,6 @@ pub fn demo() void {
     const fps_str = std.fmt.bufPrint(&buf, "{d:0>3.0} fps | frame no {d}", .{ dvui.FPS(), frame_counter }) catch unreachable;
     frame_counter += 1;
     float.dragAreaSet(dvui.windowHeader("DVUI Demo", fps_str, &show_demo_window));
-
-    dvui.toastsShow(float.data().id, .cast(float.data().rect));
 
     var scaler = dvui.scale(@src(), .{ .scale = &scale_val }, .{ .expand = .both });
     defer scaler.deinit();
@@ -190,7 +191,7 @@ pub fn demo() void {
                 switch (e) {
                     .basic_widgets => basicWidgets(),
                     .applets => applets(),
-                    .text_entry => textEntryWidgets(float.data().id),
+                    .text_entry => textEntryWidgets(),
                     .styling => styling(),
                     .theming => theming(),
                     .layout => layout(),
@@ -200,7 +201,7 @@ pub fn demo() void {
                     .menus => menus(),
                     .scrolling => scrolling(),
                     .scroll_canvas => scrollCanvas(),
-                    .dialogs => dialogs(float.data().id),
+                    .dialogs => dialogs(),
                     .animations => animations(),
                     .struct_ui => structUI(),
                     .debugging => debuggingErrors(),
@@ -248,7 +249,7 @@ pub fn demo() void {
         switch (demo_active) {
             .basic_widgets => basicWidgets(),
             .applets => applets(),
-            .text_entry => textEntryWidgets(float.data().id),
+            .text_entry => textEntryWidgets(),
             .styling => styling(),
             .theming => theming(),
             .layout => layout(),
@@ -258,7 +259,7 @@ pub fn demo() void {
             .menus => menus(),
             .scrolling => scrolling(),
             .scroll_canvas => scrollCanvas(),
-            .dialogs => dialogs(float.data().id),
+            .dialogs => dialogs(),
             .animations => animations(),
             .struct_ui => structUI(),
             .debugging => debuggingErrors(),
@@ -275,7 +276,6 @@ pub fn demo() void {
     if (icon_browser_show) {
         icon_browser(@src(), &icon_browser_show, "entypo", entypo);
     }
-    widgetpedia();
 
     if (StrokeTest.show) {
         show_stroke_test_window();
