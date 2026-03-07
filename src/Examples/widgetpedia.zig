@@ -137,7 +137,8 @@ const WidgetHierarchy = struct {
     displayFn: *const fn (reset_widget: bool) void,
 };
 
-var current_widget: WidgetHierarchy = widget_hierarchy[0];
+var current_widget: WidgetHierarchy = .{ .name = "floatingWindow", .displayFn = DisplayFloatingWindow.displayFn };
+//widget_hierarchy[0];
 
 fn displayEmpty(_: bool) void {
     var label_str = std.Io.Writer.Allocating.initCapacity(dvui.currentWindow().arena(), current_widget.name.len + 2) catch return;
@@ -604,7 +605,11 @@ const DisplayCheckbox = struct {
     }
 
     pub fn layoutWidget() void {
-        result = dvui.checkbox(@src(), &test_options.checked, test_options.label_str, options.override(.{ .data_out = &wd }));
+        var theme_override = dvui.themeGet();
+        theme_override.highlight.fill = .red;
+        theme_override.fill = .green;
+
+        result = dvui.checkbox(@src(), &test_options.checked, test_options.label_str, options.override(.{ .data_out = &wd, .theme = &theme_override }));
     }
 
     pub fn layoutResults() void {
@@ -959,6 +964,115 @@ const DisplayExpander = struct {
             }, null),
         }, .{});
         dvui.structUI(@src(), "init_opts", &init_opts, 2, .{}, .{});
+    }
+};
+
+const DisplayFloatingWindow = struct {
+    const name = "floatingWindow()";
+    var wd: dvui.WidgetData = undefined;
+    var floating_opts: dvui.FloatingWindowWidget.InitOptions = .{};
+    var options: dvui.Options = undefined;
+    var open_flag = false;
+    var rect: Rect = undefined;
+    // Used to "relaunch" as a new window.
+    var id_extra: usize = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        open_flag = true;
+        rect = .all(0);
+        id_extra = 0;
+        floating_opts = .{ .open_flag = &open_flag };
+        options = .{ .min_size_content = .all(350) };
+    }
+
+    pub fn layoutWidget() void {
+        if (!open_flag) return;
+
+        var fw = dvui.floatingWindow(@src(), floating_opts, options.override(.{ .data_out = &wd, .id_extra = id_extra }));
+        defer fw.deinit();
+        dvui.icon(@src(), "rocket", dvui.entypo.rocket, .{}, .{ .expand = .both });
+        if (floating_opts.modal) {
+            if (dvui.button(@src(), "End Modal", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5 })) {
+                floating_opts.modal = false;
+            }
+        }
+        if (floating_opts.rect == null) {
+            rect = fw.data().rect;
+        }
+    }
+
+    pub fn layoutWidgetControls() void {
+        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+            defer container.deinit();
+            if (dvui.button(@src(), "Relaunch window", .{}, .{})) {
+                open_flag = true;
+                id_extra += 1;
+            }
+        }
+        const display_opts: StructOptions(dvui.FloatingWindowWidget.InitOptions) = .initWithDefaults(.{}, .{ .rect = &rect, .open_flag = &open_flag });
+        dvui.structUI(@src(), "floating_opts", &floating_opts, 2, .{display_opts}, .{});
+    }
+};
+
+const DisplayWindowHeader = struct {
+    const name = "windowHeader()";
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+
+    var test_options: struct {
+        str: []const u8,
+        right_str: []const u8,
+        open_flag: bool,
+    } = undefined;
+
+    var result: Rect.Physical = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{};
+        test_options = .{
+            .str = "Window heading",
+            .right_str = "right text",
+            .open_flag = true,
+        };
+    }
+
+    pub fn layoutWidget() void {
+        {
+            var tl = dvui.textLayout(@src(), .{}, .{ .gravity_y = 1.0, .gravity_x = 0.5 });
+            defer tl.deinit();
+            tl.addText("This widget has no configurable DVUI options.", .{});
+        }
+        if (!test_options.open_flag) return;
+
+        var fw = dvui.floatingWindow(@src(), .{ .open_flag = &test_options.open_flag }, .{ .min_size_content = .all(350) });
+        defer fw.deinit();
+        result = dvui.windowHeader(test_options.str, test_options.right_str, &test_options.open_flag);
+        fw.dragAreaSet(result);
+
+        dvui.icon(@src(), "rocket", dvui.entypo.rocket, .{}, .{ .expand = .both });
+    }
+
+    pub fn displayResults() void {
+        const result_c = result;
+        dvui.structUI(@src(), null, &result_c, 1, .{}, .{});
+    }
+
+    pub fn layoutWidgetControls() void {
+        const display_opts: StructOptions(@TypeOf(test_options)) = .initWithDefaults(.{
+            .str = .defaultTextRW,
+            .right_str = .defaultTextRW,
+        }, null);
+        dvui.structUI(@src(), test_options_label, &test_options, 1, .{display_opts}, .{});
     }
 };
 
@@ -2518,11 +2632,12 @@ const widget_hierarchy = [_]WidgetHierarchy{
     } },
     .{ .name = "expander", .displayFn = DisplayExpander.displayFn, .children = null },
     .{ .name = "flexbox", .displayFn = displayEmpty, .children = null },
-    .{ .name = "floatingMenu", .displayFn = displayEmpty, .children = null },
+    // FloatingMenuWidget is typically combined with other widgets, and not used standalone.
+    //    .{ .name = "floatingMenu", .displayFn = displayEmpty, .children = null },
 
     .{ .name = "floatingWindow", .displayFn = displayEmpty, .children = &.{
-        .{ .name = "floatingWindow", .displayFn = displayEmpty, .children = null },
-        .{ .name = "windowHeader", .displayFn = displayEmpty, .children = null },
+        .{ .name = "floatingWindow", .displayFn = DisplayFloatingWindow.displayFn, .children = null },
+        .{ .name = "windowHeader", .displayFn = DisplayWindowHeader.displayFn, .children = null },
     } },
 
     .{ .name = "focusGroup", .displayFn = DisplayFocusGroup.displayFn, .children = null },

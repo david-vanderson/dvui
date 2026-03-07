@@ -834,10 +834,13 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
             var vbox = dvui.box(@src(), .{}, .{});
             defer vbox.deinit();
 
-            const field: *?dvui.Color = switch (active_color.*) {
-                inline else => |c| &@field(self, "color_" ++ @tagName(c)),
+            const field: *?dvui.Color, const default: dvui.Color = switch (active_color.*) {
+                inline else => |c| .{
+                    &@field(self, "color_" ++ @tagName(c)),
+                    dvui.themeGet().color(.control, std.meta.stringToEnum(dvui.Options.ColorAsk, @tagName(c)) orelse unreachable),
+                },
             };
-            var hsv = dvui.Color.HSV.fromColor(field.* orelse .white);
+            var hsv = dvui.Color.HSV.fromColor(field.* orelse default);
             if (dvui.colorPicker(@src(), .{ .hsv = &hsv, .dir = .horizontal }, .{})) {
                 changed = true;
                 field.* = hsv.toColor();
