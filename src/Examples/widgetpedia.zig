@@ -137,8 +137,7 @@ const WidgetHierarchy = struct {
     displayFn: *const fn (reset_widget: bool) void,
 };
 
-var current_widget: WidgetHierarchy = .{ .name = "floatingWindow", .displayFn = DisplayFloatingWindow.displayFn };
-//widget_hierarchy[0];
+var current_widget: WidgetHierarchy = widget_hierarchy[0];
 
 fn displayEmpty(_: bool) void {
     var label_str = std.Io.Writer.Allocating.initCapacity(dvui.currentWindow().arena(), current_widget.name.len + 2) catch return;
@@ -164,6 +163,7 @@ pub fn displayWidgetTemplate(widget_display: type) void {
     const state = struct {
         // Guess at initial split
         var split_ratio: f32 = 0.9;
+        var split_ratio_inner: f32 = 0.5;
         var split_ratio_open: f32 = 0.5;
         var split_ratio_closed: f32 = 0.9;
         var options_editor_open: bool = false;
@@ -183,9 +183,13 @@ pub fn displayWidgetTemplate(widget_display: type) void {
 
     if (paned.showFirst()) {
         {
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal, .equal_space = true }, .{ .expand = .both });
-            defer hbox.deinit();
-            {
+            var inner_paned = dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = 0, .split_ratio = &state.split_ratio_inner }, .{ .expand = .both });
+            defer inner_paned.deinit();
+            // Don't let the first pane completely close as it will stop the widget being displayed.
+            // Important for floating widgets.
+            if (state.split_ratio_inner < 0.01) state.split_ratio_inner = 0.01;
+
+            if (inner_paned.showFirst()) {
                 var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
                 defer vbox.deinit();
                 {
@@ -200,17 +204,19 @@ pub fn displayWidgetTemplate(widget_display: type) void {
                 }
             }
             if (std.meta.hasFn(widget_display, "layoutWidgetControls")) {
-                var scroll = dvui.scrollArea(@src(), .{}, .{
-                    .corner_radius = Rect.all(3),
-                    .border = Rect.all(1),
-                    .padding = Rect.all(6),
-                    .expand = .both,
-                    .margin = .{ .x = 6, .y = 6 + dvui.themeGet().font_body.lineHeight() / 2 - 1, .w = 6, .h = 6 },
-                    .background = false,
-                    .min_size_content = .{ .w = 350 },
-                });
-                defer scroll.deinit();
-                widget_display.layoutWidgetControls();
+                if (inner_paned.showSecond()) {
+                    var scroll = dvui.scrollArea(@src(), .{}, .{
+                        .corner_radius = Rect.all(3),
+                        .border = Rect.all(1),
+                        .padding = Rect.all(6),
+                        .expand = .both,
+                        .margin = .{ .x = 6, .y = 6 + dvui.themeGet().font_body.lineHeight() / 2 - 1, .w = 6, .h = 6 },
+                        .background = false,
+                        .min_size_content = .{ .w = 350 },
+                    });
+                    defer scroll.deinit();
+                    widget_display.layoutWidgetControls();
+                }
             }
         }
     }
@@ -531,8 +537,6 @@ const DisplayButtonLabelAndIcon = struct {
     const name = "buttonLabelAndIcon()";
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
-    var init_opts: dvui.ButtonWidget.InitOptions = undefined;
-    var icon_opts: dvui.IconRenderOptions = undefined;
     var combined_opts: dvui.ButtonLabelAndIconOptions = undefined;
     var result: bool = undefined;
 
@@ -542,7 +546,7 @@ const DisplayButtonLabelAndIcon = struct {
     }
 
     pub fn resetWidget() void {
-        options = .{};
+        options = .{ .expand = .horizontal };
         combined_opts = .{
             .label = "Button",
             .tvg_bytes = dvui.entypo.aircraft,
@@ -572,7 +576,6 @@ const DisplayButtonLabelAndIcon = struct {
             }, null), struct_options.color },
             .{},
         );
-        dvui.structUI(@src(), "icon_opts", &icon_opts, 1, .{struct_options.color}, .{});
     }
 };
 
@@ -605,11 +608,7 @@ const DisplayCheckbox = struct {
     }
 
     pub fn layoutWidget() void {
-        var theme_override = dvui.themeGet();
-        theme_override.highlight.fill = .red;
-        theme_override.fill = .green;
-
-        result = dvui.checkbox(@src(), &test_options.checked, test_options.label_str, options.override(.{ .data_out = &wd, .theme = &theme_override }));
+        result = dvui.checkbox(@src(), &test_options.checked, test_options.label_str, options.override(.{ .data_out = &wd }));
     }
 
     pub fn layoutResults() void {
