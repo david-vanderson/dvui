@@ -158,9 +158,15 @@ pub fn show(self: *Debug) void {
 
         var wd: dvui.WidgetData = undefined;
         _ = dvui.checkbox(@src(), &dvui.currentWindow().debug.touch_simulate_events, "Use Mouse as Touch", .{ .data_out = &wd });
-        _ = dvui.checkbox(@src(), &dvui.currentWindow().debug.log_stats, "Log Stats", .{});
 
         dvui.tooltip(@src(), .{ .active_rect = wd.borderRectScale().r }, "mouse drag will scroll\ntext layout/entry have draggables and menu", .{}, .{});
+    }
+
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+        _ = dvui.checkbox(@src(), &dvui.currentWindow().debug.log_stats, "Log Stats", .{});
+        _ = dvui.checkbox(@src(), &dvui.currentWindow().batch_draws, "Batch Draws", .{});
     }
 
     _ = dvui.spacer(@src(), .{ .min_size_content = .all(4) });

@@ -115,6 +115,7 @@ _lifo_arena: std.heap.ArenaAllocator,
 _widget_stack: WidgetStack,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
+batch_draws: bool = false,
 triQueue: struct {
     texture: ?dvui.Texture,
     clipr: ?dvui.Rect.Physical,
@@ -1391,9 +1392,10 @@ pub fn toastsShow(self: *Self, subwindow_id: ?Id, rect: Rect.Natural) void {
 
 pub fn trianglesQueue(self: *Self, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, clipr: ?dvui.Rect.Physical) !void {
     const tq = &self.triQueue;
-    //if (!std.mem.eql(u8, std.mem.asBytes(&tq.texture), std.mem.asBytes(&texture)) or
-    //    !std.mem.eql(u8, std.mem.asBytes(&tq.clipr), std.mem.asBytes(&clipr)))
-    if (true) {
+    if (!self.batch_draws or
+        !std.mem.eql(u8, std.mem.asBytes(&tq.texture), std.mem.asBytes(&texture)) or
+        !std.mem.eql(u8, std.mem.asBytes(&tq.clipr), std.mem.asBytes(&clipr)))
+    {
         // can't coalesce
         try self.trianglesFlush();
 
