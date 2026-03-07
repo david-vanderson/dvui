@@ -137,9 +137,7 @@ const WidgetHierarchy = struct {
     displayFn: *const fn (reset_widget: bool) void,
 };
 
-var current_widget: WidgetHierarchy = .{ .name = "menu", .displayFn = DisplayMenu.displayFn, .children = null };
-
-//widget_hierarchy[0];
+var current_widget: WidgetHierarchy = widget_hierarchy[0];
 
 fn displayEmpty(_: bool) void {
     var label_str = std.Io.Writer.Allocating.initCapacity(dvui.currentWindow().arena(), current_widget.name.len + 2) catch return;
@@ -757,17 +755,17 @@ const DisplayContext = struct {
         defer ctext.deinit();
 
         if (ctext.activePoint()) |cp| {
-            var fw2 = dvui.floatingMenu(@src(), .{ .from = Rect.Natural.fromPoint(cp) }, .{});
-            defer fw2.deinit();
+            var fw = dvui.floatingMenu(@src(), .{ .from = Rect.Natural.fromPoint(cp) }, .{});
+            defer fw.deinit();
 
             if (dvui.menuItemLabel(@src(), "Menu Item 1", .{}, .{ .expand = .horizontal })) |_| {
-                fw2.close();
+                fw.close();
             }
             if (dvui.menuItemLabel(@src(), "Menu Item 2", .{}, .{ .expand = .horizontal })) |_| {
-                fw2.close();
+                fw.close();
             }
             if ((dvui.menuItemLabel(@src(), "Menu Item 3", .{}, .{ .expand = .horizontal }))) |_| {
-                fw2.close();
+                fw.close();
             }
         }
     }
@@ -1302,59 +1300,67 @@ const DisplayMenu = struct {
         direction: dvui.enums.Direction,
     } = undefined;
 
-    var fba: std.heap.FixedBufferAllocator = undefined;
-    const allocator = fba.allocator();
-
-    var menu_id: usize = 0;
-
-    const MenuItem = struct {
-        label: []const u8,
-        id: usize,
-        sub_items: std.ArrayList(MenuItem) = .empty,
-    };
-
-    var menu_items: std.ArrayList(MenuItem) = .empty;
-
     pub fn displayFn(reset: bool) void {
         if (reset) resetWidget();
         displayWidgetTemplate(@This());
     }
 
-    // Give each menu item a unique id as their index in the arraylist can change with deletions.
-    fn menuId() usize {
-        defer menu_id += 1;
-        return menu_id;
-    }
-
     pub fn resetWidget() void {
-        fba = .init(&allocator_buffer);
-        menu_items = .empty;
-
         options = .{};
         test_options = .{ .direction = .horizontal };
-        menu_items.append(allocator, .{
-            .label = allocator.dupe(u8, "File") catch "",
-            .id = menuId(),
-        }) catch {};
     }
 
     pub fn layoutWidget() void {
         var menu = dvui.menu(@src(), test_options.direction, options.override(.{ .data_out = &wd }));
         defer menu.deinit();
-        displayMenuItems(menu, menu_items);
+        {
+            if (dvui.menuItemLabel(@src(), "Item", .{ .submenu = true }, .{})) |r| {
+                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+                defer fw.deinit();
+                var mi = dvui.menuItem(@src(), .{}, .{ .expand = .horizontal });
+                defer mi.deinit();
+                {
+                    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+                    defer hbox.deinit();
+                    dvui.icon(@src(), "bell", dvui.entypo.bell, .{}, .{ .expand = .ratio });
+                    dvui.labelNoFmt(@src(), "MenuItemWidget with icon and text", .{}, .{});
+                }
+                if (mi.activeRect()) |_| {
+                    menu.close();
+                }
+            }
+            if (dvui.menuItemLabel(@src(), "ItemIcon", .{ .submenu = true }, .{})) |r| {
+                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+                defer fw.deinit();
+                if (dvui.menuItemIcon(@src(), "brush", dvui.entypo.brush, .{}, .{ .expand = .ratio })) |_| {
+                    menu.close();
+                }
+            }
+            if (dvui.menuItemLabel(@src(), "ItemLabel", .{ .submenu = true }, .{})) |r| {
+                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+                defer fw.deinit();
+                if (dvui.menuItemLabel(@src(), "Menu label", .{}, .{ .expand = .horizontal })) |_| {
+                    menu.close();
+                }
+            }
+            if (dvui.menuItemLabel(@src(), "SubMenus", .{ .submenu = true }, .{})) |r| {
+                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+                defer fw.deinit();
+                submenu();
+                if (dvui.menuItemLabel(@src(), "Close", .{ .submenu = false }, .{ .expand = .horizontal })) |_| {
+                    menu.close();
+                }
+            }
+        }
     }
 
-    fn displayMenuItems(menu: *dvui.MenuWidget, items: std.ArrayList(MenuItem)) void {
-        for (items.items, 0..) |menu_item, i| {
-            if (dvui.menuItemLabel(@src(), menu_item.label, .{ .submenu = menu_item.sub_items.items.len > 0 }, .{ .id_extra = i, .expand = .horizontal })) |r| {
-                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{ .id_extra = i });
-                defer fw.deinit();
-                // If there are no sub menus to display close on click.
-                if (menu_item.sub_items.items.len == 0) {
-                    menu.close();
-                } else {
-                    displayMenuItems(menu, menu_item.sub_items);
-                }
+    pub fn submenu() void {
+        if (dvui.menuItemLabel(@src(), "Sub...", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
+            var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+            defer fw.deinit();
+            submenu();
+            if (dvui.menuItemLabel(@src(), "Close", .{ .submenu = false }, .{ .expand = .horizontal })) |_| {
+                fw.close();
             }
         }
     }
@@ -1363,70 +1369,6 @@ const DisplayMenu = struct {
         dvui.structUI(@src(), test_options_label, &test_options, 1, .{}, .{});
         var al: dvui.Alignment = .init(@src(), 0);
         defer al.deinit();
-        if (struct_ui.displayContainer(@src(), "Menu builder")) |container| {
-            defer container.deinit();
-            displayMenuControls(&menu_items);
-            al.spacer(@src(), 0);
-            if (dvui.buttonIcon(@src(), "add", dvui.entypo.circle_with_plus, .{}, .{}, .{})) {
-                const label = std.fmt.allocPrint(allocator, "Main {}", .{menu_items.items.len + 1}) catch "";
-                menu_items.append(allocator, .{ .label = label, .id = menuId() }) catch {};
-                dvui.refresh(null, @src(), null);
-            }
-        }
-    }
-
-    fn displayMenuControls(items: *std.ArrayList(MenuItem)) void {
-        var indent = dvui.box(@src(), .{ .dir = .vertical }, .{
-            .expand = .horizontal,
-            .border = .{ .x = 1 },
-            .background = true,
-            .margin = .{ .x = 12 },
-        });
-        defer indent.deinit();
-
-        var to_remove: ?usize = null;
-        for (items.items, 0..) |*menu_item, i| {
-            var vbox = dvui.box(@src(), .{}, .{ .id_extra = menu_item.id });
-            defer vbox.deinit();
-            {
-                var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-                defer hbox.deinit();
-                {
-                    const size = dvui.themeGet().font_body.sizeM(10, 1);
-                    var te = dvui.textEntry(@src(), .{}, .{ .min_size_content = size, .max_size_content = .cast(size) });
-                    defer te.deinit();
-                    if (dvui.firstFrame(te.data().id)) {
-                        te.textSet(menu_item.label, false);
-                    }
-                    // FBA allocated strings are only used to initialize the text entry's value.
-                    // Once that is done, free them and set the menu item's label to the text entry's internal buffer.
-                    if (@intFromPtr(menu_item.label.ptr) >= @intFromPtr(&allocator_buffer) and @intFromPtr(menu_item.label.ptr) <= @intFromPtr(&allocator_buffer) + allocator_buffer.len) {
-                        allocator.free(menu_item.label);
-                    }
-                    menu_item.label = te.textGet();
-                }
-                if (dvui.buttonIcon(@src(), "delete", dvui.entypo.circle_with_minus, .{}, .{}, .{ .expand = .both })) {
-                    to_remove = i;
-                    continue;
-                }
-                if (dvui.buttonIcon(@src(), "add", dvui.entypo.circle_with_plus, .{}, .{}, .{ .expand = .both })) {
-                    const label = std.fmt.allocPrint(allocator, "Sub {d}...", .{menu_item.sub_items.items.len + 1}) catch "";
-                    menu_item.sub_items.append(allocator, .{ .label = label, .id = menuId() }) catch {};
-                }
-            }
-            displayMenuControls(&menu_item.sub_items);
-        }
-        if (to_remove) |index| {
-            deinitMenuItem(items, index);
-            to_remove = null;
-        }
-    }
-    pub fn deinitMenuItem(items: *std.ArrayList(MenuItem), index: usize) void {
-        while (items.items[index].sub_items.items.len > 0) {
-            // deinit from end to start
-            deinitMenuItem(&items.items[index].sub_items, items.items[index].sub_items.items.len - 1);
-        }
-        _ = items.orderedRemove(index);
     }
 };
 
@@ -1542,6 +1484,8 @@ const DisplayMenuItemLabel = struct {
     var options: dvui.Options = undefined;
     var init_opts: dvui.MenuItemWidget.InitOptions = undefined;
 
+    // Since FixedBufferAllocator only frees the last allocation, there is little point in performing
+    // deallocations. If the FBA returns OOM, call resetWidget(.oom).
     var allocator_buffer: [10 * 1024]u8 = undefined;
     var fba: std.heap.FixedBufferAllocator = undefined;
     const allocator = fba.allocator();
@@ -1556,7 +1500,7 @@ const DisplayMenuItemLabel = struct {
     var menu_items: std.ArrayList(MenuItem) = .empty;
 
     pub fn displayFn(reset: bool) void {
-        if (reset) resetWidget();
+        if (reset) resetWidget(.reset);
         displayWidgetTemplate(@This());
     }
 
@@ -1565,7 +1509,7 @@ const DisplayMenuItemLabel = struct {
         return menu_id;
     }
 
-    pub fn resetWidget() void {
+    pub fn resetWidget(reason: enum { reset, oom }) void {
         fba = .init(&allocator_buffer);
         menu_items = .empty;
 
@@ -1574,9 +1518,39 @@ const DisplayMenuItemLabel = struct {
             .submenu = true,
         };
         menu_items.append(allocator, .{
-            .label = allocator.dupe(u8, "File") catch "",
+            .label = "File",
             .id = menuId(),
-        }) catch {};
+            .sub_items = populateSubItems(&.{
+                .{
+                    .id = menuId(),
+                    .label = "Export...",
+                    .sub_items = populateSubItems(&.{
+                        .{ .id = menuId(), .label = "png" },
+                        .{ .id = menuId(), .label = "jpg" },
+                    }),
+                },
+                .{ .id = menuId(), .label = "Close" },
+            }),
+        }) catch unreachable;
+        menu_items.append(allocator, .{
+            .label = "Help",
+            .id = menuId(),
+            .sub_items = populateSubItems(&.{
+                .{ .id = menuId(), .label = "About" },
+            }),
+        }) catch unreachable;
+
+        if (reason == .oom) {
+            dvui.toast(@src(), .{ .subwindow_id = dvui.currentWindow().subwindows.current_id, .message = "Menu builder exceeded memory limit and has been reset " });
+        }
+    }
+
+    fn populateSubItems(sub_items: []const MenuItem) std.ArrayList(MenuItem) {
+        var result: std.ArrayList(MenuItem) = .empty;
+        for (sub_items) |menu_item| {
+            result.append(allocator, menu_item) catch resetWidget(.oom);
+        }
+        return result;
     }
 
     pub fn layoutWidget() void {
@@ -1611,8 +1585,8 @@ const DisplayMenuItemLabel = struct {
             displayMenuControls(&menu_items);
             al.spacer(@src(), 0);
             if (dvui.buttonIcon(@src(), "add", dvui.entypo.circle_with_plus, .{}, .{}, .{})) {
-                const label = std.fmt.allocPrint(allocator, "Main {}", .{menu_items.items.len + 1}) catch "";
-                menu_items.append(allocator, .{ .label = label, .id = menuId() }) catch {};
+                const label = std.fmt.allocPrint(allocator, "Main {}", .{menu_items.items.len + 1}) catch return resetWidget(.oom);
+                menu_items.append(allocator, .{ .label = label, .id = menuId() }) catch return resetWidget(.oom);
                 dvui.refresh(null, @src(), null);
             }
         }
@@ -1641,11 +1615,6 @@ const DisplayMenuItemLabel = struct {
                     if (dvui.firstFrame(te.data().id)) {
                         te.textSet(menu_item.label, false);
                     }
-                    // FBA allocated strings are only used to initialize the text entry's value.
-                    // Once that is done, free them and set the menu item's label to the text entry's internal buffer.
-                    if (@intFromPtr(menu_item.label.ptr) >= @intFromPtr(&allocator_buffer) and @intFromPtr(menu_item.label.ptr) <= @intFromPtr(&allocator_buffer) + allocator_buffer.len) {
-                        allocator.free(menu_item.label);
-                    }
                     menu_item.label = te.textGet();
                 }
                 if (dvui.buttonIcon(@src(), "delete", dvui.entypo.circle_with_minus, .{}, .{}, .{ .expand = .both })) {
@@ -1653,23 +1622,16 @@ const DisplayMenuItemLabel = struct {
                     continue;
                 }
                 if (dvui.buttonIcon(@src(), "add", dvui.entypo.circle_with_plus, .{}, .{}, .{ .expand = .both })) {
-                    const label = std.fmt.allocPrint(allocator, "Sub {d}...", .{menu_item.sub_items.items.len + 1}) catch "";
-                    menu_item.sub_items.append(allocator, .{ .label = label, .id = menuId() }) catch {};
+                    const label = std.fmt.allocPrint(allocator, "Sub {d}...", .{menu_item.sub_items.items.len + 1}) catch return resetWidget(.oom);
+                    menu_item.sub_items.append(allocator, .{ .label = label, .id = menuId() }) catch return resetWidget(.oom);
                 }
             }
             displayMenuControls(&menu_item.sub_items);
         }
         if (to_remove) |index| {
-            deinitMenuItem(items, index);
+            _ = items.orderedRemove(index);
             to_remove = null;
         }
-    }
-    pub fn deinitMenuItem(items: *std.ArrayList(MenuItem), index: usize) void {
-        while (items.items[index].sub_items.items.len > 0) {
-            // deinit from end to start
-            deinitMenuItem(&items.items[index].sub_items, items.items[index].sub_items.items.len - 1);
-        }
-        _ = items.orderedRemove(index);
     }
 };
 
