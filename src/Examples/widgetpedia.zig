@@ -1430,7 +1430,7 @@ const DisplayMenuItem = struct {
 };
 
 const DisplayMenuItemIcon = struct {
-    var name: []const u8 = "tooltip()";
+    var name: []const u8 = "menuItemIcon()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
