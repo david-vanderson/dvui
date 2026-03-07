@@ -1879,7 +1879,7 @@ const DisplayRadioGroup = struct {
     }
 };
 
-const DiplayScale = struct {
+const DisplayScale = struct {
     var name: []const u8 = "scale()";
     const nr_radio_buttons = 3;
 
@@ -1911,7 +1911,7 @@ const DiplayScale = struct {
     }
 };
 
-const DiplaySeparator = struct {
+const DisplaySeparator = struct {
     var name: []const u8 = "separator()";
 
     var wd: dvui.WidgetData = undefined;
@@ -1949,7 +1949,7 @@ const DiplaySeparator = struct {
     }
 };
 
-const DiplaySlider = struct {
+const DisplaySlider = struct {
     var name: []const u8 = "slider()";
 
     var wd: dvui.WidgetData = undefined;
@@ -1992,7 +1992,7 @@ const DiplaySlider = struct {
     }
 };
 
-const DiplaySliderEntry = struct {
+const DisplaySliderEntry = struct {
     var name: []const u8 = "sliderEntry()";
 
     var wd: dvui.WidgetData = undefined;
@@ -2062,7 +2062,7 @@ const DiplaySliderEntry = struct {
     }
 };
 
-const DiplaySpacer = struct {
+const DisplaySpacer = struct {
     var name: []const u8 = "spacer()";
 
     var wd: dvui.WidgetData = undefined;
@@ -2116,7 +2116,7 @@ const DiplaySpacer = struct {
     }
 };
 
-const DiplaySpinner = struct {
+const DisplaySpinner = struct {
     var name: []const u8 = "spinner()";
 
     var wd: dvui.WidgetData = undefined;
@@ -2145,7 +2145,7 @@ const DiplaySpinner = struct {
     }
 };
 
-const DiplayTabs = struct {
+const DisplayTabs = struct {
     var name: []const u8 = "tabs()";
 
     var wd: dvui.WidgetData = undefined;
@@ -2499,7 +2499,7 @@ const DisplayToast = struct {
     }
 };
 
-const DiplayToolTip = struct {
+const DisplayToolTip = struct {
     var name: []const u8 = "tooltip()";
 
     var wd: dvui.WidgetData = undefined;
@@ -2681,20 +2681,20 @@ const widget_hierarchy = [_]WidgetHierarchy{
     .{ .name = "radio", .displayFn = DisplayRadio.displayFn, .children = null },
     .{ .name = "radioGroup", .displayFn = DisplayRadioGroup.displayFn, .children = null },
     .{ .name = "reorder", .displayFn = displayEmpty, .children = null },
-    .{ .name = "scale", .displayFn = DiplayScale.displayFn, .children = null },
+    .{ .name = "scale", .displayFn = DisplayScale.displayFn, .children = null },
     .{ .name = "scrollArea", .displayFn = displayEmpty, .children = null },
-    .{ .name = "separator", .displayFn = DiplaySeparator.displayFn, .children = null },
+    .{ .name = "separator", .displayFn = DisplaySeparator.displayFn, .children = null },
 
     .{ .name = "sliders", .displayFn = displayEmpty, .children = &.{
-        .{ .name = "slider", .displayFn = DiplaySlider.displayFn, .children = null },
-        .{ .name = "sliderEntry", .displayFn = DiplaySliderEntry.displayFn, .children = null },
+        .{ .name = "slider", .displayFn = DisplaySlider.displayFn, .children = null },
+        .{ .name = "sliderEntry", .displayFn = DisplaySliderEntry.displayFn, .children = null },
         .{ .name = "sliderVector", .displayFn = displayEmpty, .children = null },
     } },
 
-    .{ .name = "spacer", .displayFn = DiplaySpacer.displayFn, .children = null },
-    .{ .name = "spinner", .displayFn = DiplaySpinner.displayFn, .children = null },
+    .{ .name = "spacer", .displayFn = DisplaySpacer.displayFn, .children = null },
+    .{ .name = "spinner", .displayFn = DisplaySpinner.displayFn, .children = null },
     .{ .name = "suggestion", .displayFn = displayEmpty, .children = null },
-    .{ .name = "tabs", .displayFn = DiplayTabs.displayFn, .children = null },
+    .{ .name = "tabs", .displayFn = DisplayTabs.displayFn, .children = null },
 
     .{ .name = "textEntries", .displayFn = displayEmpty, .children = &.{
         .{ .name = "textEntry", .displayFn = DisplayTextEntry.displayFn, .children = null },
@@ -2704,7 +2704,7 @@ const widget_hierarchy = [_]WidgetHierarchy{
 
     .{ .name = "textLayout", .displayFn = displayEmpty, .children = null },
     .{ .name = "toast", .displayFn = DisplayToast.displayFn, .children = null },
-    .{ .name = "tooltip", .displayFn = DiplayToolTip.displayFn, .children = null },
+    .{ .name = "tooltip", .displayFn = DisplayToolTip.displayFn, .children = null },
 };
 
 const lorem: []const []const u8 = &.{
