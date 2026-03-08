@@ -15,6 +15,9 @@ pub const Target = struct {
     /// Only valid between `Window.begin`and `Window.end`.
     pub fn setAsCurrent(target: Target) Target {
         var cw = dvui.currentWindow();
+        cw.trianglesFlush() catch |err| {
+            dvui.logError(@src(), err, "Failed to flush triangles", .{});
+        };
         const ret = cw.render_target;
         cw.backend.renderTarget(target.texture) catch |err| {
             // TODO: This might be unrecoverable? Or brake rendering too badly?
