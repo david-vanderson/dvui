@@ -2036,8 +2036,8 @@ const DisplayScrollArea = struct {
     }
 
     pub fn layoutWidget() void {
-        const min_size: ?dvui.Size = if (init_opts.scroll_info == null) null else .{ .w = @floatFromInt(nr_boxes.w * 27), .h = @floatFromInt(nr_boxes.h * 27) };
-        var scroll = dvui.scrollArea(@src(), init_opts, options.override(.{ .data_out = &wd, .min_size_content = min_size }));
+        options.min_size_content = if (init_opts.scroll_info == null) null else .{ .w = @floatFromInt(nr_boxes.w * 27), .h = @floatFromInt(nr_boxes.h * 27) };
+        var scroll = dvui.scrollArea(@src(), init_opts, options.override(.{ .data_out = &wd }));
         defer scroll.deinit();
         var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
         defer vbox.deinit();
@@ -2056,10 +2056,10 @@ const DisplayScrollArea = struct {
         }
         if (init_opts.scroll_info) |si| {
             if (si.horizontal == .given) {
-                si.virtual_size.w = min_size.?.w;
+                si.virtual_size.w = options.min_size_content.?.w;
             }
             if (si.vertical == .given) {
-                si.virtual_size.h = min_size.?.h;
+                si.virtual_size.h = options.min_size_content.?.h;
             }
         }
     }
@@ -2068,8 +2068,8 @@ const DisplayScrollArea = struct {
         if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
             defer container.deinit();
             const display_opts: StructOptions(@TypeOf(nr_boxes)) = .init(.{
-                .w = .{ .number = .{ .min = 0, .max = 500 } },
-                .h = .{ .number = .{ .min = 0, .max = 500 } },
+                .w = .{ .number = .{ .min = 2, .max = 200 } },
+                .h = .{ .number = .{ .min = 2, .max = 200 } },
             }, null);
             dvui.structUI(@src(), "Boxes", &nr_boxes, 1, .{display_opts}, .{});
         }
@@ -2078,13 +2078,13 @@ const DisplayScrollArea = struct {
         }, .{ .scroll_info = &scroll_info, .frame_viewport = .{ .x = 100, .y = 100 }, .user_scroll = &user_scroll });
         const si_opts: StructOptions(dvui.ScrollInfo) = .initWithDefaults(.{
             .viewport = .{ .number = .{ .customDisplayFn = displayViewport } },
+            .velocity = .{ .number = .{ .customDisplayFn = displayVelocity } },
         }, null);
-        // TODO: This is another example of need for struct_ui enhancement. Luckily velocity is the
-        // only Point is the struct so I can override the type. But I really just want to override the
-        // point display for the velocity field.
+        // TODO: This is another example of need for struct_ui enhancement. There are multiple points and we
+        // need to override one of them (velocity). Ideally we'd just like to override velocity with it's own options
         const point_opts: StructOptions(dvui.Point) = .init(.{
-            .x = .{ .number = .{ .widget_type = .number_placeholder } },
-            .y = .{ .number = .{ .widget_type = .number_placeholder } },
+            .x = .defaultReadOnly,
+            .y = .defaultReadOnly,
         }, null);
         // TODO: Same with size
         const size_opts: StructOptions(dvui.Size) = .init(.{
@@ -2177,6 +2177,17 @@ const DisplayScrollArea = struct {
                 }
             }
         }
+    }
+
+    fn displayVelocity(_: []const u8, _: *anyopaque, _: bool, _: *dvui.Alignment) void {
+        const display_opts: StructOptions(dvui.Point) = .init(.{
+            .x = .{ .number = .{ .widget_type = .number_placeholder } },
+            .y = .{ .number = .{ .widget_type = .number_placeholder } },
+        }, null);
+        // Ignore the old alignment as structs always start a new alignment.
+        var al: dvui.Alignment = .init(@src(), 0);
+        defer al.deinit();
+        if (struct_ui.displayStruct(@src(), "velocity", &scroll_info.velocity, 1, .default, .{display_opts}, &al)) |box| box.deinit();
     }
 };
 
