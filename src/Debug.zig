@@ -475,6 +475,7 @@ pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
             if (stylePage(self, vbox.data().id)) changed = true;
         },
         .info => {
+            // Note uses wd.options here instead of self, so it can pick up defaults from the widget, like .role etc.
             infoPage(wd.options);
         },
     }
