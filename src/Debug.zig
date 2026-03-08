@@ -837,7 +837,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
             const field: *?dvui.Color, const default: dvui.Color = switch (active_color.*) {
                 inline else => |c| .{
                     &@field(self, "color_" ++ @tagName(c)),
-                    dvui.themeGet().color(.control, std.meta.stringToEnum(dvui.Options.ColorAsk, @tagName(c)) orelse unreachable),
+                    self.color(std.meta.stringToEnum(dvui.Options.ColorAsk, @tagName(c)) orelse unreachable),
                 },
             };
             var hsv = dvui.Color.HSV.fromColor(field.* orelse default);

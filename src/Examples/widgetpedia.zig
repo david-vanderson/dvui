@@ -1053,7 +1053,7 @@ const DisplayWindowHeader = struct {
         }
         if (!test_options.open_flag) return;
 
-        var fw = dvui.floatingWindow(@src(), .{ .open_flag = &test_options.open_flag }, .{ .min_size_content = .all(350) });
+        var fw = dvui.floatingWindow(@src(), .{ .open_flag = &test_options.open_flag }, .{ .min_size_content = .all(350), .data_out = &wd });
         defer fw.deinit();
         result = dvui.windowHeader(test_options.str, test_options.right_str, &test_options.open_flag);
         fw.dragAreaSet(result);
@@ -2005,6 +2005,15 @@ const DisplayScrollArea = struct {
     var options: dvui.Options = undefined;
     var init_opts: dvui.ScrollAreaWidget.InitOpts = undefined;
     var scroll_info: dvui.ScrollInfo = undefined;
+
+    var top_left_wd: dvui.WidgetData = undefined;
+    var bottom_right_wd: dvui.WidgetData = undefined;
+    var check_top_left: bool = false;
+    var check_bottom_right = false;
+    var user_scroll: dvui.Point = undefined;
+
+    var focus_id: ?dvui.Id = undefined;
+
     var nr_boxes: struct {
         w: usize,
         h: usize,
@@ -2018,7 +2027,12 @@ const DisplayScrollArea = struct {
     pub fn resetWidget() void {
         options = .{};
         init_opts = .{};
+        scroll_info = .{};
         nr_boxes = .{ .w = 20, .h = 20 };
+        focus_id = null;
+        check_bottom_right = false;
+        check_top_left = false;
+        user_scroll = .{ .x = 0, .y = 0 };
     }
 
     pub fn layoutWidget() void {
@@ -2033,6 +2047,11 @@ const DisplayScrollArea = struct {
             for (0..nr_boxes.w) |j| {
                 var box = dvui.box(@src(), .{}, .{ .min_size_content = .all(25), .color_fill = if ((i + j) % 2 == 0) options.color(.border) else null, .id_extra = i * 1_000_000 + j, .border = .all(1), .background = true });
                 defer box.deinit();
+                if (i == 0 and j == 0) {
+                    _ = dvui.checkbox(@src(), &check_top_left, "", .{ .gravity_x = 0.5, .gravity_y = 0.5, .data_out = &top_left_wd, .padding = .all(0) });
+                } else if (i == nr_boxes.h - 1 and j == nr_boxes.w - 1) {
+                    _ = dvui.checkbox(@src(), &check_bottom_right, "", .{ .gravity_x = 0.5, .gravity_y = 0.5, .data_out = &bottom_right_wd, .padding = .all(0) });
+                }
             }
         }
         if (init_opts.scroll_info) |si| {
@@ -2048,9 +2067,15 @@ const DisplayScrollArea = struct {
     pub fn layoutWidgetControls() void {
         if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
             defer container.deinit();
-            dvui.structUI(@src(), "Boxes", &nr_boxes, 1, .{}, .{});
+            const display_opts: StructOptions(@TypeOf(nr_boxes)) = .init(.{
+                .w = .{ .number = .{ .min = 0, .max = 500 } },
+                .h = .{ .number = .{ .min = 0, .max = 500 } },
+            }, null);
+            dvui.structUI(@src(), "Boxes", &nr_boxes, 1, .{display_opts}, .{});
         }
-        const display_opts: StructOptions(dvui.ScrollAreaWidget.InitOpts) = .initWithDefaults(.{}, .{ .scroll_info = &scroll_info });
+        const display_opts: StructOptions(dvui.ScrollAreaWidget.InitOpts) = .initWithDefaults(.{
+            .focus_id = .{ .standard = .{ .customDisplayFn = displayFocusId } },
+        }, .{ .scroll_info = &scroll_info, .frame_viewport = .{ .x = 100, .y = 100 }, .user_scroll = &user_scroll });
         const si_opts: StructOptions(dvui.ScrollInfo) = .initWithDefaults(.{
             .viewport = .{ .number = .{ .customDisplayFn = displayViewport } },
         }, null);
@@ -2061,7 +2086,13 @@ const DisplayScrollArea = struct {
             .x = .{ .number = .{ .widget_type = .number_placeholder } },
             .y = .{ .number = .{ .widget_type = .number_placeholder } },
         }, null);
-        dvui.structUI(@src(), "init_opts", &init_opts, 2, .{ display_opts, si_opts, point_opts }, .{});
+        // TODO: Same with size
+        const size_opts: StructOptions(dvui.Size) = .init(.{
+            .w = .defaultReadOnly,
+            .h = .defaultReadOnly,
+        }, null);
+
+        dvui.structUI(@src(), "init_opts", &init_opts, 2, .{ display_opts, si_opts, point_opts, size_opts }, .{});
     }
 
     fn displayViewport(field_name: []const u8, ptr: *anyopaque, _: bool, _: *dvui.Alignment) void {
@@ -2094,6 +2125,57 @@ const DisplayScrollArea = struct {
             }
             struct_ui.displayNumber(@src(), "w", &field_value_ptr.w, .defaultReadOnly, &al);
             struct_ui.displayNumber(@src(), "h", &field_value_ptr.h, .defaultReadOnly, &al);
+        }
+    }
+
+    fn displayFocusId(field_name: []const u8, _: *anyopaque, _: bool, alignment: *dvui.Alignment) void {
+        var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer box.deinit();
+
+        dvui.label(@src(), "{s}", .{field_name}, .{});
+        var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
+        defer hbox_aligned.deinit();
+        alignment.record(box.data().id, hbox_aligned.data());
+
+        const selected_index: usize = if (init_opts.focus_id == null)
+            0
+        else if (init_opts.focus_id == top_left_wd.id)
+            1
+        else
+            2;
+
+        var dd: dvui.DropdownWidget = undefined;
+        dd.init(@src(), .{ .selected_index = selected_index, .label = if (selected_index == 0) "null" else if (selected_index == 1) "top left" else "bottom right" }, .{});
+        defer dd.deinit();
+
+        if (dd.dropped()) {
+            {
+                var mi = dd.addChoice();
+                defer mi.deinit();
+                dvui.labelNoFmt(@src(), "null", .{}, .{});
+                if (mi.activeRect()) |_| {
+                    dd.close();
+                    init_opts.focus_id = null;
+                }
+            }
+            {
+                var mi = dd.addChoice();
+                defer mi.deinit();
+                dvui.label(@src(), "top left\n{f}", .{top_left_wd.id}, .{});
+                if (mi.activeRect()) |_| {
+                    dd.close();
+                    init_opts.focus_id = top_left_wd.id;
+                }
+            }
+            {
+                var mi = dd.addChoice();
+                defer mi.deinit();
+                dvui.label(@src(), "bottom right\n{f}", .{bottom_right_wd.id}, .{});
+                if (mi.activeRect()) |_| {
+                    dd.close();
+                    init_opts.focus_id = bottom_right_wd.id;
+                }
+            }
         }
     }
 };
