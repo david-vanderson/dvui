@@ -285,7 +285,14 @@ pub const NumberFieldOptions = struct {
     customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
 
     /// For .read_write, display as either a text entry box or as a slider.
-    widget_type: enum { number_entry, slider, slider_entry } = .number_entry,
+    widget_type: enum {
+        number_entry,
+        slider,
+        slider_entry,
+        // Apply a number only when the user presses enter.
+        // Display the value as a placeholder if no value is being entered.
+        number_placeholder,
+    } = .number_entry,
     /// Minimum value - required if widget_type is slider.
     min: ?f64 = null,
     /// Maximum value - required if widget_type is slider.
@@ -415,6 +422,36 @@ pub fn numberFieldWidget(
             if (!defaults.narrow or read_only)
                 dvui.label(@src(), "{d}", .{field_value_ptr.*}, .{ .margin = .{ .y = 4 } });
         },
+        .number_placeholder => {
+            var box = dvui.box(src, .{ .dir = .horizontal }, .{});
+            defer box.deinit();
+
+            dvui.label(@src(), "{s}", .{opt.label orelse field_name}, .{ .margin = .{ .y = 4 } });
+
+            var enter_pressed = dvui.dataGetDefault(null, box.data().id, "_enter_pressed", bool, false);
+            defer dvui.dataSet(null, box.data().id, "_enter_pressed", enter_pressed);
+
+            var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
+            defer hbox_aligned.deinit();
+            alignment.record(box.data().id, hbox_aligned.data());
+
+            if (!read_only) {
+                const value_str = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{field_value_ptr.*}) catch "";
+                defer dvui.currentWindow().lifo().free(value_str);
+                const maybe_num = dvui.textEntryNumber(@src(), T, .{
+                    .text = if (enter_pressed) "" else null,
+                    .placeholder = value_str,
+                }, .{});
+                if (maybe_num.value == .Valid and maybe_num.enter_pressed) {
+                    field_value_ptr.* = maybe_num.value.Valid;
+                    enter_pressed = true;
+                } else {
+                    enter_pressed = false;
+                }
+            }
+            if (!defaults.narrow or read_only)
+                dvui.label(@src(), "{d}", .{field_value_ptr.*}, .{ .margin = .{ .y = 4 } });
+        },
         .slider => {
             var box = dvui.box(src, .{ .dir = .horizontal }, .{});
             defer box.deinit();
@@ -511,7 +548,7 @@ pub fn numberFieldWidgetOptional(
             if (!defaults.narrow or read_only)
                 dvui.label(@src(), "{?d}", .{field_value_optional_ptr.*}, .{ .margin = .{ .y = 4 } });
         },
-        .slider, .slider_entry => {
+        .slider, .slider_entry, .number_placeholder => {
             unreachable;
         },
     }
