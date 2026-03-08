@@ -582,7 +582,6 @@ const DisplayButtonLabelAndIcon = struct {
 const DisplayCheckbox = struct {
     const name = "checkbox()";
     var wd: dvui.WidgetData = undefined;
-    var init_opts: dvui.ButtonWidget.InitOptions = undefined;
     var options: dvui.Options = undefined;
 
     var result: bool = undefined;
@@ -598,7 +597,6 @@ const DisplayCheckbox = struct {
     }
 
     pub fn resetWidget() void {
-        init_opts = .{};
         options = .{};
         test_options = .{
             .label_str = "checkbox label",
@@ -1312,7 +1310,7 @@ const DisplayLabelEx = struct {
 };
 
 const DisplayLabelClick = struct {
-    var name: []const u8 = "labelClick()";
+    const name: []const u8 = "labelClick()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -1365,7 +1363,7 @@ const DisplayLabelClick = struct {
 };
 
 const DisplayLink = struct {
-    var name: []const u8 = "link()";
+    const name: []const u8 = "link()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -1395,8 +1393,7 @@ const DisplayLink = struct {
 };
 
 const DisplayMenu = struct {
-    var name: []const u8 = "menu()";
-    var allocator_buffer: [10 * 1024]u8 = undefined;
+    const name: []const u8 = "menu()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -1475,7 +1472,7 @@ const DisplayMenu = struct {
 };
 
 const DisplayMenuItem = struct {
-    var name: []const u8 = "menuItem()";
+    const name: []const u8 = "menuItem()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -1528,16 +1525,11 @@ const DisplayMenuItem = struct {
 };
 
 const DisplayMenuItemIcon = struct {
-    var name: []const u8 = "menuItemIcon()";
+    const name: []const u8 = "menuItemIcon()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
     var init_opts: dvui.MenuItemWidget.InitOptions = undefined;
-
-    var test_options: struct {
-        scenario: enum { @"text only", @"with icon" },
-        text: []const u8,
-    } = undefined;
 
     pub fn displayFn(reset: bool) void {
         if (reset) resetWidget();
@@ -1576,7 +1568,7 @@ const DisplayMenuItemIcon = struct {
 };
 
 const DisplayMenuItemLabel = struct {
-    var name: []const u8 = "menuItemLabel()";
+    const name: []const u8 = "menuItemLabel()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -1734,7 +1726,7 @@ const DisplayMenuItemLabel = struct {
 };
 
 const DisplayPaned = struct {
-    var name: []const u8 = "paned()";
+    const name: []const u8 = "paned()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -1820,7 +1812,7 @@ const DisplayPaned = struct {
 };
 
 const DisplayProgress = struct {
-    var name: []const u8 = "progress()";
+    const name: []const u8 = "progress()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -1853,7 +1845,7 @@ const DisplayProgress = struct {
 };
 
 const DisplayRadio = struct {
-    var name: []const u8 = "radio()";
+    const name: []const u8 = "radio()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -1899,7 +1891,7 @@ const DisplayRadio = struct {
 };
 
 const DisplayRadioGroup = struct {
-    var name: []const u8 = "radioGroup()";
+    const name: []const u8 = "radioGroup()";
     const nr_radio_buttons = 3;
 
     var wd: dvui.WidgetData = undefined;
@@ -1951,7 +1943,7 @@ const DisplayRadioGroup = struct {
 };
 
 const DisplayScale = struct {
-    var name: []const u8 = "scale()";
+    const name: []const u8 = "scale()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -1982,7 +1974,7 @@ const DisplayScale = struct {
 };
 
 const DisplayScrollArea = struct {
-    var name: []const u8 = "scrollArea()";
+    const name: []const u8 = "scrollArea()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -2175,7 +2167,7 @@ const DisplayScrollArea = struct {
 };
 
 const DisplaySeparator = struct {
-    var name: []const u8 = "separator()";
+    const name: []const u8 = "separator()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -2213,7 +2205,7 @@ const DisplaySeparator = struct {
 };
 
 const DisplaySlider = struct {
-    var name: []const u8 = "slider()";
+    const name: []const u8 = "slider()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -2256,7 +2248,7 @@ const DisplaySlider = struct {
 };
 
 const DisplaySliderEntry = struct {
-    var name: []const u8 = "sliderEntry()";
+    const name: []const u8 = "sliderEntry()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -2326,7 +2318,7 @@ const DisplaySliderEntry = struct {
 };
 
 const DisplaySpacer = struct {
-    var name: []const u8 = "spacer()";
+    const name: []const u8 = "spacer()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -2380,7 +2372,7 @@ const DisplaySpacer = struct {
 };
 
 const DisplaySpinner = struct {
-    var name: []const u8 = "spinner()";
+    const name: []const u8 = "spinner()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -2409,7 +2401,7 @@ const DisplaySpinner = struct {
 };
 
 const DisplayTabs = struct {
-    var name: []const u8 = "tabs()";
+    const name: []const u8 = "tabs()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -2492,7 +2484,7 @@ const DisplayTabs = struct {
 };
 
 const DisplayTextEntry = struct {
-    var name: []const u8 = "textEntry()";
+    const name: []const u8 = "textEntry()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -2708,7 +2700,7 @@ const DisplayTextEntry = struct {
 };
 
 const DisplayToast = struct {
-    var name: []const u8 = "toast()";
+    const name: []const u8 = "toast()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -2761,7 +2753,7 @@ const DisplayToast = struct {
 };
 
 const DisplayToolTip = struct {
-    var name: []const u8 = "tooltip()";
+    const name: []const u8 = "tooltip()";
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
