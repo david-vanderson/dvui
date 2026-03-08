@@ -438,13 +438,23 @@ pub fn numberFieldWidget(
             if (!read_only) {
                 const value_str = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{d}", .{field_value_ptr.*}) catch "";
                 defer dvui.currentWindow().lifo().free(value_str);
+                var te_wd: dvui.WidgetData = undefined;
                 const maybe_num = dvui.textEntryNumber(@src(), T, .{
                     .text = if (enter_pressed) "" else null,
                     .placeholder = value_str,
-                }, .{});
+                }, .{ .data_out = &te_wd });
                 if (maybe_num.value == .Valid and maybe_num.enter_pressed) {
-                    field_value_ptr.* = maybe_num.value.Valid;
+                    field_value_ptr.* = std.math.clamp(
+                        maybe_num.value.Valid,
+                        opt.minValue(T),
+                        opt.maxValue(T),
+                    );
                     enter_pressed = true;
+                } else if (maybe_num.value == .Valid and !maybe_num.enter_pressed) {
+                    dvui.tooltip(@src(), .{
+                        .active_rect = te_wd.borderRectScale().r,
+                        .position = .vertical,
+                    }, "Press Enter to set value", .{}, .{});
                 } else {
                     enter_pressed = false;
                 }
@@ -493,6 +503,7 @@ pub fn numberFieldWidget(
                     dvui.tooltip(@src(), .{
                         .active_rect = se_wd.borderRectScale().r,
                         .delay = 1_000_000,
+                        .position = .vertical,
                     }, "Press Enter to type a value", .{}, .{});
                 }
             } else {
