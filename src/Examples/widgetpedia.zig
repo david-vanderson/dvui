@@ -600,7 +600,6 @@ const DisplayCheckbox = struct {
     pub fn resetWidget() void {
         init_opts = .{};
         options = .{};
-        test_options.checked = false;
         test_options = .{
             .label_str = "checkbox label",
             .checked = false,
@@ -1061,7 +1060,7 @@ const DisplayWindowHeader = struct {
         dvui.icon(@src(), "rocket", dvui.entypo.rocket, .{}, .{ .expand = .both });
     }
 
-    pub fn displayResults() void {
+    pub fn layoutResults() void {
         const result_c = result;
         dvui.structUI(@src(), null, &result_c, 1, .{}, .{});
     }
@@ -1081,9 +1080,6 @@ const DisplayFocusGroup = struct {
     var init_opts: dvui.FocusGroupWidget.InitOptions = .{};
     var options: dvui.Options = undefined;
     var first_frame: bool = undefined;
-    var test_options: struct {
-        label: []const u8,
-    } = undefined;
 
     pub fn displayFn(reset: bool) void {
         if (reset) resetWidget();
@@ -1093,7 +1089,6 @@ const DisplayFocusGroup = struct {
     pub fn resetWidget() void {
         init_opts = .{};
         options = .{};
-        test_options = .{ .label = "Expander" };
         first_frame = true;
     }
 
@@ -1282,8 +1277,6 @@ const DisplayLabelEx = struct {
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
     var init_opts: dvui.LabelWidget.InitOptions = undefined;
-    var icon_opts: dvui.IconRenderOptions = undefined;
-    var icon_bytes: []const u8 = undefined;
     var test_opts: struct {
         label: []const u8,
     } = undefined;
@@ -1324,8 +1317,6 @@ const DisplayLabelClick = struct {
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
     var init_opts: dvui.LabelClickOptions = undefined;
-    var icon_opts: dvui.IconRenderOptions = undefined;
-    var icon_bytes: []const u8 = undefined;
     var test_opts: struct {
         label: []const u8,
     } = undefined;
@@ -1480,8 +1471,6 @@ const DisplayMenu = struct {
 
     pub fn layoutWidgetControls() void {
         dvui.structUI(@src(), test_options_label, &test_options, 1, .{}, .{});
-        var al: dvui.Alignment = .init(@src(), 0);
-        defer al.deinit();
     }
 };
 
@@ -1492,10 +1481,6 @@ const DisplayMenuItem = struct {
     var options: dvui.Options = undefined;
     var init_opts: dvui.MenuItemWidget.InitOptions = undefined;
     var checked: bool = false;
-    var test_options: struct {
-        scenario: enum { @"text only", @"with icon" },
-        text: []const u8,
-    } = undefined;
 
     pub fn displayFn(reset: bool) void {
         if (reset) resetWidget();
@@ -1967,7 +1952,6 @@ const DisplayRadioGroup = struct {
 
 const DisplayScale = struct {
     var name: []const u8 = "scale()";
-    const nr_radio_buttons = 3;
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -1999,7 +1983,6 @@ const DisplayScale = struct {
 
 const DisplayScrollArea = struct {
     var name: []const u8 = "scrollArea()";
-    const nr_radio_buttons = 3;
 
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -2121,7 +2104,7 @@ const DisplayScrollArea = struct {
                 }, &al);
             } else {
                 struct_ui.displayNumber(@src(), "x", &field_value_ptr.x, .defaultReadOnly, &al);
-                struct_ui.displayNumber(@src(), "y`", &field_value_ptr.y, .defaultReadOnly, &al);
+                struct_ui.displayNumber(@src(), "y", &field_value_ptr.y, .defaultReadOnly, &al);
             }
             struct_ui.displayNumber(@src(), "w", &field_value_ptr.w, .defaultReadOnly, &al);
             struct_ui.displayNumber(@src(), "h", &field_value_ptr.h, .defaultReadOnly, &al);
@@ -2731,7 +2714,6 @@ const DisplayToast = struct {
     var options: dvui.Options = undefined;
     var init_opts: dvui.ToastOptions = undefined;
     var selection: ?enum { @"widgetpedia window" } = null;
-    var box_id: dvui.Id = undefined;
 
     var test_options: struct {
         message: []const u8,
@@ -2768,7 +2750,6 @@ const DisplayToast = struct {
 
         var box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer box.deinit();
-        box_id = box.data().id;
 
         dvui.label(@src(), "{s}", .{field_name}, .{});
         var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(box.data().id) });
