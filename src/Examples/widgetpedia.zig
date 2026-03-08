@@ -2005,7 +2005,10 @@ const DisplayScrollArea = struct {
     var options: dvui.Options = undefined;
     var init_opts: dvui.ScrollAreaWidget.InitOpts = undefined;
     var scroll_info: dvui.ScrollInfo = undefined;
-    var nr_widgets: usize = undefined;
+    var nr_boxes: struct {
+        w: usize,
+        h: usize,
+    } = undefined;
 
     pub fn displayFn(reset: bool) void {
         if (reset) resetWidget();
@@ -2015,20 +2018,83 @@ const DisplayScrollArea = struct {
     pub fn resetWidget() void {
         options = .{};
         init_opts = .{};
-        nr_widgets = 30;
+        nr_boxes = .{ .w = 20, .h = 20 };
     }
 
     pub fn layoutWidget() void {
-        var scroll = dvui.scrollArea(@src(), init_opts, options.override(.{ .data_out = &wd }));
+        const min_size: ?dvui.Size = if (init_opts.scroll_info == null) null else .{ .w = @floatFromInt(nr_boxes.w * 27), .h = @floatFromInt(nr_boxes.h * 27) };
+        var scroll = dvui.scrollArea(@src(), init_opts, options.override(.{ .data_out = &wd, .min_size_content = min_size }));
         defer scroll.deinit();
-        for (0..nr_widgets) |i| {
-            dvui.label(@src(), "Line {}", .{i}, .{ .id_extra = i });
+        var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
+        defer vbox.deinit();
+        for (0..nr_boxes.h) |i| {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = i });
+            defer hbox.deinit();
+            for (0..nr_boxes.w) |j| {
+                var box = dvui.box(@src(), .{}, .{ .min_size_content = .all(25), .color_fill = if ((i + j) % 2 == 0) options.color(.border) else null, .id_extra = i * 1_000_000 + j, .border = .all(1), .background = true });
+                defer box.deinit();
+            }
+        }
+        if (init_opts.scroll_info) |si| {
+            if (si.horizontal == .given) {
+                si.virtual_size.w = min_size.?.w;
+            }
+            if (si.vertical == .given) {
+                si.virtual_size.h = min_size.?.h;
+            }
         }
     }
 
     pub fn layoutWidgetControls() void {
-        const display_opts = StructOptions(dvui.ScrollAreaWidget.InitOpts).initWithDefaults(.{}, .{ .scroll_info = &scroll_info });
-        dvui.structUI(@src(), "init_opts", &init_opts, 2, .{display_opts}, .{});
+        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+            defer container.deinit();
+            dvui.structUI(@src(), "Boxes", &nr_boxes, 1, .{}, .{});
+        }
+        const display_opts: StructOptions(dvui.ScrollAreaWidget.InitOpts) = .initWithDefaults(.{}, .{ .scroll_info = &scroll_info });
+        const si_opts: StructOptions(dvui.ScrollInfo) = .initWithDefaults(.{
+            .viewport = .{ .number = .{ .customDisplayFn = displayViewport } },
+        }, null);
+        // TODO: This is another example of need for struct_ui enhancement. Luckily velocity is the
+        // only Point is the struct so I can override the type. But I really just want to override the
+        // point display for the velocity field.
+        const point_opts: StructOptions(dvui.Point) = .init(.{
+            .x = .{ .number = .{ .widget_type = .number_placeholder } },
+            .y = .{ .number = .{ .widget_type = .number_placeholder } },
+        }, null);
+        dvui.structUI(@src(), "init_opts", &init_opts, 2, .{ display_opts, si_opts, point_opts }, .{});
+    }
+
+    fn displayViewport(field_name: []const u8, ptr: *anyopaque, _: bool, _: *dvui.Alignment) void {
+        const field_value_ptr: *Rect = @ptrCast(@alignCast(ptr));
+
+        if (struct_ui.displayContainer(@src(), field_name)) |container| {
+            defer container.deinit();
+            var al: dvui.Alignment = .init(@src(), 0);
+            defer al.deinit();
+            if (init_opts.scroll_info) |si| {
+                struct_ui.displayNumber(@src(), "x", &field_value_ptr.x, .{
+                    .number = .{
+                        .widget_type = if (si.horizontal == .given) .slider_entry else .number_entry,
+                        .min = 0,
+                        .max = scroll_info.virtual_size.w - scroll_info.viewport.w,
+                        .display = if (si.horizontal == .given) .read_write else .read_only,
+                    },
+                }, &al);
+                struct_ui.displayNumber(@src(), "y", &field_value_ptr.y, .{
+                    .number = .{
+                        .widget_type = if (si.vertical == .given) .slider_entry else .number_entry,
+                        .min = 0,
+                        .max = scroll_info.virtual_size.h - scroll_info.viewport.h,
+                        .display = if (si.vertical == .given) .read_write else .read_only,
+                    },
+                }, &al);
+            } else {
+                struct_ui.displayNumber(@src(), "x", &field_value_ptr.x, .defaultReadOnly, &al);
+                struct_ui.displayNumber(@src(), "y`", &field_value_ptr.y, .defaultReadOnly, &al);
+            }
+            struct_ui.displayNumber(@src(), "w", &field_value_ptr.w, .defaultReadOnly, &al);
+            struct_ui.displayNumber(@src(), "h", &field_value_ptr.h, .defaultReadOnly, &al);
+        }
     }
 };
 
