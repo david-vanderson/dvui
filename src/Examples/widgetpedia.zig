@@ -118,7 +118,7 @@ pub fn widgetpedia() void {
         }
     }
     {
-        var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .padding = Rect.all(6), .corner_radius = Rect.all(5), .border = Rect.all(1) });
+        var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .padding = .all(6), .corner_radius = .all(5), .border = .all(1) });
         defer vbox.deinit();
         current_widget.displayFn(reset_widget);
         reset_widget = false;
@@ -206,9 +206,9 @@ pub fn displayWidgetTemplate(widget_display: type) void {
             if (std.meta.hasFn(widget_display, "layoutWidgetControls")) {
                 if (inner_paned.showSecond()) {
                     var scroll = dvui.scrollArea(@src(), .{}, .{
-                        .corner_radius = Rect.all(3),
-                        .border = Rect.all(1),
-                        .padding = Rect.all(6),
+                        .corner_radius = .all(3),
+                        .border = .all(1),
+                        .padding = .all(6),
                         .expand = .both,
                         .margin = .{ .x = 6, .y = 6 + dvui.themeGet().font_body.lineHeight() / 2 - 1, .w = 6, .h = 6 },
                         .background = false,
@@ -225,16 +225,16 @@ pub fn displayWidgetTemplate(widget_display: type) void {
         var outer_vbox = dvui.box(@src(), .{}, .{
             .margin = .{ .x = 0, .y = 6, .h = 0, .w = 0 },
             .expand = .horizontal,
-            .border = Rect.all(1),
-            .corner_radius = Rect.all(3),
+            .border = .all(1),
+            .corner_radius = .all(3),
             .min_size_content = .{ .h = state.paned_content_height },
         });
         defer outer_vbox.deinit();
         var expander_wd: dvui.WidgetData = undefined;
         if (dvui.expander(@src(), "Options editor", .{ .default_expanded = false }, .{ .expand = .horizontal, .data_out = &expander_wd })) {
             var scroll = dvui.scrollArea(@src(), .{}, .{
-                .corner_radius = Rect.all(3),
-                .padding = Rect.all(6),
+                .corner_radius = .all(3),
+                .padding = .all(6),
                 .expand = .both,
                 .background = false,
                 .min_size_content = .{ .h = 40 },
@@ -411,7 +411,7 @@ const DisplayBox = struct {
         test_options.nr_boxes = 5;
         test_options.expand = .none;
         init_opts = .{};
-        options = .{ .expand = .both, .border = Rect.all(1) };
+        options = .{ .expand = .both, .border = .all(1) };
     }
 
     pub fn layoutWidget() void {
@@ -420,7 +420,7 @@ const DisplayBox = struct {
         for (0..test_options.nr_boxes) |i| {
             var b = dvui.box(@src(), .{}, .{
                 .min_size_content = .{ .h = 30, .w = 30 },
-                .border = Rect.all(1),
+                .border = .all(1),
                 .id_extra = i,
                 .expand = test_options.expand,
             });
@@ -759,7 +759,7 @@ const DisplayContext = struct {
         defer ctext.deinit();
 
         if (ctext.activePoint()) |cp| {
-            var fw = dvui.floatingMenu(@src(), .{ .from = Rect.Natural.fromPoint(cp) }, .{});
+            var fw = dvui.floatingMenu(@src(), .{ .from = .fromPoint(cp) }, .{});
             defer fw.deinit();
 
             if (dvui.menuItemLabel(@src(), "Menu Item 1", .{}, .{ .expand = .horizontal })) |_| {
@@ -1748,6 +1748,92 @@ const DisplayMenuItemLabel = struct {
     }
 };
 
+const DisplayPaned = struct {
+    var name: []const u8 = "paned()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.PanedWidget.InitOptions = undefined;
+    var split_ratio: f32 = undefined;
+    var auto_fit: bool = false;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{ .expand = .both };
+        init_opts = .{ .direction = .horizontal, .collapsed_size = 0 };
+        split_ratio = 0.5;
+        auto_fit = false;
+    }
+
+    pub fn layoutWidget() void {
+        var paned = dvui.paned(@src(), init_opts, options.override(.{ .data_out = &wd }));
+        defer paned.deinit();
+        if (auto_fit) {
+            paned.autoFit();
+            auto_fit = false;
+        }
+
+        if (paned.showFirst()) {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = .all(1), .corner_radius = .all(5) });
+            defer hbox.deinit();
+            if (paned.collapsed() and !paned.collapsing) {
+                if (dvui.buttonIcon(
+                    @src(),
+                    "chevron",
+                    if (init_opts.direction == .horizontal) dvui.entypo.chevron_thin_left else dvui.entypo.chevron_thin_up,
+                    .{},
+                    .{},
+                    .{ .min_size_content = .all(25), .gravity_x = 1.0 },
+                )) {
+                    paned.animateSplit(0.0);
+                }
+            }
+
+            dvui.icon(@src(), "lock", if (paned.collapsed()) dvui.entypo.lock else dvui.entypo.lock_open, .{}, .{ .expand = .both });
+        }
+        if (paned.showSecond()) {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = .all(1), .corner_radius = .all(5) });
+            defer hbox.deinit();
+            if (paned.collapsed() and !paned.collapsing) {
+                if (dvui.buttonIcon(
+                    @src(),
+                    "chevron",
+                    if (init_opts.direction == .horizontal) dvui.entypo.chevron_thin_right else dvui.entypo.chevron_thin_down,
+
+                    .{},
+                    .{},
+                    .{
+                        .min_size_content = .all(25),
+                        .gravity_x = if (init_opts.direction == .vertical) 1.0 else null,
+                    },
+                )) {
+                    paned.animateSplit(1.0);
+                }
+            }
+
+            dvui.icon(@src(), "key", dvui.entypo.key, .{}, .{ .expand = .both });
+        }
+    }
+
+    pub fn layoutWidgetControls() void {
+        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+            defer container.deinit();
+            auto_fit = dvui.button(@src(), "Auto fit", .{}, .{});
+            dvui.labelNoFmt(@src(), "*requires autofit_first to be set", .{}, .{});
+        }
+        const display_opts: StructOptions(dvui.PanedWidget.InitOptions) = .initWithDefaults(.{}, .{
+            .direction = .horizontal,
+            .split_ratio = &split_ratio,
+            .collapsed_size = 0,
+        });
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{display_opts}, .{});
+    }
+};
+
 const DisplayProgress = struct {
     var name: []const u8 = "progress()";
 
@@ -1902,12 +1988,47 @@ const DisplayScale = struct {
     pub fn layoutWidget() void {
         var scalew = dvui.scale(@src(), init_opts, options.override(.{ .data_out = &wd, .expand = .both }));
         defer scalew.deinit();
-        dvui.labelNoFmt(@src(), "Scalable", .{}, .{ .border = Rect.all(1), .color_border = dvui.themeGet().focus, .gravity_x = 0.5, .gravity_y = 0.5 });
+        dvui.labelNoFmt(@src(), "Scalable", .{}, .{ .border = .all(1), .color_border = dvui.themeGet().focus, .gravity_x = 0.5, .gravity_y = 0.5 });
     }
 
     pub fn layoutWidgetControls() void {
         const display_opts = StructOptions(dvui.ScaleWidget.InitOptions).initWithDefaults(.{ .scale = .{ .number = .{ .widget_type = .slider_entry, .min = 0, .max = 10 } } }, .{ .scale = &scale });
         dvui.structUI(@src(), "init_opts", &init_opts, 1, .{display_opts}, .{});
+    }
+};
+
+const DisplayScrollArea = struct {
+    var name: []const u8 = "scrollArea()";
+    const nr_radio_buttons = 3;
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.ScrollAreaWidget.InitOpts = undefined;
+    var scroll_info: dvui.ScrollInfo = undefined;
+    var nr_widgets: usize = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{};
+        init_opts = .{};
+        nr_widgets = 30;
+    }
+
+    pub fn layoutWidget() void {
+        var scroll = dvui.scrollArea(@src(), init_opts, options.override(.{ .data_out = &wd }));
+        defer scroll.deinit();
+        for (0..nr_widgets) |i| {
+            dvui.label(@src(), "Line {}", .{i}, .{ .id_extra = i });
+        }
+    }
+
+    pub fn layoutWidgetControls() void {
+        const display_opts = StructOptions(dvui.ScrollAreaWidget.InitOpts).initWithDefaults(.{}, .{ .scroll_info = &scroll_info });
+        dvui.structUI(@src(), "init_opts", &init_opts, 2, .{display_opts}, .{});
     }
 };
 
@@ -1944,7 +2065,7 @@ const DisplaySeparator = struct {
             var al: dvui.Alignment = .init(@src(), 0);
             defer al.deinit();
             struct_ui.displayOptional(@src(), dvui.Options, "expand", &options.expand, 1, .default, .{}, &al, .horizontal);
-            struct_ui.displayOptional(@src(), dvui.Options, "border", &options.border, 1, .default, .{}, &al, .{});
+            struct_ui.displayOptional(@src(), dvui.Options, "min_size_content", &options.min_size_content, 1, .default, .{}, &al, .all(1));
         }
     }
 };
@@ -2107,7 +2228,7 @@ const DisplaySpacer = struct {
             struct_ui.displayBool(@src(), "border", &border, .{ .boolean = .{ .widget_type = .checkbox } }, &al);
             if (prev_border != border) {
                 if (border) {
-                    options.border = Rect.all(1);
+                    options.border = .all(1);
                 } else {
                     options.border = null;
                 }
@@ -2208,7 +2329,7 @@ const DisplayTabs = struct {
         }
 
         {
-            var border = dvui.Rect.all(1);
+            var border: dvui.Rect = .all(1);
             switch (init_opts.dir) {
                 .horizontal => border.y = 0,
                 .vertical => border.x = 0,
@@ -2518,7 +2639,7 @@ const DisplayToolTip = struct {
 
     pub fn resetWidget() void {
         options = .{};
-        init_opts = .{ .active_rect = Rect.Physical.all(0) };
+        init_opts = .{ .active_rect = .all(0) };
         test_options = .{
             .text = "This is tooltip text",
             .scenario = .@"text only",
@@ -2527,7 +2648,7 @@ const DisplayToolTip = struct {
 
     pub fn layoutWidget() void {
         var label_wd: dvui.WidgetData = undefined;
-        dvui.labelNoFmt(@src(), "Mouse over me", .{}, .{ .border = Rect.all(1), .data_out = &label_wd, .gravity_x = 0.5, .gravity_y = 0.5 });
+        dvui.labelNoFmt(@src(), "Mouse over me", .{}, .{ .border = .all(1), .data_out = &label_wd, .gravity_x = 0.5, .gravity_y = 0.5 });
         init_opts.active_rect = label_wd.borderRectScale().r;
         switch (test_options.scenario) {
             .@"text only" => dvui.tooltip(@src(), init_opts, "{s}", .{test_options.text}, options.override(.{ .data_out = &wd })),
@@ -2538,7 +2659,7 @@ const DisplayToolTip = struct {
                 if (tt.shown()) {
                     var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
                     defer hbox.deinit();
-                    dvui.icon(@src(), "warning", dvui.entypo.warning, .{}, .{ .min_size_content = .all(30), .margin = Rect.all(6) });
+                    dvui.icon(@src(), "warning", dvui.entypo.warning, .{}, .{ .min_size_content = .all(30), .margin = .all(6) });
                     var tl = dvui.textLayout(@src(), .{}, .{ .background = false, .gravity_y = 0.5 });
                     tl.addText(test_options.text, .{});
                     tl.deinit();
@@ -2564,7 +2685,7 @@ const DisplayToolTip = struct {
                 .h = .defaultReadOnly,
             }, null);
             const display_opts = StructOptions(dvui.FloatingTooltipWidget.InitOptions).initWithDefaults(.{
-                .delay = .{ .number = .{ .label = "delay (μs)" } },
+                .delay = .{ .number = .{ .label = "delay (µs)" } },
             }, null);
             dvui.structUI(@src(), "init_opts", &init_opts, 1, .{ display_opts, rect_opts }, .{});
         }
@@ -2600,7 +2721,7 @@ fn structColorPicker(field_name: []const u8, ptr: *anyopaque, read_only: bool, a
             .color_fill = field_value_ptr.*,
             .background = true,
             .gravity_y = 0.5,
-            .margin = Rect.all(6),
+            .margin = .all(6),
         });
         color_box.deinit();
     } else {
@@ -2670,7 +2791,7 @@ const widget_hierarchy = [_]WidgetHierarchy{
         .{ .name = "menuItemLabel", .displayFn = DisplayMenuItemLabel.displayFn, .children = null },
     } },
 
-    .{ .name = "paned", .displayFn = displayEmpty, .children = null },
+    .{ .name = "paned", .displayFn = DisplayPaned.displayFn, .children = null },
 
     .{ .name = "plots", .displayFn = displayEmpty, .children = &.{
         .{ .name = "plot", .displayFn = displayEmpty, .children = null },
@@ -2682,7 +2803,7 @@ const widget_hierarchy = [_]WidgetHierarchy{
     .{ .name = "radioGroup", .displayFn = DisplayRadioGroup.displayFn, .children = null },
     .{ .name = "reorder", .displayFn = displayEmpty, .children = null },
     .{ .name = "scale", .displayFn = DisplayScale.displayFn, .children = null },
-    .{ .name = "scrollArea", .displayFn = displayEmpty, .children = null },
+    .{ .name = "scrollArea", .displayFn = DisplayScrollArea.displayFn, .children = null },
     .{ .name = "separator", .displayFn = DisplaySeparator.displayFn, .children = null },
 
     .{ .name = "sliders", .displayFn = displayEmpty, .children = &.{
