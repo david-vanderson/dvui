@@ -264,8 +264,8 @@ pub fn StructOptions(Struct: type) type {
         /// If `for_field_name` is set, these options will only apply to fields
         /// field with that field name.
         ///
-        /// Useful for common struct such as dvui.Point where you want to display
-        /// different fields of the same type using different widgets.
+        /// Useful for dealing with common struct such as dvui.Point where you want
+        /// to display different fields of the same type using different widgets.
         ///
         /// NOTE: Ordering is important. If there are multiple options for the same struct type
         /// order the field_name variants before the generic struct options.
