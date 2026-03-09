@@ -2050,9 +2050,11 @@ const DisplayScrollArea = struct {
         }
         const display_opts: StructOptions(dvui.ScrollAreaWidget.InitOpts) = .initWithDefaults(.{
             .focus_id = .{ .standard = .{ .customDisplayFn = displayFocusId } },
+            .user_scroll = .defaultConst,
         }, .{ .scroll_info = &scroll_info, .frame_viewport = .{ .x = 100, .y = 100 }, .user_scroll = &user_scroll });
         const si_opts: StructOptions(dvui.ScrollInfo) = .initWithDefaults(.{
             .viewport = .{ .number = .{ .customDisplayFn = displayViewport } },
+            .virtual_size = .defaultConst,
         }, null);
         // Only override the Point type display for fields named "velocity"
         const velocity_opts = StructOptions(dvui.Point).init(.{
@@ -2060,20 +2062,7 @@ const DisplayScrollArea = struct {
             .y = .{ .number = .{ .widget_type = .number_placeholder } },
         }, null).forFieldName("velocity");
 
-        // TODO: Need struct_ui enhancement to mark struct fields as read-only
-        // and propogate that to the struct's fields.
-        // But ew also need a soft "const" that recursively propogates read-only to all children.
-        const point_opts: StructOptions(dvui.Point) = .init(.{
-            .x = .defaultReadOnly,
-            .y = .defaultReadOnly,
-        }, null);
-        // TODO: Same issue with size
-        const size_opts: StructOptions(dvui.Size) = .init(.{
-            .w = .defaultReadOnly,
-            .h = .defaultReadOnly,
-        }, null);
-
-        dvui.structUI(@src(), "init_opts", &init_opts, 2, .{ display_opts, velocity_opts, si_opts, point_opts, size_opts }, .{});
+        dvui.structUI(@src(), "init_opts", &init_opts, 2, .{ display_opts, velocity_opts, si_opts }, .{});
     }
 
     fn displayViewport(field_name: []const u8, ptr: *anyopaque, _: bool, _: *dvui.Alignment) void {
@@ -2304,7 +2293,7 @@ const DisplaySliderEntry = struct {
     pub fn layoutWidgetControls() void {
         // TODO: StructUI needs a way to support read-write optionals to read-only text. at the moment it is tied to the field, so display
         // sets both whether the optional can be changed and whether the value can be changed. Here we want user to set the optional to null or not
-        // buty not set label_fmt
+        // but not set label_fmt
         if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
             defer container.deinit();
             var al: dvui.Alignment = .init(@src(), 0);
@@ -2814,18 +2803,11 @@ const DisplayToolTip = struct {
             dvui.structUI(@src(), test_options_label, &test_options, 1, .{display_opts}, .{});
         }
         {
-            // TODO: Annoyingly we can't just set the field to read_only because it does not yet propagate to the children of the field.
-            // Needs an enhancement to struct_ui.
-            const rect_opts: StructOptions(dvui.Rect.Physical) = .initWithDefaults(.{
-                .x = .defaultReadOnly,
-                .y = .defaultReadOnly,
-                .w = .defaultReadOnly,
-                .h = .defaultReadOnly,
-            }, null);
             const display_opts = StructOptions(dvui.FloatingTooltipWidget.InitOptions).initWithDefaults(.{
                 .delay = .{ .number = .{ .label = "delay (µs)" } },
+                .active_rect = .defaultConst,
             }, null);
-            dvui.structUI(@src(), "init_opts", &init_opts, 1, .{ display_opts, rect_opts }, .{});
+            dvui.structUI(@src(), "init_opts", &init_opts, 1, .{display_opts}, .{});
         }
 
         if (init_opts.position == .absolute) {
