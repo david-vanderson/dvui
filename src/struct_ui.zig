@@ -35,7 +35,17 @@ const log = std.log.scoped(.struct_ui);
 /// - customDisplayFn: ?*const fn(field_name: []const u8, field_value_ptr: *anyopaque, read_only: bool, al: *dvui.Alignment)
 pub const FieldOptions = union(enum) {
     /// Control if the field should be displayed and if it is editable.
-    const DisplayMode = enum { none, read_only, read_write };
+    const DisplayMode = enum {
+        /// do not display
+        none,
+        /// display only
+        read_only,
+        /// editable
+        read_write,
+        /// read-only for this field and all children
+        /// treats the field as if it is const
+        constant,
+    };
     standard: StandardFieldOptions,
     number: NumberFieldOptions,
     text: TextFieldOptions,
@@ -51,7 +61,7 @@ pub const FieldOptions = union(enum) {
     pub const defaultBool: FieldOptions = .{ .boolean = .{} };
     pub const defaultHidden: FieldOptions = .{ .standard = .{ .display = .none } };
     pub const defaultReadOnly: FieldOptions = .{ .standard = .{ .display = .read_only } };
-
+    pub const defaultConst: FieldOptions = .{ .standard = .{ .display = .constant } };
     pub fn optionStandard(self: FieldOptions, field_name: []const u8) StandardFieldOptions {
         return switch (self) {
             .standard => |fo| fo,
@@ -137,12 +147,22 @@ pub const FieldOptions = union(enum) {
     }
 
     pub fn markConst(self: *FieldOptions) void {
-        // TODO: Track const separately to read-only.
         switch (self.*) {
-            inline else => |*fo| fo.display = .read_only,
+            inline else => |*fo| fo.display = .constant,
         }
     }
+
+    pub fn isReadOnly(self: FieldOptions) bool {
+        return switch (self.displayMode()) {
+            .read_only, .constant => true,
+            else => false,
+        };
+    }
 };
+
+fn isReadOnly(self: anytype) bool {
+    return self.display == .read_only or self.display == .constant;
+}
 
 /// Standard field options allow control of the display mode and
 /// option to provide an alternative label.
@@ -417,7 +437,7 @@ pub fn numberFieldWidget(
     if (opt.display == .none) return;
 
     const T = @TypeOf(field_value_ptr.*);
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.display == .read_only;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or isReadOnly(opt);
 
     switch (opt.widget_type) {
         .number_entry => {
@@ -551,7 +571,7 @@ pub fn numberFieldWidgetOptional(
     if (opt.display == .none) return;
 
     const T = @TypeOf(field_value_optional_ptr.*.?);
-    const read_only = @typeInfo(@TypeOf(field_value_optional_ptr)).pointer.is_const or opt.display == .read_only;
+    const read_only = @typeInfo(@TypeOf(field_value_optional_ptr)).pointer.is_const or isReadOnly(opt);
 
     switch (opt.widget_type) {
         .number_entry => {
@@ -599,7 +619,7 @@ pub fn enumFieldWidget(
 
     const T = @TypeOf(field_value_ptr.*);
     const exhaustive = @typeInfo(T).@"enum".is_exhaustive;
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.display == .read_only;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or isReadOnly(opt);
     if (!read_only and !exhaustive) {
         // TODO: Display these as numbers and do the enum<->int conversion.
         log.debug("non-exhaustive enum {s}.{s} can only be displayed read-only", .{ @typeName(T), field_name });
@@ -642,7 +662,7 @@ pub fn enumFieldWidgetOptional(
     if (opt.display == .none) return;
 
     const T = @TypeOf(field_value_optional_ptr.*.?);
-    const read_only = @typeInfo(@TypeOf(field_value_optional_ptr)).pointer.is_const or opt.display == .read_only;
+    const read_only = @typeInfo(@TypeOf(field_value_optional_ptr)).pointer.is_const or isReadOnly(opt);
     var box = dvui.box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
     defer box.deinit();
 
@@ -696,7 +716,7 @@ pub fn boolFieldWidget(
     validateFieldPtrType(null, &.{.bool}, "boolFieldWidget", @TypeOf(field_value_ptr));
     if (opt.display == .none) return;
 
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.display == .read_only;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or isReadOnly(opt);
 
     var box = dvui.box(src, .{ .dir = .horizontal }, .{});
     defer box.deinit();
@@ -771,7 +791,7 @@ pub fn boolFieldWidgetOptional(
     validateFieldPtrType(null, &.{.bool}, "boolFieldWidgetOptional", @TypeOf(&field_value_optional_ptr.*.?));
     if (opt.display == .none) return;
 
-    const read_only = @typeInfo(@TypeOf(field_value_optional_ptr)).pointer.is_const or opt.display == .read_only;
+    const read_only = @typeInfo(@TypeOf(field_value_optional_ptr)).pointer.is_const or isReadOnly(opt);
 
     var box = dvui.box(src, .{ .dir = .horizontal }, .{});
     defer box.deinit();
@@ -837,8 +857,7 @@ pub fn textFieldWidget(
 
     const sentinel_terminated = @typeInfo(T).pointer.sentinel_ptr != null;
 
-    var read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or
-        opt.display == .read_only;
+    var read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or isReadOnly(opt);
 
     if (opt.display == .read_write and read_only) {
         // Note all string arrays are currently treated as read-only, even if they are var.
@@ -928,7 +947,7 @@ pub fn unionFieldWidget(
     if (opt.displayMode() == .none) {
         return field_value_ptr.*;
     }
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.displayMode() == .read_only;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.isReadOnly();
 
     var box = dvui.box(src, .{ .dir = .vertical }, .{});
     defer box.deinit();
@@ -984,7 +1003,7 @@ pub fn optionalFieldWidget(
     validateFieldPtrType(null, &.{.optional}, "optionalFieldWidget", @TypeOf(field_value_ptr));
 
     // Display mode is ignored. It controls whether the optional value is read_only, not the optional itself.
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opts.displayMode() == .read_only;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opts.isReadOnly();
 
     var choice: usize = if (field_value_ptr.* == null) 0 else 1; // 0 = Null, 1 = Not Null
 
@@ -1029,7 +1048,7 @@ pub inline fn displayField(
     // 3. Display using the default display functions.
 
     if (field_option.hasCustomDisplayFn()) {
-        const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
+        const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.isReadOnly();
         field_option.customDisplayFn(field_name, @ptrCast(@constCast(field_value_ptr)), read_only, al);
         return;
     }
@@ -1039,7 +1058,7 @@ pub inline fn displayField(
             const struct_options = findMatchingStructOption(@TypeOf(field_value_ptr.*), field_name, options);
             if (struct_options) |so| {
                 if (so.customDisplayFn) |displayFn| {
-                    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
+                    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.isReadOnly();
                     displayFn(field_name, @ptrCast(@constCast(field_value_ptr)), read_only, al);
                     return;
                 }
@@ -1221,7 +1240,7 @@ pub fn displayUnion(
     }
     if (!validFieldOptionsType(field_name, field_option, .standard)) return;
     const current_choice = std.meta.activeTag(field_value_ptr.*);
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.isReadOnly();
 
     if (displayContainer(src, field_option.displayLabel(field_name))) |vbox| {
         defer vbox.deinit();
@@ -1260,7 +1279,11 @@ pub fn displayUnion(
                 defer alignment.deinit();
 
                 // Will only display if an option exists for this field.
-                if (struct_options.field_options.get(active_tag)) |union_field_option| {
+                if (struct_options.field_options.get(active_tag)) |union_field_option_| {
+                    var union_field_option = union_field_option_;
+                    if (field_option.displayMode() == .constant and union_field_option.displayMode() != .none) {
+                        union_field_option.markConst();
+                    }
                     displayField(@src(), UnionT, @tagName(active_tag), active, depth, union_field_option, options, &alignment);
                 }
             },
@@ -1313,7 +1336,7 @@ pub fn displayOptional(
         else => {},
     }
 
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.isReadOnly();
     if (optionalFieldWidget(src, field_name, field_value_ptr, field_option, al)) {
         if (!read_only) {
             if (field_value_ptr.* == null) {
@@ -1348,10 +1371,10 @@ pub fn displayPointer(
 ) void {
     validateFieldPtrType(field_name, &.{.pointer}, "displayPointer", @TypeOf(field_value_ptr));
 
-    // TODO: Need a better way of propagating constness. Currently we are just updating the field_option to be .read_only.
     const field_option = blk: {
         const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
         if (read_only and field_option_.displayMode() == .read_write) {
+            // Everything pointed to by a pointer to const must be const.
             var field_option = field_option_;
             field_option.markConst();
             break :blk field_option;
@@ -1419,8 +1442,6 @@ pub fn displayStruct(
         }
     }
     if (field_option.standard.display == .none) return null;
-    // TODO: If the struct field is marked read-only, then make sure all of the fields in the struct are read-only as well.
-    // Potentially introduce a "const" options that propgates read-only to all children.
 
     const StructT = @TypeOf(field_value_ptr.*);
     const struct_options: StructOptions(StructT) = findMatchingStructOption(StructT, field_name orelse "", options) orelse .initWithDefaults(.{}, null);
@@ -1434,7 +1455,11 @@ pub fn displayStruct(
 
         inline for (0..struct_options.field_options.values.len) |field_num| {
             const field = comptime @TypeOf(struct_options.field_options).Indexer.keyForIndex(field_num);
-            if (struct_options.field_options.contains(field)) {
+            if (struct_options.field_options.get(field)) |child_option_| {
+                var child_option = child_option_;
+                if (field_option.displayMode() == .constant and child_option.displayMode() != .none) {
+                    child_option.markConst();
+                }
                 var box = dvui.box(@src(), .{ .dir = .vertical }, .{ .id_extra = field_num });
                 defer box.deinit();
                 displayField(
@@ -1443,7 +1468,7 @@ pub fn displayStruct(
                     @tagName(field),
                     &@field(field_value_ptr, @tagName(field)),
                     depth,
-                    struct_options.field_options.getAssertContains(field),
+                    child_option,
                     options,
                     alignment,
                 );
