@@ -168,16 +168,20 @@ pub fn StructOptions(Struct: type) type {
         else => @compileError(std.fmt.comptimePrint("StructOptions(T) requires Struct or Union, but received a {s}.", .{@typeName(Struct)})),
     }
     return struct {
-        pub const StructOptionsT = std.EnumMap(std.meta.FieldEnum(StructT), FieldOptions);
         const Self = @This();
+
+        pub const StructOptionsT = std.EnumMap(std.meta.FieldEnum(StructT), FieldOptions);
         // Type of struct or union these options belong to
         pub const StructT = Struct;
+
         // display options for each field to be displayed
         field_options: StructOptionsT,
         // A default value to be used whenever an instance of this type is created
         default_value: ?StructT = null,
         // Display the struct using this function, instead of the default struct_ui function.
         customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
+        // If set, this struct_option will only apply to fields with this name
+        for_field_name: ?[]const u8 = null,
 
         /// Initialize and display only the fields provided.
         /// options: field options for all the fields to be displayed.
@@ -243,6 +247,7 @@ pub fn StructOptions(Struct: type) type {
             };
         }
 
+        /// Use a custom display function to display this struct.
         pub fn initWithDisplayFn(
             // Display the struct using this function, instead of the default struct_ui function.
             customDisplayFn: *const fn (field_name: []const u8, field_value_ptr: *anyopaque, read_only: bool, *dvui.Alignment) void,
@@ -253,6 +258,23 @@ pub fn StructOptions(Struct: type) type {
                 .customDisplayFn = customDisplayFn,
                 .default_value = default_value,
             };
+        }
+
+        /// Helper for setting `for_field_name` after construction.
+        /// If `for_field_name` is set, these options will only apply to fields
+        /// field with that field name.
+        ///
+        /// Useful for common struct such as dvui.Point where you want to display
+        /// different fields of the same type using different widgets.
+        ///
+        /// NOTE: Ordering is important. If there are multiple options for the same struct type
+        /// order the field_name variants before the generic struct options.
+        pub fn forFieldName(self: Self, field_name: []const u8) Self {
+            // This should be rarely used, so this is fine. But if we add more of these
+            // options, move to using an init_opts struct, rather than this builder pattern.
+            var result = self;
+            result.for_field_name = field_name;
+            return result;
         }
 
         /// Return a default value for a field if no default for that field has been supplied through
@@ -1014,7 +1036,7 @@ pub inline fn displayField(
 
     switch (@typeInfo(@typeInfo(PtrT).pointer.child)) {
         .@"struct", .@"union" => {
-            const struct_options = findMatchingStructOption(@TypeOf(field_value_ptr.*), options);
+            const struct_options = findMatchingStructOption(@TypeOf(field_value_ptr.*), field_name, options);
             if (struct_options) |so| {
                 if (so.customDisplayFn) |displayFn| {
                     const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() == .read_only;
@@ -1233,7 +1255,7 @@ pub fn displayUnion(
             inline else => |*active, active_tag| {
                 var inner_vbox = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .horizontal, .id_extra = @intFromEnum(active_tag) });
                 defer inner_vbox.deinit();
-                const struct_options: StructOptions(UnionT) = findMatchingStructOption(UnionT, options) orelse .initWithDefaults(.{}, null);
+                const struct_options: StructOptions(UnionT) = findMatchingStructOption(UnionT, field_name, options) orelse .initWithDefaults(.{}, null);
                 var alignment: dvui.Alignment = .init(@src(), depth);
                 defer alignment.deinit();
 
@@ -1401,7 +1423,7 @@ pub fn displayStruct(
     // Potentially introduce a "const" options that propgates read-only to all children.
 
     const StructT = @TypeOf(field_value_ptr.*);
-    const struct_options: StructOptions(StructT) = findMatchingStructOption(StructT, options) orelse .initWithDefaults(.{}, null);
+    const struct_options: StructOptions(StructT) = findMatchingStructOption(StructT, field_name orelse "", options) orelse .initWithDefaults(.{}, null);
 
     if (field_option.displayMode() == .none) return null;
     const vbox: ?*dvui.BoxWidget = displayContainer(src, if (field_name) |name| field_option.displayLabel(name) else null);
@@ -1610,10 +1632,17 @@ pub fn validateFieldPtrTypeString(field_name: ?[]const u8, comptime caller: []co
 }
 
 /// Returns the option from the passed in options tuple for type T.
-pub fn findMatchingStructOption(T: type, struct_options: anytype) ?StructOptions(T) {
+pub fn findMatchingStructOption(T: type, field_name: []const u8, struct_options: anytype) ?StructOptions(T) {
     inline for (struct_options) |struct_option| {
         if (@TypeOf(struct_option).StructT == T) {
-            return struct_option;
+            // Check if these options are for a specific field.
+            if (struct_option.for_field_name) |for_name| {
+                if (std.mem.eql(u8, field_name, for_name)) {
+                    return struct_option;
+                }
+            } else {
+                return struct_option;
+            }
         }
     }
     return null;
