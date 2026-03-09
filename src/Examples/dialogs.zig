@@ -2,7 +2,7 @@ var progress_mutex: std.Io.Mutex = .init;
 var progress_val: f32 = 0.0;
 
 /// ![image](Examples-dialogs.png)
-pub fn dialogs(demo_win_id: dvui.Id) void {
+pub fn dialogs() void {
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
@@ -42,15 +42,15 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
         defer hbox.deinit();
 
         if (dvui.button(@src(), "Toast 1", .{}, .{})) {
-            dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 1 to demo window" });
+            dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = "Toast 1 to demo window" });
         }
 
         if (dvui.button(@src(), "Toast 2", .{}, .{})) {
-            dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 2" });
+            dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = "Toast 2" });
         }
 
         if (dvui.button(@src(), "Toast 3", .{}, .{})) {
-            dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 3 is really really long to demo window" });
+            dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = "Toast 3 is really really long to demo window" });
         }
 
         if (dvui.button(@src(), "Toast Main Window", .{}, .{})) {
@@ -82,19 +82,19 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
                 };
                 bg_thread.detach();
             } else {
-                dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in single-threaded" });
+                dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = "Not available in single-threaded" });
             }
         }
 
         if (dvui.button(@src(), "Toast after 1 second", .{}, .{})) {
             if (!builtin.single_threaded) blk: {
-                const bg_thread = std.Thread.spawn(.{}, background_toast, .{ dvui.currentWindow(), 1_000_000_000, demo_win_id }) catch |err| {
+                const bg_thread = std.Thread.spawn(.{}, background_toast, .{ dvui.currentWindow(), 1_000_000_000, dvui.subwindowCurrentId() }) catch |err| {
                     dvui.log.debug("Failed to spawn background thread for delayed action, got {any}", .{err});
                     break :blk;
                 };
                 bg_thread.detach();
             } else {
-                dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in single-threaded" });
+                dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = "Not available in single-threaded" });
             }
         }
     }
@@ -132,7 +132,7 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
             if (dvui.backend.kind == .web) {
                 dvui.dialogWasmFileOpen(single_file_id, .{ .accept = ".png, .jpg" });
             } else if (!dvui.useTinyFileDialogs) {
-                dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Tiny File Dilaogs disabled" });
+                dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = "Tiny File Dilaogs disabled" });
             } else {
                 const filename = dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{
                     .title = "dvui native file open",
@@ -158,7 +158,7 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
             if (dvui.backend.kind == .web) {
                 dvui.dialogWasmFileOpenMultiple(multi_file_id, .{ .accept = ".png, .jpg" });
             } else if (!dvui.useTinyFileDialogs) {
-                dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Tiny File Dilaogs disabled" });
+                dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = "Tiny File Dilaogs disabled" });
             } else {
                 const filenames = dvui.dialogNativeFileOpenMultiple(dvui.currentWindow().arena(), .{
                     .title = "dvui native file open multiple",
@@ -192,9 +192,9 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
 
         if (dvui.button(@src(), "Open Folder", .{}, .{})) {
             if (dvui.backend.kind == .web) {
-                dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
+                dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = "Not implemented for web" });
             } else if (!dvui.useTinyFileDialogs) {
-                dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Tiny File Dilaogs disabled" });
+                dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = "Tiny File Dilaogs disabled" });
             } else {
                 const filename = dvui.dialogNativeFolderSelect(dvui.currentWindow().arena(), .{ .title = "dvui native folder select" }) catch |err| blk: {
                     dvui.log.debug("Could not open folder select dialog, got {any}", .{err});
@@ -210,7 +210,7 @@ pub fn dialogs(demo_win_id: dvui.Id) void {
             if (dvui.backend.kind == .web) {
                 dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Save File", .ok_label = "Ok", .message = "Not available on the web.  For file download, see \"Save Plot\" in the plots example." });
             } else if (!dvui.useTinyFileDialogs) {
-                dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Tiny File Dilaogs disabled" });
+                dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = "Tiny File Dilaogs disabled" });
             } else {
                 const filename = dvui.dialogNativeFileSave(dvui.currentWindow().arena(), .{ .title = "dvui native file save" }) catch |err| blk: {
                     dvui.log.debug("Could not open file save dialog, got {any}", .{err});
@@ -259,7 +259,7 @@ test "DOCIMG dialogs" {
         fn frame() !dvui.App.Result {
             var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
-            dialogs(box.data().id);
+            dialogs();
             return .ok;
         }
     }.frame;

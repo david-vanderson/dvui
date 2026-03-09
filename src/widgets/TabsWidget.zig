@@ -73,8 +73,8 @@ pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitO
     }
 }
 
-pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8) bool {
-    var tab = self.addTab(selected, .{});
+pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8, opts: Options) bool {
+    var tab = self.addTab(selected, opts);
     defer tab.deinit();
 
     var label_opts = tab.data().options.strip();

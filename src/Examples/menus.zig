@@ -92,12 +92,17 @@ pub fn menus() void {
     _ = dvui.spacer(@src(), .{ .min_size_content = .height(4) });
 
     {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .width(300) });
+        var hbox = dvui.box(@src(), .{}, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .width(300) });
         defer hbox.deinit();
 
         var tl = dvui.textLayout(@src(), .{}, .{ .background = false });
         tl.addText("This box has a complex tooltip with a fade in and nested tooltip.", .{});
         tl.deinit();
+
+        const uniqId = dvui.parentGet().extendId(@src(), 0);
+        if (dvui.button(@src(), "Wiggle Tooltip", .{}, .{})) {
+            dvui.animation(uniqId, "xoffset", .{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 500_000 });
+        }
 
         {
             var tt: dvui.FloatingTooltipWidget = undefined;
@@ -110,7 +115,14 @@ pub fn menus() void {
                 var animator = dvui.animate(@src(), .{ .kind = .alpha, .duration = 250_000 }, .{ .expand = .both });
                 defer animator.deinit();
 
-                var vbox2 = dvui.box(@src(), .{}, dvui.FloatingTooltipWidget.defaults.override(.{ .expand = .both }));
+                var vbox2: dvui.BoxWidget = undefined;
+                vbox2.init(@src(), .{}, dvui.FloatingTooltipWidget.defaults.override(.{ .expand = .both }));
+                if (dvui.animationGet(uniqId, "xoffset")) |a| {
+                    var r = vbox2.data().rect;
+                    r.x += 20 * (1.0 - a.value()) * (1.0 - a.value()) * @sin(a.value() * std.math.pi * 50);
+                    vbox2.data().rectSet(r);
+                }
+                vbox2.drawBackground();
                 defer vbox2.deinit();
 
                 var tl2 = dvui.textLayout(@src(), .{}, .{ .background = false });
@@ -163,7 +175,7 @@ pub fn menus() void {
                 const tabname = std.fmt.comptimePrint("Tab {d}", .{i});
                 if (i != 3) {
                     // easy label only
-                    if (tabs.addTabLabel(active_tab.* == i, tabname)) {
+                    if (tabs.addTabLabel(active_tab.* == i, tabname, .{})) {
                         active_tab.* = i;
                     }
                 } else {

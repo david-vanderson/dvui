@@ -1,5 +1,6 @@
 const std = @import("std");
 const enums_backend = @import("src/enums_backend.zig");
+pub const Backend = enums_backend.Backend;
 const Pkg = std.Build.Pkg;
 const Compile = std.Build.Step.Compile;
 
@@ -58,7 +59,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    var back_to_build = b.option(enums_backend.Backend, "backend", "Backend to build");
+    var back_to_build = b.option(Backend, "backend", "Backend to build");
 
     const test_step = b.step("test", "Test the dvui codebase");
     const check_step = b.step("check", "Check that the entire dvui codebase has no syntax errors");
@@ -150,7 +151,7 @@ pub fn build(b: *std.Build) !void {
     if (back_to_build) |backend| {
         try buildBackend(backend, true, dvui_opts);
     } else {
-        for (std.meta.tags(enums_backend.Backend)) |backend| {
+        for (std.meta.tags(Backend)) |backend| {
             switch (backend) {
                 .custom, .sdl => continue,
                 .web, .testing => dvui_opts.accesskit = .off,
@@ -215,9 +216,40 @@ pub fn build(b: *std.Build) !void {
         const indexhtml_file = run_add_logo.captureStdOut(.{});
         docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
     }
+
+    // svg2tvg tool
+    // see svgPathToTvgPath below for how to run this at build time
+    {
+        const svg2tvg_dep = b.dependency("svg2tvg", .{ .optimize = optimize, .target = target });
+        const exe = b.addExecutable(.{
+            .name = "svg2tvg",
+            .root_module = b.createModule(.{
+                .target = target,
+                .optimize = optimize,
+                .root_source_file = b.path("./tools/svg2tvg.zig"),
+                .imports = &.{
+                    .{
+                        .name = "svg2tvg",
+                        .module = svg2tvg_dep.module("svg2tvg"),
+                    },
+                },
+            }),
+        });
+        const compile_step = b.step("compile-svg2tvg", "Compile svg2tvg");
+        const compile_cmd = b.addInstallArtifact(exe, .{});
+        compile_step.dependOn(&compile_cmd.step);
+
+        b.getInstallStep().dependOn(&exe.step);
+
+        const run_cmd = b.addRunArtifact(exe);
+        run_cmd.step.dependOn(compile_step);
+
+        const run_step = b.step("svg2tvg", "Run svg2tvg");
+        run_step.dependOn(&run_cmd.step);
+    }
 }
 
-pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvui_opts_in: DvuiModuleOptions) !void {
+pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: DvuiModuleOptions) !void {
     var dvui_opts = dvui_opts_in;
     const b = dvui_opts.b;
     const target = dvui_opts.target;
@@ -594,6 +626,57 @@ pub fn buildBackend(backend: enums_backend.Backend, test_dvui_and_app: bool, dvu
                 addExample("dx11-ontop", b.path("examples/dx11-ontop.zig"), true, example_opts, dvui_opts);
                 addExample("dx11-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
             }
+        },
+        .glfw_opengl => {
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .stb_image = true, .tiny_file_dialogs = true, .tree_sitter = true });
+
+            const glfw_opengl_mod = b.addModule("glfw-opengl", .{
+                .root_source_file = b.path("src/backends/glfw-opengl.zig"),
+                .target = target,
+                .optimize = optimize,
+                .link_libc = true,
+            });
+            const maybe_zgl = b.lazyDependency("zgl", .{
+                .target = target,
+                .optimize = optimize,
+            });
+
+            if (maybe_zgl) |zgl| {
+                glfw_opengl_mod.addImport("zgl", zgl.module("zgl"));
+                switch (target.result.os.tag) {
+                    .windows => glfw_opengl_mod.linkSystemLibrary("opengl32", .{}),
+                    .linux => glfw_opengl_mod.linkSystemLibrary("GL", .{}),
+                    .macos => {
+                        glfw_opengl_mod.linkFramework("OpenGL", .{});
+                        glfw_opengl_mod.linkFramework("Cocoa", .{});
+                    },
+                    else => {},
+                }
+            }
+
+            const maybe_glfw = b.lazyDependency(
+                "zglfw",
+                .{
+                    .target = target,
+                    .optimize = optimize,
+                },
+            );
+
+            if (maybe_glfw) |glfw| {
+                glfw_opengl_mod.addImport("zglfw", glfw.module("root"));
+                glfw_opengl_mod.linkLibrary(glfw.artifact("glfw"));
+            }
+
+            const dvui_glfw_opengl = addDvuiModule("dvui-glfw-opengl", dvui_opts);
+            linkBackend(dvui_glfw_opengl, glfw_opengl_mod);
+
+            const example_opts: ExampleOptions = .{
+                .dvui_mod = dvui_glfw_opengl,
+                .backend_name = "glfw-opengl-backend",
+                .backend_mod = glfw_opengl_mod,
+            };
+            addExample("glfw-opengl-ontop", b.path("examples/glfw-opengl-ontop.zig"), test_dvui_and_app, example_opts, dvui_opts);
+            addExample("glfw-opengl-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .web => {
             if (dvui_opts.vertex_index != .u16) {
@@ -974,15 +1057,17 @@ fn addExample(
     if (opts.accesskit.enabled() and !accessKitSupported(opts.target)) {
         compile_step.dependOn(&b.addFail("Accesskit is not supported for this target. Build with -Daccesskit=off").step);
     } else if (opts.accesskit == .shared) {
-        compile_step.dependOn(&b.addInstallFileWithDir(accessKitPath(
-            b,
-            opts.target,
-            b.lazyDependency("accesskit", .{}).?,
-            opts.accesskit,
-            true,
-        ), .bin, accessKitLibName(opts.target)).step);
-        // Converts shared lib path to be relative to exe install directory.
-        exe.root_module.addRPathSpecial("$ORIGIN");
+        if (b.lazyDependency("accesskit", .{})) |ak_dep| {
+            compile_step.dependOn(&b.addInstallFileWithDir(accessKitPath(
+                b,
+                opts.target,
+                ak_dep,
+                opts.accesskit,
+                true,
+            ), .bin, accessKitLibName(opts.target)).step);
+            // Converts shared lib path to be relative to exe install directory.
+            exe.root_module.addRPathSpecial("$ORIGIN");
+        }
     }
 
     const run_step = b.step(name, "Run " ++ name);
@@ -1048,4 +1133,51 @@ fn addWebExample(
     compile_step.dependOn(&install_noto.step);
 
     b.getInstallStep().dependOn(compile_step);
+}
+
+/// Given a lazy path to an svg file, e.g. `b.path('./src/image.svg')`
+/// return a LazyPath containing the generated tvg bytes. You can use this
+/// to make icons for DVUI apps from SVGs at build time
+/// (with svg2tvg supported SVG features only).
+///
+/// Example build.zig:
+///
+/// ```zig
+/// const dvui = @import("dvui");
+/// ...
+/// const tvg_bytes_path = dvui.svgPathToTvgPath(b.path())
+/// my_exe.root_module.addAnonymousImport("image", .{ .root_source_file = tvg_bytes_path });
+/// ````
+///
+/// Example usage in dvui application code:
+///
+/// ```zig
+/// const tvg_bytes = @embedFile("image");
+/// _ = dvui.buttonIcon(@src(), "my image", tvg_bytes, .{}, .{}, .{});
+/// ```
+pub fn svgPathToTvgPath(b: *std.Build, svg_path: std.Build.LazyPath) std.Build.LazyPath {
+    // use fast and native options since this is just for building
+    const optimize: std.builtin.OptimizeMode = .ReleaseFast;
+    const target: std.Build.ResolvedTarget = b.graph.host;
+    const svg2tvg_dep = b.dependency("svg2tvg", .{ .optimize = optimize, .target = target });
+    const svg2tvg_exe = b.addExecutable(.{
+        .name = "svg2tvg",
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .root_source_file = b.path("./tools/svg2tvg.zig"),
+            .imports = &.{
+                .{
+                    .name = "svg2tvg",
+                    .module = svg2tvg_dep.module("svg2tvg"),
+                },
+            },
+        }),
+    });
+
+    const run_svg2tvg_step = b.addRunArtifact(svg2tvg_exe);
+    run_svg2tvg_step.addFileArg(svg_path);
+    run_svg2tvg_step.addArg("-o");
+    const tvg_bytes = run_svg2tvg_step.addOutputFileArg("out.tvg");
+    return tvg_bytes;
 }

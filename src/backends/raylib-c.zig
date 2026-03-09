@@ -375,15 +375,24 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
     try self.frame_buffers.put(texid, id);
 
     const ret = dvui.TextureTarget{ .ptr = @ptrFromInt(texid), .width = width, .height = height, .format = format };
-
-    try self.renderTarget(ret);
-    c.ClearBackground(c.BLANK);
-    try self.renderTarget(null);
-
+    self.textureClearTarget(ret);
     return ret;
 }
 
+pub fn textureClearTarget(self: *RaylibBackend, texture: dvui.TextureTarget) void {
+    self.renderTarget(texture) catch {
+        log.debug("textureClearTarget: renderTarget failed", .{});
+        return;
+    };
+    c.ClearBackground(c.BLANK);
+    self.renderTarget(null) catch {};
+}
+
 pub fn textureFromTarget(_: *RaylibBackend, texture: dvui.TextureTarget) dvui.Texture {
+    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
+}
+
+pub fn textureFromTargetTemp(_: *RaylibBackend, texture: dvui.TextureTarget) dvui.Texture {
     return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
 }
 
@@ -439,6 +448,15 @@ pub fn textureReadTarget(_: *RaylibBackend, texture: dvui.TextureTarget, pixels_
 }
 
 pub fn textureDestroy(self: *RaylibBackend, texture: dvui.Texture) void {
+    const texid = @intFromPtr(texture.ptr);
+    c.rlUnloadTexture(@intCast(texid));
+
+    if (self.frame_buffers.fetchSwapRemove(@intCast(texid))) |kv| {
+        c.rlUnloadFramebuffer(kv.value);
+    }
+}
+
+pub fn textureDestroyTarget(self: *RaylibBackend, texture: dvui.Texture.Target) void {
     const texid = @intFromPtr(texture.ptr);
     c.rlUnloadTexture(@intCast(texid));
 

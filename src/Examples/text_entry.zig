@@ -7,7 +7,7 @@ var text_entry_multiline_buf: []u8 = &.{};
 var text_entry_multiline_break = false;
 
 /// ![image](Examples-text_entry.png)
-pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
+pub fn textEntryWidgets() void {
     var left_alignment = dvui.Alignment.init(@src(), 0);
     defer left_alignment.deinit();
 
@@ -292,7 +292,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
                 .{ .expand = .ratio, .gravity_x = 1.0 },
             )) {
                 if (!dvui.useTinyFileDialogs) {
-                    dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Tiny File Dilaogs disabled" });
+                    dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = "Tiny File Dilaogs disabled" });
                 } else {
                     new_filename = dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "Pick Font File" }) catch null;
                 }
@@ -317,7 +317,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
 
             if (dvui.button(@src(), "Add Font", .{}, .{})) blk: {
                 if (name.len == 0) {
-                    dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Add a Name" });
+                    dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = "Add a Name" });
                     name_error.* = true;
                     break :blk;
                 }
@@ -326,7 +326,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
                     if (std.mem.eql(u8, dbs.familyName(), name)) {
                         const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Already have font named \"{s}\"", .{name}) catch name;
                         defer dvui.currentWindow().lifo().free(msg);
-                        dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = msg });
+                        dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = msg });
                         name_error.* = true;
                         break :blk;
                     }
@@ -369,7 +369,7 @@ pub fn textEntryWidgets(demo_win_id: dvui.Id) void {
 
                     const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Added font named \"{s}\"", .{name}) catch name;
                     defer dvui.currentWindow().lifo().free(msg);
-                    dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = msg });
+                    dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = msg });
                 }
             }
         }
@@ -672,7 +672,7 @@ test "DOCIMG text_entry" {
         fn frame() !dvui.App.Result {
             var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
-            textEntryWidgets(box.data().id);
+            textEntryWidgets();
             return .ok;
         }
     }.frame;

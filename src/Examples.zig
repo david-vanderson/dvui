@@ -4,6 +4,7 @@ pub const zig_favicon = @embedFile("zig-favicon.png");
 pub const zig_svg = @embedFile("zig-mark.svg");
 
 pub var show_demo_window: bool = false;
+pub var show_widgetpedia_window: bool = false;
 pub var icon_browser_show: bool = false;
 var frame_counter: u64 = 0;
 pub var show_dialog: bool = false;
@@ -11,7 +12,7 @@ var scale_val: f32 = 1.0;
 
 pub const demoKind = enum {
     basic_widgets,
-    calculator,
+    applets,
     text_entry,
     styling,
     theming,
@@ -31,7 +32,7 @@ pub const demoKind = enum {
     pub fn name(self: demoKind) []const u8 {
         return switch (self) {
             .basic_widgets => "Basic Widgets",
-            .calculator => "Calculator",
+            .applets => "Applets",
             .text_entry => "Text Entry",
             .styling => "Styling",
             .theming => "Theming",
@@ -53,7 +54,7 @@ pub const demoKind = enum {
     pub fn scaleOffset(self: demoKind) struct { scale: f32, offset: dvui.Point } {
         return switch (self) {
             .basic_widgets => .{ .scale = 0.45, .offset = .{} },
-            .calculator => .{ .scale = 0.45, .offset = .{} },
+            .applets => .{ .scale = 0.45, .offset = .{} },
             .text_entry => .{ .scale = 0.45, .offset = .{} },
             .styling => .{ .scale = 0.45, .offset = .{} },
             .theming => .{ .scale = 0.35, .offset = .{} },
@@ -82,6 +83,9 @@ pub fn floatRetainClear(ptr: *anyopaque) void {
 }
 
 pub fn demo() void {
+    if (show_widgetpedia_window) {
+        widgetpedia();
+    }
     if (!show_demo_window) {
         return;
     }
@@ -103,8 +107,6 @@ pub fn demo() void {
     frame_counter += 1;
     float.dragAreaSet(dvui.windowHeader("DVUI Demo", fps_str, &show_demo_window));
 
-    dvui.toastsShow(float.data().id, .cast(float.data().rect));
-
     var scaler = dvui.scale(@src(), .{ .scale = &scale_val }, .{ .expand = .both });
     defer scaler.deinit();
 
@@ -123,17 +125,20 @@ pub fn demo() void {
             if (dvui.button(@src(), "Debug Window", .{}, .{})) {
                 dvui.toggleDebugWindow();
             }
+            if (dvui.button(@src(), "Widgetpedia", .{}, .{})) {
+                dvui.Examples.show_widgetpedia_window = true;
+            }
 
             if (dvui.Theme.picker(@src(), &dvui.Theme.builtins, .{})) {
                 invalidate = true;
             }
 
-            if (dvui.button(@src(), "Zoom In", .{}, .{})) {
+            dvui.labelNoFmt(@src(), "Zoom:", .{ .align_y = 0.5 }, .{ .expand = .vertical });
+            if (dvui.buttonIcon(@src(), "zoom in", dvui.entypo.plus, .{}, .{}, .{ .expand = .both })) {
                 scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
                 invalidate = true;
             }
-
-            if (dvui.button(@src(), "Zoom Out", .{}, .{})) {
+            if (dvui.buttonIcon(@src(), "Zoom out", dvui.entypo.minus, .{}, .{}, .{ .expand = .both })) {
                 scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
                 invalidate = true;
             }
@@ -185,8 +190,8 @@ pub fn demo() void {
 
                 switch (e) {
                     .basic_widgets => basicWidgets(),
-                    .calculator => calculator(),
-                    .text_entry => textEntryWidgets(float.data().id),
+                    .applets => applets(),
+                    .text_entry => textEntryWidgets(),
                     .styling => styling(),
                     .theming => theming(),
                     .layout => layout(),
@@ -196,7 +201,7 @@ pub fn demo() void {
                     .menus => menus(),
                     .scrolling => scrolling(),
                     .scroll_canvas => scrollCanvas(),
-                    .dialogs => dialogs(float.data().id),
+                    .dialogs => dialogs(),
                     .animations => animations(),
                     .struct_ui => structUI(),
                     .debugging => debuggingErrors(),
@@ -243,8 +248,8 @@ pub fn demo() void {
 
         switch (demo_active) {
             .basic_widgets => basicWidgets(),
-            .calculator => calculator(),
-            .text_entry => textEntryWidgets(float.data().id),
+            .applets => applets(),
+            .text_entry => textEntryWidgets(),
             .styling => styling(),
             .theming => theming(),
             .layout => layout(),
@@ -254,7 +259,7 @@ pub fn demo() void {
             .menus => menus(),
             .scrolling => scrolling(),
             .scroll_canvas => scrollCanvas(),
-            .dialogs => dialogs(float.data().id),
+            .dialogs => dialogs(),
             .animations => animations(),
             .struct_ui => structUI(),
             .debugging => debuggingErrors(),
@@ -433,7 +438,7 @@ pub fn grids() void {
         for (0..GridType.num_grids) |tab_num| {
             const this_tab: GridType = @enumFromInt(tab_num);
 
-            if (tabs.addTabLabel(local.tabSelected(this_tab), local.tabName(this_tab))) {
+            if (tabs.addTabLabel(local.tabSelected(this_tab), local.tabName(this_tab), .{})) {
                 local.active_grid = this_tab;
             }
         }
@@ -494,7 +499,7 @@ const Size = dvui.Size;
 const entypo = dvui.entypo;
 
 const basicWidgets = @import("Examples/basic_widgets.zig").basicWidgets;
-const calculator = @import("Examples/calculator.zig").calculator;
+const applets = @import("Examples/applets.zig").applets;
 const textEntryWidgets = @import("Examples/text_entry.zig").textEntryWidgets;
 const styling = @import("Examples/styling.zig").styling;
 const theming = @import("Examples/theming.zig").theming;
@@ -518,3 +523,4 @@ const gridVirtualScrolling = grid_examples.gridVirtualScrolling;
 const gridVariableRowHeights = grid_examples.gridVariableRowHeights;
 const gridSelection = grid_examples.gridSelection;
 const gridNavigation = grid_examples.gridNavigation;
+pub const widgetpedia = @import("Examples/widgetpedia.zig").widgetpedia;

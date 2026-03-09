@@ -64,6 +64,7 @@ pub const InitOptions = struct {
     /// use when running tests
     hidden: bool = false,
     fullscreen: bool = false,
+    transparent: bool = false,
 };
 
 pub fn initWindow(options: InitOptions) !SDLBackend {
@@ -101,12 +102,13 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
 
     const hidden_flag = if (hidden) c.SDL_WINDOW_HIDDEN else 0;
     const fullscreen_flag = if (options.fullscreen) c.SDL_WINDOW_FULLSCREEN else 0;
+    const transparent_flag = if (options.transparent and sdl3) c.SDL_WINDOW_TRANSPARENT else 0;
     const window: *c.SDL_Window = if (sdl3)
         c.SDL_CreateWindow(
             options.title,
             @as(c_int, @intFromFloat(options.size.w)),
             @as(c_int, @intFromFloat(options.size.h)),
-            @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | hidden_flag | fullscreen_flag),
+            @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | transparent_flag | hidden_flag | fullscreen_flag),
         ) orelse return logErr("SDL_CreateWindow in initWindow")
     else
         c.SDL_CreateWindow(
@@ -923,42 +925,39 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
     );
     //try toErr(c.SDL_SetTextureBlendMode(texture, c.SDL_BLENDMODE_BLEND), "SDL_SetTextureBlendMode in textureCreateTarget",);
 
-    // make sure texture starts out transparent
+    const tex = dvui.TextureTarget{ .ptr = texture, .width = width, .height = height, .format = format };
+    self.textureClearTarget(tex);
+    return tex;
+}
+
+pub fn textureClearTarget(self: *SDLBackend, texture: dvui.TextureTarget) void {
     // null is the default render target
     const old = c.SDL_GetRenderTarget(self.renderer);
-    defer toErr(
-        c.SDL_SetRenderTarget(self.renderer, old),
-        "SDL_SetRenderTarget in textureCreateTarget",
-    ) catch log.err("Could not reset render target", .{});
+    defer _ = c.SDL_SetRenderTarget(self.renderer, old);
 
     var oldBlend: c_uint = undefined;
-    try toErr(
-        c.SDL_GetRenderDrawBlendMode(self.renderer, &oldBlend),
-        "SDL_GetRenderDrawBlendMode in textureCreateTarget",
-    );
-    defer toErr(
-        c.SDL_SetRenderDrawBlendMode(self.renderer, oldBlend),
-        "SDL_SetRenderDrawBlendMode in textureCreateTarget",
-    ) catch log.err("Could not reset render blend mode", .{});
+    _ = c.SDL_GetRenderDrawBlendMode(self.renderer, &oldBlend);
+    defer _ = c.SDL_SetRenderDrawBlendMode(self.renderer, oldBlend);
 
-    try toErr(
-        c.SDL_SetRenderTarget(self.renderer, texture),
-        "SDL_SetRenderTarget in textureCreateTarget",
-    );
-    try toErr(
+    toErr(
+        c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(texture.ptr))),
+        "SDL_SetRenderTarget in textureClearTarget",
+    ) catch return;
+
+    toErr(
         c.SDL_SetRenderDrawBlendMode(self.renderer, c.SDL_BLENDMODE_NONE),
-        "SDL_SetRenderDrawBlendMode in textureCreateTarget",
-    );
-    try toErr(
-        c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0),
-        "SDL_SetRenderDrawColor in textureCreateTarget",
-    );
-    try toErr(
-        c.SDL_RenderFillRect(self.renderer, null),
-        "SDL_RenderFillRect in textureCreateTarget",
-    );
+        "SDL_SetRenderDrawBlendMode in textureClearTarget",
+    ) catch return;
 
-    return dvui.TextureTarget{ .ptr = texture, .width = width, .height = height, .format = format };
+    toErr(
+        c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0),
+        "SDL_SetRenderDrawColor in textureClearTarget",
+    ) catch return;
+
+    toErr(
+        c.SDL_RenderFillRect(self.renderer, null),
+        "SDL_RenderFillRect in textureClearTarget",
+    ) catch return;
 }
 
 pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
@@ -1040,15 +1039,19 @@ pub fn textureDestroy(_: *SDLBackend, texture: dvui.Texture) void {
     c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(@alignCast(texture.ptr))));
 }
 
-pub fn textureFromTarget(self: *SDLBackend, texture: dvui.TextureTarget) !dvui.Texture {
-    // SDL can't read from non-target textures, so read all the pixels and make a new texture
-    const pixels = try self.arena.alloc(u8, texture.width * texture.height * 4);
-    defer self.arena.free(pixels);
-    try self.textureReadTarget(texture, pixels.ptr);
-
+pub fn textureDestroyTarget(_: *SDLBackend, texture: dvui.Texture.Target) void {
     c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(@alignCast(texture.ptr))));
+}
 
-    return self.textureCreate(pixels.ptr, texture.width, texture.height, .linear, texture.format);
+// as if we are destroying target and creating a new texture
+pub fn textureFromTarget(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
+    // SDL can't read from non-target textures, but we are enforcing that through zig types
+    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
+}
+
+// return is temporary, will not be destroyed
+pub fn textureFromTargetTemp(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
+    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
 }
 
 pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
@@ -1531,6 +1534,10 @@ pub fn main(main_init: std.process.Init) !u8 {
     dvui.App.main_init = main_init;
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
+    // You can override these by calling this function with your arguments in dvui.App.config.startFn
+    if (sdl3)
+        _ = c.SDL_SetAppMetadata("DVUI App Example", "0.1", "com.example.dvui.app");
+
     if (builtin.os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         dvui.Backend.Common.windowsAttachConsole() catch {};
@@ -1570,6 +1577,7 @@ pub fn main(main_init: std.process.Init) !u8 {
         .title = init_opts.title,
         .icon = init_opts.icon,
         .hidden = init_opts.hidden,
+        .transparent = init_opts.transparent,
     });
     defer back.deinit();
 
@@ -1605,7 +1613,7 @@ pub fn main(main_init: std.process.Init) !u8 {
 
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        try toErr(c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 255), "SDL_SetRenderDrawColor in sdl main");
+        try toErr(c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in sdl main");
         try toErr(c.SDL_RenderClear(back.renderer), "SDL_RenderClear in sdl main");
 
         var res = try app.frameFn();
@@ -1675,6 +1683,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
         .title = init_opts.title,
         .icon = init_opts.icon,
         .hidden = init_opts.hidden,
+        .transparent = init_opts.transparent,
     }) catch |err| {
         log.err("initWindow failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
@@ -1770,7 +1779,7 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
 
     // if dvui widgets might not cover the whole window, then need to clear
     // the previous frame's render
-    toErr(c.SDL_SetRenderDrawColor(appState.back.renderer, 0, 0, 0, 255), "SDL_SetRenderDrawColor in sdl main") catch return c.SDL_APP_FAILURE;
+    toErr(c.SDL_SetRenderDrawColor(appState.back.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in sdl main") catch return c.SDL_APP_FAILURE;
     toErr(c.SDL_RenderClear(appState.back.renderer), "SDL_RenderClear in sdl main") catch return c.SDL_APP_FAILURE;
 
     const app = dvui.App.get() orelse unreachable;

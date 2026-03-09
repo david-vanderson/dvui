@@ -1166,10 +1166,13 @@ pub fn begin(
         var it = self.animations.iterator();
         while (it.next_used()) |kv| {
             if (kv.value_ptr.end_time <= 0) {
+                // was in the past before subtracting micros, so was "done" last frame, remove it
                 @TypeOf(self.animations).setUsed(kv.value_ptr, false);
             } else {
                 kv.value_ptr.start_time -|= micros;
                 kv.value_ptr.end_time -|= micros;
+                // was in the future last frame, so even if end_time is now
+                // negative, we keep it so it's "done" this frame
             }
         }
         self.animations.reset();

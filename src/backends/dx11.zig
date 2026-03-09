@@ -687,7 +687,7 @@ pub fn textureCreate(self: Context, pixels: [*]const u8, width: u32, height: u32
 
     try state.texture_interpolation.put(state.dvui_window.gpa, texture, interpolation);
 
-    return dvui.Texture{ .ptr = texture, .width = width, .height = height };
+    return dvui.Texture{ .ptr = texture, .width = width, .height = height, .format = .rgba_32 };
 }
 
 pub fn textureCreateTarget(self: Context, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
@@ -721,7 +721,11 @@ pub fn textureCreateTarget(self: Context, width: u32, height: u32, interpolation
     errdefer _ = texture.IUnknown.Release();
 
     try state.texture_interpolation.put(state.dvui_window.gpa, texture, interpolation);
-    return .{ .ptr = @ptrCast(texture), .width = width, .height = height };
+    return .{ .ptr = @ptrCast(texture), .width = width, .height = height, .format = .rgba_32 };
+}
+
+pub fn textureClearTarget(_: Context, _: dvui.TextureTarget) void {
+    log.err("textureClearTarget: TODO", .{});
 }
 
 pub fn textureReadTarget(self: Context, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
@@ -779,23 +783,57 @@ pub fn textureDestroy(self: Context, texture: dvui.Texture) void {
     _ = tex.IUnknown.Release();
 }
 
+pub fn textureDestroyTarget(self: Context, texture: dvui.Texture.Target) void {
+    const state = stateFromHwnd(hwndFromContext(self));
+    const tex: *win32.ID3D11Texture2D = @ptrCast(@alignCast(texture.ptr));
+    if (!state.texture_interpolation.remove(texture.ptr)) {
+        log.err("Destroyed texture that did not have a stored interpolation", .{});
+    }
+    _ = tex.IUnknown.Release();
+}
+
 pub fn textureFromTarget(self: Context, texture: dvui.TextureTarget) !dvui.Texture {
     const state = stateFromHwnd(hwndFromContext(self));
+    const tex_old: *win32.ID3D11Texture2D = @ptrCast(@alignCast(texture.ptr));
+    defer _ = tex_old.IUnknown.Release(); // destroy target
 
-    // DX11 can't draw target textures, so read all the pixels and make a new texture
-
-    const pixels = try state.arena.alloc(u8, texture.width * texture.height * 4);
-    defer state.arena.free(pixels);
-    try self.textureReadTarget(texture, pixels.ptr);
-
-    const tex: *win32.ID3D11Texture2D = @ptrCast(@alignCast(texture.ptr));
-    const interpolation = if (state.texture_interpolation.fetchRemove(texture.ptr)) |kv| kv.value else blk: {
-        log.err("Target texture destroyed that did not have a stored interpolation", .{});
+    // DX11 can't draw target textures, so copy to a new texture
+    const interpolation = state.texture_interpolation.get(texture.ptr) orelse blk: {
+        log.err("Target texture did not have a stored interpolation", .{});
         break :blk .linear;
     };
-    _ = tex.IUnknown.Release();
+    const pixels = try state.arena.alloc(u8, texture.width * texture.height * 4);
+    defer state.arena.free(pixels);
+    const newTex = try self.textureCreate(pixels.ptr, texture.width, texture.height, interpolation, .rgba_32);
 
-    return self.textureCreate(pixels.ptr, texture.width, texture.height, interpolation);
+    // copy
+    const tex_new: *win32.ID3D11Texture2D = @ptrCast(@alignCast(newTex.ptr));
+    state.device_context.CopyResource(@ptrCast(tex_new), @ptrCast(tex_old));
+
+    return newTex;
+}
+
+pub fn textureFromTargetTemp(self: Context, texture: dvui.TextureTarget) !dvui.Texture {
+    const state = stateFromHwnd(hwndFromContext(self));
+
+    // DX11 can't draw target textures, so copy to a new texture
+    const interpolation = state.texture_interpolation.get(texture.ptr) orelse blk: {
+        log.err("Target texture did not have a stored interpolation", .{});
+        break :blk .linear;
+    };
+    const pixels = try state.arena.alloc(u8, texture.width * texture.height * 4);
+    defer state.arena.free(pixels);
+    const newTex = try self.textureCreate(pixels.ptr, texture.width, texture.height, interpolation, .rgba_32);
+
+    // copy
+    const tex_old: *win32.ID3D11Texture2D = @ptrCast(@alignCast(texture.ptr));
+    const tex_new: *win32.ID3D11Texture2D = @ptrCast(@alignCast(newTex.ptr));
+    state.device_context.CopyResource(@ptrCast(tex_new), @ptrCast(tex_old));
+
+    // not destroying target, mark new texture for destruction
+    newTex.destroyLater();
+
+    return newTex;
 }
 
 pub fn renderTarget(self: Context, texture: ?dvui.TextureTarget) !void {

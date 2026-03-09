@@ -265,6 +265,8 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
             AccessKit.nodeClearModal(ak_node);
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
     }
+
+    dvui.toastsShow(self.data().id, .cast(self.data().rect));
 }
 
 pub fn drawBackground(self: *FloatingWindowWidget) void {
@@ -282,9 +284,6 @@ pub fn drawBackground(self: *FloatingWindowWidget) void {
     // we are using BoxWidget to do border/background
     self.layout.init(@src(), .{ .dir = .vertical }, self.options.override(.{ .expand = .both }));
     self.layout.drawBackground();
-
-    // clip to just our window (layout has the margin)
-    _ = dvui.clip(self.layout.data().borderRectScale().r);
 }
 
 fn dragPart(me: Event.Mouse, rs: RectScale) DragPart {
@@ -576,7 +575,6 @@ pub fn deinit(self: *FloatingWindowWidget) void {
     }
 
     if (self.init_options.process_events_in_deinit) {
-        dvui.clipSet(dvui.windowRectPixels());
         self.processEventsAfter();
     }
 

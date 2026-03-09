@@ -424,11 +424,11 @@ pub const PMAImage = struct {
             width: u32,
             height: u32,
             pub fn setPixel(self: *@This(), x: usize, y: usize, col: [4]u8) void {
-                const idx = (y * self.height + x) * 4;
+                const idx = (y * self.width + x) * 4;
                 for (0..4) |i| self.pixels[idx + i] = col[i];
             }
             pub fn getPixel(self: *@This(), x: usize, y: usize) [4]u8 {
-                const idx = y * self.height + x;
+                const idx = y * self.width + x;
                 const slice = self.pixels[idx * 4 .. (idx + 1) * 4];
                 var col: [4]u8 = undefined;
                 for (&col, slice) |*a, s| a.* = s;
@@ -443,12 +443,14 @@ pub const PMAImage = struct {
             }
         };
 
-        const img_raw_data = try alloc.alloc(u8, height * height * 4);
+        const width: u32 = @intFromFloat(try dvui.iconWidth(dbg_name, tvg_bytes, @floatFromInt(height)));
+
+        const img_raw_data = try alloc.alloc(u8, width * height * 4);
 
         @memset(img_raw_data, 0);
         var img = ImageAdapter{
             .pixels = img_raw_data,
-            .width = height,
+            .width = width,
             .height = height,
         };
         var fb: std.Io.Reader = .fixed(tvg_bytes);
