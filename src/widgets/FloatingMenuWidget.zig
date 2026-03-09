@@ -156,9 +156,6 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
     // don't have margin, so turn that off
     self.scroll.init(@src(), .{ .horizontal = .none }, options.override(.{ .margin = .{}, .expand = .both }));
 
-    // clip to just our window (using clipSet since we are not inside our parent)
-    _ = dvui.clip(rs.r);
-
     if (dvui.MenuWidget.current()) |pm| {
         pm.child_popup_rect = rs.r;
     }
