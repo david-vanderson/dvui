@@ -2053,21 +2053,27 @@ const DisplayScrollArea = struct {
         }, .{ .scroll_info = &scroll_info, .frame_viewport = .{ .x = 100, .y = 100 }, .user_scroll = &user_scroll });
         const si_opts: StructOptions(dvui.ScrollInfo) = .initWithDefaults(.{
             .viewport = .{ .number = .{ .customDisplayFn = displayViewport } },
-            .velocity = .{ .number = .{ .customDisplayFn = displayVelocity } },
         }, null);
-        // TODO: This is another example of need for struct_ui enhancement. There are multiple points and we
-        // need to override one of them (velocity). Ideally we'd just like to override velocity with it's own options
+        // Only override the Point type display for fields named "velocity"
+        const velocity_opts = StructOptions(dvui.Point).init(.{
+            .x = .{ .number = .{ .widget_type = .number_placeholder } },
+            .y = .{ .number = .{ .widget_type = .number_placeholder } },
+        }, null).forFieldName("velocity");
+
+        // TODO: Need struct_ui enhancement to mark struct fields as read-only
+        // and propogate that to the struct's fields.
+        // But ew also need a soft "const" that recursively propogates read-only to all children.
         const point_opts: StructOptions(dvui.Point) = .init(.{
             .x = .defaultReadOnly,
             .y = .defaultReadOnly,
         }, null);
-        // TODO: Same with size
+        // TODO: Same issue with size
         const size_opts: StructOptions(dvui.Size) = .init(.{
             .w = .defaultReadOnly,
             .h = .defaultReadOnly,
         }, null);
 
-        dvui.structUI(@src(), "init_opts", &init_opts, 2, .{ display_opts, si_opts, point_opts, size_opts }, .{});
+        dvui.structUI(@src(), "init_opts", &init_opts, 2, .{ display_opts, velocity_opts, si_opts, point_opts, size_opts }, .{});
     }
 
     fn displayViewport(field_name: []const u8, ptr: *anyopaque, _: bool, _: *dvui.Alignment) void {
@@ -2968,4 +2974,5 @@ const lorem: []const []const u8 = &.{
 
 const struct_ui = dvui.struct_ui;
 const StructOptions = struct_ui.StructOptions;
+const StructOptionsForField = struct_ui.StructOptionsForField;
 const Rect = dvui.Rect;
