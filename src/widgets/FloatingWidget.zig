@@ -95,9 +95,6 @@ pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: I
 
     self.data().borderAndBackground(.{});
 
-    // clip to just our window (using clipSet since we are not inside our parent)
-    _ = dvui.clip(rs.r);
-
     self.scaler.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
 }
 

@@ -25,10 +25,7 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
         break :blk blah;
     };
 
-    var vp = dvui.virtualParent(src, .{});
-    defer vp.deinit();
-
-    var fwin = dvui.floatingWindow(@src(), .{ .open_flag = show_flag }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
+    var fwin = dvui.floatingWindow(src, .{ .open_flag = show_flag }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
     defer fwin.deinit();
     fwin.dragAreaSet(dvui.windowHeader("Icon Browser " ++ icon_decl_name, "", show_flag));
 

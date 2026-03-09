@@ -177,8 +177,10 @@ fn fonts(theme: *Theme) bool {
     dd.init(@src(), .{ .selected_index = current_font_index, .label = current_font_name }, .{});
     if (dd.dropped()) {
         for (dvui.currentWindow().fonts.database.items) |dbs| {
-            if (dd.addChoiceLabel(dbs.familyName())) {
-                edited_font.* = edited_font.withFamily(dbs.familyName());
+            const font_name = dbs.name(dvui.currentWindow().lifo());
+            defer dvui.currentWindow().lifo().free(font_name);
+            if (dd.addChoiceLabel(font_name)) {
+                edited_font.* = edited_font.withFamily(dbs.familyName()).withStyle(dbs.style).withWeight(dbs.weight);
                 changed = true;
             }
         }
