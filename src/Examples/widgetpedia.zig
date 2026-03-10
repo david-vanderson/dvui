@@ -137,7 +137,7 @@ const WidgetHierarchy = struct {
     displayFn: *const fn (reset_widget: bool) void,
 };
 
-var current_widget: WidgetHierarchy = widget_hierarchy[0];
+var current_widget: WidgetHierarchy = .{ .name = "plot", .displayFn = DisplayPlot.displayFn, .children = null };
 
 fn displayEmpty(_: bool) void {
     var label_str = std.Io.Writer.Allocating.initCapacity(dvui.currentWindow().arena(), current_widget.name.len + 2) catch return;
@@ -1777,6 +1777,12 @@ const DisplayPlot = struct {
     var x_axis: dvui.PlotWidget.Axis = undefined;
     var y_axis: dvui.PlotWidget.Axis = undefined;
 
+    var test_options: struct {
+        plot_type: enum { bar, line },
+        nr_points: u8,
+        seed: u8,
+    } = undefined;
+
     pub fn displayFn(reset: bool) void {
         if (reset) resetWidget();
         displayWidgetTemplate(@This());
@@ -1785,6 +1791,11 @@ const DisplayPlot = struct {
     pub fn resetWidget() void {
         options = .{ .expand = .both };
         init_opts = .{};
+        test_options = .{
+            .plot_type = .bar,
+            .nr_points = 5,
+            .seed = 1,
+        };
         x_axis = .{
             .name = "X",
         };
@@ -1794,21 +1805,45 @@ const DisplayPlot = struct {
     }
 
     pub fn layoutWidget() void {
+        var rng: std.Random.DefaultPrng = .init(test_options.seed);
         var plot = dvui.plot(@src(), init_opts, options.override(.{ .data_out = &wd }));
         defer plot.deinit();
-        plot.bar(.{ .x = 0, .y = 0, .w = 10, .h = 100 });
-        plot.bar(.{ .x = 10, .y = 0, .w = 10, .h = 100, .color = .red });
+        switch (test_options.plot_type) {
+            .bar => {
+                for (0..test_options.nr_points) |i| {
+                    const point_nr: f64 = @floatFromInt(i);
+                    plot.bar(.{ .x = point_nr * 15, .y = 0, .w = 10, .h = @floatFromInt(rng.next() % 100) });
+                }
+            },
+            .line => {
+                var line = plot.line();
+                defer line.deinit();
+                for (0..test_options.nr_points) |i| {
+                    const point_nr: f64 = @floatFromInt(i);
+
+                    line.point(10 * point_nr, @floatFromInt(rng.next() % 100));
+                }
+                line.stroke(2, .blue);
+            },
+        }
     }
 
     pub fn layoutWidgetControls() void {
+        dvui.structUI(@src(), test_options_label, &test_options, 1, .{}, .{});
         const axis_opts: StructOptions(dvui.PlotWidget.Axis) = .initWithDefaults(.{
             .name = .defaultTextRW,
         }, null);
-        const display_opts: StructOptions(dvui.PlotWidget.InitOptions) = .initWithDefaults(.{}, .{
+        const tick_opts: StructOptions(dvui.PlotWidget.Axis.TickFormating) = .initWithDefaults(.{
+            .custom = .defaultHidden,
+        }, .{ .normal = .{} });
+        //const location_opts: StructOptions(@TypeOf(init_opts.x_axis.?.ticks.locations)) = .initWithDefaults(.{}, .{.{}});
+        const display_opts: StructOptions(dvui.PlotWidget.InitOptions) = .initWithDefaults(.{
+            .title = .defaultTextRW,
+        }, .{
             .x_axis = &x_axis,
             .y_axis = &y_axis,
         });
-        dvui.structUI(@src(), "init_opts", &init_opts, 3, .{ display_opts, axis_opts, struct_options.color }, .{});
+        dvui.structUI(@src(), "init_opts", &init_opts, 3, .{ display_opts, axis_opts, struct_options.color, tick_opts }, .{});
     }
 };
 
