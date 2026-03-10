@@ -8,9 +8,6 @@
 //! string_map holds any heap-allocated memory created when strings are modified.
 //! These are automatically cleaned up during Window.deinit().
 
-// TODO: Add OptionalFieldOptions that can have different display options for the optional
-// vs the value of the optional. i.e. can set a field to be null or a read-only string
-
 pub const defaults = struct {
     /// display structs and sub-structs expanded
     pub var display_expanded: bool = true;
@@ -159,7 +156,11 @@ pub const FieldOptions = union(enum) {
         switch (self) {
             inline else => |fo| {
                 if (@hasField(@TypeOf(fo), "child")) {
-                    return fo.child.asFieldOption() orelse self;
+                    return fo.child.asFieldOption() orelse .{ .standard = .{
+                        .display = fo.display,
+                        .label = fo.label,
+                        .customDisplayFn = fo.customDisplayFn,
+                    } };
                 }
                 return self;
             },
