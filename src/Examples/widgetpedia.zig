@@ -571,8 +571,8 @@ const DisplayButtonLabelAndIcon = struct {
             &combined_opts,
             1,
             .{ StructOptions(dvui.ButtonLabelAndIconOptions).initWithDefaults(.{
-                .label = .{ .text = .{ .display = .read_write } },
-                .tvg_bytes = .{ .standard = .{ .display = .none } },
+                .label = .defaultTextRW,
+                .tvg_bytes = .defaultHidden,
             }, null), struct_options.color },
             .{},
         );
@@ -621,7 +621,7 @@ const DisplayCheckbox = struct {
             &test_options,
             1,
             .{StructOptions(@TypeOf(test_options)).initWithDefaults(.{
-                .label_str = .{ .text = .{ .display = .read_write } },
+                .label_str = .defaultTextRW,
             }, null)},
             .{},
         );
@@ -1010,7 +1010,10 @@ const DisplayFloatingWindow = struct {
                 id_extra += 1;
             }
         }
-        const display_opts: StructOptions(dvui.FloatingWindowWidget.InitOptions) = .initWithDefaults(.{}, .{ .rect = &rect, .open_flag = &open_flag });
+        const display_opts: StructOptions(dvui.FloatingWindowWidget.InitOptions) = .initWithDefaults(
+            .{},
+            .{ .rect = &rect, .open_flag = &open_flag },
+        );
         dvui.structUI(@src(), "floating_opts", &floating_opts, 2, .{display_opts}, .{});
     }
 };
@@ -1170,52 +1173,6 @@ const DisplayGroupBox = struct {
 
     pub fn layoutWidgetControls() void {
         dvui.structUI(@src(), test_options_label, &test_options, 1, .{}, .{});
-    }
-};
-
-const DisplayTextEntryNumber = struct {
-    const NumberType = i32;
-    const name = "textEntryNumber()";
-
-    var wd: dvui.WidgetData = undefined;
-    var init_opts: dvui.TextEntryNumberInitOptions(NumberType) = undefined;
-    var options: dvui.Options = undefined;
-    var value: NumberType = undefined;
-    var result: dvui.TextEntryNumberResult(NumberType) = undefined;
-    const init_opts_defaults: dvui.TextEntryNumberInitOptions(NumberType) = .{ .value = &value, .placeholder = "Enter a number", .text = "", .min = -100, .max = 100 };
-
-    pub fn displayFn(reset: bool) void {
-        if (reset) resetWidget();
-        displayWidgetTemplate(@This());
-    }
-
-    pub fn resetWidget() void {
-        init_opts = .{};
-        options = .{ .gravity_y = 0.5 };
-        value = -789;
-    }
-
-    pub fn layoutWidget() void {
-        result = dvui.textEntryNumber(@src(), NumberType, init_opts, options.override(.{ .data_out = &wd }));
-    }
-
-    pub fn layoutResults() void {
-        const r = result;
-        dvui.structUI(@src(), null, &r, 99, .{
-            StructOptions(dvui.TextEntryNumberResult(NumberType)).initWithDefaults(.{
-                .changed = .{ .boolean = .{ .widget_type = .{ .trigger_on = true } } },
-                .enter_pressed = .{ .boolean = .{ .widget_type = .{ .trigger_on = true } } },
-            }, null),
-        }, .{ .gravity_x = 1.0 });
-    }
-
-    pub fn layoutWidgetControls() void {
-        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{
-            StructOptions(dvui.TextEntryNumberInitOptions(NumberType)).initWithDefaults(.{
-                .text = .{ .text = .{ .display = .read_write } },
-                .placeholder = .{ .text = .{ .display = .read_write } },
-            }, init_opts_defaults),
-        }, .{});
     }
 };
 
@@ -1811,6 +1768,50 @@ const DisplayPaned = struct {
     }
 };
 
+const DisplayPlot = struct {
+    const name: []const u8 = "plot()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.PlotWidget.InitOptions = undefined;
+    var x_axis: dvui.PlotWidget.Axis = undefined;
+    var y_axis: dvui.PlotWidget.Axis = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{ .expand = .both };
+        init_opts = .{};
+        x_axis = .{
+            .name = "X",
+        };
+        y_axis = .{
+            .name = "Y",
+        };
+    }
+
+    pub fn layoutWidget() void {
+        var plot = dvui.plot(@src(), init_opts, options.override(.{ .data_out = &wd }));
+        defer plot.deinit();
+        plot.bar(.{ .x = 0, .y = 0, .w = 10, .h = 100 });
+        plot.bar(.{ .x = 10, .y = 0, .w = 10, .h = 100, .color = .red });
+    }
+
+    pub fn layoutWidgetControls() void {
+        const axis_opts: StructOptions(dvui.PlotWidget.Axis) = .initWithDefaults(.{
+            .name = .defaultTextRW,
+        }, null);
+        const display_opts: StructOptions(dvui.PlotWidget.InitOptions) = .initWithDefaults(.{}, .{
+            .x_axis = &x_axis,
+            .y_axis = &y_axis,
+        });
+        dvui.structUI(@src(), "init_opts", &init_opts, 3, .{ display_opts, axis_opts, struct_options.color }, .{});
+    }
+};
+
 const DisplayProgress = struct {
     const name: []const u8 = "progress()";
 
@@ -1968,7 +1969,9 @@ const DisplayScale = struct {
     }
 
     pub fn layoutWidgetControls() void {
-        const display_opts = StructOptions(dvui.ScaleWidget.InitOptions).initWithDefaults(.{ .scale = .{ .number = .{ .widget_type = .slider_entry, .min = 0, .max = 10 } } }, .{ .scale = &scale });
+        const display_opts = StructOptions(dvui.ScaleWidget.InitOptions).initWithDefaults(.{
+            .scale = .{ .number = .{ .widget_type = .slider_entry, .min = 0, .max = 10 } },
+        }, .{ .scale = &scale });
         dvui.structUI(@src(), "init_opts", &init_opts, 1, .{display_opts}, .{});
     }
 };
@@ -2056,15 +2059,17 @@ const DisplayScrollArea = struct {
             .viewport = .{ .number = .{ .customDisplayFn = displayViewport } },
             .virtual_size = .defaultConst,
         }, null);
-        // Only override the Point type display only for fields named "velocity"
+        // Only override the Point type display widget type for fields named "velocity"
         const velocity_opts = StructOptions(dvui.Point).init(.{
-            .x = .{ .number = .{ .widget_type = .number_placeholder } },
-            .y = .{ .number = .{ .widget_type = .number_placeholder } },
+            .x = .{ .number = .{ .widget_type = .entry_on_enter } },
+            .y = .{ .number = .{ .widget_type = .entry_on_enter } },
         }, null).forFieldName("velocity");
 
         dvui.structUI(@src(), "init_opts", &init_opts, 2, .{ display_opts, velocity_opts, si_opts }, .{});
     }
 
+    /// Show sliders for the viewport x if init_opts.scroll_info.horizontal.horizontal == .given
+    /// Show sliders for the viewport y if init_opts.scroll_info.horizontal.vertical == .given
     fn displayViewport(field_name: []const u8, ptr: *anyopaque, _: bool, _: *dvui.Alignment) void {
         const field_value_ptr: *Rect = @ptrCast(@alignCast(ptr));
 
@@ -2677,6 +2682,94 @@ const DisplayTextEntry = struct {
     }
 };
 
+const DisplayTextEntryColor = struct {
+    const name = "textEntryColor()";
+
+    var wd: dvui.WidgetData = undefined;
+    var init_opts: dvui.TextEntryColorInitOptions = undefined;
+    var options: dvui.Options = undefined;
+    var value: dvui.Color = undefined;
+    var result: dvui.TextEntryColorResult = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        init_opts = .{};
+        options = .{};
+        value = .white;
+    }
+
+    pub fn layoutWidget() void {
+        result = dvui.textEntryColor(@src(), init_opts, options.override(.{ .data_out = &wd }));
+    }
+
+    pub fn layoutResults() void {
+        const result_opts: StructOptions(dvui.TextEntryColorResult) = .initWithDefaults(.{
+            .changed = .{ .boolean = .{ .widget_type = .{ .trigger_on = true } } },
+            .enter_pressed = .{ .boolean = .{ .widget_type = .{ .trigger_on = true } } },
+        }, null);
+        const r = result;
+        dvui.structUI(@src(), null, &r, 2, .{ struct_options.color, result_opts }, .{});
+    }
+
+    pub fn layoutWidgetControls() void {
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{
+            StructOptions(dvui.TextEntryColorInitOptions).initWithDefaults(.{
+                .placeholder = .defaultTextRW,
+            }, .{ .value = &value }),
+        }, .{});
+    }
+};
+
+const DisplayTextEntryNumber = struct {
+    const NumberType = i32;
+    const name = "textEntryNumber()";
+
+    var wd: dvui.WidgetData = undefined;
+    var init_opts: dvui.TextEntryNumberInitOptions(NumberType) = undefined;
+    var options: dvui.Options = undefined;
+    var value: NumberType = undefined;
+    var result: dvui.TextEntryNumberResult(NumberType) = undefined;
+    const init_opts_defaults: dvui.TextEntryNumberInitOptions(NumberType) = .{ .value = &value, .placeholder = "Enter a number", .text = "", .min = -100, .max = 100 };
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        init_opts = .{};
+        options = .{ .gravity_y = 0.5 };
+        value = -789;
+    }
+
+    pub fn layoutWidget() void {
+        result = dvui.textEntryNumber(@src(), NumberType, init_opts, options.override(.{ .data_out = &wd }));
+    }
+
+    pub fn layoutResults() void {
+        const r = result;
+        dvui.structUI(@src(), null, &r, 99, .{
+            StructOptions(dvui.TextEntryNumberResult(NumberType)).initWithDefaults(.{
+                .changed = .{ .boolean = .{ .widget_type = .{ .trigger_on = true } } },
+                .enter_pressed = .{ .boolean = .{ .widget_type = .{ .trigger_on = true } } },
+            }, null),
+        }, .{ .gravity_x = 1.0 });
+    }
+
+    pub fn layoutWidgetControls() void {
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{
+            StructOptions(dvui.TextEntryNumberInitOptions(NumberType)).initWithDefaults(.{
+                .text = .defaultTextRW,
+                .placeholder = .defaultTextRW,
+            }, init_opts_defaults),
+        }, .{});
+    }
+};
+
 const DisplayToast = struct {
     const name: []const u8 = "toast()";
 
@@ -2897,7 +2990,7 @@ const widget_hierarchy = [_]WidgetHierarchy{
     .{ .name = "paned", .displayFn = DisplayPaned.displayFn, .children = null },
 
     .{ .name = "plots", .displayFn = displayEmpty, .children = &.{
-        .{ .name = "plot", .displayFn = displayEmpty, .children = null },
+        .{ .name = "plot", .displayFn = DisplayPlot.displayFn, .children = null },
         .{ .name = "plotXY", .displayFn = displayEmpty, .children = null },
     } },
 
@@ -2922,7 +3015,7 @@ const widget_hierarchy = [_]WidgetHierarchy{
 
     .{ .name = "textEntries", .displayFn = displayEmpty, .children = &.{
         .{ .name = "textEntry", .displayFn = DisplayTextEntry.displayFn, .children = null },
-        .{ .name = "textEntryColor", .displayFn = displayEmpty, .children = null },
+        .{ .name = "textEntryColor", .displayFn = DisplayTextEntryColor.displayFn, .children = null },
         .{ .name = "textEntryNumber", .displayFn = DisplayTextEntryNumber.displayFn, .children = null },
     } },
 

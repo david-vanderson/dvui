@@ -383,7 +383,7 @@ pub const NumberFieldOptions = struct {
         slider_entry,
         // Apply a number only when the user presses enter.
         // Display the value as a placeholder if no value is being entered.
-        number_placeholder,
+        entry_on_enter,
     } = .number_entry,
     /// Minimum value - required if widget_type is slider.
     min: ?f64 = null,
@@ -514,7 +514,7 @@ pub fn numberFieldWidget(
             if (!defaults.narrow or read_only)
                 dvui.label(@src(), "{d}", .{field_value_ptr.*}, .{ .margin = .{ .y = 4 } });
         },
-        .number_placeholder => {
+        .entry_on_enter => {
             var box = dvui.box(src, .{ .dir = .horizontal }, .{});
             defer box.deinit();
 
@@ -651,7 +651,7 @@ pub fn numberFieldWidgetOptional(
             if (!defaults.narrow or read_only)
                 dvui.label(@src(), "{?d}", .{field_value_optional_ptr.*}, .{ .margin = .{ .y = 4 } });
         },
-        .slider, .slider_entry, .number_placeholder => {
+        .slider, .slider_entry, .entry_on_enter => {
             unreachable;
         },
     }
@@ -1041,9 +1041,9 @@ pub fn unionFieldWidget(
     return active_tag;
 }
 
-/// Standard field options allow control of the display mode and
-/// option to provide an alternative label.
-/// All FieldOption types must support the display and label fields.
+/// Opiotnal field options can provide separate field options for both
+/// the optional and the optional's value.
+/// The value for the optional is set via the `child` field.
 pub const OptionalFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
     /// Display the field using this function, instead of the default struct_ui function.
@@ -1317,7 +1317,7 @@ pub fn displayUnion(
                 inline else => |choice| {
                     const default_value = defaultValue(
                         @FieldType(UnionT, @tagName(choice)),
-                        @FieldType(UnionT, @tagName(choice)),
+                        UnionT,
                         field_name,
                         options,
                     );
@@ -1438,7 +1438,7 @@ pub fn displayPointer(
 
     const field_option = blk: {
         const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
-        if (read_only and field_option_.displayMode() == .read_write) {
+        if (field_option_.displayMode() == .constant or (read_only and field_option_.displayMode() != .none)) {
             // Everything pointed to by a pointer to const must be const.
             var field_option = field_option_;
             field_option.markConst();
@@ -1506,12 +1506,11 @@ pub fn displayStruct(
             @compileError("The struct_ui.displayStruct() options parameter must be passed as a tuple of StructOptions");
         }
     }
-    if (field_option.standard.display == .none) return null;
+    if (field_option.displayMode() == .none) return null;
 
     const StructT = @TypeOf(field_value_ptr.*);
     const struct_options: StructOptions(StructT) = findMatchingStructOption(StructT, field_name orelse "", options) orelse .initWithDefaults(.{}, null);
 
-    if (field_option.displayMode() == .none) return null;
     const vbox: ?*dvui.BoxWidget = displayContainer(src, if (field_name) |name| field_option.displayLabel(name) else null);
     if (vbox != null) {
         var struct_alignment: dvui.Alignment = .init(@src(), depth);
