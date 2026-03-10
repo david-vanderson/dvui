@@ -378,7 +378,7 @@ pub const NumberFieldOptions = struct {
 
 /// Display a numeric field
 pub fn numberFieldWidget(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_value_ptr: anytype,
     opt: NumberFieldOptions,
@@ -467,7 +467,7 @@ pub fn numberFieldWidget(
 
 /// Display a numeric field
 pub fn numberFieldWidgetOptional(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_value_optional_ptr: anytype,
     opt: NumberFieldOptions,
@@ -518,7 +518,7 @@ pub fn numberFieldWidgetOptional(
 }
 
 pub fn enumFieldWidget(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_value_ptr: anytype,
     opt: StandardFieldOptions,
@@ -558,7 +558,7 @@ pub fn enumFieldWidget(
 }
 
 pub fn enumFieldWidgetOptional(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_value_optional_ptr: anytype,
     opt: StandardFieldOptions,
@@ -617,7 +617,7 @@ pub const BoolFieldOptions = struct {
 };
 
 pub fn boolFieldWidget(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_value_ptr: anytype,
     opt: BoolFieldOptions,
@@ -688,7 +688,7 @@ fn easing(t: f32) f32 {
 }
 
 pub fn boolFieldWidgetOptional(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_value_optional_ptr: anytype,
     opt: BoolFieldOptions,
@@ -751,7 +751,7 @@ const StringBackingType = union(enum) {
 /// If a slice, the slice will be assigned to a duplicated copy of the
 /// text widget's buffer.
 pub fn textFieldWidget(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_value_ptr: anytype,
     opt: TextFieldOptions,
@@ -845,7 +845,7 @@ pub fn UnionTagType(FieldPtrType: type) type {
 /// Allow the selection of the active union member.
 /// returns the tag of the active member.
 pub fn unionFieldWidget(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_value_ptr: anytype,
     opt: FieldOptions,
@@ -905,7 +905,7 @@ pub fn unionFieldWidget(
 /// Display an optional
 /// returns true if optional is not null
 pub fn optionalFieldWidget(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_value_ptr: anytype,
     opts: FieldOptions,
@@ -939,7 +939,7 @@ pub fn optionalFieldWidget(
 /// displayField can be used when iterating through a list of fields of varying types.
 /// it will call the correct display function based on the type of the field.
 pub fn displayField(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     comptime ContainerT: type,
     comptime field_name: []const u8,
     field_value_ptr: anytype,
@@ -1039,12 +1039,12 @@ pub fn displayField(
 const msg_invalid_opt_type = "invalid field option type {t} used for field {s}. Using default options.";
 
 /// Display numeric fields, ints and floats.
-pub fn displayNumber(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+pub fn displayNumber(src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrType(field_name, &.{ .int, .float }, "displayNumber", @TypeOf(field_value_ptr));
     numberFieldWidget(src, field_name, field_value_ptr, field_option.optionNumber(field_name), al);
 }
 
-pub fn displayEnum(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+pub fn displayEnum(src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrType(field_name, &.{.@"enum"}, "displayEnum", @TypeOf(field_value_ptr));
     enumFieldWidget(src, field_name, field_value_ptr, field_option.optionStandard(field_name), al);
 }
@@ -1052,24 +1052,24 @@ pub fn displayEnum(comptime src: std.builtin.SourceLocation, comptime field_name
 /// Display []u8, []const u8 and arrays of u8 and const u8.
 /// Arrays are always treated as read-only. In future this could be enhanced to support in-place editing.
 /// When strings are modified, they are assigned to a duplicated version of the text widget's buffer.
-pub fn displayString(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+pub fn displayString(src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrTypeString(field_name, "displayString", @TypeOf(field_value_ptr));
     textFieldWidget(src, field_name, field_value_ptr, field_option.optionText(field_name), al, stringBackingAllocator());
 }
 
 /// Same as displayString, but uses a user-supplied buffer, rather than a dynamically allocated buffer.
-pub fn displayStringBuf(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment, buffer: []u8) void {
+pub fn displayStringBuf(src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment, buffer: []u8) void {
     validateFieldPtrTypeString(field_name, "displayString", @TypeOf(field_value_ptr));
     textFieldWidget(src, field_name, field_value_ptr, field_option.optionText(field_name), al, .{ .buffer = buffer });
 }
 
-pub fn displayBool(comptime src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+pub fn displayBool(src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrType(field_name, &.{.bool}, "displayBool", @TypeOf(field_value_ptr));
     boolFieldWidget(src, field_name, field_value_ptr, field_option.optionBool(field_name), al);
 }
 
 pub fn displayArray(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     comptime ContainerT: type,
     comptime field_name: []const u8,
     field_value_ptr: anytype,
@@ -1099,7 +1099,7 @@ pub fn displayArray(
 }
 
 pub fn displaySlice(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     comptime ContainerT: type,
     comptime field_name: []const u8,
     field_value_ptr: anytype,
@@ -1136,7 +1136,7 @@ pub fn displaySlice(
 /// for those members with an appropriate default_value.
 /// These default values will be used to populate the active union value when the user changes selections.
 pub fn displayUnion(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     comptime field_name: []const u8,
     field_value_ptr: anytype,
     comptime depth: usize,
@@ -1208,7 +1208,7 @@ pub fn displayUnion(
 ///   rather than using this function. Otherwise all instances of the type will point to a single default value as defaults
 ///   are per-type, not per field.
 pub fn displayOptional(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     comptime ContainerT: type,
     comptime field_name: []const u8,
     field_value_ptr: anytype,
@@ -1267,7 +1267,7 @@ pub fn displayOptional(
 }
 
 pub fn displayPointer(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     comptime ContainerT: type,
     comptime field_name: []const u8,
     field_value_ptr: anytype,
@@ -1332,7 +1332,7 @@ fn canDisplayPtr(ptr: std.builtin.Type.Pointer) bool {
 ///
 /// The displayStringBuf() function can be used as an alternative to display strings with a user-supplied buffer.
 pub fn displayStruct(
-    comptime src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation,
     comptime field_name: ?[]const u8,
     field_value_ptr: anytype,
     comptime depth: usize,
@@ -1385,7 +1385,7 @@ pub fn displayStruct(
 
 /// Create and expander to display a container field and indent the container's fields.
 /// can be used for the custom display of structs and unions.
-pub fn displayContainer(comptime src: std.builtin.SourceLocation, field_name: ?[]const u8) ?*dvui.BoxWidget {
+pub fn displayContainer(src: std.builtin.SourceLocation, field_name: ?[]const u8) ?*dvui.BoxWidget {
     var vbox: ?*dvui.BoxWidget = null;
     if (field_name == null or dvui.expander(
         src,
