@@ -1031,7 +1031,7 @@ pub fn unionFieldWidget(
     return active_tag;
 }
 
-/// Opiotnal field options can provide separate field options for both
+/// Optional field options can provide separate field options for both
 /// the optional and the optional's value.
 /// The value for the optional is set via the `child` field.
 pub const OptionalFieldOptions = struct {
@@ -1317,7 +1317,13 @@ pub fn displayUnion(
                         } else {
                             log.debug(
                                 "Union field {s}.{s} cannot be selected as no default value is provided. Use struct_ui.StructOptions({s}) to provide a default.",
-                                .{ field_name, @tagName(choice), @typeName(@FieldType(UnionT, @tagName(choice))) },
+                                .{
+                                    field_name, @tagName(choice),
+                                    switch (@typeInfo(@FieldType(UnionT, @tagName(choice)))) {
+                                        .@"union", .@"struct" => @typeName(@FieldType(UnionT, @tagName(choice))),
+                                        else => @typeName(UnionT),
+                                    },
+                                },
                             );
                             return;
                         }
@@ -1559,7 +1565,7 @@ pub fn defaultValue(T: type, ContainerT: type, comptime field_name: []const u8, 
     // If the containing struct has a default value, get the field's default value from
     // the corresponding field within the struct's default value.
     inline for (struct_options) |option| {
-        if (@TypeOf(option).StructT == ContainerT) {
+        if (@TypeOf(option).StructT == ContainerT and @typeInfo(ContainerT) == .@"struct") {
             if (option.default_value) |default_value| {
                 if (@typeInfo(@FieldType(ContainerT, field_name)) == .optional) {
                     if (@field(default_value, field_name) != null) {
@@ -1609,6 +1615,7 @@ pub fn defaultValue(T: type, ContainerT: type, comptime field_name: []const u8, 
         },
 
         inline .@"enum" => |e| return @enumFromInt(e.fields[0].value),
+        inline .void => return {},
         inline else => return null,
     }
 }
