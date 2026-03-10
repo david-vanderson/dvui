@@ -2056,7 +2056,7 @@ const DisplayScrollArea = struct {
             .viewport = .{ .number = .{ .customDisplayFn = displayViewport } },
             .virtual_size = .defaultConst,
         }, null);
-        // Only override the Point type display for fields named "velocity"
+        // Only override the Point type display only for fields named "velocity"
         const velocity_opts = StructOptions(dvui.Point).init(.{
             .x = .{ .number = .{ .widget_type = .number_placeholder } },
             .y = .{ .number = .{ .widget_type = .number_placeholder } },
@@ -2147,17 +2147,6 @@ const DisplayScrollArea = struct {
                 }
             }
         }
-    }
-
-    fn displayVelocity(_: []const u8, _: *anyopaque, _: bool, _: *dvui.Alignment) void {
-        const display_opts: StructOptions(dvui.Point) = .init(.{
-            .x = .{ .number = .{ .widget_type = .number_placeholder } },
-            .y = .{ .number = .{ .widget_type = .number_placeholder } },
-        }, null);
-        // Ignore the old alignment as structs always start a new alignment.
-        var al: dvui.Alignment = .init(@src(), 0);
-        defer al.deinit();
-        if (struct_ui.displayStruct(@src(), "velocity", &scroll_info.velocity, 1, .default, .{display_opts}, &al)) |box| box.deinit();
     }
 };
 
@@ -2291,24 +2280,18 @@ const DisplaySliderEntry = struct {
     }
 
     pub fn layoutWidgetControls() void {
-        // TODO: StructUI needs a way to support read-write optionals to read-only text. at the moment it is tied to the field, so display
-        // sets both whether the optional can be changed and whether the value can be changed. Here we want user to set the optional to null or not
-        // but not set label_fmt
-        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
-            defer container.deinit();
-            var al: dvui.Alignment = .init(@src(), 0);
-            defer al.deinit();
-            if (struct_ui.optionalFieldWidget(@src(), "label_fmt", &test_options.label_fmt, .default, &al)) {
-                test_options.label_fmt = "{d:0.1}";
-                struct_ui.displayString(@src(), "label_fmt", &test_options.label_fmt.?, .{ .text = .{ .display = .read_only } }, &al);
-            } else {
-                test_options.label_fmt = null;
-            }
+        {
+            const display_options: StructOptions(@TypeOf(test_options)) = .initWithDefaults(.{
+                .label_fmt = .{ .optional = .{ .child = .{ .text = .{ .display = .read_only } } } },
+            }, .{ .label_fmt = "{d:0.1}", .value = 0 });
+            dvui.structUI(@src(), test_options_label, &test_options, 1, .{display_options}, .{});
         }
-        const display_options = StructOptions(dvui.SliderEntryInitOptions).initWithDefaults(.{
-            .label = .defaultTextRW,
-        }, .{ .label = "slider entry", .value = &test_options.value });
-        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{display_options}, .{});
+        {
+            const display_options = StructOptions(dvui.SliderEntryInitOptions).initWithDefaults(.{
+                .label = .defaultTextRW,
+            }, .{ .label = "slider entry", .value = &test_options.value });
+            dvui.structUI(@src(), "init_opts", &init_opts, 1, .{display_options}, .{});
+        }
     }
 };
 

@@ -8,6 +8,9 @@
 //! string_map holds any heap-allocated memory created when strings are modified.
 //! These are automatically cleaned up during Window.deinit().
 
+// TODO: Add OptionalFieldOptions that can have different display options for the optional
+// vs the value of the optional. i.e. can set a field to be null or a read-only string
+
 pub const defaults = struct {
     /// display structs and sub-structs expanded
     pub var display_expanded: bool = true;
@@ -50,6 +53,28 @@ pub const FieldOptions = union(enum) {
     number: NumberFieldOptions,
     text: TextFieldOptions,
     boolean: BoolFieldOptions,
+    optional: OptionalFieldOptions,
+
+    // Types without a FieldOptions field
+    // Prevent FieldOptions becoming a recursive type.
+    pub const ChildFieldOptions = union(enum) {
+        none: void,
+        standard: StandardFieldOptions,
+        number: NumberFieldOptions,
+        text: TextFieldOptions,
+        boolean: BoolFieldOptions,
+        // optional excluded as it contains child FieldOptions field.
+
+        pub fn asFieldOption(self: ChildFieldOptions) ?FieldOptions {
+            switch (self) {
+                .none => return null,
+                .standard => |fo| return @unionInit(FieldOptions, "standard", fo),
+                .number => |fo| return @unionInit(FieldOptions, "number", fo),
+                .text => |fo| return @unionInit(FieldOptions, "text", fo),
+                .boolean => |fo| return @unionInit(FieldOptions, "boolean", fo),
+            }
+        }
+    };
 
     /// All field can use `default` standard field option, however using the correct field
     /// option will ensure the field is displayed correctly.
@@ -115,6 +140,30 @@ pub const FieldOptions = union(enum) {
                 return .{};
             },
         };
+    }
+
+    pub fn optionOptional(self: FieldOptions, _: []const u8) OptionalFieldOptions {
+        return switch (self) {
+            .optional => |fo| fo,
+            inline else => |fo| .{
+                .label = fo.label,
+                .display = fo.display,
+                .customDisplayFn = fo.customDisplayFn,
+            },
+        };
+    }
+
+    /// If this FieldOption supports child options,
+    /// return the child options, otherwise return self.
+    pub fn childOption(self: FieldOptions) FieldOptions {
+        switch (self) {
+            inline else => |fo| {
+                if (@hasField(@TypeOf(fo), "child")) {
+                    return fo.child.asFieldOption() orelse self;
+                }
+                return self;
+            },
+        }
     }
 
     pub fn displayMode(self: FieldOptions) DisplayMode {
@@ -991,25 +1040,40 @@ pub fn unionFieldWidget(
     return active_tag;
 }
 
+/// Standard field options allow control of the display mode and
+/// option to provide an alternative label.
+/// All FieldOption types must support the display and label fields.
+pub const OptionalFieldOptions = struct {
+    display: FieldOptions.DisplayMode = .read_write,
+    /// Display the field using this function, instead of the default struct_ui function.
+    customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
+
+    label: ?[]const u8 = null,
+    /// the optional and the option's value can have different display modes.
+    child: FieldOptions.ChildFieldOptions = .none,
+
+    pub const default: OptionalFieldOptions = .{};
+};
+
 /// Display an optional
 /// returns true if optional is not null
 pub fn optionalFieldWidget(
     src: std.builtin.SourceLocation,
     field_name: []const u8,
     field_value_ptr: anytype,
-    opts: FieldOptions,
+    opts: OptionalFieldOptions,
     alignment: *dvui.Alignment,
 ) bool {
     validateFieldPtrType(null, &.{.optional}, "optionalFieldWidget", @TypeOf(field_value_ptr));
 
     // Display mode is ignored. It controls whether the optional value is read_only, not the optional itself.
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opts.isReadOnly();
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or isReadOnly(opts);
 
     var choice: usize = if (field_value_ptr.* == null) 0 else 1; // 0 = Null, 1 = Not Null
 
     var hbox = dvui.box(src, .{ .dir = .horizontal }, .{});
     defer hbox.deinit();
-    dvui.label(@src(), "{s}?", .{opts.displayLabel(field_name)}, .{ .margin = .{ .y = 4 } });
+    dvui.label(@src(), "{s}?", .{opts.label orelse field_name}, .{ .margin = .{ .y = 4 } });
     {
         var hbox_aligned = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = alignment.margin(hbox.data().id) });
         defer hbox_aligned.deinit();
@@ -1315,19 +1379,19 @@ pub fn displayOptional(
     if (field_option.displayMode() == .none) return;
 
     const optional = @typeInfo(@TypeOf(field_value_ptr.*)).optional;
-
+    const child_field_option = field_option.childOption();
     // Shortcut some common optionals
     switch (@typeInfo(optional.child)) {
         .bool => {
-            boolFieldWidgetOptional(src, field_name, field_value_ptr, field_option.optionBool(field_name), al);
+            boolFieldWidgetOptional(src, field_name, field_value_ptr, child_field_option.optionBool(field_name), al);
             return;
         },
         .@"enum" => {
-            enumFieldWidgetOptional(src, field_name, field_value_ptr, field_option.optionStandard(field_name), al);
+            enumFieldWidgetOptional(src, field_name, field_value_ptr, child_field_option.optionStandard(field_name), al);
             return;
         },
         .int, .float => {
-            const fo = field_option.optionNumber(field_name);
+            const fo = child_field_option.optionNumber(field_name);
             if (fo.widget_type == .number_entry) {
                 numberFieldWidgetOptional(@src(), field_name, field_value_ptr, fo, al);
                 return;
@@ -1337,7 +1401,7 @@ pub fn displayOptional(
     }
 
     const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.isReadOnly();
-    if (optionalFieldWidget(src, field_name, field_value_ptr, field_option, al)) {
+    if (optionalFieldWidget(src, field_name, field_value_ptr, field_option.optionOptional(field_name), al)) {
         if (!read_only) {
             if (field_value_ptr.* == null) {
                 field_value_ptr.* = default_value orelse
@@ -1345,7 +1409,7 @@ pub fn displayOptional(
             }
         }
         if (field_value_ptr.*) |*val| {
-            displayField(@src(), ContainerT, field_name, val, depth, field_option, options, al);
+            displayField(@src(), ContainerT, field_name, val, depth, child_field_option, options, al);
         } else {
             log.debug("Optional field {s} cannot be selected as no default value is provided. Use struct_ui.StructOptions({s}) with a default or StructOptions({s}) with a default, setting a value for {s}.", .{
                 field_name,
