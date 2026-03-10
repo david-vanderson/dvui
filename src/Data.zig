@@ -139,7 +139,7 @@ fn getOrPutSliceT(self: *Data, gpa: std.mem.Allocator, key: Key, comptime S: typ
         gpa,
         key,
         @sizeOf(T) * (len + @intFromBool(st.pointer.sentinel() != null)),
-        st.pointer.alignment,
+        st.pointer.alignment orelse @alignOf(T),
         replace_existing,
         if (SavedData.DebugInfo == void) {} else .{
             .name = @typeName(T),
