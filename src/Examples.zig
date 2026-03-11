@@ -10,6 +10,8 @@ var frame_counter: u64 = 0;
 pub var show_dialog: bool = false;
 var scale_val: f32 = 1.0;
 
+const build_options = @import("build_options");
+
 pub const demoKind = enum {
     basic_widgets,
     applets,
@@ -83,9 +85,12 @@ pub fn floatRetainClear(ptr: *anyopaque) void {
 }
 
 pub fn demo() void {
-    if (show_widgetpedia_window) {
-        widgetpedia();
+    if (build_options.full_demo) {
+        if (show_widgetpedia_window) {
+            widgetpedia();
+        }
     }
+
     if (!show_demo_window) {
         return;
     }
@@ -125,8 +130,10 @@ pub fn demo() void {
             if (dvui.button(@src(), "Debug Window", .{}, .{})) {
                 dvui.toggleDebugWindow();
             }
-            if (dvui.button(@src(), "Widgetpedia", .{}, .{})) {
-                dvui.Examples.show_widgetpedia_window = true;
+            if (build_options.full_demo) {
+                if (dvui.button(@src(), "Widgetpedia", .{}, .{})) {
+                    dvui.Examples.show_widgetpedia_window = true;
+                }
             }
 
             if (dvui.Theme.picker(@src(), &dvui.Theme.builtins, .{})) {
@@ -149,6 +156,9 @@ pub fn demo() void {
 
         inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
+            if (!build_options.full_demo) {
+                if (e == .struct_ui) continue;
+            }
             var bw: dvui.ButtonWidget = undefined;
             bw.init(@src(), .{}, .{
                 .id_extra = i,
@@ -203,7 +213,7 @@ pub fn demo() void {
                     .scroll_canvas => scrollCanvas(),
                     .dialogs => dialogs(),
                     .animations => animations(),
-                    .struct_ui => structUI(),
+                    .struct_ui => if (build_options.full_demo) structUI() else {},
                     .debugging => debuggingErrors(),
                     .grid => grids(),
                 }
@@ -261,7 +271,7 @@ pub fn demo() void {
             .scroll_canvas => scrollCanvas(),
             .dialogs => dialogs(),
             .animations => animations(),
-            .struct_ui => structUI(),
+            .struct_ui => if (build_options.full_demo) structUI() else {},
             .debugging => debuggingErrors(),
             .grid => grids(),
         }
