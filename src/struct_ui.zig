@@ -938,7 +938,7 @@ pub fn optionalFieldWidget(
 /// Display a field within a container.
 /// displayField can be used when iterating through a list of fields of varying types.
 /// it will call the correct display function based on the type of the field.
-pub fn displayField(
+pub inline fn displayField(
     src: std.builtin.SourceLocation,
     comptime ContainerT: type,
     comptime field_name: []const u8,
@@ -1039,12 +1039,12 @@ pub fn displayField(
 const msg_invalid_opt_type = "invalid field option type {t} used for field {s}. Using default options.";
 
 /// Display numeric fields, ints and floats.
-pub fn displayNumber(src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+pub fn displayNumber(src: std.builtin.SourceLocation, field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrType(field_name, &.{ .int, .float }, "displayNumber", @TypeOf(field_value_ptr));
     numberFieldWidget(src, field_name, field_value_ptr, field_option.optionNumber(field_name), al);
 }
 
-pub fn displayEnum(src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+pub fn displayEnum(src: std.builtin.SourceLocation, field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrType(field_name, &.{.@"enum"}, "displayEnum", @TypeOf(field_value_ptr));
     enumFieldWidget(src, field_name, field_value_ptr, field_option.optionStandard(field_name), al);
 }
@@ -1052,18 +1052,18 @@ pub fn displayEnum(src: std.builtin.SourceLocation, comptime field_name: []const
 /// Display []u8, []const u8 and arrays of u8 and const u8.
 /// Arrays are always treated as read-only. In future this could be enhanced to support in-place editing.
 /// When strings are modified, they are assigned to a duplicated version of the text widget's buffer.
-pub fn displayString(src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+pub fn displayString(src: std.builtin.SourceLocation, field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrTypeString(field_name, "displayString", @TypeOf(field_value_ptr));
     textFieldWidget(src, field_name, field_value_ptr, field_option.optionText(field_name), al, stringBackingAllocator());
 }
 
 /// Same as displayString, but uses a user-supplied buffer, rather than a dynamically allocated buffer.
-pub fn displayStringBuf(src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment, buffer: []u8) void {
+pub fn displayStringBuf(src: std.builtin.SourceLocation, field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment, buffer: []u8) void {
     validateFieldPtrTypeString(field_name, "displayString", @TypeOf(field_value_ptr));
     textFieldWidget(src, field_name, field_value_ptr, field_option.optionText(field_name), al, .{ .buffer = buffer });
 }
 
-pub fn displayBool(src: std.builtin.SourceLocation, comptime field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
+pub fn displayBool(src: std.builtin.SourceLocation, field_name: []const u8, field_value_ptr: anytype, field_option: FieldOptions, al: *dvui.Alignment) void {
     validateFieldPtrType(field_name, &.{.bool}, "displayBool", @TypeOf(field_value_ptr));
     boolFieldWidget(src, field_name, field_value_ptr, field_option.optionBool(field_name), al);
 }
@@ -1333,7 +1333,7 @@ fn canDisplayPtr(ptr: std.builtin.Type.Pointer) bool {
 /// The displayStringBuf() function can be used as an alternative to display strings with a user-supplied buffer.
 pub fn displayStruct(
     src: std.builtin.SourceLocation,
-    comptime field_name: ?[]const u8,
+    field_name: ?[]const u8,
     field_value_ptr: anytype,
     comptime depth: usize,
     field_option: FieldOptions,
@@ -1479,7 +1479,7 @@ pub fn validFieldOptionsType(field_name: []const u8, field_option: FieldOptions,
 /// Validate if the @typeInfo() of the passed in field_value_ptr
 /// is in the set of `required_types`
 pub fn validateFieldPtrType(
-    comptime field_name: ?[]const u8,
+    field_name: ?[]const u8,
     comptime required_types: []const std.builtin.TypeId,
     comptime caller: []const u8,
     comptime ptr_type: type,
@@ -1522,7 +1522,7 @@ pub fn requiredTypesToString(comptime required_types: []const std.builtin.TypeId
 }
 
 /// Validate is a pointer to a slice
-pub fn validateFieldPtrTypeSlice(comptime field_name: []const u8, comptime caller: []const u8, comptime ptr_type: type) void {
+pub fn validateFieldPtrTypeSlice(field_name: []const u8, comptime caller: []const u8, comptime ptr_type: type) void {
     switch (@typeInfo(ptr_type)) {
         .pointer => |p1| {
             switch (@typeInfo(p1.child)) {
@@ -1542,7 +1542,7 @@ pub fn validateFieldPtrTypeSlice(comptime field_name: []const u8, comptime calle
 }
 
 /// Validate is a pointer to a u8 slice.
-pub fn validateFieldPtrTypeString(comptime field_name: ?[]const u8, comptime caller: []const u8, comptime ptr_type: type) void {
+pub fn validateFieldPtrTypeString(field_name: ?[]const u8, comptime caller: []const u8, comptime ptr_type: type) void {
     switch (@typeInfo(ptr_type)) {
         .pointer => |p| {
             switch (@typeInfo(p.child)) {
