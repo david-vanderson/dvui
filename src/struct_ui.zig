@@ -1077,13 +1077,13 @@ pub fn optionalFieldWidget(
         }
     }
     return choice == 1; // Not null
-}
+} //
 
 /// Display a field within a container.
 /// displayField can be used when iterating through a list of fields of varying types.
 /// it will call the correct display function based on the type of the field.
 /// NOTE: Inlining this slightly speeds up Debug compile times and also reduces binary
-/// size in optimization modes, except ReleaseSmall
+/// size in all optimization modes, except ReleaseSmall (~55k for demo at time of testing)
 /// (With inline)    - ReleaseSmall 7737856 sdl3-standalone.exe
 /// (without inline) - ReleaseSmall 7683072 sdl3-standalone.exe
 pub inline fn displayField(
