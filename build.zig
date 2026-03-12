@@ -1030,7 +1030,7 @@ fn addExample(
     mod.addImport("dvui", example_opts.dvui_mod);
     mod.addImport(example_opts.backend_name, example_opts.backend_mod);
 
-    const exe = b.addExecutable(.{ .name = name, .root_module = mod, .use_lld = opts.use_lld });
+    const exe = b.addExecutable(.{ .name = name, .root_module = mod, .use_lld = opts.use_lld, .use_llvm = true });
     if (opts.check_step) |step| {
         step.dependOn(&exe.step);
     }
@@ -1099,6 +1099,7 @@ fn addWebExample(
             .link_libc = false,
             .strip = if (opts.optimize == .ReleaseFast or opts.optimize == .ReleaseSmall) true else false,
         }),
+        .use_llvm = true,
     };
     const web_test = b.addExecutable(exeOptions);
     web_test.entry = .disabled;

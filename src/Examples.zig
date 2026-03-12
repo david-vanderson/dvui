@@ -28,6 +28,7 @@ pub const demoKind = enum {
     grid,
     struct_ui,
     debugging,
+    update_threads,
 
     pub fn name(self: demoKind) []const u8 {
         return switch (self) {
@@ -48,6 +49,7 @@ pub const demoKind = enum {
             .struct_ui => "Struct UI",
             .debugging => "Debugging",
             .grid => "Grid",
+            .update_threads => "Multi-Threading",
         };
     }
 
@@ -70,6 +72,7 @@ pub const demoKind = enum {
             .struct_ui => .{ .scale = 0.45, .offset = .{} },
             .debugging => .{ .scale = 0.45, .offset = .{} },
             .grid => .{ .scale = 0.45, .offset = .{} },
+            .update_threads => .{ .scale = 0.45, .offset = .{} },
         };
     }
 };
@@ -206,6 +209,7 @@ pub fn demo() void {
                     .struct_ui => structUI(),
                     .debugging => debuggingErrors(),
                     .grid => grids(),
+                    .update_threads => updateThreads() catch unreachable,
                 }
             }
 
@@ -264,6 +268,7 @@ pub fn demo() void {
             .struct_ui => structUI(),
             .debugging => debuggingErrors(),
             .grid => grids(),
+            .update_threads => updateThreads() catch unreachable,
         }
     }
 
@@ -515,6 +520,7 @@ const animations = @import("Examples/animations.zig").animations;
 const structUI = @import("Examples/struct_ui.zig").structUI;
 const debuggingErrors = @import("Examples/debugging.zig").debuggingErrors;
 const icon_browser = @import("Examples/icon_browser.zig").iconBrowser;
+const updateThreads = @import("Examples/update_thread.zig").updateThreads;
 
 const grid_examples = @import("Examples/grid.zig");
 const gridStyling = grid_examples.gridStyling;

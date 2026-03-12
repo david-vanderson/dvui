@@ -107,6 +107,7 @@ pub const selection = @import("selection.zig");
 pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHashMap;
 pub const PNGEncoder = @import("PNGEncoder.zig");
 pub const JPGEncoder = @import("JPGEncoder.zig");
+pub const update = @import("update.zig");
 
 pub const Dialogs = @import("Dialogs.zig");
 pub const Dialog = Dialogs.Dialog;
