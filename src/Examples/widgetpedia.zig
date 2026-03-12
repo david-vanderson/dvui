@@ -1847,6 +1847,71 @@ const DisplayPlot = struct {
     }
 };
 
+const DisplayPlotXY = struct {
+    const name: []const u8 = "plotXY()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.PlotXYOptions = undefined;
+    var x_axis: dvui.PlotWidget.Axis = undefined;
+    var y_axis: dvui.PlotWidget.Axis = undefined;
+    var xs: [20]f64 = undefined;
+    var ys: [20]f64 = undefined;
+
+    var test_options: struct {
+        plot_type: enum { bar, line },
+        seed: u8,
+    } = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{ .expand = .both };
+        init_opts = .{ .xs = &xs, .ys = &ys };
+        test_options = .{
+            .plot_type = .bar,
+            .seed = 1,
+        };
+        x_axis = .{
+            .name = "X",
+        };
+        y_axis = .{
+            .name = "Y",
+        };
+    }
+
+    pub fn layoutWidget() void {
+        var rng: std.Random.DefaultPrng = .init(test_options.seed);
+        for (0..xs.len) |i| {
+            xs[i] = @floatFromInt(rng.next() % 50);
+            ys[i] = @floatFromInt(rng.next() % 50);
+        }
+
+        dvui.plotXY(@src(), init_opts, options.override(.{ .data_out = &wd }));
+    }
+
+    // TODO: make these const
+    pub fn layoutWidgetControls() void {
+        dvui.structUI(@src(), test_options_label, &test_options, 1, .{}, .{});
+        const axis_opts: StructOptions(dvui.PlotWidget.Axis) = .initWithDefaults(.{
+            .name = .defaultTextRW,
+        }, null);
+        const tick_opts: StructOptions(dvui.PlotWidget.Axis.TickFormating) = .initWithDefaults(.{
+            .custom = .defaultHidden,
+        }, .{ .normal = .{} });
+        const plot_opts: StructOptions(dvui.PlotWidget.InitOptions) = .initWithDefaults(.{
+            .title = .defaultTextRW,
+        }, .{
+            .x_axis = &x_axis,
+            .y_axis = &y_axis,
+        });
+        dvui.structUI(@src(), "init_opts", &init_opts, 3, .{ plot_opts, axis_opts, struct_options.color, tick_opts }, .{});
+    }
+};
+
 const DisplayProgress = struct {
     const name: []const u8 = "progress()";
 
@@ -3026,7 +3091,7 @@ const widget_hierarchy = [_]WidgetHierarchy{
 
     .{ .name = "plots", .displayFn = displayEmpty, .children = &.{
         .{ .name = "plot", .displayFn = DisplayPlot.displayFn, .children = null },
-        .{ .name = "plotXY", .displayFn = displayEmpty, .children = null },
+        .{ .name = "plotXY", .displayFn = DisplayPlotXY.displayFn, .children = null },
     } },
 
     .{ .name = "progress", .displayFn = DisplayProgress.displayFn, .children = null },
