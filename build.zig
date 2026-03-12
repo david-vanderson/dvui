@@ -1099,7 +1099,6 @@ fn addWebExample(
             .link_libc = false,
             .strip = if (opts.optimize == .ReleaseFast or opts.optimize == .ReleaseSmall) true else false,
         }),
-        .use_llvm = true,
     };
     const web_test = b.addExecutable(exeOptions);
     web_test.entry = .disabled;
