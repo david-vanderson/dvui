@@ -965,9 +965,19 @@ export class Dvui {
             );
         }
 
-        this.gl = canvas.getContext("webgl2", { alpha: true });
+        // We do our own edge fades with triangles. If we leave antialias on
+        // then you can get a faint brightness on the edge of a filled square.
+        // Right on the edge you get the blended combination of both triangles
+        // that share that edge.
+        // It's not easy to notice, but to reproduce:
+        // * turn antialias on
+        // * use the builtin Adwaita Dark theme
+        // * put a small filled (.background = true) box in a larger filled box
+        // * screenshot it
+        // * the edge of the small box will be brighter than the fill color
+        this.gl = canvas.getContext("webgl2", { alpha: true, antialias: false });
         if (this.gl === null) {
-            this.gl = canvas.getContext("webgl", { alpha: true });
+            this.gl = canvas.getContext("webgl", { alpha: true, antialias: false });
         }
 
         if (this.gl === null) {
