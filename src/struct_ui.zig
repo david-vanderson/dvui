@@ -26,6 +26,7 @@ const log = std.log.scoped(.struct_ui);
 /// Use NumberFieldOptions for any numbers, allowing setting of min and max ranges and other options
 /// Use BooleanFieldOptions for any bools.
 /// Use StandardFieldOptions can be used for any field to give a default layout.
+/// Use OptionalFieldOptions to use different field options for the optional vs the optional's value.
 /// If a custom display function is supplied, they will be used to display the struct instead of
 /// the struct_ui default functions.
 ///
@@ -189,7 +190,7 @@ pub const FieldOptions = union(enum) {
     /// For container fields, controls whether the field is displayed expanded or collapsed.
     pub fn defaultExpanded(self: FieldOptions) bool {
         return switch (self) {
-            inline else => |*fo| fo.default_expanded orelse defaults.display_expanded,
+            inline else => |fo| fo.default_expanded orelse defaults.display_expanded,
         };
     }
 
@@ -222,7 +223,7 @@ pub const StandardFieldOptions = struct {
 
     label: ?[]const u8 = null,
     // For container fields, controls if the container displayed expanded or collapsed.
-    // If not set uses defaults.display_expnaded.
+    // If not set uses defaults.display_expanded.
     default_expanded: ?bool = null,
 };
 
@@ -877,7 +878,7 @@ pub const TextFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
     label: ?[]const u8 = null,
     customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
-    default_expanded: ?bool = false,
+    default_expanded: ?bool = null,
     multiline: bool = false,
 
     /// Set to true if the string is heap allocated and should be

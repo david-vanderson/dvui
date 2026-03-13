@@ -137,7 +137,7 @@ const WidgetHierarchy = struct {
     displayFn: *const fn (reset_widget: bool) void,
 };
 
-var current_widget: WidgetHierarchy = .{ .name = "plot", .displayFn = DisplayPlot.displayFn, .children = null };
+var current_widget: WidgetHierarchy = widget_hierarchy[0];
 
 fn displayEmpty(_: bool) void {
     var label_str = std.Io.Writer.Allocating.initCapacity(dvui.currentWindow().arena(), current_widget.name.len + 2) catch return;
@@ -1305,7 +1305,7 @@ const DisplayLabelClick = struct {
             click_event_valid = click_event;
         }
         if (click_event_valid) |cev| {
-            struct_ui.displayUnion(@src(), "last click_event", &cev, 1, .defaultReadOnly, .{});
+            struct_ui.displayUnion(@src(), "last click_event", &cev, 1, .{ .standard = .{ .display = .read_only, .default_expanded = false } }, .{});
         }
     }
 
