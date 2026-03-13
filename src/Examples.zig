@@ -10,8 +10,6 @@ var frame_counter: u64 = 0;
 pub var show_dialog: bool = false;
 var scale_val: f32 = 1.0;
 
-const build_options = @import("build_options");
-
 pub const demoKind = enum {
     basic_widgets,
     applets,
@@ -84,8 +82,13 @@ pub fn floatRetainClear(ptr: *anyopaque) void {
     dvui.retainClear(id);
 }
 
-pub fn demo() void {
-    if (build_options.full_demo) {
+pub const DemoInclude = enum {
+    full,
+    lite, // excludes struct_ui and widgetpedia to improve compile times
+};
+
+pub fn demo(comptime include: DemoInclude) void {
+    if (include == .full) {
         if (show_widgetpedia_window) {
             widgetpedia();
         }
@@ -130,7 +133,7 @@ pub fn demo() void {
             if (dvui.button(@src(), "Debug Window", .{}, .{})) {
                 dvui.toggleDebugWindow();
             }
-            if (build_options.full_demo) {
+            if (include == .full) {
                 if (dvui.button(@src(), "Widgetpedia", .{}, .{})) {
                     dvui.Examples.show_widgetpedia_window = true;
                 }
@@ -156,7 +159,7 @@ pub fn demo() void {
 
         inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
-            if (!build_options.full_demo) {
+            if (include != .full) {
                 if (e == .struct_ui) continue;
             }
             var bw: dvui.ButtonWidget = undefined;
@@ -213,7 +216,7 @@ pub fn demo() void {
                     .scroll_canvas => scrollCanvas(),
                     .dialogs => dialogs(),
                     .animations => animations(),
-                    .struct_ui => if (build_options.full_demo) structUI() else {},
+                    .struct_ui => if (include == .full) structUI() else {},
                     .debugging => debuggingErrors(),
                     .grid => grids(),
                 }
@@ -271,7 +274,7 @@ pub fn demo() void {
             .scroll_canvas => scrollCanvas(),
             .dialogs => dialogs(),
             .animations => animations(),
-            .struct_ui => if (build_options.full_demo) structUI() else {},
+            .struct_ui => if (include == .full) structUI() else {},
             .debugging => debuggingErrors(),
             .grid => grids(),
         }
@@ -476,7 +479,7 @@ test "DOCIMG demo" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            dvui.Examples.demo();
+            dvui.Examples.demo(.full);
             return .ok;
         }
     }.frame;
