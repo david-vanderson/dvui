@@ -137,14 +137,6 @@ pub fn build(b: *std.Build) !void {
         accesskit,
     );
 
-    const full_demo = b.option(bool, "full-demo", "Build with widgetpedia and other optional parts. Setting to false can reduce compile times.") orelse true;
-
-    build_options.addOption(
-        bool,
-        "full_demo",
-        full_demo,
-    );
-
     var dvui_opts = DvuiModuleOptions{
         .b = b,
         .target = target,
@@ -162,7 +154,6 @@ pub fn build(b: *std.Build) !void {
         .linux_display_backend = linux_display_backend,
         .stb_image = stb_image_option,
         .tree_sitter = tree_sitter_option,
-        .full_demo = full_demo,
     };
 
     if (back_to_build) |backend| {
@@ -795,7 +786,6 @@ const DvuiModuleOptions = struct {
     linux_display_backend: ?LinuxDisplayBackend = null,
     stb_image: ?bool,
     tree_sitter: ?bool,
-    full_demo: bool = true,
 
     pub const DefaultOptions = struct {
         libc: bool,

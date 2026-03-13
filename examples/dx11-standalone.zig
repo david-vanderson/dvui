@@ -237,6 +237,7 @@ fn gui_frame() !void {
         });
     }
 
-    // look at demo() for examples of dvui widgets, shows in a floating window
-    dvui.Examples.demo();
+    // only shows the demo if dvui.Examples.show_demo_window is true
+    // .full -> .lite or comment out to speed up compile times
+    dvui.Examples.demo(.full);
 }

@@ -66,7 +66,10 @@ pub fn app_init() !void {
         // after win.begin
         impl.addAllEvents(&win);
         try win.begin(std.time.nanoTimestamp());
-        dvui.Examples.demo();
+
+        // only shows the demo if dvui.Examples.show_demo_window is true
+        // .full -> .lite or comment out to speed up compile times
+        dvui.Examples.demo(.full);
 
         const endtime = try win.end(.{});
         window.swapBuffers();
