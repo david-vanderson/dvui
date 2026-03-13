@@ -150,23 +150,33 @@ pub fn scrolling() void {
 
             for (Data.msg_start..Data.msg_end) |i| {
                 {
-                    var tl = dvui.textLayout(@src(), .{}, .{ .id_extra = i, .style = .window });
-                    defer tl.deinit();
+                    var cache = dvui.cacheSize(@src(), .{}, .{ .id_extra = i });
+                    defer cache.deinit();
 
-                    tl.format("Message {d}", .{i}, .{});
+                    if (cache.uncached()) {
+                        var tl = dvui.textLayout(@src(), .{}, .{ .style = .window });
+                        defer tl.deinit();
+
+                        tl.format("Message {d}", .{i}, .{});
+                    }
 
                     if (scroll_to_msg != null and scroll_to_msg.? == i) {
-                        Data.scroll_info.scrollToOffset(.vertical, tl.data().rect.y);
-                    } else if (Data.dynamic and tl.data().rect.y < Data.scroll_info.offset(.vertical) - 1000) {
+                        Data.scroll_info.scrollToOffset(.vertical, cache.data().rect.y);
+                    } else if (Data.dynamic and cache.data().rect.y < Data.scroll_info.offset(.vertical) - 1000) {
                         // record farthest message we want to remove
                         Data.remove_top = i;
                         dvui.refresh(null, @src(), null);
                     }
                 }
 
-                var tl2 = dvui.textLayout(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0, .style = .window });
-                tl2.format("Reply {d}", .{i}, .{});
-                tl2.deinit();
+                var cache2 = dvui.cacheSize(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0 });
+                defer cache2.deinit();
+
+                if (cache2.uncached()) {
+                    var tl2 = dvui.textLayout(@src(), .{}, .{ .style = .window });
+                    tl2.format("Reply {d}", .{i}, .{});
+                    tl2.deinit();
+                }
             }
 
             scroll.deinit();
