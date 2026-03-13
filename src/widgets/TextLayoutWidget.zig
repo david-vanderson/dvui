@@ -280,21 +280,21 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
     const scale_old = dvui.dataGetPtrDefault(null, self.wd.id, "_scale", f32, dvui.parentGet().screenRectScale(Rect{}).s);
     const scale_new = dvui.parentGet().screenRectScale(Rect{}).s;
     if (self.cache_layout and scale_old.* != scale_new) {
-        dvui.log.debug("TextLayoutWidget forcing cache_layout false due to scale change", .{});
+        dvui.log.debug("{x} TextLayoutWidget forcing cache_layout false due to scale change", .{self.data().id});
         self.cache_layout = false;
     }
     scale_old.* = scale_new;
 
     const break_lines_old = dvui.dataGetPtrDefault(null, self.wd.id, "_break_lines", bool, self.break_lines);
     if (self.cache_layout and break_lines_old.* != self.break_lines) {
-        dvui.log.debug("TextLayoutWidget forcing cache_layout false due to break_lines change", .{});
+        dvui.log.debug("{x} TextLayoutWidget forcing cache_layout false due to break_lines change", .{self.data().id});
         self.cache_layout = false;
     }
     break_lines_old.* = self.break_lines;
 
     const width_old = dvui.dataGetPtrDefault(null, self.wd.id, "_width", f32, self.data().rect.w);
     if (self.cache_layout and self.break_lines and width_old.* != self.data().rect.w) {
-        dvui.log.debug("TextLayoutWidget forcing cache_layout false due to width change while break_lines", .{});
+        dvui.log.debug("{x} TextLayoutWidget forcing cache_layout false due to width change while break_lines", .{self.data().id});
         self.cache_layout = false;
     }
     width_old.* = self.data().rect.w;

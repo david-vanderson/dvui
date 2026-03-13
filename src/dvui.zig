@@ -69,6 +69,7 @@ pub const widgets = @import("import_widgets.zig");
 pub const AnimateWidget = widgets.AnimateWidget;
 pub const BoxWidget = widgets.BoxWidget;
 pub const CacheWidget = widgets.CacheWidget;
+pub const CacheSizeWidget = widgets.CacheSizeWidget;
 pub const ColorPickerWidget = widgets.ColorPickerWidget;
 pub const FlexBoxWidget = widgets.FlexBoxWidget;
 pub const ReorderWidget = widgets.ReorderWidget;
@@ -3131,6 +3132,12 @@ pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOpt
 
 pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) *CacheWidget {
     var ret = widgetAlloc(CacheWidget);
+    ret.init(src, init_opts, opts);
+    return ret;
+}
+
+pub fn cacheSize(src: std.builtin.SourceLocation, init_opts: CacheSizeWidget.InitOptions, opts: Options) *CacheSizeWidget {
+    var ret = widgetAlloc(CacheSizeWidget);
     ret.init(src, init_opts, opts);
     return ret;
 }
