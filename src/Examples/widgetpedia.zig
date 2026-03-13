@@ -352,7 +352,7 @@ const DisplayAnimate = struct {
         {
             var box = dvui.box(@src(), .{}, .{ .expand = .horizontal });
             defer box.deinit();
-            if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+            if (struct_ui.displayContainer(@src(), test_options_label, true)) |container| {
                 defer container.deinit();
                 container.data().options.expand = .horizontal;
                 if (dvui.button(@src(), "Restart animation", .{}, .{})) {
@@ -521,7 +521,7 @@ const DisplayButtonIcon = struct {
     }
 
     pub fn layoutWidgetControls() void {
-        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+        if (struct_ui.displayContainer(@src(), test_options_label, true)) |container| {
             defer container.deinit();
             if (dvui.dropdownEnum(@src(), EntypoIcons, .{ .choice = &icon }, .{}, .{ .expand = .horizontal })) {
                 switch (icon) {
@@ -1003,7 +1003,7 @@ const DisplayFloatingWindow = struct {
     }
 
     pub fn layoutWidgetControls() void {
-        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+        if (struct_ui.displayContainer(@src(), test_options_label, true)) |container| {
             defer container.deinit();
             if (dvui.button(@src(), "Relaunch window", .{}, .{})) {
                 open_flag = true;
@@ -1205,7 +1205,7 @@ const DisplayIcon = struct {
     }
 
     pub fn layoutWidgetControls() void {
-        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+        if (struct_ui.displayContainer(@src(), test_options_label, true)) |container| {
             defer container.deinit();
             var al: dvui.Alignment = .init(@src(), 0);
             defer al.deinit();
@@ -1627,7 +1627,7 @@ const DisplayMenuItemLabel = struct {
         dvui.structUI(@src(), "init_opts", &init_opts, 1, .{}, .{});
         var al: dvui.Alignment = .init(@src(), 0);
         defer al.deinit();
-        if (struct_ui.displayContainer(@src(), "Menu builder")) |container| {
+        if (struct_ui.displayContainer(@src(), "Menu builder", true)) |container| {
             defer container.deinit();
             displayMenuControls(&menu_items);
             al.spacer(@src(), 0);
@@ -1754,7 +1754,7 @@ const DisplayPaned = struct {
     }
 
     pub fn layoutWidgetControls() void {
-        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+        if (struct_ui.displayContainer(@src(), test_options_label, true)) |container| {
             defer container.deinit();
             auto_fit = dvui.button(@src(), "Auto fit", .{}, .{});
             dvui.labelNoFmt(@src(), "*requires autofit_first to be set", .{}, .{});
@@ -1893,7 +1893,7 @@ const DisplayPlotXY = struct {
         dvui.plotXY(@src(), init_opts, options.override(.{ .data_out = &wd }));
     }
 
-    // TODO: make these const
+    // TODO: make these options shared if possible.
     pub fn layoutWidgetControls() void {
         dvui.structUI(@src(), test_options_label, &test_options, 1, .{}, .{});
         const axis_opts: StructOptions(dvui.PlotWidget.Axis) = .initWithDefaults(.{
@@ -1908,7 +1908,11 @@ const DisplayPlotXY = struct {
             .x_axis = &x_axis,
             .y_axis = &y_axis,
         });
-        dvui.structUI(@src(), "init_opts", &init_opts, 3, .{ plot_opts, axis_opts, struct_options.color, tick_opts }, .{});
+        const display_opts: StructOptions(dvui.PlotXYOptions) = .initWithDefaults(.{
+            .xs = .{ .standard = .{ .default_expanded = false } },
+            .ys = .{ .standard = .{ .default_expanded = false } },
+        }, null);
+        dvui.structUI(@src(), "init_opts", &init_opts, 3, .{ display_opts, plot_opts, axis_opts, struct_options.color, tick_opts }, .{});
     }
 };
 
@@ -2143,7 +2147,7 @@ const DisplayScrollArea = struct {
     }
 
     pub fn layoutWidgetControls() void {
-        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+        if (struct_ui.displayContainer(@src(), test_options_label, true)) |container| {
             defer container.deinit();
             const display_opts: StructOptions(@TypeOf(nr_boxes)) = .init(.{
                 .w = .{ .number = .{ .min = 2, .max = 200 } },
@@ -2173,7 +2177,7 @@ const DisplayScrollArea = struct {
     fn displayViewport(field_name: []const u8, ptr: *anyopaque, _: bool, _: *dvui.Alignment) void {
         const field_value_ptr: *Rect = @ptrCast(@alignCast(ptr));
 
-        if (struct_ui.displayContainer(@src(), field_name)) |container| {
+        if (struct_ui.displayContainer(@src(), field_name, true)) |container| {
             defer container.deinit();
             var al: dvui.Alignment = .init(@src(), 0);
             defer al.deinit();
@@ -2283,7 +2287,7 @@ const DisplaySeparator = struct {
     }
 
     pub fn layoutWidgetControls() void {
-        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+        if (struct_ui.displayContainer(@src(), test_options_label, true)) |container| {
             defer container.deinit();
             var al: dvui.Alignment = .init(@src(), 0);
             defer al.deinit();
@@ -2474,7 +2478,7 @@ const DisplaySpinner = struct {
     }
 
     pub fn layoutWidgetControls() void {
-        if (struct_ui.displayContainer(@src(), test_options_label)) |container| {
+        if (struct_ui.displayContainer(@src(), test_options_label, true)) |container| {
             defer container.deinit();
             var al: dvui.Alignment = .init(@src(), 0);
             defer al.deinit();
@@ -2757,7 +2761,7 @@ const DisplayTextEntry = struct {
     fn structDisplayMultiLineInitOpts(field_value_ptr: *dvui.TextEntryWidget.InitOptions) void {
         const T = dvui.TextEntryWidget.InitOptions;
 
-        if (struct_ui.displayContainer(@src(), "init_opts")) |container| {
+        if (struct_ui.displayContainer(@src(), "init_opts", true)) |container| {
             defer container.deinit();
             var al: dvui.Alignment = .init(@src(), 0);
             defer al.deinit();

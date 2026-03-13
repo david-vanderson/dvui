@@ -33,6 +33,7 @@ const log = std.log.scoped(.struct_ui);
 /// - display: DisplayMode
 /// - label: ?[]const u8
 /// - customDisplayFn: ?*const fn(field_name: []const u8, field_value_ptr: *anyopaque, read_only: bool, al: *dvui.Alignment)
+/// - default_expanded: ?bool
 pub const FieldOptions = union(enum) {
     /// Control if the field should be displayed and if it is editable.
     const DisplayMode = enum {
@@ -185,6 +186,13 @@ pub const FieldOptions = union(enum) {
         }
     }
 
+    /// For container fields, controls whether the field is displayed expanded or collapsed.
+    pub fn defaultExpanded(self: FieldOptions) bool {
+        return switch (self) {
+            inline else => |*fo| fo.default_expanded orelse defaults.display_expanded,
+        };
+    }
+
     pub fn hasCustomDisplayFn(self: FieldOptions) bool {
         switch (self) {
             inline else => |fo| return fo.customDisplayFn != null,
@@ -213,6 +221,9 @@ pub const StandardFieldOptions = struct {
     customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
 
     label: ?[]const u8 = null,
+    // For container fields, controls if the container displayed expanded or collapsed.
+    // If not set uses defaults.display_expnaded.
+    default_expanded: ?bool = null,
 };
 
 /// Creates a default set of field options for a struct or union.
@@ -365,6 +376,7 @@ pub const NumberFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
     label: ?[]const u8 = null,
     customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
+    default_expanded: ?bool = null,
 
     /// For .read_write, display as either a text entry box or as a slider.
     widget_type: enum {
@@ -734,6 +746,7 @@ pub const BoolFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
     label: ?[]const u8 = null,
     customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
+    default_expanded: ?bool = null,
     widget_type: union(enum) {
         // true/false/null dropdown.
         dropdown: void,
@@ -864,6 +877,7 @@ pub const TextFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
     label: ?[]const u8 = null,
     customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
+    default_expanded: ?bool = false,
     multiline: bool = false,
 
     /// Set to true if the string is heap allocated and should be
@@ -1040,6 +1054,7 @@ pub const OptionalFieldOptions = struct {
     customDisplayFn: ?*const fn ([]const u8, *anyopaque, bool, *dvui.Alignment) void = null,
 
     label: ?[]const u8 = null,
+    default_expanded: ?bool = null,
     /// the optional and the option's value can have different display modes.
     child: FieldOptions.ChildFieldOptions = .none,
 
@@ -1224,7 +1239,7 @@ pub fn displayArray(
     validateFieldPtrType(field_name, &.{.array}, "displayArray", @TypeOf(field_value_ptr));
     if (field_option.displayMode() == .none) return;
 
-    if (displayContainer(src, field_option.displayLabel(field_name))) |vbox| {
+    if (displayContainer(src, field_option.displayLabel(field_name), field_option.defaultExpanded())) |vbox| {
         defer vbox.deinit();
         var alignment: dvui.Alignment = .init(@src(), depth);
         defer alignment.deinit();
@@ -1254,7 +1269,7 @@ pub fn displaySlice(
     validateFieldPtrTypeSlice(field_name, "displaySlice", @TypeOf(field_value_ptr));
     if (field_option.displayMode() == .none) return;
 
-    if (displayContainer(src, field_option.displayLabel(field_name))) |vbox| {
+    if (displayContainer(src, field_option.displayLabel(field_name), field_option.defaultExpanded())) |vbox| {
         defer vbox.deinit();
         var alignment: dvui.Alignment = .init(@src(), depth);
         defer alignment.deinit();
@@ -1297,7 +1312,7 @@ pub fn displayUnion(
     const current_choice = std.meta.activeTag(field_value_ptr.*);
     const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() != .read_write;
 
-    if (displayContainer(src, field_option.displayLabel(field_name))) |vbox| {
+    if (displayContainer(src, field_option.displayLabel(field_name), field_option.defaultExpanded())) |vbox| {
         defer vbox.deinit();
 
         const UnionT = @TypeOf(field_value_ptr.*);
@@ -1507,7 +1522,7 @@ pub fn displayStruct(
     const StructT = @TypeOf(field_value_ptr.*);
     const struct_options: StructOptions(StructT) = findMatchingStructOption(StructT, field_name orelse "", options) orelse .initWithDefaults(.{}, null);
 
-    const vbox: ?*dvui.BoxWidget = displayContainer(src, if (field_name) |name| field_option.displayLabel(name) else null);
+    const vbox: ?*dvui.BoxWidget = displayContainer(src, if (field_name) |name| field_option.displayLabel(name) else null, field_option.defaultExpanded());
     if (vbox != null) {
         var struct_alignment: dvui.Alignment = .init(@src(), depth);
         defer struct_alignment.deinit();
@@ -1540,12 +1555,12 @@ pub fn displayStruct(
 
 /// Create and expander to display a container field and indent the container's fields.
 /// can be used for the custom display of structs and unions.
-pub fn displayContainer(src: std.builtin.SourceLocation, field_name: ?[]const u8) ?*dvui.BoxWidget {
+pub fn displayContainer(src: std.builtin.SourceLocation, field_name: ?[]const u8, default_expanded: bool) ?*dvui.BoxWidget {
     var vbox: ?*dvui.BoxWidget = null;
     if (field_name == null or dvui.expander(
         src,
         field_name.?,
-        .{ .default_expanded = defaults.display_expanded },
+        .{ .default_expanded = default_expanded },
         .{ .expand = .horizontal },
     )) {
         // Use src again in case exoander is not created.
