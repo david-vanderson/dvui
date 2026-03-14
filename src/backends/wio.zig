@@ -21,18 +21,17 @@ pub fn backend(self: *@This()) dvui.Backend {
 pub const InitOptions = struct {
     window: wio.Window,
     renderer: *OpenGLRenderer,
-    size: ?wio.Size = null,
-    framebuffer: ?wio.Size = null,
+    /// Will be corrected by `addEvent()`, but should be set manually if events were already processed.
+    size: wio.Size = .{ .width = 640, .height = 480 },
+    /// Will be corrected by `addEvent()`, but should be set manually if events were already processed.
+    framebuffer: wio.Size = .{ .width = 640, .height = 480 },
 };
 
 pub fn init(options: InitOptions) !@This() {
-    const size_natural = options.size orelse wio.Size{ .width = 640, .height = 480 };
-    const size_physical = options.framebuffer orelse wio.Size{ .width = 640, .height = 480 };
-
     return .{
         .window = options.window,
-        .size_natural = .{ .w = @floatFromInt(size_natural.width), .h = @floatFromInt(size_natural.height) },
-        .size_physical = .{ .w = @floatFromInt(size_physical.width), .h = @floatFromInt(size_physical.height) },
+        .size_natural = .{ .w = @floatFromInt(options.size.width), .h = @floatFromInt(options.size.height) },
+        .size_physical = .{ .w = @floatFromInt(options.framebuffer.width), .h = @floatFromInt(options.framebuffer.height) },
         .renderer = options.renderer,
     };
 }
