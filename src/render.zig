@@ -15,6 +15,9 @@ pub const Target = struct {
     /// Only valid between `Window.begin`and `Window.end`.
     pub fn setAsCurrent(target: Target) Target {
         var cw = dvui.currentWindow();
+        cw.trianglesFlush() catch |err| {
+            dvui.logError(@src(), err, "Failed to flush triangles", .{});
+        };
         const ret = cw.render_target;
         cw.backend.renderTarget(target.texture) catch |err| {
             // TODO: This might be unrecoverable? Or brake rendering too badly?
@@ -58,8 +61,9 @@ pub const RenderCommand = struct {
     };
 };
 
-/// Rendered `Triangles` taking in to account the current clip rect
-/// and deferred rendering through render targets.
+/// Render `Triangles` taking in to account the current clip rect and deferred
+/// rendering through render targets.  Multiple calls here with the same clip
+/// rect and texture will be coalesced before sending to the backend.
 ///
 /// Expect that `dvui.Window.alpha` has already been applied.
 ///
@@ -97,7 +101,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
         }
     }
 
-    try cw.backend.drawClippedTriangles(tex, triangles.vertexes, triangles.indices, clipr);
+    try cw.trianglesQueue(tex, triangles.vertexes, triangles.indices, clipr);
 }
 
 pub const TextOptions = struct {
