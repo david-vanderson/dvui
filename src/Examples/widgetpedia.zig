@@ -963,6 +963,50 @@ const DisplayExpander = struct {
     }
 };
 
+const DisplayFlexBox = struct {
+    const name = "flexBox()";
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.FlexBoxWidget.InitOptions = undefined;
+
+    var test_options: struct {
+        nr_boxes: usize,
+        expand: dvui.Options.Expand,
+    } = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        test_options.nr_boxes = 25;
+        test_options.expand = .none;
+        init_opts = .{};
+        options = .{ .border = .all(1) };
+    }
+
+    pub fn layoutWidget() void {
+        var box = dvui.flexbox(@src(), init_opts, options.override(.{ .data_out = &wd }));
+        defer box.deinit();
+        for (0..test_options.nr_boxes) |i| {
+            var b = dvui.box(@src(), .{}, .{
+                .min_size_content = .{ .h = 30, .w = 30 },
+                .border = .all(1),
+                .id_extra = i,
+                .expand = test_options.expand,
+                .color_border = options.themeGet().focus,
+            });
+            b.deinit();
+        }
+    }
+
+    pub fn layoutWidgetControls() void {
+        dvui.structUI(@src(), test_options_label, &test_options, 1, .{}, .{});
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{}, .{});
+    }
+};
+
 const DisplayFloatingWindow = struct {
     const name = "floatingWindow()";
     var wd: dvui.WidgetData = undefined;
@@ -2118,7 +2162,9 @@ const DisplayScrollArea = struct {
     }
 
     pub fn layoutWidget() void {
-        options.min_size_content = if (init_opts.scroll_info == null) null else .{ .w = @floatFromInt(nr_boxes.w * 27), .h = @floatFromInt(nr_boxes.h * 27) };
+        const box_size = 26;
+        options.min_size_content = if (init_opts.scroll_info == null) null else .{ .w = @floatFromInt(nr_boxes.w * (box_size + 2)), .h = @floatFromInt(nr_boxes.h * (box_size + 2)) };
+        const color_fill = options.color(.border).opacity(0.25);
         var scroll = dvui.scrollArea(@src(), init_opts, options.override(.{ .data_out = &wd }));
         defer scroll.deinit();
         var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
@@ -2127,12 +2173,12 @@ const DisplayScrollArea = struct {
             var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = i });
             defer hbox.deinit();
             for (0..nr_boxes.w) |j| {
-                var box = dvui.box(@src(), .{}, .{ .min_size_content = .all(25), .color_fill = if ((i + j) % 2 == 0) options.color(.border) else null, .id_extra = i * 1_000_000 + j, .border = .all(1), .background = true });
+                var box = dvui.box(@src(), .{}, .{ .min_size_content = .all(box_size), .color_border = color_fill, .color_fill = if ((i + j) % 2 == 0) color_fill else null, .id_extra = i * 1_000_000 + j, .border = .all(1), .background = true });
                 defer box.deinit();
                 if (i == 0 and j == 0) {
-                    _ = dvui.checkbox(@src(), &check_top_left, "", .{ .gravity_x = 0.5, .gravity_y = 0.5, .data_out = &top_left_wd, .padding = .all(0) });
+                    _ = dvui.buttonIcon(@src(), "top_left", dvui.entypo.box, .{}, .{}, .{ .data_out = &top_left_wd, .expand = .both, .padding = .all(0) });
                 } else if (i == nr_boxes.h - 1 and j == nr_boxes.w - 1) {
-                    _ = dvui.checkbox(@src(), &check_bottom_right, "", .{ .gravity_x = 0.5, .gravity_y = 0.5, .data_out = &bottom_right_wd, .padding = .all(0) });
+                    _ = dvui.buttonIcon(@src(), "bottom_right", dvui.entypo.box, .{}, .{}, .{ .data_out = &bottom_right_wd, .expand = .both, .padding = .all(0) });
                 }
             }
         }
@@ -2153,7 +2199,16 @@ const DisplayScrollArea = struct {
                 .w = .{ .number = .{ .min = 2, .max = 200 } },
                 .h = .{ .number = .{ .min = 2, .max = 200 } },
             }, null);
-            dvui.structUI(@src(), "Boxes", &nr_boxes, 1, .{display_opts}, .{});
+            var al: dvui.Alignment = .init(@src(), 0);
+            defer al.deinit();
+            if (struct_ui.displayStruct(@src(), "Boxes", &nr_boxes, 1, .default, .{display_opts}, &al)) |container_inner| {
+                defer container_inner.deinit();
+            }
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            defer hbox.deinit();
+            dvui.icon(@src(), "box", dvui.entypo.box, .{}, .{ .max_size_content = .all(25), .gravity_y = 0.5, .padding = .{ .x = 6 } });
+            al.spacer(@src(), 0);
+            dvui.labelNoFmt(@src(), "Focus with focus_id\nthen click scrollbar", .{}, .{});
         }
         const display_opts: StructOptions(dvui.ScrollAreaWidget.InitOpts) = .initWithDefaults(.{
             .focus_id = .{ .standard = .{ .customDisplayFn = displayFocusId } },
@@ -3051,7 +3106,7 @@ const widget_hierarchy = [_]WidgetHierarchy{
         .{ .name = "dropdownEnum", .displayFn = DisplayDropDownEnum.displayFn, .children = null },
     } },
     .{ .name = "expander", .displayFn = DisplayExpander.displayFn, .children = null },
-    .{ .name = "flexbox", .displayFn = displayEmpty, .children = null },
+    .{ .name = "flexbox", .displayFn = DisplayFlexBox.displayFn, .children = null },
     // FloatingMenuWidget is typically combined with other widgets, and not used standalone.
     //    .{ .name = "floatingMenu", .displayFn = displayEmpty, .children = null },
 
