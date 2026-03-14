@@ -14,6 +14,7 @@ pub const Backend = enum {
     dx11,
     glfw_opengl,
     web,
+    wio,
     /// Does no rendering!
     testing,
 };

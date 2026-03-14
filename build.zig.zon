@@ -25,6 +25,16 @@
             .hash = "raylib-5.6.0-dev-whq8uMVQCgVTgRxG3REWgBBSi2BR-nf4bq6eqANxImt7",
             .lazy = true,
         },
+        .wio = .{
+            .url = "https://github.com/ypsvlq/wio/archive/65b65d00acc65925bbff27ba0426417dc867ca81.tar.gz",
+            .hash = "wio-0.0.0-8xHrr6kmBQB_BvMsoONvrQPjzyj0xCSM-JJNmyZmqmcK",
+            .lazy = true,
+        },
+        .opengl = .{
+            .url = "https://github.com/ypsvlq/opengl/archive/2dfbc2b4994e3333d35fd2c1bbf459340d54fef4.tar.gz",
+            .hash = "opengl-0.0.0-_Vp8-GvsKgCK18nOkOYyRNlkJUn-zWE8hu38AeUPO7Jb",
+            .lazy = true,
+        },
         //used in the raylib-ontop example
         .raygui = .{
             .url = "https://github.com/raysan5/raygui/archive/33f1659.tar.gz",
