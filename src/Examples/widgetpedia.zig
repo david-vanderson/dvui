@@ -2138,7 +2138,7 @@ const DisplayScrollArea = struct {
     var check_bottom_right = false;
     var user_scroll: dvui.Point = undefined;
 
-    var focus_id: ?dvui.Id = undefined;
+    var focus_id: enum { null, top_left, bottom_right } = undefined;
 
     var nr_boxes: struct {
         w: usize,
@@ -2155,7 +2155,7 @@ const DisplayScrollArea = struct {
         init_opts = .{};
         scroll_info = .{};
         nr_boxes = .{ .w = 20, .h = 20 };
-        focus_id = null;
+        focus_id = .null;
         check_bottom_right = false;
         check_top_left = false;
         user_scroll = .{ .x = 0, .y = 0 };
@@ -2163,8 +2163,15 @@ const DisplayScrollArea = struct {
 
     pub fn layoutWidget() void {
         const box_size = 26;
-        options.min_size_content = if (init_opts.scroll_info == null) null else .{ .w = @floatFromInt(nr_boxes.w * (box_size + 2)), .h = @floatFromInt(nr_boxes.h * (box_size + 2)) };
         const color_fill = options.color(.border).opacity(0.25);
+
+        options.min_size_content = if (init_opts.scroll_info == null) null else .{ .w = @floatFromInt(nr_boxes.w * (box_size + 2)), .h = @floatFromInt(nr_boxes.h * (box_size + 2)) };
+        init_opts.focus_id = switch (focus_id) {
+            .null => null,
+            .top_left => top_left_wd.id,
+            .bottom_right => bottom_right_wd.id,
+        };
+
         var scroll = dvui.scrollArea(@src(), init_opts, options.override(.{ .data_out = &wd }));
         defer scroll.deinit();
         var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
@@ -2271,12 +2278,7 @@ const DisplayScrollArea = struct {
         defer hbox_aligned.deinit();
         alignment.record(box.data().id, hbox_aligned.data());
 
-        const selected_index: usize = if (init_opts.focus_id == null)
-            0
-        else if (init_opts.focus_id == top_left_wd.id)
-            1
-        else
-            2;
+        const selected_index: usize = @intFromEnum(focus_id);
 
         var dd: dvui.DropdownWidget = undefined;
         dd.init(@src(), .{ .selected_index = selected_index, .label = if (selected_index == 0) "null" else if (selected_index == 1) "top left" else "bottom right" }, .{});
@@ -2298,7 +2300,7 @@ const DisplayScrollArea = struct {
                 dvui.label(@src(), "top left\n{f}", .{top_left_wd.id}, .{});
                 if (mi.activeRect()) |_| {
                     dd.close();
-                    init_opts.focus_id = top_left_wd.id;
+                    focus_id = .top_left;
                 }
             }
             {
@@ -2307,7 +2309,7 @@ const DisplayScrollArea = struct {
                 dvui.label(@src(), "bottom right\n{f}", .{bottom_right_wd.id}, .{});
                 if (mi.activeRect()) |_| {
                     dd.close();
-                    init_opts.focus_id = bottom_right_wd.id;
+                    focus_id = .bottom_right;
                 }
             }
         }
