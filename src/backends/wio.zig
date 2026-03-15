@@ -128,7 +128,7 @@ pub fn preferredColorScheme(_: *@This()) ?dvui.enums.ColorScheme {
 }
 
 pub fn refresh(_: *@This()) void {
-    // TODO
+    wio.cancelWait();
 }
 
 pub fn native(self: *@This(), _: *dvui.Window) dvui.Window.Native {
