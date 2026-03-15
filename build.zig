@@ -64,6 +64,7 @@ pub fn build(b: *std.Build) !void {
     const test_step = b.step("test", "Test the dvui codebase");
     const check_step = b.step("check", "Check that the entire dvui codebase has no syntax errors");
 
+    const use_llvm = b.option(bool, "use-llvm", "The value of the use_llvm executable option");
     // Setting this to false may fix linking errors: https://github.com/david-vanderson/dvui/issues/269
     const use_lld = b.option(bool, "use-lld", "The value of the use_lld executable option");
     const test_filters = b.option([]const []const u8, "test-filter", "Skip tests that do not match any filter") orelse &[0][]const u8{};
@@ -144,6 +145,7 @@ pub fn build(b: *std.Build) !void {
         .test_step = test_step,
         .test_filters = test_filters,
         .check_step = check_step,
+        .use_llvm = use_llvm,
         .use_lld = use_lld,
         .accesskit = accesskit,
         .build_options = build_options,
@@ -761,6 +763,52 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 addWebExample("web-app", b.path("examples/app.zig"), example_opts, wasm_dvui_opts);
             }
         },
+        .wio => {
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
+
+            // workaround for https://github.com/ziglang/zig/issues/24140
+            dvui_opts.use_llvm = true;
+
+            const wio_backend_mod = b.addModule("wio", .{
+                .root_source_file = b.path("src/backends/wio.zig"),
+                .target = target,
+                .optimize = optimize,
+            });
+            dvui_opts.addChecks(wio_backend_mod, "wio-backend");
+            dvui_opts.addTests(wio_backend_mod, "wio-backend");
+
+            if (b.lazyDependency("wio", .{
+                .target = target,
+                .optimize = optimize,
+                .features = "opengl",
+                .win32_manifest = false,
+            })) |wio| {
+                wio_backend_mod.addImport("wio", wio.module("wio"));
+            }
+
+            if (b.lazyDependency("opengl", .{
+                .major_version = 3,
+                .minor_version = 2,
+                .profile = .core,
+            })) |opengl| {
+                wio_backend_mod.addImport("gl", opengl.module("opengl"));
+            }
+
+            const dvui_wio = addDvuiModule("dvui_wio", dvui_opts);
+            dvui_opts.addChecks(dvui_wio, "dvui_wio");
+            if (test_dvui_and_app) {
+                dvui_opts.addTests(dvui_wio, "dvui_wio");
+            }
+
+            linkBackend(dvui_wio, wio_backend_mod);
+
+            const example_opts: ExampleOptions = .{
+                .dvui_mod = dvui_wio,
+                .backend_name = "wio-backend",
+                .backend_mod = wio_backend_mod,
+            };
+            addExample("wio-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
+        },
     }
 }
 
@@ -776,6 +824,7 @@ const DvuiModuleOptions = struct {
     check_step: ?*std.Build.Step = null,
     test_step: ?*std.Build.Step = null,
     test_filters: []const []const u8,
+    use_llvm: ?bool = null,
     use_lld: ?bool = null,
     accesskit: AccesskitOptions = .off,
     build_options: *std.Build.Step.Options,
@@ -830,7 +879,7 @@ const DvuiModuleOptions = struct {
     }
 
     fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
-        const tests = self.b.addTest(.{ .root_module = mod, .name = self.b.fmt("{s}-check", .{name}), .filters = self.test_filters, .use_lld = self.use_lld });
+        const tests = self.b.addTest(.{ .root_module = mod, .name = self.b.fmt("{s}-check", .{name}), .filters = self.test_filters, .use_llvm = self.use_llvm, .use_lld = self.use_lld });
         self.b.getInstallStep().dependOn(&tests.step);
         if (self.check_step) |step| {
             step.dependOn(&tests.step);
@@ -843,6 +892,7 @@ const DvuiModuleOptions = struct {
                 .root_module = mod,
                 .name = self.b.fmt("{s}-test", .{name}),
                 .filters = self.test_filters,
+                .use_llvm = self.use_llvm,
                 .use_lld = self.use_lld,
             });
             step.dependOn(&self.b.addRunArtifact(tests).step);
@@ -1030,7 +1080,7 @@ fn addExample(
     mod.addImport("dvui", example_opts.dvui_mod);
     mod.addImport(example_opts.backend_name, example_opts.backend_mod);
 
-    const exe = b.addExecutable(.{ .name = name, .root_module = mod, .use_lld = opts.use_lld });
+    const exe = b.addExecutable(.{ .name = name, .root_module = mod, .use_llvm = opts.use_llvm, .use_lld = opts.use_lld });
     if (opts.check_step) |step| {
         step.dependOn(&exe.step);
     }
