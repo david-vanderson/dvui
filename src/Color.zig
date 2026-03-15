@@ -34,7 +34,7 @@ pub const purple = Color{ .r = 0x80, .g = 0x00, .b = 0x80 };
 // https://en.wikipedia.org/wiki/Web_colors#Extended_colors
 pub const cyan = aqua;
 pub const magenta = fuchsia;
-pub const darl_cyan = teal;
+pub const dark_cyan = teal;
 pub const dark_magenta = purple;
 
 pub const transparent = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
@@ -453,7 +453,7 @@ pub const PMAImage = struct {
             .width = width,
             .height = height,
         };
-        var fb = std.io.fixedBufferStream(tvg_bytes);
+        var fb: std.Io.Reader = .fixed(tvg_bytes);
 
         var ow_stroke: ?tvg.Color = null;
         if (icon_opts.stroke_color) |cx| ow_stroke = ImageAdapter.conv(cx);
@@ -461,7 +461,7 @@ pub const PMAImage = struct {
         var disable_fill = false;
         if (ow_fill != null and ow_fill.?.a == 0.0) disable_fill = true;
         if (icon_opts.fill_color) |cx| ow_fill = ImageAdapter.conv(cx);
-        tvg.renderStream(render_alloc, &img, fb.reader(), .{
+        tvg.renderStream(render_alloc, &img, &fb, .{
             .overwrite_stroke_width = icon_opts.stroke_width,
             .overwrite_stroke = ow_stroke,
             .overwrite_fill = ow_fill,

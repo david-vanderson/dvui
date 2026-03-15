@@ -307,7 +307,7 @@ pub fn updateImageSource(self: *Texture, src: ImageSource) !void {
         .pixelsPMA => |px| {
             try update(self, px.rgba, px.interpolation);
         },
-        .texture => |_| @panic("this is not supported currently"),
+        .texture => @panic("this is not supported currently"),
     }
 }
 

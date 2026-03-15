@@ -32,7 +32,7 @@ kerning: bool = true,
 alpha: f32 = 1.0,
 
 /// Uses `arena` allocator
-events: std.ArrayListUnmanaged(Event) = .{},
+events: std.ArrayListUnmanaged(Event) = .empty,
 event_num: u16 = 0,
 /// mouse_pt tracks the last position we got a mouse event for
 /// 1) used to add position info to mouse wheel events
@@ -1534,7 +1534,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 }
 
 fn initEvents(self: *Self) std.mem.Allocator.Error!void {
-    self.events = .{};
+    self.events = .empty;
     self.event_num = 0;
 
     // We want a position mouse event to do mouse cursors.  It needs to be

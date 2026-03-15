@@ -30,18 +30,21 @@ pub fn main() !void {
     // app_init is a stand-in for what your application is already doing to set things up
     try app_init();
 
+    var io: std.Io.Threaded = .init(gpa, .{});
+    defer io.deinit();
+
     // create SDL backend using existing window and renderer, app still owns the window/renderer
-    var backend = SDLBackend.init(window, renderer);
+    var backend = SDLBackend.init(io.io(), window, renderer);
     defer backend.deinit();
 
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
+    var win = try dvui.Window.init(@src(), gpa, io.io(), backend.backend(), .{});
     defer win.deinit();
 
     main_loop: while (true) {
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(std.time.nanoTimestamp());
+        try win.begin(backend.nanoTime());
 
         // send events to dvui if they belong to floating windows
         var event: c.SDL_Event = undefined;
