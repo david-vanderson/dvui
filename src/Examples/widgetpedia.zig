@@ -2183,9 +2183,9 @@ const DisplayScrollArea = struct {
                 var box = dvui.box(@src(), .{}, .{ .min_size_content = .all(box_size), .color_border = color_fill, .color_fill = if ((i + j) % 2 == 0) color_fill else null, .id_extra = i * 1_000_000 + j, .border = .all(1), .background = true });
                 defer box.deinit();
                 if (i == 0 and j == 0) {
-                    _ = dvui.buttonIcon(@src(), "top_left", dvui.entypo.box, .{}, .{}, .{ .data_out = &top_left_wd, .expand = .both, .padding = .all(0) });
+                    _ = dvui.buttonIcon(@src(), "top_left", dvui.entypo.hair_cross, .{}, .{}, .{ .data_out = &top_left_wd, .expand = .both, .padding = .all(0) });
                 } else if (i == nr_boxes.h - 1 and j == nr_boxes.w - 1) {
-                    _ = dvui.buttonIcon(@src(), "bottom_right", dvui.entypo.box, .{}, .{}, .{ .data_out = &bottom_right_wd, .expand = .both, .padding = .all(0) });
+                    _ = dvui.buttonIcon(@src(), "bottom_right", dvui.entypo.hair_cross, .{}, .{}, .{ .data_out = &bottom_right_wd, .expand = .both, .padding = .all(0) });
                 }
             }
         }
@@ -2213,7 +2213,7 @@ const DisplayScrollArea = struct {
             }
             var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
             defer hbox.deinit();
-            dvui.icon(@src(), "box", dvui.entypo.box, .{}, .{ .max_size_content = .all(25), .gravity_y = 0.5, .padding = .{ .x = 6 } });
+            dvui.icon(@src(), "box", dvui.entypo.hair_cross, .{}, .{ .max_size_content = .all(25), .gravity_y = 0.5, .padding = .{ .x = 6 } });
             al.spacer(@src(), 0);
             dvui.labelNoFmt(@src(), "Focus with focus_id\nthen click scrollbar", .{}, .{});
         }
@@ -2458,6 +2458,42 @@ const DisplaySliderEntry = struct {
             }, .{ .label = "slider entry", .value = &test_options.value });
             dvui.structUI(@src(), "init_opts", &init_opts, 1, .{display_options}, .{});
         }
+    }
+};
+
+const DisplaySliderVector = struct {
+    const name: []const u8 = "sliderVector()";
+
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+    var init_opts: dvui.SliderVectorInitOptions = undefined;
+    var result: bool = undefined;
+
+    const pi = std.math.pi;
+    var slider_values = [_]f32{ -2 * pi, -pi, 0, pi, 2 * pi };
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{};
+        init_opts = .{ .min = -2 * pi, .max = 2 * pi, .interval = 0.01 };
+    }
+
+    pub fn layoutWidget() void {
+        result = dvui.sliderVector(@src(), "{d:0.2}", 5, &slider_values, init_opts, options.override(.{ .data_out = &wd }));
+    }
+
+    pub fn layoutResults() void {
+        var al = dvui.Alignment.init(@src(), 0);
+        defer al.deinit();
+        struct_ui.displayBool(@src(), "result", &result, .{ .boolean = .{ .display = .read_only } }, &al);
+    }
+
+    pub fn layoutWidgetControls() void {
+        dvui.structUI(@src(), "init_opts", &init_opts, 1, .{struct_options.color}, .{});
     }
 };
 
@@ -3166,7 +3202,7 @@ const widget_hierarchy = [_]WidgetHierarchy{
     .{ .name = "sliders", .displayFn = displayEmpty, .children = &.{
         .{ .name = "slider", .displayFn = DisplaySlider.displayFn, .children = null },
         .{ .name = "sliderEntry", .displayFn = DisplaySliderEntry.displayFn, .children = null },
-        .{ .name = "sliderVector", .displayFn = displayEmpty, .children = null },
+        .{ .name = "sliderVector", .displayFn = DisplaySliderVector.displayFn, .children = null },
     } },
 
     .{ .name = "spacer", .displayFn = DisplaySpacer.displayFn, .children = null },
