@@ -4586,7 +4586,13 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
     const cornerRad = opts.corner_radiusGet().scale(rs.s, Rect.Physical);
-    rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
+
+    const is98 = std.mem.eql(u8, opts.themeGet().name, "Windows 98");
+    if (is98) {
+        renderNinepatch(opts.themeGet().control.ninepatch_press.?, rs, .{}) catch {};
+    } else {
+        rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
+    }
 
     if (focused) {
         rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
