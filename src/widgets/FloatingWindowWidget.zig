@@ -98,11 +98,19 @@ drag_area: Rect.Physical = undefined,
 
 pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const options = defaults.themeOverride(opts.theme).override(opts);
+    const theme = options.themeGet();
+    const is98 = std.mem.eql(u8, theme.name, "Windows 98");
     var box_options = options;
     box_options.role = null;
     box_options.label = null;
     box_options.id_extra = null;
     box_options.rect = null; // if the user passes in a rect, don't pass it to the BoxWidget
+    if (is98) {
+        box_options.border = null;
+        box_options.ninepatch_fill = theme.ninepatch(.window, .fill);
+        box_options.padding = .{ .x = 2, .y = 2, .w = 2, .h = 2 };
+        box_options.color_fill = theme.color(.window, .fill);
+    }
 
     self.* = .{
         // options is really for our embedded BoxWidget, so save them for the

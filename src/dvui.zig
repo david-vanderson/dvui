@@ -2140,11 +2140,18 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Rect.Physical {
     var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
 
+    const is98 = std.mem.eql(u8, dvui.themeGet().name, "Windows 98");
+    const color_text: ?dvui.Color = if (is98) dvui.themeGet().window.fill else null;
+
     dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{
         .expand = .horizontal,
         .font = .theme(.heading),
         .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 },
         .label = .{ .for_id = dvui.subwindowCurrentId() },
+        .background = true,
+        .color_border = null,
+        .color_fill = if (is98) dvui.themeGet().app1.fill else null,
+        .color_text = color_text,
     });
 
     if (openflag) |of| {
@@ -2161,7 +2168,12 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
         }
     }
 
-    dvui.labelNoFmt(@src(), right_str, .{}, .{ .gravity_x = 1.0 });
+    dvui.labelNoFmt(@src(), right_str, .{}, .{
+        .gravity_x = 1.0,
+        .color_border = null,
+        .color_text = color_text,
+        .font = .theme(.heading),
+    });
 
     const evts = events();
     for (evts) |*e| {
@@ -2183,8 +2195,10 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
 
     over.deinit();
 
-    const swd = dvui.separator(@src(), .{ .expand = .horizontal });
-    ret.h += swd.rectScale().r.h;
+    if (!is98) {
+        const swd = dvui.separator(@src(), .{ .expand = .horizontal });
+        ret.h += swd.rectScale().r.h;
+    }
 
     return ret;
 }

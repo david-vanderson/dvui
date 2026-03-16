@@ -123,7 +123,16 @@ pub fn demo(comptime include: DemoInclude) void {
     //    paned.split_ratio = 0;
     //}
     if (paned.showFirst()) {
-        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .content });
+        const theme = dvui.themeGet();
+        const is98 = std.mem.eql(u8, theme.name, "Windows 98");
+        var scroll_options = dvui.Options{ .expand = .both, .style = .content };
+        if (is98) {
+            scroll_options.background = false;
+            scroll_options.ninepatch_fill = null;
+            // scroll_options.style = null;
+            // scroll_options.ninepatch = theme.ninepatch(.content, .press);
+        }
+        var scroll = dvui.scrollArea(@src(), .{}, scroll_options);
         defer scroll.deinit();
 
         var invalidate: bool = false;
