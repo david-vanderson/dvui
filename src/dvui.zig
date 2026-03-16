@@ -4589,6 +4589,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
     const is98 = std.mem.eql(u8, opts.themeGet().name, "Windows 98");
     if (is98) {
+        rs.r.fill(cornerRad, .{ .color = .white });
         renderNinepatch(opts.themeGet().control.ninepatch_press.?, rs, .{}) catch {};
     } else {
         rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
@@ -4606,11 +4607,13 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     }
 
     var options = opts;
-    if (checked) {
-        options.style = .highlight;
-        rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
-    } else {
-        rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
+    if (!is98) {
+        if (checked) {
+            options.style = .highlight;
+            rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
+        } else {
+            rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
+        }
     }
 
     if (checked) {
