@@ -354,7 +354,7 @@ pub fn scrollCanvas() void {
     // when starting out)
     if (!scroll_info.viewport.empty()) {
         // add current viewport plus padding
-        const pad = 10;
+        const pad = 60;
         var bbox = scroll_info.viewport.outsetAll(pad);
         if (mbbox) |bb| {
             // convert bb from screen space to viewport space
