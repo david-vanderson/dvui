@@ -887,7 +887,7 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
 pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8) !void {
     if (comptime sdl3) {
         const tx: [*c]c.SDL_Texture = @ptrCast(@alignCast(texture.ptr));
-        if (!c.SDL_UpdateTexture(tx, null, pixels, @intCast(texture.width * 4))) return error.TextureUpdate;
+        if (!c.SDL_UpdateTexture(tx, null, pixels, @intCast(texture.width * texture.format.bytesPerPixel()))) return error.TextureUpdate;
     } else {
         return dvui.Backend.TextureError.NotImplemented;
     }
