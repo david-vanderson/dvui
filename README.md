@@ -104,6 +104,16 @@ Tested with Zig v0.15.2 (for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.c
       <td><code>glfw-opengl-ontop</code></td>
     </tr>
     <tr>
+      <td>
+        <strong>wio</strong>
+        <br>
+        <sub>OpenGL on <a href="https://github.com/ypsvlq/wio"><code>wio</code></a></sub>
+      </td>
+      <td><code>wio-app</code></td>
+      <td>todo</td>
+      <td>todo</td>
+    </tr>
+    <tr>
       <td><strong>Web</strong></td>
       <td><code>web-app</code></td>
       <td>none</td>
