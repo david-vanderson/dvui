@@ -553,7 +553,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                             // propagate the scroll event because we are already maxxed out
                         } else {
                             e.handle(@src(), self.data());
-                            self.si.scrollByOffset(.horizontal, me.action.wheel_x);
+                            self.si.scrollByOffset(.horizontal, -me.action.wheel_x);
                             if (self.init_opts.user_scroll) |us| us.*.x += me.action.wheel_x;
                             dvui.refresh(null, @src(), self.data().id);
                         }

@@ -804,9 +804,7 @@ pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) st
             .mouse = .{
                 .action = if (dir == .vertical)
                     if (self.modifiers.shiftOnly())
-                        // Invert ticks so scrolling up takes you left
-                        // (matches behaviour of text editors and browsers)
-                        .{ .wheel_x = -ticks }
+                        .{ .wheel_x = ticks }
                     else
                         .{ .wheel_y = ticks }
                 else
