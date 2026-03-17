@@ -97,9 +97,10 @@ pub fn scrollCanvas() void {
     }
 
     for (boxes, 0..) |*b, i| {
-        const pt = dataRectScale.rectToPhysical(.{ .x = b.x, .y = b.y });
+        const phys = dataRectScale.rectToPhysical(.{ .x = b.x, .y = b.y });
+        const nat = dvui.currentWindow().rectScale().rectFromPhysical(phys);
         var fc: dvui.FloatingWidget = undefined;
-        fc.init(@src(), .{}, .{ .id_extra = i, .rect = .cast(pt) });
+        fc.init(@src(), .{}, .{ .id_extra = i, .rect = nat });
         defer fc.deinit();
         var dragBox = dvui.box(@src(), .{}, .{
             .expand = .both,
