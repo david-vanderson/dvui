@@ -537,7 +537,7 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
             global.source_code = source;
         }
 
-        // Don't process events. Read-only view.
+        te.textLayout.processEvents();
         te.draw();
     } else {
         if (showing.*) {
