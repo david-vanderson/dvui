@@ -5236,6 +5236,48 @@ pub fn plotXY(src: std.builtin.SourceLocation, init_opts: PlotXYOptions, opts: O
     p.deinit();
 }
 
+/// Defers a whole block of rendering.  Useful if you have overlapping widgets
+/// and want the event handling to match the visual order.
+pub const DeferRender = struct {
+    /// Uses `arena` allocator
+    render_cmds: std.ArrayList(dvui.RenderCommand) = .empty,
+    /// Uses `arena` allocator
+    render_cmds_after: std.ArrayList(dvui.RenderCommand) = .empty,
+
+    prev_dr_cmds: ?*std.ArrayList(dvui.RenderCommand),
+    prev_dr_cmds_after: ?*std.ArrayList(dvui.RenderCommand),
+
+    pub fn init(self: *DeferRender) void {
+        const cw = dvui.currentWindow();
+        self.* = .{
+            .prev_dr_cmds = cw.defer_render_cmds,
+            .prev_dr_cmds_after = cw.defer_render_cmds_after,
+        };
+        cw.defer_render_cmds = &self.render_cmds;
+        cw.defer_render_cmds_after = &self.render_cmds_after;
+    }
+
+    pub fn deinit(self: *DeferRender) void {
+        const cw = dvui.currentWindow();
+
+        // restore previous queues
+        cw.defer_render_cmds = self.prev_dr_cmds;
+        cw.defer_render_cmds_after = self.prev_dr_cmds_after;
+
+        // everything goes into the after queue
+        var sw = cw.subwindows.current() orelse &cw.subwindows.stack.items[0];
+        (cw.defer_render_cmds_after orelse &sw.render_cmds_after).insertSlice(cw.arena(), 0, self.render_cmds_after.items) catch |err| {
+            dvui.logError(@src(), err, "DeferRender could not insert after to render_cmds_after", .{});
+        };
+        (cw.defer_render_cmds_after orelse &sw.render_cmds_after).insertSlice(cw.arena(), 0, self.render_cmds.items) catch |err| {
+            dvui.logError(@src(), err, "DeferRender could not insert normal to render_cmds_after", .{});
+        };
+
+        self.render_cmds.clearAndFree(cw.arena());
+        self.render_cmds_after.clearAndFree(cw.arena());
+    }
+};
+
 /// Display a struct and allow the user to edit values
 ///
 /// Refer to struct_ui.zig for full API.
