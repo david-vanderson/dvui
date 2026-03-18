@@ -250,10 +250,12 @@ pub fn demo(comptime include: DemoInclude) void {
             }
 
             dvui.label(@src(), "{s}", .{demo_active.name()}, .{ .font = dvui.Font.theme(.title), .gravity_y = 0.5 });
-            if (dvui.labelClick(@src(), "View source code", .{}, .{}, .{ .gravity_x = 1.0, .gravity_y = 0.5, .color_text = dvui.themeGet().focus })) {
-                const window_rect = dvui.currentWindow().data().contentRect();
-                source_code_rect = .{ .x = window_rect.x + window_rect.w / 2, .y = window_rect.y, .h = window_rect.h, .w = window_rect.w / 2 };
-                source_code_show = true;
+            if (include == .full) {
+                if (dvui.labelClick(@src(), "View source code", .{}, .{}, .{ .gravity_x = 1.0, .gravity_y = 0.5, .color_text = dvui.themeGet().focus })) {
+                    const window_rect = dvui.currentWindow().data().contentRect();
+                    source_code_rect = .{ .x = window_rect.x + window_rect.w / 2, .y = window_rect.y, .h = window_rect.h, .w = window_rect.w / 2 };
+                    source_code_show = true;
+                }
             }
         }
 
@@ -301,7 +303,7 @@ pub fn demo(comptime include: DemoInclude) void {
         show_stroke_test_window();
     }
 
-    if (source_code_show) {
+    if (include == .full and source_code_show) {
         switch (demo_active) {
             inline else => |demo_name| {
                 const source_code = if (dvui.useTreeSitter) @embedFile("Examples/" ++ @tagName(demo_name) ++ ".zig") else "";
