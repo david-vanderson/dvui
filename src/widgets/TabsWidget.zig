@@ -44,7 +44,7 @@ pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitO
 
     self.scroll.init(src, scroll_opts, defaults.override(opts));
 
-    self.group.init(@src(), .{ .nav_key_dir = self.init_options.dir }, .{});
+    self.group.init(@src(), .{ .nav_key_dir = self.init_options.dir }, .{ .tab_index = opts.tab_index });
 
     const margin: Rect = switch (self.init_options.dir) {
         .horizontal => .{ .y = 2 },

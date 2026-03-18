@@ -35,7 +35,7 @@ pub const InitOptions = struct {
 pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const id = dvui.parentGet().extendId(src, opts.idExtra());
     const rect: Rect = dvui.dataGet(null, id, "_rect", Rect) orelse .{};
-    const defaults = Options{ .name = "Focus Group", .rect = rect, .expand = if (rect.empty()) .both else .none };
+    const defaults = Options{ .name = "Focus Group", .rect = rect, .expand = if (rect.empty()) .both else .none, .role = .group };
     self.* = .{
         .init_opts = init_opts,
         .wd = WidgetData.init(src, .{}, defaults.override(opts)),
@@ -52,7 +52,9 @@ pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts:
         if (sw.focus_group == null) {
 
             // put ourselves in the tab index so the whole focus group can be focused by tab
-            dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
+            if (self.tab_index_prev.len > 0) {
+                dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
+            }
 
             if (self.data().id == dvui.focusedWidgetId()) {
                 // if we got focused, focus our remembered focus or first id
