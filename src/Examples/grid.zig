@@ -15,7 +15,13 @@ pub fn gridStyling() void {
     var outer_hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .role = .tab_panel });
     defer outer_hbox.deinit();
 
+    var tigOuter = dvui.tabIndexGroup(@src(), .{});
+    defer tigOuter.deinit();
+
     {
+        var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 2 });
+        defer tig.deinit();
+
         var outer_vbox = dvui.box(@src(), .{}, .{
             .min_size_content = grid_panel_size,
             .max_size_content = .size(grid_panel_size),
@@ -93,6 +99,9 @@ pub fn gridStyling() void {
     const row_background = local.banding != .none or local.borders.nonZero();
 
     {
+        var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 1 });
+        defer tig.deinit();
+
         var grid = dvui.grid(@src(), .colWidths(&local.col_widths), .{
             .resize_rows = local.resize_rows,
         }, .{
@@ -322,7 +331,14 @@ pub fn gridLayouts() void {
             .{ .model = "Mustang with a really long name", .make = "Ford", .year = 2020, .mileage = 24000, .condition = .Good, .description = "Makes you feel 20% cooler just sitting in it." },
         };
     };
+
+    var tigOuter = dvui.tabIndexGroup(@src(), .{});
+    defer tigOuter.deinit();
+
     {
+        var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 2 });
+        defer tig.deinit();
+
         var outer_vbox = dvui.box(@src(), .{}, .{
             .expand = .horizontal,
             .border = Rect.all(1),
@@ -373,6 +389,9 @@ pub fn gridLayouts() void {
     }
 
     {
+        var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 1 });
+        defer tig.deinit();
+
         const all_cars = local.all_cars[0..];
         const banded: GridWidget.CellStyle.Banded = .{
             .opts = .{
