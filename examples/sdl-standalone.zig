@@ -103,75 +103,85 @@ pub fn main() !void {
     }
 }
 
+// pretending to be some library widget
+fn libWidget(tab_index: ?u16) void {
+    var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = tab_index });
+    defer tig.deinit();
+
+    _ = dvui.button(@src(), "libWidget Focus 2", .{}, .{ .tab_index = 2 });
+    _ = dvui.button(@src(), "libWidget Focus 1", .{}, .{ .tab_index = 1 });
+}
+
 // both dvui and SDL drawing
 // return false if user wants to exit the app
 fn gui_frame() bool {
     const backend = g_backend orelse return false;
+    if (false) {
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal, .name = "main" });
+            defer hbox.deinit();
 
-    {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal, .name = "main" });
-        defer hbox.deinit();
+            var m = dvui.menu(@src(), .horizontal, .{});
+            defer m.deinit();
 
-        var m = dvui.menu(@src(), .horizontal, .{});
-        defer m.deinit();
+            if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
+                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+                defer fw.deinit();
 
-        if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
-            var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
-            defer fw.deinit();
+                if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
+                    m.close();
+                }
 
-            if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
-                m.close();
+                if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
+                    return false;
+                }
             }
 
-            if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
-                return false;
+            if (dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{})) |r| {
+                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+                defer fw.deinit();
+                _ = dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
+                _ = dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
+                _ = dvui.menuItemLabel(@src(), "Dummy Super Long", .{}, .{ .expand = .horizontal });
             }
         }
 
-        if (dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{})) |r| {
-            var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
-            defer fw.deinit();
-            _ = dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
-            _ = dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
-            _ = dvui.menuItemLabel(@src(), "Dummy Super Long", .{}, .{ .expand = .horizontal });
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+        defer scroll.deinit();
+
+        var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
+        const lorem = "This example shows how to use dvui in a normal application.";
+        tl.addText(lorem, .{});
+        tl.deinit();
+
+        var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+        tl2.addText(
+            \\DVUI
+            \\- paints the entire window
+            \\- can show floating windows and dialogs
+            \\- example menu at the top of the window
+            \\- rest of the window is a scroll area
+            \\
+            \\
+        , .{});
+        tl2.addText("Framerate is variable and adjusts as needed for input events and animations.\n\n", .{});
+        if (vsync) {
+            tl2.addText("Framerate is capped by vsync.\n", .{});
+        } else {
+            tl2.addText("Framerate is uncapped.\n", .{});
         }
+        tl2.addText("\n", .{});
+        tl2.addText("Cursor is always being set by dvui.\n\n", .{});
+        if (dvui.useFreeType) {
+            tl2.addText("Fonts are being rendered by FreeType 2.", .{});
+        } else {
+            tl2.addText("Fonts are being rendered by stb_truetype.", .{});
+        }
+        tl2.deinit();
     }
-
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
-    defer scroll.deinit();
-
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
-    const lorem = "This example shows how to use dvui in a normal application.";
-    tl.addText(lorem, .{});
-    tl.deinit();
-
-    var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    tl2.addText(
-        \\DVUI
-        \\- paints the entire window
-        \\- can show floating windows and dialogs
-        \\- example menu at the top of the window
-        \\- rest of the window is a scroll area
-        \\
-        \\
-    , .{});
-    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.\n\n", .{});
-    if (vsync) {
-        tl2.addText("Framerate is capped by vsync.\n", .{});
-    } else {
-        tl2.addText("Framerate is uncapped.\n", .{});
-    }
-    tl2.addText("\n", .{});
-    tl2.addText("Cursor is always being set by dvui.\n\n", .{});
-    if (dvui.useFreeType) {
-        tl2.addText("Fonts are being rendered by FreeType 2.", .{});
-    } else {
-        tl2.addText("Fonts are being rendered by stb_truetype.", .{});
-    }
-    tl2.deinit();
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
-    if (dvui.button(@src(), label, .{}, .{})) {
+    if (dvui.button(@src(), label, .{}, .{ .tag = "show-demo-btn" })) {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
@@ -179,7 +189,55 @@ fn gui_frame() bool {
         dvui.toggleDebugWindow();
     }
 
+    _ = dvui.button(@src(), "Focus 5", .{}, .{});
+    _ = dvui.button(@src(), "Focus 6", .{}, .{});
+
+    // locally reorder a few things
     {
+        var tig = dvui.tabIndexGroup(@src(), .{});
+        defer tig.deinit();
+
+        _ = dvui.button(@src(), "Focus 8", .{}, .{ .tab_index = 2 });
+        _ = dvui.button(@src(), "Focus 7", .{}, .{ .tab_index = 1 });
+    }
+
+    {
+        var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 2 });
+        defer tig.deinit();
+
+        _ = dvui.button(@src(), "Focus 4", .{}, .{ .tab_index = 2 });
+        _ = dvui.button(@src(), "Focus 3", .{}, .{ .tab_index = 1 });
+
+        var group = dvui.radioGroup(@src(), .{}, .{ .label = .{ .text = "Radio buttons" } });
+        defer group.deinit();
+
+        var tig2 = dvui.tabIndexGroup(@src(), .{ .tab_index = 4 });
+        _ = dvui.radio(@src(), false, "Radio 3", .{ .tab_index = 2 });
+        _ = dvui.radio(@src(), false, "Radio 2", .{ .tab_index = 1 });
+        tig2.deinit();
+
+        _ = dvui.radio(@src(), false, "Radio 1", .{ .tab_index = 3 });
+    }
+
+    {
+        var b = dvui.box(@src(), .{}, .{ .border = .all(1) });
+        defer b.deinit();
+
+        dvui.label(@src(), "These are all tab index 1", .{}, .{});
+
+        libWidget(1);
+    }
+
+    {
+        var b = dvui.box(@src(), .{}, .{ .border = .all(1) });
+        defer b.deinit();
+
+        dvui.label(@src(), "These are all tab index 10", .{}, .{});
+
+        libWidget(10);
+    }
+
+    if (false) {
         var scaler = dvui.scale(@src(), .{ .scale = &scale_val }, .{ .expand = .horizontal });
         defer scaler.deinit();
 
