@@ -5236,20 +5236,27 @@ pub fn plotXY(src: std.builtin.SourceLocation, init_opts: PlotXYOptions, opts: O
     p.deinit();
 }
 
-/// Defers a whole block of rendering.  Useful if you have overlapping widgets
-/// and want the event handling to match the visual order.
-pub const DeferRender = struct {
+/// Reverse the normal back-to-front rendering order.  Rendering inside is
+/// deferred until after normal rendering.  Multiple RenderFrontToBack blocks are
+/// ordered in reverse, so the first one is rendered last.
+///
+/// Use with overlapping widgets to have event handling match the visual
+/// order (click is handled by the first to run, which will be rendered last
+/// (visually on top).
+pub const RenderFrontToBack = struct {
     /// Uses `arena` allocator
     render_cmds: std.ArrayList(dvui.RenderCommand) = .empty,
     /// Uses `arena` allocator
     render_cmds_after: std.ArrayList(dvui.RenderCommand) = .empty,
 
+    prev_rendering: bool,
     prev_dr_cmds: ?*std.ArrayList(dvui.RenderCommand),
     prev_dr_cmds_after: ?*std.ArrayList(dvui.RenderCommand),
 
-    pub fn init(self: *DeferRender) void {
+    pub fn init(self: *RenderFrontToBack) void {
         const cw = dvui.currentWindow();
         self.* = .{
+            .prev_rendering = renderingSet(false),
             .prev_dr_cmds = cw.defer_render_cmds,
             .prev_dr_cmds_after = cw.defer_render_cmds_after,
         };
@@ -5257,20 +5264,32 @@ pub const DeferRender = struct {
         cw.defer_render_cmds_after = &self.render_cmds_after;
     }
 
-    pub fn deinit(self: *DeferRender) void {
+    pub fn initReset(self: *RenderFrontToBack) void {
+        const cw = dvui.currentWindow();
+        self.* = .{
+            .prev_rendering = renderingSet(false),
+            .prev_dr_cmds = cw.defer_render_cmds,
+            .prev_dr_cmds_after = cw.defer_render_cmds_after,
+        };
+        cw.defer_render_cmds = null;
+        cw.defer_render_cmds_after = null;
+    }
+
+    pub fn deinit(self: *RenderFrontToBack) void {
         const cw = dvui.currentWindow();
 
         // restore previous queues
+        _ = renderingSet(self.prev_rendering);
         cw.defer_render_cmds = self.prev_dr_cmds;
         cw.defer_render_cmds_after = self.prev_dr_cmds_after;
 
         // everything goes into the after queue
         var sw = cw.subwindows.current() orelse &cw.subwindows.stack.items[0];
         (cw.defer_render_cmds_after orelse &sw.render_cmds_after).insertSlice(cw.arena(), 0, self.render_cmds_after.items) catch |err| {
-            dvui.logError(@src(), err, "DeferRender could not insert after to render_cmds_after", .{});
+            dvui.logError(@src(), err, "RenderFrontToBack could not insert after to render_cmds_after", .{});
         };
         (cw.defer_render_cmds_after orelse &sw.render_cmds_after).insertSlice(cw.arena(), 0, self.render_cmds.items) catch |err| {
-            dvui.logError(@src(), err, "DeferRender could not insert normal to render_cmds_after", .{});
+            dvui.logError(@src(), err, "RenderFrontToBack could not insert normal to render_cmds_after", .{});
         };
 
         self.render_cmds.clearAndFree(cw.arena());
