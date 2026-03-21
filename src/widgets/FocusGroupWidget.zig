@@ -54,7 +54,9 @@ pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts:
         if (sw.focus_group == null) {
 
             // put ourselves in the tab index so the whole focus group can be focused by tab
-            dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
+            // but only if we contain focusable widgets
+            if (self.tab_index_prev.len > 0)
+                dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
 
             if (self.data().id == dvui.focusedWidgetId()) {
                 // if we got focused, focus our remembered focus or first id
