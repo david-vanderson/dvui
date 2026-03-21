@@ -494,10 +494,15 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
         const global = struct {
             extern fn tree_sitter_zig() callconv(.c) *dvui.c.TSLanguage;
             var source_code: []const u8 = "";
+            var source_code_stripped: []const u8 = "";
+            var highlight_range: ?struct {
+                start: usize,
+                end: usize,
+            } = null;
         };
 
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-        defer hbox.deinit();
+        var vbox = dvui.box(@src(), .{}, .{});
+        defer vbox.deinit();
 
         const queries = @embedFile("Examples/tree_sitter_zig_queries.scm");
 
@@ -517,6 +522,35 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
             .{ .name = "error", .opts = .{ .color_text = .fromHex("F44747") } },
         };
 
+        var range_changed = false;
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .padding = .{ .y = 6 } });
+            defer hbox.deinit();
+            dvui.icon(@src(), "search", dvui.entypo.magnifying_glass, .{}, .{ .expand = .ratio, .gravity_x = 1.0, .padding = .all(6) });
+            var search_entry = dvui.textEntry(@src(), .{ .placeholder = "Search ..." }, .{ .expand = .horizontal });
+            defer search_entry.deinit();
+            if (search_entry.enter_pressed) {
+                const range: @TypeOf(global.highlight_range.?) = global.highlight_range orelse .{ .start = 0, .end = 0 };
+                const text = search_entry.getText();
+                if (std.mem.indexOfPos(u8, global.source_code_stripped, range.end, text)) |idx| {
+                    global.highlight_range = .{ .start = idx, .end = idx + text.len };
+                    range_changed = true;
+                }
+            } else if (search_entry.text_changed) {
+                const range: @TypeOf(global.highlight_range.?) = global.highlight_range orelse .{ .start = 0, .end = 0 };
+                const text = search_entry.getText();
+                if (std.mem.indexOfPos(u8, global.source_code_stripped, range.start, text)) |idx| {
+                    global.highlight_range = .{ .start = idx, .end = idx + text.len };
+                    range_changed = true;
+                } else if (std.mem.indexOf(u8, global.source_code_stripped, text)) |idx| {
+                    global.highlight_range = .{ .start = idx, .end = idx + text.len };
+                    range_changed = true;
+                } else {
+                    global.highlight_range = null;
+                    range_changed = true;
+                }
+            }
+        }
         var te: dvui.TextEntryWidget = undefined;
         te.init(@src(), .{
             .multiline = true,
@@ -534,11 +568,26 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
         defer te.deinit();
 
         if (dvui.firstFrame(te.data().id) or source.ptr != global.source_code.ptr) {
-            te.textSet(source, false);
+            // Need to strip out CR on windows.
+            const stripped = dvui.currentWindow().lifo().alloc(u8, std.mem.replacementSize(u8, source, "\r", "")) catch @panic("OOM");
+            defer dvui.currentWindow().lifo().free(stripped);
+            _ = std.mem.replace(u8, source, "\r", "", stripped);
+
+            te.textSet(stripped, false);
             te.textLayout.selection.moveCursor(0, false); // keep from scrolling to the bottom
             global.source_code = source;
+            global.source_code_stripped = te.getText();
         }
-
+        if (range_changed) {
+            if (global.highlight_range) |range| {
+                te.textLayout.selection.moveCursor(range.start, false);
+                te.textLayout.selection.moveCursor(range.end, true);
+                te.textLayout.scroll_to_cursor = true;
+            } else {
+                // Select nothing.
+                te.textLayout.selection.moveCursor(te.textLayout.selection.cursor, false);
+            }
+        }
         te.textLayout.processEvents();
         te.draw();
     } else {
