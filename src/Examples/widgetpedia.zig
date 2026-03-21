@@ -2663,6 +2663,76 @@ const DisplayTabs = struct {
     }
 };
 
+const DisplayTabGroup = struct {
+    const name: []const u8 = "tabIndexGroup()";
+
+    // TODO: Both of these stay undefined, because there are no
+    // options. Next widgetpedia PR will have ability to hanlde widgets without options.
+    var wd: dvui.WidgetData = undefined;
+    var options: dvui.Options = undefined;
+
+    var active_tab: usize = undefined;
+    var tab_group_index: struct {
+        @".tab_index (red)": u16,
+        @".tab_index (green)": u16,
+        @".tab_index (blue)": u16,
+    } = undefined;
+
+    pub fn displayFn(reset: bool) void {
+        if (reset) resetWidget();
+        displayWidgetTemplate(@This());
+    }
+
+    pub fn resetWidget() void {
+        options = .{};
+        active_tab = 0;
+        tab_group_index = .{
+            .@".tab_index (red)" = 1,
+            .@".tab_index (green)" = 2,
+            .@".tab_index (blue)" = 3,
+        };
+    }
+
+    pub fn layoutWidget() void {
+        var tig_outer = dvui.tabIndexGroup(@src(), .{});
+        defer tig_outer.deinit();
+        {
+            var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = tab_group_index.@".tab_index (red)" });
+            defer tig.deinit();
+            var box = dvui.box(@src(), .{}, .{ .border = .all(2), .margin = .all(1), .color_border = .red, .expand = .horizontal });
+            defer box.deinit();
+            _ = dvui.button(@src(), "One", .{}, .{ .expand = .horizontal, .color_text = .red });
+            _ = dvui.button(@src(), "Two", .{}, .{ .expand = .horizontal, .color_text = .red });
+        }
+        defer tig_outer.deinit();
+        {
+            var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = tab_group_index.@".tab_index (green)" });
+            defer tig.deinit();
+            var box = dvui.box(@src(), .{}, .{ .border = .all(2), .margin = .all(1), .color_border = .green, .expand = .horizontal });
+            defer box.deinit();
+            var fg = dvui.focusGroup(@src(), .{ .nav_key_dir = .vertical, .wrap = true }, .{});
+            defer fg.deinit();
+            var gbox = dvui.groupBox(@src(), "in focus group", .{ .expand = .horizontal });
+            defer gbox.deinit();
+            _ = dvui.button(@src(), "One", .{}, .{ .expand = .horizontal, .color_text = .green });
+            _ = dvui.button(@src(), "Two", .{}, .{ .expand = .horizontal, .color_text = .green });
+        }
+        defer tig_outer.deinit();
+        {
+            var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = tab_group_index.@".tab_index (blue)" });
+            defer tig.deinit();
+            var box = dvui.box(@src(), .{}, .{ .border = .all(2), .margin = .all(1), .color_border = .blue, .expand = .horizontal });
+            defer box.deinit();
+            _ = dvui.button(@src(), "Two", .{}, .{ .expand = .horizontal, .color_text = .blue, .tab_index = 2 });
+            _ = dvui.button(@src(), "One", .{}, .{ .expand = .horizontal, .color_text = .blue, .tab_index = 1 });
+        }
+    }
+
+    pub fn layoutWidgetControls() void {
+        dvui.structUI(@src(), test_options_label, &tab_group_index, 1, .{}, .{});
+    }
+};
+
 const DisplayTextEntry = struct {
     const name: []const u8 = "textEntry()";
 
@@ -3209,6 +3279,7 @@ const widget_hierarchy = [_]WidgetHierarchy{
     .{ .name = "spinner", .displayFn = DisplaySpinner.displayFn, .children = null },
     .{ .name = "suggestion", .displayFn = displayEmpty, .children = null },
     .{ .name = "tabs", .displayFn = DisplayTabs.displayFn, .children = null },
+    .{ .name = "tabGroup", .displayFn = DisplayTabGroup.displayFn, .children = null },
 
     .{ .name = "textEntries", .displayFn = displayEmpty, .children = &.{
         .{ .name = "textEntry", .displayFn = DisplayTextEntry.displayFn, .children = null },
