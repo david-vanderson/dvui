@@ -3371,9 +3371,10 @@ pub fn gridHeadingSortable(
     gridHeadingSeparator(resize_opts);
 
     const sort_changed = switch (g.colSortOrder(col_num)) {
-        .unsorted => button(@src(), heading, .{ .draw_focus = false }, heading_opts),
-        .ascending => buttonLabelAndIcon(@src(), .{ .label = heading, .tvg_bytes = icon_ascending, .button_opts = .{ .draw_focus = false } }, heading_opts),
-        .descending => buttonLabelAndIcon(@src(), .{ .label = heading, .tvg_bytes = icon_descending, .button_opts = .{ .draw_focus = false } }, heading_opts),
+        // Use same src for each button so they get the same id and can retain focus accross frames.
+        .unsorted => button(src, heading, .{}, heading_opts),
+        .ascending => buttonLabelAndIcon(src, .{ .label = heading, .tvg_bytes = icon_ascending, .button_opts = .{} }, heading_opts),
+        .descending => buttonLabelAndIcon(src, .{ .label = heading, .tvg_bytes = icon_descending, .button_opts = .{} }, heading_opts),
     };
 
     if (sort_changed) {
