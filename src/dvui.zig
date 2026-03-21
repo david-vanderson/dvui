@@ -2183,6 +2183,9 @@ pub fn tabIndexPrevEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id) v
     }
 }
 
+/// Creates a nested group for Options.tab_index values.  tab_index controls
+/// focus order within the group. The group as a whole is ordered by its
+/// tab_index.
 pub const TabIndexGroup = struct {
     pub var current: Id = .zero;
 
