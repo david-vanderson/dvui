@@ -1105,6 +1105,9 @@ pub fn begin(
     self.last_focused_id_this_frame = .zero;
     self.last_focused_id_in_subwindow = .zero;
 
+    // just in case something went wrong, start at zero
+    dvui.TabIndexGroup.current = .zero;
+
     self.debug.reset(self.gpa);
 
     self.data_store.reset(self.gpa);

@@ -48,8 +48,11 @@ gravity_x: ?f32 = null,
 // [0, 1] default is 0 (top)
 gravity_y: ?f32 = null,
 
-// used to override the tab order, lower numbers first, null means highest
-// possible number, same tab_index goes in install() order, 0 disables
+/// Specify focus order within the current TabIndexGroup.
+/// * lower numbers first
+/// * null means highest possible
+/// * same tab_index go in processed order
+/// * 0 disables (cannot focus via keyboard navigation)
 tab_index: ?u16 = null,
 
 // Used to override the style/theme.
