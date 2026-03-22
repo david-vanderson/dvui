@@ -97,6 +97,12 @@ pub fn scrollCanvas() void {
     }
 
     for (boxes, 0..) |*b, i| {
+        // This makes clicks interact with the box that is visually on top, by
+        // reversing the draw order.
+        var ftb: dvui.RenderFrontToBack = undefined;
+        ftb.init();
+        defer ftb.deinit();
+
         var dragBox = dvui.box(@src(), .{}, .{
             .id_extra = i,
             .rect = dvui.Rect{ .x = b.x, .y = b.y },
