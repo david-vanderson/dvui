@@ -17,7 +17,7 @@ pub var defaults: Options = .{
     .name = "Dropdown",
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
-    .padding = Rect.all(6),
+    // .padding = Rect.all(6),
     .background = true,
     .style = .control,
 };
@@ -54,7 +54,17 @@ pub fn wrapInner(opts: Options) Options {
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const options = defaults.themeOverride(opts.theme).override(opts);
+    var options = defaults.themeOverride(opts.theme);
+    options = options.override(opts);
+    if (std.mem.eql(u8, options.themeGet().name, "Windows 98")) {
+        options = options.override(.{
+            .style = .control,
+            .ninepatch_fill = options.themeGet().ninepatch(.control, .press),
+            .background = true,
+            .color_fill = .white,
+        });
+    }
+
     self.* = .{
         .options = options,
         .init_options = init_opts,
@@ -84,13 +94,18 @@ pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: I
         }
     };
     if (label_text) |ll| {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
+            .expand = .both,
+            .ninepatch_fill = options.themeGet().ninepatch(.control, .press),
+            .color_fill = .white,
+        });
         defer hbox.deinit();
 
         var lw: LabelWidget = undefined;
         lw.initNoFmt(@src(), ll, .{}, self.options.strip().override(.{
             .gravity_y = 0.5,
             .color_text = if (self.init_options.selected_index == null and self.init_options.placeholder != null) self.data().options.color(.text).opacity(0.65) else null,
+            .margin = .all(6),
         }));
         lw.draw();
         lw.deinit();
@@ -100,7 +115,16 @@ pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: I
             "dropdown_triangle",
             dvui.entypo.chevron_small_down,
             .{},
-            self.options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0, .role = .none }),
+            self.options.strip().override(.{
+                .gravity_y = 0.5,
+                .gravity_x = 1.0,
+                .margin = .all(2),
+                .role = .none,
+                .ninepatch_fill = options.themeGet().ninepatch(.control, .fill),
+                .color_fill = options.themeGet().fill,
+                .background = true,
+                .expand = .ratio,
+            }),
         );
     }
     if (self.menuItem.data().accesskit_node()) |ak_node| {
