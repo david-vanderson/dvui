@@ -574,7 +574,8 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                     var hbox_inner = dvui.box(@src(), .{ .dir = .horizontal }, .{
                         .gravity_x = 1.0,
                         .background = true,
-                        .margin = .{ .x = 0, .y = 4, .w = 4, .h = 4 },
+                        .margin = .{ .x = -1, .y = 4, .w = 4, .h = 4 },
+                        .padding = .{ .x = 4 },
                         .corner_radius = .{ .x = 0, .y = 5, .w = 5, .h = 0 },
                         .border = .{ .x = 0, .y = 1, .w = 1, .h = 1 },
                     });
