@@ -14,6 +14,8 @@ backend: dvui.Backend,
 previous_window: ?*Window = null,
 
 subwindows: dvui.Subwindows = .{},
+defer_render_cmds: ?*std.ArrayList(dvui.RenderCommand) = null,
+defer_render_cmds_after: ?*std.ArrayList(dvui.RenderCommand) = null,
 
 last_focused_id_this_frame: Id = .zero,
 last_focused_id_in_subwindow: Id = .zero,
@@ -1261,11 +1263,11 @@ pub fn addRenderCommand(self: *Self, cmd: dvui.RenderCommand.Command, after: boo
         .cmd = cmd,
     };
     if (after) {
-        sw.render_cmds_after.append(self.arena(), render_cmd) catch |err| {
+        (self.defer_render_cmds_after orelse &sw.render_cmds_after).append(self.arena(), render_cmd) catch |err| {
             dvui.logError(@src(), err, "Could not append to render_cmds_after", .{});
         };
     } else {
-        sw.render_cmds.append(self.arena(), render_cmd) catch |err| {
+        (self.defer_render_cmds orelse &sw.render_cmds).append(self.arena(), render_cmd) catch |err| {
             dvui.logError(@src(), err, "Could not append to render_cmds", .{});
         };
     }

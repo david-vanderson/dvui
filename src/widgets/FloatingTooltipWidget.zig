@@ -54,7 +54,7 @@ pub const InitOptions = struct {
 
 parent_tooltip: ?*FloatingTooltipWidget = null,
 /// SAFETY: Set by `install`
-prev_rendering: bool = undefined,
+render_ftb: dvui.RenderFrontToBack = undefined,
 wd: WidgetData,
 /// SAFETY: Set by `install`
 prev_windowId: dvui.Id = undefined,
@@ -177,7 +177,7 @@ pub fn shown(self: *FloatingTooltipWidget) bool {
 pub fn install(self: *FloatingTooltipWidget) void {
     self.installed = true;
     self.data().register();
-    self.prev_rendering = dvui.renderingSet(false);
+    self.render_ftb.initReset();
 
     dvui.parentSet(self.widget());
 
@@ -256,7 +256,7 @@ pub fn deinit(self: *FloatingTooltipWidget) void {
     dvui.parentReset(self.data().id, self.data().parent);
     _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
     dvui.clipSet(self.prevClip);
-    _ = dvui.renderingSet(self.prev_rendering);
+    self.render_ftb.deinit();
 }
 
 // Return 0 until 80% of time then fade in remaining 20% linearly.
