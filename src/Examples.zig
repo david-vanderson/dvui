@@ -536,31 +536,17 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
             defer hbox.deinit();
             {
                 var search_entry: dvui.TextEntryWidget = undefined;
-                defer search_entry.deinit();
-                // TODO: This 26 char limit is to prevent horizontal scrolling of the prev/next buttons. Needs a better solution.
-                search_entry.init(@src(), .{ .placeholder = "Search ...", .text = .{ .internal = .{ .limit = 26 } } }, .{ .expand = .horizontal, .margin = .{ .x = 4, .y = 4, .w = 4, .h = 0 } });
-                {
-                    var hhbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0 });
-                    defer hhbox.deinit();
-                    if (dvui.buttonIcon(@src(), "previous", dvui.entypo.chevron_small_up, .{}, .{}, .{ .expand = .ratio })) {
-                        const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
-                        const text = search_entry.getText();
-                        if (std.mem.lastIndexOf(u8, global.source_code_stripped[0..range.start], text)) |idx| {
-                            global.highlight_range = .{ .start = idx, .end = idx + text.len };
-                            range_changed = true;
-                        }
-                    }
-                    if (dvui.buttonIcon(@src(), "next", dvui.entypo.chevron_small_down, .{}, .{}, .{ .expand = .ratio })) {
-                        const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
-                        const text = search_entry.getText();
-                        if (std.mem.indexOfPos(u8, global.source_code_stripped, range.end, text)) |idx| {
-                            global.highlight_range = .{ .start = idx, .end = idx + text.len };
-                            range_changed = true;
-                        }
-                    }
-                }
+                search_entry.init(@src(), .{ .placeholder = "Search ...", .text = .{ .internal = .{ .limit = 1024 } } }, .{
+                    .expand = .horizontal,
+                    .margin = .{ .x = 4, .y = 4, .w = 0, .h = 0 },
+                    .corner_radius = .{ .x = 5, .y = 0, .w = 0, .h = 5 },
+                    .border = .{ .x = 1, .y = 1, .w = 0, .h = 1 },
+                });
                 search_entry.processEvents();
                 search_entry.draw();
+                const search_entry_wid = search_entry.data().id;
+                const wd = search_entry.textLayout.data();
+                const icon_size: Size = .{ .h = wd.contentRect().h - 4, .w = wd.contentRect().h - 4 }; // Subtract top margin.
                 if (search_entry.enter_pressed) {
                     const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
                     const text = search_entry.getText();
@@ -582,6 +568,41 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                         range_changed = true;
                     }
                 }
+                const search_text = search_entry.getText();
+                search_entry.deinit();
+                {
+                    var hbox_inner = dvui.box(@src(), .{ .dir = .horizontal }, .{
+                        .gravity_x = 1.0,
+                        .background = true,
+                        .margin = .{ .x = 0, .y = 4, .w = 4, .h = 4 },
+                        .corner_radius = .{ .x = 0, .y = 5, .w = 5, .h = 0 },
+                        .border = .{ .x = 0, .y = 1, .w = 1, .h = 1 },
+                    });
+                    defer hbox_inner.deinit();
+                    if (dvui.focusedWidgetId() == search_entry_wid) {
+                        hbox_inner.data().focusBorder();
+                    }
+                    if (dvui.buttonIcon(@src(), "previous", dvui.entypo.chevron_small_up, .{}, .{}, .{
+                        .min_size_content = icon_size,
+                        .max_size_content = .cast(icon_size),
+                    })) {
+                        const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
+                        if (std.mem.lastIndexOf(u8, global.source_code_stripped[0..range.start], search_text)) |idx| {
+                            global.highlight_range = .{ .start = idx, .end = idx + search_text.len };
+                            range_changed = true;
+                        }
+                    }
+                    if (dvui.buttonIcon(@src(), "next", dvui.entypo.chevron_small_down, .{}, .{}, .{
+                        .min_size_content = icon_size,
+                        .max_size_content = .cast(icon_size),
+                    })) {
+                        const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
+                        if (std.mem.indexOfPos(u8, global.source_code_stripped, range.end, search_text)) |idx| {
+                            global.highlight_range = .{ .start = idx, .end = idx + search_text.len };
+                            range_changed = true;
+                        }
+                    }
+                }
             }
         }
         var te: dvui.TextEntryWidget = undefined;
@@ -589,12 +610,7 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
             .multiline = true,
             .cache_layout = true,
             .text = .{ .internal = .{ .limit = 1_000_000 } },
-            .tree_sitter = .{
-                .language = global.tree_sitter_zig(),
-                .queries = queries,
-                .highlights = highlights,
-                .log_captures = false,
-            },
+            .tree_sitter = .{ .language = global.tree_sitter_zig(), .queries = queries, .highlights = highlights, .log_captures = false },
         }, .{
             .expand = .both,
         });
