@@ -491,13 +491,22 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
         defer fwin.deinit();
         fwin.dragAreaSet(dvui.windowHeader("View Zig Source", filename, showing));
 
+        const Range = struct {
+            start: usize,
+            end: usize,
+        };
+
         const global = struct {
             extern fn tree_sitter_zig() callconv(.c) *dvui.c.TSLanguage;
             var source_code: []const u8 = "";
+            var source_code_stripped: []const u8 = "";
+            var highlight_range: ?Range = null;
+            var cursor_pos: usize = 0;
+            var cursor_moved: bool = false;
         };
 
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-        defer hbox.deinit();
+        var vbox = dvui.box(@src(), .{}, .{});
+        defer vbox.deinit();
 
         const queries = @embedFile("Examples/tree_sitter_zig_queries.scm");
 
@@ -517,30 +526,123 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
             .{ .name = "error", .opts = .{ .color_text = .fromHex("F44747") } },
         };
 
+        var range_changed = false;
+        if (global.cursor_moved) {
+            global.highlight_range = .{ .start = global.cursor_pos, .end = global.cursor_pos };
+            global.cursor_moved = false;
+        }
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            {
+                var search_entry: dvui.TextEntryWidget = undefined;
+                search_entry.init(@src(), .{ .placeholder = "Search ...", .text = .{ .internal = .{ .limit = 1024 } } }, .{
+                    .expand = .horizontal,
+                    .margin = .{ .x = 4, .y = 4, .w = 0, .h = 0 },
+                    .corner_radius = .{ .x = 5, .y = 0, .w = 0, .h = 5 },
+                    .border = .{ .x = 1, .y = 1, .w = 0, .h = 1 },
+                });
+                search_entry.processEvents();
+                search_entry.draw();
+                const search_entry_wid = search_entry.data().id;
+                const wd = search_entry.textLayout.data();
+                const icon_size: Size = .{ .h = wd.contentRect().h - 4, .w = wd.contentRect().h - 4 }; // Subtract top margin.
+                if (search_entry.enter_pressed) {
+                    const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
+                    const text = search_entry.getText();
+                    if (std.mem.indexOfPos(u8, global.source_code_stripped, range.end, text)) |idx| {
+                        global.highlight_range = .{ .start = idx, .end = idx + text.len };
+                        range_changed = true;
+                    }
+                } else if (search_entry.text_changed) {
+                    const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
+                    const text = search_entry.getText();
+                    if (std.mem.indexOfPos(u8, global.source_code_stripped, range.start, text)) |idx| {
+                        global.highlight_range = .{ .start = idx, .end = idx + text.len };
+                        range_changed = true;
+                    } else if (std.mem.indexOf(u8, global.source_code_stripped, text)) |idx| {
+                        global.highlight_range = .{ .start = idx, .end = idx + text.len };
+                        range_changed = true;
+                    } else {
+                        global.highlight_range = .{ .start = global.cursor_pos, .end = global.cursor_pos };
+                        range_changed = true;
+                    }
+                }
+                const search_text = search_entry.getText();
+                search_entry.deinit();
+                {
+                    var hbox_inner = dvui.box(@src(), .{ .dir = .horizontal }, .{
+                        .gravity_x = 1.0,
+                        .background = true,
+                        .margin = .{ .x = -1, .y = 4, .w = 4, .h = 4 },
+                        .padding = .{ .x = 4 },
+                        .corner_radius = .{ .x = 0, .y = 5, .w = 5, .h = 0 },
+                        .border = .{ .x = 0, .y = 1, .w = 1, .h = 1 },
+                    });
+                    defer hbox_inner.deinit();
+                    if (dvui.focusedWidgetId() == search_entry_wid) {
+                        hbox_inner.data().focusBorder();
+                    }
+                    if (dvui.buttonIcon(@src(), "previous", dvui.entypo.chevron_small_up, .{}, .{}, .{
+                        .min_size_content = icon_size,
+                        .max_size_content = .cast(icon_size),
+                    })) {
+                        const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
+                        if (std.mem.lastIndexOf(u8, global.source_code_stripped[0..range.start], search_text)) |idx| {
+                            global.highlight_range = .{ .start = idx, .end = idx + search_text.len };
+                            range_changed = true;
+                        }
+                    }
+                    if (dvui.buttonIcon(@src(), "next", dvui.entypo.chevron_small_down, .{}, .{}, .{
+                        .min_size_content = icon_size,
+                        .max_size_content = .cast(icon_size),
+                    })) {
+                        const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
+                        if (std.mem.indexOfPos(u8, global.source_code_stripped, range.end, search_text)) |idx| {
+                            global.highlight_range = .{ .start = idx, .end = idx + search_text.len };
+                            range_changed = true;
+                        }
+                    }
+                }
+            }
+        }
         var te: dvui.TextEntryWidget = undefined;
         te.init(@src(), .{
             .multiline = true,
             .cache_layout = true,
             .text = .{ .internal = .{ .limit = 1_000_000 } },
-            .tree_sitter = .{
-                .language = global.tree_sitter_zig(),
-                .queries = queries,
-                .highlights = highlights,
-                .log_captures = false,
-            },
+            .tree_sitter = .{ .language = global.tree_sitter_zig(), .queries = queries, .highlights = highlights, .log_captures = false },
         }, .{
             .expand = .both,
         });
         defer te.deinit();
-
         if (dvui.firstFrame(te.data().id) or source.ptr != global.source_code.ptr) {
-            te.textSet(source, false);
+            // Need to strip out CR on windows.
+            const stripped = dvui.currentWindow().lifo().alloc(u8, std.mem.replacementSize(u8, source, "\r", "")) catch @panic("OOM");
+            defer dvui.currentWindow().lifo().free(stripped);
+            _ = std.mem.replace(u8, source, "\r", "", stripped);
+
+            te.textSet(stripped, false);
             te.textLayout.selection.moveCursor(0, false); // keep from scrolling to the bottom
             global.source_code = source;
+            global.source_code_stripped = te.getText();
         }
-
+        if (range_changed) {
+            if (global.highlight_range) |range| {
+                te.textLayout.selection.moveCursor(range.end, false);
+                te.textLayout.selection.moveCursor(range.start, true);
+                te.textLayout.scroll_to_cursor = true;
+            } else {
+                // Select nothing.
+                te.textLayout.selection.moveCursor(te.textLayout.selection.cursor, false);
+            }
+        }
         te.textLayout.processEvents();
         te.draw();
+        if (te.textLayout.selection.cursor != global.cursor_pos and !range_changed) {
+            global.cursor_moved = true;
+        }
+        global.cursor_pos = te.textLayout.selection.cursor;
     } else {
         if (showing.*) {
             var url: std.io.Writer.Allocating = .init(dvui.currentWindow().arena());
