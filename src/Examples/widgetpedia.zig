@@ -291,20 +291,15 @@ pub fn widgetShowSetOptionsTooltip(src: std.builtin.SourceLocation, rect: Rect.P
 
 // Same as std.meta.DeclEnum, but allows decls to be skipped.
 pub fn DeclEnumWithSkip(comptime T: type, start_at_decl: usize) type {
-    const fieldInfos = std.meta.declarations(T);
-    var enumDecls: [fieldInfos.len]std.builtin.Type.EnumField = undefined;
-    var decls = [_]std.builtin.Type.Declaration{};
+    const fieldInfos = std.meta.declarations(T)[start_at_decl..];
+    const tt = std.math.IntFittingRange(0, if (fieldInfos.len == 0) 0 else fieldInfos.len - 1);
+    var field_names: [fieldInfos.len][]const u8 = undefined;
+    var field_values: [fieldInfos.len]tt = undefined;
     inline for (fieldInfos, 0..) |field, i| {
-        enumDecls[i] = .{ .name = field.name, .value = i };
+        field_names[i] = field.name;
+        field_values[i] = @intCast(i);
     }
-    return @Type(.{
-        .@"enum" = .{
-            .tag_type = std.math.IntFittingRange(0, if (fieldInfos.len == 0) 0 else fieldInfos.len - 1),
-            .fields = enumDecls[start_at_decl..],
-            .decls = &decls,
-            .is_exhaustive = true,
-        },
-    });
+    return @Enum(tt, .exhaustive, &field_names, &field_values);
 }
 
 const DisplayAnimate = struct {

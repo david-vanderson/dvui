@@ -30,6 +30,7 @@ pub const Context = *SDLBackend;
 
 const log = std.log.scoped(.SDLBackend);
 
+io: std.Io,
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
 ak_should_initialized: bool = dvui.accesskit_enabled,
@@ -45,6 +46,7 @@ cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).@"enum".fields.len]bool = [_
 arena: std.mem.Allocator = undefined,
 
 pub const InitOptions = struct {
+    io: std.Io,
     /// The allocator used for temporary allocations used during init()
     allocator: std.mem.Allocator,
     /// The initial size of the application window
@@ -150,7 +152,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
     try toErr(c.SDL_SetRenderDrawBlendMode(renderer, pma_blend), "SDL_SetRenderDrawBlendMode in initWindow");
 
-    var back = init(window, renderer);
+    var back = init(options.io, window, renderer);
     back.ak_should_initialized = show_window_in_begin;
     back.we_own_window = true;
 
@@ -302,8 +304,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     return back;
 }
 
-pub fn init(window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
-    return SDLBackend{ .window = window, .renderer = renderer };
+pub fn init(io: std.Io, window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
+    return SDLBackend{ .io = io, .window = window, .renderer = renderer };
 }
 
 const SDL_ERROR = if (sdl3) bool else c_int;
@@ -603,12 +605,13 @@ pub fn backend(self: *SDLBackend) dvui.Backend {
     return dvui.Backend.init(self);
 }
 
-pub fn nanoTime(_: *SDLBackend) i128 {
-    return std.time.nanoTimestamp();
+pub fn nanoTime(self: *SDLBackend) i128 {
+    const ret = std.Io.Clock.boot.now(self.io);
+    return ret.nanoseconds;
 }
 
-pub fn sleep(_: *SDLBackend, ns: u64) void {
-    std.Thread.sleep(ns);
+pub fn sleep(self: *SDLBackend, ns: u64) void {
+    std.Io.Clock.Duration.sleep(.{ .clock = .boot, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }
 
 pub fn clipboardText(self: *SDLBackend) ![]const u8 {
@@ -884,7 +887,7 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
 pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8) !void {
     if (comptime sdl3) {
         const tx: [*c]c.SDL_Texture = @ptrCast(@alignCast(texture.ptr));
-        if (!c.SDL_UpdateTexture(tx, null, pixels, @intCast(texture.width * 4))) return error.TextureUpdate;
+        if (!c.SDL_UpdateTexture(tx, null, pixels, @intCast(texture.width * texture.format.bytesPerPixel()))) return error.TextureUpdate;
     } else {
         return dvui.Backend.TextureError.NotImplemented;
     }
@@ -1465,7 +1468,7 @@ fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: c_uint, mess
     }
 }
 
-fn sdlLog(comptime category: @Type(.enum_literal), priority: c_uint, message: [*c]const u8) void {
+fn sdlLog(comptime category: @EnumLiteral(), priority: c_uint, message: [*c]const u8) void {
     const logger = std.log.scoped(category);
     switch (priority) {
         c.SDL_LOG_PRIORITY_VERBOSE => logger.debug("VERBOSE: {s}", .{message}),
@@ -1495,7 +1498,7 @@ pub fn enableSDLLogging() void {
         c.SDL_LOG_PRIORITY_ERROR;
     if (sdl3) c.SDL_SetLogPriorities(default_log_level) else c.SDL_LogSetAllPriority(default_log_level);
 
-    const categories = [_]struct { c_uint, @Type(.enum_literal) }{
+    const categories = [_]struct { c_uint, @EnumLiteral() }{
         .{ c.SDL_LOG_CATEGORY_APPLICATION, .SDL_APPLICATION },
         .{ c.SDL_LOG_CATEGORY_ERROR, .SDL_ERROR },
         .{ c.SDL_LOG_CATEGORY_ASSERT, .SDL_ASSERT },
@@ -1526,7 +1529,9 @@ pub fn enableSDLLogging() void {
 }
 
 /// This is what is run if you are using `dvui.App` with this backend.
-pub fn main() !u8 {
+pub fn main(main_init: std.process.Init) !u8 {
+    dvui.io = main_init.io;
+    dvui.App.main_init = main_init;
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
     // You can override these by calling this function with your arguments in dvui.App.config.startFn
@@ -1542,6 +1547,11 @@ pub fn main() !u8 {
     if (sdl3 and (sdl_options.callbacks orelse true) and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows)) {
         // We are using sdl's callbacks to support rendering during OS resizing
 
+        const init_opts = app.config.get();
+
+        appState.gpa = init_opts.gpa orelse main_init.gpa;
+        appState.io = init_opts.io orelse main_init.io;
+
         // For programs that provide their own entry points instead of relying on SDL's main function
         // macro magic, 'SDL_SetMainReady()' should be called before calling 'SDL_Init()'.
         c.SDL_SetMainReady();
@@ -1556,13 +1566,10 @@ pub fn main() !u8 {
 
     const init_opts = app.config.get();
 
-    var gpa_instance: std.heap.DebugAllocator(.{}) = .init;
-    defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
-    const gpa = gpa_instance.allocator();
-
     // init SDL backend (creates and owns OS window)
     var back = try initWindow(.{
-        .allocator = gpa,
+        .io = init_opts.io orelse main_init.io,
+        .allocator = init_opts.gpa orelse main_init.gpa,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
         .max_size = init_opts.max_size,
@@ -1581,7 +1588,7 @@ pub fn main() !u8 {
     }
 
     //// init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, back.backend(), init_opts.window_init_options);
+    var win = try dvui.Window.init(@src(), main_init.gpa, back.backend(), init_opts.window_init_options);
     defer win.deinit();
 
     if (app.initFn) |initFn| {
@@ -1637,16 +1644,20 @@ pub fn main() !u8 {
 
 /// used when doing sdl callbacks
 const CallbackState = struct {
+    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+    var threaded_io: ?std.Io.Threaded = null;
+
     win: dvui.Window,
     back: SDLBackend,
-    gpa: std.heap.GeneralPurposeAllocator(.{}) = .init,
+    gpa: std.mem.Allocator,
+    io: std.Io,
     interrupted: bool = false,
     have_resize: bool = false,
     no_wait: bool = false,
 };
 
 /// used when doing sdl callbacks
-var appState: CallbackState = .{ .win = undefined, .back = undefined };
+var appState: CallbackState = .{ .win = undefined, .back = undefined, .gpa = undefined, .io = undefined };
 
 // sdl3 callback
 fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callconv(.c) c.SDL_AppResult {
@@ -1661,11 +1672,10 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
 
     const init_opts = app.config.get();
 
-    const gpa = appState.gpa.allocator();
-
     // init SDL backend (creates and owns OS window)
     appState.back = initWindow(.{
-        .allocator = gpa,
+        .io = appState.io,
+        .allocator = appState.gpa,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
         .max_size = init_opts.max_size,
@@ -1686,7 +1696,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
     }
 
     //// init dvui Window (maps onto a single OS window)
-    appState.win = dvui.Window.init(@src(), gpa, appState.back.backend(), app.config.options.window_init_options) catch |err| {
+    appState.win = dvui.Window.init(@src(), appState.gpa, appState.back.backend(), app.config.options.window_init_options) catch |err| {
         log.err("dvui.Window.init failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
@@ -1720,7 +1730,8 @@ fn appQuit(_: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
     if (app.deinitFn) |deinitFn| deinitFn();
     appState.win.deinit();
     appState.back.deinit();
-    if (appState.gpa.deinit() != .ok) @panic("Memory leak on exit!");
+    if (CallbackState.threaded_io) |*to| to.deinit();
+    if (CallbackState.debug_allocator.deinit() != .ok) @panic("Memory leak on exit!");
 
     // SDL will clean up the window/renderer for us.
 }
