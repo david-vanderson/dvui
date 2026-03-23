@@ -1,6 +1,7 @@
 const std = @import("std");
 const enums_backend = @import("src/enums_backend.zig");
 pub const Backend = enums_backend.Backend;
+const RenderBackend = enums_backend.RenderBackend;
 const Pkg = std.Build.Pkg;
 const Compile = std.Build.Step.Compile;
 
@@ -60,6 +61,7 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     var back_to_build = b.option(Backend, "backend", "Backend to build");
+    const render_backend = b.option(RenderBackend, "render-backend", "Render backend to build (default: implied by backend)") orelse .default;
 
     const test_step = b.step("test", "Test the dvui codebase");
     const check_step = b.step("check", "Check that the entire dvui codebase has no syntax errors");
@@ -149,6 +151,7 @@ pub fn build(b: *std.Build) !void {
         .use_lld = use_lld,
         .accesskit = accesskit,
         .build_options = build_options,
+        .render_backend = render_backend,
         .vertex_index = vertex_index,
         .libc = libc_option,
         .freetype = freetype_option,
@@ -734,6 +737,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                     }),
                     .optimize = optimize,
                     .build_options = dvui_opts.build_options,
+                    .render_backend = .default,
                     .vertex_index = .u16,
                     .test_filters = dvui_opts.test_filters,
                     .accesskit = .off,
@@ -769,6 +773,10 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             // workaround for https://github.com/ziglang/zig/issues/24140
             dvui_opts.use_llvm = true;
 
+            if (dvui_opts.render_backend == .default) {
+                dvui_opts.render_backend = .opengl;
+            }
+
             const wio_backend_mod = b.addModule("wio", .{
                 .root_source_file = b.path("src/backends/wio.zig"),
                 .target = target,
@@ -784,14 +792,6 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .win32_manifest = false,
             })) |wio| {
                 wio_backend_mod.addImport("wio", wio.module("wio"));
-            }
-
-            if (b.lazyDependency("opengl", .{
-                .major_version = 3,
-                .minor_version = 2,
-                .profile = .core,
-            })) |opengl| {
-                wio_backend_mod.addImport("gl", opengl.module("opengl"));
             }
 
             const dvui_wio = addDvuiModule("dvui_wio", dvui_opts);
@@ -828,6 +828,7 @@ const DvuiModuleOptions = struct {
     use_lld: ?bool = null,
     accesskit: AccesskitOptions = .off,
     build_options: *std.Build.Step.Options,
+    render_backend: RenderBackend,
     vertex_index: VertexIndex,
     libc: ?bool,
     tiny_file_dialogs: ?bool,
@@ -962,6 +963,26 @@ pub fn addDvuiModule(
         .target = target,
         .optimize = optimize,
     }).module("svg2tvg"));
+
+    const renderer_mod = b.addModule("render_backend", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    switch (opts.render_backend) {
+        .default => renderer_mod.root_source_file = b.path("src/backends/render/default.zig"),
+        .opengl => {
+            renderer_mod.root_source_file = b.path("src/backends/render/opengl.zig");
+            if (b.lazyDependency("opengl", .{
+                .major_version = 3,
+                .minor_version = 2,
+                .profile = .core,
+            })) |opengl| {
+                renderer_mod.addImport("gl", opengl.module("opengl"));
+            }
+        },
+    }
+    renderer_mod.addImport("dvui", dvui_mod);
+    dvui_mod.addImport("render_backend", renderer_mod);
 
     // the system integration option check has to always occur even if accesskit is disabled for
     // it to be displayed in the build help
