@@ -4,6 +4,7 @@ const dvui = @import("dvui.zig");
 const enums_backend = @import("enums_backend.zig");
 
 pub const Backend = enums_backend.Backend;
+pub const RenderBackend = enums_backend.RenderBackend;
 
 pub const DialogButtonOrder = enum {
     cancel_ok,
