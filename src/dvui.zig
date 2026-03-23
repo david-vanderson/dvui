@@ -1962,7 +1962,7 @@ pub fn tabIndexSetEx(widget_id: Id, tab_index: ?u16, rect: ?Rect.Physical, tab_g
     var ti = TabIndex{
         .windowId = cw.subwindows.current_id,
         .widgetId = widget_id,
-        .pt = if (rect) |r| r.center() else .{},
+        .pt = if (rect) |r| r.topLeft() else .{},
         .tab_index_group = TabIndexGroup.current,
         .tabIndex = (tab_index orelse math.maxInt(u16)),
         .tab_group = tab_group,
