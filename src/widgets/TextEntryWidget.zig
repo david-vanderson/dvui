@@ -275,7 +275,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
 
     self.data().register();
 
-    dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
+    dvui.tabIndexSet(self.data().id, self.data().options.tab_index, self.data().rectScale().r);
 
     dvui.parentSet(self.widget());
 
