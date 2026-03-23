@@ -48,7 +48,7 @@ pub fn init(self: *MenuItemWidget, src: std.builtin.SourceLocation, init_opts: I
 
     self.data().register();
 
-    dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
+    dvui.tabIndexSet(self.data().id, self.data().options.tab_index, self.data().rectScale().r);
 
     self.data().borderAndBackground(.{});
 
