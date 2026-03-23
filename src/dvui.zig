@@ -32,6 +32,7 @@ const std = @import("std");
 /// const Backend = @import("backend");
 /// ```
 pub const backend = @import("backend");
+pub const render_backend = @import("render_backend");
 const tvg = @import("svg2tvg");
 
 pub const math = std.math;
