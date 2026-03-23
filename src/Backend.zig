@@ -41,14 +41,14 @@ pub fn sleep(self: Backend, ns: u64) void {
 /// arg is cleared before `dvui.Window.begin` is called next, useful for any
 /// temporary allocations needed only for this frame.
 pub fn begin(self: Backend, arena: std.mem.Allocator) GenericError!void {
-    try self.impl.begin(arena);
     if (dvui.render_backend.kind != .default) try self.render_impl.begin(arena);
+    return self.impl.begin(arena);
 }
 
 /// Called during `dvui.Window.end` before freeing any memory for the current frame.
 pub fn end(self: Backend) GenericError!void {
     if (dvui.render_backend.kind != .default) try self.render_impl.end();
-    try self.impl.end();
+    return self.impl.end();
 }
 
 /// Return size of the window in physical pixels.  For a 300x200 retina
