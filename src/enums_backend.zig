@@ -18,3 +18,8 @@ pub const Backend = enum {
     /// Does no rendering!
     testing,
 };
+
+pub const RenderBackend = enum {
+    default,
+    opengl,
+};
