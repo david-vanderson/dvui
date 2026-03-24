@@ -120,6 +120,8 @@ pub fn build(b: *std.Build) !void {
         "vertex_index",
         vertex_index,
     );
+    const no_tvg = b.option(bool, "no_tvg", "no pull tvg") orelse false;
+    build_options.addOption(bool, "no_tvg", no_tvg);
 
     const accesskit = b.option(AccesskitOptions, "accesskit", "Build with AccessKit support") orelse .off;
 
@@ -140,6 +142,7 @@ pub fn build(b: *std.Build) !void {
         .accesskit = accesskit,
         .build_options = build_options,
         .vertex_index = vertex_index,
+        .no_tvg = no_tvg,
         .libc = libc_option,
         .freetype = freetype_option,
         .tiny_file_dialogs = tiny_file_dialogs_option,
@@ -219,8 +222,9 @@ pub fn build(b: *std.Build) !void {
 
     // svg2tvg tool
     // see svgPathToTvgPath below for how to run this at build time
+    //if (!no_tvg) {
     {
-        const svg2tvg_dep = b.dependency("svg2tvg", .{ .optimize = optimize, .target = target });
+        const svg2tvg_dep = b.lazyDependency("svg2tvg", .{ .optimize = optimize, .target = target }).?;
         const exe = b.addExecutable(.{
             .name = "svg2tvg",
             .root_module = b.createModule(.{
@@ -725,6 +729,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                     .optimize = optimize,
                     .build_options = dvui_opts.build_options,
                     .vertex_index = .u16,
+                    .no_tvg = dvui_opts.no_tvg,
                     .test_filters = dvui_opts.test_filters,
                     .accesskit = .off,
                     .libc = false,
@@ -772,6 +777,7 @@ const DvuiModuleOptions = struct {
     accesskit: AccesskitOptions = .off,
     build_options: *std.Build.Step.Options,
     vertex_index: VertexIndex,
+    no_tvg: bool,
     libc: ?bool,
     tiny_file_dialogs: ?bool,
     freetype: ?bool,
@@ -900,10 +906,13 @@ pub fn addDvuiModule(
     });
     dvui_mod.addOptions("build_options", opts.build_options);
     dvui_mod.addOptions("default_options", opts.makeDefaults());
-    dvui_mod.addImport("svg2tvg", b.dependency("svg2tvg", .{
-        .target = target,
-        .optimize = optimize,
-    }).module("svg2tvg"));
+    if (!opts.no_tvg){
+        dvui_mod.addImport("svg2tvg", b.lazyDependency("svg2tvg", .{
+            .target = target,
+            .optimize = optimize,
+        }).?.module("svg2tvg"));
+    }
+
 
     // the system integration option check has to always occur even if accesskit is disabled for
     // it to be displayed in the build help
@@ -1159,7 +1168,7 @@ pub fn svgPathToTvgPath(b: *std.Build, svg_path: std.Build.LazyPath) std.Build.L
     // use fast and native options since this is just for building
     const optimize: std.builtin.OptimizeMode = .ReleaseFast;
     const target: std.Build.ResolvedTarget = b.graph.host;
-    const svg2tvg_dep = b.dependency("svg2tvg", .{ .optimize = optimize, .target = target });
+    const svg2tvg_dep = b.lazyDependency("svg2tvg", .{ .optimize = optimize, .target = target }).?;
     const svg2tvg_exe = b.addExecutable(.{
         .name = "svg2tvg",
         .root_module = b.createModule(.{
