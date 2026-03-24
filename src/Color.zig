@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const hsluv = @import("hsluv.zig");
 
 const Color = @This();
@@ -388,6 +389,7 @@ pub const PMA = extern struct {
     }
 };
 
+
 pub const PMAImage = struct {
     pma: []PMA,
     width: u32,
@@ -419,6 +421,7 @@ pub const PMAImage = struct {
     /// the returned []PMA inside PMAImage is allocated with alloc
     /// the render_alloc is used for temporary allocations in the render process
     pub fn fromTvgFile(dbg_name: []const u8, alloc: std.mem.Allocator, render_alloc: std.mem.Allocator, tvg_bytes: []const u8, height: u32, icon_opts: dvui.IconRenderOptions) !PMAImage {
+        if (comptime @import("build_options").no_tvg) { comptime unreachable; }
         const ImageAdapter = struct {
             pixels: []u8,
             width: u32,

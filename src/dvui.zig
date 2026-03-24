@@ -581,6 +581,7 @@ pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*Font.Cache.Entry {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn svgToTvg(allocator: std.mem.Allocator, svg_bytes: []const u8) (std.mem.Allocator.Error || TvgError)![]const u8 {
+    if (comptime @import("build_options").no_tvg) { comptime unreachable; }
     return tvg.tvg_from_svg(allocator, svg_bytes, .{}) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
@@ -594,6 +595,7 @@ pub fn svgToTvg(allocator: std.mem.Allocator, svg_bytes: []const u8) (std.mem.Al
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) TvgError!f32 {
+    if (comptime @import("build_options").no_tvg) { comptime unreachable; }
     if (height == 0) return 0.0;
     var stream: std.Io.Reader = .fixed(tvg_bytes);
     var parser = tvg.tvg.parse(currentWindow().arena(), &stream) catch |err| {
