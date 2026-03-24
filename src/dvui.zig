@@ -1923,6 +1923,7 @@ pub fn scrollDrag(scroll_drag: ScrollDragOptions) void {
 pub const TabIndex = struct {
     windowId: Id,
     widgetId: Id,
+    pt: Point.Physical,
     tab_index_group: Id,
     tabIndex: u16,
 
@@ -1949,11 +1950,11 @@ pub const TabIndex = struct {
 /// keys instead of tab.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn tabIndexSet(widget_id: Id, tab_index: ?u16) void {
-    tabIndexSetEx(widget_id, tab_index, false);
+pub fn tabIndexSet(widget_id: Id, tab_index: ?u16, rect: ?Rect.Physical) void {
+    tabIndexSetEx(widget_id, tab_index, rect, false);
 }
 
-pub fn tabIndexSetEx(widget_id: Id, tab_index: ?u16, tab_group: bool) void {
+pub fn tabIndexSetEx(widget_id: Id, tab_index: ?u16, rect: ?Rect.Physical, tab_group: bool) void {
     if (tab_index != null and tab_index.? == 0)
         return;
 
@@ -1961,6 +1962,7 @@ pub fn tabIndexSetEx(widget_id: Id, tab_index: ?u16, tab_group: bool) void {
     var ti = TabIndex{
         .windowId = cw.subwindows.current_id,
         .widgetId = widget_id,
+        .pt = if (rect) |r| r.topLeft() else .{},
         .tab_index_group = TabIndexGroup.current,
         .tabIndex = (tab_index orelse math.maxInt(u16)),
         .tab_group = tab_group,
@@ -1990,16 +1992,17 @@ pub fn tabIndexSetEx(widget_id: Id, tab_index: ?u16, tab_group: bool) void {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn tabIndexNext(event_num: ?u16) void {
-    tabIndexNextEx(event_num, currentWindow().tab_index_prev.items, .zero);
+    tabIndexNextEx(event_num, currentWindow().tab_index_prev.items, .zero, false);
 }
 
-pub fn tabIndexNextEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id) void {
+pub fn tabIndexNextEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id, in_focus_group: bool) void {
     const cw = currentWindow();
     var widgetId = focusedWidgetId();
     var oldtab: ?u16 = null;
     var tig: Id = base_tig;
     var newId: ?Id = null;
     var ran_off: bool = false;
+    var first: bool = true;
     outer: while (true) {
         if (widgetId != null) {
             for (tabidxs) |ti| {
@@ -2010,6 +2013,17 @@ pub fn tabIndexNextEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id) v
                 }
             }
         }
+
+        if (first and !in_focus_group and oldtab == null) {
+            if (cw.subwindows.focused()) |sw| {
+                if (sw.kb_restart_widget_id) |id| {
+                    newId = id;
+                    sw.kb_restart_widget_id = null;
+                    break :outer;
+                }
+            }
+        }
+        first = false;
 
         if (ran_off and oldtab == null) {
             // We ran off the tab index group, but couldn't find the entry for
@@ -2078,6 +2092,13 @@ pub fn tabIndexNextEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id) v
     }
 
     focusWidget(newId, null, event_num);
+
+    if (newId == null) {
+        // intentionally moving to the null focus state, don't try to recover
+        if (cw.subwindows.focused()) |sw| {
+            sw.kb_restart_widget_id = null;
+        }
+    }
 }
 
 /// Move focus to the previous widget in tab index order.  Uses the tab index values from last frame.
@@ -2087,10 +2108,10 @@ pub fn tabIndexNextEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id) v
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn tabIndexPrev(event_num: ?u16) void {
-    tabIndexPrevEx(event_num, currentWindow().tab_index_prev.items, .zero);
+    tabIndexPrevEx(event_num, currentWindow().tab_index_prev.items, .zero, false);
 }
 
-pub fn tabIndexPrevEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id) void {
+pub fn tabIndexPrevEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id, in_focus_group: bool) void {
     const cw = currentWindow();
     var widgetId = focusedWidgetId();
     var oldtab: ?u16 = null;
@@ -2098,6 +2119,7 @@ pub fn tabIndexPrevEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id) v
     var tig: Id = base_tig;
     var newId: ?Id = null;
     var ran_off: bool = false;
+    var first: bool = true;
     outer: while (true) {
         if (widgetId != null) {
             for (tabidxs) |ti| {
@@ -2109,6 +2131,17 @@ pub fn tabIndexPrevEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id) v
                 }
             }
         }
+
+        if (first and !in_focus_group and oldtab == null) {
+            if (cw.subwindows.focused()) |sw| {
+                if (sw.kb_restart_widget_id) |id| {
+                    newId = id;
+                    sw.kb_restart_widget_id = null;
+                    break :outer;
+                }
+            }
+        }
+        first = false;
 
         if (ran_off and oldtab == null) {
             // We ran off the tab index group, but couldn't find the entry for
@@ -2179,7 +2212,14 @@ pub fn tabIndexPrevEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id) v
         // If we shift-tabbed from inside a focusGroup, we will always focus
         // the focusGroup itself, so do this again to focus the widget before
         // the focusGroup.
-        tabIndexPrevEx(event_num, tabidxs, base_tig);
+        tabIndexPrevEx(event_num, tabidxs, base_tig, false);
+    }
+
+    if (newId == null) {
+        // intentionally moving to the null focus state, don't try to recover
+        if (cw.subwindows.focused()) |sw| {
+            sw.kb_restart_widget_id = null;
+        }
     }
 }
 
@@ -2203,7 +2243,7 @@ pub const TabIndexGroup = struct {
 
         const id = dvui.parentGet().extendId(src, opts.id_extra orelse 0);
 
-        tabIndexSetEx(id, opts.tab_index, true);
+        tabIndexSetEx(id, opts.tab_index, null, true);
 
         TabIndexGroup.current = id;
     }
@@ -2970,7 +3010,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     var b = box(src, .{ .dir = .horizontal }, options);
     defer b.deinit();
 
-    dvui.tabIndexSet(b.data().id, b.data().options.tab_index);
+    dvui.tabIndexSet(b.data().id, b.data().options.tab_index, b.data().rectScale().r);
 
     var expanded: bool = init_opts.default_expanded;
     if (dvui.dataGet(null, b.data().id, "_expand", bool)) |e| {
@@ -3677,7 +3717,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
     lw.init(src, fmt, args, init_opts.label_opts, defaults.override(opts));
     // draw border and background
 
-    dvui.tabIndexSet(lw.data().id, lw.data().options.tab_index);
+    dvui.tabIndexSet(lw.data().id, lw.data().options.tab_index, lw.data().rectScale().r);
 
     var ret = false;
     if (dvui.clickedEx(lw.data(), .{ .buttons = .any })) |click_event| {
@@ -4021,7 +4061,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         AccessKit.nodeSetNumericValueJump(ak_node, 0.10);
     }
 
-    tabIndexSet(b.data().id, options.tab_index);
+    tabIndexSet(b.data().id, options.tab_index, b.data().rectScale().r);
 
     var hovered: bool = false;
     var ret = false;
@@ -4236,7 +4276,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         }
     }
 
-    tabIndexSet(b.data().id, options.tab_index);
+    tabIndexSet(b.data().id, options.tab_index, b.data().rectScale().r);
 
     const br = b.data().contentRect();
     const knobsize = @min(br.w, br.h);
@@ -4667,7 +4707,7 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
     var b = box(src, .{ .dir = .horizontal }, options);
     defer b.deinit();
 
-    dvui.tabIndexSet(b.data().id, b.data().options.tab_index);
+    dvui.tabIndexSet(b.data().id, b.data().options.tab_index, b.data().rectScale().r);
 
     var hovered: bool = false;
     if (dvui.clicked(b.data(), .{ .hovered = &hovered })) {
@@ -4761,7 +4801,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     var b = box(src, .{ .dir = .horizontal }, options);
     defer b.deinit();
 
-    dvui.tabIndexSet(b.data().id, b.data().options.tab_index);
+    dvui.tabIndexSet(b.data().id, b.data().options.tab_index, b.data().rectScale().r);
 
     var hovered: bool = false;
     if (dvui.clicked(b.data(), .{ .hovered = &hovered })) {
