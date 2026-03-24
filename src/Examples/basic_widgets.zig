@@ -214,6 +214,7 @@ pub fn basicWidgets() void {
 
         dvui.label(@src(), "Svg Images", .{}, .{ .gravity_y = 0.5 });
 
+	if (comptime !@import("build_options").no_tvg) {
         const zig_tvg_bytes = if (dvui.dataGetSlice(null, hbox.data().id, "_zig_tvg", []u8)) |tvg| tvg else blk: {
             // Could fail on OutOfMemory, but then the dataGetSlice would also panic
             const zig_tvg_bytes = dvui.svgToTvg(dvui.currentWindow().arena(), zig_svg) catch unreachable;
@@ -224,6 +225,7 @@ pub fn basicWidgets() void {
 
         const icon_opts = dvui.Options{ .gravity_y = 0.5, .min_size_content = .{ .h = 16 + icon_image_size_extra }, .rotation = icon_image_rotation };
         dvui.icon(@src(), "zig favicon", zig_tvg_bytes, .{}, icon_opts);
+	}
     }
 
     {

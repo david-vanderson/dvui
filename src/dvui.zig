@@ -33,6 +33,7 @@ const Io = std.Io;
 /// const Backend = @import("backend");
 /// ```
 pub const backend = @import("backend");
+pub const no_tvg = @import("build_options").no_tvg;
 const tvg = @import("svg2tvg");
 
 pub const math = std.math;
