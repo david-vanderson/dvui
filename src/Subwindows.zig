@@ -16,6 +16,9 @@ pub const Subwindow = struct {
     rect: Rect,
     rect_pixels: Rect.Physical,
     focused_widget_id: ?Id = null,
+    /// Set when an unhandled click sets focus to null (or a widget without
+    /// tab_index), used to restart keyboard nav.
+    kb_restart_widget_id: ?Id = null,
     /// Uses `arena` allocator
     render_cmds: std.ArrayList(dvui.RenderCommand) = .empty,
     /// Uses `arena` allocator

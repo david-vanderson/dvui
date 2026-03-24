@@ -459,8 +459,16 @@ pub fn focusWidget(self: *Self, id: ?Id, subwindow_id: ?Id, event_num: ?u16) voi
         }
         self.refreshWindow(@src(), null);
 
+        var kb_nav = false;
+
         if (id) |wid| {
             self.scroll_to_focused = true;
+
+            for (self.tab_index_prev.items) |ti| {
+                if (ti.windowId == sw.id and ti.widgetId == wid) {
+                    kb_nav = true;
+                }
+            }
 
             if (self.last_registered_id_this_frame == wid) {
                 self.last_focused_id_this_frame = wid;
@@ -473,6 +481,29 @@ pub fn focusWidget(self: *Self, id: ?Id, subwindow_id: ?Id, event_num: ?u16) voi
                         self.last_focused_id_this_frame = wid;
                         self.last_focused_id_in_subwindow = wid;
                         break;
+                    }
+                }
+            }
+        }
+
+        if (!kb_nav) {
+            var closest: f32 = 0;
+            var found_left: bool = false;
+            for (self.tab_index_prev.items) |ti| {
+                if (ti.windowId == sw.id) {
+                    const diff = self.mouse_pt.diff(ti.pt);
+                    const d = diff.x * diff.x + diff.y * diff.y;
+                    if (diff.x >= 0 and ((diff.y >= 0 and diff.y <= diff.x) or (diff.y < 0 and @abs(diff.y) <= diff.x * 0.1))) {
+                        if (sw.kb_restart_widget_id == null or !found_left or d < closest) {
+                            sw.kb_restart_widget_id = ti.widgetId;
+                            closest = d;
+                        }
+                        found_left = true;
+                    } else if (!found_left) {
+                        if (sw.kb_restart_widget_id == null or d < closest) {
+                            sw.kb_restart_widget_id = ti.widgetId;
+                            closest = d;
+                        }
                     }
                 }
             }

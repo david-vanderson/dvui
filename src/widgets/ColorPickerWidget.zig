@@ -69,7 +69,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
     // Accessibility TODO: Needs 2d-slider support from AccessKit. It's not possible to attach
     // a horizontal and vertical value to a single widget.
 
-    dvui.tabIndexSet(b.data().id, options.tab_index);
+    dvui.tabIndexSet(b.data().id, options.tab_index, b.data().rectScale().r);
 
     const rs = b.data().contentRectScale();
 
@@ -208,7 +208,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
         AccessKit.nodeSetNumericValue(ak_node, hue.*);
     }
 
-    dvui.tabIndexSet(b.data().id, options.tab_index);
+    dvui.tabIndexSet(b.data().id, options.tab_index, b.data().rectScale().r);
 
     const br = b.data().contentRect();
     const knobsize: dvui.Size = switch (dir) {
