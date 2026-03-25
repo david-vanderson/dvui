@@ -16,25 +16,14 @@ icon_opts: dvui.IconRenderOptions,
 pub fn init(self: *IconWidget, src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: dvui.IconRenderOptions, opts: Options) void {
     var size = Size{};
 
-    if (comptime !dvui.no_tvg) {
-        if (opts.min_size_content) |msc| {
-            // user gave us a min size, use it
-            size = msc;
-            size.w = @max(size.w, dvui.iconWidth(name, tvg_bytes, size.h) catch size.w);
-        } else {
-            // user didn't give us one, make it the height of text
-            const h = opts.fontGet().textHeight();
-            size = Size{ .w = dvui.iconWidth(name, tvg_bytes, h) catch h, .h = h };
-        }
+    if (opts.min_size_content) |msc| {
+        // user gave us a min size, use it
+        size = msc;
+        size.w = @max(size.w, dvui.iconWidth(name, tvg_bytes, size.h) catch size.w);
     } else {
-        if (opts.min_size_content) |msc| {
-            // user gave us a min size, use it
-            size = msc;
-        } else {
-            // user didn't give us one, make it the height of text
-            const h = opts.fontGet().textHeight();
-            size = Size{ .w = h, .h = h };
-        }
+        // user didn't give us one, make it the height of text
+        const h = opts.fontGet().textHeight();
+        size = Size{ .w = dvui.iconWidth(name, tvg_bytes, h) catch h, .h = h };
     }
 
     const defaults = Options{ .label = .{ .text = name }, .role = .image };
@@ -75,17 +64,16 @@ pub fn draw(self: *IconWidget) void {
         // a text color
         texOpts.colormod = ct;
     }
-    if (comptime !dvui.no_tvg) {
-        dvui.renderIcon(
-            self.name,
-            self.tvg_bytes,
-            rs,
-            texOpts,
-            self.icon_opts,
-        ) catch |err| {
-            dvui.logError(@src(), err, "Could not render icon", .{});
-        };
-    }
+
+    dvui.renderIcon(
+        self.name,
+        self.tvg_bytes,
+        rs,
+        texOpts,
+        self.icon_opts,
+    ) catch |err| {
+        dvui.logError(@src(), err, "Could not render icon", .{});
+    };
 }
 
 pub fn deinit(self: *IconWidget) void {
