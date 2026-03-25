@@ -78,6 +78,7 @@ pub fn build(b: *std.Build) !void {
     const tiny_file_dialogs_option = b.option(bool, "tiny-file-dialogs", "OS-native file dialogs (default is backend specific)");
     const stb_image_option = b.option(bool, "stb-image", "Build stb_image (default is backend specific, some include stb_image)");
     const tree_sitter_option = b.option(bool, "tree-sitter", "Build tree sitter (default is backend specific)");
+    const tvg_option = b.option(bool, "tvg", "Build tvg (default is true)");
 
     // This option is triggered only if it involved with raylib backend of any kind
     var linux_display_backend: ?LinuxDisplayBackend = null;
@@ -120,8 +121,6 @@ pub fn build(b: *std.Build) !void {
         "vertex_index",
         vertex_index,
     );
-    const no_tvg = b.option(bool, "no_tvg", "no pull tvg") orelse false;
-    build_options.addOption(bool, "no_tvg", no_tvg);
 
     const accesskit = b.option(AccesskitOptions, "accesskit", "Build with AccessKit support") orelse .off;
 
@@ -142,13 +141,13 @@ pub fn build(b: *std.Build) !void {
         .accesskit = accesskit,
         .build_options = build_options,
         .vertex_index = vertex_index,
-        .no_tvg = no_tvg,
         .libc = libc_option,
         .freetype = freetype_option,
         .tiny_file_dialogs = tiny_file_dialogs_option,
         .linux_display_backend = linux_display_backend,
         .stb_image = stb_image_option,
         .tree_sitter = tree_sitter_option,
+        .tvg = tvg_option,
     };
 
     if (back_to_build) |backend| {
@@ -222,7 +221,6 @@ pub fn build(b: *std.Build) !void {
 
     // svg2tvg tool
     // see svgPathToTvgPath below for how to run this at build time
-    //if (!no_tvg) {
     {
         const svg2tvg_dep = b.lazyDependency("svg2tvg", .{ .optimize = optimize, .target = target }).?;
         const exe = b.addExecutable(.{
@@ -260,7 +258,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
     const optimize = dvui_opts.optimize;
     switch (backend) {
         .custom => {
-            dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = false, .tree_sitter = true });
+            dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = false, .tree_sitter = true, .tvg = true });
 
             // For export to users who are bringing their own backend.  Use in your build.zig:
             // const dvui_mod = dvui_dep.module("dvui");
@@ -285,7 +283,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             }
         },
         .testing => {
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true, .tvg = true });
             const testing_mod = b.addModule("testing", .{
                 .root_source_file = b.path("src/backends/testing.zig"),
                 .target = target,
@@ -309,7 +307,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             addExample("testing-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .sdl2 => {
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true, .tvg = true });
             const sdl_mod = b.addModule("sdl2", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
@@ -394,7 +392,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             addExample("sdl2-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .sdl3gpu => {
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true, .tvg = true });
             const sdl_mod = b.addModule("sdl3", .{
                 .root_source_file = b.path("src/backends/sdl3gpu.zig"),
                 .target = target,
@@ -428,7 +426,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             addExample("sdl3gpu-ontop", b.path("examples/sdl3gpu-ontop.zig"), true, example_opts, dvui_opts);
         },
         .sdl3 => {
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true, .tvg = true });
             const sdl_mod = b.addModule("sdl3", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
@@ -470,7 +468,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
         //        return error.IncompatibleVertexIndex;
         //    }
 
-        //    dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true });
+        //    dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true, .tvg = true });
 
         //    const raylib_backend_mod = b.addModule("raylib", .{
         //        .root_source_file = b.path("src/backends/raylib-c.zig"),
@@ -540,7 +538,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
         //        return error.IncompatibleVertexIndex;
         //    }
 
-        //    dvui_opts.setDefaults(.{ .libc = dvui_opts_in.libc orelse true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true });
+        //    dvui_opts.setDefaults(.{ .libc = dvui_opts_in.libc orelse true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true, .tvg = true });
 
         //    const raylib_backend_mod = b.addModule("raylib_zig", .{
         //        .root_source_file = b.path("src/backends/raylib-zig.zig"),
@@ -599,7 +597,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 return error.IncompatibleVertexIndex;
             }
 
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true, .tvg = true });
             if (target.result.os.tag == .windows) {
                 const dx11_mod = b.addModule("dx11", .{
                     .root_source_file = b.path("src/backends/dx11.zig"),
@@ -632,7 +630,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             }
         },
         .glfw_opengl => {
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .stb_image = true, .tiny_file_dialogs = true, .tree_sitter = true });
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .stb_image = true, .tiny_file_dialogs = true, .tree_sitter = true, .tvg = true });
 
             const glfw_opengl_mod = b.addModule("glfw-opengl", .{
                 .root_source_file = b.path("src/backends/glfw-opengl.zig"),
@@ -688,7 +686,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 return error.IncompatibleVertexIndex;
             }
 
-            dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = false });
+            dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = false, .tvg = true });
             const export_symbol_names = &[_][]const u8{
                 "dvui_init",
                 "dvui_deinit",
@@ -729,7 +727,6 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                     .optimize = optimize,
                     .build_options = dvui_opts.build_options,
                     .vertex_index = .u16,
-                    .no_tvg = dvui_opts.no_tvg,
                     .test_filters = dvui_opts.test_filters,
                     .accesskit = .off,
                     .libc = false,
@@ -737,10 +734,11 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                     .tiny_file_dialogs = false,
                     .stb_image = true,
                     .tree_sitter = false,
+                    .tvg = dvui_opts.tvg,
                     // no tests or checks needed, they are check above in native build
                 };
 
-                wasm_dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = false });
+                wasm_dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = false, .tvg = true });
 
                 const web_mod_wasm = b.createModule(.{
                     .root_source_file = b.path("src/backends/web.zig"),
@@ -777,13 +775,13 @@ const DvuiModuleOptions = struct {
     accesskit: AccesskitOptions = .off,
     build_options: *std.Build.Step.Options,
     vertex_index: VertexIndex,
-    no_tvg: bool,
     libc: ?bool,
     tiny_file_dialogs: ?bool,
     freetype: ?bool,
     linux_display_backend: ?LinuxDisplayBackend = null,
     stb_image: ?bool,
     tree_sitter: ?bool,
+    tvg: ?bool,
 
     pub const DefaultOptions = struct {
         libc: bool,
@@ -791,6 +789,7 @@ const DvuiModuleOptions = struct {
         tiny_file_dialogs: bool,
         stb_image: bool,
         tree_sitter: bool,
+        tvg: bool,
     };
 
     fn setDefaults(self: *@This(), defaults: DefaultOptions) void {
@@ -799,6 +798,7 @@ const DvuiModuleOptions = struct {
         self.freetype = self.freetype orelse defaults.freetype;
         self.stb_image = self.stb_image orelse defaults.stb_image;
         self.tree_sitter = self.tree_sitter orelse defaults.tree_sitter;
+        self.tvg = self.tvg orelse defaults.tvg;
     }
 
     fn makeDefaults(self: *const @This()) *std.Build.Step.Options {
@@ -822,6 +822,11 @@ const DvuiModuleOptions = struct {
             bool,
             "tree_sitter",
             self.tree_sitter orelse @panic("makeDefaults: tree_sitter was null"),
+        );
+        ret.addOption(
+            bool,
+            "tvg",
+            self.tvg orelse @panic("makeDefaults: tvg was null"),
         );
 
         return ret;
@@ -906,13 +911,6 @@ pub fn addDvuiModule(
     });
     dvui_mod.addOptions("build_options", opts.build_options);
     dvui_mod.addOptions("default_options", opts.makeDefaults());
-    if (!opts.no_tvg){
-        dvui_mod.addImport("svg2tvg", b.lazyDependency("svg2tvg", .{
-            .target = target,
-            .optimize = optimize,
-        }).?.module("svg2tvg"));
-    }
-
 
     // the system integration option check has to always occur even if accesskit is disabled for
     // it to be displayed in the build help
@@ -1003,6 +1001,14 @@ pub fn addDvuiModule(
                 .flags = &.{"-std=c11"},
             });
         }
+    }
+
+    const tvg = opts.tvg orelse @panic("tvg was null");
+    if (tvg){
+        dvui_mod.addImport("svg2tvg", b.lazyDependency("svg2tvg", .{
+            .target = target,
+            .optimize = optimize,
+        }).?.module("svg2tvg"));
     }
 
     return dvui_mod;
