@@ -3637,15 +3637,11 @@ pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options
 pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: MenuItemWidget.InitOptions, opts: Options) ?Rect.Natural {
     var mi = menuItem(src, init_opts, opts);
 
-    var labelopts = opts.strip().override(.{ .label = .{ .for_id = mi.data().id } });
+    const labelopts = mi.style().strip().override(.{ .label = .{ .for_id = mi.data().id } });
 
     var ret: ?Rect.Natural = null;
     if (mi.activeRect()) |r| {
         ret = r;
-    }
-
-    if (mi.show_active) {
-        labelopts.style = .highlight;
     }
 
     labelNoFmt(@src(), label_str, .{}, labelopts);

@@ -112,10 +112,13 @@ pub fn style(self: *MenuItemWidget) Options {
     var opts: Options = self.data().options.styleOnly();
     if (self.show_active and !self.init_opts.focus_as_outline) {
         opts.style = .highlight;
+        opts.color_fill = opts.color_fill_hover orelse opts.color(.fill);
+        opts.color_text = opts.color_text_hover orelse opts.color(.text_hover);
     } else if (self.highlight or (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow())) {
-        opts.color_fill = self.data().options.color(.fill_hover);
-        opts.color_text = self.data().options.color(.text_hover);
+        opts.color_fill = opts.color_fill_hover orelse opts.color(.fill_hover);
+        opts.color_text = opts.color_text_hover orelse opts.color(.text_hover);
     }
+
     return opts;
 }
 
