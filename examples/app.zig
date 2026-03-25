@@ -129,7 +129,7 @@ pub fn frame() !dvui.App.Result {
         dvui.toggleDebugWindow();
     }
 
-   if (comptime dvui.useTvg) {
+    {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
         dvui.label(@src(), "Pinch Zoom or Scale", .{}, .{});
