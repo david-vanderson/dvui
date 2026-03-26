@@ -812,7 +812,7 @@ fn glfwScrollCallback(window: *zglfw.Window, xrel: f64, yrel: f64) callconv(.c) 
 
 fn handleScrollEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xrel: f64, yrel: f64) void {
     const ctx: *@This() = dvui_window.backend.impl;
-    const scrollx: f32 = @floatCast(-xrel * dvui.scroll_speed);
+    const scrollx: f32 = @floatCast(xrel * dvui.scroll_speed);
     const scrolly: f32 = @floatCast(yrel * dvui.scroll_speed);
     const consumed_x = dvui_window.addEventMouseWheel(scrollx, .horizontal) catch |err| {
         log.err("Encountered error when adding event! Err: {}", .{err});
