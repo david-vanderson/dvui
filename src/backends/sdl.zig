@@ -1184,11 +1184,13 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             const ticks_y = if (sdl3) event.wheel.y else event.wheel.preciseY;
 
             if (self.log_events) {
-                log.debug("event MOUSEWHEEL {d} {d} {d}\n", .{ ticks_x, ticks_y, event.wheel.which });
+                log.debug("event MOUSEWHEEL {d} {d} {d} {s}\n", .{ ticks_x, ticks_y, event.wheel.which, if (event.wheel.direction == c.SDL_MOUSEWHEEL_FLIPPED) "flipped" else "normal" });
             }
 
             var ret = false;
-            if (ticks_x != 0) ret = try win.addEventMouseWheel(ticks_x * dvui.scroll_speed, .horizontal);
+            // sdl says x positive means to the right, where as y positive
+            // means up, so we negate x so that down and right match
+            if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed, .horizontal);
             if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed, .vertical);
             return ret;
         },
