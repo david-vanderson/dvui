@@ -114,7 +114,8 @@ pub fn style(self: *MenuItemWidget) Options {
         opts.style = .highlight;
         opts.color_fill = opts.color_fill_hover orelse opts.color(.fill);
         opts.color_text = opts.color_text_hover orelse opts.color(.text_hover);
-    } else if (self.highlight or (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow())) {
+    } else if (self.highlight) {
+        // mouse is over us
         opts.color_fill = opts.color_fill_hover orelse opts.color(.fill_hover);
         opts.color_text = opts.color_text_hover orelse opts.color(.text_hover);
     }
