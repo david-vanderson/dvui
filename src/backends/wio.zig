@@ -251,7 +251,7 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
             return try win.addEventMouseMotion(.{ .pt = .{ .x = x * scale, .y = y * scale } });
         },
         .scroll_vertical => |ticks| return try win.addEventMouseWheel(-ticks * dvui.scroll_speed, .vertical),
-        .scroll_horizontal => |ticks| return try win.addEventMouseWheel(-ticks * dvui.scroll_speed, .horizontal),
+        .scroll_horizontal => |ticks| return try win.addEventMouseWheel(ticks * dvui.scroll_speed, .horizontal),
         else => return false,
     }
 }
