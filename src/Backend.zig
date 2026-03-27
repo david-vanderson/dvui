@@ -137,7 +137,11 @@ pub fn textureClearTarget(self: Backend, texture: dvui.Texture.Target) void {
 /// The caller must have already switched to the target via renderTarget()
 /// and flushed any pending draw commands.
 pub fn renderClearRect(self: Backend, x: i32, y: i32, w: i32, h: i32) void {
-    return self.impl.renderClearRect(x, y, w, h);
+    if (dvui.render_backend.kind == .default) {
+        return self.impl.renderClearRect(x, y, w, h);
+    } else {
+        return self.renderer().renderClearRect(self.impl.pixelSize(), x, y, w, h);
+    }
 }
 
 /// Destroy `texture` made with `Target.Create`. After this call, this texture
