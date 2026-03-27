@@ -890,6 +890,19 @@ pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8)
     }
 }
 
+pub fn textureUpdateSubRect(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8, x: u32, y: u32, w: u32, h: u32) !void {
+    if (comptime sdl3) {
+        const tx: [*c]c.SDL_Texture = @ptrCast(@alignCast(texture.ptr));
+        const bpp: usize = texture.format.bytesPerPixel();
+        const row_pitch: usize = @as(usize, texture.width) * bpp;
+        const offset: usize = @as(usize, y) * row_pitch + @as(usize, x) * bpp;
+        const rect: c.SDL_Rect = .{ .x = @intCast(x), .y = @intCast(y), .w = @intCast(w), .h = @intCast(h) };
+        if (!c.SDL_UpdateTexture(tx, &rect, pixels + offset, @intCast(row_pitch))) return error.TextureUpdate;
+    } else {
+        return dvui.Backend.TextureError.NotImplemented;
+    }
+}
+
 pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
     if (!sdl3) switch (interpolation) {
         .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
@@ -955,6 +968,20 @@ pub fn textureClearTarget(self: *SDLBackend, texture: dvui.TextureTarget) void {
         c.SDL_RenderFillRect(self.renderer, null),
         "SDL_RenderFillRect in textureClearTarget",
     ) catch return;
+}
+
+/// Clear a sub-region of the CURRENT render target to transparent.
+/// Caller must have already set the render target and flushed pending draws.
+pub fn renderClearRect(self: *SDLBackend, x: i32, y: i32, w: i32, h: i32) void {
+    var oldBlend: c_uint = undefined;
+    _ = c.SDL_GetRenderDrawBlendMode(self.renderer, &oldBlend);
+    defer _ = c.SDL_SetRenderDrawBlendMode(self.renderer, oldBlend);
+
+    _ = c.SDL_SetRenderDrawBlendMode(self.renderer, c.SDL_BLENDMODE_NONE);
+    _ = c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0);
+
+    const rect = c.SDL_FRect{ .x = @floatFromInt(x), .y = @floatFromInt(y), .w = @floatFromInt(w), .h = @floatFromInt(h) };
+    _ = c.SDL_RenderFillRect(self.renderer, &rect);
 }
 
 pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
