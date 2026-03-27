@@ -237,6 +237,39 @@ pub fn renderTarget(self: *@This(), maybe_texture: ?dvui.TextureTarget) !void {
     }
 }
 
+/// Clear a sub-rectangle of the current draw framebuffer to transparent (physical pixels).
+/// Matches `drawClippedTriangles` scissor convention: Y flipped for the default framebuffer only.
+pub fn renderClearRect(self: *@This(), physical_size: dvui.Size.Physical, x: i32, y: i32, w: i32, h: i32) void {
+    if (w <= 0 or h <= 0) return;
+
+    const scissor_was_on = gl.isEnabled(gl.SCISSOR_TEST) != gl.FALSE;
+    var prev_box: [4]c_int = undefined;
+    gl.getIntegerv(gl.SCISSOR_BOX, &prev_box);
+
+    var prev_clear: [4]f32 = undefined;
+    gl.getFloatv(gl.COLOR_CLEAR_VALUE, &prev_clear);
+
+    defer {
+        gl.clearColor(prev_clear[0], prev_clear[1], prev_clear[2], prev_clear[3]);
+        if (scissor_was_on) {
+            gl.enable(gl.SCISSOR_TEST);
+            gl.scissor(prev_box[0], prev_box[1], prev_box[2], prev_box[3]);
+        } else {
+            gl.disable(gl.SCISSOR_TEST);
+        }
+    }
+
+    const sy: i32 = if (self.render_target_size == null)
+        @as(i32, @intFromFloat(physical_size.h)) - y - h
+    else
+        y;
+
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(x, sy, w, h);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+}
+
 fn createTexture(pixels: ?[*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !u32 {
     if (format != .rgba_32) {
         log.err("unsupported texture format", .{});

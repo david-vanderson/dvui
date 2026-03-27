@@ -104,6 +104,8 @@ pub fn textureCreateTarget(_: *TestingBackend, _: u32, _: u32, _: dvui.enums.Tex
 pub fn textureClearTarget(_: *TestingBackend, _: dvui.TextureTarget) void {
 }
 
+pub fn renderClearRect(_: *TestingBackend, _: i32, _: i32, _: i32, _: i32) void {}
+
 /// Read pixel data (RGBA) from texture into pixel.
 pub fn textureReadTarget(_: *TestingBackend, texture: dvui.TextureTarget, pixels: [*]u8) !void {
     const ptr: [*]const u8 = @ptrCast(texture.ptr);

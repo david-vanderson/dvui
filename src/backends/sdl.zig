@@ -980,8 +980,13 @@ pub fn renderClearRect(self: *SDLBackend, x: i32, y: i32, w: i32, h: i32) void {
     _ = c.SDL_SetRenderDrawBlendMode(self.renderer, c.SDL_BLENDMODE_NONE);
     _ = c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0);
 
-    const rect = c.SDL_FRect{ .x = @floatFromInt(x), .y = @floatFromInt(y), .w = @floatFromInt(w), .h = @floatFromInt(h) };
-    _ = c.SDL_RenderFillRect(self.renderer, &rect);
+    if (sdl3) {
+        const rect = c.SDL_FRect{ .x = @floatFromInt(x), .y = @floatFromInt(y), .w = @floatFromInt(w), .h = @floatFromInt(h) };
+        _ = c.SDL_RenderFillRect(self.renderer, &rect);
+    } else {
+        const rect = c.SDL_Rect{ .x = x, .y = y, .w = w, .h = h };
+        _ = c.SDL_RenderFillRect(self.renderer, &rect);
+    }
 }
 
 pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {

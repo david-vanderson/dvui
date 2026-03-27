@@ -659,6 +659,8 @@ pub fn textureFromTargetTemp(_: *WebBackend, texture: dvui.TextureTarget) !dvui.
     return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
 }
 
+pub fn renderClearRect(_: *WebBackend, _: i32, _: i32, _: i32, _: i32) void {}
+
 pub fn renderTarget(_: *WebBackend, texture: ?dvui.TextureTarget) !void {
     if (texture) |tex| {
         wasm.wasm_renderTarget(@intCast(@intFromPtr(tex.ptr)));
