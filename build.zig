@@ -82,6 +82,8 @@ pub fn build(b: *std.Build) !void {
     const stb_image_option = b.option(bool, "stb-image", "Build stb_image (default is backend specific, some include stb_image)");
     const tree_sitter_option = b.option(bool, "tree-sitter", "Build tree sitter (default is backend specific)");
 
+    const wio_unix_backends = b.option([]const u8, "wio_unix_backends", "List of wio backends for Unix (default: all)");
+
     // This option is triggered only if it involved with raylib backend of any kind
     var linux_display_backend: ?LinuxDisplayBackend = null;
     if (back_to_build == null or back_to_build.? == .raylib or back_to_build.? == .raylib_zig) {
@@ -159,6 +161,7 @@ pub fn build(b: *std.Build) !void {
         .linux_display_backend = linux_display_backend,
         .stb_image = stb_image_option,
         .tree_sitter = tree_sitter_option,
+        .wio_unix_backends = wio_unix_backends,
     };
 
     if (back_to_build) |backend| {
@@ -793,7 +796,8 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             if (b.lazyDependency("wio", .{
                 .target = target,
                 .optimize = optimize,
-                .features = "opengl",
+                .enable_opengl = (dvui_opts.render_backend == .opengl),
+                .unix_backends = dvui_opts.wio_unix_backends,
                 .win32_manifest = false,
             })) |wio| {
                 wio_backend_mod.addImport("wio", wio.module("wio"));
@@ -841,6 +845,7 @@ const DvuiModuleOptions = struct {
     linux_display_backend: ?LinuxDisplayBackend = null,
     stb_image: ?bool,
     tree_sitter: ?bool,
+    wio_unix_backends: ?[]const u8 = null,
 
     pub const DefaultOptions = struct {
         libc: bool,
