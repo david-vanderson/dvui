@@ -72,15 +72,20 @@ pub fn layoutText() void {
             var tl = dvui.textLayout(@src(), .{ .cache_layout = cache_ok, .break_lines = break_lines.*, .kerning = kern }, .{ .expand = .both });
             defer tl.deinit();
 
-            const lorem1 = "Header line with 9 indented (kerning test T.)\n";
-            const lorem2 = "    an indented line\n";
+            const lorem1 = "Header line with 9 indented (kerning test T.)\n" ++
+                "  indented line 1\n" ++
+                "  indented line 2\n" ++
+                "  indented line 3\n" ++
+                "  indented line 4\n" ++
+                "  indented line 5\n" ++
+                "  indented line 6\n" ++
+                "  indented line 7\n" ++
+                "  indented line 8\n" ++
+                "  indented line 9\n";
 
             for (0..copies.*) |i| {
                 tl.format("{d} ", .{i}, .{});
                 tl.addText(lorem1, .{});
-                for (0..9) |_| {
-                    tl.addText(lorem2, .{});
-                }
             }
         }
     }

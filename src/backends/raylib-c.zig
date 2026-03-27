@@ -120,11 +120,11 @@ pub fn createWindow(options: InitOptions) void {
 
 //==========DVUI MANAGEMENT FUNCTIONS==========
 
-pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) void {
+pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
 }
 
-pub fn end(_: *RaylibBackend) void {}
+pub fn end(_: *RaylibBackend) !void {}
 
 pub fn clear(_: *RaylibBackend) void {
     c.ClearBackground(c.BLANK);

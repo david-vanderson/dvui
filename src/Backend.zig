@@ -16,9 +16,16 @@ pub const TextureError = GenericError || error{ TextureCreate, TextureRead, Text
 pub const kind = Implementation.kind;
 
 impl: *Implementation,
+render_impl: if (dvui.render_backend.kind == .default) void else *dvui.render_backend,
 
-pub fn init(impl: *Implementation) Backend {
-    return .{ .impl = impl };
+pub const init = if (dvui.render_backend.kind == .default) initDefault else initRenderer;
+
+fn initDefault(impl: *Implementation) Backend {
+    return .{ .impl = impl, .render_impl = {} };
+}
+
+fn initRenderer(impl: *Implementation, render_impl: *dvui.render_backend) Backend {
+    return .{ .impl = impl, .render_impl = render_impl };
 }
 
 /// Get monotonic nanosecond timestamp. Doesn't have to be system time.
@@ -34,12 +41,14 @@ pub fn sleep(self: Backend, ns: u64) void {
 /// arg is cleared before `dvui.Window.begin` is called next, useful for any
 /// temporary allocations needed only for this frame.
 pub fn begin(self: Backend, arena: std.mem.Allocator) GenericError!void {
-    return self.impl.begin(arena);
+    try self.impl.begin(arena);
+    if (dvui.render_backend.kind != .default) try self.render_impl.begin(arena);
 }
 
 /// Called during `dvui.Window.end` before freeing any memory for the current frame.
 pub fn end(self: Backend) GenericError!void {
-    return self.impl.end();
+    if (dvui.render_backend.kind != .default) try self.render_impl.end();
+    try self.impl.end();
 }
 
 /// Return size of the window in physical pixels.  For a 300x200 retina
@@ -67,21 +76,25 @@ pub fn contentScale(self: Backend) f32 {
 /// physical pixels.  If `texture` is given, the vertexes uv coords are
 /// normalized (0-1). `clipr` (if given) has whole pixel values.
 pub fn drawClippedTriangles(self: Backend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, clipr: ?dvui.Rect.Physical) GenericError!void {
-    return self.impl.drawClippedTriangles(texture, vtx, idx, clipr);
+    if (dvui.render_backend.kind == .default) {
+        try self.impl.drawClippedTriangles(texture, vtx, idx, clipr);
+    } else {
+        try self.renderer().drawClippedTriangles(self.impl.pixelSize(), texture, vtx, idx, clipr);
+    }
 }
 
 /// Create a `dvui.Texture` from premultiplied alpha `pixels` in RGBA.  The
 /// returned pointer is what will later be passed to `drawClippedTriangles`.
 pub fn textureCreate(self: Backend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) TextureError!dvui.Texture {
-    return self.impl.textureCreate(pixels, width, height, interpolation, format);
+    return self.renderer().textureCreate(pixels, width, height, interpolation, format);
 }
 
 /// Update a `dvui.Texture` from premultiplied alpha `pixels` in RGBA.  The
 /// passed in texture must be created  with textureCreate
 pub fn textureUpdate(self: Backend, texture: dvui.Texture, pixels: [*]const u8) TextureError!void {
     // we can handle backends that dont support textureUpdate by using destroy and create again!
-    if (comptime !@hasDecl(Implementation, "textureUpdate")) return TextureError.NotImplemented else {
-        return self.impl.textureUpdate(texture, pixels);
+    if (comptime !@hasDecl(@TypeOf(self.renderer().*), "textureUpdate")) return TextureError.NotImplemented else {
+        return self.renderer().textureUpdate(texture, pixels);
     }
 }
 
@@ -100,24 +113,24 @@ pub fn textureUpdateSubRect(self: Backend, texture: dvui.Texture, pixels: [*]con
 /// pointer will not be used by dvui.
 pub fn textureDestroy(self: Backend, texture: dvui.Texture) void {
     // std.debug.print("destroy ptr {} w: {}, h:{}\n", .{ @intFromPtr(texture.ptr), texture.width, texture.height });
-    return self.impl.textureDestroy(texture);
+    return self.renderer().textureDestroy(texture);
 }
 
 /// Create a `dvui.Texture` that can be rendered to with `renderTarget`.  The
 /// returned pointer is what will later be passed to `drawClippedTriangles`.
 pub fn textureCreateTarget(self: Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) TextureError!dvui.TextureTarget {
-    return self.impl.textureCreateTarget(width, height, interpolation, format);
+    return self.renderer().textureCreateTarget(width, height, interpolation, format);
 }
 
 /// Read pixel data (RGBA) from `texture` into `pixels_out`.
 pub fn textureReadTarget(self: Backend, texture: dvui.TextureTarget, pixels_out: [*]u8) TextureError!void {
-    return self.impl.textureReadTarget(texture, pixels_out);
+    return self.renderer().textureReadTarget(texture, pixels_out);
 }
 
 /// Destroy `texture` made with `Target.Create`. After this call, this texture
 /// pointer will not be used by dvui.
 pub fn textureClearTarget(self: Backend, texture: dvui.Texture.Target) void {
-    return self.impl.textureClearTarget(texture);
+    return self.renderer().textureClearTarget(texture);
 }
 
 /// Clear a sub-region of the current render target to transparent.
@@ -130,26 +143,33 @@ pub fn renderClearRect(self: Backend, x: i32, y: i32, w: i32, h: i32) void {
 /// Destroy `texture` made with `Target.Create`. After this call, this texture
 /// pointer will not be used by dvui.
 pub fn textureDestroyTarget(self: Backend, texture: dvui.Texture.Target) void {
-    return self.impl.textureDestroyTarget(texture);
+    return self.renderer().textureDestroyTarget(texture);
 }
 
 /// Convert `target` made with `textureCreateTarget` into return texture
 /// as if made by `textureCreate`.  target will be destroyed.
 pub fn textureFromTarget(self: Backend, target: dvui.TextureTarget) TextureError!dvui.Texture {
-    return self.impl.textureFromTarget(target);
+    return self.renderer().textureFromTarget(target);
 }
 
 /// Get a temporary drawable texture from this target, as if made by
 /// `textureCreate` and then passed to `textureDestroyLater`.  target is not
 /// destroyed.
 pub fn textureFromTargetTemp(self: Backend, target: dvui.TextureTarget) TextureError!dvui.Texture {
-    return self.impl.textureFromTargetTemp(target);
+    return self.renderer().textureFromTargetTemp(target);
 }
 
 /// Render future `drawClippedTriangles` to the passed `texture` (or screen
 /// if null).
 pub fn renderTarget(self: Backend, texture: ?dvui.TextureTarget) GenericError!void {
-    return self.impl.renderTarget(texture);
+    return self.renderer().renderTarget(texture);
+}
+
+fn renderer(self: Backend) if (dvui.render_backend.kind == .default) *Implementation else *dvui.render_backend {
+    return if (dvui.render_backend.kind == .default)
+        self.impl
+    else
+        self.render_impl;
 }
 
 /// Get clipboard content (text only)
