@@ -134,11 +134,11 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
             try win.addEventWindow(.{ .action = .close });
             return false;
         },
-        .size => |size| {
+        .size_logical => |size| {
             self.size_natural = .{ .w = @floatFromInt(size.width), .h = @floatFromInt(size.height) };
             return false;
         },
-        .framebuffer => |size| {
+        .size_physical => |size| {
             self.size_physical = .{ .w = @floatFromInt(size.width), .h = @floatFromInt(size.height) };
             return false;
         },
