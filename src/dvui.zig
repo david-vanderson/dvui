@@ -137,10 +137,18 @@ pub const ImageSource = Texture.ImageSource;
 pub const imageSize = Texture.ImageSource.size;
 pub const textureCreate = Texture.create;
 pub const textureUpdate = Texture.update;
+pub const textureUpdateSubRect = Texture.updateSubRect;
 pub const textureCreateTarget = Texture.Target.create;
 pub const textureReadTarget = Texture.readTarget;
 pub const textureFromTarget = Texture.fromTarget;
 pub const textureDestroyLater = Texture.destroyLater;
+
+/// Clear a sub-region of the current render target to fully transparent.
+/// Flushes any pending draw commands first. The caller must have already
+/// switched to the desired render target via `renderTarget()`.
+pub fn renderClearRect(x: i32, y: i32, w: i32, h: i32) void {
+    currentWindow().backend.renderClearRect(x, y, w, h);
+}
 
 /// Gets a texture from the internal texture cache. If a texture
 /// isn't used for one frame it gets removed from the cache and
