@@ -138,6 +138,7 @@ pub const ImageSource = Texture.ImageSource;
 pub const imageSize = Texture.ImageSource.size;
 pub const textureCreate = Texture.create;
 pub const textureUpdate = Texture.update;
+pub const textureUpdateSubRect = Texture.updateSubRect;
 pub const textureCreateTarget = Texture.Target.create;
 pub const textureReadTarget = Texture.readTarget;
 pub const textureFromTarget = Texture.fromTarget;

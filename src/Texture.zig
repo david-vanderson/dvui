@@ -382,6 +382,26 @@ pub fn update(tex: *Texture, pma: []const Color.PMA, interpolation: TextureInter
     };
 }
 
+/// Update a sub-rectangle of a texture from raw PMA pixel data.
+/// The full pixel buffer must be passed (same as for `update`); only the
+/// rows/columns within the given rect will be uploaded.
+///
+/// Falls back to a full `update` if the backend does not support sub-rect
+/// updates.
+///
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn updateSubRect(tex: *Texture, pma: [*]const u8, x: u32, y: u32, w: u32, h: u32) !void {
+    dvui.currentWindow().backend.textureUpdateSubRect(tex.*, pma, x, y, w, h) catch |err| {
+        if (err == TextureError.NotImplemented) {
+            const full_len = tex.width * tex.height;
+            const full: []const Color.PMA = @as([*]const Color.PMA, @ptrCast(@alignCast(pma)))[0..full_len];
+            try update(tex, full, .nearest);
+        } else {
+            return err;
+        }
+    };
+}
+
 /// Read pixels from texture created with `textureCreateTarget`.
 ///
 /// Returns pixels allocated by arena.
