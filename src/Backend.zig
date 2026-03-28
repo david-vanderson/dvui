@@ -133,17 +133,6 @@ pub fn textureClearTarget(self: Backend, texture: dvui.Texture.Target) void {
     return self.renderer().textureClearTarget(texture);
 }
 
-/// Clear a sub-region of the current render target to transparent.
-/// The caller must have already switched to the target via renderTarget()
-/// and flushed any pending draw commands.
-pub fn renderClearRect(self: Backend, x: i32, y: i32, w: i32, h: i32) void {
-    if (dvui.render_backend.kind == .default) {
-        return self.impl.renderClearRect(x, y, w, h);
-    } else {
-        return self.renderer().renderClearRect(self.impl.pixelSize(), x, y, w, h);
-    }
-}
-
 /// Destroy `texture` made with `Target.Create`. After this call, this texture
 /// pointer will not be used by dvui.
 pub fn textureDestroyTarget(self: Backend, texture: dvui.Texture.Target) void {

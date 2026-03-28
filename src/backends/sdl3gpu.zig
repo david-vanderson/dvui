@@ -1412,8 +1412,6 @@ pub fn textureClearTarget(_: *SDLBackend, _: dvui.TextureTarget) void {
     log.err("textureClearTarget unimplemented", .{});
 }
 
-pub fn renderClearRect(_: *SDLBackend, _: i32, _: i32, _: i32, _: i32) void {}
-
 pub fn renderTarget(self: *SDLBackend, dvuiTarget: ?dvui.TextureTarget) !void {
     try self.finishRenderingCurrentTarget(false);
 

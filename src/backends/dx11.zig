@@ -836,8 +836,6 @@ pub fn textureFromTargetTemp(self: Context, texture: dvui.TextureTarget) !dvui.T
     return newTex;
 }
 
-pub fn renderClearRect(_: Context, _: i32, _: i32, _: i32, _: i32) void {}
-
 pub fn renderTarget(self: Context, texture: ?dvui.TextureTarget) !void {
     const state = stateFromHwnd(hwndFromContext(self));
     cleanupRenderTarget(state);

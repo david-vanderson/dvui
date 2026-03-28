@@ -390,8 +390,6 @@ pub fn textureFromTargetTemp(_: *RaylibBackend, texture: dvui.TextureTarget) dvu
     return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
 }
 
-pub fn renderClearRect(_: *RaylibBackend, _: i32, _: i32, _: i32, _: i32) void {}
-
 /// Render future drawClippedTriangles() to the passed texture (or screen
 /// if null).
 pub fn renderTarget(self: *RaylibBackend, texture: ?dvui.TextureTarget) !void {
