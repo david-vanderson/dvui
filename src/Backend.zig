@@ -98,6 +98,17 @@ pub fn textureUpdate(self: Backend, texture: dvui.Texture, pixels: [*]const u8) 
     }
 }
 
+/// Update a sub-rectangle of a `dvui.Texture` from premultiplied alpha
+/// `pixels`. The pixel pointer must point to the start of the full texture
+/// row that contains the sub-rect (i.e. same pointer as full update, with
+/// pitch = texture.width * bpp). The backend reads only the rows/columns
+/// within the given rect.
+pub fn textureUpdateSubRect(self: Backend, texture: dvui.Texture, pixels: [*]const u8, x: u32, y: u32, w: u32, h: u32) TextureError!void {
+    if (comptime !@hasDecl(Implementation, "textureUpdateSubRect")) return TextureError.NotImplemented else {
+        return self.impl.textureUpdateSubRect(texture, pixels, x, y, w, h);
+    }
+}
+
 /// Destroy `texture` made with `textureCreate`. After this call, this texture
 /// pointer will not be used by dvui.
 pub fn textureDestroy(self: Backend, texture: dvui.Texture) void {
