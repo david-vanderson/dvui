@@ -970,25 +970,6 @@ pub fn textureClearTarget(self: *SDLBackend, texture: dvui.TextureTarget) void {
     ) catch return;
 }
 
-/// Clear a sub-region of the CURRENT render target to transparent.
-/// Caller must have already set the render target and flushed pending draws.
-pub fn renderClearRect(self: *SDLBackend, x: i32, y: i32, w: i32, h: i32) void {
-    var oldBlend: c_uint = undefined;
-    _ = c.SDL_GetRenderDrawBlendMode(self.renderer, &oldBlend);
-    defer _ = c.SDL_SetRenderDrawBlendMode(self.renderer, oldBlend);
-
-    _ = c.SDL_SetRenderDrawBlendMode(self.renderer, c.SDL_BLENDMODE_NONE);
-    _ = c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0);
-
-    if (sdl3) {
-        const rect = c.SDL_FRect{ .x = @floatFromInt(x), .y = @floatFromInt(y), .w = @floatFromInt(w), .h = @floatFromInt(h) };
-        _ = c.SDL_RenderFillRect(self.renderer, &rect);
-    } else {
-        const rect = c.SDL_Rect{ .x = x, .y = y, .w = w, .h = h };
-        _ = c.SDL_RenderFillRect(self.renderer, &rect);
-    }
-}
-
 pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
     if (sdl3) {
         // null is the default target
