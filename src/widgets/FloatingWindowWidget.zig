@@ -32,6 +32,7 @@ pub const Resize = enum {
 
 pub const InitOptions = struct {
     modal: bool = false,
+    modal_fade_alpha: u8 = 80,
     rect: ?*Rect = null,
     center_on: ?Rect.Natural = null,
     open_flag: ?*bool = null,
@@ -276,8 +277,8 @@ pub fn drawBackground(self: *FloatingWindowWidget) void {
 
     if (self.init_options.modal and !dvui.firstFrame(self.data().id)) {
         // paint over everything below
-        var col = self.options.color(.text);
-        col.a = if (dvui.themeGet().dark) 60 else 80;
+        var col = self.options.color(.fill);
+        col.a = self.init_options.modal_fade_alpha;
         dvui.windowRectPixels().fill(.{}, .{ .color = col });
     }
 
