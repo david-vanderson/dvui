@@ -926,6 +926,25 @@ pub fn snapToPixels() bool {
     return cw.snap_to_pixels;
 }
 
+/// Set multiplier for fractional (`snap_to_pixels = false`) font cache raster size.
+/// Cache size is `font.size * windowNaturalScale() * mult`. Returns previous value.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn fractionalFontCacheRefScaleSet(mult: f32) f32 {
+    const cw = currentWindow();
+    const old = cw.fractional_font_cache_ref_scale;
+    cw.fractional_font_cache_ref_scale = @max(mult, 0.01);
+    return old;
+}
+
+/// Current fractional font cache reference scale. See `fractionalFontCacheRefScaleSet`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn fractionalFontCacheRefScale() f32 {
+    const cw = currentWindow();
+    return cw.fractional_font_cache_ref_scale;
+}
+
 /// Set kerning setting.  If true:
 /// * textSize includes kerning by default
 /// * renderText include kerning by default

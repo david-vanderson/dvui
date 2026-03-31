@@ -289,14 +289,17 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     const ask_size = if (cw.snap_to_pixels)
         self.size * ss
     else
-        self.size * 16;
+        self.size * dvui.fractionalFontCacheRefScale() * dvui.windowNaturalScale();
     const sized_font = self.withSize(ask_size);
 
     // might give us a slightly smaller font
     const fce = dvui.fontCacheGet(sized_font) catch return .{ .w = 10, .h = 10 };
 
     // this must be synced with dvui.renderText()
-    const target_fraction = if (cw.snap_to_pixels) 1.0 / ss else self.size / fce.em_height;
+    const target_fraction = if (cw.snap_to_pixels)
+        1.0 / ss
+    else
+        self.size / fce.em_height;
 
     var options = opts;
     if (opts.max_width) |mwidth| {

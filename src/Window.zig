@@ -28,6 +28,9 @@ scroll_to_focused: bool = false,
 text_input_rect: ?Rect.Natural = null,
 
 snap_to_pixels: bool = true,
+/// Multiplier for font cache raster size when `snap_to_pixels` is false.
+/// Effective cache size is `font.size * windowNaturalScale() * this`.
+fractional_font_cache_ref_scale: f32 = 1.0,
 kerning: bool = true,
 /// The alpha value for all rendering. All colors alpha values will be
 /// multiplied by this value.

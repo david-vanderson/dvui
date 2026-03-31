@@ -156,7 +156,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     const cache_size = if (cw.snap_to_pixels)
         target_size
     else
-        opts.font.size * 16;
+        opts.font.size * dvui.fractionalFontCacheRefScale() * dvui.windowNaturalScale();
     const sized_font = opts.font.withSize(cache_size);
 
     // might get a slightly smaller font
