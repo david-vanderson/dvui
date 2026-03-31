@@ -286,14 +286,10 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     const ss = dvui.parentGet().screenRectScale(Rect{}).s;
     const cw = dvui.currentWindow();
 
-    // When snap_to_pixels is false (fractional scaling mode), use only the
-    // window DPI scale for the cache lookup so the font entry stays fixed
-    // across zoom levels — target_fraction handles the rest smoothly.
-    const font_ss = if (cw.snap_to_pixels)
-        ss
+    const ask_size = if (cw.snap_to_pixels)
+        self.size * ss
     else
-        dvui.windowNaturalScale() * dvui.fractionalFontRefScale();
-    const ask_size = self.size * font_ss;
+        self.size * 16;
     const sized_font = self.withSize(ask_size);
 
     // might give us a slightly smaller font

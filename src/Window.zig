@@ -28,9 +28,6 @@ scroll_to_focused: bool = false,
 text_input_rect: ?Rect.Natural = null,
 
 snap_to_pixels: bool = true,
-/// Multiplier used for fractional (snap_to_pixels=false) font cache lookup size.
-/// 1.0 means cache at theme size * natural DPI scale.
-fractional_font_ref_scale: f32 = 1.0,
 kerning: bool = true,
 /// The alpha value for all rendering. All colors alpha values will be
 /// multiplied by this value.
