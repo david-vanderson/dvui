@@ -3,6 +3,21 @@ pub fn scrollCanvas() void {
     var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
     defer vbox.deinit();
 
+    var fractional_font_cache_ref_scale: bool = dvui.fractionalFontCacheRefScale() != 1.0;
+    var snap_to_pixels: bool = dvui.snapToPixels();
+
+    if (dvui.checkbox(
+        @src(),
+        &fractional_font_cache_ref_scale,
+        "Fractional Font Cache Ref Scale",
+        .{},
+    )) {
+        _ = dvui.fractionalFontCacheRefScaleSet(if (fractional_font_cache_ref_scale) 32.0 else 1.0);
+    }
+    if (dvui.checkbox(@src(), &snap_to_pixels, "Snap to Pixels", .{})) {
+        _ = dvui.snapToPixelsSet(snap_to_pixels);
+    }
+
     const scroll_info = dvui.dataGetPtrDefault(null, vbox.data().id, "scroll_info", ScrollInfo, .{ .vertical = .given, .horizontal = .given });
     const origin = dvui.dataGetPtrDefault(null, vbox.data().id, "origin", Point, .{});
     const scale = dvui.dataGetPtrDefault(null, vbox.data().id, "scale", f32, 1.0);
@@ -322,6 +337,8 @@ pub fn scrollCanvas() void {
                         zoom *= zs;
                         zoomP = me.p;
                     }
+                } else if (me.action == .wheel_x) {
+                    e.handle(@src(), scrollContainer.data());
                 }
             },
             else => {},
