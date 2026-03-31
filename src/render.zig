@@ -166,7 +166,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         fce_ascent = @round(fce_ascent * opts.font.line_height_factor);
     }
 
-    // this must be synced with Font.textSizeEx()
+    // Physical scale from cache; Font.textSizeEx uses self.size/em for layout when snap is off.
     const target_fraction = if (cw.snap_to_pixels) 1.0 else target_size / fce.em_height;
 
     // make sure the cache has all the glyphs we need

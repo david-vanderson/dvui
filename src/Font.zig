@@ -299,7 +299,7 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     const target_fraction = if (cw.snap_to_pixels)
         1.0 / ss
     else
-        (self.size * ss) / fce.em_height;
+        self.size / fce.em_height;
 
     var options = opts;
     if (opts.max_width) |mwidth| {
