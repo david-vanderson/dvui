@@ -248,7 +248,9 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
         if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
             const kk = fce.kern(last_codepoint, codepoint);
-            x += kk;
+            // Must match advance scaling (`nextx` below); textSizeEx scales the
+            // full measured width (including kerning) by target_fraction.
+            x += kk * target_fraction;
 
             if (opts.kern_in) |ki| {
                 if (next_kern_idx < ki.len) {
