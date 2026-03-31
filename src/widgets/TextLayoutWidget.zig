@@ -1251,7 +1251,8 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         // size.  Sometimes due to floating point this width will be very
         // slightly less than the width of the text that textSizeEx below sees,
         // causing a line break.  So give ourselves a tiny bit of extra room.
-        var linewidth = container_width + 0.001;
+        // (1 logical px: fractional font cache paths need more than 0.001.)
+        var linewidth = container_width + 1.0;
         var width = linewidth - self.insert_pt.x;
         var width_after: f32 = 0;
         for (self.corners, 0..) |corner, i| {

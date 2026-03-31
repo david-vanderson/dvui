@@ -295,11 +295,11 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     // might give us a slightly smaller font
     const fce = dvui.fontCacheGet(sized_font) catch return .{ .w = 10, .h = 10 };
 
-    // this must be synced with dvui.renderText()
+    // this must be synced with dvui.renderText() (`target_size / fce.em_height` when snap is off)
     const target_fraction = if (cw.snap_to_pixels)
         1.0 / ss
     else
-        self.size / fce.em_height;
+        (self.size * ss) / fce.em_height;
 
     var options = opts;
     if (opts.max_width) |mwidth| {
@@ -314,7 +314,14 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     if (ask_size == 0.0) return Size{};
 
     // convert size back from font units
-    return s.scale(target_fraction, Size);
+    var out = s.scale(target_fraction, Size);
+    if (!cw.snap_to_pixels) {
+        // Fractional cache + target_fraction can leave measured width slightly
+        // below rendered extent; TextLayout clips to contentRect and trims text.
+        out.w = @ceil(out.w) + 0.5;
+        out.h = @ceil(out.h) + 0.5;
+    }
+    return out;
 }
 
 pub const Cache = struct {
