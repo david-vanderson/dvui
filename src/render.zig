@@ -155,7 +155,10 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     const target_size = opts.font.size * opts.rs.s;
     // When snap_to_pixels is false, use the window DPI scale for the cache
     // lookup (matching textSizeEx) so the font entry is stable across zoom.
-    const cache_size = if (cw.snap_to_pixels) target_size else opts.font.size * dvui.windowNaturalScale();
+    const cache_size = if (cw.snap_to_pixels)
+        target_size
+    else
+        opts.font.size * dvui.windowNaturalScale() * dvui.fractionalFontRefScale();
     const sized_font = opts.font.withSize(cache_size);
 
     // might get a slightly smaller font
