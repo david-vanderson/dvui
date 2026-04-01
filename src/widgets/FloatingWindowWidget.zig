@@ -277,7 +277,7 @@ pub fn drawBackground(self: *FloatingWindowWidget) void {
 
     if (self.init_options.modal and !dvui.firstFrame(self.data().id)) {
         // paint over everything below
-        var col = self.options.color(.fill);
+        var col = self.options.color(.text);
         col.a = self.init_options.modal_fade_alpha;
         dvui.windowRectPixels().fill(.{}, .{ .color = col });
     }
