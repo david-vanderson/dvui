@@ -244,7 +244,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
         if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
             const kk = fce.kern(last_codepoint, codepoint);
-            x += kk;
+            x += target_fraction * (if (cw.snap_to_pixels) @round(kk) else kk);
 
             if (opts.kern_in) |ki| {
                 if (next_kern_idx < ki.len) {
@@ -257,6 +257,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         i += cplen;
         last_codepoint = codepoint;
 
+        const adv = if (cw.snap_to_pixels) @round(gi.advance) else gi.advance;
         if (x + gi.leftBearing * target_fraction < start.x) {
             // Glyph extends left of the start, like the first letter being
             // "j", which has a negative left bearing.
@@ -269,7 +270,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
             x = start.x;
         }
 
-        const nextx = x + gi.advance * target_fraction;
+        const nextx = x + adv * target_fraction;
         const leftx = x + gi.leftBearing * target_fraction;
 
         if (sel) {
