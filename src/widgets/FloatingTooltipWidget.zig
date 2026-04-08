@@ -40,16 +40,21 @@ pub const Position = enum {
 };
 
 pub const InitOptions = struct {
-    /// Show when mouse enters this physical rect
+    /// Show when mouse enters this physical rect.
     active_rect: Rect.Physical,
 
+    /// How to position tooltip from `active_rect` or mouse.
     position: Position = .horizontal,
 
-    /// Is true if the user should be able to hover the tooltips content without it disappearing
+    /// True if the user should be able to hover the tooltips content without it disappearing.
     interactive: bool = false,
 
-    // delay the tooltip display for `delay` microseconds. Tooltip will fade in after 80% of `delay`
+    /// Delay showing the tooltip for `delay` microseconds. Tooltip will fade in after 80% of `delay`.
     delay: ?i32 = null,
+
+    /// Scale applied on top of `windowNaturalScale` (so 1.0 means natural
+    /// scale).  If null, match the scale of the current parent.
+    scale: ?f32 = null,
 };
 
 parent_tooltip: ?*FloatingTooltipWidget = null,
@@ -94,7 +99,7 @@ pub fn init(self: *FloatingTooltipWidget, src: std.builtin.SourceLocation, init_
             .rect = opts_in.rect orelse .{},
         })),
         // get scale from parent
-        .scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale(),
+        .scale_val = init_opts.scale orelse (dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale()),
         .options = defaults.themeOverride(opts_in.theme).override(opts_in),
         .init_options = init_opts,
     };
