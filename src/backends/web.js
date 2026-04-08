@@ -205,6 +205,7 @@ export class Dvui {
      * The first number is x and second is y
      * @type {[number, number]} */
     lowest_scroll_delta = [99999, 99999];
+    lowest_scroll_ms = Date.now();
     /**
      * x y w h of on screen keyboard editing position, or empty if none
      *
@@ -1262,9 +1263,16 @@ export class Dvui {
             if (this.stopped) return;
             ev.preventDefault();
 
+            // If we haven't gotten a wheel event in a second, reset our delta
+            // because the user might have switched between mouse and touchpad.
+            if ((Date.now() - this.lowest_scroll_ms) > 1000) {
+                this.lowest_scroll_delta = [99999, 99999];
+            }
+            this.lowest_scroll_ms = Date.now();
+
             // deltaX/Y numbers less than this indicate a touchpad
             const touchpad_threshold = 4;
-            const touchpad_adj = 0.1;
+            const touchpad_adj = 0.025;
 
             if (ev.deltaX != 0) {
                 const min = Math.min(
@@ -1272,7 +1280,7 @@ export class Dvui {
                     this.lowest_scroll_delta[0],
                 );
                 this.lowest_scroll_delta[0] = min;
-                var ticks = ev.deltaX / min;
+                var ticks = -ev.deltaX / min;
                 if (min < touchpad_threshold) ticks *= touchpad_adj;
                 this.instance.exports.add_event(
                     4,
@@ -1291,6 +1299,11 @@ export class Dvui {
                 this.lowest_scroll_delta[1] = min;
                 var ticks = -ev.deltaY / min;
                 if (min < touchpad_threshold) ticks *= touchpad_adj;
+                if (min < touchpad_threshold) {
+                    console.log(-ev.deltaY + " touchpad " + ticks);
+                } else {
+                    console.log(-ev.deltaY + " wheel " + ticks);
+                }
                 this.instance.exports.add_event(
                     4,
                     1,

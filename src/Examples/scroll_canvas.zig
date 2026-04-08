@@ -127,7 +127,13 @@ pub fn scrollCanvas() void {
             mbbox = boxRect;
         }
 
-        dvui.label(@src(), "Box {d} {d:0>3.0}x{d:0>3.0}", .{ i, b.x, b.y }, .{});
+        // This label controls the size of the box, but when zooming the box
+        // will use last frame's min size.  That means the label this frame
+        // might be slightly larger so will ellipsize.  We could turn that off
+        // with labelEx, but here we'll add extra space.
+        var label_wd: dvui.WidgetData = undefined;
+        dvui.label(@src(), "Box {d} {d:0>3.0}x{d:0>3.0}", .{ i, b.x, b.y }, .{ .data_out = &label_wd });
+        dragBox.data().minSizeMax(dragBox.data().options.padSize(label_wd.min_size.pad(.{ .w = 10 })));
 
         {
             var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
@@ -321,7 +327,7 @@ pub fn scrollCanvas() void {
                     }
                 } else if (me.action == .wheel_y and me.mod.matchBind("ctrl/cmd")) {
                     e.handle(@src(), scrollContainer.data());
-                    const base: f32 = 1.01;
+                    const base: f32 = 1.005;
                     const zs = @exp(@log(base) * me.action.wheel_y);
                     if (zs != 1.0) {
                         zoom *= zs;
