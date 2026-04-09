@@ -1298,11 +1298,11 @@ export class Dvui {
                     if (this.scroll_lowest_batch[0] === 4.000244140625) {
                         ticks *= touchpad_adj; // mac safari/chrome scale wheel like touchpad
                     }
-                    console.log(-ev.deltaX + " wheelX " + ticks);
+                    console.log("wheelX -deltaX " + -ev.deltaX + " ticks " + ticks);
                 } else {
                     // assume touchpad
                     ticks = ticks / this.scroll_lowest[0] * touchpad_adj;
-                    console.log(-ev.deltaX + " touchpadX " + ticks);
+                    console.log("touchpadX -deltaX " + -ev.deltaX + " ticks " + ticks);
                 }
                 this.instance.exports.add_event(
                     4,
@@ -1331,11 +1331,11 @@ export class Dvui {
                     if (this.scroll_lowest_batch[1] === 4.000244140625) {
                         ticks *= touchpad_adj; // mac safari/chrome scale wheel like touchpad
                     }
-                    console.log(-ev.deltaY + " wheelY " + ticks);
+                    console.log("wheelY -deltaY " + -ev.deltaY + " ticks " + ticks);
                 } else {
                     // assume touchpad
                     ticks = ticks / this.scroll_lowest[1] * touchpad_adj;
-                    console.log(-ev.deltaY + " touchpadY " + ticks);
+                    console.log("touchpadY -deltaY " + -ev.deltaY + " ticks " + ticks);
                 }
                 this.instance.exports.add_event(
                     4,
