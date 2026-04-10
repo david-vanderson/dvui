@@ -1015,6 +1015,9 @@ pub fn main() !void {
     defer b.deinit();
     b.log_events = true;
 
+    // turn off normal raylib behavior where escape closes the window
+    raylib.setExitKey(.null);
+
     // init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), gpa, b.backend(), init_opts.window_init_options);
     defer win.deinit();
