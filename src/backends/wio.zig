@@ -135,6 +135,17 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
             try win.addEventWindow(.{ .action = .close });
             return false;
         },
+        .focused => {
+            const modifiers = wio.getModifiers();
+            if (modifiers.shift) self.mod.combine(.lshift);
+            if (modifiers.control) self.mod.combine(.lcontrol);
+            if (modifiers.alt) self.mod.combine(.lalt);
+            return false;
+        },
+        .unfocused => {
+            self.mod = .none;
+            return false;
+        },
         .size_logical => |size| {
             self.size_natural = .{ .w = @floatFromInt(size.width), .h = @floatFromInt(size.height) };
             return false;
@@ -162,19 +173,16 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
                 return try win.addEventMouseButton(mouse, if (event == .button_press) .press else .release);
             }
 
-            const maybe_mod: ?dvui.enums.Mod = switch (button) {
-                .left_control => .lcontrol,
-                .left_shift => .lshift,
-                .left_alt => .lalt,
+            const mod: dvui.enums.Mod = switch (button) {
+                // left and right are not distinguished to match wio.getModifiers()
+                .left_control, .right_control => .lcontrol,
+                .left_shift, .right_shift => .lshift,
+                .left_alt, .right_alt => .lalt,
                 .left_gui => .lcommand,
-                .right_control => .rcontrol,
-                .right_shift => .rshift,
-                .right_alt => .ralt,
                 .right_gui => .rcommand,
-                else => null,
+                else => .none,
             };
-
-            if (maybe_mod) |mod| {
+            if (mod != .none) {
                 if (event == .button_press) {
                     self.mod.combine(mod);
                 } else {
