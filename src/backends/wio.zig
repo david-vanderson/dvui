@@ -211,8 +211,8 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
         .scroll_horizontal => |ticks| return try win.addEventMouseWheel(-ticks * dvui.scroll_speed, .horizontal),
         .touch => |touch| {
             const button = touchIdToDvuiButton(touch.id) orelse return false;
-            const xnorm = @as(f32, @floatFromInt(touch.x)) / self.size_physical.w;
-            const ynorm = @as(f32, @floatFromInt(touch.y)) / self.size_physical.h;
+            const xnorm = @as(f32, @floatFromInt(touch.x)) / self.size_natural.w;
+            const ynorm = @as(f32, @floatFromInt(touch.y)) / self.size_natural.h;
             const old = &self.touch[touch.id];
             if (std.math.isInf(old.x)) {
                 old.* = .{ .x = xnorm, .y = ynorm };
