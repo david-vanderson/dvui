@@ -168,7 +168,7 @@ pub fn textureCreate(_: *@This(), pixels: [*]const u8, width: u32, height: u32, 
 
 pub fn textureUpdate(_: *@This(), texture: dvui.Texture, pixels: [*]const u8) !void {
     gl.bindTexture(gl.TEXTURE_2D, @intCast(@intFromPtr(texture.ptr)));
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, @bitCast(texture.width), @bitCast(texture.height), gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, pixels);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, @bitCast(texture.width), @bitCast(texture.height), gl.RGBA, gl.UNSIGNED_BYTE, pixels);
 }
 
 pub fn textureDestroy(self: *@This(), texture: dvui.Texture) void {
@@ -200,7 +200,7 @@ pub fn textureCreateTarget(self: *@This(), width: u32, height: u32, interpolatio
 
 pub fn textureReadTarget(_: *@This(), texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
     gl.bindTexture(gl.TEXTURE_2D, @intCast(@intFromPtr(texture.ptr)));
-    gl.getTexImage(gl.TEXTURE_2D, 0, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, pixels_out);
+    gl.getTexImage(gl.TEXTURE_2D, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels_out);
 }
 
 pub fn textureClearTarget(self: *@This(), texture: dvui.Texture.Target) void {
@@ -246,7 +246,7 @@ fn createTexture(pixels: ?[*]const u8, width: u32, height: u32, interpolation: d
     var texture: u32 = undefined;
     gl.genTextures(1, &texture);
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, @bitCast(width), @bitCast(height), 0, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, pixels);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, @bitCast(width), @bitCast(height), 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
 
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -289,6 +289,10 @@ fn shaderSources(version: []const u8) type {
 
         const fragment =
             "#version " ++ version ++ "\n" ++
+            \\
+            \\#ifdef GL_ES
+            \\precision mediump float;
+            \\#endif
             \\
             \\in vec4 f_color;
             \\in vec2 f_uv;
