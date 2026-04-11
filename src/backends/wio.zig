@@ -10,6 +10,7 @@ size_natural: dvui.Size.Natural,
 size_physical: dvui.Size.Physical,
 arena: std.mem.Allocator = undefined, // assigned in begin()
 mod: dvui.enums.Mod = .none,
+touch: [10]dvui.Point = @splat(.{ .x = std.math.inf(f32), .y = std.math.inf(f32) }),
 
 pub fn backend(self: *@This(), renderer: *dvui.render_backend) dvui.Backend {
     return .init(self, renderer);
@@ -134,6 +135,17 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
             try win.addEventWindow(.{ .action = .close });
             return false;
         },
+        .focused => {
+            const modifiers = wio.getModifiers();
+            if (modifiers.shift) self.mod.combine(.lshift);
+            if (modifiers.control) self.mod.combine(.lcontrol);
+            if (modifiers.alt) self.mod.combine(.lalt);
+            return false;
+        },
+        .unfocused => {
+            self.mod = .none;
+            return false;
+        },
         .size_logical => |size| {
             self.size_natural = .{ .w = @floatFromInt(size.width), .h = @floatFromInt(size.height) };
             return false;
@@ -161,19 +173,16 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
                 return try win.addEventMouseButton(mouse, if (event == .button_press) .press else .release);
             }
 
-            const maybe_mod: ?dvui.enums.Mod = switch (button) {
-                .left_control => .lcontrol,
-                .left_shift => .lshift,
-                .left_alt => .lalt,
+            const mod: dvui.enums.Mod = switch (button) {
+                // left and right are not distinguished to match wio.getModifiers()
+                .left_control, .right_control => .lcontrol,
+                .left_shift, .right_shift => .lshift,
+                .left_alt, .right_alt => .lalt,
                 .left_gui => .lcommand,
-                .right_control => .rcontrol,
-                .right_shift => .rshift,
-                .right_alt => .ralt,
                 .right_gui => .rcommand,
-                else => null,
+                else => .none,
             };
-
-            if (maybe_mod) |mod| {
+            if (mod != .none) {
                 if (event == .button_press) {
                     self.mod.combine(mod);
                 } else {
@@ -199,7 +208,28 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
             return try win.addEventMouseMotion(.{ .pt = .{ .x = x * scale, .y = y * scale } });
         },
         .scroll_vertical => |ticks| return try win.addEventMouseWheel(-ticks * dvui.scroll_speed, .vertical),
-        .scroll_horizontal => |ticks| return try win.addEventMouseWheel(ticks * dvui.scroll_speed, .horizontal),
+        .scroll_horizontal => |ticks| return try win.addEventMouseWheel(-ticks * dvui.scroll_speed, .horizontal),
+        .touch => |touch| {
+            const button = touchIdToDvuiButton(touch.id) orelse return false;
+            const xnorm = @as(f32, @floatFromInt(touch.x)) / self.size_natural.w;
+            const ynorm = @as(f32, @floatFromInt(touch.y)) / self.size_natural.h;
+            const old = &self.touch[touch.id];
+            if (std.math.isInf(old.x)) {
+                old.* = .{ .x = xnorm, .y = ynorm };
+                return try win.addEventPointer(.{ .button = button, .action = .press, .xynorm = .{ .x = xnorm, .y = ynorm } });
+            } else {
+                const dxnorm = old.x - xnorm;
+                const dynorm = old.y - ynorm;
+                old.* = .{ .x = xnorm, .y = ynorm };
+                return try win.addEventTouchMotion(button, xnorm, ynorm, dxnorm, dynorm);
+            }
+        },
+        .touch_end => |touch| {
+            const button = touchIdToDvuiButton(touch.id) orelse return false;
+            const xynorm = self.touch[touch.id];
+            self.touch[touch.id] = .{ .x = std.math.inf(f32), .y = std.math.inf(f32) };
+            return try win.addEventPointer(.{ .button = button, .action = .release, .xynorm = xynorm });
+        },
         else => return false,
     }
 }
@@ -275,6 +305,22 @@ pub fn main() !void {
         const wait_ms = win.waitTime(end_ms);
         dvui_wio.waitEventTimeout(wait_ms);
     }
+}
+
+fn touchIdToDvuiButton(id: u8) ?dvui.enums.Button {
+    return switch (id) {
+        0 => .touch0,
+        1 => .touch1,
+        2 => .touch2,
+        3 => .touch3,
+        4 => .touch4,
+        5 => .touch5,
+        6 => .touch6,
+        7 => .touch7,
+        8 => .touch8,
+        9 => .touch9,
+        else => null,
+    };
 }
 
 fn buttonToDvuiKey(button: wio.Button) dvui.enums.Key {
