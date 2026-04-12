@@ -1036,8 +1036,10 @@ pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
     const target = min_micros + wait_micros;
 
     // how long it's taken from begin to here
-    const so_far_nanos = @max(self.frame_time_ns, self.backend.nanoTime()) - self.frame_time_ns;
-    var so_far_micros = @as(u32, @intCast(@divFloor(so_far_nanos, 1000)));
+    var so_far_nanos = @max(self.frame_time_ns, self.backend.nanoTime()) - self.frame_time_ns;
+    so_far_nanos = @divFloor(so_far_nanos, 1000);
+    so_far_nanos = @min(so_far_nanos, (1 << 32) - 1);
+    var so_far_micros = @as(u32, @intCast(so_far_nanos));
     //std.debug.print("  far {d:6}", .{so_far_micros});
 
     // take time from min_micros first
