@@ -88,11 +88,11 @@ pub fn native(self: *@This(), _: *dvui.Window) dvui.Window.Native {
     };
 }
 
-pub fn waitEventTimeout(_: *@This(), timeout_ms: u32) void {
-    if (timeout_ms == std.math.maxInt(u32)) {
+pub fn waitEventTimeout(_: *@This(), timeout_us: u32) void {
+    if (timeout_us == std.math.maxInt(u32)) {
         wio.wait(.{});
     } else {
-        wio.wait(.{ .timeout_ns = @as(u64, timeout_ms) * std.time.ns_per_ms });
+        wio.wait(.{ .timeout_ns = @as(u64, timeout_us) * std.time.ns_per_us });
     }
 }
 
@@ -294,7 +294,7 @@ pub fn main() !void {
                 if (e.evt == .window and e.evt.window.action == .close) res = .close;
             }
         }
-        const end_ms = try win.end(.{});
+        const end_us = try win.end(.{});
         if (res != .ok) break;
 
         dvui_wio.setTextInputRect(win.textInputRequested());
@@ -302,8 +302,8 @@ pub fn main() !void {
 
         window.swapBuffers();
 
-        const wait_ms = win.waitTime(end_ms);
-        dvui_wio.waitEventTimeout(wait_ms);
+        const wait_us = win.waitTime(end_us);
+        dvui_wio.waitEventTimeout(wait_us);
     }
 }
 
