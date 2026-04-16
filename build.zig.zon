@@ -54,8 +54,8 @@
         },
         // for rendering tvg icons
         .svg2tvg = .{
-            .url = "git+https://github.com/andrewrk/zig-lib-svg2tvg#112eb42cdfe99ce9b5e090366469abe7f1f2ddb8",
-            .hash = "svg2tvg-0.0.0-HpMZuep3BgADinJZXnguHTeDG6XyGwhqPI8v9ozVmGqo",
+            .url = "git+https://github.com/david-vanderson/zig-lib-svg2tvg#2bb8750979d33f07cc70b2c1d522913180e642f5",
+            .hash = "svg2tvg-0.0.0-HpMZuet3BgB0Y8CJqlE48WHKcW_bvsSs1FlpEKKRezv5",
             .lazy = true,
         },
         .accesskit = .{
