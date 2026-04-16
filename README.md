@@ -4,7 +4,6 @@
 
 Tested with Zig v0.15.2
 * for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.com/david-vanderson/dvui/releases/tag/v0.3.0))
-* for Zig master, use branch `zig16-dev`
 
 [Homepage](https://david-vanderson.github.io) · [Demo](https://david-vanderson.github.io/demo) · [Docs](https://david-vanderson.github.io/docs/) · [Devlog](https://david-vanderson.github.io/log/2026)
 
