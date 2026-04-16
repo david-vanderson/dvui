@@ -412,6 +412,8 @@ pub const Id = enum(u64) {
 /// Current `Window` (i.e. the one that widgets will be added to).
 /// Managed by `Window.begin` / `Window.end`
 pub var current_window: ?*Window = null;
+
+/// Global Io used by dvui functions, set by the backend when it is initialized.
 pub var io: Io = undefined;
 
 /// Get the current `dvui.Window` which corresponds to the OS window we are
