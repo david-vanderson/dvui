@@ -129,14 +129,7 @@ pub fn get() ?App {
     return root.dvui_app;
 }
 
-pub const ReleaseAllocator = blk: {
-    if (builtin.target.cpu.arch.isWasm()) break :blk std.heap.wasm_allocator;
-    if (builtin.single_threaded) break :blk std.heap.c_allocator;
-    break :blk std.heap.smp_allocator;
-};
-
 const std = @import("std");
-const builtin = @import("builtin");
 const dvui = @import("dvui.zig");
 
 test {

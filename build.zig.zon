@@ -1,8 +1,8 @@
 .{
     .name = .dvui,
     .fingerprint = 0xa35affe599490101,
-    .version = "0.4.0-dev",
-    .minimum_zig_version = "0.16.0-dev.2821+3edaef9e0",
+    .version = "0.5.0-dev",
+    .minimum_zig_version = "0.16.0",
     .paths = .{
         "LICENSE",
         "README.md",
@@ -10,10 +10,13 @@
         "build.zig.zon",
         "docs",
         "examples",
+        "package.json",
         "readme-accessibility.md",
         "readme-implementation.md",
+        "readme-raylib-zig-custom.md",
         "src",
         "tools",
+        "tsconfig.json",
         "vendor",
     },
     .dependencies = .{
