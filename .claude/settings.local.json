@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(zig version:*)",
+      "Bash(zig build:*)",
+      "Bash(powershell -Command \"[System.Text.Encoding]::ASCII.GetString\\([IO.File]::ReadAllBytes\\('zig-out/bin/web-standalone/web.wasm'\\)\\)\")",
+      "Bash(grep -E \"^\\(dvui_main|dvui_init|dvui_update|dvui_deinit|add_event|gpa_u8|arena_u8|new_font|gpa_free\\)$\")"
+    ]
+  }
+}

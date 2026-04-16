@@ -42,6 +42,17 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_sleep(ms: u32) void;
     pub extern "dvui" fn wasm_refresh() void;
 
+    // Standalone/Worker mode: Atomics-based blocking wait for events.
+    // Returns 1 if woken by an event, 0 on timeout.
+    pub extern "dvui" fn wasm_wait_event(timeout_ms: i32) u32;
+    // Standalone/Worker mode: read canvas info into provided pointers.
+    pub extern "dvui" fn wasm_canvas_info(
+        out_pixel_width: *f32,
+        out_pixel_height: *f32,
+        out_canvas_width: *f32,
+        out_canvas_height: *f32,
+    ) void;
+
     pub extern "dvui" fn wasm_pixel_width() f32;
     pub extern "dvui" fn wasm_pixel_height() f32;
     pub extern "dvui" fn wasm_canvas_width() f32;
@@ -85,6 +96,11 @@ pub const wasm = if (!builtin.is_test) struct {
     }
     pub fn wasm_sleep(_: u32) void {}
     pub fn wasm_refresh() void {}
+
+    pub fn wasm_wait_event(_: i32) u32 {
+        return 0;
+    }
+    pub fn wasm_canvas_info(_: *f32, _: *f32, _: *f32, _: *f32) void {}
 
     pub fn wasm_pixel_width() f32 {
         return undefined;
@@ -752,6 +768,123 @@ pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) void {
     wasm.wasm_cursor(name.ptr, name.len);
 }
 
+// ============================================================
+// Standalone mode API (matches SDL/DX11 backend surface)
+// ============================================================
+
+pub const InitOptions = struct {
+    allocator: std.mem.Allocator = gpa,
+    size: dvui.Size = .{ .w = 800.0, .h = 600.0 },
+    min_size: ?dvui.Size = null,
+    max_size: ?dvui.Size = null,
+    vsync: bool = true,
+    title: [:0]const u8 = "DVUI Web Standalone",
+    icon: ?[]const u8 = null,
+};
+
+/// Create and initialize a web backend for standalone mode.
+/// Mirrors `SDLBackend.initWindow()`.
+pub fn initWindow(options: InitOptions) !WebBackend {
+    _ = options; // size/vsync/title handled by HTML/CSS and JS
+    return WebBackend.init();
+}
+
+/// Read all pending events from the SharedArrayBuffer event ring and
+/// feed them into the dvui Window. Call once per frame, between
+/// `win.begin()` and user gui code.
+pub fn addAllEvents(self: *WebBackend, w: *dvui.Window) !void {
+    _ = self;
+    // In standalone/worker mode, events are written by the main thread
+    // into the SharedArrayBuffer. The JS worker-side code calls our
+    // exported `add_event` for each event it reads from the ring buffer
+    // before calling dvui_update. The events are already in the dvui
+    // Window by the time user code runs. So this is intentionally a
+    // no-op — events were injected via the `add_event` export during
+    // the JS-side event drain that happens every frame.
+    //
+    // In the future, if events are read directly from SharedArrayBuffer
+    // by Zig code, the parsing would go here.
+    _ = w;
+}
+
+/// Block the current thread (Worker) until an event arrives or the
+/// timeout expires. Returns true if woken by an event.
+/// Mirrors `SDLBackend.waitEventTimeout()`.
+pub fn waitEventTimeout(_: *WebBackend, timeout_micros: u32) !bool {
+    if (timeout_micros == std.math.maxInt(u32)) {
+        // Wait forever (until event)
+        return wasm.wasm_wait_event(-1) != 0;
+    }
+    const timeout_ms: i32 = @intCast(@min((timeout_micros + 999) / 1000, std.math.maxInt(u31)));
+    return wasm.wasm_wait_event(timeout_ms) != 0;
+}
+
+/// Commit the frame. In the web backend this is a no-op since WebGL
+/// draw calls go directly to the OffscreenCanvas which auto-presents.
+pub fn renderPresent(_: *WebBackend) !void {}
+
+/// Standalone-mode main loop, used by `dvui.App.main` when the web
+/// backend is in Worker mode. Mirrors `SDLBackend.main()`.
+pub fn main() !void {
+    const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
+    const init_opts = app.config.get();
+
+    var back_local = try initWindow(.{
+        .size = init_opts.size,
+        .min_size = init_opts.min_size,
+        .max_size = init_opts.max_size,
+        .vsync = init_opts.vsync,
+        .title = init_opts.title,
+        .icon = init_opts.icon,
+    });
+    defer back_local.deinit();
+
+    var win_local = try dvui.Window.init(@src(), gpa, back_local.backend(), init_opts.window_init_options);
+    defer win_local.deinit();
+
+    // Make module-level pointers available for the `add_event` export
+    back = back_local;
+    win = win_local;
+    win_ok = true;
+
+    if (app.initFn) |initFn| {
+        try win.begin(win.frame_time_ns);
+        try initFn(&win);
+        _ = try win.end(.{});
+    }
+    defer if (app.deinitFn) |deinitFn| deinitFn();
+
+    var interrupted = false;
+
+    while (true) {
+        const nstime = win.beginWait(interrupted);
+        try win.begin(nstime);
+
+        // Events were already injected by JS calling add_event before
+        // waking us from waitEventTimeout.
+
+        const res = try app.frameFn();
+
+        // Check for unhandled quit/close
+        var result = res;
+        for (dvui.events()) |*e| {
+            if (e.handled) continue;
+            if (e.evt == .window and e.evt.window.action == .close) result = .close;
+            if (e.evt == .app and e.evt.app.action == .quit) result = .close;
+        }
+
+        const end_micros = try win.end(.{});
+
+        back.setCursor(win.cursorRequested());
+        back.textInputRect(win.textInputRequested());
+
+        if (result != .ok) break;
+
+        const wait_event_micros = win.waitTime(end_micros);
+        interrupted = try back.waitEventTimeout(wait_event_micros);
+    }
+}
+
 pub fn openFilePicker(id: dvui.Id, accept: ?[]const u8, multiple: bool) void {
     const accept_final = accept orelse "";
     wasm.wasm_open_file_picker(id.asU64(), accept_final.ptr, accept_final.len, multiple);
@@ -884,6 +1017,9 @@ comptime {
         @export(&dvui_init, .{ .name = "dvui_init" });
         @export(&dvui_deinit, .{ .name = "dvui_deinit" });
         @export(&dvui_update, .{ .name = "dvui_update" });
+        // Standalone/Worker mode: export main as a callable function.
+        // The Worker JS calls this instead of dvui_init/dvui_update.
+        @export(&dvui_main, .{ .name = "dvui_main" });
     }
 }
 
@@ -1007,6 +1143,15 @@ fn update() !i32 {
 
     const wait_event_micros = win.waitTime(end_micros);
     return @intCast(@divTrunc(wait_event_micros, 1000));
+}
+
+/// Entry point for Worker-based standalone mode.
+/// Called by web-worker.js after WASM instantiation.
+fn dvui_main() callconv(.c) void {
+    main() catch |err| {
+        const msg = std.fmt.allocPrint(gpa, "{any}", .{err}) catch "main() error";
+        wasm.wasm_panic(msg.ptr, msg.len);
+    };
 }
 
 test {
