@@ -49,7 +49,13 @@ cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).@"enum".fields.len]bool = [_
 arena: std.mem.Allocator = undefined,
 
 pub const InitOptions = struct {
+    /// Io backend and dvui should use, will be assigned to dvui.io.
     io: std.Io,
+    /// SDL2 uses this to query for environment variables for scale:
+    /// - QT_AUTO_SCREEN_SCALE_FACTOR
+    /// - QT_SCALE_FACTOR
+    /// - GDK_SCALE
+    environ_map: ?*std.process.Environ.Map = null,
     /// The allocator used for temporary allocations used during init()
     allocator: std.mem.Allocator,
     /// The initial size of the application window
@@ -171,24 +177,14 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
             var guess_from_dpi = true;
 
             // first try to inspect environment variables
-            {
-                // zig 0.16 removed std.process.getEnvVarOwned; use C getenv and dupe.
-                const dupeEnv = struct {
-                    fn f(alloc: std.mem.Allocator, name: [*:0]const u8) ?[]u8 {
-                        const raw = std.c.getenv(name) orelse return null;
-                        return alloc.dupe(u8, std.mem.span(raw)) catch null;
-                    }
-                }.f;
-                const qt_auto_str: ?[]u8 = dupeEnv(options.allocator, "QT_AUTO_SCREEN_SCALE_FACTOR");
-                defer if (qt_auto_str) |str| options.allocator.free(str);
+            if (options.environ_map) |map| {
+                const qt_auto_str: ?[]const u8 = map.get("QT_AUTO_SCREEN_SCALE_FACTOR");
                 if (qt_auto_str != null and std.mem.eql(u8, qt_auto_str.?, "0")) {
                     log.info("QT_AUTO_SCREEN_SCALE_FACTOR is 0, disabling content scale guessing", .{});
                     guess_from_dpi = false;
                 }
-                const qt_str: ?[]u8 = dupeEnv(options.allocator, "QT_SCALE_FACTOR");
-                defer if (qt_str) |str| options.allocator.free(str);
-                const gdk_str: ?[]u8 = dupeEnv(options.allocator, "GDK_SCALE");
-                defer if (gdk_str) |str| options.allocator.free(str);
+                const qt_str: ?[]const u8 = map.get("QT_SCALE_FACTOR");
+                const gdk_str: ?[]const u8 = map.get("GDK_SCALE");
 
                 if (qt_str) |str| {
                     const qt_scale = std.fmt.parseFloat(f32, str) catch 1.0;
@@ -1570,6 +1566,7 @@ pub fn main(main_init: std.process.Init) !u8 {
     // init SDL backend (creates and owns OS window)
     var back = try initWindow(.{
         .io = init_opts.io orelse main_init.io,
+        .environ_map = main_init.environ_map,
         .allocator = init_opts.gpa orelse main_init.gpa,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
