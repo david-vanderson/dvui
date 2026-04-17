@@ -441,6 +441,8 @@ pub const Cursor = enum(u8) {
 
 pub const ColorScheme = enum { light, dark };
 
+pub const MotionAmount = enum { all, reduced };
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

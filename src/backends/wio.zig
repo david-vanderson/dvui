@@ -76,6 +76,10 @@ pub fn preferredColorScheme(_: *@This()) ?dvui.enums.ColorScheme {
     return null;
 }
 
+pub fn preferredMotionAmount(_: *@This()) ?dvui.enums.MotionAmount {
+    return null;
+}
+
 pub fn refresh(_: *@This()) void {
     wio.cancelWait();
 }

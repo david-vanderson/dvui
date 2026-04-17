@@ -60,6 +60,7 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_text_input(x: f32, y: f32, w: f32, h: f32) void;
     pub extern "dvui" fn wasm_open_url(ptr: [*]const u8, len: usize, new_window: bool) void;
     pub extern "dvui" fn wasm_preferred_color_scheme() u8;
+    pub extern "dvui" fn wasm_preferred_motion() u8;
     pub extern "dvui" fn wasm_download_data(name_ptr: [*]const u8, name_len: usize, data_ptr: [*]const u8, data_len: usize) void;
     pub extern "dvui" fn wasm_clipboardTextSet(ptr: [*]const u8, len: usize) void;
 
@@ -118,6 +119,9 @@ pub const wasm = if (!builtin.is_test) struct {
     pub fn wasm_text_input(_: f32, _: f32, _: f32, _: f32) void {}
     pub fn wasm_open_url(_: [*]const u8, _: usize, _: bool) void {}
     pub fn wasm_preferred_color_scheme() u8 {
+        return undefined;
+    }
+    pub fn wasm_preferred_motion() u8 {
         return undefined;
     }
     pub fn wasm_download_data(_: [*]const u8, _: usize, _: [*]const u8, _: usize) void {}
@@ -718,6 +722,14 @@ pub fn preferredColorScheme(_: *WebBackend) ?dvui.enums.ColorScheme {
     };
 }
 
+pub fn preferredMotionAmount(_: *WebBackend) ?dvui.enums.MotionAmount {
+    return switch (wasm.wasm_preferred_motion()) {
+        1 => .all,
+        2 => .reduced,
+        else => null,
+    };
+}
+
 pub fn downloadData(name: []const u8, data: []const u8) !void {
     wasm.wasm_download_data(name.ptr, name.len, data.ptr, data.len);
 }
@@ -929,6 +941,8 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
     back = WebBackend.init() catch {
         return 1;
     };
+
+    dvui.motion_amount = back.preferredMotionAmount();
 
     var win_opts = init_opts.window_init_options;
     if (win_opts.button_order == null) {
