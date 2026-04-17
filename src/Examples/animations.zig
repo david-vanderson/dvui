@@ -35,7 +35,9 @@ pub fn animations() void {
     };
 
     var wd: dvui.WidgetData = undefined;
+
     _ = dvui.checkbox(@src(), &dvui.reduce_motion, "Reduce Motion", .{ .data_out = &wd });
+
     dvui.tooltip(@src(), .{ .active_rect = wd.borderRectScale().r, .position = .horizontal }, "animations expire in one frame\ntimers not affected", .{}, .{});
 
     {

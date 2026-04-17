@@ -648,6 +648,10 @@ pub fn preferredColorScheme(_: *SDLBackend) ?dvui.enums.ColorScheme {
     return null;
 }
 
+pub fn prefersReducedMotion(_: *@This()) bool {
+    return false;
+}
+
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
     const size = self.pixelSize();
