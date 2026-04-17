@@ -15,6 +15,9 @@ pub const c = blk: {
         });
     }
     break :blk @cImport({
+        // Zig 0.16 bundled arm_vector_types.h uses __mfp8 builtin that
+        // translate-c can't resolve. Gate arm_neon.h include off.
+        @cDefine("SDL_DISABLE_ARM_NEON_H", "1");
         @cInclude("SDL2/SDL_syswm.h");
         @cInclude("SDL2/SDL.h");
     });
@@ -169,24 +172,22 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
 
             // first try to inspect environment variables
             {
-                const qt_auto_str: ?[]u8 = std.process.getEnvVarOwned(options.allocator, "QT_AUTO_SCREEN_SCALE_FACTOR") catch |err| switch (err) {
-                    error.EnvironmentVariableNotFound => null,
-                    else => return err,
-                };
+                // zig 0.16 removed std.process.getEnvVarOwned; use C getenv and dupe.
+                const dupeEnv = struct {
+                    fn f(alloc: std.mem.Allocator, name: [*:0]const u8) ?[]u8 {
+                        const raw = std.c.getenv(name) orelse return null;
+                        return alloc.dupe(u8, std.mem.span(raw)) catch null;
+                    }
+                }.f;
+                const qt_auto_str: ?[]u8 = dupeEnv(options.allocator, "QT_AUTO_SCREEN_SCALE_FACTOR");
                 defer if (qt_auto_str) |str| options.allocator.free(str);
                 if (qt_auto_str != null and std.mem.eql(u8, qt_auto_str.?, "0")) {
                     log.info("QT_AUTO_SCREEN_SCALE_FACTOR is 0, disabling content scale guessing", .{});
                     guess_from_dpi = false;
                 }
-                const qt_str: ?[]u8 = std.process.getEnvVarOwned(options.allocator, "QT_SCALE_FACTOR") catch |err| switch (err) {
-                    error.EnvironmentVariableNotFound => null,
-                    else => return err,
-                };
+                const qt_str: ?[]u8 = dupeEnv(options.allocator, "QT_SCALE_FACTOR");
                 defer if (qt_str) |str| options.allocator.free(str);
-                const gdk_str: ?[]u8 = std.process.getEnvVarOwned(options.allocator, "GDK_SCALE") catch |err| switch (err) {
-                    error.EnvironmentVariableNotFound => null,
-                    else => return err,
-                };
+                const gdk_str: ?[]u8 = dupeEnv(options.allocator, "GDK_SCALE");
                 defer if (gdk_str) |str| options.allocator.free(str);
 
                 if (qt_str) |str| {
