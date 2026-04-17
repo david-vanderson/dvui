@@ -293,7 +293,7 @@ pub const useTreeSitter = @import("default_options").tree_sitter;
 /// The amount of logical pixels to scroll per "tick" of the scroll wheel
 pub var scroll_speed: f32 = 40;
 
-/// When true, `animation` overwrites end_time so animations expire next frame.
+/// When this is true, `animation` overwrites end_time so animations expire next frame.
 /// Timers are not affected.
 pub var reduce_motion: bool = false;
 
