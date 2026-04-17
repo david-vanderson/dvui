@@ -155,9 +155,13 @@ pub fn show(self: *Debug) void {
         }
 
         var wd: dvui.WidgetData = undefined;
-        _ = dvui.checkbox(@src(), &dvui.currentWindow().debug.touch_simulate_events, "Simulate Touch With Mouse", .{ .data_out = &wd });
+        _ = dvui.checkbox(@src(), &dvui.currentWindow().debug.touch_simulate_events, "Simulate Touch", .{ .data_out = &wd });
 
-        dvui.tooltip(@src(), .{ .active_rect = wd.borderRectScale().r }, "mouse drag will scroll\ntext layout/entry have draggables and menu", .{}, .{});
+        dvui.tooltip(@src(), .{ .active_rect = wd.borderRectScale().r, .position = .vertical }, "mouse drag will scroll\ntext layout/entry have draggables and menu", .{}, .{});
+
+        _ = dvui.checkbox(@src(), &dvui.reduce_motion, "Reduce Motion", .{ .data_out = &wd });
+
+        dvui.tooltip(@src(), .{ .active_rect = wd.borderRectScale().r, .position = .vertical }, "animations expire in one frame\ntimers not affected", .{}, .{});
     }
 
     _ = dvui.spacer(@src(), .{ .min_size_content = .all(4) });

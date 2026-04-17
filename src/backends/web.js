@@ -845,6 +845,19 @@ export class Dvui {
                 }
                 return 0;
             },
+            wasm_prefers_reduced_motion: () => {
+                if (
+                    window.matchMedia("(prefers-reduced-motion: no-preference)").matches
+                ) {
+                    return 0;
+                }
+                if (
+                    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                ) {
+                    return 1;
+                }
+                return 0;
+            },
             wasm_download_data: (
                 name_ptr,
                 name_len,
@@ -1202,7 +1215,7 @@ export class Dvui {
             this.requestRender();
         } else if (millis_to_wait > 0) {
             this.renderTimeoutId = setTimeout(
-                function () {
+                function() {
                     this.renderTimeoutId = 0;
                     this.requestRender();
                 }.bind(this),

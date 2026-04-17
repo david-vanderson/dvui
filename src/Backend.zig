@@ -186,6 +186,11 @@ pub fn preferredColorScheme(self: Backend) ?dvui.enums.ColorScheme {
     return self.impl.preferredColorScheme();
 }
 
+/// Get the prefersReducedMotion if available
+pub fn prefersReducedMotion(self: Backend) bool {
+    return self.impl.prefersReducedMotion();
+}
+
 /// Called by `dvui.refresh` when it is called from a background
 /// thread.  Used to wake up the gui thread.  It only has effect if you
 /// are using `dvui.Window.waitTime` or some other method of waiting until
