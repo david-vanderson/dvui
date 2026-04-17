@@ -34,6 +34,12 @@ pub fn animations() void {
         break :blk .{ out_fns, out_names };
     };
 
+    var wd: dvui.WidgetData = undefined;
+
+    _ = dvui.checkbox(@src(), &dvui.reduce_motion, "Reduce Motion", .{ .data_out = &wd });
+
+    dvui.tooltip(@src(), .{ .active_rect = wd.borderRectScale().r, .position = .horizontal }, "animations expire in one frame\ntimers not affected", .{}, .{});
+
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
@@ -304,6 +310,7 @@ const AnimatingDialog = struct {
 
         var win: FloatingWindowWidget = undefined;
         win.init(@src(), .{ .modal = modal }, .{ .id_extra = id.asUsize(), .max_size_content = .width(300) });
+        defer win.deinit();
 
         if (dvui.firstFrame(win.data().id)) {
             dvui.animation(win.data().id, "rect_percent", .{ .start_val = 0.0, .end_val = 1.0, .end_time = duration, .easing = easing });
@@ -336,7 +343,6 @@ const AnimatingDialog = struct {
             }
         }
 
-        defer win.deinit();
         win.processEventsBefore();
         win.drawBackground();
 
