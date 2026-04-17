@@ -308,6 +308,7 @@ const AnimatingDialog = struct {
 
         var win: FloatingWindowWidget = undefined;
         win.init(@src(), .{ .modal = modal }, .{ .id_extra = id.asUsize(), .max_size_content = .width(300) });
+        defer win.deinit();
 
         if (dvui.firstFrame(win.data().id)) {
             dvui.animation(win.data().id, "rect_percent", .{ .start_val = 0.0, .end_val = 1.0, .end_time = duration, .easing = easing });
@@ -340,7 +341,6 @@ const AnimatingDialog = struct {
             }
         }
 
-        defer win.deinit();
         win.processEventsBefore();
         win.drawBackground();
 
