@@ -207,22 +207,14 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
                 //Xft.dpi: 96
                 //Xft.antialias: 1
                 if (mdpi == null and builtin.os.tag == .linux) {
-                    var stdout: std.ArrayListUnmanaged(u8) = .empty;
-                    defer stdout.deinit(options.allocator);
-                    var stderr: std.ArrayListUnmanaged(u8) = .empty;
-                    defer stderr.deinit(options.allocator);
-                    var child = std.process.Child.init(&.{ "xrdb", "-get", "Xft.dpi" }, options.allocator);
-                    child.stdout_behavior = .Pipe;
-                    child.stderr_behavior = .Pipe;
-                    try child.spawn();
-                    var ok = true;
-                    child.collectOutput(options.allocator, &stdout, &stderr, 100) catch {
-                        ok = false;
-                    };
-                    _ = child.wait() catch {};
-                    if (ok) {
-                        const end_digits = std.mem.indexOfNone(u8, stdout.items, &.{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }) orelse stdout.items.len;
-                        const xrdb_dpi = std.fmt.parseInt(u32, stdout.items[0..end_digits], 10) catch null;
+                    const result: ?std.process.RunResult = std.process.run(options.allocator, options.io, .{
+                        .argv = &.{ "xrdb", "-get", "Xft.dpi" },
+                    }) catch null;
+                    if (result) |r| {
+                        defer options.allocator.free(r.stdout);
+                        defer options.allocator.free(r.stderr);
+                        const end_digits = std.mem.indexOfNone(u8, r.stdout, &.{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }) orelse r.stdout.len;
+                        const xrdb_dpi = std.fmt.parseInt(u32, r.stdout[0..end_digits], 10) catch null;
                         if (xrdb_dpi) |dpi| {
                             mdpi = @floatFromInt(dpi);
                         }
