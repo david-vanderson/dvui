@@ -845,16 +845,16 @@ export class Dvui {
                 }
                 return 0;
             },
-            wasm_preferred_motion: () => {
+            wasm_prefers_reduced_motion: () => {
                 if (
                     window.matchMedia("(prefers-reduced-motion: no-preference)").matches
                 ) {
-                    return 1;
+                    return 0;
                 }
                 if (
                     window.matchMedia("(prefers-reduced-motion: reduce)").matches
                 ) {
-                    return 2;
+                    return 1;
                 }
                 return 0;
             },

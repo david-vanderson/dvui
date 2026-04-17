@@ -186,9 +186,9 @@ pub fn preferredColorScheme(self: Backend) ?dvui.enums.ColorScheme {
     return self.impl.preferredColorScheme();
 }
 
-/// Get the preferredMotionAmount if available
-pub fn preferredMotionAmount(self: Backend) ?dvui.enums.MotionAmount {
-    return self.impl.preferredMotionAmount();
+/// Get the prefersReducedMotion if available
+pub fn prefersReducedMotion(self: Backend) bool {
+    return self.impl.prefersReducedMotion();
 }
 
 /// Called by `dvui.refresh` when it is called from a background

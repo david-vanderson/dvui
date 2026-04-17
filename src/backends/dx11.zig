@@ -1082,8 +1082,8 @@ pub fn preferredColorScheme(_: Context) ?dvui.enums.ColorScheme {
     return dvui.Backend.Common.windowsGetPreferredColorScheme();
 }
 
-pub fn preferredMotionAmount(_: Context) ?dvui.enums.MotionAmount {
-    return null;
+pub fn prefersReducedMotion(_: Context) bool {
+    return false;
 }
 
 pub fn cursorShow(_: Context, value: ?bool) !bool {

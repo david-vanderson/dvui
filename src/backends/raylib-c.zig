@@ -519,8 +519,8 @@ pub fn preferredColorScheme(_: *RaylibBackend) ?dvui.enums.ColorScheme {
     return null;
 }
 
-pub fn preferredMotionAmount(_: *@This()) ?dvui.enums.MotionAmount {
-    return null;
+pub fn prefersReducedMotion(_: *@This()) bool {
+    return false;
 }
 
 pub fn cursorShow(_: *RaylibBackend, value: ?bool) bool {

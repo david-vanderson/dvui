@@ -648,8 +648,8 @@ pub fn preferredColorScheme(_: *SDLBackend) ?dvui.enums.ColorScheme {
     return null;
 }
 
-pub fn preferredMotionAmount(_: *@This()) ?dvui.enums.MotionAmount {
-    return null;
+pub fn prefersReducedMotion(_: *@This()) bool {
+    return false;
 }
 
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {

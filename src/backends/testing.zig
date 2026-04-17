@@ -155,8 +155,8 @@ pub fn preferredColorScheme(_: *TestingBackend) ?dvui.enums.ColorScheme {
     return null;
 }
 
-pub fn preferredMotionAmount(_: *@This()) ?dvui.enums.MotionAmount {
-    return null;
+pub fn prefersReducedMotion(_: *@This()) bool {
+    return false;
 }
 
 /// Called by dvui.refresh() when it is called from a background
