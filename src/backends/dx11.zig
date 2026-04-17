@@ -1081,6 +1081,11 @@ pub fn openURL(self: Context, url: []const u8, _: bool) !void {
 pub fn preferredColorScheme(_: Context) ?dvui.enums.ColorScheme {
     return dvui.Backend.Common.windowsGetPreferredColorScheme();
 }
+
+pub fn preferredMotionAmount(_: Context) ?dvui.enums.MotionAmount {
+    return null;
+}
+
 pub fn cursorShow(_: Context, value: ?bool) !bool {
     var info: win32.CURSORINFO = undefined;
     info.cbSize = @sizeOf(win32.CURSORINFO);

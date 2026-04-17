@@ -293,9 +293,9 @@ pub const useTreeSitter = @import("default_options").tree_sitter;
 /// The amount of logical pixels to scroll per "tick" of the scroll wheel
 pub var scroll_speed: f32 = 40;
 
-/// When true, `animation` overwrites end_time so animations expire next frame.
+/// When this is .reduced, `animation` overwrites end_time so animations expire next frame.
 /// Timers are not affected.
-pub var reduce_motion: bool = false;
+pub var motion_amount: ?dvui.enums.MotionAmount = null;
 
 /// Used as a default maximum in various places:
 /// * Options.max_size_content
@@ -1837,7 +1837,7 @@ pub fn animation(id: Id, key: []const u8, a: Animation) void {
     var cw = currentWindow();
     const h = id.update(key);
     var aa = a;
-    if (reduce_motion) aa.end_time = aa.start_time + 1;
+    if (motion_amount != null and motion_amount.? == .reduced) aa.end_time = aa.start_time + 1;
     cw.animations.put(cw.gpa, h, aa) catch |err| switch (err) {
         error.OutOfMemory => {
             log.err("animation got {any} for id {x} key {s}\n", .{ err, id, key });

@@ -519,6 +519,10 @@ pub fn preferredColorScheme(_: *RaylibBackend) ?dvui.enums.ColorScheme {
     return null;
 }
 
+pub fn preferredMotionAmount(_: *@This()) ?dvui.enums.MotionAmount {
+    return null;
+}
+
 pub fn cursorShow(_: *RaylibBackend, value: ?bool) bool {
     const prev = !c.IsCursorHidden();
     if (value) |val| {

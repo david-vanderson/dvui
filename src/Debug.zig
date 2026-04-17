@@ -159,7 +159,14 @@ pub fn show(self: *Debug) void {
 
         dvui.tooltip(@src(), .{ .active_rect = wd.borderRectScale().r, .position = .vertical }, "mouse drag will scroll\ntext layout/entry have draggables and menu", .{}, .{});
 
-        _ = dvui.checkbox(@src(), &dvui.reduce_motion, "Reduce Motion", .{ .data_out = &wd });
+        var reduce_motion = dvui.motion_amount != null and dvui.motion_amount == .reduced;
+        _ = dvui.checkbox(@src(), &reduce_motion, "Reduce Motion", .{ .data_out = &wd });
+        if (reduce_motion) {
+            dvui.motion_amount = .reduced;
+        }
+        if (!reduce_motion and dvui.motion_amount != null) {
+            dvui.motion_amount = .all;
+        }
 
         dvui.tooltip(@src(), .{ .active_rect = wd.borderRectScale().r, .position = .vertical }, "animations expire in one frame\ntimers not affected", .{}, .{});
     }
