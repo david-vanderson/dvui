@@ -854,7 +854,8 @@ pub fn main() !void {
     }
     defer if (app.deinitFn) |deinitFn| deinitFn();
 
-    var interrupted = false;
+    // Render one frame immediately at startup before entering blocking waits.
+    var interrupted = true;
 
     while (true) {
         const nstime = win.beginWait(interrupted);
@@ -1017,9 +1018,6 @@ comptime {
         @export(&dvui_init, .{ .name = "dvui_init" });
         @export(&dvui_deinit, .{ .name = "dvui_deinit" });
         @export(&dvui_update, .{ .name = "dvui_update" });
-        // Standalone/Worker mode: export main as a callable function.
-        // The Worker JS calls this instead of dvui_init/dvui_update.
-        @export(&dvui_main, .{ .name = "dvui_main" });
     }
 }
 
@@ -1147,7 +1145,7 @@ fn update() !i32 {
 
 /// Entry point for Worker-based standalone mode.
 /// Called by web-worker.js after WASM instantiation.
-fn dvui_main() callconv(.c) void {
+export fn dvui_main() callconv(.c) void {
     main() catch |err| {
         const msg = std.fmt.allocPrint(gpa, "{any}", .{err}) catch "main() error";
         wasm.wasm_panic(msg.ptr, msg.len);

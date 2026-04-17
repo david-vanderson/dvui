@@ -710,6 +710,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 "dvui_init",
                 "dvui_deinit",
                 "dvui_update",
+                "dvui_main",
                 "add_event",
                 "arena_u8",
                 "gpa_u8",

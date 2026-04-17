@@ -35,6 +35,18 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
         throw new Error("Could not find canvas element: " + canvasArg);
     }
 
+    const search = new URLSearchParams(window.location.search);
+    const debugParam = search.get("dvui_debug");
+    const probeEnabled = search.get("dvui_probe") === "1";
+    const debugEnabled = debugParam === "1";
+    if (debugEnabled) {
+        console.info("[dvui-standalone] script loaded", {
+            debugEnabled,
+            probeEnabled,
+            href: window.location.href,
+        });
+    }
+
     // Check for SharedArrayBuffer support
     if (typeof SharedArrayBuffer === "undefined") {
         throw new Error(
@@ -57,6 +69,10 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
     const offscreen = canvas.transferControlToOffscreen();
 
     const worker = new Worker(workerUrl);
+
+    if (debugEnabled) {
+        console.debug("[dvui-standalone] debug enabled");
+    }
 
     // Detect color scheme and write to shared buffer
     function updateColorScheme() {
@@ -343,6 +359,9 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
             case "ready":
                 console.log("dvui worker ready");
                 break;
+            case "debug":
+                console.log("[dvui-worker]", msg.message, msg.data ?? "");
+                break;
         }
     };
 
@@ -353,7 +372,12 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
         sharedBuffer: sharedBuffer,
         wasmUrl: wasmUrl,
         platform: navigator.platform || "",
+        debug: debugEnabled,
+        probe: probeEnabled,
     }, [offscreen]);
+    if (debugEnabled) {
+        console.info("[dvui-standalone] init posted to worker", { debugEnabled, probeEnabled, wasmUrl, workerUrl });
+    }
 
     return { worker, sharedBuffer };
 }
