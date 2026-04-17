@@ -1014,11 +1014,9 @@ pub const Console = struct {
 
 // dvui_app stuff
 comptime {
-    if (dvui.App.get() != null) {
-        @export(&dvui_init, .{ .name = "dvui_init" });
-        @export(&dvui_deinit, .{ .name = "dvui_deinit" });
-        @export(&dvui_update, .{ .name = "dvui_update" });
-    }
+    @export(&dvui_init, .{ .name = "dvui_init" });
+    @export(&dvui_deinit, .{ .name = "dvui_deinit" });
+    @export(&dvui_update, .{ .name = "dvui_update" });
 }
 
 var wasm_log_console_buffer: [512]u8 = undefined;
@@ -1049,11 +1047,20 @@ pub const panic = std.debug.FullPanic(struct {
 pub var back: WebBackend = undefined;
 
 fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
-    const app = dvui.App.get() orelse return 404;
+    const app = dvui.App.get() orelse blk: {
+        const root = @import("root");
+        if (@hasDecl(root, "dvui_web_init")) {
+            root.dvui_web_init(platform_ptr, platform_len) catch return 406;
+            break :blk null;
+        }
+        return 404;
+    };
+    if (app == null) return 0;
+    const app_nonnull = app.?;
     // TODO: Allow web backend to set title of browser tab via init_opts
     // TODO: Respect min size (maybe max size?) via css on the canvas element
     // TODO: Use the icon to set the browser tab icon (if possible considering size requirements)
-    const init_opts = app.config.get();
+    const init_opts = app_nonnull.config.get();
 
     const platform = platform_ptr[0..platform_len];
     log.debug("platform: {s}", .{platform});
@@ -1077,7 +1084,7 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 
     win_ok = true;
 
-    if (app.initFn) |initFn| {
+    if (app_nonnull.initFn) |initFn| {
         win.begin(win.frame_time_ns) catch |err| {
             log.err("dvui.Window.begin failed: {any}", .{err});
             return 3;
@@ -1098,8 +1105,15 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 }
 
 fn dvui_deinit() callconv(.c) void {
-    const app = dvui.App.get() orelse return;
-    if (app.deinitFn) |deinitFn| deinitFn();
+    const app = dvui.App.get();
+    if (app == null) {
+        const root = @import("root");
+        if (@hasDecl(root, "dvui_web_deinit")) {
+            root.dvui_web_deinit();
+        }
+        return;
+    }
+    if (app.?.deinitFn) |deinitFn| deinitFn();
 
     win.deinit();
     back.deinit();
@@ -1116,7 +1130,15 @@ fn dvui_update() callconv(.c) i32 {
 }
 
 fn update() !i32 {
-    const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
+    const app = dvui.App.get() orelse blk: {
+        const root = @import("root");
+        if (@hasDecl(root, "dvui_web_update")) {
+            return root.dvui_web_update();
+        }
+        break :blk null;
+    };
+    if (app == null) return error.DvuiAppNotDefined;
+    const app_nonnull = app.?;
 
     const nstime = win.beginWait(back.hasEvent());
 
@@ -1126,7 +1148,7 @@ fn update() !i32 {
     // backend is directly sending the events to dvui
     //try backend.addAllEvents(&win);
 
-    const res = try app.frameFn();
+    const res = try app_nonnull.frameFn();
 
     const end_micros = try win.end(.{});
 
@@ -1146,10 +1168,18 @@ fn update() !i32 {
 /// Entry point for Worker-based standalone mode.
 /// Called by web-worker.js after WASM instantiation.
 export fn dvui_main() callconv(.c) void {
-    main() catch |err| {
+    standaloneEntry() catch |err| {
         const msg = std.fmt.allocPrint(gpa, "{any}", .{err}) catch "main() error";
         wasm.wasm_panic(msg.ptr, msg.len);
     };
+}
+
+fn standaloneEntry() !void {
+    const root = @import("root");
+    if (@hasDecl(root, "dvui_web_main")) {
+        return root.dvui_web_main();
+    }
+    return main();
 }
 
 test {

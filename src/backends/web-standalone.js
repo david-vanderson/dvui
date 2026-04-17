@@ -123,6 +123,7 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
         // Wake the worker
         Atomics.store(signalArray, SIGNAL_INDEX, 1);
         Atomics.notify(signalArray, SIGNAL_INDEX);
+        worker.postMessage({ type: "wake" });
     }
 
     /** Write a string into the string area and return its offset */
@@ -195,12 +196,14 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
         // Wake the worker so it sees the new size
         Atomics.store(signalArray, SIGNAL_INDEX, 1);
         Atomics.notify(signalArray, SIGNAL_INDEX);
+        worker.postMessage({ type: "wake" });
     });
 
     const resizeObserver = new ResizeObserver(() => {
         updateCanvasInfo();
         Atomics.store(signalArray, SIGNAL_INDEX, 1);
         Atomics.notify(signalArray, SIGNAL_INDEX);
+        worker.postMessage({ type: "wake" });
     });
     resizeObserver.observe(canvas);
 

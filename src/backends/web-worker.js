@@ -113,6 +113,10 @@ let probeEnabled = false;
 let debugWaitCalls = 0;
 let debugDrawCalls = 0;
 let debugEventsDrained = 0;
+let startupTraceCount = 0;
+let loopRunning = false;
+let framePending = false;
+let frameTimerId = 0;
 
 // Cached canvas dimensions (updated from SharedArrayBuffer each frame)
 let cachedPixelWidth = 800;
@@ -125,11 +129,57 @@ function isWebGL2() {
 }
 
 function presentFrame() {
+    if (using_fb) {
+        // Defensive: if a frame ends with a texture render target bound,
+        // the visible canvas may stay unchanged/blank despite draw calls.
+        using_fb = false;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        const dw = gl.drawingBufferWidth || 0;
+        const dh = gl.drawingBufferHeight || 0;
+        const cw = gl.canvas.width || 0;
+        const ch = gl.canvas.height || 0;
+        renderTargetSize = [dw > 0 ? dw : cw, dh > 0 ? dh : ch];
+        gl.viewport(0, 0, renderTargetSize[0], renderTargetSize[1]);
+        gl.scissor(0, 0, renderTargetSize[0], renderTargetSize[1]);
+    }
     // Ensure worker-side WebGL commands are pushed to the visible canvas.
     gl.flush();
     if (typeof gl.commit === "function") {
         gl.commit();
     }
+}
+
+function scheduleFrame(frameFn, delayMs) {
+    if (!loopRunning) return;
+
+    const ms = Math.max(0, delayMs | 0);
+    if (framePending) {
+        if (ms === 0 && frameTimerId !== 0) {
+            clearTimeout(frameTimerId);
+            frameTimerId = 0;
+            framePending = false;
+        } else {
+            return;
+        }
+    }
+
+    framePending = true;
+    if (ms === 0 && typeof self.requestAnimationFrame === "function") {
+        self.requestAnimationFrame(() => {
+            framePending = false;
+            if (loopRunning) frameFn();
+        });
+    } else {
+        frameTimerId = setTimeout(() => {
+            frameTimerId = 0;
+            framePending = false;
+            if (loopRunning) frameFn();
+        }, ms);
+    }
+}
+
+function wakeFrame(frameFn) {
+    scheduleFrame(frameFn, 0);
 }
 
 function syncCanvasSize(pixelWidth, pixelHeight) {
@@ -182,6 +232,16 @@ async function waitForEventOrTimeout(timeout_ms) {
 
 function debugLog(message, data = null) {
     if (!debugEnabled) return;
+    if (data === null) {
+        self.postMessage({ type: "debug", message });
+    } else {
+        self.postMessage({ type: "debug", message, data });
+    }
+}
+
+function traceOnce(message, data = null) {
+    if (startupTraceCount >= 80) return;
+    startupTraceCount++;
     if (data === null) {
         self.postMessage({ type: "debug", message });
     } else {
@@ -285,6 +345,7 @@ function drainEvents() {
             readCursor,
         });
     }
+    return drained;
 }
 
 const STRING_AREA_OFFSET = EVENT_RING_OFFSET + RING_SIZE;
@@ -406,7 +467,7 @@ function buildImports() {
             wasm_wait_event: (timeout_ms) => {
                 debugWaitCalls++;
                 // Drain any pending events first
-                drainEvents();
+                const drainedBeforeWait = drainEvents();
 
                 // Update canvas size for rendering
                 updateCanvasInfo();
@@ -432,13 +493,11 @@ function buildImports() {
                     });
                 }
                 if (writeCursor !== readCursor) {
-                    drainEvents();
-                    clearForNextFrame();
-                    return 1; // interrupted by event
+                    const drainedQueued = drainEvents();
+                    return (drainedBeforeWait + drainedQueued) > 0 ? 1 : 0;
                 }
 
                 if (timeout_ms === 0) {
-                    clearForNextFrame();
                     return 0;
                 }
 
@@ -448,10 +507,10 @@ function buildImports() {
                     : Atomics.wait(signalArray, SIGNAL_INDEX, 0, timeout_ms);
 
                 // Drain any events that arrived
-                drainEvents();
+                const drainedAfterWait = drainEvents();
+                const hadEvent = (drainedBeforeWait + drainedAfterWait) > 0;
 
-                clearForNextFrame();
-                return result === "ok" ? 1 : 0; // "ok" = was notified, "timed-out" = timeout
+                return hadEvent ? 1 : 0;
             },
             wasm_canvas_info: (out_pw, out_ph, out_cw, out_ch) => {
                 updateCanvasInfo();
@@ -549,6 +608,17 @@ function buildImports() {
             wasm_renderGeometry: (textureId, index_ptr, index_len, vertex_ptr, vertex_len,
                 sizeof_vertex, offset_pos, offset_col, offset_uv, clip, x, y, w, h) => {
                 debugDrawCalls++;
+                if (debugDrawCalls <= 20) {
+                    traceOnce("renderGeometry", {
+                        drawCalls: debugDrawCalls,
+                        textureId,
+                        index_len,
+                        vertex_len,
+                        clip,
+                        clipRect: [x, y, w, h],
+                        renderTargetSize,
+                    });
+                }
                 if (debugEnabled && (debugDrawCalls <= 10 || debugDrawCalls % 200 === 0)) {
                     debugLog("renderGeometry", {
                         drawCalls: debugDrawCalls,
@@ -731,58 +801,89 @@ self.onmessage = async function(e) {
             gl.scissor(0, 0, w, h);
 
             self.postMessage({ type: "ready" });
+            traceOnce("worker ready: wasm loaded", {
+                has_main: !!instance.exports.dvui_main,
+                has_init: !!instance.exports.dvui_init,
+                has_update: !!instance.exports.dvui_update,
+            });
 
-            // Keep fallback loop as default until dvui_main path is verified
-            // to match presentation/timing behavior in all browsers.
-            // Can be force-enabled for local testing via init message.
-            const useDvuiMain = msg.use_dvui_main === true;
-            if (useDvuiMain && instance.exports.dvui_main) {
-                instance.exports.dvui_main();
-            } else if (instance.exports.dvui_init) {
-                // Fallback to classic init/update loop
-                const platformStr = utf8encoder.encode(msg.platform || "");
-                let initRet = 0;
-                if (platformStr.length > 0) {
-                    const ptr = allocBuffer(instance.exports.gpa_u8, platformStr);
-                    initRet = instance.exports.dvui_init(ptr, platformStr.length);
-                    instance.exports.gpa_free(ptr, platformStr.length);
-                } else {
-                    initRet = instance.exports.dvui_init(0, 0);
-                }
-                if (initRet !== 0) {
-                    self.postMessage({ type: "error", message: "dvui_init returned " + initRet });
+            // Godot-style web loop: initialize once, then run async frame ticks.
+            if (!instance.exports.dvui_init || !instance.exports.dvui_update) {
+                self.postMessage({ type: "error", message: "Web worker async loop requires dvui_init and dvui_update exports" });
+                return;
+            }
+
+            traceOnce("starting async dvui_init/dvui_update loop");
+            const platformStr = utf8encoder.encode(msg.platform || "");
+            let initRet = 0;
+            if (platformStr.length > 0) {
+                const ptr = allocBuffer(instance.exports.gpa_u8, platformStr);
+                initRet = instance.exports.dvui_init(ptr, platformStr.length);
+                instance.exports.gpa_free(ptr, platformStr.length);
+            } else {
+                initRet = instance.exports.dvui_init(0, 0);
+            }
+            if (initRet !== 0) {
+                self.postMessage({ type: "error", message: "dvui_init returned " + initRet });
+                return;
+            }
+
+            const runFrame = () => {
+                updateCanvasInfo();
+                const pw = cachedPixelWidth;
+                const ph = cachedPixelHeight;
+                syncCanvasSize(pw, ph);
+                gl.clearColor(probeEnabled ? 1.0 : 0.0, 0.0, probeEnabled ? 1.0 : 0.0, 1.0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                drainEvents();
+                const millis = instance.exports.dvui_update();
+                presentFrame();
+                if (millis < 0) {
+                    loopRunning = false;
                     return;
                 }
 
-                // Run update loop
-                while (true) {
-                    updateCanvasInfo();
-                    const pw = cachedPixelWidth;
-                    const ph = cachedPixelHeight;
-                    syncCanvasSize(pw, ph);
-                    gl.clearColor(probeEnabled ? 1.0 : 0.0, 0.0, probeEnabled ? 1.0 : 0.0, 1.0);
-                    gl.clear(gl.COLOR_BUFFER_BIT);
-
-                    drainEvents();
-                    const millis = instance.exports.dvui_update();
-                    presentFrame();
-                    if (millis < 0) break;
-
-                    // Always yield at least a tiny slice in fallback mode.
-                    // If millis == 0, tight spinning can starve compositor/input
-                    // despite low measured app frame times.
-                    const wait_ms = millis > 0 ? millis : 2;
-                    // Reset wake signal before waiting so future events can interrupt.
-                    Atomics.store(signalArray, SIGNAL_INDEX, 0);
-                    // Wait in short interruptible slices so input can wake quickly.
-                    await waitForEventOrTimeout(wait_ms);
+                // Mirror existing behavior: avoid hot-spin at 0ms by yielding
+                // through rAF when available, else a tiny timeout slice.
+                if (millis === 0) {
+                    scheduleFrame(runFrame, 0);
+                } else {
+                    scheduleFrame(runFrame, millis);
                 }
-            } else {
-                self.postMessage({ type: "error", message: "No dvui_main or dvui_init export found" });
-            }
+            };
+
+            loopRunning = true;
+            scheduleFrame(runFrame, 0);
         } catch (err) {
             console.error("Worker WASM error:", err);
             self.postMessage({ type: "error", message: err?.stack || err?.toString?.() || "unknown worker error" });
+        }
+    } else if (msg.type === "wake") {
+        // Wake requested by main-thread input/resize events.
+        if (loopRunning && instance?.exports?.dvui_update) {
+            const runFrame = () => {
+                updateCanvasInfo();
+                const pw = cachedPixelWidth;
+                const ph = cachedPixelHeight;
+                syncCanvasSize(pw, ph);
+                gl.clearColor(probeEnabled ? 1.0 : 0.0, 0.0, probeEnabled ? 1.0 : 0.0, 1.0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                drainEvents();
+                const millis = instance.exports.dvui_update();
+                presentFrame();
+                if (millis < 0) {
+                    loopRunning = false;
+                    return;
+                }
+                if (millis === 0) {
+                    scheduleFrame(runFrame, 0);
+                } else {
+                    scheduleFrame(runFrame, millis);
+                }
+            };
+            wakeFrame(runFrame);
         }
     }
 };
