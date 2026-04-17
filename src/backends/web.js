@@ -404,6 +404,22 @@ export class Dvui {
             wasm_refresh: () => {
                 this.requestRender();
             },
+            // Standalone wasm compatibility for non-worker fallback.
+            // In main-thread mode we cannot block; return timeout/not-woken.
+            wasm_wait_event: (_timeout_ms) => {
+                return 0;
+            },
+            // Standalone wasm compatibility for non-worker fallback.
+            wasm_canvas_info: (out_pixel_width, out_pixel_height, out_canvas_width, out_canvas_height) => {
+                const mem = new DataView(this.instance.exports.memory.buffer);
+                const scale = window.devicePixelRatio;
+                const w = this.gl.canvas.clientWidth;
+                const h = this.gl.canvas.clientHeight;
+                mem.setFloat32(out_pixel_width, Math.round(w * scale), true);
+                mem.setFloat32(out_pixel_height, Math.round(h * scale), true);
+                mem.setFloat32(out_canvas_width, w, true);
+                mem.setFloat32(out_canvas_height, h, true);
+            },
             wasm_pixel_width: () => {
                 return this.gl.drawingBufferWidth;
             },

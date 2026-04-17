@@ -1280,6 +1280,7 @@ fn addWebStandaloneExample(
     const compile_step = b.step(name, "Compile " ++ name ++ " (Web Worker standalone)");
     compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/index-standalone.html"), install_dir, "index.html").step);
     compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/web-standalone.js"), install_dir, "web-standalone.js").step);
+    compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/web.js"), install_dir, "web.js").step);
     compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/web-worker.js"), install_dir, "web-worker.js").step);
     compile_step.dependOn(&install_wasm.step);
     compile_step.dependOn(&install_noto.step);

@@ -2,6 +2,7 @@
 /// Main-thread script for dvui standalone/Worker mode.
 /// Sets up DOM event listeners and forwards events to the Worker
 /// via SharedArrayBuffer + Atomics.notify().
+/// Falls back to main-thread runtime (web.js) when SAB isolation is unavailable.
 
 const EVENT_RING_OFFSET = 256;
 const EVENT_SIZE = 20;
@@ -23,7 +24,7 @@ const utf8encoder = new TextEncoder();
  * @param {string | HTMLCanvasElement} canvasArg
  * @param {string} wasmUrl
  * @param {string} [workerUrl]
- * @returns {Promise<{worker: Worker, sharedBuffer: SharedArrayBuffer}>}
+ * @returns {Promise<{worker: Worker, sharedBuffer: SharedArrayBuffer} | unknown>}
  */
 export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") {
     /** @type {HTMLCanvasElement} */
@@ -47,14 +48,22 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
         });
     }
 
-    // Check for SharedArrayBuffer support
-    if (typeof SharedArrayBuffer === "undefined") {
-        throw new Error(
-            "SharedArrayBuffer is not available. " +
-            "Ensure your server sends COOP/COEP headers:\n" +
-            "  Cross-Origin-Opener-Policy: same-origin\n" +
-            "  Cross-Origin-Embedder-Policy: require-corp"
+    function fallbackToMainThread(reason) {
+        console.warn(
+            "[dvui-standalone] Falling back to main-thread runtime (web.js):",
+            reason
         );
+        return import("./web.js").then(({ dvui }) => dvui(canvas, wasmUrl));
+    }
+
+    if (typeof SharedArrayBuffer === "undefined") {
+        return fallbackToMainThread("SharedArrayBuffer is not available");
+    }
+    if (typeof Atomics === "undefined") {
+        return fallbackToMainThread("Atomics is not available");
+    }
+    if (!window.crossOriginIsolated) {
+        return fallbackToMainThread("crossOriginIsolated is false (missing COOP/COEP)");
     }
 
     // Create shared memory
@@ -64,8 +73,10 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
 
     // String write cursor within the string area (resets each event batch)
     let stringWriteOffset = 0;
-
     // Transfer canvas to Worker via OffscreenCanvas
+    if (typeof canvas.transferControlToOffscreen !== "function") {
+        return fallbackToMainThread("OffscreenCanvas transfer is not available");
+    }
     const offscreen = canvas.transferControlToOffscreen();
 
     const worker = new Worker(workerUrl);
@@ -382,5 +393,5 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
         console.info("[dvui-standalone] init posted to worker", { debugEnabled, probeEnabled, wasmUrl, workerUrl });
     }
 
-    return { worker, sharedBuffer };
+    return Promise.resolve({ worker, sharedBuffer });
 }
