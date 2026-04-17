@@ -210,8 +210,8 @@ pub fn preferredColorScheme(_: *@This()) ?dvui.enums.ColorScheme {
     return null;
 }
 
-pub fn preferredMotionAmount(_: *@This()) ?dvui.enums.MotionAmount {
-    return null;
+pub fn prefersReducedMotion(_: *@This()) bool {
+    return false;
 }
 
 pub fn pollEventsTimeout(_: *@This(), win: *dvui.Window, end_time: ?u32) void {
