@@ -293,6 +293,8 @@ pub const useTreeSitter = @import("default_options").tree_sitter;
 /// The amount of logical pixels to scroll per "tick" of the scroll wheel
 pub var scroll_speed: f32 = 40;
 
+/// When true, `animation` overwrites end_time so animations expire next frame.
+/// Timers are not affected.
 pub var reduce_motion: bool = false;
 
 /// Used as a default maximum in various places:
@@ -1826,6 +1828,9 @@ pub const Animation = struct {
 };
 
 /// Add animation a to key associated with id.  See `Animation`.
+///
+/// If dvui.reduce_motion is true, overwites end_time so the animation will
+/// expire next frame.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn animation(id: Id, key: []const u8, a: Animation) void {
