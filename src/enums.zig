@@ -54,7 +54,39 @@ pub const TexturePixelFormat = enum {
     fourcc_uyvy,
     fourcc_yvyu,
 
-    pub fn bytesPerPixel(self: TexturePixelFormat) u32 {
+    pub fn bytesPerPixel(self: TexturePixelFormat) f32 {
+        return switch (self) {
+            .rgba_32,
+            .argb_32,
+            .bgra_32,
+            .abgr_32,
+            .rgbx_32,
+            .xrgb_32,
+            .bgrx_32,
+            .xbgr_32,
+            .rgba_8_8_8_8,
+            .argb_8_8_8_8,
+            .bgra_8_8_8_8,
+            .abgr_8_8_8_8,
+            .rgbx_8_8_8_8,
+            .xrgb_8_8_8_8,
+            .bgrx_8_8_8_8,
+            .xbgr_8_8_8_8,
+            => 4,
+
+            .fourcc_yv12,
+            .fourcc_iyuv,
+            => 1.5,
+
+            .fourcc_yuy2,
+            .fourcc_uyvy,
+            .fourcc_yvyu,
+            => 2,
+        };
+    }
+
+
+    pub fn pitchFactor(self: TexturePixelFormat) u32 {
         return switch (self) {
             .rgba_32,
             .argb_32,
