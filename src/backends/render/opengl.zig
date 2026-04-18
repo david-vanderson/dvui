@@ -34,25 +34,66 @@ ebo: u32,
 framebuffers: std.AutoHashMapUnmanaged(u32, u32) = .empty,
 render_target_size: ?dvui.Size.Physical = null,
 
+const ERROR_LOG_LENGTH = 4096;
+
 pub fn init(allocator: std.mem.Allocator, getProcAddress: anytype, comptime glsl_version: []const u8) !@This() {
     try gl.load(getProcAddress);
 
     const sources = shaderSources(glsl_version);
+
+    var status: i32 = undefined;
 
     const vertex_shader = gl.createShader(gl.VERTEX_SHADER);
     defer gl.deleteShader(vertex_shader);
     gl.shaderSource(vertex_shader, 1, &[_][*]const u8{sources.vertex}, &[_]i32{sources.vertex.len});
     gl.compileShader(vertex_shader);
 
+    gl.getShaderiv(vertex_shader, gl.COMPILE_STATUS, &status);
+    if (status != gl.TRUE) {
+        var error_log = std.mem.zeroes([ERROR_LOG_LENGTH]u8);
+        var log_length: i32 = 0;
+        gl.getShaderInfoLog(vertex_shader, ERROR_LOG_LENGTH, &log_length, &error_log);
+        log.err("Vertex shader failed to compile: {s}", .{error_log[0..@intCast(log_length)]});
+        return error.VertexShaderCompilationFailed;
+    }
+
     const fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
     defer gl.deleteShader(fragment_shader);
     gl.shaderSource(fragment_shader, 1, &[_][*]const u8{sources.fragment}, &[_]i32{sources.fragment.len});
     gl.compileShader(fragment_shader);
 
+    gl.getShaderiv(fragment_shader, gl.COMPILE_STATUS, &status);
+    if (status != gl.TRUE) {
+        var error_log = std.mem.zeroes([ERROR_LOG_LENGTH]u8);
+        var log_length: i32 = 0;
+        gl.getShaderInfoLog(fragment_shader, ERROR_LOG_LENGTH, &log_length, &error_log);
+        log.err("Fragment shader failed to compile: {s}", .{error_log[0..@intCast(log_length)]});
+        return error.FragmentShaderCompilationFailed;
+    }
+
     const program = gl.createProgram();
     gl.attachShader(program, vertex_shader);
     gl.attachShader(program, fragment_shader);
+
     gl.linkProgram(program);
+    gl.getProgramiv(program, gl.LINK_STATUS, &status);
+    if (status != gl.TRUE) {
+        var error_log = std.mem.zeroes([ERROR_LOG_LENGTH]u8);
+        var log_length: i32 = 0;
+        gl.getProgramInfoLog(program, ERROR_LOG_LENGTH, &log_length, &error_log);
+        log.err("Program failed to link: {s}", .{error_log[0..@intCast(log_length)]});
+        return error.ProgramLinkingFailed;
+    }
+
+    gl.validateProgram(program);
+    gl.getProgramiv(program, gl.VALIDATE_STATUS, &status);
+    if (status != gl.TRUE) {
+        var error_log = std.mem.zeroes([ERROR_LOG_LENGTH]u8);
+        var log_length: i32 = 0;
+        gl.getProgramInfoLog(program, ERROR_LOG_LENGTH, &log_length, &error_log);
+        log.warn("Program failed to validate: {s}", .{error_log[0..@intCast(log_length)]});
+        // Don't error out here. Apple's buggy OpenGL implementation can fail to validate a perfectly fine program.
+    }
 
     const position: u32 = @bitCast(gl.getAttribLocation(program, "v_position"));
     const color: u32 = @bitCast(gl.getAttribLocation(program, "v_color"));
