@@ -110,8 +110,18 @@ pub fn begin(self: *@This(), _: std.mem.Allocator) !void {
     gl.useProgram(self.program);
     gl.bindVertexArray(self.vao);
 
+    gl.bindBuffer(gl.ARRAY_BUFFER, self.vbo);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.ebo);
+
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.STENCIL_TEST);
+    gl.disable(gl.CULL_FACE);
+
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+    gl.depthMask(gl.FALSE);
+    gl.colorMask(gl.TRUE, gl.TRUE, gl.TRUE, gl.TRUE);
 }
 
 pub fn end(_: *@This()) !void {}
