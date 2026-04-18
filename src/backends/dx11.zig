@@ -1275,6 +1275,21 @@ pub fn wndProc(
                 },
                 else => unreachable,
             };
+
+            const is_button_down: bool = switch (msg) {
+                win32.WM_LBUTTONDOWN, win32.WM_RBUTTONDOWN, win32.WM_MBUTTONDOWN, win32.WM_XBUTTONDOWN => true,
+                else => false
+            };
+
+            // ensure mouse up signal is sent if cursor leaves window while held down
+            if (is_button_down) {
+                // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setcapture
+                _ = win32.SetCapture(hwnd);
+            } else {
+                // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-releasecapture
+                _ = win32.ReleaseCapture();
+            }
+
             _ = stateFromHwnd(hwnd).dvui_window.addEventMouseButton(
                 button,
                 switch (msg) {
