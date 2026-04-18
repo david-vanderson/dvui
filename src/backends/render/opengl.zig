@@ -157,6 +157,7 @@ pub fn begin(self: *@This(), _: std.mem.Allocator) !void {
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.STENCIL_TEST);
     gl.disable(gl.CULL_FACE);
+    gl.disable(gl.SCISSOR_TEST);
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
