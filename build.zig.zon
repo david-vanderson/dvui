@@ -40,6 +40,16 @@
             .hash = "raylib-5.6.0-dev-whq8uLAJDQXCUoWbI50KR2RX8f1NhyzmklCim1bT2EH2",
             .lazy = true,
         },
+        .wio = .{
+            .url = "https://github.com/ypsvlq/wio/archive/8f874372e6644769f6a964912cd819b02fcb8c6b.tar.gz",
+            .hash = "wio-0.0.0-8xHrr3sEBgDdNTJi4NMsC_SED4XiK8M96IUFfCyVlVRS",
+            .lazy = true,
+        },
+        .opengl = .{
+            .url = "https://github.com/ypsvlq/opengl/archive/2dfbc2b4994e3333d35fd2c1bbf459340d54fef4.tar.gz",
+            .hash = "opengl-0.0.0-_Vp8-GvsKgCK18nOkOYyRNlkJUn-zWE8hu38AeUPO7Jb",
+            .lazy = true,
+        },
         //used in the raylib-ontop example
         .raygui = .{
             .url = "https://github.com/raysan5/raygui/archive/33f1659.tar.gz",
@@ -84,6 +94,10 @@
             .url = "git+https://github.com/tree-sitter/tree-sitter-json#001c28d7a29832b06b0e831ec77845553c89b56d",
             .hash = "N-V-__8AAHNaAgD6kjK3HX6lAf89chPqS5zIm0tLpvBQLOtX",
             .lazy = true,
+        },
+        .tree_sitter_zig = .{
+            .url = "git+https://github.com/tree-sitter-grammars/tree-sitter-zig.git#6479aa13f32f701c383083d8b28360ebd682fb7d",
+            .hash = "tree_sitter_zig-1.1.2-AAAAAJ57XACsD_XBHC4i6G6rnCsZ1dZj7CLRTC09toEB",
         },
         .zgl = .{
             .url = "git+https://github.com/ziglibs/zgl#6ee54c287f3c4f176bd05a92746828bb791a1ad0",

@@ -133,20 +133,22 @@ pub fn draw(self: *LabelWidget) void {
     const rs = self.data().parent.screenRectScale(rect);
     const oldclip = if (rot == 0.0) dvui.clip(rs.r) else dvui.clipGet();
     var iter = std.mem.splitScalar(u8, self.label_str, '\n');
-    var line_height_adj: f32 = undefined;
+    var line_height_adj: ?f32 = null;
     var first: bool = true;
     var r = rs.r;
     while (iter.next()) |line_slice| {
         r.x = rs.r.x;
         if (first) {
-            line_height_adj = self.data().options.fontGet().textHeight() * (self.data().options.fontGet().line_height_factor - 1.0);
             first = false;
         } else {
-            r.y += rs.s * line_height_adj;
+            if (line_height_adj == null) {
+                line_height_adj = self.data().options.fontGet().textHeight() * (self.data().options.fontGet().line_height_factor - 1.0);
+            }
+            r.y += rs.s * line_height_adj.?;
         }
 
         var line = line_slice;
-        var tsize = self.data().options.fontGet().textSize(line);
+        var tsize = if (line.len == self.label_str.len) self.label_size else self.data().options.fontGet().textSize(line);
 
         // this is only about horizontal direction
         var lineRect = dvui.placeIn(self.data().contentRect(), tsize, .none, label_gravity);

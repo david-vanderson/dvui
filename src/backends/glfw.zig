@@ -1,11 +1,10 @@
 const std = @import("std");
 const dvui = @import("dvui");
-pub const zgl = @import("zgl");
 pub const zglfw = @import("zglfw");
 
-pub const kind: dvui.enums.Backend = .glfw_opengl;
+pub const kind: dvui.enums.Backend = .glfw;
 
-const log = std.log.scoped(.glfw_opengl_backend);
+const log = std.log.scoped(.glfw_backend);
 
 const BYTES_PER_VERTEX = 20;
 // Max events we can process one frame
@@ -19,12 +18,7 @@ vsync: bool,
 gpa: std.mem.Allocator,
 arena: std.heap.ArenaAllocator,
 
-vao: zgl.VertexArray,
-el_buf: zgl.Buffer,
-vtx_buf: zgl.Buffer,
-program: zgl.Program,
 state: ?State,
-fb: ?dvui.TextureTarget,
 cursor: ?*zglfw.Cursor,
 
 userKeyCallback: ?zglfw.KeyFn,
@@ -34,43 +28,7 @@ userCursorPosCallback: ?zglfw.CursorPosFn,
 userFramebufferSizeCallback: ?zglfw.FramebufferSizeFn,
 userScrollCallback: ?zglfw.ScrollFn,
 
-framebuf_map: std.AutoHashMapUnmanaged(zgl.Texture, zgl.Framebuffer),
-
 window: *zglfw.Window,
-
-// Using vec4 for better compatability than vec3
-const vertex_source =
-    \\#version 330
-    \\in vec2 vertexPosition;
-    \\in vec2 vertexTexCoord;
-    \\in vec4 vertexColor;
-    \\out vec2 fragTexCoord;
-    \\out vec4 fragColor;
-    \\uniform mat4 mvp;
-    \\void main()
-    \\{
-    \\    fragTexCoord = vec2(vertexTexCoord.x, vertexTexCoord.y);
-    \\    fragColor = vertexColor / 255.0;
-    \\    gl_Position = mvp*vec4(vertexPosition.xy, 0.0, 1.0);
-    \\}
-;
-
-const frag_source =
-    \\#version 330
-    \\in vec2 fragTexCoord;
-    \\in vec4 fragColor;
-    \\out vec4 finalColor;
-    \\uniform sampler2D texture0;
-    \\uniform bool useTex;
-    \\void main()
-    \\{
-    \\    if (useTex) {
-    \\        finalColor = texture(texture0, fragTexCoord) * fragColor;
-    \\    } else {
-    \\        finalColor = fragColor;
-    \\    }
-    \\}
-;
 
 pub const State = struct {
     pub fn save(window: *zglfw.Window) State {
@@ -114,53 +72,6 @@ pub const InitOptions = struct {
 pub fn init(gpa: std.mem.Allocator, window_: *anyopaque) @This() {
     const window: *zglfw.Window = @ptrCast(window_);
 
-    // Make sure that OpenGL functions are loaded,
-    // shouldn't matter if it's loaded twice.
-    const fns = struct {
-        pub fn glGetProcAddress(p: zglfw.GlProc, proc: [:0]const u8) ?zgl.binding.FunctionPointer {
-            _ = p;
-            return @alignCast(zglfw.getProcAddress(proc));
-        }
-    };
-    const proc: zglfw.GlProc = undefined;
-    // This is not necessarily an error. Since the `zgl` version is
-    // 4.6, but we only require 3.3, some functions won't be loaded
-    // in case the machine doesn't support 4.6.
-    zgl.loadExtensions(proc, fns.glGetProcAddress) catch |err| {
-        log.warn("Not all functions were loaded. This is not necessarily a problem. Err: {}", .{err});
-    };
-
-    const vao = zgl.VertexArray.gen();
-    const vtx_buf = zgl.Buffer.gen();
-    vao.bind();
-    vtx_buf.bind(.array_buffer);
-
-    zgl.enableVertexAttribArray(0);
-    zgl.enableVertexAttribArray(1);
-    zgl.enableVertexAttribArray(2);
-    zgl.vertexAttribPointer(0, 2, .float, false, BYTES_PER_VERTEX, 0);
-    zgl.vertexAttribPointer(1, 2, .float, false, BYTES_PER_VERTEX, 8);
-    zgl.vertexAttribPointer(2, 4, .unsigned_byte, false, BYTES_PER_VERTEX, 16);
-    const el_buf = zgl.Buffer.gen();
-    el_buf.bind(.element_array_buffer);
-
-    // Don't want our state changed by external code
-    zgl.bindVertexArray(.invalid);
-
-    const v_shader = zgl.Shader.create(.vertex);
-    defer v_shader.delete();
-    v_shader.source(1, &.{vertex_source});
-    v_shader.compile();
-    const f_shader = zgl.Shader.create(.fragment);
-    defer f_shader.delete();
-    f_shader.source(1, &.{frag_source});
-    f_shader.compile();
-
-    const program = zgl.Program.create();
-    program.attach(v_shader);
-    program.attach(f_shader);
-
-    program.link();
     events = std.ArrayList(GlfwEvent).initCapacity(gpa, MAX_EVENT_BUFFER_SIZE) catch @panic("OOM");
 
     return .{
@@ -168,13 +79,7 @@ pub fn init(gpa: std.mem.Allocator, window_: *anyopaque) @This() {
         .window = window,
         .gpa = gpa,
         .arena = .init(gpa),
-        .vao = vao,
-        .vtx_buf = vtx_buf,
-        .el_buf = el_buf,
-        .program = program,
-        .framebuf_map = .empty,
         .state = null,
-        .fb = null,
         .cursor = null,
         .userKeyCallback = window.setKeyCallback(&glfwKeyCallback),
         .userCharCallback = window.setCharCallback(&glfwCharCallback),
@@ -186,17 +91,7 @@ pub fn init(gpa: std.mem.Allocator, window_: *anyopaque) @This() {
 }
 
 pub fn deinit(ctx: *@This()) void {
-    ctx.vao.delete();
-    ctx.program.delete();
-    ctx.vtx_buf.delete();
-    ctx.el_buf.delete();
     if (ctx.cursor) |cur| cur.destroy();
-    var it = ctx.framebuf_map.iterator();
-    while (it.next()) |kv| {
-        kv.key_ptr.delete();
-        kv.value_ptr.delete();
-    }
-    ctx.framebuf_map.clearAndFree(ctx.gpa);
     ctx.arena.deinit();
     if (events) |*_events| _events.deinit(ctx.gpa);
     _ = ctx.window.setKeyCallback(ctx.userKeyCallback);
@@ -259,203 +154,6 @@ pub fn contentScale(ctx: *@This()) f32 {
     _ = ctx;
     // Figure out what to do here
     return 1;
-}
-
-pub fn drawClippedTriangles(
-    ctx: *@This(),
-    texture: ?dvui.Texture,
-    vtx: []const dvui.Vertex,
-    idx: []const dvui.Vertex.Index,
-    clipr_in: ?dvui.Rect.Physical,
-) !void {
-    if (clipr_in) |clip_rect| {
-        zgl.enable(.scissor_test);
-        const sz = ctx.pixelSize();
-        const clip_y = if (ctx.fb == null) sz.h - clip_rect.y - clip_rect.h else clip_rect.y;
-        zgl.scissor(
-            @intFromFloat(clip_rect.x),
-            @intFromFloat(clip_y),
-            @intFromFloat(clip_rect.w),
-            @intFromFloat(clip_rect.h),
-        );
-    }
-    zgl.blendFunc(.one, .one_minus_src_alpha);
-    zgl.enable(.blend);
-    const aa = ctx.arena.allocator();
-
-    const vertex_buffer = try aa.alloc(u8, BYTES_PER_VERTEX * vtx.len);
-    defer aa.free(vertex_buffer);
-    for (vtx, 0..) |v, index| {
-        const i = index * BYTES_PER_VERTEX;
-        vertex_buffer[i..][0..4].* = @bitCast(v.pos.x);
-        vertex_buffer[i..][4..8].* = @bitCast(v.pos.y);
-        vertex_buffer[i..][8..16].* = @bitCast(v.uv);
-        vertex_buffer[i..][16..20].* = @bitCast(v.col);
-    }
-    ctx.vao.bind();
-    zgl.bufferData(.array_buffer, u8, vertex_buffer, .stream_draw);
-    zgl.bufferData(.element_array_buffer, dvui.Vertex.Index, idx, .stream_draw);
-
-    ctx.program.use();
-    const usetex_loc = ctx.program.uniformLocation("useTex");
-    zgl.uniform1ui(usetex_loc, if (texture) |_| 1 else 0);
-    if (texture) |tex| {
-        const txt: zgl.Texture = @enumFromInt(@intFromPtr(tex.ptr));
-        txt.bind(.@"2d");
-        zgl.activeTexture(.texture_0);
-        const tex_loc = ctx.program.uniformLocation("texture0") orelse blk: {
-            log.err("Couldn't find uniform location!", .{});
-            break :blk null;
-        };
-        zgl.uniform1i(tex_loc, 0);
-    }
-
-    const sz: dvui.Size.Physical = if (ctx.fb) |fb_tex| .{ .h = @floatFromInt(fb_tex.height), .w = @floatFromInt(fb_tex.width) } else ctx.pixelSize();
-    const sgn: f32 = if (ctx.fb) |_| -1.0 else 1.0;
-    const mat = [4][4]f32{
-        .{ 2 / sz.w, 0, 0, 0 },
-        .{ 0, -sgn * 2 / sz.h, 0, 0 },
-        .{ 0, 0, 1, 0 },
-        .{ -1, sgn, 0, 1 },
-    };
-
-    const mat_loc = ctx.program.uniformLocation("mvp");
-    zgl.uniformMatrix4fv(mat_loc, false, &.{mat});
-    zgl.drawElements(.triangles, idx.len, switch (dvui.Vertex.Index) {
-        u16 => .unsigned_short,
-        u32 => .unsigned_int,
-        else => @compileError("Critical change in dvui internal API, notify maintainer."),
-    }, 0);
-    zgl.disable(.scissor_test);
-}
-
-pub fn textureCreate(
-    _: *@This(),
-    pixels: [*]const u8,
-    width: u32,
-    height: u32,
-    interpolation: dvui.enums.TextureInterpolation,
-    format: dvui.enums.TexturePixelFormat,
-) !dvui.Texture {
-    if (format != .rgba_32) {
-        log.err("textureCreate currently only supports pixel format .rgba_32", .{});
-        return dvui.Backend.TextureError.TextureCreate;
-    }
-    const tex = zgl.Texture.gen();
-    tex.bind(.@"2d");
-    zgl.texParameter(.@"2d", .min_filter, if (interpolation == .nearest) .nearest else .linear);
-    zgl.texParameter(.@"2d", .mag_filter, if (interpolation == .nearest) .nearest else .linear);
-    zgl.textureImage2D(.@"2d", 0, .rgba8, width, height, .rgba, .unsigned_int_8_8_8_8, pixels);
-    zgl.bindTexture(.invalid, .@"2d");
-    return .{
-        .ptr = @ptrFromInt(@intFromEnum(tex)),
-        .height = height,
-        .width = width,
-        .format = .rgba_32,
-    };
-}
-
-pub fn textureUpdate(_: *@This(), texture: dvui.Texture, pixels: [*]const u8) !void {
-    const tex: zgl.Texture = @enumFromInt(@intFromPtr(texture.ptr));
-    tex.bind(.@"2d");
-    zgl.texSubImage2D(.@"2d", 0, 0, 0, texture.width, texture.height, .rgba, .unsigned_int_8_8_8_8, pixels);
-}
-
-pub fn textureCreateTarget(
-    ctx: *@This(),
-    width: u32,
-    height: u32,
-    interpolation: dvui.enums.TextureInterpolation,
-    format: dvui.enums.TexturePixelFormat,
-) !dvui.TextureTarget {
-    if (format != .rgba_32) {
-        log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
-        return dvui.Backend.TextureError.TextureCreate;
-    }
-    const tex = zgl.Texture.gen();
-    tex.bind(.@"2d");
-    zgl.texParameter(.@"2d", .min_filter, if (interpolation == .nearest) .nearest else .linear);
-    zgl.texParameter(.@"2d", .mag_filter, if (interpolation == .nearest) .nearest else .linear);
-    zgl.texParameter(.@"2d", .wrap_s, .clamp_to_border);
-    zgl.texParameter(.@"2d", .wrap_t, .clamp_to_border);
-    zgl.textureImage2D(.@"2d", 0, .rgba8, width, height, .rgba, .unsigned_int_8_8_8_8, null);
-    const framebuf = zgl.Framebuffer.gen();
-    framebuf.texture2D(.draw_buffer, .color0, .@"2d", tex, 0);
-    ctx.framebuf_map.put(ctx.gpa, tex, framebuf) catch |err| {
-        tex.delete();
-        framebuf.delete();
-        return err;
-    };
-    const target: dvui.Texture.Target = .{
-        .ptr = @ptrFromInt(@intFromEnum(tex)),
-        .height = height,
-        .width = width,
-        .format = .rgba_32,
-    };
-    ctx.textureClearTarget(target);
-    return target;
-}
-
-pub fn textureClearTarget(self: *@This(), texture: dvui.TextureTarget) void {
-    self.renderTarget(texture) catch return;
-    zgl.clearColor(0, 0, 0, 0);
-    zgl.clear(.{ .color = true });
-    self.renderTarget(null) catch return;
-}
-
-pub fn textureFromTarget(_: *@This(), texture: dvui.TextureTarget) !dvui.Texture {
-    return .{
-        .ptr = texture.ptr,
-        .height = texture.height,
-        .width = texture.width,
-        .format = texture.format,
-    };
-}
-
-pub fn textureFromTargetTemp(_: *@This(), texture: dvui.TextureTarget) !dvui.Texture {
-    return .{
-        .ptr = texture.ptr,
-        .height = texture.height,
-        .width = texture.width,
-        .format = texture.format,
-    };
-}
-
-pub fn textureReadTarget(_: *@This(), texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
-    const tex: zgl.Texture = @enumFromInt(@intFromPtr(texture.ptr));
-    tex.bind(.@"2d");
-    zgl.getTexImage(.@"2d", 0, .rgba, .unsigned_int_8_8_8_8, pixels_out);
-}
-
-pub fn renderTarget(ctx: *@This(), texture: ?dvui.TextureTarget) !void {
-    if (texture == null) {
-        zgl.bindFramebuffer(.invalid, .draw_buffer);
-        const sz = ctx.pixelSize();
-        zgl.viewport(0, 0, @intFromFloat(sz.w), @intFromFloat(sz.h));
-        ctx.fb = null;
-        return;
-    }
-    const tex: zgl.Texture = @enumFromInt(@intFromPtr(texture.?.ptr));
-    const fb = ctx.framebuf_map.get(tex) orelse return error.BackendError;
-    fb.bind(.draw_buffer);
-    zgl.viewport(0, 0, texture.?.width, texture.?.height);
-    ctx.fb = texture;
-}
-
-pub fn textureDestroy(ctx: *@This(), texture: dvui.Texture) void {
-    const tex: zgl.Texture = @enumFromInt(@intFromPtr(texture.ptr));
-    tex.delete();
-    if (ctx.framebuf_map.fetchRemove(tex)) |kv| {
-        kv.value.delete();
-    }
-}
-
-pub fn textureDestroyTarget(ctx: *@This(), texture: dvui.Texture.Target) void {
-    const tex: zgl.Texture = @enumFromInt(@intFromPtr(texture.ptr));
-    tex.delete();
-    if (ctx.framebuf_map.fetchRemove(tex)) |kv| {
-        kv.value.delete();
-    }
 }
 
 /// Get clipboard content (text only)
@@ -812,7 +510,7 @@ fn glfwScrollCallback(window: *zglfw.Window, xrel: f64, yrel: f64) callconv(.c) 
 
 fn handleScrollEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xrel: f64, yrel: f64) void {
     const ctx: *@This() = dvui_window.backend.impl;
-    const scrollx: f32 = @floatCast(-xrel * dvui.scroll_speed);
+    const scrollx: f32 = @floatCast(xrel * dvui.scroll_speed);
     const scrolly: f32 = @floatCast(yrel * dvui.scroll_speed);
     const consumed_x = dvui_window.addEventMouseWheel(scrollx, .horizontal) catch |err| {
         log.err("Encountered error when adding event! Err: {}", .{err});
@@ -853,7 +551,6 @@ fn handleFramebufferSizeEvent(
     width: c_int,
     height: c_int,
 ) void {
-    zgl.viewport(0, 0, @intCast(width), @intCast(height));
     const ctx: *@This() = dvui_window.backend.impl;
     if (ctx.userFramebufferSizeCallback) |callback| callback(window, width, height);
 }
@@ -868,33 +565,40 @@ pub fn main() !void {
 
     try zglfw.init();
 
-    zglfw.windowHint(.context_version_major, 3);
-    zglfw.windowHint(.context_version_minor, 3);
-    zglfw.windowHint(.opengl_profile, .opengl_core_profile);
-    zglfw.windowHint(.opengl_forward_compat, true);
-    zglfw.windowHint(.client_api, .opengl_api);
+    if (dvui.render_backend.kind == .opengl) {
+        zglfw.windowHint(.context_version_major, 3);
+        zglfw.windowHint(.context_version_minor, 3);
+        zglfw.windowHint(.opengl_profile, .opengl_core_profile);
+        zglfw.windowHint(.opengl_forward_compat, true);
+        zglfw.windowHint(.client_api, .opengl_api);
+    }
     window = try zglfw.Window.create(
         @intFromFloat(config.size.w),
         @intFromFloat(config.size.h),
         config.title,
         null,
     );
-    zglfw.makeContextCurrent(window);
-    if (config.vsync) zglfw.swapInterval(1) else zglfw.swapInterval(0);
+
+    var renderer = blk: switch (dvui.render_backend.kind) {
+        .opengl => {
+            zglfw.makeContextCurrent(window);
+            if (config.vsync) zglfw.swapInterval(1) else zglfw.swapInterval(0);
+            break :blk try dvui.render_backend.init(gpa, zglfw.getProcAddress, "330");
+        },
+        else => @compileError("unsupported renderer for backend"),
+    };
 
     var impl = init(gpa, window);
     defer impl.deinit();
 
-    const backend = dvui.Backend.init(&impl);
+    const backend = dvui.Backend.init(&impl, &renderer);
     var win = try dvui.Window.init(@src(), gpa, backend, .{});
     defer win.deinit();
-    const size = backend.pixelSize();
-    zgl.viewport(0, 0, @intFromFloat(size.w), @intFromFloat(size.h));
 
     while (!window.shouldClose()) {
         impl.addAllEvents(&win);
-        zgl.clearColor(0.1, 0.4, 0.25, 1.0);
-        zgl.clear(.{ .color = true, .stencil = true, .depth = true });
+        // zgl.clearColor(0.1, 0.4, 0.25, 1.0);
+        // zgl.clear(.{ .color = true, .stencil = true, .depth = true });
         try win.begin(std.time.nanoTimestamp());
 
         var res = try app.frameFn();

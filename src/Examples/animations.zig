@@ -203,7 +203,7 @@ pub fn animations() void {
             .web => dvui.label(@src(), "web: updated when not interrupted by event", .{}, .{}),
             .raylib, .raylib_zig => dvui.label(@src(), "raylib: only updated if non-null passed to waitTime", .{}, .{}),
             .dx11 => dvui.label(@src(), "dx11: only updated if non-null passed to waitTime", .{}, .{}),
-            .sdl, .custom, .testing, .glfw_opengl => {},
+            .sdl, .custom, .testing, .glfw, .wio => {},
         }
     }
 

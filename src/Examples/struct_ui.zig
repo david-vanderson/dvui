@@ -71,7 +71,7 @@ pub fn structUI() void {
 
         var alignment: dvui.Alignment = .init(@src(), 0);
         defer alignment.deinit();
-        if (struct_ui.displayStruct(@src(), "test_struct", &test_instance, 1, .{ .standard = .{} }, .{TestStruct.structui_options}, &alignment)) |box| {
+        if (struct_ui.displayStruct(@src(), "test_struct", &test_instance, 1, .default, .{TestStruct.structui_options}, &alignment)) |box| {
             defer box.deinit();
 
             // Treat the u8 array as a fixed buffer, passing itself as the backing buffer for the string.
@@ -86,7 +86,7 @@ pub fn structUI() void {
             struct_ui.displayOptional(@src(), TestStruct, "opt_int_ptr", &test_instance.opt_int_ptr, 1, .{ .number = .{} }, .{}, &alignment, &TestStruct.ts_int);
 
             // Union fields can also be handled manually if custom initialization is required for different cases.
-            if (struct_ui.displayContainer(@src(), "union_manual")) |union_box| {
+            if (struct_ui.displayContainer(@src(), "union_manual", true)) |union_box| {
                 defer union_box.deinit();
                 const selected_tag = struct_ui.unionFieldWidget(@src(), "union_manual", &test_instance.union_manual, .default);
                 switch (selected_tag) {

@@ -965,9 +965,19 @@ export class Dvui {
             );
         }
 
-        this.gl = canvas.getContext("webgl2", { alpha: true });
+        // We do our own edge fades with triangles. If we leave antialias on
+        // then you can get a faint brightness on the edge of a filled square.
+        // Right on the edge you get the blended combination of both triangles
+        // that share that edge.
+        // It's not easy to notice, but to reproduce:
+        // * turn antialias on
+        // * use the builtin Adwaita Dark theme
+        // * put a small filled (.background = true) box in a larger filled box
+        // * screenshot it
+        // * the edge of the small box will be brighter than the fill color
+        this.gl = canvas.getContext("webgl2", { alpha: true, antialias: false });
         if (this.gl === null) {
-            this.gl = canvas.getContext("webgl", { alpha: true });
+            this.gl = canvas.getContext("webgl", { alpha: true, antialias: false });
         }
 
         if (this.gl === null) {
@@ -1251,31 +1261,41 @@ export class Dvui {
         this.gl.canvas.addEventListener("wheel", (ev) => {
             if (this.stopped) return;
             ev.preventDefault();
+
+            // deltaX/Y numbers less than this indicate a touchpad
+            const touchpad_threshold = 4;
+            const touchpad_adj = 0.1;
+
             if (ev.deltaX != 0) {
                 const min = Math.min(
                     Math.abs(ev.deltaX),
                     this.lowest_scroll_delta[0],
                 );
                 this.lowest_scroll_delta[0] = min;
+                var ticks = ev.deltaX / min;
+                if (min < touchpad_threshold) ticks *= touchpad_adj;
                 this.instance.exports.add_event(
                     4,
                     0,
                     0,
-                    ev.deltaX / min,
+                    ticks,
                     0,
                 );
             }
             if (ev.deltaY != 0) {
+                //console.log("deltaMode: " + ev.deltaMode + " deltaY: " + ev.deltaY);
                 const min = Math.min(
                     Math.abs(ev.deltaY),
                     this.lowest_scroll_delta[1],
                 );
                 this.lowest_scroll_delta[1] = min;
+                var ticks = -ev.deltaY / min;
+                if (min < touchpad_threshold) ticks *= touchpad_adj;
                 this.instance.exports.add_event(
                     4,
                     1,
                     0,
-                    -ev.deltaY / min,
+                    ticks,
                     0,
                 );
             }

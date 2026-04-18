@@ -6,6 +6,8 @@ pub const zig_svg = @embedFile("zig-mark.svg");
 pub var show_demo_window: bool = false;
 pub var show_widgetpedia_window: bool = false;
 pub var icon_browser_show: bool = false;
+var source_code_show: bool = false;
+var source_code_rect: dvui.Rect = undefined;
 var frame_counter: u64 = 0;
 pub var show_dialog: bool = false;
 var scale_val: f32 = 1.0;
@@ -19,7 +21,7 @@ pub const demoKind = enum {
     layout,
     text_layout,
     plots,
-    reorderable,
+    reorder_tree,
     menus,
     scrolling,
     scroll_canvas,
@@ -39,7 +41,7 @@ pub const demoKind = enum {
             .layout => "Layout",
             .text_layout => "Text Layout",
             .plots => "Plots",
-            .reorderable => "Reorder / Tree",
+            .reorder_tree => "Reorder / Tree",
             .menus => "Menus / Focus",
             .scrolling => "Scrolling",
             .scroll_canvas => "Scroll Canvas",
@@ -61,7 +63,7 @@ pub const demoKind = enum {
             .layout => .{ .scale = 0.45, .offset = .{ .x = -50 } },
             .text_layout => .{ .scale = 0.45, .offset = .{} },
             .plots => .{ .scale = 0.45, .offset = .{} },
-            .reorderable => .{ .scale = 0.45, .offset = .{} },
+            .reorder_tree => .{ .scale = 0.45, .offset = .{} },
             .menus => .{ .scale = 0.45, .offset = .{} },
             .scrolling => .{ .scale = 0.45, .offset = .{ .x = -150, .y = 0 } },
             .scroll_canvas => .{ .scale = 0.35, .offset = .{ .y = -120 } },
@@ -82,10 +84,18 @@ pub fn floatRetainClear(ptr: *anyopaque) void {
     dvui.retainClear(id);
 }
 
-pub fn demo() void {
-    if (show_widgetpedia_window) {
-        widgetpedia();
+pub const DemoInclude = enum {
+    full,
+    lite, // excludes struct_ui and widgetpedia to improve compile times
+};
+
+pub fn demo(comptime include: DemoInclude) void {
+    if (include == .full) {
+        if (show_widgetpedia_window) {
+            widgetpedia();
+        }
     }
+
     if (!show_demo_window) {
         return;
     }
@@ -125,8 +135,10 @@ pub fn demo() void {
             if (dvui.button(@src(), "Debug Window", .{}, .{})) {
                 dvui.toggleDebugWindow();
             }
-            if (dvui.button(@src(), "Widgetpedia", .{}, .{})) {
-                dvui.Examples.show_widgetpedia_window = true;
+            if (include == .full) {
+                if (dvui.button(@src(), "Widgetpedia", .{}, .{})) {
+                    dvui.Examples.show_widgetpedia_window = true;
+                }
             }
 
             if (dvui.Theme.picker(@src(), &dvui.Theme.builtins, .{})) {
@@ -149,6 +161,9 @@ pub fn demo() void {
 
         inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
+            if (include != .full) {
+                if (e == .struct_ui) continue;
+            }
             var bw: dvui.ButtonWidget = undefined;
             bw.init(@src(), .{}, .{
                 .id_extra = i,
@@ -197,13 +212,13 @@ pub fn demo() void {
                     .layout => layout(),
                     .text_layout => layoutText(),
                     .plots => plots(),
-                    .reorderable => reorderLists(),
+                    .reorder_tree => reorderLists(),
                     .menus => menus(),
                     .scrolling => scrolling(),
                     .scroll_canvas => scrollCanvas(),
                     .dialogs => dialogs(),
                     .animations => animations(),
-                    .struct_ui => structUI(),
+                    .struct_ui => if (include == .full) structUI() else {},
                     .debugging => debuggingErrors(),
                     .grid => grids(),
                 }
@@ -227,7 +242,7 @@ pub fn demo() void {
 
     if (paned.showSecond()) {
         {
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
             defer hbox.deinit();
 
             if (paned.collapsed() and dvui.button(@src(), "Back to Demos", .{}, .{ .min_size_content = .{ .h = 30 }, .tag = "dvui_demo_window_back" })) {
@@ -235,6 +250,13 @@ pub fn demo() void {
             }
 
             dvui.label(@src(), "{s}", .{demo_active.name()}, .{ .font = dvui.Font.theme(.title), .gravity_y = 0.5 });
+            if (include == .full) {
+                if (dvui.labelClick(@src(), "View source code", .{}, .{}, .{ .gravity_x = 1.0, .gravity_y = 0.5, .color_text = dvui.themeGet().focus })) {
+                    const window_rect = dvui.currentWindow().data().contentRect();
+                    source_code_rect = .{ .x = window_rect.x + window_rect.w / 2, .y = window_rect.y, .h = window_rect.h, .w = window_rect.w / 2 };
+                    source_code_show = true;
+                }
+            }
         }
 
         var scroll: ?*dvui.ScrollAreaWidget = null;
@@ -255,13 +277,13 @@ pub fn demo() void {
             .layout => layout(),
             .text_layout => layoutText(),
             .plots => plots(),
-            .reorderable => reorderLists(),
+            .reorder_tree => reorderLists(),
             .menus => menus(),
             .scrolling => scrolling(),
             .scroll_canvas => scrollCanvas(),
             .dialogs => dialogs(),
             .animations => animations(),
-            .struct_ui => structUI(),
+            .struct_ui => if (include == .full) structUI() else {},
             .debugging => debuggingErrors(),
             .grid => grids(),
         }
@@ -279,6 +301,15 @@ pub fn demo() void {
 
     if (StrokeTest.show) {
         show_stroke_test_window();
+    }
+
+    if (include == .full and source_code_show) {
+        switch (demo_active) {
+            inline else => |demo_name| {
+                const source_code = if (dvui.useTreeSitter) @embedFile("Examples/" ++ @tagName(demo_name) ++ ".zig") else "";
+                displayZigSourceCode(@tagName(demo_name) ++ ".zig", source_code, &source_code_show, &source_code_rect);
+            },
+        }
     }
 }
 
@@ -454,6 +485,174 @@ pub fn grids() void {
     }
 }
 
+fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool, rect: *Rect) void {
+    if (dvui.useTreeSitter) {
+        const fwin = dvui.floatingWindow(@src(), .{ .rect = rect, .open_flag = showing }, .{});
+        defer fwin.deinit();
+        fwin.dragAreaSet(dvui.windowHeader("View Zig Source", filename, showing));
+
+        const Range = struct {
+            start: usize,
+            end: usize,
+        };
+
+        const global = struct {
+            extern fn tree_sitter_zig() callconv(.c) *dvui.c.TSLanguage;
+            var source_code: []const u8 = "";
+            var source_code_stripped: []const u8 = "";
+            var highlight_range: ?Range = null;
+            var cursor_pos: usize = 0;
+            var cursor_moved: bool = false;
+        };
+
+        var vbox = dvui.box(@src(), .{}, .{});
+        defer vbox.deinit();
+
+        const queries = @embedFile("Examples/tree_sitter_zig_queries.scm");
+
+        const highlights: []const dvui.TextEntryWidget.SyntaxHighlight = &.{
+            .{ .name = "comment", .opts = .{ .color_text = .fromHex("6A9955") } },
+            .{ .name = "keyword", .opts = .{ .color_text = .fromHex("569CD6") } },
+            .{ .name = "identifier", .opts = .{ .color_text = .fromHex("D4D4D4") } },
+            .{ .name = "function", .opts = .{ .color_text = .fromHex("DCDCAA") } },
+            .{ .name = "type", .opts = .{ .color_text = .fromHex("4EC9B0") } },
+            .{ .name = "builtin", .opts = .{ .color_text = .fromHex("4EC9B0") } },
+            .{ .name = "field", .opts = .{ .color_text = .fromHex("9CDCFE") } },
+            .{ .name = "variable", .opts = .{ .color_text = .fromHex("9CDCFE") } },
+            .{ .name = "constant", .opts = .{ .color_text = .fromHex("C586C0") } },
+            .{ .name = "string", .opts = .{ .color_text = .fromHex("CE9178") } },
+            .{ .name = "number", .opts = .{ .color_text = .fromHex("B5CEA8") } },
+            .{ .name = "operator", .opts = .{ .color_text = .fromHex("D4D4D4") } },
+            .{ .name = "error", .opts = .{ .color_text = .fromHex("F44747") } },
+        };
+
+        var range_changed = false;
+        if (global.cursor_moved) {
+            global.highlight_range = .{ .start = global.cursor_pos, .end = global.cursor_pos };
+            global.cursor_moved = false;
+        }
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            {
+                var search_entry: dvui.TextEntryWidget = undefined;
+                search_entry.init(@src(), .{ .placeholder = "Search ...", .text = .{ .internal = .{ .limit = 1024 } } }, .{
+                    .expand = .horizontal,
+                    .margin = .{ .x = 4, .y = 4, .w = 0, .h = 0 },
+                    .corner_radius = .{ .x = 5, .y = 0, .w = 0, .h = 5 },
+                    .border = .{ .x = 1, .y = 1, .w = 0, .h = 1 },
+                });
+                search_entry.processEvents();
+                search_entry.draw();
+                const search_entry_wid = search_entry.data().id;
+                const wd = search_entry.textLayout.data();
+                const icon_size: Size = .{ .h = wd.contentRect().h - 4, .w = wd.contentRect().h - 4 }; // Subtract top margin.
+                if (search_entry.enter_pressed) {
+                    const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
+                    const text = search_entry.getText();
+                    if (std.mem.indexOfPos(u8, global.source_code_stripped, range.end, text)) |idx| {
+                        global.highlight_range = .{ .start = idx, .end = idx + text.len };
+                        range_changed = true;
+                    }
+                } else if (search_entry.text_changed) {
+                    const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
+                    const text = search_entry.getText();
+                    if (std.mem.indexOfPos(u8, global.source_code_stripped, range.start, text)) |idx| {
+                        global.highlight_range = .{ .start = idx, .end = idx + text.len };
+                        range_changed = true;
+                    } else if (std.mem.indexOf(u8, global.source_code_stripped, text)) |idx| {
+                        global.highlight_range = .{ .start = idx, .end = idx + text.len };
+                        range_changed = true;
+                    } else {
+                        global.highlight_range = .{ .start = global.cursor_pos, .end = global.cursor_pos };
+                        range_changed = true;
+                    }
+                }
+                const search_text = search_entry.getText();
+                search_entry.deinit();
+                {
+                    var hbox_inner = dvui.box(@src(), .{ .dir = .horizontal }, .{
+                        .gravity_x = 1.0,
+                        .background = true,
+                        .margin = .{ .x = -1, .y = 4, .w = 4, .h = 4 },
+                        .padding = .{ .x = 4 },
+                        .corner_radius = .{ .x = 0, .y = 5, .w = 5, .h = 0 },
+                        .border = .{ .x = 0, .y = 1, .w = 1, .h = 1 },
+                    });
+                    defer hbox_inner.deinit();
+                    if (dvui.focusedWidgetId() == search_entry_wid) {
+                        hbox_inner.data().focusBorder();
+                    }
+                    if (dvui.buttonIcon(@src(), "previous", dvui.entypo.chevron_small_up, .{}, .{}, .{
+                        .min_size_content = icon_size,
+                        .max_size_content = .cast(icon_size),
+                    })) {
+                        const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
+                        if (std.mem.lastIndexOf(u8, global.source_code_stripped[0..range.start], search_text)) |idx| {
+                            global.highlight_range = .{ .start = idx, .end = idx + search_text.len };
+                            range_changed = true;
+                        }
+                    }
+                    if (dvui.buttonIcon(@src(), "next", dvui.entypo.chevron_small_down, .{}, .{}, .{
+                        .min_size_content = icon_size,
+                        .max_size_content = .cast(icon_size),
+                    })) {
+                        const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
+                        if (std.mem.indexOfPos(u8, global.source_code_stripped, range.end, search_text)) |idx| {
+                            global.highlight_range = .{ .start = idx, .end = idx + search_text.len };
+                            range_changed = true;
+                        }
+                    }
+                }
+            }
+        }
+        var te: dvui.TextEntryWidget = undefined;
+        te.init(@src(), .{
+            .multiline = true,
+            .cache_layout = true,
+            .text = .{ .internal = .{ .limit = 1_000_000 } },
+            .tree_sitter = .{ .language = global.tree_sitter_zig(), .queries = queries, .highlights = highlights, .log_captures = false },
+        }, .{
+            .expand = .both,
+        });
+        defer te.deinit();
+        if (dvui.firstFrame(te.data().id) or source.ptr != global.source_code.ptr) {
+            // Need to strip out CR on windows.
+            const stripped = dvui.currentWindow().lifo().alloc(u8, std.mem.replacementSize(u8, source, "\r", "")) catch @panic("OOM");
+            defer dvui.currentWindow().lifo().free(stripped);
+            _ = std.mem.replace(u8, source, "\r", "", stripped);
+
+            te.textSet(stripped, false);
+            te.textLayout.selection.moveCursor(0, false); // keep from scrolling to the bottom
+            global.source_code = source;
+            global.source_code_stripped = te.getText();
+        }
+        if (range_changed) {
+            if (global.highlight_range) |range| {
+                te.textLayout.selection.moveCursor(range.end, false);
+                te.textLayout.selection.moveCursor(range.start, true);
+                te.textLayout.scroll_to_cursor = true;
+            } else {
+                // Select nothing.
+                te.textLayout.selection.moveCursor(te.textLayout.selection.cursor, false);
+            }
+        }
+        te.textLayout.processEvents();
+        te.draw();
+        if (te.textLayout.selection.cursor != global.cursor_pos and !range_changed) {
+            global.cursor_moved = true;
+        }
+        global.cursor_pos = te.textLayout.selection.cursor;
+    } else {
+        if (showing.*) {
+            var url: std.io.Writer.Allocating = .init(dvui.currentWindow().arena());
+            url.writer.print("https://github.com/david-vanderson/dvui/blob/main/src/Examples/{s}", .{filename}) catch return;
+            _ = dvui.openURL(.{ .url = url.toOwnedSlice() catch return, .new_window = false });
+            showing.* = false;
+        }
+    }
+}
+
 test {
     @import("std").testing.refAllDecls(@This());
 }
@@ -466,7 +665,7 @@ test "DOCIMG demo" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            dvui.Examples.demo();
+            dvui.Examples.demo(.full);
             return .ok;
         }
     }.frame;

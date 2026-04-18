@@ -42,7 +42,7 @@ pub fn init(self: *ButtonWidget, src: std.builtin.SourceLocation, init_options: 
     self.data().register();
     dvui.parentSet(self.widget());
 
-    dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
+    dvui.tabIndexSet(self.data().id, self.data().options.tab_index, self.data().rectScale().r);
 
     if (self.data().accesskit_node()) |ak_node| {
         dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);

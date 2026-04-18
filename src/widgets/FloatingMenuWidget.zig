@@ -51,7 +51,7 @@ pub const InitOptions = struct {
     avoid: FloatingMenuAvoid = .auto,
 };
 
-prev_rendering: bool,
+render_ftb: dvui.RenderFrontToBack,
 wd: WidgetData,
 prev_windowId: dvui.Id = .zero,
 prev_last_focus: dvui.Id,
@@ -75,8 +75,7 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
         // get scale from parent
         .scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale(),
 
-        // SAFETY: The following fields must be set in `postInit`
-        .prev_rendering = undefined,
+        .render_ftb = undefined,
         .prev_last_focus = undefined,
         .prevClip = undefined,
         .menu = undefined,
@@ -87,7 +86,7 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
     const options = defaults.themeOverride(opts.theme).override(opts);
     // NOTE: options is really for our embedded ScrollAreaWidget
 
-    self.prev_rendering = dvui.renderingSet(false);
+    self.render_ftb.initReset();
 
     dvui.parentSet(self.widget());
 
@@ -274,7 +273,7 @@ pub fn deinit(self: *FloatingMenuWidget) void {
     dvui.currentWindow().last_focused_id_this_frame = self.prev_last_focus;
     _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
     dvui.clipSet(self.prevClip);
-    _ = dvui.renderingSet(self.prev_rendering);
+    self.render_ftb.deinit();
 }
 
 test {

@@ -59,39 +59,53 @@ pub fn appDeinit() void {}
 
 // Run each frame to do normal UI
 pub fn appFrame() !dvui.App.Result {
-    return frame();
+    {
+        // Here's the dvui example content, replace/modify with your stuff
+
+        var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
+        scaler.deinit();
+
+        if (menu()) |res| return res;
+
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
+        defer scroll.deinit();
+
+        if (content()) |res| return res;
+    }
+     
+    // only shows the demo if dvui.Examples.show_demo_window is true
+    // .full -> .lite or comment out to speed up compile times
+    dvui.Examples.demo(.full);
+
+    return .ok;
 }
 
-pub fn frame() !dvui.App.Result {
-    var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
-    scaler.deinit();
+pub fn menu() ?dvui.App.Result {
+    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal });
+    defer hbox.deinit();
 
-    {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .style = .window, .background = true, .expand = .horizontal });
-        defer hbox.deinit();
+    var m = dvui.menu(@src(), .horizontal, .{});
+    defer m.deinit();
 
-        var m = dvui.menu(@src(), .horizontal, .{});
-        defer m.deinit();
+    if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .tag = "first-focusable" })) |r| {
+        var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+        defer fw.deinit();
 
-        if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .tag = "first-focusable" })) |r| {
-            var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
-            defer fw.deinit();
+        if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
+            m.close();
+        }
 
-            if (dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
-                m.close();
-            }
-
-            if (dvui.backend.kind != .web) {
-                if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
-                    return .close;
-                }
+        if (dvui.backend.kind != .web) {
+            if (dvui.menuItemLabel(@src(), "Exit", .{}, .{ .expand = .horizontal }) != null) {
+                return .close;
             }
         }
     }
 
-    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
-    defer scroll.deinit();
+    return null;
+}
 
+pub fn content() ?dvui.App.Result {
     var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
     const lorem = "This is a dvui.App example that can compile on multiple backends.\n";
     tl.addText(lorem, .{});
@@ -173,22 +187,19 @@ pub fn frame() !dvui.App.Result {
         }
     }
 
-    // look at demo() for examples of dvui widgets, shows in a floating window
-    dvui.Examples.demo();
-
-    return .ok;
+    return null;
 }
 
 test "tab order" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    try dvui.testing.settle(frame);
+    try dvui.testing.settle(appFrame);
 
     try dvui.testing.expectNotFocused("first-focusable");
 
     try dvui.testing.pressKey(.tab, .none);
-    try dvui.testing.settle(frame);
+    try dvui.testing.settle(appFrame);
 
     try dvui.testing.expectFocused("first-focusable");
 }
@@ -197,7 +208,7 @@ test "open example window" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    try dvui.testing.settle(frame);
+    try dvui.testing.settle(appFrame);
 
     // FIXME: The global show_demo_window variable makes tests order dependent
     dvui.Examples.show_demo_window = false;
@@ -206,7 +217,7 @@ test "open example window" {
 
     try dvui.testing.moveTo("show-demo-btn");
     try dvui.testing.click(.left);
-    try dvui.testing.settle(frame);
+    try dvui.testing.settle(appFrame);
 
     try dvui.testing.expectVisible(dvui.Examples.demo_window_tag);
 }
