@@ -114,11 +114,11 @@ pub fn createWindow(options: InitOptions) void {
 
 //==========DVUI MANAGEMENT FUNCTIONS==========
 
-pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) void {
+pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
 }
 
-pub fn end(_: *RaylibBackend) void {}
+pub fn end(_: *RaylibBackend) !void {}
 
 pub fn clear(_: *RaylibBackend) void {
     raylib.clearBackground(raylib.Color.blank);
@@ -671,7 +671,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
     //scroll wheel movement
     const scroll_wheel = raylib.getMouseWheelMoveV();
     if (scroll_wheel.x != 0) {
-        if (try win.addEventMouseWheel(-scroll_wheel.x * dvui.scroll_speed, .horizontal)) disable_raylib_input = true;
+        if (try win.addEventMouseWheel(scroll_wheel.x * dvui.scroll_speed, .horizontal)) disable_raylib_input = true;
 
         if (self.log_events) {
             std.debug.print("raylib event Mouse Wheel: {}\n", .{scroll_wheel});
@@ -1014,6 +1014,9 @@ pub fn main() !void {
     });
     defer b.deinit();
     b.log_events = true;
+
+    // turn off normal raylib behavior where escape closes the window
+    raylib.setExitKey(.null);
 
     // init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), gpa, b.backend(), init_opts.window_init_options);

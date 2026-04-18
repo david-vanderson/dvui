@@ -40,21 +40,26 @@ pub const Position = enum {
 };
 
 pub const InitOptions = struct {
-    /// Show when mouse enters this physical rect
+    /// Show when mouse enters this physical rect.
     active_rect: Rect.Physical,
 
+    /// How to position tooltip from `active_rect` or mouse.
     position: Position = .horizontal,
 
-    /// Is true if the user should be able to hover the tooltips content without it disappearing
+    /// True if the user should be able to hover the tooltips content without it disappearing.
     interactive: bool = false,
 
-    // delay the tooltip display for `delay` microseconds. Tooltip will fade in after 80% of `delay`
+    /// Delay showing the tooltip for `delay` microseconds. Tooltip will fade in after 80% of `delay`.
     delay: ?i32 = null,
+
+    /// Scale applied on top of `windowNaturalScale` (so 1.0 means natural
+    /// scale).  If null, match the scale of the current parent.
+    scale: ?f32 = null,
 };
 
 parent_tooltip: ?*FloatingTooltipWidget = null,
 /// SAFETY: Set by `install`
-prev_rendering: bool = undefined,
+render_ftb: dvui.RenderFrontToBack = undefined,
 wd: WidgetData,
 /// SAFETY: Set by `install`
 prev_windowId: dvui.Id = undefined,
@@ -94,7 +99,7 @@ pub fn init(self: *FloatingTooltipWidget, src: std.builtin.SourceLocation, init_
             .rect = opts_in.rect orelse .{},
         })),
         // get scale from parent
-        .scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale(),
+        .scale_val = init_opts.scale orelse (dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale()),
         .options = defaults.themeOverride(opts_in.theme).override(opts_in),
         .init_options = init_opts,
     };
@@ -177,7 +182,7 @@ pub fn shown(self: *FloatingTooltipWidget) bool {
 pub fn install(self: *FloatingTooltipWidget) void {
     self.installed = true;
     self.data().register();
-    self.prev_rendering = dvui.renderingSet(false);
+    self.render_ftb.initReset();
 
     dvui.parentSet(self.widget());
 
@@ -256,7 +261,7 @@ pub fn deinit(self: *FloatingTooltipWidget) void {
     dvui.parentReset(self.data().id, self.data().parent);
     _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
     dvui.clipSet(self.prevClip);
-    _ = dvui.renderingSet(self.prev_rendering);
+    self.render_ftb.deinit();
 }
 
 // Return 0 until 80% of time then fade in remaining 20% linearly.

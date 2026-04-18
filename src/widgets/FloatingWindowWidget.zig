@@ -32,6 +32,7 @@ pub const Resize = enum {
 
 pub const InitOptions = struct {
     modal: bool = false,
+    modal_alpha: ?u8 = null,
     rect: ?*Rect = null,
     center_on: ?Rect.Natural = null,
     open_flag: ?*bool = null,
@@ -81,7 +82,7 @@ const DragPart = enum {
     }
 };
 
-prev_rendering: bool = undefined,
+render_ftb: dvui.RenderFrontToBack = undefined,
 wd: WidgetData,
 init_options: InitOptions,
 /// options is for our embedded BoxWidget
@@ -218,7 +219,7 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
     }
 
     self.data().register();
-    self.prev_rendering = dvui.renderingSet(false);
+    self.render_ftb.initReset();
 
     if (dvui.firstFrame(self.data().id)) {
         dvui.focusSubwindow(self.data().id, null);
@@ -277,7 +278,7 @@ pub fn drawBackground(self: *FloatingWindowWidget) void {
     if (self.init_options.modal and !dvui.firstFrame(self.data().id)) {
         // paint over everything below
         var col = self.options.color(.text);
-        col.a = if (dvui.themeGet().dark) 60 else 80;
+        col.a = self.init_options.modal_alpha orelse (if (dvui.themeGet().dark) 60 else 80);
         dvui.windowRectPixels().fill(.{}, .{ .color = col });
     }
 
@@ -601,7 +602,7 @@ pub fn deinit(self: *FloatingWindowWidget) void {
     dvui.currentWindow().last_focused_id_this_frame = self.prev_last_focus;
     _ = dvui.subwindowCurrentSet(self.prev_windowInfo.id, self.prev_windowInfo.rect);
     dvui.clipSet(self.prevClip);
-    _ = dvui.renderingSet(self.prev_rendering);
+    self.render_ftb.deinit();
 }
 
 test {

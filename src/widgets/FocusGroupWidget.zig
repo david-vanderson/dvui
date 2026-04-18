@@ -22,6 +22,7 @@ last_focus: dvui.Id,
 remember_focus: ?dvui.Id,
 tab_index_prev: []dvui.TabIndex,
 tab_index: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
+tab_index_group: dvui.Id,
 
 pub const InitOptions = struct {
     /// If true wrap focus around the first/last.  If false, focus stops at
@@ -42,6 +43,7 @@ pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts:
         .last_focus = dvui.lastFocusedIdInFrame(),
         .tab_index_prev = dvui.dataGetSlice(null, id, "_tab_prev", []dvui.TabIndex) orelse &.{},
         .remember_focus = dvui.dataGet(null, id, "_remember_focus", dvui.Id) orelse null,
+        .tab_index_group = dvui.TabIndexGroup.current,
     };
     dvui.parentSet(self.widget());
     self.data().register();
@@ -52,14 +54,16 @@ pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts:
         if (sw.focus_group == null) {
 
             // put ourselves in the tab index so the whole focus group can be focused by tab
-            dvui.tabIndexSet(self.data().id, self.data().options.tab_index);
+            // but only if we contain focusable widgets
+            if (self.tab_index_prev.len > 0)
+                dvui.tabIndexSet(self.data().id, self.data().options.tab_index, self.data().rectScale().r);
 
             if (self.data().id == dvui.focusedWidgetId()) {
                 // if we got focused, focus our remembered focus or first id
                 if (self.remember_focus) |focused_id| {
                     dvui.focusWidget(focused_id, null, null);
                 } else {
-                    dvui.tabIndexNextEx(null, self.tab_index_prev);
+                    self.focusNext(null);
                 }
             }
 
@@ -67,6 +71,14 @@ pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts:
             //std.debug.print("subwindow {x} focus group {x}\n", .{ sw.id.asU64(), self.data().id.asU64() });
         }
     }
+}
+
+pub fn focusNext(self: *FocusGroupWidget, event_num: ?u16) void {
+    dvui.tabIndexNextEx(event_num, self.tab_index_prev, self.tab_index_group, true);
+}
+
+pub fn focusPrev(self: *FocusGroupWidget, event_num: ?u16) void {
+    dvui.tabIndexPrevEx(event_num, self.tab_index_prev, self.tab_index_group, true);
 }
 
 pub fn widget(self: *FocusGroupWidget) Widget {
@@ -123,26 +135,26 @@ pub fn deinit(self: *FocusGroupWidget) void {
                         const key_dir = self.init_opts.nav_key_dir;
                         if ((ke.code == .up and key_dir != .horizontal) or (ke.code == .left and key_dir != .vertical)) {
                             e.handle(@src(), self.data());
-                            dvui.tabIndexPrevEx(e.num, self.tab_index_prev);
+                            self.focusPrev(e.num);
                             if (dvui.focusedWidgetId() == null) {
                                 if (self.init_opts.wrap) {
                                     // wrap around
-                                    dvui.tabIndexPrevEx(e.num, self.tab_index_prev);
+                                    self.focusPrev(e.num);
                                 } else {
                                     // go back to where we were
-                                    dvui.tabIndexNextEx(e.num, self.tab_index_prev);
+                                    self.focusNext(e.num);
                                 }
                             }
                         } else if ((ke.code == .down and key_dir != .horizontal) or (ke.code == .right and key_dir != .vertical)) {
                             e.handle(@src(), self.data());
-                            dvui.tabIndexNextEx(e.num, self.tab_index_prev);
+                            self.focusNext(e.num);
                             if (dvui.focusedWidgetId() == null) {
                                 if (self.init_opts.wrap) {
                                     // wrap around
-                                    dvui.tabIndexNextEx(e.num, self.tab_index_prev);
+                                    self.focusNext(e.num);
                                 } else {
                                     // go back to where we were
-                                    dvui.tabIndexPrevEx(e.num, self.tab_index_prev);
+                                    self.focusPrev(e.num);
                                 }
                             }
                         }

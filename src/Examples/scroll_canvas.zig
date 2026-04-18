@@ -97,6 +97,17 @@ pub fn scrollCanvas() void {
     }
 
     for (boxes, 0..) |*b, i| {
+        // This makes clicks interact with the box that is visually on top, by
+        // reversing the draw order.
+        var ftb: dvui.RenderFrontToBack = undefined;
+        ftb.init();
+        defer ftb.deinit();
+
+        // This makes the text smoothly zoom, as long as you are using
+        // stb_truetype (-Dfreetype=false)
+        const snap = dvui.snapToPixelsSet(dvui.useFreeType);
+        defer _ = dvui.snapToPixelsSet(snap);
+
         var dragBox = dvui.box(@src(), .{}, .{
             .id_extra = i,
             .rect = dvui.Rect{ .x = b.x, .y = b.y },
@@ -354,7 +365,7 @@ pub fn scrollCanvas() void {
     // when starting out)
     if (!scroll_info.viewport.empty()) {
         // add current viewport plus padding
-        const pad = 10;
+        const pad = 60;
         var bbox = scroll_info.viewport.outsetAll(pad);
         if (mbbox) |bb| {
             // convert bb from screen space to viewport space

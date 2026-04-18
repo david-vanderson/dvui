@@ -15,7 +15,13 @@ pub fn gridStyling() void {
     var outer_hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .role = .tab_panel });
     defer outer_hbox.deinit();
 
+    var tig_outer = dvui.tabIndexGroup(@src(), .{});
+    defer tig_outer.deinit();
+
     {
+        var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 2 });
+        defer tig.deinit();
+
         var outer_vbox = dvui.box(@src(), .{}, .{
             .min_size_content = grid_panel_size,
             .max_size_content = .size(grid_panel_size),
@@ -93,6 +99,9 @@ pub fn gridStyling() void {
     const row_background = local.banding != .none or local.borders.nonZero();
 
     {
+        var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 1 });
+        defer tig.deinit();
+
         var grid = dvui.grid(@src(), .colWidths(&local.col_widths), .{
             .resize_rows = local.resize_rows,
         }, .{
@@ -322,7 +331,14 @@ pub fn gridLayouts() void {
             .{ .model = "Mustang with a really long name", .make = "Ford", .year = 2020, .mileage = 24000, .condition = .Good, .description = "Makes you feel 20% cooler just sitting in it." },
         };
     };
+
+    var tig_outer = dvui.tabIndexGroup(@src(), .{});
+    defer tig_outer.deinit();
+
     {
+        var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 2 });
+        defer tig.deinit();
+
         var outer_vbox = dvui.box(@src(), .{}, .{
             .expand = .horizontal,
             .border = Rect.all(1),
@@ -373,6 +389,9 @@ pub fn gridLayouts() void {
     }
 
     {
+        var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 1 });
+        defer tig.deinit();
+
         const all_cars = local.all_cars[0..];
         const banded: GridWidget.CellStyle.Banded = .{
             .opts = .{
@@ -739,7 +758,11 @@ pub fn gridSelection() void {
     };
     var outer_vbox = dvui.box(@src(), .{}, .{ .expand = .both });
     defer outer_vbox.deinit();
+    var tg_outer = dvui.tabIndexGroup(@src(), .{});
+    defer tg_outer.deinit();
     {
+        var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 1 });
+        defer tig.deinit();
         var top_controls = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_y = 0 });
         defer top_controls.deinit();
         dvui.labelNoFmt(@src(), "Filter (contains): ", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
@@ -753,6 +776,8 @@ pub fn gridSelection() void {
         defer text.deinit();
     }
     {
+        var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 3 });
+        defer tig.deinit();
         var vbox = dvui.box(@src(), .{}, .{ .gravity_y = 1.0 });
         defer vbox.deinit();
         if (dvui.expander(@src(), "Options", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
@@ -769,13 +794,15 @@ pub fn gridSelection() void {
         }
     }
     {
+        var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 2 });
+        defer tig.deinit();
+
         // This is sort of subtle. We need to reset the kb select before the grid is created, so that grid focus is included in select all
         local.kb_select.reset();
 
         var grid = dvui.grid(@src(), .numCols(6), .{ .scroll_opts = .{ .horizontal_bar = .auto } }, .{ .expand = .both, .background = true });
         defer grid.deinit();
         if (!local.initialized) {
-            dvui.focusWidget(grid.data().id, null, null);
             local.initialized = true;
         }
 
@@ -1019,6 +1046,8 @@ pub fn gridNavigation() void {
         }
     };
 
+    var main_tig = dvui.tabIndexGroup(@src(), .{});
+    defer main_tig.deinit();
     var main_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .style = .window, .background = true, .border = dvui.Rect.all(1) });
     defer main_box.deinit();
     if (dvui.firstFrame(main_box.data().id)) {
@@ -1032,6 +1061,9 @@ pub fn gridNavigation() void {
         var vbox = dvui.box(@src(), .{}, .{ .expand = .vertical, .border = dvui.Rect.all(1) });
         defer vbox.deinit();
         {
+            var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 3 });
+            defer tig.deinit();
+
             var bottom_panel = dvui.box(@src(), .{}, .{ .gravity_y = 1.0 });
             defer bottom_panel.deinit();
             {
@@ -1073,6 +1105,9 @@ pub fn gridNavigation() void {
             }
         }
         {
+            var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 1 });
+            defer tig.deinit();
+
             var top_panel = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_y = 0 });
             defer top_panel.deinit();
             dvui.labelNoFmt(@src(), "Plot Title:", .{}, .{ .margin = dvui.TextEntryWidget.defaults.margin });
@@ -1085,6 +1120,9 @@ pub fn gridNavigation() void {
             local.plot_title = text.getText();
         }
         {
+            var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 2 });
+            defer tig.deinit();
+
             var grid = dvui.grid(@src(), .{ .col_widths = &local.col_widths }, .{ .scroll_opts = .{ .vertical_bar = .show } }, .{ .expand = .vertical, .border = dvui.Rect.all(1) });
             defer grid.deinit();
 

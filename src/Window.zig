@@ -14,6 +14,8 @@ backend: dvui.Backend,
 previous_window: ?*Window = null,
 
 subwindows: dvui.Subwindows = .{},
+defer_render_cmds: ?*std.ArrayList(dvui.RenderCommand) = null,
+defer_render_cmds_after: ?*std.ArrayList(dvui.RenderCommand) = null,
 
 last_focused_id_this_frame: Id = .zero,
 last_focused_id_in_subwindow: Id = .zero,
@@ -457,8 +459,16 @@ pub fn focusWidget(self: *Self, id: ?Id, subwindow_id: ?Id, event_num: ?u16) voi
         }
         self.refreshWindow(@src(), null);
 
+        var kb_nav = false;
+
         if (id) |wid| {
             self.scroll_to_focused = true;
+
+            for (self.tab_index_prev.items) |ti| {
+                if (ti.windowId == sw.id and ti.widgetId == wid) {
+                    kb_nav = true;
+                }
+            }
 
             if (self.last_registered_id_this_frame == wid) {
                 self.last_focused_id_this_frame = wid;
@@ -471,6 +481,29 @@ pub fn focusWidget(self: *Self, id: ?Id, subwindow_id: ?Id, event_num: ?u16) voi
                         self.last_focused_id_this_frame = wid;
                         self.last_focused_id_in_subwindow = wid;
                         break;
+                    }
+                }
+            }
+        }
+
+        if (!kb_nav) {
+            var closest: f32 = 0;
+            var found_left: bool = false;
+            for (self.tab_index_prev.items) |ti| {
+                if (ti.windowId == sw.id) {
+                    const diff = self.mouse_pt.diff(ti.pt);
+                    const d = diff.x * diff.x + diff.y * diff.y;
+                    if (diff.x >= 0 and ((diff.y >= 0 and diff.y <= diff.x) or (diff.y < 0 and @abs(diff.y) <= diff.x * 0.1))) {
+                        if (sw.kb_restart_widget_id == null or !found_left or d < closest) {
+                            sw.kb_restart_widget_id = ti.widgetId;
+                            closest = d;
+                        }
+                        found_left = true;
+                    } else if (!found_left) {
+                        if (sw.kb_restart_widget_id == null or d < closest) {
+                            sw.kb_restart_widget_id = ti.widgetId;
+                            closest = d;
+                        }
                     }
                 }
             }
@@ -804,9 +837,7 @@ pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) st
             .mouse = .{
                 .action = if (dir == .vertical)
                     if (self.modifiers.shiftOnly())
-                        // Invert ticks so scrolling up takes you left
-                        // (matches behaviour of text editors and browsers)
-                        .{ .wheel_x = -ticks }
+                        .{ .wheel_x = ticks }
                     else
                         .{ .wheel_y = ticks }
                 else
@@ -1005,8 +1036,10 @@ pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
     const target = min_micros + wait_micros;
 
     // how long it's taken from begin to here
-    const so_far_nanos = @max(self.frame_time_ns, self.backend.nanoTime()) - self.frame_time_ns;
-    var so_far_micros = @as(u32, @intCast(@divFloor(so_far_nanos, 1000)));
+    var so_far_nanos = @max(self.frame_time_ns, self.backend.nanoTime()) - self.frame_time_ns;
+    so_far_nanos = @divFloor(so_far_nanos, 1000);
+    so_far_nanos = @min(so_far_nanos, (1 << 32) - 1);
+    var so_far_micros = @as(u32, @intCast(so_far_nanos));
     //std.debug.print("  far {d:6}", .{so_far_micros});
 
     // take time from min_micros first
@@ -1106,6 +1139,9 @@ pub fn begin(
     self.text_input_rect = null;
     self.last_focused_id_this_frame = .zero;
     self.last_focused_id_in_subwindow = .zero;
+
+    // just in case something went wrong, start at zero
+    dvui.TabIndexGroup.current = .zero;
 
     self.debug.reset(self.gpa);
 
@@ -1260,11 +1296,11 @@ pub fn addRenderCommand(self: *Self, cmd: dvui.RenderCommand.Command, after: boo
         .cmd = cmd,
     };
     if (after) {
-        sw.render_cmds_after.append(self.arena(), render_cmd) catch |err| {
+        (self.defer_render_cmds_after orelse &sw.render_cmds_after).append(self.arena(), render_cmd) catch |err| {
             dvui.logError(@src(), err, "Could not append to render_cmds_after", .{});
         };
     } else {
-        sw.render_cmds.append(self.arena(), render_cmd) catch |err| {
+        (self.defer_render_cmds orelse &sw.render_cmds).append(self.arena(), render_cmd) catch |err| {
             dvui.logError(@src(), err, "Could not append to render_cmds", .{});
         };
     }

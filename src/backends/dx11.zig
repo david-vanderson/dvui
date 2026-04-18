@@ -1296,8 +1296,13 @@ pub fn wndProc(
             const delta: i16 = @bitCast(win32.hiword(wparam));
             const float_delta: f32 = @floatFromInt(delta);
             const wheel_delta: f32 = @floatFromInt(win32.WHEEL_DELTA);
+            const ticks = float_delta / wheel_delta * dvui.scroll_speed;
             _ = stateFromHwnd(hwnd).dvui_window.addEventMouseWheel(
-                float_delta / wheel_delta * dvui.scroll_speed,
+                switch (msg) {
+                    win32.WM_MOUSEWHEEL => ticks,
+                    win32.WM_MOUSEHWHEEL => -ticks,
+                    else => unreachable,
+                },
                 switch (msg) {
                     win32.WM_MOUSEWHEEL => .vertical,
                     win32.WM_MOUSEHWHEEL => .horizontal,

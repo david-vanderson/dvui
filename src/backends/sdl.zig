@@ -883,6 +883,19 @@ pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8)
     }
 }
 
+pub fn textureUpdateSubRect(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8, x: u32, y: u32, w: u32, h: u32) !void {
+    if (comptime sdl3) {
+        const tx: [*c]c.SDL_Texture = @ptrCast(@alignCast(texture.ptr));
+        const bpp: usize = texture.format.bytesPerPixel();
+        const row_pitch: usize = @as(usize, texture.width) * bpp;
+        const offset: usize = @as(usize, y) * row_pitch + @as(usize, x) * bpp;
+        const rect: c.SDL_Rect = .{ .x = @intCast(x), .y = @intCast(y), .w = @intCast(w), .h = @intCast(h) };
+        if (!c.SDL_UpdateTexture(tx, &rect, pixels + offset, @intCast(row_pitch))) return error.TextureUpdate;
+    } else {
+        return dvui.Backend.TextureError.NotImplemented;
+    }
+}
+
 pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
     if (!sdl3) switch (interpolation) {
         .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
@@ -1177,11 +1190,13 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             const ticks_y = if (sdl3) event.wheel.y else event.wheel.preciseY;
 
             if (self.log_events) {
-                log.debug("event MOUSEWHEEL {d} {d} {d}\n", .{ ticks_x, ticks_y, event.wheel.which });
+                log.debug("event MOUSEWHEEL {d} {d} {d} {s}\n", .{ ticks_x, ticks_y, event.wheel.which, if (event.wheel.direction == c.SDL_MOUSEWHEEL_FLIPPED) "flipped" else "normal" });
             }
 
             var ret = false;
-            if (ticks_x != 0) ret = try win.addEventMouseWheel(ticks_x * dvui.scroll_speed, .horizontal);
+            // sdl says x positive means to the right, where as y positive
+            // means up, so we negate x so that down and right match
+            if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed, .horizontal);
             if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed, .vertical);
             return ret;
         },

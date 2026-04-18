@@ -1,8 +1,8 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const Backend = @import("glfw-opengl-backend");
+const Backend = @import("glfw-backend");
+const zgl = @import("zgl");
 const zglfw = Backend.zglfw;
-const zgl = Backend.zgl;
 
 // This can optionally be added in source file to manage how opengl
 // errors are handled.
@@ -24,6 +24,8 @@ pub fn main() !void {
 }
 
 pub fn app_init() !void {
+    if (dvui.render_backend.kind != .opengl) @compileError("unsupported renderer");
+
     try zglfw.init();
     //Recommended hints
     zglfw.windowHint(.context_version_major, 3);
@@ -38,16 +40,15 @@ pub fn app_init() !void {
     zglfw.makeContextCurrent(window);
     zglfw.swapInterval(1);
 
-    // The backend currently initializes zgl context in Backend.init in case the
-    // user doesn't use zgl. Therefore, the user doesn't have to initialize it
-    // themselves, but doing so results in no error.
-    // const proc: zglfw.GlProc = undefined;
-    // try zgl.loadExtensions(proc, glGetProcAddress);
+    const proc: zglfw.GlProc = undefined;
+    try zgl.loadExtensions(proc, glGetProcAddress);
+
+    var renderer = try dvui.render_backend.init(gpa, zglfw.getProcAddress, "330");
 
     var impl = Backend.init(gpa, window);
     defer impl.deinit();
 
-    const backend = dvui.Backend.init(&impl);
+    const backend = dvui.Backend.init(&impl, &renderer);
     var win = try dvui.Window.init(@src(), gpa, backend, .{});
     defer win.deinit();
 
@@ -66,7 +67,10 @@ pub fn app_init() !void {
         // after win.begin
         impl.addAllEvents(&win);
         try win.begin(std.time.nanoTimestamp());
-        dvui.Examples.demo();
+
+        // only shows the demo if dvui.Examples.show_demo_window is true
+        // .full -> .lite or comment out to speed up compile times
+        dvui.Examples.demo(.full);
 
         const endtime = try win.end(.{});
         window.swapBuffers();

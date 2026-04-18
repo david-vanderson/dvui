@@ -364,7 +364,7 @@ pub const Branch = struct {
                         .right => {
                             e.handle(@src(), self.button.data());
                             if (self.expanded) {
-                                dvui.tabIndexNextEx(e.num, self.tree.group.tab_index_prev);
+                                self.tree.group.focusNext(e.num);
                             } else {
                                 self.expanded = true;
                             }
@@ -378,9 +378,9 @@ pub const Branch = struct {
                             } else {
                                 // no parent, so focus the first branch of the tree
                                 while (dvui.focusedWidgetId() != null) {
-                                    dvui.tabIndexPrevEx(e.num, self.tree.group.tab_index_prev);
+                                    self.tree.group.focusPrev(e.num);
                                 }
-                                dvui.tabIndexNextEx(e.num, self.tree.group.tab_index_prev);
+                                self.tree.group.focusNext(e.num);
                             }
                         },
                         else => {},

@@ -133,6 +133,8 @@ pub fn calculator() void {
                         next_op = null;
                         calculand = null;
                         digits_after_dot = 0;
+                    } else {
+                        digits_after_dot = 0;
                     },
                     else => unreachable,
                 }

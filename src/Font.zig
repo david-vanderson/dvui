@@ -403,7 +403,7 @@ pub const Cache = struct {
         name: []const u8, // gpa
         scaleFactor: f32,
         height: f32, // ascender - descender
-        ascent: f32, // ascender
+        ascent: f32, // ascender (integer)
         em_height: f32, // height of M
         glyph_info: std.AutoHashMapUnmanaged(u32, GlyphInfo) = .empty,
         glyph_info_ascii: [ascii_size - ascii_start]GlyphInfo,
@@ -414,10 +414,10 @@ pub const Cache = struct {
 
         const GlyphInfo = struct {
             advance: f32, // horizontal distance to move the pen
-            leftBearing: f32, // horizontal distance from pen to bounding box left edge
-            topBearing: f32, // vertical distance from pen to bounding box top edge
-            w: f32, // width of bounding box
-            h: f32, // height of bounding box
+            leftBearing: f32, // horizontal distance from pen to glyph pixels left edge (integer)
+            topBearing: f32, // vertical distance from pen to glyph pixels top edge (integer)
+            w: f32, // width of bounding box (integer)
+            h: f32, // height of bounding box (integer)
             uv: @Vector(2, f32),
         };
 
@@ -460,8 +460,8 @@ pub const Cache = struct {
                         .face = face,
                         .name = fname,
                         .scaleFactor = 1.0, // not used with freetype
-                        .height = @trunc(ascent - descent), // cheat total a bit
-                        .ascent = @trunc(ascent), // cheat ascent a bit
+                        .height = ascent - descent,
+                        .ascent = @trunc(ascent), // cheat ascent a bit, must be an integer
                         .em_height = undefined, // below
                         .glyph_info_ascii = undefined,
                     };
@@ -512,8 +512,8 @@ pub const Cache = struct {
                 entry.scaleFactor = @max(min_pixel_size, @floor(font.size)) / M.h;
                 const ascender = entry.scaleFactor * @as(f32, @floatFromInt(face_ascent));
                 const descender = entry.scaleFactor * @as(f32, @floatFromInt(face_descent));
-                entry.ascent = @trunc(ascender); // cheat the ascent a bit
-                entry.height = @trunc(ascender - descender); // cheat total a bit
+                entry.ascent = @trunc(ascender); // cheat the ascent a bit, must be integer
+                entry.height = ascender - descender;
                 entry.em_height = entry.scaleFactor * M.h;
 
                 //std.debug.print("{s} ascent {d} descent {d} computed ascent {d} height {d}\n", .{fname, ascender, descender, entry.ascent, entry.height});
@@ -740,7 +740,7 @@ pub const Cache = struct {
                 // bitmap assumes pen position is at a pixel boundary.
 
                 break :blk .{
-                    .advance = @round(adv),
+                    .advance = adv,
                     .leftBearing = @floor(minx),
                     .topBearing = @floor(miny),
                     .w = @ceil(minx + @as(f32, @floatFromInt(m.width)) / 64.0) - @floor(minx),
@@ -769,7 +769,7 @@ pub const Cache = struct {
                 // x0/y0, and ceil x1/y1)
 
                 break :blk .{
-                    .advance = @round(adv),
+                    .advance = adv,
                     .leftBearing = @floor(x0),
                     .topBearing = @ceil(y1),
                     .w = @ceil(x1) - @floor(x0),
@@ -792,10 +792,10 @@ pub const Cache = struct {
                     k.y = 0;
                 };
 
-                return @round(@as(f32, @floatFromInt(k.x)) / 64.0);
+                return @as(f32, @floatFromInt(k.x)) / 64.0;
             } else {
                 const kern_adv: c_int = c.stbtt_GetCodepointKernAdvance(&fce.face, @as(c_int, @intCast(codepoint1)), @as(c_int, @intCast(codepoint2)));
-                return @round(fce.scaleFactor * @as(f32, @floatFromInt(kern_adv)));
+                return fce.scaleFactor * @as(f32, @floatFromInt(kern_adv));
             }
         }
 
@@ -811,6 +811,7 @@ pub const Cache = struct {
         ) std.mem.Allocator.Error!Size {
             const mwidth = opts.max_width orelse dvui.max_float_safe;
 
+            const snap = dvui.snapToPixels();
             var x: f32 = 0;
             var minx: f32 = 0;
             var maxx: f32 = 0;
@@ -846,7 +847,7 @@ pub const Cache = struct {
 
                 if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
                     const kk = self.kern(last_codepoint, codepoint);
-                    x += kk;
+                    x += if (snap) @round(kk) else kk;
 
                     if (opts.kern_in) |ki| {
                         if (next_kern_idx < ki.len) {
@@ -871,9 +872,11 @@ pub const Cache = struct {
                 i += cplen;
                 last_codepoint = codepoint;
 
+                const adv = if (snap) @round(gi.advance) else gi.advance;
+
                 minx = @min(minx, x + gi.leftBearing);
                 maxx = @max(maxx, x + gi.leftBearing + gi.w);
-                maxx = @max(maxx, x + gi.advance);
+                maxx = @max(maxx, x + adv);
 
                 miny = @min(miny, self.ascent - gi.topBearing);
                 maxy = @max(maxy, self.ascent - gi.topBearing + gi.h);
@@ -898,7 +901,7 @@ pub const Cache = struct {
                 // update space taken by glyph
                 tw = maxx - minx;
                 th = maxy - miny;
-                x += gi.advance;
+                x += adv;
 
                 if (nearest_break) break;
             }
