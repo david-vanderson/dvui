@@ -9,8 +9,8 @@ pub const Context = *WebBackend;
 
 const log = std.log.scoped(.WebBackend);
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
+var gpa: std.mem.Allocator = std.heap.wasm_allocator;
+var single_threaded: std.Io.Threaded = .init_single_threaded;
 
 pub var win: dvui.Window = undefined;
 pub var win_ok = false;
@@ -28,8 +28,6 @@ const EventTemp = struct {
     float1: f32,
     float2: f32,
 };
-
-// pub var event_temps = std.ArrayList(EventTemp).init(gpa);
 
 pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_about_webgl2() u8;
@@ -931,6 +929,9 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
     // TODO: Respect min size (maybe max size?) via css on the canvas element
     // TODO: Use the icon to set the browser tab icon (if possible considering size requirements)
     const init_opts = app.config.get();
+
+    gpa = init_opts.gpa orelse gpa;
+    dvui.io = init_opts.io orelse single_threaded.io();
 
     const platform = platform_ptr[0..platform_len];
     log.debug("platform: {s}", .{platform});
