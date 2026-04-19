@@ -89,7 +89,7 @@ init_options: InitOptions,
 options: Options,
 prev_windowInfo: dvui.subwindowCurrentSetReturn = undefined,
 prev_last_focus: dvui.Id = undefined,
-layout: BoxWidget = undefined,
+layout: ?BoxWidget = null,
 prevClip: Rect.Physical = undefined,
 auto_pos: bool = false,
 auto_size: bool = false,
@@ -283,8 +283,9 @@ pub fn drawBackground(self: *FloatingWindowWidget) void {
     }
 
     // we are using BoxWidget to do border/background
-    self.layout.init(@src(), .{ .dir = .vertical }, self.options.override(.{ .expand = .both }));
-    self.layout.drawBackground();
+    self.layout = @as(BoxWidget, undefined);
+    self.layout.?.init(@src(), .{ .dir = .vertical }, self.options.override(.{ .expand = .both }));
+    self.layout.?.drawBackground();
 }
 
 fn dragPart(me: Event.Mouse, rs: RectScale) DragPart {
@@ -566,7 +567,7 @@ pub fn minSizeForChild(self: *FloatingWindowWidget, s: Size) void {
 pub fn deinit(self: *FloatingWindowWidget) void {
     defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
-    self.layout.deinit();
+    if (self.layout) |*l| l.deinit();
 
     if (self.auto_size_refresh_prev_value) |pv| {
         if (dvui.currentWindow().extra_frames_needed == 0) {

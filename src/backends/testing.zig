@@ -101,8 +101,7 @@ pub fn textureCreateTarget(_: *TestingBackend, _: u32, _: u32, _: dvui.enums.Tex
     return error.TextureCreate;
 }
 
-pub fn textureClearTarget(_: *TestingBackend, _: dvui.TextureTarget) void {
-}
+pub fn textureClearTarget(_: *TestingBackend, _: dvui.TextureTarget) void {}
 
 /// Read pixel data (RGBA) from texture into pixel.
 pub fn textureReadTarget(_: *TestingBackend, texture: dvui.TextureTarget, pixels: [*]u8) !void {
@@ -118,8 +117,7 @@ pub fn textureDestroy(self: *TestingBackend, texture: dvui.Texture) void {
     self.allocator.free(ptr[0..(texture.width * texture.height * 4)]);
 }
 
-pub fn textureDestroyTarget(_: *TestingBackend, _: dvui.Texture.Target) void {
-}
+pub fn textureDestroyTarget(_: *TestingBackend, _: dvui.Texture.Target) void {}
 
 pub fn textureFromTarget(_: *TestingBackend, texture: dvui.TextureTarget) !dvui.Texture {
     return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
@@ -155,6 +153,10 @@ pub fn openURL(_: *TestingBackend, _: []const u8, _: bool) std.mem.Allocator.Err
 
 pub fn preferredColorScheme(_: *TestingBackend) ?dvui.enums.ColorScheme {
     return null;
+}
+
+pub fn prefersReducedMotion(_: *@This()) bool {
+    return false;
 }
 
 /// Called by dvui.refresh() when it is called from a background

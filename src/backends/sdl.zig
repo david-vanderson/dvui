@@ -641,6 +641,10 @@ pub fn preferredColorScheme(_: *SDLBackend) ?dvui.enums.ColorScheme {
     return null;
 }
 
+pub fn prefersReducedMotion(_: *@This()) bool {
+    return false;
+}
+
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
     const size = self.pixelSize();
@@ -847,7 +851,7 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
             @as(c_int, @intCast(height)),
             sdl_format,
             @constCast(pixels),
-            @as(c_int, @intCast(width * format.bytesPerPixel())),
+            @as(c_int, @intCast(width * format.pitchFactor())),
         ) orelse return logErr("SDL_CreateSurfaceFrom in textureCreate")
     else
         c.SDL_CreateRGBSurfaceWithFormatFrom(
@@ -855,7 +859,7 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
             @as(c_int, @intCast(width)),
             @as(c_int, @intCast(height)),
             32,
-            @as(c_int, @intCast(width * format.bytesPerPixel())),
+            @as(c_int, @intCast(width * format.pitchFactor())),
             sdl_format,
         ) orelse return logErr("SDL_CreateRGBSurfaceWithFormatFrom in textureCreate");
 
@@ -877,7 +881,7 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
 pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8) !void {
     if (comptime sdl3) {
         const tx: [*c]c.SDL_Texture = @ptrCast(@alignCast(texture.ptr));
-        if (!c.SDL_UpdateTexture(tx, null, pixels, @intCast(texture.width * texture.format.bytesPerPixel()))) return error.TextureUpdate;
+        if (!c.SDL_UpdateTexture(tx, null, pixels, @intCast(texture.width * texture.format.pitchFactor()))) return error.TextureUpdate;
     } else {
         return dvui.Backend.TextureError.NotImplemented;
     }
@@ -886,9 +890,9 @@ pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8)
 pub fn textureUpdateSubRect(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8, x: u32, y: u32, w: u32, h: u32) !void {
     if (comptime sdl3) {
         const tx: [*c]c.SDL_Texture = @ptrCast(@alignCast(texture.ptr));
-        const bpp: usize = texture.format.bytesPerPixel();
-        const row_pitch: usize = @as(usize, texture.width) * bpp;
-        const offset: usize = @as(usize, y) * row_pitch + @as(usize, x) * bpp;
+        const pitch_factor: usize = texture.format.pitchFactor();
+        const row_pitch: usize = @as(usize, texture.width) * pitch_factor;
+        const offset: usize = @as(usize, y) * row_pitch + @as(usize, x) * pitch_factor;
         const rect: c.SDL_Rect = .{ .x = @intCast(x), .y = @intCast(y), .w = @intCast(w), .h = @intCast(h) };
         if (!c.SDL_UpdateTexture(tx, &rect, pixels + offset, @intCast(row_pitch))) return error.TextureUpdate;
     } else {

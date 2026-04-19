@@ -61,6 +61,10 @@ pub const Cache = struct {
         return self.cache.get(key);
     }
 
+    pub fn remove(self: *Cache, key: Key) bool {
+        return self.cache.remove(key);
+    }
+
     /// Add a texture to the cache. This is useful if you want to load
     /// and image from disk, create a texture from it and then unload
     /// it from memory. The texture will remain in the cache as long
@@ -248,6 +252,12 @@ pub const ImageSource = union(enum) {
             if (invalidate == .always) {
                 var tex_mut = cached_texture;
                 try tex_mut.updateImageSource(self);
+                if (cached_texture.ptr != tex_mut.ptr) {
+                    // updateImageSource created a new texture, called
+                    // destroyLater on old one, remove before adding new one
+                    _ = dvui.currentWindow().texture_cache.remove(key);
+                    dvui.textureAddToCache(key, tex_mut);
+                }
                 return tex_mut;
             } else return cached_texture;
         } else {

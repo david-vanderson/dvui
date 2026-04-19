@@ -15,6 +15,9 @@ pub fn applets() void {
     if (tabs.addTabLabel(active_tab.* == 2, "texture", .{})) {
         active_tab.* = 2;
     }
+    if (tabs.addTabLabel(active_tab.* == 3, "sub rect", .{})) {
+        active_tab.* = 3;
+    }
 
     tabs.deinit();
 
@@ -22,6 +25,7 @@ pub fn applets() void {
         0 => calculator(),
         1 => draw(),
         2 => texture(),
+        3 => textureSubRect(),
         else => {},
     }
 }
@@ -343,6 +347,63 @@ pub fn texture() void {
             };
             dvui.renderTexture(drawable, output.data().contentRectScale(), .{}) catch {};
         }
+    }
+}
+
+pub fn appletTextureDestroy(ptr: *anyopaque) void {
+    dvui.log.debug("appletTextureDestroy()", .{});
+    const tt: dvui.Texture = @as(*dvui.Texture, @ptrCast(@alignCast(ptr))).*;
+    tt.destroyLater();
+}
+
+pub fn textureSubRect() void {
+    dvui.label(@src(), "Randomly updates portions of a texture", .{}, .{});
+
+    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+    defer hbox.deinit();
+
+    const size = 200;
+    const scale: f32 = hbox.data().contentRectScale().s;
+
+    var tex: dvui.Texture = dvui.dataGet(null, hbox.data().id, "tex", dvui.Texture) orelse blk: {
+        const pixels = dvui.currentWindow().arena().alloc(dvui.Color.PMA, @intFromFloat(size * size * scale * scale)) catch @panic("OOM");
+        for (pixels) |*p| {
+            p.* = .black;
+        }
+        const t = dvui.Texture.create(pixels, @intFromFloat(scale * size), @intFromFloat(scale * size), .linear, .rgba_32) catch {
+            dvui.log.debug("Can't create texture", .{});
+            return;
+        };
+        dvui.dataSet(null, hbox.data().id, "tex", t);
+        dvui.dataSetDeinitFunction(null, hbox.data().id, "tex", &appletTargetDestroy);
+        break :blk t;
+    };
+
+    {
+        var box = dvui.box(@src(), .{}, .{ .min_size_content = .all(size) });
+        defer box.deinit();
+        dvui.renderTexture(tex, box.data().contentRectScale(), .{}) catch {};
+    }
+
+    if (dvui.button(@src(), "Update", .{}, .{})) {
+        var rng: std.Random.DefaultPrng = .init(@intCast(dvui.frameTimeNS()));
+        var r = rng.random();
+        const x = r.intRangeLessThan(u32, 0, size);
+        const y = r.intRangeLessThan(u32, 0, size);
+        const w = r.intRangeLessThan(u32, 0, size - x);
+        const h = r.intRangeLessThan(u32, 0, size - y);
+
+        const pixels = dvui.currentWindow().arena().alloc(dvui.Color.PMA, @intFromFloat(size * size * scale * scale)) catch @panic("OOM");
+        var newp: dvui.Color.PMA = .{};
+        newp.r = r.intRangeLessThan(u8, 0, 255);
+        newp.g = r.intRangeLessThan(u8, 0, 255);
+        newp.b = r.intRangeLessThan(u8, 0, 255);
+        for (pixels) |*p| {
+            p.* = newp;
+        }
+        tex.updateSubRect(@ptrCast(pixels.ptr), x, y, w, h) catch |err| {
+            dvui.logError(@src(), err, "Could not updateSubRect", .{});
+        };
     }
 }
 

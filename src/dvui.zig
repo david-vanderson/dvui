@@ -293,7 +293,11 @@ pub const useTinyFileDialogs = @import("default_options").tiny_file_dialogs;
 pub const useTreeSitter = @import("default_options").tree_sitter;
 
 /// The amount of logical pixels to scroll per "tick" of the scroll wheel
-pub var scroll_speed: f32 = 40;
+pub var scroll_speed: f32 = 80;
+
+/// When this is true, `animation` overwrites end_time so animations expire next frame.
+/// Timers are not affected.
+pub var reduce_motion: bool = false;
 
 /// Used as a default maximum in various places:
 /// * Options.max_size_content
@@ -1852,11 +1856,16 @@ pub const Animation = struct {
 
 /// Add animation a to key associated with id.  See `Animation`.
 ///
+/// If dvui.reduce_motion is true, overwites end_time so the animation will
+/// expire next frame.
+///
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn animation(id: Id, key: []const u8, a: Animation) void {
     var cw = currentWindow();
     const h = id.update(key);
-    cw.animations.put(cw.gpa, h, a) catch |err| switch (err) {
+    var aa = a;
+    if (reduce_motion) aa.end_time = aa.start_time + 1;
+    cw.animations.put(cw.gpa, h, aa) catch |err| switch (err) {
         error.OutOfMemory => {
             log.err("animation got {any} for id {x} key {s}\n", .{ err, id, key });
         },

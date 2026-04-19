@@ -54,7 +54,7 @@ pub const TexturePixelFormat = enum {
     fourcc_uyvy,
     fourcc_yvyu,
 
-    pub fn bytesPerPixel(self: TexturePixelFormat) u32 {
+    pub fn pitchFactor(self: TexturePixelFormat) u32 {
         return switch (self) {
             .rgba_32,
             .argb_32,
