@@ -897,10 +897,9 @@ pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8)
 pub fn textureUpdateSubRect(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8, x: u32, y: u32, w: u32, h: u32) !void {
     if (comptime sdl3) {
         const tx: [*c]c.SDL_Texture = @ptrCast(@alignCast(texture.ptr));
-        const bpp: usize = texture.format.bytesPerPixel();
         const pitch_factor: usize = texture.format.pitchFactor();
         const row_pitch: usize = @as(usize, texture.width) * pitch_factor;
-        const offset: usize = @as(usize, y) * row_pitch + @as(usize, x) * bpp;
+        const offset: usize = @as(usize, y) * row_pitch + @as(usize, x) * pitch_factor;
         const rect: c.SDL_Rect = .{ .x = @intCast(x), .y = @intCast(y), .w = @intCast(w), .h = @intCast(h) };
         if (!c.SDL_UpdateTexture(tx, &rect, pixels + offset, @intCast(row_pitch))) return error.TextureUpdate;
     } else {
