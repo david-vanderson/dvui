@@ -7,9 +7,6 @@ comptime {
 
 // straight copy-paste of sdl3 backend example,
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
-
 pub const c = SDLBackend.c;
 
 const vsync = false;
@@ -23,13 +20,11 @@ const log = std.log.scoped(.SDL3GPUBackend);
 /// This example shows how to use dvui for floating windows on top of an existing application
 /// - dvui renders only floating windows
 /// - framerate is managed by application, not dvui
-pub fn main() !void {
+pub fn main(main_init: std.process.Init) !void {
     if (@import("builtin").os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         dvui.Backend.Common.windowsAttachConsole() catch {};
     }
-
-    defer std.debug.assert(gpa_instance.deinit() == .ok);
 
     SDLBackend.enableSDLLogging();
     dvui.Examples.show_demo_window = show_demo;
@@ -38,11 +33,11 @@ pub fn main() !void {
     try app_init();
 
     // create SDL backend using existing window and renderer, app still owns the window/renderer
-    var backend = SDLBackend.init(window, device, gpa_instance.allocator());
+    var backend = SDLBackend.init(main_init.io, window, device, main_init.gpa);
     defer backend.deinit();
 
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
+    var win = try dvui.Window.init(@src(), main_init.gpa, backend.backend(), .{});
     defer win.deinit();
 
     main_loop: while (true) {
@@ -66,7 +61,8 @@ pub fn main() !void {
         backend.swapchain_texture = swapchain_texture;
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(std.time.nanoTimestamp());
+        const ret = std.Io.Clock.boot.now(main_init.io);
+        try win.begin(ret.nanoseconds);
 
         // send events to dvui if they belong to floating windows
         var event: c.SDL_Event = undefined;
