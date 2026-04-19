@@ -13,7 +13,7 @@ drop_mi_index: usize = 0,
 drop_height: f32 = 0,
 drop_adjust: f32 = 0,
 
-pub var defaults: Options = .{
+pub const defaults: Options = .{
     .name = "Dropdown",
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
@@ -54,7 +54,7 @@ pub fn wrapInner(opts: Options) Options {
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const options = defaults.themeOverride(opts.theme).override(opts);
+    const options = dvui.styleSchemeGet().dropdown.themeOverride(opts.theme).override(opts);
     self.* = .{
         .options = options,
         .init_options = init_opts,

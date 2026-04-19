@@ -9,7 +9,7 @@ const WidgetData = dvui.WidgetData;
 
 const LabelWidget = @This();
 
-pub var defaults: Options = .{
+pub const defaults: Options = .{
     .name = "Label",
     .role = .label,
     .padding = Rect.all(6),
@@ -63,19 +63,20 @@ pub fn init(self: *LabelWidget, src: std.builtin.SourceLocation, comptime fmt: [
         dvui.log.debug("LabelWidget format output was invalid utf8 for {s} with '{any}'.", .{ fmt, args });
         break :blk .{ utf8, null };
     };
-    return self.initNoFmtAllocator(src, str, alloc, init_opts, opts);
+    return self.initNoFmtAllocator(src, str, alloc, init_opts, dvui.styleSchemeGet().label.override(opts));
 }
 
 /// It's expected to call this when `self` is `undefined`
 pub fn initNoFmt(self: *LabelWidget, src: std.builtin.SourceLocation, label_str: []const u8, init_opts: InitOptions, opts: Options) void {
     const arena = dvui.currentWindow().lifo();
+    const opts_full = dvui.styleSchemeGet().label.override(opts);
     // If the allocation fails, the textSize will be incorrect
     // later because of invalid utf8
     const str = dvui.toUtf8(arena, label_str) catch |err| blk: {
-        logAndHighlight(src, opts, err);
+        logAndHighlight(src, dvui.styleSchemeGet().label.override(opts_full), err);
         break :blk label_str;
     };
-    return self.initNoFmtAllocator(src, str, if (str.ptr != label_str.ptr) arena else null, init_opts, opts);
+    return self.initNoFmtAllocator(src, str, if (str.ptr != label_str.ptr) arena else null, init_opts, opts_full);
 }
 
 /// The `allocator` argument will be used to deallocator `label_str` on
@@ -85,13 +86,13 @@ pub fn initNoFmt(self: *LabelWidget, src: std.builtin.SourceLocation, label_str:
 ///
 /// It's expected to call this when `self` is `undefined`
 pub fn initNoFmtAllocator(self: *LabelWidget, src: std.builtin.SourceLocation, label_str: []const u8, allocator: ?std.mem.Allocator, init_opts: InitOptions, opts: Options) void {
-    const options = defaults.override(opts);
+    const options = dvui.styleSchemeGet().label.override(opts);
     const lsize = options.fontGet().textSize(label_str);
     var size = lsize;
-    if (opts.rotationGet() != 0.0) {
+    if (options.rotationGet() != 0.0) {
         var t: dvui.Triangles = .{ .vertexes = &.{}, .indices = &.{}, .bounds = .{ .w = size.w, .h = size.h } };
 
-        t.rotate(.{}, opts.rotationGet());
+        t.rotate(.{}, options.rotationGet());
         size.w = t.bounds.w;
         size.h = t.bounds.h;
     }

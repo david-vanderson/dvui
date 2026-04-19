@@ -67,6 +67,7 @@ clipRect: dvui.Rect.Physical = .{},
 
 /// Active theme for colors and fonts. Set with `dvui.themeSet` or `themeSet`.
 theme: Theme,
+style_scheme: dvui.StyleScheme = .{},
 
 /// Used by `dvui.dialog` for button order of Ok and Cancel.
 button_order: dvui.enums.DialogButtonOrder = .cancel_ok,
@@ -126,6 +127,7 @@ pub const InitOptions = struct {
     id_extra: usize = 0,
     arena: ?std.heap.ArenaAllocator = null,
     theme: ?Theme = null,
+    style_scheme: ?dvui.StyleScheme = null,
     /// `null` indicated that the OS will choose it's preferred theme
     ///
     /// Does nothing if the `theme` option is populated

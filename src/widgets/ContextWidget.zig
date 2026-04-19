@@ -17,6 +17,8 @@ pub const InitOptions = struct {
     rect: Rect.Physical,
 };
 
+pub const defaults = Options{ .name = "Context" };
+
 wd: WidgetData,
 init_options: InitOptions,
 
@@ -27,9 +29,10 @@ activePt: Point.Natural = .{},
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *ContextWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const defaults = Options{ .name = "Context" };
     self.* = .{
-        .wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .rect = dvui.parentGet().data().contentRectScale().rectFromPhysical(init_opts.rect) })),
+        .wd = WidgetData.init(src, .{}, dvui.styleSchemeGet().context.override(opts).override(.{
+            .rect = dvui.parentGet().data().contentRectScale().rectFromPhysical(init_opts.rect),
+        })),
         .init_options = init_opts,
         .winId = dvui.subwindowCurrentId(),
     };

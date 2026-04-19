@@ -20,7 +20,7 @@ const TextEntryWidget = @This();
 /// If multiline is false and max_size_content is not given, use min_size_content.
 pub var defaultMWidth: f32 = 14;
 
-pub var defaults: Options = .{
+pub const defaults: Options = .{
     .name = "TextEntry",
     .role = .text_input, // can change to multiline in init
     .margin = Rect.all(4),
@@ -211,7 +211,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         .horizontal_bar = init_opts.scroll_horizontal_bar orelse (if (init_opts.multiline) .auto else .hide),
     };
 
-    var options = defaults.themeOverride(opts.theme).min_sizeM(defaultMWidth, 1);
+    var options = dvui.styleSchemeGet().text_entry.themeOverride(opts.theme).min_sizeM(defaultMWidth, 1);
 
     if (init_opts.password_char != null) {
         options.role = .password_input;
@@ -328,7 +328,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         defer floating_widget.deinit();
 
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
-            .corner_radius = dvui.ButtonWidget.defaults.themeOverride(opts.theme).corner_radiusGet(),
+            .corner_radius = dvui.styleSchemeGet().button.themeOverride(opts.theme).corner_radiusGet(),
             .background = true,
             .border = dvui.Rect.all(1),
         });
