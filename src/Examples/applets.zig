@@ -365,7 +365,7 @@ pub fn textureSubRect() void {
     const size = 200;
     const scale: f32 = hbox.data().contentRectScale().s;
 
-    var tex: dvui.Texture = dvui.dataGet(null, hbox.data().id, "tex", dvui.Texture) orelse blk: {
+    var tex: *dvui.Texture = dvui.dataGetPtr(null, hbox.data().id, "tex", dvui.Texture) orelse blk: {
         const pixels = dvui.currentWindow().arena().alloc(dvui.Color.PMA, @intFromFloat(size * size * scale * scale)) catch @panic("OOM");
         for (pixels) |*p| {
             p.* = .black;
@@ -375,23 +375,23 @@ pub fn textureSubRect() void {
             return;
         };
         dvui.dataSet(null, hbox.data().id, "tex", t);
-        dvui.dataSetDeinitFunction(null, hbox.data().id, "tex", &appletTargetDestroy);
-        break :blk t;
+        dvui.dataSetDeinitFunction(null, hbox.data().id, "tex", &appletTextureDestroy);
+        break :blk dvui.dataGetPtr(null, hbox.data().id, "tex", dvui.Texture).?;
     };
 
     {
         var box = dvui.box(@src(), .{}, .{ .min_size_content = .all(size) });
         defer box.deinit();
-        dvui.renderTexture(tex, box.data().contentRectScale(), .{}) catch {};
+        dvui.renderTexture(tex.*, box.data().contentRectScale(), .{}) catch {};
     }
 
     if (dvui.button(@src(), "Update", .{}, .{})) {
         var rng: std.Random.DefaultPrng = .init(@intCast(dvui.frameTimeNS()));
         var r = rng.random();
-        const x = r.intRangeLessThan(u32, 0, size);
-        const y = r.intRangeLessThan(u32, 0, size);
-        const w = r.intRangeLessThan(u32, 0, size - x);
-        const h = r.intRangeLessThan(u32, 0, size - y);
+        const x = r.intRangeLessThan(u32, 0, @intFromFloat(size * scale));
+        const y = r.intRangeLessThan(u32, 0, @intFromFloat(size * scale));
+        const w = r.intRangeLessThan(u32, 0, @as(u32, @intFromFloat(size * scale)) - x);
+        const h = r.intRangeLessThan(u32, 0, @as(u32, @intFromFloat(size * scale)) - y);
 
         const pixels = dvui.currentWindow().arena().alloc(dvui.Color.PMA, @intFromFloat(size * size * scale * scale)) catch @panic("OOM");
         var newp: dvui.Color.PMA = .{};
