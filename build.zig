@@ -32,25 +32,47 @@ const CommonSdl = struct {
     options: *std.Build.Step.Options,
 };
 
+fn addAndroidLibC(
+    mod: *std.Build.Module,
+    opts: DvuiModuleOptions,
+) void {
+    if (opts.android_include_path) |include_path| {
+        // https://developer.android.com/ndk/guides/other_build_systems
+        const arch_specific_path = switch (opts.target.result.cpu.arch) {
+            .x86 => "i686-linux-android",
+            .x86_64 => "x86_64-linux-android",
+            .arm => "arm-linux-androideabi",
+            .aarch64 => "aarch64-linux-android",
+            else => @panic("Unkown Android arch")
+        };
+
+        mod.addSystemIncludePath(include_path.path(opts.b, arch_specific_path));
+        mod.addSystemIncludePath(include_path);
+    } else {
+        @panic("Can't build for android without android_include_path");
+    }
+}
+
 pub fn linkSdl3(
-    b: *std.Build,
     sdl_mod: *std.Build.Module,
     sdl3_options: *std.Build.Step.Options,
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
+    opts: DvuiModuleOptions,
 ) void {
-    if (b.systemIntegrationOption("sdl3", .{})) {
+    if (opts.b.systemIntegrationOption("sdl3", .{})) {
         // SDL3 from system
         sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
         sdl_mod.linkSystemLibrary("SDL3", .{});
     } else {
         // SDL3 compiled from source
         sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
-        if (b.lazyDependency("sdl3", .{
-            .target = target,
-            .optimize = optimize,
+        if (opts.b.lazyDependency("sdl3", .{
+            .target = opts.target,
+            .optimize = opts.optimize,
         })) |sdl3| {
-            sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
+            if (opts.target.result.abi.isAndroid()) {
+                sdl_mod.addIncludePath(sdl3.path("include"));
+                addAndroidLibC(sdl_mod, opts);
+            } else sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
         }
     }
     sdl_mod.addOptions("sdl_options", sdl3_options);
@@ -100,6 +122,11 @@ pub fn build(b: *std.Build) !void {
 
             break :blk .Both;
         };
+    }
+
+    var android_include_path: ?std.Build.LazyPath = null;
+    if (target.result.abi.isAndroid()) {
+        android_include_path = b.option(std.Build.LazyPath, "android_include_path", "Path (e.g. /path/to/android/home/Android/sdk/ndk/<version>/toolchains/llvm/prebuilt/<host>/sysroot/usr/include");
     }
 
     const build_options = b.addOptions();
@@ -162,6 +189,7 @@ pub fn build(b: *std.Build) !void {
         .stb_image = stb_image_option,
         .tree_sitter = tree_sitter_option,
         .wio_unix_backends = wio_unix_backends,
+        .android_include_path = android_include_path,
     };
 
     if (back_to_build) |backend| {
@@ -422,7 +450,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             //     "callbacks",
             //     b.option(bool, "sdl3gpu-callbacks", "Use callbacks for live resizing on windows/mac"),
             // );
-            linkSdl3(b, sdl_mod, sdl3_options, target, optimize);
+            linkSdl3(sdl_mod, sdl3_options, dvui_opts_in);
 
             const dvui_sdl = addDvuiModule("dvui_sdl3gpu", dvui_opts);
             // dvui_opts.addChecks(dvui_sdl, "dvui_sdl3gpu");
@@ -440,7 +468,11 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             _ = addExample("sdl3gpu-ontop", b.path("examples/sdl3gpu-ontop.zig"), true, example_opts, dvui_opts);
         },
         .sdl3 => {
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
+            if (target.result.abi.isAndroid()) {
+                dvui_opts.setDefaults(.{ .libc = true, .freetype = false, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = false });
+            } else {
+                dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
+            }
             const sdl_mod = b.addModule("sdl3", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
@@ -448,9 +480,10 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .link_libc = true,
             });
 
-            dvui_opts.addChecks(sdl_mod, "sdl3-backend");
-            dvui_opts.addTests(sdl_mod, "sdl3-backend");
-
+            if (!target.result.abi.isAndroid()) {
+                dvui_opts.addChecks(sdl_mod, "sdl3-backend");
+                dvui_opts.addTests(sdl_mod, "sdl3-backend");
+            }
             const sdl3_options = b.addOptions();
             sdl3_options.addOption(
                 ?bool,
@@ -458,23 +491,27 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 b.option(bool, "sdl3-callbacks", "Use callbacks for live resizing on windows/mac"),
             );
 
-            linkSdl3(b, sdl_mod, sdl3_options, target, optimize);
+            linkSdl3(sdl_mod, sdl3_options, dvui_opts_in);
 
             const dvui_sdl = addDvuiModule("dvui_sdl3", dvui_opts);
-            dvui_opts.addChecks(dvui_sdl, "dvui_sdl3");
-            if (test_dvui_and_app) {
-                dvui_opts.addTests(dvui_sdl, "dvui_sdl3");
+            if (!target.result.abi.isAndroid()) {
+                dvui_opts.addChecks(dvui_sdl, "dvui_sdl3");
+                if (test_dvui_and_app) {
+                    dvui_opts.addTests(dvui_sdl, "dvui_sdl3");
+                }
             }
 
             linkBackend(dvui_sdl, sdl_mod);
-            const example_opts: ExampleOptions = .{
-                .dvui_mod = dvui_sdl,
-                .backend_name = "sdl-backend",
-                .backend_mod = sdl_mod,
-            };
-            _ = addExample("sdl3-standalone", b.path("examples/sdl-standalone.zig"), true, example_opts, dvui_opts);
-            _ = addExample("sdl3-ontop", b.path("examples/sdl-ontop.zig"), true, example_opts, dvui_opts);
-            _ = addExample("sdl3-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
+            if (!target.result.abi.isAndroid()) {
+                const example_opts: ExampleOptions = .{
+                    .dvui_mod = dvui_sdl,
+                    .backend_name = "sdl-backend",
+                    .backend_mod = sdl_mod,
+                };
+                _ = addExample("sdl3-standalone", b.path("examples/sdl-standalone.zig"), true, example_opts, dvui_opts);
+                _ = addExample("sdl3-ontop", b.path("examples/sdl-ontop.zig"), true, example_opts, dvui_opts);
+                _ = addExample("sdl3-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
+            }
         },
         .raylib => {
             if (dvui_opts.vertex_index != .u16) {
@@ -846,6 +883,7 @@ const DvuiModuleOptions = struct {
     stb_image: ?bool,
     tree_sitter: ?bool,
     wio_unix_backends: ?[]const u8 = null,
+    android_include_path: ?std.Build.LazyPath = null,
 
     pub const DefaultOptions = struct {
         libc: bool,
@@ -967,6 +1005,7 @@ pub fn addDvuiModule(
         .target = target,
         .optimize = optimize,
     });
+    if (target.result.abi.isAndroid()) addAndroidLibC(dvui_mod, opts);
     dvui_mod.addOptions("build_options", opts.build_options);
     dvui_mod.addOptions("default_options", opts.makeDefaults());
     dvui_mod.addImport("svg2tvg", b.dependency("svg2tvg", .{
