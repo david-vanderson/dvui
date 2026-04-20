@@ -270,33 +270,53 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     }
 
     if (back.initial_scale != 1.0) {
-        _ = c.SDL_SetWindowSize(
-            window,
-            @as(c_int, @intFromFloat(back.initial_scale * options.size.w)),
-            @as(c_int, @intFromFloat(back.initial_scale * options.size.h)),
-        );
+        if (builtin.abi.isAndroid()) {
+            // log.error fails on Android but SDL_Log will show up in LogCat
+            c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowSize");
+        } else {
+            _ = c.SDL_SetWindowSize(
+                window,
+                @as(c_int, @intFromFloat(back.initial_scale * options.size.w)),
+                @as(c_int, @intFromFloat(back.initial_scale * options.size.h)),
+            );
+        }
     }
 
     if (options.icon) |bytes| {
-        try back.setIconFromFileContent(bytes);
+        if (builtin.abi.isAndroid()) {
+            // log.error fails on Android but SDL_Log will show up in LogCat
+            c.SDL_Log("[ERROR] Android doesn't support setting a custom icon at runtime");
+        } else {
+            try back.setIconFromFileContent(bytes);
+        }
     }
 
     if (options.min_size) |size| {
-        const ret = c.SDL_SetWindowMinimumSize(
-            window,
-            @as(c_int, @intFromFloat(back.initial_scale * size.w)),
-            @as(c_int, @intFromFloat(back.initial_scale * size.h)),
-        );
-        if (sdl3) try toErr(ret, "SDL_SetWindowMinimumSize in initWindow");
+        if (builtin.abi.isAndroid()) {
+            // log.error fails on Android but SDL_Log will show up in LogCat
+            c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowMinimumSize");
+        } else {
+            const ret = c.SDL_SetWindowMinimumSize(
+                window,
+                @as(c_int, @intFromFloat(back.initial_scale * size.w)),
+                @as(c_int, @intFromFloat(back.initial_scale * size.h)),
+            );
+            if (sdl3) try toErr(ret, "SDL_SetWindowMinimumSize in initWindow");
+        }
     }
 
     if (options.max_size) |size| {
-        const ret = c.SDL_SetWindowMaximumSize(
-            window,
-            @as(c_int, @intFromFloat(back.initial_scale * size.w)),
-            @as(c_int, @intFromFloat(back.initial_scale * size.h)),
-        );
-        if (sdl3) try toErr(ret, "SDL_SetWindowMaximumSize in initWindow");
+        if (builtin.abi.isAndroid()) {
+            // log.error fails on Android but SDL_Log will show up in LogCat
+            c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowMaximumSize");
+        } else {
+            const ret = c.SDL_SetWindowMaximumSize(
+                window,
+                @as(c_int, @intFromFloat(back.initial_scale * size.w)),
+                @as(c_int, @intFromFloat(back.initial_scale * size.h)),
+            );
+            if (sdl3) try toErr(ret, "SDL_SetWindowMaximumSize in initWindow");
+        }
     }
 
     return back;
