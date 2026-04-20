@@ -272,7 +272,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     if (back.initial_scale != 1.0) {
         if (builtin.abi.isAndroid()) {
             // log.error fails on Android but SDL_Log will show up in LogCat
-            c.SDL_Log("[ERROR] Android doesn't support min_size");
+            c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowSize");
         } else {
             _ = c.SDL_SetWindowSize(
                 window,
@@ -294,7 +294,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     if (options.min_size) |size| {
         if (builtin.abi.isAndroid()) {
             // log.error fails on Android but SDL_Log will show up in LogCat
-            c.SDL_Log("[ERROR] Android doesn't support min_size");
+            c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowMinimumSize");
         } else {
             const ret = c.SDL_SetWindowMinimumSize(
                 window,
@@ -308,7 +308,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     if (options.max_size) |size| {
         if (builtin.abi.isAndroid()) {
             // log.error fails on Android but SDL_Log will show up in LogCat
-            c.SDL_Log("[ERROR] Android doesn't support max_size");
+            c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowMaximumSize");
         } else {
             const ret = c.SDL_SetWindowMaximumSize(
                 window,
