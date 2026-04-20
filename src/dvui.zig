@@ -547,7 +547,7 @@ pub fn frameTimeNS() i128 {
 ///
 /// ttf_bytes are the bytes of the ttf file
 ///
-/// If ttf_bytes_allocator is not null, it will be used to free `ttf_bytes` AND `name` in
+/// If ttf_bytes_allocator is not null, it will be used to free `ttf_bytes` in
 /// `Window.deinit`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
