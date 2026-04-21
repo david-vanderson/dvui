@@ -15,6 +15,7 @@ var events: ?std.ArrayList(GlfwEvent) = null;
 
 vsync: bool,
 
+io: std.Io,
 gpa: std.mem.Allocator,
 arena: std.heap.ArenaAllocator,
 
@@ -69,12 +70,14 @@ pub const InitOptions = struct {
 };
 
 /// Pass the window handle (pointer) to the glfw window
-pub fn init(gpa: std.mem.Allocator, window_: *anyopaque) @This() {
+pub fn init(io: std.Io, gpa: std.mem.Allocator, window_: *anyopaque) @This() {
+    dvui.io = io;
     const window: *zglfw.Window = @ptrCast(window_);
 
     events = std.ArrayList(GlfwEvent).initCapacity(gpa, MAX_EVENT_BUFFER_SIZE) catch @panic("OOM");
 
     return .{
+        .io = io,
         .vsync = false,
         .window = window,
         .gpa = gpa,
@@ -219,12 +222,13 @@ pub fn pollEventsTimeout(_: *@This(), win: *dvui.Window, end_time: ?u32) void {
     zglfw.waitEventsTimeout(@max(@as(f64, @floatFromInt(wt)) / std.time.us_per_s, 0));
 }
 
-pub fn nanoTime(_: *@This()) i128 {
-    return std.time.nanoTimestamp();
+pub fn nanoTime(self: *@This()) i128 {
+    const ret = std.Io.Clock.boot.now(self.io);
+    return ret.nanoseconds;
 }
 
-pub fn sleep(_: *@This(), ns: u64) void {
-    std.Thread.sleep(ns);
+pub fn sleep(self: *@This(), ns: u64) void {
+    std.Io.Clock.Duration.sleep(.{ .clock = .boot, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }
 
 /// Called by `dvui.refresh` when it is called from a background
@@ -559,12 +563,14 @@ fn handleFramebufferSizeEvent(
     if (ctx.userFramebufferSizeCallback) |callback| callback(window, width, height);
 }
 
-pub fn main() !void {
+pub fn main(main_init: std.process.Init) !void {
+    dvui.App.main_init = main_init;
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
     const config = app.config.get();
 
-    var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-    const gpa = gpa_instance.allocator();
+    const gpa = config.gpa orelse main_init.gpa;
+    const io = config.io orelse main_init.io;
+
     var window: *zglfw.Window = undefined;
 
     try zglfw.init();
@@ -591,8 +597,9 @@ pub fn main() !void {
         },
         else => @compileError("unsupported renderer for backend"),
     };
+    defer renderer.deinit();
 
-    var impl = init(gpa, window);
+    var impl = init(io, gpa, window);
     defer impl.deinit();
 
     const backend = dvui.Backend.init(&impl, &renderer);
@@ -603,7 +610,7 @@ pub fn main() !void {
         impl.addAllEvents(&win);
         // zgl.clearColor(0.1, 0.4, 0.25, 1.0);
         // zgl.clear(.{ .color = true, .stencil = true, .depth = true });
-        try win.begin(std.time.nanoTimestamp());
+        try win.begin(impl.nanoTime());
 
         var res = try app.frameFn();
         for (dvui.events()) |*e| {
