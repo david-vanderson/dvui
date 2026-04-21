@@ -5,6 +5,7 @@ const wio = @import("wio");
 
 pub const kind: dvui.enums.Backend = .wio;
 
+io: std.Io,
 window: wio.Window,
 size_natural: dvui.Size.Natural,
 size_physical: dvui.Size.Physical,
@@ -17,6 +18,7 @@ pub fn backend(self: *@This(), renderer: *dvui.render_backend) dvui.Backend {
 }
 
 pub const InitOptions = struct {
+    io: std.Io,
     window: wio.Window,
     /// Will be corrected by `addEvent()`, but should be set manually if events were already processed.
     size: wio.Size = .{ .width = 640, .height = 480 },
@@ -25,7 +27,9 @@ pub const InitOptions = struct {
 };
 
 pub fn init(options: InitOptions) !@This() {
+    dvui.io = options.io;
     return .{
+        .io = options.io,
         .window = options.window,
         .size_natural = .{ .w = @floatFromInt(options.size.width), .h = @floatFromInt(options.size.height) },
         .size_physical = .{ .w = @floatFromInt(options.framebuffer.width), .h = @floatFromInt(options.framebuffer.height) },
@@ -34,12 +38,13 @@ pub fn init(options: InitOptions) !@This() {
 
 pub fn deinit(_: *@This()) void {}
 
-pub fn nanoTime(_: *@This()) i128 {
-    return std.time.nanoTimestamp();
+pub fn nanoTime(self: *@This()) i128 {
+    const ret = std.Io.Clock.boot.now(self.io);
+    return ret.nanoseconds;
 }
 
-pub fn sleep(_: *@This(), ns: u64) void {
-    std.Thread.sleep(ns);
+pub fn sleep(self: *@This(), ns: u64) void {
+    std.Io.Clock.Duration.sleep(.{ .clock = .boot, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }
 
 pub fn begin(self: *@This(), arena: std.mem.Allocator) !void {
@@ -238,14 +243,15 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
     }
 }
 
-pub fn main() !void {
+pub fn main(main_init: std.process.Init) !void {
+    dvui.App.main_init = main_init;
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
     const config = app.config.get();
 
-    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
-    const allocator = debug_allocator.allocator();
+    const gpa = config.gpa orelse main_init.gpa;
+    const io = config.io orelse main_init.io;
 
-    try wio.init(allocator, .{});
+    try wio.init(gpa, io, .{});
     defer wio.deinit();
 
     var window = try wio.createWindow(.{
@@ -262,19 +268,20 @@ pub fn main() !void {
 
     var renderer = blk: switch (dvui.render_backend.kind) {
         .opengl => {
-            window.makeContextCurrent();
+            window.glMakeContextCurrent();
             if (config.vsync) {
-                window.swapInterval(1);
+                window.glSwapInterval(1);
             }
-            break :blk try dvui.render_backend.init(allocator, wio.glGetProcAddress, "150");
+            break :blk try dvui.render_backend.init(gpa, wio.glGetProcAddress, "150");
         },
         else => @compileError("unsupported renderer for backend"),
     };
+    defer renderer.deinit();
 
-    var dvui_wio = try @This().init(.{ .window = window });
+    var dvui_wio = try @This().init(.{ .io = io, .window = window });
     defer dvui_wio.deinit();
 
-    var win = try dvui.Window.init(@src(), allocator, dvui_wio.backend(&renderer), config.window_init_options);
+    var win = try dvui.Window.init(@src(), gpa, dvui_wio.backend(&renderer), config.window_init_options);
     defer win.deinit();
 
     if (app.initFn) |initFn| {
@@ -304,7 +311,7 @@ pub fn main() !void {
         dvui_wio.setTextInputRect(win.textInputRequested());
         dvui_wio.setCursor(win.cursorRequested());
 
-        window.swapBuffers();
+        window.glSwapBuffers();
 
         const wait_us = win.waitTime(end_us);
         dvui_wio.waitEventTimeout(wait_us);

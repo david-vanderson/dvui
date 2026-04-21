@@ -41,13 +41,13 @@
             .lazy = true,
         },
         .wio = .{
-            .url = "https://github.com/ypsvlq/wio/archive/8f874372e6644769f6a964912cd819b02fcb8c6b.tar.gz",
-            .hash = "wio-0.0.0-8xHrr3sEBgDdNTJi4NMsC_SED4XiK8M96IUFfCyVlVRS",
+            .url = "git+https://github.com/ypsvlq/wio?master#b8abff48c317348a1177998d07ce8d331a863ccc",
+            .hash = "wio-0.0.0-8xHrr2mRBgCezIa_g2nf07nUnrHf-PCo95tkge77ppgo",
             .lazy = true,
         },
         .opengl = .{
-            .url = "https://github.com/ypsvlq/opengl/archive/2dfbc2b4994e3333d35fd2c1bbf459340d54fef4.tar.gz",
-            .hash = "opengl-0.0.0-_Vp8-GvsKgCK18nOkOYyRNlkJUn-zWE8hu38AeUPO7Jb",
+            .url = "git+https://github.com/ypsvlq/opengl?master#2cd1835dc6e9b31518597cff25ce95fd07f2e0c7",
+            .hash = "opengl-0.0.0-_Vp8-EjsKgDhnkUWeb8Nmr2oEdvsCsDq9bUgmcNi0SuQ",
             .lazy = true,
         },
         //used in the raylib-ontop example
