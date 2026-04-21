@@ -38,6 +38,7 @@ pub fn linkSdl3(
     sdl3_options: *std.Build.Step.Options,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    dvui_opts: DvuiModuleOptions,
 ) void {
     if (b.systemIntegrationOption("sdl3", .{})) {
         // SDL3 from system
@@ -49,6 +50,9 @@ pub fn linkSdl3(
         if (b.lazyDependency("sdl3", .{
             .target = target,
             .optimize = optimize,
+            .system_include_path = dvui_opts.sdl3_system_include_path,
+            .system_framework_path = dvui_opts.sdl3_system_framework_path,
+            .library_path = dvui_opts.sdl3_library_path,
         })) |sdl3| {
             sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
         }
@@ -125,6 +129,10 @@ pub fn build(b: *std.Build) !void {
         tvg_option,
     );
 
+    const system_include_path = b.option(std.Build.LazyPath, "system_include_path", "system include path");
+    const system_framework_path = b.option(std.Build.LazyPath, "system_framework_path", "system framework path");
+    const library_path = b.option(std.Build.LazyPath, "library_path", "system library path");
+
     const vertex_index = b.option(VertexIndex, "vertex-index", "Vertex index type (default u16)") orelse .u16;
     build_options.addOption(
         VertexIndex,
@@ -161,6 +169,9 @@ pub fn build(b: *std.Build) !void {
         .tree_sitter = tree_sitter_option,
         .tvg = tvg_option,
         .wio_unix_backends = wio_unix_backends,
+        .sdl3_system_include_path = system_include_path,
+        .sdl3_system_framework_path = system_framework_path,
+        .sdl3_library_path = library_path,
     };
 
     if (back_to_build) |backend| {
@@ -422,7 +433,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             //     "callbacks",
             //     b.option(bool, "sdl3gpu-callbacks", "Use callbacks for live resizing on windows/mac"),
             // );
-            linkSdl3(b, sdl_mod, sdl3_options, target, optimize);
+            linkSdl3(b, sdl_mod, sdl3_options, target, optimize, dvui_opts);
 
             const dvui_sdl = addDvuiModule("dvui_sdl3gpu", dvui_opts);
             // dvui_opts.addChecks(dvui_sdl, "dvui_sdl3gpu");
@@ -458,7 +469,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 b.option(bool, "sdl3-callbacks", "Use callbacks for live resizing on windows/mac"),
             );
 
-            linkSdl3(b, sdl_mod, sdl3_options, target, optimize);
+            linkSdl3(b, sdl_mod, sdl3_options, target, optimize, dvui_opts);
 
             const dvui_sdl = addDvuiModule("dvui_sdl3", dvui_opts);
             dvui_opts.addChecks(dvui_sdl, "dvui_sdl3");
@@ -848,6 +859,9 @@ const DvuiModuleOptions = struct {
     tree_sitter: ?bool,
     tvg: bool,
     wio_unix_backends: ?[]const u8 = null,
+    sdl3_system_include_path: ?std.Build.LazyPath = null,
+    sdl3_system_framework_path: ?std.Build.LazyPath = null,
+    sdl3_library_path: ?std.Build.LazyPath = null,
 
     pub const DefaultOptions = struct {
         libc: bool,
@@ -972,7 +986,7 @@ pub fn addDvuiModule(
     dvui_mod.addOptions("build_options", opts.build_options);
     dvui_mod.addOptions("default_options", opts.makeDefaults());
 
-    if (opts.tvg){
+    if (opts.tvg) {
         if (b.lazyDependency("svg2tvg", .{
             .target = target,
             .optimize = optimize,
