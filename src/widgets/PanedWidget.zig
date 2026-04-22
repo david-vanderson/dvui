@@ -104,16 +104,18 @@ pub fn init(self: *PanedWidget, src: std.builtin.SourceLocation, init_options: I
         },
     };
 
-    // autofit on the second frame, after we know the full widget size
-    if (dvui.firstFrame(wd.id)) {
-        dvui.dataSet(null, wd.id, "_autofit_next_frame", true);
-    } else if (self.should_autofit) {
-        dvui.dataRemove(null, wd.id, "_autofit_next_frame");
-    }
+    if (self.init_opts.autofit_first != null) {
+        // autofit on the second frame, after we know the full widget size
+        if (dvui.firstFrame(wd.id)) {
+            dvui.dataSet(null, wd.id, "_autofit_next_frame", true);
+        } else if (self.should_autofit) {
+            dvui.dataRemove(null, wd.id, "_autofit_next_frame");
+        }
 
-    if (self.init_opts.autofit_first != null and self.should_autofit) {
-        // Make the first side take the full space to begin with
-        self.split_ratio.* = 1.0;
+        if (self.should_autofit) {
+            // Make the first side take the full space to begin with
+            self.split_ratio.* = 1.0;
+        }
     }
 
     if (self.collapsing) {
