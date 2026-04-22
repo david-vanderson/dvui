@@ -10,7 +10,6 @@ pub const Context = *WebBackend;
 const log = std.log.scoped(.WebBackend);
 
 var gpa: std.mem.Allocator = std.heap.wasm_allocator;
-var single_threaded: std.Io.Threaded = .init_single_threaded;
 
 pub var win: dvui.Window = undefined;
 pub var win_ok = false;
@@ -931,7 +930,10 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
     const init_opts = app.config.get();
 
     gpa = init_opts.gpa orelse gpa;
-    dvui.io = init_opts.io orelse single_threaded.io();
+
+    // failing works for now because the only thing we call is the mutex
+    // functions, and Io.Mutex doesn't call any Io vtable functions on wasm
+    dvui.io = init_opts.io orelse std.Io.failing;
 
     const platform = platform_ptr[0..platform_len];
     log.debug("platform: {s}", .{platform});
