@@ -476,23 +476,26 @@ pub const FormatErrorTrace = struct {
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {
     @branchHint(.cold);
     const stack_trace_frame_count = @import("build_options").log_stack_trace orelse if (builtin.mode == .Debug) 12 else 0;
-    const stack_trace_enabled = stack_trace_frame_count > 0;
+    const stack_trace_enabled = if (builtin.cpu.arch.isWasm()) false else stack_trace_frame_count > 0;
     const err_trace_enabled = if (@import("build_options").log_error_trace) |enabled| enabled else stack_trace_enabled;
-
-    var addresses: [stack_trace_frame_count]usize = @splat(0);
-    const stack_trace = std.debug.captureCurrentStackTrace(.{}, &addresses);
 
     const error_trace_fmt, const err_trace_arg = if (err_trace_enabled)
         .{ "\nError trace: {f}", FormatErrorTrace{ .error_trace = @errorReturnTrace(), .terminal_mode = std.log.terminalMode() }}
     else
         .{ "{s}", "" }; // Keep arg count the same
 
-    const stack_trace_fmt, const trace_arg = if (stack_trace_enabled)
-        .{ "\nStack trace: {f}", std.debug.FormatStackTrace{
+    const stack_trace_fmt, const trace_arg = blk: {
+        if (stack_trace_enabled) {
+            var addresses: [stack_trace_frame_count]usize = @splat(0);
+            const stack_trace = std.debug.captureCurrentStackTrace(.{}, &addresses);
+
+            break :blk .{ "\nStack trace: {f}", std.debug.FormatStackTrace{
                                     .stack_trace = stack_trace,
-                                    .terminal_mode = std.log.terminalMode() }}
-    else
-        .{ "{s}", "" }; // Needed to keep the arg count the sames
+                                    .terminal_mode = std.log.terminalMode() }};
+        } else {
+            break :blk .{ "{s}", "" }; // Needed to keep the arg count the sames
+        }
+    };
 
     const combined_args = .{ src.file, src.line, src.column, src.fn_name, @errorName(err) } ++ args ++ .{ err_trace_arg, trace_arg };
     log.err("{s}:{d}:{d}: {s} got {s}: " ++ fmt ++ error_trace_fmt ++ stack_trace_fmt, combined_args);
