@@ -1216,12 +1216,6 @@ pub fn begin(
             }
         }
         self.animations.reset();
-        const it_ = self.animation_runners.iterator();
-        while (it_.next_used()) |kv| {
-            if (kv.value_ptr.frameFn != null) {
-                kv.value_ptr.next();
-            }
-        }
     }
 
     if (!self.captured_last_frame) {
