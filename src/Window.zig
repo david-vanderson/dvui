@@ -81,6 +81,8 @@ data_store: dvui.Data = .{},
 /// Uses `gpa` allocator
 animations: dvui.TrackingAutoHashMap(Id, Animation, .get_and_put, void) = .empty,
 /// Uses `gpa` allocator
+animation_runners: dvui.TrackingAutoHashMap(Id, AnimationRunner, .get_and_put, void) = .empty,
+/// Uses `gpa` allocator
 tab_index_prev: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
 tab_index: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
@@ -1622,6 +1624,7 @@ const Widget = dvui.Widget;
 const Id = dvui.Id;
 
 const Animation = dvui.Animation;
+const AnimationRunner = dvui.AnimationRunner;
 const Theme = dvui.Theme;
 const Dialog = dvui.Dialog;
 const Toast = dvui.Toast;

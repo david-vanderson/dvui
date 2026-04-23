@@ -1,6 +1,6 @@
 const dvui = @import("dvui.zig");
 
-const Icon = []const u8;
+pub const Icon = []const u8;
 
 address: Icon,
 add_to_list: Icon,

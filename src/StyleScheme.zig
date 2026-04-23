@@ -22,7 +22,6 @@ icon: Options = IconWidget.defaults,
 scrollbar: Options = ScrollBarWidget.defaults,
 context: Options = ContextWidget.defaults,
 dropdown: Options = DropdownWidget.defaults,
-animations: std.ArrayList(AnimationRunner) = .empty,
 icon_theme: IconTheme = dvui.entypo,
 
 const StyleScheme = @This();

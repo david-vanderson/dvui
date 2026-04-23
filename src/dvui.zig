@@ -1872,6 +1872,34 @@ pub fn animationGet(id: Id, key: []const u8) ?Animation {
     return currentWindow().animations.get(h);
 }
 
+/// Add animation a to key associated with id.  See `Animation`.
+///
+/// If dvui.reduce_motion is true, overwites end_time so the animation will
+/// expire next frame, as it relies on the animations backend of dvui,
+///
+/// See `Animation` and `animation()`.
+///
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn animationRunner(id: Id, key: []const u8, a: AnimationRunner) void {
+    var cw = currentWindow();
+    const h = id.update(key);
+    cw.animation_runners.put(cw.gpa, h, a) catch |err| switch (err) {
+        error.OutOfMemory => {
+            log.err("animation runner got {any} for id {x} key {s}\n", .{ err, id, key });
+        },
+    };
+}
+
+/// Retrieve an animation runner previously added with `animation`.
+///
+/// See `AnimationRunner`.
+///
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn animationRunnerGet(id: Id, key: []const u8) ?AnimationRunner {
+    const h = id.update(key);
+    return currentWindow().animation_runners.get(h);
+}
+
 /// Add a timer for id that will be `timerDone` on the first frame after micros
 /// has passed.
 ///
@@ -3615,21 +3643,14 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
     const r = rs.r;
 
     var t: f32 = 0;
-    const anim = Animation{ .end_time = 3_000_000 };
-    if (animationGet(wd.id, "_t")) |a| {
+    const anim = AnimationRunner.init(@src(), &wd, .{ .duration = 3_000_000, .kind = .looping, .ptr = null, .name = "_t" });
+    if (animationRunnerGet(wd.id, "_t")) |a| {
         // existing animation
         var aa = a;
-        if (aa.done()) {
-            // this animation is expired, seamlessly transition to next animation
-            aa = anim;
-            aa.start_time = a.end_time;
-            aa.end_time += a.end_time;
-            animation(wd.id, "_t", aa);
-        }
         t = aa.value();
     } else {
         // first frame we are seeing the spinner
-        animation(wd.id, "_t", anim);
+        animationRunner(wd.id, "_t", anim);
     }
 
     var path: Path.Builder = .init(dvui.currentWindow().lifo());
