@@ -747,6 +747,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 "dvui_init",
                 "dvui_deinit",
                 "dvui_update",
+                "dvui_main",
                 "add_event",
                 "arena_u8",
                 "gpa_u8",
@@ -810,6 +811,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 };
                 addWebExample("web-test", b.path("examples/web-test.zig"), example_opts, wasm_dvui_opts);
                 addWebExample("web-app", b.path("examples/app.zig"), example_opts, wasm_dvui_opts);
+                addWebStandaloneExample("web-standalone", b.path("examples/web-standalone.zig"), example_opts, wasm_dvui_opts);
             }
         },
         .wio => {
@@ -1271,6 +1273,54 @@ fn addWebExample(
     const web_js = b.path("src/backends/web.js");
     compile_step.dependOn(&b.addInstallFileWithDir(web_js, install_dir, "web.js").step);
     b.addNamedLazyPath("web.js", web_js);
+    compile_step.dependOn(&install_wasm.step);
+    compile_step.dependOn(&install_noto.step);
+
+    b.getInstallStep().dependOn(compile_step);
+}
+
+fn addWebStandaloneExample(
+    comptime name: []const u8,
+    file: std.Build.LazyPath,
+    example_opts: ExampleOptions,
+    opts: DvuiModuleOptions,
+) void {
+    const b = opts.b;
+
+    const exeOptions: std.Build.ExecutableOptions = .{
+        .name = "web",
+        .root_module = b.createModule(.{
+            .root_source_file = file,
+            .target = opts.target,
+            .optimize = opts.optimize,
+            .link_libc = false,
+            .strip = if (opts.optimize == .ReleaseFast or opts.optimize == .ReleaseSmall) true else false,
+        }),
+    };
+    const web_exe = b.addExecutable(exeOptions);
+    web_exe.entry = .disabled;
+    web_exe.root_module.addImport("dvui", example_opts.dvui_mod);
+    web_exe.root_module.addImport(example_opts.backend_name, example_opts.backend_mod);
+
+    const web_check = b.addExecutable(exeOptions);
+    web_check.entry = .disabled;
+    web_check.root_module.addImport("dvui", example_opts.dvui_mod);
+    web_check.root_module.addImport(example_opts.backend_name, example_opts.backend_mod);
+    if (opts.check_step) |step| step.dependOn(&web_check.step);
+
+    const install_dir: std.Build.InstallDir = .{ .custom = "bin/" ++ name };
+
+    const install_wasm = b.addInstallArtifact(web_exe, .{
+        .dest_dir = .{ .override = install_dir },
+    });
+
+    const install_noto = b.addInstallFileWithDir(b.path("src/fonts/NotoSansKR-Regular.ttf"), install_dir, "NotoSansKR-Regular.ttf");
+
+    const compile_step = b.step(name, "Compile " ++ name ++ " (Web Worker standalone)");
+    compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/index-standalone.html"), install_dir, "index.html").step);
+    compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/web-standalone.js"), install_dir, "web-standalone.js").step);
+    compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/web.js"), install_dir, "web.js").step);
+    compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/web-worker.js"), install_dir, "web-worker.js").step);
     compile_step.dependOn(&install_wasm.step);
     compile_step.dependOn(&install_noto.step);
 
