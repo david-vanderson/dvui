@@ -393,6 +393,7 @@ pub fn deinit(self: *Self) void {
     }
 
     self.animations.deinit(self.gpa);
+    self.animation_runners.deinit(self.gpa);
     self.tab_index_prev.deinit(self.gpa);
     self.tab_index.deinit(self.gpa);
 

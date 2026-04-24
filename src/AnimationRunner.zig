@@ -46,8 +46,8 @@ owner: *const dvui.WidgetData,
 /// Source location used to derive a stable dvui ID for this animation.
 src: std.builtin.SourceLocation,
 
-/// How long the full forward (or backward) pass takes, in milliseconds.
-duration: f32 = 200.0,
+/// How long the full forward (or backward) pass takes, in microseconds.
+duration: i32 = 200,
 
 /// Easing function applied to the raw linear time progress.
 easing: *const dvui.easing.EasingFn = dvui.easing.linear,
@@ -65,7 +65,7 @@ current_value: f32 = 0.0,
 /// How many milliseconds into the animation we currently are.
 /// Stored so that interrupted animations can reverse from their
 /// current position rather than snapping to an end.
-elapsed_ms: f32 = 0.0,
+elapsed: i32 = 0,
 
 /// Incremented whenever an in-progress animation is interrupted,
 /// so a fresh dvui animation ID is used and the old one is discarded.
@@ -131,7 +131,7 @@ pub fn init(
         .frameFn = init_opts.Fn,
         .animation = init_opts.name,
         .owner = owner,
-        .duration = init_opts.duration * std.time.ms_per_s * 1000,
+        .duration = @intFromFloat(init_opts.duration * std.time.ms_per_s * 1000),
         .src = src,
         .id_extra = init_opts.id_extra,
         .id = dvui.Id.extendId(null, src, init_opts.id_extra),
@@ -163,7 +163,7 @@ pub fn value(self: *AnimationRunner) f32 {
     // Convert normalised value back to milliseconds so we know how far
     // through the animation we are. This is used to start a reverse pass
     // from the current position when the animation is interrupted.
-    self.elapsed_ms = self.duration * self.current_value;
+    self.elapsed = self.duration - @min(a.end_time, 0);
 
     if (self.kind == .start) return self.current_value; // .start never reverses, nothing left to do.
 
@@ -235,9 +235,7 @@ fn supplyAnimation(self: *AnimationRunner) void {
 
     // When reversing, play only for as long as we have already played
     // forward, so the speed feels symmetrical.
-    const end_time_ms: i32 = @intFromFloat(
-        if (starting_backward) self.elapsed_ms else self.duration,
-    );
+    const end_time_ms: i32 = if (starting_backward) self.elapsed else self.duration;
 
     dvui.animation(self.id, self.animation, .{
         .start_val = self.current_value,
@@ -255,5 +253,5 @@ pub fn reset(self: *AnimationRunner) void {
     self.hovered = false;
     self.clicked = false;
     self.current_value = 0.0;
-    self.elapsed_ms = 0.0;
+    self.elapsed = 0.0;
 }

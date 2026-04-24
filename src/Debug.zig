@@ -952,7 +952,7 @@ fn fontChanger(self: *Options) bool {
     return changed;
 }
 
-fn quickDisplayField(comptime src: std.builtin.SourceLocation, ContainerT: type, comptime field_name: []const u8, field_value_ptr: anytype, field_option: dvui.struct_ui.FieldOptions, al: *dvui.Alignment) void {
+fn quickDisplayField(src: std.builtin.SourceLocation, ContainerT: type, comptime field_name: []const u8, field_value_ptr: anytype, field_option: dvui.struct_ui.FieldOptions, al: *dvui.Alignment) void {
     const rect_opts: dvui.struct_ui.StructOptions(dvui.Rect) = .init(.{
         .x = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },
         .y = .{ .number = .{ .min = 0, .max = 30, .widget_type = .slider_entry } },

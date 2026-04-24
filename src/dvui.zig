@@ -1895,9 +1895,9 @@ pub fn animationRunner(id: Id, key: []const u8, a: AnimationRunner) void {
 /// See `AnimationRunner`.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn animationRunnerGet(id: Id, key: []const u8) ?AnimationRunner {
+pub fn animationRunnerGet(id: Id, key: []const u8) ?*AnimationRunner {
     const h = id.update(key);
-    return currentWindow().animation_runners.get(h);
+    return currentWindow().animation_runners.getPtr(h);
 }
 
 /// Add a timer for id that will be `timerDone` on the first frame after micros
@@ -3643,11 +3643,11 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
     const r = rs.r;
 
     var t: f32 = 0;
-    const anim = AnimationRunner.init(@src(), &wd, .{ .duration = 3_000_000, .kind = .looping, .ptr = null, .name = "_t" });
+    const anim = AnimationRunner.init(@src(), &wd, .{ .duration = 3, .kind = .looping, .ptr = null, .name = "_t", .easing = easing.inOutQuad });
     if (animationRunnerGet(wd.id, "_t")) |a| {
         // existing animation
-        var aa = a;
-        t = aa.value();
+        t = a.value();
+        dvui.log.debug("elapsed/value(.5s) {}", .{a.current_value / @as(f32, @floatFromInt(a.elapsed)) * std.time.ms_per_s * 1000});
     } else {
         // first frame we are seeing the spinner
         animationRunner(wd.id, "_t", anim);
