@@ -95,6 +95,9 @@ app1: Style = .{},
 app2: Style = .{},
 app3: Style = .{},
 
+/// Extra colors for themes to use away from the default stylesheets
+misc: ?std.StringHashMap(Color) = null,
+
 /// Font for body text.
 /// Use `Font.withSize`, `Font.withWeight`, etc. for variation.
 /// Suggestions:

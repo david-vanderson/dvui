@@ -14,7 +14,7 @@ const enums = dvui.enums;
 
 const ScrollBarWidget = @This();
 
-pub var defaults: Options = .{
+pub const defaults: Options = .{
     .name = "ScrollBar",
     .role = .scroll_bar,
     .min_size_content = .{ .w = 10, .h = 10 },
@@ -39,7 +39,7 @@ pub fn init(self: *ScrollBarWidget, src: std.builtin.SourceLocation, init_opts: 
         .si = init_opts.scroll_info,
         .focus_id = init_opts.focus_id,
         .dir = init_opts.direction,
-        .wd = WidgetData.init(src, .{}, defaults.override(opts)),
+        .wd = WidgetData.init(src, .{}, dvui.styleSchemeGet().scrollbar.override(opts)),
     };
 
     self.data().register();

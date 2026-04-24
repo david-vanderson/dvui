@@ -1738,6 +1738,11 @@ pub fn main() !void {
             // marks the beginning of a frame for dvui, can call dvui functions after this
             try win.begin(nstime);
 
+            // update to next frame in all animations in the given style scheme
+            for (win.style_scheme.animations.items) |*a| {
+                a.next();
+            }
+
             // both dvui and dx11 drawing
             var res = try app.frameFn();
 

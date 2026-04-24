@@ -248,6 +248,7 @@ pub fn build(b: *std.Build) !void {
         // Use customized index.html
         const add_doc_logo = b.addExecutable(.{
             .name = "addDocLogo",
+            .use_llvm = true,
             .root_module = b.createModule(.{
                 .root_source_file = b.path("docs/add_doc_logo.zig"),
                 .target = b.graph.host,
@@ -267,6 +268,7 @@ pub fn build(b: *std.Build) !void {
         const svg2tvg_dep = b.dependency("svg2tvg", .{ .optimize = optimize, .target = target });
         const exe = b.addExecutable(.{
             .name = "svg2tvg",
+            .use_llvm = true,
             .root_module = b.createModule(.{
                 .target = target,
                 .optimize = optimize,
@@ -1162,7 +1164,7 @@ fn addExample(
     mod.addImport("dvui", example_opts.dvui_mod);
     mod.addImport(example_opts.backend_name, example_opts.backend_mod);
 
-    const exe = b.addExecutable(.{ .name = name, .root_module = mod, .use_llvm = opts.use_llvm, .use_lld = opts.use_lld });
+    const exe = b.addExecutable(.{ .name = name, .root_module = mod, .use_llvm = true, .use_lld = opts.use_lld });
     if (opts.check_step) |step| {
         step.dependOn(&exe.step);
     }
@@ -1226,6 +1228,7 @@ fn addWebExample(
 
     const exeOptions: std.Build.ExecutableOptions = .{
         .name = "web",
+        .use_llvm = true,
         .root_module = b.createModule(.{
             .root_source_file = file,
             .target = opts.target,
@@ -1253,6 +1256,7 @@ fn addWebExample(
 
     const cb = b.addExecutable(.{
         .name = "cacheBuster",
+        .use_llvm = true,
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/cacheBuster.zig"),
             .target = b.graph.host,
@@ -1304,6 +1308,7 @@ pub fn svgPathToTvgPath(b: *std.Build, svg_path: std.Build.LazyPath) std.Build.L
     const svg2tvg_dep = b.dependency("svg2tvg", .{ .optimize = optimize, .target = target });
     const svg2tvg_exe = b.addExecutable(.{
         .name = "svg2tvg",
+        .use_llvm = true,
         .root_module = b.createModule(.{
             .target = target,
             .optimize = optimize,
