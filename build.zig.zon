@@ -36,8 +36,8 @@
             .lazy = true,
         },
         .raylib = .{
-            .url = "git+https://github.com/kristoff-it/raylib?ref=zig-0.16#68eff3f612091d9e713d2229b4f840582dbfc28f",
-            .hash = "raylib-5.6.0-dev-whq8uLAJDQXCUoWbI50KR2RX8f1NhyzmklCim1bT2EH2",
+            .url = "git+https://github.com/raysan5/raylib?ref=master#e9caf5a9811a9c1a126398795915b13ef488618e",
+            .hash = "raylib-6.0.0-whq8uOmvLgUktXC94fZkRLK2dQA75X2pMwZYj2X3EZl8",
             .lazy = true,
         },
         .wio = .{

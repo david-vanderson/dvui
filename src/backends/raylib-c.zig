@@ -18,6 +18,7 @@ pub const Context = *RaylibBackend;
 
 const log = std.log.scoped(.RaylibBackend);
 
+io: std.Io,
 gpa: std.mem.Allocator,
 we_own_window: bool = false,
 shader: c.Shader,
@@ -30,7 +31,7 @@ mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButton
 touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
 dvui_consumed_events: bool = false,
 cursor_last: dvui.enums.Cursor = .arrow,
-frame_buffers: std.AutoArrayHashMap(u32, u32),
+frame_buffers: std.AutoArrayHashMapUnmanaged(u32, u32),
 fb_width: ?c_int = null,
 fb_height: ?c_int = null,
 ak_should_initialized: bool = dvui.accesskit_enabled,
@@ -69,6 +70,8 @@ const fragSource =
 ;
 
 pub const InitOptions = struct {
+    /// Io for backend and dvui.io
+    io: std.Io,
     /// allocator used for general backend bookkeeping
     gpa: std.mem.Allocator,
     /// The initial size of the application window
@@ -135,12 +138,13 @@ pub fn clear(_: *RaylibBackend) void {
 pub fn initWindow(options: InitOptions) !RaylibBackend {
     createWindow(options);
 
-    var back = init(options.gpa);
+    var back = init(options.io, options.gpa);
     back.we_own_window = true;
     return back;
 }
 
-pub fn init(gpa: std.mem.Allocator) RaylibBackend {
+pub fn init(io: std.Io, gpa: std.mem.Allocator) RaylibBackend {
+    dvui.io = io;
     if (!c.IsWindowReady()) {
         @panic(
             \\OS Window must be created before initializing dvui raylib backend.
@@ -148,8 +152,9 @@ pub fn init(gpa: std.mem.Allocator) RaylibBackend {
     }
 
     return RaylibBackend{
+        .io = io,
         .gpa = gpa,
-        .frame_buffers = std.AutoArrayHashMap(u32, u32).init(gpa),
+        .frame_buffers = .empty,
         .shader = c.LoadShaderFromMemory(vertexSource, fragSource),
         .VAO = @intCast(c.rlLoadVertexArray()),
     };
@@ -160,7 +165,7 @@ pub fn shouldBlockRaylibInput(self: *RaylibBackend) bool {
 }
 
 pub fn deinit(self: *RaylibBackend) void {
-    self.frame_buffers.deinit();
+    self.frame_buffers.deinit(self.gpa);
     c.UnloadShader(self.shader);
     c.rlUnloadVertexArray(@intCast(self.VAO));
 
@@ -185,12 +190,12 @@ pub fn backend(self: *RaylibBackend) dvui.Backend {
 }
 
 pub fn nanoTime(self: *RaylibBackend) i128 {
-    _ = self;
-    return std.time.nanoTimestamp();
+    const ret = std.Io.Clock.boot.now(self.io);
+    return ret.nanoseconds;
 }
 
-pub fn sleep(_: *RaylibBackend, ns: u64) void {
-    std.Thread.sleep(ns);
+pub fn sleep(self: *RaylibBackend, ns: u64) void {
+    std.Io.Clock.Duration.sleep(.{ .clock = .boot, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }
 
 pub fn pixelSize(_: *RaylibBackend) dvui.Size.Physical {
@@ -372,7 +377,7 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
         return dvui.Backend.TextureError.TextureCreate;
     }
 
-    try self.frame_buffers.put(texid, id);
+    try self.frame_buffers.put(self.gpa, texid, id);
 
     const ret = dvui.TextureTarget{ .ptr = @ptrFromInt(texid), .width = width, .height = height, .format = format };
     self.textureClearTarget(ret);
@@ -1011,7 +1016,8 @@ pub fn enableRaylibLogging() void {
 }
 
 /// This is what is run if you are using `dvui.App` with this backend.
-pub fn main() !void {
+pub fn main(main_init: std.process.Init) !void {
+    dvui.App.main_init = main_init;
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
     enableRaylibLogging();
 
@@ -1020,15 +1026,14 @@ pub fn main() !void {
         dvui.Backend.Common.windowsAttachConsole() catch {};
     }
 
-    var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-    const gpa = gpa_instance.allocator();
-    defer _ = gpa_instance.deinit();
-
     const init_opts = app.config.get();
+    const gpa = init_opts.gpa orelse main_init.gpa;
+    const io = init_opts.io orelse main_init.io;
 
     // init Raylib backend (creates OS window)
     // initWindow() means the backend calls CloseWindow for you in deinit()
     var b = try RaylibBackend.initWindow(.{
+        .io = io,
         .gpa = gpa,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
