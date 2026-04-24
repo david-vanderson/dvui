@@ -1,0 +1,16 @@
+.{
+    .name = .sdl_hello,
+    .version = "0.0.1",
+    .dependencies = .{
+        .dvui = .{
+            .path = "../../.."
+        },
+    },
+    .minimum_zig_version = "0.15.2",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+    .fingerprint = 0x3a7a88d7d5a50490,
+}
