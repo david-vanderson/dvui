@@ -706,7 +706,7 @@ pub fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
 /// Note: This callback can occur on a non-gui thread.
 pub fn initialTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     var self: *AccessKit = @ptrCast(@alignCast(instance));
-    const io = self.io;
+    const io = dvui.io;
     self.mutex.lockUncancelable(io);
     defer self.mutex.unlock(io);
 
@@ -731,7 +731,7 @@ fn doAction(request: [*c]c.accesskit_action_request, userdata: ?*anyopaque) call
 
     var self: *AccessKit = @ptrCast(@alignCast(userdata));
 
-    const io = self.io;
+    const io = dvui.io;
     self.mutex.lockUncancelable(io);
     defer self.mutex.unlock(io);
 
@@ -744,7 +744,7 @@ fn doAction(request: [*c]c.accesskit_action_request, userdata: ?*anyopaque) call
 
 fn deactivateAccessibility(userdata: ?*anyopaque) callconv(.c) void {
     var self: *AccessKit = @ptrCast(@alignCast(userdata));
-    const io = self.io;
+    const io = dvui.io;
 
     self.mutex.lockUncancelable(io);
     defer self.mutex.unlock(io);
