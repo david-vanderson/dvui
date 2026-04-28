@@ -1311,11 +1311,11 @@ export class Dvui {
                     if (this.scroll_lowest_batch[0] === 4.000244140625) {
                         ticks *= touchpad_adj; // mac safari/chrome scale wheel like touchpad
                     }
-                    console.log("wheelX -deltaX " + -ev.deltaX + " ticks " + ticks);
+                    //console.log("wheelX -deltaX " + -ev.deltaX + " ticks " + ticks);
                 } else {
                     // assume touchpad
                     ticks = ticks / this.scroll_lowest[0] * touchpad_adj;
-                    console.log("touchpadX -deltaX " + -ev.deltaX + " ticks " + ticks);
+                    //console.log("touchpadX -deltaX " + -ev.deltaX + " ticks " + ticks);
                 }
                 this.instance.exports.add_event(
                     4,
