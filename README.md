@@ -144,7 +144,7 @@ Tested with Zig v0.15.2
 ## Featured Projects
 
 The following projects use DVUI:
-- [Graphl Visual Programming Language Demo](https://graphl.tech/graphl/demo/)
+- [Graphl Visual Programming Language Demo](https://graphl.tech/demo/)
 - [Podcast Player](https://github.com/david-vanderson/podcast)
 - [Graphical Janet REPL](https://codeberg.org/iacore/janet-graphical-repl)
 - [FIDO2/ Passkey compatible authenticator implementation for Linux](https://github.com/r4gus/keypass)
