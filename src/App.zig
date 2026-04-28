@@ -30,6 +30,9 @@ deinitFn: ?fn () void = null,
 /// Returns whether the app should continue running or close.
 frameFn: frameFunction,
 
+/// The init arg passed into main.  null if not available (like on web).
+pub var main_init: ?std.process.Init = null;
+
 pub const frameFunction = fn () anyerror!Result;
 
 fn nop_main() !void {}
@@ -93,6 +96,12 @@ pub const StartOptions = struct {
     /// be used for all backends and platforms, meaning the platform
     /// defaults will be overrulled.
     window_init_options: dvui.Window.InitOptions = .{},
+    /// General purpose allocator.  If null, dvui picks a reasonable default.
+    /// Use dvui.App.config.startFn to initialize this non-statically
+    gpa: ?std.mem.Allocator = null,
+    /// Io implementation.  If null, dvui picks a reasonable default.
+    /// Use dvui.App.config.startFn to initialize this non-statically
+    io: ?std.Io = null,
 };
 
 pub const Result = enum {

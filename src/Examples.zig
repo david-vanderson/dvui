@@ -645,7 +645,7 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
         global.cursor_pos = te.textLayout.selection.cursor;
     } else {
         if (showing.*) {
-            var url: std.io.Writer.Allocating = .init(dvui.currentWindow().arena());
+            var url: std.Io.Writer.Allocating = .init(dvui.currentWindow().arena());
             url.writer.print("https://github.com/david-vanderson/dvui/blob/main/src/Examples/{s}", .{filename}) catch return;
             _ = dvui.openURL(.{ .url = url.toOwnedSlice() catch return, .new_window = false });
             showing.* = false;

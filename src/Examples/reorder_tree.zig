@@ -754,17 +754,18 @@ pub fn fileTree(src: std.builtin.SourceLocation, root_directory: []const u8, tre
 }
 
 fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, uniqueId: dvui.Id, branch_options: dvui.Options, expander_options: dvui.Options) !void {
+    const io = std.testing.io; // FIXME
     const recursor = struct {
         fn search(directory: []const u8, tree: *dvui.TreeWidget, uid: dvui.Id, color_id: *usize, branch_opts: dvui.Options, expander_opts: dvui.Options) !void {
-            var dir = std.fs.cwd().openDir(directory, .{ .access_sub_paths = true, .iterate = true }) catch return;
-            defer dir.close();
+            var dir = std.Io.Dir.cwd().openDir(io, directory, .{ .access_sub_paths = true, .iterate = true }) catch return;
+            defer dir.close(io);
 
             const padding = dvui.Rect.all(2);
 
             var iter = dir.iterate();
 
             var id_extra: usize = 0;
-            while (try iter.next()) |entry| {
+            while (try iter.next(io)) |entry| {
                 id_extra += 1;
 
                 var branch_opts_override = dvui.Options{
@@ -793,7 +794,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
                         if (!std.mem.eql(u8, removed_path, new_path)) {
                             std.log.debug("DVUI/TreeWidget: Moved {s} to {s}", .{ removed_path, new_path });
 
-                            try std.fs.renameAbsolute(removed_path, new_path);
+                            try std.Io.Dir.renameAbsolute(removed_path, new_path, io);
                         }
 
                         dvui.dataRemove(null, uid, "removed_path");

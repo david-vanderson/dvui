@@ -5,9 +5,6 @@ const SDLBackend = @import("sdl3gpu-backend");
 const window_icon_png = @embedFile("zig-favicon.png");
 const c = SDLBackend.c;
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
-
 const vsync = true;
 const show_demo = false;
 var scale_val: f32 = 1.0;
@@ -17,7 +14,7 @@ var show_dialog_outside_frame: bool = false;
 /// This example shows how to use dvui for a normal application:
 /// - dvui renders the whole application
 /// - render frames only when needed
-pub fn main() !void {
+pub fn main(main_init: std.process.Init) !void {
     if (@import("builtin").os.tag == .windows) {
         dvui.Backend.Common.windowsAttachConsole() catch {};
     }
@@ -27,11 +24,10 @@ pub fn main() !void {
 
     dvui.Examples.show_demo_window = show_demo;
 
-    defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
-
     // init SDL3GPU backend (creates and owns OS window)
     var backend = try SDLBackend.initWindow(.{
-        .allocator = gpa,
+        .io = main_init.io,
+        .allocator = main_init.gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
         .vsync = vsync,
@@ -44,7 +40,7 @@ pub fn main() !void {
     _ = c.SDL_EnableScreenSaver();
 
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{
+    var win = try dvui.Window.init(@src(), main_init.gpa, backend.backend(), .{
         .theme = switch (backend.preferredColorScheme() orelse .light) {
             .light => dvui.Theme.builtin.adwaita_light,
             .dark => dvui.Theme.builtin.adwaita_dark,

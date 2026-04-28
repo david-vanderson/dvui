@@ -15,6 +15,9 @@ pub const c = blk: {
         });
     }
     break :blk @cImport({
+        // Zig 0.16 bundled arm_vector_types.h uses __mfp8 builtin that
+        // translate-c can't resolve. Gate arm_neon.h include off.
+        @cDefine("SDL_DISABLE_ARM_NEON_H", "1");
         @cInclude("SDL2/SDL_syswm.h");
         @cInclude("SDL2/SDL.h");
     });
@@ -30,6 +33,7 @@ pub const Context = *SDLBackend;
 
 const log = std.log.scoped(.SDLBackend);
 
+io: std.Io,
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
 ak_should_initialized: bool = dvui.accesskit_enabled,
@@ -45,6 +49,13 @@ cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).@"enum".fields.len]bool = [_
 arena: std.mem.Allocator = undefined,
 
 pub const InitOptions = struct {
+    /// Io backend and dvui should use, will be assigned to dvui.io.
+    io: std.Io,
+    /// SDL2 uses this to query for environment variables for scale:
+    /// - QT_AUTO_SCREEN_SCALE_FACTOR
+    /// - QT_SCALE_FACTOR
+    /// - GDK_SCALE
+    environ_map: ?*std.process.Environ.Map = null,
     /// The allocator used for temporary allocations used during init()
     allocator: std.mem.Allocator,
     /// The initial size of the application window
@@ -150,7 +161,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
     try toErr(c.SDL_SetRenderDrawBlendMode(renderer, pma_blend), "SDL_SetRenderDrawBlendMode in initWindow");
 
-    var back = init(window, renderer);
+    var back = init(options.io, window, renderer);
     back.ak_should_initialized = show_window_in_begin;
     back.we_own_window = true;
 
@@ -166,26 +177,14 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
             var guess_from_dpi = true;
 
             // first try to inspect environment variables
-            {
-                const qt_auto_str: ?[]u8 = std.process.getEnvVarOwned(options.allocator, "QT_AUTO_SCREEN_SCALE_FACTOR") catch |err| switch (err) {
-                    error.EnvironmentVariableNotFound => null,
-                    else => return err,
-                };
-                defer if (qt_auto_str) |str| options.allocator.free(str);
+            if (options.environ_map) |map| {
+                const qt_auto_str: ?[]const u8 = map.get("QT_AUTO_SCREEN_SCALE_FACTOR");
                 if (qt_auto_str != null and std.mem.eql(u8, qt_auto_str.?, "0")) {
                     log.info("QT_AUTO_SCREEN_SCALE_FACTOR is 0, disabling content scale guessing", .{});
                     guess_from_dpi = false;
                 }
-                const qt_str: ?[]u8 = std.process.getEnvVarOwned(options.allocator, "QT_SCALE_FACTOR") catch |err| switch (err) {
-                    error.EnvironmentVariableNotFound => null,
-                    else => return err,
-                };
-                defer if (qt_str) |str| options.allocator.free(str);
-                const gdk_str: ?[]u8 = std.process.getEnvVarOwned(options.allocator, "GDK_SCALE") catch |err| switch (err) {
-                    error.EnvironmentVariableNotFound => null,
-                    else => return err,
-                };
-                defer if (gdk_str) |str| options.allocator.free(str);
+                const qt_str: ?[]const u8 = map.get("QT_SCALE_FACTOR");
+                const gdk_str: ?[]const u8 = map.get("GDK_SCALE");
 
                 if (qt_str) |str| {
                     const qt_scale = std.fmt.parseFloat(f32, str) catch 1.0;
@@ -208,22 +207,14 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
                 //Xft.dpi: 96
                 //Xft.antialias: 1
                 if (mdpi == null and builtin.os.tag == .linux) {
-                    var stdout: std.ArrayListUnmanaged(u8) = .empty;
-                    defer stdout.deinit(options.allocator);
-                    var stderr: std.ArrayListUnmanaged(u8) = .empty;
-                    defer stderr.deinit(options.allocator);
-                    var child = std.process.Child.init(&.{ "xrdb", "-get", "Xft.dpi" }, options.allocator);
-                    child.stdout_behavior = .Pipe;
-                    child.stderr_behavior = .Pipe;
-                    try child.spawn();
-                    var ok = true;
-                    child.collectOutput(options.allocator, &stdout, &stderr, 100) catch {
-                        ok = false;
-                    };
-                    _ = child.wait() catch {};
-                    if (ok) {
-                        const end_digits = std.mem.indexOfNone(u8, stdout.items, &.{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }) orelse stdout.items.len;
-                        const xrdb_dpi = std.fmt.parseInt(u32, stdout.items[0..end_digits], 10) catch null;
+                    const result: ?std.process.RunResult = std.process.run(options.allocator, options.io, .{
+                        .argv = &.{ "xrdb", "-get", "Xft.dpi" },
+                    }) catch null;
+                    if (result) |r| {
+                        defer options.allocator.free(r.stdout);
+                        defer options.allocator.free(r.stderr);
+                        const end_digits = std.mem.indexOfNone(u8, r.stdout, &.{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }) orelse r.stdout.len;
+                        const xrdb_dpi = std.fmt.parseInt(u32, r.stdout[0..end_digits], 10) catch null;
                         if (xrdb_dpi) |dpi| {
                             mdpi = @floatFromInt(dpi);
                         }
@@ -322,8 +313,9 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     return back;
 }
 
-pub fn init(window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
-    return SDLBackend{ .window = window, .renderer = renderer };
+pub fn init(io: std.Io, window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
+    dvui.io = io;
+    return SDLBackend{ .io = io, .window = window, .renderer = renderer };
 }
 
 const SDL_ERROR = if (sdl3) bool else c_int;
@@ -623,12 +615,13 @@ pub fn backend(self: *SDLBackend) dvui.Backend {
     return dvui.Backend.init(self);
 }
 
-pub fn nanoTime(_: *SDLBackend) i128 {
-    return std.time.nanoTimestamp();
+pub fn nanoTime(self: *SDLBackend) i128 {
+    const ret = std.Io.Clock.boot.now(self.io);
+    return ret.nanoseconds;
 }
 
-pub fn sleep(_: *SDLBackend, ns: u64) void {
-    std.Thread.sleep(ns);
+pub fn sleep(self: *SDLBackend, ns: u64) void {
+    std.Io.Clock.Duration.sleep(.{ .clock = .boot, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }
 
 pub fn clipboardText(self: *SDLBackend) ![]const u8 {
@@ -1504,7 +1497,7 @@ fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: c_uint, mess
     }
 }
 
-fn sdlLog(comptime category: @Type(.enum_literal), priority: c_uint, message: [*c]const u8) void {
+fn sdlLog(comptime category: @EnumLiteral(), priority: c_uint, message: [*c]const u8) void {
     const logger = std.log.scoped(category);
     switch (priority) {
         c.SDL_LOG_PRIORITY_VERBOSE => logger.debug("VERBOSE: {s}", .{message}),
@@ -1534,7 +1527,7 @@ pub fn enableSDLLogging() void {
         c.SDL_LOG_PRIORITY_ERROR;
     if (sdl3) c.SDL_SetLogPriorities(default_log_level) else c.SDL_LogSetAllPriority(default_log_level);
 
-    const categories = [_]struct { c_uint, @Type(.enum_literal) }{
+    const categories = [_]struct { c_uint, @EnumLiteral() }{
         .{ c.SDL_LOG_CATEGORY_APPLICATION, .SDL_APPLICATION },
         .{ c.SDL_LOG_CATEGORY_ERROR, .SDL_ERROR },
         .{ c.SDL_LOG_CATEGORY_ASSERT, .SDL_ASSERT },
@@ -1565,7 +1558,8 @@ pub fn enableSDLLogging() void {
 }
 
 /// This is what is run if you are using `dvui.App` with this backend.
-pub fn main() !u8 {
+pub fn main(main_init: std.process.Init) !u8 {
+    dvui.App.main_init = main_init;
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
     // You can override these by calling this function with your arguments in dvui.App.config.startFn
@@ -1581,6 +1575,11 @@ pub fn main() !u8 {
     if (sdl3 and (sdl_options.callbacks orelse true) and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows)) {
         // We are using sdl's callbacks to support rendering during OS resizing
 
+        const init_opts = app.config.get();
+
+        appState.gpa = init_opts.gpa orelse main_init.gpa;
+        appState.io = init_opts.io orelse main_init.io;
+
         // For programs that provide their own entry points instead of relying on SDL's main function
         // macro magic, 'SDL_SetMainReady()' should be called before calling 'SDL_Init()'.
         c.SDL_SetMainReady();
@@ -1595,13 +1594,11 @@ pub fn main() !u8 {
 
     const init_opts = app.config.get();
 
-    var gpa_instance: std.heap.DebugAllocator(.{}) = .init;
-    defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
-    const gpa = gpa_instance.allocator();
-
     // init SDL backend (creates and owns OS window)
     var back = try initWindow(.{
-        .allocator = gpa,
+        .io = init_opts.io orelse main_init.io,
+        .environ_map = main_init.environ_map,
+        .allocator = init_opts.gpa orelse main_init.gpa,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
         .max_size = init_opts.max_size,
@@ -1620,7 +1617,7 @@ pub fn main() !u8 {
     }
 
     //// init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, back.backend(), init_opts.window_init_options);
+    var win = try dvui.Window.init(@src(), main_init.gpa, back.backend(), init_opts.window_init_options);
     defer win.deinit();
 
     if (app.initFn) |initFn| {
@@ -1678,14 +1675,15 @@ pub fn main() !u8 {
 const CallbackState = struct {
     win: dvui.Window,
     back: SDLBackend,
-    gpa: std.heap.GeneralPurposeAllocator(.{}) = .init,
+    gpa: std.mem.Allocator,
+    io: std.Io,
     interrupted: bool = false,
     have_resize: bool = false,
     no_wait: bool = false,
 };
 
 /// used when doing sdl callbacks
-var appState: CallbackState = .{ .win = undefined, .back = undefined };
+var appState: CallbackState = .{ .win = undefined, .back = undefined, .gpa = undefined, .io = undefined };
 
 // sdl3 callback
 fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callconv(.c) c.SDL_AppResult {
@@ -1700,11 +1698,10 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
 
     const init_opts = app.config.get();
 
-    const gpa = appState.gpa.allocator();
-
     // init SDL backend (creates and owns OS window)
     appState.back = initWindow(.{
-        .allocator = gpa,
+        .io = appState.io,
+        .allocator = appState.gpa,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
         .max_size = init_opts.max_size,
@@ -1725,7 +1722,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
     }
 
     //// init dvui Window (maps onto a single OS window)
-    appState.win = dvui.Window.init(@src(), gpa, appState.back.backend(), app.config.options.window_init_options) catch |err| {
+    appState.win = dvui.Window.init(@src(), appState.gpa, appState.back.backend(), app.config.options.window_init_options) catch |err| {
         log.err("dvui.Window.init failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
@@ -1759,7 +1756,6 @@ fn appQuit(_: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
     if (app.deinitFn) |deinitFn| deinitFn();
     appState.win.deinit();
     appState.back.deinit();
-    if (appState.gpa.deinit() != .ok) @panic("Memory leak on exit!");
 
     // SDL will clean up the window/renderer for us.
 }

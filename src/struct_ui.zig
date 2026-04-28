@@ -735,9 +735,10 @@ pub fn enumFieldWidgetOptional(
             null;
         _ = dvui.dropdown(@src(), entries, .{ .choice_nullable = &choice }, .{ .placeholder = "null" }, .{});
 
-        if (choice) |ch|
-            field_value_optional_ptr.* = std.meta.stringToEnum(T, @tagName(@as(std.meta.FieldEnum(T), @enumFromInt(ch)))).?
-        else
+        if (choice) |ch| {
+            @setEvalBranchQuota(5000);
+            field_value_optional_ptr.* = std.meta.stringToEnum(T, @tagName(@as(std.meta.FieldEnum(T), @enumFromInt(ch)))).?;
+        } else
             field_value_optional_ptr.* = null;
     }
 }

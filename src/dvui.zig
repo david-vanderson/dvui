@@ -19,6 +19,7 @@
 //!
 const builtin = @import("builtin");
 const std = @import("std");
+const Io = std.Io;
 /// Using this in application code will hinder ZLS from referencing the correct backend.
 /// To avoid this import the backend directly from the applications build.zig
 ///
@@ -32,6 +33,7 @@ const std = @import("std");
 /// const Backend = @import("backend");
 /// ```
 pub const backend = @import("backend");
+pub const useTvg = @import("build_options").tvg;
 pub const render_backend = @import("render_backend");
 const tvg = @import("svg2tvg");
 
@@ -418,6 +420,9 @@ pub const Id = enum(u64) {
 /// Managed by `Window.begin` / `Window.end`
 pub var current_window: ?*Window = null;
 
+/// Global Io used by dvui functions, set by the backend when it is initialized.
+pub var io: Io = undefined;
+
 /// Get the current `dvui.Window` which corresponds to the OS window we are
 /// currently adding widgets to.
 ///
@@ -454,24 +459,44 @@ pub fn widgetIsAllocated(ptr: anytype) bool {
     return dvui.currentWindow()._widget_stack.created(ptr);
 }
 
+pub const FormatErrorTrace = struct {
+    error_trace: ?*const std.builtin.StackTrace,
+    terminal_mode: Io.Terminal.Mode = .no_color,
+
+    pub fn format(fet: FormatErrorTrace, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        if (fet.error_trace) |ert| {
+            try writer.writeByte('\n');
+            try std.debug.writeErrorReturnTrace(ert, .{ .writer = writer, .mode = fet.terminal_mode });
+        } else {
+            try writer.writeAll("null");
+        }
+    }
+};
+
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {
     @branchHint(.cold);
     const stack_trace_frame_count = @import("build_options").log_stack_trace orelse if (builtin.mode == .Debug) 12 else 0;
-    const stack_trace_enabled = stack_trace_frame_count > 0;
+    const stack_trace_enabled = if (builtin.cpu.arch.isWasm()) false else stack_trace_frame_count > 0;
     const err_trace_enabled = if (@import("build_options").log_error_trace) |enabled| enabled else stack_trace_enabled;
 
-    var addresses: [stack_trace_frame_count]usize = @splat(0);
-    var stack_trace = std.builtin.StackTrace{ .instruction_addresses = &addresses, .index = 0 };
-    if (!builtin.strip_debug_info) std.debug.captureStackTrace(@returnAddress(), &stack_trace);
-
     const error_trace_fmt, const err_trace_arg = if (err_trace_enabled)
-        .{ "\nError trace: {?f}", @errorReturnTrace() }
+        .{ "\nError trace: {f}", FormatErrorTrace{ .error_trace = @errorReturnTrace(), .terminal_mode = std.log.terminalMode() }}
     else
-        .{ "{s}", "" }; // Needed to keep the arg count the same
-    const stack_trace_fmt, const trace_arg = if (stack_trace_enabled)
-        .{ "\nStack trace: {f}", stack_trace }
-    else
-        .{ "{s}", "" }; // Needed to keep the arg count the sames
+        .{ "{s}", "" }; // Keep arg count the same
+
+    const stack_trace_fmt, const trace_arg = blk: {
+        if (stack_trace_enabled) {
+            var addresses: [stack_trace_frame_count]usize = @splat(0);
+            const stack_trace = std.debug.captureCurrentStackTrace(.{}, &addresses);
+
+            break :blk .{ "\nStack trace: {f}", std.debug.FormatStackTrace{
+                                    .stack_trace = stack_trace,
+                                    .terminal_mode = std.log.terminalMode() }};
+        } else {
+            break :blk .{ "{s}", "" }; // Needed to keep the arg count the sames
+        }
+    };
+
     const combined_args = .{ src.file, src.line, src.column, src.fn_name, @errorName(err) } ++ args ++ .{ err_trace_arg, trace_arg };
     log.err("{s}:{d}:{d}: {s} got {s}: " ++ fmt ++ error_trace_fmt ++ stack_trace_fmt, combined_args);
 }
@@ -566,6 +591,7 @@ pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*Font.Cache.Entry {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn svgToTvg(allocator: std.mem.Allocator, svg_bytes: []const u8) (std.mem.Allocator.Error || TvgError)![]const u8 {
+    if (comptime !useTvg) { comptime unreachable; }
     return tvg.tvg_from_svg(allocator, svg_bytes, .{}) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
@@ -579,9 +605,13 @@ pub fn svgToTvg(allocator: std.mem.Allocator, svg_bytes: []const u8) (std.mem.Al
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) TvgError!f32 {
+    if (comptime !useTvg) {
+        return (Options{}).fontGet().withSize(height / 2).textSize(name).w;
+    }
+
     if (height == 0) return 0.0;
-    var stream = std.io.fixedBufferStream(tvg_bytes);
-    var parser = tvg.tvg.parse(currentWindow().arena(), stream.reader()) catch |err| {
+    var stream: std.Io.Reader = .fixed(tvg_bytes);
+    var parser = tvg.tvg.parse(currentWindow().arena(), &stream) catch |err| {
         log.warn("iconWidth Tinyvg error {any} parsing icon {s}\n", .{ err, name });
         return TvgError.tvgError;
     };
@@ -2374,7 +2404,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
 
 pub const IdMutex = struct {
     id: Id,
-    mutex: *std.Thread.Mutex,
+    mutex: *Io.Mutex,
 };
 
 /// Add a dialog to be displayed on the GUI thread during `Window.end`.
@@ -2398,7 +2428,7 @@ pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize
     };
     const mutex = w.dialogs.add(w.gpa, .{ .id = id, .display = display }) catch |err| {
         logError(@src(), err, "failed to add dialog", .{});
-        w.dialogs.mutex.lock();
+        w.dialogs.mutex.lockUncancelable(io);
         return .{ .id = .zero, .mutex = &w.dialogs.mutex };
     };
     refresh(win, @src(), id);
@@ -2465,7 +2495,7 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
         }
     }
 
-    id_mutex.mutex.unlock();
+    id_mutex.mutex.unlock(io);
 }
 
 pub fn dialogDisplay(id: Id) !void {
@@ -2591,7 +2621,7 @@ pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize,
     };
     const mutex = w.toasts.add(w.gpa, .{ .id = id, .subwindow_id = subwindow_id, .display = display }) catch |err| {
         logError(@src(), err, "failed to add toast", .{});
-        w.toasts.mutex.lock();
+        w.toasts.mutex.lockUncancelable(io);
         return .{ .id = .zero, .mutex = &w.toasts.mutex };
     };
     refresh(win, @src(), id);
@@ -2647,7 +2677,7 @@ pub fn toast(src: std.builtin.SourceLocation, opts: ToastOptions) void {
     const id_mutex = dvui.toastAdd(opts.window, src, opts.id_extra, opts.subwindow_id, opts.displayFn, opts.timeout);
     const id = id_mutex.id;
     dvui.dataSetSlice(opts.window, id, "_message", opts.message);
-    id_mutex.mutex.unlock();
+    id_mutex.mutex.unlock(io);
 }
 
 pub fn toastDisplay(id: Id) !void {

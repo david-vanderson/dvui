@@ -1,3 +1,8 @@
+
+fn testError() !void {
+    return error.TestError;
+}
+
 /// ![image](Examples-debugging.png)
 pub fn debuggingErrors() void {
     {
@@ -13,6 +18,12 @@ pub fn debuggingErrors() void {
     dvui.label(@src(), "on non-hdpi screens watch the window title \"DVUI Demo\"", .{}, .{ .margin = .{ .x = 10 } });
     dvui.label(@src(), "- text, icons, and images rounded to nearest pixel", .{}, .{ .margin = .{ .x = 10 } });
     dvui.label(@src(), "- text rendered at the closest smaller font (not stretched)", .{}, .{ .margin = .{ .x = 10 } });
+
+    if (dvui.button(@src(), "dvui.logError()", .{}, .{})) {
+        testError() catch |err| {
+            dvui.logError(@src(), err, "Test Error", .{});
+        };
+    }
 
     if (dvui.expander(@src(), "Virtual Parent (affects IDs but not layout)", .{}, .{ .expand = .horizontal })) {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = .{ .x = 10 } });

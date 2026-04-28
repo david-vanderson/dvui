@@ -9,9 +9,6 @@ comptime {
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
-
 const vsync = true;
 const show_demo = false;
 var scale_val: f32 = 1.0;
@@ -24,7 +21,7 @@ var g_win: ?*dvui.Window = null;
 /// - dvui renders the whole application
 /// - render frames only when needed
 ///
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     if (@import("builtin").os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         dvui.Backend.Common.windowsAttachConsole() catch {};
@@ -34,11 +31,11 @@ pub fn main() !void {
 
     dvui.Examples.show_demo_window = show_demo;
 
-    defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
-
     // init SDL backend (creates and owns OS window)
     var backend = try SDLBackend.initWindow(.{
-        .allocator = gpa,
+        .io = init.io,
+        .environ_map = init.environ_map,
+        .allocator = init.gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
         .vsync = vsync,
@@ -51,7 +48,7 @@ pub fn main() !void {
     _ = SDLBackend.c.SDL_EnableScreenSaver();
 
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{
+    var win = try dvui.Window.init(@src(), init.gpa, backend.backend(), .{
         // you can set the default theme here in the init options
         .theme = switch (backend.preferredColorScheme() orelse .light) {
             .light => dvui.Theme.builtin.adwaita_light,

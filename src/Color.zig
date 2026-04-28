@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const hsluv = @import("hsluv.zig");
 
 const Color = @This();
@@ -34,7 +35,7 @@ pub const purple = Color{ .r = 0x80, .g = 0x00, .b = 0x80 };
 // https://en.wikipedia.org/wiki/Web_colors#Extended_colors
 pub const cyan = aqua;
 pub const magenta = fuchsia;
-pub const darl_cyan = teal;
+pub const dark_cyan = teal;
 pub const dark_magenta = purple;
 
 pub const transparent = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
@@ -388,6 +389,7 @@ pub const PMA = extern struct {
     }
 };
 
+
 pub const PMAImage = struct {
     pma: []PMA,
     width: u32,
@@ -419,6 +421,7 @@ pub const PMAImage = struct {
     /// the returned []PMA inside PMAImage is allocated with alloc
     /// the render_alloc is used for temporary allocations in the render process
     pub fn fromTvgFile(dbg_name: []const u8, alloc: std.mem.Allocator, render_alloc: std.mem.Allocator, tvg_bytes: []const u8, height: u32, icon_opts: dvui.IconRenderOptions) !PMAImage {
+        if (comptime !dvui.useTvg) { comptime unreachable; }
         const ImageAdapter = struct {
             pixels: []u8,
             width: u32,
@@ -453,7 +456,7 @@ pub const PMAImage = struct {
             .width = width,
             .height = height,
         };
-        var fb = std.io.fixedBufferStream(tvg_bytes);
+        var fb: std.Io.Reader = .fixed(tvg_bytes);
 
         var ow_stroke: ?tvg.Color = null;
         if (icon_opts.stroke_color) |cx| ow_stroke = ImageAdapter.conv(cx);
@@ -461,7 +464,7 @@ pub const PMAImage = struct {
         var disable_fill = false;
         if (ow_fill != null and ow_fill.?.a == 0.0) disable_fill = true;
         if (icon_opts.fill_color) |cx| ow_fill = ImageAdapter.conv(cx);
-        tvg.renderStream(render_alloc, &img, fb.reader(), .{
+        tvg.renderStream(render_alloc, &img, &fb, .{
             .overwrite_stroke_width = icon_opts.stroke_width,
             .overwrite_stroke = ow_stroke,
             .overwrite_fill = ow_fill,

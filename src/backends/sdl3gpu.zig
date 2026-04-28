@@ -239,7 +239,7 @@ const FrameUploads = struct {
     index: UploadBuffer(dvui.Vertex.Index),
 
     // Draw calls tracking
-    draws: std.ArrayList(RectDraw) = .{},
+    draws: std.ArrayList(RectDraw) = .empty,
     allocator: std.mem.Allocator,
 
     // Copy pass for uploading data each frame
@@ -342,6 +342,7 @@ const Vertex = extern struct {
     }
 };
 
+io: std.Io,
 window: *c.SDL_Window,
 device: *c.SDL_GPUDevice,
 
@@ -422,6 +423,7 @@ pub const TexTransferBuf = struct {
 };
 
 pub const InitOptions = struct {
+    io: std.Io,
     /// The allocator used for temporary allocations used during init()
     allocator: std.mem.Allocator,
     /// The initial size of the application window
@@ -485,7 +487,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         return error.BackendError;
     }
 
-    var back = init(window, device, options.allocator);
+    var back = init(options.io, window, device, options.allocator);
     back.ak_should_initialized = show_window_in_begin;
     back.we_own_window = true;
 
@@ -539,8 +541,10 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     return back;
 }
 
-pub fn init(window: *c.SDL_Window, device: *c.SDL_GPUDevice, allocator: std.mem.Allocator) SDLBackend {
+pub fn init(io: std.Io, window: *c.SDL_Window, device: *c.SDL_GPUDevice, allocator: std.mem.Allocator) SDLBackend {
+    dvui.io = io;
     var back = SDLBackend{
+        .io = io,
         .window = window,
         .device = device,
         .textures_arena = std.heap.ArenaAllocator.init(allocator),
@@ -1026,12 +1030,13 @@ pub fn backend(self: *SDLBackend) dvui.Backend {
     return dvui.Backend.init(self);
 }
 
-pub fn nanoTime(_: *SDLBackend) i128 {
-    return std.time.nanoTimestamp();
+pub fn nanoTime(self: *SDLBackend) i128 {
+    const ret = std.Io.Clock.boot.now(self.io);
+    return ret.nanoseconds;
 }
 
-pub fn sleep(_: *SDLBackend, ns: u64) void {
-    std.Thread.sleep(ns);
+pub fn sleep(self: *SDLBackend, ns: u64) void {
+    std.Io.Clock.Duration.sleep(.{ .clock = .boot, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }
 
 pub fn clipboardText(self: *SDLBackend) ![]const u8 {
@@ -1849,7 +1854,7 @@ fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: c_uint, mess
     }
 }
 
-fn sdlLog(comptime category: @Type(.enum_literal), priority: c_uint, message: [*c]const u8) void {
+fn sdlLog(comptime category: @EnumLiteral(), priority: c_uint, message: [*c]const u8) void {
     const logger = std.log.scoped(category);
     switch (priority) {
         c.SDL_LOG_PRIORITY_VERBOSE => logger.debug("VERBOSE: {s}", .{message}),
@@ -1881,7 +1886,7 @@ pub fn enableSDLLogging() void {
 
     c.SDL_SetLogPriorities(default_log_level);
 
-    const categories = [_]struct { c_uint, @Type(.enum_literal) }{
+    const categories = [_]struct { c_uint, @EnumLiteral() }{
         .{ c.SDL_LOG_CATEGORY_APPLICATION, .SDL_APPLICATION },
         .{ c.SDL_LOG_CATEGORY_ERROR, .SDL_ERROR },
         .{ c.SDL_LOG_CATEGORY_ASSERT, .SDL_ASSERT },

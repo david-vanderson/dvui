@@ -1,38 +1,53 @@
 .{
     .name = .dvui,
     .fingerprint = 0xa35affe599490101,
-    .version = "0.4.0",
-    .minimum_zig_version = "0.15.1",
-    .paths = .{""},
+    .version = "0.5.0-dev",
+    .minimum_zig_version = "0.16.0",
+    .paths = .{
+        "LICENSE",
+        "README.md",
+        "build.zig",
+        "build.zig.zon",
+        "docs",
+        "examples",
+        "package.json",
+        "readme-accessibility.md",
+        "readme-implementation.md",
+        "readme-raylib-zig-custom.md",
+        "src",
+        "tools",
+        "tsconfig.json",
+        "vendor",
+    },
     .dependencies = .{
         .sdl = .{
-            .url = "git+https://github.com/allyourcodebase/SDL#d29847ebcb6da34dec466a06163431982500a092",
-            .hash = "SDL-2.32.6-JToi38aTEgECY2mV9iUG7dNouCbarfJ1mkzjjm53gC80",
+            .url = "git+https://github.com/david-vanderson/SDL#b25735a465f7db1c160d2eca8ac46dde9ec41cfb",
+            .hash = "SDL-2.32.10-JToi37G3EgG0eraPos4vhCwC6vVgyB1FYf1SxxhpBr_Y",
             .lazy = true,
         },
         .sdl3 = .{
-            .url = "git+https://github.com/castholm/SDL#887fa805e40d5c7bb3955ae69b89ed566c6a0471",
-            .hash = "sdl-0.4.0+3.4.0-SDL--rq2owEZsySGuHCuVJ9naEvH3i3e_pyUIjziBtJ-",
+            .url = "git+https://github.com/david-vanderson/SDL#5bbcf665494fe14acadf50601edf6d5f74ebf96a",
+            .hash = "sdl-0.4.2+3.4.4-SDL--tB1pQFLgwvCakiiOSoZIuVaz6a6-_gOZC66AGRD",
             .lazy = true,
         },
         .freetype = .{
-            .url = "git+https://github.com/david-vanderson/freetype#153f45bf550d54c902c2e6233c1c0554f067028c",
-            .hash = "freetype-2.14.1-alzUkTaBqgBs62EIZtayIBpFnCaZmSh8Qy6QNF2BUE3E",
+            .url = "git+https://github.com/david-vanderson/freetype#cd981cdea11ddd82b89975bb673f25ac069ffc09",
+            .hash = "freetype-2.14.1-alzUkTyBqgBwke4Jsot997WYSpl207Ij9oO-2QOvGrOi",
             .lazy = true,
         },
         .raylib = .{
-            .url = "git+https://github.com/raysan5/raylib?ref=master#720dd22491cdc4a29ec0ea87b572d9380872198c",
-            .hash = "raylib-5.6.0-dev-whq8uMVQCgVTgRxG3REWgBBSi2BR-nf4bq6eqANxImt7",
+            .url = "git+https://github.com/raysan5/raylib?ref=master#e9caf5a9811a9c1a126398795915b13ef488618e",
+            .hash = "raylib-6.0.0-whq8uOmvLgUktXC94fZkRLK2dQA75X2pMwZYj2X3EZl8",
             .lazy = true,
         },
         .wio = .{
-            .url = "https://github.com/ypsvlq/wio/archive/8f874372e6644769f6a964912cd819b02fcb8c6b.tar.gz",
-            .hash = "wio-0.0.0-8xHrr3sEBgDdNTJi4NMsC_SED4XiK8M96IUFfCyVlVRS",
+            .url = "git+https://github.com/ypsvlq/wio?master#b8abff48c317348a1177998d07ce8d331a863ccc",
+            .hash = "wio-0.0.0-8xHrr2mRBgCezIa_g2nf07nUnrHf-PCo95tkge77ppgo",
             .lazy = true,
         },
         .opengl = .{
-            .url = "https://github.com/ypsvlq/opengl/archive/2dfbc2b4994e3333d35fd2c1bbf459340d54fef4.tar.gz",
-            .hash = "opengl-0.0.0-_Vp8-GvsKgCK18nOkOYyRNlkJUn-zWE8hu38AeUPO7Jb",
+            .url = "git+https://github.com/ypsvlq/opengl?master#2cd1835dc6e9b31518597cff25ce95fd07f2e0c7",
+            .hash = "opengl-0.0.0-_Vp8-EjsKgDhnkUWeb8Nmr2oEdvsCsDq9bUgmcNi0SuQ",
             .lazy = true,
         },
         //used in the raylib-ontop example
@@ -43,14 +58,15 @@
         },
         // required for the directx11 backend
         .win32 = .{
-            .url = "git+https://github.com/marlersoft/zigwin32#5587b16fa040573846a6bf531301f6206d31a6bf",
-            .hash = "zigwin32-25.0.28-preview-AAAAAICM5AMResOGQnQ85mfe60TTOQeMtt7GRATUOKoP",
+            .url = "git+https://github.com/kristoff-it/zigwin32.git?ref=fix/zig16#1102e9b82e8bd50913b6a78035bfb399ebd8cf97",
+            .hash = "zigwin32-25.0.28-preview-6BfVhYKN5AOvXPVJq4bGZ7C5dM3PbUra4xhKAKOFJGcF",
             .lazy = true,
         },
         // for rendering tvg icons
         .svg2tvg = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-svg2tvg#78797970be3d676a9087696ec36d6f29a522b580",
-            .hash = "svg2tvg-0.0.0-HpMZuWZ3BgApRrFbd9CxtabLoXEA5odBFUDFrDqno8Ih",
+            .url = "git+https://github.com/david-vanderson/zig-lib-svg2tvg#ae4e3c656ae00c8a0a931ebee30b3c4f270703dd",
+            .hash = "svg2tvg-0.0.0-HpMZueh3BgDUpNyENQCfcSDeVWeat2x_q-811ZH8GWDZ",
+            .lazy = true,
         },
         .accesskit = .{
             .url = "https://github.com/AccessKit/accesskit-c/releases/download/0.20.0/accesskit-c-0.20.0.zip",
@@ -60,18 +76,18 @@
 
         // Experimental zig bindings, any zig based backend will be located here
         .raylib_zig = .{
-            .url = "git+https://github.com/raylib-zig/raylib-zig?ref=devel#3cd4d3179d967fc8b931514603fdbc4a43a1d771",
-            .hash = "raylib_zig-5.6.0-dev-KE8REE1LBQCL7lia-DwUkusWI1G4kJmhtatLh2kNsuiE",
+            .url = "git+https://github.com/raylib-zig/raylib-zig?ref=devel#4b6a05cd102d51f00523dd5c5e18e628df359d20",
+            .hash = "raylib_zig-5.6.0-dev-KE8REKNmBQDek2Sz27ULioxYpY9IYR0K0CeIC-iJRLCI",
             .lazy = true,
         },
         .zglfw = .{
-            .url = "git+https://github.com/zig-gamedev/zglfw.git#6034a5623312c58bf5e64c1a2b686691c28575f4",
-            .hash = "zglfw-0.10.0-dev-zgVDNPKyIQCBi-wv_vxkvIQq1u0bP4D56Wszx_2mszc7",
+            .url = "git+https://github.com/zig-gamedev/zglfw.git#d9c06187e8b23e91b2ba6865d265e4213e5e7d09",
+            .hash = "zglfw-0.10.0-dev-zgVDNC64IQCeL-_eVOA27Wa50WVitrJswOZVvgcXmIsy",
             .lazy = true,
         },
         .tree_sitter = .{
-            .url = "git+https://github.com/tree-sitter/tree-sitter#eacb95c85da15005f091729f3225609d0db67963",
-            .hash = "tree_sitter-0.27.0-Tw2sRwKWCwCqwcmq1ZXGlBVEa1887b3t2RwZdmIRrX3Z",
+            .url = "git+https://github.com/david-vanderson/tree-sitter#c8cad6e16017a6bb6eb8a61fb1c1e7f23c552b4f",
+            .hash = "tree_sitter-0.27.0-Tw2sR72eCwCRZKEZND6TJIgdWq9ZnPV9g_syCHLyNEGe",
             .lazy = true,
         },
         .tree_sitter_json = .{
@@ -80,8 +96,9 @@
             .lazy = true,
         },
         .tree_sitter_zig = .{
-            .url = "git+https://github.com/tree-sitter-grammars/tree-sitter-zig.git#6479aa13f32f701c383083d8b28360ebd682fb7d",
-            .hash = "tree_sitter_zig-1.1.2-AAAAAJ57XACsD_XBHC4i6G6rnCsZ1dZj7CLRTC09toEB",
+            .url = "git+https://github.com/david-vanderson/tree-sitter-zig.git#f247e4f0017a79c86646089078b68591620d5709",
+            .hash = "tree_sitter_zig-1.1.2-YNf2GAt8XACdbaWHHiNMMfw--bLN1Av1rMsnq6bokMdL",
+            .lazy = true,
         },
         .zgl = .{
             .url = "git+https://github.com/ziglibs/zgl#6ee54c287f3c4f176bd05a92746828bb791a1ad0",

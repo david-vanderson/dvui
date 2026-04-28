@@ -73,6 +73,7 @@ pub fn step(frame: dvui.App.frameFunction) !?u32 {
 }
 
 pub const InitOptions = struct {
+    io: std.Io = if (@import("builtin").is_test) std.testing.io else undefined,
     allocator: std.mem.Allocator = if (@import("builtin").is_test) std.testing.allocator else undefined,
     window_size: dvui.Size = .{ .w = 600, .h = 400 },
     window_init_opts: Window.InitOptions = .{},
@@ -81,6 +82,7 @@ pub const InitOptions = struct {
 };
 
 pub fn init(options: InitOptions) !Self {
+    dvui.io = options.io;
     // init SDL backend (creates and owns OS window)
     const backend = try options.allocator.create(Backend);
     errdefer options.allocator.destroy(backend);
@@ -106,7 +108,7 @@ pub fn init(options: InitOptions) !Self {
     if (should_write_snapshots()) {
         // ensure snapshot directory exists
         // NOTE: do fs operation through cwd to handle relative and absolute paths
-        std.fs.cwd().makeDir(options.snapshot_dir) catch |err| switch (err) {
+        std.Io.Dir.cwd().createDir(dvui.io, options.snapshot_dir, .default_dir) catch |err| switch (err) {
             error.PathAlreadyExists => {},
             else => return err,
         };
@@ -236,7 +238,7 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     const filename = try std.fmt.allocPrint(self.allocator, "{s}-{s}-{d}", .{ src.file, src.fn_name, self.snapshot_index });
     defer self.allocator.free(filename);
     // NOTE: do fs operation through cwd to handle relative and absolute paths
-    var dir = std.fs.cwd().openDir(self.snapshot_dir, .{}) catch |err| switch (err) {
+    var dir = std.Io.Dir.cwd().openDir(self.snapshot_dir, .{}) catch |err| switch (err) {
         error.FileNotFound => {
             std.debug.print("{s}:{d}:{d}: Snapshot directory did not exist! Run the test with DVUI_SNAPSHOT_WRITE to create all snapshot files\n", .{ src.file, src.line, src.column });
             return error.MissingSnapshotFile;
@@ -307,11 +309,11 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
 
 fn should_ignore_snapshots() bool {
     // If there is a snapshot image suffix, we expect to generate images, thus not ignore the test
-    return @import("build_options").snapshot_image_suffix == null and (Backend.kind != .testing or std.process.hasEnvVarConstant("DVUI_SNAPSHOT_IGNORE"));
+    return @import("build_options").snapshot_image_suffix == null and (Backend.kind != .testing or std.testing.environ.containsConstant("DVUI_SNAPSHOT_IGNORE"));
 }
 
 fn should_write_snapshots() bool {
-    return !should_ignore_snapshots() and std.process.hasEnvVarConstant("DVUI_SNAPSHOT_WRITE");
+    return !should_ignore_snapshots() and std.testing.environ.containsConstant("DVUI_SNAPSHOT_WRITE");
 }
 
 /// Internal use only!
@@ -330,13 +332,13 @@ pub fn saveImage(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.Ph
         return;
     }
 
-    var dir = try std.fs.cwd().makeOpenPath(self.image_dir.?, .{});
-    defer dir.close();
-    if (std.fs.path.dirname(filename)) |sub| try dir.makePath(sub);
-    const file = try dir.createFile(filename, .{});
-    defer file.close();
+    var dir = try std.Io.Dir.cwd().createDirPathOpen(dvui.io, self.image_dir.?, .{});
+    defer dir.close(dvui.io);
+    if (std.fs.path.dirname(filename)) |sub| try dir.createDirPath(dvui.io, sub);
+    const file = try dir.createFile(dvui.io, filename, .{});
+    defer file.close(dvui.io);
     var buf: [512]u8 = undefined;
-    var writer = file.writer(&buf);
+    var writer = file.writer(dvui.io, &buf);
     try capturePng(frame, rect, &writer.interface);
     try writer.end();
 }

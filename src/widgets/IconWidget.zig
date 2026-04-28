@@ -15,6 +15,7 @@ icon_opts: dvui.IconRenderOptions,
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *IconWidget, src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: dvui.IconRenderOptions, opts: Options) void {
     var size = Size{};
+
     if (opts.min_size_content) |msc| {
         // user gave us a min size, use it
         size = msc;

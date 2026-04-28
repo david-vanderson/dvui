@@ -68,6 +68,9 @@ pub fn linkSdl3(
         if (opts.b.lazyDependency("sdl3", .{
             .target = opts.target,
             .optimize = opts.optimize,
+            .system_include_path = opts.sdl3_system_include_path,
+            .system_framework_path = opts.sdl3_system_framework_path,
+            .library_path = opts.sdl3_library_path,
         })) |sdl3| {
             if (opts.target.result.abi.isAndroid()) {
                 sdl_mod.addIncludePath(sdl3.path("include"));
@@ -103,6 +106,7 @@ pub fn build(b: *std.Build) !void {
     const tiny_file_dialogs_option = b.option(bool, "tiny-file-dialogs", "OS-native file dialogs (default is backend specific)");
     const stb_image_option = b.option(bool, "stb-image", "Build stb_image (default is backend specific, some include stb_image)");
     const tree_sitter_option = b.option(bool, "tree-sitter", "Build tree sitter (default is backend specific)");
+    const tvg_option = b.option(bool, "tvg", "Build tvg (default true)") orelse true;
 
     const wio_unix_backends = b.option([]const u8, "wio_unix_backends", "List of wio backends for Unix (default: all)");
 
@@ -110,16 +114,8 @@ pub fn build(b: *std.Build) !void {
     var linux_display_backend: ?LinuxDisplayBackend = null;
     if (back_to_build == null or back_to_build.? == .raylib or back_to_build.? == .raylib_zig) {
         linux_display_backend = b.option(LinuxDisplayBackend, "linux_display_backend", "If using raylib, which linux display?") orelse blk: {
-            _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
-                error.EnvironmentVariableNotFound => break :blk .X11,
-                else => @panic("Unknown error checking for WAYLAND_DISPLAY environment variable"),
-            };
-
-            _ = std.process.getEnvVarOwned(b.allocator, "DISPLAY") catch |err| switch (err) {
-                error.EnvironmentVariableNotFound => break :blk .Wayland,
-                else => @panic("Unknown error checking for DISPLAY environment variable"),
-            };
-
+            if (b.graph.environ_map.get("WAYLAND_DISPLAY") == null) break :blk .X11;
+            if (b.graph.environ_map.get("DISPLAY") == null) break :blk .Wayland;
             break :blk .Both;
         };
     }
@@ -153,6 +149,15 @@ pub fn build(b: *std.Build) !void {
         "log_error_trace",
         b.option(bool, "log-error-trace", "If error logs should include the error return trace (automatically enabled with log stack traces)"),
     );
+    build_options.addOption(
+        bool,
+        "tvg",
+        tvg_option,
+    );
+
+    const system_include_path = b.option(std.Build.LazyPath, "system_include_path", "system include path");
+    const system_framework_path = b.option(std.Build.LazyPath, "system_framework_path", "system framework path");
+    const library_path = b.option(std.Build.LazyPath, "library_path", "system library path");
 
     const vertex_index = b.option(VertexIndex, "vertex-index", "Vertex index type (default u16)") orelse .u16;
     build_options.addOption(
@@ -188,7 +193,11 @@ pub fn build(b: *std.Build) !void {
         .linux_display_backend = linux_display_backend,
         .stb_image = stb_image_option,
         .tree_sitter = tree_sitter_option,
+        .tvg = tvg_option,
         .wio_unix_backends = wio_unix_backends,
+        .sdl3_system_include_path = system_include_path,
+        .sdl3_system_framework_path = system_framework_path,
+        .sdl3_library_path = library_path,
         .android_include_path = android_include_path,
     };
 
@@ -257,39 +266,40 @@ pub fn build(b: *std.Build) !void {
         run_add_logo.addFileArg(b.path("docs/index.html"));
         run_add_logo.addFileArg(b.path("docs/favicon.svg"));
         run_add_logo.addFileArg(b.path("docs/logo.svg"));
-        const indexhtml_file = run_add_logo.captureStdOut();
+        const indexhtml_file = run_add_logo.captureStdOut(.{});
         docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
     }
 
     // svg2tvg tool
     // see svgPathToTvgPath below for how to run this at build time
-    {
-        const svg2tvg_dep = b.dependency("svg2tvg", .{ .optimize = optimize, .target = target });
-        const exe = b.addExecutable(.{
-            .name = "svg2tvg",
-            .root_module = b.createModule(.{
-                .target = target,
-                .optimize = optimize,
-                .root_source_file = b.path("./tools/svg2tvg.zig"),
-                .imports = &.{
-                    .{
-                        .name = "svg2tvg",
-                        .module = svg2tvg_dep.module("svg2tvg"),
+    if (tvg_option) {
+        if (b.lazyDependency("svg2tvg", .{ .optimize = optimize, .target = target })) |svg2tvg_dep| {
+            const exe = b.addExecutable(.{
+                .name = "svg2tvg",
+                .root_module = b.createModule(.{
+                    .target = target,
+                    .optimize = optimize,
+                    .root_source_file = b.path("./tools/svg2tvg.zig"),
+                    .imports = &.{
+                        .{
+                            .name = "svg2tvg",
+                            .module = svg2tvg_dep.module("svg2tvg"),
+                        },
                     },
-                },
-            }),
-        });
-        const compile_step = b.step("compile-svg2tvg", "Compile svg2tvg");
-        const compile_cmd = b.addInstallArtifact(exe, .{});
-        compile_step.dependOn(&compile_cmd.step);
+                }),
+            });
+            const compile_step = b.step("compile-svg2tvg", "Compile svg2tvg");
+            const compile_cmd = b.addInstallArtifact(exe, .{});
+            compile_step.dependOn(&compile_cmd.step);
 
-        b.getInstallStep().dependOn(&exe.step);
+            b.getInstallStep().dependOn(&exe.step);
 
-        const run_cmd = b.addRunArtifact(exe);
-        run_cmd.step.dependOn(compile_step);
+            const run_cmd = b.addRunArtifact(exe);
+            run_cmd.step.dependOn(compile_step);
 
-        const run_step = b.step("svg2tvg", "Run svg2tvg");
-        run_step.dependOn(&run_cmd.step);
+            const run_step = b.step("svg2tvg", "Run svg2tvg");
+            run_step.dependOn(&run_cmd.step);
+        }
     }
 }
 
@@ -410,7 +420,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                         .optimize = optimize,
                     }),
                 });
-                lib.addCSourceFile(.{
+                lib.root_module.addCSourceFile(.{
                     .file = objc_file,
                     .language = .objective_c,
                 });
@@ -557,9 +567,9 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                         raylib.step.dependOn(&gen_step.step);
 
                         const raygui_c_path = gen_step.add("raygui.c", "#define RAYGUI_IMPLEMENTATION\n#include \"raygui.h\"\n");
-                        raylib.addCSourceFile(.{ .file = raygui_c_path });
-                        raylib.addIncludePath(raygui_dep.path("src"));
-                        raylib.addIncludePath(ray.path("src"));
+                        raylib.root_module.addCSourceFile(.{ .file = raygui_c_path });
+                        raylib.root_module.addIncludePath(raygui_dep.path("src"));
+                        raylib.root_module.addIncludePath(ray.path("src"));
 
                         raylib.installHeader(raygui_dep.path("src/raygui.h"), "raygui.h");
                     }
@@ -791,6 +801,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                     .tiny_file_dialogs = false,
                     .stb_image = true,
                     .tree_sitter = false,
+                    .tvg = true,
                     // no tests or checks needed, they are check above in native build
                 };
 
@@ -882,7 +893,11 @@ const DvuiModuleOptions = struct {
     linux_display_backend: ?LinuxDisplayBackend = null,
     stb_image: ?bool,
     tree_sitter: ?bool,
+    tvg: bool,
     wio_unix_backends: ?[]const u8 = null,
+    sdl3_system_include_path: ?std.Build.LazyPath = null,
+    sdl3_system_framework_path: ?std.Build.LazyPath = null,
+    sdl3_library_path: ?std.Build.LazyPath = null,
     android_include_path: ?std.Build.LazyPath = null,
 
     pub const DefaultOptions = struct {
@@ -1008,10 +1023,15 @@ pub fn addDvuiModule(
     if (target.result.abi.isAndroid()) addAndroidLibC(dvui_mod, opts);
     dvui_mod.addOptions("build_options", opts.build_options);
     dvui_mod.addOptions("default_options", opts.makeDefaults());
-    dvui_mod.addImport("svg2tvg", b.dependency("svg2tvg", .{
-        .target = target,
-        .optimize = optimize,
-    }).module("svg2tvg"));
+
+    if (opts.tvg) {
+        if (b.lazyDependency("svg2tvg", .{
+            .target = target,
+            .optimize = optimize,
+        })) |dep| {
+            dvui_mod.addImport("svg2tvg", dep.module("svg2tvg"));
+        }
+    }
 
     const renderer_mod = b.addModule("render_backend", .{
         .target = target,
@@ -1262,7 +1282,7 @@ fn addWebExample(
     cb_run.addFileArg(b.path("src/backends/index.html"));
     cb_run.addFileArg(b.path("src/backends/web.js"));
     cb_run.addFileArg(web_test.getEmittedBin());
-    const output = cb_run.captureStdOut();
+    const output = cb_run.captureStdOut(.{});
 
     const install_noto = b.addInstallFileWithDir(b.path("src/fonts/NotoSansKR-Regular.ttf"), install_dir, "NotoSansKR-Regular.ttf");
 
@@ -1301,7 +1321,7 @@ pub fn svgPathToTvgPath(b: *std.Build, svg_path: std.Build.LazyPath) std.Build.L
     // use fast and native options since this is just for building
     const optimize: std.builtin.OptimizeMode = .ReleaseFast;
     const target: std.Build.ResolvedTarget = b.graph.host;
-    const svg2tvg_dep = b.dependency("svg2tvg", .{ .optimize = optimize, .target = target });
+    const svg2tvg_dep = b.lazyDependency("svg2tvg", .{ .optimize = optimize, .target = target }).?;
     const svg2tvg_exe = b.addExecutable(.{
         .name = "svg2tvg",
         .root_module = b.createModule(.{

@@ -9,8 +9,7 @@ pub const Context = *WebBackend;
 
 const log = std.log.scoped(.WebBackend);
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
+var gpa: std.mem.Allocator = std.heap.wasm_allocator;
 
 pub var win: dvui.Window = undefined;
 pub var win_ok = false;
@@ -28,8 +27,6 @@ const EventTemp = struct {
     float1: f32,
     float2: f32,
 };
-
-// pub var event_temps = std.ArrayList(EventTemp).init(gpa);
 
 pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_about_webgl2() u8;
@@ -903,7 +900,7 @@ pub var js_console = Console.init(&wasm_log_console_buffer);
 
 pub fn logFn(
     comptime message_level: std.log.Level,
-    comptime scope: @Type(.enum_literal),
+    comptime scope: @EnumLiteral(),
     comptime format: []const u8,
     args: anytype,
 ) void {
@@ -931,6 +928,12 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
     // TODO: Respect min size (maybe max size?) via css on the canvas element
     // TODO: Use the icon to set the browser tab icon (if possible considering size requirements)
     const init_opts = app.config.get();
+
+    gpa = init_opts.gpa orelse gpa;
+
+    // failing works for now because the only thing we call is the mutex
+    // functions, and Io.Mutex doesn't call any Io vtable functions on wasm
+    dvui.io = init_opts.io orelse std.Io.failing;
 
     const platform = platform_ptr[0..platform_len];
     log.debug("platform: {s}", .{platform});
