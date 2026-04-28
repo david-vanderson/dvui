@@ -258,21 +258,17 @@ pub fn main(main_init: std.process.Init) !void {
         .title = config.title,
         .size = .{ .width = @intFromFloat(config.size.w), .height = @intFromFloat(config.size.h) },
         .scale = 1,
-    });
-    defer window.destroy();
-
-    var context = if (dvui.render_backend.kind == .opengl) try window.glCreateContext(.{
-        .options = .{
+        .opengl = if (dvui.render_backend.kind == .opengl) .{
             .major_version = 3,
             .minor_version = 2,
             .profile = .core,
-        },
-    }) else null;
-    defer if (dvui.render_backend.kind == .opengl) context.destroy() else {};
-    
+        } else null,
+    });
+    defer window.destroy();
+
     var renderer = blk: switch (dvui.render_backend.kind) {
         .opengl => {
-            window.glMakeContextCurrent(context.?);
+            window.glMakeContextCurrent();
             if (config.vsync) {
                 window.glSwapInterval(1);
             }
