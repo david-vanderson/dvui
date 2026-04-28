@@ -264,5 +264,5 @@ pub const Borders = struct {
 };
 
 test {
-    @import("std").testing.refAllDeclsRecursive(@This());
+    @import("std").testing.refAllDecls(@This());
 }
