@@ -26,8 +26,8 @@
             .lazy = true,
         },
         .sdl3 = .{
-            .url = "git+https://github.com/castholm/SDL#c5ba24c694b5d520cdc1d029d8def398690d6894",
-            .hash = "sdl-0.4.2+3.4.4-SDL--kB3pQHKG_4zWG-pH04ZcZZj_IRF7dwMpxNVGwd6",
+            .url = "git+https://github.com/david-vanderson/SDL#5bbcf665494fe14acadf50601edf6d5f74ebf96a",
+            .hash = "sdl-0.4.2+3.4.4-SDL--tB1pQFLgwvCakiiOSoZIuVaz6a6-_gOZC66AGRD",
             .lazy = true,
         },
         .freetype = .{
