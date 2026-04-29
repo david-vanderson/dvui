@@ -196,6 +196,12 @@ pub const ImageSource = union(enum) {
     /// this function will always return 0 as it doesn't interact with
     /// the texture cache.
     pub fn hash(self: ImageSource) u64 {
+        // short circuit for texture
+        switch (self) {
+            .texture => return 0,
+            else => {},
+        }
+
         var h = dvui.fnv.init();
         // .always hashes ptr (for uniqueness) and image dimensions so we can update the texture if dimensions stay the same
         const img_dimensions = self.size() catch Size{ .w = 0, .h = 0 };
@@ -230,7 +236,7 @@ pub const ImageSource = union(enum) {
                 h.update(std.mem.asBytes(&@intFromEnum(pixels.interpolation)));
                 h.update(img_dim_bytes);
             },
-            .texture => return 0,
+            .texture => unreachable,
         }
         return h.final();
     }
