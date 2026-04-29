@@ -254,21 +254,32 @@ pub fn main(main_init: std.process.Init) !void {
     try wio.init(gpa, io, .{});
     defer wio.deinit();
 
+    const gl_options: ?wio.GlOptions = if (dvui.render_backend.kind == .opengl) .{
+            .major_version = 3,
+            .minor_version = 2,
+            .profile = .core,
+        } else null;
+
     var window = try wio.createWindow(.{
         .title = config.title,
         .size = .{ .width = @intFromFloat(config.size.w), .height = @intFromFloat(config.size.h) },
         .scale = 1,
-        .opengl = if (dvui.render_backend.kind == .opengl) .{
-            .major_version = 3,
-            .minor_version = 2,
-            .profile = .core,
-        } else null,
+        .gl_options = gl_options,
     });
     defer window.destroy();
 
+    var context: wio.GlContext = undefined;
+    if (gl_options) |glo| {
+        context = try window.glCreateContext(.{ .options = glo });
+        window.glMakeContextCurrent(context);
+    }
+
+    defer {
+        if (gl_options) |_| context.destroy();
+    }
+
     var renderer = blk: switch (dvui.render_backend.kind) {
         .opengl => {
-            window.glMakeContextCurrent();
             if (config.vsync) {
                 window.glSwapInterval(1);
             }
