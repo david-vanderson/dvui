@@ -717,7 +717,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 glfw_mod.linkLibrary(glfw.artifact("glfw"));
             }
 
-            const dvui_glfw = addDvuiModule("dvui-glfw", dvui_opts);
+            const dvui_glfw = addDvuiModule("dvui_glfw", dvui_opts);
             linkBackend(dvui_glfw, glfw_mod);
 
             const example_opts: ExampleOptions = .{
