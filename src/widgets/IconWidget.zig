@@ -12,6 +12,8 @@ name: []const u8,
 tvg_bytes: []const u8,
 icon_opts: dvui.IconRenderOptions,
 
+pub const defaults = Options{ .role = .image };
+
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *IconWidget, src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: dvui.IconRenderOptions, opts: Options) void {
     var size = Size{};
@@ -25,10 +27,10 @@ pub fn init(self: *IconWidget, src: std.builtin.SourceLocation, name: []const u8
         size = Size{ .w = dvui.iconWidth(name, tvg_bytes, h) catch h, .h = h };
     }
 
-    const defaults = Options{ .label = .{ .text = name }, .role = .image };
+    const extra_opts = Options{ .label = .{ .text = name } };
 
     self.* = .{
-        .wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .min_size_content = size })),
+        .wd = WidgetData.init(src, .{}, dvui.styleSchemeGet().icon.override(extra_opts).override(opts).override(.{ .min_size_content = size })),
         .name = name,
         .tvg_bytes = tvg_bytes,
         .icon_opts = icon_opts,

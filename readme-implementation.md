@@ -276,4 +276,3 @@ The drawing functions are:
 - `Path.stroke()` - stroke path (see below)
 - `Rect.fill()` - convenience for making and filling a rounded rect
 - `Rect.stroke()` - convenience for making and stroking a rounded rect
-

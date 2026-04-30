@@ -484,7 +484,7 @@ const DisplayButton = struct {
 };
 
 const DisplayButtonIcon = struct {
-    const EntypoIcons = std.meta.DeclEnum(dvui.entypo);
+    const entypoIcons = dvui.entypo;
     const name = "buttonIcon()";
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -495,7 +495,7 @@ const DisplayButtonIcon = struct {
     var icon_opts: dvui.IconRenderOptions = undefined;
 
     var icon_bytes: []const u8 = undefined;
-    var icon: EntypoIcons = undefined;
+    var icon: std.meta.FieldEnum(dvui.IconTheme) = undefined;
 
     pub fn displayFn(reset: bool) void {
         if (reset) resetWidget();
@@ -523,9 +523,9 @@ const DisplayButtonIcon = struct {
     pub fn layoutWidgetControls() void {
         if (struct_ui.displayContainer(@src(), test_options_label, true)) |container| {
             defer container.deinit();
-            if (dvui.dropdownEnum(@src(), EntypoIcons, .{ .choice = &icon }, .{}, .{ .expand = .horizontal })) {
+            if (dvui.dropdownEnum(@src(), std.meta.FieldEnum(dvui.IconTheme), .{ .choice = &icon }, .{}, .{ .expand = .horizontal })) {
                 switch (icon) {
-                    inline else => |ch| icon_bytes = @field(dvui.entypo, @tagName(ch)),
+                    inline else => |ch| icon_bytes = @field(entypoIcons, @tagName(ch)),
                 }
             }
         }
@@ -1221,7 +1221,7 @@ const DisplayGroupBox = struct {
 };
 
 const DisplayIcon = struct {
-    const EntypoIcons = std.meta.DeclEnum(dvui.entypo);
+    const entypoIcons = dvui.entypo;
     const name = "icon()";
 
     var wd: dvui.WidgetData = undefined;
@@ -1229,7 +1229,7 @@ const DisplayIcon = struct {
     var icon_opts: dvui.IconRenderOptions = undefined;
     var icon_bytes: []const u8 = undefined;
     var icon_name: []const u8 = undefined;
-    var choice: EntypoIcons = undefined;
+    var choice: std.meta.FieldEnum(dvui.IconTheme) = undefined;
 
     pub fn displayFn(reset: bool) void {
         if (reset) resetWidget();
@@ -1259,7 +1259,7 @@ const DisplayIcon = struct {
                 defer hbox.deinit();
                 dvui.labelNoFmt(@src(), "icon_bytes", .{}, .{});
                 al.spacer(@src(), 0);
-                if (dvui.dropdownEnum(@src(), EntypoIcons, .{ .choice = &choice }, .{}, .{ .expand = .horizontal })) {
+                if (dvui.dropdownEnum(@src(), std.meta.FieldEnum(dvui.IconTheme), .{ .choice = &choice }, .{}, .{ .expand = .horizontal })) {
                     switch (choice) {
                         inline else => |ch| icon_bytes = @field(dvui.entypo, @tagName(ch)),
                     }

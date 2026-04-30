@@ -1,6 +1,6 @@
 /// ![image](Examples-iconBrowser.png)
-pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime icon_decl_name: []const u8, comptime icon_decl: type) void {
-    const num_icons = @typeInfo(icon_decl).@"struct".decls.len;
+pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime icon_decl_name: []const u8, comptime icon_decl: dvui.IconTheme) void {
+    const num_icons = @typeInfo(dvui.IconTheme).@"struct".fields.len;
     const Settings = struct {
         icon_size: f32 = 20,
         icon_rgb: dvui.Color = .black,
@@ -11,7 +11,7 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
 
     const icon_names: [num_icons][]const u8 = blk: {
         var blah: [num_icons][]const u8 = undefined;
-        inline for (@typeInfo(icon_decl).@"struct".decls, 0..) |d, i| {
+        inline for (@typeInfo(dvui.IconTheme).@"struct".fields, 0..) |d, i| {
             blah[i] = d.name;
         }
         break :blk blah;
@@ -19,7 +19,7 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
 
     const icon_fields: [num_icons][]const u8 = blk: {
         var blah: [num_icons][]const u8 = undefined;
-        inline for (@typeInfo(icon_decl).@"struct".decls, 0..) |d, i| {
+        inline for (@typeInfo(dvui.IconTheme).@"struct".fields, 0..) |d, i| {
             blah[i] = @field(icon_decl, d.name);
         }
         break :blk blah;

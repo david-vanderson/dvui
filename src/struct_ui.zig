@@ -1437,7 +1437,7 @@ pub fn displayOptional(
 }
 
 pub fn displayPointer(
-    src: std.builtin.SourceLocation,
+    src: std.builtin.SourceLocation, // This is comptime so the compileError could log it, as zig does not provide a stacktrace
     comptime ContainerT: type,
     comptime field_name: []const u8,
     field_value_ptr: anytype,
@@ -1469,7 +1469,11 @@ pub fn displayPointer(
         if (canDisplayPtr(ptr))
             displaySlice(src, ContainerT, field_name, &field_value_ptr.*, depth, field_option, options);
     } else {
-        @compileError(std.fmt.comptimePrint("C-style and many item pointers not supported for {s}.{s}\n", .{ @typeName(@TypeOf(field_value_ptr.*)), field_name }));
+        @panic(std.fmt.allocPrint(
+            dvui.currentWindow().arena(),
+            "C-style and many item pointers not supported for {s}.{s} at file: {s}, line: {}\n",
+            .{ @typeName(@TypeOf(field_value_ptr.*)), field_name, src.file, src.line },
+        ) catch unreachable); // I changed this to get a traceback
     }
 }
 
