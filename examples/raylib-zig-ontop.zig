@@ -13,16 +13,12 @@ const window_icon_png = @embedFile("zig-favicon.png");
 //TODO:
 //Figure out the best way to integrate raylib and dvui Event Handling
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     if (@import("builtin").os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         try dvui.Backend.Common.windowsAttachConsole();
     }
     RaylibBackend.enableRaylibLogging();
-    var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-    const gpa = gpa_instance.allocator();
-
-    defer _ = gpa_instance.deinit();
 
     // create OS window directly with raylib
     raylib.setConfigFlags(.{
@@ -36,13 +32,13 @@ pub fn main() !void {
 
     // init Raylib backend
     // init() means the app owns the window (and must call CloseWindow itself)
-    var backend = RaylibBackend.init(gpa);
+    var backend = RaylibBackend.init(init.io, init.gpa);
     defer backend.deinit();
     backend.log_events = true;
 
     // init dvui Window (maps onto a single OS window)
     // OS window is managed by raylib, not dvui
-    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
+    var win = try dvui.Window.init(@src(), init.gpa, backend.backend(), .{});
     defer win.deinit();
 
     var selected_color: dvui.Color = dvui.Color.white;
@@ -51,7 +47,7 @@ pub fn main() !void {
         raylib.beginDrawing();
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(std.time.nanoTimestamp());
+        try win.begin(win.backend.nanoTime());
 
         // send all Raylib events to dvui for processing
         try backend.addAllEvents(&win);

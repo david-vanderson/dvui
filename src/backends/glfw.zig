@@ -608,8 +608,11 @@ pub fn main(main_init: std.process.Init) !void {
 
     while (!window.shouldClose()) {
         impl.addAllEvents(&win);
+
+        // temporarily disabled due to "unable to perform tail call: compiler backend 'stage2_x86_64' does not support tail calls"
         // zgl.clearColor(0.1, 0.4, 0.25, 1.0);
         // zgl.clear(.{ .color = true, .stencil = true, .depth = true });
+
         try win.begin(impl.nanoTime());
 
         var res = try app.frameFn();

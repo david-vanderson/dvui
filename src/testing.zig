@@ -88,6 +88,7 @@ pub fn init(options: InitOptions) !Self {
     errdefer options.allocator.destroy(backend);
     backend.* = switch (Backend.kind) {
         .sdl2, .sdl3 => try Backend.initWindow(.{
+            .io = options.io,
             .allocator = options.allocator,
             .size = options.window_size,
             .vsync = false,
