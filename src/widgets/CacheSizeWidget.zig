@@ -12,7 +12,10 @@ const RectScale = dvui.RectScale;
 /// large scroll areas.
 const CacheSizeWidget = @This();
 
-pub const InitOptions = struct {};
+pub const InitOptions = struct {
+    /// If true `uncached` will return true.
+    invalidate: bool = false,
+};
 
 wd: WidgetData,
 init_opts: InitOptions,
@@ -30,6 +33,7 @@ pub fn init(self: *CacheSizeWidget, src: std.builtin.SourceLocation, init_opts: 
     };
 
     self.stable = dvui.dataGetDefault(null, self.data().id, "stable", bool, false);
+    if (init_opts.invalidate) self.stable = false;
     if (self.data().visible()) self.stable = false;
 
     dvui.currentWindow().extra_frames_needed = 0;
