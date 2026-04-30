@@ -2,7 +2,7 @@
 
 [Zig](https://ziglang.org) GUI toolkit for whole applications or debugging windows in existing apps/games.
 
-Tested with Zig v0.16.0 (for Zig v0.15.2, use DVUI [tag v0.4.0](https://github.com/david-vanderson/dvui/releases/tag/v0.4.0)).
+Tested with Zig v0.16.0 (for Zig v0.15.2, use DVUI branch zig15 or [tag v0.4.0](https://github.com/david-vanderson/dvui/releases/tag/v0.4.0)).
 
 [Homepage](https://david-vanderson.github.io) · [Demo](https://david-vanderson.github.io/demo) · [Docs](https://david-vanderson.github.io/docs/) · [Devlog](https://david-vanderson.github.io/log/2026)
 
