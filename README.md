@@ -143,7 +143,7 @@ Tested with Zig v0.16.0 (for Zig v0.15.2, use DVUI [tag v0.4.0](https://github.c
 ## Featured Projects
 
 The following projects use DVUI:
-- [Graphl Visual Programming Language Demo](https://graphl.tech/graphl/demo/)
+- [Graphl Visual Programming Language Demo](https://graphl.tech/demo/)
 - [Podcast Player](https://github.com/david-vanderson/podcast)
 - [Graphical Janet REPL](https://codeberg.org/iacore/janet-graphical-repl)
 - [FIDO2/ Passkey compatible authenticator implementation for Linux](https://github.com/r4gus/keypass)
