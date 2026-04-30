@@ -103,19 +103,19 @@ pub fn dialogs() void {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer hbox.deinit();
 
-        if (dvui.button(@src(), "TODO: Show Progress from another Thread", .{}, .{})) {
-            //progress_mutex.lock();
-            //progress_val = 0;
-            //progress_mutex.unlock();
-            //if (!builtin.single_threaded) blk: {
-            //    const bg_thread = std.Thread.spawn(.{}, background_progress, .{ dvui.currentWindow(), 2_000_000_000 }) catch |err| {
-            //        dvui.log.debug("Failed to spawn background thread for delayed action, got {any}", .{err});
-            //        break :blk;
-            //    };
-            //    bg_thread.detach();
-            //} else {
-            //    dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in single-threaded" });
-            //}
+        if (dvui.button(@src(), "Show Progress from another Thread", .{}, .{})) {
+            progress_mutex.lockUncancelable(dvui.io);
+            progress_val = 0;
+            progress_mutex.unlock(dvui.io);
+            if (!builtin.single_threaded) blk: {
+                const bg_thread = std.Thread.spawn(.{}, background_progress, .{ dvui.currentWindow(), 2_000_000_000 }) catch |err| {
+                    dvui.log.debug("Failed to spawn background thread for delayed action, got {any}", .{err});
+                    break :blk;
+                };
+                bg_thread.detach();
+            } else {
+                dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = "Not available in single-threaded" });
+            }
         }
 
         dvui.progress(@src(), .{ .percent = progress_val }, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
@@ -240,9 +240,9 @@ fn background_progress(win: *dvui.Window, delay_ns: u64) void {
     var total_sleep: u64 = 0;
     while (total_sleep < delay_ns) : (total_sleep += interval) {
         win.backend.sleep(interval);
-        progress_mutex.lock();
+        progress_mutex.lockUncancelable(dvui.io);
         progress_val = @as(f32, @floatFromInt(total_sleep)) / @as(f32, @floatFromInt(delay_ns));
-        progress_mutex.unlock();
+        progress_mutex.unlock(dvui.io);
         dvui.refresh(win, @src(), null);
     }
 }
