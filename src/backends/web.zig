@@ -9,7 +9,7 @@ pub const Context = *WebBackend;
 
 const log = std.log.scoped(.WebBackend);
 
-var gpa: std.mem.Allocator = std.heap.wasm_allocator;
+pub var gpa: std.mem.Allocator = std.heap.wasm_allocator;
 
 pub var win: dvui.Window = undefined;
 pub var win_ok = false;

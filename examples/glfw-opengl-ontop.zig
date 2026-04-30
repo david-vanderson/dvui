@@ -54,8 +54,10 @@ pub fn main(main_init: std.process.Init) !void {
         // zglfw.pollEvents should be used.
         //
         // zglfw.pollEvents();
-        zgl.clearColor(0.1, 0.4, 0.25, 1.0);
-        zgl.clear(.{ .color = true, .stencil = true, .depth = true });
+
+        // temporarily disabled due to "unable to perform tail call: compiler backend 'stage2_x86_64' does not support tail calls"
+        //zgl.clearColor(0.1, 0.4, 0.25, 1.0);
+        //zgl.clear(.{ .color = true, .stencil = true, .depth = true });
 
         // This needs to be called after pollEvents and before or just
         // after win.begin

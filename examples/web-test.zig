@@ -26,9 +26,6 @@ pub const std_options: std.Options = .{
     .logFn = logFn,
 };
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
-
 var touchPoints: [2]?dvui.Point.Physical = [_]?dvui.Point.Physical{null} ** 2;
 var orig_content_scale: f32 = 1.0;
 
@@ -42,7 +39,7 @@ export fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) i32 {
     WebBackend.back = WebBackend.init() catch {
         return 1;
     };
-    WebBackend.win = dvui.Window.init(@src(), gpa, WebBackend.back.backend(), .{ .keybinds = if (mac) .mac else .windows }) catch {
+    WebBackend.win = dvui.Window.init(@src(), WebBackend.gpa, WebBackend.back.backend(), .{ .keybinds = if (mac) .mac else .windows }) catch {
         return 2;
     };
 
@@ -63,7 +60,7 @@ export fn dvui_deinit() void {
 export fn dvui_update() i32 {
     return update() catch |err| {
         std.log.err("{any}", .{err});
-        const msg = std.fmt.allocPrint(gpa, "{any}", .{err}) catch "allocPrint OOM";
+        const msg = std.fmt.allocPrint(WebBackend.gpa, "{any}", .{err}) catch "allocPrint OOM";
         WebBackend.wasm.wasm_panic(msg.ptr, msg.len);
         return -1;
     };

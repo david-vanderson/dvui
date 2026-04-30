@@ -43,7 +43,7 @@ fn addAndroidLibC(
             .x86_64 => "x86_64-linux-android",
             .arm => "arm-linux-androideabi",
             .aarch64 => "aarch64-linux-android",
-            else => @panic("Unkown Android arch")
+            else => @panic("Unknown Android arch"),
         };
 
         mod.addSystemIncludePath(include_path.path(opts.b, arch_specific_path));
@@ -768,6 +768,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .root_source_file = b.path("src/backends/web.zig"),
                 .target = target,
                 .optimize = optimize,
+                .single_threaded = true,
             });
             web_mod.export_symbol_names = export_symbol_names;
             dvui_opts.addChecks(web_mod, "web-backend");
@@ -775,6 +776,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
 
             // NOTE: exported module uses the standard target so it can be overridden by users
             const dvui_web = addDvuiModule("dvui_web", dvui_opts);
+            dvui_web.single_threaded = true;
             dvui_opts.addChecks(dvui_web, "dvui_web");
             if (test_dvui_and_app) {
                 dvui_opts.addTests(dvui_web, "dvui_web");
@@ -809,6 +811,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
 
                 const web_mod_wasm = b.createModule(.{
                     .root_source_file = b.path("src/backends/web.zig"),
+                    .single_threaded = true,
                 });
                 web_mod_wasm.export_symbol_names = export_symbol_names;
 
