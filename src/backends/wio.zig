@@ -74,7 +74,7 @@ pub fn clipboardTextSet(self: *@This(), text: []const u8) !void {
 }
 
 pub fn openURL(_: *@This(), url: []const u8, _: bool) !void {
-    _ = url;
+    wio.openUri(url);
 }
 
 pub fn preferredColorScheme(_: *@This()) ?dvui.enums.ColorScheme {
@@ -115,26 +115,20 @@ pub fn setTextInputRect(self: *@This(), maybe_rect: ?dvui.Rect.Natural) void {
 }
 
 pub fn setCursor(self: *@This(), cursor: dvui.enums.Cursor) void {
-    if (cursor == .hidden) {
-        self.window.setCursorMode(.hidden);
-        return;
-    }
-
-    self.window.setCursorMode(.normal);
     self.window.setCursor(switch (cursor) {
-        .arrow => .arrow,
+        .arrow => .default,
         .ibeam => .text,
-        .wait => .busy,
-        .wait_arrow => .arrow_busy,
+        .wait => .wait,
+        .wait_arrow => .progress,
         .crosshair => .crosshair,
-        .arrow_nw_se => .size_nwse,
-        .arrow_ne_sw => .size_nesw,
-        .arrow_w_e => .size_ew,
-        .arrow_n_s => .size_ns,
+        .arrow_nw_se => .nwse_resize,
+        .arrow_ne_sw => .nesw_resize,
+        .arrow_w_e => .ew_resize,
+        .arrow_n_s => .ns_resize,
         .arrow_all => .move,
-        .bad => .forbidden,
-        .hand => .hand,
-        .hidden => unreachable,
+        .bad => .not_allowed,
+        .hand => .pointer,
+        .hidden => .none,
     });
 }
 
@@ -255,10 +249,10 @@ pub fn main(main_init: std.process.Init) !void {
     defer wio.deinit();
 
     const gl_options: ?wio.GlOptions = if (dvui.render_backend.kind == .opengl) .{
-            .major_version = 3,
-            .minor_version = 2,
-            .profile = .core,
-        } else null;
+        .major_version = 3,
+        .minor_version = 2,
+        .profile = .core,
+    } else null;
 
     var window = try wio.createWindow(.{
         .title = config.title,

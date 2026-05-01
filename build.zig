@@ -829,9 +829,6 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
         .wio => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
 
-            // workaround for https://github.com/ziglang/zig/issues/24140
-            dvui_opts.use_llvm = true;
-
             if (dvui_opts.render_backend == .default) {
                 dvui_opts.render_backend = .opengl;
             }
