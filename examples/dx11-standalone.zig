@@ -5,8 +5,7 @@ const win32 = Backend.win32;
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
+var gpa: std.mem.Allocator = undefined;
 
 const ExtraWindow = struct {
     state: *Backend.WindowState,
@@ -16,7 +15,7 @@ const ExtraWindow = struct {
         gpa.destroy(self.state);
     }
 };
-var extra_windows: std.ArrayListUnmanaged(ExtraWindow) = .{};
+var extra_windows: std.ArrayListUnmanaged(ExtraWindow) = .empty;
 
 const vsync = true;
 
@@ -27,12 +26,13 @@ const window_class = win32.L("DvuiStandaloneWindow");
 /// This example shows how to use the dvui for a normal application:
 /// - dvui renders the whole application
 /// - render frames only when needed
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    gpa = init.gpa;
+    dvui.io = init.io;
     if (@import("builtin").os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         dvui.Backend.Common.windowsAttachConsole() catch {};
     }
-    defer _ = gpa_instance.deinit();
 
     Backend.RegisterClass(window_class, .{}) catch win32.panicWin32(
         "RegisterClass",
