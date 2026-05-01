@@ -2,19 +2,15 @@ const std = @import("std");
 const svg2tvg = @import("svg2tvg");
 
 pub fn main(main_init: std.process.Init) !void {
-    var args = main_init.minimal.args.iterate();
+    const args = try main_init.minimal.args.toSlice(main_init.arena.allocator());
 
-    _ = args.next();
-    const input_path = args.next() orelse {
+    if (args.len != 4) {
         std.debug.print("Usage: svg2tvg <svg file> -o <output file>\n", .{});
         return error.NoInputArg;
-    };
-    // this should be '-o' but we just ignore it
-    _ = args.next() orelse return error.NoOutputFlag;
-    const output_path = args.next() orelse {
-        std.debug.print("Usage: svg2tvg <svg file> -o <output file>\n", .{});
-        return error.NoOutputArg;
-    };
+    }
+
+    const input_path = args[1];
+    const output_path = args[3];
 
     errdefer {
         var path_buf: [1024]u8 = undefined;

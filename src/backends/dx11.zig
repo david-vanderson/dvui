@@ -998,11 +998,12 @@ pub fn backend(self: Context) dvui.Backend {
 }
 
 pub fn nanoTime(_: Context) i128 {
-    return std.time.nanoTimestamp();
+    const ret = std.Io.Clock.boot.now(dvui.io);
+    return ret.nanoseconds;
 }
 
 pub fn sleep(_: Context, ns: u64) void {
-    std.Thread.sleep(ns);
+    dvui.io.sleep(.fromNanoseconds(ns), .boot) catch {};
 }
 
 pub fn clipboardText(self: Context) ![]const u8 {
@@ -1362,7 +1363,7 @@ pub fn wndProc(
             };
             const info: KeystrokeMessageFlags = @bitCast(@as(i32, @truncate(lparam)));
 
-            if (std.meta.intToEnum(win32.VIRTUAL_KEY, wparam)) |as_vkey| {
+            if (std.enums.fromInt(win32.VIRTUAL_KEY, wparam)) |as_vkey| {
                 // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getasynckeystate
                 // NOTE: If the key is pressed, the most significant bit is set.
                 //       For a signed integer that means it's a negative number
@@ -1395,8 +1396,8 @@ pub fn wndProc(
                         .mod = mods,
                     }) catch {};
                 }
-            } else |err| {
-                log.err("invalid key found: {t}", .{err});
+            } else {
+                log.err("invalid key found", .{});
             }
             return switch (msg) {
                 win32.WM_SYSKEYDOWN, win32.WM_SYSKEYUP => win32.DefWindowProcW(hwnd, umsg, wparam, lparam),
@@ -1686,16 +1687,13 @@ fn convertVKeyToDvuiKey(vkey: win32.VIRTUAL_KEY) dvui.enums.Key {
 }
 
 /// This is what is run if you are using `dvui.App` with this backend.
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    dvui.App.main_init = init;
     dvui.Backend.Common.windowsAttachConsole() catch {};
 
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
     const window_class = win32.L("DvuiWindow");
-
-    var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-    const gpa = gpa_instance.allocator();
-    defer _ = gpa_instance.deinit();
 
     RegisterClass(window_class, .{}) catch win32.panicWin32(
         "RegisterClass",
@@ -1703,6 +1701,9 @@ pub fn main() !void {
     );
 
     const init_opts = app.config.get();
+    const io = init_opts.io orelse init.io;
+    const gpa = init_opts.gpa orelse init.gpa;
+    dvui.io = io;
 
     var window_state: WindowState = undefined;
 
