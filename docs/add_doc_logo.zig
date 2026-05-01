@@ -7,26 +7,27 @@ const std = @import("std");
 const Encoder = std.base64.standard.Encoder;
 const Decoder = std.base64.standard.Decoder;
 
-pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.arena.allocator();
 
     // Get files via arguments (passed by build system)
-    const args = try std.process.argsAlloc(allocator);
+    const args = try init.minimal.args.toSlice(allocator);
 
     // Open and read the files
-    var html_file = try std.fs.openFileAbsolute(args[1], .{});
-    defer html_file.close();
-    const html = try html_file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    var html_file = try std.Io.Dir.openFileAbsolute(init.io, args[1], .{});
+    defer html_file.close(init.io);
+    var file_reader = html_file.reader(init.io, &.{});
+    const html = try file_reader.interface.allocRemaining(allocator, .unlimited);
 
-    var favico_file = try std.fs.openFileAbsolute(args[2], .{});
-    defer favico_file.close();
-    const favico = try favico_file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    var favico_file = try std.Io.Dir.openFileAbsolute(init.io, args[2], .{});
+    defer favico_file.close(init.io);
+    file_reader = favico_file.reader(init.io, &.{});
+    const favico = try file_reader.interface.allocRemaining(allocator, .unlimited);
 
-    var logo_file = try std.fs.openFileAbsolute(args[3], .{});
-    defer logo_file.close();
-    const logo = try logo_file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    var logo_file = try std.Io.Dir.openFileAbsolute(init.io, args[3], .{});
+    defer logo_file.close(init.io);
+    file_reader = logo_file.reader(init.io, &.{});
+    const logo = try file_reader.interface.allocRemaining(allocator, .unlimited);
 
     // Encode images
     const fav_len = Encoder.calcSize(favico.len);
@@ -42,7 +43,7 @@ pub fn main() !void {
 
     // Output resulting html file for the build system to do it's magic.
     var buf: [1000]u8 = undefined;
-    var stdout = std.fs.File.stdout().writer(&buf);
+    var stdout = std.Io.File.stdout().writer(init.io, &buf);
     try stdout.interface.print("{s}", .{html_out});
     try stdout.interface.flush();
 }

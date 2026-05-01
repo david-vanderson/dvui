@@ -11,11 +11,13 @@
 //! A complete list of available widgets can be found under `dvui.widgets`.  The demo includes examples of all widgets.
 //!
 //! ## Backends
-//! - [SDL](#dvui.backends.sdl)
-//! - [Web](#dvui.backends.web)
-//! - [rayLib](#dvui.backends.raylib)
-//! - [Dx11](#dvui.backends.dx11)
-//! - [Testing](#dvui.backends.testing)
+//! - [sdl](#dvui.backends.sdl)
+//! - [web](#dvui.backends.web)
+//! - [raylib](#dvui.backends.raylib)
+//! - [wio](#dvui.backends.wio)
+//! - [glfw](#dvui.backends.glfw)
+//! - [dx11](#dvui.backends.dx11)
+//! - [testing](#dvui.backends.testing)
 //!
 const builtin = @import("builtin");
 const std = @import("std");
@@ -480,7 +482,7 @@ pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []
     const err_trace_enabled = if (@import("build_options").log_error_trace) |enabled| enabled else stack_trace_enabled;
 
     const error_trace_fmt, const err_trace_arg = if (err_trace_enabled)
-        .{ "\nError trace: {f}", FormatErrorTrace{ .error_trace = @errorReturnTrace(), .terminal_mode = std.log.terminalMode() }}
+        .{ "\nError trace: {f}", FormatErrorTrace{ .error_trace = @errorReturnTrace(), .terminal_mode = std.log.terminalMode() } }
     else
         .{ "{s}", "" }; // Keep arg count the same
 
@@ -489,9 +491,7 @@ pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []
             var addresses: [stack_trace_frame_count]usize = @splat(0);
             const stack_trace = std.debug.captureCurrentStackTrace(.{}, &addresses);
 
-            break :blk .{ "\nStack trace: {f}", std.debug.FormatStackTrace{
-                                    .stack_trace = stack_trace,
-                                    .terminal_mode = std.log.terminalMode() }};
+            break :blk .{ "\nStack trace: {f}", std.debug.FormatStackTrace{ .stack_trace = stack_trace, .terminal_mode = std.log.terminalMode() } };
         } else {
             break :blk .{ "{s}", "" }; // Needed to keep the arg count the sames
         }
@@ -591,7 +591,9 @@ pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*Font.Cache.Entry {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn svgToTvg(allocator: std.mem.Allocator, svg_bytes: []const u8) (std.mem.Allocator.Error || TvgError)![]const u8 {
-    if (comptime !useTvg) { comptime unreachable; }
+    if (comptime !useTvg) {
+        comptime unreachable;
+    }
     return tvg.tvg_from_svg(allocator, svg_bytes, .{}) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
