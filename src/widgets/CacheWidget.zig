@@ -69,7 +69,9 @@ pub fn init(self: *CacheWidget, src: std.builtin.SourceLocation, init_opts: Init
     if (dvui.textureGetCached(self.hash)) |t| {
         // successful cache, draw texture and enforce min size
         self.drawCachedTexture(t);
-        self.data().minSizeMax(self.data().options.padSize(.{ .w = @floatFromInt(t.width), .h = @floatFromInt(t.height) }));
+        const tex_size: dvui.Size = .{ .w = @floatFromInt(t.width), .h = @floatFromInt(t.height) };
+        const rs = self.data().rectScale();
+        self.data().minSizeMax(self.data().options.padSize(tex_size.scale(1.0 / rs.s, dvui.Size)));
     } else {
 
         // we need to cache, but only do it if we didn't have any refreshes from last frame
