@@ -16,7 +16,7 @@ pub fn windowsAttachConsole() !void {
 
     const ATTACH_PARENT_PROCESS: std.os.windows.DWORD = 0xFFFFFFFF; //DWORD(-1)
     const res = winapi.AttachConsole(ATTACH_PARENT_PROCESS);
-    if (res == std.os.windows.FALSE) return error.CouldNotAttachConsole;
+    if (res == std.os.windows.BOOL.FALSE) return error.CouldNotAttachConsole;
 }
 
 /// Gets the preferred color scheme from the Windows registry
