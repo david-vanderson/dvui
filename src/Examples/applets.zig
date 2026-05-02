@@ -198,7 +198,7 @@ pub fn draw() void {
             .mouse => |m| {
                 switch (m.action) {
                     .press, .motion => {
-                        if (m.action == .press and m.button == .left) {
+                        if (m.action == .press and m.button.pointer()) {
                             dvui.captureMouse(canvas.data(), e.num);
                         }
 
@@ -214,7 +214,7 @@ pub fn draw() void {
                                     const p = points.items[i];
                                     const dx = p.x - newp.x;
                                     const dy = p.y - newp.y;
-                                    if ((dx * dx + dy * dy) < 5 * 5) {
+                                    if ((dx * dx + dy * dy) < 5 * rs.s * 5 * rs.s) {
                                         _ = points.swapRemove(i);
                                     } else {
                                         i += 1;
@@ -309,7 +309,7 @@ pub fn texture() void {
                 if (!dvui.eventMatchSimple(e, input.data())) continue;
                 switch (e.evt) {
                     .mouse => |m| {
-                        if (m.action == .press and m.button == .left) {
+                        if (m.action == .press and m.button.pointer()) {
                             dvui.captureMouse(input.data(), e.num);
                         }
 
@@ -319,7 +319,7 @@ pub fn texture() void {
                             if (m.action == .release) {
                                 dvui.captureMouse(null, e.num);
                             } else {
-                                dvui.Path.stroke(.{ .points = &.{e.evt.mouse.p} }, .{ .thickness = 5, .color = .red });
+                                dvui.Path.stroke(.{ .points = &.{e.evt.mouse.p} }, .{ .thickness = 5 * scale, .color = .red });
                                 dvui.refresh(null, @src(), input.data().id);
                             }
                         }
