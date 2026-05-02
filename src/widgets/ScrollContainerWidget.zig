@@ -601,8 +601,8 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     // drag starts the button gives up capture, so we get here,
                     // never having seen the touch down.
                     //
-                    // We will give up capture on any touch release even if it
-                    // was already handled to deal with:
+                    // We will give up capture on any touch release even if
+                    // already handled (see comment at top of loop):
                     // * finger down/motion/up in same frame in textLayout
                     // * textLayout gives up capture on the motion event
                     // * textLayout processes the finger up

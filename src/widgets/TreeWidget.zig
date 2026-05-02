@@ -319,7 +319,7 @@ pub const Branch = struct {
             dvui.parentSet(self.widget());
         }
 
-        self.button.init(@src(), .{}, wrapInner(self.options).override(.{ .expand = self.options.expand }));
+        self.button.init(@src(), .{ .touch_drag = true }, wrapInner(self.options).override(.{ .expand = self.options.expand }));
         self.button.processEvents();
         self.button.drawBackground();
         self.button.drawFocus();

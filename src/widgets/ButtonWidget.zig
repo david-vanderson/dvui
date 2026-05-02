@@ -25,6 +25,10 @@ pub var defaults: Options = .{
 
 pub const InitOptions = struct {
     draw_focus: bool = true,
+
+    /// True if you are going to be processing events to drag the button around
+    /// (like TreeWidget).  See `dvui.clicked`.
+    touch_drag: bool = false,
 };
 
 wd: WidgetData,
@@ -55,7 +59,7 @@ pub fn matchEvent(self: *ButtonWidget, e: *Event) bool {
 }
 
 pub fn processEvents(self: *ButtonWidget) void {
-    self.click = dvui.clicked(self.data(), .{ .hovered = &self.hover });
+    self.click = dvui.clicked(self.data(), .{ .hovered = &self.hover, .touch_drag = self.init_options.touch_drag });
 }
 
 pub fn drawBackground(self: *ButtonWidget) void {

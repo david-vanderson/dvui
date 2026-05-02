@@ -1730,6 +1730,11 @@ pub const ClickOptions = struct {
 
     /// Which mouse buttons to react to.
     buttons: enum { pointer, any } = .pointer,
+
+    /// If a touch event drags on the button, should we keep capture?
+    /// - false allows touch scrolling
+    /// - true allows dragging the button somewhere (like in TreeWidget)
+    touch_drag: bool = false,
 };
 
 pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
@@ -1775,7 +1780,7 @@ pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
                         }
                     }
                 } else if (me.action == .motion and me.button.touch()) {
-                    if (dvui.captured(wd.id)) {
+                    if (!opts.touch_drag and dvui.captured(wd.id)) {
                         if (dvui.dragging(me.p, null)) |_| {
                             // touch: if we overcame the drag threshold, then
                             // that means the person probably didn't want to
