@@ -494,19 +494,33 @@ pub fn themeSet(theme: Theme) void {
     currentWindow().themeSet(theme);
 }
 
-// Get the StyleScheme for the current window.
-//
-// Only valid between `Window.begin` and `Window.end`.
+/// Get the StyleScheme for the current window.
+///
+/// Only valid between `Window.begin` and `Window.end`.
 pub fn styleSchemeGet() StyleScheme {
     return currentWindow().style_scheme;
 }
 
-// Set the StyleScheme for A certian element for the current window.
-// StyleScheme elements have to be set individually, like `button`, `text_entry`, etc.
-//
-// Only valid between `Window.begin` and `Window.end`.
-pub fn styleSchemeSet(element: StyleScheme.StyleSchemeElement, opts: Options) void {
-    currentWindow().style_scheme.set(element, opts);
+/// Set the StyleScheme for A certian element for the current window.
+/// StyleScheme elements have to be set individually, like `button`, `text_entry`, etc.
+///
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn styleSchemeSet(selector: []const u8, opts: Options) void {
+    currentWindow().style_scheme.addStyle(selector, opts);
+}
+
+/// set the styling from the styleScheme (the class styles you or your theme puts)
+///
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn styleSchemeApply(data: *WidgetData, extra_opts: Options) void {
+    styleSchemeGet().applyStyles(data, extra_opts);
+}
+
+/// Sync the StyleScheme cache
+///
+/// Only valid between `Window.begin` and `Window.end`
+pub fn styleSchemeSync() void {
+    currentWindow().style_scheme.syncCache();
 }
 
 /// Toggle showing the debug window (run during `Window.end`).

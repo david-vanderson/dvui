@@ -37,10 +37,10 @@ row: usize = 0,
 col: usize = 0,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *FlexBoxWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *FlexBoxWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options, classes: [][]const u8) void {
     const defaults = Options{ .name = "FlexBox" };
     self.* = .{
-        .wd = WidgetData.init(src, .{}, defaults.override(opts)),
+        .wd = WidgetData.init(src, .{}, defaults.override(opts), .{ .widget_kind = "div", .classes = classes }),
         .init_options = init_opts,
         // SAFETY: Set bellow
         .prevClip = undefined,

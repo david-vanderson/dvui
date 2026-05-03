@@ -14,7 +14,7 @@ pub fn install(self: *Self, src: std.builtin.SourceLocation, options: dvui.Optio
     _ = dvui.sliderEntry(@src(), "thick: {d:0.2}", .{ .value = &thickness }, .{ .expand = .horizontal });
 
     const defaults = dvui.Options{ .name = "StrokeTest" };
-    self.wd = dvui.WidgetData.init(src, .{}, defaults.override(options));
+    self.wd = dvui.WidgetData.init(src, .{}, defaults.override(options), .{ .widget_kind = test });
     self.wd.register();
 
     const evts = dvui.events();

@@ -90,14 +90,14 @@ tt_child_shown: bool = false,
 ///
 /// Use FloatingWindowWidget for a floating window that the user can change
 /// size, move around, and adjust stacking.
-pub fn init(self: *FloatingTooltipWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Options) void {
+pub fn init(self: *FloatingTooltipWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Options, classes: [][]const u8) void {
     self.* = .{
         .wd = WidgetData.init(src, .{ .subwindow = true }, (Options{ .name = "FloatingTooltip" }).override(.{
             // passing options.rect will stop WidgetData.init from calling
             // rectFor/minSizeForChild which is important because we are outside
             // normal layout
             .rect = opts_in.rect orelse .{},
-        })),
+        }), .{ .widget_kind = "tooltip", .classes = classes }),
         // get scale from parent
         .scale_val = init_opts.scale orelse (dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale()),
         .options = defaults.themeOverride(opts_in.theme).override(opts_in),

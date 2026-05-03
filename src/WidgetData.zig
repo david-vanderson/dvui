@@ -10,6 +10,7 @@ const Size = dvui.Size;
 const Widget = dvui.Widget;
 const Id = dvui.Id;
 const WidgetData = @This();
+const WidgetIdData = dvui.StyleScheme.WidgetIdData;
 
 pub const InitOptions = struct {
     // if true, don't send our rect through our parent because we aren't located inside our parent
@@ -17,6 +18,7 @@ pub const InitOptions = struct {
 };
 
 id: Id,
+style_id: WidgetIdData = undefined,
 parent: Widget,
 init_options: InitOptions,
 rect: Rect,
@@ -26,7 +28,7 @@ src: std.builtin.SourceLocation,
 rect_scale: ?RectScale = null,
 ak_node: if (dvui.accesskit_enabled) ?*dvui.AccessKit.Node else void = if (dvui.accesskit_enabled) null else {},
 
-pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
+pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options, style_id: WidgetIdData) WidgetData {
     const parent = dvui.parentGet();
     const id = parent.extendId(src, opts.idExtra());
     const options = if (dvui.currentWindow().debug.options_override.get(id)) |val| val.@"0" else opts;
@@ -58,7 +60,13 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
         .rect = rect,
         .options = options,
         .src = src,
+        .style_id = style_id,
     };
+}
+
+pub fn addClass(self: *WidgetData, class: []const u8) void {
+    self.style_id.classes.append(dvui.currentWindow().gpa, class) catch @panic("OOM");
+    dvui.styleSchemeGet().applyStyles(self.style_id);
 }
 
 pub fn rectSet(self: *WidgetData, r: Rect) void {

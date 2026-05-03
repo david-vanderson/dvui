@@ -37,7 +37,7 @@ init_options: InitOptions,
 ellipsized: bool,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *LabelWidget, src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *LabelWidget, src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: InitOptions, opts: Options, classes: [][]const u8) void {
     comptime if (!std.unicode.utf8ValidateSlice(fmt)) @compileError("Format strings must be valid utf-8");
 
     const cw = dvui.currentWindow();
@@ -63,20 +63,19 @@ pub fn init(self: *LabelWidget, src: std.builtin.SourceLocation, comptime fmt: [
         dvui.log.debug("LabelWidget format output was invalid utf8 for {s} with '{any}'.", .{ fmt, args });
         break :blk .{ utf8, null };
     };
-    return self.initNoFmtAllocator(src, str, alloc, init_opts, dvui.styleSchemeGet().label.override(opts));
+    return self.initNoFmtAllocator(src, str, alloc, init_opts, opts, classes);
 }
 
 /// It's expected to call this when `self` is `undefined`
-pub fn initNoFmt(self: *LabelWidget, src: std.builtin.SourceLocation, label_str: []const u8, init_opts: InitOptions, opts: Options) void {
+pub fn initNoFmt(self: *LabelWidget, src: std.builtin.SourceLocation, label_str: []const u8, init_opts: InitOptions, opts: Options, classes: [][]const u8) void {
     const arena = dvui.currentWindow().lifo();
-    const opts_full = dvui.styleSchemeGet().label.override(opts);
     // If the allocation fails, the textSize will be incorrect
     // later because of invalid utf8
     const str = dvui.toUtf8(arena, label_str) catch |err| blk: {
-        logAndHighlight(src, dvui.styleSchemeGet().label.override(opts_full), err);
+        logAndHighlight(src, opts, err);
         break :blk label_str;
     };
-    return self.initNoFmtAllocator(src, str, if (str.ptr != label_str.ptr) arena else null, init_opts, opts_full);
+    return self.initNoFmtAllocator(src, str, if (str.ptr != label_str.ptr) arena else null, init_opts, opts, classes);
 }
 
 /// The `allocator` argument will be used to deallocator `label_str` on
@@ -85,20 +84,19 @@ pub fn initNoFmt(self: *LabelWidget, src: std.builtin.SourceLocation, label_str:
 /// Assumes the label_str is valid utf8
 ///
 /// It's expected to call this when `self` is `undefined`
-pub fn initNoFmtAllocator(self: *LabelWidget, src: std.builtin.SourceLocation, label_str: []const u8, allocator: ?std.mem.Allocator, init_opts: InitOptions, opts: Options) void {
-    const options = dvui.styleSchemeGet().label.override(opts);
-    const lsize = options.fontGet().textSize(label_str);
+pub fn initNoFmtAllocator(self: *LabelWidget, src: std.builtin.SourceLocation, label_str: []const u8, allocator: ?std.mem.Allocator, init_opts: InitOptions, opts: Options, classes: [][]const u8) void {
+    const lsize = opts.fontGet().textSize(label_str);
     var size = lsize;
-    if (options.rotationGet() != 0.0) {
+    if (opts.rotationGet() != 0.0) {
         var t: dvui.Triangles = .{ .vertexes = &.{}, .indices = &.{}, .bounds = .{ .w = size.w, .h = size.h } };
 
-        t.rotate(.{}, options.rotationGet());
+        t.rotate(.{}, opts.rotationGet());
         size.w = t.bounds.w;
         size.h = t.bounds.h;
     }
-    size = Size.max(size, options.min_size_contentGet());
+    size = Size.max(size, opts.min_size_contentGet());
     self.* = .{
-        .wd = .init(src, .{}, options.override(.{ .min_size_content = size })),
+        .wd = .init(src, .{}, opts.override(.{ .min_size_content = size }), .{ .widget_kind = "label", .classes = classes }),
         .init_options = init_opts,
         .label_str = label_str,
         .label_size = lsize,

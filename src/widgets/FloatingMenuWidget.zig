@@ -64,14 +64,14 @@ scaler: dvui.ScaleWidget,
 scroll: ScrollAreaWidget,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options, classes: [][]const u8) void {
     self.* = .{
         // the widget itself doesn't have any styling, it comes from the
         // embedded MenuWidget
         // passing options.rect will stop WidgetData.init from calling
         // rectFor/minSizeForChild which is important because we are outside
         // normal layout
-        .wd = .init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{} }),
+        .wd = .init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{} }, .{ .widget_kind = "menu", .classes = classes }),
         // get scale from parent
         .scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale(),
 

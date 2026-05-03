@@ -211,7 +211,7 @@ init_opts: InitOpts,
 // Default col_widths slice to use if allocation etc fails this frame.
 var default_col_widths: [1]f32 = .{0};
 
-pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitOpts, opts: Options) void {
+pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, cols: WidthsOrNum, init_opts: InitOpts, opts: Options, classes: [][]const u8) void {
     self.* = .{
         .init_opts = init_opts,
         .cols = cols,
@@ -229,7 +229,7 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, cols: WidthsOrNu
         .scroll = undefined,
     };
 
-    self.vbox.init(src, .{ .dir = .vertical }, defaults.themeOverride(opts.theme).override(opts));
+    self.vbox.init(src, .{ .dir = .vertical }, defaults.themeOverride(opts.theme).override(opts), classes);
     self.vbox.drawBackground();
 
     if (dvui.dataGet(null, self.data().id, "_resizing", bool)) |resizing| {

@@ -33,7 +33,7 @@ old_clip: ?Rect.Physical = null,
 pub fn init(self: *CacheWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const defaults = Options{ .name = "Cache" };
     self.* = .{
-        .wd = .init(src, .{}, defaults.override(opts)),
+        .wd = .init(src, .{}, defaults.override(opts), .{ .widget_kind = "non-display" }),
         .init_opts = init_opts,
         // SAFETY: Set bellow
         .hash = undefined,

@@ -1,3 +1,4 @@
+/// TODO: make a global swapable theme in dvui insstead of the hardcoded `dvui.entypo`
 const dvui = @import("dvui.zig");
 
 pub const Icon = []const u8;

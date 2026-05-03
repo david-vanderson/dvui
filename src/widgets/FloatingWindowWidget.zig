@@ -97,7 +97,7 @@ auto_size_refresh_prev_value: ?u8 = null,
 drag_part: ?DragPart = null,
 drag_area: Rect.Physical = undefined,
 
-pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options, classes: [][]const u8) void {
     const options = defaults.themeOverride(opts.theme).override(opts);
     var box_options = options;
     box_options.role = null;
@@ -119,7 +119,7 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
             .rect = .{},
             .role = options.role,
             .label = options.label,
-        }),
+        }, .{ .widget_kind = "window", .classes = classes }),
         .init_options = init_opts,
     };
 

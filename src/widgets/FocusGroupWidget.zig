@@ -39,7 +39,7 @@ pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts:
     const defaults = Options{ .name = "Focus Group", .rect = rect, .expand = if (rect.empty()) .both else .none };
     self.* = .{
         .init_opts = init_opts,
-        .wd = WidgetData.init(src, .{}, defaults.override(opts)),
+        .wd = WidgetData.init(src, .{}, defaults.override(opts), .{ .widget_kind = "non-display" }),
         .last_focus = dvui.lastFocusedIdInFrame(),
         .tab_index_prev = dvui.dataGetSlice(null, id, "_tab_prev", []dvui.TabIndex) orelse &.{},
         .remember_focus = dvui.dataGet(null, id, "_remember_focus", dvui.Id) orelse null,

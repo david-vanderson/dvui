@@ -28,11 +28,9 @@ focused: bool = false,
 activePt: Point.Natural = .{},
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *ContextWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *ContextWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options, classes: [][]const u8) void {
     self.* = .{
-        .wd = WidgetData.init(src, .{}, dvui.styleSchemeGet().context.override(opts).override(.{
-            .rect = dvui.parentGet().data().contentRectScale().rectFromPhysical(init_opts.rect),
-        })),
+        .wd = WidgetData.init(src, .{}, opts, .{ .widget_kind = "context", .classes = classes }),
         .init_options = init_opts,
         .winId = dvui.subwindowCurrentId(),
     };

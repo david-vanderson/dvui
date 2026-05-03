@@ -44,7 +44,7 @@ scaler: dvui.ScaleWidget = undefined,
 ///
 /// Use FloatingWindowWidget for a floating window that the user can change
 /// size, move around, and adjust stacking.
-pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Options) void {
+pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Options, classes: [][]const u8) void {
     const scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale();
     var opts = opts_in;
     if (opts.min_size_content) |msc| {
@@ -59,7 +59,7 @@ pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: I
             // rectFor/minSizeForChild which is important because we are outside
             // normal layout
             .rect = opts.rect orelse .{},
-        })),
+        }), .{ .widget_kind = "float-div", .classes = classes }),
     };
 
     if (init_opts.from) |pt| {

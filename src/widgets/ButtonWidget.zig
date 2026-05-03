@@ -34,15 +34,18 @@ focus: bool = false,
 click: bool = false,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *ButtonWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
+pub fn init(self: *ButtonWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options, classes: [][]const u8) void {
+    const wd = WidgetData.init(src, .{}, defaults.override(opts), .{ .widget_kind = "button", .classes = classes });
     self.* = .{
-        .wd = .init(src, .{}, dvui.styleSchemeGet().button.themeOverride(opts.theme).override(opts)),
+        .wd = wd,
         .init_options = init_options,
     };
     self.data().register();
     dvui.parentSet(self.widget());
 
     dvui.tabIndexSet(self.data().id, self.data().options.tab_index, self.data().rectScale().r);
+
+    dvui.styleSchemeApply(self.wd, opts);
 
     if (self.data().accesskit_node()) |ak_node| {
         dvui.AccessKit.nodeAddAction(ak_node, dvui.AccessKit.Action.focus);

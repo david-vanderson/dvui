@@ -48,9 +48,9 @@ ran_off: bool = false,
 pixels_per_w: f32 = 0,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *BoxWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
+pub fn init(self: *BoxWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options, classes: [][]const u8) void {
     const defaults = Options{ .name = "Box" };
-    const wd = WidgetData.init(src, .{}, defaults.override(opts));
+    const wd = WidgetData.init(src, .{}, defaults.override(opts), .{ .widget_kind = "div", .classes = classes });
     self.* = .{
         .wd = wd,
         .init_opts = init_options,
