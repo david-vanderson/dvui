@@ -125,7 +125,7 @@ pub fn setCursor(self: *@This(), cursor: dvui.enums.Cursor) void {
         .arrow_ne_sw => .nesw_resize,
         .arrow_w_e => .ew_resize,
         .arrow_n_s => .ns_resize,
-        .arrow_all => .move,
+        .arrow_all => .all_scroll,
         .bad => .not_allowed,
         .hand => .pointer,
         .hidden => .none,
