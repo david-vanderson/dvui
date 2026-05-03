@@ -117,7 +117,7 @@ pub fn get() ?App {
     // return error instead of failing compile to allow for reference in tests without dvui_app defined
     if (!@hasDecl(root, "dvui_app")) return null;
 
-    if (!@hasDecl(root, "main") or @field(root, "main") != main) {
+    if (!@hasDecl(root, "main")) {
         @compileError(
             \\Using the App interface requires using the App main function
             \\
