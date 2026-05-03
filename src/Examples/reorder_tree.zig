@@ -730,6 +730,7 @@ pub fn exampleFileTree(src: std.builtin.SourceLocation, uniqueId: dvui.Id, tree_
 
         if (dvui.dataGetSlice(null, uniqueId, "removed_path", []u8)) |removed_path| {
             if (dvui.dataGetSlice(null, uniqueId, "inserted_path", []u8)) |inserted_path| {
+                dvui.dataRemove(null, uniqueId, "inserted_path");
                 const alloc = dvui.currentWindow().lifo();
                 const old_sub_path = std.fs.path.basename(removed_path);
                 const new_path = try std.fs.path.join(alloc, &.{ inserted_path, old_sub_path });
