@@ -451,7 +451,8 @@ fn exampleRemoveTreeEntry(directory: []const u8, entries: *MutableTreeEntry.Chil
         defer alloc.free(abs_path);
 
         if (std.mem.eql(u8, old_directory, abs_path)) {
-            dvui.dataSet(null, uniqueId, "removed_entry", entries.swapRemove(i));
+            dvui.dataSet(null, uniqueId, "removed_entry", entries.orderedRemove(i));
+            return;
         }
 
         if (e.children.items.len > 0) {
@@ -597,24 +598,13 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
         defer alloc.free(abs_path);
 
         if (branch.insertBefore()) {
-            if (dvui.dataGetSlice(null, uniqueId, "removed_path", []u8)) |removed_path| {
-                const old_sub_path = std.fs.path.basename(removed_path);
-
-                const new_path = try std.fs.path.join(alloc, &.{ if (entry.kind == .directory) abs_path else directory, old_sub_path });
-                defer alloc.free(new_path);
-
-                if (!std.mem.eql(u8, removed_path, new_path)) {
-                    exampleRemoveTreeEntry("~", base_entries, removed_path, uniqueId);
-                    examplePlaceTreeEntry("~", base_entries, new_path, uniqueId);
-                }
-
-                dvui.dataRemove(null, uniqueId, "removed_path");
+            if (dvui.dataGetSlice(null, uniqueId, "removed_path", []u8)) |_| {
+                dvui.dataSetSlice(null, uniqueId, "inserted_path", if (entry.kind == .directory) abs_path else directory);
             }
         }
 
         if (branch.floating()) {
-            if (dvui.dataGetSlice(null, uniqueId, "removed_path", []u8) == null)
-                dvui.dataSetSlice(null, uniqueId, "removed_path", abs_path);
+            dvui.dataSetSlice(null, uniqueId, "removed_path", abs_path);
         }
 
         if (entry.kind == .directory) {
@@ -737,6 +727,20 @@ pub fn exampleFileTree(src: std.builtin.SourceLocation, uniqueId: dvui.Id, tree_
         }
 
         exampleFileTreeSearch("~", mutable_file_tree, mutable_file_tree, tree, uniqueId, &color_index, branch_options, expander_options) catch std.debug.panic("Failed to recurse files", .{});
+
+        if (dvui.dataGetSlice(null, uniqueId, "removed_path", []u8)) |removed_path| {
+            if (dvui.dataGetSlice(null, uniqueId, "inserted_path", []u8)) |inserted_path| {
+                const alloc = dvui.currentWindow().lifo();
+                const old_sub_path = std.fs.path.basename(removed_path);
+                const new_path = try std.fs.path.join(alloc, &.{ inserted_path, old_sub_path });
+                defer alloc.free(new_path);
+
+                if (!std.mem.eql(u8, removed_path, new_path)) {
+                    exampleRemoveTreeEntry("~", mutable_file_tree, removed_path, uniqueId);
+                    examplePlaceTreeEntry("~", mutable_file_tree, new_path, uniqueId);
+                }
+            }
+        }
     } else {
         dvui.dataSetSliceCopies(null, uniqueId, "mutable_slice", &[1]MutableTreeEntry{undefined}, example_file_structure_max_children);
         dvui.dataSet(null, uniqueId, "mutable_data", MutableTreeEntry.Children.initBuffer(
