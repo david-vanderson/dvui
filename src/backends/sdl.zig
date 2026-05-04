@@ -4,24 +4,8 @@ const dvui = @import("dvui");
 
 const sdl_options = @import("sdl_options");
 pub const sdl3 = sdl_options.version.major == 3;
-pub const c = blk: {
-    if (sdl3) {
-        break :blk @cImport({
-            @cDefine("SDL_DISABLE_OLD_NAMES", {});
-            @cInclude("SDL3/SDL.h");
 
-            @cDefine("SDL_MAIN_HANDLED", {});
-            @cInclude("SDL3/SDL_main.h");
-        });
-    }
-    break :blk @cImport({
-        // Zig 0.16 bundled arm_vector_types.h uses __mfp8 builtin that
-        // translate-c can't resolve. Gate arm_neon.h include off.
-        @cDefine("SDL_DISABLE_ARM_NEON_H", "1");
-        @cInclude("SDL2/SDL_syswm.h");
-        @cInclude("SDL2/SDL.h");
-    });
-};
+pub const c = if (sdl3) @import("sdl3-c") else @import("sdl2-c");
 
 /// Only available in sdl2
 extern "SDL_config" fn MACOS_enable_scroll_momentum() callconv(.c) void;

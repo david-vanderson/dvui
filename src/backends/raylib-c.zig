@@ -2,14 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
 
-pub const c = @cImport({
-    @cInclude("raylib.h");
-    @cInclude("raymath.h");
-    @cInclude("rlgl.h");
-    @cInclude("raygui.h");
-
-    @cInclude("glfw3.h");
-});
+pub const c = @import("raylib-c");
 
 pub const kind: dvui.enums.Backend = .raylib;
 
