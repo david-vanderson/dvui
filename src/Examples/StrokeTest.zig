@@ -1,7 +1,7 @@
 pub const Self = @This();
 pub var show: bool = false;
 pub var show_rect = dvui.Rect{};
-pub var pointsArray: [10]dvui.Point = [1]dvui.Point{.{}} ** 10;
+pub var pointsArray: [10]dvui.Point = @splat(dvui.Point{});
 pub var points: []dvui.Point = pointsArray[0..0];
 pub var dragi: ?usize = null;
 pub var thickness: f32 = 1.0;

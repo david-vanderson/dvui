@@ -14,7 +14,7 @@ pub var gpa: std.mem.Allocator = std.heap.wasm_allocator;
 pub var win: dvui.Window = undefined;
 pub var win_ok = false;
 var arena: std.mem.Allocator = undefined;
-var touchPoints: [10]?dvui.Point = [_]?dvui.Point{null} ** 10;
+var touchPoints: [10]?dvui.Point = @splat(null);
 var have_event = false;
 
 cursor_last: dvui.enums.Cursor = .wait,
