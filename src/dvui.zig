@@ -4335,7 +4335,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
     if (text_mode) {
         var te_buf = dataGetSlice(null, b.data().id, "_buf", []u8) orelse blk: {
-            var buf = [_]u8{0} ** 20;
+            var buf: [20]u8 = @splat(0);
             _ = std.fmt.bufPrintZ(&buf, "{d:0.3}", .{init_opts.value.*}) catch {};
             dataSetSlice(null, b.data().id, "_buf", &buf);
             break :blk dataGetSlice(null, b.data().id, "_buf", []u8).?;
@@ -5024,7 +5024,8 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     // https://github.com/david-vanderson/dvui/issues/502
     const id = dvui.parentGet().extendId(src, opts.idExtra()).update(@typeName(T));
 
-    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 32);
+    const default_bytes: [32]u8 = @splat(0);
+    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &default_bytes);
 
     // always initialize with value so we do the dataGet
     if (init_opts.value) |num| {
@@ -5194,7 +5195,8 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     const id = dvui.parentGet().extendId(src, opts.idExtra());
 
-    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 9);
+    const default_bytes: [9]u8 = @splat(0);
+    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &default_bytes);
 
     var te: TextEntryWidget = undefined;
     te.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = init_opts.placeholder }, options);

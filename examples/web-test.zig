@@ -26,7 +26,7 @@ pub const std_options: std.Options = .{
     .logFn = logFn,
 };
 
-var touchPoints: [2]?dvui.Point.Physical = [_]?dvui.Point.Physical{null} ** 2;
+var touchPoints: [2]?dvui.Point.Physical = @splat(null);
 var orig_content_scale: f32 = 1.0;
 
 const zig_favicon = @embedFile("src/zig-favicon.png");
