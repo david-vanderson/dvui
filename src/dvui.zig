@@ -2360,11 +2360,18 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Rect.Physical {
     var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
 
+    const is98 = std.mem.eql(u8, dvui.themeGet().name, "Windows 98");
+    const color_text: ?dvui.Color = if (is98) dvui.themeGet().window.fill else null;
+
     dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{
         .expand = .horizontal,
         .font = .theme(.heading),
         .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 },
         .label = .{ .for_id = dvui.subwindowCurrentId() },
+        .background = true,
+        .color_border = null,
+        .color_fill = if (is98) dvui.themeGet().app1.fill else null,
+        .color_text = color_text,
     });
 
     if (openflag) |of| {
@@ -2381,7 +2388,12 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
         }
     }
 
-    dvui.labelNoFmt(@src(), right_str, .{}, .{ .gravity_x = 1.0 });
+    dvui.labelNoFmt(@src(), right_str, .{}, .{
+        .gravity_x = 1.0,
+        .color_border = null,
+        .color_text = color_text,
+        .font = .theme(.heading),
+    });
 
     const evts = events();
     for (evts) |*e| {
@@ -2403,8 +2415,10 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
 
     over.deinit();
 
-    const swd = dvui.separator(@src(), .{ .expand = .horizontal });
-    ret.h += swd.rectScale().r.h;
+    if (!is98) {
+        const swd = dvui.separator(@src(), .{ .expand = .horizontal });
+        ret.h += swd.rectScale().r.h;
+    }
 
     return ret;
 }
@@ -4789,7 +4803,14 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
     const cornerRad = opts.corner_radiusGet().scale(rs.s, Rect.Physical);
-    rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
+
+    const is98 = std.mem.eql(u8, opts.themeGet().name, "Windows 98");
+    if (is98) {
+        rs.r.fill(cornerRad, .{ .color = .white });
+        renderNinepatch(opts.themeGet().control.ninepatch_press.?, rs, .{}) catch {};
+    } else {
+        rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
+    }
 
     if (focused) {
         rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
@@ -4803,11 +4824,13 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     }
 
     var options = opts;
-    if (checked) {
-        options.style = .highlight;
-        rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
-    } else {
-        rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
+    if (!is98) {
+        if (checked) {
+            options.style = .highlight;
+            rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
+        } else {
+            rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
+        }
     }
 
     if (checked) {
