@@ -8,13 +8,7 @@ pub const sdl3 = sdl_options.version.major == 3;
 // Index buffer configuration based on build option
 pub const IndexElementSize = if (dvui.Vertex.Index == u32) c.SDL_GPU_INDEXELEMENTSIZE_32BIT else c.SDL_GPU_INDEXELEMENTSIZE_16BIT;
 
-pub const c = @cImport({
-    @cDefine("SDL_DISABLE_OLD_NAMES", {});
-    @cInclude("SDL3/SDL.h");
-
-    @cDefine("SDL_MAIN_HANDLED", {});
-    @cInclude("SDL3/SDL_main.h");
-});
+pub const c = @import("sdl3-c");
 
 extern "SDL_config" fn MACOS_enable_scroll_momentum() callconv(.c) void;
 

@@ -314,41 +314,7 @@ pub var reduce_motion: bool = false;
 /// If positions/sizes are getting into this range, then likely something is going wrong.
 pub const max_float_safe: f32 = 2_000_000; // 2000000 and 2e6 for searchability
 
-pub const c = @cImport({
-    // musl fails to compile saying missing "bits/setjmp.h", and nobody should
-    // be using setjmp anyway
-    @cDefine("_SETJMP_H", "1");
-
-    if (useFreeType) {
-        @cInclude("freetype/ftadvanc.h");
-        @cInclude("freetype/ftbbox.h");
-        @cInclude("freetype/ftbitmap.h");
-        @cInclude("freetype/ftcolor.h");
-        @cInclude("freetype/ftlcdfil.h");
-        @cInclude("freetype/ftsizes.h");
-        @cInclude("freetype/ftstroke.h");
-        @cInclude("freetype/fttrigon.h");
-    } else {
-        @cInclude("stb_truetype.h");
-    }
-
-    if (!useLibc) {
-        @cDefine("STBI_NO_STDIO", "1");
-        @cDefine("STBI_NO_STDLIB", "1");
-        @cDefine("STBIW_NO_STDLIB", "1");
-    }
-    @cInclude("stb_image.h");
-    @cInclude("stb_image_write.h");
-
-    // Used by native dialogs
-    if (useTinyFileDialogs) {
-        @cInclude("tinyfiledialogs.h");
-    }
-
-    if (useTreeSitter) {
-        @cInclude("tree_sitter/api.h");
-    }
-});
+pub const c = @import("dvui-c");
 
 pub var ft2lib: if (useFreeType) c.FT_Library else void = undefined;
 

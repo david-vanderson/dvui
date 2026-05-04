@@ -55,6 +55,7 @@ fn addAndroidLibC(
 
 pub fn linkSdl3(
     sdl_mod: *std.Build.Module,
+    sdl_translate_c: *std.Build.Step.TranslateC,
     sdl3_options: *std.Build.Step.Options,
     opts: DvuiModuleOptions,
 ) void {
@@ -75,7 +76,10 @@ pub fn linkSdl3(
             if (opts.target.result.abi.isAndroid()) {
                 sdl_mod.addIncludePath(sdl3.path("include"));
                 addAndroidLibC(sdl_mod, opts);
-            } else sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
+            } else {
+                sdl_translate_c.addIncludePath(sdl3.path("include"));
+                sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
+            }
         }
     }
     sdl_mod.addOptions("sdl_options", sdl3_options);
@@ -360,11 +364,23 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
         },
         .sdl2 => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
+
+            const sdl_translate_c = b.addTranslateC(.{
+                .root_source_file = b.path("src/backends/sdl2-c.h"),
+                .target = target,
+                .optimize = optimize,
+            });
             const sdl_mod = b.addModule("sdl2", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
                 .optimize = optimize,
                 .link_libc = true,
+                .imports = &.{
+                    .{
+                        .name = "sdl2-c",
+                        .module = sdl_translate_c.createModule(),
+                    },
+                },
             });
             dvui_opts.addChecks(sdl_mod, "sdl2-backend");
             dvui_opts.addTests(sdl_mod, "sdl2-backend");
@@ -389,11 +405,13 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                         .render_driver_ogl_es = false,
                     });
                     if (sdl_dep) |sd| {
+                        sdl_translate_c.addIncludePath(sd.path("include"));
                         sdl_mod.linkLibrary(sd.artifact("SDL2"));
                     }
                 } else {
                     const sdl_dep = b.lazyDependency("sdl", .{ .target = target, .optimize = optimize });
                     if (sdl_dep) |sd| {
+                        sdl_translate_c.addIncludePath(sd.path("include"));
                         sdl_mod.linkLibrary(sd.artifact("SDL2"));
                     }
                 }
@@ -445,11 +463,23 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
         },
         .sdl3gpu => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
+
+            const sdl_translate_c = b.addTranslateC(.{
+                .root_source_file = b.path("src/backends/sdl3-c.h"),
+                .target = target,
+                .optimize = optimize,
+            });
             const sdl_mod = b.addModule("sdl3", .{
                 .root_source_file = b.path("src/backends/sdl3gpu.zig"),
                 .target = target,
                 .optimize = optimize,
                 .link_libc = true,
+                .imports = &.{
+                    .{
+                        .name = "sdl3-c",
+                        .module = sdl_translate_c.createModule(),
+                    },
+                },
             });
             dvui_opts.addChecks(sdl_mod, "sdl3gpu-backend");
             dvui_opts.addTests(sdl_mod, "sdl3gpu-backend");
@@ -460,7 +490,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             //     "callbacks",
             //     b.option(bool, "sdl3gpu-callbacks", "Use callbacks for live resizing on windows/mac"),
             // );
-            linkSdl3(sdl_mod, sdl3_options, dvui_opts_in);
+            linkSdl3(sdl_mod, sdl_translate_c, sdl3_options, dvui_opts_in);
 
             const dvui_sdl = addDvuiModule("dvui_sdl3gpu", dvui_opts);
             // dvui_opts.addChecks(dvui_sdl, "dvui_sdl3gpu");
@@ -483,11 +513,23 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             } else {
                 dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
             }
+
+            const sdl_translate_c = b.addTranslateC(.{
+                .root_source_file = b.path("src/backends/sdl3-c.h"),
+                .target = target,
+                .optimize = optimize,
+            });
             const sdl_mod = b.addModule("sdl3", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
                 .optimize = optimize,
                 .link_libc = true,
+                .imports = &.{
+                    .{
+                        .name = "sdl3-c",
+                        .module = sdl_translate_c.createModule(),
+                    },
+                },
             });
 
             if (!target.result.abi.isAndroid()) {
@@ -501,7 +543,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 b.option(bool, "sdl3-callbacks", "Use callbacks for live resizing on windows/mac"),
             );
 
-            linkSdl3(sdl_mod, sdl3_options, dvui_opts_in);
+            linkSdl3(sdl_mod, sdl_translate_c, sdl3_options, dvui_opts_in);
 
             const dvui_sdl = addDvuiModule("dvui_sdl3", dvui_opts);
             if (!target.result.abi.isAndroid()) {
@@ -531,11 +573,22 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
 
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true });
 
+            const raylib_translate_c = b.addTranslateC(.{
+                .root_source_file = b.path("src/backends/raylib-c.h"),
+                .target = target,
+                .optimize = optimize,
+            });
             const raylib_backend_mod = b.addModule("raylib", .{
                 .root_source_file = b.path("src/backends/raylib-c.zig"),
                 .target = target,
                 .optimize = optimize,
                 .link_libc = true,
+                .imports = &.{
+                    .{
+                        .name = "raylib-c",
+                        .module = raylib_translate_c.createModule(),
+                    },
+                },
             });
             dvui_opts.addChecks(raylib_backend_mod, "raylib-backend");
             dvui_opts.addTests(raylib_backend_mod, "raylib-backend");
@@ -552,7 +605,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 raylib_backend_mod.linkLibrary(ray.artifact("raylib"));
 
                 // This is to support variable framerate
-                raylib_backend_mod.addIncludePath(ray.path("src/external/glfw/include/GLFW"));
+                raylib_translate_c.addIncludePath(ray.path("src/external/glfw/include/GLFW"));
 
                 // This seems wonky to me, but is copied from raylib's src/build.zig
                 if (b.lazyDependency("raygui", .{})) |raygui_dep| {
@@ -571,7 +624,8 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                         raylib.root_module.addIncludePath(raygui_dep.path("src"));
                         raylib.root_module.addIncludePath(ray.path("src"));
 
-                        raylib.installHeader(raygui_dep.path("src/raygui.h"), "raygui.h");
+                        raylib_translate_c.addIncludePath(raygui_dep.path("src"));
+                        raylib_translate_c.addIncludePath(ray.path("src"));
                     }
                 }
             }
@@ -1014,11 +1068,26 @@ pub fn addDvuiModule(
     const b = opts.b;
     const target = opts.target;
     const optimize = opts.optimize;
+    const libc = opts.libc orelse @panic("libc was null");
+
+    const dvui_translate_c = b.addTranslateC(.{
+        .root_source_file = b.path("src/dvui-c.h"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = libc,
+    });
+    if (libc) dvui_translate_c.defineCMacro("DVUI_USE_LIBC", "1");
 
     const dvui_mod = b.addModule(name, .{
         .root_source_file = b.path("src/dvui.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{
+            .{
+                .name = "dvui-c",
+                .module = dvui_translate_c.createModule(),
+            },
+        },
     });
     if (target.result.abi.isAndroid()) addAndroidLibC(dvui_mod, opts);
     dvui_mod.addOptions("build_options", opts.build_options);
@@ -1072,9 +1141,8 @@ pub fn addDvuiModule(
     }
 
     const stb_source = "vendor/stb/";
-    dvui_mod.addIncludePath(b.path(stb_source));
+    dvui_translate_c.addIncludePath(b.path(stb_source));
 
-    const libc = opts.libc orelse @panic("libc was null");
     const stb_flags: []const []const u8 = if (!libc)
         &.{ "-DINCLUDE_CUSTOM_LIBC_FUNCS=1", "-DSTBI_NO_STDLIB=1", "-DSTBIW_NO_STDLIB=1", "-DSTBI_NO_SIMD=1" }
     else
@@ -1093,7 +1161,9 @@ pub fn addDvuiModule(
 
     const freetype = opts.freetype orelse @panic("freetype was null");
     if (freetype) {
+        dvui_translate_c.defineCMacro("DVUI_USE_FREETYPE", "1");
         if (b.systemIntegrationOption("freetype", .{})) {
+            dvui_translate_c.linkSystemLibrary("freetype2", .{});
             dvui_mod.linkSystemLibrary("freetype2", .{});
         } else {
             const freetype_dep = b.lazyDependency("freetype", .{
@@ -1101,6 +1171,7 @@ pub fn addDvuiModule(
                 .optimize = optimize,
             });
             if (freetype_dep) |fd| {
+                dvui_translate_c.addIncludePath(fd.path("include"));
                 dvui_mod.linkLibrary(fd.artifact("freetype"));
             }
         }
@@ -1110,7 +1181,8 @@ pub fn addDvuiModule(
 
     const tfd = opts.tiny_file_dialogs orelse @panic("tiny_file_dialogs was null");
     if (tfd) {
-        dvui_mod.addIncludePath(b.path("vendor/tfd"));
+        dvui_translate_c.addIncludePath(b.path("vendor/tfd"));
+        dvui_translate_c.defineCMacro("DVUI_USE_TINYFILEDIALOGS", "1");
         dvui_mod.addCSourceFiles(.{ .files = &.{"vendor/tfd/tinyfiledialogs.c"} });
 
         if (target.result.os.tag == .windows) {
@@ -1127,6 +1199,8 @@ pub fn addDvuiModule(
             .optimize = optimize,
         });
         if (tree_sitter_dep) |tsd| {
+            dvui_translate_c.defineCMacro("DVUI_USE_TREESITTER", "1");
+            dvui_translate_c.addIncludePath(tsd.path("lib/include"));
             dvui_mod.linkLibrary(tsd.artifact("tree-sitter"));
         }
 
