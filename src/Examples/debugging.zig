@@ -1,4 +1,3 @@
-
 fn testError() !void {
     return error.TestError;
 }
@@ -67,7 +66,7 @@ pub fn debuggingErrors() void {
         defer b.deinit();
 
         const g = struct {
-            const empty = [1]u8{0} ** 100;
+            const empty: [100]u8 = @splat(0);
             var latest_buf = empty;
             var latest_slice: []u8 = &.{};
         };
