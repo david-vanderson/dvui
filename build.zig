@@ -74,10 +74,10 @@ pub fn linkSdl3(
             .library_path = opts.sdl3_library_path,
         })) |sdl3| {
             if (opts.target.result.abi.isAndroid()) {
-                sdl_mod.addIncludePath(sdl3.path("include"));
+                sdl_mod.addIncludePath(sdl3.artifact("SDL3").getEmittedIncludeTree());
                 addAndroidLibC(sdl_mod, opts);
             } else {
-                sdl_translate_c.addIncludePath(sdl3.path("include"));
+                sdl_translate_c.addIncludePath(sdl3.artifact("SDL3").getEmittedIncludeTree());
                 sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
             }
         }
@@ -405,13 +405,13 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                         .render_driver_ogl_es = false,
                     });
                     if (sdl_dep) |sd| {
-                        sdl_translate_c.addIncludePath(sd.path("include"));
+                        sdl_translate_c.addIncludePath(sd.artifact("SDL2").getEmittedIncludeTree());
                         sdl_mod.linkLibrary(sd.artifact("SDL2"));
                     }
                 } else {
                     const sdl_dep = b.lazyDependency("sdl", .{ .target = target, .optimize = optimize });
                     if (sdl_dep) |sd| {
-                        sdl_translate_c.addIncludePath(sd.path("include"));
+                        sdl_translate_c.addIncludePath(sd.artifact("SDL2").getEmittedIncludeTree());
                         sdl_mod.linkLibrary(sd.artifact("SDL2"));
                     }
                 }
