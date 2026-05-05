@@ -1127,7 +1127,13 @@ pub fn addDvuiModule(
     const accesskit_from_system = b.systemIntegrationOption("accesskit", .{});
     if (opts.accesskit.enabled()) {
         if (b.lazyDependency("accesskit", .{})) |ak_dep| {
-            dvui_mod.addIncludePath(ak_dep.path("include"));
+            const ak_translate_c = b.addTranslateC(.{
+                .root_source_file = b.path("src/accesskit-c.h"),
+                .target = target,
+                .optimize = optimize,
+            });
+            ak_translate_c.addIncludePath(ak_dep.path("include"));
+            dvui_mod.addImport("accesskit-c", ak_translate_c.createModule());
 
             if (!accesskit_from_system) {
                 dvui_mod.addLibraryPath(accessKitPath(b, target, ak_dep, opts.accesskit, false));
