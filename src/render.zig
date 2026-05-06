@@ -190,7 +190,8 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     var builder = try dvui.Triangles.Builder.init(cw.lifo(), 4 * utf8_text.len, 6 * utf8_text.len);
     defer builder.deinit(cw.lifo());
 
-    const col: Color.PMA = .fromColor(opts.color.opacity(cw.alpha));
+    const color = opts.color.opacity(cw.alpha);
+    const col: Color.PMA = .fromColor(color);
 
     var start = opts.p orelse opts.rs.r.topLeft();
     if (cw.snap_to_pixels) {
@@ -357,6 +358,35 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
                 .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
             })
             .fill(.{}, .{ .color = opts.sel_color orelse dvui.themeGet().focus, .fade = 0 });
+    }
+
+    if (opts.font.underline) |u| {
+        if (u.thick > 0) {
+            var topleft: dvui.Point.Physical = .{ .x = start.x, .y = start.y + fce_ascent + (fce.em_height * 0.1) };
+            if (cw.snap_to_pixels) {
+                // x should already be snapped
+                topleft.y = @round(topleft.y);
+            }
+
+            const botright: dvui.Point.Physical = .{ .x = max_x, .y = topleft.y + @max(1.0 * opts.rs.s, fce.em_height * u.thick) };
+
+            Rect.Physical.fromPoint(topleft).toPoint(botright).fill(.{}, .{ .color = color, .fade = 0 });
+        }
+    }
+
+    if (opts.font.strike) |s| {
+        if (s.thick > 0) {
+            const thick = @max(1.0 * opts.rs.s, fce.em_height * s.thick);
+            var topleft: dvui.Point.Physical = .{ .x = start.x, .y = start.y + fce_ascent - (fce.em_height * 0.5) - thick * 0.5 };
+            if (cw.snap_to_pixels) {
+                // x should already be snapped
+                topleft.y = @round(topleft.y);
+            }
+
+            const botright: dvui.Point.Physical = .{ .x = max_x, .y = topleft.y + thick };
+
+            Rect.Physical.fromPoint(topleft).toPoint(botright).fill(.{}, .{ .color = color, .fade = 0 });
+        }
     }
 
     var tri = builder.build();
