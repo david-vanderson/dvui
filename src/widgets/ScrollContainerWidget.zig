@@ -19,7 +19,7 @@ pub fn current() ?*ScrollContainerWidget {
     return scroll_current;
 }
 
-fn scrollSet(scroll: ?*ScrollContainerWidget) ?*ScrollContainerWidget {
+pub fn scrollSet(scroll: ?*ScrollContainerWidget) ?*ScrollContainerWidget {
     const ret = scroll_current;
     scroll_current = scroll;
     return ret;

@@ -54,6 +54,7 @@ pub const InitOptions = struct {
 render_ftb: dvui.RenderFrontToBack,
 wd: WidgetData,
 prev_windowInfo: dvui.subwindowCurrentSetReturn = undefined,
+prev_scroll: ?*dvui.ScrollContainerWidget = undefined,
 prev_last_focus: dvui.Id,
 parent_fmw: ?*FloatingMenuWidget = null,
 have_popup_child: bool = false,
@@ -128,6 +129,7 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
         dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
         self.prevClip = dvui.clipGet();
         dvui.clipSet(dvui.windowRectPixels()); // break out of whatever clipping we were in
+        self.prev_scroll = dvui.ScrollContainerWidget.scrollSet(null);
     }
 
     // prevents parents from processing key events if focus is inside the floating window
@@ -272,6 +274,7 @@ pub fn deinit(self: *FloatingMenuWidget) void {
 
     // standard subwindow stuff
     {
+        _ = dvui.ScrollContainerWidget.scrollSet(self.prev_scroll);
         _ = dvui.subwindowCurrentSet(self.prev_windowInfo.id, self.prev_windowInfo.rect);
         dvui.clipSet(self.prevClip);
         self.render_ftb.deinit();
