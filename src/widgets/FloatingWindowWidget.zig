@@ -219,7 +219,6 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
     }
 
     self.data().register();
-    self.render_ftb.initReset();
 
     if (dvui.firstFrame(self.data().id)) {
         dvui.focusSubwindow(self.data().id, null);
@@ -246,18 +245,23 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
         }
     }
 
-    self.drag_area = self.data().rectScale().r;
-
     dvui.parentSet(self.widget());
-    self.prev_windowInfo = dvui.subwindowCurrentSet(self.data().id, .cast(self.data().rect));
+
+    // standard subwindow stuff
+    {
+        const rs = self.data().rectScale();
+        self.render_ftb.initReset();
+        self.prev_windowInfo = dvui.subwindowCurrentSet(self.data().id, .cast(self.data().rect));
+        dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent_window) self.prev_windowInfo.id else null, true);
+        dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
+        self.prevClip = dvui.clipGet();
+        dvui.clipSet(dvui.windowRectPixels()); // break out of whatever clipping we were in
+    }
+
     // prevents parents from processing key events if focus is inside the floating window
     self.prev_last_focus = dvui.lastFocusedIdInFrame();
 
-    // reset clip to whole OS window
-    // - if modal fade everything below us
-    // - gives us all mouse events
-    self.prevClip = dvui.clipGet();
-    dvui.clipSet(dvui.windowRectPixels());
+    self.drag_area = self.data().rectScale().r;
 
     if (self.data().accesskit_node()) |ak_node| {
         if (self.init_options.modal)
@@ -271,10 +275,6 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
 }
 
 pub fn drawBackground(self: *FloatingWindowWidget) void {
-    const rs = self.data().rectScale();
-    dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent_window) self.prev_windowInfo.id else null, true);
-    dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
-
     if (self.init_options.modal and !dvui.firstFrame(self.data().id)) {
         // paint over everything below
         var col = self.options.color(.text);
@@ -601,9 +601,13 @@ pub fn deinit(self: *FloatingWindowWidget) void {
 
     dvui.parentReset(self.data().id, self.data().parent);
     dvui.currentWindow().last_focused_id_this_frame = self.prev_last_focus;
-    _ = dvui.subwindowCurrentSet(self.prev_windowInfo.id, self.prev_windowInfo.rect);
-    dvui.clipSet(self.prevClip);
-    self.render_ftb.deinit();
+
+    // standard subwindow stuff
+    {
+        _ = dvui.subwindowCurrentSet(self.prev_windowInfo.id, self.prev_windowInfo.rect);
+        dvui.clipSet(self.prevClip);
+        self.render_ftb.deinit();
+    }
 }
 
 test {

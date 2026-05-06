@@ -53,7 +53,7 @@ pub const InitOptions = struct {
 
 render_ftb: dvui.RenderFrontToBack,
 wd: WidgetData,
-prev_windowId: dvui.Id = .zero,
+prev_windowInfo: dvui.subwindowCurrentSetReturn = undefined,
 prev_last_focus: dvui.Id,
 parent_fmw: ?*FloatingMenuWidget = null,
 have_popup_child: bool = false,
@@ -86,14 +86,6 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
     const options = defaults.themeOverride(opts.theme).override(opts);
     // NOTE: options is really for our embedded ScrollAreaWidget
 
-    self.render_ftb.initReset();
-
-    dvui.parentSet(self.widget());
-
-    self.parent_fmw = currentSet(self);
-    // prevents parents from processing key events if focus is inside the floating window
-    self.prev_last_focus = dvui.lastFocusedIdInFrame();
-
     const avoid: dvui.PlaceOnScreenAvoid = switch (init_opts.avoid) {
         .none => .none,
         .horizontal => .horizontal,
@@ -125,19 +117,25 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
     }
 
     self.data().register();
+    dvui.parentSet(self.widget());
+
+    // standard subwindow stuff
+    {
+        const rs = self.data().rectScale();
+        self.render_ftb.initReset();
+        self.prev_windowInfo = dvui.subwindowCurrentSet(self.data().id, null);
+        dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, null, true);
+        dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
+        self.prevClip = dvui.clipGet();
+        dvui.clipSet(dvui.windowRectPixels()); // break out of whatever clipping we were in
+    }
+
+    // prevents parents from processing key events if focus is inside the floating window
+    self.prev_last_focus = dvui.lastFocusedIdInFrame();
+
+    self.parent_fmw = currentSet(self);
 
     const rs = self.data().rectScale();
-
-    self.prev_windowId = dvui.subwindowCurrentSet(self.data().id, null).id;
-    dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, null, true);
-    dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
-
-    // first break out of whatever clip we were in (so box shadows work, since
-    // they are outside our window)
-    self.prevClip = dvui.clipGet();
-    dvui.clipSet(dvui.windowRectPixels());
-
-    // do this while the clip is the whole window
     const evts = dvui.events();
     for (evts) |*e| {
         if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = rs.r }))
@@ -159,7 +157,7 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
         pm.child_popup_rect = rs.r;
     }
 
-    self.menu.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowId }, options.strip().override(.{ .role = .none, .expand = .horizontal }));
+    self.menu.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowInfo.id }, options.strip().override(.{ .role = .none, .expand = .horizontal }));
 }
 
 pub fn close(self: *FloatingMenuWidget) void {
@@ -208,7 +206,7 @@ pub fn chainFocused(self: *FloatingMenuWidget, self_call: bool) bool {
         if (pp.chainFocused(false)) {
             ret = true;
         }
-    } else if (self.prev_windowId == dvui.focusedSubwindowId()) {
+    } else if (self.prev_windowInfo.id == dvui.focusedSubwindowId()) {
         // no parent popup, is our parent window focused
         ret = true;
     }
@@ -271,9 +269,13 @@ pub fn deinit(self: *FloatingMenuWidget) void {
     _ = currentSet(self.parent_fmw);
     dvui.parentReset(self.data().id, self.data().parent);
     dvui.currentWindow().last_focused_id_this_frame = self.prev_last_focus;
-    _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
-    dvui.clipSet(self.prevClip);
-    self.render_ftb.deinit();
+
+    // standard subwindow stuff
+    {
+        _ = dvui.subwindowCurrentSet(self.prev_windowInfo.id, self.prev_windowInfo.rect);
+        dvui.clipSet(self.prevClip);
+        self.render_ftb.deinit();
+    }
 }
 
 test {

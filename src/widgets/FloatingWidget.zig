@@ -30,7 +30,7 @@ pub const InitOptions = struct {
 init_opts: InitOptions,
 render_ftb: dvui.RenderFrontToBack = undefined,
 wd: WidgetData,
-prev_windowId: dvui.Id = undefined,
+prev_windowInfo: dvui.subwindowCurrentSetReturn = undefined,
 prevClip: Rect.Physical = undefined,
 scale_val: f32,
 scaler: dvui.ScaleWidget = undefined,
@@ -77,21 +77,19 @@ pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: I
         }
     }
 
-    self.render_ftb.initReset();
     self.data().register();
-
     dvui.parentSet(self.widget());
 
-    self.prev_windowId = dvui.subwindowCurrentSet(self.data().id, null).id;
-
-    const rs = self.data().rectScale();
-
-    dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, self.prev_windowId, self.init_opts.mouse_events);
-    dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
-
-    // first break out of whatever clipping we were in
-    self.prevClip = dvui.clipGet();
-    dvui.clipSet(dvui.windowRectPixels());
+    // standard subwindow stuff
+    {
+        const rs = self.data().rectScale();
+        self.render_ftb.initReset();
+        self.prev_windowInfo = dvui.subwindowCurrentSet(self.data().id, null);
+        dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, self.prev_windowInfo.id, self.init_opts.mouse_events);
+        dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
+        self.prevClip = dvui.clipGet();
+        dvui.clipSet(dvui.windowRectPixels()); // break out of whatever clipping we were in
+    }
 
     self.data().borderAndBackground(.{});
 
@@ -128,9 +126,13 @@ pub fn deinit(self: *FloatingWidget) void {
     // outside normal layout, don't call minSizeForChild or self.data().minSizeReportToParent();
 
     dvui.parentReset(self.data().id, self.data().parent);
-    _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
-    dvui.clipSet(self.prevClip);
-    self.render_ftb.deinit();
+
+    // standard subwindow stuff
+    {
+        _ = dvui.subwindowCurrentSet(self.prev_windowInfo.id, self.prev_windowInfo.rect);
+        dvui.clipSet(self.prevClip);
+        self.render_ftb.deinit();
+    }
 }
 
 test {
