@@ -199,9 +199,9 @@ pub fn textureRetain(key: Texture.Cache.Key, retain_key: ?Id) void {
     };
 }
 
-/// Clear retain for all textures and datas with this retain key.
+/// Clear retain for all textures and values with this retain key.
 ///
-/// Use to clear related datas/textures, maybe from a data's deinitfunction.
+/// Use to clear related values/textures, maybe from a value's deinitfunction.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn retainClear(retain_key: Id) void {
@@ -359,12 +359,12 @@ pub const Id = enum(u64) {
         return @enumFromInt(hash.final());
     }
 
-    /// Make a new id by combining id with some data, commonly a string key like `"_value"`.
+    /// Make a new id by combining id with a name, commonly a string key like `"__value"`.
     /// This is how dvui tracks things in `dataGet`/`dataSet`, `animation`, and `timer`.
-    pub fn update(id: Id, input: []const u8) Id {
+    pub fn update(id: Id, name: []const u8) Id {
         var h = fnv.init();
         h.value = id.asU64();
-        h.update(input);
+        h.update(name);
         return @enumFromInt(h.final());
     }
 
@@ -509,16 +509,16 @@ pub const TagData = struct {
     visible: bool,
 };
 
-pub fn tag(name: []const u8, data: TagData) void {
+pub fn tag(name: []const u8, tdata: TagData) void {
     var cw = currentWindow();
 
     if (cw.tags.map.getPtr(name)) |old_data| {
         if (old_data.used) {
-            dvui.log.err("duplicate tag name \"{s}\" id {x} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ name, data.id });
-            dvui.Debug.errorOutline(data.rect);
+            dvui.log.err("duplicate tag name \"{s}\" id {x} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ name, tdata.id });
+            dvui.Debug.errorOutline(tdata.rect);
         }
 
-        old_data.*.inner = data;
+        old_data.*.inner = tdata;
         old_data.used = true;
         return;
     }
@@ -529,8 +529,8 @@ pub fn tag(name: []const u8, data: TagData) void {
         return;
     };
 
-    cw.tags.put(cw.gpa, name_copy, data) catch |err| {
-        dvui.log.err("tag() \"{s}\" got {any} for id {x}\n", .{ name, err, data.id });
+    cw.tags.put(cw.gpa, name_copy, tdata) catch |err| {
+        dvui.log.err("tag() \"{s}\" got {any} for id {x}\n", .{ name, err, tdata.id });
         cw.gpa.free(name_copy);
     };
 }
@@ -789,9 +789,9 @@ pub const CaptureMouse = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn captureMouse(wd: ?*const WidgetData, event_num: u16) void {
-    const cm = if (wd) |data| CaptureMouse{
-        .id = data.id,
-        .rect = data.borderRectScale().r,
+    const cm = if (wd) |wdata| CaptureMouse{
+        .id = wdata.id,
+        .rect = wdata.borderRectScale().r,
         .subwindow_id = subwindowCurrentId(),
     } else null;
     captureMouseCustom(cm, event_num);
@@ -1192,6 +1192,27 @@ pub fn minSize(id: Id, min_size: Size) Size {
     return size;
 }
 
+pub const data = struct {
+    pub const Key = enum(u64) {
+        _,
+
+        /// Combine a widget id and string.  This is the standard way to store
+        /// data associated with a widget.  Different string values allow
+        /// storing multiple pieces of data under the same widget id.
+        ///
+        /// * dvui itself prefixes string with double underscore (__)
+        /// * 3rd party librares should prefix with the name of the library (mylib_) or dns name (com.example.mylib.)
+        pub fn widget(id: dvui.Id, string: []const u8) Key {
+            return @enumFromInt(id.update(string).asU64());
+        }
+    };
+
+    pub fn get(win: ?*Window, key: Key, comptime T: type) ?T {
+        const w = currentOverrideOrPanic(win);
+        return if (w.data_store.getPtr(key, T)) |v| v.* else null;
+    }
+};
+
 /// DEPRECATED: See `dvui.Id.extendId`
 pub const hashSrc = void;
 /// DEPRECATED: See `dvui.Id.update`
@@ -1202,185 +1223,182 @@ fn currentOverrideOrPanic(win: ?*Window) *Window {
     return win orelse current_window orelse @panic("current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
 }
 
-/// Set key/value pair for given id.
+/// Store value under key (id+name).
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
-/// Stored data with the same id/key will be overwritten if it has the same size,
-/// otherwise the data will be freed at the next call to `Window.end`. This means
-/// that if a pointer to the same id/key was retrieved earlier, the value behind
+/// Stored value with the same key will be overwritten if it has the same size,
+/// otherwise the value will be freed at the next call to `Window.end`. This means
+/// that if a pointer to the same key was retrieved earlier, the value behind
 /// that pointer would be modified.
 ///
 /// If you want to store the contents of a slice, use `dataSetSlice`.
-pub fn dataSet(win: ?*Window, id: Id, key: []const u8, data: anytype) void {
+pub fn dataSet(win: ?*Window, id: Id, name: []const u8, value: anytype) void {
     const w = currentOverrideOrPanic(win);
-    w.data_store.set(w.gpa, id.update(key), data) catch |err| {
-        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+    w.data_store.set(w.gpa, .widget(id, name), value) catch |err| {
+        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
     };
 }
 
-/// Set a deinit function for data stored under id/key.
+/// Set a deinit function for value stored under key (id+name).
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
-/// When data for this id/key is about to be freed by dvui, it will first call
-/// the passed function.  This is useful for cases where data for a widget
+/// When value for this id/name is about to be freed by dvui, it will first call
+/// the passed function.  This is useful for cases where value for a widget
 /// allocates memory outside of your control.
-pub fn dataSetDeinitFunction(win: ?*Window, id: Id, key: []const u8, func: Data.DeinitFunction) void {
+pub fn dataSetDeinitFunction(win: ?*Window, id: Id, name: []const u8, func: Data.DeinitFunction) void {
     const w = currentOverrideOrPanic(win);
-    w.data_store.setDeinitFunction(id.update(key), func);
+    w.data_store.setDeinitFunction(.widget(id, name), func);
 }
 
-/// Set retain key for this id/key.  null means remove retain key.
+/// Set retain key for this key (id+name).  null means remove retain key.
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
-/// While an id/key has retain dvui will not free its data.  To free it you
+/// While a key has retain dvui will not free its value.  To free it you
 /// must call either this with null, `dataRemove`, or `retainClear`.
-pub fn dataRetain(win: ?*Window, id: Id, key: []const u8, retain_key: ?Id) void {
+pub fn dataRetain(win: ?*Window, id: Id, name: []const u8, retain_key: ?Id) void {
     const w = currentOverrideOrPanic(win);
-    w.data_store.retain(w.gpa, id.update(key), retain_key) catch |err| {
-        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+    w.data_store.retain(w.gpa, .widget(id, name), retain_key) catch |err| {
+        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
     };
 }
 
-/// Set key/value pair for given id, copying the slice contents. Can be passed
-/// a slice or pointer to an array.
+/// Set value for key (id+name), copying the slice contents. Can be passed a
+/// slice or pointer to an array.
 ///
 /// Can be called from any thread.
 ///
-/// Stored data with the same id/key will be overwritten if it has the same size,
-/// otherwise the data will be freed at the next call to `Window.end`. This means
-/// that if the slice with the same id/key was retrieved earlier, the value behind
+/// Stored value with the same key will be overwritten if it has the same size,
+/// otherwise the value will be freed at the next call to `Window.end`. This means
+/// that if the slice with the same key was retrieved earlier, the value behind
 /// that slice would be modified.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
-pub fn dataSetSlice(win: ?*Window, id: Id, key: []const u8, data: anytype) void {
+/// pass a pointer to the `Window` you want to add the value to.
+pub fn dataSetSlice(win: ?*Window, id: Id, name: []const u8, value: anytype) void {
     const w = currentOverrideOrPanic(win);
-    (w.data_store.setSlice(w.gpa, id.update(key), data)) catch |err| {
-        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+    (w.data_store.setSlice(w.gpa, .widget(id, name), value)) catch |err| {
+        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
     };
 }
 
-/// Same as `dataSetSlice`, but will copy data `num_copies` times all concatenated
+/// Same as `dataSetSlice`, but will copy value `num_copies` times all concatenated
 /// into a single slice.  Useful to get dvui to allocate a specific number of
 /// entries that you want to fill in after.
-pub fn dataSetSliceCopies(win: ?*Window, id: Id, key: []const u8, data: anytype, num_copies: usize) void {
+pub fn dataSetSliceCopies(win: ?*Window, id: Id, name: []const u8, value: anytype, num_copies: usize) void {
     const w = currentOverrideOrPanic(win);
-    (w.data_store.setSliceCopies(w.gpa, id.update(key), data, num_copies)) catch |err| {
-        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+    (w.data_store.setSliceCopies(w.gpa, .widget(id, name), value, num_copies)) catch |err| {
+        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
     };
 }
 
-/// Set key/value pair for given id.
+/// Set value for key (id+name).
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
-/// Stored data with the same id/key will be freed at next `win.end()`.
+/// Stored value with the same key will be freed at next `win.end()`.
 ///
-/// If `copy_slice` is true, data must be a slice or pointer to array, and the
+/// If `copy_slice` is true, value must be a slice or pointer to array, and the
 /// contents are copied into internal storage. If false, only the slice itself
 /// (ptr and len) and stored.
-pub fn dataSetAdvanced(win: ?*Window, id: Id, key: []const u8, data: anytype, comptime copy_slice: bool, num_copies: usize) void {
+pub fn dataSetAdvanced(win: ?*Window, id: Id, name: []const u8, value: anytype, comptime copy_slice: bool, num_copies: usize) void {
     if (copy_slice) {
-        return dataSetSliceCopies(win, id, key, data, num_copies);
+        return dataSetSliceCopies(win, id, name, value, num_copies);
     } else {
-        return dataSet(win, id, key, data);
+        return dataSet(win, id, name, value);
     }
 }
 
-/// Retrieve the value for given key associated with id.
+/// Retrieve the value for key (id+name).
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
-/// If you want a pointer to the stored data, use `dataGetPtr`.
+/// If you want a pointer to the stored value, use `dataGetPtr`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGet(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
-    const w = currentOverrideOrPanic(win);
-    return if (w.data_store.getPtr(id.update(key), T)) |v| v.* else null;
+pub fn dataGet(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?T {
+    return data.get(win, .widget(id, name), T);
 }
 
-/// Retrieve the value for given key associated with id.  If no value was stored, store default and then return it.
+/// Retrieve the value for key (id+name).  If no value was stored, store default and then return it.
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
-/// If you want a pointer to the stored data, use `dataGetPtrDefault`.
+/// If you want a pointer to the stored value, use `dataGetPtrDefault`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGetDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: T) T {
+pub fn dataGetDefault(win: ?*Window, id: Id, name: []const u8, comptime T: type, default: T) T {
     const w = currentOverrideOrPanic(win);
-    if (w.data_store.getPtr(id.update(key), T)) |v| return v.* else {
-        w.data_store.set(w.gpa, id.update(key), default) catch |err| {
-            dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+    const key: data.Key = .widget(id, name);
+    if (w.data_store.getPtr(key, T)) |v| return v.* else {
+        w.data_store.set(w.gpa, key, default) catch |err| {
+            dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
         };
         return default;
     }
 }
 
-/// Retrieve a pointer to the value for given key associated with id.  If no
-/// value was stored, store default and then return a pointer to the stored
-/// value.
+/// Retrieve a pointer to the value for key (id+name).  If no value was
+/// stored, store default and then return a pointer to the stored value.
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
 /// Returns a pointer to internal storage, which will be freed after a frame
-/// where there is no call to any `dataGet`/`dataSet` functions for that id/key
-/// combination.
+/// where there is no call to any `dataGet`/`dataSet` functions for this key.
 ///
 /// The pointer will always be valid until the next call to `Window.end`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGetPtrDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: T) *T {
+pub fn dataGetPtrDefault(win: ?*Window, id: Id, name: []const u8, comptime T: type, default: T) *T {
     const w = currentOverrideOrPanic(win);
-    return w.data_store.getPtrDefault(w.gpa, id.update(key), T, default) catch |err| {
-        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+    return w.data_store.getPtrDefault(w.gpa, .widget(id, name), T, default) catch |err| {
+        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
         @panic("dataGetPtrDefault failed");
     };
 }
 
-/// Retrieve a pointer to the value for given key associated with id.
+/// Retrieve a pointer to the value for key (id+name).
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
 /// Returns a pointer to internal storage, which will be freed after a frame
-/// where there is no call to any `dataGet`/`dataSet` functions for that id/key
-/// combination.
+/// where there is no call to any `dataGet`/`dataSet` functions for this key.
 ///
 /// The pointer will always be valid until the next call to `Window.end`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGetPtr(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?*T {
+pub fn dataGetPtr(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?*T {
     const w = currentOverrideOrPanic(win);
-    return w.data_store.getPtr(id.update(key), T);
+    return w.data_store.getPtr(.widget(id, name), T);
 }
 
-/// Retrieve slice contents for given key associated with id.
+/// Retrieve slice contents for key (id+name).
 ///
 /// `dataSetSlice` strips const from the slice type, so always call
 /// `dataGetSlice` with a mutable slice type ([]u8, not []const u8).
@@ -1388,61 +1406,61 @@ pub fn dataGetPtr(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?*T 
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
 /// The returned slice points to internal storage, which will be freed after
-/// a frame where there is no call to any `dataGet`/`dataSet` functions for that
-/// id/key combination.
+/// a frame where there is no call to any `dataGet`/`dataSet` functions for this
+/// key.
 ///
 /// The slice will always be valid until the next call to `Window.end`.
-pub fn dataGetSlice(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
+pub fn dataGetSlice(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?T {
     const w = currentOverrideOrPanic(win);
-    return w.data_store.getSlice(id.update(key), T);
+    return w.data_store.getSlice(.widget(id, name), T);
 }
 
-/// Retrieve slice contents for given key associated with id.
+/// Retrieve slice contents for key (id+name).
 ///
-/// If the id/key doesn't exist yet, store the default slice into internal
+/// If the key doesn't exist yet, store the default slice into internal
 /// storage, and then return the internal storage slice.
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
 /// The returned slice points to internal storage, which will be freed after
-/// a frame where there is no call to any `dataGet`/`dataSet` functions for that
-/// id/key combination.
+/// a frame where there is no call to any `dataGet`/`dataSet` functions for this
+/// key.
 ///
 /// The slice will always be valid until the next call to `Window.end`.
-pub fn dataGetSliceDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
+pub fn dataGetSliceDefault(win: ?*Window, id: Id, name: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
     const w = currentOverrideOrPanic(win);
-    return w.data_store.getSliceDefault(w.gpa, id.update(key), T, default) catch |err| {
-        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+    return w.data_store.getSliceDefault(w.gpa, .widget(id, name), T, default) catch |err| {
+        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
         @panic("dataGetSliceDefault failed");
     };
 }
 
 // returns the backing slice of bytes if we have it
-pub fn dataGetInternal(win: ?*Window, id: Id, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
+pub fn dataGetInternal(win: ?*Window, id: Id, name: []const u8, comptime T: type, slice: bool) ?[]u8 {
     if (slice) {
-        return dataGetPtr(win, id, key, T);
+        return dataGetPtr(win, id, name, T);
     } else {
-        return dataGetSlice(win, id, key, T);
+        return dataGetSlice(win, id, name, T);
     }
 }
 
-/// Remove key (and data if any) for given id.  The data will be freed at next
+/// Remove key (id+name) and associated value (if any).  The value will be freed at next
 /// `Window.end`.
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the dialog to.
-pub fn dataRemove(win: ?*Window, id: Id, key: []const u8) void {
+pub fn dataRemove(win: ?*Window, id: Id, name: []const u8) void {
     const w = currentOverrideOrPanic(win);
-    return w.data_store.remove(w.gpa, id.update(key)) catch |err| {
-        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
+    return w.data_store.remove(w.gpa, .widget(id, name)) catch |err| {
+        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
     };
 }
 
