@@ -362,7 +362,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
     if (opts.font.underline) |u| {
         if (u.thick > 0) {
-            var topleft: dvui.Point.Physical = .{ .x = start.x, .y = start.y + fce_ascent + (fce.em_height * 0.1) };
+            var topleft: dvui.Point.Physical = .{ .x = start.x, .y = start.y + fce_ascent + (fce.em_height * 0.2) };
             if (cw.snap_to_pixels) {
                 // x should already be snapped
                 topleft.y = @round(topleft.y);
