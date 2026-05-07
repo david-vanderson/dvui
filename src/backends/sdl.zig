@@ -1284,6 +1284,12 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             try win.addEventApp(.{ .action = .quit });
             return false;
         },
+        if (sdl3) c.SDL_EVENT_DROP_FILE else c.SDL_DROPFILE => {
+            if (self.log_events) {
+                log.debug("SDL event drop file: {s}\n", .{ if (sdl3) event.drop.data else event.drop.file });
+            }
+            return false;
+        },
         else => {
             if (self.log_events) {
                 log.debug("unhandled SDL event type {any}\n", .{event.type});
