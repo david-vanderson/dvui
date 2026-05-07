@@ -32,6 +32,11 @@ pub const Resize = enum {
 
 pub const InitOptions = struct {
     modal: bool = false,
+    /// If true the floating widget effectively becomes a dedicated OS window.
+    /// Depending the backend, this can be ignored.
+    // FIXME : what is the mechanism to ignore ? Ideally it's comptime enough that no cost
+    // is payed for unsupported backends, or maybe even provide a general flag to disable ?
+    dedicated_os_win: bool = false,
     modal_alpha: ?u8 = null,
     rect: ?*Rect = null,
     center_on: ?Rect.Natural = null,
@@ -222,6 +227,12 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
     self.data().register();
 
     if (dvui.firstFrame(self.data().id)) {
+        if (self.init_options.dedicated_os_win) {
+            // FIXME : Is this the right ID to pass ?
+            dvui.currentWindow().backend.impl.createExtraWindow(self.wd.id) catch unreachable;
+            dvui.dataSet(null, self.wd.id, "active_child_os_window", self.wd.id);
+        }
+
         dvui.focusSubwindow(self.data().id, null);
 
         // write back before we hide ourselves for the first frame
@@ -238,6 +249,15 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
         // jump when we autopos/autosize
         self.data().rect.w = 0;
         self.data().rect.h = 0;
+    } else {
+        // FIXME : Adding the else above feel weird, not sure why
+        // Should this go in FloatingWindowWidget.deinit() instead ?
+        if (init_opts.dedicated_os_win) {
+            dvui.dataSetDeinitFunction(null, self.wd.id, "active_child_os_window", &OsWinDestroy);
+        }
+    }
+    if (self.init_options.dedicated_os_win) {
+        // TODO : change where the backend draws to
     }
 
     if (dvui.captured(self.data().id)) {
@@ -611,6 +631,13 @@ pub fn deinit(self: *FloatingWindowWidget) void {
         dvui.clipSet(self.prevClip);
         self.render_ftb.deinit();
     }
+}
+
+// FIXME : Is this the right place to go ? Should I put it somewhere else ?
+// But I think the general idea is actionnable.
+fn OsWinDestroy(ptr: *anyopaque) void {
+    const id: dvui.Id = @as(*dvui.Id, @ptrCast(@alignCast(ptr))).*;
+    dvui.currentWindow().backend.impl.destroyExtraWindow(id) catch unreachable;
 }
 
 test {

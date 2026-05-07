@@ -17,9 +17,20 @@ pub const Context = *SDLBackend;
 
 const log = std.log.scoped(.SDLBackend);
 
+// FIXME : this is maybe a bit dumb, but has advantage to allow me
+// to NOT deal with allocation at this stage.
+const ChildOsWindow = struct {
+    dvui_id: dvui.Id,
+    window: *c.SDL_Window,
+    renderer: *c.SDL_Renderer,
+};
+const max_child_windows = 5;
+
 io: std.Io,
+// FIXME : Should probably rename to main_window/main_renderer
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
+child_os_wins: [max_child_windows]?ChildOsWindow = @splat(null),
 ak_should_initialized: bool = dvui.accesskit_enabled,
 we_own_window: bool = false,
 touch_mouse_events: bool = false,
@@ -30,6 +41,7 @@ last_window_size: dvui.Size.Natural = .{ .w = 800, .h = 600 },
 cursor_last: dvui.enums.Cursor = .arrow,
 cursor_backing: [cursor_enum_count]?*c.SDL_Cursor = @splat(null),
 cursor_backing_tried: [cursor_enum_count]bool = @splat(false),
+// FIXME : this is a "per-frame" arena, right ? to confirm and document here
 arena: std.mem.Allocator = undefined,
 
 const cursor_enum_count = @typeInfo(dvui.enums.Cursor).@"enum".fields.len;
@@ -297,6 +309,68 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     }
 
     return back;
+}
+
+// FIXME : I'm not sure yet about the API, not even that createExtraWindow/destroyExtraWindow is the right move.
+pub fn createExtraWindow(self: *SDLBackend, id: dvui.Id) !void {
+    for (self.child_os_wins) |win| {
+        if (win) |w| {
+            if (w.dvui_id == id) return;
+        }
+    }
+
+    // FIXME : don't forget to deal with options from original code now hardcoded
+    // FIXME : deal with sdl2, probably need to refactor a bit around here,
+    // notably will be worth to have a private CreateWindow, maybe one for each SDL...
+    const extra_win = c.SDL_CreateWindow(
+        "extra window",
+        @as(c_int, @intFromFloat(800)),
+        @as(c_int, @intFromFloat(800)),
+        @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE),
+    ) orelse return logErr("SDL_CreateWindow in createExtraWindow");
+
+    errdefer c.SDL_DestroyWindow(extra_win);
+
+    const props = c.SDL_CreateProperties();
+    defer c.SDL_DestroyProperties(props);
+    try toErr(
+        c.SDL_SetPointerProperty(props, c.SDL_PROP_RENDERER_CREATE_WINDOW_POINTER, extra_win),
+        "SDL_SetPointerProperty in createExtraWindow",
+    );
+    // vsync
+    try toErr(
+        c.SDL_SetNumberProperty(props, c.SDL_PROP_RENDERER_CREATE_PRESENT_VSYNC_NUMBER, 1),
+        "SDL_SetNumberProperty in createExtraWindow",
+    );
+    const extra_renderer = c.SDL_CreateRendererWithProperties(props) orelse return logErr("SDL_CreateRendererWithProperties in createExtraWindow");
+
+    errdefer c.SDL_DestroyRenderer(extra_renderer);
+
+    for (0..max_child_windows) |i| {
+        if (self.child_os_wins[i] == null) {
+            self.child_os_wins[i] = .{
+                .dvui_id = id,
+                .window = extra_win,
+                .renderer = extra_renderer,
+            };
+            std.debug.print("SDL created subwindow with id {f}\n", .{id});
+            return;
+        }
+    }
+    return error.TooMuchChildOSWindows;
+}
+pub fn destroyExtraWindow(self: *SDLBackend, id: dvui.Id) !void {
+    for (0..max_child_windows) |i| {
+        if (self.child_os_wins[i]) |child_win| {
+            if (child_win.dvui_id == id) {
+                c.SDL_DestroyWindow(child_win.window);
+                c.SDL_DestroyRenderer(child_win.renderer);
+                std.debug.print("SDL destroyed subwindow with id {f}\n", .{id});
+                self.child_os_wins[i] = null;
+                break;
+            }
+        }
+    }
 }
 
 pub fn init(io: std.Io, window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
@@ -592,6 +666,11 @@ pub fn deinit(self: *SDLBackend) void {
 pub fn renderPresent(self: *SDLBackend) !void {
     if (sdl3) {
         try toErr(c.SDL_RenderPresent(self.renderer), "SDL_RenderPresent in renderPresent");
+        for (self.child_os_wins) |child_os_win| {
+            if (child_os_win) |win| {
+                try toErr(c.SDL_RenderPresent(win.renderer), "SDL_RenderPresent in renderPresent for extra win");
+            }
+        }
     } else {
         c.SDL_RenderPresent(self.renderer);
     }
