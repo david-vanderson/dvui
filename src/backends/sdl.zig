@@ -4,15 +4,31 @@ const dvui = @import("dvui");
 
 const sdl_options = @import("sdl_options");
 pub const sdl3 = sdl_options.version.major == 3;
+
+/// MSVC stdint uses a SIZE_MAX literal with a `ui64` suffix; Zig translate-c rejects
+/// it. MSVC guards SIZE_MAX with #ifndef, so a friendly value here is kept when SDL
+/// pulls in stdint.h; SDL then sets SDL_SIZE_MAX from that macro.
+fn sdl3CImport() type {
+    const win_msvc = builtin.target.os.tag == .windows and builtin.target.abi == .msvc;
+    return @cImport({
+        if (win_msvc) {
+            switch (builtin.target.ptrBitWidth()) {
+                32 => @cDefine("SIZE_MAX", "4294967295UL"),
+                64 => @cDefine("SIZE_MAX", "18446744073709551615ULL"),
+                else => {},
+            }
+        }
+        @cDefine("SDL_DISABLE_OLD_NAMES", {});
+        @cInclude("SDL3/SDL.h");
+
+        @cDefine("SDL_MAIN_HANDLED", {});
+        @cInclude("SDL3/SDL_main.h");
+    });
+}
+
 pub const c = blk: {
     if (sdl3) {
-        break :blk @cImport({
-            @cDefine("SDL_DISABLE_OLD_NAMES", {});
-            @cInclude("SDL3/SDL.h");
-
-            @cDefine("SDL_MAIN_HANDLED", {});
-            @cInclude("SDL3/SDL_main.h");
-        });
+        break :blk sdl3CImport();
     }
     break :blk @cImport({
         // Zig 0.16 bundled arm_vector_types.h uses __mfp8 builtin that
@@ -869,7 +885,7 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
         c.SDL_CreateSurfaceFrom(
             @as(c_int, @intCast(width)),
             @as(c_int, @intCast(height)),
-            sdl_format,
+            @as(c.SDL_PixelFormat, @intCast(sdl_format)),
             @constCast(pixels),
             @as(c_int, @intCast(width * format.pitchFactor())),
         ) orelse return logErr("SDL_CreateSurfaceFrom in textureCreate")
@@ -933,7 +949,7 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
 
     const texture = c.SDL_CreateTexture(
         self.renderer,
-        sdl_format,
+        if (comptime sdl3) @as(c.SDL_PixelFormat, @intCast(sdl_format)) else sdl_format,
         c.SDL_TEXTUREACCESS_TARGET,
         @intCast(width),
         @intCast(height),
@@ -1474,8 +1490,7 @@ pub fn getSDLVersion() std.SemanticVersion {
     }
 }
 
-fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: c_uint, message: [*c]const u8) callconv(.c) void {
-    _ = userdata;
+fn sdlLogCallbackCommon(category: c_int, priority: c_int, message: [*c]const u8) void {
     switch (category) {
         c.SDL_LOG_CATEGORY_APPLICATION => sdlLog(.SDL_APPLICATION, priority, message),
         c.SDL_LOG_CATEGORY_ERROR => sdlLog(.SDL_ERROR, priority, message),
@@ -1497,7 +1512,17 @@ fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: c_uint, mess
     }
 }
 
-fn sdlLog(comptime category: @EnumLiteral(), priority: c_uint, message: [*c]const u8) void {
+fn sdlLogCallbackSdl3(userdata: ?*anyopaque, category: c_int, priority: c_uint, message: [*c]const u8) callconv(.c) void {
+    _ = userdata;
+    sdlLogCallbackCommon(category, @intCast(priority), message);
+}
+
+fn sdlLogCallbackSdl2(userdata: ?*anyopaque, category: c_int, priority: c_int, message: [*c]const u8) callconv(.c) void {
+    _ = userdata;
+    sdlLogCallbackCommon(category, priority, message);
+}
+
+fn sdlLog(comptime category: @EnumLiteral(), priority: c_int, message: [*c]const u8) void {
     const logger = std.log.scoped(category);
     switch (priority) {
         c.SDL_LOG_PRIORITY_VERBOSE => logger.debug("VERBOSE: {s}", .{message}),
@@ -1515,7 +1540,15 @@ fn sdlLog(comptime category: @EnumLiteral(), priority: c_uint, message: [*c]cons
 
 /// This set enables the internal logging of SDL based on the level of std.log (and the SDL_... scopes)
 pub fn enableSDLLogging() void {
-    if (sdl3) c.SDL_SetLogOutputFunction(&sdlLogCallback, null) else c.SDL_LogSetOutputFunction(&sdlLogCallback, null);
+    // translate-c maps SDL_LogOutputFunction's priority as `c_uint` on Darwin but `c_int` on *-windows-msvc.
+    if (sdl3) {
+        if (builtin.target.os.tag == .windows and builtin.target.abi == .msvc)
+            c.SDL_SetLogOutputFunction(&sdlLogCallbackSdl2, null)
+        else
+            c.SDL_SetLogOutputFunction(&sdlLogCallbackSdl3, null);
+    } else {
+        c.SDL_LogSetOutputFunction(&sdlLogCallbackSdl2, null);
+    }
     // Set default log level
     const default_log_level: c.SDL_LogPriority = if (std.log.logEnabled(.debug, .SDLBackend))
         c.SDL_LOG_PRIORITY_VERBOSE
