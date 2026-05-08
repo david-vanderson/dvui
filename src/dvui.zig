@@ -3430,8 +3430,8 @@ pub fn gridHeadingSortable(
     const sort_changed = switch (g.colSortOrder(col_num)) {
         // Use same src for each button so they get the same id and can retain focus accross frames.
         .unsorted => button(src, heading, .{}, heading_opts),
-        .ascending => buttonLabelAndIcon(src, .{ .label = heading, .tvg_bytes = icon_ascending, .button_opts = .{} }, heading_opts),
-        .descending => buttonLabelAndIcon(src, .{ .label = heading, .tvg_bytes = icon_descending, .button_opts = .{} }, heading_opts),
+        .ascending => buttonLabelAndIcon(src, .{ .label = heading, .icon_label = "sorted ascending", .tvg_bytes = icon_ascending, .button_opts = .{} }, heading_opts),
+        .descending => buttonLabelAndIcon(src, .{ .label = heading, .icon_label = "sorted descending", .tvg_bytes = icon_descending, .button_opts = .{} }, heading_opts),
     };
 
     if (sort_changed) {
@@ -4002,6 +4002,8 @@ pub const ButtonLabelAndIconOptions = struct {
     label: []const u8,
     tvg_bytes: []const u8,
     icon_first: bool = false,
+    // Best practice is to supply an icon label for accessibility.
+    icon_label: ?[]const u8 = null,
 };
 
 pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, combined_opts: ButtonLabelAndIconOptions, opts: Options) bool {
@@ -4018,7 +4020,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, combined_opts: Button
     {
         var outer_hbox = box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer outer_hbox.deinit();
-        icon(@src(), combined_opts.label, combined_opts.tvg_bytes, .{}, options.strip().override(.{ .gravity_x = if (combined_opts.icon_first) 0.0 else 1.0, .color_text = opts.color_text }));
+        icon(@src(), combined_opts.icon_label orelse combined_opts.label, combined_opts.tvg_bytes, .{}, options.strip().override(.{ .gravity_x = if (combined_opts.icon_first) 0.0 else 1.0, .color_text = opts.color_text }));
         labelEx(@src(), "{s}", .{combined_opts.label}, .{ .align_x = 0.5 }, options.strip().override(.{ .expand = .both }));
     }
 
