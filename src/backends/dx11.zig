@@ -687,7 +687,28 @@ pub fn textureCreate(self: Context, pixels: [*]const u8, width: u32, height: u32
 
     try state.texture_interpolation.put(state.dvui_window.gpa, texture, interpolation);
 
+    log.debug("created texture @0x{x}", .{@intFromPtr(texture)});
+
     return dvui.Texture{ .ptr = texture, .width = width, .height = height, .format = .rgba_32 };
+}
+
+pub fn textureUpdate(
+    self: Context,
+    texture: dvui.Texture,
+    pixels: [*]const u8,
+) dvui.Backend.TextureError!void {
+    const state = stateFromHwnd(hwndFromContext(self));
+    // cast to resource to please the compiler god
+    const tex: *win32.ID3D11Resource = @ptrCast(@alignCast(texture.ptr));
+
+    state.device_context.UpdateSubresource(
+        tex,
+        0, // subresource
+        null, // full region
+        pixels,
+        texture.width * 4,
+        0,
+    );
 }
 
 pub fn textureCreateTarget(self: Context, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
@@ -775,10 +796,14 @@ pub fn textureReadTarget(self: Context, texture: dvui.TextureTarget, pixels_out:
 }
 
 pub fn textureDestroy(self: Context, texture: dvui.Texture) void {
+    log.debug("Destroying texture @0x{x}", .{@intFromPtr(texture.ptr)});
     const state = stateFromHwnd(hwndFromContext(self));
     const tex: *win32.ID3D11Texture2D = @ptrCast(@alignCast(texture.ptr));
     if (!state.texture_interpolation.remove(texture.ptr)) {
-        log.err("Destroyed texture that did not have a stored interpolation", .{});
+        log.err(
+            "Destroyed texture @0x{x} that did not have a stored interpolation",
+            .{@intFromPtr(texture.ptr)},
+        );
     }
     _ = tex.IUnknown.Release();
 }
@@ -797,13 +822,19 @@ pub fn textureFromTarget(self: Context, texture: dvui.TextureTarget) !dvui.Textu
     const tex_old: *win32.ID3D11Texture2D = @ptrCast(@alignCast(texture.ptr));
     defer _ = tex_old.IUnknown.Release(); // destroy target
 
-    // DX11 can't draw target textures, so copy to a new texture
-    const interpolation = state.texture_interpolation.get(texture.ptr) orelse blk: {
-        log.err("Target texture did not have a stored interpolation", .{});
-        break :blk .linear;
-    };
+    // DX11 can't draw target textures, so read all the pixels and make a new texture
+
     const pixels = try state.arena.alloc(u8, texture.width * texture.height * 4);
     defer state.arena.free(pixels);
+
+    log.debug("Destroying texture @0x{x}", .{@intFromPtr(texture.ptr)});
+    const interpolation = if (state.texture_interpolation.fetchRemove(texture.ptr)) |kv| kv.value else blk: {
+        log.err(
+            "Destroyed texture @0x{x} that did not have a stored interpolation",
+            .{@intFromPtr(texture.ptr)},
+        );
+        break :blk .linear;
+    };
     const newTex = try self.textureCreate(pixels.ptr, texture.width, texture.height, interpolation, .rgba_32);
 
     // copy
