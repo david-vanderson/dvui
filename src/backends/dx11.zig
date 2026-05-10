@@ -826,7 +826,6 @@ pub fn textureFromTarget(self: Context, texture: dvui.TextureTarget) !dvui.Textu
 
     const pixels = try state.arena.alloc(u8, texture.width * texture.height * 4);
     defer state.arena.free(pixels);
-    try self.textureReadTarget(texture, pixels.ptr);
 
     log.debug("Destroying texture @0x{x}", .{@intFromPtr(texture.ptr)});
     const interpolation = if (state.texture_interpolation.fetchRemove(texture.ptr)) |kv| kv.value else blk: {
