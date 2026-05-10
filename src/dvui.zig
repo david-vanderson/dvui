@@ -3218,9 +3218,14 @@ pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOpt
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget.InitOptions, comptime fmt: []const u8, fmt_args: anytype, opts: Options) void {
     var tt: dvui.FloatingTooltipWidget = undefined;
-    tt.init(src, init_opts, opts.override(.{ .role = .tooltip }));
+    const defaults: Options = .{
+        .role = .tooltip,
+        .padding = Rect.all(6),
+    };
+    const options = defaults.override(opts);
+    tt.init(src, init_opts, options);
     if (tt.shown()) {
-        var tl2 = dvui.textLayout(@src(), .{}, .{ .background = false });
+        var tl2 = dvui.textLayout(@src(), .{}, options.strip());
         tl2.format(fmt, fmt_args, .{});
         tl2.deinit();
         if (tt.data().accesskit_node()) |ak_node| {
