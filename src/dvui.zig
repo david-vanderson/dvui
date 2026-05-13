@@ -294,8 +294,10 @@ pub const useFreeType = @import("default_options").freetype;
 pub const useTinyFileDialogs = @import("default_options").tiny_file_dialogs;
 pub const useTreeSitter = @import("default_options").tree_sitter;
 
-/// The amount of logical pixels to scroll per "tick" of the scroll wheel
-pub var scroll_speed: f32 = 80;
+/// The amount of logical pixels to scroll per "tick" of the scroll wheel.
+/// This variable is provided in case you need a quick fix.  If you need to
+/// adjust this, please file an issue.
+pub var scroll_speed: f32 = if (builtin.os.tag.isDarwin()) 40 else 80;
 
 /// When this is true, `animation` overwrites end_time so animations expire next frame.
 /// Timers are not affected.
