@@ -401,10 +401,10 @@ pub const Cache = struct {
             if (second) |s| {
                 const sname = s.name(gpa);
                 defer gpa.free(sname);
-                dvui.log.err("Font {s} not in dvui database, using second best {s}", .{ fname, sname });
+                dvui.log.warn("Font {s} not loaded in dvui, using second best {s}", .{ fname, sname });
                 break :blk s;
             } else {
-                dvui.log.err("Font {s} not in dvui database, using fallback", .{fname});
+                dvui.log.warn("Font {s} not loaded in dvui, using fallback", .{fname});
                 break :blk Source.fallback;
             }
         };
