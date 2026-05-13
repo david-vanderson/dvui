@@ -45,6 +45,16 @@ pub const Style = enum {
     italic,
 };
 
+pub const Underline = struct {
+    /// Percent of font size, will always be at least 1 logical pixel
+    thick: f32 = 0.1,
+};
+
+pub const Strike = struct {
+    /// Percent of font size, will always be at least 1 logical pixel
+    thick: f32 = 0.1,
+};
+
 /// Changing any of these might query for a font.
 family: [NAME_MAX_LEN:0]u8 = @splat(0),
 
@@ -56,6 +66,8 @@ style: Style = .normal,
 
 /// Can be changed for any font, no query.
 line_height_factor: f32 = 1.2,
+underline: ?Underline = null,
+strike: ?Strike = null,
 
 pub const FindOptions = struct {
     family: []const u8,
@@ -120,6 +132,18 @@ pub fn withStyle(self: Font, s: Style) Font {
 pub fn withLineHeight(self: Font, factor: f32) Font {
     var r = self;
     r.line_height_factor = factor;
+    return r;
+}
+
+pub fn withUnderline(self: Font, underline: Underline) Font {
+    var r = self;
+    r.underline = underline;
+    return r;
+}
+
+pub fn withStrike(self: Font, strike: Strike) Font {
+    var r = self;
+    r.strike = strike;
     return r;
 }
 

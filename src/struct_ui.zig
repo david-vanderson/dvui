@@ -24,7 +24,7 @@ const log = std.log.scoped(.struct_ui);
 ///
 /// Use TextFieldOptions for any array or slice of u8 you want ot display as a string.
 /// Use NumberFieldOptions for any numbers, allowing setting of min and max ranges and other options
-/// Use BooleanFieldOptions for any bools.
+/// Use BoolFieldOptions for any bools.
 /// Use StandardFieldOptions can be used for any field to give a default layout.
 /// Use OptionalFieldOptions to use different field options for the optional vs the optional's value.
 /// If a custom display function is supplied, they will be used to display the struct instead of

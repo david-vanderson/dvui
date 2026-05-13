@@ -174,7 +174,7 @@ pub fn show(self: *Debug) void {
 
         dvui.labelNoFmt(@src(), "Widget Id:", .{}, .{ .gravity_y = 0.5 });
 
-        var buf = [_]u8{0} ** 20;
+        var buf: [20]u8 = @splat(0);
         if (self.widget_id != .zero) {
             _ = std.fmt.bufPrint(&buf, "{x}", .{self.widget_id}) catch unreachable;
         }

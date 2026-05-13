@@ -294,8 +294,10 @@ pub const useFreeType = @import("default_options").freetype;
 pub const useTinyFileDialogs = @import("default_options").tiny_file_dialogs;
 pub const useTreeSitter = @import("default_options").tree_sitter;
 
-/// The amount of logical pixels to scroll per "tick" of the scroll wheel
-pub var scroll_speed: f32 = 80;
+/// The amount of logical pixels to scroll per "tick" of the scroll wheel.
+/// This variable is provided in case you need a quick fix.  If you need to
+/// adjust this, please file an issue.
+pub var scroll_speed: f32 = if (builtin.os.tag.isDarwin()) 40 else 80;
 
 /// When this is true, `animation` overwrites end_time so animations expire next frame.
 /// Timers are not affected.
@@ -314,41 +316,7 @@ pub var reduce_motion: bool = false;
 /// If positions/sizes are getting into this range, then likely something is going wrong.
 pub const max_float_safe: f32 = 2_000_000; // 2000000 and 2e6 for searchability
 
-pub const c = @cImport({
-    // musl fails to compile saying missing "bits/setjmp.h", and nobody should
-    // be using setjmp anyway
-    @cDefine("_SETJMP_H", "1");
-
-    if (useFreeType) {
-        @cInclude("freetype/ftadvanc.h");
-        @cInclude("freetype/ftbbox.h");
-        @cInclude("freetype/ftbitmap.h");
-        @cInclude("freetype/ftcolor.h");
-        @cInclude("freetype/ftlcdfil.h");
-        @cInclude("freetype/ftsizes.h");
-        @cInclude("freetype/ftstroke.h");
-        @cInclude("freetype/fttrigon.h");
-    } else {
-        @cInclude("stb_truetype.h");
-    }
-
-    if (!useLibc) {
-        @cDefine("STBI_NO_STDIO", "1");
-        @cDefine("STBI_NO_STDLIB", "1");
-        @cDefine("STBIW_NO_STDLIB", "1");
-    }
-    @cInclude("stb_image.h");
-    @cInclude("stb_image_write.h");
-
-    // Used by native dialogs
-    if (useTinyFileDialogs) {
-        @cInclude("tinyfiledialogs.h");
-    }
-
-    if (useTreeSitter) {
-        @cInclude("tree_sitter/api.h");
-    }
-});
+pub const c = @import("dvui-c");
 
 pub var ft2lib: if (useFreeType) c.FT_Library else void = undefined;
 
@@ -1730,6 +1698,11 @@ pub const ClickOptions = struct {
 
     /// Which mouse buttons to react to.
     buttons: enum { pointer, any } = .pointer,
+
+    /// If a touch event drags on the button, should we keep capture?
+    /// - false allows touch scrolling
+    /// - true allows dragging the button somewhere (like in TreeWidget)
+    touch_drag: bool = false,
 };
 
 pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
@@ -1775,7 +1748,7 @@ pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
                         }
                     }
                 } else if (me.action == .motion and me.button.touch()) {
-                    if (dvui.captured(wd.id)) {
+                    if (!opts.touch_drag and dvui.captured(wd.id)) {
                         if (dvui.dragging(me.p, null)) |_| {
                             // touch: if we overcame the drag threshold, then
                             // that means the person probably didn't want to
@@ -3247,9 +3220,14 @@ pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOpt
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget.InitOptions, comptime fmt: []const u8, fmt_args: anytype, opts: Options) void {
     var tt: dvui.FloatingTooltipWidget = undefined;
-    tt.init(src, init_opts, opts.override(.{ .role = .tooltip }));
+    const defaults: Options = .{
+        .role = .tooltip,
+        .padding = Rect.all(6),
+    };
+    const options = defaults.override(opts);
+    tt.init(src, init_opts, options);
     if (tt.shown()) {
-        var tl2 = dvui.textLayout(@src(), .{}, .{ .background = false });
+        var tl2 = dvui.textLayout(@src(), .{}, options.strip());
         tl2.format(fmt, fmt_args, .{});
         tl2.deinit();
         if (tt.data().accesskit_node()) |ak_node| {
@@ -3459,8 +3437,8 @@ pub fn gridHeadingSortable(
     const sort_changed = switch (g.colSortOrder(col_num)) {
         // Use same src for each button so they get the same id and can retain focus accross frames.
         .unsorted => button(src, heading, .{}, heading_opts),
-        .ascending => buttonLabelAndIcon(src, .{ .label = heading, .tvg_bytes = icon_ascending, .button_opts = .{} }, heading_opts),
-        .descending => buttonLabelAndIcon(src, .{ .label = heading, .tvg_bytes = icon_descending, .button_opts = .{} }, heading_opts),
+        .ascending => buttonLabelAndIcon(src, .{ .label = heading, .icon_label = "sorted ascending", .tvg_bytes = icon_ascending, .button_opts = .{} }, heading_opts),
+        .descending => buttonLabelAndIcon(src, .{ .label = heading, .icon_label = "sorted descending", .tvg_bytes = icon_descending, .button_opts = .{} }, heading_opts),
     };
 
     if (sort_changed) {
@@ -4031,6 +4009,8 @@ pub const ButtonLabelAndIconOptions = struct {
     label: []const u8,
     tvg_bytes: []const u8,
     icon_first: bool = false,
+    // Best practice is to supply an icon label for accessibility.
+    icon_label: ?[]const u8 = null,
 };
 
 pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, combined_opts: ButtonLabelAndIconOptions, opts: Options) bool {
@@ -4047,7 +4027,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, combined_opts: Button
     {
         var outer_hbox = box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer outer_hbox.deinit();
-        icon(@src(), combined_opts.label, combined_opts.tvg_bytes, .{}, options.strip().override(.{ .gravity_x = if (combined_opts.icon_first) 0.0 else 1.0, .color_text = opts.color_text }));
+        icon(@src(), combined_opts.icon_label orelse combined_opts.label, combined_opts.tvg_bytes, .{}, options.strip().override(.{ .gravity_x = if (combined_opts.icon_first) 0.0 else 1.0, .color_text = opts.color_text }));
         labelEx(@src(), "{s}", .{combined_opts.label}, .{ .align_x = 0.5 }, options.strip().override(.{ .expand = .both }));
     }
 
@@ -4330,7 +4310,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
     if (text_mode) {
         var te_buf = dataGetSlice(null, b.data().id, "_buf", []u8) orelse blk: {
-            var buf = [_]u8{0} ** 20;
+            var buf: [20]u8 = @splat(0);
             _ = std.fmt.bufPrintZ(&buf, "{d:0.3}", .{init_opts.value.*}) catch {};
             dataSetSlice(null, b.data().id, "_buf", &buf);
             break :blk dataGetSlice(null, b.data().id, "_buf", []u8).?;
@@ -5019,7 +4999,8 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     // https://github.com/david-vanderson/dvui/issues/502
     const id = dvui.parentGet().extendId(src, opts.idExtra()).update(@typeName(T));
 
-    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 32);
+    const default_bytes: [32]u8 = @splat(0);
+    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &default_bytes);
 
     // always initialize with value so we do the dataGet
     if (init_opts.value) |num| {
@@ -5189,7 +5170,8 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     const id = dvui.parentGet().extendId(src, opts.idExtra());
 
-    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 9);
+    const default_bytes: [9]u8 = @splat(0);
+    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &default_bytes);
 
     var te: TextEntryWidget = undefined;
     te.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = init_opts.placeholder }, options);
