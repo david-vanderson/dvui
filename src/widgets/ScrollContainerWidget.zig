@@ -253,8 +253,7 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Opt
         // If you are reading this, make sure that children of scrollArea() are
         // not expanded in the scrollArea's layout direction, or that only the
         // last child is.
-        dvui.currentWindow().debug.widget_id = id;
-        dvui.log.debug("{s}:{d} got child {x} after expanded child", .{ @src().file, @src().line, id });
+        dvui.log.err("{s}:{d} got child {x} after expanded child", .{ @src().file, @src().line, id });
         var iter = dvui.parentGet().data().iterator();
         while (iter.next()) |wd| {
             dvui.log.debug("  {s}:{d} {s} {x}", .{
@@ -263,6 +262,7 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Opt
                 wd.options.name orelse "???",
                 wd.id,
             });
+            dvui.Debug.errorOutline(wd.rectScale().r);
         }
     } else if (e.isVertical()) {
         self.seen_expanded_child = true;

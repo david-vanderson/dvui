@@ -45,16 +45,14 @@ pub fn init(self: *LabelWidget, src: std.builtin.SourceLocation, comptime fmt: [
     const str, const alloc = blk: {
         const str = std.fmt.allocPrint(cw.lifo(), fmt, args) catch |err| {
             const newid = dvui.parentGet().extendId(src, opts.idExtra());
-            dvui.logError(@src(), err, "id {x} (highlighted in red) could not print its content", .{newid});
-            dvui.currentWindow().debug.widget_id = newid;
+            dvui.logError(@src(), err, "Label {x} could not print its content", .{newid});
             break :blk .{ fmt, null };
         };
         // We need to use `long_term_arena` because otherwise we
         // will not be able to free the memory of the allocPrint
         const utf8 = dvui.toUtf8(cw.arena(), str) catch |err| {
             const newid = dvui.parentGet().extendId(src, opts.idExtra());
-            dvui.logError(@src(), err, "id {x} (highlighted in red) could not allocate valid utf8 slice", .{newid});
-            dvui.currentWindow().debug.widget_id = newid;
+            dvui.logError(@src(), err, "Label {x} could not allocate valid utf8 slice", .{newid});
             // We contained invalid utf8, so textSize will fail later
             break :blk .{ str, cw.lifo() };
         };
@@ -72,7 +70,8 @@ pub fn initNoFmt(self: *LabelWidget, src: std.builtin.SourceLocation, label_str:
     // If the allocation fails, the textSize will be incorrect
     // later because of invalid utf8
     const str = dvui.toUtf8(arena, label_str) catch |err| blk: {
-        logAndHighlight(src, opts, err);
+        const newid = dvui.parentGet().extendId(src, opts.idExtra());
+        dvui.logError(@src(), err, "Label {x} could not allocate valid utf8 slice", .{newid});
         break :blk label_str;
     };
     return self.initNoFmtAllocator(src, str, if (str.ptr != label_str.ptr) arena else null, init_opts, opts);
@@ -114,12 +113,6 @@ pub fn initNoFmtAllocator(self: *LabelWidget, src: std.builtin.SourceLocation, l
             dvui.AccessKit.nodeSetLabelWithLength(ak_node, self.label_str.ptr, self.label_str.len);
         }
     }
-}
-
-fn logAndHighlight(src: std.builtin.SourceLocation, opts: Options, err: anyerror) void {
-    const newid = dvui.parentGet().extendId(src, opts.idExtra());
-    dvui.currentWindow().debug.widget_id = newid;
-    dvui.log.err("{s}:{d} LabelWidget id {x} (highlighted in red) init() got {any}", .{ src.file, src.line, newid, err });
 }
 
 pub fn data(self: *LabelWidget) *WidgetData {

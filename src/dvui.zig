@@ -503,7 +503,7 @@ pub fn tag(name: []const u8, data: TagData) void {
     if (cw.tags.map.getPtr(name)) |old_data| {
         if (old_data.used) {
             dvui.log.err("duplicate tag name \"{s}\" id {x} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ name, data.id });
-            cw.debug.widget_id = data.id;
+            dvui.Debug.errorOutline(data.rect);
         }
 
         old_data.*.inner = data;
@@ -1073,8 +1073,6 @@ pub fn parentReset(id: Id, prev_parent: Widget) void {
     const cw = currentWindow();
     const currentId = cw.current_parent.data().id;
     if (id != currentId) {
-        cw.debug.widget_id = currentId;
-
         log.err("widget is not closed within its parent. did you forget to call `.deinit()`?", .{});
 
         var iter = cw.current_parent.data().iterator();
@@ -1086,6 +1084,7 @@ pub fn parentReset(id: Id, prev_parent: Widget) void {
                 wd.options.name orelse "???",
                 wd.id,
             });
+            dvui.Debug.errorOutline(wd.rectScale().r);
         }
     }
     cw.current_parent = prev_parent;
@@ -3099,8 +3098,8 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
         if (border.x != border.y or border.y != border.w or border.w != border.h) {
             options.border = Rect.all(@max(border.x, border.y, border.w, border.h));
             b.data().options.border = options.border;
-            dvui.log.debug("groupBox {x} requires uniform borders, border width set to {d}", .{ b.data().id, options.border.?.x });
-            dvui.currentWindow().debug.widget_id = b.data().id;
+            dvui.log.err("groupBox {x} requires uniform borders, border width set to {d}", .{ b.data().id, options.border.?.x });
+            dvui.Debug.errorOutline(b.data().rectScale().r);
         }
     }
 

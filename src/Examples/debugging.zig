@@ -37,7 +37,7 @@ pub fn debuggingErrors() void {
         var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         for (0..2) |i| {
-            dvui.label(@src(), "this should be highlighted (and error logged)", .{}, .{});
+            dvui.label(@src(), "second should be highlighted (and error logged)", .{}, .{});
             dvui.label(@src(), " - fix by passing .id_extra = <loop index>", .{}, .{ .id_extra = i });
         }
 

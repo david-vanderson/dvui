@@ -61,6 +61,29 @@ pub fn deinit(self: *Debug, gpa: std.mem.Allocator) void {
     self.options_override.deinit(gpa);
 }
 
+pub fn errorOutline(rect: Rect.Physical) void {
+    const clipr = dvui.clipGet();
+    defer dvui.clipSet(clipr);
+
+    // clip to whole window so we always see the outline
+    dvui.clipSet(dvui.windowRectPixels());
+
+    // intersect our rect with the clip - we only want to outline
+    // the visible part
+    var outline_rect = rect.intersect(clipr);
+
+    // make sure something is visible
+    outline_rect.w = @max(outline_rect.w, 1);
+    outline_rect.h = @max(outline_rect.h, 1);
+
+    if (dvui.currentWindow().snap_to_pixels) {
+        outline_rect.x = @ceil(outline_rect.x) - 0.5;
+        outline_rect.y = @ceil(outline_rect.y) - 0.5;
+    }
+
+    outline_rect.stroke(.{}, .{ .thickness = 1 * dvui.windowNaturalScale(), .color = .red, .after = true });
+}
+
 /// Returns the previous value
 ///
 /// called from any thread
