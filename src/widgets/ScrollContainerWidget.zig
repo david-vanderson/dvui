@@ -559,27 +559,13 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                         }
                     }
                 } else if (me.action == .wheel_y) {
-                    // scroll vertically if we can, otherwise try horizontal
-                    // use scrollMax instead of self.si.vertical != .none so
-                    // that if we possibly could scroll vertically but there's
-                    // not enough content to show the scrollbar, we'll try
-                    // horizontal
                     if (self.si.scrollMax(.vertical) > 0) {
                         if ((me.action.wheel_y > 0 and self.si.viewport.y <= 0) or (me.action.wheel_y < 0 and self.si.viewport.y >= self.si.scrollMax(.vertical))) {
-                            // try horizontal or propagate the scroll event because we are already maxxed out
+                            // propagate the scroll event because we are already maxxed out
                         } else {
                             e.handle(@src(), self.data());
                             self.si.scrollByOffset(.vertical, -me.action.wheel_y);
                             if (self.init_opts.user_scroll) |us| us.*.y -= me.action.wheel_y;
-                            dvui.refresh(null, @src(), self.data().id);
-                        }
-                    } else if (self.si.scrollMax(.horizontal) > 0) {
-                        if ((me.action.wheel_y > 0 and self.si.viewport.x <= 0) or (me.action.wheel_y < 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
-                            // propagate the scroll event because we are already maxxed out
-                        } else {
-                            e.handle(@src(), self.data());
-                            self.si.scrollByOffset(.horizontal, -me.action.wheel_y);
-                            if (self.init_opts.user_scroll) |us| us.*.x -= me.action.wheel_y;
                             dvui.refresh(null, @src(), self.data().id);
                         }
                     }
