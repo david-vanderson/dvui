@@ -65,7 +65,7 @@ pub fn linkSdl3(
         sdl_mod.linkSystemLibrary("SDL3", .{});
     } else {
         // SDL3 compiled from source
-        
+
         sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
         // msvcup / minimal SDK trees often omit um/gameinput.h. Upstream's Zig SDL enables
         // HAVE_GAMEINPUT_H for every MSVC build; undef here when cross-compiling so
@@ -541,9 +541,9 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .optimize = optimize,
             });
             if (target.result.os.tag == .windows and target.result.abi == .msvc) {
-                /// MSVC stdint uses a SIZE_MAX literal with a `ui64` suffix; Zig translate-c rejects
-                /// it. MSVC guards SIZE_MAX with #ifndef, so a friendly value here is kept when SDL
-                /// pulls in stdint.h; SDL then sets SDL_SIZE_MAX from that macro.
+                // MSVC stdint uses a SIZE_MAX literal with a `ui64` suffix; Zig translate-c rejects
+                // it. MSVC guards SIZE_MAX with #ifndef, so a friendly value here is kept when SDL
+                // pulls in stdint.h; SDL then sets SDL_SIZE_MAX from that macro.
                 sdl_translate_c.defineCMacro("SIZE_MAX", "UINT_MAX");
             }
 
